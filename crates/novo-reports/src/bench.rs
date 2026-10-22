@@ -572,6 +572,13 @@ impl BenchCut {
                 jobs.len()
             ));
         }
+        let unrouted = jobs.iter().filter(|j| j.bundle.is_none()).count();
+        if unrouted > 0 {
+            notes.push(format!(
+                "{unrouted} of {} wires are not routed through a duct: they have no bundle or track, and their ends A and B are the order the wire list names them, not a direction of current. Route them in the Cabinet view to bundle them.",
+                jobs.len()
+            ));
+        }
         let cores: Vec<&WireCutJob> = jobs.iter().filter(|j| on_cable(j)).collect();
         if !cores.is_empty() {
             let (n, verb) = if cores.len() == 1 {
@@ -650,9 +657,11 @@ impl BenchCut {
                     Column::new("route", "Route", 8.0).right(),
                     Column::new("ends", "+Ends", 6.0).right(),
                     Column::new("strip_a", "Strip A", 7.0).right(),
-                    Column::new("ferrule_a", "Ferr. A", 10.0),
+                    Column::new("ferrule_a", "End A", 10.0),
                     Column::new("strip_b", "Strip B", 7.0).right(),
-                    Column::new("ferrule_b", "Ferr. B", 10.0),
+                    Column::new("ferrule_b", "End B", 10.0),
+                    Column::new("bundle", "Bundle", 8.0),
+                    Column::new("track", "Track", 12.0),
                     Column::new("from", "From", 22.0),
                     Column::new("to", "To", 22.0),
                 ],
@@ -674,9 +683,11 @@ impl BenchCut {
                         mark(j.length_mm),
                         Cell::Number(j.cut_mm - j.length_mm),
                         j.end_a.strip_mm.into(),
-                        j.end_a.ferrule.clone().into(),
+                        j.end_a.sleeve_text().into(),
                         j.end_b.strip_mm.into(),
-                        j.end_b.ferrule.clone().into(),
+                        j.end_b.sleeve_text().into(),
+                        j.bundle_text().into(),
+                        Cell::text(j.track.clone()),
                         Cell::text(j.end_a.designation.clone()),
                         Cell::text(j.end_b.designation.clone()),
                     ],

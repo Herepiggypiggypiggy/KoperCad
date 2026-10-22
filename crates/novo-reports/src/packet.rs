@@ -59,7 +59,7 @@ fn length_text(job: &WireCutJob) -> String {
 
 /// The ferrules of both ends: one name when both ends take the same.
 fn ferrule_text(job: &WireCutJob) -> String {
-    match (&job.end_a.ferrule, &job.end_b.ferrule) {
+    match (&job.end_a.sleeve_text(), &job.end_b.sleeve_text()) {
         (Some(a), Some(b)) if a == b => a.clone(),
         (Some(a), Some(b)) => format!("{a} / {b}"),
         (Some(a), None) | (None, Some(a)) => format!("{a} / none"),
@@ -160,6 +160,8 @@ pub fn circuit_sheets(project: &Project, jobs: &[WireCutJob]) -> ReportOutput {
                 Column::new("colour", "Colour", 10.0),
                 Column::new("cut", "Cut mm", 10.0).right(),
                 Column::new("ferrule", "Ferrule", 16.0),
+                Column::new("bundle", "Bundle", 8.0),
+                Column::new("track", "Track", 12.0),
             ],
         );
         let mut devices: Vec<&&Device> = devices.iter().collect();
@@ -195,6 +197,8 @@ pub fn circuit_sheets(project: &Project, jobs: &[WireCutJob]) -> ReportOutput {
                     }),
                     Cell::text(length_text(j)),
                     Cell::text(ferrule_text(j)),
+                    j.bundle_text().into(),
+                    Cell::text(j.track.clone()),
                 ],
                 j.wires.iter().map(|w| AnyId::from(*w)).collect(),
             );
@@ -302,7 +306,7 @@ pub fn cover_notes(jobs: &[WireCutJob]) -> Vec<String> {
     let mut notes = vec![
         "Sheets marked \"print at 100 %\" are true size: print them at 100 % or actual size, never fit to page, and check the 100 mm ruler on each with a rule before you drill or cut.".to_owned(),
         "Hole and rail positions come from the cabinet layout; accuracy on paper is about 0.5 mm when the check square measures 100 mm and up to 0.2 % otherwise, and was not measured on a real printer.".to_owned(),
-        "Ferrule colours and lengths are a default table you can edit (Reports > Bench output). Makers differ above 16 mm²; it is not a claim of compliance with a standard.".to_owned(),
+        "Ferrule colours and lengths are an editable default table (Reports > Bench output); makers differ above 16 mm². Bundle and track come from the duct routing: unrouted wires have none; ends A and B follow the wire list.".to_owned(),
         "The test lines are a workshop routine, not an inspection record: use your own checks for a handover or a standard.".to_owned(),
     ];
     if !jobs.is_empty() {

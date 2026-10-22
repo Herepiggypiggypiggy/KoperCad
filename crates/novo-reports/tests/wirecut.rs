@@ -2,8 +2,8 @@
 
 use novo_core::{DeviceTag, Document, MountingPlate, Point, RailKind, Value, Wire};
 use novo_reports::{
-    CsvOptions, FERRULE_KEY, JOB_COLUMNS, Report, STRIP_LENGTH_KEY, StripBasis, WireCut,
-    typical_strip_mm, wire_cut_csv, wire_cut_jobs,
+    CsvOptions, END_PROCESSING_KEY, FERRULE_KEY, JOB_COLUMNS, Report, STRIP_LENGTH_KEY, StripBasis,
+    WireCut, typical_strip_mm, wire_cut_csv, wire_cut_jobs,
 };
 use novo_tests::{MotorStarter, motor_starter};
 
@@ -273,4 +273,94 @@ fn two_feeds_in_one_net_never_pair_with_each_other() {
         all.contains(&("-X9:0".into(), "B (feed)".into())),
         "{all:?}"
     );
+}
+
+#[test]
+fn wires_in_the_same_ducts_are_one_bundle_laid_longest_first() {
+    let (doc, _) = cabinet();
+    let jobs = wire_cut_jobs(doc.project());
+    let routed: Vec<_> = jobs.iter().filter(|j| !j.ducts.is_empty()).collect();
+    assert!(!routed.is_empty());
+    for j in &routed {
+        assert_eq!(j.track, "D1", "{j:?}");
+        assert_eq!(j.bundle, Some(1));
+        assert_eq!(j.direction, "A>B along track");
+    }
+    let mut by_seq: Vec<_> = routed
+        .iter()
+        .map(|j| (j.sequence.unwrap(), j.cut_mm))
+        .collect();
+    by_seq.sort_by_key(|(s, _)| *s);
+    let seqs: Vec<u32> = by_seq.iter().map(|(s, _)| *s).collect();
+    assert_eq!(seqs, (1..=routed.len() as u32).collect::<Vec<_>>());
+    assert!(by_seq.windows(2).all(|p| p[0].1 >= p[1].1), "{by_seq:?}");
+    assert!(routed[0].bundle_text().is_some());
+}
+
+#[test]
+fn a_wire_that_lies_in_no_duct_has_no_bundle_and_says_so() {
+    let mut doc = Document::default();
+    motor_starter(&mut doc).expect("fixture");
+    let jobs = wire_cut_jobs(doc.project());
+    for j in &jobs {
+        assert_eq!((j.bundle, j.sequence), (None, None));
+        assert_eq!(j.track, "not routed");
+        assert_eq!(j.direction, "A>B as listed");
+        assert_eq!(j.bundle_text(), None);
+    }
+}
+
+#[test]
+fn end_processing_is_stated_by_the_wire_else_proposed_and_labelled() {
+    let (mut doc, _) = cabinet();
+    let jobs = wire_cut_jobs(doc.project());
+    let j = between(&jobs, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!(j.end_a.processing, "Ferrule A1.5-10");
+    assert_eq!(j.end_a.processing_basis, StripBasis::Typical);
+    let wire = j.wires[0];
+    doc.transact("Lug", |tx| {
+        tx.set_property(
+            wire,
+            END_PROCESSING_KEY,
+            Some(Value::Text("Ring lug M5".into())),
+        )
+    })
+    .expect("prop");
+    let jobs = wire_cut_jobs(doc.project());
+    let j = between(&jobs, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!(j.end_a.processing, "Ring lug M5");
+    assert_eq!(j.end_b.processing_basis, StripBasis::Stated);
+    assert_eq!(j.end_a.ferrule, None, "a lug replaces the ferrule");
+    assert_eq!(j.end_a.sleeve_text().as_deref(), Some("Ring lug M5"));
+    assert_eq!(novo_reports::end_basis_text(j), "stated");
+}
+
+#[test]
+fn the_job_file_and_report_carry_the_production_columns() {
+    let (doc, _) = cabinet();
+    let jobs = wire_cut_jobs(doc.project());
+    let csv = wire_cut_csv(
+        &jobs,
+        &CsvOptions {
+            bom: false,
+            ..CsvOptions::default()
+        },
+    );
+    let header = csv.lines().next().unwrap();
+    for c in [
+        "Direction",
+        "Processing A",
+        "Processing B",
+        "Bundle",
+        "Seq",
+        "Track",
+        "End basis",
+    ] {
+        assert!(header.contains(c), "{header}");
+    }
+    let out = WireCut.generate(doc.project());
+    let cuts = &out.sections[0];
+    for key in ["bundle", "seq", "track", "processing_a", "end_basis"] {
+        assert!(cuts.column(key).is_some(), "{key}");
+    }
 }

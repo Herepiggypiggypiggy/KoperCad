@@ -20,12 +20,17 @@ use crate::wires::items;
 
 /// Part property that gives the length a clamp or connector needs stripped.
 pub const STRIP_LENGTH_KEY: &str = "strip_length_mm";
+/// Wire property that states the end processing in words (`Ring lug M5`) and
+/// replaces the proposed one at both ends.
+pub const END_PROCESSING_KEY: &str = "end_processing";
 /// Wire property that turns the ferrule off (`none`) or names the one to use.
 pub const FERRULE_KEY: &str = "ferrule";
 
 /// Where a strip length came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StripBasis {
+    /// The wire states it (the `end_processing` or `ferrule` property).
+    Stated,
     /// The part of the device the wire ends on gives it.
     Part,
     /// A typical value for the cross-section (see [`typical_strip_mm`]).
@@ -38,6 +43,7 @@ pub enum StripBasis {
 impl StripBasis {
     pub fn text(self) -> &'static str {
         match self {
+            StripBasis::Stated => "stated",
             StripBasis::Part => "part",
             StripBasis::Typical => "typical",
             StripBasis::Unknown => "unknown",
@@ -73,9 +79,32 @@ pub struct WireEnd {
     /// Ferrule designation (`A1.5-10`: cross-section and contact length), or
     /// `None` when the wire is marked without one or its size is unknown.
     pub ferrule: Option<String>,
+    /// What is done to this end, in words: `Ferrule A1.5-10`, `Strip 10`,
+    /// or the wire's stated processing (`Ring lug M5`).
+    pub processing: String,
+    /// Where the processing came from: `stated`, `part`, `typical` or
+    /// `unknown` (no cross-section, so nothing is proposed).
+    pub processing_basis: StripBasis,
     /// Label text for the flag at this end: the wire number and where the
     /// other end goes.
     pub label: String,
+}
+
+impl WireEnd {
+    /// What the bench sheet shows for the end's sleeve or terminal: the
+    /// ferrule, else the wire's stated processing, else nothing.
+    pub fn sleeve_text(&self) -> Option<String> {
+        self.ferrule.clone().or_else(|| {
+            (self.processing_basis == StripBasis::Stated).then(|| self.processing.clone())
+        })
+    }
+}
+
+impl WireCutJob {
+    /// `B2 #3`: the bundle and the place in it, or `None` when not routed.
+    pub fn bundle_text(&self) -> Option<String> {
+        Some(format!("B{} #{}", self.bundle?, self.sequence?))
+    }
 }
 
 /// One wire to cut, in production order.
@@ -99,6 +128,18 @@ pub struct WireCutJob {
     pub end_b: WireEnd,
     /// The ducts the wire lies in, in order; empty when it is not routed.
     pub ducts: Vec<u64>,
+    /// The ducts as short names (`D1 > D3`), in wire order from end A to end
+    /// B; `not routed` when the wire lies in no duct.
+    pub track: String,
+    /// Wires that lie in the same ducts in the same order (either way round)
+    /// are one bundle, numbered from 1 by track; `None` when not routed.
+    pub bundle: Option<u32>,
+    /// The order the wire is laid in its bundle: longest first, from 1.
+    pub sequence: Option<u32>,
+    /// `A>B along track` for a routed wire, `A>B as listed` otherwise. End A
+    /// is the end the wire list names first; it does not say which end is
+    /// the supply.
+    pub direction: String,
     /// The cable this wire is a core of (the longest, when its wires lie in
     /// several). Cores are cut from the cable, not from hookup wire stock,
     /// so they do not add to the metres of wire to pull: see [`cable_runs`].
@@ -231,7 +272,7 @@ fn end(
     pin: PinRef,
     other: PinRef,
     section: Option<f64>,
-    ferrule_override: Option<&str>,
+    (ferrule_override, processing_override): (Option<&str>, Option<&str>),
     number: &str,
     standard: &FerruleStandard,
 ) -> WireEnd {
@@ -247,11 +288,26 @@ fn end(
         (None, None) => (None, StripBasis::Unknown),
     };
     let ferrule = match ferrule_override {
+        // A stated processing (a ring lug, say) replaces the ferrule.
+        _ if processing_override.is_some() => None,
         Some(text) if text.eq_ignore_ascii_case("none") => None,
         Some(text) => Some(text.to_owned()),
         None => section
             .zip(strip_mm)
             .map(|(s, l)| format!("A{}-{}", number_text(s), number_text(l))),
+    };
+    let (processing, processing_basis) = match (processing_override, &ferrule, strip_mm) {
+        (Some(text), _, _) => (text.to_owned(), StripBasis::Stated),
+        (None, Some(f), _) => (
+            format!("Ferrule {f}"),
+            if ferrule_override.is_some() {
+                StripBasis::Stated
+            } else {
+                strip_basis
+            },
+        ),
+        (None, None, Some(l)) => (format!("Strip {}", number_text(l)), strip_basis),
+        (None, None, None) => ("Size unknown".to_owned(), StripBasis::Unknown),
     };
     let to = end_designation(project, other);
     let label = match (number.is_empty(), to.is_empty()) {
@@ -265,6 +321,8 @@ fn end(
         strip_mm,
         strip_basis,
         ferrule,
+        processing,
+        processing_basis,
         label,
     }
 }
@@ -317,6 +375,13 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
                     Some(Value::Text(t)) => Some(t.as_str()),
                     _ => None,
                 });
+            let processing =
+                item.wires
+                    .iter()
+                    .find_map(|w| match w.properties.get(END_PROCESSING_KEY) {
+                        Some(Value::Text(t)) if !t.trim().is_empty() => Some(t.trim()),
+                        _ => None,
+                    });
             WireCutJob {
                 wires: item.wires.iter().map(|w| w.id).collect(),
                 cross_section_mm2: section,
@@ -330,12 +395,28 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
                 cut_mm: length.mm + 2.0 * cut_list.end_allowance_mm(section),
                 basis: length.basis.text().to_owned(),
                 end_a: end(
-                    project, item.from, item.to, section, ferrule, &number, standard,
+                    project,
+                    item.from,
+                    item.to,
+                    section,
+                    (ferrule, processing),
+                    &number,
+                    standard,
                 ),
                 end_b: end(
-                    project, item.to, item.from, section, ferrule, &number, standard,
+                    project,
+                    item.to,
+                    item.from,
+                    section,
+                    (ferrule, processing),
+                    &number,
+                    standard,
                 ),
                 ducts: length.ducts,
+                track: String::new(),
+                bundle: None,
+                sequence: None,
+                direction: String::new(),
                 cable: cable_of(project, &item.wires),
                 number,
             }
@@ -349,7 +430,68 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
             .then_with(|| b.cut_mm.total_cmp(&a.cut_mm))
             .then_with(|| natural_cmp(&a.number, &b.number))
     });
+    assign_tracks(&mut jobs, &plans);
     (jobs, plans)
+}
+
+/// Names the ducts (`D1`, `D2`, ... in plan order), writes each job's track
+/// and direction, and groups wires that lie in the same ducts into bundles.
+/// A bundle's wires are laid longest first.
+fn assign_tracks(jobs: &mut [WireCutJob], plans: &Plans) {
+    let mut names: BTreeMap<u64, String> = BTreeMap::new();
+    for (_, plan) in plans {
+        for fill in &plan.fill {
+            let n = names.len() + 1;
+            names.entry(fill.duct).or_insert_with(|| format!("D{n}"));
+        }
+    }
+    let name = |d: &u64| names.get(d).cloned().unwrap_or_else(|| format!("D{d}"));
+    // The same ducts walked the other way are the same physical track.
+    let key = |ducts: &[u64]| {
+        let mut rev = ducts.to_vec();
+        rev.reverse();
+        ducts.to_vec().min(rev)
+    };
+    let mut keys: Vec<Vec<u64>> = jobs
+        .iter()
+        .filter(|j| !j.ducts.is_empty())
+        .map(|j| key(&j.ducts))
+        .collect();
+    keys.sort_by_cached_key(|k| natural_key(&k.iter().map(&name).collect::<Vec<_>>()));
+    keys.dedup();
+    for j in jobs.iter_mut() {
+        if j.ducts.is_empty() {
+            j.track = "not routed".to_owned();
+            j.direction = "A>B as listed".to_owned();
+        } else {
+            j.track = j.ducts.iter().map(&name).collect::<Vec<_>>().join(" > ");
+            j.direction = "A>B along track".to_owned();
+            let k = key(&j.ducts);
+            j.bundle = keys.iter().position(|x| *x == k).map(|i| i as u32 + 1);
+        }
+    }
+    let mut members: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
+    for (i, j) in jobs.iter().enumerate() {
+        if let Some(b) = j.bundle {
+            members.entry(b).or_default().push(i);
+        }
+    }
+    for list in members.values_mut() {
+        list.sort_by(|&a, &b| {
+            jobs[b]
+                .cut_mm
+                .total_cmp(&jobs[a].cut_mm)
+                .then_with(|| natural_cmp(&jobs[a].number, &jobs[b].number))
+        });
+        for (rank, &i) in list.iter().enumerate() {
+            jobs[i].sequence = Some(rank as u32 + 1);
+        }
+    }
+}
+
+/// A sort key that puts `D2` before `D10`.
+fn natural_key(names: &[String]) -> Vec<(usize, String)> {
+    names.iter().map(|n| (n.len(), n.clone())).collect()
 }
 
 /// The cable a connection's wires are cores of: the one with the longest
@@ -388,7 +530,7 @@ pub(crate) fn sections(project: &Project, wires: &[&novo_core::Wire]) -> Vec<f64
 /// Columns of the machine job file, in order. One row per wire; the
 /// machine-specific formats (named when the workshop's machine is known) are
 /// column maps over this same data.
-pub const JOB_COLUMNS: [&str; 16] = [
+pub const JOB_COLUMNS: [&str; 23] = [
     "No",
     "Wire no.",
     "Qty",
@@ -404,7 +546,14 @@ pub const JOB_COLUMNS: [&str; 16] = [
     "Label B",
     "From",
     "To",
+    "Direction",
+    "Processing A",
+    "Processing B",
+    "Bundle",
+    "Seq",
+    "Track",
     "Length basis",
+    "End basis",
 ];
 
 /// Title of the table of wires to cut, with its count: every connection of
@@ -429,8 +578,26 @@ fn job_cells(n: usize, j: &WireCutJob) -> Vec<Cell> {
         Cell::text(j.end_b.label.clone()),
         Cell::text(j.end_a.designation.clone()),
         Cell::text(j.end_b.designation.clone()),
+        Cell::text(j.direction.clone()),
+        Cell::text(j.end_a.processing.clone()),
+        Cell::text(j.end_b.processing.clone()),
+        j.bundle.map(i64::from).into(),
+        j.sequence.map(i64::from).into(),
+        Cell::text(j.track.clone()),
         Cell::text(j.basis.clone()),
+        Cell::text(end_basis_text(j)),
     ]
+}
+
+/// Where the end processing came from, one word when both ends agree
+/// (`part`), else `A part, B typical`.
+pub fn end_basis_text(j: &WireCutJob) -> String {
+    let (a, b) = (j.end_a.processing_basis, j.end_b.processing_basis);
+    if a == b {
+        a.text().to_owned()
+    } else {
+        format!("A {}, B {}", a.text(), b.text())
+    }
 }
 
 /// The generic wire-cut job file as CSV: one row per wire under
@@ -526,7 +693,14 @@ impl Report for WireCut {
             Column::new("label_b", "Label B", 30.0),
             Column::new("from", "From", 25.0),
             Column::new("to", "To", 25.0),
+            Column::new("direction", "Direction", 16.0),
+            Column::new("processing_a", "Processing A", 18.0),
+            Column::new("processing_b", "Processing B", 18.0),
+            Column::new("bundle", "Bundle", 7.0).right(),
+            Column::new("seq", "Seq", 5.0).right(),
+            Column::new("track", "Track", 14.0),
             Column::new("basis", "Length basis", 14.0),
+            Column::new("end_basis", "End basis", 12.0),
         ];
         let title = WIRE_CUT_COUNT_TITLE.replace("{n}", &jobs.len().to_string());
         let mut cuts = Section::new("cuts", &title, columns);
