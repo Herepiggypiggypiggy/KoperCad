@@ -138,6 +138,22 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "file.recover",
+        "Recover a damaged project",
+        "Project",
+        &[
+            "repair",
+            "corrupt",
+            "broken",
+            "salvage",
+            "restore",
+            "damaged file",
+            "cannot open",
+            "will not open",
+        ],
+        Needs::Nothing,
+    ),
+    cmd(
         "file.example",
         "Open example",
         "Project",

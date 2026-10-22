@@ -7,6 +7,8 @@ wait 30
 expect "damaged"
 expect "recovered copy"
 expect "was not changed"
+expect "beside the original"
+expect "Recover a damaged project"
 shot recovered-copy
 check_layout
 check_blank recovered-copy
