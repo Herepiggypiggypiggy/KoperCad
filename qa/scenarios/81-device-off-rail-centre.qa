@@ -1,0 +1,14 @@
+@title Cabinet: a plan made before rails ran through the device middles lists its devices as off the rail's middle
+@area Cabinet
+# qa/fixtures/door-cutouts.novo was made before rails ran through the middle of their devices, so its devices sit on the rail's line by their top edge. The Cabinet view counts them as problems, the pill names them and the Place all hint, and the Inspector says it for the selected device. The example project (rails through the middles) shows none of this.
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text Cabinet #1
+wait 30
+shot old-plan
+click_text " problems"
+wait 10
+expect "off the middle of its rail"
+expect "run Place all"
+shot problems-named
+check_layout

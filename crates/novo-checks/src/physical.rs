@@ -225,6 +225,19 @@ pub(crate) fn layout(cx: &Context<'_>, out: &mut Vec<Problem>) {
             };
             out.push(Problem::new(ProblemKind::DuctOverlap, at, what));
         }
+        for (device, _rail, off) in report.off_centre {
+            out.push(Problem::new(
+                ProblemKind::DeviceOffRail,
+                vec![AnyId::Device(DeviceId::from(device))],
+                format!(
+                    "{} sits {} mm off the middle of its DIN rail on the plate of {}: \
+                     run Place all or drag it onto the rail",
+                    tag(device),
+                    off.abs().round(),
+                    structure.tag
+                ),
+            ));
+        }
         for (rail, over) in report.rail_overflows {
             let devices: Vec<AnyId> = layout
                 .placements

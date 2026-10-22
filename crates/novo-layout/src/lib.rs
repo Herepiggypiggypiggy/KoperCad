@@ -352,6 +352,32 @@ pub fn rail_overflows(rails: &[Rail], placements: &[Placement]) -> Vec<(u64, f64
         .collect()
 }
 
+/// A device whose middle is nearer than this to its rail's line counts as
+/// centred on it (millimetres).
+pub const RAIL_CENTRE_TOLERANCE_MM: f64 = 1.0;
+
+/// Devices that sit on a DIN rail but not centred on it, as
+/// `(device, rail, offset)`: the offset is how far the device's middle lies
+/// from the rail's line across the rail (positive below or to the right of
+/// it). The planners and the snap centre a device on its rail, so this finds
+/// plans made before that, and devices moved by hand without leaving the rail.
+/// Devices on a rail that is not in `rails` (a duct, say) are not judged.
+pub fn off_centre(rails: &[Rail], placements: &[Placement]) -> Vec<(u64, u64, f64)> {
+    placements
+        .iter()
+        .filter_map(|p| {
+            let rail = rails.iter().find(|r| Some(r.id) == p.rail)?;
+            let f = p.footprint();
+            let off = if rail.vertical {
+                f.x + f.w / 2.0 - rail.x
+            } else {
+                f.y + f.h / 2.0 - rail.y
+            };
+            (off.abs() > RAIL_CENTRE_TOLERANCE_MM).then_some((p.id, rail.id, off))
+        })
+        .collect()
+}
+
 /// What a duct lies over.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DuctHit {
@@ -441,6 +467,43 @@ mod tests {
             margins: Margins::default(),
             rail: None,
         }
+    }
+
+    #[test]
+    fn a_device_off_the_middle_of_its_rail_is_found() {
+        let rail = |vertical| Rail {
+            id: 1,
+            x: 100.0,
+            y: 100.0,
+            length: 300.0,
+            vertical,
+        };
+        let on = |x: f64, y: f64| Placement {
+            rail: Some(1),
+            ..p(5, x, y, 40.0, 90.0)
+        };
+        // Horizontal rail at y 100: a 90 mm device is centred at top 55.
+        assert!(off_centre(&[rail(false)], &[on(120.0, 55.0)]).is_empty());
+        // Within the 1 mm tolerance.
+        assert!(off_centre(&[rail(false)], &[on(120.0, 55.8)]).is_empty());
+        // The old convention: the line on the device's top edge, 45 mm off.
+        assert_eq!(
+            off_centre(&[rail(false)], &[on(120.0, 100.0)]),
+            vec![(5, 1, 45.0)]
+        );
+        // Vertical rail at x 100: a 40 mm wide device is centred at left 80.
+        assert!(off_centre(&[rail(true)], &[on(80.0, 120.0)]).is_empty());
+        assert_eq!(
+            off_centre(&[rail(true)], &[on(100.0, 120.0)]),
+            vec![(5, 1, 20.0)]
+        );
+        // Not on a rail, or on one that is not a DIN rail here: not judged.
+        let mut free = on(120.0, 100.0);
+        free.rail = None;
+        assert!(off_centre(&[rail(false)], &[free]).is_empty());
+        let mut on_duct = on(120.0, 100.0);
+        on_duct.rail = Some(9);
+        assert!(off_centre(&[rail(false)], &[on_duct]).is_empty());
     }
 
     #[test]

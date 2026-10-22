@@ -96,6 +96,7 @@ impl NovoApp {
                     "too_close": report.too_close.len(),
                     "rail_overflows": report.rail_overflows.len(),
                     "duct_overlaps": report.duct_overlaps.len(),
+                    "off_rail_centre": report.off_centre.len(),
                     "guessed_size": report.guessed.iter().map(|&i| tag(i)).collect::<Vec<_>>(),
                 },
             }));

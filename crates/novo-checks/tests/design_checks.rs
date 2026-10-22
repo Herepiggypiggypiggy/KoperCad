@@ -1,6 +1,6 @@
 //! Voltage drop, short-circuit rating, unplaced devices, routing and waivers.
 
-use novo_checks::{Problem, ProblemKind, check, check_open, waive, waived_problems};
+use novo_checks::{Problem, ProblemKind, Severity, check, check_open, waive, waived_problems};
 use novo_core::*;
 
 fn tag(text: &str) -> DeviceTag {
@@ -317,4 +317,54 @@ fn overlapping_off_plate_and_tight_devices_are_found() {
     let problems = check(&project);
     assert_eq!(of_kind(&problems, ProblemKind::DevicesTooClose).len(), 1);
     assert!(of_kind(&problems, ProblemKind::DeviceCollision).is_empty());
+}
+
+/// -K1 (45 x 90 mm, the size of a device without a part) on a DIN rail whose
+/// line is at y 100, with its top edge at `top`.
+fn on_a_rail(top: f64) -> Project {
+    build(|tx| {
+        let page = tx.add_page("1")?;
+        let cab = tx.add_structure(tag("+CAB1"), "", true)?;
+        tx.set_plate(
+            cab,
+            Some(MountingPlate {
+                width: 300.0,
+                height: 300.0,
+                margin: 10.0,
+            }),
+        )?;
+        let rail = tx.add_rail(cab, 20.0, 100.0, 250.0, RailKind::DinRail)?;
+        let d = tx.add_device(tag("-K1"), "")?;
+        tx.place_symbol(
+            page,
+            "iec/contacts/no",
+            Placement::at(Point::new(10.0, 10.0)),
+            vec![Pin::new("1", 0.0, 0.0)],
+            SymbolRole::Device {
+                device: d,
+                main: true,
+            },
+        )?;
+        tx.place_device(d, cab, Point::new(60.0, top), false, Some((rail, 40.0)))?;
+        Ok(())
+    })
+    .0
+}
+
+#[test]
+fn a_device_is_centred_on_its_rail_or_listed_with_how_far_off_it_is() {
+    // The rail runs through the middle of the 90 mm device: top at 100 - 45.
+    let problems = check(&on_a_rail(55.0));
+    assert!(of_kind(&problems, ProblemKind::DeviceOffRail).is_empty());
+    // The old convention, the line on the device's top edge, is 45 mm off.
+    let problems = check(&on_a_rail(100.0));
+    let off = of_kind(&problems, ProblemKind::DeviceOffRail);
+    assert_eq!(off.len(), 1);
+    assert!(
+        off[0].message.contains("45 mm off the middle"),
+        "{}",
+        off[0].message
+    );
+    assert!(off[0].message.contains("Place all"), "{}", off[0].message);
+    assert_eq!(ProblemKind::DeviceOffRail.severity(), Severity::Warning);
 }

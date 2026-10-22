@@ -346,6 +346,14 @@ pub(super) fn problem_lines(
             ));
         }
     }
+    for &(device, _, off) in &report.off_centre {
+        if device == id {
+            lines.push(format!(
+                "Sits {:.0} mm off the middle of its rail: run Place all or drag it onto the rail",
+                off.abs()
+            ));
+        }
+    }
     if let Some(p) = layout.placements.iter().find(|p| p.id == id) {
         for &(rail, over) in &report.rail_overflows {
             if p.rail == Some(rail) {
@@ -708,6 +716,7 @@ impl NovoApp {
                     + r.opening_conflicts.len()
                     + s.opening_problems.len()
                     + r.duct_overlaps.len()
+                    + r.off_centre.len()
                     + s.door_report().map_or(0, |d| d.problems())
                     + s.swing_report().map_or(0, |d| d.problems());
                 (l.placements.len(), l.unplaced(&cands).len(), problems)

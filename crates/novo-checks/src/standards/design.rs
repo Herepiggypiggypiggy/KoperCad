@@ -211,6 +211,7 @@ pub static FAMILIES: &[Family] = &[
             ProblemKind::DeviceOutsidePlate,
             ProblemKind::DevicesTooClose,
             ProblemKind::RailOverflow,
+            ProblemKind::DeviceOffRail,
             ProblemKind::DuctOverlap,
             ProblemKind::DeviceTooDeep,
             ProblemKind::DoorGapTight,
