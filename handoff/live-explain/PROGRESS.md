@@ -4,3 +4,4 @@
 2026-10-21 09:10 UTC PR #1141 review: Esc closing a dialog also left Live; added panel::dialog_on_top (drawn last frame and top layer) and a PLC-window test
 2026-10-21 09:40 UTC Live panel: Operate list no longer cut (height from canvas, wrapped rows); idle hint points to the page with the push buttons and offers Go to page
 2026-10-22 08:10 UTC C-56: Live card says when no supply is defined (banner, Place a feed, Add supply circuit), Why? answers no supply everywhere (engine has_supply); QA scenario 08 at both sizes
+2026-10-22 08:45 UTC wording nits after #1340: fix text for an empty project, Place a feed hover (one feed, right-click sets potential), status line names only what exists (live_status)
