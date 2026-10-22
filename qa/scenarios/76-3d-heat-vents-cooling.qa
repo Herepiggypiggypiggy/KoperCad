@@ -1,0 +1,40 @@
+@title 3D Heat vents: the Cooling selection proposes a fan and the Vents panel adds it
+@area 3D
+# Finished Quick run of the hot cooling-advice cabinet: the Cooling selection proposes a fan, the Vents and fans panel shows the proposal with its button, and one press places it on its wall.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 200
+expect_not "Preliminary"
+move 700 650
+wait 10
+click_text "Cooling selection"
+wait 10
+shot proposal
+expect "Cooling selection proposes"
+check_layout
+click_text "Add the filter fan to the cabinet"
+wait 20
+shot added
+expect "Already added"
+check_layout
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 20
+shot added-light
+check_layout
