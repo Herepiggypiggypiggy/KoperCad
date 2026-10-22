@@ -131,6 +131,9 @@ pub struct WireCutJob {
     /// The ducts as short names (`D1 > D3`), in wire order from end A to end
     /// B; `not routed` when the wire lies in no duct.
     pub track: String,
+    /// The ducts of the track as `(D1, +CAB duct at 80, 120)`: the short name
+    /// and where the duct is, so a printed track can be found on the plate.
+    pub track_ducts: Vec<(String, String)>,
     /// Wires that lie in the same ducts in the same order (either way round)
     /// are one bundle, numbered from 1 by track; `None` when not routed.
     pub bundle: Option<u32>,
@@ -414,6 +417,7 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
                 ),
                 ducts: length.ducts,
                 track: String::new(),
+                track_ducts: Vec::new(),
                 bundle: None,
                 sequence: None,
                 direction: String::new(),
@@ -430,21 +434,41 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
             .then_with(|| b.cut_mm.total_cmp(&a.cut_mm))
             .then_with(|| natural_cmp(&a.number, &b.number))
     });
-    assign_tracks(&mut jobs, &plans);
+    assign_tracks(project, &mut jobs, &plans);
     (jobs, plans)
 }
 
-/// Names the ducts (`D1`, `D2`, ... in plan order), writes each job's track
-/// and direction, and groups wires that lie in the same ducts into bundles.
-/// A bundle's wires are laid longest first.
-fn assign_tracks(jobs: &mut [WireCutJob], plans: &Plans) {
-    let mut names: BTreeMap<u64, String> = BTreeMap::new();
-    for (_, plan) in plans {
+/// Every duct of the plans with its short name (`D1`, `D2`, ... in plan
+/// order) and where it is (`+CAB duct at 80, 120`).
+fn duct_legend(project: &Project, plans: &Plans) -> BTreeMap<u64, (String, String)> {
+    let mut legend: BTreeMap<u64, (String, String)> = BTreeMap::new();
+    for (structure, plan) in plans {
+        let tag = project
+            .get::<novo_core::Structure>(*structure)
+            .map(|s| s.tag.to_string())
+            .unwrap_or_default();
         for fill in &plan.fill {
-            let n = names.len() + 1;
-            names.entry(fill.duct).or_insert_with(|| format!("D{n}"));
+            let n = legend.len() + 1;
+            let place = project
+                .all::<Rail>()
+                .find(|r| r.id.raw() == fill.duct)
+                .map_or(format!("{tag} duct"), |r| {
+                    format!("{tag} duct at {:.0}, {:.0}", r.x, r.y)
+                });
+            legend
+                .entry(fill.duct)
+                .or_insert_with(|| (format!("D{n}"), place));
         }
     }
+    legend
+}
+
+/// Names the ducts, writes each job's track and direction, and groups wires
+/// that lie in the same ducts into bundles. A bundle's wires are laid
+/// longest first.
+fn assign_tracks(project: &Project, jobs: &mut [WireCutJob], plans: &Plans) {
+    let legend = duct_legend(project, plans);
+    let names: BTreeMap<u64, String> = legend.iter().map(|(d, (n, _))| (*d, n.clone())).collect();
     let name = |d: &u64| names.get(d).cloned().unwrap_or_else(|| format!("D{d}"));
     // The same ducts walked the other way are the same physical track.
     let key = |ducts: &[u64]| {
@@ -465,6 +489,11 @@ fn assign_tracks(jobs: &mut [WireCutJob], plans: &Plans) {
             j.direction = "A>B as listed".to_owned();
         } else {
             j.track = j.ducts.iter().map(&name).collect::<Vec<_>>().join(" > ");
+            j.track_ducts = j
+                .ducts
+                .iter()
+                .filter_map(|d| legend.get(d).cloned())
+                .collect();
             j.direction = "A>B along track".to_owned();
             let k = key(&j.ducts);
             j.bundle = keys.iter().position(|x| *x == k).map(|i| i as u32 + 1);
@@ -788,6 +817,7 @@ impl Report for WireCut {
                 Column::new("numbers", "Wire nos.", 40.0),
             ],
         );
+        let legend = duct_legend(project, &plans);
         for (structure, plan) in &plans {
             let tag = project
                 .get::<novo_core::Structure>(*structure)
@@ -795,9 +825,11 @@ impl Report for WireCut {
                 .unwrap_or_default();
             for fill in &plan.fill {
                 let rail = project.all::<Rail>().find(|r| r.id.raw() == fill.duct);
-                let name = rail.map_or(format!("{tag} duct"), |r| {
-                    format!("{tag} duct at {:.0}, {:.0}", r.x, r.y)
-                });
+                let name = match (legend.get(&fill.duct), rail) {
+                    (Some((short, place)), _) => format!("{short} = {place}"),
+                    (None, Some(r)) => format!("{tag} duct at {:.0}, {:.0}", r.x, r.y),
+                    (None, None) => format!("{tag} duct"),
+                };
                 let sized = fill.capacity_mm2 > 0.0;
                 let mut numbers: Vec<&str> = jobs
                     .iter()

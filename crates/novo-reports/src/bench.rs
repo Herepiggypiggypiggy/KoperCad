@@ -572,6 +572,20 @@ impl BenchCut {
                 jobs.len()
             ));
         }
+        let mut ducts: BTreeMap<(usize, String), String> = BTreeMap::new();
+        for (name, place) in jobs.iter().flat_map(|j| j.track_ducts.iter()) {
+            ducts.insert((name.len(), name.clone()), place.clone());
+        }
+        if !ducts.is_empty() {
+            let list: Vec<String> = ducts
+                .iter()
+                .map(|((_, name), place)| format!("{name} = {place}"))
+                .collect();
+            notes.push(format!(
+                "Track names are the ducts of the wire production report (Duct fill), numbered in plan order: {}. Bundle B2 #3 is the third wire to lay in bundle 2; Seq is longest first within a bundle, a default order you can change if your shop lays the other way.",
+                list.join("; ")
+            ));
+        }
         let unrouted = jobs.iter().filter(|j| j.bundle.is_none()).count();
         if unrouted > 0 {
             notes.push(format!(

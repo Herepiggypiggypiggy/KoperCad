@@ -306,7 +306,7 @@ pub fn cover_notes(jobs: &[WireCutJob]) -> Vec<String> {
     let mut notes = vec![
         "Sheets marked \"print at 100 %\" are true size: print them at 100 % or actual size, never fit to page, and check the 100 mm ruler on each with a rule before you drill or cut.".to_owned(),
         "Hole and rail positions come from the cabinet layout; accuracy on paper is about 0.5 mm when the check square measures 100 mm and up to 0.2 % otherwise, and was not measured on a real printer.".to_owned(),
-        "Ferrule colours and lengths are an editable default table (Reports > Bench output); makers differ above 16 mm². Bundle and track come from the duct routing: unrouted wires have none; ends A and B follow the wire list.".to_owned(),
+        "Ferrule colours and lengths are an editable default table (Reports > Bench output); makers differ above 16 mm². Track names (D1, D2 and so on) are listed on the cut list page; unrouted wires have none; ends A and B follow the wire list.".to_owned(),
         "The test lines are a workshop routine, not an inspection record: use your own checks for a handover or a standard.".to_owned(),
     ];
     if !jobs.is_empty() {

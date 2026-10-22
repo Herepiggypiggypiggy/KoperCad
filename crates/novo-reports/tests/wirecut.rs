@@ -364,3 +364,37 @@ fn the_job_file_and_report_carry_the_production_columns() {
         assert!(cuts.column(key).is_some(), "{key}");
     }
 }
+
+#[test]
+fn track_names_are_explained_in_the_duct_fill_and_on_the_bench_cut_list() {
+    let (doc, _) = cabinet();
+    let jobs = wire_cut_jobs(doc.project());
+    let routed = jobs.iter().find(|j| j.track == "D1").expect("routed");
+    assert_eq!(routed.track_ducts[0].0, "D1");
+    assert!(
+        routed.track_ducts[0].1.contains("duct at 50, 250"),
+        "{routed:?}"
+    );
+    let out = WireCut.generate(doc.project());
+    let fill = out.sections.iter().find(|s| s.key == "ducts").unwrap();
+    assert!(
+        fill.text_rows()
+            .iter()
+            .any(|r| r.iter().any(|c| c.starts_with("D1 = "))),
+        "{:?}",
+        fill.text_rows()
+    );
+    let bench = novo_reports::BenchCut::build(doc.project(), &jobs);
+    let note = bench
+        .sections
+        .iter()
+        .find(|s| s.key == "check")
+        .expect("note");
+    assert!(
+        note.text_rows().iter().any(|r| r
+            .iter()
+            .any(|c| c.contains("D1 = ") && c.contains("longest first"))),
+        "{:?}",
+        note.text_rows()
+    );
+}
