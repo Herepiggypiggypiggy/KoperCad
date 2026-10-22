@@ -666,6 +666,9 @@ pub struct PageScene {
     /// Terminals of a crowded row that put their name on a second level
     /// (see [`terminal_levels`]): the shift along the symbol's own y axis.
     name_levels: HashMap<SymbolId, f32>,
+    /// Terminals with another strip's terminals just left of them on the
+    /// row: a strip name they head goes above (see `terminal_crowds`).
+    crowded: std::collections::HashSet<SymbolId>,
     /// The wire part under the pointer or selected, drawn emphasised.
     focus: Option<WirePart>,
     /// Wires drawn in another colour and width than the style's; see
@@ -798,6 +801,7 @@ impl PageScene {
             revisions: None,
             strip_heads: HashMap::new(),
             name_levels: HashMap::new(),
+            crowded: Default::default(),
             focus: None,
             wire_looks: HashMap::new(),
             wire_cables: HashMap::new(),
@@ -1116,6 +1120,7 @@ impl PageScene {
         self.draw_underlay();
         self.strip_heads = strip_heads(project, self.page);
         self.name_levels = terminal_levels(project, self.page);
+        self.crowded = terminal_crowds(project, self.page);
         let contents = project.page_contents(self.page);
         for id in contents.symbols {
             self.sync_symbol(project, id, art);
@@ -1262,6 +1267,13 @@ impl PageScene {
                 }
             }
             self.name_levels = levels;
+            let crowded = terminal_crowds(project, self.page);
+            dirty.extend(
+                self.crowded
+                    .symmetric_difference(&crowded)
+                    .map(|s| AnyId::Symbol(*s)),
+            );
+            self.crowded = crowded;
         }
         // A junction's glyph follows the wires leaving it, before and after
         // the edit (a removed wire is gone from the project).
@@ -1641,6 +1653,7 @@ impl PageScene {
             item.labels.insert(0, label);
         }
         if let Some(strip) = self.strip_heads.get(&id) {
+            let crowded = self.crowded.contains(&id);
             // Left of the run's first terminal and of every label already
             // on its row (the terminal's own name, a pin number), so the
             // two never overlap at any zoom: label boxes are in mm.
@@ -1661,11 +1674,15 @@ impl PageScene {
                     x = x.min(lb.min.x);
                 }
             }
-            item.labels.push(
-                Label::new(Vec2::new(x - 2.0, y), strip.clone(), h)
-                    .anchored(Anchor::CenterRight)
-                    .colored(self.style.tag_color),
-            );
+            let label = if crowded && !b.is_empty() {
+                // Another strip's terminals stand just left: its names
+                // would run into this one, so the name goes above.
+                Label::new(Vec2::new(x - 1.0, b.min.y - 0.5), strip.clone(), h)
+                    .anchored(Anchor::BottomRight)
+            } else {
+                Label::new(Vec2::new(x - 2.0, y), strip.clone(), h).anchored(Anchor::CenterRight)
+            };
+            item.labels.push(label.colored(self.style.tag_color));
         }
         let slot = self
             .notes
@@ -2172,28 +2189,52 @@ const NAME_ROOM: f64 = 4.6;
 fn terminal_levels(project: &Project, page: PageId) -> HashMap<SymbolId, f32> {
     use novo_core::Rotation;
     // Level shift: the name's anchor sits at the body's middle, 4 mm down.
-    const LEVEL: f32 = 2.8;
-    let mut rows: HashMap<i64, Vec<(f64, SymbolId, f64)>> = HashMap::new();
+    const LEVEL: f32 = 2.4;
+    // One strip per row: where another strip starts in the row its name
+    // sits among these terminals (a strip name is placed per run, stage 3b).
+    // Per (row, strip): x, symbol and name width.
+    type Row = Vec<(f64, SymbolId, f64)>;
+    let mut rows: HashMap<(i64, novo_core::DeviceId), Row> = HashMap::new();
+    let mut tagged: Vec<(i64, f64)> = Vec::new();
     for id in project.page_contents(page).symbols {
         let Some(sym) = project.symbol(id) else {
             continue;
         };
-        if !matches!(sym.role, SymbolRole::Terminal { .. })
-            || !matches!(sym.placement.rotation, Rotation::R0 | Rotation::R180)
-        {
+        if !matches!(sym.placement.rotation, Rotation::R0 | Rotation::R180) {
+            continue;
+        }
+        if matches!(sym.role, SymbolRole::Device { .. }) {
+            // Its tag hangs below the body: no name goes down there.
+            tagged.push((
+                (sym.placement.origin.y / 2.5).round() as i64,
+                sym.placement.origin.x,
+            ));
+            continue;
+        }
+        if !matches!(sym.role, SymbolRole::Terminal { .. }) {
             continue;
         }
         let Some(text) = symbol_text(project, sym) else {
             continue;
         };
         let width = text.chars().count() as f64 * 3.0 * f64::from(crate::text::ADVANCE);
+        let SymbolRole::Terminal { terminals } = &sym.role else {
+            continue;
+        };
+        let Some(strip) = terminals
+            .first()
+            .and_then(|t| project.terminal(*t))
+            .map(|t| t.strip)
+        else {
+            continue;
+        };
         let row = (sym.placement.origin.y / 2.5).round() as i64;
-        rows.entry(row)
+        rows.entry((row, strip))
             .or_default()
             .push((sym.placement.origin.x, id, width));
     }
     let mut levels = HashMap::new();
-    for (_, mut row) in rows {
+    for ((row_key, _), mut row) in rows {
         row.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
         // Runs: neighbours at most STRIP_RUN_GAP apart.
         let mut start = 0;
@@ -2209,14 +2250,67 @@ fn terminal_levels(project: &Project, page: PageId) -> HashMap<SymbolId, f32> {
                 .fold(f64::INFINITY, f64::min);
             let widest = run.iter().map(|r| r.2).fold(0.0, f64::max);
             if run.len() > 1 && pitch < widest + NAME_ROOM {
-                for (i, (_, id, _)) in run.iter().enumerate() {
-                    levels.insert(*id, if i % 2 == 0 { -LEVEL } else { LEVEL });
+                for (i, (x, id, _)) in run.iter().enumerate() {
+                    let under_tag = tagged
+                        .iter()
+                        .any(|(r, tx)| *r == row_key && (tx - x).abs() < 8.0);
+                    levels.insert(
+                        *id,
+                        if i % 2 == 0 {
+                            -LEVEL
+                        } else if under_tag {
+                            0.0
+                        } else {
+                            LEVEL
+                        },
+                    );
                 }
             }
             start = end;
         }
     }
     levels
+}
+
+/// The terminals with a terminal of another strip within `CROWD` to their
+/// left on the same row: a strip name placed left of them would run into
+/// that strip's terminal names.
+fn terminal_crowds(project: &Project, page: PageId) -> std::collections::HashSet<SymbolId> {
+    const CROWD: f64 = 40.0;
+    let mut rows: HashMap<i64, Vec<(f64, SymbolId, novo_core::DeviceId)>> = HashMap::new();
+    for id in project.page_contents(page).symbols {
+        let Some(sym) = project.symbol(id) else {
+            continue;
+        };
+        let SymbolRole::Terminal { terminals } = &sym.role else {
+            continue;
+        };
+        if let Some(strip) = terminals
+            .first()
+            .and_then(|t| project.terminal(*t))
+            .map(|t| t.strip)
+        {
+            let o = sym.placement.origin;
+            rows.entry((o.y / 2.5).round() as i64)
+                .or_default()
+                .push((o.x, id, strip));
+        }
+    }
+    let mut crowded = std::collections::HashSet::new();
+    for (_, mut row) in rows {
+        row.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+        for (i, (x, id, strip)) in row.iter().enumerate() {
+            let other = row[..i]
+                .iter()
+                .rev()
+                .take_while(|(px, ..)| x - px <= CROWD)
+                .any(|(px, _, s)| px < x && s != strip);
+            if other {
+                crowded.insert(*id);
+            }
+        }
+    }
+    crowded
 }
 
 /// The anchor of a tag whose library position was moved by `place`. The tag
@@ -3384,6 +3478,54 @@ mod tests {
                 "{rotation:?}: strip label {b:?} overlaps the terminal name {a:?}"
             );
         }
+    }
+
+    #[test]
+    fn names_of_close_terminals_stand_on_two_levels() {
+        struct Name;
+        impl SymbolArt for Name {
+            fn artwork(&self, _: &SymbolInstance) -> Option<Vec<Primitive>> {
+                None
+            }
+            fn tag_anchor(&self, _: &SymbolInstance) -> Option<(Vec2, Anchor)> {
+                Some((Vec2::new(0.0, 4.0), Anchor::Center))
+            }
+        }
+        let mut doc = Document::default();
+        let ((page, syms), _) = doc
+            .transact("strip", |tx| {
+                let page = tx.add_page("1")?;
+                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                let mut syms = Vec::new();
+                for k in 0..4 {
+                    let t = tx.add_terminal(x1, format!("{}", 10 + k))?;
+                    syms.push(tx.place_symbol(
+                        page,
+                        "iec/terminal",
+                        MPlacement {
+                            origin: Point::new(100.0 + 4.0 * f64::from(k), 50.0),
+                            rotation: novo_core::Rotation::R0,
+                            mirrored: false,
+                        },
+                        vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                        SymbolRole::Terminal { terminals: vec![t] },
+                    )?);
+                }
+                Ok((page, syms))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &Name);
+        let name = |i: usize, text: &str| {
+            let item = ps.scene().get(item_id(syms[i])).unwrap();
+            item.labels
+                .iter()
+                .find(|l| l.text == text)
+                .unwrap()
+                .bounds()
+        };
+        let (a, b) = (name(0, "10"), name(1, "11"));
+        // Neighbours on different levels never overlap.
+        assert!(a.min.y >= b.max.y || b.min.y >= a.max.y, "{a:?} {b:?}");
     }
 
     #[test]
