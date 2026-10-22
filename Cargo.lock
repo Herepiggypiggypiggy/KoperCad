@@ -1911,6 +1911,15 @@ name = "novo-ai"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "novo-checks",
+ "novo-core",
+ "novo-editor",
+ "novo-numbering",
+ "novo-parts",
+ "novo-py",
+ "novo-reports",
+ "novo-symbols",
+ "novo-workflow",
  "serde",
  "serde_json",
  "tempfile",

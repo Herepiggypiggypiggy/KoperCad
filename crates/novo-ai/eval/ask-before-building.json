@@ -1,0 +1,111 @@
+{
+  "id": "ask-before-building",
+  "category": "create",
+  "title": "Ask what matters before building, then build with the answer",
+  "setup": [],
+  "turns": [
+    {
+      "prompt": "Add a motor starter.",
+      "script": [
+        {
+          "text": "The power and supply change the breaker and overload, so I need to ask.",
+          "calls": [
+            {
+              "tool": "ask_user",
+              "input": {
+                "question": "What motor power and supply voltage, and which page should it go on?",
+                "options": [
+                  "2.2 kW, 400 V, page 1",
+                  "7.5 kW, 400 V, page 1",
+                  "Something else"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "text": "I'll wait for your answer before drawing anything.",
+          "calls": []
+        }
+      ]
+    },
+    {
+      "prompt": "7.5 kW, 400 V, page 1.",
+      "script": [
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "set_plan",
+              "input": {
+                "steps": [
+                  {
+                    "title": "Add page 1",
+                    "status": "doing"
+                  },
+                  {
+                    "title": "Place the starter",
+                    "status": "todo"
+                  },
+                  {
+                    "title": "Check",
+                    "status": "todo"
+                  }
+                ]
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "add_page",
+                "args": {
+                  "name": "1",
+                  "title": "Motor 7.5 kW"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "place_macro",
+                "args": {
+                  "macro": "Motor starter DOL",
+                  "page": "1",
+                  "parameters": {
+                    "power": 7.5
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "run_checks",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "text": "The 7.5 kW starter is on page 1 in the draft. Its supply pins are still open: ask me to terminate them, or connect your own incoming terminals. The macro sets the breaker and overload for its power parameter; confirm both against the motor's plate.",
+          "calls": []
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "asks_in_turn": 0,
+    "devices_include": [
+      "-K1",
+      "-M1"
+    ],
+    "errors_max": 0,
+    "verified": true,
+    "plan_shown": true,
+    "text_contains": [
+      "open"
+    ]
+  }
+}

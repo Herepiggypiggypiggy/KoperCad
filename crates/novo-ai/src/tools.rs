@@ -107,6 +107,11 @@ impl SnapshotHost {
         }
     }
 
+    /// Replaces what the read tools see (the project changed in a draft).
+    pub fn set_snapshot(&mut self, snapshot: Snapshot) {
+        self.snapshot = snapshot;
+    }
+
     /// First proposal id to use (ids continue across turns).
     pub fn starting_at(mut self, next_id: u32) -> Self {
         self.next_id = next_id;
@@ -190,6 +195,11 @@ impl SnapshotHost {
             }
         }
     }
+}
+
+/// [`clip`] for the other tool hosts of this crate.
+pub(crate) fn clip_for_tools(s: &str) -> String {
+    clip(s)
 }
 
 fn clip(s: &str) -> String {

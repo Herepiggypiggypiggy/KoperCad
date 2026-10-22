@@ -18,6 +18,8 @@ pub mod api;
 pub mod config;
 pub mod consent;
 pub mod datasheet;
+pub mod engineer;
+pub mod eval;
 pub mod image;
 pub mod key;
 pub mod models;
