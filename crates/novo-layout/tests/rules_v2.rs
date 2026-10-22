@@ -6,8 +6,12 @@ use novo_layout::plan::{Plan, PlannedDuct};
 use novo_layout::rules::{
     Class, GapSource, Gaps, RuleSet, Spec, UnplacedWhy, Zone, place_all_explained, place_all_rules,
 };
+use novo_layout::rules::{DUCT_CLEAR_MM, RAIL_DUCT_CLEAR_MM};
 use novo_layout::stock::{Stock, optimise, rail_pieces};
-use novo_layout::{Placement, Plate, Size, collisions, outside, rail_overflows};
+use novo_layout::{
+    Duct, Placement, Plate, RAIL_BAND_MM, Rail, Size, collisions, duct_overlaps, outside,
+    rail_overflows,
+};
 
 fn spec(id: u64, kind: &str, w: f64, h: f64) -> Spec {
     Spec {
@@ -89,8 +93,11 @@ fn rows_of_one_class_share_a_duct() {
     assert_eq!(d.class, Class::Signal);
     let (_, y1) = at(&plan, 1);
     let (_, y2) = at(&plan, 2);
-    // Centred in the space between the two rows.
-    assert!((d.y - ((y1 + 90.0 + y2) / 2.0)).abs() < 1e-9);
+    // Centred in the free space between the two rows: from the devices above
+    // to the lower rail's 35 mm band, which reaches 17.5 mm up from the rail
+    // line along the top of the lower row's devices.
+    assert!((d.y - ((y1 + 90.0 + y2 - RAIL_BAND_MM / 2.0) / 2.0)).abs() < 1e-9);
+    assert!(duct_rect(d).bottom() <= y2 - RAIL_BAND_MM / 2.0 + 1e-9);
     assert_eq!((d.width, d.height), (25.0, 60.0));
 }
 
@@ -102,7 +109,14 @@ fn separation_off_gives_one_duct_and_the_normal_row_gap() {
     let plan = place_all_rules(&plate(), &specs, &rules, 1, 0.0);
     let (_, qy) = at(&plan, 1);
     let (_, ky) = at(&plan, 2);
-    assert_eq!(ky - (qy + 90.0), rules.row_gap);
+    // The 40 mm row gap is not enough for a 25 mm duct between the devices
+    // above and the lower rail's band (17.5 mm up from its line), so the gap
+    // grows to: duct + 10 to the devices + 5 to the band + the band's 17.5.
+    assert_eq!(
+        ky - (qy + 90.0),
+        rules.duct_width + DUCT_CLEAR_MM + RAIL_DUCT_CLEAR_MM + RAIL_BAND_MM / 2.0
+    );
+    assert!(ky - (qy + 90.0) > rules.row_gap);
     assert_eq!(row_ducts(&plan).len(), 1);
 }
 
@@ -110,7 +124,9 @@ fn separation_off_gives_one_duct_and_the_normal_row_gap() {
 fn a_small_plate_gives_up_the_separation_before_leaving_a_device_off() {
     let small = Plate {
         width: 300.0,
-        height: 400.0,
+        // Three rows of 90 mm need two row gaps of 57.5 mm (duct and rail
+        // band) but not the 127.5 mm each that the separation asks.
+        height: 420.0,
         margin: 10.0,
     };
     let specs = vec![
@@ -603,4 +619,39 @@ fn the_trunk_is_dropped_when_the_narrower_plate_would_lose_a_device() {
     assert!(plan.unplaced.is_empty());
     assert!(why.trunk_dropped && !why.trunk);
     assert!(plan.ducts.iter().all(|d| !d.vertical));
+}
+
+/// The planner's rails are lines on the plate but real rails are 35 mm bands;
+/// no planned duct may lie over the band of any rail, whatever the rules.
+#[test]
+fn planned_ducts_clear_the_rail_bands() {
+    for separation in [0.0, 40.0] {
+        let specs = vec![
+            spec(1, "Q", 18.0, 90.0),
+            spec(2, "K", 45.0, 90.0),
+            spec(3, "A", 100.0, 20.0),
+            spec(4, "T", 80.0, 150.0),
+            spec(5, "X", 6.0, 30.0),
+        ];
+        let mut rules = RuleSet::standard();
+        rules.separation = separation;
+        let plan = place_all_rules(&plate(), &specs, &rules, 1, 0.0);
+        assert!(plan.unplaced.is_empty(), "{:?}", plan.unplaced);
+        let rails: Vec<Rail> = plan.rails.clone();
+        let ducts: Vec<Duct> = plan
+            .ducts
+            .iter()
+            .enumerate()
+            .map(|(i, d)| Duct {
+                id: i as u64 + 1,
+                x: d.x,
+                y: d.y,
+                length: d.length,
+                width: d.width,
+                vertical: d.vertical,
+            })
+            .collect();
+        let found = duct_overlaps(&ducts, &rails, &placements(&plan, &specs));
+        assert!(found.is_empty(), "separation {separation}: {found:?}");
+    }
 }

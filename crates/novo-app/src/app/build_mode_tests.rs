@@ -166,3 +166,73 @@ fn opening_the_commissioning_workspace_closes_it() {
     d.frame();
     assert!(d.app.wb.build.is_none());
 }
+
+#[test]
+fn the_build_sheet_pdf_lands_next_to_the_project_with_the_ticks_on_it() {
+    let (dir, mut d) = started();
+    let file = dir.path().join("Plant 3.novo");
+    assert!(d.app.save_to(&file));
+    cabinet(&mut d);
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.build", None);
+    d.frame();
+    d.frame();
+    tap_space(&mut d);
+    let plan = d
+        .app
+        .wb
+        .build
+        .as_ref()
+        .and_then(|b| b.plan.clone())
+        .map(|(_, p)| p)
+        .unwrap();
+    let pdf = d.app.export_build_sheet(&plan).expect("written");
+    assert_eq!(pdf, dir.path().join("Plant 3 build sheet.pdf"));
+    let bytes = std::fs::read(&pdf).unwrap();
+    assert!(bytes.starts_with(b"%PDF"));
+    // A second print replaces our own file.
+    d.app.export_build_sheet(&plan).expect("again");
+    assert!(
+        d.app
+            .messages()
+            .last()
+            .unwrap()
+            .text
+            .starts_with("Replaced")
+    );
+}
+
+#[test]
+fn a_device_step_can_be_shown_on_the_plate_and_in_3d_and_build_mode_steps_aside() {
+    use super::workspace::Workspace;
+    let (_dir, mut d) = started();
+    cabinet(&mut d);
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.build", None);
+    d.frame();
+    d.frame();
+    let device = d
+        .app
+        .wb
+        .build
+        .as_ref()
+        .and_then(|b| b.plan.clone())
+        .and_then(|(_, p)| p.cabinets[0].steps.iter().find_map(|s| s.device))
+        .expect("a device step");
+    d.app.show_device(device, false);
+    d.app.wb.build.as_mut().unwrap().away = true;
+    d.frame();
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
+    assert_eq!(d.app.cabinet_selected(), vec![device]);
+    // Stepped aside: Space does not tick, Escape does not close.
+    tap_space(&mut d);
+    d.key(egui::Key::Escape, egui::Modifiers::NONE);
+    d.frame();
+    assert!(d.app.wb.build.is_some());
+    assert_eq!(ticks(&d), 0);
+    d.app.show_device(device, true);
+    d.frame();
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+}

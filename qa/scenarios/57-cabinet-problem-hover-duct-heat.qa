@@ -1,0 +1,20 @@
+@title Cabinet: the problems pill names its problem on hover; "duct heat" finds the heat run
+@area Cabinet
+click_text "Open example"
+wait 20
+click_text Cabinet #1
+wait 30
+# The chip sits at x 345 at 1366 wide and at x 595 at 1920 (the pages panel is pinned there): hover both spots, the tooltip is in one of the pictures.
+move 345 96
+wait 40
+shot pill-hover-narrow
+move 595 96
+wait 40
+shot pill-hover-wide
+check_layout
+key ctrl+k
+wait 4
+text duct heat
+wait 6
+shot duct-heat
+expect "Simulate heat of the cabinet"

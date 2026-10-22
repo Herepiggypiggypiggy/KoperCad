@@ -35,7 +35,7 @@ const BIG_BUTTON: f32 = 64.0;
 
 /// What Build mode keeps between frames.
 pub(crate) struct BuildState {
-    plan: Option<(u64, Rc<BuildPlan>)>,
+    pub(super) plan: Option<(u64, Rc<BuildPlan>)>,
     /// Index into the plan's cabinets.
     cabinet: usize,
     /// The step the card shows; `None` follows the next step to do.
@@ -44,6 +44,9 @@ pub(crate) struct BuildState {
     problem: Option<String>,
     /// Large buttons and text, on for a window the size of a tablet.
     large: bool,
+    /// Build mode is stepped aside to show something in another workspace;
+    /// a small bar brings it back.
+    pub(super) away: bool,
     /// Steps ticked in this session, newest last, for Back.
     history: Vec<novo_commissioning::StepKey>,
 }
@@ -56,9 +59,18 @@ impl BuildState {
             focus: None,
             problem: None,
             large,
+            away: false,
             history: Vec::new(),
         }
     }
+}
+
+/// Where a step's object is shown, in another workspace.
+#[derive(Clone, Copy)]
+enum Show {
+    Wire3d(WireId),
+    DevicePlate(u64),
+    Device3d(u64),
 }
 
 /// What the screen asked for this frame.
@@ -67,7 +79,8 @@ struct Asked {
     close: bool,
     export: bool,
     import: bool,
-    show_wire: Option<WireId>,
+    sheet: bool,
+    show: Option<Show>,
     /// A step was ticked, taken back or parked: the store changed.
     changed: bool,
 }
@@ -147,7 +160,25 @@ impl NovoApp {
                 state.plan = Some((project.revision(), Rc::new(plan)));
             }
             let plan = state.plan.as_ref().map(|(_, p)| Rc::clone(p));
-            if let Some(plan) = plan {
+            if state.away {
+                let step = plan
+                    .as_ref()
+                    .and_then(|p| p.cabinets.get(state.cabinet))
+                    .and_then(|c| {
+                        match state.focus.or_else(|| match c.next(&mode.store) {
+                            Next::Ready(n) | Next::Blocked { step: n, .. } => Some(n),
+                            Next::Finished => None,
+                        }) {
+                            Some(n) => c.step(n).map(|s| format!("Step {n}: {}", s.title)),
+                            None => None,
+                        }
+                    })
+                    .unwrap_or_default();
+                let back = away_bar(ctx, rect, &step);
+                if back {
+                    state.away = false;
+                }
+            } else if let Some(plan) = plan {
                 let p = crate::theme::ui_palette();
                 let id = egui::Id::new("build_mode");
                 egui::Area::new(id)
@@ -180,14 +211,25 @@ impl NovoApp {
         if asked.export {
             self.export_field_results();
         }
+        if asked.sheet {
+            let plan = state.plan.as_ref().map(|(_, p)| Rc::clone(p));
+            if let Some(plan) = plan {
+                self.export_build_sheet(&plan);
+            }
+        }
         if asked.import {
             self.import_field_results();
             // Ticks came in: draw the card again from the merged store.
         }
-        if let Some(wire) = asked.show_wire {
-            self.show_wire_in_3d(wire);
-            // The 3D view is another workspace; Build mode stays open
-            // behind it for when the person comes back.
+        if let Some(show) = asked.show {
+            // Build mode steps aside (a bar brings it back) so the other
+            // workspace can be seen.
+            state.away = true;
+            match show {
+                Show::Wire3d(wire) => self.show_wire_in_3d(wire),
+                Show::DevicePlate(device) => self.show_device(device, false),
+                Show::Device3d(device) => self.show_device(device, true),
+            }
             self.wb.build = Some(state);
             return;
         }
@@ -206,8 +248,9 @@ impl NovoApp {
         let Some(mut state) = self.wb.build.take() else {
             return false;
         };
-        // Typing a problem note: the space belongs to the text.
-        let mut taken = state.problem.is_some();
+        // Typing a problem note: the space belongs to the text; stepped
+        // aside, Build mode is not on screen.
+        let mut taken = state.problem.is_some() || state.away;
         if !taken {
             let who = self
                 .wb
@@ -250,6 +293,78 @@ impl NovoApp {
             let json = mode.store.to_json();
             self.backend.set_commissioning_json(&json);
         }
+    }
+
+    /// Writes the build sheet PDF next to the project (`<project> build
+    /// sheet.pdf`), replacing only a file of this program's own making.
+    pub(super) fn export_build_sheet(&mut self, plan: &BuildPlan) -> Option<std::path::PathBuf> {
+        let (dir, stem) = self.export_base()?;
+        let path = super::pdf::replaceable_path(&dir.join(format!("{stem} build sheet.pdf")));
+        self.export_build_sheet_to(plan, &path)
+    }
+
+    pub(super) fn export_build_sheet_to(
+        &mut self,
+        plan: &BuildPlan,
+        path: &std::path::Path,
+    ) -> Option<std::path::PathBuf> {
+        self.load_commissioning();
+        let name = self.machine_title().unwrap_or_default();
+        let revision = self
+            .backend
+            .document()
+            .map_or(0, |d| d.project().revision());
+        let store = self.wb.commissioning.as_ref().map(|m| m.store.clone())?;
+        let output = novo_commissioning::build_sheet(plan, &store, revision);
+        if output.sections.is_empty() {
+            self.message(
+                Level::Warning,
+                "No cabinet has a mounting plate yet, so there is no build sheet.",
+            );
+            return None;
+        }
+        let options = novo_pdf::ReportPdfOptions {
+            title: format!("{name}  Build sheet"),
+            row_mm: output
+                .sections
+                .iter()
+                .map(|s| (s.key.clone(), novo_commissioning::build_sheet_row_mm(s)))
+                .collect(),
+            language: self.report_translator(),
+            ..novo_pdf::ReportPdfOptions::default()
+        };
+        let bytes = novo_pdf::export_report_pdf(&[&output], &options);
+        let replaced = path.exists();
+        match super::pdf::write_replacing(path, &bytes) {
+            Ok(()) => {
+                let verb = if replaced { "Replaced" } else { "Exported" };
+                self.message_file(format!("{verb} {}", path.display()), path);
+                Some(path.to_owned())
+            }
+            Err(e) => {
+                self.message(
+                    Level::Error,
+                    format!("Could not export the build sheet: {e}"),
+                );
+                None
+            }
+        }
+    }
+
+    /// Selects the device on the Cabinet canvas and shows it there or, with
+    /// `three_d`, in the 3D view (which follows the plate's selection).
+    pub(super) fn show_device(&mut self, device: u64, three_d: bool) {
+        self.flush_commissioning();
+        self.cabinet.view.selection.apply(
+            [novo_canvas::cabinet::box_item(device)],
+            novo_canvas::selection::SelectOp::Replace,
+        );
+        self.cabinet.rails.selected = None;
+        self.switch_workspace(if three_d {
+            super::workspace::Workspace::View3d
+        } else {
+            super::workspace::Workspace::Cabinet
+        });
     }
 
     fn message_if_finished(&mut self, state: &BuildState) {
@@ -307,6 +422,12 @@ fn screen(
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if widgets::ghost_button(ui, "Close").clicked() {
                 asked.close = true;
+            }
+            if widgets::ghost_button(ui, "Print sheet…")
+                .on_hover_text("A PDF of every step with its tick, for the workshop wall")
+                .clicked()
+            {
+                asked.sheet = true;
             }
             if widgets::ghost_button(ui, "Import ticks…")
                 .on_hover_text("Merge a .kcfield file from the tablet; the newer decision wins")
@@ -565,12 +686,21 @@ fn card(
             }
             ui.add_space(10.0);
             status_and_buttons(ui, state, cab, mode, step, status, who, asked);
-            if !step.wires.is_empty()
-                && widgets::ghost_button(ui, "Show the wire in 3D").clicked()
-                && let Some(&w) = step.wires.first()
-            {
-                asked.show_wire = Some(w);
-            }
+            ui.horizontal(|ui| {
+                if let Some(device) = step.device {
+                    if widgets::ghost_button(ui, "Show on the plate").clicked() {
+                        asked.show = Some(Show::DevicePlate(device));
+                    }
+                    if widgets::ghost_button(ui, "Show in 3D").clicked() {
+                        asked.show = Some(Show::Device3d(device));
+                    }
+                }
+                if let Some(&w) = step.wires.first()
+                    && widgets::ghost_button(ui, "Show the wire in 3D").clicked()
+                {
+                    asked.show = Some(Show::Wire3d(w));
+                }
+            });
             ready_now(ui, state, cab, mode, step.number);
             if next == Next::Finished {
                 ui.add_space(10.0);
@@ -820,4 +950,27 @@ fn ranges(numbers: &[usize]) -> String {
         i = j + 1;
     }
     out.join(", ")
+}
+
+/// The bar shown while Build mode is stepped aside. Returns whether the
+/// person asked to go back.
+fn away_bar(ctx: &egui::Context, rect: egui::Rect, step: &str) -> bool {
+    let mut back = false;
+    egui::Area::new(egui::Id::new("build_mode_away"))
+        .order(egui::Order::Middle)
+        .pivot(egui::Align2::CENTER_BOTTOM)
+        .fixed_pos(egui::pos2(rect.center().x, rect.bottom() - 14.0))
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    if widgets::primary_button(ui, "Back to Build mode").clicked() {
+                        back = true;
+                    }
+                    if !step.is_empty() {
+                        ui.add(egui::Label::new(step).truncate());
+                    }
+                });
+            });
+        });
+    back
 }

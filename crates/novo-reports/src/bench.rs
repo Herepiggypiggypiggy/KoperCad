@@ -603,7 +603,7 @@ impl BenchCut {
                 .map(|((_, name), place)| format!("{name} = {place}"))
                 .collect();
             notes.push(format!(
-                "Track names are the ducts of the wire production report (Duct fill), numbered in plan order: {}. Bundle B2 #3 is the third wire to lay in bundle 2; Seq is longest first within a bundle, a default order you can change if your shop lays the other way.",
+                "Track names are the ducts of the wire production report (Duct fill), numbered in the order the ducts were added: {}. Wires in the same ducts form one bundle whichever way they run (D1 > D5 and D5 > D1 are the same bundle). B2 #3 is the third wire to lay in bundle 2; Seq is longest first within a bundle, so lay them the other way round if your shop does.",
                 list.join("; ")
             ));
         }
@@ -662,7 +662,7 @@ impl BenchCut {
             let mut note = Section::new(
                 "check",
                 "Check before cutting",
-                vec![Column::new("note", "", 60.0)],
+                vec![Column::new("note", "Note", 60.0)],
             );
             for text in notes {
                 note.push(vec![Cell::text(text)], Vec::new());
@@ -674,15 +674,26 @@ impl BenchCut {
         for (mm2, colour, list) in &groups {
             let total: f64 = reel_mm(list);
             let cores = list.iter().filter(|j| on_cable(j)).count();
+            let reel = if total > 0.0 {
+                format!(" · {:.1} m", total / 1000.0)
+            } else {
+                String::new()
+            };
             let heading = format!(
-                "{} · {} wires · {:.1} m{}",
+                "{} · {}{}{}",
                 group_name(*mm2, colour),
-                list.len(),
-                total / 1000.0,
-                if cores > 0 {
-                    format!(" (+{cores} cable cores, not counted in metres)")
-                } else {
+                crate::count_text(list.len(), "wires"),
+                reel,
+                if cores == 0 {
                     String::new()
+                } else if cores == list.len() {
+                    " (cable cores: cut from the cable, not pulled from a reel)".to_owned()
+                } else {
+                    format!(
+                        " (+{} cable {}, not counted in metres)",
+                        cores,
+                        if cores == 1 { "core" } else { "cores" }
+                    )
                 }
             );
             let mut section = Section::new(
@@ -695,9 +706,9 @@ impl BenchCut {
                     Column::new("route", "Route", 8.0).right(),
                     Column::new("ends", "+Ends", 6.0).right(),
                     Column::new("strip_a", "Strip A", 7.0).right(),
-                    Column::new("ferrule_a", "End A", 10.0),
+                    Column::new("ferrule_a", "Sleeve A", 10.0),
                     Column::new("strip_b", "Strip B", 7.0).right(),
-                    Column::new("ferrule_b", "End B", 10.0),
+                    Column::new("ferrule_b", "Sleeve B", 10.0),
                     Column::new("bundle", "Bundle", 8.0),
                     Column::new("track", "Track", 12.0),
                     Column::new("from", "From", 22.0),

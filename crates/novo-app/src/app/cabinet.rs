@@ -359,6 +359,30 @@ pub(super) fn problem_lines(
     lines
 }
 
+/// Every problem of the layout, one per line, for the hover text of the problems pill.
+pub(super) fn problem_summary(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> String) -> String {
+    let mut lines: Vec<String> = layout
+        .placements
+        .iter()
+        .flat_map(|p| {
+            problem_lines(layout, p.id, tag_of)
+                .into_iter()
+                .map(move |l| (p.id, l))
+        })
+        .map(|(id, l)| format!("{}: {l}", tag_of(id)))
+        .collect();
+    // A device problem can be selected from the list; a panel-level one cannot.
+    let hint = if lines.is_empty() {
+        "Click to list the problems."
+    } else {
+        "Click to list them and select the device."
+    };
+    lines.extend(rail_duct_lines(layout));
+    lines.extend(panel_problem_lines(layout, tag_of));
+    lines.push(hint.to_owned());
+    lines.join("\n")
+}
+
 /// What is wrong with the panel as a whole, in words: the problems the count
 /// in the status bar includes that belong to no single device (the wiring
 /// openings, the room for the door, the door's sweep, tight depth). Without
@@ -1360,6 +1384,8 @@ impl NovoApp {
                     let pill =
                         cabinet_bar::pill(ui, &label, Some(novo_theme::widgets::Level::Error))
                             .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    // Hovering names the problems too, so a user need not click to learn them.
+                    let pill = pill.on_hover_text(problem_summary(shown, &tag_of));
                     egui::Popup::menu(&pill).show(|ui| {
                         for p in &shown.placements {
                             let lines = problem_lines(shown, p.id, &tag_of);
