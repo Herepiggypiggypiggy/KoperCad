@@ -1891,7 +1891,11 @@ impl Renderer {
             }),
             Shape::Part(k) => match library.get(k) {
                 Some(g) => {
-                    let lod = cull::lod_for(size_px, g.lods.len())?;
+                    let lod = cull::lod_for_part(
+                        size_px,
+                        g.lods.len(),
+                        g.lods.first().map_or(0, |l| l.triangles()),
+                    )?;
                     let extent = g.lods[lod].bounds.size();
                     let fit = Vec3::new(
                         if extent.x > 1e-6 {

@@ -107,14 +107,14 @@ impl Label {
         }
     }
 
-    /// Marks the label as secondary text: the first to go when the drawing
-    /// is too small to read it.
     /// Marks the label as part of its item's drawing (see [`Label::inside`]).
     pub fn inside(mut self) -> Self {
         self.inside = true;
         self
     }
 
+    /// Marks the label as secondary text: the first to go when the drawing
+    /// is too small to read it.
     pub fn secondary(mut self) -> Self {
         self.priority = crate::declutter::Priority::Secondary;
         self

@@ -5,7 +5,7 @@ measures what a printed sheet shows rather than the canvas estimate.
 
   python3 -I tools/text-conflicts/pdf_text_overlaps.py export.pdf [out.json]
 
-Prints one line per page with overlaps and a total. Needs `pip install pdfminer.six`.
+Prints one line per page with overlaps and a total. Needs `pip install pdfminer.six`. Not run in CI.
 """
 import json
 import sys

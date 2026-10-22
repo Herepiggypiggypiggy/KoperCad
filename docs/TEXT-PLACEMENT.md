@@ -205,7 +205,7 @@ colliding pair. Findings become regression scenarios in `qa/scenarios` and unit 
 
 | Stage | Content | Where the user sees it |
 | --- | --- | --- |
-| 0 | Measurement, done: `novo_canvas::text_audit`, the `text_audit` key in the scene dump, and the motor starter ratchet test `text_baseline` (baseline: 0 text on text, 1 text on symbol, 1 text on wire). The stress page generator for Tester A comes with stage 1. Nothing in the UI | Scene dump and QA reports show the counts; nothing moves yet |
+| 0 | Measurement, done: `novo_canvas::text_audit`, the `text_audit` key in the scene dump, and the motor starter ratchet test `text_baseline` (baseline: 0 text on text, 1 text on symbol, 1 text on wire). The stress page generator for Tester A is `novo_tests::text_stress` with its own per-cause ratchet (`text_conflicts`, 90 pages), an independent oracle: both ratchets count a tag over its own symbol, agree on the motor starter, and a stage that lowers one re-checks the other. Nothing in the UI | Scene dump and QA reports show the counts; nothing moves yet |
 | 1 | Engine `textlayout`: obstacles index, slots, search, cost, determinism, dirty-region re-solve, with unit and property tests; not yet wired | Not visible |
 | 2 | Devices: tag, description, pin text, symbol-kind slot tables, side-aware transform. Also the `text.conflict` check in the check panel, fed by the text audit of the drawn page; off by default so existing pages do not light up at once | Tags and pin numbers stop colliding when symbols are rotated, mirrored or neighbours; Check panel entry "Text conflicts" (off by default, switch on in the check settings) |
 | 3 | Terminals and strips: row logic, rotated names, strip name at run start | The terminal strip case from the report |
@@ -213,6 +213,8 @@ colliding pair. Findings become regression scenarios in `qa/scenarios` and unit 
 | 5 | Notes move onto the engine, shortening with hover text, leader lines, pinned overrides, Reset and Tidy commands, the setting | Edit menu "Tidy texts", Preferences, Drawing, Text placement |
 | 6 | Cabinet, 3D and PDF use the engine | Printed output matches screen |
 | 7 | Performance work to the budget and the 600-page scale check | Large projects stay fast |
+
+Stage 2a result (PR #1367): the anchor of a tag follows mirror and half turn. Stress matrix 4,287 to 3,354 conflicts; the sum of own-symbol causes fell from 1,091 to 18 (18 device tags still over their own symbol; the rest of the 1,091 were terminal, feed and interruption names). Two causes rose on purpose: device tag over a neighbour's symbol line 1,715 to 1,737 (+22) and terminal name over a neighbour's symbol line 524 to 642 (+118). A tag that used to sit on its own body now sits on the free side, which in tight packs faces the next symbol; the mirrored terminals row page grew from 100 to 118. Stage 3 (terminal pitch and neighbours) must take both causes below their stage 0b values.
 
 Honest limits: text boxes are estimates (`ADVANCE` 0.6 per glyph) until the print backend reports real widths;
 the engine pads for that. Very dense pages can still need a manual move; those are reported as `text.conflict`, not hidden.
