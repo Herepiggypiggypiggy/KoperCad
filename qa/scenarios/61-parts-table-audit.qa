@@ -1,0 +1,62 @@
+@title Parts table import: Dutch maker headers, price date, repeated order numbers, long list, palette ranking, folder picked as file
+@area Parts
+# Audit C-53 (palette ranking, plain error), C-54 (repeated order numbers are a visible choice) and the wider header words (made-up Dutch list).
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text import parts from a table
+wait 10
+shot palette
+expect "Import parts from a table (CSV or Excel)"
+expect_not "from a folder: from a table"
+key Escape
+wait 6
+import_table qa/fixtures/parts/price-list-nl.csv
+expect "Import parts from price-list-nl.csv"
+expect "Prijsdatum"
+expect "Price list date"
+shot columns
+check_layout
+check_blank columns
+click_text Rows Button
+wait 10
+expect "more than one row"
+expect "is not a date"
+expect "not for pieces"
+shot rows-last
+check_layout
+click_text "First row" Button
+wait 10
+shot rows-first
+check_layout
+click_text "Add 4 parts to the catalog"
+wait 20
+shot added
+# A single file picked in the folder import is said in words.
+answer_dialog qa/fixtures/parts/price-list-nl.csv
+click_text File
+wait 4
+click_text "Import parts"
+wait 4
+click_text "Import parts from a folder"
+wait 20
+expect "is a file, not a folder"
+expect_not "os error"
+shot folder-picked-file
+# A workbook with an odd layout and a renamed picture, through the one-step verb.
+import_table qa/fixtures/parts/odd-list.xlsx
+expect "Import parts from odd-list.xlsx"
+shot xlsx-columns
+click_text Cancel
+wait 6
+import_table qa/fixtures/parts/not-text.csv
+expect "does not look like a text file"
+shot refused
+# About 45 rows: the list scrolls and Add and Cancel stay in view.
+import_table qa/fixtures/parts/price-list-long.csv
+click_text Rows Button
+wait 10
+expect "Repeated"
+shot rows-long
+check_layout

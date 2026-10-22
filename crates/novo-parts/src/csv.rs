@@ -310,13 +310,31 @@ const HEADERS: &[(&[&str], Column)] = &[
     ),
 ];
 
+/// A header as the word tables compare it: lower case, accents folded
+/// (`Höhe` is `hohe`, `Anschlüsse` is `anschlusse`, `ß` is `ss`), spaces and
+/// punctuation removed.
+pub(crate) fn squash_header(header: &str) -> String {
+    let mut out = String::new();
+    for c in header.chars().flat_map(char::to_lowercase) {
+        match c {
+            'ä' | 'à' | 'á' | 'â' | 'å' => out.push('a'),
+            'ö' | 'ò' | 'ó' | 'ô' => out.push('o'),
+            'ü' | 'ù' | 'ú' | 'û' => out.push('u'),
+            'é' | 'è' | 'ê' | 'ë' => out.push('e'),
+            'ï' | 'í' | 'ì' | 'î' => out.push('i'),
+            'ç' => out.push('c'),
+            'ñ' => out.push('n'),
+            'ß' => out.push_str("ss"),
+            c if c.is_alphanumeric() => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}
+
 /// Maps one header to its column.
 pub fn column_for(header: &str) -> Column {
-    let squashed: String = header
-        .chars()
-        .filter(|c| c.is_alphanumeric())
-        .flat_map(char::to_lowercase)
-        .collect();
+    let squashed = squash_header(header);
     if squashed.is_empty() {
         return Column::Ignored;
     }

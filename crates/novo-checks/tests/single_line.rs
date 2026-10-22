@@ -10,7 +10,10 @@ use novo_checks::calc::drop::{Run, Supply};
 use novo_checks::calc::tables::TableSet;
 use novo_checks::single_line::{Kind, Origin, SingleLine, single_line};
 use novo_core::*;
-use novo_tests::{Board, MotorStarter, distribution_board, motor_starter};
+use novo_tests::{
+    Board, MotorStarter, Signals, distribution_board, distribution_board_with_signals,
+    motor_starter,
+};
 
 fn at(x: f64) -> Placement {
     Placement::at(Point::new(x, 0.0))
@@ -720,6 +723,79 @@ fn a_single_phase_motor_current_uses_efficiency_and_power_factor() {
             .contains("typical efficiency and power factor")
     );
     assert!(motor.current_a.value.unwrap() > p * 1000.0 / 400.0 * 1.2);
+}
+
+fn board_with_signals() -> (Document, Board, Signals) {
+    let mut doc = Document::default();
+    let (board, signals) = distribution_board_with_signals(&mut doc).unwrap();
+    (doc, board, signals)
+}
+
+#[test]
+fn lamps_and_sounders_on_a_mains_feeder_are_drawn_below_their_breaker() {
+    let (doc, _b, s) = board_with_signals();
+    let sl = build(&doc);
+    let p = doc.project();
+    let q5 = node(&sl, p, s.q5);
+    assert_eq!(q5.kind, Kind::Breaker);
+    let (h1, h2, b1) = (node(&sl, p, s.h1), node(&sl, p, s.h2), node(&sl, p, s.b1));
+    assert_eq!(
+        (h1.kind, h2.kind, b1.kind),
+        (Kind::Lamp, Kind::Lamp, Kind::Sounder)
+    );
+    for n in [h1, h2, b1] {
+        assert_eq!(n.parent, Some(q5.id));
+    }
+    // 60 W at the phase voltage 400 V / √3 = 230.9 V, power factor 1.
+    let phase = 400.0 / 3.0_f64.sqrt();
+    assert!((h1.current_a.value.unwrap() - 60.0 / phase).abs() < 1e-9);
+    assert_eq!(h1.current_a.origin, Origin::Calculated);
+    assert!((b1.current_a.value.unwrap() - 30.0 / phase).abs() < 1e-9);
+    // The breaker carries the arithmetic sum.
+    assert!((q5.current_a.value.unwrap() - 150.0 / phase).abs() < 1e-9);
+    let link = h1.link.as_ref().unwrap();
+    assert!(!link.three_phase);
+    assert!((link.voltage_v.value.unwrap() - phase).abs() < 1e-9);
+}
+
+#[test]
+fn single_phase_loads_say_how_their_voltage_was_taken() {
+    let (doc, _b, _s) = board_with_signals();
+    let sl = build(&doc);
+    assert!(
+        sl.notes
+            .iter()
+            .any(|n| n.starts_with("A load on one line conductor"))
+    );
+    assert!(
+        sl.notes
+            .iter()
+            .any(|n| n.starts_with("Lamps and sounders are drawn"))
+    );
+}
+
+#[test]
+fn a_lamp_on_a_24_volt_circuit_stays_off_the_diagram_and_is_named() {
+    let (doc, _b, s) = board_with_signals();
+    let sl = build(&doc);
+    assert!(sl.nodes.iter().all(|n| n.device != Some(s.h9)));
+    assert!(
+        sl.notes
+            .iter()
+            .any(|n| n.starts_with("Not drawn, lamps and sounders") && n.contains("H9"))
+    );
+}
+
+#[test]
+fn a_lamp_without_a_stated_power_leaves_the_feeder_current_unknown_and_says_so() {
+    let (mut doc, _b, s) = board_with_signals();
+    doc.transact("No power", |tx| tx.set_property(s.h2, "power_kw", None))
+        .unwrap();
+    let sl = build(&doc);
+    let p = doc.project();
+    assert!(node(&sl, p, s.h2).current_a.is_missing());
+    let q5 = node(&sl, p, s.q5);
+    assert!(q5.loads_without_current >= 1);
 }
 
 #[test]

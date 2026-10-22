@@ -65,6 +65,7 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `click X Y`, `move X Y`, `drag X1 Y1 X2 Y2`, `scroll X Y DY` | pointer, window points |
 | `key ctrl+k Escape`, `text some words` | keyboard |
 | `answer_dialog FILE` | the next native file dialog gets this path (queue it first) |
+| `import_table FILE` | File > Import parts > Import parts from a table, with the file dialog answered with FILE; leaves the mapping (or the refusal) on screen |
 | `wait N`, `resize W H` | run N frames; resize the window |
 | `frame_stats [pan\|zoom\|none] [frames]` | run frames (default 120) while the page pans, zooms or stands still, and report UI pass and whole-frame times (mean, median, p95, worst, in ms); they appear under "Measurements" in `report.md`. On a box without a GPU the whole-frame time includes software rasterising: read the UI pass as the program's own cost |
 | `shot label` | labelled screenshot |
