@@ -1,10 +1,11 @@
 @title Reports list: counts arrive after the workspace opens, never from an earlier state
 @area Reports
-# The list opens at once with dashes; the row counts fill in when the worker answers.
+# The list opens at once with dashes; the row counts fill in when the worker answers. The picture is
+# taken with no wait after the click; on the small example the worker may already be done, so the
+# dashes are guaranteed only by the unit test (reports_view.rs), and the 600-page project shows them.
 click_text "Open example"
 wait 20
 click_text Reports #2
-wait 2
 shot counts-pending
 check_layout
 wait 40
