@@ -40,11 +40,13 @@ row becomes, then add the parts. Nothing is added before that last click.
 | --- | --- | --- |
 | Rated current, AC-1/AC-3 current, setting range | `9`, `500 mA`, `1.2 kA` | A |
 | Voltage, coil voltage | `24`, `230 V`, `0.4 kV` | V |
-| Power loss | `1,2`, `800 mW` | W |
-| Rated power | `4`, `4000 W`, `5 hp` | kW |
-| Width, height, depth | `45`, `6 cm`, `2 in` | mm |
+| Power loss | `1,2`, `800 mW`, `1000 BTU/h` | W |
+| Rated power | `4`, `4000 W`, `5 hp`, `10 PS` (metric hp, Dutch `pk`) | kW |
+| Width, height, depth | `45`, `6 cm`, `2 in`, `0.5 ft` | mm |
 | Conductor range or min/max | `0.14 ... 4 mm²` | mm² |
-| Price | `12,50 €`, `1.234,56 EUR` | amount, currency, date of import |
+| Price | `12,50 €`, `1.234,56 EUR` | amount, currency |
+| Price list date | `2026-10-15`, `15.10.2026`, `15-10-2026`, `10/2026`, an Excel date | date on the price (the day of the import when no column, or an unreadable cell, says so) |
+| Price is per (pieces) | `100`, `per 100`, `1000 Stk.` | quantity the price is for; a price per metre, kg or set is left out, not shown as a piece price |
 | ETIM, ECLASS | `EC000066`, `27-14-11-01`, `27141101` | codes |
 | Lifecycle, connection method | words in EN, DE, NL | enum |
 
@@ -56,8 +58,27 @@ handled or flagged.
 Never guessed: a value that is not a number, has a unit that does not fit, is not
 possible (a 45 m wide relay, a negative loss) or is an invalid class code is left
 out of the part and the finding says so. `1,500` is ambiguous (1.5 or 1500): it is
-read as 1.5 and flagged. A row with no order number or no maker (no default maker
-set) is not imported. The same part twice in one file: the later row is used.
+read as 1.5 and flagged. A date written `05-10-2026` is read day first (as German and
+Dutch lists write it) and the row says so when month first would be a different date;
+`10/2026` is the first of that month. A row with no order number or no maker (no
+default maker set) is not imported.
+
+## The same part in several rows
+
+The catalog holds one entry per maker and order number, so two rows with the same
+order number cannot both be kept. The Rows step lists them (count, rows, which row is
+used) and offers the choice: **Last row** (the default, as an update list reads),
+**First row**, or **First row, gaps filled from the others**. Every row that is not the
+one used says so in its findings, and the footer counts the repeated order numbers.
+
+## Header words
+
+Headers are matched without accents and case (`Höhe`, `Anschlüsse`, `Gültig ab`), in
+English, German and Dutch: for example `Bedrijfsstroom`, `Warmteverlies`,
+`Aansluitwijze`, `Aantal klemmen`, `Prijsdatum`, `Prijseenheid`, `Leverstatus`,
+`Preiseinheit`, `Gültig ab`, `Valid from`. A header that is not known is shown as
+"Other data" and the person chooses. `AWG` sizes are not converted (not a linear unit);
+the cell is left out with a finding.
 
 ## Honest labelling
 

@@ -131,7 +131,8 @@ fn rows_that_cannot_be_trusted_are_skipped_or_stripped_and_said_so() {
     // Rows are numbered as the spreadsheet shows them: header is row 1.
     assert_eq!(p.rows[0].line, 2);
     assert_eq!(p.parts.len(), 3);
-    assert_eq!(p.counts().skipped, 3);
+    // Two rows have no usable order number or maker; the third is the same part twice.
+    assert_eq!((p.counts().skipped, p.counts().repeated), (2, 1));
 }
 
 #[test]
@@ -459,4 +460,268 @@ fn plain_order_numbers_that_look_like_exponents_are_imported() {
     let p = preview(&sheet, &mapping);
     let orders: Vec<&str> = p.parts.iter().map(|p| p.order_number.as_str()).collect();
     assert_eq!(orders, ["3E10", "2E4", "100E3"], "{:#?}", p.rows);
+}
+
+const DUTCH_MAKER: &str = "Fabrikant;Bestelnummer;Omschrijving;Bedrijfsstroom (A);Warmteverlies W;Spoel;Aansluitwijze;Aantal klemmen;Prijs;Prijsdatum;Prijseenheid;Leverstatus\n\
+Example Maker;NL-1;Contactor 9 A;9;1,3;24;Schroef;3;45,00;05-10-2026;100;leverbaar\n\
+Example Maker;NL-2;Hulprelais;6;0,4;230;Veer;2;12,00;2026-10-01;1;uit productie\n";
+
+#[test]
+fn dutch_maker_headers_map_with_price_date_basis_and_status() {
+    let sheet = csv_sheet(DUTCH_MAKER);
+    let mapping = Mapping::suggest(&sheet, 0);
+    for (header, target) in [
+        ("Fabrikant", Target::Manufacturer),
+        ("Bestelnummer", Target::OrderNumber),
+        ("Omschrijving", Target::Description),
+        ("Bedrijfsstroom (A)", Target::Measure("rated_current_a")),
+        ("Warmteverlies W", Target::Measure("power_loss_w")),
+        ("Spoel", Target::Measure("coil_voltage_v")),
+        ("Aansluitwijze", Target::Connection),
+        ("Aantal klemmen", Target::ConnectionCount),
+        ("Prijs", Target::Price),
+        ("Prijsdatum", Target::PriceDate),
+        ("Prijseenheid", Target::PricePer),
+        ("Leverstatus", Target::Lifecycle),
+    ] {
+        assert_eq!(*target_of(&mapping, header), target, "{header}");
+    }
+    let p = preview(&sheet, &mapping);
+    assert!(p.problems.is_empty(), "{:?}", p.problems);
+    let price = p.parts[0].price.as_ref().unwrap();
+    // 45,00 per 100 pieces, dated by the file, not by the day of the import.
+    assert_eq!(
+        (price.amount, price.per, price.date.as_str()),
+        (45.0, 100, "2026-10-05")
+    );
+    assert_eq!(p.parts[1].price.as_ref().unwrap().date, "2026-10-01");
+    assert_eq!(p.parts[0].lifecycle, Lifecycle::Active);
+    assert_eq!(p.parts[1].lifecycle, Lifecycle::PhasingOut);
+    // The first date has day and month both at most 12: read day first, and said so.
+    assert!(
+        p.rows[0]
+            .issues
+            .iter()
+            .any(|i| i.message.contains("read as day.month.year")),
+        "{:?}",
+        p.rows[0].issues
+    );
+}
+
+#[test]
+fn accents_in_headers_do_not_hide_them() {
+    let sheet = csv_sheet(
+        "Hersteller;Artikelnummer;Anschlüsse;Höhe;Gültig ab;Preiseinheit\nExample Maker;X-1;4;85;15.10.2026;10\n",
+    );
+    let mapping = Mapping::suggest(&sheet, 0);
+    assert_eq!(*target_of(&mapping, "Anschlüsse"), Target::ConnectionCount);
+    assert_eq!(*target_of(&mapping, "Höhe"), Target::Height);
+    assert_eq!(*target_of(&mapping, "Gültig ab"), Target::PriceDate);
+    assert_eq!(*target_of(&mapping, "Preiseinheit"), Target::PricePer);
+}
+
+#[test]
+fn unreadable_dates_and_bases_are_said_and_a_price_per_metre_is_left_out() {
+    let sheet = csv_sheet(
+        "Maker,Order no,Price,Price date,Per\n\
+         Example Maker,D-1,10,31.02.2026,1\n\
+         Example Maker,D-2,10,10/2026,100 pcs\n\
+         Example Maker,D-3,10,2026-10-02,per metre\n\
+         Example Maker,D-4,10,46300,abc\n",
+    );
+    let mut mapping = Mapping::suggest(&sheet, 0);
+    // "abc" in the last row keeps the guess off this column: the person sets it.
+    let per = mapping
+        .columns
+        .iter()
+        .position(|c| c.header == "Per")
+        .unwrap();
+    mapping.columns[per].target = Target::PricePer;
+    let p = preview(&sheet, &mapping);
+    let date_of = |i: usize| p.parts[i].price.as_ref().map(|p| (p.date.clone(), p.per));
+    // 31 February is not a date: the import date stands in, and the row says so.
+    assert_eq!(date_of(0), Some(("2026-10-21".into(), 1)));
+    assert!(
+        p.rows[0]
+            .issues
+            .iter()
+            .any(|i| i.message.contains("is not a date"))
+    );
+    // Month and year: the first of the month, said so.
+    assert_eq!(date_of(1), Some(("2026-10-01".into(), 100)));
+    assert!(
+        p.rows[1]
+            .issues
+            .iter()
+            .any(|i| i.message.contains("no day"))
+    );
+    // A price per metre cannot be compared with a price per piece: left out.
+    assert_eq!(date_of(2), None);
+    assert!(
+        p.rows[2]
+            .issues
+            .iter()
+            .any(|i| i.message.contains("not for pieces"))
+    );
+    // An Excel date number is a date (46300 is 2026-10-05 in Excel's calendar).
+    assert_eq!(p.parts[3].price.as_ref().unwrap().date, "2026-10-05");
+    // Text that is no number of pieces: per piece, said so.
+    assert!(
+        p.rows[3]
+            .issues
+            .iter()
+            .any(|i| i.message.contains("not a number of pieces"))
+    );
+}
+
+#[test]
+fn an_excel_date_cell_is_the_price_list_date() {
+    use rust_xlsxwriter::{ExcelDateTime, Format, Workbook};
+    let mut book = Workbook::new();
+    let sheet = book.add_worksheet();
+    for (c, h) in ["Maker", "Order no", "Price", "Valid from"]
+        .iter()
+        .enumerate()
+    {
+        sheet.write_string(0, c as u16, *h).unwrap();
+    }
+    sheet.write_string(1, 0, "Example Maker").unwrap();
+    sheet.write_string(1, 1, "XD-1").unwrap();
+    sheet.write_number(1, 2, 12.5).unwrap();
+    let format = Format::new().set_num_format("dd.mm.yyyy");
+    let date = ExcelDateTime::from_ymd(2026, 3, 1).unwrap();
+    sheet
+        .write_datetime_with_format(1, 3, &date, &format)
+        .unwrap();
+    let bytes = book.save_to_buffer().unwrap();
+    let file = TableFile::read("dates.xlsx", &bytes).unwrap();
+    let sheet = &file.sheets[0];
+    let mapping = Mapping::suggest(sheet, 0);
+    assert_eq!(*target_of(&mapping, "Valid from"), Target::PriceDate);
+    let p = preview(sheet, &mapping);
+    assert_eq!(p.parts[0].price.as_ref().unwrap().date, "2026-03-01");
+}
+
+#[test]
+fn metric_horsepower_btu_and_feet_convert() {
+    let sheet = csv_sheet(
+        "Maker,Order no,Motor power [PS],Heat loss [BTU/h],Width [ft]\nExample Maker,U-1,10,1000,0.5\n",
+    );
+    let mapping = Mapping::suggest(&sheet, 0);
+    let p = preview(&sheet, &mapping);
+    assert!(p.problems.is_empty(), "{:?}", p.problems);
+    let part = &p.parts[0];
+    let kw = match part.data["rated_power_kw"] {
+        novo_core::Value::Float(f) => f,
+        ref other => panic!("{other:?}"),
+    };
+    assert!((kw - 7.355).abs() < 1e-9, "{kw}");
+    let w = match part.data["power_loss_w"] {
+        novo_core::Value::Float(f) => f,
+        ref other => panic!("{other:?}"),
+    };
+    assert!((w - 293.071).abs() < 1e-6, "{w}");
+}
+
+const REPEATED: &str = "Maker,Order no,Description,Width [mm],Price\n\
+Example Maker,R-1,First row,,10\n\
+Example Maker,R-2,Single,45,5\n\
+Example Maker,R-1,Last row,60,12\n\
+Example Maker,R-1,,,\n";
+
+#[test]
+fn repeated_order_numbers_are_listed_and_the_person_picks_what_is_kept() {
+    let sheet = csv_sheet(REPEATED);
+    let mut mapping = Mapping::suggest(&sheet, 0);
+    // Default: the last row, as before, but now listed.
+    let p = preview(&sheet, &mapping);
+    assert_eq!(p.repeated.len(), 1);
+    let group = &p.repeated[0];
+    assert_eq!(
+        (group.order_number.as_str(), group.lines.as_slice()),
+        ("R-1", &[2, 4, 5][..])
+    );
+    assert_eq!(group.used, 5);
+    assert_eq!(p.parts.len(), 2);
+    // The last row of R-1 has nothing but the order number.
+    let kept = p.parts.iter().find(|x| x.order_number == "R-1").unwrap();
+    assert_eq!(kept.description, "");
+    assert_eq!((p.counts().skipped, p.counts().repeated), (0, 2));
+    assert!(p.rows[0].issues.iter().any(|i| i.message.contains("row 5")));
+
+    mapping.duplicates = DuplicateRule::KeepFirst;
+    let p = preview(&sheet, &mapping);
+    let kept = p.parts.iter().find(|x| x.order_number == "R-1").unwrap();
+    assert_eq!(kept.description, "First row");
+    assert_eq!(p.repeated[0].used, 2);
+    assert_eq!((p.counts().skipped, p.counts().repeated), (0, 2));
+    assert!(p.rows[2].issues.iter().any(|i| i.message.contains("row 2")));
+
+    mapping.duplicates = DuplicateRule::Merge;
+    let p = preview(&sheet, &mapping);
+    let kept = p.parts.iter().find(|x| x.order_number == "R-1").unwrap();
+    // The first row wins; the width it lacks comes from the next row that has one.
+    assert_eq!(kept.description, "First row");
+    assert_eq!(kept.dimensions, None); // a width alone is not a size
+    assert_eq!(kept.price.as_ref().unwrap().amount, 10.0);
+    assert_eq!(p.parts.len(), 2);
+    // Nothing is dropped in silence: every other row says why it is not a part,
+    // and the summary says they were merged, not that they failed.
+    for row in [&p.rows[2], &p.rows[3]] {
+        assert!(!row.issues.is_empty(), "{row:?}");
+    }
+    let summary = p.summary();
+    assert!(
+        summary.contains("1 repeated order number (2 rows merged into the first row)"),
+        "{summary}"
+    );
+    assert!(!summary.contains("not imported"), "{summary}");
+}
+
+#[test]
+fn pe_is_the_price_basis_only_for_a_column_of_numbers() {
+    let sheet =
+        csv_sheet("Maker,Order no,PE,Price\nExample Maker,T-1,100,5\nExample Maker,T-2,1,6\n");
+    let mapping = Mapping::suggest(&sheet, 0);
+    assert_eq!(*target_of(&mapping, "PE"), Target::PricePer);
+    // A protective-earth column of Yes/No or marks is not.
+    let sheet =
+        csv_sheet("Maker,Order no,PE,Price\nExample Maker,T-1,yes,5\nExample Maker,T-2,no,6\n");
+    let mapping = Mapping::suggest(&sheet, 0);
+    assert_ne!(*target_of(&mapping, "PE"), Target::PricePer);
+}
+
+#[test]
+fn a_withdrawn_part_is_never_read_as_active() {
+    // "nicht lieferbar" contains "lieferbar": the withdrawn words are tested first.
+    let withdrawn = [
+        "nicht lieferbar",
+        "unlieferbar",
+        "nicht verfügbar",
+        "niet leverbaar",
+        "niet meer leverbaar",
+        "onleverbaar",
+        "niet beschikbaar",
+        "unavailable",
+        "not available",
+    ];
+    let mut text = String::from("Maker,Order no,Status\n");
+    for (i, w) in withdrawn.iter().enumerate() {
+        text.push_str(&format!("Example Maker,W-{i},{w}\n"));
+    }
+    text.push_str(
+        "Example Maker,A-1,lieferbar\nExample Maker,A-2,leverbaar\nExample Maker,A-3,available\n",
+    );
+    let sheet = csv_sheet(&text);
+    let mapping = Mapping::suggest(&sheet, 0);
+    assert_eq!(*target_of(&mapping, "Status"), Target::Lifecycle);
+    let p = preview(&sheet, &mapping);
+    for part in &p.parts {
+        let want = if part.order_number.starts_with('W') {
+            Lifecycle::Discontinued
+        } else {
+            Lifecycle::Active
+        };
+        assert_eq!(part.lifecycle, want, "{}", part.order_number);
+    }
 }
