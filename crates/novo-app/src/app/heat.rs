@@ -1732,7 +1732,10 @@ fn legend(
                 // Room for the top tick label, which hangs above the bar.
                 ui.add_space(6.0);
                 // A short canvas gets a shorter colour bar, so the notes below stay in view.
-                let height = if rect.height() < 620.0 { 110.0 } else { 180.0 };
+                // With a lesson card in the corner the legend has only the room above it.
+                let room = rect.height() - super::panel::reserved_bottom_right(ui.ctx());
+                let full: f32 = if rect.height() < 620.0 { 110.0 } else { 180.0 };
+                let height = full.min((room - 250.0).max(30.0));
                 let (bar, _) =
                     ui.allocate_exact_size(Vec2::new(14.0, height), egui::Sense::hover());
                 let mut mesh = egui::Mesh::default();
@@ -1796,8 +1799,7 @@ fn legend(
                 match &cache.source {
                     Source::Synthetic => {
                         ui.label(small(
-                            "Preview model from the part losses, not a solver result. \
-                             Press Simulate for a real run.",
+                            "Preview from part losses, not a solver result. Simulate runs it.",
                             t::TEXT_MUTED,
                         ));
                     }

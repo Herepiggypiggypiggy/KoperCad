@@ -1,6 +1,7 @@
 @title Lesson card and heat legend: the legend keeps clear of the card, both in view
 @area Cabinet
-# At 1366x768 the card sits in the bottom right; the Temperature legend hangs from the top right and must stay above it.
+# At 1366x768 the card sits in the bottom right; the Temperature legend hangs from the top right, stays above it and shows all its lines.
+# The plate is empty at this step (0 placed), so the map is the preview gradient from the part losses.
 click_text "Learn…"
 wait 15
 text cabinet layout
@@ -14,3 +15,6 @@ wait 60
 shot heat-with-card
 check_blank heat-with-card
 check_layout
+key escape
+wait 10
+shot heat-hint-dismissed
