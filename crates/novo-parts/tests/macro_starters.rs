@@ -257,15 +257,21 @@ fn safety_macro_wires_both_channels_and_both_contactors() {
         };
         let (ka, pa) = project_pin(a.symbol, a.pin);
         let (kb, pb) = project_pin(b.symbol, b.pin);
-        pair.push(format!("{ka}:{pa}-{kb}:{pb}"));
+        // The direction a wire was drawn in does not matter.
+        let (x, y) = (format!("{ka}:{pa}"), format!("{kb}:{pb}"));
+        pair.push(if x <= y {
+            format!("{x}-{y}")
+        } else {
+            format!("{y}-{x}")
+        });
     }
     pair.sort();
     for expected in [
         "iec/operators/pushbutton_no:14-iec/safety/relay:S34",
-        "iec/safety/relay:14-iec/coils/contactor:A1",
-        "iec/safety/relay:24-iec/coils/contactor:A1",
-        "iec/safety/relay:S11-iec/safety/emergency_stop_2ch:11",
-        "iec/safety/relay:S21-iec/safety/emergency_stop_2ch:21",
+        "iec/coils/contactor:A1-iec/safety/relay:14",
+        "iec/coils/contactor:A1-iec/safety/relay:24",
+        "iec/safety/emergency_stop_2ch:11-iec/safety/relay:S11",
+        "iec/safety/emergency_stop_2ch:21-iec/safety/relay:S21",
         "iec/safety/emergency_stop_2ch:12-iec/safety/relay:S12",
         "iec/safety/emergency_stop_2ch:22-iec/safety/relay:S22",
     ] {

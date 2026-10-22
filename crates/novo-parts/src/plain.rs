@@ -32,15 +32,22 @@ mod tests {
 
     #[test]
     fn os_errors_are_said_in_words() {
-        let e = Error::from_raw_os_error(20);
+        // Built from the error kind, not an OS error number: numbers mean
+        // different things on Windows and Linux.
+        let e = Error::from(ErrorKind::NotADirectory);
         let text = plain_io_error(&e);
         assert!(text.contains("file, not a folder"), "{text}");
         assert!(!text.contains("os error"), "{text}");
+        let e = Error::from(ErrorKind::IsADirectory);
+        assert!(plain_io_error(&e).contains("folder, not a file"));
         let e = Error::from(ErrorKind::NotFound);
         assert!(plain_io_error(&e).contains("does not exist"));
         let e = Error::from(ErrorKind::PermissionDenied);
         assert!(plain_io_error(&e).contains("may not read"));
+        // Any other error loses its "(os error N)" tail on every platform.
         let e = Error::from_raw_os_error(28);
         assert!(!plain_io_error(&e).contains("os error"));
+        // Windows says 267 for a file used as a folder.
+        assert!(plain_io_error(&Error::from_raw_os_error(267)).contains("file, not a folder"));
     }
 }
