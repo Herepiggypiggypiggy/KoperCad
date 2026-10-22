@@ -408,6 +408,74 @@ pub fn centre_rails(rails: &[Rail], placements: &[Placement]) -> Vec<RailShift> 
         .collect()
 }
 
+/// What [`centre_rails_checked`] did and could not do.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Centring {
+    /// The rails to move.
+    pub shifts: Vec<RailShift>,
+    /// Rails left where they are because the move would put them under a duct.
+    pub skipped: Vec<u64>,
+    /// Devices still more than 1 mm off the middle of their rail afterwards:
+    /// the shorter ones on a rail that follows its tallest device, and the
+    /// devices of skipped rails.
+    pub still_off: usize,
+}
+
+impl Centring {
+    /// The longest move, in mm.
+    pub fn largest(&self) -> f64 {
+        self.shifts.iter().map(|s| s.by.abs()).fold(0.0, f64::max)
+    }
+}
+
+/// [`centre_rails`], leaving out a rail whose move would put it under a duct
+/// it did not lie under, and counting the devices that stay off the middle.
+pub fn centre_rails_checked(rails: &[Rail], ducts: &[Duct], placements: &[Placement]) -> Centring {
+    let under = |rails: &[Rail], rail: u64| -> Vec<u64> {
+        duct_overlaps(ducts, rails, &[])
+            .iter()
+            .filter_map(|o| match o.hit {
+                DuctHit::Rail { id, .. } if id == rail => Some(o.duct),
+                _ => None,
+            })
+            .collect()
+    };
+    let mut out = Centring::default();
+    let mut after = rails.to_vec();
+    for shift in centre_rails(rails, placements) {
+        let before = under(rails, shift.rail);
+        let mut moved = rails.to_vec();
+        if let Some(r) = moved.iter_mut().find(|r| r.id == shift.rail) {
+            (r.x, r.y) = (shift.x, shift.y);
+        }
+        if under(&moved, shift.rail)
+            .iter()
+            .any(|d| !before.contains(d))
+        {
+            out.skipped.push(shift.rail);
+            continue;
+        }
+        if let Some(r) = after.iter_mut().find(|r| r.id == shift.rail) {
+            (r.x, r.y) = (shift.x, shift.y);
+        }
+        out.shifts.push(shift);
+    }
+    out.still_off = placements
+        .iter()
+        .filter_map(|p| {
+            let rail = after.iter().find(|r| Some(r.id) == p.rail)?;
+            let f = p.footprint();
+            let off = if rail.vertical {
+                f.x + f.w / 2.0 - rail.x
+            } else {
+                f.y + f.h / 2.0 - rail.y
+            };
+            (off.abs() > 1.0).then_some(())
+        })
+        .count();
+    out
+}
+
 /// What a duct lies over.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DuctHit {
@@ -543,6 +611,47 @@ mod tests {
             ..rails[0]
         }];
         assert!(centre_rails(&done, &[a]).is_empty());
+    }
+
+    #[test]
+    fn a_rail_that_would_move_under_a_duct_stays_and_mixed_heights_are_counted() {
+        let rail = Rail {
+            id: 1,
+            x: 0.0,
+            y: 100.0,
+            length: 300.0,
+            vertical: false,
+        };
+        let mut tall = p(1, 20.0, 100.0, 40.0, 90.0);
+        tall.rail = Some(1);
+        let mut small = p(2, 80.0, 100.0, 20.0, 20.0);
+        small.rail = Some(1);
+        // No duct: the rail follows the tall device (middle 145); the small
+        // device (middle 110) stays 35 mm off.
+        let free = centre_rails_checked(
+            std::slice::from_ref(&rail),
+            &[],
+            &[tall.clone(), small.clone()],
+        );
+        assert_eq!(free.shifts.len(), 1);
+        assert_eq!(free.largest(), 45.0);
+        assert_eq!(free.still_off, 1);
+        assert!(free.skipped.is_empty());
+        // A duct just below the rail's band (band 82.5 to 117.5): moving the
+        // line to 145 would put the band (127.5 to 162.5) over the duct.
+        let duct = Duct {
+            id: 9,
+            x: 0.0,
+            y: 150.0,
+            length: 300.0,
+            width: 25.0,
+            vertical: false,
+        };
+        let blocked =
+            centre_rails_checked(std::slice::from_ref(&rail), &[duct], &[tall.clone(), small]);
+        assert!(blocked.shifts.is_empty());
+        assert_eq!(blocked.skipped, vec![1]);
+        assert_eq!(blocked.still_off, 2);
     }
 
     #[test]

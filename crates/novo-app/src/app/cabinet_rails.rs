@@ -331,16 +331,6 @@ pub(super) fn show_window(
                     });
                 }
                 if ui
-                    .button("Centre rails on devices")
-                    .on_hover_text(
-                        "Moves each DIN rail onto the middle of its devices; \
-                         the devices stay where they are. One undo step.",
-                    )
-                    .clicked()
-                {
-                    ask = Some(RailAsk::CentreRails);
-                }
-                if ui
                     .button("Add vertical duct")
                     .on_hover_text("A trunk that joins the ducts between the rows")
                     .clicked()
@@ -349,6 +339,18 @@ pub(super) fn show_window(
                         kind: RailKind::Duct,
                         vertical: true,
                     });
+                }
+                if ui
+                    .button("Centre rails on devices")
+                    .on_hover_text(
+                        "Moves each DIN rail onto the middle of its devices; the devices \
+                         stay where they are. A rail with devices of different heights \
+                         follows the tallest, and a rail that would then run under a duct \
+                         is left alone. One undo step.",
+                    )
+                    .clicked()
+                {
+                    ask = Some(RailAsk::CentreRails);
                 }
             });
             ui.weak(
@@ -645,31 +647,49 @@ impl super::NovoApp {
         else {
             return;
         };
-        let shifts = novo_layout::centre_rails(&layout.rails, &layout.placements);
-        if shifts.is_empty() {
+        let done =
+            novo_layout::centre_rails_checked(&layout.rails, &layout.ducts, &layout.placements);
+        if done.shifts.is_empty() && done.skipped.is_empty() && done.still_off == 0 {
             self.message(
                 super::Level::Info,
                 "Every rail already runs through the middle of its devices".to_string(),
             );
             return;
         }
-        let count = shifts.len();
-        let moved = self.cabinet_edit("Centre rails on devices", move |tx| {
-            for s in &shifts {
-                // Not `MoveRail`: it carries the devices along.
-                tx.update::<Rail>(RailId::from(s.rail), |r| {
-                    r.x = s.x;
-                    r.y = s.y;
-                })?;
-            }
-            Ok(())
-        });
-        if moved {
-            let plural = if count == 1 { "rail" } else { "rails" };
-            self.message(
-                super::Level::Info,
-                format!("Centred {count} {plural} on their devices; the devices did not move"),
-            );
+        let count = done.shifts.len();
+        let largest = done.largest();
+        let shifts = done.shifts.clone();
+        let moved = count == 0
+            || self.cabinet_edit("Centre rails on devices", move |tx| {
+                for s in &shifts {
+                    // Not `MoveRail`: it carries the devices along.
+                    tx.update::<Rail>(RailId::from(s.rail), |r| {
+                        r.x = s.x;
+                        r.y = s.y;
+                    })?;
+                }
+                Ok(())
+            });
+        if !moved {
+            return;
         }
+        let mut text = match count {
+            0 => "No rail moved".to_string(),
+            1 => format!("Centred 1 rail ({largest:.0} mm), devices unmoved"),
+            n => format!("Centred {n} rails (most {largest:.0} mm), devices unmoved"),
+        };
+        if !done.skipped.is_empty() {
+            text.push_str(&format!(
+                "; {} left alone, a duct is in the way",
+                done.skipped.len()
+            ));
+        }
+        if done.still_off > 0 {
+            text.push_str(&format!(
+                "; {} still off the middle (shorter ones)",
+                done.still_off
+            ));
+        }
+        self.message(super::Level::Info, text);
     }
 }

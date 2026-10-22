@@ -19,7 +19,7 @@ expect "Centre rails on devices"
 shot window
 click_text "Centre rails on devices"
 wait 10
-expect "on their devices"
+expect "devices unmoved"
 shot after
 check_layout
 key ctrl+z
@@ -27,4 +27,4 @@ wait 10
 shot undone
 click_text "Centre rails on devices"
 wait 10
-expect "on their devices"
+expect "devices unmoved"
