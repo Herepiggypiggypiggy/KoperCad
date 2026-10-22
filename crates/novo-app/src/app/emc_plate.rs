@@ -19,6 +19,7 @@ pub(super) fn draw(
     rect: egui::Rect,
     view: &Viewport,
     pic: &Picture,
+    field: Option<&emc::Field>,
     layers: &EmcLayers,
     selected: Option<u32>,
     dark: bool,
@@ -32,8 +33,9 @@ pub(super) fn draw(
     };
     let px_per_mm = (to_screen(1.0, 0.0).x - to_screen(0.0, 0.0).x).abs();
 
-    if layers.risk {
-        let f = field::exposure(pic);
+    if layers.risk
+        && let Some(f) = field
+    {
         for j in 0..f.ny {
             for i in 0..f.nx {
                 let v = f.values[j * f.nx + i];
@@ -102,6 +104,7 @@ pub(super) fn draw(
         let font = egui::FontId::proportional(12.0);
         let mut spots: Vec<_> = pic.hotspots.iter().collect();
         spots.sort_by(|a, b| a.risk.total_cmp(&b.risk));
+        let mut placed: Vec<egui::Rect> = Vec::new();
         for h in spots {
             let p = to_screen(h.at[0], h.at[1]);
             if !rect.contains(p) {
@@ -112,7 +115,22 @@ pub(super) fn draw(
             let text = emc::label(h);
             let galley = painter.layout_no_wrap(text, font.clone(), super::emc_view::text_on(fill));
             let size = galley.size() + egui::vec2(12.0, 6.0);
-            let chip = egui::Rect::from_center_size(p, size);
+            // A badge that would sit on another one steps down, with a stalk
+            // back to its point.
+            let mut chip = egui::Rect::from_center_size(p, size);
+            for _ in 0..12 {
+                if !placed.iter().any(|o| o.expand(2.0).intersects(chip)) {
+                    break;
+                }
+                chip = chip.translate(egui::vec2(0.0, size.y + 3.0));
+            }
+            placed.push(chip);
+            if chip.center() != p {
+                painter.line_segment(
+                    [p, chip.center_top()],
+                    egui::Stroke::new(1.5, color(fill, 230)),
+                );
+            }
             painter.circle_stroke(
                 p,
                 (18.0 + 22.0 * h.risk) * px_per_mm.max(0.2),
@@ -168,5 +186,32 @@ mod tests {
         let pic = d.app.cabinet.emc.picture().expect("a picture of the plate");
         assert!(!pic.runs.is_empty(), "wires are classed");
         assert!(!pic.nodes.is_empty(), "devices have roles");
+    }
+
+    #[test]
+    fn wires_with_no_duct_route_are_counted_and_not_drawn() {
+        use crate::app::cabinet_routes::RouteLine;
+        use crate::app::emc_view::EmcState;
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        crate::app::route_all_tests::wired_cabinet(&mut d);
+        let project = d.app.backend.document().unwrap().project();
+        let id = project.structures().find(|s| s.enclosure).unwrap().id;
+        let mut emc = EmcState::default();
+        emc.sync_plate(project, id, || {
+            vec![RouteLine {
+                wire: 1,
+                points: vec![(60.0, 60.0), (60.0, 250.0)],
+                free_air: true,
+                length_mm: 190.0,
+            }]
+        });
+        assert_eq!(emc.left_out, 1);
+        let pic = emc.picture().expect("a picture of the plate");
+        assert!(pic.runs.is_empty(), "no run is drawn for it");
     }
 }

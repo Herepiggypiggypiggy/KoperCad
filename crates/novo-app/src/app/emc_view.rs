@@ -38,6 +38,10 @@ pub(crate) struct EmcState {
     overlays: Vec<Overlay>,
     overlay_key: Option<(Key, EmcLayers, Option<u32>, bool)>,
     tinted: Option<((Key, EmcLayers, bool), Arc<Scene>)>,
+    /// Wires the plate view leaves out because no duct reaches both ends.
+    pub(super) left_out: usize,
+    /// The exposure map of the picture, made once per picture.
+    field: Option<(Key, Arc<emc::Field>)>,
 }
 
 /// The theme's colours as the overlays take them.
@@ -156,12 +160,14 @@ impl EmcState {
         &mut self,
         project: &Project,
         id: StructureId,
-        routes: &[super::cabinet_routes::RouteLine],
+        routes: impl FnOnce() -> Vec<super::cabinet_routes::RouteLine>,
     ) {
         let key: Key = (id, project.revision(), 0);
         if self.picture.as_ref().map(|p| p.0) == Some(key) {
             return;
         }
+        let routes = routes();
+        self.left_out = routes.iter().filter(|r| r.free_air).count();
         let Some(layout) = novo_layout::model::load(project, id) else {
             self.picture = None;
             return;
@@ -245,6 +251,15 @@ impl EmcState {
 
     pub(super) fn overlays(&self) -> &[Overlay] {
         &self.overlays
+    }
+
+    /// The exposure map of the current picture, made once per picture.
+    pub(super) fn exposure(&mut self) -> Option<Arc<emc::Field>> {
+        let (key, pic) = self.picture.as_ref()?;
+        if self.field.as_ref().map(|f| f.0) != Some(*key) {
+            self.field = Some((*key, Arc::new(emc::field::exposure(pic))));
+        }
+        self.field.as_ref().map(|f| f.1.clone())
     }
 
     pub(super) fn picture(&self) -> Option<&Arc<Picture>> {
@@ -416,6 +431,18 @@ pub(super) fn legend(ctx: &egui::Context, view: egui::Rect, state: &EmcState, da
                     .rect_filled(r, 5.0, egui::Color32::from_gray(0x6B));
                 ui.label("Not classed");
             });
+        }
+        if state.left_out > 0 {
+            let n = state.left_out;
+            ui.label(
+                egui::RichText::new(format!(
+                    "{n} wire{} with no duct route {} left out of this view (see Routes)",
+                    if n == 1 { "" } else { "s" },
+                    if n == 1 { "is" } else { "are" },
+                ))
+                .small()
+                .color(pal.warning),
+            );
         }
         if layers.halos {
             ui.label(

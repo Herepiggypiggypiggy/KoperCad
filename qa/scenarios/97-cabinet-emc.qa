@@ -13,8 +13,14 @@ text emc view on the plate
 wait 8
 key Enter
 wait 30
+expect "Indicative model"
 shot plate-emc
 check_layout
+# The card scrolls: Close is reachable even in the small window.
+scroll 1180 520 -2000
+wait 10
+expect "Close EMC view"
+shot plate-emc-card-end
 click_text "Exposure map" #1
 wait 15
 shot plate-emc-exposure
