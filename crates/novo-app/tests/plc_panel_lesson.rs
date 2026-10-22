@@ -40,4 +40,32 @@ fn the_finished_panel_has_every_part_on_a_rail_and_no_problem() {
     assert!(report.collisions.is_empty() && report.outside.is_empty());
     assert!(report.too_close.is_empty() && report.rail_overflows.is_empty());
     assert!(report.duct_overlaps.is_empty() && report.guessed.is_empty());
+
+    // The lesson text names the rows: pin them, so the text and the sample cannot drift apart.
+    let mut rows: std::collections::BTreeMap<u64, Vec<String>> = Default::default();
+    for p in &on {
+        let tag = project
+            .devices()
+            .find(|d| d.id.raw() == p.id)
+            .map(|d| d.tag.to_string())
+            .expect("device");
+        let short = tag.rsplit('-').next().unwrap().to_string();
+        rows.entry(p.rail.unwrap()).or_default().push(short);
+    }
+    let mut rows: Vec<Vec<String>> = rows
+        .into_values()
+        .map(|mut r| {
+            r.sort();
+            r
+        })
+        .collect();
+    rows.sort();
+    let want: Vec<Vec<&str>> = vec![
+        vec!["A1", "A2", "A3"],
+        vec!["F1", "F2", "F3", "G1", "Q1"],
+        vec!["K1", "K2", "K3"],
+        vec!["U1"],
+        vec!["X1", "X2", "X3"],
+    ];
+    assert_eq!(rows, want, "the rails the lesson text describes");
 }

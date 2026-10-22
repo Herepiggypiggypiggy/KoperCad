@@ -29,11 +29,11 @@ title = "A bigger plate"
 title_nl = "Een grotere plaat"
 text = """
 Press {key:view.cabinet}. This panel is **800 x 1000 mm** and holds fifteen devices: a main breaker and three small ones, a 24 V supply, a PLC with two I/O modules, a drive, two relays, a contactor and three terminal strips.
-Their sizes come from their parts. The part numbers are illustrative and the sizes are typical for the family, not those of that exact product.
+Their sizes come from their parts. The part numbers are illustrative; the sizes and losses are typical for the family, not those of that exact product.
 """
 text_nl = """
 Druk op {key:view.cabinet}. Deze kast is **800 x 1000 mm** en bevat vijftien componenten: een hoofdautomaat en drie kleine, een 24 V-voeding, een PLC met twee I/O-modules, een omvormer, twee relais, een contactor en drie klemmenstroken.
-De afmetingen komen uit de artikelen. De artikelnummers zijn illustratief en de maten gangbaar voor de familie, niet die van dat exacte product.
+De afmetingen komen uit de artikelen. De artikelnummers zijn illustratief; de maten en verliezen zijn gangbaar voor de familie, niet die van dat exacte product.
 """
 point = { ui = "switcher.cabinet" }
 expect = { command = "view.cabinet" }
@@ -46,12 +46,12 @@ how_nl = ["Klik op Place all in de groep Place, of druk op Ctrl+Shift+P.", "Er v
 title = "Place all fifteen"
 title_nl = "Plaats alle vijftien"
 text = """
-Click {ui:cabinet.place_all}. Five rails come out: the breakers and the supply on the top one, the PLC with its two modules on the second, the three relays and contactor on the third, the drive alone on the fourth, and all three strips side by side on the bottom one.
-Each rail has a duct along it. The preview shows it all before anything is stored.
+Click {ui:cabinet.place_all}. Five rails come out: the breakers and the supply on the top one, the PLC with its two modules on the second, the two relays and the contactor on the third, the drive alone on the fourth, and all three strips side by side on the bottom one.
+Ducts run between the rows. The preview shows the devices before anything is stored.
 """
 text_nl = """
-Klik op {ui:cabinet.place_all}. Er komen vijf rails uit: de automaten en de voeding op de bovenste, de PLC met zijn twee modules op de tweede, de drie relais en de contactor op de derde, de omvormer alleen op de vierde en alle drie de strips naast elkaar op de onderste.
-Elke rail heeft een kanaal erlangs. Het voorbeeld toont alles voordat er iets wordt opgeslagen.
+Klik op {ui:cabinet.place_all}. Er komen vijf rails uit: de automaten en de voeding op de bovenste, de PLC met zijn twee modules op de tweede, de twee relais en de contactor op de derde, de omvormer alleen op de vierde en alle drie de strips naast elkaar op de onderste.
+Kanalen lopen tussen de rijen. Het voorbeeld toont de componenten voordat er iets wordt opgeslagen.
 """
 point = { ui = "cabinet.place_all" }
 expect = { clicked = "cabinet.place_all" }

@@ -17,7 +17,7 @@ wait 40
 shot step2-place-all-card
 check_blank step2-place-all-card
 check_layout
-key ctrl+shift+p
+click_text "Ctrl+Shift+P" #1
 wait 40
 shot step2-preview
 check_layout
