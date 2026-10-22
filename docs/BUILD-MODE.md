@@ -26,6 +26,14 @@ traffic light in the list. "Also ready now" lists steps that can be done at the
 same time, so two people can work on different devices. A step that waits for
 others says which. The progress bar counts done, problems and changed steps.
 
+**Print sheet...** (top right of Build mode) writes `<project> build sheet.pdf` next to the
+project: one table per cabinet with every step, who ticked it and when (the name set under
+Commissioning; "(no name set)" if none), a box for pencil on the open ones, and a Note column
+with problems, cautions (guessed sizes, estimated lengths) and "changed since ticked". Rows are
+as tall as their longest text, so nothing is cut with "..." on paper. Only the position list of a
+drill step, when it is long, is replaced by "see the drilling template" (the 1:1 template has
+the positions); part lists and wire ends are always printed.
+
 A device step also has **Show on the plate** and **Show in 3D**: Build mode steps
 aside behind a "Back to Build mode" bar at the bottom of the window, the device is
 selected in the Cabinet canvas or the 3D view, and the bar brings you back to the
