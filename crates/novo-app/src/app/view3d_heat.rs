@@ -7,7 +7,7 @@ use eframe::egui;
 use novo_theme::tokens as t;
 
 use super::heat::{self, HeatState};
-use super::heat_settings::{LEVELS, MODELS, VentSpec, Wall};
+use super::heat_settings::{LEVELS, MODELS};
 
 /// Margin from the view's corner, in points.
 #[cfg(test)]
@@ -53,7 +53,7 @@ pub(super) fn phase_line(running: bool, has_result: bool, stale: bool) -> (&'sta
             true,
         ),
         (false, true, false) => (
-            "Result for this layout. Quality, turbulence and vents apply to the next run.",
+            "Result for this layout. Quality, turbulence, vents and fans apply to the next run.",
             false,
         ),
     }
@@ -240,67 +240,17 @@ fn settings(ui: &mut egui::Ui, state: &mut HeatState) {
             .on_hover_text(hint);
     }
     ui.add_space(4.0);
-    ui.label("Vents");
-    if s.vents.is_empty() {
-        ui.label(
-            egui::RichText::new("None: the enclosure is sealed.")
-                .small()
-                .color(t::TEXT_MUTED),
-        );
-    }
-    let mut remove = None;
-    for (i, v) in s.vents.iter_mut().enumerate() {
-        ui.horizontal_wrapped(|ui| {
-            egui::ComboBox::from_id_salt(("vent_wall", i))
-                .width(70.0)
-                .selected_text(v.wall.label())
-                .show_ui(ui, |ui| {
-                    for w in Wall::ALL {
-                        ui.selectable_value(&mut v.wall, w, w.label());
-                    }
-                });
-            ui.add(egui::Slider::new(&mut v.at, 0.0..=1.0).show_value(false))
-                .on_hover_text("Where along the wall the opening is centred");
-            ui.add(
-                egui::DragValue::new(&mut v.width_mm)
-                    .range(10.0..=2000.0)
-                    .suffix(" mm"),
-            )
-            .on_hover_text("Opening size along the wall");
-            ui.add(
-                egui::DragValue::new(&mut v.height_mm)
-                    .range(10.0..=2000.0)
-                    .suffix(" mm"),
-            )
-            .on_hover_text("Opening size the other way (the depth for a top or bottom vent)");
-            ui.add(
-                egui::DragValue::new(&mut v.free_fraction)
-                    .range(0.05..=1.0)
-                    .speed(0.01)
-                    .fixed_decimals(2),
-            )
-            .on_hover_text("Free share of the opening: a louvred grille is 0.5 to 0.7");
-            if ui.small_button("Remove").clicked() {
-                remove = Some(i);
-            }
-        });
-    }
-    if let Some(i) = remove {
-        s.vents.remove(i);
-    }
-    if ui
-        .button("Add vent")
-        .on_hover_text("A passive grille or louvre; air enters low and leaves high")
-        .clicked()
-    {
-        s.vents.push(VentSpec::new(Wall::Bottom));
-    }
+    ui.add_space(4.0);
+    let n = s.vents.len();
     ui.label(
-        egui::RichText::new(
-            "Vents are kept for this session; they are not saved in the project yet.",
-        )
+        egui::RichText::new(if n == 0 {
+            "Vents and fans: none, the enclosure is sealed. Add them in the Vents and fans panel."
+                .to_owned()
+        } else {
+            format!("Vents and fans: {n} set in the Vents and fans panel.")
+        })
         .small()
-        .color(t::TEXT_MUTED),
+        .color(crate::theme::ui_palette().text_secondary),
     );
 }
 

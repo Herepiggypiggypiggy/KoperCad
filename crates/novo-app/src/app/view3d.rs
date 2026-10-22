@@ -23,6 +23,7 @@ use super::NovoApp;
 use super::heat::{self, HeatState};
 use super::heat_3d::{self, Heat3d, Place};
 use super::heat_legend;
+use super::heat_openings;
 use super::heat_probe::{self, ProbeState};
 use super::heat_spots;
 use super::view3d_align;
@@ -92,10 +93,20 @@ pub(crate) struct View3dMode {
     pub(super) menu: Option<super::cabinet_menu::PlateMenu>,
     /// What of the heat result the view shows, and the result and settings
     /// the overlays were built for.
-    heat: Heat3d,
+    pub(super) heat: Heat3d,
     /// The probe tool and the point it reads.
     probe: ProbeState,
     heat_shown: Option<(u64, Heat3d)>,
+    /// The enclosure the openings sit in, for the project revision it was read
+    /// at (the Heat panel's grilles and fans are drawn before any run).
+    vent_enclosure: Option<((StructureId, u64), Option<novo_thermal::model::Enclosure>)>,
+    /// The openings as drawn, their overlays, and the air measured through
+    /// them for a result (the result id and the openings it was read for).
+    pub(super) vent_markers: Vec<heat_openings::Marker>,
+    pub(super) vent_marks: Vec<novo_view3d::Overlay>,
+    vent_flows: Option<(u64, Vec<super::heat_settings::VentSpec>, Vec<Option<f64>>)>,
+    /// The Airflow layer was switched on once for a result with openings.
+    auto_flow_done: bool,
     /// Whether the door was open on the last frame: opening it from closed
     /// reframes the cabinet once so the leaf is not cut off.
     door_was_open: bool,
@@ -176,6 +187,11 @@ impl Default for View3dMode {
             heat: Heat3d::default(),
             probe: ProbeState::default(),
             heat_shown: None,
+            vent_enclosure: None,
+            vent_markers: Vec::new(),
+            vent_marks: Vec::new(),
+            vent_flows: None,
+            auto_flow_done: false,
             door_was_open: false,
             heat_base: Vec::new(),
             heat_flow: heat_3d::Flow::default(),
@@ -547,6 +563,71 @@ impl NovoApp {
             mode.pins_shown = Some(pins_key);
             ghost_changed = true;
         }
+        // The grilles and fans of the Heat panel, drawn on their walls whether
+        // or not a run exists; the air through each is read from a result that
+        // was made for these very openings.
+        if mode.vent_enclosure.as_ref().map(|(k, _)| *k) != Some((id, revision)) {
+            let built = novo_thermal::bridge::scenario_from_project(
+                project,
+                id,
+                &novo_thermal::bridge::BridgeOptions::default(),
+            )
+            .ok()
+            .map(|b| b.scenario.enclosure);
+            mode.vent_enclosure = Some(((id, revision), built));
+        }
+        let vent_enclosure = mode.vent_enclosure.as_ref().and_then(|(_, e)| e.clone());
+        let vent_specs = self.cabinet.heat.settings.vents.clone();
+        let vent_flows: Vec<Option<f64>> = match (&solution, &vent_enclosure) {
+            (Some(sol), Some(e))
+                if !self.cabinet.heat.live.is_stale() && !vent_specs.is_empty() =>
+            {
+                let up_to_date = mode
+                    .vent_flows
+                    .as_ref()
+                    .is_some_and(|(sid, specs, _)| *sid == sol.id && *specs == vent_specs);
+                if !up_to_date {
+                    let flows = vent_specs
+                        .iter()
+                        .map(|v| heat_openings::measured_m3h(&sol.snapshot, &v.footprint(e)))
+                        .collect();
+                    mode.vent_flows = Some((sol.id, vent_specs.clone(), flows));
+                }
+                mode.vent_flows
+                    .as_ref()
+                    .map(|(_, _, f)| f.clone())
+                    .unwrap_or_default()
+            }
+            _ => Vec::new(),
+        };
+        let show_openings =
+            !vent_specs.is_empty() && (mode.controls.heat_panel || solution.is_some());
+        let markers = match (&vent_enclosure, show_openings) {
+            (Some(e), true) => heat_openings::markers(
+                &vent_specs,
+                e,
+                Place {
+                    plate_x: e.plate.x,
+                    plate_y: e.plate.y,
+                    frame: scene.frame,
+                },
+                &vent_flows,
+                self.cabinet.heat.settings.selected,
+            ),
+            _ => Vec::new(),
+        };
+        if markers != mode.vent_markers {
+            mode.vent_marks = heat_openings::overlays(&markers);
+            mode.vent_markers = markers;
+            ghost_changed = true;
+        }
+        // With openings in the cabinet the airflow is what the person came to
+        // see: switch it on once for the first result, then leave it theirs.
+        if !mode.auto_flow_done && solution.is_some() && !vent_specs.is_empty() {
+            mode.auto_flow_done = true;
+            mode.heat.lines = true;
+            ui.ctx().request_repaint();
+        }
         // Runs: read how the picked wires were measured, then light their
         // path and outline their ducts.
         let want_runs = mode.controls.layers.wires;
@@ -656,7 +737,13 @@ impl NovoApp {
                 frame: scene.frame,
             };
             mode.heat_flow = match &solution {
-                Some(sol) if mode.heat.lines => heat_3d::flow(&sol.snapshot, place(sol)),
+                Some(sol) if mode.heat.lines => {
+                    let seeds = vent_enclosure
+                        .as_ref()
+                        .map(|e| heat_openings::inlet_seeds(&mode.vent_markers, &vent_specs, e))
+                        .unwrap_or_default();
+                    heat_3d::flow_from(&sol.snapshot, place(sol), &seeds)
+                }
                 _ => heat_3d::Flow::default(),
             };
             mode.heat_carry = match &solution {
@@ -696,6 +783,7 @@ impl NovoApp {
             let mut all = mode.heat_base.clone();
             all.extend(mode.surface_panes.iter().cloned());
             all.extend(mode.pin_marks.iter().cloned());
+            all.extend(mode.vent_marks.iter().cloned());
             all.extend(mode.run_marks.iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker.clone());
@@ -705,6 +793,7 @@ impl NovoApp {
             let mut all = mode.heat_base.clone();
             all.extend(mode.surface_panes.iter().cloned());
             all.extend(mode.pin_marks.iter().cloned());
+            all.extend(mode.vent_marks.iter().cloned());
             all.extend(mode.run_marks.iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker);
@@ -798,6 +887,15 @@ impl NovoApp {
                     .and_then(|d| d.tag.device_code().map(str::to_owned))
                     .unwrap_or_else(|| format!("device {raw}"))
             };
+            let heat_running = self.cabinet.heat.running();
+            super::view3d_vents::show(
+                ui.ctx(),
+                view_rect,
+                &mut self.cabinet.heat.settings,
+                vent_enclosure.as_ref(),
+                &vent_flows,
+                heat_running,
+            );
             if let Some(raw) =
                 view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale, &tag_of)
             {
@@ -910,25 +1008,6 @@ impl NovoApp {
                 ui.painter()
                     .galley(chip.min + egui::vec2(6.0, 3.0), galley, pal.sunken);
             }
-            if mode.heat.labels
-                && let Some(sol) = &solution
-            {
-                let tag_of = |raw: u64| {
-                    project
-                        .get::<Device>(DeviceId::from(raw))
-                        .and_then(|d| d.tag.device_code().map(str::to_owned))
-                        .unwrap_or_else(|| format!("device {raw}"))
-                };
-                let labels = view3d_heat_labels::labels(&sol.snapshot, &tag_of);
-                view3d_heat_labels::paint(
-                    ui,
-                    &mode.view,
-                    out.rect,
-                    scene,
-                    &labels,
-                    stale || self.cabinet.heat.running(),
-                );
-            }
             if view3d_measure::readout(ui.ctx(), out.rect, &mode.measure, reading) {
                 mode.measure.clear();
             }
@@ -939,6 +1018,33 @@ impl NovoApp {
                     mode.measure.on = false;
                 }
             }
+        }
+        if mode.heat.labels
+            && let Some(sol) = &solution
+        {
+            let tag_of = |raw: u64| {
+                project
+                    .get::<Device>(DeviceId::from(raw))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_else(|| format!("device {raw}"))
+            };
+            let labels = view3d_heat_labels::labels(&sol.snapshot, &tag_of);
+            view3d_heat_labels::paint(
+                ui,
+                &mode.view,
+                out.rect,
+                scene,
+                &labels,
+                stale || self.cabinet.heat.running(),
+            );
+        }
+        // The openings of the Heat panel, labelled where they are: a click on a
+        // label opens that opening in the Vents and fans panel.
+        if !mode.vent_markers.is_empty()
+            && let Some(i) =
+                heat_openings::paint_labels(ui, &mode.view, out.rect, scene, &mode.vent_markers)
+        {
+            self.cabinet.heat.settings.selected = Some(i);
         }
         if let Some(hover) = out.hover.filter(|h| h.kind == ItemKind::Device)
             && !mode.mv.dragging()
@@ -1469,9 +1575,13 @@ fn heat_controls(
     use novo_heatview::cfd::Axis;
     let range = heat_3d::range_for(&sol.snapshot, sol.ambient, h.scale);
     let mut jump = None;
+    // Its own fill: the 3D canvas behind it is cleared black, which hid the
+    // strip's text and the keys in the light look.
     egui::Frame::new()
+        .fill(ui.visuals().panel_fill)
         .inner_margin(egui::Margin::symmetric(10, 4))
         .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
             ui.horizontal_wrapped(|ui| {
         ui.label("Heat");
         ui.checkbox(&mut h.slice, "Slice").on_hover_text(

@@ -23,7 +23,7 @@ pub(crate) fn notes(h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) -> 
     }
     if h.lines {
         out.push(format!(
-            "Streamlines: brighter is faster, up to {top_speed:.2} m/s"
+            "Airflow: lines and arrows are coloured by air speed, up to {top_speed:.2} m/s"
         ));
     }
     if h.cloud {
@@ -52,7 +52,7 @@ pub(crate) fn wanted(h: &Heat3d) -> bool {
 /// row (wrapping with it), so it can never cover a panel.
 pub(crate) fn strip(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) {
     let notes = notes(h, range, top_speed, top_flux);
-    if !wanted(h) && notes.is_empty() {
+    if !wanted(h) && notes.is_empty() && !h.lines {
         return;
     }
     // Own rows under the controls: a note that wrapped beside the bar broke
@@ -62,9 +62,58 @@ pub(crate) fn strip(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32,
         scale(ui, range);
         ui.end_row();
     }
+    if h.lines {
+        speed_scale(ui, top_speed);
+        ui.end_row();
+    }
     if !notes.is_empty() {
         ui.label(egui::RichText::new(notes.join("   ·   ")).small());
     }
+}
+
+/// The colour bar of the airflow lines: still air at the left, the fastest at
+/// the right, in m/s.
+fn speed_scale(ui: &mut egui::Ui, top_speed: f32) {
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(BAR_LEN + 2.0 * TICK_PAD + 24.0, BAR_H + LABEL_H),
+        egui::Sense::hover(),
+    );
+    response.on_hover_text(
+        "Air speed in m/s along the streamlines and their arrows; the temperature scale is a different colour ramp",
+    );
+    let bar = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x + TICK_PAD, rect.min.y),
+        egui::vec2(BAR_LEN, BAR_H),
+    );
+    let painter = ui.painter();
+    let step = BAR_LEN / STEPS as f32;
+    for i in 0..STEPS {
+        let [r, g, b] = super::heat_3d::speed_rgb((i as f32 + 0.5) / STEPS as f32);
+        painter.rect_filled(
+            egui::Rect::from_min_size(
+                egui::pos2(bar.min.x + i as f32 * step, bar.min.y),
+                egui::vec2(step + 0.5, BAR_H),
+            ),
+            0.0,
+            egui::Color32::from_rgb(r, g, b),
+        );
+    }
+    let pal = crate::theme::ui_palette();
+    for frac in [0.0_f32, 0.5, 1.0] {
+        let x = bar.min.x + frac * BAR_LEN;
+        painter.line_segment(
+            [egui::pos2(x, bar.max.y), egui::pos2(x, bar.max.y + 3.0)],
+            egui::Stroke::new(1.0, pal.text_secondary),
+        );
+        painter.text(
+            egui::pos2(x, bar.max.y + 4.0),
+            egui::Align2::CENTER_TOP,
+            format!("{:.2}", top_speed * frac),
+            egui::FontId::proportional(10.0),
+            pal.text_secondary,
+        );
+    }
+    ui.label(egui::RichText::new("m/s").small());
 }
 
 /// The colour bar with degree ticks.
