@@ -14,6 +14,7 @@
 //! edits, cables, parts, revisions, numbering, Autopilot and generated pages
 //! (a follow-up extends the mix to those).
 
+#[cfg(unix)]
 use std::path::Path;
 
 use novo_core::*;
@@ -152,7 +153,7 @@ fn run(seed: u64, steps: usize) -> usize {
     let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
     let (mut edits, mut undos, mut redos, mut saves) = (0, 0, 0, 0);
 
-    for step in 0..steps {
+    for _step in 0..steps {
         let what = rng.below(100);
         if what < 55 {
             if let Some(changes) = edit(&mut doc, &mut rng) {
@@ -177,7 +178,7 @@ fn run(seed: u64, steps: usize) -> usize {
             assert_eq!(
                 file_json(&path),
                 saved,
-                "seed {seed}, step {step}: the file after a save"
+                "seed {seed}, step {_step}: the file after a save"
             );
         } else {
             session.autosave(doc.project()).unwrap();
