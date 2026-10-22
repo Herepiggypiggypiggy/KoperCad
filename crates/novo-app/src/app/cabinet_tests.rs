@@ -1889,3 +1889,24 @@ fn centre_rails_moves_only_the_rails_and_is_one_undo_step() {
     assert_eq!(off(&d), rails.len());
     assert_eq!(devices(&d), before);
 }
+
+#[test]
+fn a_cooler_layout_asked_before_the_plate_exists_is_dropped_not_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    // No plate yet: the Cabinet shows its empty state.
+    d.app.run_command(&ctx, "heat.cooler_layout", None);
+    assert!(d.app.cabinet.heat.layout.pending());
+    d.frame();
+    d.frame();
+    assert!(
+        !d.app.cabinet.heat.layout.pending(),
+        "the request is taken up, or the 3D view would bounce the person out on every visit"
+    );
+}

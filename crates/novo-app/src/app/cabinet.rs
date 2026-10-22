@@ -2292,6 +2292,10 @@ impl NovoApp {
                 }
             }
             None => {
+                // A search asked for here (also from the 3D Heat panel) has
+                // nothing to run on: drop it, or the 3D view would send the
+                // person back here on every visit.
+                let search_asked = self.cabinet.heat.layout.take_request();
                 // The empty state names the next step and puts its button
                 // right under the sentence, not at the far end of the bar.
                 ui.add_space(48.0);
@@ -2303,6 +2307,9 @@ impl NovoApp {
                         }
                         _ => "Set the size of the mounting plate to start placing devices.",
                     });
+                    if search_asked {
+                        ui.label("Cooler layout needs a plate: set its size, then search again.");
+                    }
                     ui.add_space(8.0);
                     match (&location, structure) {
                         (None, _) => {
