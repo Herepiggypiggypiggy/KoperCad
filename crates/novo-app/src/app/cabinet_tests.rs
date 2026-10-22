@@ -1909,4 +1909,8 @@ fn a_cooler_layout_asked_before_the_plate_exists_is_dropped_not_kept() {
         !d.app.cabinet.heat.layout.pending(),
         "the request is taken up, or the 3D view would bounce the person out on every visit"
     );
+    assert!(
+        d.app.cabinet.heat.layout.needs_plate(),
+        "the empty state keeps saying why, frame after frame"
+    );
 }

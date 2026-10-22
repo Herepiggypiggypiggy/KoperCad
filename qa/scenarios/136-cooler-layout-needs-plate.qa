@@ -1,0 +1,23 @@
+@title Cooler layout without a plate: the Cabinet says why and keeps saying it
+@area Heat
+# A search asked for on a cabinet with no plate yet is dropped. The empty state names the reason and the sentence stays on screen, not for one frame.
+click_text Cabinet #1
+wait 20
+click_text "New cabinet..."
+wait 10
+key Enter
+wait 20
+expect "Set the size of the mounting plate"
+shot no-plate
+key ctrl+k
+wait 6
+text cooler layout
+wait 8
+key Enter
+wait 20
+expect "Cooler layout needs a plate"
+shot says-why
+wait 20
+expect "Cooler layout needs a plate"
+shot still-says-why
+check_layout

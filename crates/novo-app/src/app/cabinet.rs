@@ -2295,7 +2295,8 @@ impl NovoApp {
                 // A search asked for here (also from the 3D Heat panel) has
                 // nothing to run on: drop it, or the 3D view would send the
                 // person back here on every visit.
-                let search_asked = self.cabinet.heat.layout.take_request();
+                self.cabinet.heat.layout.drop_for_missing_plate();
+                let search_asked = self.cabinet.heat.layout.needs_plate();
                 // The empty state names the next step and puts its button
                 // right under the sentence, not at the far end of the bar.
                 ui.add_space(48.0);

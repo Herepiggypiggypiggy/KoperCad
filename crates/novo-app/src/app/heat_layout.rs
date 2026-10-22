@@ -55,6 +55,9 @@ pub(super) struct LayoutSearch {
     #[cfg(test)]
     pub(super) settings: Option<Settings>,
     requested: bool,
+    /// A search was asked for while the Cabinet had no plate; the empty
+    /// state says so until a plate is there, not for one frame only.
+    needs_plate: bool,
     run: Option<Running>,
     pub(super) found: Option<Found>,
     notice: Option<String>,
@@ -88,6 +91,19 @@ impl LayoutSearch {
 
     pub(super) fn take_request(&mut self) -> bool {
         std::mem::take(&mut self.requested)
+    }
+
+    /// The Cabinet has no plate to search on: the request is dropped and
+    /// the empty state keeps saying why until a plate is shown.
+    pub(super) fn drop_for_missing_plate(&mut self) {
+        if self.take_request() {
+            self.needs_plate = true;
+        }
+    }
+
+    /// Whether the empty state should say that the search needs a plate.
+    pub(super) fn needs_plate(&self) -> bool {
+        self.needs_plate
     }
 
     pub(super) fn running(&self) -> bool {
@@ -171,6 +187,8 @@ impl LayoutSearch {
 
     /// Takes in a finished search. Called every frame.
     pub(super) fn poll(&mut self, ctx: &egui::Context) {
+        // Only called where a plate is shown.
+        self.needs_plate = false;
         let Some(run) = &self.run else {
             return;
         };
@@ -259,9 +277,10 @@ impl LayoutSearch {
                     );
                 }
                 let room = (ctx.content_rect().bottom() - at.y - 190.0).max(160.0);
-                egui::ScrollArea::vertical()
+                let scrolled = egui::ScrollArea::vertical()
                     .max_height(room)
                     .auto_shrink([false, true])
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                     .show(ui, |ui| {
                     ui.label(headline(s));
                     ui.add_space(4.0);
@@ -293,6 +312,9 @@ impl LayoutSearch {
                         }
                     }
                     });
+                if scrolled.content_size.y > scrolled.inner_rect.height() + 1.0 {
+                    ui.label(egui::RichText::new("Scroll for more").small().color(pal.text_secondary));
+                }
                 ui.add_space(6.0);
                 ui.label(
                     egui::RichText::new(
