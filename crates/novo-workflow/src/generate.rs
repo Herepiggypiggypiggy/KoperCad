@@ -402,11 +402,11 @@ fn extent(def: &BlockDefinition) -> (f64, f64) {
     (max_x - min_x, max_y - min_y)
 }
 
-/// The template-coordinate corner a definition's drawing starts at.
 fn snap(v: f64, grid: f64) -> f64 {
     (v / grid).round() * grid
 }
 
+/// The template-coordinate corner a definition's drawing starts at.
 fn corner(def: &BlockDefinition) -> Point {
     let (mut min_x, mut min_y) = (f64::MAX, f64::MAX);
     for m in &def.members {

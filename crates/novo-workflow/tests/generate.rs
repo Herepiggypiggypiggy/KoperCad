@@ -37,9 +37,12 @@ fn starter() -> BlockDefinition {
             };
             let (q1, m1) = (sym(tx, 10.0, q)?, sym(tx, 40.0, m)?);
             tx.connect(Endpoint::pin(q1, 1), Endpoint::pin(m1, 0))?;
+            // A junction left of the symbols pulls the block's padded corner to a fractional x, so a
+            // block that is not snapped lands off the grid.
+            let j = tx.add_junction(page, Point::new(-3.5, 0.0))?;
             let id = tx.define_block(
                 "starter",
-                &[q1.into(), m1.into()],
+                &[q1.into(), m1.into(), j.into()],
                 Point::new(10.0, 0.0),
                 Vec::new(),
             )?;
@@ -134,7 +137,9 @@ fn rows_become_placements_with_calculated_values() {
 
 #[test]
 fn generated_blocks_sit_on_the_snap_grid() {
-    // The page flow works from a padded bounding box that is off the grid; the blocks must not be.
+    // The page flow works from a padded bounding box that is off the grid (the fixture's junction
+    // makes it fractional); the block's symbols must still sit a whole number of grid steps from
+    // their template position, so the pins line up with what the designer places next.
     let sheet = SpecSheet::from_csv("Macro,Page\nstarter,A\nstarter,A\nstarter,B\n");
     let mut doc = empty();
     let (result, _) = doc
@@ -147,20 +152,32 @@ fn generated_blocks_sit_on_the_snap_grid() {
     let on_grid = |v: f64| ((v / grid) - (v / grid).round()).abs() < 1e-9;
     let mut seen = 0;
     for s in doc.project().symbols() {
-        // The test block's own symbols sit at x 10 and 40 (not on the grid); what counts is that
-        // the whole block moved by whole grid steps.
-        let (x, y) = (s.placement.origin.x, s.placement.origin.y);
+        let SymbolRole::Device { device, .. } = &s.role else {
+            continue;
+        };
+        // Offsets from the block anchor (x 10) in `starter`: the breaker at 0, the motor at 30.
+        let template_x = match doc.project().device(*device).unwrap().tag.product[0]
+            .chars()
+            .next()
+        {
+            Some('Q') => 0.0,
+            Some('M') => 30.0,
+            other => panic!("unexpected device {other:?}"),
+        };
+        let o = s.placement.origin;
         assert!(
-            on_grid(x - 10.0) || on_grid(x - 40.0),
-            "block shifted by a fraction of a grid step: x {x}"
+            on_grid(o.x - template_x),
+            "block shifted by a fraction of a grid step: x {}",
+            o.x
         );
         assert!(
-            on_grid(y),
-            "block shifted by a fraction of a grid step: y {y}"
+            on_grid(o.y),
+            "block shifted by a fraction of a grid step: y {}",
+            o.y
         );
         seen += 1;
     }
-    assert!(seen >= 6);
+    assert_eq!(seen, 6);
 }
 
 #[test]
