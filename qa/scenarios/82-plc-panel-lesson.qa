@@ -1,21 +1,40 @@
-@title PLC panel lesson: fifteen parts on five rails, in the plate and in 3D
+@title PLC panel lesson: each step with the lesson card open, done with the keys the card names
 @area Cabinet
-# The finished PLC panel sample of the lesson: all parts on rails, readable at both window sizes.
-open qa/fixtures/plc-panel.novo
-wait 30
+# The lesson card at each step: open the cabinet, Place all (preview), accept (15 placed), heat with its legend, 3D.
+# Heat is Shift+H; at 1366 its button sits under More. In 3D the F key fits the view.
+click_text "Learn…"
+wait 15
+text PLC panel
+wait 8
+shot learn-search
+check_layout
+click_text Start #1
+wait 40
+shot step1-open
+check_layout
 click_text Cabinet #1
-wait 30
-shot plate
-check_blank plate
+wait 40
+shot step2-place-all-card
+check_blank step2-place-all-card
+check_layout
+key ctrl+shift+p
+wait 40
+shot step2-preview
+check_layout
+key Enter
+wait 40
+shot step3-15-placed
+expect "15 placed"
+check_layout
+key shift+h
+wait 60
+shot step4-heat-map
+check_blank step4-heat-map
 check_layout
 click_text 3D
 wait 60
-scroll 700 300 -30
+key f
 wait 40
-scroll 700 300 -30
-wait 40
-scroll 700 300 -30
-wait 40
-shot parts-3d
-check_blank parts-3d
+shot step5-3d
+check_blank step5-3d
 check_layout

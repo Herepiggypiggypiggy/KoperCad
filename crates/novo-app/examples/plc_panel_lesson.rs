@@ -157,8 +157,8 @@ fn base(doc: &mut Document) -> Result<()> {
         tx.set_info(|info| {
             info.name = "PLC panel (lesson)".into();
             info.description = "A PLC with its supply, a drive, relays and terminal strips on an \
-                800 x 1000 mm plate. The sizes are typical published sizes, not checked against \
-                data sheets."
+                800 x 1000 mm plate. The part numbers are illustrative; sizes and losses are typical \
+                for the family, not data-sheet values."
                 .into();
         })?;
         let cab = tx.add_structure(tag("+CAB"), "Control cabinet", true)?;

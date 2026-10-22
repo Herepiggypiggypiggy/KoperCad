@@ -20,7 +20,7 @@ plus sample projects, against `docs/design/learning-modules.md`.
 4. `commissioning` (cabinet track in the design's list) once #471 merges: not written, it was not in the brief.
 
 ## Next (2026-10-22)
-- (Done as draft `plc-panel`, 2026-10-22.) A further step up: the PLC panel with wiring and a cable run, owned with the Learning and example coverage thread.
+- (Done as `plc-panel`, ready, 2026-10-22.) A further step up: the PLC panel with wiring and a cable run, owned with the Learning and example coverage thread.
 - A design check for a device recorded on a rail whose line does not pass through its centre (plans saved before #1356 keep the rail on the top edge until Place all is run again).
 
 ## Open questions

@@ -2,7 +2,7 @@
   "format": 1,
   "info": {
     "name": "PLC panel (lesson)",
-    "description": "A PLC with its supply, a drive, relays and terminal strips on an 800 x 1000 mm plate. The sizes are typical published sizes, not checked against data sheets.",
+    "description": "A PLC with its supply, a drive, relays and terminal strips on an 800 x 1000 mm plate. The part numbers are illustrative; sizes and losses are typical for the family, not data-sheet values.",
     "rules": {
       "terminals": {
         "same_name": "join",

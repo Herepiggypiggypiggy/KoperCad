@@ -2,11 +2,11 @@
 # breakers and three terminal strips, 15 devices on an 800 x 1000 mm plate (project.json, nothing
 # placed). finished.json is the same panel after Place all with the standard rules. Both come from
 # `cargo run -p novo-app --example plc_panel_lesson -- assets/lessons`.
-# The part sizes are typical published sizes of the families, not checked against data sheets.
+# Part numbers are illustrative; sizes and losses are typical for the family, not data-sheet values.
 format = 1
 id = "plc-panel"
 version = 1
-status = "draft"
+status = "ready"
 title = "A PLC panel: many parts, one plate"
 title_nl = "Een PLC-kast: veel onderdelen, één plaat"
 summary = "Place a PLC, its supply, a drive, relays and three terminal strips, read the rails Place all makes, find the hot drive and look at the panel in 3D."
@@ -29,11 +29,11 @@ title = "A bigger plate"
 title_nl = "Een grotere plaat"
 text = """
 Press {key:view.cabinet}. This panel is **800 x 1000 mm** and holds fifteen devices: a main breaker and three small ones, a 24 V supply, a PLC with two I/O modules, a drive, two relays, a contactor and three terminal strips.
-Their sizes come from their parts: typical published sizes of those families, not checked against data sheets.
+Their sizes come from their parts. The part numbers are illustrative and the sizes are typical for the family, not those of that exact product.
 """
 text_nl = """
 Druk op {key:view.cabinet}. Deze kast is **800 x 1000 mm** en bevat vijftien componenten: een hoofdautomaat en drie kleine, een 24 V-voeding, een PLC met twee I/O-modules, een omvormer, twee relais, een contactor en drie klemmenstroken.
-De afmetingen komen uit de artikelen: gangbare gepubliceerde maten van die families, niet gecontroleerd aan datasheets.
+De afmetingen komen uit de artikelen. De artikelnummers zijn illustratief en de maten gangbaar voor de familie, niet die van dat exacte product.
 """
 point = { ui = "switcher.cabinet" }
 expect = { command = "view.cabinet" }
@@ -46,12 +46,12 @@ how_nl = ["Klik op Place all in de groep Place, of druk op Ctrl+Shift+P.", "Er v
 title = "Place all fifteen"
 title_nl = "Plaats alle vijftien"
 text = """
-Click {ui:cabinet.place_all}. The rules put the breakers and the supply on the top rail, the PLC, its modules and the drive on a rail of their own, the relays and the contactor on the next, and the three strips at the bottom, each on its own rail with a duct.
-The hot drive is kept away from the PLC by the gap the rules keep between hot and heat-sensitive parts.
+Click {ui:cabinet.place_all}. Five rails come out: the breakers and the supply on the top one, the PLC with its two modules on the second, the three relays and contactor on the third, the drive alone on the fourth, and all three strips side by side on the bottom one.
+Each rail has a duct along it. The preview shows it all before anything is stored.
 """
 text_nl = """
-Klik op {ui:cabinet.place_all}. De regels zetten de automaten en de voeding op de bovenste rail, de PLC, de modules en de omvormer op een eigen rail, de relais en de contactor op de volgende en de drie strips onderaan, elk op een eigen rail met een kanaal.
-De hete omvormer blijft op afstand van de PLC door de ruimte die de regels tussen warme en gevoelige onderdelen aanhouden.
+Klik op {ui:cabinet.place_all}. Er komen vijf rails uit: de automaten en de voeding op de bovenste, de PLC met zijn twee modules op de tweede, de drie relais en de contactor op de derde, de omvormer alleen op de vierde en alle drie de strips naast elkaar op de onderste.
+Elke rail heeft een kanaal erlangs. Het voorbeeld toont alles voordat er iets wordt opgeslagen.
 """
 point = { ui = "cabinet.place_all" }
 expect = { clicked = "cabinet.place_all" }
@@ -75,17 +75,17 @@ solve = [ { cabinet = "accept" } ]
 
 [[step]]
 id = "heat-on"
-how = ["Click Heat in the View group, or press {key:heat.toggle}.", "A temperature legend appears in the corner."]
-how_nl = ["Klik op Heat in de groep View, of druk op {key:heat.toggle}.", "In de hoek verschijnt een temperatuurlegenda."]
+how = ["Click Heat in the View group, or press {key:heat.toggle}; in a narrow window Heat sits under More.", "A temperature legend appears in the corner."]
+how_nl = ["Klik op Heat in de groep View, of druk op {key:heat.toggle}; in een smal venster zit Heat onder More.", "In de hoek verschijnt een temperatuurlegenda."]
 title = "Find the hot part"
 title_nl = "Vind het hete onderdeel"
 text = """
-Turn on {ui:cabinet.heat}. The parts add up to about 118 W of loss; the drive alone is 60 W, the supply 18 W and the PLC 14 W. The hot spot sits on the drive, and the {tip:heat-map} shows how far it reaches towards the PLC.
-Losses are the figures in the parts; the map is a planning model, not a measurement.
+Turn on {ui:cabinet.heat} (press {key:heat.toggle}; in a narrow window the bar folds it into {ui:cabinet.more}). The losses are typical figures for each kind of device (the {tip:power-loss} stored in this sample project), not data-sheet values: about 118 W in all, the drive 60 W, the supply 18 W, the PLC 14 W.
+The hot spot sits on the drive, and the {tip:heat-map} shows how far it reaches; the legend **TEMPERATURE** gives the scale. The map is a planning model.
 """
 text_nl = """
-Zet {ui:cabinet.heat} aan. De artikelen tellen op tot ongeveer 118 W verlies; de omvormer alleen is 60 W, de voeding 18 W en de PLC 14 W. De hotspot zit op de omvormer en de {tip:heat-map} laat zien hoe ver die richting de PLC reikt.
-De verliezen zijn de cijfers in de artikelen; de kaart is een planningsmodel, geen meting.
+Zet {ui:cabinet.heat} aan (druk op {key:heat.toggle}; in een smal venster zit het onder {ui:cabinet.more}). De verliezen zijn gangbare cijfers per soort component (het {tip:power-loss} in dit voorbeeldproject), geen datasheetwaarden: samen ongeveer 118 W, de omvormer 60 W, de voeding 18 W, de PLC 14 W.
+De hotspot zit op de omvormer en de {tip:heat-map} laat zien hoe ver die reikt; de legenda **TEMPERATURE** geeft de schaal. De kaart is een planningsmodel.
 """
 point = { ui = "cabinet.heat" }
 expect = { command = "heat.toggle" }
