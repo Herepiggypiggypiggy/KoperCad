@@ -17,6 +17,12 @@ fn updating() -> bool {
 /// The lesson's `file` (`project.json` or `finished.json`) must equal what
 /// the builder makes. With `UPDATE_LESSONS=1` the file is written instead.
 pub fn check_file(id: &str, file: &str, project: &Project) {
+    check_file_up_to(id, file, project, 200);
+}
+
+/// [`check_file`] with a size limit of `max_kb` KB for a lesson whose sample
+/// project places several starter macros.
+pub fn check_file_up_to(id: &str, file: &str, project: &Project, max_kb: usize) {
     let json = format!("{}\n", project.to_json());
     let path = lessons_dir().join(id).join(file);
     if updating() {
@@ -32,8 +38,8 @@ pub fn check_file(id: &str, file: &str, project: &Project) {
         path.display()
     );
     assert!(
-        json.len() < 200 * 1024,
-        "{id}/{file} is over 200 KB ({} bytes)",
+        json.len() < max_kb * 1024,
+        "{id}/{file} is over {max_kb} KB ({} bytes)",
         json.len()
     );
     Project::from_json(&on_disk).expect("the file loads");

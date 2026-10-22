@@ -1,0 +1,249 @@
+# Capstone: a whole small machine on four pages, with one fault on each of three
+# pages. Sample project: four of the program's own starter macros placed on
+# four pages and fed (crates/novo-tests/tests/lessons/progression.rs).
+# Conveyor: -F1 fuses, -K1 forward, -K2 reverse, -F2 overload, -M1, -F3 control breaker,
+#   -S1 stop, -S2 forward, -S3 reverse. Mixer: -K3 line, -K4 delta, -K5 star,
+#   -K6 star timer, -M2, -S4 stop, -S5 start. Safety: -S6 e-stop (2 channels),
+#   -S7 reset, -K7 safety relay, -K8 and -K9 contactors. PLC inputs: -A1 supply,
+#   -A2 input card, -S8 start, -S9 stop, -S10 key switch, -B1 float switch.
+# Faults: -S1:12 to -F2:95 (conveyor), -K4:22 to -K5:A1 (mixer), -S7:14 to -K7:S34 (safety).
+format = 1
+id = "conveyor-line"
+version = 1
+status = "early"
+kind = "challenge"
+title = "A whole machine: the conveyor line"
+title_nl = "Een hele machine: de transportlijn"
+summary = "A reversing conveyor, a star-delta mixer, an emergency stop and a PLC input card on four pages. Three faults hide on three pages: find them with the problem list, repair them, try the machine and check it before you hand it over."
+summary_nl = "Een omkeerbare transportband, een ster-driehoekmixer, een noodstop en een PLC-ingangskaart op vier pagina's. Drie fouten zitten op drie pagina's: vind ze met de probleemlijst, herstel ze, probeer de machine en controleer hem voor je hem overdraagt."
+explain = "Real machines are the same small circuits you met one at a time, on several pages, sharing a supply. Faults show up first as open pins in the problem list, then in the live view. The three repairs here were: the stop button was not wired to the overload contact on the conveyor (no control supply), the delta contactor's interlock was not wired to the star coil on the mixer, and the reset button was not wired to the safety relay. The Standards check and the handover gate are what you run last, because they look at the whole project."
+explain_nl = "Echte machines zijn dezelfde kleine schema's die je een voor een zag, op meerdere pagina's met een gedeelde voeding. Fouten verschijnen eerst als open pennen in de probleemlijst, daarna in de live-weergave. De drie herstellingen hier waren: de stopknop was niet met het overbelastingscontact verbonden op de transportband (geen stuurspanning), de blokkering van de driehoekcontactor was niet met de sterspoel verbonden op de mixer, en de resetknop was niet met het veiligheidsrelais verbonden. De normencontrole en de overdrachtscontrole voer je als laatste uit, omdat ze naar het hele project kijken."
+track = "machines"
+order = 100
+level = "advanced"
+minutes = 20
+topics = ["whole machine", "troubleshooting", "problems", "live", "handover"]
+needs = ["crane-hoist", "safety-circuit", "design-checks"]
+project = "project.json"
+finished = "finished.json"
+page = "Conveyor"
+
+[[step]]
+id = "tour"
+title = "The machine on four pages"
+title_nl = "De machine op vier pagina's"
+text = """
+Open the page list. **Conveyor** has a reversing starter, **Mixer** a star-delta starter, **Safety** a two-channel emergency stop on a safety relay and **PLC inputs** a 24 V input card with four field devices. Every page is fed from its own supply points. This project was assembled from the program's own starter macros, so you can place the same circuits in your own projects.
+"""
+text_nl = """
+Open de paginalijst. **Conveyor** heeft een omkeerstarter, **Mixer** een ster-driehoekstarter, **Safety** een tweekanaals noodstop op een veiligheidsrelais en **PLC inputs** een 24 V-ingangskaart met vier veldapparaten. Elke pagina wordt gevoed vanuit zijn eigen voedingspunten. Dit project is samengesteld uit de eigen startermacro's van het programma, dus je kunt dezelfde schema's in je eigen projecten plaatsen.
+"""
+
+[[step]]
+id = "problems"
+title = "Ask the program what is wrong"
+title_nl = "Vraag het programma wat er mis is"
+text = """
+Three wires are missing somewhere in this machine. You do not have to search four pages: the problem list names every open pin and the page it is on.
+"""
+text_nl = """
+Er ontbreken drie draden ergens in deze machine. Je hoeft geen vier pagina's af te zoeken: de probleemlijst noemt elke open pen en de pagina waar hij zit.
+"""
+how = [
+  "Click the problem pill in the top bar, or open **Check** and choose **Problems**.",
+]
+how_nl = [
+  "Klik op de probleemknop in de bovenbalk, of open **Check** en kies **Problems**.",
+]
+point = { ui = "issue.pill" }
+expect = { any = [ { clicked = "issue.pill" }, { command = "check.problems" } ] }
+solve = [ { command = "check.problems" } ]
+
+[[step]]
+id = "next"
+title = "Walk the problems"
+title_nl = "Loop de problemen langs"
+text = """
+Step through the problems with the key. Each jump takes you to the page and the pin. Notice which pins are open: the three real faults, and the spare outputs of the safety relay that nobody needs.
+"""
+text_nl = """
+Loop de problemen langs met de toets. Elke sprong brengt je naar de pagina en de pen. Let op welke pennen open zijn: de drie echte fouten en de reserve-uitgangen van het veiligheidsrelais die niemand nodig heeft.
+"""
+how = [
+  "Press {key:check.next_problem}.",
+]
+how_nl = [
+  "Druk op {key:check.next_problem}.",
+]
+expect = { command = "check.next_problem" }
+solve = [ { command = "check.next_problem" } ]
+
+[[step]]
+id = "conveyor"
+title = "Conveyor: no control supply"
+title_nl = "Transportband: geen stuurspanning"
+text = """
+**Goal:** on the Conveyor page the control circuit goes from the breaker **-F3** through the stop button **-S1** to the overload contact **-F2** and on to the start buttons. One link is missing. Draw the wire from the stop button's lower pin (12) to the overload contact's pin 95.
+"""
+text_nl = """
+**Doel:** op de pagina Conveyor loopt het stuurcircuit van de automaat **-F3** via de stopknop **-S1** naar het overbelastingscontact **-F2** en verder naar de startknoppen. Een schakel ontbreekt. Teken de draad van de onderste pen (12) van de stopknop naar pen 95 van het overbelastingscontact.
+"""
+hints = [
+  "Open the Conveyor page. The start buttons get no supply because the chain from the breaker stops after the stop button.",
+  "-S1 pin 12 and -F2 pin 95 are both open.",
+  "Draw a wire from -S1 pin 12 to -F2 pin 95.",
+]
+hints_nl = [
+  "Open de pagina Conveyor. De startknoppen krijgen geen spanning omdat de keten vanaf de automaat na de stopknop ophoudt.",
+  "-S1 pen 12 en -F2 pen 95 zijn allebei open.",
+  "Trek een draad van -S1 pen 12 naar -F2 pen 95.",
+]
+point = { at = { device = "-S1", pin = "12" } }
+expect = { wire = { from = "-S1:12", to = "-F2:95" } }
+solve = [ { page = "Conveyor" }, { wire = ["-S1:12", "-F2:95"] } ]
+
+[[step]]
+id = "live"
+title = "Switch the live view on"
+title_nl = "Zet de live-weergave aan"
+text = """
+Now try what you repaired. The live view works on the page you are looking at.
+"""
+text_nl = """
+Probeer nu wat je hebt hersteld. De live-weergave werkt op de pagina waar je naar kijkt.
+"""
+how = [
+  "Press {key:sim.live}.",
+]
+how_nl = [
+  "Druk op {key:sim.live}.",
+]
+expect = { live = true }
+solve = [ { command = "sim.live" } ]
+
+[[step]]
+id = "forward"
+title = "Run the conveyor"
+title_nl = "Laat de band lopen"
+text = """
+**Goal:** press forward (**-S2**) and let go: **-K1** holds itself in. The reverse button **-S3** would now do nothing until you press stop, because of the interlock you know from the reversing lesson.
+"""
+text_nl = """
+**Doel:** druk op vooruit (**-S2**) en laat los: **-K1** houdt zichzelf vast. De omkeerknop **-S3** doet nu niets tot je op stop drukt, vanwege de blokkering die je kent van de omkeerles.
+"""
+point = { at = { device = "-S2" } }
+expect = { all = [ { coil_on = "-K1" }, { not = { coil_on = "-K2" } }, { not = { pole_closed = "-S2" } } ] }
+solve = [ { live_pole = { device = "-S2" } } ]
+
+[[step]]
+id = "mixer"
+title = "Mixer: the star path"
+title_nl = "Mixer: het sterpad"
+text = """
+**Goal:** on the Mixer page the star contactor **-K5** is fed from the timer through the normally closed contact of the delta contactor **-K4** (22). The link from **-K4** pin 22 to the star coil **-K5** pin A1 is missing. Draw it.
+"""
+text_nl = """
+**Doel:** op de pagina Mixer wordt de stercontactor **-K5** gevoed vanaf de timer via het verbreekcontact van de driehoekcontactor **-K4** (22). De schakel van **-K4** pen 22 naar de sterspoel **-K5** pen A1 ontbreekt. Teken hem.
+"""
+hints = [
+  "Open the Mixer page. The star contactor has no supply path from the timer.",
+  "-K4 pin 22 (the interlock) and -K5 pin A1 (the star coil) are both open.",
+  "Draw a wire from -K4 pin 22 to -K5 pin A1.",
+]
+hints_nl = [
+  "Open de pagina Mixer. De stercontactor heeft geen voedingspad vanaf de timer.",
+  "-K4 pen 22 (de blokkering) en -K5 pen A1 (de sterspoel) zijn allebei open.",
+  "Trek een draad van -K4 pen 22 naar -K5 pen A1.",
+]
+point = { at = { device = "-K5", pin = "A1" } }
+expect = { wire = { from = "-K4:22", to = "-K5:A1" } }
+solve = [ { page = "Mixer" }, { wire = ["-K4:22", "-K5:A1"] } ]
+
+[[step]]
+id = "mixer-start"
+title = "Start the mixer in star"
+title_nl = "Start de mixer in ster"
+text = """
+**Goal:** press start (**-S5**). The line contactor **-K3** and the star contactor **-K5** pull in, the delta contactor **-K4** stays out until the timer has counted.
+"""
+text_nl = """
+**Doel:** druk op start (**-S5**). De lijncontactor **-K3** en de stercontactor **-K5** trekken aan, de driehoekcontactor **-K4** blijft uit tot de timer geteld heeft.
+"""
+point = { at = { device = "-S5" } }
+expect = { all = [ { coil_on = "-K3" }, { coil_on = "-K5" }, { not = { coil_on = "-K4" } } ] }
+solve = [ { live_pole = { device = "-S5" } } ]
+
+[[step]]
+id = "safety"
+title = "Safety: the relay cannot reset"
+title_nl = "Veiligheid: het relais kan niet resetten"
+text = """
+**Goal:** on the Safety page the reset button **-S7** must reach the relay **-K7** at its reset input S34. The link is missing, so the relay can never be armed. Draw the wire from **-S7** pin 14 to **-K7** pin S34. Do not bridge any of the relay's channels.
+"""
+text_nl = """
+**Doel:** op de pagina Safety moet de resetknop **-S7** het relais **-K7** bereiken op zijn reset-ingang S34. De schakel ontbreekt, dus het relais kan nooit worden ingeschakeld. Teken de draad van **-S7** pen 14 naar **-K7** pen S34. Overbrug nooit een kanaal van het relais.
+"""
+hints = [
+  "Open the Safety page. The reset button has one wire; its other side is open.",
+  "-S7 pin 14 and -K7 pin S34 are both open.",
+  "Draw a wire from -S7 pin 14 to -K7 pin S34.",
+]
+hints_nl = [
+  "Open de pagina Safety. De resetknop heeft een draad; zijn andere kant is open.",
+  "-S7 pen 14 en -K7 pen S34 zijn allebei open.",
+  "Trek een draad van -S7 pen 14 naar -K7 pen S34.",
+]
+point = { at = { device = "-K7", pin = "S34" } }
+expect = { wire = { from = "-S7:14", to = "-K7:S34" } }
+solve = [ { page = "Safety" }, { wire = ["-S7:14", "-K7:S34"] } ]
+
+[[step]]
+id = "plc"
+title = "The PLC inputs"
+title_nl = "De PLC-ingangen"
+text = """
+Open the **PLC inputs** page: a start button, a stop button (wired normally closed so a broken wire stops the machine), a key switch and a float switch feed four inputs of the card **-A2**. Reading step: the program that uses these inputs is not part of this project.
+"""
+text_nl = """
+Open de pagina **PLC inputs**: een startknop, een stopknop (verbreekcontact, zodat een draadbreuk de machine stopt), een sleutelschakelaar en een vlotterschakelaar voeden vier ingangen van de kaart **-A2**. Leesstap: het programma dat deze ingangen gebruikt maakt geen deel uit van dit project.
+"""
+expect = { page = "PLC inputs" }
+solve = [ { page = "PLC inputs" } ]
+
+[[step]]
+id = "standards"
+title = "Check the whole project"
+title_nl = "Controleer het hele project"
+text = """
+Run the standards check. It reads the whole machine, not one page. Some findings will remain (the safety relay's spare outputs, parts not chosen yet): the list tells you what to do with each, and it is a check against the rules built into the program, not a certification.
+"""
+text_nl = """
+Voer de normencontrole uit. Ze leest de hele machine, niet een pagina. Sommige bevindingen blijven staan (de reserve-uitgangen van het veiligheidsrelais, nog niet gekozen onderdelen): de lijst zegt wat je ermee doet, en het is een controle tegen de regels in het programma, geen certificering.
+"""
+how = [
+  "Press {key:view.command_palette}, type **standards** and press Enter",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **standards** en druk op Enter",
+]
+expect = { command = "check.standards" }
+solve = [ { command = "check.standards" } ]
+
+[[step]]
+id = "handover"
+title = "Before you hand it over"
+title_nl = "Voor je het overdraagt"
+text = """
+The handover gate lists what is still open and lets you hand over anyway, with the open items written on the cover sheet. A machine is finished when the list is empty or every open item has a reason.
+"""
+text_nl = """
+De overdrachtscontrole toont wat nog openstaat en laat je toch overdragen, met de open punten op het voorblad. Een machine is af als de lijst leeg is of elk open punt een reden heeft.
+"""
+how = [
+  "Press {key:view.command_palette}, type **handover** and press Enter",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **handover** en druk op Enter",
+]
+expect = { command = "export.handover" }
+solve = [ { command = "export.handover" } ]

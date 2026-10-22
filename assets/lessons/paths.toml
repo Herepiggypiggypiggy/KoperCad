@@ -34,3 +34,11 @@ title_nl = "Projectleider"
 summary = "Issues and hands over: generated pages, wire list and parts list, revisions, PDF, parts library, spreadsheets, DXF."
 summary_nl = "Geeft uit en draagt over: gegenereerde pagina's, draadlijst en stuklijst, revisies, PDF, onderdelenbibliotheek, spreadsheets, DXF."
 lessons = ["generated-pages", "wire-list-and-bom", "revisions-and-compare", "pdf-export", "parts-library", "spreadsheets", "dxf-and-backgrounds", "protection-and-single-line", "standards-check", "safety-functions", "handover-package"]
+
+[[path]]
+id = "machine-builder"
+title = "From loops to a machine"
+title_nl = "Van lus tot machine"
+summary = "After the first hour: real machine circuits, one step harder each time, each one a circuit you trace, break and repair."
+summary_nl = "Na het eerste uur: echte machineschema's, steeds een stap moeilijker, elk een schema dat je volgt, stuk maakt en repareert."
+lessons = ["reversing-starter", "star-delta-starter", "safety-circuit", "crane-hoist", "conveyor-line"]

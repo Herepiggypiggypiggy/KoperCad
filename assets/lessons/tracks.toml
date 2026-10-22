@@ -45,3 +45,10 @@ title = "Parts and data"
 title_nl = "Onderdelen en gegevens"
 summary = "Find and import parts, edit hundreds of devices in Excel and hand over DXF."
 summary_nl = "Onderdelen zoeken en importeren, honderden apparaten in Excel bewerken en DXF aanleveren."
+
+[[track]]
+id = "machines"
+title = "Machines"
+title_nl = "Machines"
+summary = "Real machine circuits, one step harder each time: reversing, star-delta, safety, a crane hoist, a PLC, then a whole machine. Each one is a circuit you trace, break and repair."
+summary_nl = "Echte machineschema's, steeds een stap moeilijker: omkeren, ster-driehoek, veiligheid, een kraanlier, een PLC en dan een hele machine. Elk is een schema dat je volgt, stuk maakt en repareert."
