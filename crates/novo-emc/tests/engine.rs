@@ -475,6 +475,9 @@ fn the_picture_carries_ribbons_loops_zones_and_the_wording_rule() {
     assert_eq!(pic.runs.iter().find(|r| r.id == 2).unwrap().score, 72);
     assert_eq!(pic.zones.len(), 1);
     assert!(pic.assumptions.iter().all(|a| !a.user_set));
+    assert!(pic.assumptions.iter().any(|a| {
+        a.name.starts_with("Distance counted across a duct divider") && a.value == "50 mm"
+    }));
     assert!(pic.not_checked.iter().any(|t| t.contains("Compliance")));
     // The estimate carries its band.
     let hot = pic.hotspots.iter().find(|h| h.rule == "EMC-01").unwrap();

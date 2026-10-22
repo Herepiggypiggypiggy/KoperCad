@@ -356,7 +356,7 @@ fn assumptions(input: &Input) -> Vec<Assumption> {
         user_set: p.user_set.contains(&property.trim_start_matches("emc.")),
         property,
     };
-    vec![
+    let mut list = vec![
         a(
             "Shortest parallel stretch reported",
             "emc.min_parallel_mm",
@@ -397,7 +397,15 @@ fn assumptions(input: &Input) -> Vec<Assumption> {
             "emc.pigtail_max_mm",
             mm(p.pigtail_max_mm),
         ),
-    ]
+    ];
+    // Fixed in the program, so no property to set.
+    list.push(Assumption {
+        name: "Distance counted across a duct divider (metal wall, not measured)",
+        value: mm(DIVIDER_ASSUMED_DISTANCE_MM),
+        user_set: false,
+        property: "",
+    });
+    list
 }
 
 // ---- EMC-01 and EMC-02 -----------------------------------------------------
