@@ -323,13 +323,13 @@ fn the_report_says_so_when_the_end_of_the_file_is_gone() {
 
 #[test]
 fn the_recovered_copy_keeps_the_extension_of_the_damaged_file() {
-    let dir = tempfile::tempdir().unwrap();
-    for name in ["dmg.kopercad", "dmg"] {
+    for name in ["dmg.kopercad", "dmg.novo", "dmg"] {
+        let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(name);
         saved(&path, 150);
         cut(&path, 0.6);
         let salvaged = salvage(&path).unwrap();
-        let expect = if name == "dmg" {
+        let expect = if name == "dmg.novo" {
             "dmg.recovered.novo"
         } else {
             "dmg.recovered.kopercad"
