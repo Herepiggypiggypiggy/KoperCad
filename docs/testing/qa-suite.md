@@ -153,9 +153,11 @@ Add a block to it (or a new `2x-` file) when an audit defect is fixed and merged
 state the fixed behaviour with `expect*` steps, and add a `shot` for the ones only a
 picture can show. Run it with `scripts/qa.sh --only critic`.
 
-`qa/scenarios/30-heat-cabinet.qa` runs Cabinet > Simulate heat of the cabinet (Ctrl+K) and
-takes pictures while it runs and after 400 frames; on software rendering the coarse run
-is still going then, so the picture shows the running state ("working", "not converged").
+`qa/scenarios/30-heat-cabinet.qa` runs Cabinet > Simulate heat of the cabinet (Ctrl+K),
+takes a picture right after the start, waits 60 s of wall time (`wait_s`, the solver runs on
+the wall clock) and expects the `· it N · S s` strip at both sizes. The running state is a
+spinner bar with no text, "meshing and setting up" before the first iteration and the
+iteration strip after it; the second picture shows the unconverged first-look result.
 Use it before and after a change to the hot-spot cards or the Temperature panel.
 
 ## Fixtures

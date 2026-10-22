@@ -855,9 +855,10 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
                 // they were cut off at the bar's end.
                 // A residual that has not started to fall reads 0 %; the bar
                 // moves instead of claiming nothing has happened.
+                // No text in the animated bar: the spinner dot sat on its first letter.
                 let bar = egui::ProgressBar::new(frac).desired_width(80.0);
                 ui.add(if frac < 0.01 {
-                    bar.animate(true).text("working")
+                    bar.animate(true)
                 } else {
                     bar.show_percentage()
                 });
@@ -874,13 +875,12 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
                 ui.add(
                     egui::ProgressBar::new(0.0)
                         .desired_width(80.0)
-                        .animate(true)
-                        .text("preparing"),
+                        .animate(true),
                 );
                 ui.label(
                     egui::RichText::new(heat_progress::preparing_label(secs))
                         .small()
-                        .color(t::TEXT_MUTED),
+                        .color(crate::theme::ui_palette().text_secondary),
                 );
             }
         }

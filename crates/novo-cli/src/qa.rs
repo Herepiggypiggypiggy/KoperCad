@@ -908,7 +908,11 @@ impl Ctx<'_> {
                 // Real seconds, for work that runs on the wall clock (a
                 // solver on its own thread); `wait` counts frames, which
                 // pass faster in a small window.
-                let secs = num(1, "seconds")?.clamp(0.0, 300.0);
+                let secs = num(1, "seconds")?;
+                if !secs.is_finite() {
+                    return Err("wait_s needs a finite number of seconds".into());
+                }
+                let secs = secs.clamp(0.0, 300.0);
                 std::thread::sleep(std::time::Duration::from_secs_f64(secs));
                 self.srv.tool("wait", &json!({"frames": 4})).map(|_| ())
             }
