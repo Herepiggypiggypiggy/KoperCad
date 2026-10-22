@@ -8,7 +8,7 @@ The Cabinet workspace (**Ctrl+2**) lays the devices of the schematic out on a mo
 
 1. Open the Cabinet workspace (View > Workspace > Cabinet). If the project has no cabinet yet, the workspace offers to create one.
 2. Set the enclosure size and depth, door and plate. The program warns when the devices cannot fit.
-3. **Place all** (View > Cabinet > Place all devices) puts every device on a rail or on the bare plate, using each part's size. A size that is a guess (no part data) is said so on the device.
+3. **Place all** (View > Cabinet > Place all devices) puts every device on a rail or on the bare plate, using each part's size. A size that is a guess (no part data) is said so on the device. When parts carry a power loss and a maximum ambient, Place all is also heat-aware: it spreads hot devices, keeps devices that mind heat away from them and below them, and says what it did. This is a planning score, not a temperature; check the result in the Heat view. Switch it off with the *Heat-aware placement* check box in Rules.
 
 ## Rails and ducts
 

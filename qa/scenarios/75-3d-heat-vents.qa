@@ -54,6 +54,33 @@ shot airflow-result
 expect "Airflow: lines and arrows are coloured by air speed"
 check_blank airflow-result
 check_layout
+wait_s 5
+shot after-run
+expect "at free air; this run moves about"
+move 170 560
+wait 5
+scroll 170 560 -200
+wait 10
+shot operating-point
+scroll 170 560 200
+wait 10
+click_text "Cooling selection"
+wait 10
+click_text "40.0 °C"
+key ctrl+a
+text 37
+key Enter
+wait 20
+shot cooling-card
+click_text "Cooling selection"
+wait 10
+click_text Auto
+wait 10
+click_text Undo
+wait 10
+expect "from before your last change"
+shot stale-after-edit
+check_layout
 key ctrl+k
 wait 6
 text preferences

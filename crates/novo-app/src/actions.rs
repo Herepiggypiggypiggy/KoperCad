@@ -11,6 +11,7 @@ pub enum Action {
     OpenReadOnly,
     RecoverProject,
     OpenExample,
+    OpenEmcExample,
     TryFastKeys,
     ShowWalkthrough,
     Learn,
@@ -26,6 +27,7 @@ pub enum Action {
     SizeEnclosure,
     EnclosureList,
     StandardsCheck,
+    EmcCheck,
     Protection,
     MotorStart,
     PinOutline,
@@ -42,6 +44,7 @@ impl Action {
         Action::OpenReadOnly,
         Action::RecoverProject,
         Action::OpenExample,
+        Action::OpenEmcExample,
         Action::TryFastKeys,
         Action::ShowWalkthrough,
         Action::Learn,
@@ -57,6 +60,7 @@ impl Action {
         Action::SizeEnclosure,
         Action::EnclosureList,
         Action::StandardsCheck,
+        Action::EmcCheck,
         Action::Protection,
         Action::MotorStart,
         Action::PinOutline,
@@ -75,6 +79,7 @@ impl Action {
             Action::OpenReadOnly => "file.open_read_only",
             Action::RecoverProject => "file.recover",
             Action::OpenExample => "file.example",
+            Action::OpenEmcExample => "file.example_emc",
             Action::TryFastKeys => "file.practice",
             Action::ShowWalkthrough => "help.walkthrough",
             Action::Learn => "help.learn",
@@ -90,6 +95,7 @@ impl Action {
             Action::SizeEnclosure => "cabinet.size-enclosure",
             Action::EnclosureList => "cabinet.enclosures",
             Action::StandardsCheck => "check.standards",
+            Action::EmcCheck => "check.emc",
             Action::Protection => "view.protection",
             Action::MotorStart => "simulate.motor-start",
             Action::PinOutline => "view.pin_outline",
@@ -111,6 +117,7 @@ impl Action {
             Action::OpenReadOnly => "Open read-only…",
             Action::RecoverProject => "Recover a damaged project…",
             Action::OpenExample => "Open example",
+            Action::OpenEmcExample => "Open EMC example",
             Action::TryFastKeys => "Try the fast keys",
             Action::ShowWalkthrough => "Fast keys card on this project",
             Action::Learn => "Learn…",
@@ -126,6 +133,7 @@ impl Action {
             Action::SizeEnclosure => "Size the enclosure…",
             Action::EnclosureList => "Enclosures…",
             Action::StandardsCheck => "Standards check…",
+            Action::EmcCheck => "EMC check…",
             Action::Protection => "Protection: curves, selectivity, rating…",
             Action::MotorStart => "Simulate motor start…",
             Action::PinOutline => "Pin outline",
@@ -145,6 +153,7 @@ impl Action {
             | Action::OpenReadOnly
             | Action::RecoverProject
             | Action::OpenExample
+            | Action::OpenEmcExample
             | Action::TryFastKeys
             | Action::SaveProject
             | Action::SaveProjectAs
@@ -158,6 +167,7 @@ impl Action {
             | Action::SizeEnclosure
             | Action::EnclosureList
             | Action::StandardsCheck
+            | Action::EmcCheck
             | Action::Protection
             | Action::MotorStart
             | Action::PinOutline
@@ -192,11 +202,13 @@ impl Action {
             | Action::OpenReadOnly
             | Action::RecoverProject
             | Action::OpenExample
+            | Action::OpenEmcExample
             | Action::TryFastKeys
             | Action::ShowWalkthrough
             | Action::Learn
             | Action::SizeEnclosure
             | Action::StandardsCheck
+            | Action::EmcCheck
             | Action::EnclosureList
             | Action::Protection
             | Action::MotorStart => return None,

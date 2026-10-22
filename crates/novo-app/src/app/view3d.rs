@@ -143,6 +143,8 @@ pub(crate) struct View3dMode {
     pub(super) run_marks: Vec<novo_view3d::Overlay>,
     /// The Wire runs list is open.
     pub(super) wire_runs: bool,
+    /// The EMC view: class colours, keep-clear zones, hot spots.
+    pub(super) emc: super::emc_view::EmcState,
     /// The toolbar's layers and door.
     pub(super) controls: Controls,
     /// The legend of mouse and keys.
@@ -212,6 +214,7 @@ impl Default for View3dMode {
             runs_settle: Default::default(),
             run_marks: Vec::new(),
             wire_runs: false,
+            emc: Default::default(),
             controls: Controls::default(),
             hints: Hints::default(),
             stats: Stats::default(),
@@ -625,7 +628,11 @@ impl NovoApp {
                     frame: scene.frame,
                 },
                 &vent_flows,
-                self.cabinet.heat.settings.selected,
+                self.cabinet
+                    .heat
+                    .settings
+                    .hovered
+                    .or(self.cabinet.heat.settings.selected),
             ),
             _ => Vec::new(),
         };
@@ -723,6 +730,9 @@ impl NovoApp {
             }))
             .collect();
         ghost.extend(mode.measure.overlays());
+        let dark = ui.visuals().dark_mode;
+        mode.emc.on = mode.controls.emc;
+        ghost_changed |= mode.emc.sync(project, id, revision, scene, dark);
         let mut heat_changed = false;
         if !mode.probe.on {
             mode.probe.at = None;
@@ -798,6 +808,7 @@ impl NovoApp {
             all.extend(mode.pin_marks.iter().cloned());
             all.extend(mode.vent_marks.iter().cloned());
             all.extend(mode.run_marks.iter().cloned());
+            all.extend(mode.emc.overlays().iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker.clone());
             mode.view.set_overlays(all);
@@ -808,6 +819,7 @@ impl NovoApp {
             all.extend(mode.pin_marks.iter().cloned());
             all.extend(mode.vent_marks.iter().cloned());
             all.extend(mode.run_marks.iter().cloned());
+            all.extend(mode.emc.overlays().iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker);
             let time = ui.input(|i| i.time);
@@ -893,6 +905,48 @@ impl NovoApp {
             stored.as_ref(),
             ambient,
         );
+        {
+            // The cooling advice window follows the Heat strip's button and
+            // the command, whether or not the Heat panel is open.
+            let tag_of = |raw: u64| {
+                project
+                    .get::<Device>(DeviceId::from(raw))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_else(|| format!("device {raw}"))
+            };
+            let heat = &mut self.cabinet.heat;
+            heat.advice.poll(ui.ctx());
+            if heat.advice.take_request() {
+                heat.advice
+                    .start(project, id, ambient, &heat.settings, &tag_of);
+            }
+            if heat.advice.is_open() {
+                let now_key = super::heat_sweep::key_of(project, id, ambient, &heat.settings);
+                let at = view_rect.center_top() + egui::vec2(-200.0, 170.0);
+                match heat.advice.show(ui.ctx(), 2, now_key, at) {
+                    Some(super::heat_sweep::Ask::Again) => heat.advice.request(),
+                    Some(super::heat_sweep::Ask::Add(c)) => {
+                        super::heat_sweep::add_pair(&mut heat.settings, &c);
+                        heat.advice.set_added(super::heat_sweep::added_text(&c));
+                        mode.controls.heat_panel = true;
+                    }
+                    None => {}
+                }
+            }
+        }
+        if self.cabinet.heat.layout.pending() {
+            // The suggestions are drawn on the plate: the button of the 3D
+            // panel takes the person to the Cabinet view, which runs the
+            // search (it also tells when nothing is worth moving).
+            self.switch_workspace(super::workspace::Workspace::Cabinet);
+            self.cabinet.table = false;
+            self.cabinet.heat.on = true;
+            self.message(
+                super::Level::Info,
+                "Cooler layout: searching in the Cabinet view, where the suggestions are shown on the plate.",
+            );
+            return;
+        }
         if mode.controls.heat_panel {
             let tag_of = |raw: u64| {
                 project
@@ -901,13 +955,21 @@ impl NovoApp {
                     .unwrap_or_else(|| format!("device {raw}"))
             };
             let heat_running = self.cabinet.heat.running();
+            let has_result = self.cabinet.heat.solution().is_some();
+            let suggestion = self.cabinet.heat.solution().and_then(|sol| {
+                super::view3d_vents::suggestion(&sol, &mut self.cabinet.heat.cooling)
+            });
             super::view3d_vents::show(
                 ui.ctx(),
                 view_rect,
                 &mut self.cabinet.heat.settings,
                 vent_enclosure.as_ref(),
-                &vent_flows,
-                heat_running,
+                &super::view3d_vents::Shown {
+                    flows: &vent_flows,
+                    running: heat_running,
+                    stale: stale && has_result,
+                    suggestion: suggestion.as_ref(),
+                },
             );
             if let Some(raw) =
                 view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale, &tag_of)
@@ -919,6 +981,9 @@ impl NovoApp {
                         .fit(scene, ui.input(|i| i.time), options.reduced_motion);
                 }
             }
+        } else {
+            // A closed panel marks nothing in the cabinet.
+            self.cabinet.heat.settings.hovered = None;
         }
         if let Some(text) = empty_hint {
             ui.painter().text(
@@ -975,9 +1040,13 @@ impl NovoApp {
             }
             _ => None,
         };
+        let emc_scene = match shown {
+            None => mode.emc.tinted(scene, dark),
+            Some(_) => None,
+        };
         let out = mode.view.show(
             ui,
-            shown.unwrap_or(scene),
+            emc_scene.as_ref().unwrap_or(shown.unwrap_or(scene)),
             &mode.library,
             &Look::for_theme(theme),
             options,
@@ -1031,6 +1100,32 @@ impl NovoApp {
                     mode.measure.on = false;
                 }
             }
+        }
+        if mode.emc.on {
+            if let Some(pic) = mode.emc.picture().cloned() {
+                if mode.emc.layers.spots
+                    && let Some(h) = super::emc_view::paint_badges(
+                        ui,
+                        &mode.view,
+                        out.rect,
+                        scene,
+                        &pic,
+                        mode.emc.selected,
+                        dark,
+                    )
+                {
+                    mode.emc.selected = (mode.emc.selected != Some(h)).then_some(h);
+                }
+                let tag_of = |raw: u64| {
+                    project
+                        .get::<Device>(DeviceId::from(raw))
+                        .and_then(|d| d.tag.device_code().map(|c| format!("-{c}")))
+                        .unwrap_or_else(|| format!("device {raw}"))
+                };
+                super::emc_view::panel(ui.ctx(), view_rect, &mut mode.emc, &tag_of);
+                super::emc_view::legend(ui.ctx(), view_rect, &mode.emc, dark);
+            }
+            mode.controls.emc = mode.emc.on;
         }
         if mode.heat.labels
             && let Some(sol) = &solution
@@ -1617,23 +1712,46 @@ fn run_heat(
 /// Height the Heat strip keeps from the moment the Heat panel opens, points:
 /// the controls, the two colour bars and their note. The strip first appears
 /// with the first result; without the room kept, the panels and the cabinet
-/// jumped down by this much under the person's pointer.
-const STRIP_HEIGHT: f32 = 112.0;
+/// jumped down by this much under the person's pointer. Assumes the two
+/// colour bars fit one row; a window too narrow for that wraps them back to
+/// two rows and the strip grows past this room.
+const STRIP_HEIGHT: f32 = 84.0;
 
-/// The strip's place before there is a result.
+/// The strip's place before there is a result: the same rows, empty, so the
+/// room kept reads as the strip waiting for its first run and not as a gap.
 fn heat_strip_placeholder(ui: &mut egui::Ui) {
+    let pal = crate::theme::ui_palette();
     egui::Frame::new()
         .fill(ui.visuals().panel_fill)
         .inner_margin(egui::Margin::symmetric(10, 4))
         .show(ui, |ui| {
             ui.set_min_size(egui::vec2(ui.available_width(), STRIP_HEIGHT));
-            ui.label(
-                egui::RichText::new(
-                    "Heat: Simulate (right) fills this strip with the slice, airflow and scales.",
-                )
-                .small()
-                .color(crate::theme::ui_palette().text_secondary),
-            );
+            ui.horizontal(|ui| {
+                ui.label("Heat");
+                ui.label(
+                    egui::RichText::new("Simulate (Heat panel, right) fills this strip.")
+                        .small()
+                        .color(pal.text_secondary),
+                );
+            });
+            ui.horizontal(|ui| {
+                for (unit, name) in [("°C", "Temperature"), ("m/s", "Air speed")] {
+                    let (bar, _) =
+                        ui.allocate_exact_size(egui::vec2(160.0, 12.0), egui::Sense::hover());
+                    ui.painter().rect_stroke(
+                        bar,
+                        2.0,
+                        egui::Stroke::new(1.0, pal.text_secondary.gamma_multiply(0.5)),
+                        egui::StrokeKind::Inside,
+                    );
+                    ui.label(
+                        egui::RichText::new(format!("{unit}  {name}: after a run"))
+                            .small()
+                            .color(pal.text_secondary),
+                    );
+                    ui.add_space(14.0);
+                }
+            });
         });
 }
 

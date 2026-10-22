@@ -71,6 +71,7 @@
 //! | [`DeviceOutsidePlate`](ProblemKind::DeviceOutsidePlate) | error | A device beyond the usable area of its plate |
 //! | [`DevicesTooClose`](ProblemKind::DevicesTooClose) | warning | Two devices closer than their clearance |
 //! | [`RailOverflow`](ProblemKind::RailOverflow) | warning | Devices needing more room than their DIN rail has |
+//! | [`DeviceOffRail`](ProblemKind::DeviceOffRail) | warning | A device on a DIN rail whose middle is not on the rail's line (plans made before rails ran through the device middles; Place all puts it right) |
 //! | [`DuctOverlap`](ProblemKind::DuctOverlap) | error | A wiring duct lying over a DIN rail or a device on the plate |
 //! | [`DeviceTooDeep`](ProblemKind::DeviceTooDeep) | error | A device deeper than the room between plate and door |
 //! | [`DoorGapTight`](ProblemKind::DoorGapTight) | warning | A device that leaves less than the minimum gap to the door |
@@ -79,6 +80,7 @@
 //! | [`SafetyLevelNotMet`](ProblemKind::SafetyLevelNotMet) | error | A safety function whose achieved performance level is below the required one (ISO 13849-1 calculation aid) |
 //! | [`SafetyBinding`](ProblemKind::SafetyBinding) | warning | A safety function block bound to a device that is missing or states no reliability data |
 //! | [`DoorSwing`](ProblemKind::DoorSwing) | warning | An open door that needs more room outside than the site allows, or a device on the door that touches a wall or a plate device as the door opens |
+//! | [`Emc`](ProblemKind::Emc) | per rule | An EMC design rule is not met (novo-emc, rules EMC-01..); opt-in with the project property `emc.check`. A design aid, never a compliance statement |
 //!
 //! A problem can be waived with a reason ([`waive`]); [`check_open`] leaves
 //! waived problems out and [`waived_problems`] lists them for the report.
@@ -108,6 +110,7 @@ mod checks;
 mod connection_rules;
 mod contacts;
 mod door;
+mod emc;
 mod house_rules;
 mod more_rules;
 mod physical;
@@ -313,6 +316,10 @@ pub enum ProblemKind {
     DevicesTooClose,
     /// Devices on a DIN rail that need more room than the rail has.
     RailOverflow,
+    /// A device on a DIN rail whose middle is not on the rail's line. A rail
+    /// runs through the middle of the devices it carries; older plans have it
+    /// on their top edge.
+    DeviceOffRail,
     /// A wiring duct that lies over a DIN rail or a device on the plate.
     DuctOverlap,
     /// A device deeper than the room between the plate and the door
@@ -332,11 +339,15 @@ pub enum ProblemKind {
     /// The open door needs more room in front or beside the hinge side than
     /// the enclosure's stated free room.
     DoorSwing,
+    /// An EMC design rule is not met (novo-emc). Only produced for projects
+    /// that turned the EMC check on (`emc.check`). Each problem carries its
+    /// rule id (`EMC-01`) in [`Problem::rule`] and its own severity.
+    Emc,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 68] = [
+    pub const ALL: [ProblemKind; 70] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -371,6 +382,7 @@ impl ProblemKind {
         ProblemKind::DeviceOutsidePlate,
         ProblemKind::DevicesTooClose,
         ProblemKind::RailOverflow,
+        ProblemKind::DeviceOffRail,
         ProblemKind::DuctOverlap,
         ProblemKind::DeviceTooDeep,
         ProblemKind::DoorGapTight,
@@ -379,6 +391,7 @@ impl ProblemKind {
         ProblemKind::SafetyLevelNotMet,
         ProblemKind::SafetyBinding,
         ProblemKind::DoorSwing,
+        ProblemKind::Emc,
         ProblemKind::AmbiguousInterruption,
         ProblemKind::WireNumber,
         ProblemKind::UntaggedDevice,
@@ -442,6 +455,7 @@ impl ProblemKind {
             | ProblemKind::Standard
             | ProblemKind::DevicesTooClose
             | ProblemKind::RailOverflow
+            | ProblemKind::DeviceOffRail
             | ProblemKind::DoorGapTight
             | ProblemKind::DoorSwing
             | ProblemKind::AmbiguousInterruption
@@ -469,6 +483,7 @@ impl ProblemKind {
             | ProblemKind::DisplayedTag
             | ProblemKind::StructureCode
             | ProblemKind::SafetyBinding
+            | ProblemKind::Emc
             | ProblemKind::Plc => Severity::Warning,
             ProblemKind::MissingPart
             | ProblemKind::UnplacedDevice
@@ -517,6 +532,7 @@ impl ProblemKind {
             ProblemKind::DeviceOutsidePlate => "Device off the plate",
             ProblemKind::DevicesTooClose => "Devices too close",
             ProblemKind::RailOverflow => "Rail overfull",
+            ProblemKind::DeviceOffRail => "Device off its rail's middle",
             ProblemKind::DuctOverlap => "Duct over rail or device",
             ProblemKind::DeviceTooDeep => "Device too deep",
             ProblemKind::DoorGapTight => "Door gap tight",
@@ -525,6 +541,7 @@ impl ProblemKind {
             ProblemKind::SafetyLevelNotMet => "Safety level not met",
             ProblemKind::SafetyBinding => "Safety function binding",
             ProblemKind::DoorSwing => "Door swing",
+            ProblemKind::Emc => "EMC",
             ProblemKind::AmbiguousInterruption => "Interruption name used often",
             ProblemKind::WireNumber => "Wire number",
             ProblemKind::UntaggedDevice => "Device without tag",
@@ -591,6 +608,7 @@ impl ProblemKind {
             ProblemKind::DeviceOutsidePlate => "check.device_outside_plate",
             ProblemKind::DevicesTooClose => "check.devices_too_close",
             ProblemKind::RailOverflow => "check.rail_overflow",
+            ProblemKind::DeviceOffRail => "check.device_off_rail",
             ProblemKind::DuctOverlap => "check.duct_overlap",
             ProblemKind::DeviceTooDeep => "check.device_too_deep",
             ProblemKind::DoorGapTight => "check.door_gap_tight",
@@ -599,6 +617,7 @@ impl ProblemKind {
             ProblemKind::SafetyLevelNotMet => "check.safety_level",
             ProblemKind::SafetyBinding => "check.safety_binding",
             ProblemKind::DoorSwing => "check.door_swing",
+            ProblemKind::Emc => "check.emc",
             ProblemKind::AmbiguousInterruption => "check.ambiguous_interruption",
             ProblemKind::WireNumber => "check.wire_number",
             ProblemKind::UntaggedDevice => "check.untagged_device",
@@ -645,9 +664,9 @@ pub struct Problem {
     pub position: Option<Point>,
     /// One plain sentence, shown on hover and in the Issues list.
     pub message: String,
-    /// The id of the standards rule this problem comes from
-    /// (`iec60204.pe-colour`), for [`ProblemKind::Standard`]; `None` for
-    /// every other kind.
+    /// The id of the rule this problem comes from: a standards rule
+    /// (`iec60204.pe-colour`) for [`ProblemKind::Standard`], an EMC rule
+    /// (`EMC-01`) for [`ProblemKind::Emc`]; `None` for every other kind.
     pub rule: Option<&'static str>,
 }
 
@@ -671,6 +690,7 @@ impl Problem {
     /// so a waiver covers one rule and not every standards problem.
     pub fn waiver_key(&self) -> String {
         match self.rule {
+            Some(rule) if self.kind == ProblemKind::Emc => format!("check.emc.{rule}"),
             Some(rule) => standards::waiver_key(rule),
             None => self.kind.key().to_owned(),
         }
@@ -781,6 +801,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     physical::layout(&cx, &mut problems);
     door::door(&cx, &mut problems);
     safety::run(&cx, &mut problems);
+    emc::run(&cx, netlist, &mut problems);
     cx.sort(&mut problems);
     problems
 }

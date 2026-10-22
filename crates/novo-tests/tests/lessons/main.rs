@@ -10,5 +10,6 @@ mod cables;
 mod common;
 mod documents;
 mod plc;
+mod progression;
 mod standard;
 mod terminals;

@@ -62,6 +62,11 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl("file.example", &[], &["voorbeeld openen", "voorbeeld"]),
+    nl(
+        "file.example_emc",
+        &[],
+        &["emc voorbeeld", "storing voorbeeld"],
+    ),
     nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
     nl(
         "help.walkthrough",
@@ -567,6 +572,20 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["warmte simuleren", "kast doorrekenen"],
     ),
+    nl(
+        "heat.cooling_advice",
+        &[],
+        &["koeladvies", "ventilator plaatsen", "ventilatieroosters"],
+    ),
+    nl(
+        "heat.cooler_layout",
+        &[],
+        &[
+            "koelere indeling",
+            "indeling optimaliseren",
+            "warmte verplaatsen",
+        ],
+    ),
     nl("heat.airflow", &[], &["luchtstroom", "luchtstroming"]),
     nl(
         "heat.vents",
@@ -599,6 +618,17 @@ pub const DUTCH: &[Aliases] = &[
         "check.standards",
         &[],
         &["normen", "normencontrole", "conformiteit", "nen"],
+    ),
+    nl(
+        "check.emc",
+        &[],
+        &[
+            "emc",
+            "storing",
+            "afscherming",
+            "scheiding",
+            "kabelscheiding",
+        ],
     ),
     nl(
         "view.protection",
@@ -918,6 +948,11 @@ pub const DUTCH: &[Aliases] = &[
         &["verdelen", "gelijk"],
     ),
     nl(
+        "view.emc",
+        &["emc weergave tonen"],
+        &["emc", "storing", "kabelklassen", "afscherming"],
+    ),
+    nl(
         "view.3d_wire_runs",
         &["draadlengtes tonen in 3d"],
         &["draadlengte", "draden", "lengtes", "afkorten"],
@@ -1146,6 +1181,11 @@ pub const DUTCH: &[Aliases] = &[
         "cabinet.door",
         &["binnenmaat en deur", "deurdraaiing", "scharnierkant"],
         &["deur", "scharnier", "binnenmaat", "diepte"],
+    ),
+    nl(
+        "cabinet.emc",
+        &["emc weergave op de plaat tonen"],
+        &["emc", "storing", "kabelklassen"],
     ),
     nl(
         "cabinet.routes",

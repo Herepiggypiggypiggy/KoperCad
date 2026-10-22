@@ -1,0 +1,12 @@
+@title Ctrl+K: the PLC input card macro entry says it is symbols and where the card comes from
+@area Command field
+# Critical audit C-59 (S4): the entry read "24 V PLC card" and gave no hint it is symbols only.
+click_text "New project"
+wait 20
+key ctrl+k
+wait 6
+text plc input card
+wait 10
+expect "add the card via Add PLC card"
+shot search-results
+check_layout

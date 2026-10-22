@@ -67,6 +67,14 @@ mod drawers;
 mod duplicate;
 mod dxf;
 mod electrical;
+mod emc;
+mod emc_adapter;
+mod emc_demo;
+mod emc_plate;
+mod emc_stub;
+#[cfg(test)]
+mod emc_tests;
+mod emc_view;
 mod eplan_export;
 mod eplan_import;
 mod eplan_parts;
@@ -87,6 +95,9 @@ mod heat_compare_tests;
 mod heat_cooling;
 #[cfg(test)]
 mod heat_duct_slice_tests;
+mod heat_layout;
+#[cfg(test)]
+mod heat_layout_tests;
 mod heat_legend;
 mod heat_live;
 #[cfg(test)]
@@ -102,6 +113,9 @@ mod heat_run;
 mod heat_run_tests;
 mod heat_settings;
 mod heat_spots;
+mod heat_sweep;
+#[cfg(test)]
+mod heat_sweep_tests;
 mod heat_time;
 #[cfg(test)]
 mod heat_time_tests;
@@ -489,6 +503,7 @@ enum Leaving {
     Recover,
     OpenPath(PathBuf),
     Example,
+    EmcExample,
     Practice,
     Close,
     Quit,
@@ -512,6 +527,8 @@ pub struct NovoApp {
     /// Help > About the numbers is open (app/model_labels.rs).
     show_numbers: bool,
     standards_open: bool,
+    /// The EMC check window (app/emc.rs).
+    emc: emc::EmcState,
     window_title: String,
     /// Opened on the first frame, so errors show in the window.
     open_on_start: Option<PathBuf>,
@@ -631,6 +648,7 @@ impl NovoApp {
             show_whats_new: false,
             show_numbers: false,
             standards_open: false,
+            emc: emc::EmcState::default(),
             window_title: String::new(),
             open_on_start: None,
             started: false,
@@ -778,6 +796,7 @@ impl NovoApp {
             | Action::ZoomToFit
             | Action::SizeEnclosure
             | Action::StandardsCheck
+            | Action::EmcCheck
             | Action::EnclosureList
             | Action::Protection => open,
             Action::MotorStart => open,
@@ -815,6 +834,7 @@ impl NovoApp {
             Action::OpenReadOnly => self.leave_then(ctx, Leaving::OpenReadOnly),
             Action::RecoverProject => self.leave_then(ctx, Leaving::Recover),
             Action::OpenExample => self.leave_then(ctx, Leaving::Example),
+            Action::OpenEmcExample => self.leave_then(ctx, Leaving::EmcExample),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
             Action::Learn => self.learn_run_command("help.learn", None),
@@ -850,6 +870,7 @@ impl NovoApp {
                 self.sizing.editor_open = true;
             }
             Action::StandardsCheck => self.standards_open = true,
+            Action::EmcCheck => self.emc.open = true,
             Action::Protection => self.protection.open = true,
             Action::MotorStart => self.open_motor_start(),
             Action::PinOutline => {
@@ -964,6 +985,7 @@ impl NovoApp {
             }
             Leaving::OpenPath(path) => self.open_path(&path),
             Leaving::Example => self.open_example(),
+            Leaving::EmcExample => self.open_emc_example(),
             Leaving::Practice => self.start_practice(),
             Leaving::Close => self.close_project(),
             Leaving::Quit => {
@@ -1210,6 +1232,19 @@ impl NovoApp {
         self.wb.field.close();
         self.wb.commissioning = None;
         self.wb.sheet = 0;
+        // Build mode takes the whole canvas and the output windows show the old
+        // project's numbers: none may sit over the new project (or a lesson card).
+        self.wb.build = None;
+        self.wb.bench = None;
+        self.wb.autopilot = None;
+        self.wb.handover_ask = None;
+        self.wb.print_preview = None;
+        self.wb.calculations = None;
+        self.wb.electrical = None;
+        self.wb.safety = None;
+        self.protection.open = false;
+        self.standards_open = false;
+        self.emc = emc::EmcState::default();
         self.cabinet.result = None;
         self.add_generated_pages();
         // Nothing to commission in a closed project.
@@ -1419,6 +1454,7 @@ impl NovoApp {
                     || id.starts_with("view.3d_align")
                     || id.starts_with("view.3d_spread")
                     || *id == "view.3d_wire_runs"
+                    || *id == "view.emc"
                     || *id == "view.3d_duplicate"
                     || (*id == "edit.duplicate" && in_3d)
                     || *id == "view.3d_position"
@@ -1534,6 +1570,7 @@ impl NovoApp {
         self.crash_dialog(&ctx);
         self.about_dialog(&ctx);
         self.standards_window(&ctx);
+        self.emc_window(&ctx);
         self.learn_window(&ctx);
         self.motor_start_window(&ctx);
         self.renumber_dialog(&ctx);

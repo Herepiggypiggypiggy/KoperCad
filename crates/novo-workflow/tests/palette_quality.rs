@@ -386,6 +386,18 @@ fn duct_heat_and_wire_heat_find_the_heat_run() {
 }
 
 #[test]
+fn learning_paths_finds_the_learn_window() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    // Help > Learning paths opens the Learn window at its paths; the command field must find it.
+    for query in ["learning paths", "paths", "learn"] {
+        let rows = search(&palette, &keymap, query);
+        let at = position(&rows, "help.learn")
+            .unwrap_or_else(|| panic!("{query:?} does not find Learn"));
+        assert!(at < 3, "{query:?} ranks it {at}th");
+    }
+}
+
+#[test]
 fn handover_ranks_the_handover_package_first() {
     let (palette, keymap) = (Palette::default(), Keymap::workflow());
     let rows = search(&palette, &keymap, "handover");
@@ -541,4 +553,41 @@ fn a_typed_label_beats_a_shorter_verb_run_on_the_rest() {
     }
     let rows = search(&palette, &keymap, "import parts from a folder");
     assert_eq!(position(&rows, "parts.import_folder"), Some(0));
+}
+
+/// The empty-report hints quote these words for Ctrl+K; each must land on its command.
+#[test]
+fn the_words_an_empty_report_hint_quotes_find_their_command() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for (query, command) in [
+        ("import io list", "plc.import_list"),
+        ("add plc card", "plc.add_card"),
+    ] {
+        let rows = search(&palette, &keymap, query);
+        assert_eq!(rows[0].target, Target::Command(command), "{query}");
+    }
+}
+
+#[test]
+fn the_symbol_words_an_empty_report_hint_quotes_find_symbols() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for query in ["plug", "terminal"] {
+        let rows = search(&palette, &keymap, query);
+        assert!(
+            rows.iter().any(|r| matches!(r.target, Target::Symbol(_))),
+            "{query} finds no symbol"
+        );
+    }
+}
+
+#[test]
+fn continue_lesson_finds_the_lesson_on_offer() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    // Help shows "Continue lesson: <title>" for this command while a lesson is under way.
+    for query in ["continue lesson", "resume lesson", "continue learning"] {
+        let rows = search(&palette, &keymap, query);
+        let at = position(&rows, "help.next_lesson")
+            .unwrap_or_else(|| panic!("{query:?} does not find the lesson command"));
+        assert!(at < 3, "{query:?} ranks it {at}th");
+    }
 }

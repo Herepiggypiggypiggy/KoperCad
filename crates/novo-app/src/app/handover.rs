@@ -166,6 +166,7 @@ impl NovoApp {
         };
         let (mut fix, mut anyway) = (false, false);
         let mut go: Option<Option<Place>> = None;
+        let mut marks: Vec<(&'static str, egui::Rect, &'static str, bool)> = Vec::new();
         let modal = egui::Modal::new(egui::Id::new("handover_ask")).show(ctx, |ui| {
             ui.set_width(460.0);
             ui.heading("The design still has open problems");
@@ -197,15 +198,22 @@ impl NovoApp {
                 });
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if ui.button("Fix these first").clicked() {
+                let first = ui.button("Fix these first");
+                marks.push(("handover.fix", first.rect, "Fix these first", false));
+                if first.clicked() {
                     fix = true;
                 }
-                if ui.button("Hand over anyway").clicked() {
+                let any = ui.button("Hand over anyway");
+                marks.push(("handover.anyway", any.rect, "Hand over anyway", false));
+                if any.clicked() {
                     anyway = true;
                 }
                 ui.weak("Esc cancels");
             });
         });
+        for (id, rect, label, clicked) in marks {
+            self.anchor_clicked(id, rect, label, clicked);
+        }
         if let Some(place) = go {
             // Leave the question so the page can be worked on; the Issues
             // list stays open for the rest.
@@ -216,6 +224,7 @@ impl NovoApp {
         } else if fix {
             self.show_issues(false);
         } else if anyway {
+            self.learn_event(novo_learn::Event::Clicked("handover.anyway".to_owned()));
             self.export_handover();
         } else if !modal.should_close() {
             self.wb.handover_ask = Some(ask);

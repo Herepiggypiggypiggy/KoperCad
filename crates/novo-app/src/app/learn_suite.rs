@@ -35,6 +35,11 @@ pub(super) enum Section {
 
 type Start = Option<(String, bool)>;
 
+/// A level chip with no lessons cannot be picked; a picked one can still be left.
+fn chip_enabled(lessons: usize, picked: bool) -> bool {
+    lessons > 0 || picked
+}
+
 fn level_rank(level: Level) -> usize {
     LEVELS.iter().position(|l| *l == level).unwrap_or(0)
 }
@@ -74,6 +79,8 @@ impl NovoApp {
             self.learn.only_track = None;
             self.learn.only_path = None;
             self.learn.level = None;
+            // Reopening starts at the home page, not on an old search.
+            self.learn.filter.clear();
         }
         if reload {
             self.learn.reload();
@@ -152,6 +159,27 @@ impl NovoApp {
         self.suite_footer(ui, reload, reset);
     }
 
+    /// Most shown lessons are early access, so a tag on each says nothing:
+    /// the home says it once and only the exceptions are marked.
+    fn early_is_the_norm(&self) -> bool {
+        let shown = self.learn.catalog.visible(self.learn.show_drafts);
+        let (all, early) = shown.fold((0, 0), |(all, early), e| {
+            (
+                all + 1,
+                early + usize::from(e.lesson.status == novo_learn::Status::Early),
+            )
+        });
+        early * 2 > all
+    }
+
+    /// The one line that says lessons are early access, on every Learn page
+    /// where the per-lesson tag is left off (see [`Self::early_is_the_norm`]).
+    fn early_note(&self, ui: &mut egui::Ui) {
+        if self.early_is_the_norm() {
+            ui.weak(self.learn.say("early_note"));
+        }
+    }
+
     /// Search and the level chips. Returns whether Enter was pressed in the
     /// search field, which starts the first result.
     fn suite_toolbar(&mut self, ui: &mut egui::Ui, first_frame: bool) -> bool {
@@ -186,7 +214,9 @@ impl NovoApp {
                     .filter(|e| e.lesson.level == level)
                     .count();
                 let label = format!("{} · {n}", self.learn.say(level_key(level)));
-                if ui.selectable_label(on, label).clicked() {
+                // A level with no lessons cannot be picked (a picked one can still be left).
+                let chip = ui.add_enabled(chip_enabled(n, on), egui::Button::selectable(on, label));
+                if chip.clicked() {
                     self.learn.level = if on { None } else { Some(level) };
                 }
             }
@@ -376,6 +406,7 @@ impl NovoApp {
         start: &mut Start,
     ) {
         let rows = self.suite_matches(section, words);
+        self.early_note(ui);
         ui.horizontal(|ui| {
             ui.label(
                 egui::RichText::new(
@@ -415,7 +446,9 @@ impl NovoApp {
         let lang = self.learn.lang;
         let drafts = self.learn.show_drafts;
         ui.add_space(2.0);
+        ui.heading(self.learn.say("learn_title"));
         ui.weak(self.learn.say("learn_hint"));
+        self.early_note(ui);
         ui.add_space(8.0);
         let hero = self.recommendation();
         match &hero {
@@ -528,6 +561,7 @@ impl NovoApp {
         ui.label(egui::RichText::new(path.title(lang)).heading());
         ui.add_space(2.0);
         ui.weak(path.summary(lang));
+        self.early_note(ui);
         ui.add_space(6.0);
         let sum = self
             .learn
@@ -558,6 +592,7 @@ impl NovoApp {
             _ => track.summary.as_str(),
         };
         ui.weak(summary);
+        self.early_note(ui);
         ui.add_space(6.0);
         let sum = self
             .learn
@@ -921,7 +956,7 @@ impl NovoApp {
                 }
                 Standing::NotStarted => {}
             }
-            if lesson.status == novo_learn::Status::Early {
+            if lesson.status == novo_learn::Status::Early && !self.early_is_the_norm() {
                 ui.small("·");
                 ui.small(self.learn.say("early_access"));
             }
@@ -1093,5 +1128,18 @@ fn status_badge(ui: &mut egui::Ui, standing: &Standing, number: Option<usize>) {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod chip_tests {
+    use super::chip_enabled;
+
+    #[test]
+    fn an_empty_level_chip_is_off_unless_it_is_the_picked_one() {
+        assert!(!chip_enabled(0, false), "nothing to pick");
+        assert!(chip_enabled(0, true), "a picked level can still be left");
+        assert!(chip_enabled(3, false));
+        assert!(chip_enabled(3, true));
     }
 }

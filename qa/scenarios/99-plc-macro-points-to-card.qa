@@ -1,0 +1,23 @@
+@title Place macro: the PLC input card says it is symbols only and where to get a card
+@area Schematic
+# Critical audit C-59: the macro registered no card, so the I/O list stayed empty with no explanation.
+click_text "New project"
+wait 20
+key ctrl+k
+text "place macro"
+wait 5
+key Enter
+wait 10
+click 237 94
+text plc input card
+wait 5
+click_text "PLC input card" Label
+wait 10
+expect "Symbols only"
+shot macro-picked
+click_text Place Button #2
+wait 20
+expect_scene "-A2"
+expect "Symbols only"
+shot macro-placed
+check_layout

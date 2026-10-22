@@ -72,6 +72,9 @@ impl Kind {
 
 /// Smallest opening, mm.
 pub(super) const MIN_SIZE_MM: f64 = 20.0;
+/// A fan opening thinner than this on one side is flagged, mm. The smallest
+/// common cabinet fans have a cut-out of about 38 mm, so under 30 is a slip.
+pub(super) const MIN_FAN_SIDE_MM: f64 = 30.0;
 /// Planning size of a fan cut-out and its datasheet ends when the person has
 /// not entered a maker's: stated in the panel as a starting point.
 const FAN_SIZE_MM: f64 = 150.0;
@@ -160,6 +163,12 @@ impl Default for VentSpec {
 }
 
 impl VentSpec {
+    /// A fan narrower than [`MIN_FAN_SIDE_MM`] on one side: no common cabinet
+    /// fan is that thin, so the size (or the datasheet flow) is probably a slip.
+    pub(super) fn is_thin_fan(&self) -> bool {
+        self.kind.is_fan() && self.width_mm.min(self.height_mm) < MIN_FAN_SIDE_MM
+    }
+
     /// A louvred grille in `wall`, centred and sized for a first look; the
     /// person edits it from there.
     pub(super) fn new(wall: Wall) -> VentSpec {
@@ -178,7 +187,7 @@ impl VentSpec {
     }
 
     /// Length of the wall along the `u` axis and the other way, mm.
-    fn wall_len(wall: Wall, e: &Enclosure) -> (f64, f64) {
+    pub(super) fn wall_len(wall: Wall, e: &Enclosure) -> (f64, f64) {
         let (w, h, d) = (
             e.interior_width_mm(),
             e.interior_height_mm(),
@@ -193,9 +202,14 @@ impl VentSpec {
 
     /// This opening moved and cut down until it lies inside its wall: nothing
     /// hangs over an edge, so the area the solver sees is the area drawn.
-    pub(super) fn fitted(mut self, e: &Enclosure) -> VentSpec {
-        // A number that is not a number (typed, or from a damaged file) falls
-        // back to the starting value instead of reaching the geometry.
+    pub(super) fn fitted(self, e: &Enclosure) -> VentSpec {
+        self.finite().fitted_finite(e)
+    }
+
+    /// Every number finite: one that is not a number (typed, or from a damaged
+    /// file) falls back to the starting value instead of reaching the
+    /// geometry or the stored text (a NaN is stored as null and loses the list).
+    pub(super) fn finite(mut self) -> VentSpec {
         let start = VentSpec::new(self.wall);
         for (v, d) in [
             (&mut self.u_mm, 0.0),
@@ -210,6 +224,10 @@ impl VentSpec {
                 *v = d;
             }
         }
+        self
+    }
+
+    fn fitted_finite(mut self, e: &Enclosure) -> VentSpec {
         let (along, across) = Self::wall_len(self.wall, e);
         self.width_mm = self.width_mm.clamp(MIN_SIZE_MM, along.max(MIN_SIZE_MM));
         self.height_mm = self.height_mm.clamp(MIN_SIZE_MM, across.max(MIN_SIZE_MM));
@@ -460,6 +478,8 @@ pub(super) struct HeatSettings {
     /// What the project holds for the shown enclosure, as last read or
     /// written (see `heat_openings_store`).
     pub(super) stored: Option<(novo_core::StructureId, String)>,
+    /// The row the pointer is on in the panel: its wall is shown in the cabinet.
+    pub(super) hovered: Option<usize>,
     /// A command (Ctrl+K) asked for this preset to be added; the panel does it.
     pub(super) requested: Option<usize>,
     undo: Vec<Vec<VentSpec>>,
@@ -475,6 +495,7 @@ impl Default for HeatSettings {
             selected: None,
             editing: false,
             stored: None,
+            hovered: None,
             requested: None,
             undo: Vec::new(),
             redo: Vec::new(),
@@ -603,6 +624,63 @@ impl HeatSettings {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_cooling_suggestion_places_what_fits_side_by_side_and_says_so() {
+        use super::super::view3d_vents::Suggestion;
+        let e = enclosure();
+        let sg = Suggestion::for_test(Kind::FilterFan, 3, 180.0);
+        let specs = sg.specs_for_test(&e);
+        assert_eq!(specs.len(), 3);
+        assert!(
+            specs
+                .iter()
+                .all(|v| v.kind == Kind::FilterFan && v.flow_m3h == 180.0)
+        );
+        assert!(!specs[0].footprint(&e).overlaps(&specs[1].footprint(&e)));
+        assert!(!specs[1].footprint(&e).overlaps(&specs[2].footprint(&e)));
+        // More than the wall holds: only what fits, never overlapping, and the
+        // sentence names the rest.
+        let many = Suggestion::for_test(Kind::FilterFan, 9, 180.0);
+        let placed = many.specs_for_test(&e);
+        assert!(placed.len() < 9 && placed.len() >= 2, "{}", placed.len());
+        for i in 0..placed.len() {
+            for j in i + 1..placed.len() {
+                assert!(!placed[i].footprint(&e).overlaps(&placed[j].footprint(&e)));
+            }
+        }
+        assert!(many.sentence_for_test(&e).contains("add the other"));
+        // The flow given is the one placed (the caller applies the derate).
+        assert_eq!(
+            Suggestion::for_test(Kind::FilterFan, 1, 126.0).specs_for_test(&e)[0].flow_m3h,
+            126.0
+        );
+        // Six on a wide enough wall: all six.
+        let six = Suggestion::for_test(Kind::FilterFan, 6, 100.0);
+        assert!(six.specs_for_test(&e).len() <= 6);
+    }
+
+    #[test]
+    fn only_a_fan_thinner_than_any_real_fan_is_flagged() {
+        let mut set = HeatSettings::default();
+        let mut thin = VentSpec::new(Wall::Top);
+        thin.kind = Kind::Fan;
+        thin.width_mm = 500.0;
+        thin.height_mm = 20.0;
+        let mut ok = thin;
+        ok.height_mm = 40.0;
+        let mut slot = thin;
+        slot.kind = Kind::Grille;
+        set.add(thin);
+        set.add(ok);
+        set.add(slot);
+        let flagged: Vec<usize> = (0..3).filter(|&i| set.vents[i].is_thin_fan()).collect();
+        assert_eq!(
+            flagged,
+            vec![0],
+            "a 40 mm fan and a thin grille slot are fine"
+        );
+    }
+
     #[test]
     fn identical_openings_are_reported_as_overlapping_and_apart_ones_are_not() {
         let e = enclosure();

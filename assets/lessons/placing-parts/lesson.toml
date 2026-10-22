@@ -133,21 +133,21 @@ De startknop sluit het circuit zolang hij ingedrukt is, dus het is een **sluiten
 """
 how = [
   "Hold {key:tool.place} to open the wheel.",
-  "Still holding the key, move onto **Switch**, then onto **Push NO** (the push button that closes while pressed).",
+  "Still holding the key, move onto **Switch**, then straight outward onto the parts that fan out around it, and along that outer ring to **Push NO** (the push button that closes while pressed). Do not cut across the inner ring: the fan follows the wedge you rest on.",
   "Let go of the key over **Push NO**. The push button hangs on your pointer.",
   "Click just under the breaker. It gets the tag **-S1** and is wired to the breaker.",
   "Press {key:edit.escape} to put the part down.",
 ]
 how_nl = [
   "Houd {key:tool.place} ingedrukt om het wiel te openen.",
-  "Houd de toets vast, beweeg naar **Switch** en dan naar **Push NO** (de drukknop die sluit zolang hij ingedrukt is).",
+  "Houd de toets vast, beweeg naar **Switch**, dan recht naar buiten naar de onderdelen die eromheen uitwaaieren, en langs die buitenring naar **Push NO** (de drukknop die sluit zolang hij ingedrukt is). Snijd niet over de binnenring: de waaier volgt het segment waarop je rust.",
   "Laat de toets los boven **Push NO**. De drukknop hangt aan je aanwijzer.",
   "Klik net onder de automaat. Hij krijgt de tag **-S1** en wordt met de automaat verbonden.",
   "Druk op {key:edit.escape} om het onderdeel los te laten.",
 ]
 demo = [
   { hold = "tool.place", secs = 1.5 },
-  { say = "Move onto Switch, then onto Push NO, and let go of the key over it.", say_nl = "Beweeg naar Switch en dan naar Push NO, en laat de toets los erboven." },
+  { say = "Move onto Switch, out onto its parts, along the outer ring to Push NO, and let go of the key over it.", say_nl = "Beweeg naar Switch, naar buiten naar de onderdelen, langs de buitenring naar Push NO, en laat de toets los erboven." },
   { ghost = { symbol = "iec/operators/pushbutton_no", page = "Control branch", x = 80, y = 72 } },
   { move = { at = { page = "Control branch", x = 80, y = 72 } } },
   { click = true },

@@ -100,6 +100,8 @@ pub(super) struct CabinetState {
     /// beside it (Route all).
     pub(super) routes: bool,
     routes_cache: cabinet_routes::OverlayCache,
+    /// The EMC view over the plate (the same picture as in 3D).
+    pub(super) emc: super::emc_view::EmcState,
     /// The place rules, why `Place all` chose what it did, and the cut list.
     pub(super) rules: cabinet_rules::RulesState,
     /// The Heat view over the plate.
@@ -156,6 +158,7 @@ impl CabinetState {
             surface_popup: None,
             routes: false,
             routes_cache: Default::default(),
+            emc: Default::default(),
             rules: cabinet_rules::RulesState::new(),
             heat: super::heat::HeatState::new(),
             rails: Default::default(),
@@ -207,6 +210,7 @@ pub(super) enum Ask {
     ToggleTable,
     TogglePlateCard,
     ToggleRoutes,
+    ToggleEmc,
     ExportWireCut,
     /// Set a wire production rule of the project (`None` back to its default).
     SetWireRule(&'static str, Option<f64>),
@@ -238,6 +242,10 @@ pub(super) enum Ask {
     ),
     /// Cut rails to new lengths (rail id, length in mm), from the cut list.
     SetRailLengths(Vec<(u64, f64)>),
+    /// Put a pair of openings from the cooling advice in the project's Vents and fans.
+    CoolingPair(novo_thermal::sweep::Candidate),
+    /// Put the devices of an accepted cooler layout at their new places.
+    CoolerLayout(StructureId, Vec<novo_thermal::placement::Move>),
 }
 
 /// The Cabinet drawing of a layout, with the layout's problems as box states.
@@ -314,6 +322,13 @@ pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> Stri
     }
 }
 
+/// "TAG: problem", the problem's first letter lower case after the colon.
+fn after_tag(tag: &str, line: &str) -> String {
+    let mut chars = line.chars();
+    let first = chars.next().map(|c| c.to_lowercase().to_string());
+    format!("{tag}: {}{}", first.unwrap_or_default(), chars.as_str())
+}
+
 /// What is wrong with a placed device, in words: the hover text of its mark
 /// and the table's Problems column.
 pub(super) fn problem_lines(
@@ -368,6 +383,14 @@ pub(super) fn problem_lines(
             ));
         }
     }
+    for &(device, _, off) in &report.off_centre {
+        if device == id {
+            lines.push(format!(
+                "Sits {:.0} mm off the middle of its rail: drag it onto the rail, or use Centre rails on devices in Rails and ducts",
+                off.abs()
+            ));
+        }
+    }
     if let Some(p) = layout.placements.iter().find(|p| p.id == id) {
         for &(rail, over) in &report.rail_overflows {
             if p.rail == Some(rail) {
@@ -391,7 +414,7 @@ pub(super) fn problem_summary(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> S
                 .into_iter()
                 .map(move |l| (p.id, l))
         })
-        .map(|(id, l)| format!("{}: {l}", tag_of(id)))
+        .map(|(id, l)| after_tag(&tag_of(id), &l))
         .collect();
     // A device problem can be selected from the list; a panel-level one cannot.
     let hint = if lines.is_empty() {
@@ -730,6 +753,7 @@ impl NovoApp {
                     + r.opening_conflicts.len()
                     + s.opening_problems.len()
                     + r.duct_overlaps.len()
+                    + r.off_centre.len()
                     + s.door_report().map_or(0, |d| d.problems())
                     + s.swing_report().map_or(0, |d| d.problems());
                 (l.placements.len(), l.unplaced(&cands).len(), problems)
@@ -832,6 +856,7 @@ impl NovoApp {
                         + button_width(ui, icons::ARROWS_OUT, "Size enclosure"),
                 ));
                 items.push((Foldable::Heat, button_width(ui, icons::FLAME, "Heat")));
+                items.push((Foldable::Emc, button_width(ui, icons::PLUGS, "EMC")));
             }
             if layout.is_none() || has_plan {
                 items.clear();
@@ -841,6 +866,7 @@ impl NovoApp {
         let captions = ui.available_width() >= cabinet_bar::WIDE;
         let caption = |c: &'static str| captions.then_some(c);
         let mut all_placed_note = false;
+        let mut place_all_keyed = false;
         let mut delete_rail: Option<u64> = None;
         let mut move_rail: Option<super::cabinet_rails::RailDrag> = None;
         // Narrower than the fixed part of the bar (a 683 point window), the bar
@@ -1017,6 +1043,22 @@ impl NovoApp {
                                 .clicked()
                                 {
                                     ask = Some(Ask::ToggleRoutes);
+                                }
+                                if !fold.has(Foldable::Emc) {
+                                let emc = cabinet_bar::button(
+                                    ui,
+                                    icons::PLUGS,
+                                    "EMC",
+                                    self.cabinet.emc.on,
+                                )
+                                .on_hover_text(
+                                    "Show which wires are noisy and which sensitive, and where they run side by side. An indicative model, not a field solver",
+                                );
+                                if cabinet_bar::note(&mut anchors, "cabinet.emc", "EMC", &emc)
+                                    .clicked()
+                                {
+                                    ask = Some(Ask::ToggleEmc);
+                                }
                                 }
                             }
                             if !fold.has(Foldable::Rails) {
@@ -1195,6 +1237,22 @@ impl NovoApp {
                                             ui.close();
                                         }
                                     }
+                                    if fold.has(Foldable::Emc) {
+                                        let emc = cabinet_bar::button(
+                                            ui,
+                                            icons::PLUGS,
+                                            "EMC",
+                                            self.cabinet.emc.on,
+                                        )
+                                        .on_hover_text(
+                                            "Show which wires are noisy and which sensitive. An indicative model, not a field solver",
+                                        );
+                                        cabinet_bar::note(&mut anchors, "cabinet.emc", "EMC", &emc);
+                                        if emc.clicked() {
+                                            ask = Some(Ask::ToggleEmc);
+                                            ui.close();
+                                        }
+                                    }
                                     if fold.has(Foldable::Heat) {
                                         let heat = super::heat::toggle(ui, &mut self.cabinet.heat);
                                         cabinet_bar::note(
@@ -1248,6 +1306,7 @@ impl NovoApp {
                                 (Foldable::Rails, "cabinet.rails", "Rails and ducts"),
                                 (Foldable::CutList, "cabinet.cutlist", "Cut list"),
                                 (Foldable::Heat, "cabinet.heat", "Heat"),
+                                (Foldable::Emc, "cabinet.emc", "EMC"),
                                 (Foldable::Export, "cabinet.plate_drawing", "Plate drawing"),
                             ] {
                                 if fold.has(f) && !anchors.iter().any(|a| a.id == id) {
@@ -1318,10 +1377,22 @@ impl NovoApp {
                 .preview
                 .as_ref()
                 .map_or((0, 0), |p| (p.placements.len(), p.unplaced.len()));
+            let heat = self
+                .cabinet
+                .rules
+                .explain
+                .as_ref()
+                .and_then(|e| e.heat.as_ref())
+                .map(|h| h.message());
             let mut text = format!(
-                "Preview: {n} {} would be placed. Nothing is stored until you accept.",
+                "Preview{}: {n} {} would be placed. Nothing is stored until you accept.",
+                if heat.is_some() { " (heat-aware)" } else { "" },
                 if n == 1 { "device" } else { "devices" }
             );
+            if let Some(heat) = heat {
+                text.push(' ');
+                text.push_str(&heat);
+            }
             if left > 0 {
                 text.push_str(&format!(" {left} do not fit."));
             }
@@ -1421,7 +1492,7 @@ impl NovoApp {
                                 continue;
                             }
                             if ui
-                                .button(format!("{}: {}", tag_of(p.id), lines.join("; ")))
+                                .button(after_tag(&tag_of(p.id), &lines.join("; ")))
                                 .clicked()
                             {
                                 ask = Some(Ask::Select(p.id));
@@ -1663,6 +1734,58 @@ impl NovoApp {
                             .fail("Open an enclosure with a mounting plate to simulate".into()),
                     }
                 }
+                self.cabinet.heat.advice.poll(ui.ctx());
+                if self.cabinet.heat.advice.take_request() {
+                    match structure {
+                        Some(s) => {
+                            let ambient = self.sizing.request().ambient_max;
+                            let h = &mut self.cabinet.heat;
+                            h.advice.start(project, s, ambient, &h.settings, &tag_of);
+                        }
+                        None => self.cabinet.heat.fail(
+                            "Open an enclosure with a mounting plate to ask for cooling advice"
+                                .into(),
+                        ),
+                    }
+                }
+                self.cabinet.heat.layout.poll(ui.ctx());
+                if self.cabinet.heat.layout.take_request() {
+                    match structure {
+                        Some(s) => {
+                            let scenario = self.cabinet.heat.current_scenario();
+                            self.cabinet
+                                .heat
+                                .layout
+                                .start(project, s, scenario, &tag_of);
+                        }
+                        None => self.cabinet.heat.fail(
+                            "Open an enclosure with a mounting plate to search for a cooler layout"
+                                .into(),
+                        ),
+                    }
+                }
+                if self.cabinet.heat.advice.is_open() {
+                    let ambient = self.sizing.request().ambient_max;
+                    let now_key = structure.map_or(0, |s| {
+                        super::heat_sweep::key_of(project, s, ambient, &self.cabinet.heat.settings)
+                    });
+                    let at = ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0);
+                    match self.cabinet.heat.advice.show(ui.ctx(), 1, now_key, at) {
+                        Some(super::heat_sweep::Ask::Again) => self.cabinet.heat.advice.request(),
+                        Some(super::heat_sweep::Ask::Add(c)) => ask = Some(Ask::CoolingPair(c)),
+                        None => {}
+                    }
+                }
+                let now_key = self.cabinet.heat.current_scenario().map(|(_, k)| k);
+                if let Some(super::heat_layout::Ask::Apply(s, moves)) =
+                    self.cabinet.heat.layout.show(
+                        ui.ctx(),
+                        now_key,
+                        ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                    )
+                {
+                    ask = Some(Ask::CoolerLayout(s, moves));
+                }
                 let dragging = self.cabinet.drag.is_some();
                 // The map goes under the canvas: it paints no background of
                 // its own while the map is on.
@@ -1703,6 +1826,11 @@ impl NovoApp {
                     out.response.rect,
                     false,
                 );
+                self.cabinet.heat.layout.paint(
+                    &ui.painter_at(out.response.rect),
+                    out.response.rect,
+                    &self.cabinet.view.viewport,
+                );
                 if self.cabinet.routes
                     && let Some(s) = structure
                 {
@@ -1714,6 +1842,44 @@ impl NovoApp {
                         &self.cabinet.view.viewport,
                         overlay,
                     );
+                }
+                if self.cabinet.emc.on
+                    && let Some(s) = structure
+                {
+                    let rect = out.response.rect;
+                    let dark = ui.visuals().dark_mode;
+                    let cache = &mut self.cabinet.routes_cache;
+                    self.cabinet
+                        .emc
+                        .sync_plate(project, s, || cache.get(project, s).routes.clone());
+                    let field = self.cabinet.emc.exposure();
+                    if let Some(pic) = self.cabinet.emc.picture().cloned() {
+                        let shown = super::emc_plate::Shown {
+                            pic: &pic,
+                            field: field.as_deref(),
+                            layers: &self.cabinet.emc.layers,
+                            selected: self.cabinet.emc.selected,
+                        };
+                        let picked = super::emc_plate::draw(
+                            ui,
+                            rect,
+                            &self.cabinet.view.viewport,
+                            &shown,
+                            dark,
+                        );
+                        if let Some(h) = picked {
+                            self.cabinet.emc.selected =
+                                (self.cabinet.emc.selected != Some(h)).then_some(h);
+                        }
+                        let tag_of = |raw: u64| {
+                            project
+                                .get::<novo_core::Device>(novo_core::DeviceId::from(raw))
+                                .and_then(|d| d.tag.device_code().map(|c| format!("-{c}")))
+                                .unwrap_or_else(|| format!("device {raw}"))
+                        };
+                        super::emc_view::panel(ui.ctx(), rect, &mut self.cabinet.emc, &tag_of);
+                        super::emc_view::legend(ui.ctx(), rect, &self.cabinet.emc, dark);
+                    }
                 }
                 if let Some(mode) = self.wb.commissioning.as_ref() {
                     let marks = super::commissioning_cabinet::marks(&mode.store, project, &shown);
@@ -2108,6 +2274,7 @@ impl NovoApp {
                             }
                             "cabinet.place-all" if (unplaced > 0 || homeless > 0) && !has_plan => {
                                 ask = Some(Ask::PlaceAll);
+                                place_all_keyed = true;
                             }
                             "cabinet.place-all" if !has_plan => {
                                 all_placed_note = true;
@@ -2125,6 +2292,11 @@ impl NovoApp {
                 }
             }
             None => {
+                // A search asked for here (also from the 3D Heat panel) has
+                // nothing to run on: drop it, or the 3D view would send the
+                // person back here on every visit.
+                self.cabinet.heat.layout.drop_for_missing_plate();
+                let search_asked = self.cabinet.heat.layout.needs_plate();
                 // The empty state names the next step and puts its button
                 // right under the sentence, not at the far end of the bar.
                 ui.add_space(48.0);
@@ -2136,6 +2308,9 @@ impl NovoApp {
                         }
                         _ => "Set the size of the mounting plate to start placing devices.",
                     });
+                    if search_asked {
+                        ui.label("Cooler layout needs a plate: set its size, then search again.");
+                    }
                     ui.add_space(8.0);
                     match (&location, structure) {
                         (None, _) => {
@@ -2234,6 +2409,10 @@ impl NovoApp {
             self.message(Level::Info, "Every device of this panel is placed");
         }
         anchors.extend(cabinet_bar::take_noted(ui.ctx()));
+        // The shortcut ticks a lesson's "click Place all" step like the button.
+        if place_all_keyed {
+            self.learn_event(novo_learn::Event::Clicked("cabinet.place_all".into()));
+        }
         for a in anchors {
             self.anchor(a.id, a.rect, a.label);
             if a.clicked {
@@ -2386,8 +2565,7 @@ impl NovoApp {
 
     /// The plate the Cabinet shows, with its stored layout and the devices
     /// that could go on it: what a canvas action works on. Used by lesson
-    /// replays, which act without the canvas.
-    #[cfg(test)]
+    /// steps ("Do it for me" and the replays), which act without the canvas.
     pub(super) fn cabinet_plate(
         &self,
     ) -> Option<(
@@ -2431,6 +2609,7 @@ impl NovoApp {
                     Ask::PlaceAll
                         | Ask::PlaceEveryPanel
                         | Ask::SetRailLengths(_)
+                        | Ask::CoolerLayout(..)
                         | Ask::SetPlate(_)
                         | Ask::SetPlateSize(..)
                         | Ask::SetEnclosure(_)
@@ -2471,6 +2650,7 @@ impl NovoApp {
                 self.export_plate_dxf();
             }
             Ask::ToggleRoutes => self.cabinet.routes ^= true,
+            Ask::ToggleEmc => self.cabinet.emc.on ^= true,
             Ask::SetWireRule(key, value) => {
                 self.cabinet_edit("Wire rule", move |tx| {
                     novo_routing::project_rules::set_rule(tx, key, value)
@@ -2602,6 +2782,41 @@ impl NovoApp {
                     self.learn_signal("cabinet_dropped");
                 }
             }
+            Ask::CoolingPair(c) => {
+                // Read the project's list first, so adding to a list the 3D
+                // view has not looked at yet keeps what is already there.
+                self.sync_openings_now();
+                super::heat_sweep::add_pair(&mut self.cabinet.heat.settings, &c);
+                self.sync_openings_now();
+                // The 3D view opens with the list showing the pair.
+                self.view3d.controls.heat_panel = true;
+                self.cabinet
+                    .heat
+                    .advice
+                    .set_added(super::heat_sweep::added_text(&c));
+            }
+            Ask::CoolerLayout(enclosure, moves) => {
+                let count = moves.len();
+                let mut skipped = Vec::new();
+                if self.cabinet_edit("Cooler layout", |tx| {
+                    skipped = novo_thermal::placement_project::apply_moves(tx, enclosure, &moves)?;
+                    Ok(())
+                }) {
+                    let text = if skipped.is_empty() {
+                        format!(
+                            "Moved {count} {} for a cooler layout. Undo puts {} back.",
+                            if count == 1 { "device" } else { "devices" },
+                            if count == 1 { "it" } else { "them" }
+                        )
+                    } else {
+                        format!(
+                            "Nothing moved: {} target rail(s) are gone. Search again.",
+                            skipped.len()
+                        )
+                    };
+                    self.message(Level::Info, text);
+                }
+            }
             Ask::SetRailLengths(lengths) => {
                 self.cabinet_edit("Cut rails to length", move |tx| {
                     for (id, length) in lengths {
@@ -2698,6 +2913,20 @@ impl NovoApp {
                 });
             }
         }
+    }
+
+    /// EMC view on the plate (Ctrl+K): shows the Cabinet with the EMC picture.
+    pub(super) fn toggle_cabinet_emc(&mut self) {
+        if self.backend.document().is_none() {
+            return;
+        }
+        if self.workspace() == super::workspace::Workspace::Cabinet && self.cabinet.emc.on {
+            self.cabinet.emc.on = false;
+            return;
+        }
+        self.switch_workspace(super::workspace::Workspace::Cabinet);
+        self.cabinet.table = false;
+        self.cabinet.emc.on = true;
     }
 
     /// Route all (Ctrl+K): shows the Cabinet with every wire's route.

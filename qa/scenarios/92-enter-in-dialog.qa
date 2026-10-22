@@ -1,0 +1,26 @@
+@title Enter goes to the dialog on top, not the drawing under the pointer
+@area Editor
+# Renumber I/O opens a dialog; Enter must apply it while the pointer rests over the drawing
+# (before the fix the drawing took the key as "finish wire").
+key ctrl+k
+wait 4
+text plc cards
+wait 6
+click_text "PLC Cards and I/O"
+wait 40
+move 700 420
+wait 4
+key ctrl+k
+wait 4
+text renumber io
+wait 6
+key Enter
+wait 10
+shot dialog
+expect "Renumber (Enter)"
+key Enter
+wait 20
+shot applied
+expect_not "Renumber (Enter)"
+expect "Renumbered I/O"
+check_layout

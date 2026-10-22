@@ -150,6 +150,7 @@ pub const LIMITS: &[&str] = &[
     "Ampacity tables, protective conductor sizes, colours, voltage limits and motor protection percentages are planning values, not read from the licensed standards. Verdicts that use them are marked.",
     "Functional safety figures are a calculation aid: PFHd for categories 2 to 4 is a closed-form estimate, not ISO 13849-1 Table K.1.",
     "Heat, short-circuit and selectivity results are models and estimates, not measurements.",
+    "EMC results (when the EMC check is on) are rule-based and analytic design aids with planning distances; emission and immunity margins are not computed and nothing here shows compliance.",
     "Nothing here is a certification, a CE marking or a declaration of conformity. The engineer remains responsible for the design.",
 ];
 

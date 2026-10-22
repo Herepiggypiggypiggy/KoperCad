@@ -35,6 +35,8 @@ pub(super) enum RailAsk {
     /// Dragged on the plate: the rail's new start.
     MoveTo(u64, f64, f64),
     Delete(u64),
+    /// Put every DIN rail's line on the middle of its devices, which stay put.
+    CentreRails,
     /// The lesson chip: start or continue this lesson.
     Lesson(String),
 }
@@ -338,6 +340,18 @@ pub(super) fn show_window(
                         vertical: true,
                     });
                 }
+                if ui
+                    .button("Centre rails on devices")
+                    .on_hover_text(
+                        "Moves each DIN rail onto the middle of its devices; the devices \
+                         stay where they are. A rail with devices of different heights \
+                         follows the tallest, and a rail that would then run under a duct \
+                         is left alone. One undo step.",
+                    )
+                    .clicked()
+                {
+                    ask = Some(RailAsk::CentreRails);
+                }
             });
             ui.weak(
                 "Edit a value to move or resize. Delete removes the selected row. \
@@ -607,6 +621,7 @@ impl super::NovoApp {
                         .map(|_| ())
                 });
             }
+            RailAsk::CentreRails => self.centre_cabinet_rails(structure),
             // Handled before the match.
             RailAsk::Lesson(_) => {}
             RailAsk::Delete(id) => {
@@ -620,5 +635,61 @@ impl super::NovoApp {
                 }
             }
         }
+    }
+
+    /// "Centre rails on devices": every DIN rail's line goes to the middle of
+    /// its devices as one undo step. Only the rails move; the devices stay.
+    fn centre_cabinet_rails(&mut self, structure: StructureId) {
+        let Some(layout) = self
+            .backend
+            .document()
+            .and_then(|d| novo_layout::model::load(d.project(), structure))
+        else {
+            return;
+        };
+        let done =
+            novo_layout::centre_rails_checked(&layout.rails, &layout.ducts, &layout.placements);
+        if done.shifts.is_empty() && done.skipped.is_empty() && done.still_off == 0 {
+            self.message(
+                super::Level::Info,
+                "Every rail already runs through the middle of its devices".to_string(),
+            );
+            return;
+        }
+        let count = done.shifts.len();
+        let largest = done.largest();
+        let shifts = done.shifts.clone();
+        let moved = count == 0
+            || self.cabinet_edit("Centre rails on devices", move |tx| {
+                for s in &shifts {
+                    // Not `MoveRail`: it carries the devices along.
+                    tx.update::<Rail>(RailId::from(s.rail), |r| {
+                        r.x = s.x;
+                        r.y = s.y;
+                    })?;
+                }
+                Ok(())
+            });
+        if !moved {
+            return;
+        }
+        let mut text = match count {
+            0 => "No rail moved".to_string(),
+            1 => format!("Centred 1 rail ({largest:.0} mm), devices unmoved"),
+            n => format!("Centred {n} rails (most {largest:.0} mm), devices unmoved"),
+        };
+        if !done.skipped.is_empty() {
+            text.push_str(&format!(
+                "; {} left alone: it would run under a duct",
+                done.skipped.len()
+            ));
+        }
+        if done.still_off > 0 {
+            text.push_str(&format!(
+                "; {} off the middle: not the tallest on its rail",
+                done.still_off
+            ));
+        }
+        self.message(super::Level::Info, text);
     }
 }

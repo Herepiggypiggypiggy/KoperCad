@@ -225,13 +225,15 @@ impl NovoApp {
         let mut go: Option<Vec<AnyId>> = None;
         let mut copy: Option<String> = None;
         let mut to_inputs = false;
+        let mut tab_rects: Vec<egui::Rect> = Vec::new();
+        let tab_before = win.tab;
         if let Some((_, _, sheet)) = win.cache.clone() {
             super::panel::dialog(ctx, "Calculations", [760.0, 620.0])
                 .open(super::panel::esc(ctx, &mut open))
                 .show(ctx, |ui| {
                     header(ui, &sheet, &mut to_inputs, &mut copy);
                     ui.separator();
-                    novo_theme::widgets::tabs(ui, &mut win.tab, &TABS);
+                    tab_rects = novo_theme::widgets::tabs_with_rects(ui, &mut win.tab, &TABS).1;
                     ui.add_space(4.0);
                     egui::ScrollArea::vertical().show(ui, |ui| match win.tab {
                         0 => circuits(ui, &sheet, &mut win.only_issues, &mut go),
@@ -239,6 +241,17 @@ impl NovoApp {
                         _ => panel(ui, &sheet),
                     });
                 });
+        }
+        for (i, (rect, (id, label))) in tab_rects
+            .iter()
+            .zip([
+                ("calc.tab.circuits", "Circuits tab"),
+                ("calc.tab.starters", "Motor starters tab"),
+                ("calc.tab.sccr", "Panel SCCR tab"),
+            ])
+            .enumerate()
+        {
+            self.anchor_clicked(id, *rect, label, win.tab != tab_before && win.tab == i);
         }
         if let Some(text) = copy {
             ctx.copy_text(text);

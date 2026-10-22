@@ -223,6 +223,7 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::DeviceOutsidePlate,
         ProblemKind::DevicesTooClose,
         ProblemKind::RailOverflow,
+        ProblemKind::DeviceOffRail,
         ProblemKind::DuctOverlap,
         // Need an enclosure; see tests/door_checks.
         ProblemKind::DeviceTooDeep,
@@ -259,6 +260,8 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::StructureCode,
         ProblemKind::SafetyLevelNotMet,
         ProblemKind::SafetyBinding,
+        // Only reported once the project turns the EMC check on; see tests/emc_checks.
+        ProblemKind::Emc,
         // Found by the application, which reads the rules; see novo-reports tests/autopilot_rules.
         ProblemKind::WireRule,
     ];

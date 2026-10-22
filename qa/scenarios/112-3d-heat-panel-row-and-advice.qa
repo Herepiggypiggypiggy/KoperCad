@@ -1,0 +1,27 @@
+@title 3D Heat: the status line sits on its own row, and the Cooling advice window shows its notes once
+@area 3D
+@sizes 1280x688 1366x768 1920x1080
+# After a Quick run of the hot cabinet the Heat panel buttons wrap, and the status line "Coarse 3D, not validated" must start its own row instead of splitting beside Keep as A. Cooling advice then lists its notes inside a scroll area with a visible scroll bar, and the model-estimate note is said once (the footer).
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 45
+shot heat-panel-after-run
+check_layout
+click_text "Cooling advice"
+wait_s 90
+expect "Cooling advice"
+expect "Tightest margin"
+shot advice-top
+scroll 600 400 -400
+wait 10
+shot advice-bottom
+check_layout

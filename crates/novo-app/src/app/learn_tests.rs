@@ -452,6 +452,24 @@ fn the_shipped_lessons_lint_without_errors_against_this_build() {
 }
 
 #[test]
+fn no_shipped_lesson_names_a_control_this_build_does_not_register() {
+    // The lint only warns for a lesson that is still early access, and a step
+    // waiting for a control that never comes cannot be finished (Drawing
+    // standard once waited for two).
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    let report = d.app.learn.lint_report();
+    let missing: Vec<String> = report
+        .findings
+        .iter()
+        .filter(|f| f.message.contains("anchor") && f.message.contains("is not in this build"))
+        .map(ToString::to_string)
+        .collect();
+    assert!(missing.is_empty(), "{}", missing.join("\n"));
+}
+
+#[test]
 fn a_ready_lesson_naming_a_missing_anchor_is_coming_soon() {
     let (_dir, mut d) = drive();
     let mut files = files();
@@ -1000,6 +1018,50 @@ fn the_inspector_keeps_above_the_lesson_card_at_1366() {
 }
 
 #[test]
+fn starting_a_lesson_clears_the_search_so_learn_reopens_on_its_home_page() {
+    let (_dir, mut d) = drive();
+    d.app.learn.filter = "wheel".into();
+    d.app.start_lesson("tiny");
+    assert!(d.app.learn.filter.is_empty());
+}
+
+#[test]
+fn page_down_changes_the_page_with_the_pointer_on_the_lesson_card() {
+    let (_dir, mut d) = drive();
+    d.app.start_lesson("tiny");
+    let size = eframe::egui::vec2(1366.0, 768.0);
+    for _ in 0..3 {
+        d.frame_sized(size, Vec::new());
+    }
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "page.new", None);
+    d.app.run_command(&ctx, "nav.previous_page", None);
+    for _ in 0..3 {
+        d.frame_sized(size, Vec::new());
+    }
+    let first = d.app.current_page().expect("a page");
+    let card = d
+        .ctx
+        .memory(|m| m.area_rect(super::panel::id("lesson_card")))
+        .expect("the card is shown");
+    let key = |pressed| eframe::egui::Event::Key {
+        key: eframe::egui::Key::PageDown,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: eframe::egui::Modifiers::NONE,
+    };
+    d.frame_sized(size, vec![eframe::egui::Event::PointerMoved(card.center())]);
+    d.frame_sized(size, vec![key(true), key(false)]);
+    d.frame_sized(size, Vec::new());
+    assert_ne!(
+        d.app.current_page(),
+        Some(first),
+        "Page Down is taken with the pointer on the card"
+    );
+}
+
+#[test]
 fn skip_does_the_step_so_the_steps_after_it_find_their_parts() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
@@ -1417,4 +1479,82 @@ fn the_level_chip_narrows_the_lessons_and_a_prerequisite_never_blocks() {
     d.app.learn.level = None;
     assert_eq!(d.app.suite_matches(&home, &["tiny".to_owned()]).len(), 1);
     assert!(d.app.suite_matches(&home, &["zzz".to_owned()]).is_empty());
+}
+
+#[test]
+fn skip_runs_a_cabinet_step_in_the_live_app() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.start_lesson("cabinet-layout");
+    d.frame();
+    let ctx = d.ctx.clone();
+    let placements = |d: &Drive| {
+        let project = d.doc().project();
+        project
+            .structures()
+            .find(|s| s.enclosure)
+            .and_then(|s| novo_layout::model::load(project, s.id))
+            .map_or(0, |l| l.placements.len())
+    };
+    // Open the Cabinet, read the screen, then the drag step: the solve places -F1.
+    for _ in 0..3 {
+        d.app.learn_skip(&ctx);
+        d.frame();
+    }
+    assert_eq!(placements(&d), 1, "Do it for me placed -F1 on the plate");
+}
+
+#[test]
+fn the_place_all_shortcut_ticks_the_click_step_like_the_button() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.start_lesson("cabinet-layout");
+    d.frame();
+    let ctx = d.ctx.clone();
+    for _ in 0..30 {
+        let at_place_all = d
+            .app
+            .learn
+            .run
+            .as_ref()
+            .and_then(|r| r.step())
+            .is_some_and(|s| s.id == "place-all");
+        if at_place_all {
+            break;
+        }
+        d.app.learn_skip(&ctx);
+        d.frame();
+    }
+    d.frame();
+    d.app.run_command(&ctx, "cabinet.place-all", None);
+    d.frame();
+    d.frame();
+    let phase = d.app.learn.run.as_ref().map(|r| r.phase());
+    assert_eq!(phase, Some(novo_learn::Phase::Ticked), "the step is ticked");
+}
+
+#[test]
+fn the_command_field_row_for_the_lesson_names_the_lesson_like_the_help_menu() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "help.next_lesson", None);
+    d.frame();
+    d.app.wb.field.open(novo_workflow::palette::Mode::All, None);
+    d.app.wb.field.type_text("continue lesson");
+    d.frame();
+    let rows = d.app.with_field(|field, sources| field.rows(sources));
+    let row = rows
+        .iter()
+        .find(|r| {
+            matches!(
+                r.target,
+                novo_workflow::palette::Target::Command("help.next_lesson")
+            )
+        })
+        .expect("`continue lesson` finds the lesson command");
+    assert_eq!(row.label, "Continue lesson: Tiny lesson");
 }

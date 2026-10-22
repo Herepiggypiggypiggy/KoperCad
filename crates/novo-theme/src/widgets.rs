@@ -376,8 +376,20 @@ pub fn segment(ui: &mut Ui, text: &str, current: bool) -> Response {
 /// Two to four exclusive options in a pill track. Returns whether the
 /// choice changed.
 pub fn segmented(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> bool {
+    segmented_with_rects(ui, current, labels).0
+}
+
+/// [`segmented`] that also returns where each segment was drawn and whether
+/// it was clicked this frame, so a caller can register them (the lesson
+/// pointer, for one).
+pub fn segmented_with_rects(
+    ui: &mut Ui,
+    current: &mut usize,
+    labels: &[&str],
+) -> (bool, Vec<(Rect, bool)>) {
     let p = Palette::of(ui);
     let mut changed = false;
+    let mut segments = Vec::with_capacity(labels.len());
     Frame::new()
         .fill(p.sunken)
         .stroke(Stroke::new(1.0, p.border_subtle))
@@ -387,20 +399,29 @@ pub fn segmented(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> bool {
             ui.spacing_mut().item_spacing.x = 2.0;
             ui.horizontal(|ui| {
                 for (i, label) in labels.iter().enumerate() {
-                    if segment(ui, label, *current == i).clicked() && *current != i {
+                    let response = segment(ui, label, *current == i);
+                    segments.push((response.rect, response.clicked()));
+                    if response.clicked() && *current != i {
                         *current = i;
                         changed = true;
                     }
                 }
             });
         });
-    changed
+    (changed, segments)
 }
 
 /// Switches a panel's content: text with a copper underline under the
 /// current one and a hairline under the row. Returns whether the choice
 /// changed.
 pub fn tabs(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> bool {
+    tabs_with_rects(ui, current, labels).0
+}
+
+/// [`tabs`] that also returns where each tab was drawn, so a caller can
+/// register them (the lesson pointer, for one).
+pub fn tabs_with_rects(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> (bool, Vec<Rect>) {
+    let mut rects = Vec::with_capacity(labels.len());
     let p = Palette::of(ui);
     let height = control_height(ui) + 4.0;
     let body = ui.style().text_styles[&egui::TextStyle::Body].clone();
@@ -419,6 +440,7 @@ pub fn tabs(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> bool {
             );
             let width = galley.size().x + 2.0 * space::M + 2.0;
             let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::click());
+            rects.push(rect);
             // The tab is painted, so name it for screen readers and the
             // lesson checks that look for a control by its label.
             response.widget_info(|| {
@@ -460,7 +482,7 @@ pub fn tabs(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> bool {
         y,
         Stroke::new(1.0, p.border_subtle),
     );
-    changed
+    (changed, rects)
 }
 
 /// A visibility or filter toggle (a layer, a map, a badge): neutral, so it

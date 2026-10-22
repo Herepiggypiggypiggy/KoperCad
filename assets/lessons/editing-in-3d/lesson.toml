@@ -1,0 +1,187 @@
+format = 1
+id = "editing-in-3d"
+version = 1
+status = "early"
+title = "Edit in 3D, follow a wire through the ducts"
+summary = "Measure, move, align and duplicate devices in the 3D view under the Cabinet's own rules, then click a wire and read its routed path, length and how full each duct is."
+track = "cabinet"
+order = 92
+level = "intermediate"
+minutes = 8
+topics = ["3d", "measure", "align", "duplicate", "wire runs", "duct fill"]
+needs = ["view-3d", "wire-routing"]
+next = ["commissioning"]
+project = "@example"
+title_nl = "Bewerk in 3D, volg een draad door de kanalen"
+summary_nl = "Meet, verplaats, lijn uit en dupliceer apparaten in de 3D-weergave onder de eigen regels van de kast, klik dan op een draad en lees zijn gerouteerde pad, lengte en hoe vol elk kanaal is."
+
+[[step]]
+id = "same-project"
+title = "The 3D view edits the real project"
+title_nl = "De 3D-weergave bewerkt het echte project"
+text = """
+Moving something in 3D is not a drawing trick. It uses the **Cabinet's own rules**: the same grid snap, the same clearance checks and the same undo steps. The plate and the 3D view always show one project.
+So a move you make here is a move you could have made on the plate, and Undo takes it back from either.
+"""
+text_nl = """
+Iets verplaatsen in 3D is geen tekentruc. Het gebruikt de **eigen regels van de kast**: dezelfde rasterklik, dezelfde afstandscontroles en dezelfde undo-stappen. De plaat en de 3D-weergave tonen altijd één project.
+Een verplaatsing hier is dus een verplaatsing die je ook op de plaat had kunnen maken, en Undo draait haar terug vanuit beide.
+"""
+
+[[step]]
+id = "open"
+title = "Open the 3D view"
+title_nl = "Open de 3D-weergave"
+text = "The example has a cabinet with a plate, rails, ducts and a door. Open it in 3D."
+text_nl = "Het voorbeeld heeft een kast met plaat, rails, kanalen en een deur. Open hem in 3D."
+how = [
+  "Press {key:view.3d}, or choose the {ui:switcher.view3d}.",
+]
+how_nl = [
+  "Druk op {key:view.3d}, of kies de {ui:switcher.view3d}.",
+]
+point = { ui = "switcher.view3d" }
+expect = { command = "view.3d" }
+solve = [ { command = "view.3d" } ]
+
+[[step]]
+id = "measure"
+title = "Measure before you move"
+title_nl = "Meet voordat je verplaatst"
+text = """
+The **Measure** tool reads the straight distance between two clicked points, its X, Y and height parts and, when both points are on devices, the gap between the two devices and between their centres.
+It only reads; the project is never touched, so there is nothing to undo.
+"""
+text_nl = """
+Het gereedschap **Measure** leest de rechte afstand tussen twee aangeklikte punten, de X-, Y- en hoogtedelen en, als beide punten op apparaten liggen, de ruimte tussen de twee apparaten en tussen hun middens.
+Het leest alleen; het project wordt nooit aangeraakt, dus er is niets om ongedaan te maken.
+"""
+how = [
+  "Press {key:view.command_palette}, type **measure** and choose {ui:cmd.view.3d_measure}.",
+  "Click a point on one device, then a point on another, and read the gap.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **measure** en kies {ui:cmd.view.3d_measure}.",
+  "Klik een punt op het ene apparaat en dan een punt op een ander, en lees de ruimte.",
+]
+point = { ui = "cmd.view.3d_measure" }
+expect = { command = "view.3d_measure" }
+solve = [ { command = "view.3d_measure" } ]
+
+[[step]]
+id = "move"
+title = "Drag, turn, remove"
+title_nl = "Sleep, draai, verwijder"
+text = """
+A left drag that starts on a device, rail or duct moves it across the plate. **R** turns it and **Delete** takes it off the plate. While you drag, the landing spot shows red where the Cabinet would flag it, and the gap to its neighbours is shown.
+A rail that moves carries the devices mounted on it.
+"""
+text_nl = """
+Een linkersleep die op een apparaat, rail of kanaal begint verplaatst het over de plaat. **R** draait het en **Delete** haalt het van de plaat. Tijdens het slepen toont de landingsplek rood waar de kast een probleem zou melden en wordt de ruimte tot de buren getoond.
+Een rail die verschuift neemt de apparaten erop mee.
+"""
+how = [
+  "Drag a device a few centimetres along its rail. Release.",
+  "Press {key:edit.undo} to put it back.",
+]
+how_nl = [
+  "Sleep een apparaat enkele centimeters langs zijn rail. Laat los.",
+  "Druk op {key:edit.undo} om het terug te zetten.",
+]
+manual = "a drag on the 3D canvas; no script drags in 3D"
+
+[[step]]
+id = "typed"
+title = "Type exact values"
+title_nl = "Typ exacte waarden"
+text = "Select a rail or a duct and a small card by its corner shows **Left, Top, Length** (and for a duct Across and Stands) in millimetres. Type a value and leave the field: that is one undo step, and the card says what the result would run into while you type."
+text_nl = "Selecteer een rail of kanaal en een kaartje bij de hoek toont **Left, Top, Length** (en bij een kanaal Across en Stands) in millimeters. Typ een waarde en verlaat het veld: dat is een undo-stap, en het kaartje zegt waar het resultaat tegenaan zou lopen terwijl je typt."
+
+[[step]]
+id = "align"
+title = "Align and spread"
+title_nl = "Uitlijnen en verdelen"
+text = """
+Select two or more devices and an **Align strip** appears at the bottom: line them up on their left, right, top or bottom edge or on a shared centre line, or **spread** them so the free space between neighbours is equal.
+It is one group edit, one undo step, and the Cabinet checks flag whatever the new positions break.
+"""
+text_nl = """
+Selecteer twee of meer apparaten en onderaan verschijnt een **uitlijnstrook**: lijn ze uit op hun linker-, rechter-, boven- of onderrand of op een gedeelde middenlijn, of **verdeel** ze zodat de vrije ruimte tussen buren gelijk is.
+Het is één groepsbewerking, één undo-stap, en de kastcontroles melden wat de nieuwe posities breken.
+"""
+how = [
+  "Select two devices with Shift+click.",
+  "Press {key:view.command_palette}, type **align** and pick one of the Align rows.",
+]
+how_nl = [
+  "Selecteer twee apparaten met Shift+klik.",
+  "Druk op {key:view.command_palette}, typ **align** en kies een van de Align-rijen.",
+]
+manual = "needs a selection made with the pointer in the 3D view"
+
+[[step]]
+id = "duplicate"
+title = "Duplicate in the nearest free slot"
+title_nl = "Dupliceer op de dichtstbijzijnde vrije plek"
+text = "Ctrl+D copies each selected device as a new device of the same kind, with the same description, part and properties and the **next free tag** of its letter. The copy is put in the nearest free slot: no overlap, clearances kept, inside the plate, off the ducts. One undo step takes all the copies back, and they stay selected so Ctrl+D can go on."
+text_nl = "Ctrl+D kopieert elk geselecteerd apparaat als nieuw apparaat van dezelfde soort, met dezelfde omschrijving, onderdeel en eigenschappen en de **eerstvolgende vrije tag** van zijn letter. De kopie komt op de dichtstbijzijnde vrije plek: geen overlap, afstanden behouden, binnen de plaat, buiten de kanalen. Een undo-stap neemt alle kopieën terug en ze blijven geselecteerd zodat Ctrl+D kan doorgaan."
+
+[[step]]
+id = "runs"
+title = "Show the wire runs"
+title_nl = "Toon de draadtrajecten"
+text = """
+The wire run view lights up the **routed path** of a wire along the ducts it lies in, outlines each duct in its fill colour, and marks the cabinet entry point.
+Click a wire, or a row of the list, and the Run card opens at the left: how the length was found, how full each duct is and what is not checked.
+"""
+text_nl = """
+De weergave van draadtrajecten licht het **gerouteerde pad** van een draad op langs de kanalen waarin hij ligt, omrandt elk kanaal in zijn vulkleur en markeert het ingangspunt van de kast.
+Klik op een draad, of een rij van de lijst, en de Run-kaart opent links: hoe de lengte is gevonden, hoe vol elk kanaal is en wat niet is gecontroleerd.
+"""
+how = [
+  "Press {key:view.command_palette}, type **wire runs** and choose {ui:cmd.view.3d_wire_runs}.",
+  "Click a wire in the view and read the Run card.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **wire runs** en kies {ui:cmd.view.3d_wire_runs}.",
+  "Klik op een draad in de weergave en lees de Run-kaart.",
+]
+point = { ui = "cmd.view.3d_wire_runs" }
+expect = { command = "view.3d_wire_runs" }
+solve = [ { command = "view.3d_wire_runs" } ]
+
+[[step]]
+id = "one-number"
+title = "One length everywhere"
+title_nl = "Eén lengte overal"
+text = """
+The length on the Run card is the same number as in the wire list and the cut list, because they share one measurement. If they ever differ, one of them is wrong.
+Only the part **inside** the cabinet is drawn. From the entry point outwards the length is a stated value, never a drawn path.
+"""
+text_nl = """
+De lengte op de Run-kaart is hetzelfde getal als in de draadlijst en de knippelijst, omdat ze één meting delen. Verschillen ze ooit, dan is een van beide fout.
+Alleen het deel **binnen** de kast wordt getekend. Vanaf het ingangspunt naar buiten is de lengte een opgegeven waarde, nooit een getekend pad.
+"""
+
+[[step]]
+id = "fill"
+title = "An over-full duct is visible from across the panel"
+title_nl = "Een overvol kanaal is zichtbaar van over het paneel"
+text = "Each duct body takes the colour of its fill tone, the same tones as the route screen on the plate. The colour is a cue only: the tooltip and the route screen carry the numbers. Move a wire or widen a duct until the red turns green."
+text_nl = "Elk kanaal neemt de kleur van zijn vultoon aan, dezelfde tonen als het routescherm op de plaat. De kleur is slechts een aanwijzing: de tooltip en het routescherm hebben de getallen. Verplaats een draad of verbreed een kanaal tot het rood groen wordt."
+
+[[step]]
+id = "section"
+title = "Cut the view open"
+title_nl = "Snijd de weergave open"
+text = "A **section plane** cuts the 3D view so you can look inside a crowded box, and **saved views** keep a camera angle you like in your settings (per user, not in the project). Neither changes the project."
+text_nl = "Een **doorsnedevlak** snijdt de 3D-weergave open zodat je in een volle kast kunt kijken, en **opgeslagen weergaven** bewaren een camerahoek die je bevalt in je instellingen (per gebruiker, niet in het project). Geen van beide verandert het project."
+how = [
+  "Press {key:view.command_palette}, type **section** and choose {ui:cmd.view.3d_section}.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **section** en kies {ui:cmd.view.3d_section}.",
+]
+point = { ui = "cmd.view.3d_section" }
+expect = { command = "view.3d_section" }
+solve = [ { command = "view.3d_section" } ]

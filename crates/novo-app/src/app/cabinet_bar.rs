@@ -16,6 +16,7 @@ pub(super) const WIDE: f32 = 1100.0;
 pub(super) enum Foldable {
     Export,
     Heat,
+    Emc,
     CutList,
     Rails,
     Arrange,
@@ -44,6 +45,7 @@ impl Fold {
         let order = [
             Foldable::Export,
             Foldable::Heat,
+            Foldable::Emc,
             Foldable::CutList,
             Foldable::Rails,
             Foldable::Arrange,

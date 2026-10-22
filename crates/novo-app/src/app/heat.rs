@@ -139,6 +139,10 @@ pub(super) struct HeatState {
     pub(super) time: super::heat_time::TimeLine,
     /// The next run is a heat-up over time, not a steady state.
     transient_wanted: bool,
+    /// The vent and fan sweep (`heat.cooling_advice`).
+    pub(super) advice: super::heat_sweep::CoolingAdvice,
+    /// The search for a cooler layout of the rails (`heat.cooler_layout`).
+    pub(super) layout: super::heat_layout::LayoutSearch,
 }
 
 /// Where a cached picture came from.
@@ -196,6 +200,8 @@ impl HeatState {
             cooling: super::heat_cooling::CoolingSettings::default(),
             time: super::heat_time::TimeLine::new(),
             transient_wanted: false,
+            advice: Default::default(),
+            layout: Default::default(),
         }
     }
 
@@ -468,6 +474,11 @@ impl HeatState {
         match id {
             "heat.toggle" => self.on = !self.on,
             "heat.simulate" => self.request_run(),
+            "heat.cooling_advice" => self.advice.request(),
+            "heat.cooler_layout" => {
+                self.on = true;
+                self.layout.request();
+            }
             "heat.airflow" => {
                 self.airflow = !(self.on && self.airflow);
                 self.on |= self.airflow;
@@ -909,11 +920,41 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
         if simulate.clicked() {
             state.request_run();
         }
+        let advice = ui
+            .add_enabled(!state.advice.running(), egui::Button::new("Cooling advice"))
+            .on_hover_text(
+                "Try where a pair of vents or fans goes and how big, and show the best few with before and after temperatures",
+            );
+        super::cabinet_bar::note_ctx(
+            ui.ctx(),
+            "heat.cooling_advice",
+            "Cooling advice button",
+            &advice,
+        );
+        if advice.clicked() {
+            state.advice.request();
+        }
+        let cooler = ui
+            .add_enabled(!state.layout.running(), egui::Button::new("Cooler layout"))
+            .on_hover_text(
+                "Try moving the hottest devices, and the ones that suffer, to other places on their rails",
+            );
+        super::cabinet_bar::note_ctx(
+            ui.ctx(),
+            "heat.cooler_layout",
+            "Cooler layout button",
+            &cooler,
+        );
+        if cooler.clicked() {
+            state.layout.request();
+        }
         heat_up_controls(ui, state);
         compare_controls(ui, state);
         if let Some(sol) = &state.solution {
             let p = &sol.snapshot.progress;
             let validated = sol.snapshot.accuracy.validated;
+            // Own row: wrapped beside the buttons it split in the middle.
+            ui.end_row();
             ui.label(
                 egui::RichText::new(status_label(p, validated))
                     .small()
@@ -1732,7 +1773,10 @@ fn legend(
                 // Room for the top tick label, which hangs above the bar.
                 ui.add_space(6.0);
                 // A short canvas gets a shorter colour bar, so the notes below stay in view.
-                let height = if rect.height() < 620.0 { 110.0 } else { 180.0 };
+                // With a lesson card in the corner the legend has only the room above it.
+                let room = rect.height() - super::panel::reserved_bottom_right(ui.ctx());
+                let full: f32 = if rect.height() < 620.0 { 110.0 } else { 180.0 };
+                let height = full.min((room - 250.0).max(30.0));
                 let (bar, _) =
                     ui.allocate_exact_size(Vec2::new(14.0, height), egui::Sense::hover());
                 let mut mesh = egui::Mesh::default();
@@ -1796,26 +1840,50 @@ fn legend(
                 match &cache.source {
                     Source::Synthetic => {
                         ui.label(small(
-                            "Preview model from the part losses, not a solver result. \
-                             Press Simulate for a real run.",
+                            "Preview from part losses, not a solver result. Simulate runs it.",
                             t::TEXT_MUTED,
                         ));
                     }
                     Source::Solved(sol) => {
                         let p = &sol.snapshot.progress;
                         let validated = sol.snapshot.accuracy.validated;
+                        let conv = novo_cfd::large::convergence(&sol.snapshot);
                         ui.label(small(
                             &status_label(p, validated),
                             crate::theme::ui_palette().text_primary,
-                        ));
+                        ))
+                        .on_hover_text(conv.lines.join("\n"));
+                        // A large cabinet runs as a reduced model: a fold-away line
+                        // next to the level keeps the legend short.
+                        if let Some(r) = novo_cfd::large::reduced_summary(&sol.snapshot) {
+                            egui::CollapsingHeader::new(small(
+                                "Reduced model",
+                                crate::theme::ui_palette().text_secondary,
+                            ))
+                            .default_open(false)
+                            .show(ui, |ui| {
+                                ui.label(small(r, crate::theme::ui_palette().text_secondary));
+                                ui.label(small(
+                                    "Cold devices are lumped into row blocks and thin ducts and \
+                                     rails are widened to porous strips so a big cabinet fits \
+                                     the cell budget. More under Notes on this run.",
+                                    crate::theme::ui_palette().text_secondary,
+                                ));
+                            });
+                        }
                         if stale {
                             ui.label(small(
                                 "Out of date: the layout changed since this run.",
                                 t::WARNING,
                             ));
                         }
-                        if !p.converged {
-                            ui.label(small("Not converged.", t::WARNING));
+                        // Not converged, or "steady" with a poor heat balance or
+                        // drifting temperatures: one line here, the numbers on hover.
+                        if conv.verdict != novo_cfd::large::Verdict::Converged
+                            || conv.lines.len() > 1
+                        {
+                            ui.label(small(&conv.headline, crate::theme::ui_palette().warning))
+                                .on_hover_text(conv.lines.join("\n"));
                         }
                         let a = &sol.snapshot.accuracy;
                         // The status line above already names the level.

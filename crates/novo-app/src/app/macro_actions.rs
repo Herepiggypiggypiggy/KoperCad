@@ -11,7 +11,7 @@
 //! can be moved with the usual keys.
 
 use eframe::egui;
-use novo_core::{AnyId, BlockDefinition, Value};
+use novo_core::{AnyId, BlockDefinition, Record, Value};
 use novo_parts::{MacroEntry, MacroFile, MacroLibrary};
 use novo_workflow::macro_place::{self, PartRef, PlaceOptions, Report, WireNumbers};
 
@@ -167,6 +167,22 @@ impl Default for PlaceWindow {
     fn default() -> Self {
         PlaceWindow::new(MacroLibrary::user())
     }
+}
+
+/// Shown in the Place window under the preview of a macro with PLC channel
+/// symbols: the symbols alone give no addresses, so the I/O list and PLC
+/// overview stay empty.
+const PLC_CARD_NOTE: &str =
+    "Symbols only: no addresses or I/O list until you add a PLC card (Draw > PLC > Add PLC card)";
+
+/// Whether the macro draws PLC input or output channels (not just a supply
+/// or CPU), which need a registered card to show in the I/O list.
+pub(crate) fn draws_plc_channels(definition: &BlockDefinition) -> bool {
+    definition.members.iter().any(|m| {
+        matches!(m, Record::Symbol(s) if
+            s.symbol.0.starts_with("iec/plc/")
+                && (s.symbol.0.ends_with("_input") || s.symbol.0.ends_with("_output")))
+    })
 }
 
 /// The preview line: what a placement will do.
@@ -556,6 +572,15 @@ impl NovoApp {
                         match &shown.report {
                             Ok(report) => {
                                 ui.label(describe(report));
+                                if draws_plc_channels(&shown.definition) {
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(PLC_CARD_NOTE)
+                                                .color(crate::theme::ui_palette().warning),
+                                        )
+                                        .wrap(),
+                                    );
+                                }
                             }
                             Err(reason) => {
                                 novo_theme::widgets::banner(
@@ -606,6 +631,7 @@ impl NovoApp {
         };
         let options = self.wb.macro_place.options();
         let name = shown.definition.name.clone();
+        let plc_note = draws_plc_channels(&shown.definition);
         let Some(doc) = self.backend.document_mut() else {
             return;
         };
@@ -624,10 +650,15 @@ impl NovoApp {
                 if let Some(view) = self.canvas.schematic() {
                     view.select_ids(&ids);
                 }
-                self.message(
-                    Level::Info,
-                    format!("Placed {name} · {}", describe(&placed.report)),
-                );
+                let text = if plc_note {
+                    format!(
+                        "Placed {name} (symbols only: use Draw > PLC > Add PLC card for addresses) · {}",
+                        describe(&placed.report)
+                    )
+                } else {
+                    format!("Placed {name} · {}", describe(&placed.report))
+                };
+                self.message(Level::Info, text);
                 self.wb.macro_place.open = false;
             }
             Err(e) => {

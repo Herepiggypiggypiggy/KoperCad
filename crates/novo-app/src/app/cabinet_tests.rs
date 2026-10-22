@@ -203,9 +203,9 @@ fn the_table_face_toggles_and_problems_are_in_words() {
     assert!(c.iter().any(|t| t.contains("guess")));
     // The pill's hover text names every problem, with the device tag.
     let hover = super::cabinet::problem_summary(&l, &name);
-    assert!(hover.contains("-K1: Overlaps -K2"), "{hover}");
+    assert!(hover.contains("-K1: overlaps -K2"), "{hover}");
     assert!(
-        hover.contains("-K3: Reaches past the usable plate"),
+        hover.contains("-K3: reaches past the usable plate"),
         "{hover}"
     );
     assert!(
@@ -222,6 +222,48 @@ fn the_table_face_toggles_and_problems_are_in_words() {
         super::cabinet::problem_summary(&empty, &name),
         "Click to list the problems."
     );
+}
+
+#[test]
+fn a_device_off_the_middle_of_its_rail_says_so_and_counts_as_a_problem() {
+    use novo_layout::state::CabinetLayout;
+    use novo_layout::{Placement, Plate, Rail, Size};
+    let mut l = CabinetLayout::new(Plate {
+        width: 300.0,
+        height: 300.0,
+        margin: 10.0,
+    });
+    l.rails = vec![Rail {
+        id: 3,
+        x: 20.0,
+        y: 100.0,
+        length: 250.0,
+        vertical: false,
+    }];
+    let on = |id: u64, y: f64| Placement {
+        id,
+        x: 20.0 + 60.0 * id as f64,
+        y,
+        rotated: false,
+        size: Size::from_part(Some(45.0), Some(90.0)),
+        clearance: None,
+        margins: Default::default(),
+        rail: Some(3),
+    };
+    // -K1 is centred on the rail line (y 100), -K2 has it on its top edge.
+    l.placements = vec![on(1, 55.0), on(2, 100.0)];
+    let name = |id: u64| format!("-K{id}");
+    assert!(super::cabinet::problem_lines(&l, 1, &name).is_empty());
+    let lines = super::cabinet::problem_lines(&l, 2, &name);
+    assert_eq!(
+        lines,
+        vec![
+            "Sits 45 mm off the middle of its rail: drag it onto the rail, or use Centre rails on devices in Rails and ducts"
+        ]
+    );
+    assert!(!l.report().is_clean());
+    let hover = super::cabinet::problem_summary(&l, &name);
+    assert!(hover.contains("-K2: sits 45 mm off the middle"), "{hover}");
 }
 
 #[test]
@@ -1775,4 +1817,100 @@ fn a_drop_on_a_rail_line_stays_mounted_and_one_off_it_leaves_the_rail() {
         &cands,
     );
     assert_eq!(on(&d).0.rail, None);
+}
+
+#[test]
+fn centre_rails_moves_only_the_rails_and_is_one_undo_step() {
+    use super::cabinet_rails::RailAsk;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    let layout = novo_layout::model::load(project(&d), cab);
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app.cabinet_ask(Ask::PlaceAll, Some(cab), layout, &cands);
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    d.frame();
+
+    // An old plan: the rails sit 12 mm below the middle of their devices.
+    // (Ducts are rails in the model too; only DIN rails with devices follow.)
+    let l = layout_of(&d, cab).unwrap();
+    let rails: Vec<_> = l
+        .rails
+        .iter()
+        .filter(|r| l.placements.iter().any(|p| p.rail == Some(r.id)))
+        .map(|r| (novo_core::RailId::from(r.id), r.y))
+        .collect();
+    assert!(!rails.is_empty());
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Old plan", |tx| {
+            for (id, y) in &rails {
+                tx.update::<Rail>(*id, |r| r.y = y + 12.0)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let devices = |d: &Drive| -> Vec<(u64, f64, f64)> {
+        let mut v: Vec<_> = project(d)
+            .all::<CabinetPlacement>()
+            .map(|p| (p.id.raw(), p.x, p.y))
+            .collect();
+        v.sort_by_key(|a| a.0);
+        v
+    };
+    let before = devices(&d);
+    let off = |d: &Drive| {
+        let l = layout_of(d, cab).unwrap();
+        novo_layout::centre_rails(&l.rails, &l.placements).len()
+    };
+    assert_eq!(off(&d), rails.len());
+
+    d.app.cabinet_rail_ask(Some(cab), RailAsk::CentreRails);
+    d.frame();
+    assert_eq!(off(&d), 0);
+    for (id, y) in &rails {
+        assert!((project(&d).get::<Rail>(*id).unwrap().y - y).abs() < 1e-6);
+    }
+    assert_eq!(devices(&d), before, "devices must not move");
+
+    // One undo step brings the 12 mm back.
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(off(&d), rails.len());
+    assert_eq!(devices(&d), before);
+}
+
+#[test]
+fn a_cooler_layout_asked_before_the_plate_exists_is_dropped_not_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    // No plate yet: the Cabinet shows its empty state.
+    d.app.run_command(&ctx, "heat.cooler_layout", None);
+    assert!(d.app.cabinet.heat.layout.pending());
+    d.frame();
+    d.frame();
+    assert!(
+        !d.app.cabinet.heat.layout.pending(),
+        "the request is taken up, or the 3D view would bounce the person out on every visit"
+    );
+    assert!(
+        d.app.cabinet.heat.layout.needs_plate(),
+        "the empty state keeps saying why, frame after frame"
+    );
 }

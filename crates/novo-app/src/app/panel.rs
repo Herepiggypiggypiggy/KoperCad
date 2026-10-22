@@ -24,12 +24,16 @@ pub(super) const MARGIN: f32 = 12.0;
 /// Space kept above a panel for the top bar, and below it for the status bar.
 const TOP: f32 = 48.0;
 const BOTTOM: f32 = 60.0;
+/// What a window's title bar and frame take from its `max_height`.
+const TITLE_ROOM: f32 = 40.0;
 /// The narrowest a panel can be dragged to.
 const MIN_WIDTH: f32 = 260.0;
 /// The shortest a panel can be dragged to.
 const MIN_HEIGHT: f32 = 120.0;
 /// A panel the person opens starts at least this wide.
 const DIALOG_MIN_WIDTH: f32 = 380.0;
+/// Width of the card that parks in the bottom right corner (the lesson card).
+pub(super) const CORNER_CARD_WIDTH: f32 = 316.0;
 
 /// Which end of the canvas a panel starts at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,6 +64,7 @@ pub(super) struct Panel {
     bottom: f32,
     height: Option<f32>,
     fit: bool,
+    scroll: bool,
     title_bar: bool,
     above_card: bool,
 }
@@ -84,6 +89,7 @@ impl Panel {
             bottom: 0.0,
             height: None,
             fit: false,
+            scroll: false,
             title_bar: true,
             above_card: false,
         }
@@ -113,6 +119,13 @@ impl Panel {
     /// resizable: for toolbars and cards. It can still be dragged.
     pub(super) fn fit(mut self) -> Self {
         self.fit = true;
+        self
+    }
+
+    /// A fitted panel whose content can outgrow the canvas scrolls instead of
+    /// being cut at the bottom (cards with a list of unknown length).
+    pub(super) fn scrolls(mut self) -> Self {
+        self.scroll = true;
         self
     }
 
@@ -240,7 +253,25 @@ impl Panel {
         if self.scroll_bar {
             ctx.global_style_mut(|st| st.spacing.scroll = egui::style::ScrollStyle::solid());
         }
-        let shown = window.show(ctx, add);
+        let scrolls = self.fit && self.scroll;
+        if scrolls {
+            // egui would offer a card only its 420 default; the scroll area below
+            // shrinks it back to its content.
+            window = window.default_height(max_height);
+        }
+        let shown = window.show(ctx, |ui| {
+            if scrolls {
+                // The card is as tall as its content up to the canvas, then scrolls
+                // (the window's own scroll area would start at egui's 420 default).
+                egui::ScrollArea::vertical()
+                    .max_height((max_height - TITLE_ROOM).max(MIN_HEIGHT))
+                    .auto_shrink([true, true])
+                    .show(ui, add)
+                    .inner
+            } else {
+                add(ui)
+            }
+        });
         if let Some(scroll) = before {
             ctx.global_style_mut(|st| st.spacing.scroll = scroll);
         }
@@ -299,11 +330,15 @@ pub(super) fn dialog<'a>(
     // egui derives the window's id from `Some(title text)`; `esc` reads it
     // back. The test `escape_closes_the_dialog_on_top` catches a change.
     ctx.data_mut(|d| d.insert_temp(pending_id(), egui::Id::new(Some(title.text()))));
-    let screen = ctx.content_rect().shrink(MARGIN);
-    let size = [
-        size[0] * grow(screen.width()),
-        size[1] * grow(screen.width()),
-    ];
+    let full = ctx.content_rect().shrink(MARGIN);
+    let size = [size[0] * grow(full.width()), size[1] * grow(full.width())];
+    let mut screen = full;
+    // A dialog stays left of the parked corner card, so it does not open over
+    // the card (Protection at 1366 covered it); one too wide for that is
+    // capped at what is left of the screen.
+    if reserved_bottom_right(ctx) > 0.0 {
+        screen.max.x = (full.max.x - CORNER_CARD_WIDTH - MARGIN).max(full.min.x + DIALOG_MIN_WIDTH);
+    }
     let width = size[0].max(DIALOG_MIN_WIDTH).min(screen.width());
     let window = egui::Window::new(title)
         .resizable(true)
@@ -405,7 +440,7 @@ pub(super) fn reserve_bottom_right(ctx: &egui::Context, height: f32) {
     ctx.data_mut(|d| d.insert_temp(corner_id(), height));
 }
 
-fn reserved_bottom_right(ctx: &egui::Context) -> f32 {
+pub(super) fn reserved_bottom_right(ctx: &egui::Context) -> f32 {
     ctx.data(|d| d.get_temp::<f32>(corner_id())).unwrap_or(0.0)
 }
 
@@ -545,6 +580,48 @@ mod tests {
 
     fn canvas() -> egui::Rect {
         egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(1200.0, 800.0))
+    }
+
+    /// The height of a fitted, scrolling panel with this many rows.
+    fn scrolling_panel_height(rows: usize) -> f32 {
+        let ctx = egui::Context::default();
+        let mut height = 0.0;
+        for _ in 0..6 {
+            let mut out = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(canvas()),
+                    ..Default::default()
+                },
+                |ctx| {
+                    let shown = Panel::new("tall", "Tall", canvas(), Side::Left, 240.0)
+                        .fit()
+                        .scrolls()
+                        .show(ctx, |ui| {
+                            for n in 0..rows {
+                                ui.label(format!("row {n}"));
+                            }
+                        });
+                    height = shown.map_or(0.0, |r| r.response.rect.height());
+                },
+            );
+            out.textures_delta.clear();
+        }
+        height
+    }
+
+    #[test]
+    fn a_scrolling_card_is_as_tall_as_its_content_up_to_the_canvas() {
+        // The wheel over it is checked in the real app (QA 59, picture "live-card-scrolled").
+        let tall = scrolling_panel_height(80);
+        assert!(
+            tall > canvas().height() * 0.8 && tall <= canvas().height(),
+            "taller than the canvas: the card takes the canvas, not egui's 420: {tall}"
+        );
+        let short = scrolling_panel_height(5);
+        assert!(
+            short < 200.0,
+            "a short card is its content's height, not the canvas: {short}"
+        );
     }
 
     fn frame(ctx: &egui::Context, side: Side) -> egui::Rect {
@@ -722,6 +799,34 @@ mod tests {
         assert!(open, "stays open without a key");
         dialog_frame(&ctx, &mut open, true);
         assert!(!open, "Escape closes it");
+    }
+
+    #[test]
+    fn a_wide_dialog_stays_left_of_the_parked_corner_card() {
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1366.0, 768.0));
+        reserve_bottom_right(&ctx, 300.0);
+        let mut right = 0.0;
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    ..Default::default()
+                },
+                |ctx| {
+                    let shown = dialog(ctx, "Wide test", [1300.0, 0.0]).show(ctx, |ui| {
+                        ui.label("content");
+                    });
+                    right = shown.map_or(0.0, |r| r.response.rect.max.x);
+                },
+            );
+            out.textures_delta.clear();
+        }
+        assert!(right > 0.0, "the dialog is shown");
+        assert!(
+            right <= screen.max.x - CORNER_CARD_WIDTH,
+            "the dialog ends at {right}, under the corner card"
+        );
     }
 
     #[test]

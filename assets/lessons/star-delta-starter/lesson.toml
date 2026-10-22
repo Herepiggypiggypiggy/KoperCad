@@ -1,0 +1,149 @@
+# Challenge: the star-delta starter never changes over to delta. The wire from
+# the timer relay's closing contact (-K4 17/18) to the star contactor's
+# interlock contact (-K3 21/22) is missing.
+# Sample project: the program's own "Star-delta starter" macro, fed
+# (crates/novo-tests/tests/lessons/progression.rs).
+# -K1 line, -K2 delta, -K3 star contactor, -K4 star time relay. The live view
+# has no clock check, so steps use wire checks and predictions.
+format = 1
+id = "star-delta-starter"
+version = 1
+status = "early"
+kind = "challenge"
+title = "A star-delta starter that stays in star"
+title_nl = "Een ster-driehoekstarter die in ster blijft"
+summary = "Three contactors and a timer start a large motor gently: star first, then delta. Trace the sequence, find the missing path to the delta contactor and repair it."
+summary_nl = "Drie contactoren en een timer starten een grote motor rustig: eerst ster, dan driehoek. Volg de volgorde, vind het ontbrekende pad naar de driehoekcontactor en herstel het."
+explain = "After the star time, the timer **-K4** opens its first contact (15-16), which drops the star contactor **-K3**, and closes its second (17-18). That closing contact feeds the delta contactor **-K2** through the normally closed contact of **-K3**. The wire from **-K4** pin 18 to **-K3** pin 21 was missing, so **-K2** never got a supply and the motor stayed in star: one third of the power and torque, and a motor that overheats on load."
+explain_nl = "Na de tijd in ster opent de timer **-K4** zijn eerste contact (15-16), waardoor de stercontactor **-K3** afvalt, en sluit zijn tweede (17-18). Dat sluitcontact voedt de driehoekcontactor **-K2** via het verbreekcontact van **-K3**. De draad van **-K4** pen 18 naar **-K3** pen 21 ontbrak, dus **-K2** kreeg nooit spanning en de motor bleef in ster: een derde van het vermogen en koppel, en een motor die onder belasting oververhit raakt."
+track = "machines"
+order = 20
+level = "advanced"
+minutes = 10
+topics = ["star-delta", "timer", "contactors", "troubleshooting"]
+needs = ["reversing-starter"]
+next = ["safety-circuit"]
+project = "project.json"
+finished = "finished.json"
+page = "Star-delta starter"
+
+[[step]]
+id = "idea"
+title = "Why star first"
+title_nl = "Waarom eerst ster"
+text = """
+A big motor started straight on line pulls five to seven times its rated current. In star each winding sees 58 % of the voltage, so the line current is about a third. When the motor is up to speed the starter switches to delta for full power. This only works on a motor wound for the line voltage in delta (all six terminals are brought out).
+"""
+text_nl = """
+Een grote motor die direct wordt ingeschakeld trekt vijf tot zeven keer zijn nominale stroom. In ster krijgt elke wikkeling 58 % van de spanning, dus de lijnstroom is ongeveer een derde. Is de motor op toeren, dan schakelt de starter naar driehoek voor het volle vermogen. Dit werkt alleen op een motor die voor de netspanning in driehoek is gewikkeld (alle zes aansluitingen naar buiten).
+"""
+
+[[step]]
+id = "power"
+title = "Trace the power side"
+title_nl = "Volg de hoofdstroomzijde"
+text = """
+**-K1** is the line contactor: it feeds the motor terminals U1, V1, W1. **-K2** (delta) joins each winding end to the next phase. **-K3** (star) ties the winding ends U2, V2, W2 together. Look at the three contactors on the drawing.
+"""
+text_nl = """
+**-K1** is de lijncontactor: hij voedt de motoraansluitingen U1, V1, W1. **-K2** (driehoek) verbindt elk wikkeleinde met de volgende fase. **-K3** (ster) verbindt de wikkeleinden U2, V2, W2 met elkaar. Kijk naar de drie contactoren op de tekening.
+"""
+note = [
+  { at = { device = "-K1" }, text = "Line contactor", text_nl = "Lijncontactor" },
+  { at = { device = "-K2" }, text = "Delta contactor", text_nl = "Driehoekcontactor" },
+  { at = { device = "-K3" }, text = "Star contactor", text_nl = "Stercontactor" },
+]
+
+[[step]]
+id = "predict-star"
+title = "Predict: the first seconds"
+title_nl = "Voorspel: de eerste seconden"
+text = """
+You press start. The line contactor **-K1** pulls in and the timer **-K4** starts counting. Which contactor joins **-K1** during the star time?
+"""
+text_nl = """
+Je drukt op start. De lijncontactor **-K1** trekt aan en de timer **-K4** begint te tellen. Welke contactor werkt samen met **-K1** tijdens de tijd in ster?
+"""
+expect = { predicted = true }
+pause = true
+solve = [ { choose = 1 } ]
+[step.predict]
+options = ["-K2, the delta contactor", "-K3, the star contactor", "None, only -K1"]
+options_nl = ["-K2, de driehoekcontactor", "-K3, de stercontactor", "Geen, alleen -K1"]
+answer = 1
+why = "The timer's first contact (15-16) is closed while the timer counts, and it feeds the star contactor **-K3** through the normally closed contact of **-K2**. So **-K1** and **-K3** are on: the motor runs in star."
+why_nl = "Het eerste contact van de timer (15-16) is gesloten zolang de timer telt en voedt de stercontactor **-K3** via het verbreekcontact van **-K2**. Dus **-K1** en **-K3** zijn aan: de motor draait in ster."
+
+[[step]]
+id = "predict-delta"
+title = "Predict: after the star time"
+title_nl = "Voorspel: na de tijd in ster"
+text = """
+The star time (8 s in this drawing) has passed. What must happen so that the motor never has star and delta closed at once?
+"""
+text_nl = """
+De tijd in ster (8 s in deze tekening) is voorbij. Wat moet er gebeuren zodat ster en driehoek nooit tegelijk gesloten zijn?
+"""
+expect = { predicted = true }
+pause = true
+solve = [ { choose = 0 } ]
+[step.predict]
+options = ["-K3 drops first, then -K2 may pull in", "-K2 pulls in first, then -K3 drops", "Both switch at the same instant"]
+options_nl = ["-K3 valt eerst af, daarna mag -K2 aantrekken", "-K2 trekt eerst aan, daarna valt -K3 af", "Beide schakelen op hetzelfde moment"]
+answer = 0
+why = "Star and delta together would short-circuit the three phases through the star point. The normally closed contacts of **-K2** and **-K3** (the interlocks) make sure each one can only pull in when the other is out."
+why_nl = "Ster en driehoek samen sluiten de drie fasen kort via het sterpunt. De verbreekcontacten van **-K2** en **-K3** (de blokkeringen) zorgen dat de een alleen kan aantrekken als de ander uit is."
+
+[[step]]
+id = "fault"
+title = "Goal: the delta contactor must be fed"
+title_nl = "Doel: de driehoekcontactor moet gevoed worden"
+text = """
+**Goal:** the motor stays in star on site. Follow the path that should feed the delta coil **-K2** after the star time: the closing contact of the timer **-K4** (17-18), then the interlock contact of **-K3** (21-22). One wire is missing. Draw it.
+"""
+text_nl = """
+**Doel:** de motor blijft ter plaatse in ster. Volg het pad dat de driehoekspoel **-K2** na de tijd in ster moet voeden: het sluitcontact van timer **-K4** (17-18) en dan het verbreekcontact van **-K3** (21-22). Er ontbreekt een draad. Teken hem.
+"""
+hints = [
+  "Start at the timer -K4. Its first contact (15-16) feeds the star path. Where does its second contact (17-18) go?",
+  "Pin 18 of -K4 has no wire, and neither has pin 21 of the interlock contact of -K3 that sits in front of the delta coil.",
+  "Draw a wire from -K4 pin 18 to -K3 pin 21.",
+]
+hints_nl = [
+  "Begin bij de timer -K4. Zijn eerste contact (15-16) voedt het sterpad. Waar gaat zijn tweede contact (17-18) naartoe?",
+  "Pen 18 van -K4 heeft geen draad, en pen 21 van het verbreekcontact van -K3 voor de driehoeksspoel ook niet.",
+  "Trek een draad van -K4 pen 18 naar -K3 pen 21.",
+]
+point = { at = { device = "-K4", pin = "18" } }
+expect = { wire = { from = "-K4:18", to = "-K3:21" } }
+solve = [ { wire = ["-K4:18", "-K3:21"] } ]
+
+[[step]]
+id = "motor-start"
+title = "See the start current"
+title_nl = "Bekijk de aanloopstroom"
+text = """
+Open the motor start simulation and choose “Star-delta”: speed and line current over time for direct, star-delta, auto-transformer and soft starting. It is a model with standard motor data, not your motor; check the real values with the motor's data sheet.
+"""
+text_nl = """
+Open de motoraanloopsimulatie en kies “Star-delta”: toerental en lijnstroom in de tijd voor direct, ster-driehoek, autotransformator en softstart. Het is een model met standaard motorgegevens, niet jouw motor; controleer de echte waarden met het gegevensblad van de motor.
+"""
+how = [
+  "Press {key:view.command_palette}, type **simulate motor start** and press Enter",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **simulate motor start** en druk op Enter",
+]
+expect = { command = "simulate.motor-start" }
+solve = [ { command = "simulate.motor-start" } ]
+
+[[step]]
+id = "limits"
+title = "What this drawing leaves out"
+title_nl = "Wat deze tekening weglaat"
+text = """
+The star time (8 s) is a parameter of the macro, not a calculated value. A real design sets it so the motor is near full speed at the changeover, and checks the changeover current peak. The cable and fuse sizes need the calculations window, not this lesson.
+"""
+text_nl = """
+De tijd in ster (8 s) is een parameter van de macro, geen berekende waarde. Een echt ontwerp stelt hem zo in dat de motor bij het omschakelen bijna op toeren is en controleert de stroompiek bij het omschakelen. Voor kabel- en zekeringmaten heb je het berekeningsvenster nodig, niet deze les.
+"""

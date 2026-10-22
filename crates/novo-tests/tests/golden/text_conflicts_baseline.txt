@@ -14,10 +14,10 @@
 120	potential feed name / symbol line (neighbour)
 1	potential feed name / text inside symbol art (neighbour)
 4	strip name / frame line (neighbour)
-41	strip name / symbol line (neighbour)
-642	terminal name / symbol line (neighbour)
-6	terminal name / terminal name (neighbour)
-2	terminal name / terminal name (neighbour) [tight]
+11	strip name / symbol line (neighbour)
+232	terminal name / symbol line (neighbour)
+1	terminal name / terminal name (neighbour)
+1	terminal name / terminal name (neighbour) [tight]
 22	text inside symbol art / frame line (neighbour)
 4	text inside symbol art / outside the sheet
 435	text inside symbol art / symbol line (neighbour)

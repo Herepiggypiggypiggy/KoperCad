@@ -1,0 +1,23 @@
+@title Cabinet plate: EMC view says how many wires with no duct route are left out
+@area Cabinet
+@sizes 1920x1080
+# With the vertical duct removed some wires have no duct route; the plate view leaves them out and the legend says so.
+key ctrl+k
+wait 6
+text open emc example
+wait 8
+key Enter
+wait 30
+key ctrl+k
+wait 6
+text emc view on the plate
+wait 8
+key Enter
+wait 30
+click 887 195
+wait 10
+key Delete
+wait 30
+shot plate-emc-left-out
+expect "left out of this view"
+check_layout

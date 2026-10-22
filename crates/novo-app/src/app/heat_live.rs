@@ -106,6 +106,13 @@ impl Live {
 }
 
 impl HeatState {
+    /// The scenario of the cabinet as the Heat view follows it now, with its
+    /// key. `None` when the bridge cannot build one.
+    pub(super) fn current_scenario(&self) -> Option<(Arc<Scenario>, u64)> {
+        let c = self.live.current.as_ref()?;
+        Some((c.scenario.clone()?, c.scenario_key))
+    }
+
     /// Follows the project: marks the result out of date and, with auto on,
     /// re-solves. Cheap when the project revision did not change. `dragging`
     /// holds the automatic start back while a device is in the pointer's

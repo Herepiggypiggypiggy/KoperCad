@@ -504,6 +504,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.ferrules",
     "export.labels",
     "cabinet.routes",
+    "cabinet.emc",
     "cabinet.rails",
     "cabinet.rules",
     "cabinet.plate",
@@ -535,6 +536,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_section",
     "view.3d_save_view",
     "view.3d_wire_runs",
+    "view.emc",
     "view.3d_hints",
     "view.3d_select_devices",
     "view.3d_select_rails",
@@ -657,6 +659,8 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "heat.airflow",
     "heat.contours",
     "heat.simulate",
+    "heat.cooling_advice",
+    "heat.cooler_layout",
     "heat.vents",
     "heat.add_filter_fan",
     "heat.add_grille",
@@ -806,7 +810,10 @@ impl NovoApp {
     pub(super) fn track_pointer(&mut self, ctx: &egui::Context) {
         let at = ctx.pointer_hover_pos();
         self.wb.pointer_world = match (at, self.wb.canvas_area, self.canvas.schematic_ref()) {
-            (Some(at), Some((_, rect)), Some(view)) if rect.contains(at) => {
+            // Not through a window or the lesson card lying over the drawing.
+            (Some(at), Some((layer, rect)), Some(view))
+                if rect.contains(at) && ctx.layer_id_at(at).is_none_or(|l| l == layer) =>
+            {
                 let local = at - rect.min;
                 let w = view
                     .canvas
@@ -831,6 +838,14 @@ impl NovoApp {
         }
         if command == "edit.delete" {
             return self.declines_proposal();
+        }
+        // The editor reads the page keys only while the pointer is on the
+        // drawing; with it on the lesson card or a panel nobody would.
+        if matches!(command, "nav.next_page" | "nav.previous_page")
+            && self.workspace() == Workspace::Schematic
+            && self.wb.pointer_world.is_none()
+        {
+            return self.is_open();
         }
         if EDITOR_KEYS.contains(&command) {
             return false;
@@ -864,8 +879,9 @@ impl NovoApp {
         // Escape belongs to a window floating on top, not the drawing, even
         // with the pointer over it (the drawing would take the key first).
         let window_on_top = super::panel::dialog_on_top(ctx);
+        let modal = self.modal_open();
         if let Some(view) = self.canvas.schematic() {
-            view.yield_escape = window_on_top;
+            view.yield_escape = window_on_top || modal;
         }
     }
 
@@ -958,6 +974,7 @@ impl NovoApp {
                 self.cabinet.keys.push(id.to_owned());
             }
             "heat.toggle" | "heat.airflow" | "heat.contours" | "heat.simulate"
+            | "heat.cooler_layout"
                 if self.is_open() =>
             {
                 // Simulate stays in the 3D view when it is the one open.
@@ -967,6 +984,14 @@ impl NovoApp {
                 } else {
                     // The run's progress and stop button live in the panel.
                     self.view3d.controls.heat_panel = true;
+                }
+                self.cabinet.heat.command(id);
+            }
+            "heat.cooling_advice" if self.is_open() => {
+                // Stays in the 3D view when it is the one open.
+                if self.workspace() != Workspace::View3d {
+                    self.switch_workspace(Workspace::Cabinet);
+                    self.cabinet.table = false;
                 }
                 self.cabinet.heat.command(id);
             }
@@ -1189,6 +1214,10 @@ impl NovoApp {
                     self.view3d.controls.layers.wires = true;
                 }
             }
+            "view.emc" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.controls.emc ^= true;
+            }
             "view.3d_hints" => {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.hints.toggle();
@@ -1353,6 +1382,7 @@ impl NovoApp {
                 self.export_spreadsheet();
             }
             "cabinet.routes" => self.toggle_cabinet_routes(),
+            "cabinet.emc" => self.toggle_cabinet_emc(),
             "cabinet.rails" => self.toggle_cabinet_rails(),
             "cabinet.rules" if self.is_open() => {
                 self.switch_workspace(Workspace::Cabinet);
@@ -1630,6 +1660,9 @@ impl NovoApp {
             return;
         }
         self.wb.field.ask_enabled = self.settings.ai.enabled;
+        self.wb.field.relabel = novo_workflow::commands::get("help.next_lesson")
+            .map(|info| vec![("help.next_lesson", self.command_label(info))])
+            .unwrap_or_default();
         let picked = self.with_field(|field, sources| field.show(ctx, canvas, sources));
         if let Some(rect) = self.wb.field.rect() {
             self.anchor("palette.field", rect, "Command field");

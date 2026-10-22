@@ -90,17 +90,16 @@ title_nl = "Kies NFPA 79"
 # GAP: the check wanted is the state "project rule standard = nfpa"; no such
 # check kind exists. `clicked` is the closest.
 text = """
-Click the radio button **NFPA 79 / ANSI Y32.2**.
+Click {ui:settings.standard.nfpa}.
 The title bar now shows · NFPA after the project name.
 """
 text_nl = """
-Klik op de keuzeknop **NFPA 79 / ANSI Y32.2**.
+Klik op {ui:settings.standard.nfpa}.
 De titelbalk toont nu · NFPA achter de projectnaam.
 """
 point = { ui = "settings.standard.nfpa" }
 expect = { clicked = "settings.standard.nfpa" }
-# GAP: solve has no operation for a project rule.
-solve = [ { command = "project.standard" } ]
+solve = [ { ui_click = "settings.standard.nfpa" } ]
 
 [[step]]
 id = "a-rule-not-a-view"
@@ -140,17 +139,16 @@ title_nl = "Zet de geplaatste symbolen om"
 # twin (`iec/coils/contactor` -> `nfpa/coils/contactor`); tags, pins, positions,
 # wires, parts and roles are untouched; the rule becomes "nfpa".
 text = """
-In the same window, press **Switch placed symbols**.
+In the Project settings window (reopen it with {key:view.command_palette} and **standard** if it closed), press {ui:settings.standard.switch}.
 Every symbol on every page gets the NFPA drawing of the same device.
 """
 text_nl = """
-Druk in hetzelfde venster op **Switch placed symbols**.
+Druk in het venster Project settings (open het opnieuw met {key:view.command_palette} en **standard** als het dicht ging) op {ui:settings.standard.switch}.
 Elk symbool op elke pagina krijgt de NFPA-tekening van hetzelfde apparaat.
 """
 point = { ui = "settings.standard.switch" }
 expect = { device = { tag = "=A1+CAB-K1", symbol = "nfpa/coils/contactor" } }
-# GAP: solve has no operation that switches the standard.
-solve = [ { command = "project.standard" } ]
+solve = [ { ui_click = "settings.standard.switch" } ]
 
 [[step]]
 id = "look"

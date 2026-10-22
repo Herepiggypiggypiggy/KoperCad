@@ -67,6 +67,9 @@ impl RowDrag {
 /// the pitch of a terminal strip, in millimetres.
 pub const POLE_PITCH: f64 = 8.0;
 
+/// How far short of a position, in pitches, the pointer still places it.
+const SHORT_OF_POSITION: f64 = 0.25;
+
 /// Library ids of one device in 1 to 4 poles, in pole order.
 const POLE_FAMILIES: [&[&str]; 6] = [
     &[
@@ -236,6 +239,13 @@ pub fn pitch(
     f64::from(steps) * grid
 }
 
+/// How many symbols a drag of `along` millimetres asks for. A pointer a
+/// little short of a position (up to a quarter of a pitch) counts as being on
+/// it: a release on the pin itself must not lose the last one.
+fn count_for(along: f64, pitch: f64) -> usize {
+    (((along.abs() / pitch) + SHORT_OF_POSITION).floor() as usize + 1).min(MAX_COUNT)
+}
+
 fn overlaps(a: (Point, Point), b: (Point, Point)) -> bool {
     a.0.x < b.1.x - TOUCH && b.0.x < a.1.x - TOUCH && a.0.y < b.1.y - TOUCH && b.0.y < a.1.y - TOUCH
 }
@@ -253,7 +263,7 @@ pub fn positions(
 ) -> (Vec<Point>, Option<Point>) {
     let along = row.along();
     let sign = if along < 0.0 { -1.0 } else { 1.0 };
-    let wanted = ((along.abs() / pitch).floor() as usize + 1).min(MAX_COUNT);
+    let wanted = count_for(along, pitch);
     let others: Vec<(Point, Point)> = project
         .page_contents(page)
         .symbols
@@ -294,6 +304,15 @@ mod tests {
 
     fn p(x: f64, y: f64) -> Point {
         Point::new(x, y)
+    }
+
+    #[test]
+    fn a_drag_a_little_short_of_a_position_still_places_it() {
+        assert_eq!(count_for(0.0, 8.0), 1);
+        assert_eq!(count_for(5.0, 8.0), 1, "a drag of less than a pitch is one");
+        assert_eq!(count_for(15.0, 8.0), 3, "1 mm short of the third");
+        assert_eq!(count_for(-15.9, 8.0), 3, "to the left too");
+        assert_eq!(count_for(13.0, 8.0), 2, "3 mm short is too far");
     }
 
     #[test]

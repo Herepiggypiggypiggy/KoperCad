@@ -1947,6 +1947,7 @@ dependencies = [
  "novo-commissioning",
  "novo-core",
  "novo-editor",
+ "novo-emc",
  "novo-heatview",
  "novo-interop",
  "novo-layout",
@@ -2009,7 +2010,9 @@ name = "novo-cfd"
 version = "0.1.0"
 dependencies = [
  "novo-cfd",
+ "novo-core",
  "novo-layout",
+ "novo-storage",
  "novo-thermal",
  "rayon",
  "thiserror 2.0.21",
@@ -2021,6 +2024,7 @@ version = "0.1.0"
 dependencies = [
  "novo-cables",
  "novo-core",
+ "novo-emc",
  "novo-layout",
  "novo-parts",
  "novo-plc",
@@ -2097,6 +2101,15 @@ dependencies = [
  "novo-symbols",
  "novo-terminals",
  "novo-xref",
+]
+
+[[package]]
+name = "novo-emc"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-layout",
+ "novo-routing",
 ]
 
 [[package]]
@@ -2335,6 +2348,7 @@ dependencies = [
  "novo-cli",
  "novo-core",
  "novo-editor",
+ "novo-emc",
  "novo-interop",
  "novo-layout",
  "novo-numbering",

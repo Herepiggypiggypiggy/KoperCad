@@ -1,0 +1,155 @@
+format = 1
+id = "workshop-pack"
+version = 1
+status = "early"
+title = "Print for a workshop that cuts and drills by hand"
+summary = "Read the bench output: what to cut, which ferrule to crimp, which label to stick, and the 1:1 drilling template, all checked for what is exact and what is a guess."
+track = "cabinet"
+order = 85
+level = "intermediate"
+minutes = 9
+topics = ["workshop", "bench", "ferrules", "labels", "template", "drill"]
+needs = ["cut-lengths", "panel-labels"]
+next = ["build-mode"]
+project = "@example"
+title_nl = "Print voor een werkplaats die met de hand snijdt en boort"
+summary_nl = "Lees de werkbankuitvoer: wat af te korten, welke adereindhuls te krimpen, welk label te plakken en de 1:1 boorsjabloon, met per ding wat exact is en wat een schatting."
+
+[[step]]
+id = "why"
+title = "Paper that matches the hands"
+title_nl = "Papier dat bij de handen past"
+text = """
+KoperCAD assumes **wires are cut and holes are drilled by hand**. So the printed output is not a plot of the drawing: it is a cut list with tick boxes, a ferrule count to crimp, label sheets, and a 1:1 template to tape on the plate.
+Each of them says where a number is exact and where it is an estimate.
+"""
+text_nl = """
+KoperCAD gaat ervan uit dat **draden met de hand worden afgekort en gaten met de hand geboord**. De uitvoer is dus geen plot van de tekening: het is een knippelijst met vinkjes, een aantal adereindhulzen om te krimpen, labelvellen en een 1:1 sjabloon om op de plaat te plakken.
+Elk daarvan zegt waar een getal exact is en waar het een schatting is.
+"""
+
+[[step]]
+id = "open"
+title = "Open the bench output"
+title_nl = "Open de werkbankuitvoer"
+text = "One window holds the three bench sheets and, above them, a strip that says what is still missing before printing makes sense."
+text_nl = "Een venster bevat de drie werkbankvellen en erboven een strook die zegt wat er nog ontbreekt voordat printen zinvol is."
+how = [
+  "Open {ui:menu.Reports} and choose {ui:cmd.view.bench}.",
+  "Or press {key:view.command_palette}, type bench output and press Enter.",
+]
+how_nl = [
+  "Open {ui:menu.Reports} en kies {ui:cmd.view.bench}.",
+  "Of druk op {key:view.command_palette}, typ bench output en druk op Enter.",
+]
+point = { ui = "cmd.view.bench" }
+expect = { command = "view.bench" }
+solve = [ { command = "view.bench" } ]
+
+[[step]]
+id = "before"
+title = "Read what is missing first"
+title_nl = "Lees eerst wat ontbreekt"
+text = """
+“Before you print” lists the gaps that would put a wrong number on paper: wires with no cross-section, lengths that were never routed, no mounting plate. Each has a button that fixes it: **Number wires**, {ui:autopilot.window}, **Open Cabinet**.
+A wire with no size gets no ferrule and sits in one group, so fix the list before you trust the sheet.
+"""
+text_nl = """
+“Before you print” noemt de lacunes die een verkeerd getal op papier zouden zetten: draden zonder doorsnede, lengtes die nooit zijn gerouteerd, geen montageplaat. Elk heeft een knop die het herstelt: **Number wires**, {ui:autopilot.window}, **Open Cabinet**.
+Een draad zonder maat krijgt geen adereindhuls en staat in één groep, dus herstel de lijst voordat je het vel vertrouwt.
+"""
+point = { ui = "bench.window" }
+
+[[step]]
+id = "cut"
+title = "Read the cut list"
+title_nl = "Lees de knippelijst"
+text = """
+Wires are grouped by cross-section and colour, longest first, with a tick box, the strip lengths and the ferrule. The cut length is the **route plus an allowance at each end**; change the allowance under Cabinet > Routes.
+A length with a **~** is an estimate: that wire was never routed through the ducts.
+"""
+text_nl = """
+Draden staan gegroepeerd op doorsnede en kleur, langste eerst, met een vinkvak, de striplengtes en de adereindhuls. De afkortlengte is de **route plus een toeslag aan elk uiteinde**; de toeslag wijzig je onder Cabinet > Routes.
+Een lengte met een **~** is een schatting: die draad is nooit door de kanalen gerouteerd.
+"""
+point = { ui = "bench.tab.cut" }
+
+[[step]]
+id = "ferrules"
+title = "Count the ferrules"
+title_nl = "Tel de adereindhulzen"
+text = """
+The **Ferrules** sheet says how many of which size and colour to crimp, with twin ferrules where two wires share one clamp, and spares.
+The colour code is the DIN 46228-4 code as commonly sold. **Makers differ**, above 16 mm² in particular, so edit the table to match your stock; it is saved in the project.
+"""
+text_nl = """
+Het vel **Ferrules** zegt hoeveel van welke maat en kleur je moet krimpen, met dubbele hulzen waar twee draden één klem delen, en reserves.
+De kleurcode is de DIN 46228-4-code zoals die gangbaar wordt verkocht. **Fabrikanten verschillen**, vooral boven 16 mm², dus pas de tabel aan op je voorraad; ze wordt in het project bewaard.
+"""
+how = [
+  "Press the {ui:bench.tab.ferrules}.",
+  "Find the row for the size you use most and compare its colour with your box.",
+]
+how_nl = [
+  "Druk op de {ui:bench.tab.ferrules}.",
+  "Zoek de rij van de maat die je het meest gebruikt en vergelijk de kleur met je doos.",
+]
+point = { ui = "bench.tab.ferrules" }
+expect = { signal = "bench_ferrules" }
+solve = [ { ui_click = "bench.tab.ferrules" } ]
+
+[[step]]
+id = "labels"
+title = "Labels in the order you stick them"
+title_nl = "Labels in de volgorde waarin je ze plakt"
+text = "Wire flags, terminal, device and cable labels come out on A4 sticker sheets or as pieces of tape, at 1:1. Choose your stock under **Label settings**; the sheet is checked against the stock size before it is written."
+text_nl = "Draadvlaggetjes, klem-, apparaat- en kabellabels komen op A4-stickervellen of als stukjes tape, op 1:1. Kies je voorraad onder **Label settings**; het vel wordt gecontroleerd op de maat van de voorraad voordat het wordt geschreven."
+how = [
+  "Press the {ui:bench.tab.labels}.",
+  "Look at the label kinds and the sticker layout.",
+]
+how_nl = [
+  "Druk op de {ui:bench.tab.labels}.",
+  "Bekijk de labelsoorten en de stickerindeling.",
+]
+point = { ui = "bench.tab.labels" }
+expect = { signal = "bench_labels" }
+solve = [ { ui_click = "bench.tab.labels" } ]
+
+[[step]]
+id = "template"
+title = "The drilling template"
+title_nl = "De boorsjabloon"
+text = """
+The workshop pack adds the 1:1 template of every mounting plate (and any door or wall with holes), tiled on A4 or A3 with cross hairs, hole sizes and a **scale-check ruler**.
+Print it at **100 %**, measure the ruler with a tape, and only then tape it to the plate. A printer that "fits to page" makes every hole the wrong distance.
+"""
+text_nl = """
+Het **werkplaatspakket** voegt de 1:1 sjabloon toe van elke montageplaat (en elke deur of wand met gaten), verdeeld over A4 of A3 met kruisen, gatmaten en een **schaalcontrolelineaal**.
+Print op **100 %**, meet de lineaal met een meetlint en plak dan pas op de plaat. Een printer die "aanpassen aan pagina" doet zet elk gat op de verkeerde afstand.
+"""
+
+[[step]]
+id = "pack"
+title = "Write the whole pack"
+title_nl = "Schrijf het hele pakket"
+text = "One command writes a folder next to the project: the bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans), the templates and the labels. A part with nothing to print is skipped and the summary says so."
+text_nl = "Eén commando schrijft een map naast het project: het werkbankpakket (omslag, bouwvolgorde, knippelijst, adereindhulzen, een afvinkvel per schema, klemmenplannen), de sjablonen en de labels. Wat niets te printen heeft wordt overgeslagen en de samenvatting zegt dat."
+how = [
+  "Press {key:view.command_palette}, type workshop pack and choose {ui:cmd.export.workshop}.",
+  "Open the folder and print `0 Bench packet.pdf` first; its cover says which files to print at 100 %.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ workshop pack en kies {ui:cmd.export.workshop}.",
+  "Open de map en print eerst `0 Bench packet.pdf`; de omslag zegt welke bestanden op 100 % moeten.",
+]
+point = { ui = "cmd.export.workshop" }
+expect = { command = "export.workshop" }
+manual = "writes a folder next to the project; QA scenario 40-workshop-pack-files keeps the files"
+
+[[step]]
+id = "done"
+title = "Ready for the bench"
+title_nl = "Klaar voor de werkbank"
+text = "At the bench you can walk the same plan step by step on a tablet with Build mode. Next: Build mode."
+text_nl = "Aan de werkbank loop je hetzelfde plan stap voor stap door op een tablet met Build mode. Hierna: Build mode."

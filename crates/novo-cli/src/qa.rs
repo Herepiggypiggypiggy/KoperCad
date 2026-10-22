@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use clap::{Args, Subcommand};
 use serde_json::{Value, json};
 
-use crate::testuser::{Server, TestUser};
+use crate::testuser::{Server, TestUser, default_app};
 use crate::{Failure, exit};
 
 #[derive(Debug, Subcommand)]
@@ -222,6 +222,8 @@ const KNOWN_VERBS: &[&str] = &[
     "click_text",
     "click",
     "move",
+    "mouse_down",
+    "mouse_up",
     "drag",
     "scroll",
     "key",
@@ -999,6 +1001,11 @@ impl Ctx<'_> {
                 }
                 self.srv.tool(&words[0], &args).map(|_| ())
             }
+            // Press or release at a point and leave it, to take a picture mid-drag (`move` between).
+            "mouse_down" | "mouse_up" => {
+                let args = json!({"x": num(1, "x")?, "y": num(2, "y")?});
+                self.srv.tool(&words[0], &args).map(|_| ())
+            }
             "drag" => {
                 let args = json!({"from": [num(1, "x1")?, num(2, "y1")?],
                                   "to": [num(3, "x2")?, num(4, "y2")?]});
@@ -1355,6 +1362,11 @@ fn run_scenarios(r: Run, out: &mut dyn Write) -> Result<i32, Failure> {
     std::fs::create_dir_all(out_dir.join("logs"))
         .map_err(|e| Failure::new(exit::WRITE, e.to_string()))?;
 
+    let binary = binary_provenance(&r.app.clone().unwrap_or_else(default_app), &root);
+    if let Some(w) = binary["warning"].as_str() {
+        eprintln!("\n!!! WARNING: {w}\n!!! The pictures may not show the current code.\n");
+        writeln!(out, "WARNING: {w}").ok();
+    }
     let mut findings: Vec<Finding> = Vec::new();
     let mut runs: Vec<ScenarioRun> = Vec::new();
     let mut sweeps: Vec<Value> = Vec::new();
@@ -1519,6 +1531,7 @@ fn run_scenarios(r: Run, out: &mut dyn Write) -> Result<i32, Failure> {
         "generated": stamp,
         "platform": std::env::consts::OS,
         "app_info": info,
+        "binary": binary,
         "sizes": sizes,
         "summary": {
             "runs": runs.len(),
@@ -1710,6 +1723,130 @@ pub(crate) fn render_summary(v: &Value) -> String {
     s
 }
 
+/// Which program the run used and whether it can be older than the code it is
+/// meant to show: path, build time, git HEAD and a warning when stale.
+fn binary_provenance(app: &Path, root: &Path) -> Value {
+    let secs = |t: std::time::SystemTime| {
+        t.duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs() as i64)
+    };
+    let built = std::fs::metadata(app)
+        .and_then(|m| m.modified())
+        .ok()
+        .map(secs);
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(root)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
+    };
+    let head = git(&["rev-parse", "--short=10", "HEAD"]);
+    // Only what the build really uses counts: tests, examples and docs never rebuild the program.
+    let head_time = git(&[
+        "log",
+        "-1",
+        "--format=%ct",
+        "--",
+        ":(glob)crates/*/src/**",
+        ":(glob)crates/*/build.rs",
+        ":(glob)crates/*/Cargo.toml",
+        "assets/lessons",
+        "Cargo.lock",
+    ])
+    .and_then(|t| t.parse::<i64>().ok());
+    let mtime = |p: &Path| {
+        std::fs::metadata(p)
+            .and_then(|m| m.modified())
+            .ok()
+            .map(secs)
+    };
+    let mut newest = 0;
+    // cargo's own list of the files the program was built from (the `.d` file beside it).
+    match std::fs::read_to_string(app.with_extension("d")) {
+        Ok(d) => {
+            let deps = d.replace("\\\n", " ");
+            let deps = deps.split_once(": ").map_or("", |x| x.1);
+            for f in deps.split_whitespace() {
+                newest = newest.max(
+                    mtime(&root.join(f))
+                        .or_else(|| mtime(Path::new(f)))
+                        .unwrap_or(0),
+                );
+            }
+        }
+        Err(_) => {
+            for dir in ["crates", "assets/lessons"] {
+                newest = newest.max(newest_source(&root.join(dir)));
+            }
+        }
+    }
+    for f in ["Cargo.lock", "assets/lessons"] {
+        newest = newest.max(mtime(&root.join(f)).unwrap_or(0));
+    }
+    let warning = stale_reason(built, (newest > 0).then_some(newest), head_time);
+    json!({
+        "path": std::fs::canonicalize(app).unwrap_or_else(|_| app.to_path_buf()).display().to_string(),
+        "built": built.map(|t| format!("{t} (unix time)")),
+        "git_head": head,
+        "warning": warning,
+    })
+}
+
+/// Newest modification time (unix seconds) of a source file below `dir`.
+fn newest_source(dir: &Path) -> i64 {
+    let mut newest = 0;
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        let name = e.file_name();
+        if matches!(
+            name.to_str(),
+            Some("target" | ".git" | "tests" | "examples" | "benches")
+        ) || p.extension().is_some_and(|x| x == "md")
+        {
+            continue;
+        }
+        if p.is_dir() {
+            newest = newest.max(newest_source(&p));
+        } else if let Ok(t) = e.metadata().and_then(|m| m.modified()) {
+            newest = newest.max(
+                t.duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_secs() as i64),
+            );
+        }
+    }
+    newest
+}
+
+/// A warning text when the program is missing or older than the newest source
+/// file or the HEAD commit, else `None`. All times are unix seconds.
+fn stale_reason(
+    built: Option<i64>,
+    newest_source: Option<i64>,
+    head_commit: Option<i64>,
+) -> Option<String> {
+    let Some(built) = built else {
+        return Some("the program to test cannot be read, its build time is unknown".into());
+    };
+    if let Some(n) = newest_source.filter(|&n| n > built) {
+        return Some(format!(
+            "the program is older than the newest source file by {} s, it was built before the latest change",
+            n - built
+        ));
+    }
+    head_commit.filter(|&h| h > built).map(|h| {
+        format!(
+            "the program is older than the HEAD commit by {} s, rebuild before testing",
+            h - built
+        )
+    })
+}
+
 /// The audit report: summary, scenario table, then every finding with the
 /// steps that led to it, what was expected, what was seen and the picture.
 pub(crate) fn render_report(v: &Value) -> String {
@@ -1731,6 +1868,23 @@ pub(crate) fn render_report(v: &Value) -> String {
         sum["findings"],
         sum["blocking"]
     );
+    if let Some(b) = v["binary"].as_object() {
+        let _ = writeln!(
+            s,
+            "Program: `{}`, built {}, source at git {}.\n",
+            b.get("path").and_then(Value::as_str).unwrap_or("?"),
+            b.get("built").and_then(Value::as_str).unwrap_or("unknown"),
+            b.get("git_head")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown")
+        );
+        if let Some(w) = b.get("warning").and_then(Value::as_str) {
+            let _ = writeln!(
+                s,
+                "> **WARNING: {w}** The pictures may not show the current code.\n"
+            );
+        }
+    }
     if let Some(i) = v["app_info"].as_object() {
         let _ = writeln!(
             s,
@@ -2002,6 +2156,51 @@ mod tests {
         assert!(app_home_path("../x").is_err());
         assert!(app_home_path("Documents/../../x/y").is_err());
         assert!(app_home_path("/etc/passwd").is_err());
+    }
+
+    #[test]
+    fn a_program_older_than_the_code_is_flagged() {
+        assert!(stale_reason(Some(100), Some(90), Some(80)).is_none());
+        assert!(
+            stale_reason(Some(100), Some(160), Some(80))
+                .unwrap()
+                .contains("60 s")
+        );
+        assert!(
+            stale_reason(Some(100), None, Some(130))
+                .unwrap()
+                .contains("HEAD")
+        );
+        assert!(stale_reason(None, Some(1), None).is_some());
+    }
+
+    #[test]
+    fn files_that_do_not_rebuild_the_program_are_not_counted() {
+        let dir = std::env::temp_dir().join(format!("kopercad-newest-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("tests")).unwrap();
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(dir.join("tests/x.rs"), "").unwrap();
+        std::fs::write(dir.join("README.md"), "").unwrap();
+        assert_eq!(newest_source(&dir), 0);
+        std::fs::write(dir.join("src/lib.rs"), "").unwrap();
+        assert!(newest_source(&dir) > 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn report_header_names_the_program_and_warns() {
+        let v = json!({
+            "platform": "linux", "sizes": [], "app_info": null,
+            "binary": {"path": "/x/target/debug/kopercad", "built": "5 (unix time)",
+                       "git_head": "abc1234567", "warning": "the program is old"},
+            "summary": {"runs": 0, "passed": 0, "failed": 0, "findings": 0, "blocking": 0},
+            "scenarios": [], "findings": [],
+        });
+        let md = render_report(&v);
+        assert!(md.contains("/x/target/debug/kopercad"));
+        assert!(md.contains("abc1234567"));
+        assert!(md.contains("WARNING: the program is old"));
     }
 
     #[test]

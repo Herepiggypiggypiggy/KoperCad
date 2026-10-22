@@ -10,6 +10,7 @@
 pub mod brand;
 pub mod canvas;
 mod density;
+pub mod emc;
 pub mod fonts;
 pub mod heat;
 pub mod icons;

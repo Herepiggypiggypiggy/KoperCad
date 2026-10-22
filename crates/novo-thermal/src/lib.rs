@@ -16,10 +16,14 @@ pub mod bridge;
 pub mod cooling;
 mod flow;
 mod linalg;
+pub mod lump;
 pub mod model;
+pub mod placement;
+pub mod placement_project;
 mod report;
 pub mod result;
 mod setup;
+pub mod sweep;
 mod thermal;
 pub mod wires;
 

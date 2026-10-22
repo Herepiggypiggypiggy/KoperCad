@@ -204,9 +204,17 @@ pub(super) fn overlays(markers: &[Marker]) -> Vec<Overlay> {
             let base = fill.positions.len() as u32;
             fill.positions
                 .extend(m.wall.map(|p| p + m.outward * (LIFT_MM * 0.5)));
-            fill.colors.extend([m.colour(38); 4]);
+            fill.colors.extend([m.colour(WALL_TINT); 4]);
             fill.indices
                 .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+            // And its edge, so the wall reads as a wall even where it is far
+            // or transparent.
+            let edge = m.wall.map(|p| p + m.outward * (LIFT_MM * 0.5));
+            polyline(
+                &mut frame,
+                &[edge[0], edge[1], edge[2], edge[3], edge[0]],
+                m.colour(230),
+            );
         }
         let alpha = if m.selected { 150 } else { 85 };
         let c = m.corners(0.0);
@@ -256,6 +264,9 @@ pub(super) fn overlays(markers: &[Marker]) -> Vec<Overlay> {
     }
     out
 }
+
+/// How opaque the tint of a selected or hovered opening's wall is, 0 to 255.
+const WALL_TINT: u8 = 90;
 
 /// Horizontal louvres across the opening.
 fn slats(m: &Marker, out: &mut OverlayLines, colour: [u8; 4]) {
