@@ -230,6 +230,7 @@ const KNOWN_VERBS: &[&str] = &[
     "expect_not",
     "expect_scene",
     "expect_file",
+    "keep_file",
     "expect_enabled",
     "expect_disabled",
     "check_layout",
@@ -600,6 +601,8 @@ struct ScenarioRun {
     status: &'static str,
     steps: Vec<StepResult>,
     shots: Vec<String>,
+    /// Files an export wrote that the run kept (`keep_file`), relative to the output folder.
+    files: Vec<String>,
     findings: Vec<usize>,
     seconds: f64,
 }
@@ -615,6 +618,7 @@ struct Ctx<'a> {
     notes: Vec<String>,
     sweeps: &'a mut Vec<Value>,
     shots: Vec<String>,
+    files: Vec<String>,
     done: Vec<String>,
     findings: &'a mut Vec<Finding>,
     mine: Vec<usize>,
@@ -1108,6 +1112,38 @@ impl Ctx<'_> {
                 }
                 Ok(())
             }
+            "keep_file" => {
+                // Copies what an export wrote into `files/` of the output
+                // folder, so a reader of the report can open the real PDF.
+                let path = self.resolve(need(1, "path")?)?;
+                let found = match_paths(&path);
+                if found.is_empty() {
+                    self.add(
+                        "S2",
+                        "expect",
+                        format!("file `{}` missing, nothing to keep", path.display()),
+                        "the export wrote the file",
+                        "not found".into(),
+                    );
+                    return Ok(());
+                }
+                let dir = self.out.join("files");
+                std::fs::create_dir_all(&dir)
+                    .map_err(|e| format!("creating {}: {e}", dir.display()))?;
+                for f in found {
+                    let base = f
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned();
+                    let name = format!("{}-{}-{}", self.scenario.file, self.size, base)
+                        .replace([' ', '(', ')'], "_");
+                    std::fs::copy(&f, dir.join(&name))
+                        .map_err(|e| format!("keeping {}: {e}", f.display()))?;
+                    self.files.push(format!("files/{name}"));
+                }
+                Ok(())
+            }
             "check_layout" => {
                 let nodes = self.tree()?;
                 let win = self.window()?;
@@ -1277,6 +1313,7 @@ fn run_scenarios(r: Run, out: &mut dyn Write) -> Result<i32, Failure> {
                 notes: Vec::new(),
                 sweeps: &mut sweeps,
                 shots: Vec::new(),
+                files: Vec::new(),
                 done: Vec::new(),
                 findings: &mut findings,
                 mine: Vec::new(),
@@ -1403,6 +1440,7 @@ fn run_scenarios(r: Run, out: &mut dyn Write) -> Result<i32, Failure> {
                 status,
                 steps,
                 shots: ctx.shots.clone(),
+                files: ctx.files.clone(),
                 findings: ctx.mine.clone(),
                 seconds: started.elapsed().as_secs_f64(),
             });
@@ -1427,6 +1465,7 @@ fn run_scenarios(r: Run, out: &mut dyn Write) -> Result<i32, Failure> {
             "name": r.name, "title": r.title, "area": r.area, "size": r.size,
             "status": r.status, "seconds": (r.seconds * 10.0).round() / 10.0,
             "shots": r.shots,
+            "files": r.files,
             "findings": r.findings.iter().map(|i| format!("F-{:03}", i + 1)).collect::<Vec<_>>(),
             "steps": r.steps.iter().map(|s| json!({
                 "n": s.n, "step": s.text, "status": s.status, "ms": s.ms, "error": s.error, "note": s.note,
@@ -1486,41 +1525,42 @@ fn app_home_path(rest: &str) -> Result<PathBuf, String> {
         .join(rest))
 }
 
+/// The files a path names: the file itself, or every file matching it when a
+/// component has one `*` (`Motor*.pdf`, `*DXF/*.dxf`, `/tmp/run-*/out/*.pdf`).
+/// Empty when nothing matches.
+fn match_paths(path: &Path) -> Vec<PathBuf> {
+    let mut found = vec![PathBuf::new()];
+    for part in path.components() {
+        let text = part.as_os_str().to_string_lossy().into_owned();
+        let mut next = Vec::new();
+        for base in &found {
+            match text.split_once('*') {
+                None => next.push(base.join(part.as_os_str())),
+                Some((pre, post)) => {
+                    for e in std::fs::read_dir(base).into_iter().flatten().flatten() {
+                        let n = e.file_name().to_string_lossy().into_owned();
+                        if n.len() >= pre.len() + post.len()
+                            && n.starts_with(pre)
+                            && n.ends_with(post)
+                        {
+                            next.push(e.path());
+                        }
+                    }
+                }
+            }
+        }
+        found = next;
+    }
+    found.retain(|p| p.is_file());
+    found
+}
+
 /// Size of the file, or the biggest file when the last component has one `*`
 /// (`Motor*.pdf`); 0 when nothing matches.
 fn biggest_match(path: &Path) -> u64 {
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
-    let Some((pre, post)) = name.as_deref().and_then(|n| n.split_once('*')) else {
-        return std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-    };
-    let Some(dir) = path.parent() else { return 0 };
-    // One `*` may also stand in the folder name (`*DXF/*.dxf`).
-    let dir_name = dir.file_name().map(|n| n.to_string_lossy().into_owned());
-    if let (Some((dpre, dpost)), Some(grand)) = (
-        dir_name.as_deref().and_then(|n| n.split_once('*')),
-        dir.parent(),
-    ) {
-        return std::fs::read_dir(grand)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .filter(|e| {
-                let n = e.file_name().to_string_lossy().into_owned();
-                n.starts_with(dpre) && n.ends_with(dpost)
-            })
-            .map(|e| biggest_match(&e.path().join(path.file_name().unwrap_or_default())))
-            .max()
-            .unwrap_or(0);
-    }
-    std::fs::read_dir(dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|e| {
-            let n = e.file_name().to_string_lossy().into_owned();
-            n.len() >= pre.len() + post.len() && n.starts_with(pre) && n.ends_with(post)
-        })
-        .filter_map(|e| e.metadata().ok())
+    match_paths(path)
+        .iter()
+        .filter_map(|p| std::fs::metadata(p).ok())
         .map(|m| m.len())
         .max()
         .unwrap_or(0)
@@ -1660,6 +1700,22 @@ pub(crate) fn render_report(v: &Value) -> String {
             r["shots"].as_array().map_or(0, Vec::len),
         );
     }
+    let kept: Vec<String> = v["scenarios"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|r| r["files"].as_array().into_iter().flatten())
+        .filter_map(|f| f.as_str().map(|f| format!("- `{f}`")))
+        .collect();
+    if !kept.is_empty() {
+        let _ = writeln!(
+            s,
+            "\n## Files kept\n\nExports the run wrote, copied next to this report:\n"
+        );
+        for k in kept {
+            let _ = writeln!(s, "{k}");
+        }
+    }
     let measured: Vec<(String, String, String)> = v["scenarios"]
         .as_array()
         .into_iter()
@@ -1776,6 +1832,26 @@ pub(crate) fn render_report(v: &Value) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn match_paths_expands_a_star_in_any_folder_or_file_name() {
+        let dir = std::env::temp_dir().join(format!("qa-match-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("run-7/out dir")).unwrap();
+        std::fs::create_dir_all(dir.join("run-8/out dir")).unwrap();
+        std::fs::write(dir.join("run-7/out dir/a plate.pdf"), b"1234").unwrap();
+        std::fs::write(dir.join("run-8/out dir/b plate.pdf"), b"12").unwrap();
+        std::fs::write(dir.join("run-8/out dir/b.txt"), b"1").unwrap();
+        let both = match_paths(&dir.join("run-*/out dir/*plate.pdf"));
+        assert_eq!(both.len(), 2);
+        assert_eq!(biggest_match(&dir.join("run-*/out dir/*plate.pdf")), 4);
+        // One name, no star: only that file.
+        assert_eq!(match_paths(&dir.join("run-8/out dir/b.txt")).len(), 1);
+        // Nothing matches: empty, size 0.
+        assert!(match_paths(&dir.join("run-*/out dir/*.dxf")).is_empty());
+        assert_eq!(biggest_match(&dir.join("run-9/none.pdf")), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     use super::*;
 
     #[test]

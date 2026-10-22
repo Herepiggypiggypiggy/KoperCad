@@ -1,0 +1,24 @@
+@title Plate drawing with its drill table: PDF and DXF kept for inspection
+@area Cabinet
+# Ctrl+K "Export plate drawing" and "Export plate drawing as DXF" write the mounting plate and door sheets with the numbered drill table next to the project; keep_file copies them next to the report.
+open qa/fixtures/door-cutouts.novo
+wait 20
+key ctrl+k
+wait 4
+text Export plate drawing
+wait 6
+key Return
+wait 30
+expect_file "/tmp/kopercad-qa-open-*/*plate.pdf" 1500
+keep_file "/tmp/kopercad-qa-open-*/*plate.pdf"
+shot pdf
+key ctrl+k
+wait 4
+text Export plate drawing as DXF
+wait 6
+key Return
+wait 30
+expect_file "/tmp/kopercad-qa-open-*/*plate.dxf" 500
+keep_file "/tmp/kopercad-qa-open-*/*plate.dxf"
+keep_file "/tmp/kopercad-qa-open-*/*plate 2.dxf"
+shot dxf
