@@ -67,6 +67,7 @@ pub fn plan_insert(
     let all = project.pages_in_order();
     let Some(anchor) = after
         .and_then(|a| all.iter().find(|p| p.id == a))
+        .or_else(|| all.iter().rev().find(|p| p.kind == PageKind::Schematic))
         .or_else(|| all.last())
     else {
         return plain("1".into());
@@ -228,6 +229,19 @@ fn increment(name: &str) -> Option<String> {
     Some(format!("{head}{}", n + 1))
 }
 
+/// The last drawn page in reading order, or the last page of any kind when
+/// none is drawn. A new schematic page goes after this one, not after a
+/// generated page (a report sorts into its own section, so a name counted from
+/// it never fits among the drawn pages).
+pub fn last_schematic_page(project: &Project) -> Option<PageId> {
+    let all = project.pages_in_order();
+    all.iter()
+        .rev()
+        .find(|p| p.kind == PageKind::Schematic)
+        .or_else(|| all.last())
+        .map(|p| p.id)
+}
+
 /// Adds a schematic page after `after` (or at the end), with the same paper
 /// format and structure (`=A1+CAB1`) as that page, re-lettering a run of
 /// lettered pages to make room when needed ([`plan_insert`]). Returns the
@@ -238,7 +252,7 @@ pub fn add_page(tx: &mut Tx<'_>, after: Option<PageId>) -> Result<(PageId, Optio
         tx.update::<Page>(page, |p| p.name = name)?;
     }
     let template = after
-        .or_else(|| tx.project().pages_in_order().last().map(|p| p.id))
+        .or_else(|| last_schematic_page(tx.project()))
         .and_then(|a| tx.project().page(a))
         .map(|p| (p.format, p.structure.clone()));
     let page = tx.add_page(plan.name)?;

@@ -448,3 +448,37 @@ fn reopening_a_saved_project_gets_report_pages_without_an_undo_step() {
         "undo does not remove them"
     );
 }
+
+#[test]
+fn an_io_list_imported_next_to_the_report_pages_gets_the_next_free_page_numbers() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::OpenExample);
+    d.frame();
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../novo-plc/tests/fixtures/io-list-demo.csv");
+    assert!(d.app.plc_import_list_from(&fixture));
+    let review = d.app.wb.plc_list.take().expect("the review is open");
+    d.app.apply_plc_list(&review);
+    d.frame();
+    let names: Vec<String> = d
+        .doc()
+        .project()
+        .pages_in_order()
+        .iter()
+        .map(|p| p.name.clone())
+        .collect();
+    assert!(
+        names.iter().all(|n| !n.contains("new")),
+        "page names after the import: {names:?}"
+    );
+    let mut sorted = names.clone();
+    sorted.sort();
+    sorted.dedup();
+    assert_eq!(sorted.len(), names.len(), "{names:?}");
+    // The example's drawn pages are 1 and 2: the three cards follow as 3, 4, 5.
+    for n in ["3", "4", "5"] {
+        assert!(names.iter().any(|p| p == n), "{n} in {names:?}");
+    }
+}

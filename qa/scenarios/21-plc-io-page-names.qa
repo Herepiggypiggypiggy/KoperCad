@@ -1,0 +1,21 @@
+@title I/O list import: the card pages get the next page numbers (no "51 new 1")
+@area Fixtures
+@sizes 1366x768 1920x1080
+# The example already has report pages; the imported PLC card pages must be numbered after the drawn pages.
+click_text "Open example"
+wait 20
+answer_dialog crates/novo-plc/tests/fixtures/io-list-demo.csv
+key ctrl+k
+wait 4
+text import io list
+wait 6
+key Enter
+wait 20
+expect "Import I/O list"
+key Enter
+wait 30
+try click_text Pages
+wait 10
+expect_not "new 1"
+shot io-import-pages
+check_layout
