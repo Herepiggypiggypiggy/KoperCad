@@ -94,6 +94,8 @@ pub(crate) struct CommissioningMode {
     /// The wire figures of the walk (ends, ferrules, length), kept until the
     /// project changes: computing them routes every wire.
     plan: Option<(u64, Rc<WirePlan>)>,
+    /// The machine copy the plan was made for (`NovoApp::machine_generation`).
+    generation: u64,
     /// What "Next open" and Space visit: everything, or the wires only.
     pub(super) scope: WalkScope,
     /// The order the wires are walked in.
@@ -138,6 +140,7 @@ impl CommissioningMode {
             signing: None,
             viewer: Default::default(),
             plan: None,
+            generation: 0,
             scope: WalkScope::Wires,
             order: WalkOrder::Number,
             fail_pending: None,
@@ -151,7 +154,8 @@ impl CommissioningMode {
 
     /// The walk's wire figures for the project as it is now.
     fn plan(&mut self, project: &Project) -> Rc<WirePlan> {
-        let revision = project.revision();
+        // The machine copy has revision numbers of its own.
+        let revision = project.revision() ^ (self.generation << 40);
         match &self.plan {
             Some((r, plan)) if *r == revision => Rc::clone(plan),
             _ => {
@@ -510,11 +514,13 @@ impl NovoApp {
         if self.outline_mode != OutlineMode::Commissioning {
             return Vec::new();
         }
+        // What the machine's option choice leaves out is not walked.
+        let choice = self.machine_variant();
         let (Some(mode), Some(doc)) = (self.wb.commissioning.as_ref(), self.backend.document())
         else {
             return Vec::new();
         };
-        let project = doc.project();
+        let project: &Project = choice.as_deref().unwrap_or(doc.project());
         let mut marks = Vec::new();
         let infos = targets(project);
         for info in infos.iter().filter(|i| i.pages.contains(&page)) {
@@ -560,13 +566,16 @@ impl NovoApp {
         let mut redline_action: Option<RedlineAction> = None;
         let tablet = self.commissioning_tablet();
         let photos_dir = self.field_photos_dir();
+        let choice = self.machine_variant();
+        let generation = self.machine_generation();
         {
             let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
             else {
                 ui.weak("Open a project to commission it");
                 return false;
             };
-            let project = doc.project();
+            let project: &Project = choice.as_deref().unwrap_or(doc.project());
+            mode.generation = generation;
             mode.large = self.settings.large_buttons || tablet;
             mode.viewer.dir = photos_dir;
             touch_density(ui, mode.large);
@@ -819,12 +828,15 @@ impl NovoApp {
         self.load_commissioning();
         let current = self.current_page;
         let mut go = None;
+        let choice = self.machine_variant();
+        let generation = self.machine_generation();
         let finished = {
             let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
             else {
                 return false;
             };
-            let finished = mode.tick(doc.project(), current, &mut go);
+            mode.generation = generation;
+            let finished = mode.tick(choice.as_deref().unwrap_or(doc.project()), current, &mut go);
             mode.finished = finished;
             finished
         };
@@ -858,9 +870,11 @@ impl NovoApp {
         let Some(mode) = self.wb.commissioning.as_ref() else {
             return;
         };
+        let choice = self.machine_variant();
         let Some(project) = self.backend.document().map(|d| d.project()) else {
             return;
         };
+        let project: &Project = choice.as_deref().unwrap_or(project);
         let input = novo_commissioning::to_report_input(
             project,
             &mode.store,
@@ -868,7 +882,10 @@ impl NovoApp {
         );
         let report = novo_reports::commissioning::punch_list_report(&input);
         let options = ReportPdfOptions {
-            title: format!("{name}, punch list"),
+            title: format!(
+                "{}, punch list",
+                self.machine_title().unwrap_or_else(|| name.clone())
+            ),
             footer_right: now().chars().take(10).collect(),
             language: self.report_translator(),
             ..ReportPdfOptions::default()
@@ -922,7 +939,11 @@ impl NovoApp {
         let name = self.project_name()?;
         self.load_commissioning();
         let mode = self.wb.commissioning.as_ref()?;
-        let project = self.backend.document()?.project();
+        let choice = self.machine_variant();
+        let project: &Project = match choice.as_deref() {
+            Some(p) => p,
+            None => self.backend.document()?.project(),
+        };
         let input = novo_commissioning::to_report_input(
             project,
             &mode.store,
@@ -930,7 +951,10 @@ impl NovoApp {
         );
         let report = novo_reports::commissioning::commissioning_report(&input);
         let options = ReportPdfOptions {
-            title: format!("{name}, commissioning"),
+            title: format!(
+                "{}, commissioning",
+                self.machine_title().unwrap_or_else(|| name.clone())
+            ),
             footer_right: now().chars().take(10).collect(),
             language: self.report_translator(),
             ..ReportPdfOptions::default()

@@ -570,3 +570,126 @@ fn a_project_without_options_prints_no_option_column() {
     let output = d.app.report_output("devices").unwrap();
     assert!(output.sections.iter().all(|s| s.column("option").is_none()));
 }
+
+fn device_of_symbol(d: &Drive, s: SymbolId) -> novo_core::DeviceId {
+    let p = d.app.backend.document().unwrap().project();
+    match &p.symbol(s).unwrap().role {
+        SymbolRole::Device { device, .. } => *device,
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn the_plate_veils_the_spot_of_a_left_out_device_and_keeps_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let ids = machine(&mut d);
+    let k9 = device_of_symbol(&d, ids.k9);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Tie K9", |tx| {
+            options::set_condition(tx, k9, Some("opt.fan"))
+        })
+        .unwrap();
+    d.frame();
+    let mut layout = novo_layout::state::CabinetLayout::new(novo_layout::Plate {
+        width: 600.0,
+        height: 800.0,
+        margin: 10.0,
+    });
+    let on_plate = |id: u64, x: f64| novo_layout::Placement {
+        id,
+        x,
+        y: 100.0,
+        rotated: false,
+        size: novo_layout::Size {
+            width: 40.0,
+            height: 60.0,
+            guessed: false,
+        },
+        clearance: None,
+        margins: Default::default(),
+        rail: None,
+    };
+    layout.placements = vec![on_plate(k9.raw(), 50.0), on_plate(1, 200.0)];
+    let project = d.app.backend.document().unwrap().project();
+    let veiled = super::machine::left_out_boxes(project, &d.app.machine_inactive(), &layout);
+    assert_eq!(veiled.len(), 1, "{veiled:?}");
+    assert_eq!(veiled[0].footprint.0, 50.0);
+    assert_eq!(veiled[0].text, "Left out: only with Fan");
+    // With the fan on nothing is veiled.
+    d.app.run_command(&ctx, "project.option", Some("fan on"));
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    assert!(super::machine::left_out_boxes(project, &d.app.machine_inactive(), &layout).is_empty());
+}
+
+#[test]
+fn the_commissioning_report_lists_only_what_the_choice_includes() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    machine(&mut d);
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    let write = |d: &mut Drive, name: &str| {
+        let path = dir.path().join(name);
+        d.app
+            .write_commissioning_report(novo_pdf::ReportFileFormat::Csv(Default::default()), &path)
+            .expect("written");
+        std::fs::read_to_string(path).unwrap()
+    };
+    let off = write(&mut d, "off.csv");
+    d.app
+        .run_command(&ctx, "project.option", Some("conveyor on"));
+    d.frame();
+    let on = write(&mut d, "on.csv");
+    assert!(
+        !off.contains("-M1"),
+        "the conveyor motor is left out: {off}"
+    );
+    assert!(on.contains("-M1"), "{on}");
+    assert!(
+        on.contains("[Conveyor"),
+        "the choice names the report: {on}"
+    );
+}
+
+#[test]
+fn the_ghost_switch_hides_the_veil_and_the_header_names_what_is_left_out() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let ids = machine(&mut d);
+    let conveyor = page_of(&d, "2");
+    d.app.show_page(conveyor);
+    d.frame();
+    let marks = |d: &mut Drive| {
+        d.app.update_marks();
+        d.app
+            .canvas
+            .schematic()
+            .map(|v| {
+                v.canvas
+                    .marks
+                    .list
+                    .iter()
+                    .filter(|m| m.kind == novo_canvas::MarkKind::LeftOut)
+                    .count()
+            })
+            .unwrap_or(0)
+    };
+    assert_eq!(marks(&mut d), 3);
+    d.app.run_command(&ctx, "view.left_out", None);
+    assert_eq!(marks(&mut d), 0, "the switch hides the veil");
+    d.app.run_command(&ctx, "view.left_out", None);
+    assert_eq!(marks(&mut d), 3);
+    let names = d.app.left_out_names();
+    assert!(names.contains("Page 2 Conveyor"), "{names}");
+    assert!(names.contains("-K2") && names.contains("-M1"), "{names}");
+    assert!(!names.contains("-K1"), "{names}");
+    let _ = ids;
+}

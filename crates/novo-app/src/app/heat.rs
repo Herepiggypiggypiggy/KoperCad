@@ -111,6 +111,10 @@ pub(super) struct HeatState {
     /// Follows the cabinet while a result is shown: out of date marking and
     /// the automatic re-solve.
     pub(super) live: super::heat_live::Live,
+    /// Which machine copy the project given to `sync_live` is
+    /// (`NovoApp::machine_generation`; 0 for the working project): a copy has
+    /// revision numbers of its own.
+    pub(super) machine: u64,
     /// Counts the snapshots, so each one gets its own cache key.
     snap_seq: u64,
     #[cfg(test)]
@@ -192,6 +196,7 @@ impl HeatState {
             pending: None,
             runs: 0,
             live: super::heat_live::Live::default(),
+            machine: 0,
             snap_seq: 0,
             #[cfg(test)]
             test_solver: None,

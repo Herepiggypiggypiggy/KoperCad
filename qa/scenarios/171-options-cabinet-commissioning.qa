@@ -1,0 +1,31 @@
+@title Machine options: Cabinet and Commissioning follow the choice
+@area Options
+# The fixture's Cooling fan (-Q9, -M9) is only with the Cooling fan option. With the fan off the Cabinet plate keeps the
+# fan's spot but veils it (hover says why) and the heat leaves it out; Commissioning does not list its checks.
+open qa/fixtures/machine-options.novo
+wait 20
+click_text Cabinet #1
+wait 20
+shot cabinet-fan-off
+check_layout
+move 642 370
+wait 4
+shot cabinet-fan-off-hover
+click_text Commissioning #1
+wait 20
+expect "0 / 76"
+shot commissioning-fan-off
+check_layout
+key ctrl+k
+wait 3
+text option fan on
+wait 4
+key Enter
+wait 10
+expect "0 / 86"
+shot commissioning-fan-on
+check_layout
+click_text Cabinet #1
+wait 20
+shot cabinet-fan-on
+check_layout

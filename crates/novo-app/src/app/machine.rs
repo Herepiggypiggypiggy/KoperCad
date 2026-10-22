@@ -14,6 +14,7 @@
 //! ([`NovoApp::machine_info`]); `option <name> [value]` switches it from the
 //! keyboard and `tie <option> [value]` ties the selection to it.
 
+use eframe::egui;
 use std::cell::{Cell as StdCell, RefCell};
 use std::ops::Deref;
 use std::rc::Rc;
@@ -160,6 +161,52 @@ impl NovoApp {
         };
         *cache = Some(made);
         true
+    }
+
+    /// The pages and devices the choice leaves out, by name, one per line
+    /// (at most 12 lines), for the hover on the count in the Reports header.
+    pub(crate) fn left_out_names(&self) -> String {
+        let inactive = self.machine_inactive();
+        let Some(doc) = self.backend.document() else {
+            return String::new();
+        };
+        let project = doc.project();
+        let mut lines: Vec<String> = Vec::new();
+        for id in inactive.iter() {
+            match id {
+                AnyId::Page(p) => {
+                    if let Some(p) = project.page(*p) {
+                        lines.push(format!("Page {} {}", p.name, p.title).trim_end().to_owned());
+                    }
+                }
+                AnyId::Device(d) => {
+                    if let Some(d) = project.device(*d) {
+                        lines.push(format!("{} {}", d.tag, d.description).trim_end().to_owned());
+                    }
+                }
+                _ => {}
+            }
+        }
+        let more = lines.len().saturating_sub(12);
+        lines.truncate(12);
+        if more > 0 {
+            lines.push(format!("and {more} more"));
+        }
+        lines.join("\n")
+    }
+
+    /// What the choice leaves out, spread (empty without options).
+    pub(super) fn machine_inactive(&self) -> Rc<std::collections::BTreeSet<AnyId>> {
+        if !self.machine_refresh() {
+            return Rc::default();
+        }
+        self.wb
+            .machine
+            .cache
+            .borrow()
+            .as_ref()
+            .map(|c| Rc::clone(&c.inactive))
+            .unwrap_or_default()
     }
 
     /// The marks that ghost what the choice leaves out on `page`: every
@@ -489,6 +536,78 @@ impl NovoApp {
         parts.extend(pages);
         parts.join(", ")
     }
+}
+
+/// The placements on the plate of devices the choice leaves out, outlined by
+/// the Cabinet with what they need on hover. The plate keeps their spot.
+pub(super) fn left_out_boxes(
+    project: &Project,
+    inactive: &std::collections::BTreeSet<AnyId>,
+    layout: &novo_layout::state::CabinetLayout,
+) -> Vec<super::commissioning_cabinet::CabinetMark> {
+    if inactive.is_empty() {
+        return Vec::new();
+    }
+    layout
+        .placements
+        .iter()
+        .filter_map(|p| {
+            let id = AnyId::Device(novo_core::DeviceId::from(p.id));
+            if !inactive.contains(&id) {
+                return None;
+            }
+            let f = p.footprint();
+            let text = match needs_of(project, id) {
+                Some(c) => format!("Left out: only with {c}"),
+                None => "Left out by the option choice".to_owned(),
+            };
+            Some(super::commissioning_cabinet::CabinetMark {
+                footprint: (f.x, f.y, f.w, f.h),
+                text,
+            })
+        })
+        .collect()
+}
+
+/// Paints the veils over the plate (`rect` is the canvas widget's screen
+/// rectangle) and returns the text of the one under `pointer`: the sheet's
+/// colour over the device and a dashed outline, so it reads as present but
+/// not part of this machine (and not as a selection).
+pub(super) fn draw_left_out(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    view: &novo_canvas::viewport::Viewport,
+    marks: &[super::commissioning_cabinet::CabinetMark],
+    pointer: Option<egui::Pos2>,
+) -> Option<String> {
+    let palette = crate::theme::ui_palette();
+    let to_screen = |x: f64, y: f64| {
+        let s = view.world_to_screen(novo_canvas::vec2(x as f32, y as f32));
+        egui::pos2(rect.min.x + s.x, rect.min.y + s.y)
+    };
+    let mut hovered = None;
+    for mark in marks {
+        let (x, y, w, h) = mark.footprint;
+        let area = egui::Rect::from_two_pos(to_screen(x, y), to_screen(x + w, y + h)).expand(3.0);
+        painter.rect_filled(area, 2.0, palette.sunken.gamma_multiply(0.7));
+        let corners = [
+            area.left_top(),
+            area.right_top(),
+            area.right_bottom(),
+            area.left_bottom(),
+            area.left_top(),
+        ];
+        painter.extend(egui::Shape::dashed_line(
+            &corners,
+            egui::Stroke::new(1.5, palette.text_tertiary),
+            5.0,
+            3.0,
+        ));
+        if pointer.is_some_and(|p| area.contains(p)) {
+            hovered = Some(mark.text.clone());
+        }
+    }
+    hovered
 }
 
 /// Reports whose rows say which option they need.
