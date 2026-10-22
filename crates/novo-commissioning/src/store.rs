@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::build::{BuildTick, StepKey};
+use crate::build::{BuildClaim, BuildTick, StepKey};
 use crate::check::{CheckKind, CheckRecord, CheckState, Target};
 use crate::punch::{Photo, PunchItem, PunchState, Severity, Signature};
 use crate::redline::{Redline, RedlineState};
@@ -32,6 +32,7 @@ pub struct CommissioningStore {
     next_punch: u64,
     redlines: BTreeMap<u64, Redline>,
     build: BTreeMap<StepKey, BuildTick>,
+    claims: BTreeMap<StepKey, BuildClaim>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -44,6 +45,8 @@ struct StoreData {
     redlines: Vec<Redline>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     build: Vec<BuildTick>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    claims: Vec<BuildClaim>,
 }
 
 impl From<StoreData> for CommissioningStore {
@@ -59,6 +62,7 @@ impl From<StoreData> for CommissioningStore {
             next_punch,
             redlines: data.redlines.into_iter().map(|r| (r.id, r)).collect(),
             build: data.build.into_iter().map(|t| (t.key, t)).collect(),
+            claims: data.claims.into_iter().map(|c| (c.key, c)).collect(),
         }
     }
 }
@@ -70,6 +74,7 @@ impl From<CommissioningStore> for StoreData {
             punch: store.punch.into_values().collect(),
             redlines: store.redlines.into_values().collect(),
             build: store.build.into_values().collect(),
+            claims: store.claims.into_values().collect(),
         }
     }
 }
@@ -97,6 +102,7 @@ impl CommissioningStore {
             && self.punch.is_empty()
             && self.redlines.is_empty()
             && self.build.is_empty()
+            && self.claims.is_empty()
     }
 
     /// The state of one check; `Pending` when nothing was decided.
@@ -191,6 +197,25 @@ impl CommissioningStore {
         self.build.insert(tick.key, tick);
     }
 
+    /// The claim record of a build step: who said they take it, or the
+    /// released record that carries a release through a merge.
+    pub fn build_claim_record(&self, key: StepKey) -> Option<&BuildClaim> {
+        self.claims.get(&key)
+    }
+
+    /// Who has claimed a build step now; `None` when nobody or released.
+    pub fn build_claim(&self, key: StepKey) -> Option<&BuildClaim> {
+        self.claims.get(&key).filter(|c| !c.by.is_empty())
+    }
+
+    pub fn build_claims(&self) -> impl Iterator<Item = &BuildClaim> {
+        self.claims.values()
+    }
+
+    pub fn put_claim(&mut self, claim: BuildClaim) {
+        self.claims.insert(claim.key, claim);
+    }
+
     /// Takes a build tick back.
     pub fn clear_build(&mut self, key: StepKey) {
         self.build.remove(&key);
@@ -199,6 +224,7 @@ impl CommissioningStore {
     /// Drops ticks of steps the plan no longer has (a device was deleted).
     pub fn retain_build(&mut self, keep: &std::collections::BTreeSet<StepKey>) {
         self.build.retain(|k, _| keep.contains(k));
+        self.claims.retain(|k, _| keep.contains(k));
     }
 
     /// Forgets a decision, back to `Pending`.

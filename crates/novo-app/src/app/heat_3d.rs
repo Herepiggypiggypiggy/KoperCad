@@ -82,6 +82,8 @@ impl Place {
 
 /// Opacity of the slice and of the shell.
 const SLICE_ALPHA: u8 = 190;
+/// The slice's opacity while the airflow lines are on.
+const SLICE_ALPHA_WITH_LINES: u8 = 105;
 const SHELL_ALPHA: u8 = 110;
 /// Most cells across a slice.
 const SLICE_CELLS: f64 = 120.0;
@@ -171,7 +173,18 @@ pub(crate) fn overlays(
         out.push(Overlay::Mesh(m));
     }
     if settings.slice
-        && let Some(m) = slice_mesh(snap, place, range, settings.axis, settings.slice_at)
+        && let Some(m) = slice_mesh_with(
+            snap,
+            place,
+            range,
+            settings.axis,
+            settings.slice_at,
+            if settings.lines {
+                SLICE_ALPHA_WITH_LINES
+            } else {
+                SLICE_ALPHA
+            },
+        )
     {
         out.push(Overlay::Mesh(m));
     }
@@ -232,12 +245,26 @@ pub(crate) fn slice_offset(snap: &CfdSnapshot, axis: Axis, at: f32) -> f64 {
 
 /// The plane at `at` (0 to 1 along `axis`) as coloured quads; cells inside
 /// solids are left out so devices stay visible.
+#[cfg(test)]
 pub(crate) fn slice_mesh(
     snap: &CfdSnapshot,
     place: Place,
     range: Range,
     axis: Axis,
     at: f32,
+) -> Option<OverlayMesh> {
+    slice_mesh_with(snap, place, range, axis, at, SLICE_ALPHA)
+}
+
+/// [`slice_mesh`] with its own opacity: lighter while the airflow lines are
+/// on, so the devices and the lines show through it.
+pub(crate) fn slice_mesh_with(
+    snap: &CfdSnapshot,
+    place: Place,
+    range: Range,
+    axis: Axis,
+    at: f32,
+    alpha: u8,
 ) -> Option<OverlayMesh> {
     let offset = slice_offset(snap, axis, at);
     let window = cfd::whole_window(snap, axis);
@@ -268,7 +295,7 @@ pub(crate) fn slice_mesh(
                 continue;
             }
             let rgb = heat::ramp(range.t(f64::from(s.temperature.values[r * g.cols + c])));
-            let colour = [rgb[0], rgb[1], rgb[2], SLICE_ALPHA];
+            let colour = [rgb[0], rgb[1], rgb[2], alpha];
             let (u0, v0) = (
                 window.u0 + c as f64 * g.cell_w,
                 window.v0 + r as f64 * g.cell_h,
@@ -337,7 +364,7 @@ pub(crate) fn flow(snap: &CfdSnapshot, place: Place) -> Flow {
 /// As [`flow`], with more seeds in the solver frame, mm: the air coming in at
 /// the openings, so it can be followed from the vent through the cabinet.
 pub(crate) fn flow_from(snap: &CfdSnapshot, place: Place, extra: &[[f64; 3]]) -> Flow {
-    const SEEDS: usize = 6;
+    const SEEDS: usize = 5;
     if !snap.is_consistent() {
         return Flow::default();
     }
@@ -380,15 +407,16 @@ pub(crate) fn flow_from(snap: &CfdSnapshot, place: Place, extra: &[[f64; 3]]) ->
 }
 
 /// The colour of air at `t` (0 to 1) of the fastest air: still air is a
-/// medium blue, the fastest is near white, through cyan and mint. It stays
+/// medium blue, the fastest a saturated lime, through cyan and green (no white
+/// end: it vanished on the light look). It stays
 /// clear of the temperature ramp (purple to yellow) so the two never read as
 /// one scale, and every step is readable on the dark and on the light view.
 pub(crate) fn speed_rgb(t: f32) -> [u8; 3] {
     const STOPS: [(f32, [f32; 3]); 4] = [
         (0.0, [60.0, 120.0, 255.0]),
-        (0.35, [30.0, 205.0, 240.0]),
-        (0.7, [120.0, 240.0, 160.0]),
-        (1.0, [250.0, 255.0, 235.0]),
+        (0.4, [20.0, 200.0, 230.0]),
+        (0.75, [60.0, 215.0, 110.0]),
+        (1.0, [205.0, 240.0, 40.0]),
     ];
     let t = if t.is_nan() { 0.0 } else { t.clamp(0.0, 1.0) };
     let k = STOPS
@@ -412,7 +440,7 @@ const ARROW_MIN_SHARE: f32 = 0.04;
 pub(crate) fn stream_lines(flow: &Flow) -> OverlayLines {
     let top = flow.top.max(1e-9);
     let mut out = OverlayLines {
-        width_px: 2.6,
+        width_px: 2.3,
         order: 2,
         ..Default::default()
     };
