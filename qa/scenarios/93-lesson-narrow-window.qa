@@ -1,0 +1,25 @@
+@title Longest lesson step in a narrow window
+@area Learn
+@sizes 1024x600
+key ctrl+k
+wait 4
+text Does the protection protect?
+wait 6
+click_text "Does the protection protect?"
+wait 40
+try click_text "Next"
+wait 30
+try click_text "Skip step"
+wait 30
+try click_text "Next"
+wait 30
+try click_text "Next"
+wait 30
+try click_text "Skip step"
+wait 30
+try click_text "Skip step"
+wait 30
+try click_text "Skip step"
+wait 30
+shot longest-step-narrow
+check_layout

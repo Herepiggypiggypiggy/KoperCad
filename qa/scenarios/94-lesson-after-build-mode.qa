@@ -1,0 +1,34 @@
+@title A lesson started after one that left Build mode open
+@area Learn
+key ctrl+k
+wait 4
+text Build the cabinet one step at a time
+wait 6
+click_text "Build the cabinet one step at a time"
+wait 40
+try click_text "Next"
+wait 30
+try click_text "Skip step"
+wait 30
+try click_text "Next"
+wait 30
+try click_text "Skip step"
+wait 30
+try click_text "Next"
+wait 30
+try click_text "Next"
+wait 30
+try click_text "Next"
+wait 30
+try click_text "Next"
+wait 30
+shot build-mode-left-open
+key ctrl+k
+wait 4
+text Your project file
+wait 6
+click_text "Your project file, and what keeps it safe"
+wait 40
+shot next-lesson
+check_layout
+expect "Your project file"

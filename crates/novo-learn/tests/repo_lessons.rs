@@ -32,7 +32,8 @@ fn tracks_and_glossary_parse() {
             "terminals",
             "outputs",
             "cabinet",
-            "data"
+            "data",
+            "machines"
         ]
     );
     assert!(catalog.glossary.contains_key("pin"));

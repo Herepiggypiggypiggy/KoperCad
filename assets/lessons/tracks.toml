@@ -50,5 +50,5 @@ summary_nl = "Onderdelen zoeken en importeren, honderden apparaten in Excel bewe
 id = "machines"
 title = "Machines"
 title_nl = "Machines"
-summary = "Real machine circuits, one step harder each time: reversing, star-delta, safety, a crane hoist, a PLC, then a whole machine. Each one is a circuit you trace, break and repair."
-summary_nl = "Echte machineschema's, steeds een stap moeilijker: omkeren, ster-driehoek, veiligheid, een kraanlier, een PLC en dan een hele machine. Elk is een schema dat je volgt, stuk maakt en repareert."
+summary = "Real machine circuits, one step harder each time: reversing, star-delta, safety, a crane hoist, then a whole machine. Each one is a circuit you trace, break and repair."
+summary_nl = "Echte machineschema's, steeds een stap moeilijker: omkeren, ster-driehoek, veiligheid, een kraanlier en dan een hele machine. Elk is een schema dat je volgt, stuk maakt en repareert."

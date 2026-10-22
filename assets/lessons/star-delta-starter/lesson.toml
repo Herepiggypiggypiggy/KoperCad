@@ -15,7 +15,7 @@ title_nl = "Een ster-driehoekstarter die in ster blijft"
 summary = "Three contactors and a timer start a large motor gently: star first, then delta. Trace the sequence, find the missing path to the delta contactor and repair it."
 summary_nl = "Drie contactoren en een timer starten een grote motor rustig: eerst ster, dan driehoek. Volg de volgorde, vind het ontbrekende pad naar de driehoekcontactor en herstel het."
 explain = "After the star time, the timer **-K4** opens its first contact (15-16), which drops the star contactor **-K3**, and closes its second (17-18). That closing contact feeds the delta contactor **-K2** through the normally closed contact of **-K3**. The wire from **-K4** pin 18 to **-K3** pin 21 was missing, so **-K2** never got a supply and the motor stayed in star: one third of the power and torque, and a motor that overheats on load."
-explain_nl = "Na de sterttijd opent de timer **-K4** zijn eerste contact (15-16), waardoor de stercontactor **-K3** afvalt, en sluit zijn tweede (17-18). Dat sluitcontact voedt de driehoekcontactor **-K2** via het verbreekcontact van **-K3**. De draad van **-K4** pen 18 naar **-K3** pen 21 ontbrak, dus **-K2** kreeg nooit spanning en de motor bleef in ster: een derde van het vermogen en koppel, en een motor die onder belasting oververhit raakt."
+explain_nl = "Na de tijd in ster opent de timer **-K4** zijn eerste contact (15-16), waardoor de stercontactor **-K3** afvalt, en sluit zijn tweede (17-18). Dat sluitcontact voedt de driehoekcontactor **-K2** via het verbreekcontact van **-K3**. De draad van **-K4** pen 18 naar **-K3** pen 21 ontbrak, dus **-K2** kreeg nooit spanning en de motor bleef in ster: een derde van het vermogen en koppel, en een motor die onder belasting oververhit raakt."
 track = "machines"
 order = 20
 level = "advanced"
@@ -62,7 +62,7 @@ text = """
 You press start. The line contactor **-K1** pulls in and the timer **-K4** starts counting. Which contactor joins **-K1** during the star time?
 """
 text_nl = """
-Je drukt op start. De lijncontactor **-K1** trekt aan en de timer **-K4** begint te tellen. Welke contactor werkt samen met **-K1** tijdens de sterttijd?
+Je drukt op start. De lijncontactor **-K1** trekt aan en de timer **-K4** begint te tellen. Welke contactor werkt samen met **-K1** tijdens de tijd in ster?
 """
 expect = { predicted = true }
 pause = true
@@ -77,12 +77,12 @@ why_nl = "Het eerste contact van de timer (15-16) is gesloten zolang de timer te
 [[step]]
 id = "predict-delta"
 title = "Predict: after the star time"
-title_nl = "Voorspel: na de sterttijd"
+title_nl = "Voorspel: na de tijd in ster"
 text = """
 The star time (8 s in this drawing) has passed. What must happen so that the motor never has star and delta closed at once?
 """
 text_nl = """
-De sterttijd (8 s in deze tekening) is voorbij. Wat moet er gebeuren zodat ster en driehoek nooit tegelijk gesloten zijn?
+De tijd in ster (8 s in deze tekening) is voorbij. Wat moet er gebeuren zodat ster en driehoek nooit tegelijk gesloten zijn?
 """
 expect = { predicted = true }
 pause = true
@@ -102,7 +102,7 @@ text = """
 **Goal:** the motor stays in star on site. Follow the path that should feed the delta coil **-K2** after the star time: the closing contact of the timer **-K4** (17-18), then the interlock contact of **-K3** (21-22). One wire is missing. Draw it.
 """
 text_nl = """
-**Doel:** de motor blijft ter plaatse in ster. Volg het pad dat de driehoekspoel **-K2** na de sterttijd moet voeden: het sluitcontact van timer **-K4** (17-18) en dan het verbreekcontact van **-K3** (21-22). Er ontbreekt een draad. Teken hem.
+**Doel:** de motor blijft ter plaatse in ster. Volg het pad dat de driehoekspoel **-K2** na de tijd in ster moet voeden: het sluitcontact van timer **-K4** (17-18) en dan het verbreekcontact van **-K3** (21-22). Er ontbreekt een draad. Teken hem.
 """
 hints = [
   "Start at the timer -K4. Its first contact (15-16) feeds the star path. Where does its second contact (17-18) go?",
@@ -145,5 +145,5 @@ text = """
 The star time (8 s) is a parameter of the macro, not a calculated value. A real design sets it so the motor is near full speed at the changeover, and checks the changeover current peak. The cable and fuse sizes need the calculations window, not this lesson.
 """
 text_nl = """
-De sterttijd (8 s) is een parameter van de macro, geen berekende waarde. Een echt ontwerp stelt hem zo in dat de motor bij het omschakelen bijna op toeren is en controleert de stroompiek bij het omschakelen. Voor kabel- en zekeringmaten heb je het berekeningsvenster nodig, niet deze les.
+De tijd in ster (8 s) is een parameter van de macro, geen berekende waarde. Een echt ontwerp stelt hem zo in dat de motor bij het omschakelen bijna op toeren is en controleert de stroompiek bij het omschakelen. Voor kabel- en zekeringmaten heb je het berekeningsvenster nodig, niet deze les.
 """

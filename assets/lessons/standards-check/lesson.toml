@@ -21,11 +21,11 @@ title = "A second pair of eyes, not a certificate"
 title_nl = "Een tweede paar ogen, geen certificaat"
 text = """
 The design checks you know look at the drawing. The **standards check** asks a different question: does the drawing follow the rules of IEC 60204-1, NFPA 79 or UL 508A.
-KoperCAD holds a **subset** of each standard in its own words with a clause pointer. It helps you; you still read the clauses in your own licensed copy.
+KoperCAD holds a **subset** of each standard in its own words with a clause pointer. It helps you; you still read the clauses in your own licensed copy. The clause numbers in the program are unverified: they were written without a licensed copy of the standards, so check each one before you rely on it.
 """
 text_nl = """
 De ontwerpcontroles die je kent kijken naar de tekening. De **normcontrole** stelt een andere vraag: volgt de tekening de regels van IEC 60204-1, NFPA 79 of UL 508A.
-KoperCAD kent een **deel** van elke norm in eigen woorden met een verwijzing naar de clausule. Het helpt jou; de clausules lees je nog steeds in je eigen gelicentieerde exemplaar.
+KoperCAD kent een **deel** van elke norm in eigen woorden met een verwijzing naar de clausule. Het helpt jou; de clausules lees je nog steeds in je eigen gelicentieerde exemplaar. De clausulenummers in het programma zijn niet geverifieerd: ze zijn geschreven zonder gelicentieerd exemplaar van de normen, dus controleer ze voordat je erop vertrouwt.
 """
 point = { ui = "menu.Check" }
 
