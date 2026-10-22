@@ -100,6 +100,8 @@ pub(super) struct CabinetState {
     /// beside it (Route all).
     pub(super) routes: bool,
     routes_cache: cabinet_routes::OverlayCache,
+    /// The EMC view over the plate (the same picture as in 3D).
+    pub(super) emc: super::emc_view::EmcState,
     /// The place rules, why `Place all` chose what it did, and the cut list.
     pub(super) rules: cabinet_rules::RulesState,
     /// The Heat view over the plate.
@@ -156,6 +158,7 @@ impl CabinetState {
             surface_popup: None,
             routes: false,
             routes_cache: Default::default(),
+            emc: Default::default(),
             rules: cabinet_rules::RulesState::new(),
             heat: super::heat::HeatState::new(),
             rails: Default::default(),
@@ -207,6 +210,7 @@ pub(super) enum Ask {
     ToggleTable,
     TogglePlateCard,
     ToggleRoutes,
+    ToggleEmc,
     ExportWireCut,
     /// Set a wire production rule of the project (`None` back to its default).
     SetWireRule(&'static str, Option<f64>),
@@ -852,6 +856,7 @@ impl NovoApp {
                         + button_width(ui, icons::ARROWS_OUT, "Size enclosure"),
                 ));
                 items.push((Foldable::Heat, button_width(ui, icons::FLAME, "Heat")));
+                items.push((Foldable::Emc, button_width(ui, icons::PLUGS, "EMC")));
             }
             if layout.is_none() || has_plan {
                 items.clear();
@@ -1039,6 +1044,22 @@ impl NovoApp {
                                 {
                                     ask = Some(Ask::ToggleRoutes);
                                 }
+                                if !fold.has(Foldable::Emc) {
+                                let emc = cabinet_bar::button(
+                                    ui,
+                                    icons::PLUGS,
+                                    "EMC",
+                                    self.cabinet.emc.on,
+                                )
+                                .on_hover_text(
+                                    "Show which wires are noisy and which sensitive, and where they run side by side. An indicative model, not a field solver",
+                                );
+                                if cabinet_bar::note(&mut anchors, "cabinet.emc", "EMC", &emc)
+                                    .clicked()
+                                {
+                                    ask = Some(Ask::ToggleEmc);
+                                }
+                                }
                             }
                             if !fold.has(Foldable::Rails) {
                                 let rails = cabinet_bar::button(
@@ -1216,6 +1237,22 @@ impl NovoApp {
                                             ui.close();
                                         }
                                     }
+                                    if fold.has(Foldable::Emc) {
+                                        let emc = cabinet_bar::button(
+                                            ui,
+                                            icons::PLUGS,
+                                            "EMC",
+                                            self.cabinet.emc.on,
+                                        )
+                                        .on_hover_text(
+                                            "Show which wires are noisy and which sensitive. An indicative model, not a field solver",
+                                        );
+                                        cabinet_bar::note(&mut anchors, "cabinet.emc", "EMC", &emc);
+                                        if emc.clicked() {
+                                            ask = Some(Ask::ToggleEmc);
+                                            ui.close();
+                                        }
+                                    }
                                     if fold.has(Foldable::Heat) {
                                         let heat = super::heat::toggle(ui, &mut self.cabinet.heat);
                                         cabinet_bar::note(
@@ -1269,6 +1306,7 @@ impl NovoApp {
                                 (Foldable::Rails, "cabinet.rails", "Rails and ducts"),
                                 (Foldable::CutList, "cabinet.cutlist", "Cut list"),
                                 (Foldable::Heat, "cabinet.heat", "Heat"),
+                                (Foldable::Emc, "cabinet.emc", "EMC"),
                                 (Foldable::Export, "cabinet.plate_drawing", "Plate drawing"),
                             ] {
                                 if fold.has(f) && !anchors.iter().any(|a| a.id == id) {
@@ -1804,6 +1842,44 @@ impl NovoApp {
                         &self.cabinet.view.viewport,
                         overlay,
                     );
+                }
+                if self.cabinet.emc.on
+                    && let Some(s) = structure
+                {
+                    let rect = out.response.rect;
+                    let dark = ui.visuals().dark_mode;
+                    let cache = &mut self.cabinet.routes_cache;
+                    self.cabinet
+                        .emc
+                        .sync_plate(project, s, || cache.get(project, s).routes.clone());
+                    let field = self.cabinet.emc.exposure();
+                    if let Some(pic) = self.cabinet.emc.picture().cloned() {
+                        let shown = super::emc_plate::Shown {
+                            pic: &pic,
+                            field: field.as_deref(),
+                            layers: &self.cabinet.emc.layers,
+                            selected: self.cabinet.emc.selected,
+                        };
+                        let picked = super::emc_plate::draw(
+                            ui,
+                            rect,
+                            &self.cabinet.view.viewport,
+                            &shown,
+                            dark,
+                        );
+                        if let Some(h) = picked {
+                            self.cabinet.emc.selected =
+                                (self.cabinet.emc.selected != Some(h)).then_some(h);
+                        }
+                        let tag_of = |raw: u64| {
+                            project
+                                .get::<novo_core::Device>(novo_core::DeviceId::from(raw))
+                                .and_then(|d| d.tag.device_code().map(|c| format!("-{c}")))
+                                .unwrap_or_else(|| format!("device {raw}"))
+                        };
+                        super::emc_view::panel(ui.ctx(), rect, &mut self.cabinet.emc, &tag_of);
+                        super::emc_view::legend(ui.ctx(), rect, &self.cabinet.emc, dark);
+                    }
                 }
                 if let Some(mode) = self.wb.commissioning.as_ref() {
                     let marks = super::commissioning_cabinet::marks(&mode.store, project, &shown);
@@ -2566,6 +2642,7 @@ impl NovoApp {
                 self.export_plate_dxf();
             }
             Ask::ToggleRoutes => self.cabinet.routes ^= true,
+            Ask::ToggleEmc => self.cabinet.emc.on ^= true,
             Ask::SetWireRule(key, value) => {
                 self.cabinet_edit("Wire rule", move |tx| {
                     novo_routing::project_rules::set_rule(tx, key, value)
@@ -2828,6 +2905,20 @@ impl NovoApp {
                 });
             }
         }
+    }
+
+    /// EMC view on the plate (Ctrl+K): shows the Cabinet with the EMC picture.
+    pub(super) fn toggle_cabinet_emc(&mut self) {
+        if self.backend.document().is_none() {
+            return;
+        }
+        if self.workspace() == super::workspace::Workspace::Cabinet && self.cabinet.emc.on {
+            self.cabinet.emc.on = false;
+            return;
+        }
+        self.switch_workspace(super::workspace::Workspace::Cabinet);
+        self.cabinet.table = false;
+        self.cabinet.emc.on = true;
     }
 
     /// Route all (Ctrl+K): shows the Cabinet with every wire's route.

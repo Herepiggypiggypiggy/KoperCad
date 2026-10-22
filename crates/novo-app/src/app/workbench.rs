@@ -504,6 +504,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.ferrules",
     "export.labels",
     "cabinet.routes",
+    "cabinet.emc",
     "cabinet.rails",
     "cabinet.rules",
     "cabinet.plate",
@@ -1370,6 +1371,7 @@ impl NovoApp {
                 self.export_spreadsheet();
             }
             "cabinet.routes" => self.toggle_cabinet_routes(),
+            "cabinet.emc" => self.toggle_cabinet_emc(),
             "cabinet.rails" => self.toggle_cabinet_rails(),
             "cabinet.rules" if self.is_open() => {
                 self.switch_workspace(Workspace::Cabinet);

@@ -237,6 +237,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("cabinet.size-enclosure", under("View", "Cabinet")),
     ("cabinet.enclosures", under("View", "Cabinet")),
     ("cabinet.routes", under("View", "Cabinet")),
+    ("cabinet.emc", under("View", "Cabinet")),
     // Layers: what is drawn on top of the page
     ("view.toggle_marks", under("View", "Layers")),
     ("view.override_marks", under("View", "Layers")),
