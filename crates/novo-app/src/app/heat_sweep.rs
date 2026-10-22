@@ -335,7 +335,7 @@ impl CoolingAdvice {
                 ui.add_space(6.0);
                 ui.label(
                     egui::RichText::new(
-                        "Model estimate: the 2D heat model with planning values and the losses you entered. Not validated against measurements. Check the winner with Simulate in 3D after adding it.",
+                        "Model estimate: the 2D heat model with planning values and the losses you entered. Not validated against measurements, and the 2D slice does not see the depth of the cabinet. Check the winner with Simulate in 3D after adding it.",
                     )
                     .small()
                     .color(pal.text_secondary),
