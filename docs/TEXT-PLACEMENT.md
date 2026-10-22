@@ -214,5 +214,7 @@ colliding pair. Findings become regression scenarios in `qa/scenarios` and unit 
 | 6 | Cabinet, 3D and PDF use the engine | Printed output matches screen |
 | 7 | Performance work to the budget and the 600-page scale check | Large projects stay fast |
 
+Stage 2a result (PR #1367): the anchor of a tag follows mirror and half turn. Stress matrix 4,287 to 3,354 conflicts; the sum of own-symbol causes fell from 1,091 to 18 (18 device tags still over their own symbol; the rest of the 1,091 were terminal, feed and interruption names). Two causes rose on purpose: device tag over a neighbour's symbol line 1,715 to 1,737 (+22) and terminal name over a neighbour's symbol line 524 to 642 (+118). A tag that used to sit on its own body now sits on the free side, which in tight packs faces the next symbol; the mirrored terminals row page grew from 100 to 118. Stage 3 (terminal pitch and neighbours) must take both causes below their stage 0b values.
+
 Honest limits: text boxes are estimates (`ADVANCE` 0.6 per glyph) until the print backend reports real widths;
 the engine pads for that. Very dense pages can still need a manual move; those are reported as `text.conflict`, not hidden.

@@ -9,3 +9,5 @@ Traps: no stacked PRs; after READY do not push; cloud disk: CARGO_INCREMENTAL=0 
 
 Stress kit (#1359, Text collision stress test thread) uses `text_audit::audit` for the shared measure: its `[tight]` is under 0.5 mm of air
 (`text_audit::TIGHT`) and "outside the sheet" means the label box is not inside `Scene::sheet().rect`. After both land, re-check the 4,287 golden baseline once.
+
+Stage 2a (#1367): neighbour causes rose on purpose (device tag / neighbour symbol line 1,715 -> 1,737, terminal name / neighbour symbol line 524 -> 642; mirrored terminals row page 100 -> 118) because tags now sit on the free side, facing the next symbol in tight packs. Stage 3 (terminal pitch and neighbours) must bring both below their pre-2a values (1,715 and 524). Net 4,287 -> 3,354.
