@@ -1,7 +1,7 @@
 format = 1
 id = "iec/safety/relay"
 name = "Safety relay, 2-channel"
-description = "Safety relay that monitors two-channel safety contacts: A1/A2 supply, S11-S12 and S21-S22 the two input channels, S34 start or reset, 13-14, 23-24, 33-34 three safety make contacts, 41-42 one monitoring break contact. Drawing symbol only: no safety function, category or PL/SIL is evaluated. IEC pack block symbol (a manufacturer-neutral drawing, not a 60617 graphic)."
+description = "Safety relay that monitors two-channel safety contacts: A1/A2 supply, S11-S12 and S21-S22 the two input channels, S34 start or reset, 13-14, 23-24, 33-34 three safety make contacts, 41-42 one monitoring break contact. Drawing symbol only: no safety function, category or PL/SIL is evaluated. Manufacturer-neutral block symbol: the box and pin layout are not defined by IEC 60617."
 standard = "IEC 60617"
 category = "safety"
 function = "safety.relay"

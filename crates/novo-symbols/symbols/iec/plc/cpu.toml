@@ -1,7 +1,7 @@
 format = 1
 id = "iec/plc/cpu"
 name = "PLC CPU"
-description = "PLC central processing unit: 24 V supply L+, M and PE, two industrial Ethernet ports P1 and P2 (PROFINET, EtherNet/IP, Modbus TCP) and an RS-485 fieldbus port A, B, SH. IEC pack block symbol (a manufacturer-neutral drawing, not a 60617 graphic)."
+description = "PLC central processing unit: 24 V supply L+, M and PE, two industrial Ethernet ports P1 and P2 (PROFINET, EtherNet/IP, Modbus TCP) and an RS-485 fieldbus port A, B, SH. Manufacturer-neutral block symbol: the box and pin layout are not defined by IEC 60617."
 standard = "IEC 60617"
 category = "plc"
 function = "plc.cpu"
