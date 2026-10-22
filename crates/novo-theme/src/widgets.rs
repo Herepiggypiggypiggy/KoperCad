@@ -537,6 +537,29 @@ pub fn issue_pill(ui: &mut Ui, errors: usize, warnings: usize) -> Response {
     )
 }
 
+/// The pill for a recovered copy nobody has checked yet. It takes the place
+/// of the green "No issues": the checks only see what survived, so a clean
+/// result proves nothing about what was lost.
+pub fn recovered_pill(ui: &mut Ui) -> Response {
+    let p = Palette::of(ui);
+    let small = egui::TextStyle::Small.resolve(ui.style());
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        &format!("{}  {RECOVERED_PILL}", status::WARNING),
+        0.0,
+        egui::TextFormat::simple(small, p.warning),
+    );
+    ui.add(
+        Button::new(job)
+            .fill(p.raised)
+            .stroke(Stroke::new(1.0, p.border_subtle))
+            .corner_radius(radius::PILL),
+    )
+}
+
+/// What the recovered-copy pill says.
+pub const RECOVERED_PILL: &str = "Recovered copy: check every page";
+
 /// The pill's text runs and their colours.
 fn pill_parts(p: &Palette, errors: usize, warnings: usize) -> Vec<(String, egui::Color32)> {
     let count =

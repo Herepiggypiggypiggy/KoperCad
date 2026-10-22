@@ -183,6 +183,10 @@ pub(crate) struct Workbench {
     /// Where the issue pill was drawn, so its own click does not close
     /// the outline it opens.
     pub(super) pill_rect: egui::Rect,
+    /// The open project is a recovered copy that nobody has checked yet:
+    /// the lines of what it holds and what was left out. Cleared by "I have
+    /// checked every page", or when another project is opened.
+    pub(super) recovered: Option<Vec<String>>,
     /// The outline's Issues filter chips: errors, warnings, infos shown.
     pub(super) issue_filter: [bool; 3],
     /// F8 position in the problem list.
@@ -280,6 +284,7 @@ impl Default for Workbench {
             place_latch: None,
             queued: Vec::new(),
             renumber: None,
+            recovered: None,
             plc_import: None,
             plc_list: None,
             preferences: false,

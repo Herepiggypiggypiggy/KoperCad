@@ -130,3 +130,36 @@ fn recovering_a_healthy_file_opens_it_as_itself_and_writes_no_copy() {
     assert!(dir.path().join("plant.recovered.novo").exists());
     assert_eq!(std::fs::read(&path).unwrap(), cut);
 }
+
+#[test]
+fn a_recovered_copy_is_not_called_saved_or_clean_until_it_is_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut d, path, _cut) = damaged_project(dir.path());
+    d.app.open_salvaged(&path);
+    d.frame();
+    // No green claim: the status says it is a recovered copy, and the
+    // issue pill is the recovered-copy pill while nothing is flagged.
+    assert_eq!(d.app.saved_state(), "Saved (recovered copy)");
+    let lines = d.app.wb.recovered.clone().expect("flagged as unchecked");
+    let said = lines.join("\n");
+    assert!(
+        said.contains("In the copy: 25 pages, 0 symbols, 0 wires"),
+        "{said}"
+    );
+    assert!(said.contains("The end of the file was lost"), "{said}");
+    // The message carries the same account.
+    let toast = d
+        .app
+        .messages()
+        .iter()
+        .map(|m| m.text.clone())
+        .find(|t| t.contains("recovered copy"))
+        .unwrap();
+    assert!(toast.contains("In the copy: 25 pages"), "{toast}");
+    assert!(toast.contains("Check every page"), "{toast}");
+    // Another project is not a recovered copy.
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::CloseProject);
+    d.frame();
+    assert!(d.app.wb.recovered.is_none());
+}
