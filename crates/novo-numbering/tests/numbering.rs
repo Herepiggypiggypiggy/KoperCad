@@ -516,3 +516,26 @@ fn scope_note_is_singular_for_one_wire() {
     );
     assert_eq!(p.scope_note(), "1 wire, one number each.");
 }
+
+#[test]
+fn the_sample_follows_the_scheme_fields() {
+    let mut s = Scheme::new(SchemeKind::Sequential);
+    assert_eq!(
+        s.sample(),
+        "1, 2, 3",
+        "defaults: start 1, step 1, one digit"
+    );
+    s.start = 101;
+    assert_eq!(s.sample(), "101, 102, 103");
+    s.prefix = "W".into();
+    s.step = 10;
+    s.digits = 4;
+    assert_eq!(s.sample(), "W0101, W0111, W0121");
+    s.kind = SchemeKind::ByPage;
+    s.separator = "-".into();
+    assert_eq!(s.sample(), "W3-0101, W3-0111, W4-0101");
+    s.kind = SchemeKind::ByPotential;
+    assert_eq!(s.sample(), "WL1-0101, WL2-0101, PE");
+    s.bare_potentials = false;
+    assert!(s.sample().ends_with("WPE-0101"));
+}

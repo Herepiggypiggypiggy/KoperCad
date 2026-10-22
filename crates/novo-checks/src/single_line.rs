@@ -37,6 +37,12 @@
 //! licensed copy ([`TableSet::disclosure`]); the clause numbers in
 //! [`crate::calc_view::clause`] are not verified against the standard text.
 //!
+//! The short-circuit current at each box is the stated supply fault level
+//! through the cable impedance of every run on the way ([`Node::ik_ka`],
+//! three-phase maximum, conductors at 20 °C); it is a ceiling where a run has
+//! no data, absent past a converter, and a device whose rated breaking
+//! capacity is below it fails.
+//!
 //! What it leaves out, and says so in [`SingleLine::notes`]: diversity (the
 //! current of a distribution device is the arithmetic sum of what hangs on
 //! it), the reactive part of the voltage drop when no power factor is
@@ -56,6 +62,7 @@ use crate::calc::cable::{Circuit, Loaded, Method};
 use crate::calc::circuit::Status;
 use crate::calc::drop::{Run, Supply};
 use crate::calc::motor::full_load_current;
+use crate::calc::short_circuit::{Impedance, Source, cable_impedance, ik3_max};
 use crate::calc::starter::{typical_cos_phi, typical_efficiency};
 use crate::calc::tables::TableSet;
 use crate::calc_checks::{
@@ -333,6 +340,13 @@ pub struct Verdict {
     pub status: Status,
     /// Titles of the rows that fail.
     pub failing: Vec<String>,
+    /// `status` without the "Breaking capacity" row.
+    pub status_without_breaking: Status,
+    /// The Calculations sheet fails Icu against the level at the device
+    /// from the supply data alone. Where the diagram has an Ik along the run
+    /// it judges Icu against that instead (`icu_status`) and the row is
+    /// taken out of `status` and `failing`.
+    pub breaking_row_failed: bool,
     /// Maximum three-phase short-circuit current at the device, kA.
     pub ik_max_ka: Option<f64>,
     /// Inputs the calculation lacks, named by property.
@@ -369,6 +383,20 @@ pub struct Node {
     pub loads_without_current: usize,
     pub link: Option<Link>,
     pub verdict: Option<Verdict>,
+    /// Maximum three-phase short-circuit current at the box's incoming
+    /// terminals, kA: the supply's fault level through the cables of every
+    /// run on the way (IEC 60909-0, low-voltage simplification, resistance at
+    /// 20 °C). Missing past a transformer or power supply and on runs that are
+    /// not three-phase.
+    pub ik_ka: Figure,
+    /// Whether every run from the supply has a length and a cross-section.
+    /// When false, `ik_ka` is a ceiling: the cable impedance of the runs
+    /// without data is left out.
+    pub ik_exact: bool,
+    /// The box cannot break the current there: `Fail` when the figure is
+    /// exact and above the rated breaking capacity, `Warning` when only the
+    /// ceiling is above it.
+    pub icu_status: Status,
     /// Hops from the supply.
     pub depth: usize,
 }
@@ -381,6 +409,7 @@ impl Node {
                 .verdict
                 .as_ref()
                 .is_some_and(|v| v.status == Status::Fail)
+            || self.icu_status == Status::Fail
     }
 }
 
@@ -1433,6 +1462,9 @@ pub fn single_line(
         loads_without_current: 0,
         link: None,
         verdict: None,
+        ik_ka: supply_ik_fig,
+        ik_exact: true,
+        icu_status: Status::Pass,
         depth: 0,
     }];
     let mut node_of_item: Vec<usize> = vec![usize::MAX; items.len()];
@@ -1487,18 +1519,30 @@ pub fn single_line(
         };
         let verdict = verdicts.get(&item.device).and_then(|entry| {
             let report = entry.report.as_ref()?;
-            let mut status = Status::Pass;
-            for row in &report.rows {
-                status = match (status, row.status) {
-                    (Status::Fail, _) | (_, Status::Fail) => Status::Fail,
-                    (Status::Warning, _) | (_, Status::Warning) => Status::Warning,
-                    (Status::Unknown, _) | (_, Status::Unknown) => Status::Unknown,
-                    _ => Status::Pass,
-                };
-            }
+            let fold = |skip_breaking: bool| {
+                let mut status = Status::Pass;
+                for row in report
+                    .rows
+                    .iter()
+                    .filter(|r| !(skip_breaking && r.title == "Breaking capacity"))
+                {
+                    status = match (status, row.status) {
+                        (Status::Fail, _) | (_, Status::Fail) => Status::Fail,
+                        (Status::Warning, _) | (_, Status::Warning) => Status::Warning,
+                        (Status::Unknown, _) | (_, Status::Unknown) => Status::Unknown,
+                        _ => Status::Pass,
+                    };
+                }
+                status
+            };
             Some(Verdict {
-                status,
+                status: fold(false),
+                status_without_breaking: fold(true),
                 failing: report.failures().map(|r| r.title.to_owned()).collect(),
+                breaking_row_failed: report
+                    .rows
+                    .iter()
+                    .any(|r| r.title == "Breaking capacity" && r.status == Status::Fail),
                 ik_max_ka: report.at_device.as_ref().map(|f| f.ik3_max_a / 1000.0),
                 missing: entry.missing.clone(),
             })
@@ -1525,6 +1569,9 @@ pub fn single_line(
             } else {
                 None
             },
+            ik_ka: Figure::MISSING,
+            ik_exact: false,
+            icu_status: Status::Pass,
             depth: 0,
         });
     }
@@ -1739,6 +1786,13 @@ pub fn single_line(
     let mut protector_above: HashMap<usize, Option<(String, f64)>> = HashMap::new();
     let mut restarted: Vec<String> = Vec::new();
     protector_above.insert(0, None);
+    // The cable impedance from the supply to each box, and whether every run
+    // on the way is complete. `None` past a converter or without a source.
+    let source = supply_ik.and_then(|ik| Source::from_ik(ik, voltage));
+    let mut ik_state: HashMap<usize, Option<(Impedance, bool)>> = HashMap::new();
+    ik_state.insert(0, source.map(|_| (Impedance::default(), true)));
+    let mut ik_through_converter = false;
+    let mut breaking_judged_along_run = false;
     for &id in &order_down {
         let parent_id = nodes[id].parent.unwrap_or(0);
         let above = protector_above.get(&parent_id).cloned().flatten();
@@ -1752,7 +1806,18 @@ pub fn single_line(
             above.clone()
         };
         protector_above.insert(id, own);
+        let parent_is_converter =
+            matches!(nodes[parent_id].kind, Kind::Transformer | Kind::PowerSupply);
+        if parent_is_converter && nodes[parent_id].ik_ka.value.is_some() {
+            ik_through_converter = true;
+        }
+        let parent_ik = if parent_is_converter {
+            None
+        } else {
+            ik_state.get(&parent_id).copied().flatten()
+        };
         let Some((route, _net, poles, facts)) = runs.remove(&id) else {
+            ik_state.insert(id, parent_ik);
             continue;
         };
         phase_voltage_used |= facts.phase_to_neutral;
@@ -1822,6 +1887,41 @@ pub fn single_line(
                 fmt(drop_limit)
             ));
         }
+        let state = match (source, parent_ik) {
+            (Some(_), Some((mut z, mut exact))) if link.three_phase => {
+                exact &= link.complete && link.traced;
+                for seg in &link.segments {
+                    match (seg.section_mm2.value, seg.length_m.value) {
+                        (Some(sec), Some(len)) => match cable_impedance(sec, len, 20.0) {
+                            Some(c) => z = z + c,
+                            None => exact = false,
+                        },
+                        _ => exact = false,
+                    }
+                }
+                Some((z, exact))
+            }
+            _ => None,
+        };
+        ik_state.insert(id, state);
+        if let (Some(src), Some((z, exact))) = (source, state) {
+            let ik = ik3_max(&src, &[z]) / 1000.0;
+            nodes[id].ik_ka = Figure::calculated(ik);
+            nodes[id].ik_exact = exact;
+            if let Some(v) = nodes[id].verdict.as_mut()
+                && v.breaking_row_failed
+            {
+                v.status = v.status_without_breaking;
+                v.failing.retain(|t| t != "Breaking capacity");
+                breaking_judged_along_run = true;
+            }
+            if let Some(icu) = nodes[id].breaking_ka.value
+                && nodes[id].kind.is_protective()
+                && ik > icu
+            {
+                nodes[id].icu_status = if exact { Status::Fail } else { Status::Warning };
+            }
+        }
         nodes[id].link = Some(link);
     }
 
@@ -1874,6 +1974,34 @@ pub fn single_line(
             "ΔU Σ is counted again from the output of {}: percentages of two voltages are not added.",
             restarted.join(", ")
         ));
+    }
+    if breaking_judged_along_run {
+        notes.push(
+            "Icu is checked against Ik along the run, which the cable impedance lowers; the Calculations window compares with the supply fault level alone, so it can fail a device that passes here."
+                .to_owned(),
+        );
+    }
+    if ik_through_converter {
+        notes.push(
+            "Short-circuit current is not carried through a transformer or power supply: boxes behind one show no Ik."
+                .to_owned(),
+        );
+    }
+    if nodes.iter().skip(1).any(|n| n.ik_ka.value.is_some()) {
+        notes.push(
+            "Ik is the three-phase maximum (IEC 60909-0, low-voltage simplification): the stated supply fault level through the cable impedance of each run, conductors at 20 °C; motor contribution and busbar impedance are left out."
+                .to_owned(),
+        );
+    }
+    if nodes
+        .iter()
+        .skip(1)
+        .any(|n| n.ik_ka.value.is_some() && !n.ik_exact)
+    {
+        notes.push(
+            "Ik is a ceiling (shown as ≤) where a run above has no length or cross-section: its cable impedance is left out."
+                .to_owned(),
+        );
     }
     let links = || nodes.iter().filter_map(|n| n.link.as_ref());
     let mut assumed: Vec<&'static str> = links()

@@ -49,18 +49,6 @@ impl SchemeKind {
         }
     }
 
-    /// One line on what the numbers look like.
-    pub fn example(self) -> &'static str {
-        match self {
-            SchemeKind::Sequential => "101, 102, 103",
-            SchemeKind::ByPage => "3.1, 3.2, 4.1",
-            SchemeKind::ByColumn => "3.4.1, 3.4.2",
-            SchemeKind::ByPotential => "L1.1, L2.1, PE",
-            SchemeKind::ByCable => "W1.1, W1.2",
-            SchemeKind::ByFunction => "A2.1, A2.2",
-        }
-    }
-
     fn key(self) -> &'static str {
         match self {
             SchemeKind::Sequential => "sequential",
@@ -182,6 +170,50 @@ impl Scheme {
             p.insert(GAPS.into(), Value::Bool(scheme.reuse_gaps));
             p.insert(BARE.into(), Value::Bool(scheme.bare_potentials));
         })
+    }
+
+    /// Three sample numbers built from these settings (prefix, separator, start, step, digits),
+    /// so the line next to the scheme picker always agrees with the fields.
+    pub fn sample(&self) -> String {
+        let (pre, sep) = (&self.prefix, &self.separator);
+        let c = |i: u32| self.count_text(self.start.saturating_add(self.step.saturating_mul(i)));
+        let parts = match self.kind {
+            SchemeKind::Sequential => [
+                format!("{pre}{}", c(0)),
+                format!("{pre}{}", c(1)),
+                format!("{pre}{}", c(2)),
+            ],
+            SchemeKind::ByPage => [
+                format!("{pre}3{sep}{}", c(0)),
+                format!("{pre}3{sep}{}", c(1)),
+                format!("{pre}4{sep}{}", c(0)),
+            ],
+            SchemeKind::ByColumn => [
+                format!("{pre}3{sep}4{sep}{}", c(0)),
+                format!("{pre}3{sep}4{sep}{}", c(1)),
+                format!("{pre}3{sep}5{sep}{}", c(0)),
+            ],
+            SchemeKind::ByPotential => [
+                format!("{pre}L1{sep}{}", c(0)),
+                format!("{pre}L2{sep}{}", c(0)),
+                if self.bare_potentials {
+                    "PE".to_owned()
+                } else {
+                    format!("{pre}PE{sep}{}", c(0))
+                },
+            ],
+            SchemeKind::ByCable => [
+                format!("{pre}W1{sep}1"),
+                format!("{pre}W1{sep}2"),
+                format!("{pre}W2{sep}1"),
+            ],
+            SchemeKind::ByFunction => [
+                format!("{pre}A2{sep}{}", c(0)),
+                format!("{pre}A2{sep}{}", c(1)),
+                format!("{pre}B1{sep}{}", c(0)),
+            ],
+        };
+        parts.join(", ")
     }
 
     /// The count as text, zero padded.

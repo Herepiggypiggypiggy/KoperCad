@@ -8,3 +8,4 @@
 - Kinds Lamp and Sounder; mains test = control net reached from a stated AC line voltage >= 100 V over switched poles and carrying a lamp or sounder.
 - One-conductor runs: phase voltage = line voltage / sqrt(3), marked calculated (assumed when no potential voltage is stated); note in the legend.
 - Fixture `distribution_board_with_signals`, QA scenario 69, pictures in qa/single-line-loads-2026-10-22/.
+2026-10-21 23:00 UTC follow-up PR 1 of 3 (short-circuit current along each run): Node.ik_ka/ik_exact/icu_status, report shows Ik per box, Icu check, notes and legend; QA scenario 58 re-run (/mnt/project-files/qa/single-line-ik-2026-10-21/)

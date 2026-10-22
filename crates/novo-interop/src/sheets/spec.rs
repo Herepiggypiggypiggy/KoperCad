@@ -32,6 +32,7 @@ fn text_of(data: &Data) -> String {
 /// Reads one sheet of an `.xlsx` as rows of text. Blank trailing rows are
 /// dropped and every row is padded to the header's width.
 pub fn read_grid(bytes: &[u8]) -> Result<Vec<Vec<String>>, SheetError> {
+    novo_parts::xlsx_guard::check_xlsx(bytes).map_err(|e| SheetError::Read(e.0))?;
     let mut book: Xlsx<_> = open_workbook_from_rs(Cursor::new(bytes.to_vec()))
         .map_err(|e: calamine::XlsxError| SheetError::Read(e.to_string()))?;
     let names = book.sheet_names();

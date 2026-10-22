@@ -269,7 +269,9 @@ fn a_smaller_sheet_scales_the_drawing_down_instead_of_cutting_it() {
     let height =
         |l: &novo_reports::PageLayout| l.texts.iter().map(|t| t.text_mm).fold(0.0, f64::max);
     assert!(height(&a4) <= height(&a3));
-    assert_eq!(a3.texts.len(), a4.texts.len());
+    // Nothing is dropped; only the legend (full width) wraps into more lines.
+    let drawn = |l: &novo_reports::PageLayout| l.texts.iter().filter(|t| t.width < 100.0).count();
+    assert_eq!(drawn(&a3), drawn(&a4));
 }
 
 fn state_all(doc: &mut Document, b: &novo_tests::Board, key: &str, value: novo_core::Value) {
@@ -310,9 +312,13 @@ fn assumed_inputs_are_marked_on_the_drawing_the_schedule_and_the_legend() {
     let legend = all.join(" ");
     assert!(legend.contains("Iz assumes installation method C, 30 °C and one circuit"));
     assert!(legend.contains("ΔU is calculated at power factor 1"));
-    // Ik is a ceiling carried down from the supply, not a stated figure.
-    assert!(all.iter().any(|t| t.contains("Ik ≤ 10 kA")));
-    assert!(legend.contains("Ik ≤ is the stated supply short-circuit current"));
+    // Ik is calculated along each run from the supply, not copied from it.
+    assert!(
+        all.iter().any(|t| t.contains("Ik 9.") && t.contains("kA~")),
+        "{all:?}"
+    );
+    assert!(legend.contains("Ik is the three-phase maximum"));
+    assert!(!all.iter().any(|t| t.contains("Ik ≤ 10 kA")));
     // The schedule column names what was assumed.
     let out = SingleLineDiagram.generate(doc.project());
     let section = &out.sections[0];

@@ -196,6 +196,7 @@ fn cell_text(d: &Data) -> String {
 
 /// The rows of the first sheet that has a heading row.
 fn sheet_rows(bytes: &[u8]) -> Result<Vec<Vec<String>>, ListError> {
+    novo_parts::xlsx_guard::check_xlsx(bytes).map_err(|e| ListError::Bad(e.0))?;
     let mut book: Xlsx<_> = open_workbook_from_rs(Cursor::new(bytes.to_vec()))
         .map_err(|e: calamine::XlsxError| ListError::Bad(e.to_string()))?;
     let mut first = None;
