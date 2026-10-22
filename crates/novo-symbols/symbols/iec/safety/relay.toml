@@ -1,0 +1,57 @@
+format = 1
+id = "iec/safety/relay"
+name = "Safety relay, 2-channel"
+description = "Safety relay that monitors two-channel safety contacts: A1/A2 supply, S11-S12 and S21-S22 the two input channels, S34 start or reset, 13-14, 23-24, 33-34 three safety make contacts, 41-42 one monitoring break contact."
+standard = "IEC 60617"
+category = "safety"
+function = "safety.relay"
+keywords = ["safety relay", "safety module", "monitoring relay", "veiligheidsrelais", "sil", "ple"]
+aliases = ["sr", "safety"]
+
+connections = [
+  { id = "A1", at = [0, 0], dir = "up" },
+  { id = "S34", at = [16, 0], dir = "up" },
+  { id = "S11", at = [32, 0], dir = "up" },
+  { id = "S12", at = [40, 0], dir = "up" },
+  { id = "S21", at = [48, 0], dir = "up" },
+  { id = "S22", at = [56, 0], dir = "up" },
+  { id = "A2", at = [0, 32], dir = "down" },
+  { id = "13", at = [16, 32], dir = "down" },
+  { id = "14", at = [24, 32], dir = "down" },
+  { id = "23", at = [32, 32], dir = "down" },
+  { id = "24", at = [40, 32], dir = "down" },
+  { id = "33", at = [48, 32], dir = "down" },
+  { id = "34", at = [56, 32], dir = "down" },
+  { id = "41", at = [64, 32], dir = "down" },
+  { id = "42", at = [72, 32], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 16], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "line", from = [32, 0], to = [32, 4] },
+  { kind = "line", from = [40, 0], to = [40, 4] },
+  { kind = "line", from = [48, 0], to = [48, 4] },
+  { kind = "line", from = [56, 0], to = [56, 4] },
+  { kind = "line", from = [0, 28], to = [0, 32] },
+  { kind = "line", from = [16, 28], to = [16, 32] },
+  { kind = "line", from = [24, 28], to = [24, 32] },
+  { kind = "line", from = [32, 28], to = [32, 32] },
+  { kind = "line", from = [40, 28], to = [40, 32] },
+  { kind = "line", from = [48, 28], to = [48, 32] },
+  { kind = "line", from = [56, 28], to = [56, 32] },
+  { kind = "line", from = [64, 28], to = [64, 32] },
+  { kind = "line", from = [72, 28], to = [72, 32] },
+  { kind = "rect", at = [-4, 4], size = [80, 24] },
+  { kind = "text", at = [36, 13], text = "SAFETY RELAY", size = 2.6 },
+  { kind = "text", at = [36, 20], text = "2-channel", size = 2.0 },
+]
+
+[behavior]
+kind = "load"
+type = "safety_relay"
+poles = [["A1", "A2"]]

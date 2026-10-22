@@ -1,0 +1,32 @@
+format = 1
+id = "iec/safety/door_switch_no"
+name = "Guard door switch, monitoring make contact"
+description = "Monitoring make contact 33-34 of a guard door interlock switch; closed when the door is shut. Same tag as the safety contacts."
+standard = "IEC 60617"
+category = "safety"
+function = "contact.no.interlock"
+keywords = ["door", "guard", "interlock", "monitoring", "feedback", "make"]
+aliases = ["doorno"]
+
+connections = [
+  { id = "33", at = [0, 0], dir = "up" },
+  { id = "34", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-16, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [-4, 4] },
+  { kind = "line", from = [-1.714, 8], to = [-8, 8], stroke = "dashed" },
+  { kind = "line", from = [-8, 4], to = [-8, 12] },
+  { kind = "rect", at = [-14, 6], size = [6, 4] },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+poles = [["33", "34"]]

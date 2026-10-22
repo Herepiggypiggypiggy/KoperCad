@@ -70,7 +70,7 @@ pub fn letter_code_with(function: &str, rules: LetterRules) -> Option<&'static s
         "coil" if has("contactor") => contactor,
         "coil" => "K",
         "contact"
-            if ["push", "key", "turn", "estop", "foot", "pull"]
+            if ["push", "key", "turn", "estop", "foot", "pull", "interlock"]
                 .iter()
                 .any(|p| has(p)) =>
         {
@@ -105,6 +105,15 @@ pub fn letter_code_with(function: &str, rules: LetterRules) -> Option<&'static s
         "converter" | "transformer" => "T",
         "meter" | "signal" => "P",
         "sensor" => "B",
+        // Safety: a safety relay is class K, a light curtain senses (B).
+        "safety" => match parts.get(1).copied() {
+            Some("relay") => "K",
+            Some("lightcurtain") => "B",
+            _ => "A",
+        },
+        // Network components are A (assemblies); a bus terminator is a
+        // resistor.
+        "network" if has("terminator") => "R",
         "load" => "E",
         // 81346-2 class K: a PLC processes signals.
         "plc" => "K",
@@ -159,6 +168,7 @@ mod tests {
             ("contact.nc.flow", Some("B")),
             ("contact.nc.float", Some("B")),
             ("contact.nc.foot", Some("S")),
+            ("contact.nc.interlock", Some("S")),
             ("contact.nc.key", Some("S")),
             ("contact.nc.position", Some("B")),
             ("contact.nc.pressure", Some("B")),
@@ -174,6 +184,7 @@ mod tests {
             ("contact.no.flow", Some("B")),
             ("contact.no.float", Some("B")),
             ("contact.no.foot", Some("S")),
+            ("contact.no.interlock", Some("S")),
             ("contact.no.key", Some("S")),
             ("contact.no.position", Some("B")),
             ("contact.no.pressure", Some("B")),
@@ -208,6 +219,10 @@ mod tests {
             ("motor.ac3", Some("M")),
             ("motor.dc", Some("M")),
             ("motor.dc.fan", Some("M")),
+            ("network.port.ethernet", Some("A")),
+            ("network.port.fieldbus", Some("A")),
+            ("network.switch.ethernet", Some("A")),
+            ("network.terminator", Some("R")),
             ("passive.capacitor", Some("C")),
             ("passive.capacitor.polarized", Some("C")),
             ("passive.capacitor.variable", Some("C")),
@@ -230,11 +245,13 @@ mod tests {
             ("passive.transistor.npn", Some("K")),
             ("passive.transistor.pnp", Some("K")),
             ("passive.triac", Some("Q")),
+            ("plc.cpu", Some("K")),
             ("plc.input.analog", Some("K")),
             ("plc.input.digital", Some("K")),
             ("plc.output.analog", Some("K")),
             ("plc.output.digital", Some("K")),
             ("plc.output.relay", Some("K")),
+            ("plc.remote_io", Some("K")),
             ("plc.supply", Some("K")),
             ("protection.fuse", Some("F")),
             ("protection.fuse_switch", Some("F")),
@@ -245,6 +262,10 @@ mod tests {
             ("protection.rcbo", Some("F")),
             ("protection.rcd", Some("F")),
             ("protection.surge", Some("F")),
+            ("safety.lightcurtain.rx", Some("B")),
+            ("safety.lightcurtain.tx", Some("B")),
+            ("safety.relay", Some("K")),
+            ("safety.relay.expander", Some("K")),
             ("sensor.capacitive", Some("B")),
             ("sensor.encoder", Some("B")),
             ("sensor.inductive", Some("B")),

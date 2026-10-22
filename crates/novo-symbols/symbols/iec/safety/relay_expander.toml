@@ -1,0 +1,51 @@
+format = 1
+id = "iec/safety/relay_expander"
+name = "Safety contact expander"
+description = "Output expansion for a safety relay: A1/A2 supply, Y1-Y2 feedback loop to the base unit, four safety make contacts 13-14 to 43-44."
+standard = "IEC 60617"
+category = "safety"
+function = "safety.relay.expander"
+keywords = ["safety", "expander", "contact expansion", "extension", "relay", "uitbreiding"]
+aliases = ["sx"]
+
+connections = [
+  { id = "A1", at = [0, 0], dir = "up" },
+  { id = "Y1", at = [16, 0], dir = "up" },
+  { id = "Y2", at = [24, 0], dir = "up" },
+  { id = "A2", at = [0, 32], dir = "down" },
+  { id = "13", at = [16, 32], dir = "down" },
+  { id = "14", at = [24, 32], dir = "down" },
+  { id = "23", at = [32, 32], dir = "down" },
+  { id = "24", at = [40, 32], dir = "down" },
+  { id = "33", at = [48, 32], dir = "down" },
+  { id = "34", at = [56, 32], dir = "down" },
+  { id = "43", at = [64, 32], dir = "down" },
+  { id = "44", at = [72, 32], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 16], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "line", from = [24, 0], to = [24, 4] },
+  { kind = "line", from = [0, 28], to = [0, 32] },
+  { kind = "line", from = [16, 28], to = [16, 32] },
+  { kind = "line", from = [24, 28], to = [24, 32] },
+  { kind = "line", from = [32, 28], to = [32, 32] },
+  { kind = "line", from = [40, 28], to = [40, 32] },
+  { kind = "line", from = [48, 28], to = [48, 32] },
+  { kind = "line", from = [56, 28], to = [56, 32] },
+  { kind = "line", from = [64, 28], to = [64, 32] },
+  { kind = "line", from = [72, 28], to = [72, 32] },
+  { kind = "rect", at = [-4, 4], size = [80, 24] },
+  { kind = "text", at = [36, 13], text = "CONTACT EXPANDER", size = 2.6 },
+  { kind = "text", at = [36, 20], text = "4 safety contacts", size = 2.0 },
+]
+
+[behavior]
+kind = "load"
+type = "safety_relay"
+poles = [["A1", "A2"]]

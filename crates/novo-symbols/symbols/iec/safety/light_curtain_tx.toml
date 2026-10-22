@@ -1,0 +1,36 @@
+format = 1
+id = "iec/safety/light_curtain_tx"
+name = "Safety light curtain, transmitter"
+description = "Transmitter of an electro-sensitive protective device (type 4 light curtain): 24 V supply L+ and M."
+standard = "IEC 60617"
+category = "safety"
+function = "safety.lightcurtain.tx"
+keywords = ["light curtain", "lichtgordijn", "espe", "espe", "emitter", "transmitter", "type 4", "safety"]
+aliases = ["lctx"]
+
+connections = [
+  { id = "L+", at = [0, 0], dir = "up" },
+  { id = "M", at = [8, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 12], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "rect", at = [-4, 4], size = [16, 16] },
+  { kind = "text", at = [4, 8], text = "Tx", size = 2.6 },
+  { kind = "line", from = [20, 8], to = [28, 8], stroke = "dashed" },
+  { kind = "line", from = [20, 12], to = [28, 12], stroke = "dashed" },
+  { kind = "line", from = [20, 16], to = [28, 16], stroke = "dashed" },
+  { kind = "polyline", points = [[26, 6.8], [28, 8], [26, 9.2]] },
+  { kind = "polyline", points = [[26, 10.8], [28, 12], [26, 13.2]] },
+  { kind = "polyline", points = [[26, 14.8], [28, 16], [26, 17.2]] },
+]
+
+[behavior]
+kind = "load"
+type = "light_curtain"
+poles = [["L+", "M"]]

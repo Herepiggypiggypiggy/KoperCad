@@ -1,0 +1,81 @@
+@title Safety, PLC and network symbols are found by Ctrl+K, place with their pins and stay inside the window
+@area Schematic
+# RM-04 / RM-20: safety relay, light curtain, PLC CPU, switch and fieldbus symbols, found by everyday words.
+click_text "New project"
+wait 20
+key ctrl+k
+text "safety relay"
+wait 5
+key Enter
+wait 10
+expect "Click to place Safety relay"
+click 330 150
+wait 10
+key Escape
+key ctrl+k
+text "light curtain receiver"
+wait 5
+key Enter
+wait 10
+click 600 150
+wait 10
+key Escape
+key ctrl+k
+text "plc cpu"
+wait 5
+key Enter
+wait 10
+click 330 380
+wait 10
+key Escape
+key ctrl+k
+text "ethernet switch"
+wait 5
+key Enter
+wait 10
+click 640 380
+wait 10
+key Escape
+key ctrl+k
+text "emergency stop 2 channel"
+wait 5
+key Enter
+wait 10
+click 840 150
+wait 10
+key Escape
+shot symbols-placed
+expect_scene "iec/safety/relay"
+expect_scene "iec/safety/light_curtain_rx"
+expect_scene "iec/plc/cpu"
+expect_scene "iec/network/ethernet_switch_5"
+expect_scene "iec/safety/emergency_stop_2ch"
+check_layout
+# The two starter macros that use the new symbols.
+key ctrl+n
+wait 20
+key ctrl+k
+text "emergency stop with safety relay"
+wait 6
+key Enter
+wait 10
+shot safety-macro-picked
+click_text Place Button #2
+wait 20
+expect_scene "-K1"
+expect_scene "iec/safety/relay"
+shot safety-macro-placed
+check_layout
+key ctrl+n
+wait 20
+key ctrl+k
+text "plc network with switch"
+wait 6
+key Enter
+wait 10
+shot network-macro-picked
+click_text Place Button #2
+wait 20
+expect_scene "iec/network/ethernet_switch_5"
+shot network-macro-placed
+check_layout
