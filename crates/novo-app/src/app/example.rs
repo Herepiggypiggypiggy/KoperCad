@@ -18,7 +18,7 @@ use super::{Level, NovoApp};
 pub(crate) const EXAMPLE_NAME: &str = "Motor starter (example)";
 
 const EXAMPLE_DESCRIPTION: &str = "Direct-on-line starter for a pump motor: main and control \
-    circuit. The parts are illustrative catalogue entries, not a verified parts list, and the
+    circuit. The parts are illustrative catalogue entries, not a verified parts list, and the \
     400 V / 6 kA supply is an illustrative value to replace with your own.";
 
 /// Draws the example into a project that has only its empty first page, as
