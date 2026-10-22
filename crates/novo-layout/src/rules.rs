@@ -531,10 +531,11 @@ struct Row {
 }
 
 impl Row {
-    /// How far the rail's band reaches below the row's devices: a row lower
-    /// than half the band has the band sticking out under it.
-    fn band_below(&self) -> f64 {
-        (RAIL_BAND_MM / 2.0 - self.height).max(0.0)
+    /// How far the rail's band sticks out above and below the row's devices.
+    /// The rail runs through the middle of the row, so only a row lower than
+    /// the band (35 mm) has any of it showing.
+    fn band_out(&self) -> f64 {
+        (RAIL_BAND_MM - self.height).max(0.0) / 2.0
     }
 }
 
@@ -1046,12 +1047,11 @@ fn plan_once(
     // space holds two ducts and the separation between them.
     let separated = rules.separation > 0.0;
     let between_with = |upper: &Row, lower: &Row| -> (f64, RowGapCause) {
-        // The rail line runs along the top edge of the row's devices, so the
-        // lower row's band reaches half its width up into the space between
-        // the rows (and the upper row's band may reach down below its
-        // devices). A duct has to fit between the devices above, the band
-        // below and the clearances of both.
-        let band = RAIL_BAND_MM / 2.0 + upper.band_below();
+        // The rail runs through the middle of its row, so a row lower than the
+        // band has the band sticking out into the space between the rows. A
+        // duct has to fit between the devices above, the band below and the
+        // clearances of both.
+        let band = upper.band_out() + lower.band_out();
         let mut best = (rules.row_gap, RowGapCause::RowGap);
         let duct_room = rules.duct_width + DUCT_CLEAR_MM + RAIL_DUCT_CLEAR_MM + band;
         if duct_room > best.0 {
@@ -1093,12 +1093,24 @@ fn plan_once(
         in_zone(Zone::Middle),
         in_zone(Zone::Bottom),
     );
-    let limit = usable.y + usable.h;
+    // A last row lower than its rail's band ends above the plate's edge.
+    let last_out = bottoms
+        .last()
+        .or(middles.last())
+        .or(tops.last())
+        .map_or(0.0, |r| r.band_out());
+    let limit = usable.y + usable.h - last_out;
     let mut placed: Vec<(f64, &Row, Zone)> = Vec::new();
     let mut skipped: Vec<&Row> = Vec::new();
 
     // Top rows flow down from the start.
-    let mut cursor = usable.y.max(top);
+    // A first row lower than its rail's band starts below the plate's edge.
+    let first_out = tops
+        .first()
+        .or(middles.first())
+        .or(bottoms.first())
+        .map_or(0.0, |r| r.band_out());
+    let mut cursor = usable.y.max(top) + first_out;
     let mut last: Option<&Row> = None;
     for row in &tops {
         let y = last.map_or(cursor, |l| cursor + between(l, row));
@@ -1169,10 +1181,12 @@ fn plan_once(
     let mut previous: Option<(f64, &Row)> = None;
     for (n, (y, row, zone)) in placed.iter().enumerate() {
         let rail = first_rail_id + n as u64;
+        // The rail runs through the middle of the row, behind its devices,
+        // which are centred on it.
         plan.rails.push(Rail {
             id: rail,
             x: usable.x,
-            y: *y,
+            y: *y + row.height / 2.0,
             length: usable.w,
             vertical: false,
         });
@@ -1180,7 +1194,7 @@ fn plan_once(
             plan.placements.push(Proposed {
                 id: specs[*i].id,
                 x: usable.x + at,
-                y: *y,
+                y: *y + (row.height - specs[*i].size.height) / 2.0,
                 rail,
             });
             why.decisions.push(Decision {
@@ -1213,8 +1227,8 @@ fn plan_once(
                 rules,
                 duct_x,
                 usable.x + usable.w - duct_x,
-                (py + p.height + p.band_below(), p.class),
-                (*y - RAIL_BAND_MM / 2.0, row.class),
+                (py + p.height + p.band_out(), p.class),
+                (*y - row.band_out(), row.class),
             );
         }
         previous = Some((*y, row));
@@ -1247,8 +1261,9 @@ fn duct_class(row: Class, other: Class) -> Class {
 
 /// Wiring ducts for the space between two rows. `upper` is where the row
 /// above ends and `lower` where the row below starts, each including its
-/// rail's band (35 mm across, centred on the rail line, which runs along the
-/// top edge of the devices): the ducts stay clear of both.
+/// rail's band (35 mm across, centred on the rail line, which runs through
+/// the middle of the row's devices, so only a row lower than the band shows
+/// any of it): the ducts stay clear of both.
 fn plan_ducts(
     out: &mut Vec<PlannedDuct>,
     rules: &RuleSet,

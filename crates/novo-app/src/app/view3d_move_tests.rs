@@ -379,16 +379,18 @@ fn a_group_clashes_when_any_member_does() {
 #[test]
 fn a_device_near_a_rail_lines_up_on_it() {
     let l = layout();
-    // The rail at y = 400 runs from x = 50 for 300 mm; device 1 is at y = 100.
-    let land = landing(&l, dev(1), (0.0, 296.0)).unwrap();
-    assert_eq!(land.at.1, 400.0, "top snapped onto the rail line");
+    // The rail at y = 400 runs from x = 50 for 300 mm; device 1 is at y = 100
+    // and 90 mm high, so on the rail its top is at 355 (the line runs through
+    // its middle).
+    let land = landing(&l, dev(1), (0.0, 256.0)).unwrap();
+    assert_eq!(land.at.1, 355.0, "centre snapped onto the rail line");
     assert_eq!(land.rail, Some(7));
     assert!(!land.clash);
     // Beyond the reach: no snap.
-    let far = landing(&l, dev(1), (0.0, 250.0)).unwrap();
+    let far = landing(&l, dev(1), (0.0, 200.0)).unwrap();
     assert_eq!(far.rail, None);
     // Beside the rail's run: no snap.
-    let beside = landing(&l, dev(1), (400.0, 296.0)).unwrap();
+    let beside = landing(&l, dev(1), (400.0, 256.0)).unwrap();
     assert_eq!(beside.rail, None);
 }
 
@@ -399,7 +401,7 @@ fn the_lined_up_landing_is_green() {
         width: 600.0,
         height: 800.0,
     };
-    let land = landing(&l, dev(1), (0.0, 296.0)).unwrap();
+    let land = landing(&l, dev(1), (0.0, 256.0)).unwrap();
     let set = ghost(&land, &frame, 60.0);
     let novo_view3d::Overlay::Mesh(m) = &set[0] else {
         panic!()
