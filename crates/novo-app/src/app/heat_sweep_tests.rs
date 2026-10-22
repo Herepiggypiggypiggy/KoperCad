@@ -185,22 +185,42 @@ fn a_gain_under_a_kelvin_is_called_noise() {
     assert!(text.contains("No position or size wins 1 K"), "{text}");
 }
 
-/// The pair the sweep proposes shows in the 3D view without trouble.
+/// Adding from the Cabinet, before the 3D view has looked at the list, keeps
+/// the pair: it is written to the project and the 3D list and cabinet show it.
 #[test]
-fn an_added_pair_shows_in_3d() {
+fn a_pair_added_from_the_cabinet_reaches_the_3d_list_and_the_project() {
+    use super::cabinet::Ask;
     use super::view3d_tests::drive_with_cabinet;
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
-    d.app.view3d.controls.heat_panel = true;
+    let id = {
+        let project = d.app.backend.document().unwrap().project();
+        project
+            .structures()
+            .find(|s| s.enclosure && s.plate.is_some())
+            .map(|s| s.id)
+            .expect("a cabinet")
+    };
     let c = Candidate {
         pairing: Pairing::VentInFanOut,
         inlet: vent(Placement::Left { y_mm: 1000.0 }),
         outlet: fan(Placement::Left { y_mm: 100.0 }, 150.0, 250.0),
     };
-    add_pair(&mut d.app.cabinet.heat.settings, &c);
+    d.app.cabinet_ask(Ask::CoolingPair(c), Some(id), None, &[]);
+    assert!(
+        !super::heat_openings_store::stored_text(d.app.backend.document().unwrap().project(), id)
+            .is_empty(),
+        "the project holds the pair"
+    );
+    assert_eq!(d.app.cabinet.heat.settings.vents.len(), 2);
     for _ in 0..8 {
         d.frame_sized(egui::vec2(1366.0, 768.0), Vec::new());
     }
+    assert_eq!(
+        d.app.cabinet.heat.settings.vents.len(),
+        2,
+        "the 3D view kept them"
+    );
     assert_eq!(d.app.view3d.vent_markers.len(), 2);
 }
 

@@ -42,6 +42,7 @@ shot added
 click_text 3D #1
 wait 40
 expect_not "Model estimate"
-expect "Vents and fans"
+expect "Grille, in the left wall"
+expect "Fan, in the left wall"
 shot in-3d
 check_layout

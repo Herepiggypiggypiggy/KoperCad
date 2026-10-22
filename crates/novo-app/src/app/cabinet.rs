@@ -238,6 +238,8 @@ pub(super) enum Ask {
     ),
     /// Cut rails to new lengths (rail id, length in mm), from the cut list.
     SetRailLengths(Vec<(u64, f64)>),
+    /// Put a pair of openings from the cooling advice in the project's Vents and fans.
+    CoolingPair(novo_thermal::sweep::Candidate),
 }
 
 /// The Cabinet drawing of a layout, with the layout's problems as box states.
@@ -1685,15 +1687,7 @@ impl NovoApp {
                     let at = ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0);
                     match self.cabinet.heat.advice.show(ui.ctx(), 1, now_key, at) {
                         Some(super::heat_sweep::Ask::Again) => self.cabinet.heat.advice.request(),
-                        Some(super::heat_sweep::Ask::Add(c)) => {
-                            super::heat_sweep::add_pair(&mut self.cabinet.heat.settings, &c);
-                            // The 3D view opens with the list showing the pair.
-                            self.view3d.controls.heat_panel = true;
-                            self.cabinet
-                                .heat
-                                .advice
-                                .set_added(super::heat_sweep::added_text(&c));
-                        }
+                        Some(super::heat_sweep::Ask::Add(c)) => ask = Some(Ask::CoolingPair(c)),
                         None => {}
                     }
                 }
@@ -2635,6 +2629,19 @@ impl NovoApp {
                 }) {
                     self.learn_signal("cabinet_dropped");
                 }
+            }
+            Ask::CoolingPair(c) => {
+                // Read the project's list first, so adding to a list the 3D
+                // view has not looked at yet keeps what is already there.
+                self.sync_openings_now();
+                super::heat_sweep::add_pair(&mut self.cabinet.heat.settings, &c);
+                self.sync_openings_now();
+                // The 3D view opens with the list showing the pair.
+                self.view3d.controls.heat_panel = true;
+                self.cabinet
+                    .heat
+                    .advice
+                    .set_added(super::heat_sweep::added_text(&c));
             }
             Ask::SetRailLengths(lengths) => {
                 self.cabinet_edit("Cut rails to length", move |tx| {

@@ -62,6 +62,12 @@ impl super::NovoApp {
         if !ctx.input(|i| i.pointer.any_down()) && ctx.memory(|m| m.focused().is_none()) {
             self.cabinet.heat.settings.end_edit();
         }
+        self.sync_openings_now();
+    }
+
+    /// The reading and writing of [`Self::sync_openings`], for a caller that
+    /// has no frame (the Cooling advice adding a pair from the Cabinet).
+    pub(super) fn sync_openings_now(&mut self) {
         let Some(document) = self.backend.document() else {
             return;
         };
