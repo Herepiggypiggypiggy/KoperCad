@@ -8,3 +8,10 @@ Branch `claude/project-thread-d7x16s`. Works the ranked leftovers of RESULTS.md.
 
 Resume: `cargo test -p novo-tests --test scale_budget`, `cargo test -p novo-app --lib scale_tests` (release for real numbers).
 Not done: heat and CFD at large cabinets (unchanged from SCALE-1).
+
+## Review round 1 (R5, Reviewer A)
+* Counts shown only for the exact project state; "-" otherwise. A worker that dies is replaced. One worker at a time.
+* Only the project's own ferrule standard is cached.
+* Test `list_counts_show_only_the_current_state_and_equal_the_synchronous_ones` (reports_view.rs): equals sync `headline_count`, nothing shown after an edit or undo until the worker answers.
+* QA scenario `qa/scenarios/190-reports-list-counts.qa` added, NOT yet run: this cloud box has no openbox. Needs a run on a box with the QA harness, evidence to /mnt/project-files/qa/ with HEAD.txt.
+* Speed: release timings are NOT measured. "Routed once" and "off the UI thread" are by construction and test; any "faster" is unmeasured.

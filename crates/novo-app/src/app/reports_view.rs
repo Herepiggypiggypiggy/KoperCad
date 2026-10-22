@@ -66,7 +66,7 @@ type CountAnswer = Vec<(String, usize)>;
 
 /// The row count of every report at one project state. Working out all of
 /// them takes about half a second on a 600-page project, so the list asks a
-/// worker thread and shows the last counts (or a dash) until it answers.
+/// worker thread and shows a dash until it answers, never the counts of an earlier state.
 #[derive(Default)]
 struct ListCounts {
     /// The counts and the project state (revision with choice generation)
@@ -200,8 +200,8 @@ impl NovoApp {
         }
     }
 
-    /// The row counts of the list: the ones last worked out (empty before the
-    /// first answer), with a worker started for the current project state.
+    /// The row counts of the list for the current project state; empty until
+    /// the worker started for it answers (the rows then show a dash).
     fn list_counts(&mut self, ctx: &egui::Context) -> std::collections::HashMap<String, usize> {
         let generation = self.machine_generation();
         let Some(revision) = self.machine().map(|p| p.revision()) else {
@@ -209,14 +209,21 @@ impl NovoApp {
         };
         let key = revision ^ (generation << 40);
         let counts = &mut self.reports_view.counts;
-        if let Some((_, receiver)) = &counts.pending
-            && let Ok(answer) = receiver.try_recv()
-        {
-            let at = counts.pending.take().map_or(key, |(at, _)| at);
-            counts.known = Some((at, answer.into_iter().collect()));
+        if let Some((_, receiver)) = &counts.pending {
+            match receiver.try_recv() {
+                Ok(answer) => {
+                    let at = counts.pending.take().map_or(key, |(at, _)| at);
+                    counts.known = Some((at, answer.into_iter().collect()));
+                }
+                // The worker died without answering: the next call starts another.
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => counts.pending = None,
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            }
         }
         let current = counts.known.as_ref().is_some_and(|(at, _)| *at == key);
-        let busy = counts.pending.as_ref().is_some_and(|(at, _)| *at == key);
+        // One worker at a time: a project that changes while it runs is
+        // taken up when it answers, so typing cannot pile workers up.
+        let busy = counts.pending.is_some();
         if !current && !busy {
             let copy: Option<Project> = self.machine().map(|p| (*p).clone());
             if let Some(copy) = copy {
@@ -237,15 +244,15 @@ impl NovoApp {
                     let _ = send.send(answer);
                     ctx.request_repaint();
                 });
-                // A newer state replaces a worker still busy with an older
-                // one; its answer goes nowhere.
                 self.reports_view.counts.pending = Some((key, receive));
             }
         }
-        let counts = &self.reports_view.counts;
-        counts
+        // Only counts worked out for this very state: a number shown is current.
+        self.reports_view
+            .counts
             .known
             .as_ref()
+            .filter(|(at, _)| *at == key)
             .map(|(_, c)| c.clone())
             .unwrap_or_default()
     }
@@ -984,6 +991,56 @@ mod tests {
     use super::*;
     use crate::actions::Action;
     use crate::app::gate1_tests::Drive;
+
+    #[test]
+    fn list_counts_show_only_the_current_state_and_equal_the_synchronous_ones() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = saved_example(dir.path());
+        let ctx = d.ctx.clone();
+        let wait = |d: &mut Drive| {
+            for _ in 0..600 {
+                let counts = d.app.list_counts(&ctx);
+                if !counts.is_empty() {
+                    return counts;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            panic!("the worker never answered");
+        };
+        let first = wait(&mut d);
+        let sync: std::collections::HashMap<String, usize> = {
+            let project = d.doc().project();
+            let mut live = novo_reports::LiveReports::standard();
+            let ids: Vec<String> = live.ids().into_iter().map(str::to_owned).collect();
+            ids.into_iter()
+                .map(|id| {
+                    let n = live
+                        .get(project, &id)
+                        .map_or(0, |o| novo_reports::headline_count(&id, o).0);
+                    (id, n)
+                })
+                .collect()
+        };
+        assert_eq!(first, sync);
+
+        // An edit: until the worker answers for the new state no number shows.
+        let wire = d.doc().project().wires().next().expect("a wire").id;
+        d.app
+            .backend
+            .document_mut()
+            .unwrap()
+            .transact("Remove a wire", |tx| tx.remove(wire))
+            .unwrap();
+        assert!(d.app.list_counts(&ctx).is_empty(), "stale counts shown");
+        let after = wait(&mut d);
+        assert_ne!(after, first, "the edit changed no count");
+        d.app.backend.document_mut().unwrap().undo().unwrap();
+        assert!(
+            d.app.list_counts(&ctx).is_empty(),
+            "stale counts after undo"
+        );
+        assert_eq!(wait(&mut d), first, "undo gives the first counts back");
+    }
 
     #[test]
     fn numbers_sort_by_value_and_empty_last() {
