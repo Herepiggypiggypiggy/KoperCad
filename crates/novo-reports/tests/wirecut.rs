@@ -304,7 +304,14 @@ fn a_wire_that_lies_in_no_duct_has_no_bundle_and_says_so() {
     let jobs = wire_cut_jobs(doc.project());
     for j in &jobs {
         assert_eq!((j.bundle, j.sequence), (None, None));
-        assert_eq!(j.track, "not routed");
+        assert_eq!(
+            j.track,
+            if j.cable.is_some() {
+                "in cable"
+            } else {
+                "not routed"
+            }
+        );
         assert_eq!(j.direction, "A>B as listed");
         assert_eq!(j.bundle_text(), None);
     }
@@ -416,4 +423,48 @@ fn track_names_are_explained_in_the_duct_fill_and_on_the_bench_cut_list() {
         "{:?}",
         note.text_rows()
     );
+}
+
+#[test]
+fn duct_names_follow_the_order_the_ducts_were_added_and_not_the_routing() {
+    let (doc, _) = cabinet();
+    let names = novo_reports::duct_names(doc.project());
+    assert_eq!(names.len(), 1);
+    assert_eq!(names.values().next().unwrap(), "D1");
+}
+
+#[test]
+fn a_cable_core_says_it_is_in_the_cable_and_bundles_are_explained_as_direction_free() {
+    let mut doc = Document::default();
+    motor_starter(&mut doc).expect("fixture");
+    let jobs = wire_cut_jobs(doc.project());
+    for j in jobs.iter().filter(|j| j.cable.is_some()) {
+        assert_eq!(j.track, "in cable", "{j:?}");
+    }
+    let (doc, _) = cabinet();
+    let bench = novo_reports::BenchCut::build(doc.project(), &wire_cut_jobs(doc.project()));
+    let text = format!(
+        "{:?}",
+        bench
+            .sections
+            .iter()
+            .map(|s| s.text_rows())
+            .collect::<Vec<_>>()
+    );
+    assert!(text.contains("same bundle"), "{text}");
+    let titles: Vec<&str> = bench.sections.iter().map(|s| s.title.as_str()).collect();
+    assert!(
+        titles
+            .iter()
+            .all(|t| !t.contains("1 wires") && !t.contains("-0.0")),
+        "{titles:?}"
+    );
+    let group = bench
+        .sections
+        .iter()
+        .find(|s| s.key.starts_with("g:"))
+        .unwrap();
+    assert!(group.columns.iter().any(|c| c.header == "Sleeve A"));
+    let note = bench.sections.iter().find(|s| s.key == "check").unwrap();
+    assert_eq!(note.columns[0].header, "Note");
 }

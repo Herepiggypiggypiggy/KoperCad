@@ -34,6 +34,11 @@ as tall as their longest text, so nothing is cut with "..." on paper. Only the p
 drill step, when it is long, is replaced by "see the drilling template" (the 1:1 template has
 the positions); part lists and wire ends are always printed.
 
+A device step also has **Show on the plate** and **Show in 3D**: Build mode steps
+aside behind a "Back to Build mode" bar at the bottom of the window, the device is
+selected in the Cabinet canvas or the 3D view, and the bar brings you back to the
+same step. While it is stepped aside Space and Escape do not touch the build.
+
 ## Honest limits
 
 - Wires are cut and holes drilled by hand. A step says what to cut or drill and

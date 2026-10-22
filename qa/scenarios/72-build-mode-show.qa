@@ -1,0 +1,31 @@
+@title Build mode: show a device step on the plate and in 3D, step aside and come back
+@area Cabinet
+# A device step has Show on the plate and Show in 3D; Build mode steps aside behind a bar so the workspace can be seen.
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text Reports
+wait 5
+click_text "Build mode..."
+wait 30
+click_text "Devices  0/8"
+wait 10
+click_text "20  =A1+CAB-K1"
+wait 10
+expect "Show on the plate"
+shot device-step
+click_text "Show on the plate" Button
+wait 20
+expect "Back to Build mode"
+shot on-the-plate
+check_layout
+click_text "Back to Build mode" Button
+wait 10
+expect "Step"
+click_text "Show in 3D" Button
+wait 40
+expect "Back to Build mode"
+shot in-3d
+check_blank in-3d
+click_text "Back to Build mode" Button
+wait 10
+shot back
