@@ -365,6 +365,6 @@ fn a_device_is_centred_on_its_rail_or_listed_with_how_far_off_it_is() {
         "{}",
         off[0].message
     );
-    assert!(off[0].message.contains("Place all"), "{}", off[0].message);
+    assert!(off[0].message.contains("drag it onto the rail"), "{}", off[0].message);
     assert_eq!(ProblemKind::DeviceOffRail.severity(), Severity::Warning);
 }
