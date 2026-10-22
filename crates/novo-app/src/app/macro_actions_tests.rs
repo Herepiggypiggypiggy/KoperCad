@@ -188,3 +188,19 @@ fn the_command_field_finds_a_starter_circuit_and_opens_the_place_window_on_it() 
     // Picked by its whole name, so the window already has it chosen.
     assert!(d.app.wb.macro_place.selected.is_some());
 }
+
+/// Audit C-59: the PLC input card macro only draws symbols, so placing it says
+/// where to get a real card; a macro without PLC channels says nothing.
+#[test]
+fn only_a_macro_with_plc_channels_points_to_add_plc_card() {
+    let starters = novo_parts::starter_macros();
+    let draws = |name: &str| {
+        let (_, file) = starters
+            .iter()
+            .find(|(_, f)| f.name == name)
+            .unwrap_or_else(|| panic!("starter {name}"));
+        super::macro_actions::draws_plc_channels(&file.definition)
+    };
+    assert!(draws("PLC input card"));
+    assert!(!draws("Frequency converter drive"));
+}
