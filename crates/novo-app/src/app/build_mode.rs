@@ -245,10 +245,16 @@ impl NovoApp {
             // Build mode steps aside (a bar brings it back) so the other
             // workspace can be seen.
             state.away = true;
+            let tag = state
+                .plan
+                .as_ref()
+                .and_then(|(_, p)| p.cabinets.get(state.cabinet))
+                .map(|c| c.tag.clone())
+                .unwrap_or_default();
             match show {
                 Show::Wire3d(wire) => self.show_wire_in_3d(wire),
-                Show::DevicePlate(device) => self.show_device(device, false),
-                Show::Device3d(device) => self.show_device(device, true),
+                Show::DevicePlate(device) => self.show_device(device, &tag, false),
+                Show::Device3d(device) => self.show_device(device, &tag, true),
             }
             self.wb.build = Some(state);
             return;
@@ -382,9 +388,16 @@ impl NovoApp {
     }
 
     /// Selects the device on the Cabinet canvas and shows it there or, with
-    /// `three_d`, in the 3D view (which follows the plate's selection).
-    pub(super) fn show_device(&mut self, device: u64, three_d: bool) {
+    /// `three_d`, in the 3D view (which follows the plate's selection). The
+    /// Cabinet switches to the step's own cabinet (`tag`), its plate and not
+    /// the table face, so a project with several cabinets shows the right one.
+    pub(super) fn show_device(&mut self, device: u64, tag: &str, three_d: bool) {
         self.flush_commissioning();
+        if let Ok(location) = novo_core::DeviceTag::parse(tag) {
+            self.cabinet.location = Some(location);
+        }
+        self.cabinet.surface = None;
+        self.cabinet.table = false;
         self.cabinet.view.selection.apply(
             [novo_canvas::cabinet::box_item(device)],
             novo_canvas::selection::SelectOp::Replace,
@@ -718,17 +731,26 @@ fn card(
             }
             ui.add_space(10.0);
             status_and_buttons(ui, state, cab, mode, step, status, who, asked);
-            ui.horizontal(|ui| {
+            // Real buttons, in the size of the others: a bare text link is
+            // easy to miss and too small for a finger.
+            let h = if state.large { 48.0 } else { 30.0 };
+            let show = |ui: &mut egui::Ui, label: &str| {
+                // The width follows the (possibly translated) label.
+                ui.add(egui::Button::new(label).min_size(egui::vec2(0.0, h)))
+                    .clicked()
+            };
+            ui.add_space(6.0);
+            ui.horizontal_wrapped(|ui| {
                 if let Some(device) = step.device {
-                    if widgets::ghost_button(ui, "Show on the plate").clicked() {
+                    if show(ui, "Show on the plate") {
                         asked.show = Some(Show::DevicePlate(device));
                     }
-                    if widgets::ghost_button(ui, "Show in 3D").clicked() {
+                    if show(ui, "Show in 3D") {
                         asked.show = Some(Show::Device3d(device));
                     }
                 }
                 if let Some(&w) = step.wires.first()
-                    && widgets::ghost_button(ui, "Show the wire in 3D").clicked()
+                    && show(ui, "Show the wire in 3D")
                 {
                     asked.show = Some(Show::Wire3d(w));
                 }
@@ -1013,8 +1035,10 @@ fn away_bar(ctx: &egui::Context, rect: egui::Rect, step: &str) -> bool {
     let mut back = false;
     egui::Area::new(egui::Id::new("build_mode_away"))
         .order(egui::Order::Middle)
-        .pivot(egui::Align2::CENTER_BOTTOM)
-        .fixed_pos(egui::pos2(rect.center().x, rect.bottom() - 14.0))
+        // Bottom left: the Cabinet's lowest device and the 3D view's
+        // controls sit towards the middle and the right.
+        .pivot(egui::Align2::LEFT_BOTTOM)
+        .fixed_pos(egui::pos2(rect.left() + 14.0, rect.bottom() - 14.0))
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.horizontal(|ui| {

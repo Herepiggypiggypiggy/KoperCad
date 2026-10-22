@@ -262,7 +262,7 @@ fn a_device_step_can_be_shown_on_the_plate_and_in_3d_and_build_mode_steps_aside(
         .and_then(|b| b.plan.clone())
         .and_then(|(_, p)| p.cabinets[0].steps.iter().find_map(|s| s.device))
         .expect("a device step");
-    d.app.show_device(device, false);
+    d.app.show_device(device, "+CAB1", false);
     d.app.wb.build.as_mut().unwrap().away = true;
     d.frame();
     d.frame();
@@ -274,8 +274,37 @@ fn a_device_step_can_be_shown_on_the_plate_and_in_3d_and_build_mode_steps_aside(
     d.frame();
     assert!(d.app.wb.build.is_some());
     assert_eq!(ticks(&d), 0);
-    d.app.show_device(device, true);
+    d.app.show_device(device, "+CAB1", true);
     d.frame();
     d.frame();
     assert_eq!(d.app.workspace(), Workspace::View3d);
+}
+
+#[test]
+fn showing_a_device_switches_the_cabinet_to_the_step_s_own_plate_not_the_table() {
+    let (_dir, mut d) = started();
+    cabinet(&mut d);
+    let device = d
+        .app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .devices()
+        .next()
+        .unwrap()
+        .id
+        .raw();
+    // Another cabinet is on show, in table face, on a door surface.
+    d.app.cabinet.location = Some(DeviceTag::parse("+OTHER").unwrap());
+    d.app.cabinet.table = true;
+    d.app.cabinet.surface = Some("door".to_owned());
+    d.app.show_device(device, "+CAB1", false);
+    assert_eq!(
+        d.app.cabinet.location,
+        Some(DeviceTag::parse("+CAB1").unwrap())
+    );
+    assert!(!d.app.cabinet.table);
+    assert_eq!(d.app.cabinet.surface, None);
+    assert_eq!(d.app.cabinet_selected(), vec![device]);
 }

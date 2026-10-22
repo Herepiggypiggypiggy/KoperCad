@@ -42,7 +42,7 @@ drill step, when it is long, is replaced by "see the drilling template" (the 1:1
 the positions); part lists and wire ends are always printed.
 
 A device step also has **Show on the plate** and **Show in 3D**: Build mode steps
-aside behind a "Back to Build mode" bar at the bottom of the window, the device is
+aside behind a "Back to Build mode" bar at the bottom left of the window, the device is
 selected in the Cabinet canvas or the 3D view, and the bar brings you back to the
 same step. While it is stepped aside Space and Escape do not touch the build.
 
