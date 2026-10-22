@@ -490,3 +490,19 @@ fn recovering_a_damaged_project_is_found_by_the_words_people_try() {
         );
     }
 }
+
+#[test]
+fn a_typed_label_beats_a_shorter_verb_run_on_the_rest() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    // `import parts` is a verb of the folder importer, but the whole phrase is
+    // the start of the table importer's label: Enter must open the table one.
+    for query in [
+        "import parts from a table",
+        "Import parts from a table (CSV",
+    ] {
+        let rows = search(&palette, &keymap, query);
+        assert_eq!(position(&rows, "parts.import_table"), Some(0), "{query:?}");
+    }
+    let rows = search(&palette, &keymap, "import parts from a folder");
+    assert_eq!(position(&rows, "parts.import_folder"), Some(0));
+}

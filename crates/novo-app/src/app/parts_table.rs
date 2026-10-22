@@ -230,6 +230,7 @@ impl NovoApp {
             }
         };
         let existing = existing_catalog(catalog_path.as_deref());
+        self.dismiss_toasts();
         self.wb.parts_table = Some(PartsTableImport::new(
             name,
             table,
