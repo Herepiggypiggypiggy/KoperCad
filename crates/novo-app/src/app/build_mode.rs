@@ -218,10 +218,16 @@ impl NovoApp {
             // Build mode steps aside (a bar brings it back) so the other
             // workspace can be seen.
             state.away = true;
+            let tag = state
+                .plan
+                .as_ref()
+                .and_then(|(_, p)| p.cabinets.get(state.cabinet))
+                .map(|c| c.tag.clone())
+                .unwrap_or_default();
             match show {
                 Show::Wire3d(wire) => self.show_wire_in_3d(wire),
-                Show::DevicePlate(device) => self.show_device(device, false),
-                Show::Device3d(device) => self.show_device(device, true),
+                Show::DevicePlate(device) => self.show_device(device, &tag, false),
+                Show::Device3d(device) => self.show_device(device, &tag, true),
             }
             self.wb.build = Some(state);
             return;
@@ -289,9 +295,16 @@ impl NovoApp {
     }
 
     /// Selects the device on the Cabinet canvas and shows it there or, with
-    /// `three_d`, in the 3D view (which follows the plate's selection).
-    pub(super) fn show_device(&mut self, device: u64, three_d: bool) {
+    /// `three_d`, in the 3D view (which follows the plate's selection). The
+    /// Cabinet switches to the step's own cabinet (`tag`), its plate and not
+    /// the table face, so a project with several cabinets shows the right one.
+    pub(super) fn show_device(&mut self, device: u64, tag: &str, three_d: bool) {
         self.flush_commissioning();
+        if let Ok(location) = novo_core::DeviceTag::parse(tag) {
+            self.cabinet.location = Some(location);
+        }
+        self.cabinet.surface = None;
+        self.cabinet.table = false;
         self.cabinet.view.selection.apply(
             [novo_canvas::cabinet::box_item(device)],
             novo_canvas::selection::SelectOp::Replace,
