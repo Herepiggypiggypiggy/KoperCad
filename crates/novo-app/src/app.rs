@@ -100,6 +100,9 @@ mod heat_time;
 #[cfg(test)]
 mod heat_time_tests;
 mod heat_verdict;
+mod heat_wires;
+#[cfg(test)]
+mod heat_wires_tests;
 mod inspector;
 mod interop;
 mod languages;

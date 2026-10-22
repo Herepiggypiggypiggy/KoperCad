@@ -18,6 +18,7 @@ fn meta() -> Meta {
         ambient: 35.0,
         plate: [20.0, 20.0, 360.0, 360.0],
         messages: Vec::new(),
+        wire_notes: Vec::new(),
     }
 }
 
@@ -40,6 +41,7 @@ fn dummy(id: u64) -> Arc<Solution> {
         ambient: 35.0,
         plate: [20.0, 20.0, 360.0, 360.0],
         messages: Vec::new(),
+        wire_notes: Vec::new(),
     })
 }
 

@@ -316,6 +316,11 @@ impl Medium {
                         .iter()
                         .find(|d| d.id == id)
                         .map_or(0.0, |d| d.loss_w),
+                    // Wires in a duct: the duct's heat is spread over its box.
+                    crate::result::MaterialKind::Duct => (m.id as usize)
+                        .checked_sub(2 + scn.devices.len())
+                        .and_then(|idx| scn.obstacles.get(idx))
+                        .map_or(0.0, |o| o.loss_w),
                     _ => 0.0,
                 };
                 // heat density inside the material, W/m3
@@ -354,6 +359,7 @@ impl Medium {
                     md.drag[long_axis][cell] += share * along;
                     md.drag[cross_axis][cell] += share * cross;
                     md.drag[2][cell] += share * 10.0 * cross;
+                    md.heat_w_m3[cell] += share * q;
                     return;
                 }
                 let k = if lumped && is_device(id) && dev_share[cell] >= 0.5 {

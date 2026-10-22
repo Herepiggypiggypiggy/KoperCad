@@ -137,6 +137,9 @@ pub struct Setup {
     /// Plate to ambient through the rear wall, W/K per cell.
     pub g_pa: Vec<f64>,
     pub devices: Vec<DeviceCells>,
+    /// Heat released straight into the air, W per cell: the wires lying in
+    /// ducts (`Obstacle::loss_w`), spread over the cells the duct covers.
+    pub sources: Vec<(usize, f64)>,
     pub ports: Vec<Port>,
     pub params: Params,
     /// Extra eddy diffusivity from the fan jets, m2/s (see [`JET_MIXING_COEFFICIENT`]).
@@ -162,6 +165,11 @@ fn validate(s: &Scenario) -> Result<(), Error> {
     }
     if !finite(s.ambient_c) || !(-60.0..=120.0).contains(&s.ambient_c) {
         return bad("ambient temperature is out of range");
+    }
+    for o in &s.obstacles {
+        if !(finite(o.loss_w) && o.loss_w >= 0.0) {
+            return bad("an obstacle's heat is negative or not a number");
+        }
     }
     for d in &s.devices {
         if !(finite(d.loss_w) && d.loss_w >= 0.0) {
@@ -387,6 +395,17 @@ impl Setup {
             });
         }
 
+        // Heat released inside obstacles (wires in a duct) goes into the air
+        // of the cells under them, by the share of the footprint in each.
+        let mut sources: Vec<(usize, f64)> = Vec::new();
+        for ob in s.obstacles.iter().filter(|o| o.loss_w > 0.0) {
+            let cells = cells_of(&ob.rect);
+            let total: f64 = cells.iter().map(|c| c.1).sum();
+            if total > 0.0 {
+                sources.extend(cells.iter().map(|&(i, f)| (i, ob.loss_w * f / total)));
+            }
+        }
+
         // Openings.
         let mut ports = Vec::new();
         let mut add_opening =
@@ -504,6 +523,7 @@ impl Setup {
             g_ap,
             g_pa,
             devices,
+            sources,
             ports,
             params: p.clone(),
             jet_mixing_m2s,
@@ -516,6 +536,12 @@ impl Setup {
 
     pub fn n(&self) -> usize {
         self.nx * self.ny
+    }
+
+    /// Heat of everything in the cabinet at full load, W: devices and wires.
+    pub fn total_loss_w(&self) -> f64 {
+        self.devices.iter().map(|d| d.loss_w).sum::<f64>()
+            + self.sources.iter().map(|s| s.1).sum::<f64>()
     }
 }
 

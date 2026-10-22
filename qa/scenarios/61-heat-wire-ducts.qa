@@ -1,0 +1,81 @@
+@title Cabinet heat: wires in the ducts add heat
+@area Heat
+@slow
+@sizes 1920x1080
+# 1920x1080 only: at 1366x768 the Cabinet heat run stays at "starting" in the QA harness (scenario 30 shows the same). Cabinet with every wire sized: the power wires lie in the ducts, so the heat run counts their I2R loss and the Temperature panel says what it rests on (currents, copper temperature, no diversity).
+open qa/fixtures/cabinet-wire-heat.novo
+wait 20
+click_text Cabinet #1
+wait 20
+key ctrl+k
+wait 3
+text Simulate heat of the cabinet
+wait 4
+key Enter
+wait 60
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+expect "Wires in ducts add"
+move 1800 300
+wait 10
+shot heat-wires-in-ducts
+check_blank heat-wires-in-ducts
+check_layout

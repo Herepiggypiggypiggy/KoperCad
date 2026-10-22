@@ -81,6 +81,9 @@ pub(super) struct Meta {
     pub ambient: f64,
     pub plate: [f64; 4],
     pub messages: Vec<String>,
+    /// What the heat of the wires in the ducts rests on (information, not a
+    /// warning).
+    pub wire_notes: Vec<String>,
 }
 
 pub(super) struct HeatState {
@@ -357,6 +360,7 @@ impl HeatState {
                             ambient: m.ambient,
                             plate: m.plate,
                             messages: m.messages.clone(),
+                            wire_notes: m.wire_notes.clone(),
                         }));
                     }
                 }
@@ -417,6 +421,7 @@ impl HeatState {
                         ambient: m.ambient,
                         plate: m.plate,
                         messages: m.messages,
+                        wire_notes: m.wire_notes,
                     });
                     self.time.push(f.time_s, f.load_factor, solution);
                 }
@@ -975,8 +980,10 @@ pub(super) fn start_run(
     enclosure: novo_core::StructureId,
     input: &Input,
 ) {
+    let wires = super::heat_wires::wire_heat(project, enclosure);
     let options = novo_thermal::bridge::BridgeOptions {
         ambient_c: input.ambient,
+        duct_loss_w: wires.by_duct.clone(),
         ..Default::default()
     };
     match novo_thermal::bridge::scenario_from_project(project, enclosure, &options) {
@@ -992,6 +999,7 @@ pub(super) fn start_run(
                 ambient: input.ambient,
                 plate: [plate.x, plate.y, plate.w, plate.h],
                 messages: bridge.report.messages(),
+                wire_notes: wires.notes.clone(),
             };
             state.start(bridge.scenario, meta);
         }
@@ -1748,7 +1756,7 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                 let (total_w, with_data, unknown) = totals(input);
                 if with_data > 0 {
                     ui.label(small(
-                        &format!("Total loss {total_w:.0} W"),
+                        &format!("Total loss {total_w:.0} W (devices)"),
                         crate::theme::ui_palette().text_primary,
                     ));
                 }
@@ -1800,6 +1808,12 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                         // so a short window is not cut off mid-sentence.
                         for m in &sol.messages {
                             ui.label(small(m, t::WARNING));
+                        }
+                        // The headline fits the narrow panel; what it rests on is
+                        // on hover here and in full in the 3D Heat panel.
+                        if let Some((head, basis)) = sol.wire_notes.split_first() {
+                            ui.label(small(head, crate::theme::ui_palette().text_secondary))
+                                .on_hover_text(basis.join("\n\n"));
                         }
                         if !sol.snapshot.notes.is_empty() {
                             let pal = crate::theme::ui_palette();
@@ -2096,6 +2110,7 @@ mod tests {
             ambient: i.ambient,
             plate: [50.0, 50.0, 600.0, 800.0],
             messages: vec!["1 device has no loss data".into()],
+            wire_notes: Vec::new(),
         }
     }
 

@@ -98,6 +98,9 @@ impl TransientSolver for CabinetSolver {
             for d in &mut at_start.devices {
                 d.loss_w *= load;
             }
+            for o in &mut at_start.obstacles {
+                o.loss_w *= load;
+            }
             let steady = self.solve(&at_start, fidelity, control, &mut |_| {})?;
             if steady.temperature_c.len() != flow.t.len() {
                 return Err(CfdError::Setup(
