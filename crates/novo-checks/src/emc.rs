@@ -29,7 +29,11 @@ pub(crate) fn run(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
         let mut at: Vec<AnyId> = f.subjects.iter().copied().map(any).collect();
         // Drawn objects first: wires, then the rest, as the other checks do.
         at.sort_by_key(|id| !matches!(id, AnyId::Wire(_)));
-        let hint = f.fixes.first().map(|x| format!(" Suggestion: {}", x.hint())).unwrap_or_default();
+        let hint = f
+            .fixes
+            .first()
+            .map(|x| format!(" Suggestion: {}", x.hint()))
+            .unwrap_or_default();
         out.push(Problem {
             kind: ProblemKind::Emc,
             severity: match f.severity {
@@ -40,7 +44,12 @@ pub(crate) fn run(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
             at,
             page: None,
             position: None,
-            message: format!("{} ({}, {}){hint}", f.message, f.rule, f.level.label().to_lowercase()),
+            message: format!(
+                "{} ({}, {}){hint}",
+                f.message,
+                f.rule,
+                f.level.label().to_lowercase()
+            ),
             rule: Some(f.rule),
         });
     }

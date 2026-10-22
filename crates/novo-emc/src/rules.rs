@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::class::{EmcClass, Termination};
 use crate::geometry::{self, Piece};
-use crate::input::{Device, FilterState, Finish, Input, Origin, Role, Run, P};
+use crate::input::{Device, FilterState, Finish, Input, Origin, P, Role, Run};
 use crate::report::*;
 
 /// One rule of the catalogue (`docs/EMC.md` section 5).
@@ -122,13 +122,19 @@ struct Ctx<'a> {
 
 impl<'a> Ctx<'a> {
     fn run(&self, id: u64) -> String {
-        self.names.get(&id).map_or_else(|| format!("wire {id}"), |n| (*n).to_owned())
+        self.names
+            .get(&id)
+            .map_or_else(|| format!("wire {id}"), |n| (*n).to_owned())
     }
     fn dev(&self, id: u64) -> String {
-        self.devices.get(&id).map_or_else(|| format!("device {id}"), |d| d.tag.clone())
+        self.devices
+            .get(&id)
+            .map_or_else(|| format!("device {id}"), |d| d.tag.clone())
     }
     fn plate(&self, id: u64) -> String {
-        self.plates.get(&id).map_or_else(|| "a plate".to_owned(), |p| (*p).to_owned())
+        self.plates
+            .get(&id)
+            .map_or_else(|| "a plate".to_owned(), |p| (*p).to_owned())
     }
 }
 
@@ -146,11 +152,20 @@ pub fn analyse(input: &Input) -> Report {
         input,
         names: input.runs.iter().map(|r| (r.id, r.name.as_str())).collect(),
         devices: input.devices.iter().map(|d| (d.id, d)).collect(),
-        plates: input.plates.iter().map(|p| (p.id, p.tag.as_str())).collect(),
+        plates: input
+            .plates
+            .iter()
+            .map(|p| (p.id, p.tag.as_str()))
+            .collect(),
     };
     let mut findings = Vec::new();
     let mut status: Vec<RuleStatus> = Vec::new();
-    let note = |status: &mut Vec<RuleStatus>, rule: &'static str, found: usize, applies: bool, text: &str, missing: bool| {
+    let note = |status: &mut Vec<RuleStatus>,
+                rule: &'static str,
+                found: usize,
+                applies: bool,
+                text: &str,
+                missing: bool| {
         let (st, note) = if !applies {
             (Status::NotApplicable, text.to_owned())
         } else if missing {
@@ -160,7 +175,12 @@ pub fn analyse(input: &Input) -> Report {
         } else {
             (Status::NoFinding, text.to_owned())
         };
-        status.push(RuleStatus { rule, status: st, findings: found, note });
+        status.push(RuleStatus {
+            rule,
+            status: st,
+            findings: found,
+            note,
+        });
     };
 
     let before = findings.len();
@@ -169,14 +189,22 @@ pub fn analyse(input: &Input) -> Report {
     let seg1 = findings.iter().filter(|f| f.rule == "EMC-01").count();
     let seg2 = findings.iter().filter(|f| f.rule == "EMC-02").count();
     let classes: BTreeSet<EmcClass> = input.runs.iter().map(|r| r.class).collect();
-    let mixed_classes = classes.iter().any(|a| classes.iter().any(|b| input.params.distance_mm(*a, *b) > 0.0));
+    let mixed_classes = classes.iter().any(|a| {
+        classes
+            .iter()
+            .any(|b| input.params.distance_mm(*a, *b) > 0.0)
+    });
     let _ = before;
     note(
         &mut status,
         "EMC-01",
         seg1,
         mixed_classes,
-        if routed == 0 { "No wire has a route on a plate yet: cable mixing was checked, duct sharing was not" } else { "Duct sharing and cable mixing" },
+        if routed == 0 {
+            "No wire has a route on a plate yet: cable mixing was checked, duct sharing was not"
+        } else {
+            "Duct sharing and cable mixing"
+        },
         false,
     );
     note(
@@ -184,46 +212,92 @@ pub fn analyse(input: &Input) -> Report {
         "EMC-02",
         seg2,
         mixed_classes,
-        if routed == 0 { "No wire has a route on a plate yet" } else { "Parallel stretches of different classes" },
+        if routed == 0 {
+            "No wire has a route on a plate yet"
+        } else {
+            "Parallel stretches of different classes"
+        },
         routed == 0 && mixed_classes,
     );
 
     let n = findings.len();
     motor_cables(&cx, &mut findings);
     let motor = input.runs.iter().any(|r| r.class == EmcClass::Motor);
-    note(&mut status, "EMC-04", findings.len() - n, motor, "Motor wires and their cables", false);
+    note(
+        &mut status,
+        "EMC-04",
+        findings.len() - n,
+        motor,
+        "Motor wires and their cables",
+        false,
+    );
 
     let n = findings.len();
     pigtails(&cx, &mut findings);
     let shielded = input.runs.iter().any(|r| r.shield.is_some());
-    let unknown_ends = input.runs.iter().filter_map(|r| r.shield).any(|s| s.a == Termination::Unknown || s.b == Termination::Unknown);
+    let unknown_ends = input
+        .runs
+        .iter()
+        .filter_map(|r| r.shield)
+        .any(|s| s.a == Termination::Unknown || s.b == Termination::Unknown);
     note(
         &mut status,
         "EMC-05",
         findings.len() - n,
         shielded,
-        if input.params.frequency_hz > BAND_HZ.1 { "No model above 30 MHz: the estimate is not given" } else if unknown_ends { "Some shield ends are not stated (emc.shield_a / emc.shield_b)" } else { "Shield ends" },
+        if input.params.frequency_hz > BAND_HZ.1 {
+            "No model above 30 MHz: the estimate is not given"
+        } else if unknown_ends {
+            "Some shield ends are not stated (emc.shield_a / emc.shield_b)"
+        } else {
+            "Shield ends"
+        },
         (unknown_ends && findings.len() == n) || input.params.frequency_hz > BAND_HZ.1,
     );
 
     let n = findings.len();
     drive_filters(&cx, &mut findings);
     let drives = input.devices.iter().any(|d| d.role == Role::Drive);
-    note(&mut status, "EMC-07", findings.len() - n, drives, "Drives and filters", false);
+    note(
+        &mut status,
+        "EMC-07",
+        findings.len() - n,
+        drives,
+        "Drives and filters",
+        false,
+    );
 
     let n = findings.len();
     loops(&cx, &mut findings);
-    note(&mut status, "EMC-09", findings.len() - n, routed > 0, "Go and return pairs between the same two devices", false);
+    note(
+        &mut status,
+        "EMC-09",
+        findings.len() - n,
+        routed > 0,
+        "Go and return pairs between the same two devices",
+        false,
+    );
 
     let n = findings.len();
     bonding(&cx, &mut findings);
-    let plate_unknown = input.devices.iter().any(|d| matches!(d.role, Role::Drive | Role::Filter) && d.plate.is_some_and(|p| input.plates.iter().any(|q| q.id == p && q.finish.is_none())));
+    let plate_unknown = input.devices.iter().any(|d| {
+        matches!(d.role, Role::Drive | Role::Filter)
+            && d.plate
+                .is_some_and(|p| input.plates.iter().any(|q| q.id == p && q.finish.is_none()))
+    });
     note(
         &mut status,
         "EMC-11",
         findings.len() - n,
-        input.devices.iter().any(|d| matches!(d.role, Role::Drive | Role::Filter)),
-        if plate_unknown { "The plate finish is not stated (emc.finish)" } else { "Plate finish under drives and filters" },
+        input
+            .devices
+            .iter()
+            .any(|d| matches!(d.role, Role::Drive | Role::Filter)),
+        if plate_unknown {
+            "The plate finish is not stated (emc.finish)"
+        } else {
+            "Plate finish under drives and filters"
+        },
         plate_unknown && findings.len() == n,
     );
 
@@ -253,12 +327,22 @@ pub fn analyse(input: &Input) -> Report {
     findings.sort_by(|a, b| {
         a.severity
             .cmp(&b.severity)
-            .then(b.points.iter().map(|p| p.1).max().cmp(&a.points.iter().map(|p| p.1).max()))
+            .then(
+                b.points
+                    .iter()
+                    .map(|p| p.1)
+                    .max()
+                    .cmp(&a.points.iter().map(|p| p.1).max()),
+            )
             .then(a.rule.cmp(b.rule))
             .then(a.subjects.cmp(&b.subjects))
     });
 
-    let mut report = Report { findings, rules: status, ..Report::default() };
+    let mut report = Report {
+        findings,
+        rules: status,
+        ..Report::default()
+    };
     scores(&cx, &mut report);
     report.assumptions = assumptions(input);
     report
@@ -273,14 +357,46 @@ fn assumptions(input: &Input) -> Vec<Assumption> {
         property,
     };
     vec![
-        a("Shortest parallel stretch reported", "emc.min_parallel_mm", mm(p.min_parallel_mm)),
-        a("Height of the wires above the plate (the plate carries the return)", "emc.wire_height_mm", mm(p.wire_height_mm)),
-        a("Current step assumed in an aggressor", "emc.didt_a_per_us", format!("{} A/us", p.didt_a_per_us)),
-        a("Frequency of the shield pigtail impedance", "emc.frequency_hz", format!("{} MHz (estimates hold up to {} MHz)", p.frequency_hz / 1.0e6, BAND_HZ.1 / 1.0e6)),
-        a("Largest loop between go and return", "emc.max_loop_cm2", format!("{} cm2", p.max_loop_cm2)),
+        a(
+            "Shortest parallel stretch reported",
+            "emc.min_parallel_mm",
+            mm(p.min_parallel_mm),
+        ),
+        a(
+            "Height of the wires above the plate (the plate carries the return)",
+            "emc.wire_height_mm",
+            mm(p.wire_height_mm),
+        ),
+        a(
+            "Current step assumed in an aggressor",
+            "emc.didt_a_per_us",
+            format!("{} A/us", p.didt_a_per_us),
+        ),
+        a(
+            "Frequency of the shield pigtail impedance",
+            "emc.frequency_hz",
+            format!(
+                "{} MHz (estimates hold up to {} MHz)",
+                p.frequency_hz / 1.0e6,
+                BAND_HZ.1 / 1.0e6
+            ),
+        ),
+        a(
+            "Largest loop between go and return",
+            "emc.max_loop_cm2",
+            format!("{} cm2", p.max_loop_cm2),
+        ),
         a("Filter within", "emc.filter_max_mm", mm(p.filter_max_mm)),
-        a("Sensitive device away from a drive", "emc.sensitive_min_mm", mm(p.sensitive_min_mm)),
-        a("Longest shield pigtail", "emc.pigtail_max_mm", mm(p.pigtail_max_mm)),
+        a(
+            "Sensitive device away from a drive",
+            "emc.sensitive_min_mm",
+            mm(p.sensitive_min_mm),
+        ),
+        a(
+            "Longest shield pigtail",
+            "emc.pigtail_max_mm",
+            mm(p.pigtail_max_mm),
+        ),
     ]
 }
 
@@ -360,7 +476,10 @@ fn segregation(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
         }
     }
     for (plate, runs) in by_plate {
-        let cache: Vec<Vec<Piece>> = runs.iter().map(|r| geometry::pieces(r, &input.ducts)).collect();
+        let cache: Vec<Vec<Piece>> = runs
+            .iter()
+            .map(|r| geometry::pieces(r, &input.ducts))
+            .collect();
         for i in 0..runs.len() {
             for j in i + 1..runs.len() {
                 let (a, b) = (runs[i], runs[j]);
@@ -393,7 +512,11 @@ fn segregation(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                     if group.is_empty() || length < p.min_parallel_mm {
                         continue;
                     }
-                    let mean_d = group.iter().map(|s| s.distance_mm * s.length_mm).sum::<f64>() / length;
+                    let mean_d = group
+                        .iter()
+                        .map(|s| s.distance_mm * s.length_mm)
+                        .sum::<f64>()
+                        / length;
                     let min_d = group.iter().map(|s| s.distance_mm).fold(f64::MAX, f64::min);
                     let (ia, iv) = victim_first(a, b);
                     let pair = [a, b];
@@ -401,63 +524,110 @@ fn segregation(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                     let w = (agg.class.aggression() * vic.class.sensitivity()).sqrt();
                     let s_short = clamp01((need - mean_d) / need);
                     let lf = clamp01(length / 1000.0);
-                    let pts = (100.0 * w * (0.25 + 0.75 * s_short) * (0.3 + 0.7 * lf)).round() as u32;
+                    let pts =
+                        (100.0 * w * (0.25 + 0.75 * s_short) * (0.3 + 0.7 * lf)).round() as u32;
                     if pts == 0 {
                         continue;
                     }
                     let mut band_hz = None;
                     let mut metrics = vec![
-                        Metric { label: "Parallel length", value: mm(length), level: Level::Index },
-                        Metric { label: "Closest distance", value: mm(min_d), level: Level::Index },
-                        Metric { label: "Planning distance", value: mm(need), level: Level::Index },
+                        Metric {
+                            label: "Parallel length",
+                            value: mm(length),
+                            level: Level::Index,
+                        },
+                        Metric {
+                            label: "Closest distance",
+                            value: mm(min_d),
+                            level: Level::Index,
+                        },
+                        Metric {
+                            label: "Planning distance",
+                            value: mm(need),
+                            level: Level::Index,
+                        },
                     ];
                     // Level 2: induced voltage into the victim over the stretch.
                     if agg.class.is_aggressor() {
                         let volts: f64 = group
                             .iter()
                             .map(|s| {
-                                geometry::mutual_per_m(p.wire_height_mm, s.centre_mm, vic.diameter_mm.max(agg.diameter_mm))
-                                    * (s.length_mm / 1000.0)
+                                geometry::mutual_per_m(
+                                    p.wire_height_mm,
+                                    s.centre_mm,
+                                    vic.diameter_mm.max(agg.diameter_mm),
+                                ) * (s.length_mm / 1000.0)
                                     * p.didt_a_per_us
                                     * 1.0e6
                             })
                             .sum();
                         metrics.push(Metric {
                             label: "Induced voltage (estimate)",
-                            value: format!("{volts:.1} V for {} A/us, within a factor of 3", p.didt_a_per_us),
+                            value: format!(
+                                "{volts:.1} V for {} A/us, within a factor of 3",
+                                p.didt_a_per_us
+                            ),
                             level: Level::Estimate,
                         });
                         band_hz = Some(BAND_HZ);
                     }
                     let ribbons: Vec<Ribbon> = group
                         .iter()
-                        .map(|s| Ribbon { a: s.on_a, b: s.on_b, length_mm: s.length_mm, distance_mm: s.distance_mm })
+                        .map(|s| Ribbon {
+                            a: s.on_a,
+                            b: s.on_b,
+                            length_mm: s.length_mm,
+                            distance_mm: s.distance_mm,
+                        })
                         .collect();
                     let in_duct = group.first().and_then(|s| s.duct);
                     let message = match (rule_id, in_duct) {
                         ("EMC-01", Some(_)) => format!(
                             "{} ({}) runs in the same duct as {} ({}) for {}: these classes need {} between them.",
-                            cx.run(vic.id), vic.class.label(), cx.run(agg.id), agg.class.label(), mm(length), mm(need)
+                            cx.run(vic.id),
+                            vic.class.label(),
+                            cx.run(agg.id),
+                            agg.class.label(),
+                            mm(length),
+                            mm(need)
                         ),
                         _ => format!(
                             "{} ({}) runs parallel to {} ({}) for {} at {} (mean {}); the planning distance is {}.",
-                            cx.run(vic.id), vic.class.label(), cx.run(agg.id), agg.class.label(), mm(length), mm(min_d), mm(mean_d), mm(need)
+                            cx.run(vic.id),
+                            vic.class.label(),
+                            cx.run(agg.id),
+                            agg.class.label(),
+                            mm(length),
+                            mm(min_d),
+                            mm(mean_d),
+                            mm(need)
                         ),
                     };
-                    let mut fixes = vec![Fix::SeparateRuns { a: agg.id, b: vic.id, to_mm: need.ceil() }];
+                    let mut fixes = vec![Fix::SeparateRuns {
+                        a: agg.id,
+                        b: vic.id,
+                        to_mm: need.ceil(),
+                    }];
                     if let (Some(c), None) = (vic.cable, vic.shield) {
                         fixes.push(Fix::AddShield { cable: c });
                     }
                     for r in [vic, agg] {
                         if r.origin == Origin::Guessed {
-                            fixes.push(Fix::DeclareClass { wire: r.id, class: r.class });
+                            fixes.push(Fix::DeclareClass {
+                                wire: r.id,
+                                class: r.class,
+                            });
                         }
                     }
                     let spot = group.first().map(|_| plate);
                     out.push(Finding {
                         rule: rule_id,
                         level: rule(rule_id).level,
-                        severity: if pts >= 25 { Severity::Warning } else { Severity::Info },
+                        severity: if pts >= 25 {
+                            Severity::Warning
+                        } else {
+                            Severity::Info
+                        },
                         subjects: vec![Subject::Run(vic.id), Subject::Run(agg.id)],
                         points: vec![(Subject::Run(vic.id), pts), (Subject::Run(agg.id), pts / 2)],
                         message,
@@ -520,16 +690,26 @@ fn motor_cables(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
             }
             (Some(c), Some(s)) if !s.is_full() => {
                 let open = matches!(s.a, Termination::Open) || matches!(s.b, Termination::Open);
-                let pig = matches!(s.a, Termination::Pigtail(_)) || matches!(s.b, Termination::Pigtail(_));
-                let unknown = matches!(s.a, Termination::Unknown) || matches!(s.b, Termination::Unknown);
+                let pig = matches!(s.a, Termination::Pigtail(_))
+                    || matches!(s.b, Termination::Pigtail(_));
+                let unknown =
+                    matches!(s.a, Termination::Unknown) || matches!(s.b, Termination::Unknown);
                 let (sev, pts, why) = if open {
                     (Severity::Warning, 35, "a shield end is not connected")
                 } else if pig {
-                    (Severity::Warning, 25, "a shield end is a pigtail, not all round")
+                    (
+                        Severity::Warning,
+                        25,
+                        "a shield end is a pigtail, not all round",
+                    )
                 } else if unknown {
                     (Severity::Info, 10, "the shield ends are not stated")
                 } else {
-                    (Severity::Warning, 25, "the shield is not bonded all round at both ends")
+                    (
+                        Severity::Warning,
+                        25,
+                        "the shield is not bonded all round at both ends",
+                    )
                 };
                 out.push(Finding {
                     rule: "EMC-04",
@@ -560,12 +740,16 @@ fn pigtails(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
     }
     let mut done: BTreeSet<u64> = BTreeSet::new();
     for r in cx.input.runs.iter() {
-        let (Some(shield), Some(cable)) = (r.shield, r.cable) else { continue };
+        let (Some(shield), Some(cable)) = (r.shield, r.cable) else {
+            continue;
+        };
         if !done.insert(cable) {
             continue;
         }
         for (end, t) in [("first", shield.a), ("second", shield.b)] {
-            let Termination::Pigtail(len) = t else { continue };
+            let Termination::Pigtail(len) = t else {
+                continue;
+            };
             if len <= p.pigtail_max_mm {
                 continue;
             }
@@ -609,7 +793,11 @@ fn drive_filters(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
             .input
             .devices
             .iter()
-            .filter(|f| f.role == Role::Filter && (f.filter_for.as_deref() == Some(d.tag.as_str()) || (f.filter_for.is_none() && f.plate == d.plate)))
+            .filter(|f| {
+                f.role == Role::Filter
+                    && (f.filter_for.as_deref() == Some(d.tag.as_str())
+                        || (f.filter_for.is_none() && f.plate == d.plate))
+            })
             .collect();
         if filters.is_empty() {
             out.push(Finding {
@@ -668,14 +856,22 @@ fn loops(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
     let p = &cx.input.params;
     let mut groups: BTreeMap<(EmcClass, u64, u64), Vec<&Run>> = BTreeMap::new();
     for r in cx.input.runs.iter().filter(|r| r.path.len() >= 2) {
-        if !matches!(r.class, EmcClass::Control | EmcClass::Analog | EmcClass::Fieldbus | EmcClass::Safety) {
+        if !matches!(
+            r.class,
+            EmcClass::Control | EmcClass::Analog | EmcClass::Fieldbus | EmcClass::Safety
+        ) {
             continue;
         }
-        let (Some(a), Some(b)) = (r.from, r.to) else { continue };
+        let (Some(a), Some(b)) = (r.from, r.to) else {
+            continue;
+        };
         if a == b {
             continue;
         }
-        groups.entry((r.class, a.min(b), a.max(b))).or_default().push(r);
+        groups
+            .entry((r.class, a.min(b), a.max(b)))
+            .or_default()
+            .push(r);
     }
     for ((class, ..), runs) in groups {
         let [a, b] = runs[..] else { continue };
@@ -686,7 +882,9 @@ fn loops(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
         if area <= p.max_loop_cm2 {
             continue;
         }
-        let pts = (40.0 * (area / (2.0 * p.max_loop_cm2)).min(1.0)).round().max(10.0) as u32;
+        let pts = (40.0 * (area / (2.0 * p.max_loop_cm2)).min(1.0))
+            .round()
+            .max(10.0) as u32;
         out.push(Finding {
             rule: "EMC-09",
             level: Level::Index,
@@ -712,7 +910,9 @@ fn loops(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
 
 fn loop_polygon(go: &[P], back: &[P]) -> Vec<P> {
     let d = |p: P, q: P| ((p.0 - q.0).powi(2) + (p.1 - q.1).powi(2)).sqrt();
-    let (Some(g0), Some(g1), Some(b0), Some(b1)) = (go.first(), go.last(), back.first(), back.last()) else {
+    let (Some(g0), Some(g1), Some(b0), Some(b1)) =
+        (go.first(), go.last(), back.first(), back.last())
+    else {
         return Vec::new();
     };
     let flip = d(*g0, *b0) + d(*g1, *b1) > d(*g0, *b1) + d(*g1, *b0);
@@ -728,9 +928,19 @@ fn loop_polygon(go: &[P], back: &[P]) -> Vec<P> {
 // ---- EMC-11 ----------------------------------------------------------------
 
 fn bonding(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
-    for d in cx.input.devices.iter().filter(|d| matches!(d.role, Role::Drive | Role::Filter)) {
+    for d in cx
+        .input
+        .devices
+        .iter()
+        .filter(|d| matches!(d.role, Role::Drive | Role::Filter))
+    {
         let Some(plate) = d.plate else { continue };
-        let finish = cx.input.plates.iter().find(|p| p.id == plate).and_then(|p| p.finish);
+        let finish = cx
+            .input
+            .plates
+            .iter()
+            .find(|p| p.id == plate)
+            .and_then(|p| p.finish);
         let painted = finish == Some(Finish::Painted);
         if painted || d.bonded == Some(false) {
             out.push(Finding {
@@ -759,7 +969,11 @@ fn bonding(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
 
 fn leaving(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
     let mut done: BTreeSet<(u8, u64)> = BTreeSet::new();
-    for r in cx.input.runs.iter().filter(|r| r.leaves_cabinet && matches!(r.class, EmcClass::Analog | EmcClass::Fieldbus)) {
+    for r in
+        cx.input.runs.iter().filter(|r| {
+            r.leaves_cabinet && matches!(r.class, EmcClass::Analog | EmcClass::Fieldbus)
+        })
+    {
         if r.shield.is_some() {
             continue;
         }
@@ -788,26 +1002,56 @@ fn leaving(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
 
 fn sensitive(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
     let p = &cx.input.params;
-    for s in cx.input.devices.iter().filter(|d| d.role == Role::Sensitive) {
-        for n in cx.input.devices.iter().filter(|d| matches!(d.role, Role::Drive | Role::Noisy)) {
+    for s in cx
+        .input
+        .devices
+        .iter()
+        .filter(|d| d.role == Role::Sensitive)
+    {
+        for n in cx
+            .input
+            .devices
+            .iter()
+            .filter(|d| matches!(d.role, Role::Drive | Role::Noisy))
+        {
             if s.plate.is_none() || s.plate != n.plate {
                 continue;
             }
-            let (Some(a), Some(b)) = (s.rect, n.rect) else { continue };
+            let (Some(a), Some(b)) = (s.rect, n.rect) else {
+                continue;
+            };
             let gap = geometry::gap_mm(a, b);
             if gap >= p.sensitive_min_mm {
                 continue;
             }
-            let pts = (30.0 + 20.0 * clamp01((p.sensitive_min_mm - gap) / p.sensitive_min_mm)).round() as u32;
+            let pts = (30.0 + 20.0 * clamp01((p.sensitive_min_mm - gap) / p.sensitive_min_mm))
+                .round() as u32;
             out.push(Finding {
                 rule: "EMC-17",
                 level: Level::Index,
                 severity: Severity::Warning,
                 subjects: vec![Subject::Device(s.id), Subject::Device(n.id)],
-                points: vec![(Subject::Device(s.id), pts), (Subject::Device(n.id), pts / 2)],
-                message: format!("{} sits {} from {}: keep sensitive devices at least {} away from a drive.", cx.dev(s.id), mm(gap), cx.dev(n.id), mm(p.sensitive_min_mm)),
-                metrics: vec![Metric { label: "Gap", value: mm(gap), level: Level::Index }],
-                fixes: vec![Fix::MoveDevice { device: s.id, from: n.id, to_mm: p.sensitive_min_mm }],
+                points: vec![
+                    (Subject::Device(s.id), pts),
+                    (Subject::Device(n.id), pts / 2),
+                ],
+                message: format!(
+                    "{} sits {} from {}: keep sensitive devices at least {} away from a drive.",
+                    cx.dev(s.id),
+                    mm(gap),
+                    cx.dev(n.id),
+                    mm(p.sensitive_min_mm)
+                ),
+                metrics: vec![Metric {
+                    label: "Gap",
+                    value: mm(gap),
+                    level: Level::Index,
+                }],
+                fixes: vec![Fix::MoveDevice {
+                    device: s.id,
+                    from: n.id,
+                    to_mm: p.sensitive_min_mm,
+                }],
                 at: s.plate.map(|pl| (pl, (a.0, a.1))),
                 ribbons: Vec::new(),
                 loop_polygon: Vec::new(),
@@ -824,14 +1068,23 @@ fn scores(cx: &Ctx<'_>, report: &mut Report) {
     for f in &report.findings {
         for (subject, pts) in &f.points {
             if *pts > 0 {
-                by.entry(*subject).or_default().push(Reason { rule: f.rule, points: *pts, text: f.message.clone() });
+                by.entry(*subject).or_default().push(Reason {
+                    rule: f.rule,
+                    points: *pts,
+                    text: f.message.clone(),
+                });
             }
         }
     }
     let make = |subject: Subject, reasons: Vec<Reason>| {
         let sum: u32 = reasons.iter().map(|r| r.points).sum();
         let points = sum.min(100);
-        Score { subject, points, band: Band::of(points), reasons }
+        Score {
+            subject,
+            points,
+            band: Band::of(points),
+            reasons,
+        }
     };
     // Every run and device gets a score, so a clean one reads "No findings".
     let mut runs = Vec::new();

@@ -106,16 +106,33 @@ impl Fix {
     /// One short sentence saying what the fix is, without names.
     pub fn hint(&self) -> String {
         match self {
-            Fix::DeclareClass { class, .. } => format!("Mark the wire as {} if it is.", class.label()),
+            Fix::DeclareClass { class, .. } => {
+                format!("Mark the wire as {} if it is.", class.label())
+            }
             Fix::AddShield { .. } => "Use a shielded cable.".to_owned(),
-            Fix::Terminate360 { .. } => "Bond both shield ends all round at the gland or a shield bar.".to_owned(),
+            Fix::Terminate360 { .. } => {
+                "Bond both shield ends all round at the gland or a shield bar.".to_owned()
+            }
             Fix::AddFilter { .. } => "Add a mains filter next to the drive.".to_owned(),
-            Fix::MoveRun { points_after, .. } => format!("Run the wire in another duct (score about {points_after} after)."),
-            Fix::SeparateRuns { to_mm, .. } if *to_mm > 0.0 => format!("Keep the two runs {} mm apart, or in separate ducts.", to_mm.round() as i64),
-            Fix::SeparateRuns { .. } => "Run go and return together, or in one twisted cable.".to_owned(),
-            Fix::MoveDevice { to_mm, .. } => format!("Move the device to keep {} mm clear.", to_mm.round() as i64),
-            Fix::BarePlate { .. } => "Scrape the mounting area bare or use a galvanised plate.".to_owned(),
-            Fix::ShortenPigtail { to_mm, .. } => format!("Shorten the pigtail to under {} mm.", to_mm.round() as i64),
+            Fix::MoveRun { points_after, .. } => {
+                format!("Run the wire in another duct (score about {points_after} after).")
+            }
+            Fix::SeparateRuns { to_mm, .. } if *to_mm > 0.0 => format!(
+                "Keep the two runs {} mm apart, or in separate ducts.",
+                to_mm.round() as i64
+            ),
+            Fix::SeparateRuns { .. } => {
+                "Run go and return together, or in one twisted cable.".to_owned()
+            }
+            Fix::MoveDevice { to_mm, .. } => {
+                format!("Move the device to keep {} mm clear.", to_mm.round() as i64)
+            }
+            Fix::BarePlate { .. } => {
+                "Scrape the mounting area bare or use a galvanised plate.".to_owned()
+            }
+            Fix::ShortenPigtail { to_mm, .. } => {
+                format!("Shorten the pigtail to under {} mm.", to_mm.round() as i64)
+            }
         }
     }
 

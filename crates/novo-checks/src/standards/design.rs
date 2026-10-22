@@ -579,7 +579,11 @@ fn evidence(
                     "Assumed: {}: {} ({})",
                     a.name,
                     a.value,
-                    if a.user_set { "set in this project" } else { "program default" }
+                    if a.user_set {
+                        "set in this project"
+                    } else {
+                        "program default"
+                    }
                 )
             }));
         }

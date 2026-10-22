@@ -17,7 +17,14 @@ fn cabinet() -> Project {
         .transact("build", |tx| {
             let page = tx.add_page("1")?;
             let cab = tx.add_structure(tag("+CAB"), "", true)?;
-            tx.set_plate(cab, Some(MountingPlate { width: 800.0, height: 400.0, margin: 10.0 }))?;
+            tx.set_plate(
+                cab,
+                Some(MountingPlate {
+                    width: 800.0,
+                    height: 400.0,
+                    margin: 10.0,
+                }),
+            )?;
             let duct = tx.add_rail(cab, 20.0, 300.0, 760.0, RailKind::Duct)?;
             tx.set_rail_size(duct, 760.0, 60.0, 60.0)?;
             let mut place = |t: &str, key: &str, x: f64| -> Result<SymbolId> {
@@ -30,7 +37,10 @@ fn cabinet() -> Project {
                     key,
                     Placement::at(Point::new(x, 10.0)),
                     vec![Pin::new("U", 0.0, 0.0), Pin::new("1", 8.0, 0.0)],
-                    SymbolRole::Device { device: d, main: true },
+                    SymbolRole::Device {
+                        device: d,
+                        main: true,
+                    },
                 )
             };
             let drive = place("-T1", "iec/drives/frequency_converter", 40.0)?;
@@ -46,7 +56,10 @@ fn cabinet() -> Project {
 }
 
 fn emc(problems: &[Problem]) -> Vec<&Problem> {
-    problems.iter().filter(|p| p.kind == ProblemKind::Emc).collect()
+    problems
+        .iter()
+        .filter(|p| p.kind == ProblemKind::Emc)
+        .collect()
 }
 
 #[test]
@@ -58,30 +71,55 @@ fn nothing_is_reported_until_the_project_asks_for_it() {
 #[test]
 fn findings_arrive_as_problems_with_rule_ids_and_suggestions() {
     let mut project = cabinet();
-    project.transact("on", |tx| novo_emc::project::set_enabled(tx, true)).unwrap();
+    project
+        .transact("on", |tx| novo_emc::project::set_enabled(tx, true))
+        .unwrap();
     let problems = check(&project);
     let found = emc(&problems);
     assert!(!found.is_empty(), "{problems:#?}");
-    let duct = found.iter().find(|p| p.rule == Some("EMC-01")).expect("shared duct");
+    let duct = found
+        .iter()
+        .find(|p| p.rule == Some("EMC-01"))
+        .expect("shared duct");
     assert_eq!(duct.severity, Severity::Warning);
-    assert!(duct.message.contains("same duct") && duct.message.contains("Suggestion:"), "{}", duct.message);
+    assert!(
+        duct.message.contains("same duct") && duct.message.contains("Suggestion:"),
+        "{}",
+        duct.message
+    );
     assert!(duct.message.contains("(EMC-01, rule)"), "{}", duct.message);
     assert!(duct.at.iter().any(|id| matches!(id, AnyId::Wire(_))));
     // Every EMC problem names a rule of the catalogue.
     for p in &found {
-        assert!(novo_emc::RULES.iter().any(|r| Some(r.id) == p.rule), "{p:?}");
+        assert!(
+            novo_emc::RULES.iter().any(|r| Some(r.id) == p.rule),
+            "{p:?}"
+        );
     }
 }
 
 #[test]
 fn an_emc_finding_can_be_waived_with_a_reason_and_only_that_rule() {
     let mut project = cabinet();
-    project.transact("on", |tx| novo_emc::project::set_enabled(tx, true)).unwrap();
+    project
+        .transact("on", |tx| novo_emc::project::set_enabled(tx, true))
+        .unwrap();
     let problems = check(&project);
-    let duct = emc(&problems).into_iter().find(|p| p.rule == Some("EMC-01")).unwrap().clone();
+    let duct = emc(&problems)
+        .into_iter()
+        .find(|p| p.rule == Some("EMC-01"))
+        .unwrap()
+        .clone();
     assert_eq!(duct.waiver_key(), "check.emc.EMC-01");
-    let other = emc(&problems).into_iter().filter(|p| p.rule != Some("EMC-01")).count();
-    project.transact("waive", |tx| waive(tx, &duct, "separate duct is on the order").map(|_| ())).unwrap();
+    let other = emc(&problems)
+        .into_iter()
+        .filter(|p| p.rule != Some("EMC-01"))
+        .count();
+    project
+        .transact("waive", |tx| {
+            waive(tx, &duct, "separate duct is on the order").map(|_| ())
+        })
+        .unwrap();
     let open = check_open(&project);
     assert!(emc(&open).iter().all(|p| p.rule != Some("EMC-01")));
     assert_eq!(emc(&open).len(), other);
@@ -92,17 +130,41 @@ fn the_standards_document_has_an_emc_row_that_is_honest_when_off_and_on() {
     let mut project = cabinet();
     let doc = |p: &Project| document::build(p, &standards::compliance(p));
     let row_text = |p: &Project| {
-        let d = doc(p);
-        let row = d.design.iter().find(|r| r.family.id == "emc").expect("emc family").clone();
-        row
+        doc(p)
+            .design
+            .iter()
+            .find(|r| r.family.id == "emc")
+            .expect("emc family")
+            .clone()
     };
     let off = row_text(&project);
     assert_eq!(off.verdict, document::Verdict::NotApplicable, "{off:#?}");
-    assert!(off.not_checkable.iter().any(|t| t.contains("EMC check is off")));
-    project.transact("on", |tx| novo_emc::project::set_enabled(tx, true)).unwrap();
+    assert!(
+        off.not_checkable
+            .iter()
+            .any(|t| t.contains("EMC check is off"))
+    );
+    project
+        .transact("on", |tx| novo_emc::project::set_enabled(tx, true))
+        .unwrap();
     let on = row_text(&project);
     assert!(on.warnings > 0, "{on:#?}");
-    assert!(on.evidence.iter().any(|t| t.starts_with("Wire classes:")), "{:?}", on.evidence);
-    assert!(on.not_checkable.iter().any(|t| t.contains("Not checked: Radiated")), "{:?}", on.not_checkable);
-    assert!(doc(&project).limits.iter().any(|t| t.contains("EMC results")));
+    assert!(
+        on.evidence.iter().any(|t| t.starts_with("Wire classes:")),
+        "{:?}",
+        on.evidence
+    );
+    assert!(
+        on.not_checkable
+            .iter()
+            .any(|t| t.contains("Not checked: Radiated")),
+        "{:?}",
+        on.not_checkable
+    );
+    assert!(
+        doc(&project)
+            .limits
+            .iter()
+            .any(|t| t.contains("EMC results"))
+    );
 }

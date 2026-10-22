@@ -30,7 +30,11 @@ impl Piece {
     }
     /// The coordinate across the stretch.
     fn offset(&self) -> f64 {
-        if self.horizontal() { self.a.1 } else { self.a.0 }
+        if self.horizontal() {
+            self.a.1
+        } else {
+            self.a.0
+        }
     }
 }
 
@@ -154,7 +158,11 @@ pub fn parallel(a: &[Piece], b: &[Piece], ducts: &[Duct], reach_mm: f64) -> Vec<
                     .is_some_and(|d| d.divider);
             let (lo, hi) = (alo.max(blo), ahi.min(bhi));
             let line = |off: f64| {
-                if pa.horizontal() { ((lo, off), (hi, off)) } else { ((off, lo), (off, hi)) }
+                if pa.horizontal() {
+                    ((lo, off), (hi, off))
+                } else {
+                    ((off, lo), (off, hi))
+                }
             };
             out.push(Stretch {
                 on_a: line(pa.offset()),

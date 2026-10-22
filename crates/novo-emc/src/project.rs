@@ -22,8 +22,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use novo_core::{
     CabinetPlacement, Cable, CableCore, Device, DeviceKind, DeviceTag, Endpoint, NetId, Netlist,
-    PinRef, PotentialKind, Project, Properties, Rail, RailKind, Result, Structure, SymbolRole,
-    Tx, Value,
+    PinRef, PotentialKind, Project, Properties, Rail, RailKind, Result, Structure, SymbolRole, Tx,
+    Value,
 };
 
 use crate::class::{EmcClass, Shield, Termination};
@@ -78,7 +78,8 @@ pub fn is_enabled(project: &Project) -> bool {
 pub fn set_enabled(tx: &mut Tx<'_>, on: bool) -> Result<()> {
     tx.set_info(|info| {
         if on {
-            info.properties.insert(CHECK_KEY.to_owned(), Value::Bool(true));
+            info.properties
+                .insert(CHECK_KEY.to_owned(), Value::Bool(true));
         } else {
             info.properties.remove(CHECK_KEY);
         }
@@ -97,8 +98,21 @@ pub fn params_of(project: &Project) -> Params {
     };
     let d = Params::default();
     let mut user_set: Vec<&'static str> = Vec::new();
-    for name in ["min_parallel_mm", "max_loop_cm2", "filter_max_mm", "sensitive_min_mm", "pigtail_max_mm", "frequency_hz", "didt_a_per_us", "wire_height_mm"] {
-        if props.get(&format!("emc.{name}")).and_then(as_f64).is_some_and(|v| v.is_finite() && v > 0.0) {
+    for name in [
+        "min_parallel_mm",
+        "max_loop_cm2",
+        "filter_max_mm",
+        "sensitive_min_mm",
+        "pigtail_max_mm",
+        "frequency_hz",
+        "didt_a_per_us",
+        "wire_height_mm",
+    ] {
+        if props
+            .get(&format!("emc.{name}"))
+            .and_then(as_f64)
+            .is_some_and(|v| v.is_finite() && v > 0.0)
+        {
             user_set.push(name);
         }
     }
@@ -182,15 +196,24 @@ fn classify_net(project: &Project, netlist: &Netlist, net: NetId) -> NetClass {
     let mut analog = false;
     let mut power_device = false;
     for e in &n.endpoints {
-        let Endpoint::Pin { symbol, pin } = e else { continue };
-        let Some(sym) = project.symbol(*symbol) else { continue };
+        let Endpoint::Pin { symbol, pin } = e else {
+            continue;
+        };
+        let Some(sym) = project.symbol(*symbol) else {
+            continue;
+        };
         let (group, name) = key_parts(&sym.symbol.0);
-        let pname = sym.pins.get(usize::from(*pin)).map(|p| p.name.as_str()).unwrap_or("");
+        let pname = sym
+            .pins
+            .get(usize::from(*pin))
+            .map(|p| p.name.as_str())
+            .unwrap_or("");
         match group {
             "drives" if name == "frequency_converter" && is_drive_output(pname) => {
-                motor_drive = novo_routing::model::device_of_pin(project, PinRef::new(*symbol, *pin))
-                    .map(|d| d.raw())
-                    .or(Some(0));
+                motor_drive =
+                    novo_routing::model::device_of_pin(project, PinRef::new(*symbol, *pin))
+                        .map(|d| d.raw())
+                        .or(Some(0));
             }
             "safety" => safety = true,
             "operators" if name.starts_with("emergency_stop") || name.starts_with("pullcord") => {
@@ -202,7 +225,10 @@ fn classify_net(project: &Project, netlist: &Netlist, net: NetId) -> NetClass {
             "motors" => power_device = true,
             "passive" if name.starts_with("heater") => power_device = true,
             "contactors"
-                if matches!(pname, "1" | "2" | "3" | "4" | "5" | "6" | "L1" | "L2" | "L3" | "T1" | "T2" | "T3") =>
+                if matches!(
+                    pname,
+                    "1" | "2" | "3" | "4" | "5" | "6" | "L1" | "L2" | "L3" | "T1" | "T2" | "T3"
+                ) =>
             {
                 power_device = true
             }
@@ -221,11 +247,20 @@ fn classify_net(project: &Project, netlist: &Netlist, net: NetId) -> NetClass {
             analog = true;
         }
     }
-    let mk = |class, origin, why: &str| NetClass { class, origin, why: why.to_owned(), drive: None };
+    let mk = |class, origin, why: &str| NetClass {
+        class,
+        origin,
+        why: why.to_owned(),
+        drive: None,
+    };
     if let Some(d) = motor_drive {
         return NetClass {
             drive: (d != 0).then_some(d),
-            ..mk(EmcClass::Motor, Origin::Derived, "on a drive's motor output")
+            ..mk(
+                EmcClass::Motor,
+                Origin::Derived,
+                "on a drive's motor output",
+            )
         };
     }
     if safety {
@@ -235,7 +270,11 @@ fn classify_net(project: &Project, netlist: &Netlist, net: NetId) -> NetClass {
         return mk(EmcClass::Fieldbus, Origin::Derived, "on a network port");
     }
     if analog {
-        return mk(EmcClass::Analog, Origin::Derived, "on an analog channel or sensor");
+        return mk(
+            EmcClass::Analog,
+            Origin::Derived,
+            "on an analog channel or sensor",
+        );
     }
     let mut max_v: Option<f64> = None;
     let mut kinds: Vec<PotentialKind> = Vec::new();
@@ -252,16 +291,29 @@ fn classify_net(project: &Project, netlist: &Netlist, net: NetId) -> NetClass {
     }
     if let Some(v) = max_v {
         return if v >= 50.0 {
-            mk(EmcClass::Power, Origin::Derived, "a potential of 50 V or more")
+            mk(
+                EmcClass::Power,
+                Origin::Derived,
+                "a potential of 50 V or more",
+            )
         } else {
             mk(EmcClass::Control, Origin::Derived, "a potential under 50 V")
         };
     }
-    if kinds.iter().any(|k| matches!(k, PotentialKind::Line | PotentialKind::Pen | PotentialKind::Neutral)) {
+    if kinds.iter().any(|k| {
+        matches!(
+            k,
+            PotentialKind::Line | PotentialKind::Pen | PotentialKind::Neutral
+        )
+    }) {
         return mk(EmcClass::Power, Origin::Derived, "a mains potential");
     }
     if power_device {
-        return mk(EmcClass::Power, Origin::Derived, "on a motor, heater or contactor power pole");
+        return mk(
+            EmcClass::Power,
+            Origin::Derived,
+            "on a motor, heater or contactor power pole",
+        );
     }
     mk(
         EmcClass::Control,
@@ -278,7 +330,10 @@ fn shield_end(cable: &Cable, key: &str) -> Termination {
                 Termination::Full360
             } else if matches!(t.as_str(), "open" | "none") {
                 Termination::Open
-            } else if let Some(mm) = t.strip_prefix("pigtail:").and_then(|n| n.trim().parse().ok()) {
+            } else if let Some(mm) = t
+                .strip_prefix("pigtail:")
+                .and_then(|n| n.trim().parse().ok())
+            {
                 Termination::Pigtail(mm)
             } else if t == "pigtail" {
                 Termination::Pigtail(100.0)
@@ -291,7 +346,10 @@ fn shield_end(cable: &Cable, key: &str) -> Termination {
 }
 
 fn finish_of(s: &Structure) -> Option<Finish> {
-    match text(&s.properties, "emc.finish")?.to_ascii_lowercase().as_str() {
+    match text(&s.properties, "emc.finish")?
+        .to_ascii_lowercase()
+        .as_str()
+    {
         "painted" | "lacquered" | "powder" | "powder-coated" => Some(Finish::Painted),
         "galvanised" | "galvanized" | "bare" | "zinc" | "stainless" | "conductive" => {
             Some(Finish::Conductive)
@@ -314,7 +372,9 @@ fn role_of(project: &Project, device: &Device) -> Role {
         return Role::Sensitive;
     }
     for s in project.symbols() {
-        let SymbolRole::Device { device: d, .. } = &s.role else { continue };
+        let SymbolRole::Device { device: d, .. } = &s.role else {
+            continue;
+        };
         if *d != device.id {
             continue;
         }
@@ -332,7 +392,10 @@ fn role_of(project: &Project, device: &Device) -> Role {
 /// Builds the engine's input from the project.
 pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
     let params = params_of(project);
-    let placements: HashMap<_, _> = project.all::<CabinetPlacement>().map(|p| (p.device, p)).collect();
+    let placements: HashMap<_, _> = project
+        .all::<CabinetPlacement>()
+        .map(|p| (p.device, p))
+        .collect();
     let started = !placements.is_empty();
 
     // Plates and ducts.
@@ -341,13 +404,25 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
     let mut tag_of: HashMap<u64, DeviceTag> = HashMap::new();
     for s in project.structures().filter(|s| s.enclosure) {
         tag_of.insert(s.id.raw(), s.tag.clone());
-        plates.push(Plate { id: s.id.raw(), tag: s.tag.to_string(), finish: finish_of(s) });
+        plates.push(Plate {
+            id: s.id.raw(),
+            tag: s.tag.to_string(),
+            finish: finish_of(s),
+        });
     }
     if started {
         let dividers: HashMap<u64, bool> = project
             .all::<Rail>()
             .filter(|r| r.kind == RailKind::Duct)
-            .map(|r| (r.id.raw(), r.properties.get("emc.divider").and_then(as_bool).unwrap_or(false)))
+            .map(|r| {
+                (
+                    r.id.raw(),
+                    r.properties
+                        .get("emc.divider")
+                        .and_then(as_bool)
+                        .unwrap_or(false),
+                )
+            })
             .collect();
         for p in &plates {
             let structure = novo_core::StructureId::from(p.id);
@@ -374,13 +449,20 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
         let place = placements.get(&d.id);
         let rect = place.map(|pl| {
             let size = novo_layout::model::device_size(project, d);
-            let (w, h) = if pl.rotated { (size.height, size.width) } else { (size.width, size.height) };
+            let (w, h) = if pl.rotated {
+                (size.height, size.width)
+            } else {
+                (size.width, size.height)
+            };
             (pl.x, pl.y, w, h)
         });
         let filter = match device_prop(project, d, "emc.filter") {
             Some(Value::Text(t)) => {
                 let t = t.trim().to_ascii_lowercase();
-                if matches!(t.as_str(), "built-in" | "builtin" | "internal" | "c1" | "c2") {
+                if matches!(
+                    t.as_str(),
+                    "built-in" | "builtin" | "internal" | "c1" | "c2"
+                ) {
                     FilterState::Built
                 } else if matches!(t.as_str(), "external" | "fitted" | "yes" | "true") {
                     FilterState::Declared
@@ -411,7 +493,9 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
         let pins = (w.from.as_pin(), w.to.as_pin());
         let name = match (&w.number, pins) {
             (Some(n), _) if !n.is_empty() => n.clone(),
-            (_, (Some(a), Some(b))) => format!("{} to {}", pin_label(project, a), pin_label(project, b)),
+            (_, (Some(a), Some(b))) => {
+                format!("{} to {}", pin_label(project, a), pin_label(project, b))
+            }
             (_, (Some(p), None)) | (_, (None, Some(p))) => pin_label(project, p),
             _ => format!("wire {}", w.id.raw()),
         };
@@ -421,7 +505,12 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
             .or_else(|| cable.and_then(|c| text(&c.properties, "emc.class")))
             .and_then(EmcClass::parse);
         let nc = net
-            .map(|n| net_class.entry(n).or_insert_with(|| classify_net(project, netlist, n)).clone())
+            .map(|n| {
+                net_class
+                    .entry(n)
+                    .or_insert_with(|| classify_net(project, netlist, n))
+                    .clone()
+            })
             .unwrap_or(NetClass {
                 class: EmcClass::Control,
                 origin: Origin::Guessed,
@@ -432,13 +521,14 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
             Some(c) => (c, Origin::Declared, "set by the user".to_owned()),
             None => (nc.class, nc.origin, nc.why.clone()),
         };
-        let shield = cable.filter(|c| c.cores.iter().any(|k| k.shield)).map(|c| Shield {
-            a: shield_end(c, "emc.shield_a"),
-            b: shield_end(c, "emc.shield_b"),
-        });
-        let device_of = |p: Option<PinRef>| {
-            p.and_then(|p| novo_routing::model::device_of_pin(project, p))
-        };
+        let shield = cable
+            .filter(|c| c.cores.iter().any(|k| k.shield))
+            .map(|c| Shield {
+                a: shield_end(c, "emc.shield_a"),
+                b: shield_end(c, "emc.shield_b"),
+            });
+        let device_of =
+            |p: Option<PinRef>| p.and_then(|p| novo_routing::model::device_of_pin(project, p));
         let (da, db) = (device_of(pins.0), device_of(pins.1));
         let plate = [da, db]
             .into_iter()
@@ -446,14 +536,28 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
             .find_map(|d| placements.get(&d))
             .map(|pl| pl.structure);
         let route = routed.as_ref().and_then(|r| r.routes.get(&w.id.raw()));
-        let diameter = novo_routing::model::wire_diameter_mm(novo_routing::model::wire_section_mm2(project, w))
-            .unwrap_or(novo_routing::DEFAULT_WIRE_DIAMETER_MM);
-        let leaves = w.properties.get("emc.leaves").and_then(as_bool).unwrap_or_else(|| {
-            let Some(pl) = plate.and_then(|s| tag_of.get(&s.raw())) else { return false };
-            [da, db].into_iter().flatten().filter_map(|d| project.device(d)).any(|d| {
-                !d.tag.location.is_empty() && !pl.location.is_empty() && d.tag.location != pl.location
-            })
-        });
+        let diameter = novo_routing::model::wire_diameter_mm(
+            novo_routing::model::wire_section_mm2(project, w),
+        )
+        .unwrap_or(novo_routing::DEFAULT_WIRE_DIAMETER_MM);
+        let leaves = w
+            .properties
+            .get("emc.leaves")
+            .and_then(as_bool)
+            .unwrap_or_else(|| {
+                let Some(pl) = plate.and_then(|s| tag_of.get(&s.raw())) else {
+                    return false;
+                };
+                [da, db]
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|d| project.device(d))
+                    .any(|d| {
+                        !d.tag.location.is_empty()
+                            && !pl.location.is_empty()
+                            && d.tag.location != pl.location
+                    })
+            });
         runs.push(Run {
             id: w.id.raw(),
             name,
@@ -462,19 +566,32 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
             class_reason: why,
             cable: cable_id.map(|c| c.raw()),
             shield,
-            twisted: cable.and_then(|c| c.properties.get("emc.twisted")).and_then(as_bool).unwrap_or(false),
+            twisted: cable
+                .and_then(|c| c.properties.get("emc.twisted"))
+                .and_then(as_bool)
+                .unwrap_or(false),
             net: net.map(|n| n.0),
             from: da.map(|d| d.raw()),
             to: db.map(|d| d.raw()),
             plate: plate.map(|s| s.raw()),
-            path: route.map(|r| r.points.iter().map(|p| (p.x, p.y)).collect()).unwrap_or_default(),
+            path: route
+                .map(|r| r.points.iter().map(|p| (p.x, p.y)).collect())
+                .unwrap_or_default(),
             ducts: route.map(|r| r.ducts.clone()).unwrap_or_default(),
             diameter_mm: diameter,
-            drive: nc.drive.filter(|_| declared.is_none() || class == EmcClass::Motor),
+            drive: nc
+                .drive
+                .filter(|_| declared.is_none() || class == EmcClass::Motor),
             leaves_cabinet: leaves,
         });
     }
-    Input { runs, ducts, devices, plates, params }
+    Input {
+        runs,
+        ducts,
+        devices,
+        plates,
+        params,
+    }
 }
 
 /// Runs the engine on a project.
@@ -548,8 +665,15 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
             };
             let filter = tx.add_device(tag.clone(), format!("EMC filter for {}", d.tag))?;
             tx.set_property(filter, "emc.role", Some(Value::Text("filter".to_owned())))?;
-            tx.set_property(filter, "emc.filter_for", Some(Value::Text(d.tag.to_string())))?;
-            Ok(format!("Filter {tag} added for {}: place it next to the drive", d.tag))
+            tx.set_property(
+                filter,
+                "emc.filter_for",
+                Some(Value::Text(d.tag.to_string())),
+            )?;
+            Ok(format!(
+                "Filter {tag} added for {}: place it next to the drive",
+                d.tag
+            ))
         }
         other => Err(ModelError::Format(format!("{other:?} is done by hand"))),
     }

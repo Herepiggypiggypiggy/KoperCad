@@ -35,7 +35,13 @@ fn motor(id: u64, path: &[(f64, f64)], ducts: &[u64]) -> Run {
 }
 
 fn duct(id: u64, a: (f64, f64), b: (f64, f64), width: f64) -> Duct {
-    Duct { id, a, b, width_mm: width, divider: false }
+    Duct {
+        id,
+        a,
+        b,
+        width_mm: width,
+        divider: false,
+    }
 }
 
 fn input(runs: Vec<Run>, ducts: Vec<Duct>) -> Input {
@@ -43,13 +49,20 @@ fn input(runs: Vec<Run>, ducts: Vec<Duct>) -> Input {
         runs,
         ducts,
         devices: Vec::new(),
-        plates: vec![Plate { id: 1, tag: "+CAB".into(), finish: None }],
+        plates: vec![Plate {
+            id: 1,
+            tag: "+CAB".into(),
+            finish: None,
+        }],
         params: Params::default(),
     }
 }
 
 fn full() -> Shield {
-    Shield { a: Termination::Full360, b: Termination::Full360 }
+    Shield {
+        a: Termination::Full360,
+        b: Termination::Full360,
+    }
 }
 
 #[test]
@@ -64,12 +77,19 @@ fn motor_and_analog_in_one_duct_are_a_rule_finding_with_a_worked_score() {
     let f: Vec<_> = report.of_rule("EMC-01").collect();
     assert_eq!(f.len(), 1, "{:#?}", report.findings);
     assert_eq!(f[0].level, Level::Fact);
-    assert_eq!(f[0].points, vec![(Subject::Run(2), 72), (Subject::Run(1), 36)]);
+    assert_eq!(
+        f[0].points,
+        vec![(Subject::Run(2), 72), (Subject::Run(1), 36)]
+    );
     assert_eq!(report.score_of(Subject::Run(2)).unwrap().points, 72);
     assert_eq!(report.score_of(Subject::Run(2)).unwrap().band, Band::High);
     assert_eq!(report.score_of(Subject::Run(1)).unwrap().band, Band::Medium);
     // The induced voltage is shown as an estimate with its assumption.
-    let v = f[0].metrics.iter().find(|m| m.label.starts_with("Induced")).unwrap();
+    let v = f[0]
+        .metrics
+        .iter()
+        .find(|m| m.label.starts_with("Induced"))
+        .unwrap();
     assert!(v.value.contains("10 A/us"), "{}", v.value);
     // The reasons of a score add up to the score.
     let s = report.score_of(Subject::Run(2)).unwrap();
@@ -88,9 +108,17 @@ fn two_ducts_apart_use_the_edge_distance() {
     let f: Vec<_> = report.of_rule("EMC-02").collect();
     assert_eq!(f.len(), 1, "{:#?}", report.findings);
     assert_eq!(f[0].level, Level::Index);
-    let length = f[0].metrics.iter().find(|m| m.label == "Parallel length").unwrap();
+    let length = f[0]
+        .metrics
+        .iter()
+        .find(|m| m.label == "Parallel length")
+        .unwrap();
     assert_eq!(length.value, "500 mm");
-    let dist = f[0].metrics.iter().find(|m| m.label == "Closest distance").unwrap();
+    let dist = f[0]
+        .metrics
+        .iter()
+        .find(|m| m.label == "Closest distance")
+        .unwrap();
     assert_eq!(dist.value, "40 mm");
     // w = sqrt(0.7 * 0.4) = 0.529; s = (100 - 40) / 100 = 0.6; lf = 0.5:
     // 100 * 0.529 * (0.25 + 0.45) * (0.3 + 0.35) = 24.1 -> 24, info (< 25).
@@ -139,13 +167,20 @@ fn a_full_shield_and_a_twisted_pair_buy_distance_back() {
     let mut m = motor(1, &[(0.0, 0.0), (600.0, 0.0)], &[]);
     m.shield = None;
     let mut a = run(2, EmcClass::Analog, &[(0.0, 100.0), (600.0, 100.0)], &[]);
-    let n = |m: &Run, a: &Run| analyse(&input(vec![m.clone(), a.clone()], vec![])).of_rule("EMC-02").count();
+    let n = |m: &Run, a: &Run| {
+        analyse(&input(vec![m.clone(), a.clone()], vec![]))
+            .of_rule("EMC-02")
+            .count()
+    };
     assert_eq!(n(&m, &a), 1);
     // Victim shielded all round at both ends: 300 x 0.25 = 75 mm needed.
     a.shield = Some(full());
     assert_eq!(n(&m, &a), 0);
     // A shield with unknown ends earns nothing.
-    a.shield = Some(Shield { a: Termination::Unknown, b: Termination::Unknown });
+    a.shield = Some(Shield {
+        a: Termination::Unknown,
+        b: Termination::Unknown,
+    });
     assert_eq!(n(&m, &a), 1);
     // Twisting alone: 300 x 0.8 = 240 still flagged at 97 mm.
     a.shield = None;
@@ -161,7 +196,12 @@ fn a_metal_divider_counts_as_a_gap() {
     let mut d = duct(7, (0.0, 0.0), (600.0, 0.0), 60.0);
     let m = motor(1, &[(0.0, 0.0), (600.0, 0.0)], &[7]);
     let a = run(2, EmcClass::Analog, &[(0.0, 0.0), (600.0, 0.0)], &[7]);
-    assert_eq!(analyse(&input(vec![m.clone(), a.clone()], vec![d.clone()])).of_rule("EMC-01").count(), 1);
+    assert_eq!(
+        analyse(&input(vec![m.clone(), a.clone()], vec![d.clone()]))
+            .of_rule("EMC-01")
+            .count(),
+        1
+    );
     d.divider = true;
     // With the divider the pair is judged as 50 mm apart: an EMC-02 index, not a shared duct.
     let r = analyse(&input(vec![m, a], vec![d]));
@@ -183,7 +223,10 @@ fn classes_in_one_cable_are_flagged_and_safety_with_power_is_an_error() {
     let mut c = run(3, EmcClass::Control, &[], &[]);
     c.cable = Some(9);
     let r = analyse(&input(vec![p, c], vec![]));
-    assert_eq!(r.of_rule("EMC-01").next().unwrap().severity, Severity::Warning);
+    assert_eq!(
+        r.of_rule("EMC-01").next().unwrap().severity,
+        Severity::Warning
+    );
 }
 
 #[test]
@@ -195,16 +238,37 @@ fn motor_cable_rules() {
     assert_eq!(r.of_rule("EMC-04").next().unwrap().fixes, vec![]);
     m.cable = Some(3);
     let r = analyse(&input(vec![m.clone()], vec![]));
-    assert_eq!(r.of_rule("EMC-04").next().unwrap().fixes, vec![Fix::AddShield { cable: 3 }]);
+    assert_eq!(
+        r.of_rule("EMC-04").next().unwrap().fixes,
+        vec![Fix::AddShield { cable: 3 }]
+    );
     m.shield = Some(full());
-    assert_eq!(analyse(&input(vec![m.clone()], vec![])).of_rule("EMC-04").count(), 0);
-    m.shield = Some(Shield { a: Termination::Full360, b: Termination::Open });
+    assert_eq!(
+        analyse(&input(vec![m.clone()], vec![]))
+            .of_rule("EMC-04")
+            .count(),
+        0
+    );
+    m.shield = Some(Shield {
+        a: Termination::Full360,
+        b: Termination::Open,
+    });
     let f = analyse(&input(vec![m.clone()], vec![]));
     let f = f.of_rule("EMC-04").next().unwrap().clone();
     assert!(f.message.contains("not connected"), "{}", f.message);
     assert_eq!(f.fixes, vec![Fix::Terminate360 { cable: 3 }]);
-    m.shield = Some(Shield { a: Termination::Unknown, b: Termination::Full360 });
-    assert_eq!(analyse(&input(vec![m], vec![])).of_rule("EMC-04").next().unwrap().severity, Severity::Info);
+    m.shield = Some(Shield {
+        a: Termination::Unknown,
+        b: Termination::Full360,
+    });
+    assert_eq!(
+        analyse(&input(vec![m], vec![]))
+            .of_rule("EMC-04")
+            .next()
+            .unwrap()
+            .severity,
+        Severity::Info
+    );
 }
 
 #[test]
@@ -214,13 +278,26 @@ fn pigtail_impedance_is_the_rule_of_thumb() {
     assert!((z - 5.0265).abs() < 1e-3, "{z}");
     let mut m = run(1, EmcClass::Analog, &[], &[]);
     m.cable = Some(3);
-    m.shield = Some(Shield { a: Termination::Pigtail(80.0), b: Termination::Full360 });
+    m.shield = Some(Shield {
+        a: Termination::Pigtail(80.0),
+        b: Termination::Full360,
+    });
     let r = analyse(&input(vec![m.clone()], vec![]));
     let f = r.of_rule("EMC-05").next().unwrap();
     assert_eq!(f.level, Level::Estimate);
-    assert!(f.metrics.iter().any(|m| m.value.starts_with("5.0 ohm")), "{:?}", f.metrics);
-    m.shield = Some(Shield { a: Termination::Pigtail(40.0), b: Termination::Full360 });
-    assert_eq!(analyse(&input(vec![m], vec![])).of_rule("EMC-05").count(), 0);
+    assert!(
+        f.metrics.iter().any(|m| m.value.starts_with("5.0 ohm")),
+        "{:?}",
+        f.metrics
+    );
+    m.shield = Some(Shield {
+        a: Termination::Pigtail(40.0),
+        b: Termination::Full360,
+    });
+    assert_eq!(
+        analyse(&input(vec![m], vec![])).of_rule("EMC-05").count(),
+        0
+    );
 }
 
 #[test]
@@ -254,7 +331,12 @@ fn loop_area_is_the_enclosed_polygon() {
     // The same pair in one cable is a twisted bundle: not judged.
     a.cable = Some(4);
     b.cable = Some(4);
-    assert_eq!(analyse(&input(vec![a, b], vec![])).of_rule("EMC-09").count(), 0);
+    assert_eq!(
+        analyse(&input(vec![a, b], vec![]))
+            .of_rule("EMC-09")
+            .count(),
+        0
+    );
 }
 
 fn dev(id: u64, tag: &str, role: Role, rect: (f64, f64, f64, f64)) -> Device {
@@ -279,7 +361,8 @@ fn drive_filter_rules() {
     assert_eq!(f.fixes, vec![Fix::AddFilter { drive: 1 }]);
     assert_eq!(r.score_of(Subject::Device(1)).unwrap().points, 30);
     // A filter 150 mm away is fine, 400 mm away is flagged.
-    i.devices.push(dev(2, "-Z1", Role::Filter, (250.0, 0.0, 80.0, 100.0)));
+    i.devices
+        .push(dev(2, "-Z1", Role::Filter, (250.0, 0.0, 80.0, 100.0)));
     assert_eq!(analyse(&i).of_rule("EMC-07").count(), 0);
     i.devices[1].rect = Some((500.0, 0.0, 80.0, 100.0));
     let r = analyse(&i);
@@ -303,11 +386,17 @@ fn painted_plate_and_close_sensitive_device() {
     let r = analyse(&i);
     assert_eq!(r.of_rule("EMC-17").count(), 1);
     assert_eq!(r.of_rule("EMC-11").count(), 0);
-    assert_eq!(r.rules.iter().find(|s| s.rule == "EMC-11").unwrap().status, Status::NotEvaluated);
+    assert_eq!(
+        r.rules.iter().find(|s| s.rule == "EMC-11").unwrap().status,
+        Status::NotEvaluated
+    );
     i.plates[0].finish = Some(Finish::Painted);
     let r = analyse(&i);
     assert_eq!(r.of_rule("EMC-11").count(), 1);
-    assert_eq!(r.rules.iter().find(|s| s.rule == "EMC-11").unwrap().status, Status::Finding);
+    assert_eq!(
+        r.rules.iter().find(|s| s.rule == "EMC-11").unwrap().status,
+        Status::Finding
+    );
     assert_eq!(r.score_of(Subject::Plate(1)).unwrap().points, 20);
     i.plates[0].finish = Some(Finish::Conductive);
     assert_eq!(analyse(&i).of_rule("EMC-11").count(), 0);
@@ -319,9 +408,15 @@ fn an_unshielded_signal_leaving_the_cabinet_is_flagged() {
     a.leaves_cabinet = true;
     a.cable = Some(2);
     let r = analyse(&input(vec![a.clone()], vec![]));
-    assert_eq!(r.of_rule("EMC-14").next().unwrap().fixes, vec![Fix::AddShield { cable: 2 }]);
+    assert_eq!(
+        r.of_rule("EMC-14").next().unwrap().fixes,
+        vec![Fix::AddShield { cable: 2 }]
+    );
     a.shield = Some(full());
-    assert_eq!(analyse(&input(vec![a], vec![])).of_rule("EMC-14").count(), 0);
+    assert_eq!(
+        analyse(&input(vec![a], vec![])).of_rule("EMC-14").count(),
+        0
+    );
 }
 
 #[test]
@@ -329,7 +424,15 @@ fn scores_cap_at_100_and_nets_take_the_worst_run() {
     let m = motor(1, &[(0.0, 0.0), (1000.0, 0.0)], &[]);
     let mut runs = vec![m];
     for k in 0..5u64 {
-        runs.push(run(10 + k, EmcClass::Analog, &[(0.0, 10.0 * (k + 1) as f64), (1000.0, 10.0 * (k + 1) as f64)], &[]));
+        runs.push(run(
+            10 + k,
+            EmcClass::Analog,
+            &[
+                (0.0, 10.0 * (k + 1) as f64),
+                (1000.0, 10.0 * (k + 1) as f64),
+            ],
+            &[],
+        ));
     }
     let r = analyse(&input(runs, vec![]));
     let motor = r.score_of(Subject::Run(1)).unwrap();
@@ -396,11 +499,17 @@ fn a_loop_finding_carries_its_polygon_and_no_estimate_is_given_above_the_band() 
     // 100 MHz is above the band: no pigtail number at all.
     let mut c = run(3, EmcClass::Analog, &[], &[]);
     c.cable = Some(9);
-    c.shield = Some(Shield { a: Termination::Pigtail(80.0), b: Termination::Full360 });
+    c.shield = Some(Shield {
+        a: Termination::Pigtail(80.0),
+        b: Termination::Full360,
+    });
     let mut j = input(vec![c], vec![]);
     assert_eq!(analyse(&j).of_rule("EMC-05").count(), 1);
     j.params.frequency_hz = 100.0e6;
     let r = analyse(&j);
     assert_eq!(r.of_rule("EMC-05").count(), 0);
-    assert_eq!(r.rules.iter().find(|s| s.rule == "EMC-05").unwrap().status, Status::NotEvaluated);
+    assert_eq!(
+        r.rules.iter().find(|s| s.rule == "EMC-05").unwrap().status,
+        Status::NotEvaluated
+    );
 }

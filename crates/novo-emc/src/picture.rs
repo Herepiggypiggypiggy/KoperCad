@@ -7,7 +7,7 @@
 //! card and report.
 
 use crate::class::EmcClass;
-use crate::input::{Input, Origin, Role, P};
+use crate::input::{Input, Origin, P, Role};
 use crate::report::{Assumption, Band, Finding, Level, Metric, Report, Ribbon, Severity, Subject};
 
 /// Said on every card and report.
@@ -184,7 +184,9 @@ pub fn picture(input: &Input, report: &Report) -> Picture {
                 role: d.role,
                 plate: d.plate?,
                 rect: d.rect?,
-                score: report.score_of(Subject::Device(d.id)).map_or(0, |s| s.points),
+                score: report
+                    .score_of(Subject::Device(d.id))
+                    .map_or(0, |s| s.points),
             })
         })
         .collect();
