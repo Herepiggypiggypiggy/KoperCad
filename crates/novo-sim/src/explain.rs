@@ -116,6 +116,20 @@ pub struct Explanation {
     pub verdict: Verdict,
 }
 
+/// Whether anything in the drawing defines a potential: a feed, a source
+/// pin or a supply terminal. Without one nothing can ever be energized, and
+/// every question ends in the same answer ([`NO_SUPPLY`]).
+pub fn has_supply(netlist: &Netlist) -> bool {
+    netlist.nets().iter().any(|n| !n.defined.is_empty())
+}
+
+/// The headline the live view and every answer give when [`has_supply`] is
+/// false.
+pub const NO_SUPPLY: &str = "No supply is defined in this drawing";
+
+/// What to do about it, in words.
+pub const NO_SUPPLY_FIX: &str = "Nothing can be energized until a feed gives L1, L2, L3, N or PE a potential. Place a feed on each open supply point and right-click it to set its potential.";
+
 /// One line of the answer; `symbol` is the device the line is about, which a
 /// view can make clickable ("why is that one open?").
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -546,6 +560,9 @@ pub fn answer_net(
     net: NetId,
     name: &dyn Fn(SymbolId) -> String,
 ) -> Answer {
+    if !has_supply(netlist) {
+        return no_supply_answer("This wire".to_owned(), vec![net]);
+    }
     let e = explain_net(project, netlist, settled, net, None);
     Answer {
         title: "This wire".to_owned(),
@@ -553,6 +570,17 @@ pub fn answer_net(
         nets: e.nets(),
         breaks: breaks_of(&e),
         dead: matches!(e.verdict, Verdict::Cut(_) | Verdict::Isolated),
+    }
+}
+
+/// The answer for any question asked of a drawing with no supply.
+fn no_supply_answer(title: String, nets: Vec<NetId>) -> Answer {
+    Answer {
+        title,
+        lines: vec![Line::plain(NO_SUPPLY), Line::plain(NO_SUPPLY_FIX)],
+        nets,
+        breaks: Vec::new(),
+        dead: true,
     }
 }
 
@@ -616,6 +644,9 @@ pub fn answer_symbol(
             breaks: Vec::new(),
             dead: false,
         };
+    }
+    if !has_supply(netlist) && !settled.energized.contains(&symbol) {
+        return no_supply_answer(n, Vec::new());
     }
     let pins = explain_symbol(project, netlist, settled, symbol);
     let on = settled.energized.contains(&symbol);

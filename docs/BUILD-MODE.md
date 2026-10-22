@@ -33,6 +33,11 @@ named by their content, and carried in the `.kcfield` file, so the desk sees the
 the hole that is off. The photos are chosen before the problem is raised; Cancel drops them.
 Photos of an existing item are added in Commissioning. There is no live camera capture yet.
 
+A device step also has **Show on the plate** and **Show in 3D**: Build mode steps
+aside behind a "Back to Build mode" bar at the bottom of the window, the device is
+selected in the Cabinet canvas or the 3D view, and the bar brings you back to the
+same step. While it is stepped aside Space and Escape do not touch the build.
+
 ## Honest limits
 
 - Wires are cut and holes drilled by hand. A step says what to cut or drill and

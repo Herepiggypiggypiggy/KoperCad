@@ -8,7 +8,7 @@ Done (PR claude/project-thread-naa4la):
 - QA scenario 71, tests, docs/BUILD-MODE.md.
 
 Next, in order:
-1. Show the step's device on the Cabinet canvas and in 3D (only "Show the wire in 3D" exists).
+1. DONE (PR show-device): device step on the Cabinet canvas and in 3D, Build mode steps aside behind a bar.
 2. Build-mode PDF per cabinet with the ticks printed (the paper twin).
 3. Door and wall steps in their own surface coordinates (today door devices say "Fit on the door").
 4. ~~Photos on a problem~~ done (PR build-mode-photos): chosen in the problem editor, kept on the punch item. Live camera capture is not done.
