@@ -72,3 +72,31 @@ fn cable_reports_build_the_netlist_once() {
         );
     }
 }
+
+/// The bench packet and the standards report each ask for the wire jobs
+/// several times; routing every wire is the cost, so a second ask for the
+/// same revision must come from the cache. Compared with the first ask, not
+/// against a clock, so a slow machine does not fail it.
+#[test]
+fn wire_jobs_are_routed_once_per_revision() {
+    let mut doc = big();
+    let p = doc.project();
+    let first_start = Instant::now();
+    let first = novo_reports::wire_cut_jobs(p);
+    let first_took = first_start.elapsed();
+    assert!(!first.is_empty());
+    let again_start = Instant::now();
+    let again = novo_reports::wire_cut_jobs(p);
+    let again_took = again_start.elapsed();
+    assert_eq!(first, again);
+    assert!(
+        again_took * 5 < first_took,
+        "second ask took {again_took:?}, first {first_took:?}: not cached"
+    );
+    // An edit moves the revision, so the next ask works it out again.
+    let revision = doc.project().revision();
+    doc.undo().unwrap();
+    assert_ne!(doc.project().revision(), revision);
+    let after = novo_reports::wire_cut_jobs(doc.project());
+    assert!(after.len() < first.len(), "stale jobs after an edit");
+}

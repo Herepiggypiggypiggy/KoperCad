@@ -58,6 +58,9 @@ pub struct Project {
     derived_cache: DerivedCache,
 }
 
+/// The page ids in reading order, kept by [`Project::pages_in_order`].
+struct PageOrder(Vec<PageId>);
+
 /// The last netlist built, keyed by the revision it was built from. Cloning a
 /// project clones the handle, so the clone shares the same (still valid) netlist.
 #[derive(Debug, Default)]
@@ -1368,9 +1371,15 @@ impl Project {
     /// location levels, each in natural order; pages without a structure
     /// first), then by name in natural order (`2` before `10`).
     pub fn pages_in_order(&self) -> Vec<&Page> {
-        let mut pages: Vec<&Page> = self.pages.values().collect();
-        pages.sort_by(|a, b| page_cmp(a, b));
-        pages
+        // Sorting compares structure levels and names with a natural order,
+        // which showed up in samples at 600 pages; the order is worked out
+        // once per revision and only looked up here.
+        let order = self.derived(|p| {
+            let mut pages: Vec<&Page> = p.pages.values().collect();
+            pages.sort_by(|a, b| page_cmp(a, b));
+            PageOrder(pages.into_iter().map(|page| page.id).collect())
+        });
+        order.0.iter().filter_map(|id| self.pages.get(id)).collect()
     }
 
     /// The pages that share `page`'s group, panel and section (contents,

@@ -58,6 +58,22 @@ pub(crate) struct ReportsView {
     /// Name of the report template the PDF button prints through; `None`
     /// is the plain report layout.
     pub(super) template: Option<String>,
+    /// The row counts of the list, worked out off the UI thread.
+    counts: ListCounts,
+}
+
+type CountAnswer = Vec<(String, usize)>;
+
+/// The row count of every report at one project state. Working out all of
+/// them takes about half a second on a 600-page project, so the list asks a
+/// worker thread and shows the last counts (or a dash) until it answers.
+#[derive(Default)]
+struct ListCounts {
+    /// The counts and the project state (revision with choice generation)
+    /// they were worked out for.
+    known: Option<(u64, std::collections::HashMap<String, usize>)>,
+    /// The state the worker is busy with, and where its answer arrives.
+    pending: Option<(u64, std::sync::mpsc::Receiver<CountAnswer>)>,
 }
 
 /// A file format a report can be written in.
@@ -146,7 +162,7 @@ impl NovoApp {
         let Some(selected) = self.report_selected() else {
             return;
         };
-        let rows: Vec<(String, String, usize)> = {
+        let rows: Vec<(String, String)> = {
             let Some((reports, project)) = self.machine_reports() else {
                 return;
             };
@@ -154,18 +170,17 @@ impl NovoApp {
             let live = reports.live(project);
             live.ids()
                 .into_iter()
-                .map(str::to_owned)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .filter_map(|id| {
-                    let title = live.report(&id)?.title();
-                    let count = live
-                        .get(project, &id)
-                        .map_or(0, |o| novo_reports::headline_count(&id, o).0);
-                    Some((id, title, count))
-                })
+                .filter_map(|id| Some((id.to_owned(), live.report(id)?.title())))
                 .collect()
         };
+        let counts = self.list_counts(ui.ctx());
+        let rows: Vec<(String, String, Option<usize>)> = rows
+            .into_iter()
+            .map(|(id, title)| {
+                let count = counts.get(&id).copied();
+                (id, title, count)
+            })
+            .collect();
         section_label(ui, "Reports");
         let mut chosen = None;
         for (id, title, count) in &rows {
@@ -175,7 +190,7 @@ impl NovoApp {
                     chosen = Some(id.clone());
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.weak(count.to_string());
+                    ui.weak(count.map_or("-".to_owned(), |n| n.to_string()));
                 });
             });
         }
@@ -183,6 +198,56 @@ impl NovoApp {
             self.reports_view.selected = Some(id);
             self.reports_view.sort = None;
         }
+    }
+
+    /// The row counts of the list: the ones last worked out (empty before the
+    /// first answer), with a worker started for the current project state.
+    fn list_counts(&mut self, ctx: &egui::Context) -> std::collections::HashMap<String, usize> {
+        let generation = self.machine_generation();
+        let Some(revision) = self.machine().map(|p| p.revision()) else {
+            return Default::default();
+        };
+        let key = revision ^ (generation << 40);
+        let counts = &mut self.reports_view.counts;
+        if let Some((_, receiver)) = &counts.pending
+            && let Ok(answer) = receiver.try_recv()
+        {
+            let at = counts.pending.take().map_or(key, |(at, _)| at);
+            counts.known = Some((at, answer.into_iter().collect()));
+        }
+        let current = counts.known.as_ref().is_some_and(|(at, _)| *at == key);
+        let busy = counts.pending.as_ref().is_some_and(|(at, _)| *at == key);
+        if !current && !busy {
+            let copy: Option<Project> = self.machine().map(|p| (*p).clone());
+            if let Some(copy) = copy {
+                let (send, receive) = std::sync::mpsc::channel();
+                let ctx = ctx.clone();
+                std::thread::spawn(move || {
+                    let mut live = novo_reports::LiveReports::standard();
+                    let ids: Vec<String> = live.ids().into_iter().map(str::to_owned).collect();
+                    let answer = ids
+                        .into_iter()
+                        .map(|id| {
+                            let count = live
+                                .get(&copy, &id)
+                                .map_or(0, |o| novo_reports::headline_count(&id, o).0);
+                            (id, count)
+                        })
+                        .collect();
+                    let _ = send.send(answer);
+                    ctx.request_repaint();
+                });
+                // A newer state replaces a worker still busy with an older
+                // one; its answer goes nowhere.
+                self.reports_view.counts.pending = Some((key, receive));
+            }
+        }
+        let counts = &self.reports_view.counts;
+        counts
+            .known
+            .as_ref()
+            .map(|(_, c)| c.clone())
+            .unwrap_or_default()
     }
 
     /// The project's wire counts, kept while the project is unchanged.
