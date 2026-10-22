@@ -285,7 +285,8 @@ pub(super) fn proposals_section(
                         }
                     }
                 });
-            ui.weak(format!("{} wires", proposal.wires.len()));
+            let n = proposal.wires.len();
+            ui.weak(format!("{n} wire{}", if n == 1 { "" } else { "s" }));
             if ui.small_button("Accept").clicked() {
                 actions.push(DrawerAction::AcceptOne(key, chosen));
             }
