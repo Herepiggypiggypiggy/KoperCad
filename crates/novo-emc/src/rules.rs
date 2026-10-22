@@ -411,8 +411,12 @@ fn victim_first(a: &Run, b: &Run) -> (usize, usize) {
     }
 }
 
-fn shield_factor(r: &Run) -> f64 {
-    let s = r.shield.map_or(1.0, |s| s.factor());
+/// Assumed spacing across a duct divider: the metal wall counts as this much
+/// separation, not a measured distance (reported as an assumption).
+const DIVIDER_ASSUMED_DISTANCE_MM: f64 = 50.0;
+
+fn shield_factor(r: &Run, pigtail_max_mm: f64) -> f64 {
+    let s = r.shield.map_or(1.0, |s| s.factor(pigtail_max_mm));
     if r.twisted { s * 0.8 } else { s }
 }
 
@@ -490,13 +494,14 @@ fn segregation(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                 if base <= 0.0 {
                     continue;
                 }
-                let need = base * shield_factor(a) * shield_factor(b);
+                let need =
+                    base * shield_factor(a, p.pigtail_max_mm) * shield_factor(b, p.pigtail_max_mm);
                 let stretches = geometry::parallel(&cache[i], &cache[j], &input.ducts, need);
                 let mut duct: Vec<geometry::Stretch> = Vec::new();
                 let mut near: Vec<geometry::Stretch> = Vec::new();
                 for mut s in stretches {
                     if s.divider {
-                        s.distance_mm = 50.0;
+                        s.distance_mm = DIVIDER_ASSUMED_DISTANCE_MM;
                     }
                     if s.distance_mm >= need {
                         continue;

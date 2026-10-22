@@ -149,11 +149,12 @@ pub struct Shield {
 impl Shield {
     /// Factor on the planning distance: 1 means no help from the shield.
     /// Both ends all round 0.25; a pigtail at an end helps less; one end
-    /// bonded about 0.6; unknown ends are not counted.
-    pub fn factor(&self) -> f64 {
+    /// bonded about 0.6; unknown ends are not counted. A pigtail counts as
+    /// short when it is at most `pigtail_max_mm` (the `emc.pigtail_max_mm` parameter).
+    pub fn factor(&self, pigtail_max_mm: f64) -> f64 {
         let end = |t: Termination| match t {
             Termination::Full360 => 2,
-            Termination::Pigtail(mm) if mm <= 50.0 => 1,
+            Termination::Pigtail(mm) if mm <= pigtail_max_mm => 1,
             _ => 0,
         };
         match end(self.a) + end(self.b) {
