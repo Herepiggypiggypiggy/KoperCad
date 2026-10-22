@@ -340,9 +340,24 @@ pub fn wire_cut_jobs(project: &Project) -> Vec<WireCutJob> {
 /// [`wire_cut_jobs`] with the ferrule standard given instead of the
 /// project's: the strip length of a wire end whose part does not give one is
 /// the standard's contact length for the cross-section.
+///
+/// Routing every wire is the cost, so the jobs are worked out once per
+/// project revision and standard and shared: the bench packet, the standards
+/// report and the reports that quote the cut list all ask for them.
 pub fn wire_cut_jobs_with(project: &Project, standard: &FerruleStandard) -> Vec<WireCutJob> {
-    produce(project, standard).0
+    // Only the project's own standard is kept: a what-if standard from the
+    // bench editor must not take the slot and push the project's own out.
+    if *standard != FerruleStandard::of(project) {
+        return produce(project, standard).0;
+    }
+    project
+        .derived(|p| CachedJobs(produce(p, standard).0))
+        .0
+        .clone()
 }
+
+/// The jobs under the project's own ferrule standard, as [`Project::derived`] keeps them.
+struct CachedJobs(Vec<WireCutJob>);
 
 type Plans = Vec<(StructureId, novo_routing::Plan)>;
 
