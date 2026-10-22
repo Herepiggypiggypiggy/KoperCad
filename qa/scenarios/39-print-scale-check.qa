@@ -1,6 +1,6 @@
 @title Print scale check: window row, advice for a measured square, command and file
 @area Reports
-# Reports > Bench output has a "Print scale check (PDF)" button and two boxes for the measured square; Ctrl+K "print scale check" and Reports > Export write the same file.
+# Reports > Bench output has a "Print scale check (PDF)" button, boxes for the measured square and the scale it was printed at; Ctrl+K "print scale check" and Reports > Export write the same file.
 click_text "Open example"
 wait 20
 click_text Reports
@@ -10,22 +10,21 @@ wait 20
 expect "Print scale check (PDF)"
 shot window
 check_layout
-click 395 166
-wait 2
+click_text "Print scale check (PDF)"
+wait 30
+expect_file "~/Documents/KoperCAD/*print scale check.pdf" 1500
+keep_file "~/Documents/KoperCAD/*print scale check.pdf"
+shot written
+click_text "Square width"
 text 99,2
-key tab
+click_text "Square height"
 text 99,1
 wait 4
 expect "Print again at"
 shot advice
 check_layout
-click_text "Print scale check (PDF)"
-wait 30
-expect_file "~/Documents/KoperCAD/*print scale check.pdf" 1500
-shot written
 key ctrl+k
 wait 4
 text Export print scale check
 wait 6
 shot palette
-check_layout

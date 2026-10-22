@@ -11,3 +11,9 @@
 ## Round 4: full edit mix and 600-page runs (2026-10-22)
 
 `undo_across_save.rs` now has a full mix on top of the basic one: cables (proposals or a hand-made cable with a core), parts (add and assign), issued revisions, wire numbering runs, Autopilot plans and generated pages, 40% of edit steps. Same checks as the basic mix: the file equals the drawing after every save, a crash leaves the last save plus a recovery file, undo to the bottom gives the starting project, redo to the top gives the final drawing. A coverage assert fails the test if any heavy kind never applied. A 600-page project runs 2 seeds x 60 steps (about 47 s). No product bug found. Still not covered: add device, connect pins, property and wire data edits.
+## Recovery made discoverable (2026-10-22)
+
+- New command `file.recover`, "Recover a damaged project": Ctrl+K (words: recover, repair, corrupt, salvage, broken), File > Open submenu, and a quiet "File damaged? Recover it…" line on the start screen. It asks for the damaged file and opens a recovered copy beside it; the damaged file is only read.
+- The "damaged" warning now names the recovered copy and points at the command.
+- Control mode: `open_file {path, recover?}` answers the next file dialog and starts Open (or the recovery command), so QA can open damaged fixtures.
+- Tests: palette ranking, menu placement, message text, nothing-readable case; QA scenarios 36 (message) and 37 (start screen, Ctrl+K, File menu). Pictures in /mnt/project-files/qa/recover-discoverable/.

@@ -55,6 +55,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     // File > Open: the ways to open a project (the Recent list joins them).
     ("file.open", under("File", "Open")),
     ("file.open_read_only", under("File", "Open")),
+    ("file.recover", under("File", "Open")),
     ("file.example", under("File", "Open")),
     ("macro.browser", under("File", "Macros")),
     ("macro.import", under("File", "Macros")),
@@ -887,7 +888,15 @@ mod tests {
                 items,
             } => {
                 let ids: Vec<_> = items.iter().map(|c| c.id).collect();
-                assert_eq!(ids, ["file.open", "file.open_read_only", "file.example"]);
+                assert_eq!(
+                    ids,
+                    [
+                        "file.open",
+                        "file.open_read_only",
+                        "file.recover",
+                        "file.example"
+                    ]
+                );
             }
             other => panic!("expected File > Open after New project, got {other:?}"),
         }

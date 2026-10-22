@@ -50,6 +50,17 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["alleen lezen openen", "alleen lezen", "inzien", "bekijken"],
     ),
+    nl(
+        "file.recover",
+        &[],
+        &[
+            "beschadigd project herstellen",
+            "herstellen",
+            "repareren",
+            "kapot",
+            "beschadigd",
+        ],
+    ),
     nl("file.example", &[], &["voorbeeld openen", "voorbeeld"]),
     nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
     nl(

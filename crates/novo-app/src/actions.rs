@@ -9,6 +9,7 @@ pub enum Action {
     NewProject,
     OpenProject,
     OpenReadOnly,
+    RecoverProject,
     OpenExample,
     TryFastKeys,
     ShowWalkthrough,
@@ -39,6 +40,7 @@ impl Action {
         Action::NewProject,
         Action::OpenProject,
         Action::OpenReadOnly,
+        Action::RecoverProject,
         Action::OpenExample,
         Action::TryFastKeys,
         Action::ShowWalkthrough,
@@ -71,6 +73,7 @@ impl Action {
             Action::NewProject => "file.new",
             Action::OpenProject => "file.open",
             Action::OpenReadOnly => "file.open_read_only",
+            Action::RecoverProject => "file.recover",
             Action::OpenExample => "file.example",
             Action::TryFastKeys => "file.practice",
             Action::ShowWalkthrough => "help.walkthrough",
@@ -106,6 +109,7 @@ impl Action {
             Action::NewProject => "New project",
             Action::OpenProject => "Open project…",
             Action::OpenReadOnly => "Open read-only…",
+            Action::RecoverProject => "Recover a damaged project…",
             Action::OpenExample => "Open example",
             Action::TryFastKeys => "Try the fast keys",
             Action::ShowWalkthrough => "Fast keys card on this project",
@@ -139,6 +143,7 @@ impl Action {
             Action::NewProject
             | Action::OpenProject
             | Action::OpenReadOnly
+            | Action::RecoverProject
             | Action::OpenExample
             | Action::TryFastKeys
             | Action::SaveProject
@@ -185,6 +190,7 @@ impl Action {
             Action::PinOutline
             | Action::About
             | Action::OpenReadOnly
+            | Action::RecoverProject
             | Action::OpenExample
             | Action::TryFastKeys
             | Action::ShowWalkthrough
