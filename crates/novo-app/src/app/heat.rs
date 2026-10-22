@@ -1748,7 +1748,7 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                 let (total_w, with_data, unknown) = totals(input);
                 if with_data > 0 {
                     ui.label(small(
-                        &format!("Total loss {total_w:.0} W"),
+                        &format!("Total loss {total_w:.0} W (devices)"),
                         crate::theme::ui_palette().text_primary,
                     ));
                 }
@@ -1801,8 +1801,11 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                         for m in &sol.messages {
                             ui.label(small(m, t::WARNING));
                         }
-                        for n in &sol.wire_notes {
-                            ui.label(small(n, crate::theme::ui_palette().text_secondary));
+                        // The headline fits the narrow panel; what it rests on is
+                        // on hover here and in full in the 3D Heat panel.
+                        if let Some((head, basis)) = sol.wire_notes.split_first() {
+                            ui.label(small(head, crate::theme::ui_palette().text_secondary))
+                                .on_hover_text(basis.join("\n\n"));
                         }
                         if !sol.snapshot.notes.is_empty() {
                             let pal = crate::theme::ui_palette();

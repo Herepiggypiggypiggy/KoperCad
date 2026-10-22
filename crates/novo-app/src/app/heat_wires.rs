@@ -194,10 +194,10 @@ pub(super) fn wire_heat(project: &Project, structure: StructureId) -> WireHeat {
     let heating = stated.len() + calculated.len();
     if total > 0.0 {
         let basis = match (stated.len(), calculated.len()) {
-            (s, 0) => format!("the current is stated on all {s}"),
-            (0, c) => format!("the current is calculated from the loads below on all {c}"),
+            (s, 0) => format!("current stated on all {s} wires"),
+            (0, c) => format!("current calculated from the loads below on all {c} wires"),
             (s, c) => {
-                format!("the current is stated on {s} and calculated from the loads below on {c}")
+                format!("current stated on {s} wires and calculated from the loads below on {c}")
             }
         };
         let load = if factor_stated {
@@ -209,20 +209,26 @@ pub(super) fn wire_heat(project: &Project, structure: StructureId) -> WireHeat {
             "no diversity: every load at its full current at the same time".to_owned()
         };
         notes.push(format!(
-            "Wires in ducts add {total:.1} W ({heating} wires; {load})."
+            "Wires in ducts add {total:.1} W ({heating} wire{}).",
+            if heating == 1 { "" } else { "s" }
         ));
         notes.push(format!(
-            "Wire heat basis: {basis}. Copper at the insulation's highest temperature (70 C PVC, 90 C XLPE), \
-             so a planning upper value. The other conductors of a run are assumed to lie like the one listed \
-             (3 for three-phase, 2 out and back). The heat is spread evenly along each duct."
+            "Wire heat basis: {basis}; {load}. Copper at the insulation's highest temperature \
+             (70 °C PVC, 90 °C XLPE), so a planning upper value. The other conductors of a run are \
+             assumed to lie like the one listed (3 for three-phase, 2 out and back). The heat is \
+             spread evenly along each duct. Neutral and PE current is not counted (balanced load). \
+             Part-load runs scale this heat linearly with the load although I²R is quadratic: that \
+             overestimates."
         ));
     }
     if !no_current.is_empty() {
         notes.push(format!(
-            "{} wire{} in ducts carry no current in the model (control and signal wires, or no load below): \
-             no heat counted for them.",
+            "{} wire{} in ducts {} on no run the model knows a current for. Where they are the other \
+             phases or the return of a run counted above, their heat is already in the total (the 3 or 2 \
+             conductors); control and signal wires, or wires with no load below, add nothing.",
             no_current.len(),
-            if no_current.len() == 1 { "" } else { "s" }
+            if no_current.len() == 1 { "" } else { "s" },
+            if no_current.len() == 1 { "is" } else { "are" }
         ));
     }
     if !no_section.is_empty() {

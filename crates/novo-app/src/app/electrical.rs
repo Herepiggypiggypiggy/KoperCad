@@ -87,7 +87,7 @@ pub(super) const LIMITS: [Field; 3] = [
         super::heat_wires::WIRE_CURRENT_FACTOR,
         "Wire heat: share of load current (0 to 1)",
         "",
-        "1",
+        "e.g. 0.8",
     ),
 ];
 

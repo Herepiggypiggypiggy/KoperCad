@@ -50,14 +50,16 @@ fn power_wires_in_ducts_make_heat_and_control_wires_are_named_as_left_out() {
         "{:?}",
         h.notes
     );
-    assert!(h.notes[0].contains("no diversity"), "{:?}", h.notes);
+    assert!(h.notes[1].contains("no diversity"), "{:?}", h.notes);
     assert!(
         h.notes[1].contains("calculated from the loads below"),
         "{:?}",
         h.notes
     );
     assert!(
-        h.notes.iter().any(|n| n.contains("carry no current")),
+        h.notes
+            .iter()
+            .any(|n| n.contains("on no run the model knows a current for")),
         "{:?}",
         h.notes
     );
@@ -79,7 +81,7 @@ fn heat_goes_with_the_square_of_the_stated_share_of_current() {
         "{full} {}",
         half.total_w()
     );
-    assert!(half.notes[0].contains("scaled to 50 %"), "{:?}", half.notes);
+    assert!(half.notes[1].contains("scaled to 50 %"), "{:?}", half.notes);
 }
 
 #[test]

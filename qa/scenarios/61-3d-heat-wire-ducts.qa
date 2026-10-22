@@ -97,6 +97,11 @@ expect "Fine. Hottest"
 click_text "Wire heat in the ducts"
 wait 10
 expect "Wires in ducts add"
+expect "no diversity"
+shot heat-wires-3d-top
+scroll 1190 450 -400
+wait 10
+shot heat-wires-3d-scrolled
 expect_not "Preliminary"
 move 700 650
 wait 10

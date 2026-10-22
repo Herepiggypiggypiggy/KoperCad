@@ -74,7 +74,8 @@ wait 1000
 wait 1000
 wait 1000
 expect "Wires in ducts add"
-expect "no diversity"
+move 1800 300
+wait 10
 shot heat-wires-in-ducts
 check_blank heat-wires-in-ducts
 check_layout
