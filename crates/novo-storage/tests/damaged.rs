@@ -275,20 +275,74 @@ fn salvage_says_when_only_the_project_information_was_lost() {
 }
 
 #[test]
-fn a_damaged_legacy_novo_file_gets_a_recovered_copy_with_the_same_extension() {
-    let (dir, path) = temp();
-    saved(&path, 60);
-    let bytes = fs::read(&path).unwrap();
-    fs::write(&path, &bytes[..bytes.len() * 6 / 10]).unwrap();
+fn the_report_names_what_is_in_the_copy_and_what_was_left_out() {
+    let (_dir, path) = temp();
+    let doc = saved(&path, 3);
+    let victim = doc.project().devices().next().unwrap().id;
+    {
+        let conn = Connection::open(&path).unwrap();
+        conn.execute(
+            "UPDATE records SET data = '{\"record\": \"device\", ' WHERE id = ?1",
+            [victim.raw() as i64],
+        )
+        .unwrap();
+    }
     let salvaged = salvage(&path).unwrap();
-    assert_eq!(salvaged.copy, dir.path().join("plant.recovered.novo"));
+    assert_eq!(salvaged.lost_text().as_deref(), Some("1 device"));
+    // Pages, symbols and wires are always named, even at zero: an empty
+    // page is the thing to notice.
+    assert!(
+        salvaged
+            .kept_text()
+            .starts_with("3 pages, 0 symbols, 0 wires"),
+        "{}",
+        salvaged.kept_text()
+    );
+    assert!(salvaged.kept_text().contains("11 devices"));
+    let lines = salvaged.report_lines().join("\n");
+    assert!(
+        lines.contains("Found but unreadable, left out: 1 device."),
+        "{lines}"
+    );
+    assert!(!lines.contains("end of the file"), "{lines}");
+}
 
-    let kc = dir.path().join("mill.kopercad");
-    saved(&kc, 60);
-    let bytes = fs::read(&kc).unwrap();
-    fs::write(&kc, &bytes[..bytes.len() * 6 / 10]).unwrap();
-    let salvaged = salvage(&kc).unwrap();
-    assert_eq!(salvaged.copy, dir.path().join("mill.recovered.kopercad"));
+#[test]
+fn the_report_says_so_when_the_end_of_the_file_is_gone() {
+    let (_dir, path) = temp();
+    saved(&path, 150);
+    cut(&path, 0.6);
+    let salvaged = salvage(&path).unwrap();
+    assert!(salvaged.cut_short);
+    let lines = salvaged.report_lines().join("\n");
+    assert!(
+        lines.contains("The end of the file was lost") && lines.contains("cannot be counted"),
+        "{lines}"
+    );
+}
+
+#[test]
+fn the_recovered_copy_keeps_the_extension_of_the_damaged_file() {
+    let dir = tempfile::tempdir().unwrap();
+    for name in ["dmg.kopercad", "dmg"] {
+        let path = dir.path().join(name);
+        saved(&path, 150);
+        cut(&path, 0.6);
+        let salvaged = salvage(&path).unwrap();
+        let expect = if name == "dmg" {
+            "dmg.recovered.novo"
+        } else {
+            "dmg.recovered.kopercad"
+        };
+        assert_eq!(salvaged.copy, dir.path().join(expect));
+        // A second recovery takes the next free name, same extension.
+        let second = salvage(&path).unwrap();
+        assert_eq!(
+            second.copy,
+            dir.path()
+                .join(expect.replace(".recovered.", ".recovered-2."))
+        );
+    }
 }
 
 #[test]

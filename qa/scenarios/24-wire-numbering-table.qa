@@ -41,7 +41,7 @@ shot conflicts-tab
 # Number the wires, then type one number by hand: it is fixed and offers Unlock.
 click_text Numbers Button
 wait 5
-click_text "Scheme and mode: sequential, number new wires, selection (17 selected)"
+click_text "Scheme and mode: sequential, number new wires, selection (20 selected)"
 wait 3
 shot settings-open
 click_text Project Button

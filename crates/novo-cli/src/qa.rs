@@ -230,6 +230,7 @@ const KNOWN_VERBS: &[&str] = &[
     "expect",
     "expect_not",
     "expect_scene",
+    "expect_dialog",
     "expect_file",
     "keep_file",
     "expect_enabled",
@@ -1117,6 +1118,33 @@ impl Ctx<'_> {
                         format!("`{want}` not in the project data"),
                         &format!("the scene dump contains `{want}`"),
                         "not found".into(),
+                    );
+                }
+                Ok(())
+            }
+            "expect_dialog" => {
+                // The native dialog cannot be screenshotted; its request line (title, filter,
+                // suggested name) is what the app showed. Drains the dialog log.
+                let want = need(1, "text")?;
+                let r = self.srv.send(json!({"cmd": "dialogs"}))?;
+                let lines: Vec<String> = r["requests"]
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|l| l.as_str().map(str::to_owned))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                for line in &lines {
+                    eprintln!("  dialog  {line}");
+                }
+                if !lines.iter().any(|l| l.contains(want)) {
+                    self.add(
+                        "S3",
+                        "expect",
+                        format!("no dialog request containing `{want}`"),
+                        &format!("a file dialog request contains `{want}`"),
+                        lines.join(" | "),
                     );
                 }
                 Ok(())

@@ -9,7 +9,8 @@ network.
 This is the first beta for test users. Start with [`docs/TESTER-README.md`](docs/TESTER-README.md).
 
 Project files now end in `.kopercad`. Files from earlier builds (`.novo`) still open; use File > Save As
-to keep a copy as `.kopercad`.
+to keep a copy as `.kopercad`. An earlier build does not list `.kopercad` files in its Open dialog. The file
+format itself did not change, so to open a new project in an old build, copy it to a `.novo` name first.
 
 ## What is in it
 

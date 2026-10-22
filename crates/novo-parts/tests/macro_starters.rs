@@ -21,7 +21,19 @@ fn starters_use_real_symbols_with_matching_pins() {
                 s.symbol.0
             );
             for (pin, c) in s.pins.iter().zip(&sym.connections) {
-                assert_eq!(pin.name, c.id, "{} {}", file.name, s.symbol.0);
+                // A device's second contact is numbered 23-24, 33-34, ...:
+                // the function digit stays, the sequence digit changes.
+                let renumbered = s.symbol.0.as_str().starts_with("iec/contacts/")
+                    && pin.name.len() == c.id.len()
+                    && pin.name.ends_with(c.id.chars().last().unwrap());
+                assert!(
+                    pin.name == c.id || renumbered,
+                    "{} {}: pin {} for {}",
+                    file.name,
+                    s.symbol.0,
+                    pin.name,
+                    c.id
+                );
                 assert_eq!(
                     (pin.offset.x, pin.offset.y),
                     (c.at[0], c.at[1]),
@@ -83,7 +95,7 @@ fn installing_starters_is_idempotent_and_keeps_user_edits() {
     let lib = MacroLibrary::new(dir.path().join("Macros"), "user");
     let first = lib.install_starters().unwrap();
     assert!(first.iter().all(|r| matches!(r, Imported::Added(_))));
-    assert_eq!(first.len(), 17);
+    assert_eq!(first.len(), 18);
     let p = "Starter/E-stop chain.kcmacro";
     let mut edited = lib.load(p).unwrap();
     edited.description = "mine".into();
@@ -113,11 +125,11 @@ fn count(file: &novo_parts::MacroFile, key: &str) -> usize {
 }
 
 #[test]
-fn there_are_seventeen_distinct_starters_and_each_one_is_wired() {
+fn there_are_eighteen_distinct_starters_and_each_one_is_wired() {
     let all = starter_macros();
-    assert_eq!(all.len(), 17);
+    assert_eq!(all.len(), 18);
     let names: std::collections::BTreeSet<_> = all.iter().map(|(_, f)| f.name.clone()).collect();
-    assert_eq!(names.len(), 17, "names repeat");
+    assert_eq!(names.len(), 18, "names repeat");
     for (_, f) in &all {
         let wires = f
             .definition

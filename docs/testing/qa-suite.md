@@ -72,6 +72,7 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `expect "text"`, `expect_not "text"` | a label or value containing the text is (not) in the widget tree; a miss is a finding (S3) |
 | `expect_enabled "Label"`, `expect_disabled "Label"` | the control with this label (icon glyphs ignored) is enabled / disabled; a miss is a finding |
 | `expect_scene "text"` | the project data dump (`scene`) contains the text: checks the canvas without reading pixels |
+| `expect_dialog "text"` | a native file dialog request since the last `expect_dialog` contains the text (title, `filter .ext`, suggested name); the lines are printed so the run log keeps them |
 | `expect_file "path" [bytes]` | a file exists with at least that many bytes; `~/` is the app home, one `*` allowed |
 | `keep_file "path"` | copy the file an export wrote (same path rules as `expect_file`, every `*` match) into `files/` beside the report and list it under "Files kept" in `report.md` and `files` in `results.json`, so auditors can open the real PDF, DXF or CSV |
 | `@env NAME=VALUE` (header) | start the app with this environment variable; Ask Claude scenarios use `KOPERCAD_AI_REPLAY=qa/replay/<file>.json` (a JSON list of Messages API replies used in order, nothing is sent) with a dummy `ANTHROPIC_API_KEY` |

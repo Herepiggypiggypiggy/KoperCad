@@ -25,13 +25,13 @@ fn the_command_opens_the_browser_without_a_project_and_installs_the_starters() {
     d.app.run_command(&ctx, "macro.browser", None);
     assert!(d.app.wb.macros.open);
     d.frame();
-    assert_eq!(d.app.wb.macros.entries().len(), 17);
+    assert_eq!(d.app.wb.macros.entries().len(), 18);
     // Opening again does not bring back one the user deleted.
     d.app.wb.macros.selected = Some("Starter/E-stop chain.kcmacro".into());
     d.app.wb.macros.trash_selected();
     d.app.run_command(&ctx, "macro.browser", None);
     d.frame();
-    assert_eq!(d.app.wb.macros.entries().len(), 16);
+    assert_eq!(d.app.wb.macros.entries().len(), 17);
 }
 
 #[test]
@@ -54,14 +54,14 @@ fn search_rename_trash_restore_export_and_import() {
     assert!(out.exists(), "{}", b.status);
 
     b.trash_selected();
-    assert_eq!(b.entries().len(), 16);
+    assert_eq!(b.entries().len(), 17);
     assert!(b.selected.is_none());
     b.restore(".trash/Supply 24 V.kcmacro");
-    assert_eq!(b.entries().len(), 17);
+    assert_eq!(b.entries().len(), 18);
 
     // Importing the exported file keeps both: the name is taken.
     b.import(&out);
-    assert_eq!(b.entries().len(), 18, "{}", b.status);
+    assert_eq!(b.entries().len(), 19, "{}", b.status);
     assert!(b.status.contains("Imported 1"));
 }
 

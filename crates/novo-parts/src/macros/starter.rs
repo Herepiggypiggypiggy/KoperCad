@@ -1,12 +1,16 @@
 //! The starter macros that ship with the program: common circuits drawn
 //! with the IEC pack and captured through `Tx::define_block`, the same path
-//! a user's own macro takes. They are starting points: the supply and the
-//! protective earth are left open for the user to connect.
+//! a user's own macro takes. They come out fully wired inside: protective
+//! earth runs through a PE terminal to every motor, coil returns share one
+//! rail, and the only open points left are the ones the user connects to the
+//! supply (the "Three-phase supply" macro has matching outputs).
 
 use novo_core::{
-    AnyId, BlockParameter, DeviceId, DeviceTag, Document, Endpoint, PageId, Pin, Placement, Point,
-    Project, Result, SymbolId, SymbolInstance, SymbolRole, Tx, Value,
+    AnyId, BlockParameter, Device, DeviceId, DeviceTag, Direction, Document, Endpoint, JunctionId,
+    PageId, Pin, Placement, Point, Project, Result, SymbolId, SymbolInstance, SymbolRole, Tx,
+    Value, Wire, WireId,
 };
+use novo_symbols::Library;
 
 use super::{Imported, MacroError, MacroFile, MacroLibrary};
 
@@ -50,23 +54,13 @@ impl MacroLibrary {
     }
 }
 
-fn pins(list: &[(&str, f64, f64)]) -> Vec<Pin> {
-    list.iter().map(|&(n, x, y)| Pin::new(n, x, y)).collect()
-}
-
-fn three_pole() -> Vec<Pin> {
-    pins(&[
-        ("1", 0.0, 0.0),
-        ("2", 0.0, 16.0),
-        ("3", 8.0, 0.0),
-        ("4", 8.0, 16.0),
-        ("5", 16.0, 0.0),
-        ("6", 16.0, 16.0),
-    ])
-}
-
-fn two_pin(a: &str, b: &str) -> Vec<Pin> {
-    pins(&[(a, 0.0, 0.0), (b, 0.0, 16.0)])
+fn direction(d: novo_symbols::Direction) -> Direction {
+    match d {
+        novo_symbols::Direction::Up => Direction::Up,
+        novo_symbols::Direction::Down => Direction::Down,
+        novo_symbols::Direction::Left => Direction::Left,
+        novo_symbols::Direction::Right => Direction::Right,
+    }
 }
 
 /// Drawing helpers on one scratch page.
@@ -74,6 +68,7 @@ struct Sheet<'a, 'b> {
     tx: &'a mut Tx<'b>,
     page: PageId,
     items: Vec<AnyId>,
+    lib: Library,
 }
 
 impl Sheet<'_, '_> {
@@ -84,48 +79,138 @@ impl Sheet<'_, '_> {
         )
     }
 
-    fn symbol(
-        &mut self,
-        key: &str,
-        x: f64,
-        y: f64,
-        pins: Vec<Pin>,
-        device: DeviceId,
-        main: bool,
-    ) -> Result<SymbolId> {
-        let id = self.tx.place_symbol(
-            self.page,
+    /// Places a symbol of the library for a device. Pins (with their exit
+    /// directions and spare points), bridges and pass-through paths come
+    /// from the symbol library, so a macro cannot drift from its symbols.
+    fn put(&mut self, key: &str, x: f64, y: f64, device: DeviceId, main: bool) -> Result<SymbolId> {
+        self.place(
             key,
             Placement::at(Point::new(x, y)),
-            pins,
             SymbolRole::Device { device, main },
-        )?;
+        )
+    }
+
+    /// Places a symbol that belongs to no device, such as a terminal.
+    fn put_plain(&mut self, key: &str, x: f64, y: f64) -> Result<SymbolId> {
+        self.place(key, Placement::at(Point::new(x, y)), SymbolRole::Unassigned)
+    }
+
+    fn place(&mut self, key: &str, placement: Placement, role: SymbolRole) -> Result<SymbolId> {
+        let sym = self.lib.get(key).expect("starter symbols exist");
+        let pins: Vec<Pin> = sym
+            .connections
+            .iter()
+            .map(|c| {
+                let pin =
+                    Pin::new(c.id.as_str(), c.at[0], c.at[1]).with_direction(direction(c.dir));
+                if c.optional { pin.optional() } else { pin }
+            })
+            .collect();
+        let to_u16 = |groups: &[Vec<usize>]| -> Vec<Vec<u16>> {
+            groups
+                .iter()
+                .map(|g| g.iter().map(|&i| i as u16).collect())
+                .collect()
+        };
+        let bridges = to_u16(&sym.bridges());
+        let passes: Vec<Vec<u16>> = to_u16(sym.pass_through().paths())
+            .into_iter()
+            .filter(|g| !bridges.contains(g))
+            .collect();
+        let id = self
+            .tx
+            .place_symbol(self.page, key, placement, pins, role)?;
         self.items.push(id.into());
+        if !bridges.is_empty() || !passes.is_empty() {
+            self.tx.update::<SymbolInstance>(id, |s| {
+                s.bridges = bridges;
+                s.pass_through = passes;
+            })?;
+        }
         Ok(id)
     }
 
-    /// Pass-through groups of switched poles, as the symbol library says.
-    fn passes(&mut self, symbol: SymbolId, groups: Vec<Vec<u16>>) -> Result<()> {
-        self.tx
-            .update::<SymbolInstance>(symbol, |s| s.pass_through = groups)
+    /// Names the pins of a symbol, in connection order: the second contact
+    /// of a device is 23-24 or 33-34, not 13-14 again.
+    fn number(&mut self, symbol: SymbolId, names: &[&str]) -> Result<()> {
+        self.tx.update::<SymbolInstance>(symbol, |s| {
+            for (pin, name) in s.pins.iter_mut().zip(names) {
+                pin.name = (*name).into();
+            }
+        })
     }
 
-    fn wire(&mut self, a: (SymbolId, u16), b: (SymbolId, u16)) -> Result<()> {
-        self.tx
-            .connect(Endpoint::pin(a.0, a.1), Endpoint::pin(b.0, b.1))?;
-        Ok(())
+    fn describe(&mut self, device: DeviceId, key: &str, text: &str) -> Result<()> {
+        self.tx.update::<Device>(device, |d| {
+            d.properties.insert(key.into(), Value::Text(text.into()));
+        })
     }
 
-    fn junction(&mut self, x: f64, y: f64) -> Result<novo_core::JunctionId> {
+    fn at(&self, symbol: SymbolId, pin: u16) -> Point {
+        self.tx
+            .project()
+            .endpoint_position(Endpoint::pin(symbol, pin))
+            .expect("the symbol was just placed")
+    }
+
+    fn wire(&mut self, a: (SymbolId, u16), b: (SymbolId, u16)) -> Result<WireId> {
+        self.tx
+            .connect(Endpoint::pin(a.0, a.1), Endpoint::pin(b.0, b.1))
+    }
+
+    /// A wire that follows the given corner points between its ends.
+    fn wire_via(
+        &mut self,
+        from: impl Into<Endpoint>,
+        to: impl Into<Endpoint>,
+        corners: &[(f64, f64)],
+    ) -> Result<()> {
+        let id = self.tx.connect(from, to)?;
+        let route: Vec<Point> = corners.iter().map(|&(x, y)| Point::new(x, y)).collect();
+        self.tx.update::<Wire>(id, |w| w.route = route)
+    }
+
+    fn junction(&mut self, x: f64, y: f64) -> Result<JunctionId> {
         let j = self.tx.add_junction(self.page, Point::new(x, y))?;
         self.items.push(j.into());
         Ok(j)
     }
 
-    fn describe(&mut self, device: DeviceId, key: &str, text: &str) -> Result<()> {
-        self.tx.update::<novo_core::Device>(device, |d| {
-            d.properties.insert(key.into(), Value::Text(text.into()));
-        })
+    /// A horizontal bus on row `y`: one junction at the x of every tap, in a
+    /// chain from left to right, each joined to its tap pins (above or
+    /// below the row) by a straight wire. Taps at the same x share a
+    /// junction. Returns the junctions from left to right.
+    fn bus(&mut self, y: f64, taps: &[(SymbolId, u16)]) -> Result<Vec<JunctionId>> {
+        let mut at: Vec<(f64, (SymbolId, u16))> =
+            taps.iter().map(|&t| (self.at(t.0, t.1).x, t)).collect();
+        at.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut junctions: Vec<(f64, JunctionId)> = Vec::new();
+        for (x, (symbol, pin)) in at {
+            let j = match junctions.last() {
+                Some(&(last, j)) if (last - x).abs() < 1e-6 => j,
+                _ => {
+                    let j = self.junction(x, y)?;
+                    if let Some(&(_, prev)) = junctions.last() {
+                        self.tx
+                            .connect(Endpoint::junction(prev), Endpoint::junction(j))?;
+                    }
+                    junctions.push((x, j));
+                    j
+                }
+            };
+            self.tx
+                .connect(Endpoint::junction(j), Endpoint::pin(symbol, pin))?;
+        }
+        Ok(junctions.into_iter().map(|(_, j)| j).collect())
+    }
+
+    /// Protective earth enters through a PE terminal on the top row, next
+    /// to the three line phases, and runs on to `to` (a motor or supply PE
+    /// point).
+    fn pe_entry(&mut self, x: f64, y: f64, to: (SymbolId, u16)) -> Result<SymbolId> {
+        let terminal = self.put_plain("iec/terminals/terminal_pe", x, y)?;
+        self.wire((terminal, 1), to)?;
+        Ok(terminal)
     }
 }
 
@@ -144,6 +229,7 @@ fn capture(
             tx,
             page,
             items: Vec::new(),
+            lib: Library::builtin().expect("the built-in symbols load"),
         };
         draw(&mut sheet)?;
         orthogonal_routes(sheet.tx)?;
@@ -163,10 +249,11 @@ fn capture(
         .with_tags(tags))
 }
 
-/// Gives every wire whose ends are not in line a right-angle route (down,
-/// across, down), so a placed macro has no diagonal wires. Parallel runs get
-/// slightly different crossing heights so they do not lie on top of each
-/// other.
+/// Gives every wire whose ends are not in line a right-angle route, so a
+/// placed macro has no diagonal wires. A wire between a pin and a junction
+/// leaves the junction sideways and enters the pin from above or below (so
+/// wires of one junction never share a stretch); a wire between two pins
+/// runs down, across, down, parallel runs at slightly different heights.
 fn orthogonal_routes(tx: &mut Tx<'_>) -> Result<()> {
     const EPS: f64 = 1e-6;
     let mut bends = Vec::new();
@@ -180,11 +267,20 @@ fn orthogonal_routes(tx: &mut Tx<'_>) -> Result<()> {
         if (a.x - b.x).abs() < EPS || (a.y - b.y).abs() < EPS || !w.route.is_empty() {
             continue;
         }
-        bends.push((w.id, a, b));
+        let corner = match (w.from, w.to) {
+            (Endpoint::Pin { .. }, Endpoint::Junction { .. }) => Some(Point::new(a.x, b.y)),
+            (Endpoint::Junction { .. }, Endpoint::Pin { .. }) => Some(Point::new(b.x, a.y)),
+            _ => None,
+        };
+        bends.push((w.id, a, b, corner));
     }
     // Crossing heights already taken, with the x range of the run.
     let mut taken: Vec<(f64, f64, f64)> = Vec::new();
-    for (id, a, b) in bends {
+    for (id, a, b, corner) in bends {
+        if let Some(corner) = corner {
+            tx.update::<Wire>(id, |w| w.route = vec![corner])?;
+            continue;
+        }
         let span = b.y - a.y;
         let (lo, hi) = (a.x.min(b.x), a.x.max(b.x));
         let room = (span.abs() / 2.0 - 3.0).max(0.0);
@@ -204,7 +300,7 @@ fn orthogonal_routes(tx: &mut Tx<'_>) -> Result<()> {
             }
         }
         taken.push((lo, hi, mid));
-        tx.update::<novo_core::Wire>(id, |w| {
+        tx.update::<Wire>(id, |w| {
             w.route = vec![Point::new(a.x, mid), Point::new(b.x, mid)];
         })?;
     }
@@ -219,9 +315,26 @@ fn parameter(name: &str, default: Value, description: &str) -> BlockParameter {
     }
 }
 
+/// Draws the control column shared by the DOL and star-delta starters at
+/// `x`: control breaker, stop, start in parallel with the self-hold contact
+/// of `k1`, and the overload contact. Returns the overload contact; its
+/// pin 1 feeds the coils.
+fn start_stop(s: &mut Sheet<'_, '_>, x: f64, devices: [DeviceId; 5]) -> Result<SymbolId> {
+    let [f3, s0, s1, k1, f2] = devices;
+    let f3s = s.put("iec/protection/mcb_1p", x, 40.0, f3, true)?;
+    let s0s = s.put("iec/operators/pushbutton_nc", x, 72.0, s0, true)?;
+    let s1s = s.put("iec/operators/pushbutton_no", x, 104.0, s1, true)?;
+    let k1a = s.put("iec/contacts/no", x + 16.0, 104.0, k1, false)?;
+    let thermal = s.put("iec/contacts/thermal_nc", x, 136.0, f2, false)?;
+    s.wire((f3s, 1), (s0s, 0))?;
+    s.bus(96.0, &[(s0s, 1), (s1s, 0), (k1a, 0)])?;
+    s.bus(128.0, &[(s1s, 1), (k1a, 1), (thermal, 0)])?;
+    Ok(thermal)
+}
+
 /// Direct-on-line starter: fuses, contactor, overload relay and motor, with
-/// the start/stop control beside it. Open ends: L1 L2 L3 above the fuses,
-/// the control supply above the breaker, N below the coil, motor PE.
+/// the start/stop control beside it. Open points: L1 L2 L3 and PE above the
+/// fuses, the control supply above the breaker, N below the coil.
 fn motor_starter() -> Result<MacroFile> {
     capture(
         "Motor starter DOL",
@@ -238,116 +351,29 @@ fn motor_starter() -> Result<MacroFile> {
             let s1 = s.device("-S1", "Start")?;
             s.describe(m1, "power_kw", "{power}")?;
 
-            let f1s = s.symbol("iec/protection/fuse_3p", 40.0, 40.0, three_pole(), f1, true)?;
-            let k1m = s.symbol(
-                "iec/contactors/main_3p",
-                40.0,
-                72.0,
-                three_pole(),
-                k1,
-                false,
-            )?;
-            let f2s = s.symbol(
-                "iec/protection/overload_relay",
-                40.0,
-                104.0,
-                three_pole(),
-                f2,
-                true,
-            )?;
-            s.tx.update::<SymbolInstance>(f2s, |x| {
-                x.bridges = vec![vec![0, 1], vec![2, 3], vec![4, 5]]
-            })?;
-            let m1s = s.symbol(
-                "iec/motors/motor_3ph",
-                40.0,
-                150.0,
-                pins(&[
-                    ("U1", 0.0, 0.0),
-                    ("V1", 8.0, 0.0),
-                    ("W1", 16.0, 0.0),
-                    ("PE", 24.0, 0.0),
-                ]),
-                m1,
-                true,
-            )?;
-            let three = vec![vec![0, 1], vec![2, 3], vec![4, 5]];
-            s.passes(f1s, three.clone())?;
-            s.passes(k1m, three)?;
+            let f1s = s.put("iec/protection/fuse_3p", 40.0, 40.0, f1, true)?;
+            let k1m = s.put("iec/contactors/main_3p", 40.0, 72.0, k1, false)?;
+            let f2s = s.put("iec/protection/overload_relay", 40.0, 104.0, f2, true)?;
+            let m1s = s.put("iec/motors/motor_3ph", 40.0, 150.0, m1, true)?;
             for p in 0..3u16 {
                 s.wire((f1s, 2 * p + 1), (k1m, 2 * p))?;
                 s.wire((k1m, 2 * p + 1), (f2s, 2 * p))?;
                 s.wire((f2s, 2 * p + 1), (m1s, p))?;
             }
+            s.pe_entry(64.0, 40.0, (m1s, 3))?;
 
-            let f3s = s.symbol(
-                "iec/protection/mcb_1p",
-                100.0,
-                40.0,
-                two_pin("1", "2"),
-                f3,
-                true,
-            )?;
-            let s0s = s.symbol(
-                "iec/operators/pushbutton_nc",
-                100.0,
-                72.0,
-                two_pin("11", "12"),
-                s0,
-                true,
-            )?;
-            let s1s = s.symbol(
-                "iec/operators/pushbutton_no",
-                100.0,
-                104.0,
-                two_pin("13", "14"),
-                s1,
-                true,
-            )?;
-            let k1a = s.symbol(
-                "iec/contacts/no",
-                116.0,
-                104.0,
-                two_pin("13", "14"),
-                k1,
-                false,
-            )?;
-            let f2a = s.symbol(
-                "iec/contacts/thermal_nc",
-                100.0,
-                136.0,
-                two_pin("95", "96"),
-                f2,
-                false,
-            )?;
-            let k1c = s.symbol(
-                "iec/coils/contactor",
-                100.0,
-                168.0,
-                two_pin("A1", "A2"),
-                k1,
-                true,
-            )?;
-            for sym in [f3s, s0s, s1s, k1a, f2a] {
-                s.passes(sym, vec![vec![0, 1]])?;
-            }
-            s.wire((f3s, 1), (s0s, 0))?;
-            let split = s.junction(100.0, 96.0)?;
-            s.tx.connect(Endpoint::pin(s0s, 1), Endpoint::junction(split))?;
-            s.tx.connect(Endpoint::junction(split), Endpoint::pin(s1s, 0))?;
-            s.tx.connect(Endpoint::junction(split), Endpoint::pin(k1a, 0))?;
-            let join = s.junction(100.0, 128.0)?;
-            s.tx.connect(Endpoint::pin(s1s, 1), Endpoint::junction(join))?;
-            s.tx.connect(Endpoint::pin(k1a, 1), Endpoint::junction(join))?;
-            s.tx.connect(Endpoint::junction(join), Endpoint::pin(f2a, 0))?;
-            s.wire((f2a, 1), (k1c, 0))?;
+            let thermal = start_stop(s, 100.0, [f3, s0, s1, k1, f2])?;
+            let k1c = s.put("iec/coils/contactor", 100.0, 168.0, k1, true)?;
+            s.wire((thermal, 1), (k1c, 0))?;
             Ok(())
         },
     )
 }
 
 /// Star-delta starter: line, delta and star contactors, overload relay, a
-/// six-terminal motor and a timer relay. Open ends as for the DOL starter.
+/// six-terminal motor and a timer relay. Open points as for the DOL starter.
+/// The delta and star wires run beside and below the motor in separate
+/// channels, so no two lie on each other.
 fn star_delta() -> Result<MacroFile> {
     capture(
         "Star-delta starter",
@@ -371,217 +397,81 @@ fn star_delta() -> Result<MacroFile> {
             s.describe(m1, "power_kw", "{power}")?;
             s.describe(k4, "delay_s", "{time}")?;
 
-            let three = vec![vec![0, 1], vec![2, 3], vec![4, 5]];
-            let f1s = s.symbol("iec/protection/fuse_3p", 40.0, 40.0, three_pole(), f1, true)?;
-            let k1m = s.symbol(
-                "iec/contactors/main_3p",
-                40.0,
-                72.0,
-                three_pole(),
-                k1,
-                false,
-            )?;
-            let f2s = s.symbol(
-                "iec/protection/overload_relay",
-                40.0,
-                104.0,
-                three_pole(),
-                f2,
-                true,
-            )?;
-            s.tx.update::<SymbolInstance>(f2s, |x| {
-                x.bridges = vec![vec![0, 1], vec![2, 3], vec![4, 5]]
-            })?;
-            let k2m = s.symbol(
-                "iec/contactors/main_3p",
-                80.0,
-                150.0,
-                three_pole(),
-                k2,
-                false,
-            )?;
-            let k3m = s.symbol(
-                "iec/contactors/main_3p",
-                8.0,
-                150.0,
-                three_pole(),
-                k3,
-                false,
-            )?;
-            let m1s = s.symbol(
-                "iec/motors/motor_3ph_6t",
-                40.0,
-                200.0,
-                pins(&[
-                    ("U1", 0.0, 0.0),
-                    ("V1", 8.0, 0.0),
-                    ("W1", 16.0, 0.0),
-                    ("U2", 0.0, 32.0),
-                    ("V2", 8.0, 32.0),
-                    ("W2", 16.0, 32.0),
-                    ("PE", 24.0, 0.0),
-                ]),
-                m1,
-                true,
-            )?;
-            for sym in [f1s, k1m, k2m, k3m] {
-                s.passes(sym, three.clone())?;
-            }
+            let f1s = s.put("iec/protection/fuse_3p", 40.0, 40.0, f1, true)?;
+            let k1m = s.put("iec/contactors/main_3p", 40.0, 72.0, k1, false)?;
+            let f2s = s.put("iec/protection/overload_relay", 40.0, 104.0, f2, true)?;
+            let m1s = s.put("iec/motors/motor_3ph_6t", 40.0, 200.0, m1, true)?;
+            let k2m = s.put("iec/contactors/main_3p", 88.0, 200.0, k2, false)?;
+            let k3m = s.put("iec/contactors/main_3p", 40.0, 256.0, k3, false)?;
+            s.pe_entry(64.0, 40.0, (m1s, 6))?;
+
+            // Line side: fuses, line contactor, overload relay, then a tap
+            // per phase for the delta contactor, down to U1 V1 W1.
             for p in 0..3u16 {
                 s.wire((f1s, 2 * p + 1), (k1m, 2 * p))?;
                 s.wire((k1m, 2 * p + 1), (f2s, 2 * p))?;
-                // Line side of the motor: U1, V1, W1.
-                s.wire((f2s, 2 * p + 1), (m1s, p))?;
-                // Delta: U1-W2, V1-U2, W1-V2.
-                s.wire((k2m, 2 * p), (m1s, p))?;
-                s.wire((k2m, 2 * p + 1), (m1s, 3 + (p + 2) % 3))?;
-                // Star: the far winding ends U2, V2, W2 meet at the star point.
-                s.wire((k3m, 2 * p), (m1s, 3 + p))?;
             }
+            let x = |p: u16| 40.0 + 8.0 * f64::from(p);
+            let tap_y = [180.0, 172.0, 164.0];
+            for p in 0..3u16 {
+                let tap = s.junction(x(p), tap_y[usize::from(p)])?;
+                s.tx.connect(Endpoint::pin(f2s, 2 * p + 1), Endpoint::junction(tap))?;
+                s.tx.connect(Endpoint::junction(tap), Endpoint::pin(m1s, p))?;
+                s.wire_via(
+                    Endpoint::junction(tap),
+                    Endpoint::pin(k2m, 2 * p),
+                    &[(88.0 + 8.0 * f64::from(p), tap_y[usize::from(p)])],
+                )?;
+            }
+            // Winding ends U2 V2 W2: a junction under each, the star
+            // contactor straight below, the delta wire from the right at
+            // its own height.
+            let join_y = [250.0, 244.0, 238.0];
+            for b in 0..3u16 {
+                let j = s.junction(x(b), join_y[usize::from(b)])?;
+                s.tx.connect(Endpoint::pin(m1s, 3 + b), Endpoint::junction(j))?;
+                s.tx.connect(Endpoint::junction(j), Endpoint::pin(k3m, 2 * b))?;
+                // Delta: U1-W2, V1-U2, W1-V2; pole q of the delta
+                // contactor ends on winding (q + 2) % 3.
+                let q = (b + 1) % 3;
+                s.wire_via(
+                    Endpoint::pin(k2m, 2 * q + 1),
+                    Endpoint::junction(j),
+                    &[(88.0 + 8.0 * f64::from(q), join_y[usize::from(b)])],
+                )?;
+            }
+            // Star point: the star contactor's lower ends joined.
             s.wire((k3m, 1), (k3m, 3))?;
             s.wire((k3m, 3), (k3m, 5))?;
 
             // Control: stop, start with self-hold on the line contactor; the
             // timer starts with it, star runs first, delta follows.
-            let f3s = s.symbol(
-                "iec/protection/mcb_1p",
-                140.0,
-                40.0,
-                two_pin("1", "2"),
-                f3,
-                true,
-            )?;
-            let s0s = s.symbol(
-                "iec/operators/pushbutton_nc",
-                140.0,
-                72.0,
-                two_pin("11", "12"),
-                s0,
-                true,
-            )?;
-            let s1s = s.symbol(
-                "iec/operators/pushbutton_no",
-                140.0,
-                104.0,
-                two_pin("13", "14"),
-                s1,
-                true,
-            )?;
-            let k1a = s.symbol(
-                "iec/contacts/no",
-                156.0,
-                104.0,
-                two_pin("13", "14"),
-                k1,
-                false,
-            )?;
-            let f2a = s.symbol(
-                "iec/contacts/thermal_nc",
-                140.0,
-                136.0,
-                two_pin("95", "96"),
-                f2,
-                false,
-            )?;
-            for sym in [f3s, s0s, s1s, k1a, f2a] {
-                s.passes(sym, vec![vec![0, 1]])?;
-            }
-            s.wire((f3s, 1), (s0s, 0))?;
-            let split = s.junction(140.0, 96.0)?;
-            s.tx.connect(Endpoint::pin(s0s, 1), Endpoint::junction(split))?;
-            s.tx.connect(Endpoint::junction(split), Endpoint::pin(s1s, 0))?;
-            s.tx.connect(Endpoint::junction(split), Endpoint::pin(k1a, 0))?;
-            let join = s.junction(140.0, 128.0)?;
-            s.tx.connect(Endpoint::pin(s1s, 1), Endpoint::junction(join))?;
-            s.tx.connect(Endpoint::pin(k1a, 1), Endpoint::junction(join))?;
-            s.tx.connect(Endpoint::junction(join), Endpoint::pin(f2a, 0))?;
-
-            // Three branches from the overload contact: line coil, timer
-            // coil, star and delta coils behind the timer contacts.
-            let bus = s.junction(140.0, 152.0)?;
-            s.tx.connect(Endpoint::pin(f2a, 1), Endpoint::junction(bus))?;
-            let k1c = s.symbol(
-                "iec/coils/contactor",
-                140.0,
-                168.0,
-                two_pin("A1", "A2"),
-                k1,
-                true,
-            )?;
-            let k4c = s.symbol(
-                "iec/coils/timer_on_delay",
-                164.0,
-                168.0,
-                two_pin("A1", "A2"),
-                k4,
-                true,
-            )?;
-            let k4n = s.symbol(
-                "iec/contacts/nc_delay_on",
-                188.0,
+            let thermal = start_stop(s, 140.0, [f3, s0, s1, k1, f2])?;
+            let k1c = s.put("iec/coils/contactor", 140.0, 168.0, k1, true)?;
+            let k4c = s.put("iec/coils/timer_on_delay", 164.0, 168.0, k4, true)?;
+            let k4n = s.put("iec/contacts/nc_delay_on", 188.0, 168.0, k4, false)?;
+            let k4o = s.put("iec/contacts/no_delay_on", 212.0, 168.0, k4, false)?;
+            let k2i = s.put("iec/contacts/nc", 188.0, 192.0, k2, false)?;
+            let k3i = s.put("iec/contacts/nc", 212.0, 192.0, k3, false)?;
+            let k3c = s.put("iec/coils/contactor", 188.0, 216.0, k3, true)?;
+            let k2c = s.put("iec/coils/contactor", 212.0, 216.0, k2, true)?;
+            s.bus(
                 160.0,
-                two_pin("15", "16"),
-                k4,
-                false,
+                &[(thermal, 1), (k1c, 0), (k4c, 0), (k4n, 0), (k4o, 0)],
             )?;
-            let k2i = s.symbol(
-                "iec/contacts/nc",
-                188.0,
-                184.0,
-                two_pin("21", "22"),
-                k2,
-                false,
-            )?;
-            let k3c = s.symbol(
-                "iec/coils/contactor",
-                188.0,
-                208.0,
-                two_pin("A1", "A2"),
-                k3,
-                true,
-            )?;
-            let k4o = s.symbol(
-                "iec/contacts/no_delay_on",
-                212.0,
-                160.0,
-                two_pin("17", "18"),
-                k4,
-                false,
-            )?;
-            let k3i = s.symbol(
-                "iec/contacts/nc",
-                212.0,
-                184.0,
-                two_pin("21", "22"),
-                k3,
-                false,
-            )?;
-            let k2c = s.symbol(
-                "iec/coils/contactor",
-                212.0,
-                208.0,
-                two_pin("A1", "A2"),
-                k2,
-                true,
-            )?;
-            for sym in [k4n, k2i, k4o, k3i] {
-                s.passes(sym, vec![vec![0, 1]])?;
-            }
-            for target in [(k1c, 0), (k4c, 0), (k4n, 0), (k4o, 0)] {
-                s.tx.connect(Endpoint::junction(bus), Endpoint::pin(target.0, target.1))?;
-            }
             s.wire((k4n, 1), (k2i, 0))?;
             s.wire((k2i, 1), (k3c, 0))?;
             s.wire((k4o, 1), (k3i, 0))?;
             s.wire((k3i, 1), (k2c, 0))?;
+            s.bus(248.0, &[(k1c, 1), (k4c, 1), (k3c, 1), (k2c, 1)])?;
             Ok(())
         },
     )
 }
 
 /// Two emergency stops in series feeding a safety relay, with the relay's
-/// feedback contact. Open ends: supply above the first button, N below the
-/// coil.
+/// feedback contact. Open points: supply above the first button, N below
+/// the coil, the feedback contact's two ends.
 fn estop_chain() -> Result<MacroFile> {
     capture(
         "E-stop chain",
@@ -592,41 +482,10 @@ fn estop_chain() -> Result<MacroFile> {
             let s1 = s.device("-S1", "Emergency stop 1")?;
             let s2 = s.device("-S2", "Emergency stop 2")?;
             let k1 = s.device("-K1", "Safety relay")?;
-            let s1s = s.symbol(
-                "iec/operators/emergency_stop",
-                40.0,
-                40.0,
-                two_pin("11", "12"),
-                s1,
-                true,
-            )?;
-            let s2s = s.symbol(
-                "iec/operators/emergency_stop",
-                40.0,
-                72.0,
-                two_pin("11", "12"),
-                s2,
-                true,
-            )?;
-            let k1c = s.symbol(
-                "iec/coils/relay",
-                40.0,
-                104.0,
-                two_pin("A1", "A2"),
-                k1,
-                true,
-            )?;
-            let k1a = s.symbol(
-                "iec/contacts/no",
-                72.0,
-                104.0,
-                two_pin("13", "14"),
-                k1,
-                false,
-            )?;
-            for sym in [s1s, s2s, k1a] {
-                s.passes(sym, vec![vec![0, 1]])?;
-            }
+            let s1s = s.put("iec/operators/emergency_stop", 40.0, 40.0, s1, true)?;
+            let s2s = s.put("iec/operators/emergency_stop", 40.0, 72.0, s2, true)?;
+            let k1c = s.put("iec/coils/relay", 40.0, 104.0, k1, true)?;
+            s.put("iec/contacts/no", 72.0, 104.0, k1, false)?;
             s.wire((s1s, 1), (s2s, 0))?;
             s.wire((s2s, 1), (k1c, 0))?;
             Ok(())
@@ -634,8 +493,8 @@ fn estop_chain() -> Result<MacroFile> {
     )
 }
 
-/// Mains breaker, 24 V DC supply and output breaker. Open ends: L, N and PE
-/// above the supply, the 24 V and 0 V rails below the output breaker.
+/// Mains breaker, 24 V DC supply and output breaker. Open points: L and N
+/// above the breaker, PE above the supply, the 0 V and 24 V outputs below.
 fn power_supply() -> Result<MacroFile> {
     capture(
         "Power supply 24 V",
@@ -651,46 +510,13 @@ fn power_supply() -> Result<MacroFile> {
             let g1 = s.device("-G1", "Power supply {voltage} V DC")?;
             let f2 = s.device("-F2", "Output breaker")?;
             s.describe(g1, "output_voltage_v", "{voltage}")?;
-            let f1s = s.symbol(
-                "iec/protection/mcb_2p",
-                40.0,
-                40.0,
-                pins(&[
-                    ("1", 0.0, 0.0),
-                    ("2", 0.0, 16.0),
-                    ("3", 8.0, 0.0),
-                    ("4", 8.0, 16.0),
-                ]),
-                f1,
-                true,
-            )?;
-            let g1s = s.symbol(
-                "iec/supplies/power_supply_dc",
-                40.0,
-                72.0,
-                pins(&[
-                    ("L", 0.0, 0.0),
-                    ("N", 8.0, 0.0),
-                    ("PE", 16.0, 0.0),
-                    ("L+", 0.0, 24.0),
-                    ("M", 8.0, 24.0),
-                ]),
-                g1,
-                true,
-            )?;
-            let f2s = s.symbol(
-                "iec/protection/mcb_1p",
-                40.0,
-                112.0,
-                two_pin("1", "2"),
-                f2,
-                true,
-            )?;
-            s.passes(f1s, vec![vec![0, 1], vec![2, 3]])?;
-            s.passes(f2s, vec![vec![0, 1]])?;
+            let f1s = s.put("iec/protection/mcb_2p", 40.0, 40.0, f1, true)?;
+            let g1s = s.put("iec/supplies/power_supply_dc", 40.0, 72.0, g1, true)?;
+            let f2s = s.put("iec/protection/mcb_1p", 40.0, 112.0, f2, true)?;
             s.wire((f1s, 1), (g1s, 0))?;
             s.wire((f1s, 3), (g1s, 1))?;
             s.wire((g1s, 3), (f2s, 0))?;
+            s.pe_entry(64.0, 40.0, (g1s, 2))?;
             Ok(())
         },
     )

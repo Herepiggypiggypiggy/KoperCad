@@ -995,7 +995,15 @@ impl NovoApp {
                         self.settings.remember_recent(path);
                     }
                     let how = if read_only { " read-only" } else { "" };
-                    self.message(Level::Info, format!("Opened {}{how}", path.display()));
+                    let legacy = path.extension().is_some_and(|e| {
+                        e.eq_ignore_ascii_case(novo_storage::LEGACY_PROJECT_EXTENSION)
+                    });
+                    let note = if legacy {
+                        ". Older file format: Save As keeps a .kopercad copy"
+                    } else {
+                        ""
+                    };
+                    self.message(Level::Info, format!("Opened {}{how}{note}", path.display()));
                 }
                 if let Some(aside) = report.set_aside {
                     self.message(
@@ -1073,11 +1081,15 @@ impl NovoApp {
                 let copy = salvaged.copy.clone();
                 self.open_path_as(&copy, false);
                 if self.project_path.as_deref() == Some(copy.as_path()) {
+                    // Until the person says they checked it, no green
+                    // "No issues": the checks only see what survived.
+                    self.wb.recovered = Some(salvaged.report_lines());
                     self.raise(
                         Level::Warning,
                         format!(
-                            "{name} is damaged. {}. This is a recovered copy, written beside the original as {}; {name} itself was not changed. Ctrl+K, \"Recover a damaged project\" does the same for any file.",
+                            "{name} is damaged. {}. In the copy: {}. This is a recovered copy, written beside the original as {}; {name} itself was not changed. Check every page. Ctrl+K, \"Recover a damaged project\" does the same for any file.",
                             salvaged.summary(),
+                            salvaged.kept_text(),
                             copy.file_name().map_or_else(
                                 || copy.display().to_string(),
                                 |n| n.to_string_lossy().into_owned()
@@ -1177,6 +1189,7 @@ impl NovoApp {
         self.wb.live = Default::default();
         self.wb.drawer = None;
         self.wb.renumber = None;
+        self.wb.recovered = None;
         self.wb.field.close();
         self.wb.commissioning = None;
         self.wb.sheet = 0;
@@ -1753,6 +1766,9 @@ impl NovoApp {
             "Not saved"
         } else if self.is_dirty() {
             "Saving"
+        } else if self.wb.recovered.is_some() {
+            // Saved, yes, but the file is a rebuilt copy: not the same claim.
+            "Saved (recovered copy)"
         } else {
             "Saved"
         }
