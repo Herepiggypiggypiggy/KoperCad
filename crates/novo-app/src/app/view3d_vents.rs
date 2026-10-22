@@ -20,6 +20,7 @@ pub(super) fn show(
     enclosure: Option<&Enclosure>,
     flows: &[Option<f64>],
     running: bool,
+    stale: bool,
 ) {
     super::panel::Panel::new(
         "view3d_vents",
@@ -37,7 +38,9 @@ pub(super) fn show(
         egui::ScrollArea::vertical()
             .max_height(room)
             .auto_shrink([false, true])
-            .show(ui, |ui| body(ui, settings, enclosure, flows, running));
+            .show(ui, |ui| {
+                body(ui, settings, enclosure, flows, running, stale)
+            });
     });
 }
 
@@ -47,6 +50,7 @@ fn body(
     enclosure: Option<&Enclosure>,
     flows: &[Option<f64>],
     running: bool,
+    stale: bool,
 ) {
     // Long notes wrap inside the panel instead of stretching it.
     ui.set_max_width(WIDTH - 24.0);
@@ -176,7 +180,14 @@ fn body(
             ),
         );
     }
-    if let Some(line) = balance_line(flows, settings) {
+    if stale && !flows.is_empty() {
+        ui.add_space(4.0);
+        ui.colored_label(
+            pal.warning,
+            "The result shown is from before your last change: run Simulate again.",
+        );
+    }
+    if let Some(line) = balance_line(flows, settings, running) {
         ui.add_space(4.0);
         ui.label(muted(&line));
     }
@@ -194,7 +205,7 @@ fn body(
 
 /// One line on how much air comes in and goes out of the shown result, so a
 /// gap between the two is explained instead of left to the reader.
-fn balance_line(flows: &[Option<f64>], settings: &HeatSettings) -> Option<String> {
+fn balance_line(flows: &[Option<f64>], settings: &HeatSettings, running: bool) -> Option<String> {
     let (mut inflow, mut outflow) = (0.0_f64, 0.0_f64);
     let mut any = false;
     for (v, q) in settings.vents.iter().zip(flows) {
@@ -211,9 +222,15 @@ fn balance_line(flows: &[Option<f64>], settings: &HeatSettings) -> Option<String
     }
     let gap = (inflow - outflow).abs();
     let larger = inflow.max(outflow).max(1e-9);
+    let why = if running {
+        "The run is still preliminary: the speeds beside the openings are still settling, so in and out \
+         do not match yet."
+    } else {
+        "Each opening's flow is read from the solved air speed next to it, so in and out differ by that \
+         reading; the solver itself conserves the air."
+    };
     Some(format!(
-        "Air in {inflow:.0}, out {outflow:.0} m³/h (model). The {gap:.0} m³/h ({:.0} %) gap is \
-         how closely the solved speeds next to the openings add up; the flow itself balances.",
+        "Air in {inflow:.0}, out {outflow:.0} m³/h (model); {gap:.0} m³/h ({:.0} %) apart. {why}",
         100.0 * gap / larger
     ))
 }

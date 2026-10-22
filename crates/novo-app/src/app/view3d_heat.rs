@@ -79,6 +79,7 @@ pub(super) fn show(
     // Starts under the view cube; the person can drag it anywhere in the view.
     .top(CUBE_MARGIN + CUBE_SIZE + GAP)
     .height(300.0)
+    .scroll_bar_always()
     .show(ctx, |ui| {
         let (text, warn) = phase_line(state.running(), state.solution().is_some(), stale);
         ui.label(egui::RichText::new(text).small().color(if warn {

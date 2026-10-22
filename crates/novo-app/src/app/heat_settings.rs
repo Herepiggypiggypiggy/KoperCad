@@ -193,9 +193,14 @@ impl VentSpec {
 
     /// This opening moved and cut down until it lies inside its wall: nothing
     /// hangs over an edge, so the area the solver sees is the area drawn.
-    pub(super) fn fitted(mut self, e: &Enclosure) -> VentSpec {
-        // A number that is not a number (typed, or from a damaged file) falls
-        // back to the starting value instead of reaching the geometry.
+    pub(super) fn fitted(self, e: &Enclosure) -> VentSpec {
+        self.finite().fitted_finite(e)
+    }
+
+    /// Every number finite: one that is not a number (typed, or from a damaged
+    /// file) falls back to the starting value instead of reaching the
+    /// geometry or the stored text (a NaN is stored as null and loses the list).
+    pub(super) fn finite(mut self) -> VentSpec {
         let start = VentSpec::new(self.wall);
         for (v, d) in [
             (&mut self.u_mm, 0.0),
@@ -210,6 +215,10 @@ impl VentSpec {
                 *v = d;
             }
         }
+        self
+    }
+
+    fn fitted_finite(mut self, e: &Enclosure) -> VentSpec {
         let (along, across) = Self::wall_len(self.wall, e);
         self.width_mm = self.width_mm.clamp(MIN_SIZE_MM, along.max(MIN_SIZE_MM));
         self.height_mm = self.height_mm.clamp(MIN_SIZE_MM, across.max(MIN_SIZE_MM));
