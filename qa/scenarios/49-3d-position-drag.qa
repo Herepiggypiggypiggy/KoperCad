@@ -16,16 +16,16 @@ key ctrl+a
 text 150
 key Enter
 wait 30
-expect "150, 210 mm"
+expect "150, 228 mm"
 shot typed-position
 drag 630 413 750 413
 wait 30
-expect_not "150, 210 mm"
+expect_not "150, 228 mm"
 shot dragged
 key ctrl+z
 wait 20
 key ctrl+z
 wait 30
-expect "55, 210 mm"
+expect "55, 228 mm"
 shot undone
 check_layout
