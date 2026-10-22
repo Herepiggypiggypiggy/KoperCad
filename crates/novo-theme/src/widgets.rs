@@ -401,6 +401,13 @@ pub fn segmented(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> bool {
 /// current one and a hairline under the row. Returns whether the choice
 /// changed.
 pub fn tabs(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> bool {
+    tabs_with_rects(ui, current, labels).0
+}
+
+/// [`tabs`] that also returns where each tab was drawn, so a caller can
+/// register them (the lesson pointer, for one).
+pub fn tabs_with_rects(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> (bool, Vec<Rect>) {
+    let mut rects = Vec::with_capacity(labels.len());
     let p = Palette::of(ui);
     let height = control_height(ui) + 4.0;
     let body = ui.style().text_styles[&egui::TextStyle::Body].clone();
@@ -419,6 +426,7 @@ pub fn tabs(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> bool {
             );
             let width = galley.size().x + 2.0 * space::M + 2.0;
             let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::click());
+            rects.push(rect);
             // The tab is painted, so name it for screen readers and the
             // lesson checks that look for a control by its label.
             response.widget_info(|| {
@@ -460,7 +468,7 @@ pub fn tabs(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> bool {
         y,
         Stroke::new(1.0, p.border_subtle),
     );
-    changed
+    (changed, rects)
 }
 
 /// A visibility or filter toggle (a layer, a map, a badge): neutral, so it

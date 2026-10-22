@@ -1,0 +1,152 @@
+format = 1
+id = "safety-functions"
+version = 1
+status = "early"
+title = "Safety functions: required level and achieved level"
+summary = "Describe a stop or e-stop as sensor, logic and actuator bound to real devices, read the required performance level and the one you reach, and export the sheets for the technical file."
+track = "outputs"
+order = 65
+level = "intermediate"
+minutes = 8
+topics = ["safety", "iso 13849-1", "performance level", "pfhd", "e-stop"]
+needs = ["standards-check"]
+next = ["handover-package"]
+project = "@example"
+title_nl = "Veiligheidsfuncties: vereist niveau en bereikt niveau"
+summary_nl = "Beschrijf een stop of noodstop als sensor, logica en actuator gekoppeld aan echte apparaten, lees het vereiste prestatieniveau en het niveau dat je haalt, en exporteer de bladen voor het technisch dossier."
+
+[[step]]
+id = "why"
+title = "A level you need, a level you reach"
+title_nl = "Een niveau dat je nodig hebt, een niveau dat je haalt"
+text = """
+A **safety function** is a stop, an e-stop or a guard door: a sensor, logic and an actuator that together must be reliable enough. ISO 13849-1 expresses that as a **performance level** from a to e.
+You compare two levels: the **required PL** from a risk assessment, and the **achieved PL** from the reliability of the parts you chose.
+"""
+text_nl = """
+Een **veiligheidsfunctie** is een stop, een noodstop of een hekdeur: een sensor, logica en een actuator die samen betrouwbaar genoeg moeten zijn. ISO 13849-1 drukt dat uit als **prestatieniveau** van a tot e.
+Je vergelijkt twee niveaus: het **vereiste PL** uit een risicobeoordeling en het **bereikte PL** uit de betrouwbaarheid van de onderdelen die je koos.
+"""
+
+[[step]]
+id = "open"
+title = "Open the safety functions"
+title_nl = "Open de veiligheidsfuncties"
+text = "The example carries one illustrative function: an ordinary stop, with the stop button and the motor contactor of the starter. Its reliability numbers are typed in as illustrative values and the function's name says so."
+text_nl = "Het voorbeeld heeft een illustratieve functie: een gewone stop, met de stopknop en de motorcontactor van de starter. De betrouwbaarheidsgetallen zijn als illustratie ingetypt en de naam van de functie zegt dat."
+how = [
+  "Open {ui:menu.Check} and choose {ui:cmd.check.safety}.",
+  "Or press {key:view.command_palette}, type safety functions and press Enter.",
+]
+how_nl = [
+  "Open {ui:menu.Check} en kies {ui:cmd.check.safety}.",
+  "Of druk op {key:view.command_palette}, typ safety functions en druk op Enter.",
+]
+point = { ui = "cmd.check.safety" }
+expect = { command = "check.safety" }
+solve = [ { command = "check.safety" } ]
+
+[[step]]
+id = "required"
+title = "Where the required level comes from"
+title_nl = "Waar het vereiste niveau vandaan komt"
+text = """
+The required PL comes from the **risk graph** (ISO 13849-1 annex A): severity **S1** slight or **S2** serious, exposure **F1** seldom or **F2** frequent, possibility to avoid **P1** possible or **P2** scarcely. Three answers give a to e.
+You make that judgement about the machine. KoperCAD only does the lookup; it cannot know how dangerous your machine is.
+"""
+text_nl = """
+Het vereiste PL komt uit de **risicograaf** (ISO 13849-1 bijlage A): ernst **S1** licht of **S2** ernstig, blootstelling **F1** zelden of **F2** vaak, mogelijkheid tot vermijden **P1** mogelijk of **P2** nauwelijks. Drie antwoorden geven a tot e.
+Dat oordeel over de machine geef jij. KoperCAD doet alleen het opzoeken; het kan niet weten hoe gevaarlijk jouw machine is.
+"""
+how = [
+  "Under **Project safety functions**, find Severity, Exposure and Avoidance.",
+  "Change Avoidance from P2 to P1 and watch the required level drop. Undo it again.",
+]
+how_nl = [
+  "Zoek onder **Project safety functions** Severity, Exposure en Avoidance.",
+  "Zet Avoidance van P2 op P1 en zie het vereiste niveau dalen. Maak het ongedaan.",
+]
+
+[[step]]
+id = "blocks"
+title = "Sensor, logic, actuator, bound to devices"
+title_nl = "Sensor, logica, actuator, gekoppeld aan apparaten"
+text = """
+Each block is a **subsystem** with a category (B, 1, 2, 3 or 4), a diagnostic coverage and a common-cause score. Its parts are bound to devices of the project **by tag**, so the sheet names the real stop button -S0 and the real contactor -K1.
+A category is a claim about how the circuit is built: category 3 and 4 mean two channels with monitoring. Draw the circuit that earns the category before you claim it.
+"""
+text_nl = """
+Elk blok is een **subsysteem** met een categorie (B, 1, 2, 3 of 4), een diagnosedekking en een common-cause-score. De onderdelen zijn **op tag** gekoppeld aan apparaten van het project, zodat het blad de echte stopknop -S0 en de echte contactor -K1 noemt.
+Een categorie is een bewering over hoe de schakeling is opgebouwd: categorie 3 en 4 betekenen twee kanalen met bewaking. Teken eerst de schakeling die de categorie verdient en claim haar dan.
+"""
+point = { ui = "cmd.check.safety" }
+
+[[step]]
+id = "numbers"
+title = "Where the reliability numbers come from"
+title_nl = "Waar de betrouwbaarheidsgetallen vandaan komen"
+text = """
+Each part takes **B10d** (cycles until 10 % of samples fail dangerously, for switches and contactors) or **MTTFd** (years, for electronics) from its datasheet. Type it in the block, or set `b10d_cycles` or `mttfd_years` on the device or its part and the block shows **from device**.
+Days per year, hours per day and cycle time turn B10d into years. The example's values are illustrative; use your datasheet values.
+"""
+text_nl = """
+Elk onderdeel neemt **B10d** (cycli tot 10 % van de exemplaren gevaarlijk uitvalt, voor schakelaars en contactoren) of **MTTFd** (jaren, voor elektronica) uit zijn gegevensblad. Typ het in het blok, of zet `b10d_cycles` of `mttfd_years` op het apparaat of zijn onderdeel en het blok toont **from device**.
+Dagen per jaar, uren per dag en cyclustijd zetten B10d om in jaren. De waarden van het voorbeeld zijn illustratief; gebruik de waarden uit je gegevensblad.
+"""
+
+[[step]]
+id = "result"
+title = "Read achieved against required"
+title_nl = "Lees bereikt tegen vereist"
+text = """
+The result line reads **Achieved PLc (PFHd … /h) against required …: met** or **NOT met**. Until every part has a device and data it says “Not rated”, never a guess.
+When the level is not met the function also appears as a problem in the Issues list and in the standards report, so it follows you while you draw.
+"""
+text_nl = """
+De resultaatregel leest **Achieved PLc (PFHd … /h) against required …: met** of **NOT met**. Zolang niet elk onderdeel een apparaat en gegevens heeft staat er “Not rated”, nooit een gok.
+Is het niveau niet gehaald, dan verschijnt de functie ook als probleem in de lijst met problemen en in het normrapport, zodat het je volgt terwijl je tekent.
+"""
+how = [
+  "Read the result line under the blocks.",
+  "Press {key:check.next_problem} if the Issues list shows a safety problem.",
+]
+how_nl = [
+  "Lees de resultaatregel onder de blokken.",
+  "Druk op {key:check.next_problem} als de lijst met problemen een veiligheidsprobleem toont.",
+]
+
+[[step]]
+id = "honest"
+title = "What is exact, what is a model"
+title_nl = "Wat exact is, wat een model"
+text = """
+**Exact:** the PL bands, the risk graph, the MTTFd formulas and the series sum. **A model:** the PFHd of categories 2, 3 and 4 is a closed-form estimate (beta 0.02, 20 year mission time), **not** the ISO 13849-1 table K.1. The result carries that badge in the window.
+Validation, software, systematic failures and the machine's real risk assessment are outside this tool. It is a calculation aid, not a certification.
+"""
+text_nl = """
+**Exact:** de PL-banden, de risicograaf, de MTTFd-formules en de seriesom. **Een model:** de PFHd van categorie 2, 3 en 4 is een gesloten schatting (beta 0,02, levensduur 20 jaar), **niet** tabel K.1 van ISO 13849-1. Het resultaat draagt die badge in het venster.
+Validatie, software, systematische fouten en de echte risicobeoordeling van de machine vallen buiten dit gereedschap. Het is een rekenhulp, geen certificering.
+"""
+
+[[step]]
+id = "export"
+title = "A sheet for the technical file"
+title_nl = "Een blad voor het technisch dossier"
+text = "**Export one sheet per function** writes one page per safety function next to the project, with the parts, the numbers, the result and the same model note. The handover package includes it too."
+text_nl = "**Export one sheet per function** schrijft een pagina per veiligheidsfunctie naast het project, met de onderdelen, de getallen, het resultaat en dezelfde modelnotitie. Het overdrachtspakket neemt het ook mee."
+how = [
+  "Press {key:view.command_palette}, type safety sheets and choose {ui:cmd.export.safety_sheets}.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ safety sheets en kies {ui:cmd.export.safety_sheets}.",
+]
+point = { ui = "cmd.export.safety_sheets" }
+expect = { command = "export.safety_sheets" }
+manual = "writes a PDF next to the project file; QA scenario 09-safety-sheets checks the command"
+
+[[step]]
+id = "done"
+title = "A function you can explain"
+title_nl = "Een functie die je kunt uitleggen"
+text = "Keep the risk-graph answers and the datasheet references with the project. Next: handing the whole project over."
+text_nl = "Bewaar de antwoorden van de risicograaf en de verwijzingen naar gegevensbladen bij het project. Hierna: het hele project overdragen."

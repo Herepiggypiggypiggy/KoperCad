@@ -1,0 +1,131 @@
+# Challenge: the two-channel emergency stop cannot reset because channel 2 is
+# cut: the wire between the safety relay's S21 and the e-stop's contact 21 is missing.
+# Sample project: the program's own "Emergency stop with safety relay" macro,
+# fed with 24 V (crates/novo-tests/tests/lessons/progression.rs).
+# -S1 e-stop (2 channels), -S2 reset, -K1 safety relay, -K2 and -K3 contactors.
+# The macro's own text says nothing here is validated as a safety design.
+format = 1
+id = "safety-circuit"
+version = 1
+status = "early"
+kind = "challenge"
+title = "An emergency stop that will not reset"
+title_nl = "Een noodstop die niet reset"
+summary = "Two channels, a safety relay, a reset button and two contactors in series. Follow both channels, find the one that is cut, and learn why a safety relay refuses to start with a broken channel."
+summary_nl = "Twee kanalen, een veiligheidsrelais, een resetknop en twee contactoren in serie. Volg beide kanalen, vind het onderbroken kanaal en leer waarom een veiligheidsrelais weigert te starten met een kapot kanaal."
+explain = "A two-channel emergency stop sends a monitored signal out of the relay at **S11** and back at **S12**, and a second one out at **S21** and back at **S22**. The relay only enables its outputs when both channels are closed, and a cut or short in either keeps it off. Here the wire from **S21** to the button's contact 21 was missing, so channel 2 was open and the relay (correctly) refused to reset. That refusal is the safe behaviour, not a bug: the fault must be found and repaired, never bridged."
+explain_nl = "Een tweekanaals noodstop stuurt een bewaakt signaal uit het relais bij **S11** en terug bij **S12**, en een tweede uit bij **S21** en terug bij **S22**. Het relais geeft zijn uitgangen pas vrij als beide kanalen gesloten zijn, en een onderbreking of sluiting in een van beide houdt het uit. Hier ontbrak de draad van **S21** naar contact 21 van de knop, dus kanaal 2 was open en weigerde het relais (terecht) te resetten. Die weigering is veilig gedrag, geen fout: de fout moet worden gevonden en hersteld, nooit overbrugd."
+track = "machines"
+order = 30
+level = "advanced"
+minutes = 10
+topics = ["safety", "emergency stop", "safety relay", "two channel", "troubleshooting"]
+needs = ["star-delta-starter", "safety-functions"]
+next = ["crane-hoist"]
+project = "project.json"
+finished = "finished.json"
+page = "Emergency stop"
+
+[[step]]
+id = "honest"
+title = "What this drawing is, and is not"
+title_nl = "Wat deze tekening is en niet is"
+text = """
+This is a **wiring example** of a two-channel emergency stop on a safety relay. The category and performance level depend on the relay type and the whole circuit; nothing in this lesson validates a safety design. The Safety functions window and the Standards report do the arithmetic, and a competent person signs it off.
+"""
+text_nl = """
+Dit is een **bedradingsvoorbeeld** van een tweekanaals noodstop op een veiligheidsrelais. De categorie en het prestatieniveau hangen af van het relaistype en het hele schema; niets in deze les valideert een veiligheidsontwerp. Het venster Veiligheidsfuncties en het normenrapport doen de berekening, en een bevoegd persoon tekent af.
+"""
+
+[[step]]
+id = "channels"
+title = "Follow the two channels"
+title_nl = "Volg de twee kanalen"
+text = """
+The safety relay **-K1** sends out a signal at S11 and S21 and expects it back at S12 and S22 through the two contacts of the e-stop **-S1**. Two separate channels mean one failure cannot defeat the stop unnoticed.
+"""
+text_nl = """
+Het veiligheidsrelais **-K1** stuurt een signaal uit bij S11 en S21 en verwacht het terug bij S12 en S22 via de twee contacten van de noodstop **-S1**. Twee gescheiden kanalen betekenen dat één storing de stop niet ongemerkt kan uitschakelen.
+"""
+note = [
+  { at = { device = "-K1" }, text = "Safety relay: S11/S12 channel 1, S21/S22 channel 2", text_nl = "Veiligheidsrelais: S11/S12 kanaal 1, S21/S22 kanaal 2" },
+  { at = { device = "-S1" }, text = "Two-channel e-stop", text_nl = "Tweekanaals noodstop" },
+]
+
+[[step]]
+id = "predict-cut"
+title = "Predict: one channel is cut"
+title_nl = "Voorspel: een kanaal is onderbroken"
+text = """
+Channel 1 is intact, but one wire of channel 2 is cut. You press reset (**-S2**). What does the safety relay do?
+"""
+text_nl = """
+Kanaal 1 is heel, maar een draad van kanaal 2 is onderbroken. Je drukt op reset (**-S2**). Wat doet het veiligheidsrelais?
+"""
+expect = { predicted = true }
+pause = true
+solve = [ { choose = 0 } ]
+[step.predict]
+options = ["It stays off and cannot be reset", "It switches on, one channel is enough", "It switches on and shows a warning"]
+options_nl = ["Hij blijft uit en kan niet worden gereset", "Hij schakelt in, een kanaal is genoeg", "Hij schakelt in en toont een waarschuwing"]
+answer = 0
+why = "A safety relay compares both channels. With one open it cannot be sure the stop is working, so it keeps its outputs off. That is also why you never bridge a channel to get the machine running."
+why_nl = "Een veiligheidsrelais vergelijkt beide kanalen. Met een open kanaal kan het niet zeker zijn dat de stop werkt, dus houdt het zijn uitgangen uit. Daarom overbrug je nooit een kanaal om de machine aan de praat te krijgen."
+
+[[step]]
+id = "fault"
+title = "Goal: channel 2 must be closed"
+title_nl = "Doel: kanaal 2 moet gesloten zijn"
+text = """
+**Goal:** repair channel 2. It leaves the relay at **S21**, goes through the second contact of the e-stop (contact 21) and comes back at S22. One of those wires is missing. Draw it.
+"""
+text_nl = """
+**Doel:** herstel kanaal 2. Het verlaat het relais bij **S21**, gaat door het tweede contact van de noodstop (contact 21) en komt terug bij S22. Een van die draden ontbreekt. Teken hem.
+"""
+hints = [
+  "Compare the two channels: channel 1 has a wire from S11 to the e-stop and one back to S12. Does channel 2 have both?",
+  "The relay pin S21 has no wire. The matching contact on the e-stop is 21.",
+  "Draw a wire from -K1 pin S21 to -S1 pin 21.",
+]
+hints_nl = [
+  "Vergelijk de twee kanalen: kanaal 1 heeft een draad van S11 naar de noodstop en een terug naar S12. Heeft kanaal 2 beide?",
+  "Relaispen S21 heeft geen draad. Het bijbehorende contact op de noodstop is 21.",
+  "Trek een draad van -K1 pen S21 naar -S1 pen 21.",
+]
+point = { at = { device = "-K1", pin = "S21" } }
+expect = { wire = { from = "-K1:S21", to = "-S1:21" } }
+solve = [ { wire = ["-K1:S21", "-S1:21"], via = [[148.0, 44.0], [204.0, 44.0]] } ]
+
+[[step]]
+id = "outputs"
+title = "Outputs in series"
+title_nl = "Uitgangen in serie"
+text = """
+The relay outputs 13 and 23 each feed one contactor coil (**-K2** and **-K3**). The two contactors together interrupt the power: if one welds, the other still opens. Reading step: nothing to change.
+"""
+text_nl = """
+De relaisuitgangen 13 en 23 voeden elk een contactorspoel (**-K2** en **-K3**). De twee contactoren onderbreken samen de stroom: als er een vastlast, opent de andere nog. Leesstap: er hoeft niets te veranderen.
+"""
+note = [
+  { at = { device = "-K2" }, text = "First safety contactor", text_nl = "Eerste veiligheidscontactor" },
+  { at = { device = "-K3" }, text = "Second safety contactor", text_nl = "Tweede veiligheidscontactor" },
+]
+
+[[step]]
+id = "level"
+title = "From wiring to a level"
+title_nl = "Van bedrading naar niveau"
+text = """
+To state a performance level, describe this stop as a safety function in the Safety functions window and bind its sensor, logic and actuators to these devices. The achieved level is then an estimate from the data you enter (a closed-form PFHd estimate, not the standard's table).
+"""
+text_nl = """
+Om een prestatieniveau te noemen, beschrijf je deze stop als veiligheidsfunctie in het venster Veiligheidsfuncties en koppel je sensor, logica en actuatoren aan deze apparaten. Het bereikte niveau is dan een schatting uit de gegevens die je invoert (een PFHd-schatting in gesloten vorm, niet de tabel uit de norm).
+"""
+how = [
+  "Press {key:view.command_palette}, type **safety functions** and press Enter",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **safety functions** en druk op Enter",
+]
+expect = { command = "check.safety" }
+solve = [ { command = "check.safety" } ]

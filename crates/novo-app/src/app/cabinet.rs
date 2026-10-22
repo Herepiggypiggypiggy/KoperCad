@@ -240,6 +240,8 @@ pub(super) enum Ask {
     SetRailLengths(Vec<(u64, f64)>),
     /// Put a pair of openings from the cooling advice in the project's Vents and fans.
     CoolingPair(novo_thermal::sweep::Candidate),
+    /// Put the devices of an accepted cooler layout at their new places.
+    CoolerLayout(StructureId, Vec<novo_thermal::placement::Move>),
 }
 
 /// The Cabinet drawing of a layout, with the layout's problems as box states.
@@ -1679,6 +1681,22 @@ impl NovoApp {
                         ),
                     }
                 }
+                self.cabinet.heat.layout.poll(ui.ctx());
+                if self.cabinet.heat.layout.take_request() {
+                    match structure {
+                        Some(s) => {
+                            let scenario = self.cabinet.heat.current_scenario();
+                            self.cabinet
+                                .heat
+                                .layout
+                                .start(project, s, scenario, &tag_of);
+                        }
+                        None => self.cabinet.heat.fail(
+                            "Open an enclosure with a mounting plate to search for a cooler layout"
+                                .into(),
+                        ),
+                    }
+                }
                 if self.cabinet.heat.advice.is_open() {
                     let ambient = self.sizing.request().ambient_max;
                     let now_key = structure.map_or(0, |s| {
@@ -1690,6 +1708,16 @@ impl NovoApp {
                         Some(super::heat_sweep::Ask::Add(c)) => ask = Some(Ask::CoolingPair(c)),
                         None => {}
                     }
+                }
+                let now_key = self.cabinet.heat.current_scenario().map(|(_, k)| k);
+                if let Some(super::heat_layout::Ask::Apply(s, moves)) =
+                    self.cabinet.heat.layout.show(
+                        ui.ctx(),
+                        now_key,
+                        ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                    )
+                {
+                    ask = Some(Ask::CoolerLayout(s, moves));
                 }
                 let dragging = self.cabinet.drag.is_some();
                 // The map goes under the canvas: it paints no background of
@@ -1730,6 +1758,11 @@ impl NovoApp {
                     "Plate",
                     out.response.rect,
                     false,
+                );
+                self.cabinet.heat.layout.paint(
+                    &ui.painter_at(out.response.rect),
+                    out.response.rect,
+                    &self.cabinet.view.viewport,
                 );
                 if self.cabinet.routes
                     && let Some(s) = structure
@@ -2459,6 +2492,7 @@ impl NovoApp {
                     Ask::PlaceAll
                         | Ask::PlaceEveryPanel
                         | Ask::SetRailLengths(_)
+                        | Ask::CoolerLayout(..)
                         | Ask::SetPlate(_)
                         | Ask::SetPlateSize(..)
                         | Ask::SetEnclosure(_)
@@ -2642,6 +2676,28 @@ impl NovoApp {
                     .heat
                     .advice
                     .set_added(super::heat_sweep::added_text(&c));
+            }
+            Ask::CoolerLayout(enclosure, moves) => {
+                let count = moves.len();
+                let mut skipped = Vec::new();
+                if self.cabinet_edit("Cooler layout", |tx| {
+                    skipped = novo_thermal::placement_project::apply_moves(tx, enclosure, &moves)?;
+                    Ok(())
+                }) {
+                    let text = if skipped.is_empty() {
+                        format!(
+                            "Moved {count} {} for a cooler layout. Undo puts {} back.",
+                            if count == 1 { "device" } else { "devices" },
+                            if count == 1 { "it" } else { "them" }
+                        )
+                    } else {
+                        format!(
+                            "Nothing moved: {} target rail(s) are gone. Search again.",
+                            skipped.len()
+                        )
+                    };
+                    self.message(Level::Info, text);
+                }
             }
             Ask::SetRailLengths(lengths) => {
                 self.cabinet_edit("Cut rails to length", move |tx| {

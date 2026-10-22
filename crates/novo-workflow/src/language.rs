@@ -571,6 +571,13 @@ pub const DUTCH: &[Aliases] = &[
         "heat.cooling_advice",
         &[],
         &["koeladvies", "ventilator plaatsen", "ventilatieroosters"],
+        "heat.cooler_layout",
+        &[],
+        &[
+            "koelere indeling",
+            "indeling optimaliseren",
+            "warmte verplaatsen",
+        ],
     ),
     nl("heat.airflow", &[], &["luchtstroom", "luchtstroming"]),
     nl(

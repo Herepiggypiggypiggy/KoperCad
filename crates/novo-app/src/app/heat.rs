@@ -141,6 +141,8 @@ pub(super) struct HeatState {
     transient_wanted: bool,
     /// The vent and fan sweep (`heat.cooling_advice`).
     pub(super) advice: super::heat_sweep::CoolingAdvice,
+    /// The search for a cooler layout of the rails (`heat.cooler_layout`).
+    pub(super) layout: super::heat_layout::LayoutSearch,
 }
 
 /// Where a cached picture came from.
@@ -199,6 +201,7 @@ impl HeatState {
             time: super::heat_time::TimeLine::new(),
             transient_wanted: false,
             advice: Default::default(),
+            layout: Default::default(),
         }
     }
 
@@ -472,6 +475,10 @@ impl HeatState {
             "heat.toggle" => self.on = !self.on,
             "heat.simulate" => self.request_run(),
             "heat.cooling_advice" => self.advice.request(),
+            "heat.cooler_layout" => {
+                self.on = true;
+                self.layout.request();
+            }
             "heat.airflow" => {
                 self.airflow = !(self.on && self.airflow);
                 self.on |= self.airflow;
@@ -926,6 +933,20 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
         );
         if advice.clicked() {
             state.advice.request();
+        }
+        let cooler = ui
+            .add_enabled(!state.layout.running(), egui::Button::new("Cooler layout"))
+            .on_hover_text(
+                "Try moving the hottest devices, and the ones that suffer, to other places on their rails",
+            );
+        super::cabinet_bar::note_ctx(
+            ui.ctx(),
+            "heat.cooler_layout",
+            "Cooler layout button",
+            &cooler,
+        );
+        if cooler.clicked() {
+            state.layout.request();
         }
         heat_up_controls(ui, state);
         compare_controls(ui, state);

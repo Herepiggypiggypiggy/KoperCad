@@ -50,6 +50,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `heat.legend`: {ui:heat.legend} shows **Heat legend**
 - `heat.simulate`: {ui:heat.simulate} shows **Simulate button**
 - `heat.cooling_advice`: {ui:heat.cooling_advice} shows **Cooling advice button**
+- `heat.cooler_layout`: {ui:heat.cooler_layout} shows **Cooler layout button**
 - `cabinet.canvas`: {ui:cabinet.canvas} shows **Cabinet canvas**
 - `workspace.view3d`: {ui:workspace.view3d} shows **3D canvas**
 - `switcher.schematic`: {ui:switcher.schematic} shows **Schematic chip**
@@ -92,6 +93,30 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `issues.restore`: {ui:issues.restore} shows **Restore**
 - `macro.place`: {ui:macro.place} shows **Place macro**
 - `macros.window`: {ui:macros.window} shows **Macros**
+- `standards.iec60204`: {ui:standards.iec60204} shows **IEC 60204-1 tick**
+- `standards.nfpa79`: {ui:standards.nfpa79} shows **NFPA 79 tick**
+- `standards.ul508a`: {ui:standards.ul508a} shows **UL 508A tick**
+- `standards.inputs`: {ui:standards.inputs} shows **Electrical inputs button**
+- `standards.calculations`: {ui:standards.calculations} shows **Calculations button**
+- `standards.save_pdf`: {ui:standards.save_pdf} shows **Save report as PDF**
+- `bench.window`: {ui:bench.window} shows **Bench output**
+- `bench.tab.cut`: {ui:bench.tab.cut} shows **Cut list tab**
+- `bench.tab.ferrules`: {ui:bench.tab.ferrules} shows **Ferrules tab**
+- `bench.tab.labels`: {ui:bench.tab.labels} shows **Labels tab**
+- `build.screen`: {ui:build.screen} shows **Build mode**
+- `build.done`: {ui:build.done} shows **Done button**
+- `build.problem`: {ui:build.problem} shows **Problem button**
+- `handover.fix`: {ui:handover.fix} shows **Fix these first**
+- `handover.anyway`: {ui:handover.anyway} shows **Hand over anyway**
+- `protection.tab.curves`: {ui:protection.tab.curves} shows **Curves tab**
+- `protection.tab.selectivity`: {ui:protection.tab.selectivity} shows **Selectivity tab**
+- `protection.tab.rating`: {ui:protection.tab.rating} shows **Panel rating tab**
+- `protection.supply`: {ui:protection.supply} shows **Fault current box**
+- `calc.tab.circuits`: {ui:calc.tab.circuits} shows **Circuits tab**
+- `calc.tab.starters`: {ui:calc.tab.starters} shows **Motor starters tab**
+- `calc.tab.sccr`: {ui:calc.tab.sccr} shows **Panel SCCR tab**
+- `autopilot.window`: {ui:autopilot.window} shows **Autopilot**
+- `autopilot.accept_all`: {ui:autopilot.accept_all} shows **Accept all button**
 
 ## Menus and their commands
 
@@ -119,3 +144,9 @@ For `expect = { signal = "name" }`; raised where a key does not pass through a c
 - `cabinet_removed`
 - `cabinet_plan_accepted`
 - `wire_cut_exported`
+- `standards_chosen`
+- `bench_ferrules`
+- `bench_labels`
+- `build_step_done`
+- `supply_current_set`
+- `autopilot_applied`

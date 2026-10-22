@@ -15,7 +15,9 @@ pub(super) fn text(vents: &[VentSpec]) -> String {
     if vents.is_empty() {
         String::new()
     } else {
-        serde_json::to_string(vents).unwrap_or_default()
+        // No NaN in the text: it would be stored as null and lose the list.
+        let clean: Vec<VentSpec> = vents.iter().map(|v| v.finite()).collect();
+        serde_json::to_string(&clean).unwrap_or_default()
     }
 }
 
@@ -38,6 +40,12 @@ pub(super) fn parse(stored: &str) -> Vec<VentSpec> {
     serde_json::from_str(stored).unwrap_or_default()
 }
 
+/// True when `stored` holds something but no list can be read from it: it is
+/// left alone until the person adds an opening, instead of being cleared.
+pub(super) fn is_damaged(stored: &str) -> bool {
+    !stored.trim().is_empty() && serde_json::from_str::<Vec<VentSpec>>(stored).is_err()
+}
+
 /// Stores `text` (empty clears the property) on the enclosure.
 pub(super) fn write(
     tx: &mut novo_core::Tx<'_>,
@@ -50,10 +58,7 @@ pub(super) fn write(
 
 impl super::NovoApp {
     /// Keeps the Heat panel's openings and the project's copy of them equal,
-    /// once a frame before the 3D view reads either: a change made in the
-    /// panel is written when the gesture ends (one undo step in the project);
-    /// a change made to the project (opened, undone there) is read back.
-    /// Driven by the 3D view (called when it is drawn): a change made on the
+    /// once a frame before the 3D view reads either. Driven by the 3D view (called when it is drawn): a change made on the
     /// panel is written when the gesture ends, and a project that changed under
     /// the panel (opened, undone, another enclosure) is read back. The project
     /// is the truth for an enclosure the panel has not read yet.
@@ -92,7 +97,8 @@ impl super::NovoApp {
         let now = text(&settings.vents);
         if known == held {
             // The project is as we last knew it: our side may have moved on.
-            if now != held && !settings.is_editing() {
+            let keep_damaged = now.is_empty() && is_damaged(&held);
+            if now != held && !settings.is_editing() && !keep_damaged {
                 if let Some(doc) = self.backend.document_mut() {
                     let _ = doc.transact("Vents and fans", |tx| write(tx, id, &now));
                 }
@@ -133,5 +139,16 @@ mod tests {
         assert_eq!(v[0].kind, Kind::Fan);
         assert_eq!(v[0].wall, Wall::Top);
         assert_eq!(v[0].width_mm, VentSpec::new(Wall::Top).width_mm);
+    }
+
+    #[test]
+    fn a_nan_is_not_stored_and_a_damaged_text_is_kept_until_something_is_added() {
+        let mut v = VentSpec::new(Wall::Top);
+        v.u_mm = f64::NAN;
+        let t = text(&[v]);
+        assert!(!t.contains("null"), "{t}");
+        assert_eq!(parse(&t).len(), 1);
+        assert!(is_damaged("{not json"));
+        assert!(!is_damaged("") && !is_damaged("[]") && !is_damaged(&t));
     }
 }

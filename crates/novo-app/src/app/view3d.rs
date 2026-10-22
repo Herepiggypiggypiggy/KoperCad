@@ -930,13 +930,21 @@ impl NovoApp {
                     .unwrap_or_else(|| format!("device {raw}"))
             };
             let heat_running = self.cabinet.heat.running();
+            let has_result = self.cabinet.heat.solution().is_some();
+            let suggestion = self.cabinet.heat.solution().and_then(|sol| {
+                super::view3d_vents::suggestion(&sol, &mut self.cabinet.heat.cooling)
+            });
             super::view3d_vents::show(
                 ui.ctx(),
                 view_rect,
                 &mut self.cabinet.heat.settings,
                 vent_enclosure.as_ref(),
-                &vent_flows,
-                heat_running,
+                &super::view3d_vents::Shown {
+                    flows: &vent_flows,
+                    running: heat_running,
+                    stale: stale && has_result,
+                    suggestion: suggestion.as_ref(),
+                },
             );
             if let Some(raw) =
                 view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale, &tag_of)
@@ -1649,20 +1657,40 @@ fn run_heat(
 /// jumped down by this much under the person's pointer.
 const STRIP_HEIGHT: f32 = 112.0;
 
-/// The strip's place before there is a result.
+/// The strip's place before there is a result: the same rows, empty, so the
+/// room kept reads as the strip waiting for its first run and not as a gap.
 fn heat_strip_placeholder(ui: &mut egui::Ui) {
+    let pal = crate::theme::ui_palette();
     egui::Frame::new()
         .fill(ui.visuals().panel_fill)
         .inner_margin(egui::Margin::symmetric(10, 4))
         .show(ui, |ui| {
             ui.set_min_size(egui::vec2(ui.available_width(), STRIP_HEIGHT));
-            ui.label(
-                egui::RichText::new(
-                    "Heat: Simulate (right) fills this strip with the slice, airflow and scales.",
-                )
-                .small()
-                .color(crate::theme::ui_palette().text_secondary),
-            );
+            ui.horizontal(|ui| {
+                ui.label("Heat");
+                ui.label(
+                    egui::RichText::new("Simulate (Heat panel, right) fills this strip.")
+                        .small()
+                        .color(pal.text_secondary),
+                );
+            });
+            for (unit, name) in [("°C", "Temperature"), ("m/s", "Air speed")] {
+                ui.horizontal(|ui| {
+                    let (bar, _) =
+                        ui.allocate_exact_size(egui::vec2(160.0, 12.0), egui::Sense::hover());
+                    ui.painter().rect_stroke(
+                        bar,
+                        2.0,
+                        egui::Stroke::new(1.0, pal.text_secondary.gamma_multiply(0.5)),
+                        egui::StrokeKind::Inside,
+                    );
+                    ui.label(
+                        egui::RichText::new(format!("{unit}  {name}: after a run"))
+                            .small()
+                            .color(pal.text_secondary),
+                    );
+                });
+            }
         });
 }
 

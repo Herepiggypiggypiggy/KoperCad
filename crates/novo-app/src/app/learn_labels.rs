@@ -45,6 +45,7 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("heat.legend", "Heat legend"),
     ("heat.simulate", "Simulate button"),
     ("heat.cooling_advice", "Cooling advice button"),
+    ("heat.cooler_layout", "Cooler layout button"),
     ("cabinet.canvas", "Cabinet canvas"),
     ("workspace.view3d", "3D canvas"),
     ("switcher.schematic", "Schematic chip"),
@@ -87,6 +88,30 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("issues.restore", "Restore"),
     ("macro.place", "Place macro"),
     ("macros.window", "Macros"),
+    ("standards.iec60204", "IEC 60204-1 tick"),
+    ("standards.nfpa79", "NFPA 79 tick"),
+    ("standards.ul508a", "UL 508A tick"),
+    ("standards.inputs", "Electrical inputs button"),
+    ("standards.calculations", "Calculations button"),
+    ("standards.save_pdf", "Save report as PDF"),
+    ("bench.window", "Bench output"),
+    ("bench.tab.cut", "Cut list tab"),
+    ("bench.tab.ferrules", "Ferrules tab"),
+    ("bench.tab.labels", "Labels tab"),
+    ("build.screen", "Build mode"),
+    ("build.done", "Done button"),
+    ("build.problem", "Problem button"),
+    ("handover.fix", "Fix these first"),
+    ("handover.anyway", "Hand over anyway"),
+    ("protection.tab.curves", "Curves tab"),
+    ("protection.tab.selectivity", "Selectivity tab"),
+    ("protection.tab.rating", "Panel rating tab"),
+    ("protection.supply", "Fault current box"),
+    ("calc.tab.circuits", "Circuits tab"),
+    ("calc.tab.starters", "Motor starters tab"),
+    ("calc.tab.sccr", "Panel SCCR tab"),
+    ("autopilot.window", "Autopilot"),
+    ("autopilot.accept_all", "Accept all button"),
 ];
 
 /// The name of an anchor, if the table has it.
@@ -171,9 +196,11 @@ pub(crate) fn anchor_fallback(id: &str) -> Option<String> {
         // The list and the field are not there until their button is pressed.
         "outline.pages" => Some("outline.toggle".to_owned()),
         "palette.field" => Some("palette.button".to_owned()),
-        "heat.chips" | "heat.legend" | "heat.simulate" | "heat.cooling_advice" => {
-            Some("cabinet.heat".to_owned())
-        }
+        "heat.chips"
+        | "heat.legend"
+        | "heat.simulate"
+        | "heat.cooling_advice"
+        | "heat.cooler_layout" => Some("cabinet.heat".to_owned()),
         _ => None,
     }
 }

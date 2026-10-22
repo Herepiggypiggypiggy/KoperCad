@@ -50,6 +50,12 @@ pub(crate) const SIGNALS: &[&str] = &[
     "cabinet_removed",
     "cabinet_plan_accepted",
     "wire_cut_exported",
+    "standards_chosen",
+    "bench_ferrules",
+    "bench_labels",
+    "build_step_done",
+    "supply_current_set",
+    "autopilot_applied",
 ];
 
 /// Every control a lesson may point at. A control joins this list when its
@@ -97,6 +103,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "heat.legend",
     "heat.simulate",
     "heat.cooling_advice",
+    "heat.cooler_layout",
     "cabinet.canvas",
     "workspace.view3d",
     "switcher.schematic",
@@ -139,6 +146,30 @@ pub(crate) const ANCHORS: &[&str] = &[
     "issues.restore",
     "macro.place",
     "macros.window",
+    "standards.iec60204",
+    "standards.nfpa79",
+    "standards.ul508a",
+    "standards.inputs",
+    "standards.calculations",
+    "standards.save_pdf",
+    "bench.window",
+    "bench.tab.cut",
+    "bench.tab.ferrules",
+    "bench.tab.labels",
+    "build.screen",
+    "build.done",
+    "build.problem",
+    "handover.fix",
+    "handover.anyway",
+    "protection.tab.curves",
+    "protection.tab.selectivity",
+    "protection.tab.rating",
+    "protection.supply",
+    "calc.tab.circuits",
+    "calc.tab.starters",
+    "calc.tab.sccr",
+    "autopilot.window",
+    "autopilot.accept_all",
 ];
 
 /// A frame the replay gate draws between two editor calls.
@@ -642,6 +673,21 @@ impl NovoApp {
     pub(super) fn anchor_response(&mut self, id: &str, response: &egui::Response, label: &str) {
         self.anchor(id, response.rect, label);
         if response.clicked() {
+            self.learn_event(Event::Clicked(id.to_owned()));
+        }
+    }
+
+    /// [`anchor`](Self::anchor) for a control drawn where the response is not
+    /// at hand: whether it was clicked this frame is given.
+    pub(super) fn anchor_clicked(
+        &mut self,
+        id: &str,
+        rect: egui::Rect,
+        label: &str,
+        clicked: bool,
+    ) {
+        self.anchor(id, rect, label);
+        if clicked {
             self.learn_event(Event::Clicked(id.to_owned()));
         }
     }

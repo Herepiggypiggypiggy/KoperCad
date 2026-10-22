@@ -658,6 +658,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "heat.contours",
     "heat.simulate",
     "heat.cooling_advice",
+    "heat.cooler_layout",
     "heat.vents",
     "heat.add_filter_fan",
     "heat.add_grille",
@@ -865,8 +866,9 @@ impl NovoApp {
         // Escape belongs to a window floating on top, not the drawing, even
         // with the pointer over it (the drawing would take the key first).
         let window_on_top = super::panel::dialog_on_top(ctx);
+        let modal = self.modal_open();
         if let Some(view) = self.canvas.schematic() {
-            view.yield_escape = window_on_top;
+            view.yield_escape = window_on_top || modal;
         }
     }
 
@@ -959,6 +961,7 @@ impl NovoApp {
                 self.cabinet.keys.push(id.to_owned());
             }
             "heat.toggle" | "heat.airflow" | "heat.contours" | "heat.simulate"
+            | "heat.cooler_layout"
                 if self.is_open() =>
             {
                 // Simulate stays in the 3D view when it is the one open.

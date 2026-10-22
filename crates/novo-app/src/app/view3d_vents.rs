@@ -11,6 +11,16 @@ use super::heat_settings::{HeatSettings, Kind, MIN_SIZE_MM, VentSpec, Wall};
 
 const WIDTH: f32 = 316.0;
 
+/// What the shown result says to the panel.
+pub(super) struct Shown<'a> {
+    /// Air measured through each opening of the shown result (empty without one).
+    pub flows: &'a [Option<f64>],
+    pub running: bool,
+    /// There is a result and it is from before the last change.
+    pub stale: bool,
+    pub suggestion: Option<&'a Suggestion>,
+}
+
 /// The panel, left side of the 3D view under the toolbar. `flows` is the air
 /// measured through each opening of the shown result (empty without one).
 pub(super) fn show(
@@ -18,9 +28,10 @@ pub(super) fn show(
     view: egui::Rect,
     settings: &mut HeatSettings,
     enclosure: Option<&Enclosure>,
-    flows: &[Option<f64>],
-    running: bool,
+    shown: &Shown,
 ) {
+    let flows = shown.flows;
+    let (running, stale, suggestion) = (shown.running, shown.stale, shown.suggestion);
     super::panel::Panel::new(
         "view3d_vents",
         "Vents and fans",
@@ -37,7 +48,9 @@ pub(super) fn show(
         egui::ScrollArea::vertical()
             .max_height(room)
             .auto_shrink([false, true])
-            .show(ui, |ui| body(ui, settings, enclosure, flows, running));
+            .show(ui, |ui| {
+                body(ui, settings, enclosure, flows, running, stale, suggestion)
+            });
     });
 }
 
@@ -47,6 +60,8 @@ fn body(
     enclosure: Option<&Enclosure>,
     flows: &[Option<f64>],
     running: bool,
+    stale: bool,
+    suggestion: Option<&Suggestion>,
 ) {
     // Long notes wrap inside the panel instead of stretching it.
     ui.set_max_width(WIDTH - 24.0);
@@ -176,7 +191,42 @@ fn body(
             ),
         );
     }
-    if let Some(line) = balance_line(flows, settings) {
+    if let Some(sg) = suggestion {
+        ui.add_space(4.0);
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.label(muted(&sg.sentence(e)));
+            let specs = sg.specs(e);
+            let held = settings.vents.iter().filter(|v| v.kind == sg.kind).count();
+            let added = held >= specs.len();
+            ui.add_enabled_ui(!running && !added, |ui| {
+                let label = if added {
+                    "Already added".to_owned()
+                } else {
+                    format!("Add {} to the cabinet", sg.button(specs.len()))
+                };
+                if ui
+                    .button(label)
+                    .on_hover_text(
+                        "From the Cooling selection of the Heat panel. The 3D fan uses the planning \
+                         shut-off pressure (60 Pa) and, for a filter fan, the flow after the mat.",
+                    )
+                    .clicked()
+                {
+                    for spec in specs {
+                        settings.add(spec);
+                    }
+                }
+            });
+        });
+    }
+    if stale {
+        ui.add_space(4.0);
+        ui.colored_label(
+            pal.warning,
+            "The result shown is from before your last change: run Simulate again.",
+        );
+    }
+    if let Some(line) = balance_line(flows, settings, running) {
         ui.add_space(4.0);
         ui.label(muted(&line));
     }
@@ -194,7 +244,7 @@ fn body(
 
 /// One line on how much air comes in and goes out of the shown result, so a
 /// gap between the two is explained instead of left to the reader.
-fn balance_line(flows: &[Option<f64>], settings: &HeatSettings) -> Option<String> {
+fn balance_line(flows: &[Option<f64>], settings: &HeatSettings, running: bool) -> Option<String> {
     let (mut inflow, mut outflow) = (0.0_f64, 0.0_f64);
     let mut any = false;
     for (v, q) in settings.vents.iter().zip(flows) {
@@ -211,9 +261,15 @@ fn balance_line(flows: &[Option<f64>], settings: &HeatSettings) -> Option<String
     }
     let gap = (inflow - outflow).abs();
     let larger = inflow.max(outflow).max(1e-9);
+    let why = if running {
+        "The run is still preliminary: the speeds beside the openings are still settling, so in and out \
+         do not match yet."
+    } else {
+        "Each opening's flow is read from the solved air speed next to it, so in and out differ by that \
+         reading; the solver itself conserves the air."
+    };
     Some(format!(
-        "Air in {inflow:.0}, out {outflow:.0} m³/h (model). The {gap:.0} m³/h ({:.0} %) gap is \
-         how closely the solved speeds next to the openings add up; the flow itself balances.",
+        "Air in {inflow:.0}, out {outflow:.0} m³/h (model); {gap:.0} m³/h ({:.0} %) apart. {why}",
         100.0 * gap / larger
     ))
 }
@@ -409,5 +465,147 @@ fn editor(ui: &mut egui::Ui, v: &mut VentSpec, i: usize, e: &Enclosure) {
                 .small()
                 .color(crate::theme::ui_palette().text_secondary),
         );
+    }
+}
+
+/// A fan the Cooling selection proposes, ready to place: its sentence, the
+/// button text and the openings that would be added.
+pub(super) struct Suggestion {
+    name: String,
+    /// Installed flow of all the proposed fans, m³/h.
+    total_m3h: f64,
+    kind: Kind,
+    count: usize,
+    flow_m3h: f64,
+}
+
+#[cfg(test)]
+impl Suggestion {
+    pub(super) fn for_test(kind: Kind, count: usize, flow_m3h: f64) -> Suggestion {
+        Suggestion {
+            name: "test fan".into(),
+            total_m3h: flow_m3h * count as f64,
+            kind,
+            count,
+            flow_m3h,
+        }
+    }
+
+    pub(super) fn specs_for_test(&self, e: &Enclosure) -> Vec<VentSpec> {
+        self.specs(e)
+    }
+
+    pub(super) fn sentence_for_test(&self, e: &Enclosure) -> String {
+        self.sentence(e)
+    }
+}
+
+impl Suggestion {
+    fn base(&self, e: &Enclosure) -> VentSpec {
+        let presets = VentSpec::presets(e);
+        let mut v = match self.kind {
+            Kind::FilterFan => presets[2].spec,
+            _ => presets[4].spec,
+        };
+        v.flow_m3h = self.flow_m3h;
+        v
+    }
+
+    /// How many fit side by side in the wall the fans go in.
+    fn room(&self, e: &Enclosure) -> usize {
+        let base = self.base(e);
+        let (along, _) = VentSpec::wall_len(base.wall, e);
+        let pitch = base.width_mm + 20.0;
+        (((along + 20.0) / pitch).floor() as usize).max(1)
+    }
+
+    /// The openings to add: as many as were proposed, as many as fit in a row.
+    fn specs(&self, e: &Enclosure) -> Vec<VentSpec> {
+        let base = self.base(e);
+        let n = self.count.clamp(1, self.room(e));
+        (0..n)
+            .map(|i| {
+                let mut v = base;
+                v.u_mm = 0.5 * VentSpec::wall_len(base.wall, e).0
+                    + (i as f64 - 0.5 * (n as f64 - 1.0)) * (v.width_mm + 20.0);
+                v.fitted(e)
+            })
+            .collect()
+    }
+
+    fn button(&self, placed: usize) -> String {
+        if placed > 1 {
+            format!("{placed} openings")
+        } else if self.kind == Kind::FilterFan {
+            "the filter fan".into()
+        } else {
+            "the fan".into()
+        }
+    }
+
+    fn sentence(&self, e: &Enclosure) -> String {
+        let placed = self.room(e).min(self.count);
+        let mut text = format!(
+            "Cooling selection proposes {} × {} ({:.0} m³/h installed, model estimate).",
+            self.count, self.name, self.total_m3h
+        );
+        if placed < self.count {
+            text.push_str(&format!(
+                " Room for {placed} side by side; add the other {} by hand.",
+                self.count - placed
+            ));
+        }
+        text
+    }
+}
+
+/// The proposal of the Cooling selection when it is a fan or a filter fan.
+pub(super) fn suggestion(
+    sol: &super::heat_run::Solution,
+    cooling: &mut super::heat_cooling::CoolingSettings,
+) -> Option<Suggestion> {
+    use novo_thermal::cooling::Kind as Cool;
+    let (_, selection) = super::heat_cooling::selection_for(sol, cooling)?;
+    let choice = selection.proposal()?;
+    let kind = match choice.product.kind {
+        Cool::Fan => Kind::Fan,
+        Cool::FilterFan => Kind::FilterFan,
+        Cool::CoolingUnit => return None,
+    };
+    Some(Suggestion {
+        name: choice.product.name.clone(),
+        total_m3h: choice.total,
+        kind,
+        count: choice.count,
+        flow_m3h: planned_flow(kind, &choice.product),
+    })
+}
+
+/// What the selection counted for one product: a filter fan after its mat, a
+/// fan free-blowing.
+fn planned_flow(kind: Kind, product: &novo_thermal::cooling::Product) -> f64 {
+    if kind == Kind::FilterFan {
+        product.installed_flow()
+    } else {
+        product.airflow_m3h
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use novo_thermal::cooling::{Kind as Cool, Product, Source};
+
+    #[test]
+    fn a_filter_fan_gets_the_flow_after_its_mat_and_a_fan_the_free_flow() {
+        let p = |kind| Product {
+            name: "x".into(),
+            kind,
+            airflow_m3h: 400.0,
+            cooling_w: 0.0,
+            source: Source::Planning,
+        };
+        assert!((planned_flow(Kind::FilterFan, &p(Cool::FilterFan)) - 280.0).abs() < 1e-9);
+        assert_eq!(planned_flow(Kind::Fan, &p(Cool::Fan)), 400.0);
     }
 }
