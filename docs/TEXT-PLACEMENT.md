@@ -206,7 +206,7 @@ colliding pair. Findings become regression scenarios in `qa/scenarios` and unit 
 | Stage | Content | Where the user sees it |
 | --- | --- | --- |
 | 0 | Measurement (the `text.conflict` check is off by default until stage 2, so existing pages do not light up at once; the measurement is visible in the scene dump and QA reports, and the check is switched on in the check panel): overlap counts in the scene dump and `kopercad-cli qa`, `text.conflict` check (reporting only), generator for the stress pages (Tester A), baseline numbers in this document | Scene dump and QA report show the counts; optional "Text conflicts" check; nothing moves yet |
-| 1 | Engine `textlayout`: obstacles index, slots, search, cost, determinism, hysteresis, with unit and property tests; not yet wired | Not visible |
+| 1 | Engine `textlayout`: obstacles index, slots, search, cost, determinism, dirty-region re-solve, with unit and property tests; not yet wired | Not visible |
 | 2 | Devices: tag, description, pin text, symbol-kind slot tables, side-aware transform | Tags and pin numbers stop colliding when symbols are rotated, mirrored or neighbours |
 | 3 | Terminals and strips: row logic, rotated names, strip name at run start | The terminal strip case from the report |
 | 4 | Wires: wire numbers, cable and core, potentials, parallel stagger | Wire number overlaps gone |
