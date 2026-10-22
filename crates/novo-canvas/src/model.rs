@@ -1607,7 +1607,10 @@ impl PageScene {
                     .map(vec),
             );
             let (pos, anchor) = match art.tag_anchor(sym) {
-                Some((p, a)) => (place.affine().transform_point2(p), a),
+                Some((p, a)) => (
+                    place.affine().transform_point2(p),
+                    tag_anchor_after(a, &place),
+                ),
                 None if b.is_empty() => (origin + Vec2::new(5.0, 0.0), Anchor::CenterLeft),
                 None => (
                     Vec2::new(b.max.x.max(origin.x + 2.5) + 5.0, b.center().y),
@@ -2139,6 +2142,30 @@ impl PageScene {
                 .push(label.secondary().colored(self.style.cable_color));
         }
         self.put(id.into(), item);
+    }
+}
+
+/// The anchor of a tag whose library position was moved by `place`. The tag
+/// stays horizontal, so mirroring or a half turn cannot turn its text; what
+/// they turn is the side the text grows to, and the anchor has to follow, or
+/// the text grows back over the symbol it was moved away from. A quarter
+/// turn moves the position only: the text still grows sideways.
+fn tag_anchor_after(anchor: Anchor, place: &crate::shape::Placement) -> Anchor {
+    use Anchor::*;
+    let grows = match anchor {
+        TopLeft | CenterLeft | BottomLeft => 1.0,
+        TopRight | CenterRight | BottomRight => -1.0,
+        TopCenter | Center | BottomCenter => return anchor,
+    };
+    let x = place.affine().transform_vector2(Vec2::new(grows, 0.0)).x;
+    match (anchor, x) {
+        (TopLeft, x) if x < -0.5 => TopRight,
+        (CenterLeft, x) if x < -0.5 => CenterRight,
+        (BottomLeft, x) if x < -0.5 => BottomRight,
+        (TopRight, x) if x > 0.5 => TopLeft,
+        (CenterRight, x) if x > 0.5 => CenterLeft,
+        (BottomRight, x) if x > 0.5 => BottomLeft,
+        _ => anchor,
     }
 }
 
@@ -3282,6 +3309,61 @@ mod tests {
                     || b.min.y >= a.max.y,
                 "{rotation:?}: strip label {b:?} overlaps the terminal name {a:?}"
             );
+        }
+    }
+
+    #[test]
+    fn a_tag_never_grows_back_over_its_symbol_when_mirrored_or_turned() {
+        // A coil-like body with its library tag to the right of it.
+        struct Body;
+        impl SymbolArt for Body {
+            fn artwork(&self, _: &SymbolInstance) -> Option<Vec<Primitive>> {
+                Some(vec![Primitive::stroked(
+                    Shape::rect(Vec2::new(-2.0, -3.0), Vec2::new(2.0, 3.0)),
+                    Stroke::world(0.25, crate::Color::rgb(255, 255, 255)),
+                )])
+            }
+            fn tag_anchor(&self, _: &SymbolInstance) -> Option<(Vec2, Anchor)> {
+                Some((Vec2::new(5.0, 0.0), Anchor::CenterLeft))
+            }
+        }
+        for rotation in [
+            novo_core::Rotation::R0,
+            novo_core::Rotation::R90,
+            novo_core::Rotation::R180,
+            novo_core::Rotation::R270,
+        ] {
+            for mirrored in [false, true] {
+                let mut doc = Document::default();
+                let ((page, _), _) = doc
+                    .transact("coil", |tx| {
+                        let page = tx.add_page("1")?;
+                        let device = tx.add_device(DeviceTag::parse("-K1")?, "Coil")?;
+                        let sym = tx.place_symbol(
+                            page,
+                            "iec/coil",
+                            MPlacement {
+                                origin: Point::new(100.0, 50.0),
+                                rotation,
+                                mirrored,
+                            },
+                            vec![Pin::new("A1", 0.0, -3.0), Pin::new("A2", 0.0, 3.0)],
+                            SymbolRole::Device {
+                                device,
+                                main: true,
+                            },
+                        )?;
+                        Ok((page, sym))
+                    })
+                    .unwrap();
+                let ps = PageScene::new(doc.project(), page, &Body);
+                let audit = crate::text_audit::audit(ps.scene());
+                assert!(
+                    audit.text_on_ink.is_empty(),
+                    "{rotation:?} mirrored {mirrored}: {:?}",
+                    audit.describe()
+                );
+            }
         }
     }
 
