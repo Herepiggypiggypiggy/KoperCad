@@ -81,6 +81,11 @@ impl LayoutSearch {
         self.open = true;
     }
 
+    /// A search is asked for and not yet taken up.
+    pub(super) fn pending(&self) -> bool {
+        self.requested
+    }
+
     pub(super) fn take_request(&mut self) -> bool {
         std::mem::take(&mut self.requested)
     }
@@ -253,7 +258,7 @@ impl LayoutSearch {
                         "The cabinet changed after this search. Search again before applying.",
                     );
                 }
-                let room = (ctx.content_rect().bottom() - at.y - 150.0).max(160.0);
+                let room = (ctx.content_rect().bottom() - at.y - 190.0).max(160.0);
                 egui::ScrollArea::vertical()
                     .max_height(room)
                     .auto_shrink([false, true])
