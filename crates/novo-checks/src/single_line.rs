@@ -1957,7 +1957,7 @@ pub fn single_line(
     }
     if phase_voltage_used {
         notes.push(
-            "A load on one line conductor is taken phase to neutral, the stated line voltage divided by √3 (400 V gives 231 V); a load between two lines keeps the line voltage."
+            "A load on one line conductor is taken phase to neutral, the line voltage (stated, or the project's) divided by √3 (400 V gives 231 V); a load between two lines keeps the line voltage."
                 .to_owned(),
         );
     }

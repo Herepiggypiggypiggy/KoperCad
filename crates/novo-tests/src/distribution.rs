@@ -298,8 +298,9 @@ pub struct Signals {
 }
 
 /// [`distribution_board`] plus a one-pole lighting feeder: breaker `-Q5` on
-/// the L1 conductor of Q1 feeding two lamps and a sounder, and a 24 V lamp
-/// that must stay off the diagram.
+/// the L1 conductor of Q1 feeding two lamps and a sounder, a 24 V lamp
+/// that must stay off the diagram, and an Icu of 9.5 kA on Q1 (between the
+/// fault level along the run and the supply level).
 pub fn distribution_board_with_signals(doc: &mut Document) -> Result<(Board, Signals)> {
     let board = distribution_board(doc)?;
     let (q1s, board_page) = doc
@@ -327,6 +328,9 @@ pub fn distribution_board_with_signals(doc: &mut Document) -> Result<(Board, Sig
                     .unwrap();
                 (d, s)
             };
+            // Q1 breaks 9.5 kA: above the 9.1 kA the cable leaves at Q1 and below
+            // the 10 kA stated at the supply.
+            tx.set_property(board.q1, "breaking_capacity_ka", Some(9.5.into()))?;
             let (q5, q5s) = place(
                 tx,
                 "=A1+CAB-Q5",

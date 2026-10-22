@@ -771,14 +771,26 @@ fn draw_box(c: &mut Canvas, sl: &SingleLine, node: &Node, cx: f64, y: f64, conti
     );
 }
 
+/// A voltage drop for the drawing: a figure that would print as 0 says it is
+/// small and not zero.
+fn percent(value: f64) -> String {
+    if value > 0.0 && value < 0.005 {
+        "<0.01".to_owned()
+    } else {
+        fmt(value)
+    }
+}
+
 fn link_lines(link: &Link) -> Vec<String> {
     let mut out = Vec::new();
     let section = match link.section_mm2.value {
         Some(s) => format!(
-            "{}x{} mm²{}",
+            "{}x{} mm²{}{}",
             link.poles.max(1),
             fmt(s),
-            mark(link.section_mm2.origin)
+            mark(link.section_mm2.origin),
+            // The neutral of a one-phase feeder is not counted: say so.
+            if link.poles == 1 { " (line)" } else { "" }
         ),
         None => "no cross-section".to_owned(),
     };
@@ -797,13 +809,13 @@ fn link_lines(link: &Link) -> Vec<String> {
         None => length,
     });
     if let Some(d) = link.drop_percent.value {
-        let mut s = format!("ΔU {} %{}", fmt(d), mark(link.drop_percent.origin));
+        let mut s = format!("ΔU {} %{}", percent(d), mark(link.drop_percent.origin));
         if let Some(t) = link.drop_total_percent.value
             && (t - d).abs() > 0.005
         {
             s.push_str(&format!(
                 " Σ {} %{}",
-                fmt(t),
+                percent(t),
                 mark(link.drop_total_percent.origin)
             ));
         }
