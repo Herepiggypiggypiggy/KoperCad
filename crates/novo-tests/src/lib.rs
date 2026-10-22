@@ -8,6 +8,7 @@
 
 pub mod big;
 pub mod distribution;
+pub mod heat_cabinet;
 pub mod motor_starter;
 pub mod stress;
 pub mod text_conflicts;

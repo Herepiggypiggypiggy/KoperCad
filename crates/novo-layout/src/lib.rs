@@ -10,6 +10,7 @@ pub mod collide;
 pub mod cutout_cards;
 pub mod drill;
 pub mod enclosure;
+pub mod heat;
 pub mod model;
 pub mod openings;
 pub mod plan;

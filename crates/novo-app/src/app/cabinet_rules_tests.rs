@@ -312,3 +312,72 @@ fn place_all_keeps_clear_of_a_duct_already_on_the_plate_and_a_hand_edit_onto_it_
         "{lines:?}"
     );
 }
+
+#[test]
+fn heat_aware_place_all_lowers_a_sensitive_breaker_and_the_rule_check_agrees() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let cab = cabinet(&mut d);
+    // The drive T1 loses 80 W; the breaker Q1 may not see more than 45 C, so the
+    // rules' top zone would put it in the plume of the drive.
+    let parts: Vec<(novo_core::PartId, String)> = project(&d)
+        .all::<novo_core::Part>()
+        .map(|p| (p.id, p.order_number.clone()))
+        .collect();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Heat data", |tx| {
+            for (id, model) in &parts {
+                let (loss, limit) = if model.ends_with("-T1") {
+                    (80.0, 55)
+                } else if model.ends_with("-Q1") {
+                    (2.0, 45)
+                } else {
+                    (3.0, 60)
+                };
+                tx.set_property(*id, "power_loss_w", Some(Value::Float(loss)))?;
+                tx.set_property(*id, "max_ambient_c", Some(Value::Int(limit)))?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let layout = novo_layout::model::load(project(&d), cab);
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app.cabinet_ask(Ask::PlaceAll, Some(cab), layout, &cands);
+    d.frame();
+    let why = d.app.cabinet.rules.explain.clone().expect("an explanation");
+    let heat = why.heat.as_ref().expect("the heat step ran");
+    assert_eq!(heat.sources, 1);
+    assert_eq!(heat.lowered, 1, "{heat:?}");
+    let q1 = project(&d)
+        .all::<novo_core::Device>()
+        .find(|dev| dev.tag.to_string().ends_with("-Q1"))
+        .unwrap()
+        .id
+        .raw();
+    assert!(
+        why.describe(q1, &d.app.cabinet.rules.rules)
+            .contains("brought it below the hot zone")
+            || why
+                .describe(q1, &d.app.cabinet.rules.rules)
+                .contains("below the hot zone")
+    );
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    d.frame();
+    // The place rules check does not call the lowered breaker out of its zone.
+    let judged = cabinet_rules::judge(project(&d), cab, &d.app.cabinet.rules.rules);
+    assert!(judged.violations.is_empty(), "{:?}", judged.violations);
+}
+
+#[test]
+fn the_heat_line_in_the_rule_text_is_switched_without_touching_the_rest() {
+    let text = "# mine\ngap 10\nrule * zone=middle\n";
+    let on = cabinet_rules::set_heat_line_for_test(text, true);
+    assert!(on.contains("heat on") && on.contains("# mine") && on.contains("gap 10"));
+    assert!(on.find("heat on").unwrap() < on.find("rule *").unwrap());
+    let off = cabinet_rules::set_heat_line_for_test(&on, false);
+    assert!(off.contains("heat off") && !off.contains("heat on"));
+    assert_eq!(off.matches("heat").count(), 1);
+}

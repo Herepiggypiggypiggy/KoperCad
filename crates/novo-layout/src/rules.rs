@@ -43,6 +43,7 @@
 
 use std::fmt;
 
+use crate::heat::{self, HeatPlace, HeatWhy, Tweaks};
 use crate::plan::{Candidate, Plan, PlannedDuct, Proposed, ROW_GAP_MM};
 use crate::{DEFAULT_CLEARANCE_MM, Plate, RAIL_BAND_MM, Rail, Rect, Size};
 
@@ -209,6 +210,9 @@ pub struct RuleSet {
     pub duct_width: f64,
     pub duct_height: f64,
     pub rules: Vec<KindRule>,
+    /// Heat-aware placement (see [`crate::heat`]); `None` places by the
+    /// rules alone.
+    pub heat: Option<HeatPlace>,
 }
 
 impl Default for RuleSet {
@@ -254,6 +258,7 @@ impl RuleSet {
                 KindRule::new(&["X"], Zone::Bottom, RailUse::Own),
                 KindRule::new(&["*"], Zone::Middle, RailUse::Shared),
             ],
+            heat: Some(HeatPlace::default()),
         }
     }
 
@@ -308,6 +313,9 @@ impl RuleSet {
             duct_width: DUCT_WIDTH_MM,
             duct_height: DUCT_HEIGHT_MM,
             rules: Vec::new(),
+            // A file without a `heat` line gets heat-aware placement, like
+            // the standard set; `heat off` turns it off.
+            heat: Some(HeatPlace::default()),
         };
         for (n, raw) in text.lines().enumerate() {
             let line_no = n + 1;
@@ -358,6 +366,7 @@ impl RuleSet {
                     })?;
                     set.hot = Some(HotRule { min_loss_w, zone });
                 }
+                "heat" => set.heat = parse_heat(&rest).map_err(err)?,
                 "rule" => set.rules.push(parse_rule(&rest).map_err(err)?),
                 other => return Err(err(format!("unknown keyword `{other}`"))),
             }
@@ -399,6 +408,13 @@ impl RuleSet {
             out.push_str(&format!("hot {} {}\n", h.min_loss_w, h.zone.as_str()));
         }
         out.push_str(&format!("hot_gap {}\n", self.hot_gap));
+        match self.heat {
+            Some(h) => out.push_str(&format!(
+                "heat on ambient={} limit={} margin={} min_source={}\n",
+                h.ambient_c, h.assumed_limit_c, h.sensitive_margin_k, h.min_source_w
+            )),
+            None => out.push_str("heat off\n"),
+        }
         for i in 0..self.rules.len() {
             out.push_str("rule ");
             out.push_str(&self.rule_text(i));
@@ -413,6 +429,35 @@ fn mm(text: &str) -> Option<f64> {
         .parse::<f64>()
         .ok()
         .filter(|v| v.is_finite() && *v >= 0.0)
+}
+
+fn parse_heat(words: &[&str]) -> Result<Option<HeatPlace>, String> {
+    let mut heat = HeatPlace::default();
+    let mut words = words.iter();
+    match words.next().map(|w| w.to_ascii_lowercase()).as_deref() {
+        Some("off") => return Ok(None),
+        Some("on") => {}
+        _ => return Err("`heat` takes `on` or `off`: `heat on ambient=35`".into()),
+    }
+    for word in words {
+        let Some((key, value)) = word.split_once('=') else {
+            return Err(format!("`{word}` should look like `ambient=35`"));
+        };
+        let v = value
+            .replace(',', ".")
+            .parse::<f64>()
+            .ok()
+            .filter(|v| v.is_finite())
+            .ok_or_else(|| format!("`{value}` is not a number"))?;
+        match key.to_ascii_lowercase().as_str() {
+            "ambient" => heat.ambient_c = v,
+            "limit" => heat.assumed_limit_c = v,
+            "margin" => heat.sensitive_margin_k = v.max(0.0),
+            "min_source" => heat.min_source_w = v.max(0.0),
+            other => return Err(format!("unknown setting `{other}`")),
+        }
+    }
+    Ok(Some(heat))
 }
 
 fn parse_rule(words: &[&str]) -> Result<KindRule, String> {
@@ -493,6 +538,9 @@ pub struct Spec {
     pub gaps: Gaps,
     /// Effective power loss in W, when known.
     pub loss_w: Option<f64>,
+    /// Highest air temperature around the device the maker allows, in
+    /// degrees C, when known (`max_ambient_c`).
+    pub limit_c: Option<f64>,
 }
 
 impl Spec {
@@ -506,6 +554,7 @@ impl Spec {
             kind: kind_of(&c.sort_key),
             gaps: Gaps::default(),
             loss_w: None,
+            limit_c: None,
         }
     }
 }
@@ -560,6 +609,8 @@ pub enum GapSource {
     Part,
     /// The extra room around a hot device (`hot_gap`).
     Hot,
+    /// Room added by the heat-aware step, to keep a device off a hot one.
+    Heat,
 }
 
 /// Why the room between two rails is what it is.
@@ -592,6 +643,8 @@ pub struct Decision {
     /// Gap to the left neighbour along the rail, and what set it.
     pub gap_before: f64,
     pub gap_source: GapSource,
+    /// What the heat-aware step did with the device, if anything.
+    pub heat: Option<HeatWhy>,
 }
 
 /// Why a device was left off the plate.
@@ -639,6 +692,8 @@ pub struct Explanation {
     /// A trunk was left out because the narrower plate would not hold every
     /// device; the rows' ducts are then not joined.
     pub trunk_dropped: bool,
+    /// What the heat-aware step found and changed; `None` when it did not run.
+    pub heat: Option<heat::HeatSummary>,
 }
 
 impl Explanation {
@@ -685,6 +740,14 @@ impl Explanation {
                 "; {} mm from its neighbour (hot device)",
                 d.gap_before
             )),
+            GapSource::Heat => out.push_str(&format!(
+                "; {:.0} mm from its neighbour (moved along the rail to keep clear of heat)",
+                d.gap_before
+            )),
+        }
+        if let Some(why) = d.heat {
+            out.push_str("; ");
+            out.push_str(why.text());
         }
         out.push('.');
         out
@@ -732,6 +795,30 @@ pub fn place_all_around(
     top: f64,
     blocked: &[Rect],
 ) -> (Plan, Explanation) {
+    if let Some(found) = heat::optimise(plate, specs, rules, first_rail_id, top, blocked) {
+        return found;
+    }
+    plan_around(
+        plate,
+        specs,
+        rules,
+        first_rail_id,
+        top,
+        blocked,
+        &Tweaks::default(),
+    )
+}
+
+/// [`place_all_around`] by the rules, with the heat step's `tweaks` applied.
+pub(crate) fn plan_around(
+    plate: &Plate,
+    specs: &[Spec],
+    rules: &RuleSet,
+    first_rail_id: u64,
+    top: f64,
+    blocked: &[Rect],
+    tw: &Tweaks,
+) -> (Plan, Explanation) {
     let regions = free_regions(plate.usable(), blocked);
     let mut plan = Plan::default();
     let mut why = Explanation::default();
@@ -741,7 +828,7 @@ pub fn place_all_around(
             break;
         }
         let first = first_rail_id + plan.rails.len() as u64;
-        let (p, w) = plan_region(*region, &left, rules, first, top);
+        let (p, w) = plan_region(*region, &left, rules, first, top, tw);
         let unplaced = p.unplaced.clone();
         plan.rails.extend(p.rails);
         plan.ducts.extend(p.ducts);
@@ -832,8 +919,9 @@ fn plan_region(
     rules: &RuleSet,
     first_rail_id: u64,
     top: f64,
+    tw: &Tweaks,
 ) -> (Plan, Explanation) {
-    let (plan, why) = plan_with_trunk(area, specs, rules, first_rail_id, top);
+    let (plan, why) = plan_with_trunk(area, specs, rules, first_rail_id, top, tw);
     if plan.unplaced.is_empty() || rules.separation <= 0.0 {
         return (plan, why);
     }
@@ -841,7 +929,7 @@ fn plan_region(
         separation: 0.0,
         ..rules.clone()
     };
-    let (plan2, mut why2) = plan_with_trunk(area, specs, &relaxed, first_rail_id, top);
+    let (plan2, mut why2) = plan_with_trunk(area, specs, &relaxed, first_rail_id, top, tw);
     if plan2.unplaced.len() < plan.unplaced.len() {
         why2.separation_relaxed = true;
         (plan2, why2)
@@ -870,12 +958,13 @@ fn plan_with_trunk(
     rules: &RuleSet,
     first_rail_id: u64,
     top: f64,
+    tw: &Tweaks,
 ) -> (Plan, Explanation) {
-    let (plan, why) = plan_once(area, specs, rules, first_rail_id, top, false);
+    let (plan, why) = plan_once(area, specs, rules, first_rail_id, top, false, tw);
     if plan.rails.len() < 2 {
         return (plan, why);
     }
-    let (with, mut why_with) = plan_once(area, specs, rules, first_rail_id, top, true);
+    let (with, mut why_with) = plan_once(area, specs, rules, first_rail_id, top, true, tw);
     if with.unplaced.len() <= plan.unplaced.len() {
         (with, why_with)
     } else {
@@ -893,6 +982,7 @@ fn plan_once(
     first_rail_id: u64,
     top: f64,
     trunk: bool,
+    tw: &Tweaks,
 ) -> (Plan, Explanation) {
     let full = area;
     let mut usable = full;
@@ -921,6 +1011,7 @@ fn plan_once(
             Some(h) if hot => h.zone,
             _ => rule.zone,
         };
+        let zone = tw.zone.get(&spec.id).copied().unwrap_or(zone);
         // A shared rail never mixes power and signal wiring.
         let name = match rule.rail {
             RailUse::Own => spec.kind.to_ascii_uppercase(),
@@ -945,7 +1036,28 @@ fn plan_once(
         rule_ids.push((rule_index != usize::MAX).then_some(rule_index));
         resolved.push((rule_index, rule));
     }
-    groups.sort_by(|a, b| (a.zone, a.order, &a.name).cmp(&(b.zone, b.order, &b.name)));
+    // With heat-aware placement a zone may put the rows that hold heat sources
+    // first, so their plume rises away from the rows below.
+    let heat_class = |g: &Group| -> u8 {
+        if !tw.hot_first {
+            return 1;
+        }
+        // Sources that mind heat themselves (a drive with a 40 C limit) sit with
+        // the sensitive rows, low, where the air is coolest.
+        if g.members
+            .iter()
+            .any(|&i| tw.sensitive.contains(&specs[i].id))
+        {
+            2
+        } else if g.members.iter().any(|&i| hot_flags[i]) {
+            0
+        } else {
+            1
+        }
+    };
+    groups.sort_by(|a, b| {
+        (a.zone, heat_class(a), a.order, &a.name).cmp(&(b.zone, heat_class(b), b.order, &b.name))
+    });
 
     // Rows of each group, left to right inside the usable width.
     let need =
@@ -982,7 +1094,8 @@ fn plan_once(
                     })
                     .unwrap_or(0)
             };
-            (ra.0, pos(a), ra.1, ra.2).cmp(&(rb.0, pos(b), rb.1, rb.2))
+            let rank = |i: usize| tw.rank.get(&specs[i].id).copied().unwrap_or(0);
+            (ra.0, pos(a), rank(a), ra.1, ra.2).cmp(&(rb.0, pos(b), rank(b), rb.1, rb.2))
         });
         let mut current: Option<Row> = None;
         let mut x = 0.0;
@@ -994,6 +1107,8 @@ fn plan_once(
                 continue;
             }
             let rule = &resolved[i].1;
+            // The heat step may slide a device along its rail.
+            let pad = tw.pad.get(&specs[i].id).copied().unwrap_or(0.0);
             let (left, left_src) = need(i, |g| g.left, rule.gap);
             let mut gap_before = (0.0, GapSource::Start);
             if let Some(row) = &current {
@@ -1005,7 +1120,7 @@ fn plan_once(
                 } else {
                     (left, left_src)
                 };
-                if x + gap_before.0 + w > usable.w {
+                if x + gap_before.0 + pad + w > usable.w {
                     rows.push((group.zone, current.take().expect("row is open")));
                 }
             }
@@ -1022,6 +1137,10 @@ fn plan_once(
                     class: group.class,
                 }
             });
+            let pad = pad.min((usable.w - x - gap_before.0 - w).max(0.0));
+            if pad > 0.5 {
+                gap_before = (gap_before.0 + pad, GapSource::Heat);
+            }
             let at = x + gap_before.0;
             gap_before_of[i] = gap_before;
             row.items.push((i, at));
@@ -1206,6 +1325,7 @@ fn plan_once(
                 rail: Some(rail),
                 gap_before: gap_before_of[*i].0,
                 gap_source: gap_before_of[*i].1,
+                heat: tw.why.get(&specs[*i].id).copied(),
             });
         }
         why.rows.push(RowNote {
@@ -1315,6 +1435,7 @@ pub mod model {
     const RIGHT: &str = "clearance_right_mm";
     const LOSS: &str = "power_loss_w";
     const LOAD_FACTOR: &str = "load_factor";
+    const MAX_AMBIENT: &str = "max_ambient_c";
 
     fn number(value: &Value) -> Option<f64> {
         match value {
@@ -1356,6 +1477,7 @@ pub mod model {
                         left: property(project, device, LEFT),
                         right: property(project, device, RIGHT),
                     };
+                    spec.limit_c = property(project, device, MAX_AMBIENT);
                     spec.loss_w = property(project, device, LOSS).map(|w| {
                         w * property(project, device, LOAD_FACTOR)
                             .unwrap_or(1.0)

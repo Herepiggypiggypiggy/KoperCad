@@ -153,6 +153,53 @@ Where the user finds it (Cabinet view, Ctrl+2):
   and *Cut N rails to these lengths* trims the rails in one undo step.
 - Ducts planned by Place all are drawn once the duct drawing (#461) is in.
 
+### 5b.2 Heat-aware Place all (`novo_layout::heat`)
+
+Place all also reads heat. A device's `power_loss_w` (times `load_factor`) and
+`max_ambient_c` (the highest air temperature around it the maker allows) come
+from the part, as the thermal bridge reads them. Parts without them are not
+guessed at: with no device at or above `min_source` W (default 10) the step does
+nothing and the plan is the rules' own.
+
+Rule file line (default on; a file without it gets it on, `heat off` turns it off):
+
+```text
+heat on ambient=35 limit=60 margin=15 min_source=10
+```
+
+What it does, in this order:
+
+1. **Lowers sensitive devices.** A device with a known limit within `margin` K of
+   `ambient` whose rule puts it above the hot zone goes into the hot zone: hot air
+   rises into whatever is above a source. `check` uses the same override, so the
+   Rules check does not call it out of its zone.
+2. **Sources first inside a zone.** Rows with heat sources sort above neutral rows,
+   and rows with sensitive devices (a drive with a 40 C limit included) below, so
+   plumes rise away from them. The search tries this order and the rules' own
+   order and keeps the better.
+3. **Searches along the rails.** Swaps of same-kind devices and slides along the
+   rail, about one second for 100 devices, bounded by a layout budget. The rails
+   come from the rules, so rails through the middle of their devices, ducts and
+   the text-placement room stay as they were; a move that loses a device, the
+   trunk duct or the duct separation is thrown away, and at most three more rows
+   than the rules' plan are accepted (each costs score).
+
+The search is judged by a coupling score (source loss x how much the other device
+minds heat x a kernel: strong beside, a rising cone above, weak below; plus how
+much warmer the air is higher up). It is a heuristic, **not a temperature**. The
+2D thermal model (`novo-thermal`, planning values, not validated against
+measurements) is the judge: `crates/novo-tests/examples/heat_place_all.rs` runs
+Place all with and without the step on a project and prints devices over their
+limit, margins and air temperatures; `crates/novo-tests/tests/heat_place_all.rs`
+asserts the made-up cabinet of `novo_tests::heat_cabinet` goes from 8 devices over
+their limit to 0. On the CV-200 conveyor (assumed sizes and losses, 460 W) the two
+devices over their limit stay over (a 165 W drive with a 40 C limit in a closed
+cabinet is not a placement problem); the other devices gain about 1.7 K on average.
+
+Where the user finds it: Cabinet, **Place all** (the message says what the heat step
+did; the inspector says why a moved device is where it is), and **Rules**, the
+*Heat-aware placement* check box.
+
 Not done here: rotating devices to fit, stacking small devices, vertical side
 ducts, and a rail and duct cut list report/CLI command.
 

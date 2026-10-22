@@ -2521,6 +2521,16 @@ impl NovoApp {
                                  the separation was given up to fit every device",
                             );
                         }
+                        if let Some(heat) = self
+                            .cabinet
+                            .rules
+                            .explain
+                            .as_ref()
+                            .and_then(|e| e.heat.as_ref())
+                        {
+                            let text = heat.message();
+                            self.message(Level::Info, text);
+                        }
                         self.cabinet.preview = Some(plan);
                     }
                 }
