@@ -1,0 +1,23 @@
+@title Learn: the early-access line is on the path, topic and search pages, not only the home
+@area Learn
+# R4 on the Learn round 25 PR: with the per-lesson tag gone, only the home said lessons are early access.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text learn
+wait 6
+key Enter
+wait 30
+text motor
+wait 10
+shot search-results
+expect "Lessons are early access"
+# S4 findings here are the dialog standing over the dock (on purpose).
+check_layout
+click_text "Clear search and level"
+wait 6
+click_text "First hour"
+wait 10
+shot path-page
+expect "Lessons are early access"

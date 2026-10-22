@@ -170,6 +170,14 @@ impl NovoApp {
         early * 2 > all
     }
 
+    /// The one line that says lessons are early access, on every Learn page
+    /// where the per-lesson tag is left off (see [`Self::early_is_the_norm`]).
+    fn early_note(&self, ui: &mut egui::Ui) {
+        if self.early_is_the_norm() {
+            ui.weak(self.learn.say("early_note"));
+        }
+    }
+
     /// Search and the level chips. Returns whether Enter was pressed in the
     /// search field, which starts the first result.
     fn suite_toolbar(&mut self, ui: &mut egui::Ui, first_frame: bool) -> bool {
@@ -396,6 +404,7 @@ impl NovoApp {
         start: &mut Start,
     ) {
         let rows = self.suite_matches(section, words);
+        self.early_note(ui);
         ui.horizontal(|ui| {
             ui.label(
                 egui::RichText::new(
@@ -437,9 +446,7 @@ impl NovoApp {
         ui.add_space(2.0);
         ui.heading(self.learn.say("learn_title"));
         ui.weak(self.learn.say("learn_hint"));
-        if self.early_is_the_norm() {
-            ui.weak(self.learn.say("early_note"));
-        }
+        self.early_note(ui);
         ui.add_space(8.0);
         let hero = self.recommendation();
         match &hero {
@@ -552,6 +559,7 @@ impl NovoApp {
         ui.label(egui::RichText::new(path.title(lang)).heading());
         ui.add_space(2.0);
         ui.weak(path.summary(lang));
+        self.early_note(ui);
         ui.add_space(6.0);
         let sum = self
             .learn
@@ -582,6 +590,7 @@ impl NovoApp {
             _ => track.summary.as_str(),
         };
         ui.weak(summary);
+        self.early_note(ui);
         ui.add_space(6.0);
         let sum = self
             .learn
