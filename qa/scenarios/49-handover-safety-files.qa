@@ -1,0 +1,26 @@
+@title Handover package and safety function sheets written and kept for inspection
+@area Reports
+# The example project has one safety function: the handover folder and the safety sheets PDF are written next to the (untitled) project in Documents; keep_file copies every file for inspection.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text Export safety function sheets
+wait 4
+key Enter
+wait 20
+expect_file "~/Documents/KoperCAD/*safety sheets.pdf" 1500
+shot safety-sheets
+key ctrl+k
+wait 4
+text Export handover package
+wait 4
+key Enter
+wait 20
+expect "The design still has open problems"
+shot handover-ask
+click_text "Hand over anyway"
+wait 40
+shot handover-done
+keep_file "~/Documents/KoperCAD/*/*"
+keep_file "~/Documents/KoperCAD/*safety sheets.pdf"
