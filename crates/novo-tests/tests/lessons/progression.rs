@@ -502,7 +502,7 @@ fn machine() -> (Document, [Scope; 4]) {
             ),
         ];
         for (n, (title, name, feeds)) in plan.into_iter().enumerate() {
-            let page = tx.add_page(&format!("{}", n + 1))?;
+            let page = tx.add_page(format!("{}", n + 1))?;
             tx.update::<novo_core::Page>(page, |p| p.title = title.into())?;
             scopes[n] = Some(place_macro(tx, page, name, (20.0, 20.0), &feeds)?);
         }
