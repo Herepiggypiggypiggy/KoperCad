@@ -3,6 +3,8 @@
 Where the user finds it: **View > 3D > EMC view**, the **EMC** button in the 3D toolbar, and Ctrl+K "EMC".
 **Ctrl+K "Open EMC example"** opens a project with a drive, a motor cable, a PLC and an analog input laid out the way a first draft often is.
 
+On the Cabinet: the **EMC** button in the Cabinet toolbar (under More in a narrow window) or Ctrl+K "EMC view on the plate" draws the same picture flat over the mounting plate.
+
 ## What it shows
 
 - Cable classes (mains, motor and drive output, 24 V control, analog and sensor, bus, safety, earth) as wire colour, with an earth stripe. Never colour alone: the legend names each class and counts its wires.
@@ -23,4 +25,4 @@ Provenance says where the picture came from: `Synthetic` (demonstration), `Stub`
 
 ## Not in this change
 
-2D mirror on the cabinet plate, the schematic net-class overlay, one-click fixes that edit the project, per-cable cards.
+The schematic net-class overlay, one-click fixes that edit the project, per-cable cards.
