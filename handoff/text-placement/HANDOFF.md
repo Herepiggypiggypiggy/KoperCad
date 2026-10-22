@@ -1,7 +1,8 @@
 # Text placement handoff
 
-Branch: `claude/project-thread-img216` (kopercad). First PR: the plan, docs only.
-State: plan in `docs/TEXT-PLACEMENT.md`; no code yet.
-Resume: read the plan, section 1 (today's code: `novo-canvas/src/model.rs` sync_symbol/sync_wire, `note_place.rs`, `declutter.rs`),
-then build stage 0 (scene dump overlap counts) and stage 1 (pure engine, reuse `declutter::Boxes` grid).
-Traps: no stacked PRs; once READY do not push; novo-core API only via WS-02; use `theme::ui_palette()`.
+Plan merged (#1351). Stage 0 PR on branch `claude/project-thread-img216`: `novo-canvas/src/text_audit.rs` (audit of a Scene),
+scene dump key `text_audit`, `novo-tests/tests/text_baseline.rs` (ratchet 0/1/1).
+Next: stage 1 engine `novo-canvas::textlayout` (pure; reuse `declutter::Boxes` grid, `note_place::{RINGS,SLIDES}`), stress generator for
+the testers (terminals both sides, pitch 2.5 to 10 mm, rotations/mirror), QA scenario using scene dump `text_audit`.
+The `text.conflict` check is deferred to stage 2 (checks are model based).
+Traps: no stacked PRs; after READY do not push; cloud disk: CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0, test crates alone.
