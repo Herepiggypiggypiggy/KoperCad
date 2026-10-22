@@ -203,9 +203,9 @@ fn the_table_face_toggles_and_problems_are_in_words() {
     assert!(c.iter().any(|t| t.contains("guess")));
     // The pill's hover text names every problem, with the device tag.
     let hover = super::cabinet::problem_summary(&l, &name);
-    assert!(hover.contains("-K1: Overlaps -K2"), "{hover}");
+    assert!(hover.contains("-K1: overlaps -K2"), "{hover}");
     assert!(
-        hover.contains("-K3: Reaches past the usable plate"),
+        hover.contains("-K3: reaches past the usable plate"),
         "{hover}"
     );
     assert!(
@@ -222,6 +222,46 @@ fn the_table_face_toggles_and_problems_are_in_words() {
         super::cabinet::problem_summary(&empty, &name),
         "Click to list the problems."
     );
+}
+
+#[test]
+fn a_device_off_the_middle_of_its_rail_says_so_and_counts_as_a_problem() {
+    use novo_layout::state::CabinetLayout;
+    use novo_layout::{Placement, Plate, Rail, Size};
+    let mut l = CabinetLayout::new(Plate {
+        width: 300.0,
+        height: 300.0,
+        margin: 10.0,
+    });
+    l.rails = vec![Rail {
+        id: 3,
+        x: 20.0,
+        y: 100.0,
+        length: 250.0,
+        vertical: false,
+    }];
+    let on = |id: u64, y: f64| Placement {
+        id,
+        x: 20.0 + 60.0 * id as f64,
+        y,
+        rotated: false,
+        size: Size::from_part(Some(45.0), Some(90.0)),
+        clearance: None,
+        margins: Default::default(),
+        rail: Some(3),
+    };
+    // -K1 is centred on the rail line (y 100), -K2 has it on its top edge.
+    l.placements = vec![on(1, 55.0), on(2, 100.0)];
+    let name = |id: u64| format!("-K{id}");
+    assert!(super::cabinet::problem_lines(&l, 1, &name).is_empty());
+    let lines = super::cabinet::problem_lines(&l, 2, &name);
+    assert_eq!(
+        lines,
+        vec!["Sits 45 mm off the middle of its rail: drag it onto the rail"]
+    );
+    assert!(!l.report().is_clean());
+    let hover = super::cabinet::problem_summary(&l, &name);
+    assert!(hover.contains("-K2: sits 45 mm off the middle"), "{hover}");
 }
 
 #[test]
