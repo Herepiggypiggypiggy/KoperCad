@@ -2100,6 +2100,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-emc"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-layout",
+ "novo-routing",
+]
+
+[[package]]
 name = "novo-heatview"
 version = "0.1.0"
 dependencies = [

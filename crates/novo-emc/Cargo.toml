@@ -1,0 +1,14 @@
+[package]
+name = "novo-emc"
+description = "EMC rule engine: wire classes, geometric indices, analytic estimates and rules EMC-01..18 (design aid, never a compliance statement)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+novo-core.workspace = true
+novo-layout.workspace = true
+novo-routing.workspace = true
+
+[lints]
+workspace = true
