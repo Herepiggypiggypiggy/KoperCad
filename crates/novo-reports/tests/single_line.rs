@@ -6,7 +6,10 @@ use novo_reports::single_line::{self, SingleLineDiagram};
 use novo_reports::{
     LiveReports, PageSetup, Report, default_generated_pages, generated_page_spec, standard_reports,
 };
-use novo_tests::{BigSpec, big_project, distribution_board, distribution_board_wide};
+use novo_tests::{
+    BigSpec, big_project, distribution_board, distribution_board_wide,
+    distribution_board_with_signals,
+};
 
 fn page(doc: &mut Document) -> PageId {
     doc.transact("Single-line page", |tx| {
@@ -377,6 +380,35 @@ fn an_incomplete_check_says_what_is_missing() {
         }
     }
     assert!(seen > 0, "the fixture has breakers without curve or Icu");
+}
+
+#[test]
+fn lamps_and_sounders_are_listed_with_their_current_and_the_phase_voltage_is_explained() {
+    let mut doc = Document::default();
+    distribution_board_with_signals(&mut doc).unwrap();
+    let out = SingleLineDiagram.generate(doc.project());
+    let section = &out.sections[0];
+    let col = |key: &str| section.column(key).unwrap();
+    let row = |tag: &str| {
+        section
+            .rows
+            .iter()
+            .find(|r| r.cells[col("tag")].to_string() == tag)
+            .unwrap_or_else(|| panic!("{tag} not listed"))
+    };
+    assert_eq!(row("=A1+FLD-H1").cells[col("type")].to_string(), "Lamp");
+    assert_eq!(row("=A1+FLD-B1").cells[col("type")].to_string(), "Sounder");
+    assert_eq!(row("=A1+FLD-H1").cells[col("ib")].to_string(), "0.26");
+    assert!(
+        section
+            .rows
+            .iter()
+            .all(|r| r.cells[col("tag")].to_string() != "=A1+FLD-H9")
+    );
+    let all = drawn(&doc).join(" ");
+    assert!(all.contains("A load on one line conductor"), "{all}");
+    assert!(all.contains("Not drawn, lamps and sounders"), "{all}");
+    assert!(all.contains("Lamps and sounders are drawn"), "{all}");
 }
 
 #[test]

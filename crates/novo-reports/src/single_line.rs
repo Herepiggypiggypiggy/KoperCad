@@ -652,6 +652,17 @@ impl Canvas {
                 lead(self);
                 self.rect(cx, cy, 3.6, 4.0);
             }
+            Kind::Lamp => {
+                self.circle(cx, cy, 4.2);
+                self.line((cx - 3.0, cy - 3.0), (cx + 3.0, cy + 3.0), false);
+                self.line((cx - 3.0, cy + 3.0), (cx + 3.0, cy - 3.0), false);
+            }
+            Kind::Sounder => {
+                self.rect(cx - 2.0, cy, 3.0, 4.0);
+                self.line((cx - 0.5, cy - 2.0), (cx + 3.5, cy - 4.5), false);
+                self.line((cx - 0.5, cy + 2.0), (cx + 3.5, cy + 4.5), false);
+                self.line((cx + 3.5, cy - 4.5), (cx + 3.5, cy + 4.5), false);
+            }
             Kind::Drive | Kind::SoftStarter | Kind::PowerSupply => {
                 self.rect(cx, cy, 9.0, 8.0);
                 self.line((cx - 4.5, cy + 4.0), (cx + 4.5, cy - 4.0), false);
@@ -769,14 +780,26 @@ fn draw_box(c: &mut Canvas, sl: &SingleLine, node: &Node, cx: f64, y: f64, conti
     );
 }
 
+/// A voltage drop for the drawing: a figure that would print as 0 says it is
+/// small and not zero.
+fn percent(value: f64) -> String {
+    if value > 0.0 && value < 0.005 {
+        "<0.01".to_owned()
+    } else {
+        fmt(value)
+    }
+}
+
 fn link_lines(link: &Link) -> Vec<String> {
     let mut out = Vec::new();
     let section = match link.section_mm2.value {
         Some(s) => format!(
-            "{}x{} mm²{}",
+            "{}x{} mm²{}{}",
             link.poles.max(1),
             fmt(s),
-            mark(link.section_mm2.origin)
+            mark(link.section_mm2.origin),
+            // The neutral of a one-phase feeder is not counted: say so.
+            if link.poles == 1 { " (line)" } else { "" }
         ),
         None => "no cross-section".to_owned(),
     };
@@ -795,13 +818,13 @@ fn link_lines(link: &Link) -> Vec<String> {
         None => length,
     });
     if let Some(d) = link.drop_percent.value {
-        let mut s = format!("ΔU {} %{}", fmt(d), mark(link.drop_percent.origin));
+        let mut s = format!("ΔU {} %{}", percent(d), mark(link.drop_percent.origin));
         if let Some(t) = link.drop_total_percent.value
             && (t - d).abs() > 0.005
         {
             s.push_str(&format!(
                 " Σ {} %{}",
-                fmt(t),
+                percent(t),
                 mark(link.drop_total_percent.origin)
             ));
         }
@@ -964,6 +987,9 @@ fn legend(sl: &SingleLine) -> Vec<String> {
             || note.starts_with("A diversity factor is stated")
             || note.starts_with("Ignored, no factor applied")
             || note.starts_with("ΔU is calculated at power factor 1")
+            || note.starts_with("Lamps and sounders are drawn")
+            || note.starts_with("Not drawn, lamps and sounders")
+            || note.starts_with("A load on one line conductor")
             || note.starts_with("Ik is")
             || note.starts_with("Icu is checked")
             || note.starts_with("Short-circuit current is not carried")
