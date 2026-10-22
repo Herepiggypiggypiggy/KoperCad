@@ -216,6 +216,7 @@ const KNOWN_VERBS: &[&str] = &[
     "library",
     "shot",
     "wait",
+    "wait_s",
     "frame_stats",
     "resize",
     "click_text",
@@ -902,6 +903,14 @@ impl Ctx<'_> {
                 self.srv
                     .tool("wait", &json!({"frames": frames}))
                     .map(|_| ())
+            }
+            "wait_s" => {
+                // Real seconds, for work that runs on the wall clock (a
+                // solver on its own thread); `wait` counts frames, which
+                // pass faster in a small window.
+                let secs = num(1, "seconds")?.clamp(0.0, 300.0);
+                std::thread::sleep(std::time::Duration::from_secs_f64(secs));
+                self.srv.tool("wait", &json!({"frames": 4})).map(|_| ())
             }
             "frame_stats" => {
                 // `frame_stats [pan|zoom|none] [frames]`: how long frames take

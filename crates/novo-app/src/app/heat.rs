@@ -869,8 +869,16 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
                 heat_progress::sparkline(ui, &state.history);
             }
             None => {
+                // Meshing and building the flow model take a while before the
+                // first iteration reports: say so, and keep the bar moving.
+                ui.add(
+                    egui::ProgressBar::new(0.0)
+                        .desired_width(80.0)
+                        .animate(true)
+                        .text("preparing"),
+                );
                 ui.label(
-                    egui::RichText::new(format!("starting · {secs:.0} s"))
+                    egui::RichText::new(heat_progress::preparing_label(secs))
                         .small()
                         .color(t::TEXT_MUTED),
                 );

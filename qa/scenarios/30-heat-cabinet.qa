@@ -12,7 +12,9 @@ wait 4
 key Enter
 wait 60
 shot heat-running
-wait 400
+# Waits count frames but the solver runs on the wall clock, so wait real seconds. At 1366 the Heat toggle sits in More: the run must still report (it showed "starting" for good).
+wait_s 60
+expect "it "
 shot heat-result
 check_blank heat-result
 check_layout

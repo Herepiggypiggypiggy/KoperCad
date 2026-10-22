@@ -43,6 +43,11 @@ pub(super) fn label(p: &Progress, secs: f64) -> String {
     format!("{} · it {} · {secs:.0} s", p.fidelity.label(), p.iteration)
 }
 
+/// Before the first iteration reports: the mesh and flow model are being built.
+pub(super) fn preparing_label(secs: f64) -> String {
+    format!("meshing and setting up · {secs:.0} s")
+}
+
 /// Points of the sparkline in a `w` by `h` box: oldest left, lowest
 /// residual at the bottom.
 pub(super) fn spark_points(history: &[f64], w: f32, h: f32) -> Vec<(f32, f32)> {
