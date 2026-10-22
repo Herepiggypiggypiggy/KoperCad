@@ -11758,7 +11758,7 @@
     {
       "id": 266,
       "name": "PLC input card",
-      "description": "Four digital inputs on a 24 V PLC card with a push button, stop button, key switch and float switch",
+      "description": "24 V PLC card symbols (add the card via Add PLC card): four digital inputs with a push button, stop button, key switch and float switch",
       "parameters": [],
       "members": [
         {
