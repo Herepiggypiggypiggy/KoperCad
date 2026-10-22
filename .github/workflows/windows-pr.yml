@@ -6,7 +6,7 @@ name: Windows build check
 # and links every test binary, which is where Windows-only failures like the
 # LNK1104 on main 125412fa show up. It then runs the tests of the crates the
 # pull request changes (the whole workspace, minus novo-cfd, when it changes
-# anything outside crates/<name>/, such as Cargo.lock or a workflow), so a
+# anything outside crates/<name>/, such as Cargo.lock or a workflow; handoff/, docs/testing, docs/release-notes, docs/audit and top-level *.md files are ignored, no test reads them), so a
 # Windows-only test failure blocks the merge too. Doc tests and the other
 # crates' tests still run on main pushes, nightly and manual starts (ci.yml).
 # novo-cfd is left out as in ci.yml: its tests take over 35 minutes on Windows.
@@ -58,6 +58,9 @@ jobs:
           $crates = @()
           $all = $false
           foreach ($f in $files) {
+            # Files no test reads: handoff notes, three docs folders, top-level *.md.
+            # (assets/*.md, docs/design/ and docs/examples/ are read by tests.)
+            if ($f -match '^(handoff|docs/(testing|release-notes|audit))/' -or $f -match '^[^/]+\.md$') { continue }
             if ($f -match '^crates/([^/]+)/') { $crates += $Matches[1] } else { $all = $true }
           }
           $crates = @($crates | Where-Object { $_ -ne 'novo-cfd' } | Sort-Object -Unique)
@@ -65,7 +68,7 @@ jobs:
             Write-Host 'Changes outside crates/<name>/: testing the whole workspace (without novo-cfd).'
             cargo test --workspace --exclude novo-cfd --no-fail-fast --lib --bins --tests
           } elseif ($crates.Count -eq 0) {
-            Write-Host 'Only novo-cfd changed: its tests run on Linux (ci.yml), not here.'
+            Write-Host 'Only novo-cfd or notes changed: nothing to test here (novo-cfd tests run on Linux, ci.yml).'
             exit 0
           } else {
             Write-Host "Testing: $($crates -join ', ')"
