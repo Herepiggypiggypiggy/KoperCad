@@ -1582,7 +1582,7 @@ impl PageScene {
         item.labels = local
             .labels
             .iter()
-            .map(|l| l.transformed(&place).colored(style.color))
+            .map(|l| l.transformed(&place).colored(style.color).inside())
             .collect();
         item.snap_points = (0..sym.pins.len() as u16)
             .filter_map(|i| sym.pin_position(i))
