@@ -114,7 +114,8 @@ mod wires;
 pub use assembly::{AssemblyChecklist, BOX as ASSEMBLY_BOX};
 pub use bench::{
     BenchCut, FerruleCount, FerruleSize, FerruleStandard, FerruleTable, STANDARD_KEY, TICK_BOX,
-    bench_jobs, ends_without_ferrule, ferrule_counts, is_estimate, with_spares,
+    bench_jobs, ends_with_stated_processing, ends_without_ferrule, ferrule_counts, is_estimate,
+    with_spares,
 };
 pub use bom::BillOfMaterials;
 pub use counts::{WireSet, count_text, headline_count, wire_set_mismatch};
@@ -147,8 +148,9 @@ pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
 pub use toc::{PanelContents, TableOfContents};
 pub use wire_defaults::{SIZES_MM2, UnsetWires, WireDefaults, apply_wire_defaults, unset_wires};
 pub use wirecut::{
-    CableRun, FERRULE_KEY, JOB_COLUMNS, STRIP_LENGTH_KEY, StripBasis, WireCut, WireCutJob, WireEnd,
-    cable_runs, hookup_cut_mm, typical_strip_mm, wire_cut_csv, wire_cut_jobs, wire_cut_jobs_with,
+    CableRun, END_PROCESSING_KEY, FERRULE_KEY, JOB_COLUMNS, STRIP_LENGTH_KEY, StripBasis, WireCut,
+    WireCutJob, WireEnd, cable_runs, end_basis_text, hookup_cut_mm, typical_strip_mm, wire_cut_csv,
+    wire_cut_jobs, wire_cut_jobs_with,
 };
 pub use wires::WireList;
 

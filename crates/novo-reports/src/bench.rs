@@ -255,12 +255,23 @@ pub fn ferrule_counts(jobs: &[WireCutJob], standard: &FerruleStandard) -> Vec<Fe
     out
 }
 
+/// Wire ends that get a terminal or lug stated on the wire (`end_processing`)
+/// instead of a ferrule.
+pub fn ends_with_stated_processing(jobs: &[WireCutJob]) -> usize {
+    jobs.iter()
+        .flat_map(|j| [&j.end_a, &j.end_b])
+        .filter(|e| e.ferrule.is_none() && e.processing_basis == crate::StripBasis::Stated)
+        .count()
+}
+
 /// Wire ends that get no ferrule: `(unknown cross-section, switched off)`.
+/// An end whose terminal or lug is stated on the wire is neither: see
+/// [`ends_with_stated_processing`].
 pub fn ends_without_ferrule(jobs: &[WireCutJob]) -> (usize, usize) {
     let (mut unknown, mut off) = (0, 0);
     for j in jobs {
         for end in [&j.end_a, &j.end_b] {
-            if end.ferrule.is_none() {
+            if end.ferrule.is_none() && end.processing_basis != crate::StripBasis::Stated {
                 if j.cross_section_mm2.is_none() {
                     unknown += 1;
                 } else {
@@ -349,7 +360,8 @@ impl FerruleTable {
         }
 
         let (unknown, off) = ends_without_ferrule(jobs);
-        if unknown + off > 0 {
+        let stated = ends_with_stated_processing(jobs);
+        if unknown + off + stated > 0 {
             let mut skipped = Section::new(
                 "skipped",
                 "Wire ends without a ferrule",
@@ -372,6 +384,15 @@ impl FerruleTable {
                     vec![
                         Cell::text("Ferrule switched off on the wire (none)"),
                         Cell::Int(off as i64),
+                    ],
+                    Vec::new(),
+                );
+            }
+            if stated > 0 {
+                skipped.push(
+                    vec![
+                        Cell::text("Terminal or lug stated on the wire (not a ferrule)"),
+                        Cell::Int(stated as i64),
                     ],
                     Vec::new(),
                 );
@@ -572,6 +593,30 @@ impl BenchCut {
                 jobs.len()
             ));
         }
+        let mut ducts: BTreeMap<(usize, String), String> = BTreeMap::new();
+        for (name, place) in jobs.iter().flat_map(|j| j.track_ducts.iter()) {
+            ducts.insert((name.len(), name.clone()), place.clone());
+        }
+        if !ducts.is_empty() {
+            let list: Vec<String> = ducts
+                .iter()
+                .map(|((_, name), place)| format!("{name} = {place}"))
+                .collect();
+            notes.push(format!(
+                "Track names are the ducts of the wire production report (Duct fill), numbered in plan order: {}. Bundle B2 #3 is the third wire to lay in bundle 2; Seq is longest first within a bundle, a default order you can change if your shop lays the other way.",
+                list.join("; ")
+            ));
+        }
+        let unrouted = jobs
+            .iter()
+            .filter(|j| j.bundle.is_none() && j.cable.is_none())
+            .count();
+        if unrouted > 0 {
+            notes.push(format!(
+                "{unrouted} of {} wires are not routed through a duct: they have no bundle or track, and their ends A and B are the order the wire list names them, not a direction of current. Route them in the Cabinet view to bundle them.",
+                jobs.len()
+            ));
+        }
         let cores: Vec<&WireCutJob> = jobs.iter().filter(|j| on_cable(j)).collect();
         if !cores.is_empty() {
             let (n, verb) = if cores.len() == 1 {
@@ -650,9 +695,11 @@ impl BenchCut {
                     Column::new("route", "Route", 8.0).right(),
                     Column::new("ends", "+Ends", 6.0).right(),
                     Column::new("strip_a", "Strip A", 7.0).right(),
-                    Column::new("ferrule_a", "Ferr. A", 10.0),
+                    Column::new("ferrule_a", "End A", 10.0),
                     Column::new("strip_b", "Strip B", 7.0).right(),
-                    Column::new("ferrule_b", "Ferr. B", 10.0),
+                    Column::new("ferrule_b", "End B", 10.0),
+                    Column::new("bundle", "Bundle", 8.0),
+                    Column::new("track", "Track", 12.0),
                     Column::new("from", "From", 22.0),
                     Column::new("to", "To", 22.0),
                 ],
@@ -674,9 +721,11 @@ impl BenchCut {
                         mark(j.length_mm),
                         Cell::Number(j.cut_mm - j.length_mm),
                         j.end_a.strip_mm.into(),
-                        j.end_a.ferrule.clone().into(),
+                        j.end_a.sleeve_text().into(),
                         j.end_b.strip_mm.into(),
-                        j.end_b.ferrule.clone().into(),
+                        j.end_b.sleeve_text().into(),
+                        j.bundle_text().into(),
+                        Cell::text(j.track.clone()),
                         Cell::text(j.end_a.designation.clone()),
                         Cell::text(j.end_b.designation.clone()),
                     ],

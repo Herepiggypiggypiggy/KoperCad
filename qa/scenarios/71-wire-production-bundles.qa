@@ -1,0 +1,15 @@
+@title Wire production: bundle, track and end processing on the bench cut list
+@area Reports
+# Reports > Bench output > Cut list has Bundle (B2 #3) and Track columns; the wire production workbook and job file also carry Direction, Processing A/B, Seq and End basis. Wires that lie in no duct show "-" and a note says so.
+click_text "Open example"
+wait 20
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+expect "Bundle"
+expect "Track"
+scroll 350 500 -700
+wait 2
+shot cut-list
+check_layout
