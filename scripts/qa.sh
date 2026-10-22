@@ -51,9 +51,9 @@ if [ -z "${KOPERCAD_BIN_DIR:-}" ]; then
   if [ -f "$bin/kopercad.d" ]; then
     stale=$(sed -e ':a' -e '/\\$/N;s/\\\n//;ta' "$bin/kopercad.d" | sed 's/^[^:]*: //' | tr ' ' '\n' | while read -r f; do
       [ -n "$f" ] && [ -f "$f" ] && [ "$f" -nt "$bin/kopercad" ] && { echo "$f"; break; }
-    done)
+    done) || true
   else
-    stale=$(find crates/*/src crates/*/build.rs crates/*/Cargo.toml assets/lessons Cargo.lock -type f -newer "$bin/kopercad" -print -quit 2>/dev/null)
+    stale=$(find crates/*/src crates/*/build.rs crates/*/Cargo.toml assets/lessons Cargo.lock -type f -newer "$bin/kopercad" -print -quit 2>/dev/null) || true
   fi
   if [ -n "$stale" ]; then
     echo "qa.sh: REFUSING to run: $bin/kopercad is older than $stale, so the pictures would show old code." >&2
