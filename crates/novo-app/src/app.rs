@@ -933,7 +933,7 @@ impl NovoApp {
                     dialog = dialog.set_directory(dir);
                 }
                 if let Some(path) = dialog.pick_file() {
-                    self.open_salvaged(&path);
+                    self.recover_path(&path);
                 }
             }
             Leaving::OpenPath(path) => self.open_path(&path),
@@ -1020,6 +1020,31 @@ impl NovoApp {
                     self.settings.forget_recent(path);
                 }
                 self.message(Level::Error, describe_error("open", path, &e));
+            }
+        }
+    }
+
+    /// The Recover command: a file that reads fine opens as itself (nothing is
+    /// written, nothing is called damaged); only a file that fails as corrupt
+    /// goes to salvage. Other failures (not found, locked) report as in Open.
+    fn recover_path(&mut self, path: &Path) {
+        match novo_storage::ProjectFile::read(path) {
+            Err(novo_storage::StorageError::Corrupt { .. }) => self.open_salvaged(path),
+            Err(_) => self.open_path(path),
+            Ok(_) => {
+                self.open_path(path);
+                if self.project_path.as_deref() == Some(path) {
+                    let name = path.file_name().map_or_else(
+                        || path.display().to_string(),
+                        |n| n.to_string_lossy().into_owned(),
+                    );
+                    self.message(
+                        Level::Info,
+                        format!(
+                            "{name} is not damaged, so it was opened as it is. No copy was written."
+                        ),
+                    );
+                }
             }
         }
     }
@@ -2132,7 +2157,14 @@ impl NovoApp {
                 // Quiet, not a headline: most people never need it, and the ones
                 // who do look for the word "recover".
                 let recover = ui
-                    .add(egui::Button::new("File damaged? Recover it…").frame(false))
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new("File damaged? Recover it…")
+                                .underline()
+                                .color(ui.visuals().hyperlink_color),
+                        )
+                        .frame(false),
+                    )
                     .on_hover_text(
                         "Reads what can be read from a damaged project and opens it as a \
                          recovered copy beside it. The damaged file is not changed.",

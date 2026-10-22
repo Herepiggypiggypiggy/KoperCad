@@ -97,3 +97,36 @@ fn recovering_a_file_with_nothing_readable_says_so_and_changes_nothing() {
         b"this is not a project file at all"
     );
 }
+
+#[test]
+fn recovering_a_healthy_file_opens_it_as_itself_and_writes_no_copy() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut d, path, cut) = damaged_project(dir.path());
+    // A healthy project next to the damaged one.
+    let healthy = dir.path().join("fine.novo");
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    assert!(d.app.save_to(&healthy));
+    d.app.run(&ctx, Action::CloseProject);
+    d.frame();
+    let before = std::fs::read(&healthy).unwrap();
+
+    d.app.recover_path(&healthy);
+    d.frame();
+    assert_eq!(d.app.project_path.as_deref(), Some(healthy.as_path()));
+    assert!(!dir.path().join("fine.recovered.novo").exists());
+    let texts: Vec<String> = d.app.messages().iter().map(|m| m.text.clone()).collect();
+    assert!(
+        texts.iter().any(|t| t.contains("is not damaged")),
+        "{texts:?}"
+    );
+    assert!(!texts.iter().any(|t| t.contains("is damaged")), "{texts:?}");
+    d.app.run(&ctx, Action::CloseProject);
+    assert_eq!(std::fs::read(&healthy).unwrap(), before, "file untouched");
+
+    // The damaged one still goes to salvage.
+    d.app.recover_path(&path);
+    d.frame();
+    assert!(dir.path().join("plant.recovered.novo").exists());
+    assert_eq!(std::fs::read(&path).unwrap(), cut);
+}

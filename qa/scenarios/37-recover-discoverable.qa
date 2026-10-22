@@ -22,6 +22,9 @@ wait 4
 click_text File #1
 wait 6
 shot menu-file
-expect "Open example"
+move 110 412
+wait 6
+shot menu-open-submenu
+expect "Recover a damaged project"
 key Escape
 check_layout
