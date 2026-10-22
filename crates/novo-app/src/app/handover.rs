@@ -11,6 +11,7 @@
 //! | `7 Commissioning record.pdf` | checks, punch items and sign-offs, when commissioning started |
 //! | `8 Safety functions.pdf` | when safety functions are defined |
 //! | `9 Lists.xlsx` | parts, devices, wires, terminals and cables for Excel |
+//! | `10 Review notes.pdf` | the review notes, open and resolved, when there are any |
 //! | `Workshop/` | the workshop pack, when there is a mounting plate or a wire |
 //!
 //! Every file reuses the export that already exists for it. A file with
@@ -76,7 +77,7 @@ fn folder_name(stem: &str, date: &str) -> String {
 
 /// The fixed names of the package's own files. A rerun removes the ones it
 /// no longer writes, so an old file never contradicts the new contents page.
-const OWN_FILES: [&str; 10] = [
+const OWN_FILES: [&str; 11] = [
     "0 Contents.pdf",
     "1 Drawing set.pdf",
     "2 Revisions.pdf",
@@ -87,6 +88,7 @@ const OWN_FILES: [&str; 10] = [
     "7 Commissioning record.pdf",
     "8 Safety functions.pdf",
     "9 Lists.xlsx",
+    "10 Review notes.pdf",
 ];
 
 fn is_own_file(name: &str) -> bool {
@@ -263,6 +265,8 @@ impl NovoApp {
             scope: "all".into(),
             ranges: String::new(),
             checks_appendix: true,
+            // The notes have a file of their own below.
+            review_notes: false,
             ..self.settings.pdf_choice.clone()
         };
         let print = (self.settings.print_choice != PrintChoice::default())
@@ -359,6 +363,25 @@ impl NovoApp {
             &mut files,
             "9 Lists.xlsx",
             "Parts, devices, wires, terminals and cables for Excel",
+            r,
+        );
+
+        // 10. Review notes, when anyone left one.
+        self.ensure_notes_loaded();
+        let notes_table = {
+            let project = self.backend.document()?.project();
+            self.wb.notes.store().filter(|s| !s.is_empty()).map(|s| {
+                novo_revisions::notes_table(project, s, &novo_revisions::NoteFilter::default())
+            })
+        };
+        let r = match &notes_table {
+            Some(table) => self.handover_pdf(&folder.join("10 Review notes.pdf"), &[table], &date),
+            None => Err("no review notes".to_owned()),
+        };
+        note(
+            &mut files,
+            "10 Review notes.pdf",
+            "Comments left on pages and objects, open and resolved",
             r,
         );
 

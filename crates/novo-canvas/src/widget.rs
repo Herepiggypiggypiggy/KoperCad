@@ -149,6 +149,8 @@ pub struct CanvasStyle {
     pub removed: Color,
     /// Text of mark hints and hover notes.
     pub mark_text: Color,
+    /// The speech bubble of a review note.
+    pub note: Color,
 }
 
 impl Default for CanvasStyle {
@@ -175,6 +177,7 @@ impl Default for CanvasStyle {
             modified: Color::rgb(214, 150, 40),
             removed: Color::rgba(200, 60, 60, 150),
             mark_text: Color::rgb(40, 40, 45),
+            note: Color::rgb(60, 110, 190),
         }
     }
 }
@@ -1252,6 +1255,23 @@ impl CanvasView {
                                 c32(st.warning),
                                 egui::Stroke::NONE,
                             ));
+                        }
+                        MarkKind::Note => {
+                            // A bubble with a tail at the bottom left.
+                            let r = egui::Rect::from_center_size(
+                                c + egui::vec2(0.0, -1.0),
+                                egui::vec2(h * 2.0 + 2.0, h * 1.5 + 2.0),
+                            );
+                            painter.add(egui::Shape::convex_polygon(
+                                vec![
+                                    c + egui::vec2(-h * 0.9, h * 0.6),
+                                    c + egui::vec2(-h * 0.9, h * 1.4),
+                                    c + egui::vec2(-h * 0.2, h * 0.6),
+                                ],
+                                c32(st.note),
+                                egui::Stroke::NONE,
+                            ));
+                            painter.rect_filled(r, 2.0, c32(st.note));
                         }
                         MarkKind::Error => {
                             let pts = (0..8)

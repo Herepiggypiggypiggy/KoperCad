@@ -211,6 +211,8 @@ pub(crate) struct Workbench {
     pub(super) changes_closed: bool,
     /// Commissioning mode's data and panel state, once opened.
     pub(super) commissioning: Option<super::commissioning::CommissioningMode>,
+    /// The Review notes panel and the project's notes.
+    pub(super) notes: super::review_notes::NotesUi,
     /// The background drawing last handed to the canvas: page, project
     /// revision and the key it has.
     /// The DXF background panel, while open; inside, the values being
@@ -369,6 +371,7 @@ impl Default for Workbench {
             pdf_dir: None,
             designer: None,
             commissioning: None,
+            notes: Default::default(),
             underlay_seen: None,
             aml_import: None,
             parts_bulk: None,
@@ -465,6 +468,9 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "sim.add_fault",
     "view.changes",
     "view.commissioning",
+    "notes.panel",
+    "notes.add",
+    "notes.next",
     "check.problems",
     "check.calculations",
     "check.electrical_inputs",
@@ -1296,6 +1302,9 @@ impl NovoApp {
                 self.switch_workspace(Workspace::Schematic);
             }
             "view.commissioning" => self.switch_workspace(Workspace::Commissioning),
+            "notes.panel" => self.toggle_notes_panel(),
+            "notes.add" => self.begin_note(),
+            "notes.next" => self.next_note(),
             "check.problems" => self.show_issues(false),
             "check.calculations" => self.toggle_calculations(),
             "check.electrical_inputs" => self.toggle_electrical(),
@@ -1773,6 +1782,7 @@ impl NovoApp {
                 .apply(items.iter().copied(), SelectOp::Replace);
             view.canvas.reveal(items);
         }
+        self.notes_after_canvas_frame();
         self.highlight_related();
     }
 
@@ -1789,6 +1799,7 @@ impl NovoApp {
         }
         list.extend(self.changes_marks(page));
         list.extend(self.commissioning_marks(page));
+        list.extend(self.notes_marks(page));
         let hidden = !self.wb.marks;
         // Cross references are printed drawing content: they go into the
         // page scene, like the tags, so the PDF shows them the same way.

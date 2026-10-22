@@ -183,6 +183,16 @@ pub trait ProjectBackend {
     /// Keeps the commissioning document at once.
     fn set_commissioning_json(&mut self, _json: &str) {}
 
+    /// The review notes kept in the project file, as JSON. Like the
+    /// commissioning data they are not part of the model: not undone, and
+    /// they never change the drawing's revision counter.
+    fn review_notes_json(&self) -> Option<String> {
+        None
+    }
+
+    /// Keeps the review notes at once.
+    fn set_review_notes_json(&mut self, _json: &str) {}
+
     /// Issues a revision: the model command and the snapshot kept in the
     /// project file, as one undo step (DESIGN §7). The caller passes
     /// [`novo_revisions::Issued::changes`] on to the views.
@@ -558,6 +568,22 @@ impl ProjectBackend for StorageBackend {
         }
     }
 
+    fn review_notes_json(&self) -> Option<String> {
+        self.session
+            .as_ref()?
+            .sidecar(novo_revisions::NOTES_SIDECAR_KEY)
+            .ok()
+            .flatten()
+    }
+
+    fn set_review_notes_json(&mut self, json: &str) {
+        if let Some(session) = self.session.as_mut()
+            && let Err(e) = session.put_sidecar(novo_revisions::NOTES_SIDECAR_KEY, json)
+        {
+            log::warn!("could not keep the review notes: {e}");
+        }
+    }
+
     fn issue_revision(
         &mut self,
         index: Option<String>,
@@ -815,6 +841,7 @@ const COMMISSIONING_KEY: &str = "commissioning";
 pub struct MemoryBackend {
     document: Option<Document>,
     commissioning: Option<String>,
+    review_notes: Option<String>,
 }
 
 impl ProjectBackend for MemoryBackend {
@@ -824,6 +851,14 @@ impl ProjectBackend for MemoryBackend {
 
     fn set_commissioning_json(&mut self, json: &str) {
         self.commissioning = Some(json.to_owned());
+    }
+
+    fn review_notes_json(&self) -> Option<String> {
+        self.review_notes.clone()
+    }
+
+    fn set_review_notes_json(&mut self, json: &str) {
+        self.review_notes = Some(json.to_owned());
     }
 
     fn new_project(&mut self, name: &str) -> Result<(), BackendError> {

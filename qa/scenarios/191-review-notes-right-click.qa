@@ -1,0 +1,19 @@
+@title Review notes: right click on empty canvas adds a note at that spot
+@area Schematic
+# The context menu has Add review note...; the note is about the spot and shows a bubble there.
+click_text "Open example"
+wait 20
+click 640 420 right
+wait 6
+expect "Add review note"
+shot context-menu
+click_text "Add review note…"
+wait 8
+expect "This spot"
+text Room for a second contactor here
+wait 4
+click_text "Add as Me"
+wait 8
+expect "A spot on page"
+shot spot-note-bubble
+check_layout

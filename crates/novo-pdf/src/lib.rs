@@ -91,9 +91,61 @@ pub struct PdfOptions {
     pub changed_pages: BTreeSet<PageId>,
     /// Plain text pages printed after the drawing (design checks report).
     pub appendix: Option<Appendix>,
+    /// Further text pages after `appendix` (the review notes), each starting
+    /// on a page of its own.
+    pub extra_appendices: Vec<Appendix>,
+    /// Numbered markers printed on a page, over the drawing (review notes).
+    pub markers: BTreeMap<PageId, Vec<PdfMarker>>,
     /// Paper, scale, margins and page numbers. `None` prints every sheet on
     /// a page of its own size at 100 %.
     pub print: Option<PrintSetup>,
+}
+
+/// A numbered marker over the drawing, like a redline bubble: filled while
+/// the matter it stands for is open, a ring once it is resolved.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PdfMarker {
+    /// The text in the bubble (`N3`).
+    pub label: String,
+    /// Centre on the page, mm.
+    pub at: (f32, f32),
+    pub resolved: bool,
+}
+
+/// Radius of a marker bubble, mm.
+const MARKER_RADIUS_MM: f32 = 3.4;
+
+/// The primitives and label of one marker.
+fn marker_ops(marker: &PdfMarker) -> Vec<DrawOp> {
+    let at = Vec2::new(marker.at.0, marker.at.1);
+    let open = Color::rgb(200, 30, 30);
+    let done = Color::rgb(110, 110, 110);
+    let (ink, text) = if marker.resolved {
+        (done, done)
+    } else {
+        (open, Color::WHITE)
+    };
+    let disc = Shape::circle(at, MARKER_RADIUS_MM);
+    let bubble = if marker.resolved {
+        Primitive::stroked(disc, Stroke::world(0.5, ink))
+    } else {
+        Primitive::filled(disc, ink)
+    };
+    vec![
+        DrawOp::Primitive(bubble),
+        DrawOp::Label(Label {
+            pos: at,
+            text: marker.label.clone(),
+            height: 2.4,
+            color: text,
+            anchor: Anchor::Center,
+            rotation: 0.0,
+            keep_color: true,
+            bold: true,
+            priority: Default::default(),
+            inside: false,
+        }),
+    ]
 }
 
 /// Text printed on A4 pages after the drawing: a title, then lines, wrapped
@@ -170,6 +222,8 @@ impl Default for PdfOptions {
             title_revisions: BTreeMap::new(),
             changed_pages: BTreeSet::new(),
             appendix: None,
+            extra_appendices: Vec::new(),
+            markers: BTreeMap::new(),
             print: None,
         }
     }
@@ -393,6 +447,13 @@ pub fn draw_sheets(
             }
             ops.extend(item.labels.iter().cloned().map(DrawOp::Label));
         }
+        if sheet.generated.is_none()
+            && let Some(markers) = options.markers.get(&page.id)
+        {
+            for marker in markers {
+                ops.extend(marker_ops(marker));
+            }
+        }
         let mut links = Vec::new();
         if options.links {
             for (item, _) in &items {
@@ -414,7 +475,7 @@ pub fn draw_sheets(
             links,
         });
     }
-    if let Some(appendix) = &options.appendix {
+    for appendix in options.appendix.iter().chain(&options.extra_appendices) {
         for lines in appendix_pages(appendix) {
             let ops = lines
                 .iter()

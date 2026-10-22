@@ -9,6 +9,7 @@ mod compare;
 mod fields;
 mod issue;
 mod list;
+mod notes;
 mod report;
 mod restore;
 mod sheets;
@@ -24,6 +25,12 @@ pub use issue::{
     issue_revision_noted,
 };
 pub use list::{ChangeRow, change_list, list_of};
+pub use notes::{
+    Counts as NoteCounts, Line as NoteLine, Located, Marker, NOTES_REPORT_ID, NoteError,
+    NoteFilter, NoteId, NoteStatus, NoteTarget, Reply, ReviewNote, ReviewNotes,
+    SIDECAR_KEY as NOTES_SIDECAR_KEY, Spot, appendix_lines as notes_appendix_lines,
+    locate as locate_note, notes_table, pdf_markers as notes_pdf_markers,
+};
 pub use report::{REPORT_ID, change_report};
 pub use restore::{RestoreError, RestoreScope, Restored, preview, restore};
 pub use sheets::{SheetChange, SheetChangeKind, changed_sheet_fingerprints, changed_sheets};

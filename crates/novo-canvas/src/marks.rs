@@ -29,6 +29,9 @@ pub enum MarkKind {
     Modified,
     /// Changes mode: a dashed ghost where something was removed.
     Removed,
+    /// A review note on the object or spot: a speech bubble at the bottom
+    /// right.
+    Note,
 }
 
 impl MarkKind {
@@ -36,7 +39,7 @@ impl MarkKind {
     pub fn is_glyph(self) -> bool {
         matches!(
             self,
-            MarkKind::Warning | MarkKind::Error | MarkKind::Override
+            MarkKind::Warning | MarkKind::Error | MarkKind::Override | MarkKind::Note
         )
     }
 
@@ -156,6 +159,7 @@ pub fn layout(marks: &Marks, scene: &Scene, view: &Viewport) -> Vec<Placed> {
         if m.kind.is_glyph() {
             let pos = match m.kind {
                 MarkKind::Override => Vec2::new(rect.min.x, rect.min.y),
+                MarkKind::Note => Vec2::new(rect.max.x, rect.max.y),
                 _ => Vec2::new(rect.max.x, rect.min.y),
             };
             let key = (

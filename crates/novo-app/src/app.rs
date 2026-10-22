@@ -192,6 +192,7 @@ mod project_settings;
 mod protection;
 mod reports;
 mod reports_view;
+mod review_notes;
 mod revisions;
 mod safety;
 mod safety_calc;
@@ -367,6 +368,8 @@ mod read_only_tests;
 mod recover_tests;
 #[cfg(test)]
 mod reopen_fit_tests;
+#[cfg(test)]
+mod review_notes_tests;
 #[cfg(test)]
 mod route_all_tests;
 #[cfg(test)]
@@ -1231,6 +1234,8 @@ impl NovoApp {
         self.wb.recovered = None;
         self.wb.field.close();
         self.wb.commissioning = None;
+        // The notes belong to the project they are kept in.
+        self.wb.notes = Default::default();
         self.wb.sheet = 0;
         // Build mode takes the whole canvas and the output windows show the old
         // project's numbers: none may sit over the new project (or a lesson card).
@@ -1557,6 +1562,7 @@ impl NovoApp {
             self.tour_watch(&ctx);
             self.walkthrough_card(&ctx, canvas_rect);
             self.changes_card(&ctx, canvas_rect);
+            self.notes_panel(&ctx, canvas_rect);
         }
         self.learn_watch(&ctx);
         self.learn_step(&ctx);

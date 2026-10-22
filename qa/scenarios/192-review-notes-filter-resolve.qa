@@ -1,0 +1,43 @@
+@title Review notes: resolve, reply, reopen and filter the list
+@area Schematic
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text add review note
+wait 6
+key Enter
+wait 10
+text First note
+click_text "Add as Me"
+wait 6
+key ctrl+k
+wait 4
+text add review note
+wait 6
+key Enter
+wait 10
+text Second note
+click_text "Add as Me"
+wait 6
+expect "Open 2"
+shot two-open
+click_text "Resolve" Button #1
+wait 6
+expect "Open 1"
+expect "Resolved 1"
+click_text "Resolved 1"
+wait 6
+expect "Reopen"
+expect "Resolved by Me"
+shot resolved-list
+click_text "Reply"
+wait 4
+text Done in the template
+click_text "Reply" Button
+wait 6
+expect "Open 2"
+click_text "All 2"
+wait 4
+shot all-notes
+check_layout

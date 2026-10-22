@@ -72,3 +72,55 @@ fn an_appendix_adds_pages_after_the_drawing() {
     // 120 lines at 4.6 mm on A4 with 15 mm margins: 58 a page, three pages.
     assert_eq!(pdf.get_pages().len(), 3);
 }
+
+#[test]
+fn review_note_markers_print_on_their_page_and_a_second_appendix_follows_the_first() {
+    use novo_pdf::{Appendix, AppendixLine, PdfMarker};
+    let mut doc = Document::default();
+    motor_starter(&mut doc).expect("fixture builds");
+    let first = doc.project().pages_in_order()[0].id;
+    let options = PdfOptions {
+        markers: BTreeMap::from([(
+            first,
+            vec![
+                PdfMarker {
+                    label: "N7".into(),
+                    at: (60.0, 40.0),
+                    resolved: false,
+                },
+                PdfMarker {
+                    label: "N8".into(),
+                    at: (60.0, 60.0),
+                    resolved: true,
+                },
+            ],
+        )]),
+        appendix: Some(Appendix {
+            title: "Design checks".into(),
+            lines: vec![AppendixLine::plain("a problem")],
+        }),
+        extra_appendices: vec![Appendix {
+            title: "Review notes".into(),
+            lines: vec![AppendixLine::bold("1 note: 1 open, 0 resolved")],
+        }],
+        ..Default::default()
+    };
+    let pdf = parse(&export_pdf(doc.project(), &options).unwrap());
+    let ids: Vec<_> = pdf.get_pages().into_values().collect();
+    assert_eq!(
+        ids.len(),
+        4,
+        "two drawing pages, then the checks, then the notes"
+    );
+    let page = |i: usize| String::from_utf8_lossy(&pdf.get_page_content(ids[i])).into_owned();
+    assert!(
+        page(0).contains("(N7) Tj") && page(0).contains("(N8) Tj"),
+        "{}",
+        page(0)
+    );
+    assert!(!page(1).contains("(N7)"), "markers stay on their own page");
+    assert!(page(3).contains("1 note: 1 open"), "{}", page(3));
+    let toc = pdf.get_toc().expect("outline");
+    let titles: Vec<&str> = toc.toc.iter().map(|t| t.title.as_str()).collect();
+    assert_eq!(titles.last(), Some(&"Review notes"));
+}
