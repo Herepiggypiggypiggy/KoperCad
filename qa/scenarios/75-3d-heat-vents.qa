@@ -57,9 +57,15 @@ check_layout
 wait_s 30
 click_text Cancel
 wait_s 5
-click_text "1  Filter fan, in the door"
-wait 10
 shot after-cancel
+expect "at free air; this run moves about"
+move 170 560
+wait 5
+scroll 170 560 -200
+wait 10
+shot operating-point
+scroll 170 560 200
+wait 10
 click_text "Cooling selection"
 wait 10
 click_text "40.0 °C"

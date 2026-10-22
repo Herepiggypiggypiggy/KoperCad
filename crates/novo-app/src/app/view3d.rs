@@ -625,7 +625,11 @@ impl NovoApp {
                     frame: scene.frame,
                 },
                 &vent_flows,
-                self.cabinet.heat.settings.selected,
+                self.cabinet
+                    .heat
+                    .settings
+                    .hovered
+                    .or(self.cabinet.heat.settings.selected),
             ),
             _ => Vec::new(),
         };
@@ -956,6 +960,9 @@ impl NovoApp {
                         .fit(scene, ui.input(|i| i.time), options.reduced_motion);
                 }
             }
+        } else {
+            // A closed panel marks nothing in the cabinet.
+            self.cabinet.heat.settings.hovered = None;
         }
         if let Some(text) = empty_hint {
             ui.painter().text(
