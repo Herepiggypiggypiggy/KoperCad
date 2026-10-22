@@ -1197,6 +1197,7 @@ impl NovoApp {
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
         // The openings of the Heat panel belong to the project's enclosure.
+        self.cabinet.heat.settings.load(Vec::new());
         self.cabinet.heat.settings.stored = None;
         // The live view, an open drawer and a preview belong to the project
         // they were opened on; a lesson (or any project) starts clean.

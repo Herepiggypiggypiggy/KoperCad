@@ -53,6 +53,10 @@ impl super::NovoApp {
     /// once a frame before the 3D view reads either: a change made in the
     /// panel is written when the gesture ends (one undo step in the project);
     /// a change made to the project (opened, undone there) is read back.
+    /// Driven by the 3D view (called when it is drawn): a change made on the
+    /// panel is written when the gesture ends, and a project that changed under
+    /// the panel (opened, undone, another enclosure) is read back. The project
+    /// is the truth for an enclosure the panel has not read yet.
     pub(super) fn sync_openings(&mut self, ctx: &eframe::egui::Context) {
         // A drag or a typed value is one step; it ends when nothing is held.
         if !ctx.input(|i| i.pointer.any_down()) && ctx.memory(|m| m.focused().is_none()) {
