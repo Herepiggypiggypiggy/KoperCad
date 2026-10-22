@@ -1,0 +1,8 @@
+@title Learn: the topic list on the left shows every topic at 1366x768, none under the buttons
+@area Learn
+# Audit finding (PLC lesson QA): the sixth and seventh topic were cut off and read as drawn over Reload.
+click_text "Learn…"
+wait 15
+expect "Machines"
+shot learn-rail
+check_layout

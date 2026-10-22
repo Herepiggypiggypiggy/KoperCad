@@ -21,6 +21,8 @@ use crate::theme::ui_palette;
 /// row of chips above the content.
 const RAIL_W: f32 = 200.0;
 const WIDE: f32 = 720.0;
+/// Below this height the rail packs its rows closer.
+const RAIL_TIGHT: f32 = 520.0;
 /// Below this width the cards stack in one column instead of two.
 const TWO_COLUMNS: f32 = 560.0;
 const LEVELS: [Level; 3] = [Level::Beginner, Level::Intermediate, Level::Advanced];
@@ -134,11 +136,15 @@ impl NovoApp {
                     egui::vec2(RAIL_W, height),
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| {
+                        // A rail that still overflows shows a solid bar, so a cut
+                        // topic does not look like it is not there.
+                        ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
+                        let tight = height < RAIL_TIGHT;
                         egui::ScrollArea::vertical()
                             .id_salt("suite_rail")
                             .max_height(height)
                             .auto_shrink([false, false])
-                            .show(ui, |ui| self.suite_rail(ui));
+                            .show(ui, |ui| self.suite_rail(ui, tight));
                     },
                 );
                 ui.add_space(4.0);
@@ -247,17 +253,19 @@ impl NovoApp {
 
     // ---- the rail ----------------------------------------------------
 
-    fn suite_rail(&mut self, ui: &mut egui::Ui) {
+    /// `tight` packs the rows closer so all eleven fit a 1366x768 window.
+    fn suite_rail(&mut self, ui: &mut egui::Ui, tight: bool) {
+        let (gap, pad) = if tight { (4.0, 6.0) } else { (10.0, 12.0) };
         let lang = self.learn.lang;
         let drafts = self.learn.show_drafts;
         let current = self.suite_section();
         let width = ui.available_width();
         let home = self.learn.say("suite_home");
-        if rail_item(ui, width, current == Section::Home, &home, None) {
+        if rail_item(ui, width, pad, current == Section::Home, &home, None) {
             self.go(Section::Home);
         }
         let paths = self.learn.catalog.paths.clone();
-        ui.add_space(10.0);
+        ui.add_space(gap);
         section_label(ui, &self.learn.say("suite_paths"));
         ui.add_space(2.0);
         for path in &paths {
@@ -270,12 +278,12 @@ impl NovoApp {
             }
             let on = current == Section::Path(path.id.clone());
             let count = format!("{}/{}", sum.done, sum.total);
-            if rail_item(ui, width, on, path.title(lang), Some(&count)) {
+            if rail_item(ui, width, pad, on, path.title(lang), Some(&count)) {
                 self.go(Section::Path(path.id.clone()));
             }
         }
         let tracks = self.learn.catalog.tracks.clone();
-        ui.add_space(10.0);
+        ui.add_space(gap);
         section_label(ui, &self.learn.say("suite_topics"));
         ui.add_space(2.0);
         for track in &tracks {
@@ -288,7 +296,7 @@ impl NovoApp {
             }
             let on = current == Section::Topic(track.id.clone());
             let count = format!("{}/{}", sum.done, sum.total);
-            if rail_item(ui, width, on, track.title(lang), Some(&count)) {
+            if rail_item(ui, width, pad, on, track.title(lang), Some(&count)) {
                 self.go(Section::Topic(track.id.clone()));
             }
         }
@@ -998,6 +1006,7 @@ impl NovoApp {
 fn rail_item(
     ui: &mut egui::Ui,
     width: f32,
+    pad: f32,
     selected: bool,
     label: &str,
     count: Option<&str>,
@@ -1015,7 +1024,7 @@ fn rail_item(
         },
         (width - 16.0 - count_w).max(40.0),
     );
-    let height = galley.size().y + 12.0;
+    let height = galley.size().y + pad;
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, label)
