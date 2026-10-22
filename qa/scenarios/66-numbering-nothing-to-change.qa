@@ -1,0 +1,19 @@
+@title Wire numbering window: the Number button is disabled when there is nothing to change
+@area Schematic
+@sizes 1366x768 1920x1080
+# Number every wire first; the window then has nothing left to do and the button must look disabled.
+click_text "Open example"
+wait 20
+key ctrl+k
+text "number wires"
+wait 5
+key Enter
+wait 10
+key ctrl+k
+text "wire numbering"
+wait 5
+key Enter
+wait 10
+expect "Number"
+shot numbering-nothing-to-change
+check_layout
