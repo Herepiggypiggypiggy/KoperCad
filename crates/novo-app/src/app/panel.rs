@@ -34,8 +34,6 @@ const MIN_HEIGHT: f32 = 120.0;
 const DIALOG_MIN_WIDTH: f32 = 380.0;
 /// Width of the card that parks in the bottom right corner (the lesson card).
 pub(super) const CORNER_CARD_WIDTH: f32 = 316.0;
-/// Below this width a dialog keeps clear of the parked corner card.
-const NARROW_SCREEN: f32 = 1200.0;
 
 /// Which end of the canvas a panel starts at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -332,17 +330,15 @@ pub(super) fn dialog<'a>(
     // egui derives the window's id from `Some(title text)`; `esc` reads it
     // back. The test `escape_closes_the_dialog_on_top` catches a change.
     ctx.data_mut(|d| d.insert_temp(pending_id(), egui::Id::new(Some(title.text()))));
-    let mut screen = ctx.content_rect().shrink(MARGIN);
-    // On a narrow screen a dialog stays left of the parked corner card
-    // instead of opening under it.
-    if reserved_bottom_right(ctx) > 0.0 && screen.width() < NARROW_SCREEN {
-        screen.max.x =
-            (screen.max.x - CORNER_CARD_WIDTH - MARGIN).max(screen.min.x + DIALOG_MIN_WIDTH);
+    let full = ctx.content_rect().shrink(MARGIN);
+    let size = [size[0] * grow(full.width()), size[1] * grow(full.width())];
+    let mut screen = full;
+    // A dialog stays left of the parked corner card, so it does not open over
+    // the card (Protection at 1366 covered it); one too wide for that is
+    // capped at what is left of the screen.
+    if reserved_bottom_right(ctx) > 0.0 {
+        screen.max.x = (full.max.x - CORNER_CARD_WIDTH - MARGIN).max(full.min.x + DIALOG_MIN_WIDTH);
     }
-    let size = [
-        size[0] * grow(screen.width()),
-        size[1] * grow(screen.width()),
-    ];
     let width = size[0].max(DIALOG_MIN_WIDTH).min(screen.width());
     let window = egui::Window::new(title)
         .resizable(true)
@@ -803,6 +799,34 @@ mod tests {
         assert!(open, "stays open without a key");
         dialog_frame(&ctx, &mut open, true);
         assert!(!open, "Escape closes it");
+    }
+
+    #[test]
+    fn a_wide_dialog_stays_left_of_the_parked_corner_card() {
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1366.0, 768.0));
+        reserve_bottom_right(&ctx, 300.0);
+        let mut right = 0.0;
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    ..Default::default()
+                },
+                |ctx| {
+                    let shown = dialog(ctx, "Wide test", [1300.0, 0.0]).show(ctx, |ui| {
+                        ui.label("content");
+                    });
+                    right = shown.map_or(0.0, |r| r.response.rect.max.x);
+                },
+            );
+            out.textures_delta.clear();
+        }
+        assert!(right > 0.0, "the dialog is shown");
+        assert!(
+            right <= screen.max.x - CORNER_CARD_WIDTH,
+            "the dialog ends at {right}, under the corner card"
+        );
     }
 
     #[test]

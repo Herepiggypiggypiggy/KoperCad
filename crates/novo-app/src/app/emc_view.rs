@@ -255,7 +255,9 @@ pub(super) fn paint_badges(
             .layout_no_wrap(emc::label(h), font.clone(), egui::Color32::WHITE)
             .size()
             + egui::vec2(12.0, 6.0);
-        let mut chip = egui::Rect::from_center_size(p, size);
+        // Left of its point: device tags sit to the right of a device's centre
+        // line, so the badge does not cover them.
+        let mut chip = egui::Rect::from_center_size(p - egui::vec2(size.x * 0.5 + 8.0, 0.0), size);
         for _ in 0..8 {
             if placed
                 .iter()
@@ -271,6 +273,14 @@ pub(super) fn paint_badges(
     for (h, chip, fill) in placed.into_iter().rev() {
         let size = chip.size();
         let text = text_on(fill);
+        // A short stalk to the point the badge speaks about.
+        painter.line_segment(
+            [
+                chip.right_center(),
+                chip.right_center() + egui::vec2(8.0, 0.0),
+            ],
+            egui::Stroke::new(1.5, color(fill)),
+        );
         let galley = painter.layout_no_wrap(emc::label(h), font.clone(), text);
         let on = selected == Some(h.id);
         painter.rect(
@@ -441,6 +451,16 @@ pub(super) fn panel(
             };
             if let Some(p) = note {
                 ui.label(egui::RichText::new(p.about()).small().color(pal.text_secondary));
+            }
+            if pic.provenance == Provenance::Stub {
+                ui.label(
+                    egui::RichText::new(
+                        "If this view and Check > EMC check differ, the check governs; this view is an interim picture.",
+                    )
+                    .small()
+                    .strong()
+                    .color(pal.text_secondary),
+                );
             }
             ui.add_space(4.0);
             layer_chips(ui, &mut state.layers, &pic);

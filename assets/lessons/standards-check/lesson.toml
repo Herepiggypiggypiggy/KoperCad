@@ -95,10 +95,12 @@ text_nl = "Veel regels zijn open omdat een machinegegeven ontbreekt: kortsluitst
 how = [
   "Press {ui:standards.inputs}. The Electrical inputs window opens.",
   "Look for the supply values. A value you type here is one undo step and updates the report at once.",
+  "Close the window again with its x when you have looked, so it does not cover the Standards check window.",
 ]
 how_nl = [
   "Druk op {ui:standards.inputs}. Het venster Electrical inputs opent.",
   "Zoek de voedingswaarden. Een waarde die je hier typt is een undo-stap en werkt het rapport meteen bij.",
+  "Sluit het venster weer met het kruisje als je gekeken hebt, zodat het het venster Standards check niet bedekt.",
 ]
 point = { ui = "standards.inputs" }
 expect = { clicked = "standards.inputs" }
@@ -128,7 +130,7 @@ how_nl = [
 ]
 point = { ui = "standards.calculations" }
 expect = { clicked = "standards.calculations" }
-solve = [ { ui_click = "standards.calculations" } ]
+solve = [ { command = "check.electrical_inputs" }, { ui_click = "standards.calculations" } ]
 
 [[step]]
 id = "save"

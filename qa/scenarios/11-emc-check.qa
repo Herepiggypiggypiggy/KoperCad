@@ -1,0 +1,45 @@
+@title EMC check window
+@area Check
+# Check > EMC check on a cabinet with a drive, a motor and an analog input in one duct.
+open qa/fixtures/emc-cabinet.novo
+wait 20
+key ctrl+k
+text Problems
+key enter
+wait 10
+# Check off: no EMC row in the Issues list.
+expect_not "EMC rule"
+shot issues-emc-off
+check_layout
+key Escape
+wait 5
+key ctrl+k
+text EMC check
+key enter
+wait 10
+expect "EMC check"
+expect "Off: the findings below are a preview"
+shot emc-off
+check_layout
+click_text "Run the EMC rules with the design checks"
+wait 10
+expect "Rules that ran"
+expect "Not checked"
+expect "EMC-"
+shot emc-findings
+check_layout
+# The filter finding has an Apply button further down the window.
+scroll 360 400 -600
+wait 5
+expect "Add a mains filter"
+shot emc-apply-button
+check_layout
+key Escape
+wait 5
+key ctrl+k
+text Problems
+key enter
+wait 10
+expect "EMC-"
+shot issues-emc-on
+check_layout
