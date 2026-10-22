@@ -266,7 +266,7 @@ pub(super) fn overlays(markers: &[Marker]) -> Vec<Overlay> {
 }
 
 /// How opaque the tint of a selected or hovered opening's wall is, 0 to 255.
-const WALL_TINT: u8 = 90;
+const WALL_TINT: u8 = 56;
 
 /// Horizontal louvres across the opening.
 fn slats(m: &Marker, out: &mut OverlayLines, colour: [u8; 4]) {

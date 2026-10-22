@@ -892,7 +892,7 @@ fn placement(ctx: &egui::Context, view: egui::Rect, heat_open: bool) -> (super::
         .map(|r| r.bottom() - view.top() + 8.0);
     match heat {
         Some(b) if view.height() - b > 220.0 => (super::panel::Side::Right, b.max(UNDER_CUBE)),
-        Some(_) => (super::panel::Side::Left, super::view3d_controls::BELOW),
+        Some(_) => (super::panel::Side::Left, super::view3d_controls::below(ctx)),
         None => (super::panel::Side::Right, UNDER_CUBE),
     }
 }
