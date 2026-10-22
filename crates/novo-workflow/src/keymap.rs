@@ -417,6 +417,7 @@ impl Keymap {
         bind(Chord::ctrl_shift(l('r')), Anywhere, "cabinet.rails");
         bind(Chord::shift(l('h')), Canvas, "heat.toggle");
         bind(Chord::plain(Char('?')), Canvas, "view.shortcuts");
+        bind(Chord::plain(F(1)), Anywhere, "help.context");
         Keymap { bindings }
     }
 

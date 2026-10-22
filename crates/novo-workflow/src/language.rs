@@ -271,6 +271,21 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     nl("help.about", &[], &["over", "versie"]),
+    nl(
+        "help.manual",
+        &["handleiding"],
+        &[
+            "handleiding",
+            "gebruikershandleiding",
+            "documentatie",
+            "hulp",
+        ],
+    ),
+    nl(
+        "help.context",
+        &[],
+        &["hulp bij dit venster", "uitleg bij dit venster"],
+    ),
     // Draw
     nl(
         "tool.repeat",
