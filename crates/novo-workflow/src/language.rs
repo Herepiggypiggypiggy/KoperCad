@@ -567,6 +567,15 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["warmte simuleren", "kast doorrekenen"],
     ),
+    nl(
+        "heat.cooler_layout",
+        &[],
+        &[
+            "koelere indeling",
+            "indeling optimaliseren",
+            "warmte verplaatsen",
+        ],
+    ),
     nl("heat.airflow", &[], &["luchtstroom", "luchtstroming"]),
     nl(
         "heat.vents",

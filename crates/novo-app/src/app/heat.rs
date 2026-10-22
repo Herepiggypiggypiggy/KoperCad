@@ -139,6 +139,8 @@ pub(super) struct HeatState {
     pub(super) time: super::heat_time::TimeLine,
     /// The next run is a heat-up over time, not a steady state.
     transient_wanted: bool,
+    /// The search for a cooler layout of the rails (`heat.cooler_layout`).
+    pub(super) layout: super::heat_layout::LayoutSearch,
 }
 
 /// Where a cached picture came from.
@@ -196,6 +198,7 @@ impl HeatState {
             cooling: super::heat_cooling::CoolingSettings::default(),
             time: super::heat_time::TimeLine::new(),
             transient_wanted: false,
+            layout: Default::default(),
         }
     }
 
@@ -468,6 +471,10 @@ impl HeatState {
         match id {
             "heat.toggle" => self.on = !self.on,
             "heat.simulate" => self.request_run(),
+            "heat.cooler_layout" => {
+                self.on = true;
+                self.layout.request();
+            }
             "heat.airflow" => {
                 self.airflow = !(self.on && self.airflow);
                 self.on |= self.airflow;
@@ -908,6 +915,20 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
         super::cabinet_bar::note_ctx(ui.ctx(), "heat.simulate", "Simulate button", &simulate);
         if simulate.clicked() {
             state.request_run();
+        }
+        let cooler = ui
+            .add_enabled(!state.layout.running(), egui::Button::new("Cooler layout"))
+            .on_hover_text(
+                "Try moving the hottest devices, and the ones that suffer, to other places on their rails",
+            );
+        super::cabinet_bar::note_ctx(
+            ui.ctx(),
+            "heat.cooler_layout",
+            "Cooler layout button",
+            &cooler,
+        );
+        if cooler.clicked() {
+            state.layout.request();
         }
         heat_up_controls(ui, state);
         compare_controls(ui, state);

@@ -87,6 +87,9 @@ mod heat_compare_tests;
 mod heat_cooling;
 #[cfg(test)]
 mod heat_duct_slice_tests;
+mod heat_layout;
+#[cfg(test)]
+mod heat_layout_tests;
 mod heat_legend;
 mod heat_live;
 #[cfg(test)]
