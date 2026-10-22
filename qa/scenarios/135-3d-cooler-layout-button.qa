@@ -9,6 +9,8 @@ click_text Heat #1
 wait 20
 shot panel-3d
 click_text "Cooler layout"
+wait 3
+shot message
 wait 30
 shot clicked
 wait_s 120
