@@ -649,10 +649,28 @@ fn a_door_device_says_where_it_goes_from_the_hinge_edge_and_names_its_surface() 
     let text = right.details.join(" | ");
     // The hinge is on the other side: the distance is measured from the right edge.
     assert!(!text.contains("80 mm from the hinge edge"), "{text}");
-    assert!(
-        text.contains("mm from the hinge edge and 400 mm down"),
-        "{text}"
+    // The door is 800 wide (the interior): 800 - 80 - the footprint's width.
+    let project = doc.project();
+    let cab = project
+        .structures()
+        .find(|s| s.enclosure)
+        .expect("cabinet")
+        .id;
+    let layout = novo_layout::model::load(project, cab).expect("layout");
+    let w = layout
+        .placements
+        .iter()
+        .find(|p| p.id == f2)
+        .expect("placed")
+        .footprint()
+        .w;
+    let want = format!(
+        "{} mm from the hinge edge and 400 mm down",
+        800.0 - 80.0 - w
     );
+    assert!(text.contains(&want), "{text} / wanted {want}");
+    // The door and walls are planning geometry: the step says so.
+    assert!(text.contains("not measured"), "{text}");
 }
 
 #[test]

@@ -46,7 +46,8 @@ A device fitted on the door, a wall, the roof, the floor or an extra plate says 
 hinge edge and down from the top edge (the same from the inside of the open door), on a side wall from the
 back wall, on the roof or floor from the left and in from the back, and on an extra plate from the corner the
 Cabinet's Surface picker takes as 0, 0. The numbers are the planned position of the device, said so on the
-step. The button then reads **Show on the door** and opens that surface in the Cabinet.
+step. The door, walls, roof and floor are planned from the enclosure's inside size with no wall
+thickness, and the step says it is not measured: measure the real surface before you mark it. The button then reads **Show on the door** and opens that surface in the Cabinet.
 
 A device step also has **Show on the plate** and **Show in 3D**: Build mode steps
 aside behind a "Back to Build mode" bar at the bottom left of the window, the device is

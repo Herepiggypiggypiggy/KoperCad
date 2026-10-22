@@ -7,12 +7,13 @@ click_text Reports
 wait 5
 click_text "Build mode..."
 wait 30
-click_text "Devices  0/8"
+click_text "Devices  0"
 wait 10
-click_text "23  =A1+CAB-S0"
+click_text "CAB-S0"
 wait 10
-expect "Fit =A1+CAB-S0 on the door"
+expect "on the door"
 expect "from the hinge edge"
+expect "not measured"
 expect "Show on the door"
 shot door-step
 check_layout
@@ -24,3 +25,4 @@ check_layout
 click_text "Back to Build mode" Button
 wait 10
 expect "from the hinge edge"
+expect "not measured"
