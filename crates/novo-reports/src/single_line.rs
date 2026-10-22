@@ -965,6 +965,7 @@ fn legend(sl: &SingleLine) -> Vec<String> {
             || note.starts_with("Ignored, no factor applied")
             || note.starts_with("ΔU is calculated at power factor 1")
             || note.starts_with("Ik is")
+            || note.starts_with("Icu is checked")
             || note.starts_with("Short-circuit current is not carried")
         {
             out.push(note.clone());

@@ -343,6 +343,13 @@ pub struct Verdict {
     pub status: Status,
     /// Titles of the rows that fail.
     pub failing: Vec<String>,
+    /// `status` without the "Breaking capacity" row.
+    pub status_without_breaking: Status,
+    /// The Calculations sheet fails Icu against the level at the device
+    /// from the supply data alone. Where the diagram has an Ik along the run
+    /// it judges Icu against that instead (`icu_status`) and the row is
+    /// taken out of `status` and `failing`.
+    pub breaking_row_failed: bool,
     /// Maximum three-phase short-circuit current at the device, kA.
     pub ik_max_ka: Option<f64>,
     /// Inputs the calculation lacks, named by property.
@@ -1406,18 +1413,30 @@ pub fn single_line(
         };
         let verdict = verdicts.get(&item.device).and_then(|entry| {
             let report = entry.report.as_ref()?;
-            let mut status = Status::Pass;
-            for row in &report.rows {
-                status = match (status, row.status) {
-                    (Status::Fail, _) | (_, Status::Fail) => Status::Fail,
-                    (Status::Warning, _) | (_, Status::Warning) => Status::Warning,
-                    (Status::Unknown, _) | (_, Status::Unknown) => Status::Unknown,
-                    _ => Status::Pass,
-                };
-            }
+            let fold = |skip_breaking: bool| {
+                let mut status = Status::Pass;
+                for row in report
+                    .rows
+                    .iter()
+                    .filter(|r| !(skip_breaking && r.title == "Breaking capacity"))
+                {
+                    status = match (status, row.status) {
+                        (Status::Fail, _) | (_, Status::Fail) => Status::Fail,
+                        (Status::Warning, _) | (_, Status::Warning) => Status::Warning,
+                        (Status::Unknown, _) | (_, Status::Unknown) => Status::Unknown,
+                        _ => Status::Pass,
+                    };
+                }
+                status
+            };
             Some(Verdict {
-                status,
+                status: fold(false),
+                status_without_breaking: fold(true),
                 failing: report.failures().map(|r| r.title.to_owned()).collect(),
+                breaking_row_failed: report
+                    .rows
+                    .iter()
+                    .any(|r| r.title == "Breaking capacity" && r.status == Status::Fail),
                 ik_max_ka: report.at_device.as_ref().map(|f| f.ik3_max_a / 1000.0),
                 missing: entry.missing.clone(),
             })
@@ -1719,6 +1738,7 @@ pub fn single_line(
     let mut ik_state: HashMap<usize, Option<(Impedance, bool)>> = HashMap::new();
     ik_state.insert(0, source.map(|_| (Impedance::default(), true)));
     let mut ik_through_converter = false;
+    let mut breaking_judged_along_run = false;
     for &id in &order_down {
         let parent_id = nodes[id].parent.unwrap_or(0);
         let above = protector_above.get(&parent_id).cloned().flatten();
@@ -1833,6 +1853,13 @@ pub fn single_line(
             let ik = ik3_max(&src, &[z]) / 1000.0;
             nodes[id].ik_ka = Figure::calculated(ik);
             nodes[id].ik_exact = exact;
+            if let Some(v) = nodes[id].verdict.as_mut()
+                && v.breaking_row_failed
+            {
+                v.status = v.status_without_breaking;
+                v.failing.retain(|t| t != "Breaking capacity");
+                breaking_judged_along_run = true;
+            }
             if let Some(icu) = nodes[id].breaking_ka.value
                 && nodes[id].kind.is_protective()
                 && ik > icu
@@ -1884,6 +1911,12 @@ pub fn single_line(
             "ΔU Σ is counted again from the output of {}: percentages of two voltages are not added.",
             restarted.join(", ")
         ));
+    }
+    if breaking_judged_along_run {
+        notes.push(
+            "Icu is checked against Ik along the run, which the cable impedance lowers; the Calculations window compares with the supply fault level alone, so it can fail a device that passes here."
+                .to_owned(),
+        );
     }
     if ik_through_converter {
         notes.push(
