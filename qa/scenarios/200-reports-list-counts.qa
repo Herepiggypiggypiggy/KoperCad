@@ -3,7 +3,7 @@
 # The list opens at once with dashes; the row counts fill in when the worker answers.
 click_text "Open example"
 wait 20
-click_text Reports #1
+click_text Reports #2
 wait 2
 shot counts-pending
 check_layout
