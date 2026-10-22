@@ -352,19 +352,21 @@ fn the_3d_run_card_is_found_by_cable_run_and_route() {
 #[test]
 fn cut_out_and_drill_template_searches_find_the_workshop_pack() {
     let (palette, keymap) = (Palette::default(), Keymap::workflow());
-    for query in [
-        "cut-out",
-        "cutout",
-        "cut out",
-        "cut-out cards",
-        "drill template",
-        "door",
+    // "door" is also the name of the door switch symbols and the cabinet door
+    // command, so the pack only has to be on the first screen of rows there.
+    for (query, within) in [
+        ("cut-out", 3),
+        ("cutout", 3),
+        ("cut out", 3),
+        ("cut-out cards", 3),
+        ("drill template", 3),
+        ("door", 8),
     ] {
         let rows = search(&palette, &keymap, query);
         let at = position(&rows, "export.workshop")
             .unwrap_or_else(|| panic!("{query:?} does not find the workshop pack"));
         assert!(
-            at < 3,
+            at < within,
             "{query:?} ranks it {at}th: {:?}",
             rows.iter().take(5).map(|r| &r.target).collect::<Vec<_>>()
         );
