@@ -133,6 +133,37 @@ fn rows_become_placements_with_calculated_values() {
 }
 
 #[test]
+fn generated_blocks_sit_on_the_snap_grid() {
+    // The page flow works from a padded bounding box that is off the grid; the blocks must not be.
+    let sheet = SpecSheet::from_csv("Macro,Page\nstarter,A\nstarter,A\nstarter,B\n");
+    let mut doc = empty();
+    let (result, _) = doc
+        .transact("Generate", |tx| {
+            generate(tx, &sheet, &lookup, &assignment(), Mode::Add)
+        })
+        .unwrap();
+    result.unwrap();
+    let grid = novo_symbols::GRID;
+    let on_grid = |v: f64| ((v / grid) - (v / grid).round()).abs() < 1e-9;
+    let mut seen = 0;
+    for s in doc.project().symbols() {
+        // The test block's own symbols sit at x 10 and 40 (not on the grid); what counts is that
+        // the whole block moved by whole grid steps.
+        let (x, y) = (s.placement.origin.x, s.placement.origin.y);
+        assert!(
+            on_grid(x - 10.0) || on_grid(x - 40.0),
+            "block shifted by a fraction of a grid step: x {x}"
+        );
+        assert!(
+            on_grid(y),
+            "block shifted by a fraction of a grid step: y {y}"
+        );
+        seen += 1;
+    }
+    assert!(seen >= 6);
+}
+
+#[test]
 fn a_long_list_flows_onto_more_pages() {
     let mut csv = String::from("Macro,Page,power\n");
     for i in 0..60 {

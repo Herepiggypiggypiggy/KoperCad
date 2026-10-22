@@ -314,12 +314,18 @@ fn cables_tab(
     let overview = novo_cables::overview(project);
     let proposed = proposals.len();
     if overview.is_empty() {
-        proposals_section(ui, project, proposals, declined, &mut edit.ui, actions);
-        ui.weak(if proposed > 0 {
-            "No cables yet. Accept the proposed ones, or draw wires between locations."
-        } else {
-            "No cables yet. Wires between two locations (+CAB to +FIELD) are proposed as cables."
-        });
+        // Scrolls like the table below: a long list of proposals must not grow
+        // the drawer past the window.
+        egui::ScrollArea::vertical()
+            .auto_shrink(false)
+            .show(ui, |ui| {
+                proposals_section(ui, project, proposals, declined, &mut edit.ui, actions);
+                ui.weak(if proposed > 0 {
+                    "No cables yet. Accept the proposed ones, or draw wires between locations."
+                } else {
+                    "No cables yet. Wires between two locations (+CAB to +FIELD) are proposed as cables."
+                });
+            });
         return;
     }
     let shown = picked
