@@ -359,7 +359,7 @@ fn the_job_file_and_report_carry_the_production_columns() {
         assert!(header.contains(c), "{header}");
     }
     let out = WireCut.generate(doc.project());
-    let cuts = &out.sections[0];
+    let cuts = out.sections.iter().find(|s| s.key == "production").unwrap();
     for key in ["bundle", "seq", "track", "processing_a", "end_basis"] {
         assert!(cuts.column(key).is_some(), "{key}");
     }

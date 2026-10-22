@@ -722,22 +722,36 @@ impl Report for WireCut {
             Column::new("label_b", "Label B", 30.0),
             Column::new("from", "From", 25.0),
             Column::new("to", "To", 25.0),
-            Column::new("direction", "Direction", 16.0),
-            Column::new("processing_a", "Processing A", 18.0),
-            Column::new("processing_b", "Processing B", 18.0),
-            Column::new("bundle", "Bundle", 7.0).right(),
-            Column::new("seq", "Seq", 5.0).right(),
-            Column::new("track", "Track", 14.0),
             Column::new("basis", "Length basis", 14.0),
-            Column::new("end_basis", "End basis", 12.0),
         ];
         let title = WIRE_CUT_COUNT_TITLE.replace("{n}", &jobs.len().to_string());
         let mut cuts = Section::new("cuts", &title, columns);
+        // The production data sits in a table of its own: the cut list is already as wide as
+        // a page takes, and the job CSV carries every column in one row.
+        let mut production = Section::new(
+            "production",
+            "Production data · bundle, laying order, track and end processing",
+            vec![
+                Column::new("no", "No", 6.0).right(),
+                Column::new("number", "Wire no.", 15.0),
+                Column::new("direction", "Direction", 16.0),
+                Column::new("processing_a", "Processing A", 18.0),
+                Column::new("processing_b", "Processing B", 18.0),
+                Column::new("bundle", "Bundle", 8.0).right(),
+                Column::new("seq", "Seq", 6.0).right(),
+                Column::new("track", "Track", 16.0),
+                Column::new("end_basis", "End basis", 14.0),
+            ],
+        );
         for (i, j) in jobs.iter().enumerate() {
+            let cells = job_cells(i + 1, j);
+            let wires: Vec<AnyId> = j.wires.iter().map(|w| AnyId::from(*w)).collect();
+            let pick = |idx: &[usize]| idx.iter().map(|&k| cells[k].clone()).collect::<Vec<_>>();
             cuts.push(
-                job_cells(i + 1, j),
-                j.wires.iter().map(|w| AnyId::from(*w)).collect(),
+                pick(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 21]),
+                wires.clone(),
             );
+            production.push(pick(&[0, 1, 15, 16, 17, 18, 19, 20, 22]), wires);
         }
 
         // Stock per cross-section and colour: pieces and metres, as cut.
@@ -866,7 +880,7 @@ impl Report for WireCut {
             title: self.title(),
             revision: project.revision(),
             sections: {
-                let mut sections = vec![cuts, stock_section, ferrule_section, ducts];
+                let mut sections = vec![cuts, production, stock_section, ferrule_section, ducts];
                 let runs = cable_runs(project, &jobs);
                 if !runs.is_empty() {
                     let mut cables = Section::new(
