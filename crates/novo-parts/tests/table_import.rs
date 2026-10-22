@@ -131,7 +131,8 @@ fn rows_that_cannot_be_trusted_are_skipped_or_stripped_and_said_so() {
     // Rows are numbered as the spreadsheet shows them: header is row 1.
     assert_eq!(p.rows[0].line, 2);
     assert_eq!(p.parts.len(), 3);
-    assert_eq!(p.counts().skipped, 3);
+    // Two rows have no usable order number or maker; the third is the same part twice.
+    assert_eq!((p.counts().skipped, p.counts().repeated), (2, 1));
 }
 
 #[test]
@@ -528,7 +529,14 @@ fn unreadable_dates_and_bases_are_said_and_a_price_per_metre_is_left_out() {
          Example Maker,D-3,10,2026-10-02,per metre\n\
          Example Maker,D-4,10,46300,abc\n",
     );
-    let mapping = Mapping::suggest(&sheet, 0);
+    let mut mapping = Mapping::suggest(&sheet, 0);
+    // "abc" in the last row keeps the guess off this column: the person sets it.
+    let per = mapping
+        .columns
+        .iter()
+        .position(|c| c.header == "Per")
+        .unwrap();
+    mapping.columns[per].target = Target::PricePer;
     let p = preview(&sheet, &mapping);
     let date_of = |i: usize| p.parts[i].price.as_ref().map(|p| (p.date.clone(), p.per));
     // 31 February is not a date: the import date stands in, and the row says so.
@@ -638,7 +646,7 @@ fn repeated_order_numbers_are_listed_and_the_person_picks_what_is_kept() {
     // The last row of R-1 has nothing but the order number.
     let kept = p.parts.iter().find(|x| x.order_number == "R-1").unwrap();
     assert_eq!(kept.description, "");
-    assert_eq!(p.counts().skipped, 2);
+    assert_eq!((p.counts().skipped, p.counts().repeated), (0, 2));
     assert!(p.rows[0].issues.iter().any(|i| i.message.contains("row 5")));
 
     mapping.duplicates = DuplicateRule::KeepFirst;
@@ -646,7 +654,7 @@ fn repeated_order_numbers_are_listed_and_the_person_picks_what_is_kept() {
     let kept = p.parts.iter().find(|x| x.order_number == "R-1").unwrap();
     assert_eq!(kept.description, "First row");
     assert_eq!(p.repeated[0].used, 2);
-    assert_eq!(p.counts().skipped, 2);
+    assert_eq!((p.counts().skipped, p.counts().repeated), (0, 2));
     assert!(p.rows[2].issues.iter().any(|i| i.message.contains("row 2")));
 
     mapping.duplicates = DuplicateRule::Merge;
@@ -657,8 +665,63 @@ fn repeated_order_numbers_are_listed_and_the_person_picks_what_is_kept() {
     assert_eq!(kept.dimensions, None); // a width alone is not a size
     assert_eq!(kept.price.as_ref().unwrap().amount, 10.0);
     assert_eq!(p.parts.len(), 2);
-    // Nothing is dropped in silence: every other row says why it is not a part.
+    // Nothing is dropped in silence: every other row says why it is not a part,
+    // and the summary says they were merged, not that they failed.
     for row in [&p.rows[2], &p.rows[3]] {
         assert!(!row.issues.is_empty(), "{row:?}");
+    }
+    let summary = p.summary();
+    assert!(
+        summary.contains("1 repeated order number (2 rows merged into the first row)"),
+        "{summary}"
+    );
+    assert!(!summary.contains("not imported"), "{summary}");
+}
+
+#[test]
+fn pe_is_the_price_basis_only_for_a_column_of_numbers() {
+    let sheet =
+        csv_sheet("Maker,Order no,PE,Price\nExample Maker,T-1,100,5\nExample Maker,T-2,1,6\n");
+    let mapping = Mapping::suggest(&sheet, 0);
+    assert_eq!(*target_of(&mapping, "PE"), Target::PricePer);
+    // A protective-earth column of Yes/No or marks is not.
+    let sheet =
+        csv_sheet("Maker,Order no,PE,Price\nExample Maker,T-1,yes,5\nExample Maker,T-2,no,6\n");
+    let mapping = Mapping::suggest(&sheet, 0);
+    assert_ne!(*target_of(&mapping, "PE"), Target::PricePer);
+}
+
+#[test]
+fn a_withdrawn_part_is_never_read_as_active() {
+    // "nicht lieferbar" contains "lieferbar": the withdrawn words are tested first.
+    let withdrawn = [
+        "nicht lieferbar",
+        "unlieferbar",
+        "nicht verfügbar",
+        "niet leverbaar",
+        "niet meer leverbaar",
+        "onleverbaar",
+        "niet beschikbaar",
+        "unavailable",
+        "not available",
+    ];
+    let mut text = String::from("Maker,Order no,Status\n");
+    for (i, w) in withdrawn.iter().enumerate() {
+        text.push_str(&format!("Example Maker,W-{i},{w}\n"));
+    }
+    text.push_str(
+        "Example Maker,A-1,lieferbar\nExample Maker,A-2,leverbaar\nExample Maker,A-3,available\n",
+    );
+    let sheet = csv_sheet(&text);
+    let mapping = Mapping::suggest(&sheet, 0);
+    assert_eq!(*target_of(&mapping, "Status"), Target::Lifecycle);
+    let p = preview(&sheet, &mapping);
+    for part in &p.parts {
+        let want = if part.order_number.starts_with('W') {
+            Lifecycle::Discontinued
+        } else {
+            Lifecycle::Active
+        };
+        assert_eq!(part.lifecycle, want, "{}", part.order_number);
     }
 }

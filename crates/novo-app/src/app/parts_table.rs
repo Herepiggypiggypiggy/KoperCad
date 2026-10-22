@@ -271,8 +271,19 @@ impl NovoApp {
         self.message(
             Level::Info,
             format!(
-                "Parts from {}: {added} added, {} updated, {} not imported",
-                import.file, counts.changed, counts.skipped
+                "Parts from {}: {added} added, {} updated, {} not imported{}",
+                import.file,
+                counts.changed,
+                counts.skipped,
+                if counts.repeated > 0 {
+                    format!(
+                        ", {} repeated {} not separate parts",
+                        counts.repeated,
+                        plural(counts.repeated, "row", "rows")
+                    )
+                } else {
+                    String::new()
+                }
             ),
         );
         if import.catalog_path.is_none()
@@ -592,6 +603,10 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
                     RowStatus::New => ("New", p.success),
                     RowStatus::Changed => ("Replaces entry", p.warning),
                     RowStatus::Unchanged => ("Already there", p.text_secondary),
+                    // A row a repeated-number rule left out is a choice, not an error.
+                    RowStatus::Skipped if row.worst() < Some(Severity::Error) => {
+                        ("Repeated", p.warning)
+                    }
                     RowStatus::Skipped => ("Not imported", p.error),
                 };
                 ui.horizontal(|ui| {
@@ -624,8 +639,9 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
             let total = import.preview.rows.len();
             if total > ROWS_SHOWN && !import.only_checks {
                 ui.weak(format!(
-                    "{} more row(s) not listed; the report saved with the catalog has every finding.",
-                    total - ROWS_SHOWN
+                    "{} more {} not listed; the report saved with the catalog has every finding.",
+                    total - ROWS_SHOWN,
+                    plural(total - ROWS_SHOWN, "row", "rows")
                 ));
             }
         });
@@ -642,8 +658,13 @@ fn repeated_ui(ui: &mut egui::Ui, import: &mut PartsTableImport) {
     ui.colored_label(
         p.warning,
         format!(
-            "{} order number(s) appear in more than one row ({rows} rows). The catalog keeps one entry per maker and order number: choose what it gets.",
-            import.preview.repeated.len()
+            "{} {} more than one row ({rows} rows). The catalog keeps one entry per maker and order number: choose what it gets.",
+            import.preview.repeated.len(),
+            if import.preview.repeated.len() == 1 {
+                "order number appears in"
+            } else {
+                "order numbers appear in"
+            }
         ),
     );
     let labels = [
@@ -683,6 +704,10 @@ fn repeated_ui(ui: &mut egui::Ui, import: &mut PartsTableImport) {
     ui.add_space(4.0);
 }
 
+fn plural(n: usize, one: &'static str, many: &'static str) -> &'static str {
+    if n == 1 { one } else { many }
+}
+
 /// One fixed-width, left-aligned, truncated cell of a row.
 fn cell(ui: &mut egui::Ui, width: f32, text: egui::RichText) {
     ui.allocate_ui_with_layout(
@@ -702,8 +727,9 @@ fn footer_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, cancel: &mut bool
     let mut go = false;
     if import.preview.problems.is_empty() {
         let text = format!(
-            "{} row(s): {}{}",
+            "{} {}: {}{}",
             import.preview.rows.len(),
+            plural(import.preview.rows.len(), "row", "rows"),
             import.preview.summary(),
             if counts.warned > 0 {
                 format!(", {} with warnings", counts.warned)
@@ -712,7 +738,7 @@ fn footer_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, cancel: &mut bool
             }
         );
         ui.colored_label(
-            if counts.skipped + counts.warned > 0 {
+            if counts.skipped + counts.warned + counts.repeated > 0 {
                 p.warning
             } else {
                 p.text_primary

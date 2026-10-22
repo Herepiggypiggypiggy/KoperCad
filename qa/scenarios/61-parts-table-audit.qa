@@ -1,4 +1,4 @@
-@title Parts table import: Dutch maker headers, price date, repeated order numbers, palette ranking, folder picked as file
+@title Parts table import: Dutch maker headers, price date, repeated order numbers, long list, palette ranking, folder picked as file
 @area Parts
 # Audit C-53 (palette ranking, plain error), C-54 (repeated order numbers are a visible choice) and the wider header words (made-up Dutch list).
 click_text "Open example"
@@ -21,7 +21,7 @@ check_layout
 check_blank columns
 click_text Rows Button
 wait 10
-expect "appear in more than one row"
+expect "more than one row"
 expect "is not a date"
 expect "not for pieces"
 shot rows-last
@@ -53,3 +53,10 @@ wait 6
 import_table qa/fixtures/parts/not-text.csv
 expect "does not look like a text file"
 shot refused
+# About 45 rows: the list scrolls and Add and Cancel stay in view.
+import_table qa/fixtures/parts/price-list-long.csv
+click_text Rows Button
+wait 10
+expect "Repeated"
+shot rows-long
+check_layout

@@ -91,6 +91,9 @@ pub struct Counts {
     pub changed: usize,
     pub unchanged: usize,
     pub skipped: usize,
+    /// Rows a repeated-order-number rule left out or merged into another
+    /// row: a choice, not an error.
+    pub repeated: usize,
     /// Rows imported with at least one warning.
     pub warned: usize,
 }
@@ -112,6 +115,8 @@ pub struct ImportPreview {
     pub assumptions: Vec<String>,
     /// Order numbers that appear in more than one row, and what was done.
     pub repeated: Vec<RepeatedPart>,
+    /// The rule the repeated rows were read with.
+    pub rule: DuplicateRule,
 }
 
 /// One part that several rows describe.
@@ -133,6 +138,7 @@ impl ImportPreview {
                 RowStatus::New => c.new += 1,
                 RowStatus::Changed => c.changed += 1,
                 RowStatus::Unchanged => c.unchanged += 1,
+                RowStatus::Skipped if row.worst() < Some(Severity::Error) => c.repeated += 1,
                 RowStatus::Skipped => c.skipped += 1,
             }
             if row.status != RowStatus::Skipped && row.worst() >= Some(Severity::Warning) {
@@ -167,10 +173,17 @@ impl ImportPreview {
             parts.push(format!("{} not imported", c.skipped));
         }
         if !self.repeated.is_empty() {
+            let n = self.repeated.len();
+            let rows = c.repeated;
             parts.push(format!(
-                "{} repeated order number(s) in {} rows",
-                self.repeated.len(),
-                self.repeated.iter().map(|r| r.lines.len()).sum::<usize>()
+                "{n} repeated order {} ({rows} {} {})",
+                if n == 1 { "number" } else { "numbers" },
+                if rows == 1 { "row" } else { "rows" },
+                if self.rule == DuplicateRule::Merge {
+                    "merged into the first row"
+                } else {
+                    "not used"
+                }
             ));
         }
         parts.join(", ")
@@ -403,6 +416,7 @@ pub fn build_preview(
         coverage,
         assumptions,
         repeated,
+        rule: mapping.duplicates,
     }
 }
 

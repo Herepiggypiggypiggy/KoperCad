@@ -1057,7 +1057,22 @@ fn suggest_column(header: &str, samples: &[&str]) -> ColumnMap {
     .iter()
     .find_map(|c| squashed.strip_suffix(c))
     .filter(|stem| !stem.is_empty());
+    // `PE` is SAP's price unit and also the protective-earth column of a
+    // terminal list: only a column of whole numbers is the price basis.
+    let basis_like = {
+        let filled: Vec<&&str> = samples.iter().filter(|s| !s.trim().is_empty()).collect();
+        !filled.is_empty()
+            && filled.iter().all(|s| {
+                let s = s.trim().to_lowercase();
+                s.starts_with(|c: char| c.is_ascii_digit())
+                    || s.starts_with("per ")
+                    || s.starts_with("pro ")
+            })
+    };
     for (words, target) in by_words {
+        if *target == Target::PricePer && !basis_like {
+            continue;
+        }
         if words.contains(&squashed.as_str())
             || (*target == Target::Price && price_stem.is_some_and(|stem| words.contains(&stem)))
         {
