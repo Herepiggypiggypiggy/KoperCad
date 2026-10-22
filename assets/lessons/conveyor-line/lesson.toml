@@ -33,10 +33,10 @@ id = "tour"
 title = "The machine on four pages"
 title_nl = "De machine op vier pagina's"
 text = """
-Open the page list. **Conveyor** has a reversing starter, **Mixer** a star-delta starter, **Safety** a two-channel emergency stop on a safety relay and **PLC inputs** a 24 V input card with four field devices. Every page is fed from its own supply points. This project was assembled from the program's own starter macros, so you can place the same circuits in your own projects.
+Open the page list. “Conveyor” has a reversing starter, “Mixer” a star-delta starter, “Safety” a two-channel emergency stop on a safety relay and “PLC inputs” a 24 V input card with four field devices. Every page is fed from its own supply points. This project was assembled from the program's own starter macros, so you can place the same circuits in your own projects.
 """
 text_nl = """
-Open de paginalijst. **Conveyor** heeft een omkeerstarter, **Mixer** een ster-driehoekstarter, **Safety** een tweekanaals noodstop op een veiligheidsrelais en **PLC inputs** een 24 V-ingangskaart met vier veldapparaten. Elke pagina wordt gevoed vanuit zijn eigen voedingspunten. Dit project is samengesteld uit de eigen startermacro's van het programma, dus je kunt dezelfde schema's in je eigen projecten plaatsen.
+Open de paginalijst. “Conveyor” heeft een omkeerstarter, “Mixer” een ster-driehoekstarter, “Safety” een tweekanaals noodstop op een veiligheidsrelais en “PLC inputs” een 24 V-ingangskaart met vier veldapparaten. Elke pagina wordt gevoed vanuit zijn eigen voedingspunten. Dit project is samengesteld uit de eigen startermacro's van het programma, dus je kunt dezelfde schema's in je eigen projecten plaatsen.
 """
 
 [[step]]
@@ -50,7 +50,7 @@ text_nl = """
 Er ontbreken drie draden ergens in deze machine. Je hoeft geen vier pagina's af te zoeken: de probleemlijst noemt elke open pen en de pagina waar hij zit.
 """
 how = [
-  "Click the problem pill in the top bar, or open **Check** and choose **Problems**.",
+  "Click the problem pill in the top bar, or open {ui:menu.Check} and choose {ui:cmd.check.problems}.",
 ]
 how_nl = [
   "Klik op de probleemknop in de bovenbalk, of open **Check** en kies **Problems**.",
@@ -202,10 +202,10 @@ id = "plc"
 title = "The PLC inputs"
 title_nl = "De PLC-ingangen"
 text = """
-Open the **PLC inputs** page: a start button, a stop button (wired normally closed so a broken wire stops the machine), a key switch and a float switch feed four inputs of the card **-A2**. Reading step: the program that uses these inputs is not part of this project.
+Open the “PLC inputs” page: a start button, a stop button (wired normally closed so a broken wire stops the machine), a key switch and a float switch feed four inputs of the card **-A2**. Reading step: the program that uses these inputs is not part of this project.
 """
 text_nl = """
-Open de pagina **PLC inputs**: een startknop, een stopknop (verbreekcontact, zodat een draadbreuk de machine stopt), een sleutelschakelaar en een vlotterschakelaar voeden vier ingangen van de kaart **-A2**. Leesstap: het programma dat deze ingangen gebruikt maakt geen deel uit van dit project.
+Open de pagina “PLC inputs”: een startknop, een stopknop (verbreekcontact, zodat een draadbreuk de machine stopt), een sleutelschakelaar en een vlotterschakelaar voeden vier ingangen van de kaart **-A2**. Leesstap: het programma dat deze ingangen gebruikt maakt geen deel uit van dit project.
 """
 expect = { page = "PLC inputs" }
 solve = [ { page = "PLC inputs" } ]

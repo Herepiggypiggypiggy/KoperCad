@@ -123,10 +123,10 @@ id = "motor-start"
 title = "See the start current"
 title_nl = "Bekijk de aanloopstroom"
 text = """
-Open the motor start simulation and choose **Star-delta**: speed and line current over time for direct, star-delta, auto-transformer and soft starting. It is a model with standard motor data, not your motor; check the real values with the motor's data sheet.
+Open the motor start simulation and choose “Star-delta”: speed and line current over time for direct, star-delta, auto-transformer and soft starting. It is a model with standard motor data, not your motor; check the real values with the motor's data sheet.
 """
 text_nl = """
-Open de motoraanloopsimulatie en kies **Star-delta**: toerental en lijnstroom in de tijd voor direct, ster-driehoek, autotransformator en softstart. Het is een model met standaard motorgegevens, niet jouw motor; controleer de echte waarden met het gegevensblad van de motor.
+Open de motoraanloopsimulatie en kies “Star-delta”: toerental en lijnstroom in de tijd voor direct, ster-driehoek, autotransformator en softstart. Het is een model met standaard motorgegevens, niet jouw motor; controleer de echte waarden met het gegevensblad van de motor.
 """
 how = [
   "Press {key:view.command_palette}, type **simulate motor start** and press Enter",
