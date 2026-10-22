@@ -354,6 +354,36 @@ mod tests {
     }
 
     #[test]
+    fn safety_plc_and_network_words_find_their_symbols() {
+        let lib = library();
+        let search = InsertSearch::default();
+        for (query, id) in [
+            ("safety relay", "iec/safety/relay"),
+            ("veiligheidsrelais", "iec/safety/relay"),
+            ("light curtain", "iec/safety/light_curtain_rx"),
+            ("lichtgordijn", "iec/safety/light_curtain_tx"),
+            ("guard door", "iec/safety/door_switch_nc"),
+            ("emergency stop 2 channel", "iec/safety/emergency_stop_2ch"),
+            ("plc cpu", "iec/plc/cpu"),
+            ("remote io", "iec/plc/remote_io"),
+            ("ethernet switch", "iec/network/ethernet_switch_5"),
+            ("profibus", "iec/network/port_rs485"),
+            ("canopen", "iec/network/port_can"),
+            ("terminating resistor", "iec/network/bus_terminator"),
+        ] {
+            let hits = search.search(&lib, query);
+            assert!(
+                hits.iter().take(2).any(|h| h.symbol.id == id),
+                "{query} does not find {id}: {:?}",
+                hits.iter()
+                    .take(4)
+                    .map(|h| &h.symbol.id)
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
     fn overload_words_find_the_relay_before_its_contact() {
         let lib = library();
         let search = InsertSearch::default();

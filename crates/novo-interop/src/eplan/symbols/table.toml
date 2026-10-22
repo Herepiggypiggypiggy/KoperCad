@@ -976,3 +976,71 @@ names = ["reactor", "line reactor", "three phase reactor", "motor choke", "mains
 symbol = "transformers/emc_filter"
 letters = ["Z"]
 names = ["emc filter", "line filter", "mains filter", "rfi filter", "emi filter", "filter", "emc filter 3 phase", "netfilter", "emc-filter", "storingsfilter", "netzfilter", "emv filter", "emv-filter", "entstoerfilter"]
+
+# ---------------------------------------------------------------- safety, PLC and network
+[[entry]]
+symbol = "safety/relay"
+letters = ["K", "F"]
+names = ["safety relay", "safety relay two channel", "emergency stop relay", "safety module", "veiligheidsrelais", "noodstoprelais", "sicherheitsrelais", "not-aus relais", "sicherheitsschaltgeraet"]
+[[entry]]
+symbol = "safety/relay_expander"
+letters = ["K", "F"]
+names = ["safety contact expander", "safety relay expansion", "contact expansion module safety", "veiligheidsrelais uitbreiding", "contactuitbreiding veiligheid", "kontakterweiterung sicherheit", "sicherheitsrelais erweiterung"]
+[[entry]]
+symbol = "safety/emergency_stop_2ch"
+letters = ["S"]
+names = ["emergency stop two channel", "emergency stop 2 channel", "emergency stop two contacts", "e-stop two channel", "noodstop tweekanaals", "noodstop twee kanalen", "not-aus zweikanalig", "not aus 2 kanal"]
+[[entry]]
+symbol = "safety/door_switch_nc"
+letters = ["S", "B"]
+names = ["guard door switch", "guard door interlock", "safety door switch", "interlock switch", "door interlock", "deurschakelaar veiligheid", "veiligheidsschakelaar deur", "schutztuerschalter", "sicherheitsschalter tuer", "zuhaltung"]
+[[entry]]
+symbol = "safety/door_switch_no"
+letters = ["S", "B"]
+names = ["guard door switch monitoring contact", "door interlock monitoring contact", "interlock make contact", "deurschakelaar bewakingscontact", "schutztuerschalter meldekontakt"]
+[[entry]]
+symbol = "safety/light_curtain_tx"
+letters = ["B"]
+names = ["light curtain transmitter", "safety light curtain transmitter", "light curtain sender", "lichtgordijn zender", "veiligheidslichtgordijn zender", "lichtvorhang sender"]
+[[entry]]
+symbol = "safety/light_curtain_rx"
+letters = ["B"]
+names = ["light curtain receiver", "safety light curtain receiver", "light curtain", "safety light curtain", "lichtgordijn ontvanger", "lichtgordijn", "veiligheidslichtgordijn", "lichtvorhang empfaenger", "lichtvorhang", "sicherheitslichtvorhang"]
+
+[[entry]]
+symbol = "plc/cpu"
+letters = ["A", "K"]
+names = ["plc cpu", "plc", "cpu", "plc central unit", "programmable logic controller", "controller", "plc besturing", "plc cpu eenheid", "besturing", "sps", "sps cpu", "steuerung"]
+[[entry]]
+symbol = "plc/remote_io"
+letters = ["A", "K"]
+names = ["remote io", "remote i/o", "remote io node", "fieldbus io station", "decentral io", "decentrale io", "dezentrale peripherie", "feldbus io station"]
+
+[[entry]]
+symbol = "network/ethernet_switch_5"
+letters = ["A", "N"]
+names = ["ethernet switch", "ethernet switch 5 ports", "network switch", "industrial switch", "netwerkswitch", "ethernet switch 5 poorten", "netzwerk switch", "ethernet switch 5 ports"]
+[[entry]]
+symbol = "network/ethernet_switch_8"
+letters = ["A", "N"]
+names = ["ethernet switch 8 ports", "network switch 8 ports", "ethernet switch 8 poorten", "ethernet switch 8 port"]
+[[entry]]
+symbol = "network/port_ethernet"
+letters = ["A", "X"]
+names = ["ethernet port", "network port", "ethernet connection", "rj45 port", "m12 ethernet port", "netwerkpoort", "ethernetpoort", "netzwerkanschluss", "ethernet anschluss"]
+[[entry]]
+symbol = "network/port_ethernet_2p"
+letters = ["A", "X"]
+names = ["ethernet port two ports", "ethernet 2 port", "ethernet two port switch", "ethernet 2 poorten", "ethernet 2 anschluesse"]
+[[entry]]
+symbol = "network/port_rs485"
+letters = ["A", "X"]
+names = ["rs485 port", "rs-485 port", "profibus port", "profibus dp", "modbus rtu port", "fieldbus port", "veldbus poort", "feldbus anschluss", "profibus anschluss"]
+[[entry]]
+symbol = "network/port_can"
+letters = ["A", "X"]
+names = ["can port", "can bus port", "canopen port", "can bus", "can anschluss", "can poort"]
+[[entry]]
+symbol = "network/bus_terminator"
+letters = ["R"]
+names = ["bus terminator", "terminating resistor", "bus termination", "120 ohm termination", "afsluitweerstand", "busafsluiting", "abschlusswiderstand", "busabschluss"]

@@ -11,6 +11,7 @@ use novo_core::{
 use super::{Imported, MacroError, MacroFile, MacroLibrary};
 
 mod more;
+mod safety;
 
 /// Folder the starter macros are kept in.
 pub const STARTER_FOLDER: &str = "Starter";
@@ -20,6 +21,7 @@ pub fn starter_macros() -> Vec<(String, MacroFile)> {
     let mut build: Vec<fn() -> Result<MacroFile>> =
         vec![motor_starter, star_delta, estop_chain, power_supply];
     build.extend(more::all());
+    build.extend(safety::all());
     build
         .into_iter()
         .map(|f| {
