@@ -80,14 +80,29 @@ pub fn rows(project: &Project, enclosure: StructureId, scenario: &Scenario) -> O
 
 /// Puts the moved devices at their new places, on their new rails, as part
 /// of the caller's transaction (one undo step). A swap is two moves in the
-/// list. Returns the devices that could not be placed.
+/// list. A device keeps the rotation it stands in. All or nothing: when a
+/// target rail is gone, nothing is placed and the devices with a missing
+/// rail are returned.
 pub fn apply_moves(tx: &mut Tx<'_>, enclosure: StructureId, moves: &[Move]) -> Result<Vec<u64>> {
     let (ox, oy) = plate_origin(tx.project(), enclosure).unwrap_or((0.0, 0.0));
-    let mut skipped = Vec::new();
+    let missing: Vec<u64> = moves
+        .iter()
+        .filter(|m| {
+            tx.project()
+                .get::<novo_core::Rail>(RailId::from(m.to_row))
+                .is_none()
+        })
+        .map(|m| m.id)
+        .collect();
+    if !missing.is_empty() {
+        return Ok(missing);
+    }
+    let rotated_now: Vec<(u64, bool)> = load(tx.project(), enclosure)
+        .map(|l| l.placements.iter().map(|p| (p.id, p.rotated)).collect())
+        .unwrap_or_default();
     for m in moves {
         let rail = RailId::from(m.to_row);
         let Some(model_rail) = tx.project().get::<novo_core::Rail>(rail) else {
-            skipped.push(m.id);
             continue;
         };
         let (x, y) = (m.to.x - ox, m.to.y - oy);
@@ -96,14 +111,18 @@ pub fn apply_moves(tx: &mut Tx<'_>, enclosure: StructureId, moves: &[Move]) -> R
         } else {
             x - model_rail.x
         };
+        let rotated = rotated_now
+            .iter()
+            .find(|(id, _)| *id == m.id)
+            .is_some_and(|(_, r)| *r);
         tx.execute(Command::PlaceDevice {
             device: DeviceId::from(m.id),
             structure: enclosure,
             x,
             y,
-            rotated: false,
+            rotated,
             rail: Some((rail, offset)),
         })?;
     }
-    Ok(skipped)
+    Ok(Vec::new())
 }

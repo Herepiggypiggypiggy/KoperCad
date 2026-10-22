@@ -25,7 +25,7 @@
 //! that the walls cannot carry away stays a problem, and the result says so
 //! by listing the cooling that is still needed. It also knows nothing about
 //! wiring or the planner's zone rules: a move is a proposal that the person
-//! looks at (and the rule check re-runs after accepting).
+//! looks at (the Cabinet problems refresh after accepting, as after any edit).
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -386,8 +386,10 @@ pub fn suggest_with(
     }
     if after.devices_over > 0 {
         notes.push(format!(
-            "{} device(s) are still over their limit after the moves: placement alone does not carry the heat away.",
-            after.devices_over
+            "{} {} still over {} limit after the moves: placement alone does not carry the heat away.",
+            after.devices_over,
+            if after.devices_over == 1 { "device is" } else { "devices are" },
+            if after.devices_over == 1 { "its" } else { "their" }
         ));
     }
     let mut cooling = Vec::new();

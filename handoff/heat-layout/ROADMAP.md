@@ -14,4 +14,4 @@ Scope: place devices so the cabinet runs cooler, with numbers from the app's own
 5. Real losses and limits: the CV-200 parts carry no loss, size or limit (Real part data lane).
 
 ## Open questions
-- Wire price (0.5 cost per metre), the largest move (900 mm) and the thin-margin band (8 K) are judgement values, not measured. The search knows no wiring: a move that lengthens many wires is not priced by connections, only by distance.
+- Move price (0.5 cost per metre moved), the largest move (900 mm) and the thin-margin band (8 K) are judgement values, not measured. The search knows no wiring: a move that lengthens many wires is not priced by connections, only by distance.

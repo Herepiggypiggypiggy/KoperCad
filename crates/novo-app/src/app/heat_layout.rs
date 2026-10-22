@@ -239,7 +239,7 @@ impl LayoutSearch {
                     return;
                 };
                 let s = &found.suggestion;
-                let stale = now_key.is_some_and(|k| k != found.scenario_key);
+                let stale = is_stale(now_key, found.scenario_key);
                 if stale {
                     ui.colored_label(
                         pal.warning,
@@ -263,7 +263,7 @@ impl LayoutSearch {
                         let gains = best_gains(self, s);
                         if !gains.is_empty() {
                             ui.add_space(4.0);
-                            ui.label(egui::RichText::new("Devices that gain most").strong());
+                            ui.label(egui::RichText::new("Margin gain, devices that gain most").strong());
                             for g in gains {
                                 ui.label(g);
                             }
@@ -396,9 +396,14 @@ fn headline(s: &Suggestion) -> String {
     };
     if over_b < over_a {
         format!(
-            "Moving {moved} takes {} of {} under their limit (tried {} layouts).",
+            "Moving {moved} takes {} of {} {} (tried {} layouts).",
             over_a - over_b,
             devices(over_a),
+            if over_a == 1 {
+                "under its limit"
+            } else {
+                "under their limit"
+            },
             s.evaluated
         )
     } else if over_a == 0 {
@@ -408,8 +413,13 @@ fn headline(s: &Suggestion) -> String {
         )
     } else {
         format!(
-            "Moving {moved} cools the neighbours, but the {} over their limit stay over (tried {} layouts).",
+            "Moving {moved} cools the neighbours, but the {} {} (tried {} layouts).",
             devices(over_a),
+            if over_a == 1 {
+                "over its limit stays over"
+            } else {
+                "over their limit stay over"
+            },
             s.evaluated
         )
     }
@@ -438,7 +448,7 @@ fn grid_of_numbers(ui: &mut egui::Ui, s: &Suggestion) {
             ui.label(format!("{:.1} °C", s.before.max_air_c));
             ui.label(format!("{:.1} °C", s.after.max_air_c));
             ui.end_row();
-            ui.label("Wire detour");
+            ui.label("Distance the devices move");
             ui.label("");
             ui.label(format!("{:.1} m of travel", s.moved_mm / 1000.0));
             ui.end_row();
@@ -496,4 +506,10 @@ fn best_gains(search: &LayoutSearch, s: &Suggestion) -> Vec<String> {
         .take(3)
         .map(|(g, id, b, a)| format!("{}: {b:+.1} K to {a:+.1} K ({g:+.1} K)", search.tag(id)))
         .collect()
+}
+
+/// A finding is only safe to apply while the Heat view follows the same
+/// cabinet it was made from: no key (view not following) counts as stale.
+pub(super) fn is_stale(now_key: Option<u64>, found_key: u64) -> bool {
+    now_key != Some(found_key)
 }

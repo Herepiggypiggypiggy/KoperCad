@@ -5,7 +5,9 @@
 use std::time::Duration;
 
 use eframe::egui;
-use novo_core::{Command, DeviceTag, MountingPlate, Project, RailKind, StructureId, Value};
+use novo_core::{
+    Command, DeviceId, DeviceTag, MountingPlate, Project, RailId, RailKind, StructureId, Value,
+};
 use novo_layout::enclosure::Enclosure;
 use novo_layout::model::{load, set_enclosure};
 use novo_thermal::placement::{Move, Suggestion};
@@ -160,4 +162,72 @@ fn closing_drops_the_finding_and_stops_a_run() {
     state.layout.close();
     assert!(state.layout.found.is_none());
     assert!(!state.layout.running());
+}
+
+#[test]
+fn a_finding_is_stale_unless_the_view_follows_the_same_cabinet() {
+    assert!(!super::heat_layout::is_stale(Some(7), 7));
+    assert!(super::heat_layout::is_stale(Some(8), 7));
+    assert!(super::heat_layout::is_stale(None, 7));
+}
+
+#[test]
+fn apply_keeps_the_rotation_of_a_moved_device() {
+    let (mut p, cab) = cabinet(true);
+    let mut state = HeatState::new();
+    run(&mut state, &p, cab);
+    let (s, _) = moves_of(&state);
+    let first = s.moves[0].clone();
+    let at = load(&p, cab)
+        .unwrap()
+        .placements
+        .iter()
+        .find(|q| q.id == first.id)
+        .map(|q| (q.x, q.y, q.rail))
+        .unwrap();
+    p.transact("Turn", |tx| {
+        tx.execute(Command::PlaceDevice {
+            device: DeviceId::from(first.id),
+            structure: cab,
+            x: at.0,
+            y: at.1,
+            rotated: true,
+            rail: at.2.map(|r| (RailId::from(r), 0.0)),
+        })
+    })
+    .unwrap();
+    let moves = s.moves.clone();
+    p.transact("Cooler layout", |tx| {
+        novo_thermal::placement_project::apply_moves(tx, cab, &moves).map(|_| ())
+    })
+    .unwrap();
+    let placed = load(&p, cab).unwrap();
+    assert!(
+        placed
+            .placements
+            .iter()
+            .find(|q| q.id == first.id)
+            .unwrap()
+            .rotated
+    );
+}
+
+#[test]
+fn a_gone_rail_applies_nothing_not_half_a_swap() {
+    let (mut p, cab) = cabinet(true);
+    let mut state = HeatState::new();
+    run(&mut state, &p, cab);
+    let (s, _) = moves_of(&state);
+    assert!(!s.moves.is_empty());
+    let before = load(&p, cab).unwrap().placements;
+    let mut moves = s.moves.clone();
+    moves.last_mut().unwrap().to_row = u64::MAX - 1;
+    let mut skipped = Vec::new();
+    p.transact("Cooler layout", |tx| {
+        skipped = novo_thermal::placement_project::apply_moves(tx, cab, &moves)?;
+        Ok(())
+    })
+    .unwrap();
+    assert!(!skipped.is_empty());
+    assert_eq!(load(&p, cab).unwrap().placements, before);
 }

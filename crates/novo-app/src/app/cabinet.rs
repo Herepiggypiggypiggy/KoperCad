@@ -2593,11 +2593,14 @@ impl NovoApp {
                     Ok(())
                 }) {
                     let text = if skipped.is_empty() {
-                        format!("Moved {count} device(s) for a cooler layout. Undo puts them back.")
+                        format!(
+                            "Moved {count} {} for a cooler layout. Undo puts {} back.",
+                            if count == 1 { "device" } else { "devices" },
+                            if count == 1 { "it" } else { "them" }
+                        )
                     } else {
                         format!(
-                            "Moved {} of {count} devices; {} rail(s) were gone.",
-                            count - skipped.len(),
+                            "Nothing moved: {} target rail(s) are gone. Search again.",
                             skipped.len()
                         )
                     };
