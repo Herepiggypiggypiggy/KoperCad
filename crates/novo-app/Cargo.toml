@@ -25,6 +25,7 @@ novo-cfd.workspace = true
 novo-thermal.workspace = true
 novo-symbols.workspace = true
 novo-editor.workspace = true
+novo-emc.workspace = true
 novo-workflow.workspace = true
 novo-numbering.workspace = true
 novo-xref.workspace = true

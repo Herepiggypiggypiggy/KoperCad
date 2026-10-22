@@ -1947,6 +1947,7 @@ dependencies = [
  "novo-commissioning",
  "novo-core",
  "novo-editor",
+ "novo-emc",
  "novo-heatview",
  "novo-interop",
  "novo-layout",
@@ -2023,6 +2024,7 @@ version = "0.1.0"
 dependencies = [
  "novo-cables",
  "novo-core",
+ "novo-emc",
  "novo-layout",
  "novo-parts",
  "novo-plc",
@@ -2346,6 +2348,7 @@ dependencies = [
  "novo-cli",
  "novo-core",
  "novo-editor",
+ "novo-emc",
  "novo-interop",
  "novo-layout",
  "novo-numbering",

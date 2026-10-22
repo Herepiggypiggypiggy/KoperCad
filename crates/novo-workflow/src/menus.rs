@@ -495,7 +495,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
     (
         "Check",
         &[
-            &["check.problems", "check.standards"],
+            &["check.problems", "check.standards", "check.emc"],
             &[
                 "check.calculations",
                 "check.electrical_inputs",
