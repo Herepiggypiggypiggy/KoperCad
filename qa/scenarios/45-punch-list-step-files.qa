@@ -1,0 +1,23 @@
+@title Punch list PDF and STEP cabinet model written and kept for inspection
+@area Reports
+# The door cut-out fixture has an enclosure with a mounting plate and door cut-outs: Ctrl+K "Export punch list" and "Export the cabinet as STEP" write the files next to the project copy; keep_file copies them.
+open qa/fixtures/door-cutouts.novo
+wait 20
+key ctrl+k
+wait 4
+text Export punch list
+wait 4
+key Enter
+wait 20
+expect_file "/tmp/kopercad-qa-open-*/door-cutouts punch list.pdf" 1500
+keep_file "/tmp/kopercad-qa-open-*/door-cutouts punch list.pdf"
+shot punch-list
+key ctrl+k
+wait 4
+text Export the cabinet as STEP
+wait 4
+key Enter
+wait 30
+expect_file "/tmp/kopercad-qa-open-*/door-cutouts*.stp" 2000
+keep_file "/tmp/kopercad-qa-open-*/door-cutouts*.stp"
+shot step

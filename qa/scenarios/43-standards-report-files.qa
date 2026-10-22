@@ -1,0 +1,33 @@
+@title Standards report: PDF and Excel written and kept for inspection
+@area Reports
+# With IEC 60204-1 ticked, Ctrl+K "Export standards report" and "Export standards Excel" write the report files; keep_file copies them so an auditor can read the real content.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text Standards check
+wait 4
+key Enter
+wait 10
+click_text "IEC 60204-1" #1
+wait 10
+key Escape
+wait 3
+key ctrl+k
+wait 4
+text Export standards report
+wait 4
+key Enter
+wait 20
+expect_file "~/Documents/KoperCAD/*standards.pdf" 1500
+keep_file "~/Documents/KoperCAD/*standards.pdf"
+shot pdf-written
+key ctrl+k
+wait 4
+text Export standards Excel
+wait 4
+key Enter
+wait 20
+expect_file "~/Documents/KoperCAD/*standards.xlsx" 1500
+keep_file "~/Documents/KoperCAD/*standards.xlsx"
+shot xlsx-written
