@@ -679,8 +679,18 @@ mod tests {
         let exhaust = Suggestion::for_test(Kind::Fan, 1, 70.0);
         let inlet = exhaust.companion_for_test(&e, &set).unwrap();
         assert_eq!((inlet.kind, inlet.wall), (Kind::Grille, Wall::Left));
-        // A grille already there serves as the other side: nothing is added.
-        set.add(VentSpec::new(Wall::Left));
+        // A grille too small for the flow does not count as a way out.
+        let mut tiny = VentSpec::new(Wall::Left);
+        tiny.width_mm = 20.0;
+        tiny.height_mm = 20.0;
+        set.add(tiny);
+        assert!(filter.companion_for_test(&e, &set).is_some());
+        let mut set = HeatSettings::default();
+        // A grille already there, big enough, serves as the other side: nothing is added.
+        let mut big = VentSpec::new(Wall::Left);
+        big.width_mm = 200.0;
+        big.height_mm = 200.0;
+        set.add(big);
         assert!(filter.companion_for_test(&e, &set).is_none());
         assert!(exhaust.companion_for_test(&e, &set).is_none());
         // So does a fan blowing the other way.
