@@ -882,7 +882,7 @@ fn status_and_buttons(
                     ui,
                     Tone::Warning,
                     &format!(
-                        "{} took this step at {}. Do another step, or take it over.",
+                        "{} took this step at {} UTC. Do another step, or take it over.",
                         c.by,
                         c.at.get(11..16).unwrap_or(&c.at)
                     ),

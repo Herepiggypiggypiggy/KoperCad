@@ -224,6 +224,7 @@ impl CommissioningStore {
     /// Drops ticks of steps the plan no longer has (a device was deleted).
     pub fn retain_build(&mut self, keep: &std::collections::BTreeSet<StepKey>) {
         self.build.retain(|k, _| keep.contains(k));
+        self.claims.retain(|k, _| keep.contains(k));
     }
 
     /// Forgets a decision, back to `Pending`.

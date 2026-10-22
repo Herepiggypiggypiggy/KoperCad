@@ -856,8 +856,10 @@ fn part_text(project: &Project, device: &novo_core::Device) -> String {
     }
 }
 
-/// Ticks a step done.
+/// Ticks a step done. A claim on it is let go, so an undone step does not
+/// come back with an old claim.
 pub fn mark_done(store: &mut CommissioningStore, step: &BuildStep, by: &str, at: &str) {
+    release(store, step, at);
     store.put_build(BuildTick {
         key: step.key,
         mark: step.mark.clone(),

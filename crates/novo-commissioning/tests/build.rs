@@ -617,6 +617,21 @@ fn claiming_a_step_shows_who_has_it_and_a_release_lets_go() {
 }
 
 #[test]
+fn finishing_a_step_lets_go_of_its_claim() {
+    let (mut doc, h) = starter();
+    cabinet(&mut doc, &h);
+    let plan = plan_of(&doc);
+    let c = &plan.cabinets[0];
+    let mut store = CommissioningStore::new();
+    let step = c.step(c.ready(&store)[0]).unwrap();
+    claim_step(&mut store, step, "bob", "2026-10-22T09:00:00Z");
+    mark_done(&mut store, step, "bob", "2026-10-22T09:10:00Z");
+    // Undoing the tick must not bring the old claim back.
+    store.clear_build(step.key);
+    assert!(store.build_claim(step.key).is_none());
+}
+
+#[test]
 fn claims_travel_in_the_field_file_and_the_newer_record_wins_a_release_too() {
     let (mut doc, h) = starter();
     cabinet(&mut doc, &h);

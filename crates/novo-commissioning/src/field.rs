@@ -401,7 +401,8 @@ impl FieldPackage {
                         report.claims_added += 1;
                     }
                     Some(have) if have == incoming => {}
-                    Some(have) if have.at < incoming.at => {
+                    // Same second: the larger name wins, so both machines agree.
+                    Some(have) if (&have.at, &have.by) < (&incoming.at, &incoming.by) => {
                         store.put_claim(incoming.clone());
                         report.claims_updated += 1;
                     }
