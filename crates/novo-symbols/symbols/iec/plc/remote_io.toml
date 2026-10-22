@@ -1,7 +1,7 @@
 format = 1
 id = "iec/plc/remote_io"
 name = "Remote I/O node"
-description = "Fieldbus head of a remote I/O station: 24 V supply L+, M and PE and two Ethernet ports P1 and P2 for the line topology."
+description = "Fieldbus head of a remote I/O station: 24 V supply L+, M and PE and two Ethernet ports P1 and P2 for the line topology. IEC pack block symbol (a manufacturer-neutral drawing, not a 60617 graphic)."
 standard = "IEC 60617"
 category = "plc"
 function = "plc.remote_io"
