@@ -1,0 +1,43 @@
+@title Wiring plan DXF and change report written and kept for inspection
+@area Reports
+# The wiring plan DXF needs the Cabinet view open on a cabinet; the change report needs an issued revision and a change after it (a PLC card added). The files are written next to the opened copy of the fixture (/tmp/kopercad-qa-open-N); keep_file copies each for inspection.
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text "Cabinet" #1
+wait 15
+key ctrl+k
+wait 4
+text Export wiring plan as DXF
+wait 4
+key Enter
+wait 20
+expect_file "/tmp/kopercad-qa-open-*/door-cutouts wiring CAB.dxf" 3000
+keep_file "/tmp/kopercad-qa-open-*/door-cutouts wiring CAB.dxf"
+shot wiring-dxf
+key ctrl+k
+wait 4
+text Issue revision
+wait 4
+key Enter
+wait 10
+expect "Issue revision A"
+text Test change for the change report
+wait 3
+key Enter
+wait 15
+shot issued
+key ctrl+k
+wait 4
+text add card DI16 DQ8
+wait 5
+key Enter
+wait 10
+key ctrl+k
+wait 4
+text Export change report
+wait 4
+key Enter
+wait 20
+expect_file "/tmp/kopercad-qa-open-*/door-cutouts changes A.pdf" 1500
+keep_file "/tmp/kopercad-qa-open-*/door-cutouts changes A.pdf"
+shot change-report
