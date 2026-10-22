@@ -161,6 +161,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "file.example_emc",
+        "Open EMC example (drive, motor cable and signal wires)",
+        "Project",
+        &["emc", "drive", "vfd", "interference", "demo"],
+        Needs::Nothing,
+    ),
+    cmd(
         "file.practice",
         "Try the fast keys",
         "Project",
@@ -1436,6 +1443,22 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Spread devices down in 3D",
         "View",
         &["distribute", "spread", "equal space", "gaps"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.emc",
+        "EMC view: cable classes, keep-clear zones and hot spots (indicative model)",
+        "View",
+        &[
+            "emc",
+            "electromagnetic",
+            "compatibility",
+            "interference",
+            "noise",
+            "segregation",
+            "cable class",
+            "hot spot",
+        ],
         Needs::Project,
     ),
     cmd(

@@ -34,6 +34,15 @@ pub(crate) fn build_example_with(
     doc: &mut Document,
     extra: impl FnOnce(&mut Tx<'_>) -> ModelResult<()>,
 ) -> ModelResult<novo_core::ChangeSet> {
+    build_example_named(doc, EXAMPLE_NAME, extra)
+}
+
+/// [`build_example_with`] under another project name (the EMC example).
+pub(crate) fn build_example_named(
+    doc: &mut Document,
+    name: &str,
+    extra: impl FnOnce(&mut Tx<'_>) -> ModelResult<()>,
+) -> ModelResult<novo_core::ChangeSet> {
     let ((), changes) = doc.transact("Open example", |tx: &mut Tx<'_>| {
         let empty: Vec<_> = tx.project().pages().map(|p| p.id).collect();
         for page in empty {
@@ -51,7 +60,7 @@ pub(crate) fn build_example_with(
         add_cabinet(tx)?;
         add_safety_function(tx)?;
         tx.set_info(|info| {
-            info.name = EXAMPLE_NAME.into();
+            info.name = name.into();
             info.description = EXAMPLE_DESCRIPTION.into();
             // A plausible small-machine supply (400 V, 6 kA, within what the example's
             // control-circuit protection breaks), stated, so the calculations and the single-line
@@ -184,13 +193,29 @@ impl NovoApp {
     /// untouched leaves nothing under Unsaved; the first edit makes it
     /// dirty and the usual autosave and Unsaved flow take over.
     pub(super) fn open_example(&mut self) {
-        if let Err(e) = self.backend.new_project(EXAMPLE_NAME) {
+        self.open_built_example(EXAMPLE_NAME, build_example);
+    }
+
+    /// The EMC example: the starter plus a drive, a motor cable and signals.
+    pub(super) fn open_emc_example(&mut self) {
+        self.open_built_example(
+            super::emc_demo::EMC_EXAMPLE_NAME,
+            super::emc_demo::build_emc_example,
+        );
+    }
+
+    fn open_built_example(
+        &mut self,
+        name: &str,
+        build: fn(&mut Document) -> ModelResult<novo_core::ChangeSet>,
+    ) {
+        if let Err(e) = self.backend.new_project(name) {
             self.message(Level::Error, format!("Could not open the example: {e}"));
             return;
         }
         self.project_path = None;
         self.current_page = None;
-        let built = self.backend.document_mut().map(build_example);
+        let built = self.backend.document_mut().map(build);
         match built {
             Some(Ok(changes)) => self.backend.record(&changes),
             Some(Err(e)) => {
