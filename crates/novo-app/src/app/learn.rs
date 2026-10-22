@@ -114,6 +114,8 @@ pub(crate) const ANCHORS: &[&str] = &[
     "outline.pages",
     "outline.toggle",
     "commissioning.who",
+    "settings.standard.nfpa",
+    "settings.standard.switch",
     "commissioning.punch",
     "commissioning.redlines",
     "commissioning.redline_apply",

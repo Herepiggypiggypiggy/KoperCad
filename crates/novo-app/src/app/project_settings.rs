@@ -126,17 +126,31 @@ impl NovoApp {
                 format!("+{}", n.next_cabinet(d.project())),
             )
         });
+        // Controls the lessons point at, registered once the window is drawn.
+        let mut marks: Vec<(&'static str, egui::Rect, &'static str, bool)> = Vec::new();
         let modal = egui::Modal::new(egui::Id::new("project_settings")).show(ctx, |ui| {
             ui.set_width(novo_theme::dialog_width::MEDIUM);
             super::dialog_ui::title(ui, "Project settings", "");
             super::dialog_ui::section(ui, "Drawing standard", true);
-            super::dialog_ui::choice(
+            super::dialog_ui::setting(ui, "Symbol pack", "Picks the symbol pack for new symbols.");
+            let mut index = usize::from(pack == Pack::Nfpa);
+            let (changed, segments) = novo_theme::widgets::segmented_with_rects(
                 ui,
-                "Symbol pack",
-                "Picks the symbol pack for new symbols.",
-                &mut pack,
-                &[(Pack::Iec, "IEC 60617"), (Pack::Nfpa, "NFPA 79 / ANSI Y32.2")],
+                &mut index,
+                &["IEC 60617", "NFPA 79 / ANSI Y32.2"],
             );
+            if changed {
+                pack = if index == 1 { Pack::Nfpa } else { Pack::Iec };
+            }
+            if let Some((rect, clicked)) = segments.get(1) {
+                marks.push((
+                    "settings.standard.nfpa",
+                    *rect,
+                    "NFPA 79 / ANSI Y32.2",
+                    *clicked,
+                ));
+            }
+            ui.add_space(8.0);
             if !stored.is_empty() && Pack::from_id(&stored).is_none() {
                 ui.colored_label(
                     ui.visuals().warn_fg_color,
@@ -144,7 +158,7 @@ impl NovoApp {
                 );
             }
             if let Some(plan) = &plan {
-                apply = switch_section(ui, plan);
+                apply = switch_section(ui, plan, &mut marks);
             }
             super::dialog_ui::section(ui, "Names for new groups and cabinets", false);
             super::dialog_ui::hint(
@@ -198,6 +212,9 @@ or its Supply or External property is set.",
                 );
             super::dialog_ui::done(ui)
         });
+        for (id, rect, label, clicked) in marks {
+            self.anchor_clicked(id, rect, label, clicked);
+        }
         self.set_standard(pack);
         self.set_project_property("tag.rule", "page-column", tag_rule);
         self.set_project_property("structure.list", "complete", structure_complete);
@@ -215,7 +232,11 @@ or its Supply or External property is set.",
 
 /// The preview and the button that re-keys placed symbols to the pack the
 /// project is set to. Returns whether the button was pressed.
-fn switch_section(ui: &mut egui::Ui, plan: &novo_workflow::switch::SwitchPlan) -> bool {
+fn switch_section(
+    ui: &mut egui::Ui,
+    plan: &novo_workflow::switch::SwitchPlan,
+    marks: &mut Vec<(&'static str, egui::Rect, &'static str, bool)>,
+) -> bool {
     if plan.rekey.is_empty() && plan.without_counterpart.is_empty() {
         return false;
     }
@@ -227,7 +248,7 @@ fn switch_section(ui: &mut egui::Ui, plan: &novo_workflow::switch::SwitchPlan) -
             "{} placed symbols are drawn in another standard.",
             plan.rekey.len()
         ));
-        pressed = ui
+        let button = ui
             .button(format!(
                 "Switch {} placed symbols to {}",
                 plan.rekey.len(),
@@ -235,8 +256,14 @@ fn switch_section(ui: &mut egui::Ui, plan: &novo_workflow::switch::SwitchPlan) -
             ))
             .on_hover_text(format!(
                 "One undo step. Connections and positions stay. Target: {name}."
-            ))
-            .clicked();
+            ));
+        marks.push((
+            "settings.standard.switch",
+            button.rect,
+            "Switch placed symbols",
+            button.clicked(),
+        ));
+        pressed = button.clicked();
     }
     if !plan.without_counterpart.is_empty() {
         let devices = plan.devices_without_counterpart();

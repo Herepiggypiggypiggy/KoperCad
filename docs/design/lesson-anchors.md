@@ -61,6 +61,8 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `outline.pages`: {ui:outline.pages} shows **Pages list**
 - `outline.toggle`: {ui:outline.toggle} shows **Pages button**
 - `commissioning.who`: {ui:commissioning.who} shows **By menu**
+- `settings.standard.nfpa`: {ui:settings.standard.nfpa} shows **NFPA 79 / ANSI Y32.2**
+- `settings.standard.switch`: {ui:settings.standard.switch} shows **Switch placed symbols**
 - `commissioning.punch`: {ui:commissioning.punch} shows **Punch tab**
 - `commissioning.redlines`: {ui:commissioning.redlines} shows **Redlines tab**
 - `commissioning.redline_apply`: {ui:commissioning.redline_apply} shows **Apply button**

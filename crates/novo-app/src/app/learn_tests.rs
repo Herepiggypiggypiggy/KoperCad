@@ -452,6 +452,24 @@ fn the_shipped_lessons_lint_without_errors_against_this_build() {
 }
 
 #[test]
+fn no_shipped_lesson_names_a_control_this_build_does_not_register() {
+    // The lint only warns for a lesson that is still early access, and a step
+    // waiting for a control that never comes cannot be finished (Drawing
+    // standard once waited for two).
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    let report = d.app.learn.lint_report();
+    let missing: Vec<String> = report
+        .findings
+        .iter()
+        .filter(|f| f.message.contains("anchor") && f.message.contains("is not in this build"))
+        .map(ToString::to_string)
+        .collect();
+    assert!(missing.is_empty(), "{}", missing.join("\n"));
+}
+
+#[test]
 fn a_ready_lesson_naming_a_missing_anchor_is_coming_soon() {
     let (_dir, mut d) = drive();
     let mut files = files();

@@ -50,14 +50,10 @@ Fix a step, then regenerate to shrink the list.
 - cut-lengths/export-cut: `Route all` (write {ui:cabinet.routes})
 - design-checks/open-list: `Check`
 - design-checks/open-list: `Problems` (write {ui:cabinet.problems})
-- design-checks/restore: `Restore`
 - design-checks/restore: `Waived`
 - design-checks/waive: `Waive with a reason...`
-- design-checks/waive: `Waive`
 - drawing-standard/back-to-iec: `IEC 60617 (default)`
-- drawing-standard/back-to-iec: `Switch placed symbols`
-- drawing-standard/pick-nfpa: `NFPA 79 / ANSI Y32.2`
-- drawing-standard/switch-symbols: `Switch placed symbols`
+- drawing-standard/back-to-iec: `Switch placed symbols` (write {ui:settings.standard.switch})
 - dxf-and-backgrounds/background: `File > Import > Import DXF as background`
 - dxf-and-backgrounds/export-all: `File > Export drawings > Export all pages as DXF`
 - dxf-and-backgrounds/export-page: `File`
@@ -122,6 +118,7 @@ Fix a step, then regenerate to shrink the list.
 - time-savers/open-prefs: `Preferences`
 - time-savers/open-standard: `Project settings`
 - time-savers/pick-standard: `IEC 60617 (default)`
+- time-savers/pick-standard: `NFPA 79 / ANSI Y32.2` (write {ui:settings.standard.nfpa})
 - view-3d/back: `Cabinet`
 - view-3d/view-cube: `Front`
 - wire-list-and-bom/bom-follows: `Reports`

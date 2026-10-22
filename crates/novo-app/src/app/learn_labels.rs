@@ -56,6 +56,8 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("outline.pages", "Pages list"),
     ("outline.toggle", "Pages button"),
     ("commissioning.who", "By menu"),
+    ("settings.standard.nfpa", "NFPA 79 / ANSI Y32.2"),
+    ("settings.standard.switch", "Switch placed symbols"),
     ("commissioning.punch", "Punch tab"),
     ("commissioning.redlines", "Redlines tab"),
     ("commissioning.redline_apply", "Apply button"),
