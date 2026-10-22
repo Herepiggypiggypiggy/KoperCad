@@ -371,9 +371,15 @@ pub(super) fn problem_summary(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> S
         })
         .map(|(id, l)| format!("{}: {l}", tag_of(id)))
         .collect();
+    // A device problem can be selected from the list; a panel-level one cannot.
+    let hint = if lines.is_empty() {
+        "Click to list the problems."
+    } else {
+        "Click to list them and select the device."
+    };
     lines.extend(rail_duct_lines(layout));
     lines.extend(panel_problem_lines(layout, tag_of));
-    lines.push("Click to list them and select the device.".to_owned());
+    lines.push(hint.to_owned());
     lines.join("\n")
 }
 
