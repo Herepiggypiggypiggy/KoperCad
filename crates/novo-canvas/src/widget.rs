@@ -666,6 +666,12 @@ impl CanvasView {
         self.viewport.center.y += reserve * 0.5 / self.viewport.zoom;
     }
 
+    /// Moves the view back inside the sheet when it shows paper beside it
+    /// (after a reveal near the sheet's edge): see [`Self::keep_sheet_in_view`].
+    pub fn keep_in_sheet(&mut self, sheet: &Aabb) {
+        self.keep_sheet_in_view(sheet);
+    }
+
     /// A close fit on the drawing must not leave a stretch of empty canvas
     /// beside the sheet while the sheet's far columns are cut off: on an
     /// axis where the whole sheet fits, the sheet is centred; where it does
@@ -2019,6 +2025,21 @@ mod tests {
         assert!(bottom <= 600.0 - 80.0 + 0.5, "sheet bottom at {bottom}");
         let top = view.viewport.world_to_screen(Vec2::ZERO).y;
         assert!(top >= 0.0);
+    }
+
+    #[test]
+    fn a_view_revealed_near_the_sheet_edge_is_kept_inside_the_sheet() {
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(1000.0, 700.0);
+        view.viewport.zoom = 4.0;
+        let sheet = Aabb::new(Vec2::ZERO, Vec2::new(840.0, 594.0));
+        // A step target near the top-left corner centres on empty paper.
+        view.viewport.center = Vec2::new(20.0, 20.0);
+        view.keep_in_sheet(&sheet);
+        let left = view.viewport.world_to_screen(sheet.min).x;
+        let top = view.viewport.world_to_screen(sheet.min).y;
+        assert!(left <= 24.5 && top <= 24.5, "paper edge at {left},{top}");
+        assert!(left >= 0.0 && top >= 0.0, "black band at {left},{top}");
     }
 
     #[test]

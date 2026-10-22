@@ -1,0 +1,16 @@
+@title Lesson page: the whole sheet is in view when a lesson starts
+@area Learn
+# Creative round 25: a running lesson showed the page shifted, a black band at the left and the sheet
+# cropped at the right. A lesson's small page now opens with the whole sheet in view.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text learn
+wait 6
+key Enter
+wait 30
+click_text Start
+wait 60
+shot lesson-running
+check_layout
