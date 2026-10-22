@@ -13,6 +13,7 @@ cd "$(dirname "$0")/.."
 # running a stale kopercad from ./target/debug instead of the fresh build gave wrong pictures.
 if [ -z "${KOPERCAD_BIN_DIR:-}" ]; then
   tdir=$(cargo metadata --format-version 1 --no-deps 2>/dev/null | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')
+  tdir=${tdir//\\\\/\/}   # JSON doubles the backslashes of a Windows path
   bin=${tdir:-${CARGO_TARGET_DIR:-target}}/debug
 else
   bin=$KOPERCAD_BIN_DIR
@@ -44,11 +45,21 @@ elif [ ! -x "$bin/kopercad" ] || [ ! -x "$bin/kopercad-cli" ]; then
   exit 3
 fi
 echo "qa.sh: program $bin/kopercad (built $(date -r "$bin/kopercad" '+%F %T' 2>/dev/null || echo unknown)), git $(git rev-parse --short=10 HEAD 2>/dev/null || echo unknown)" >&2
-# After our own build the program is newer than every source file; if not, the build went elsewhere.
-if [ -z "${KOPERCAD_BIN_DIR:-}" ] && [ -n "$(find crates assets Cargo.toml Cargo.lock -type f -not -path '*/target/*' -newer "$bin/kopercad" -print -quit 2>/dev/null)" ]; then
-  echo "qa.sh: REFUSING to run: $bin/kopercad is older than the source, so the pictures would show old code." >&2
-  echo "  cargo built into another folder? Set KOPERCAD_BIN_DIR to the folder with the fresh kopercad and kopercad-cli." >&2
-  exit 4
+# After our own build the program is newer than everything it was built from. cargo lists those
+# files in kopercad.d (tests, examples and docs are not in it and never rebuild the program).
+if [ -z "${KOPERCAD_BIN_DIR:-}" ]; then
+  if [ -f "$bin/kopercad.d" ]; then
+    stale=$(sed -e ':a' -e '/\\$/N;s/\\\n//;ta' "$bin/kopercad.d" | sed 's/^[^:]*: //' | tr ' ' '\n' | while read -r f; do
+      [ -n "$f" ] && [ -f "$f" ] && [ "$f" -nt "$bin/kopercad" ] && { echo "$f"; break; }
+    done)
+  else
+    stale=$(find crates/*/src crates/*/build.rs crates/*/Cargo.toml assets/lessons Cargo.lock -type f -newer "$bin/kopercad" -print -quit 2>/dev/null)
+  fi
+  if [ -n "$stale" ]; then
+    echo "qa.sh: REFUSING to run: $bin/kopercad is older than $stale, so the pictures would show old code." >&2
+    echo "  cargo built into another folder? Set KOPERCAD_BIN_DIR to the folder with the fresh kopercad and kopercad-cli." >&2
+    exit 4
+  fi
 fi
 case ${1:-run} in
   list) shift; exec "$bin/kopercad-cli" qa list "$@" ;;

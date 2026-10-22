@@ -1737,15 +1737,47 @@ fn binary_provenance(app: &Path, root: &Path) -> Value {
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
     };
     let head = git(&["rev-parse", "--short=10", "HEAD"]);
-    let head_time = git(&["log", "-1", "--format=%ct"]).and_then(|t| t.parse::<i64>().ok());
+    // Only what the build really uses counts: tests, examples and docs never rebuild the program.
+    let head_time = git(&[
+        "log",
+        "-1",
+        "--format=%ct",
+        "--",
+        ":(glob)crates/*/src/**",
+        ":(glob)crates/*/build.rs",
+        ":(glob)crates/*/Cargo.toml",
+        "assets/lessons",
+        "Cargo.lock",
+    ])
+    .and_then(|t| t.parse::<i64>().ok());
+    let mtime = |p: &Path| {
+        std::fs::metadata(p)
+            .and_then(|m| m.modified())
+            .ok()
+            .map(secs)
+    };
     let mut newest = 0;
-    for dir in ["crates", "assets"] {
-        newest = newest.max(newest_source(&root.join(dir)));
-    }
-    for f in ["Cargo.toml", "Cargo.lock"] {
-        if let Ok(t) = std::fs::metadata(root.join(f)).and_then(|m| m.modified()) {
-            newest = newest.max(secs(t));
+    // cargo's own list of the files the program was built from (the `.d` file beside it).
+    match std::fs::read_to_string(app.with_extension("d")) {
+        Ok(d) => {
+            let deps = d.replace("\\\n", " ");
+            let deps = deps.split_once(": ").map_or("", |x| x.1);
+            for f in deps.split_whitespace() {
+                newest = newest.max(
+                    mtime(&root.join(f))
+                        .or_else(|| mtime(Path::new(f)))
+                        .unwrap_or(0),
+                );
+            }
         }
+        Err(_) => {
+            for dir in ["crates", "assets/lessons"] {
+                newest = newest.max(newest_source(&root.join(dir)));
+            }
+        }
+    }
+    for f in ["Cargo.lock", "assets/lessons"] {
+        newest = newest.max(mtime(&root.join(f)).unwrap_or(0));
     }
     let warning = stale_reason(built, (newest > 0).then_some(newest), head_time);
     json!({
@@ -1765,7 +1797,11 @@ fn newest_source(dir: &Path) -> i64 {
     for e in rd.flatten() {
         let p = e.path();
         let name = e.file_name();
-        if name == "target" || name == ".git" {
+        if matches!(
+            name.to_str(),
+            Some("target" | ".git" | "tests" | "examples" | "benches")
+        ) || p.extension().is_some_and(|x| x == "md")
+        {
             continue;
         }
         if p.is_dir() {
@@ -2129,6 +2165,20 @@ mod tests {
                 .contains("HEAD")
         );
         assert!(stale_reason(None, Some(1), None).is_some());
+    }
+
+    #[test]
+    fn files_that_do_not_rebuild_the_program_are_not_counted() {
+        let dir = std::env::temp_dir().join(format!("kopercad-newest-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("tests")).unwrap();
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(dir.join("tests/x.rs"), "").unwrap();
+        std::fs::write(dir.join("README.md"), "").unwrap();
+        assert_eq!(newest_source(&dir), 0);
+        std::fs::write(dir.join("src/lib.rs"), "").unwrap();
+        assert!(newest_source(&dir) > 0);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
