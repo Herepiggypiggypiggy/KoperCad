@@ -1,0 +1,50 @@
+@title Example project exports kept: page PDF, report PDF, page DXF, wire production, AutomationML
+@area Reports
+# The example project exports a page as PDF and DXF, the table of contents report, the wire production workbook and the AutomationML plant file; keep_file copies each for inspection.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text Export this page as PDF
+wait 4
+key Enter
+wait 15
+expect_file "~/Documents/KoperCAD/*page 1.pdf" 3000
+keep_file "~/Documents/KoperCAD/*page 1.pdf"
+shot pdf-page
+key ctrl+k
+wait 4
+text Export report (PDF)
+wait 4
+key Enter
+wait 20
+expect_file "~/Documents/KoperCAD/*Table of contents.pdf" 3000
+keep_file "~/Documents/KoperCAD/*Table of contents.pdf"
+shot report-pdf
+key ctrl+k
+wait 4
+text Export this page as DXF
+wait 4
+key Enter
+wait 15
+expect_file "~/Documents/KoperCAD/*- 1.dxf" 3000
+keep_file "~/Documents/KoperCAD/*- 1.dxf"
+shot dxf-page
+key ctrl+k
+wait 4
+text Export wire production (.xlsx)
+wait 4
+key Enter
+wait 20
+expect_file "~/Documents/KoperCAD/*wire production.xlsx" 3000
+keep_file "~/Documents/KoperCAD/*wire production.xlsx"
+shot wirecut-xlsx
+key ctrl+k
+wait 4
+text Export the plant as AutomationML
+wait 4
+key Enter
+wait 20
+expect_file "~/Documents/KoperCAD/*.aml" 3000
+keep_file "~/Documents/KoperCAD/*.aml"
+shot aml

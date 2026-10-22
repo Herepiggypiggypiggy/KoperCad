@@ -200,6 +200,95 @@ impl PageLayout {
     }
 }
 
+/// Average width of a character as a fraction of the text height, set a bit
+/// high (capitals, digits and bold are wider than the average) so an estimate
+/// errs on the side of room.
+const CHAR_EM: f64 = 0.6;
+
+/// Column widths in mm that add up to `table_w`. Each column starts from its
+/// declared share ([`Column::width`](crate::Column::width)); a column whose
+/// text (header or any row of the page) is narrower than that share gives the
+/// difference to the columns whose text is wider, in proportion to what they
+/// lack, so no cell is cut while the page has room. What is left after every
+/// column has its text goes by the declared shares. A table too wide for the
+/// page still lets the narrow columns keep their text and cuts the wide ones.
+fn column_widths(
+    section: &crate::Section,
+    page: &ReportPage,
+    setup: &PageSetup,
+    table_w: f64,
+) -> Vec<f64> {
+    let n = section.columns.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let total: f64 = section.columns.iter().map(|c| c.width.max(0.0)).sum();
+    let declared: Vec<f64> = section
+        .columns
+        .iter()
+        .map(|c| {
+            let share = if total > 0.0 {
+                c.width.max(0.0) / total
+            } else {
+                1.0 / n as f64
+            };
+            share * table_w
+        })
+        .collect();
+    let line_chars = |text: &str| text.lines().next().map_or(0, |l| l.chars().count());
+    let needed: Vec<f64> = section
+        .columns
+        .iter()
+        .enumerate()
+        .map(|(i, column)| {
+            let rows = section.rows[page.rows.clone()].iter().map(|row| {
+                row.cells
+                    .get(i)
+                    .map_or(0, |c| line_chars(&section.cell_text(c)))
+            });
+            let chars = rows.chain([line_chars(&column.header)]).max().unwrap_or(0);
+            chars as f64 * setup.text_mm * CHAR_EM + 2.0 * setup.padding_mm
+        })
+        .collect();
+    // Water filling: a column whose text needs no more than its share takes
+    // just that; the others split what is left by their declared shares, and
+    // the check repeats because their shares grew.
+    let mut widths = vec![0.0; n];
+    let mut active: Vec<usize> = (0..n).collect();
+    let mut room = table_w;
+    loop {
+        let weight: f64 = active.iter().map(|&i| declared[i]).sum();
+        if weight <= 0.0 {
+            break;
+        }
+        let scale = room / weight;
+        let (done, rest): (Vec<usize>, Vec<usize>) = active
+            .iter()
+            .partition(|&&i| needed[i] <= declared[i] * scale);
+        if done.is_empty() {
+            for &i in &rest {
+                widths[i] = declared[i] * scale;
+            }
+            return widths;
+        }
+        for &i in &done {
+            widths[i] = needed[i];
+            room -= needed[i];
+        }
+        active = rest;
+        if active.is_empty() {
+            break;
+        }
+    }
+    // Every column has its text: what is left goes by the declared shares.
+    if room > 1e-9 {
+        for (w, d) in widths.iter_mut().zip(&declared) {
+            *w += room * d / table_w;
+        }
+    }
+    widths
+}
+
 /// Lays out one page of a report: a heading (`Bill of materials · Devices
 /// without parts`, `continued` on follow-on pages, `page n / count` on the
 /// right), the column header row and the page's rows, each cell a
@@ -254,16 +343,12 @@ pub fn layout_page(report: &ReportOutput, page: &ReportPage, setup: &PageSetup) 
         return layout;
     };
 
-    // Column edges.
-    let total: f64 = section.columns.iter().map(|c| c.width.max(0.0)).sum();
+    // Column edges: the declared widths are shares, then content that does
+    // not fit its share borrows from columns wider than they need.
+    let widths = column_widths(section, page, setup, table_w);
     let mut edges = vec![x0];
-    for column in &section.columns {
-        let share = if total > 0.0 {
-            column.width.max(0.0) / total
-        } else {
-            1.0 / section.columns.len() as f64
-        };
-        edges.push(edges.last().copied().unwrap_or(x0) + share * table_w);
+    for w in &widths {
+        edges.push(edges.last().copied().unwrap_or(x0) + w);
     }
 
     let pad = setup.padding_mm;

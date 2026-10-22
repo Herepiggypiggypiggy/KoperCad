@@ -252,3 +252,29 @@ fn a_column_header_too_narrow_for_one_line_runs_onto_two() {
         "{text}"
     );
 }
+
+#[test]
+fn no_report_cell_is_cut_with_an_ellipsis_while_the_page_has_room() {
+    let mut doc = novo_core::Document::default();
+    novo_tests::motor_starter(&mut doc).expect("fixture");
+    let all = novo_reports::generate_all(doc.project());
+    let mut cut = Vec::new();
+    for report in &all {
+        // The single-line table has 18 columns, some with whole sentences: it is
+        // wider than the page by design and cuts its longest cells.
+        if report.report == "singleline" {
+            continue;
+        }
+        let pdf = export_report_pdf(&[report], &ReportPdfOptions::default());
+        let text = {
+            let pdf = lopdf::Document::load_mem(&pdf).expect("valid pdf");
+            let pages: Vec<u32> = pdf.get_pages().keys().copied().collect();
+            pdf.extract_text(&pages).expect("text")
+        };
+        if text.contains("...") {
+            let lines: Vec<&str> = text.lines().filter(|l| l.contains("...")).collect();
+            cut.push(format!("{}: {lines:?}", report.report));
+        }
+    }
+    assert!(cut.is_empty(), "reports with cut text: {cut:?}");
+}
