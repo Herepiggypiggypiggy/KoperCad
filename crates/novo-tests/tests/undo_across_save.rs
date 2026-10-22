@@ -14,6 +14,7 @@
 //! edits, cables, parts, revisions, numbering, Autopilot and generated pages
 //! (a follow-up extends the mix to those).
 
+#[cfg(unix)]
 use std::path::Path;
 
 use novo_core::*;
@@ -153,6 +154,9 @@ fn run(seed: u64, steps: usize) -> usize {
     let (mut edits, mut undos, mut redos, mut saves) = (0, 0, 0, 0);
 
     for step in 0..steps {
+        // Only the unix-only file check below reads the step.
+        #[cfg(not(unix))]
+        let _ = step;
         let what = rng.below(100);
         if what < 55 {
             if let Some(changes) = edit(&mut doc, &mut rng) {
