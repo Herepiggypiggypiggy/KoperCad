@@ -124,21 +124,21 @@ fn field_section(
         if let Some(hz) = number(ui, "emc_field_hz", cached.params.hz, 1.0, 1.0..=30.0e6, " Hz", "Frequency of the currents. From 1 kHz up the plate counts as a conducting plane") {
             *set_setting = Some(("field_hz", Some(novo_core::Value::Float(hz))));
         }
-        ui.label("Planning value");
+        ui.label("Planning value at a PLC or analog module");
         if let Some(limit) = number(ui, "emc_field_limit", cached.params.limit_ut, 0.1, 0.1..=1000.0, " \u{b5}T", "The field at a PLC or analog module above which EMC-19 reports (house value, not a standard's limit)") {
             *set_setting = Some(("field_limit_ut", Some(novo_core::Value::Float(limit))));
         }
         let mut image = field.image;
         if ui
             .checkbox(&mut image, "Plate is a conducting plane")
-            .on_hover_text("Image current under the plate: right for steep edges, wrong for 50 Hz in a thin plate")
+            .on_hover_text("Treats the plate as a conducting plane (a mirror image of the current): right for steep edges, wrong for 50 Hz in a thin plate")
             .changed()
         {
             *set_setting = Some(("plate_image", Some(novo_core::Value::Bool(image))));
         }
     });
     if field.currents.is_empty() {
-        ui.colored_label(p.warning, "No wire has a current yet, so the field is not evaluated. Give a wire its current below once it has one, or give the devices at its ends a rated current (Inspector, Rated current).");
+        ui.colored_label(p.warning, "No wire has a current yet, so the field is not evaluated. Give a wire its current in the list that appears here, or give the devices at its ends a rated current (Inspector, Rated current).");
     }
     for row in &field.currents {
         ui.horizontal_wrapped(|ui| {

@@ -434,7 +434,11 @@ fn field_of(
             setup.params.hz,
             setup.params.slice_mm
         ),
-        ends: Some((ut(limit / 10.0), ut(limit * 10.0))),
+        ends: Some((
+            ut(limit / 10.0),
+            format!("{limit:.1} \u{b5}T"),
+            ut(limit * 10.0),
+        )),
     })
 }
 
@@ -557,8 +561,9 @@ mod tests {
         let f = pic.field.as_ref().expect("the field slice");
         assert!(f.label.contains("Magnetic field estimate"), "{}", f.label);
         assert!(f.label.contains("model"));
-        let (lo, hi) = f.ends.clone().expect("the legend ends");
+        let (lo, mid, hi) = f.ends.clone().expect("the legend ends");
         assert!(lo.contains('\u{b5}') && hi.contains('\u{b5}'), "{lo} {hi}");
+        assert_eq!(mid, "12.6 \u{b5}T");
         // Strongest on the wire (y = 50), weak at the far side of the plate.
         assert!(f.at(400.0, 55.0) > f.at(400.0, 395.0));
         assert!(f.values.iter().all(|v| (0.0..=1.0).contains(v)));

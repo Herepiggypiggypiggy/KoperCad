@@ -373,9 +373,9 @@ pub struct Field {
     pub values: Vec<f32>,
     /// What the map is, as the legend says it.
     pub label: String,
-    /// What the two ends of the colour ramp stand for ("1.3 \u{b5}T",
-    /// "126 \u{b5}T"), when the values are a physical quantity and not an index.
-    pub ends: Option<(String, String)>,
+    /// What the ends and the middle of the colour ramp stand for ("1.3 \u{b5}T",
+    /// "12.6 \u{b5}T", "126 \u{b5}T"), when the values are a physical quantity and not an index.
+    pub ends: Option<(String, String, String)>,
 }
 
 impl Field {
