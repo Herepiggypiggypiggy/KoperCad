@@ -21,12 +21,12 @@ wait 10
 expect "Opening 1 is a fan only 20 mm across"
 expect "about 38 mm"
 shot thin-fan-warned
+check_layout
 move 170 560
 wait 5
 scroll 170 560 -300
 wait 10
 shot thin-fan-warning-text
-check_layout
 scroll 170 560 300
 wait 10
 click_text "20 mm"
