@@ -714,3 +714,52 @@ fn commissioning_counts_follow_a_switch_of_option_without_any_edit() {
     d.frame();
     assert_eq!(total(&mut d), off, "and takes them away again");
 }
+
+#[test]
+fn every_way_a_list_leaves_the_program_carries_the_option_column() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let ids = machine(&mut d);
+    let k9 = device_of_symbol(&d, ids.k9);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Tie K9", |tx| {
+            options::set_condition(tx, k9, Some("opt.fan"))
+        })
+        .unwrap();
+    d.app.run_command(&ctx, "project.option", Some("fan on"));
+    d.frame();
+    d.app.add_report_page("devices");
+    d.frame();
+    // The outputs every export reads (Export all, PDF, generated pages).
+    let (reports, project) = d.app.machine_reports().unwrap();
+    let all: Vec<_> = reports
+        .live(&project)
+        .all(&project)
+        .into_iter()
+        .cloned()
+        .collect();
+    let devices = all.iter().find(|o| o.report == "devices").unwrap();
+    assert!(
+        devices.sections[0].column("option").is_some(),
+        "{:?}",
+        devices.sections[0].columns
+    );
+    // The sheet drawn for a generated page (what the PDF prints) has it.
+    let page = project
+        .pages()
+        .find(|p| {
+            matches!(&p.kind, novo_core::PageKind::Generated { generator } if generator == "devices")
+        })
+        .map(|p| p.id);
+    let live = reports.live(&project);
+    let sheets = page
+        .map(|p| live.sheets_of_page(&project, p))
+        .unwrap_or_default();
+    let sheet = sheets.first().expect("a generated device list page");
+    let layout = live.layout_sheet(&project, sheet).unwrap();
+    assert!(format!("{layout:?}").contains("Option"));
+}

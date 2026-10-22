@@ -1,0 +1,53 @@
+@title Machine options: the Option column reaches the generated page, the PDF and Excel Export all
+@area Options
+# The fixture's Cooling fan devices need the Cooling fan option. With the fan on, the Device list is added as a drawing page
+# (picture shows the Option column on the sheet), then the PDF and Excel Export all are written (the PDF is checked as a file;
+# the Excel file lands next to the opened project copy, so the unit test covers its columns).
+open qa/fixtures/machine-options.novo
+wait 20
+key ctrl+k
+wait 3
+text option fan on
+wait 4
+key Enter
+wait 10
+click_text Reports #2
+wait 20
+click_text "Device list"
+wait 10
+shot device-list
+key ctrl+k
+wait 3
+text Add report as drawing page
+wait 4
+key Enter
+wait 10
+click_text Schematic #1
+wait 10
+key PageDown
+wait 3
+key PageDown
+wait 3
+key PageDown
+wait 3
+key PageDown
+wait 3
+key PageDown
+wait 6
+shot generated-page
+check_layout
+key ctrl+k
+wait 4
+text Export PDF
+wait 6
+key Enter
+wait 40
+expect_file ~/Documents/KoperCAD/*.pdf 2000
+key ctrl+k
+wait 4
+text Export all reports to Excel
+wait 6
+key Enter
+wait 40
+shot after-exports
+check_layout

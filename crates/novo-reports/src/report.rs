@@ -7,6 +7,19 @@ use novo_core::{ChangeSet, EntityKind, Page, PageKind, Project};
 
 use crate::table::ReportOutput;
 
+/// A step every report output goes through before it is cached, set once by
+/// the application (the machine's option column lives where the option
+/// engine does, which this crate cannot depend on).
+static OUTPUT_HOOK: std::sync::OnceLock<fn(&Project, &mut ReportOutput)> =
+    std::sync::OnceLock::new();
+
+/// Installs the step every [`LiveReports`] output goes through (the first
+/// call wins). Lists, PDF pages, generated pages and exports all read the
+/// outputs of [`LiveReports`], so they all see what the step adds.
+pub fn set_output_hook(hook: fn(&Project, &mut ReportOutput)) {
+    let _ = OUTPUT_HOOK.set(hook);
+}
+
 /// What a report reads from the model, so an edit that touches none of it
 /// skips the report.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -318,7 +331,7 @@ impl LiveReports {
         if matches!(&self.entries[i].output, Some((at, _)) if *at == now) {
             return;
         }
-        let output = if self.entries[i].report.reads_reports() {
+        let mut output = if self.entries[i].report.reads_reports() {
             // Bring the reports it may read current first: those of the
             // project's generated pages (all a contents list reads).
             let generators: Vec<&str> = project
@@ -348,6 +361,9 @@ impl LiveReports {
         } else {
             self.entries[i].report.generate(project)
         };
+        if let Some(hook) = OUTPUT_HOOK.get() {
+            hook(project, &mut output);
+        }
         self.entries[i].output = Some((now, output));
     }
 }
