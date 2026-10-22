@@ -144,6 +144,10 @@ pub struct BuildStep {
     pub after: Vec<usize>,
     /// The device this step is about, for jumping to it in the other views.
     pub device: Option<u64>,
+    /// The surface a device is fitted on when it is not the mounting plate
+    /// (`door`, `left`, `roof`, `plate2`, ...), by the name the Cabinet's
+    /// Surface picker uses.
+    pub surface: Option<String>,
     pub wires: Vec<WireId>,
     fingerprint: String,
 }
@@ -462,6 +466,7 @@ fn cabinet(project: &Project, enclosure: &Structure, jobs: &[WireCutJob]) -> Opt
             caution,
             after,
             device,
+            surface: None,
             wires,
             fingerprint,
         });
@@ -638,6 +643,15 @@ fn cabinet(project: &Project, enclosure: &Structure, jobs: &[WireCutJob]) -> Opt
                 if let Some(d) = project.get::<novo_core::Device>(novo_core::DeviceId::from(id)) {
                     details.push(part_text(project, d));
                 }
+                if let Some(surface) = layout.off_plate.get(&id) {
+                    details.extend(surface_position(
+                        project,
+                        enclosure.id,
+                        &layout,
+                        id,
+                        surface,
+                    ));
+                }
                 let guessed = report.guessed.contains(&id);
                 let title = match layout.off_plate.get(&id) {
                     Some(surface) => format!("Fit {} on the {surface}", s.mark),
@@ -788,11 +802,127 @@ fn cabinet(project: &Project, enclosure: &Structure, jobs: &[WireCutJob]) -> Opt
             vec![],
         );
     }
+    for step in &mut out {
+        step.surface = step
+            .device
+            .filter(|_| step.phase == BuildPhase::Devices)
+            .and_then(|d| layout.off_plate.get(&d).cloned());
+    }
     Some(CabinetPlan {
         cabinet: cab,
         tag,
         steps: out,
     })
+}
+
+/// Where a device off the mounting plate goes, in words a person with a
+/// ruler can follow. The layout keeps its position as the top left corner in
+/// the surface's own millimetres; the door is stored as seen from the front,
+/// but a person fits it on the inside of the open door, so it is given from
+/// the hinge edge, which is the same from either side.
+fn surface_position(
+    project: &Project,
+    structure: novo_core::StructureId,
+    layout: &novo_layout::state::CabinetLayout,
+    id: u64,
+    surface: &str,
+) -> Vec<String> {
+    let Some(p) = layout.placements.iter().find(|p| p.id == id) else {
+        return Vec::new();
+    };
+    let assumed = layout.enclosure.is_some_and(|e| {
+        novo_layout::surfaces::Surfaces::from_enclosure(
+            &e,
+            &layout.plate,
+            &novo_layout::model::extra_surfaces(project, structure),
+        )
+        .0
+        .list
+        .iter()
+        .any(|s| s.name == surface && s.assumed)
+    });
+    position_lines(
+        surface,
+        p.footprint(),
+        layout.enclosure.and_then(|e| e.door).map(|d| d.hinge),
+        layout.surface_sizes.get(surface).copied(),
+        assumed,
+    )
+}
+
+/// The words for a footprint `r` on `surface`; separate from the model so
+/// each surface's wording can be tested on its own.
+fn position_lines(
+    surface: &str,
+    r: novo_layout::Rect,
+    hinge: Option<novo_layout::enclosure::Hinge>,
+    size: Option<(f64, f64)>,
+    assumed: bool,
+) -> Vec<String> {
+    use novo_layout::enclosure::Hinge;
+    use novo_layout::surfaces::SurfaceKind;
+    let label = surface_label(surface);
+    let line = match SurfaceKind::from_name(surface) {
+        Some(SurfaceKind::Door) => {
+            let from_hinge = match (hinge, size) {
+                (Some(Hinge::Right), Some((w, _))) => Some(w - r.x - r.w),
+                (Some(Hinge::Left), _) => Some(r.x),
+                _ => None,
+            };
+            match from_hinge {
+                Some(x) => format!(
+                    "{label}: {} mm from the hinge edge and {} mm down from the top edge, to the nearest corner of the device, on the inside of the door",
+                    mm1(x),
+                    mm1(r.y)
+                ),
+                None => format!(
+                    "{label}: {} mm from the left edge seen from the front and {} mm down from the top edge",
+                    mm1(r.x),
+                    mm1(r.y)
+                ),
+            }
+        }
+        Some(SurfaceKind::LeftWall | SurfaceKind::RightWall) => format!(
+            "{label}: {} mm from the back wall and {} mm down from the top edge, on the inside",
+            mm1(r.x),
+            mm1(r.y)
+        ),
+        Some(SurfaceKind::Roof | SurfaceKind::Floor) => format!(
+            "{label}: {} mm from the left seen from the front and {} mm in from the back wall, on the inside",
+            mm1(r.x),
+            mm1(r.y)
+        ),
+        _ => format!(
+            "{label}: {} mm across and {} mm down from the corner the Cabinet's Surface picker takes as 0, 0",
+            mm1(r.x),
+            mm1(r.y)
+        ),
+    };
+    let mut lines = vec![
+        line,
+        format!(
+            "The device is {} x {} mm; this position is the planned one, check it against the real device",
+            mm1(r.w),
+            mm1(r.h)
+        ),
+    ];
+    if assumed {
+        let size = size.map_or(String::new(), |(w, h)| {
+            format!(" ({} x {} mm)", mm1(w), mm1(h))
+        });
+        lines.push(format!(
+            "The {} is planned from the enclosure's inside size{size} with no wall thickness, not measured: measure the real one before you mark it",
+            label.to_lowercase()
+        ));
+    }
+    lines
+}
+
+fn surface_label(surface: &str) -> String {
+    let mut c = surface.chars();
+    c.next()
+        .map(|f| f.to_uppercase().chain(c).collect())
+        .unwrap_or_default()
 }
 
 fn part_text(project: &Project, device: &novo_core::Device) -> String {
@@ -896,4 +1026,101 @@ pub fn keys(plan: &BuildPlan) -> BTreeSet<StepKey> {
         .iter()
         .flat_map(|c| c.steps.iter().map(|s| s.key))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use novo_layout::Rect;
+    use novo_layout::enclosure::Hinge;
+
+    // A 40 x 30 mm device with its top left corner at (80, 120).
+    const R: Rect = Rect {
+        x: 80.0,
+        y: 120.0,
+        w: 40.0,
+        h: 30.0,
+    };
+
+    fn text(lines: Vec<String>) -> String {
+        lines.join(" | ")
+    }
+
+    #[test]
+    fn the_door_is_measured_from_the_hinge_edge_whichever_side_the_hinge_is() {
+        let left = text(position_lines(
+            "door",
+            R,
+            Some(Hinge::Left),
+            Some((700.0, 900.0)),
+            false,
+        ));
+        assert!(
+            left.contains("80 mm from the hinge edge and 120 mm down"),
+            "{left}"
+        );
+        // The hinge on the right: the door is 700 wide, the device ends at 120.
+        let right = text(position_lines(
+            "door",
+            R,
+            Some(Hinge::Right),
+            Some((700.0, 900.0)),
+            false,
+        ));
+        assert!(
+            right.contains("580 mm from the hinge edge and 120 mm down"),
+            "{right}"
+        );
+        // Without a hinge or a width the front view is said as it is.
+        let none = text(position_lines("door", R, None, None, false));
+        assert!(
+            none.contains("80 mm from the left edge seen from the front"),
+            "{none}"
+        );
+    }
+
+    #[test]
+    fn walls_roof_floor_and_extra_plates_each_say_their_own_measures() {
+        for wall in ["left", "right"] {
+            let t = text(position_lines(wall, R, None, None, false));
+            assert!(
+                t.contains("80 mm from the back wall and 120 mm down from the top edge"),
+                "{t}"
+            );
+        }
+        for deck in ["roof", "floor"] {
+            let t = text(position_lines(deck, R, None, None, false));
+            assert!(
+                t.contains(
+                    "80 mm from the left seen from the front and 120 mm in from the back wall"
+                ),
+                "{t}"
+            );
+        }
+        let plate = text(position_lines("plate2", R, None, None, false));
+        assert!(
+            plate.contains("Plate2: 80 mm across and 120 mm down from the corner"),
+            "{plate}"
+        );
+    }
+
+    #[test]
+    fn an_assumed_surface_says_it_is_planned_not_measured() {
+        let t = text(position_lines(
+            "door",
+            R,
+            Some(Hinge::Left),
+            Some((700.0, 900.0)),
+            true,
+        ));
+        assert!(t.contains("planned from the enclosure's inside size (700 x 900 mm) with no wall thickness, not measured"), "{t}");
+        let known = text(position_lines(
+            "door",
+            R,
+            Some(Hinge::Left),
+            Some((700.0, 900.0)),
+            false,
+        ));
+        assert!(!known.contains("not measured"), "{known}");
+    }
 }

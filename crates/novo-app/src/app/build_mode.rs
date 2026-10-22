@@ -245,16 +245,28 @@ impl NovoApp {
             // Build mode steps aside (a bar brings it back) so the other
             // workspace can be seen.
             state.away = true;
-            let tag = state
+            let cab = state
                 .plan
                 .as_ref()
-                .and_then(|(_, p)| p.cabinets.get(state.cabinet))
-                .map(|c| c.tag.clone())
-                .unwrap_or_default();
+                .and_then(|(_, p)| p.cabinets.get(state.cabinet));
+            let tag = cab.map(|c| c.tag.clone()).unwrap_or_default();
+            // A device fitted on the door or a wall is shown on that surface.
+            let surface = |device: u64| {
+                cab.and_then(|c| {
+                    c.steps
+                        .iter()
+                        .find(|s| s.device == Some(device) && s.phase == BuildPhase::Devices)
+                })
+                .and_then(|s| s.surface.clone())
+            };
             match show {
                 Show::Wire3d(wire) => self.show_wire_in_3d(wire),
-                Show::DevicePlate(device) => self.show_device(device, &tag, false),
-                Show::Device3d(device) => self.show_device(device, &tag, true),
+                Show::DevicePlate(device) => {
+                    self.show_device(device, &tag, surface(device).as_deref(), false)
+                }
+                Show::Device3d(device) => {
+                    self.show_device(device, &tag, surface(device).as_deref(), true)
+                }
             }
             self.wb.build = Some(state);
             return;
@@ -391,12 +403,18 @@ impl NovoApp {
     /// `three_d`, in the 3D view (which follows the plate's selection). The
     /// Cabinet switches to the step's own cabinet (`tag`), its plate and not
     /// the table face, so a project with several cabinets shows the right one.
-    pub(super) fn show_device(&mut self, device: u64, tag: &str, three_d: bool) {
+    pub(super) fn show_device(
+        &mut self,
+        device: u64,
+        tag: &str,
+        surface: Option<&str>,
+        three_d: bool,
+    ) {
         self.flush_commissioning();
         if let Ok(location) = novo_core::DeviceTag::parse(tag) {
             self.cabinet.location = Some(location);
         }
-        self.cabinet.surface = None;
+        self.cabinet.surface = surface.map(str::to_owned);
         self.cabinet.table = false;
         self.cabinet.view.selection.apply(
             [novo_canvas::cabinet::box_item(device)],
@@ -742,7 +760,8 @@ fn card(
             ui.add_space(6.0);
             ui.horizontal_wrapped(|ui| {
                 if let Some(device) = step.device {
-                    if show(ui, "Show on the plate") {
+                    let on = format!("Show on the {}", step.surface.as_deref().unwrap_or("plate"));
+                    if show(ui, &on) {
                         asked.show = Some(Show::DevicePlate(device));
                     }
                     if show(ui, "Show in 3D") {
