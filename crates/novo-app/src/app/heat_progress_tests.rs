@@ -2,7 +2,7 @@
 
 use novo_cfd::{Fidelity, Progress, Residuals};
 
-use super::heat_progress::{fraction, push, spark_points};
+use super::heat_progress::{fraction, preparing_label, push, spark_points};
 
 fn progress(fidelity: Fidelity, residual: f64, converged: bool) -> Progress {
     Progress {
@@ -66,4 +66,12 @@ fn history_is_capped_and_ignores_bad_values() {
         push(&mut h, &progress(Fidelity::Coarse, 1.0, false));
     }
     assert_eq!(h.len(), 400);
+}
+
+#[test]
+fn before_the_first_iteration_the_bar_says_what_it_is_doing() {
+    let text = preparing_label(29.4);
+    assert!(text.contains("meshing"), "{text}");
+    assert!(text.contains("29 s"), "{text}");
+    assert!(!text.contains("starting"), "{text}");
 }

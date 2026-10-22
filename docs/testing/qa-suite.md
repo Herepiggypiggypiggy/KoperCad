@@ -66,7 +66,8 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `key ctrl+k Escape`, `text some words` | keyboard |
 | `answer_dialog FILE` | the next native file dialog gets this path (queue it first) |
 | `import_table FILE` | File > Import parts > Import parts from a table, with the file dialog answered with FILE; leaves the mapping (or the refusal) on screen |
-| `wait N`, `resize W H` | run N frames; resize the window |
+| `wait N`, `resize W H` | run N frames (at most 600); resize the window |
+| `wait_s N` | sleep N real seconds (at most 300), then run a few frames: for work on the wall clock such as the heat solver; `wait` counts frames, which pass faster in a small window |
 | `frame_stats [pan\|zoom\|none] [frames]` | run frames (default 120) while the page pans, zooms or stands still, and report UI pass and whole-frame times (mean, median, p95, worst, in ms); they appear under "Measurements" in `report.md`. On a box without a GPU the whole-frame time includes software rasterising: read the UI pass as the program's own cost |
 | `shot label` | labelled screenshot |
 | `expect "text"`, `expect_not "text"` | a label or value containing the text is (not) in the widget tree; a miss is a finding (S3) |

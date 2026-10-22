@@ -1668,3 +1668,25 @@ fn the_landing_panel_prefers_left_out_devices_then_the_most_placed() {
     assert!(!lands_before(Some((false, 3)), false, 3));
     assert!(!lands_before(Some((true, 1)), true, 9));
 }
+
+#[test]
+fn a_heat_run_reports_in_a_narrow_window_where_the_heat_toggle_is_in_more() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = super::view3d_tests::drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::ShowCabinet);
+    let narrow = eframe::egui::vec2(1366.0, 768.0);
+    d.frame_sized(narrow, Vec::new());
+    d.app.run_command(&ctx, "heat.simulate", None);
+    for _ in super::test_wait::patient() {
+        d.frame_sized(narrow, Vec::new());
+        if d.app.cabinet.heat.solution().is_some() && !d.app.cabinet.heat.running() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(
+        d.app.cabinet.heat.solution().is_some(),
+        "the run published its result although the Heat toggle was not drawn"
+    );
+}

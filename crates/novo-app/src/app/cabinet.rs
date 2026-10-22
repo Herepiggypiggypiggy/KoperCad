@@ -1573,6 +1573,9 @@ impl NovoApp {
                     self.cabinet.view.viewport.fit(&view_bounds(&view), 24.0);
                     self.cabinet.fitted = location.clone();
                 }
+                // Takes in what the solver published, whatever the bar shows:
+                // at a narrow window the Heat toggle sits in More, unseen.
+                self.cabinet.heat.poll(ui.ctx());
                 let heat_input = self.cabinet.heat.on.then(|| {
                     let items = super::heat::items_of(project, &shown, &tag_of);
                     super::heat::Input {
