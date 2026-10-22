@@ -332,7 +332,7 @@ impl NovoApp {
                         ui.add_space(12.0);
                     }
                     if output.sections.iter().all(|s| s.rows.is_empty()) {
-                        ui.weak("Nothing to list yet");
+                        ui.weak(empty_report_hint(&id));
                     }
                     jump
                 })
@@ -1233,5 +1233,40 @@ mod tests {
             "one page is not larger than all of them"
         );
         let _ = pages;
+    }
+}
+
+/// What an empty report says, with how to get rows into it.
+fn empty_report_hint(id: &str) -> &'static str {
+    match id {
+        "io" => {
+            "Nothing to list yet: this project has no PLC channels. Add a PLC card (Ctrl+K \"Add PLC card\") or import a signal list (Ctrl+K \"Import I/O list\")."
+        }
+        "plugs" => {
+            "Nothing to list yet: no plug or socket is drawn. Place a connector from the symbol list (Q) and its pins are listed here with their wires."
+        }
+        "terminals" => {
+            "Nothing to list yet: no terminal strip is drawn. Place terminal symbols (Q \"terminal\") with a strip name such as -X1."
+        }
+        "cables" | "cableschedule" => {
+            "Nothing to list yet: no cable is drawn. Use the Cable tool to draw one between devices."
+        }
+        _ => "Nothing to list yet",
+    }
+}
+
+#[cfg(test)]
+mod empty_hint_tests {
+    use super::empty_report_hint;
+
+    #[test]
+    fn an_empty_report_says_how_to_get_rows() {
+        for id in ["io", "plugs", "terminals", "cables", "cableschedule"] {
+            assert!(
+                empty_report_hint(id).len() > "Nothing to list yet".len(),
+                "{id} names what to do"
+            );
+        }
+        assert_eq!(empty_report_hint("toc"), "Nothing to list yet");
     }
 }
