@@ -100,6 +100,9 @@ mod heat_run;
 mod heat_run_tests;
 mod heat_settings;
 mod heat_spots;
+mod heat_sweep;
+#[cfg(test)]
+mod heat_sweep_tests;
 mod heat_time;
 #[cfg(test)]
 mod heat_time_tests;

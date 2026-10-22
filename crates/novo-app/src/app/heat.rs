@@ -132,6 +132,8 @@ pub(super) struct HeatState {
     pub(super) time: super::heat_time::TimeLine,
     /// The next run is a heat-up over time, not a steady state.
     transient_wanted: bool,
+    /// The vent and fan sweep (`heat.cooling_advice`).
+    pub(super) advice: super::heat_sweep::CoolingAdvice,
 }
 
 /// Where a cached picture came from.
@@ -188,6 +190,7 @@ impl HeatState {
             settings: HeatSettings::default(),
             time: super::heat_time::TimeLine::new(),
             transient_wanted: false,
+            advice: Default::default(),
         }
     }
 
@@ -456,6 +459,7 @@ impl HeatState {
         match id {
             "heat.toggle" => self.on = !self.on,
             "heat.simulate" => self.request_run(),
+            "heat.cooling_advice" => self.advice.request(),
             "heat.airflow" => {
                 self.airflow = !(self.on && self.airflow);
                 self.on |= self.airflow;
@@ -896,6 +900,20 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
         super::cabinet_bar::note_ctx(ui.ctx(), "heat.simulate", "Simulate button", &simulate);
         if simulate.clicked() {
             state.request_run();
+        }
+        let advice = ui
+            .add_enabled(!state.advice.running(), egui::Button::new("Cooling advice"))
+            .on_hover_text(
+                "Try where a pair of vents or fans goes and how big, and show the best few with before and after temperatures",
+            );
+        super::cabinet_bar::note_ctx(
+            ui.ctx(),
+            "heat.cooling_advice",
+            "Cooling advice button",
+            &advice,
+        );
+        if advice.clicked() {
+            state.advice.request();
         }
         heat_up_controls(ui, state);
         compare_controls(ui, state);

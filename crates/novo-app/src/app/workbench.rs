@@ -657,6 +657,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "heat.airflow",
     "heat.contours",
     "heat.simulate",
+    "heat.cooling_advice",
     "terminal.connect",
     "terminal.disconnect",
     "terminal.strip_up",
@@ -963,6 +964,14 @@ impl NovoApp {
                 } else {
                     // The run's progress and stop button live in the panel.
                     self.view3d.controls.heat_panel = true;
+                }
+                self.cabinet.heat.command(id);
+            }
+            "heat.cooling_advice" if self.is_open() => {
+                // Stays in the 3D view when it is the one open.
+                if self.workspace() != Workspace::View3d {
+                    self.switch_workspace(Workspace::Cabinet);
+                    self.cabinet.table = false;
                 }
                 self.cabinet.heat.command(id);
             }

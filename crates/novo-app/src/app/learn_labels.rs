@@ -44,6 +44,7 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("heat.chips", "Heat chips"),
     ("heat.legend", "Heat legend"),
     ("heat.simulate", "Simulate button"),
+    ("heat.cooling_advice", "Cooling advice button"),
     ("cabinet.canvas", "Cabinet canvas"),
     ("workspace.view3d", "3D canvas"),
     ("switcher.schematic", "Schematic chip"),
@@ -170,7 +171,9 @@ pub(crate) fn anchor_fallback(id: &str) -> Option<String> {
         // The list and the field are not there until their button is pressed.
         "outline.pages" => Some("outline.toggle".to_owned()),
         "palette.field" => Some("palette.button".to_owned()),
-        "heat.chips" | "heat.legend" | "heat.simulate" => Some("cabinet.heat".to_owned()),
+        "heat.chips" | "heat.legend" | "heat.simulate" | "heat.cooling_advice" => {
+            Some("cabinet.heat".to_owned())
+        }
         _ => None,
     }
 }

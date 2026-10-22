@@ -1635,6 +1635,38 @@ impl NovoApp {
                             .fail("Open an enclosure with a mounting plate to simulate".into()),
                     }
                 }
+                self.cabinet.heat.advice.poll(ui.ctx());
+                if self.cabinet.heat.advice.take_request() {
+                    match structure {
+                        Some(s) => {
+                            let ambient = self.sizing.request().ambient_max;
+                            let h = &mut self.cabinet.heat;
+                            h.advice.start(project, s, ambient, &h.settings, &tag_of);
+                        }
+                        None => self.cabinet.heat.fail(
+                            "Open an enclosure with a mounting plate to ask for cooling advice"
+                                .into(),
+                        ),
+                    }
+                }
+                if self.cabinet.heat.advice.is_open() {
+                    let ambient = self.sizing.request().ambient_max;
+                    let now_key = structure.map_or(0, |s| {
+                        super::heat_sweep::key_of(project, s, ambient, &self.cabinet.heat.settings)
+                    });
+                    let at = ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0);
+                    if let Some(super::heat_sweep::Ask::Add(c)) =
+                        self.cabinet.heat.advice.show(ui.ctx(), now_key, at)
+                    {
+                        super::heat_sweep::add_pair(&mut self.cabinet.heat.settings, &c);
+                        // The 3D view opens with the list showing the pair.
+                        self.view3d.controls.heat_panel = true;
+                        self.cabinet
+                            .heat
+                            .advice
+                            .set_added(super::heat_sweep::added_text(&c));
+                    }
+                }
                 let dragging = self.cabinet.drag.is_some();
                 // The map goes under the canvas: it paints no background of
                 // its own while the map is on.

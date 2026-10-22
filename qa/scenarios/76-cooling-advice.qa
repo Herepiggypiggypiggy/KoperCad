@@ -1,0 +1,29 @@
+@title Cooling advice: sweep vent and fan places, show the best few, add one to Vents and fans
+@area Heat
+# A hot cabinet (VFD under PLC modules). Ctrl+K "Cooling advice and vent sweep" tries places and sizes in the 2D model; the window shows the best options with before and after, then Add puts the pair in the 3D Heat panel's Vents and fans list.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 30
+click_text Cabinet #1
+wait 30
+shot cabinet-before
+key ctrl+k
+wait 4
+text Cooling advice and vent sweep
+wait 6
+key Enter
+wait 20
+shot sweeping
+wait_s 90
+expect "Cooling advice"
+expect "Model estimate"
+expect "Tightest margin"
+shot advice
+check_layout
+click_text "Add these two to Vents and fans"
+wait 10
+expect "Added"
+shot added
+click_text 3D #1
+wait 40
+shot in-3d
+check_layout
