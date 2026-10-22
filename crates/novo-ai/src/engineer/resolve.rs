@@ -115,6 +115,16 @@ pub fn pin(project: &Project, spec: &Value) -> Result<PinRef, String> {
         let pin = text_of(&spec["pin"]).ok_or("pin is missing")?;
         return in_symbol(project, SymbolId::from(sym), &pin);
     }
+    if let Some(rest) = spec.as_str().and_then(|s| s.strip_prefix("symbol ")) {
+        let (id, pin) = rest
+            .split_once(" pin ")
+            .ok_or("write an unnamed symbol's pin as `symbol 14 pin 1`")?;
+        let id: u64 = id
+            .trim()
+            .parse()
+            .map_err(|_| format!("bad symbol number {id:?}"))?;
+        return in_symbol(project, SymbolId::from(id), pin.trim());
+    }
     let (dev, rest) = match spec {
         Value::String(s) => {
             let (d, r) = s
@@ -279,4 +289,18 @@ pub fn wire_description(p: &Project, w: &novo_core::Wire) -> String {
         end(w.from),
         end(w.to)
     )
+}
+
+#[cfg(test)]
+mod symbol_pin_tests {
+    use super::*;
+
+    #[test]
+    fn an_unnamed_symbols_pin_can_be_written_as_text() {
+        let p = Project::new("t");
+        let e = pin(&p, &serde_json::json!("symbol 7 pin 1")).unwrap_err();
+        assert!(!e.contains("not a pin address"), "{e}");
+        let e = pin(&p, &serde_json::json!("symbol seven")).unwrap_err();
+        assert!(e.contains("symbol 14 pin 1"), "{e}");
+    }
 }

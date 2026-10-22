@@ -2040,6 +2040,7 @@ dependencies = [
  "calamine",
  "clap",
  "image",
+ "novo-ai",
  "novo-canvas",
  "novo-checks",
  "novo-commissioning",

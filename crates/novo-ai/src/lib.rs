@@ -20,6 +20,7 @@ pub mod consent;
 pub mod datasheet;
 pub mod engineer;
 pub mod eval;
+pub mod eval_cli;
 pub mod image;
 pub mod key;
 pub mod models;

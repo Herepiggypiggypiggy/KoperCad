@@ -393,7 +393,7 @@ fn open_pins_since(project: &Project, before: &std::collections::BTreeSet<u64>) 
             }
             out.push(match s.device().and_then(|d| project.device(d)) {
                 Some(d) => format!("{}:{}", d.tag, p.name),
-                None => format!(r#"{{"symbol_id":{},"pin":"{}"}}"#, s.id.raw(), p.name),
+                None => format!("symbol {} pin {}", s.id.raw(), p.name),
             });
         }
     }

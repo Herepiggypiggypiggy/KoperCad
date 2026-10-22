@@ -30,3 +30,9 @@ Resume: `cargo test -p novo-ai`, `cargo test -p novo-app assistant`.
 - No click/keyboard tools for Claude in the app: every project change must go through a proposal and Apply (one undo step). The `--control` harness is for tests.
 - Waiting on Tadjiro: real-key test via docs/CLAUDE-ASSISTANT-TEST.md. Do not block on it.
 - Consent version 4 here; #1136 also changes the number, take the larger at merge.
+
+## Co-engineer (2026-10-22)
+
+- Code: `crates/novo-ai/src/engineer/` (host, actions, resolve, verify, snapshot), `eval.rs`, `eval_cli.rs`, scenarios `crates/novo-ai/eval/*.json`. App side `crates/novo-app/src/app/assistant.rs` (Card, plan and question entries).
+- Add a scenario: copy a JSON in eval/, give scripted `turns`/`expect`; `kopercad-cli ask-claude-eval --list`. `--replay --out DIR` writes KOPERCAD_AI_REPLAY files for QA.
+- Next: run `scripts/ask-claude-eval.ps1` with a real key and tune the prompt in agent.rs from `report-real.md`. Gaps: cabinet layout action (needs engine out of the app), text overlap tidy, 3D/sim/Autopilot actions.
