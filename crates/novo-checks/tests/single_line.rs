@@ -869,3 +869,114 @@ fn ik_is_not_carried_through_a_power_supply() {
             .any(|n| n.starts_with("Short-circuit current is not carried"))
     );
 }
+
+const DIVERSITY: &str = "diversity_factor";
+const SUPPLY_DIVERSITY: &str = "supply.diversity_factor";
+
+/// The plain sum of the board: M1 12 A, M2 4.58 A, the heater 8.66 A.
+fn plain_sum(sl: &SingleLine, doc: &Document, b: &Board) -> f64 {
+    let p = doc.project();
+    node(sl, p, b.m1).current_a.value.unwrap()
+        + node(sl, p, b.m2).current_a.value.unwrap()
+        + node(sl, p, b.heater).current_a.value.unwrap()
+}
+
+#[test]
+fn without_a_factor_nothing_changes_and_the_note_says_no_diversity() {
+    let (doc, b) = board();
+    let sl = build(&doc);
+    let q1 = node(&sl, doc.project(), b.q1);
+    assert_eq!(q1.diversity, None);
+    assert!(
+        q1.current_basis.ends_with("no diversity"),
+        "{}",
+        q1.current_basis
+    );
+    assert!(sl.notes[0].contains("no diversity or simultaneity factor is applied"));
+    assert!(!sl.notes[0].contains("times the diversity factor"));
+}
+
+#[test]
+fn a_stated_device_factor_scales_the_sum_below_it_and_is_named() {
+    let (mut doc, b) = board();
+    let plain = plain_sum(&build(&doc), &doc, &b);
+    doc.transact("Diversity", |tx| {
+        tx.set_property(b.q1, DIVERSITY, Some(0.8.into()))
+    })
+    .unwrap();
+    let sl = build(&doc);
+    let p = doc.project();
+    let q1 = node(&sl, p, b.q1);
+    assert_eq!(q1.diversity, Some(0.8));
+    assert!((q1.current_a.value.unwrap() - 0.8 * plain).abs() < 1e-9);
+    assert_eq!(q1.current_a.origin, Origin::Calculated);
+    assert!(
+        q1.current_basis.ends_with("× 0.8 diversity"),
+        "{}",
+        q1.current_basis
+    );
+    // Branches under it keep their own currents; the supply sums Q1 as it is.
+    assert!((node(&sl, p, b.m1).current_a.value.unwrap() - 12.0).abs() < 1e-9);
+    assert!((sl.nodes[0].current_a.value.unwrap() - 0.8 * plain).abs() < 1e-9);
+    assert!(sl.notes[0].contains("times the diversity factor of its own level"));
+    assert!(sl.notes[0].contains("0.8"));
+    // The run into Q1 carries the reduced current, so Ib and the drop follow it.
+    let link = q1.link.as_ref().unwrap();
+    assert!((link.current_a.value.unwrap() - 0.8 * plain).abs() < 1e-9);
+}
+
+#[test]
+fn a_project_factor_scales_the_sum_at_the_supply_only() {
+    let (mut doc, b) = board();
+    let plain = plain_sum(&build(&doc), &doc, &b);
+    doc.transact("Diversity", |tx| {
+        novo_checks::standards::set_info_property(tx, SUPPLY_DIVERSITY, Some(0.7.into()))
+    })
+    .unwrap();
+    let sl = build(&doc);
+    let q1 = node(&sl, doc.project(), b.q1);
+    assert!(
+        (q1.current_a.value.unwrap() - plain).abs() < 1e-9,
+        "Q1 is not scaled"
+    );
+    assert!((sl.nodes[0].current_a.value.unwrap() - 0.7 * plain).abs() < 1e-9);
+    assert_eq!(sl.nodes[0].diversity, Some(0.7));
+    assert!(sl.nodes[0].current_basis.contains("× 0.7 diversity"));
+    assert!(sl.notes[0].contains("the supply 0.7"));
+}
+
+#[test]
+fn a_factor_outside_zero_point_one_to_one_is_ignored_and_said() {
+    let (mut doc, b) = board();
+    let plain = plain_sum(&build(&doc), &doc, &b);
+    doc.transact("Diversity", |tx| {
+        tx.set_property(b.q1, DIVERSITY, Some(8.0.into()))
+    })
+    .unwrap();
+    let sl = build(&doc);
+    let q1 = node(&sl, doc.project(), b.q1);
+    assert_eq!(q1.diversity, None);
+    assert!((q1.current_a.value.unwrap() - plain).abs() < 1e-9);
+    assert!(
+        sl.notes
+            .iter()
+            .any(|n| n.starts_with("Ignored, no factor applied") && n.contains("is 8"))
+    );
+}
+
+#[test]
+fn a_factor_where_the_current_is_stated_is_reported_as_unused() {
+    let (mut doc, b) = board();
+    // M1 states its own current: a factor on it has nothing to scale.
+    doc.transact("Diversity", |tx| {
+        tx.set_property(b.m1, DIVERSITY, Some(0.5.into()))
+    })
+    .unwrap();
+    let sl = build(&doc);
+    assert!((node(&sl, doc.project(), b.m1).current_a.value.unwrap() - 12.0).abs() < 1e-9);
+    assert!(
+        sl.notes
+            .iter()
+            .any(|n| n.starts_with("A diversity factor is stated but not used at"))
+    );
+}

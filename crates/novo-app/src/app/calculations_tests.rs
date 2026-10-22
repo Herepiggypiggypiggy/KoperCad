@@ -448,3 +448,41 @@ fn an_untouched_safety_calculator_leaves_no_trace_in_the_project() {
             .contains_key(super::safety_calc::CALCULATOR_KEY)
     );
 }
+
+#[test]
+fn the_diversity_factor_is_entered_in_the_electrical_inputs_and_refused_above_one() {
+    use super::electrical::DISTRIBUTION;
+    use novo_core::Value;
+    let field = &DISTRIBUTION[0];
+    assert_eq!(parse_input(field, "0,8").unwrap(), Some(Value::Float(0.8)));
+    assert_eq!(parse_input(field, "1").unwrap(), Some(Value::Float(1.0)));
+    assert!(parse_input(field, "1.5").unwrap_err().contains("to 1"));
+    assert!(parse_input(field, "0").is_err());
+    let (_dir, mut d, _ms) = open();
+    assert!(d.app.apply_electrical_input(field, "0.8"));
+    let project = d.app.backend.document().unwrap().project().clone();
+    assert_eq!(
+        project.info().properties.get(field.key),
+        Some(&Value::Float(0.8))
+    );
+    // A refused entry changes nothing.
+    assert!(!d.app.apply_electrical_input(field, "3"));
+    let project = d.app.backend.document().unwrap().project().clone();
+    assert_eq!(
+        project.info().properties.get(field.key),
+        Some(&Value::Float(0.8))
+    );
+    // One undo step.
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    assert!(
+        !d.app
+            .backend
+            .document()
+            .unwrap()
+            .project()
+            .info()
+            .properties
+            .contains_key(field.key)
+    );
+}

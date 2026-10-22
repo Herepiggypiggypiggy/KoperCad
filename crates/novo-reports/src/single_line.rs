@@ -233,6 +233,7 @@ fn columns() -> Vec<Column> {
         Column::new("icu", "Icu kA", 5.0).right(),
         Column::new("ik", "Ik max kA", 7.0).right(),
         Column::new("ib", "Ib A", 6.0).right(),
+        Column::new("div", "Diversity", 6.5).right(),
         Column::new("section", "mm²", 5.0).right(),
         Column::new("length", "m", 5.0).right(),
         Column::new("iz", "Iz A", 6.0).right(),
@@ -357,6 +358,11 @@ fn row(sl: &SingleLine, node: &Node) -> (Vec<Cell>, Vec<AnyId>) {
             None => Cell::Empty,
         },
         number(node.current_a),
+        Cell::text(
+            node.diversity
+                .map(|f| format!("×{}", fmt(f)))
+                .unwrap_or_default(),
+        ),
         link.map_or(Cell::Empty, |l| number(l.section_mm2)),
         link.map_or(Cell::Empty, |l| number(l.length_m)),
         link.map_or(Cell::Empty, |l| number(l.iz_a)),
@@ -544,6 +550,9 @@ fn current_line(node: &Node) -> String {
         Some(v) => format!("Ib {} A{}", fmt(v), mark(node.current_a.origin)),
         None => "Ib n/a".to_owned(),
     };
+    if let Some(f) = node.diversity {
+        s.push_str(&format!(" ×{}", fmt(f)));
+    }
     if node.loads_without_current > 0 {
         s.push_str(&format!(" (+{} without)", node.loads_without_current));
     }
@@ -919,11 +928,26 @@ fn wrap(text: &str, max: usize) -> Vec<String> {
 
 fn legend(sl: &SingleLine) -> Vec<String> {
     let mut out = vec![
-        "No mark: stated.  ~ calculated from a power or from the loads below (no diversity).  ? assumed.  * proposed by the Autopilot, not applied.  Heavy outline: a check fails.".to_owned(),
+        format!(
+            "No mark: stated.  ~ calculated from a power or from the loads below ({}).  ? assumed.  * proposed by the Autopilot, not applied.  Heavy outline: a check fails.",
+            if sl
+                .notes
+                .iter()
+                .any(|n| n.contains("times the diversity factor"))
+            {
+                "times the stated diversity factor, see below"
+            } else {
+                "no diversity"
+            }
+        ),
         format!(
             "Iz (cable rating) and ΔU (voltage drop, Σ from the supply, + = a wire without data) are calculated; limit {} % {}.",
             fmt(sl.drop_limit_percent),
-            if sl.drop_limit_stated { "stated" } else { "default" }
+            if sl.drop_limit_stated {
+                "stated"
+            } else {
+                "default"
+            }
         ),
     ];
     if !sl.missing.is_empty() {
@@ -936,6 +960,9 @@ fn legend(sl: &SingleLine) -> Vec<String> {
     }
     for note in &sl.notes {
         if note.starts_with("Iz assumes")
+            || note.contains("times the diversity factor")
+            || note.starts_with("A diversity factor is stated")
+            || note.starts_with("Ignored, no factor applied")
             || note.starts_with("ΔU is calculated at power factor 1")
             || note.starts_with("Ik is")
             || note.starts_with("Icu is checked")
