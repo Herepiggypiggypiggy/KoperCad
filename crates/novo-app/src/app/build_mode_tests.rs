@@ -168,6 +168,41 @@ fn opening_the_commissioning_workspace_closes_it() {
 }
 
 #[test]
+fn the_build_sheet_pdf_lands_next_to_the_project_with_the_ticks_on_it() {
+    let (dir, mut d) = started();
+    let file = dir.path().join("Plant 3.novo");
+    assert!(d.app.save_to(&file));
+    cabinet(&mut d);
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.build", None);
+    d.frame();
+    d.frame();
+    tap_space(&mut d);
+    let plan = d
+        .app
+        .wb
+        .build
+        .as_ref()
+        .and_then(|b| b.plan.clone())
+        .map(|(_, p)| p)
+        .unwrap();
+    let pdf = d.app.export_build_sheet(&plan).expect("written");
+    assert_eq!(pdf, dir.path().join("Plant 3 build sheet.pdf"));
+    let bytes = std::fs::read(&pdf).unwrap();
+    assert!(bytes.starts_with(b"%PDF"));
+    // A second print replaces our own file.
+    d.app.export_build_sheet(&plan).expect("again");
+    assert!(
+        d.app
+            .messages()
+            .last()
+            .unwrap()
+            .text
+            .starts_with("Replaced")
+    );
+}
+
+#[test]
 fn a_device_step_can_be_shown_on_the_plate_and_in_3d_and_build_mode_steps_aside() {
     use super::workspace::Workspace;
     let (_dir, mut d) = started();
