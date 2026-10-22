@@ -1647,6 +1647,9 @@ impl NovoApp {
             return;
         }
         self.wb.field.ask_enabled = self.settings.ai.enabled;
+        self.wb.field.relabel = novo_workflow::commands::get("help.next_lesson")
+            .map(|info| vec![("help.next_lesson", self.command_label(info))])
+            .unwrap_or_default();
         let picked = self.with_field(|field, sources| field.show(ctx, canvas, sources));
         if let Some(rect) = self.wb.field.rect() {
             self.anchor("palette.field", rect, "Command field");

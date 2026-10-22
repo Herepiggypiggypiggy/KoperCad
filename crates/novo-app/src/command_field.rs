@@ -32,6 +32,9 @@ pub struct CommandField {
     pub ask_enabled: bool,
     /// What the person chose to ask Claude; the app takes it.
     pub asked: Option<String>,
+    /// Labels the app words for a command from the state of the project
+    /// ("Continue lesson: Placing parts fast"), by command id.
+    pub relabel: Vec<(&'static str, String)>,
 }
 
 impl CommandField {
@@ -89,6 +92,9 @@ impl CommandField {
                 Target::Command(id) | Target::Run { command: id, .. } => *id,
                 _ => continue,
             };
+            if let Some((_, label)) = self.relabel.iter().find(|(c, _)| *c == id) {
+                row.label.clone_from(label);
+            }
             if row.disabled.is_none() && !crate::app::app_runs(id) {
                 row.disabled = Some("Comes later");
             }
