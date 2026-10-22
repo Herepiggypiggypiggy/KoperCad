@@ -1,0 +1,31 @@
+@title Dragging the feed row shows Row x3 in the status bar before release
+@area Learn
+@sizes 1366x768
+# The row preview and the status bar line "Row ×3 · pitch 8 mm" are in the mid-drag picture (the card repeats that text, so no expect).
+key ctrl+k
+wait 4
+text potentials
+wait 6
+click_text "Potentials and feeds"
+wait 40
+try click_text "Next"
+wait 30
+try click_text "Do it for me"
+wait 30
+shot row-step
+key q
+wait 6
+text feed
+wait 6
+key Enter
+wait 10
+shot feed-on-pointer
+mouse_down 399 165
+move 440 165
+move 474 165
+wait 10
+shot mid-drag-status-bar
+mouse_up 474 165
+wait 20
+shot after-release
+check_layout

@@ -153,7 +153,7 @@ impl NovoApp {
             ui.add_space(8.0);
             if !stored.is_empty() && Pack::from_id(&stored).is_none() {
                 ui.colored_label(
-                    ui.visuals().warn_fg_color,
+                    crate::theme::ui_palette().warning,
                     format!("This project says \"{stored}\", which this version does not know. It is shown as IEC."),
                 );
             }
