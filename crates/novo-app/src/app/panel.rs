@@ -30,6 +30,10 @@ const MIN_WIDTH: f32 = 260.0;
 const MIN_HEIGHT: f32 = 120.0;
 /// A panel the person opens starts at least this wide.
 const DIALOG_MIN_WIDTH: f32 = 380.0;
+/// Width of the card that parks in the bottom right corner (the lesson card).
+pub(super) const CORNER_CARD_WIDTH: f32 = 316.0;
+/// Below this width a dialog keeps clear of the parked corner card.
+const NARROW_SCREEN: f32 = 1200.0;
 
 /// Which end of the canvas a panel starts at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -299,7 +303,13 @@ pub(super) fn dialog<'a>(
     // egui derives the window's id from `Some(title text)`; `esc` reads it
     // back. The test `escape_closes_the_dialog_on_top` catches a change.
     ctx.data_mut(|d| d.insert_temp(pending_id(), egui::Id::new(Some(title.text()))));
-    let screen = ctx.content_rect().shrink(MARGIN);
+    let mut screen = ctx.content_rect().shrink(MARGIN);
+    // On a narrow screen a dialog stays left of the parked corner card
+    // instead of opening under it.
+    if reserved_bottom_right(ctx) > 0.0 && screen.width() < NARROW_SCREEN {
+        screen.max.x =
+            (screen.max.x - CORNER_CARD_WIDTH - MARGIN).max(screen.min.x + DIALOG_MIN_WIDTH);
+    }
     let size = [
         size[0] * grow(screen.width()),
         size[1] * grow(screen.width()),
