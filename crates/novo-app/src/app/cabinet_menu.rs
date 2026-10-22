@@ -120,6 +120,7 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
             Some(("Size the enclosure…", "cabinet.size-enclosure")),
             None,
             Some(("Simulate heat", "heat.simulate")),
+            Some(("Suggest a cooler layout", "heat.cooler_layout")),
             Some(("Table   Ctrl+T", "view.cabinet_table")),
             Some(("Show in 3D", "view.3d")),
             Some(("Zoom to fit", "view.fit")),

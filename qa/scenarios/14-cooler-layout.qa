@@ -1,0 +1,28 @@
+@title Cabinet heat: search for a cooler layout and apply it
+@area Heat
+# A VFD sits under the PLC modules of its cabinet. The command searches in the 2D model, the window shows before and after, Apply moves the devices on their rails as one undo step.
+open qa/fixtures/cabinet-cooler-layout.novo
+wait 30
+click_text Cabinet #1
+wait 30
+shot cabinet-before
+key ctrl+k
+wait 4
+text Suggest a cooler layout
+wait 6
+key Enter
+wait 20
+shot searching
+wait_s 120
+expect "Apply the moves"
+expect "Model estimate"
+shot found
+check_layout
+click_text "Apply the moves"
+wait 20
+expect "Moved"
+shot applied
+check_layout
+key ctrl+z
+wait 20
+shot undone

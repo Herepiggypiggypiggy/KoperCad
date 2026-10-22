@@ -217,6 +217,8 @@ pub(super) enum Ask {
     ),
     /// Cut rails to new lengths (rail id, length in mm), from the cut list.
     SetRailLengths(Vec<(u64, f64)>),
+    /// Put the devices of an accepted cooler layout at their new places.
+    CoolerLayout(StructureId, Vec<novo_thermal::placement::Move>),
 }
 
 /// The Cabinet drawing of a layout, with the layout's problems as box states.
@@ -1629,6 +1631,32 @@ impl NovoApp {
                             .fail("Open an enclosure with a mounting plate to simulate".into()),
                     }
                 }
+                self.cabinet.heat.layout.poll(ui.ctx());
+                if self.cabinet.heat.layout.take_request() {
+                    match structure {
+                        Some(s) => {
+                            let scenario = self.cabinet.heat.current_scenario();
+                            self.cabinet
+                                .heat
+                                .layout
+                                .start(project, s, scenario, &tag_of);
+                        }
+                        None => self.cabinet.heat.fail(
+                            "Open an enclosure with a mounting plate to search for a cooler layout"
+                                .into(),
+                        ),
+                    }
+                }
+                let now_key = self.cabinet.heat.current_scenario().map(|(_, k)| k);
+                if let Some(super::heat_layout::Ask::Apply(s, moves)) =
+                    self.cabinet.heat.layout.show(
+                        ui.ctx(),
+                        now_key,
+                        ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                    )
+                {
+                    ask = Some(Ask::CoolerLayout(s, moves));
+                }
                 let dragging = self.cabinet.drag.is_some();
                 // The map goes under the canvas: it paints no background of
                 // its own while the map is on.
@@ -1668,6 +1696,11 @@ impl NovoApp {
                     "Plate",
                     out.response.rect,
                     false,
+                );
+                self.cabinet.heat.layout.paint(
+                    &ui.painter_at(out.response.rect),
+                    out.response.rect,
+                    &self.cabinet.view.viewport,
                 );
                 if self.cabinet.routes
                     && let Some(s) = structure
@@ -2380,6 +2413,7 @@ impl NovoApp {
                     Ask::PlaceAll
                         | Ask::PlaceEveryPanel
                         | Ask::SetRailLengths(_)
+                        | Ask::CoolerLayout(..)
                         | Ask::SetPlate(_)
                         | Ask::SetPlateSize(..)
                         | Ask::SetEnclosure(_)
@@ -2549,6 +2583,25 @@ impl NovoApp {
                     place_device(tx, structure, device, x, y, rotated)
                 }) {
                     self.learn_signal("cabinet_dropped");
+                }
+            }
+            Ask::CoolerLayout(enclosure, moves) => {
+                let count = moves.len();
+                let mut skipped = Vec::new();
+                if self.cabinet_edit("Cooler layout", |tx| {
+                    skipped = novo_thermal::placement_project::apply_moves(tx, enclosure, &moves)?;
+                    Ok(())
+                }) {
+                    let text = if skipped.is_empty() {
+                        format!("Moved {count} device(s) for a cooler layout. Undo puts them back.")
+                    } else {
+                        format!(
+                            "Moved {} of {count} devices; {} rail(s) were gone.",
+                            count - skipped.len(),
+                            skipped.len()
+                        )
+                    };
+                    self.message(Level::Info, text);
                 }
             }
             Ask::SetRailLengths(lengths) => {

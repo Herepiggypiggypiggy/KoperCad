@@ -23,15 +23,15 @@ const MIN_GAIN_K: f64 = 0.3;
 /// Fan flows a maker typically lists, m3/h.
 const FAN_SIZES: [f64; 7] = [50.0, 100.0, 150.0, 250.0, 400.0, 600.0, 800.0];
 
-struct Score {
+pub(crate) struct Score {
     /// Worst margin to a limit, K; `None` when no device has one.
-    worst_margin: Option<f64>,
-    max_air: f64,
+    pub(crate) worst_margin: Option<f64>,
+    pub(crate) max_air: f64,
     /// Margin per device in scenario order.
-    margins: Vec<Option<f64>>,
+    pub(crate) margins: Vec<Option<f64>>,
 }
 
-fn score(scn: &Scenario, init: Option<&State>) -> Result<(Score, State), Error> {
+pub(crate) fn score(scn: &Scenario, init: Option<&State>) -> Result<(Score, State), Error> {
     let mut coarse = scn.clone();
     coarse.params.cell_mm = coarse.params.cell_mm.max(ADVICE_CELL_MM);
     let (s, st) = crate::run_steady_from(&coarse, init)?;

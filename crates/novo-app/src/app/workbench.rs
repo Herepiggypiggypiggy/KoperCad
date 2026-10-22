@@ -655,6 +655,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "heat.airflow",
     "heat.contours",
     "heat.simulate",
+    "heat.cooler_layout",
     "terminal.connect",
     "terminal.disconnect",
     "terminal.strip_up",
@@ -952,6 +953,7 @@ impl NovoApp {
                 self.cabinet.keys.push(id.to_owned());
             }
             "heat.toggle" | "heat.airflow" | "heat.contours" | "heat.simulate"
+            | "heat.cooler_layout"
                 if self.is_open() =>
             {
                 // Simulate stays in the 3D view when it is the one open.
