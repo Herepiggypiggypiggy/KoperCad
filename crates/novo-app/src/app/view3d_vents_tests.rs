@@ -268,3 +268,60 @@ fn the_vent_commands_open_the_panel_and_add_the_opening() {
     }
     assert_eq!(d.app.cabinet.heat.settings.vents.len(), 2);
 }
+
+/// The list on the panel belongs to the enclosure it was read from: another
+/// enclosure (a second cabinet, another project) must not receive it.
+#[test]
+fn another_enclosure_never_receives_the_openings_of_the_last_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.app.view3d.controls.heat_panel = true;
+    let size = egui::vec2(1366.0, 768.0);
+    for _ in 0..3 {
+        d.frame_sized(size, Vec::new());
+    }
+    let e = enclosure(&d);
+    d.app
+        .cabinet
+        .heat
+        .settings
+        .add(VentSpec::presets(&e)[2].spec);
+    for _ in 0..4 {
+        d.frame_sized(size, Vec::new());
+    }
+    assert!(stored(&d).contains("FilterFan"));
+    // The panel last read another enclosure, and the project's has no openings.
+    let real = d.app.cabinet.heat.settings.stored.clone().unwrap().0;
+    let other = novo_core::StructureId::from(real.raw() + 1000);
+    {
+        let doc = d.app.backend.document_mut().unwrap();
+        doc.transact("clear", |tx| {
+            super::heat_openings_store::write(tx, real, "")
+        })
+        .unwrap();
+    }
+    d.app.cabinet.heat.settings.stored = Some((other, "[stale]".into()));
+    let steps = d.app.backend.document().unwrap().undo_depth();
+    for _ in 0..4 {
+        d.frame_sized(size, Vec::new());
+    }
+    assert!(
+        d.app.cabinet.heat.settings.vents.is_empty(),
+        "the list resets"
+    );
+    assert_eq!(stored(&d), "", "nothing is written to the project");
+    assert_eq!(d.app.backend.document().unwrap().undo_depth(), steps);
+
+    // A replaced document starts from its own project, not the old list.
+    d.app
+        .cabinet
+        .heat
+        .settings
+        .add(VentSpec::presets(&e)[2].spec);
+    d.app.cabinet.heat.settings.stored = None;
+    for _ in 0..4 {
+        d.frame_sized(size, Vec::new());
+    }
+    assert!(d.app.cabinet.heat.settings.vents.is_empty());
+    assert_eq!(stored(&d), "");
+}

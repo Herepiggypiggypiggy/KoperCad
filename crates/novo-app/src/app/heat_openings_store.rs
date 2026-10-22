@@ -72,20 +72,24 @@ impl super::NovoApp {
             .as_ref()
             .filter(|(s, _)| *s == id)
             .map(|(_, t)| t.clone());
-        let unchanged_there = known.as_deref() == Some(held.as_str());
+        // Another enclosure (a second cabinet, another project) or the first
+        // look: the project is the truth, never our list.
+        let Some(known) = known else {
+            settings.load(parse(&held));
+            settings.stored = Some((id, held));
+            return;
+        };
         let now = text(&settings.vents);
-        if unchanged_there || (known.is_none() && held.is_empty()) {
+        if known == held {
             // The project is as we last knew it: our side may have moved on.
             if now != held && !settings.is_editing() {
                 if let Some(doc) = self.backend.document_mut() {
                     let _ = doc.transact("Vents and fans", |tx| write(tx, id, &now));
                 }
                 self.cabinet.heat.settings.stored = Some((id, now));
-            } else if known.is_none() {
-                self.cabinet.heat.settings.stored = Some((id, held));
             }
         } else {
-            // The project changed under us, or this is another enclosure.
+            // The project changed under us (opened, undone).
             settings.load(parse(&held));
             settings.stored = Some((id, held));
         }
