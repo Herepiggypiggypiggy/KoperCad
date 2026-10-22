@@ -35,6 +35,11 @@ pub(super) enum Section {
 
 type Start = Option<(String, bool)>;
 
+/// A level chip with no lessons cannot be picked; a picked one can still be left.
+fn chip_enabled(lessons: usize, picked: bool) -> bool {
+    lessons > 0 || picked
+}
+
 fn level_rank(level: Level) -> usize {
     LEVELS.iter().position(|l| *l == level).unwrap_or(0)
 }
@@ -200,7 +205,7 @@ impl NovoApp {
                     .count();
                 let label = format!("{} · {n}", self.learn.say(level_key(level)));
                 // A level with no lessons cannot be picked (a picked one can still be left).
-                let chip = ui.add_enabled(n > 0 || on, egui::Button::selectable(on, label));
+                let chip = ui.add_enabled(chip_enabled(n, on), egui::Button::selectable(on, label));
                 if chip.clicked() {
                     self.learn.level = if on { None } else { Some(level) };
                 }
@@ -1112,5 +1117,18 @@ fn status_badge(ui: &mut egui::Ui, standing: &Standing, number: Option<usize>) {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod chip_tests {
+    use super::chip_enabled;
+
+    #[test]
+    fn an_empty_level_chip_is_off_unless_it_is_the_picked_one() {
+        assert!(!chip_enabled(0, false), "nothing to pick");
+        assert!(chip_enabled(0, true), "a picked level can still be left");
+        assert!(chip_enabled(3, false));
+        assert!(chip_enabled(3, true));
     }
 }
