@@ -9,6 +9,21 @@ expect "recovered copy"
 expect "was not changed"
 expect "beside the original"
 expect "Recover a damaged project"
+# Not "saved" or "no issues" until a person has checked it: the checks only see what survived.
+expect "Recovered copy: check every page"
+expect "Saved (recovered copy)"
+expect "In the copy:"
 shot recovered-copy
 check_layout
 check_blank recovered-copy
+# The pill opens the account of what the copy holds and what was left out.
+click_text "Recovered copy: check every page"
+wait 6
+expect "In the copy:"
+expect "I have checked every page"
+shot recovered-copy-account
+check_layout
+click_text "I have checked every page"
+wait 6
+shot recovered-copy-checked
+expect "No issues"
