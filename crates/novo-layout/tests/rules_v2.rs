@@ -679,3 +679,19 @@ fn a_low_first_row_keeps_its_band_on_the_plate() {
     assert!(first - RAIL_BAND_MM / 2.0 >= p.usable().y - 1e-9, "{first}");
     assert_eq!(first - RAIL_BAND_MM / 2.0, p.usable().y);
 }
+
+/// The same at the bottom edge: a last row lower than the band ends far enough
+/// above the plate's edge for the band to stay on the usable area.
+#[test]
+fn a_low_last_row_keeps_its_band_on_the_plate() {
+    let specs = vec![spec(1, "Q", 18.0, 90.0), spec(2, "X", 40.0, 20.0)];
+    let p = plate();
+    let plan = place_all_rules(&p, &specs, &RuleSet::standard(), 1, 0.0);
+    assert!(plan.unplaced.is_empty(), "{:?}", plan.unplaced);
+    let last = plan.rails.iter().map(|r| r.y).fold(f64::MIN, f64::max);
+    let usable = p.usable();
+    assert!(
+        last + RAIL_BAND_MM / 2.0 <= usable.y + usable.h + 1e-9,
+        "{last}"
+    );
+}

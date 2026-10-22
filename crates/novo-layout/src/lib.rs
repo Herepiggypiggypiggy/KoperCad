@@ -284,8 +284,8 @@ pub struct Rail {
 /// How wide a DIN rail lies on the plate across its run: the 35 mm of a
 /// TS 35 top-hat rail, centred on [`Rail`]'s line. Ducts and rows keep out of
 /// this band, not just off the line. The band is the planner's model of the
-/// rail (a TS 35 centred on the line at the devices' top edge), not a
-/// measured rail position.
+/// rail (a TS 35 centred on the line, which runs through the middle of the
+/// devices on it), not a measured rail position.
 pub const RAIL_BAND_MM: f64 = 35.0;
 
 /// Default duct cross-section in mm when the model has none yet.

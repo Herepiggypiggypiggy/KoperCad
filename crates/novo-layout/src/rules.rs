@@ -1093,7 +1093,13 @@ fn plan_once(
         in_zone(Zone::Middle),
         in_zone(Zone::Bottom),
     );
-    let limit = usable.y + usable.h;
+    // A last row lower than its rail's band ends above the plate's edge.
+    let last_out = bottoms
+        .last()
+        .or(middles.last())
+        .or(tops.last())
+        .map_or(0.0, |r| r.band_out());
+    let limit = usable.y + usable.h - last_out;
     let mut placed: Vec<(f64, &Row, Zone)> = Vec::new();
     let mut skipped: Vec<&Row> = Vec::new();
 
@@ -1255,8 +1261,9 @@ fn duct_class(row: Class, other: Class) -> Class {
 
 /// Wiring ducts for the space between two rows. `upper` is where the row
 /// above ends and `lower` where the row below starts, each including its
-/// rail's band (35 mm across, centred on the rail line, which runs along the
-/// top edge of the devices): the ducts stay clear of both.
+/// rail's band (35 mm across, centred on the rail line, which runs through
+/// the middle of the row's devices, so only a row lower than the band shows
+/// any of it): the ducts stay clear of both.
 fn plan_ducts(
     out: &mut Vec<PlannedDuct>,
     rules: &RuleSet,
