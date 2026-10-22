@@ -27,15 +27,20 @@ impl NovoApp {
         Some(base.join(format!("{name} field photos")))
     }
 
-    /// Asks for picture files and attaches them to punch item `id`.
-    pub(super) fn add_punch_photos(&mut self, id: u64) {
+    /// Asks for picture files; `None` when the dialog is cancelled.
+    pub(super) fn pick_photo_files() -> Option<Vec<PathBuf>> {
         let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Add photos to the punch item")
             .add_filter("Pictures", IMAGE_EXTENSIONS);
         if let Some(dir) = projects_dir() {
             dialog = dialog.set_directory(dir);
         }
-        let Some(paths) = dialog.pick_files() else {
+        dialog.pick_files()
+    }
+
+    /// Asks for picture files and attaches them to punch item `id`.
+    pub(super) fn add_punch_photos(&mut self, id: u64) {
+        let Some(paths) = Self::pick_photo_files() else {
             return;
         };
         let added = self.attach_photo_files(id, &paths);

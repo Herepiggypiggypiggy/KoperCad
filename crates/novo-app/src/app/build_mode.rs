@@ -42,6 +42,9 @@ pub(crate) struct BuildState {
     focus: Option<usize>,
     /// The note being typed for a problem; `Some` while the editor is open.
     problem: Option<String>,
+    /// Pictures chosen for the problem being typed; kept with the punch item
+    /// when it is raised.
+    photos: Vec<std::path::PathBuf>,
     /// Large buttons and text, on for a window the size of a tablet.
     large: bool,
     /// Steps ticked in this session, newest last, for Back.
@@ -55,6 +58,7 @@ impl BuildState {
             cabinet: 0,
             focus: None,
             problem: None,
+            photos: Vec::new(),
             large,
             history: Vec::new(),
         }
@@ -68,6 +72,10 @@ struct Asked {
     export: bool,
     import: bool,
     show_wire: Option<WireId>,
+    /// "Add photos…" was pressed in the problem editor.
+    pick_photos: bool,
+    /// Punch item raised with pictures to keep on it.
+    attach: Option<(u64, Vec<std::path::PathBuf>)>,
     /// A step was ticked, taken back or parked: the store changed.
     changed: bool,
 }
@@ -177,6 +185,18 @@ impl NovoApp {
                 self.backend.set_commissioning_json(&json);
             }
         }
+        if asked.pick_photos
+            && let Some(paths) = Self::pick_photo_files()
+        {
+            for path in paths {
+                if !state.photos.contains(&path) {
+                    state.photos.push(path);
+                }
+            }
+        }
+        if let Some((id, paths)) = asked.attach.take() {
+            self.keep_problem_photos(id, &paths);
+        }
         if asked.export {
             self.export_field_results();
         }
@@ -242,6 +262,16 @@ impl NovoApp {
     }
 
     /// Writes the commissioning data to the project when it changed.
+    /// Keeps the pictures chosen in the problem editor on the punch item the
+    /// problem raised, the same way the Commissioning workspace does.
+    pub(super) fn keep_problem_photos(&mut self, id: u64, paths: &[std::path::PathBuf]) -> usize {
+        // Flush first: the item must be in the store the photos go to.
+        self.flush_commissioning();
+        let added = self.attach_photo_files(id, paths);
+        self.flush_commissioning();
+        added
+    }
+
     fn flush_commissioning(&mut self) {
         if let Some(mode) = self.wb.commissioning.as_mut()
             && mode.dirty
@@ -299,6 +329,7 @@ fn screen(
                 state.cabinet = chosen;
                 state.focus = None;
                 state.problem = None;
+                state.photos.clear();
             }
         } else if let Some(c) = plan.cabinets.first() {
             ui.label(egui::RichText::new(&c.tag).strong());
@@ -457,6 +488,7 @@ fn step_list(
                         if r.clicked() {
                             state.focus = Some(step.number);
                             state.problem = None;
+                            state.photos.clear();
                         }
                     }
                 });
@@ -683,15 +715,38 @@ fn status_and_buttons(
                 .add_enabled(!text.is_empty(), egui::Button::new("Raise problem"))
                 .clicked();
             cancel = ui.button("Cancel").clicked();
+            if ui
+                .button("📷  Add photos…")
+                .on_hover_text("Pictures from a camera or the tablet's gallery")
+                .clicked()
+            {
+                asked.pick_photos = true;
+            }
         });
+        if !state.photos.is_empty() {
+            ui.horizontal(|ui| {
+                ui.label(format!(
+                    "{} photo{} will be kept on the punch item",
+                    state.photos.len(),
+                    if state.photos.len() == 1 { "" } else { "s" }
+                ));
+                if ui.small_button("Remove").clicked() {
+                    state.photos.clear();
+                }
+            });
+        }
         if raise {
-            mark_problem(&mut mode.store, &cab.tag, step, &text, who, &now());
+            let id = mark_problem(&mut mode.store, &cab.tag, step, &text, who, &now());
+            if !state.photos.is_empty() {
+                asked.attach = Some((id, std::mem::take(&mut state.photos)));
+            }
             mode.dirty = true;
             asked.changed = true;
             state.problem = None;
             state.focus = None;
         } else if cancel {
             state.problem = None;
+            state.photos.clear();
         }
         return;
     }
