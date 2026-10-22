@@ -1,0 +1,27 @@
+@title 3D Heat vents: the row under the pointer marks its wall in the cabinet
+@area 3D
+@sizes 1366x768
+# Two openings, none open: the pointer on a row in the Vents and fans panel tints that opening's wall and frame in the cabinet, and leaving the row lets go.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Add opening"
+wait 10
+click_text "Filter fan, low on the door"
+wait 10
+click_text "Add opening"
+wait 10
+click_text "Grille, high on the right wall"
+wait 20
+click_text "2  Grille, in the right wall"
+wait 10
+move 700 650
+wait 10
+shot none-marked
+move 125 434
+wait 10
+shot row-hovered
+check_layout

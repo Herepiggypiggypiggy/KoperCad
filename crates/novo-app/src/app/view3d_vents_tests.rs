@@ -325,3 +325,47 @@ fn another_enclosure_never_receives_the_openings_of_the_last_one() {
     assert!(d.app.cabinet.heat.settings.vents.is_empty());
     assert_eq!(stored(&d), "");
 }
+
+/// The row the pointer is on shows its wall in the cabinet, and lets go when
+/// the pointer leaves.
+#[test]
+fn hovering_a_row_marks_its_opening_in_the_cabinet() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.app.view3d.controls.heat_panel = true;
+    let size = egui::vec2(1366.0, 768.0);
+    for _ in 0..3 {
+        d.frame_sized(size, Vec::new());
+    }
+    let e = enclosure(&d);
+    d.app
+        .cabinet
+        .heat
+        .settings
+        .add(VentSpec::presets(&e)[0].spec);
+    d.app
+        .cabinet
+        .heat
+        .settings
+        .add(VentSpec::presets(&e)[1].spec);
+    for _ in 0..4 {
+        d.frame_sized(size, Vec::new());
+    }
+    let marked = |d: &super::gate1_tests::Drive| {
+        d.app
+            .view3d
+            .vent_markers
+            .iter()
+            .map(|m| m.selected)
+            .collect::<Vec<_>>()
+    };
+    d.app.cabinet.heat.settings.selected = None;
+    d.frame_sized(size, Vec::new());
+    assert_eq!(marked(&d), vec![false, false]);
+    d.app.cabinet.heat.settings.hovered = Some(1);
+    d.frame_sized(size, Vec::new());
+    assert_eq!(marked(&d), vec![false, true], "the hovered row is marked");
+    d.frame_sized(size, Vec::new());
+    d.frame_sized(size, Vec::new());
+    assert_eq!(marked(&d), vec![false, false], "and let go again");
+}

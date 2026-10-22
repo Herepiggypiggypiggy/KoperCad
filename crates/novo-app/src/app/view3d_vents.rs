@@ -128,6 +128,7 @@ fn body(
         ));
     }
     let mut remove = None;
+    settings.hovered = None;
     for i in 0..settings.vents.len() {
         let spec = settings.vents[i];
         let flow = flows.get(i).copied().flatten();
@@ -143,11 +144,13 @@ fn body(
                 spec.kind.label(),
                 heat_openings::wall_phrase(spec.wall)
             );
-            if ui
+            let row = ui
                 .selectable_label(open, title)
-                .on_hover_text("Open it here and mark it in the cabinet")
-                .clicked()
-            {
+                .on_hover_text("Open it here and mark it in the cabinet");
+            if row.hovered() {
+                settings.hovered = Some(i);
+            }
+            if row.clicked() {
                 settings.selected = if open { None } else { Some(i) };
             }
             let tag = match (role, flow) {
@@ -169,6 +172,9 @@ fn body(
                     }
                 });
             });
+            if let Some(line) = operating_point(&spec, flow) {
+                ui.label(muted(&line));
+            }
             let edited = edited.fitted(e);
             if edited != spec && remove.is_none() {
                 settings.checkpoint_edit();
@@ -240,6 +246,25 @@ fn body(
                  value, not a measurement. Drag an opening's label in the cabinet to slide it.",
             ));
         });
+}
+
+/// Where the shown run puts a fan against its datasheet: the flow the run
+/// moves through it against the flow at free air that was entered.
+fn operating_point(spec: &VentSpec, measured: Option<f64>) -> Option<String> {
+    if spec.kind == Kind::Grille {
+        return None;
+    }
+    let q = measured?.abs();
+    let rated = spec.flow_m3h;
+    if !(q.is_finite() && rated.is_finite() && rated > 0.0) {
+        return None;
+    }
+    Some(format!(
+        "Datasheet {rated:.0} m³/h at free air; this run moves about {q:.0} m³/h ({:.0} %) against \
+         the cabinet's resistance (model; the fan curve is a straight line down to {:.0} Pa).",
+        100.0 * q / rated,
+        spec.pressure_pa
+    ))
 }
 
 /// One line on how much air comes in and goes out of the shown result, so a
@@ -607,5 +632,26 @@ mod tests {
         };
         assert!((planned_flow(Kind::FilterFan, &p(Cool::FilterFan)) - 280.0).abs() < 1e-9);
         assert_eq!(planned_flow(Kind::Fan, &p(Cool::Fan)), 400.0);
+    }
+
+    #[test]
+    fn the_operating_point_compares_the_run_with_the_datasheet_and_skips_odd_values() {
+        let mut fan = VentSpec::new(Wall::Door);
+        fan.kind = Kind::FilterFan;
+        fan.flow_m3h = 100.0;
+        let line = operating_point(&fan, Some(-83.0)).unwrap();
+        assert!(
+            line.contains("100 m³/h") && line.contains("83 m³/h") && line.contains("83 %"),
+            "{line}"
+        );
+        assert!(operating_point(&fan, None).is_none());
+        assert!(operating_point(&fan, Some(f64::NAN)).is_none());
+        fan.flow_m3h = 0.0;
+        assert!(
+            operating_point(&fan, Some(50.0)).is_none(),
+            "no zero datasheet value"
+        );
+        let grille = VentSpec::new(Wall::Left);
+        assert!(operating_point(&grille, Some(50.0)).is_none());
     }
 }

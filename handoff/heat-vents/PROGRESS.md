@@ -4,3 +4,4 @@
 Still open: Cooling selection hook (needs #1342), explaining the preliminary in/out gap and showing the fan operating point against its datasheet, a smaller-window cabinet size, light/dark walk with the auditors.
 2026-10-22 review fix (bef6f08+): another enclosure or project loads its own openings and is never written to; a replaced document clears the panel list.
 2026-10-22 PR 3: NaN never stored, damaged text kept, Heat strip placeholder shows the strip's rows, toolbar-aware label clearance, in/out gap explained, 'result from before your last change' line, Heat panel scroll bar always. Cooling hook: the panel offers the fans the Cooling selection proposes. Still open: V-06 wall hover highlight, L-1 small-window cabinet.
+2026-10-22 PR 4: row hover marks its wall in the cabinet; fan operating point against the datasheet after a run; scenario 77 (hover). Still open: L-1 small-window cabinet size, fan proposal picture (needs hot fixture #1373).

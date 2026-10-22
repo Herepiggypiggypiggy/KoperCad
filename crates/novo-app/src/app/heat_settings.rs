@@ -469,6 +469,8 @@ pub(super) struct HeatSettings {
     /// What the project holds for the shown enclosure, as last read or
     /// written (see `heat_openings_store`).
     pub(super) stored: Option<(novo_core::StructureId, String)>,
+    /// The row the pointer is on in the panel: its wall is shown in the cabinet.
+    pub(super) hovered: Option<usize>,
     /// A command (Ctrl+K) asked for this preset to be added; the panel does it.
     pub(super) requested: Option<usize>,
     undo: Vec<Vec<VentSpec>>,
@@ -484,6 +486,7 @@ impl Default for HeatSettings {
             selected: None,
             editing: false,
             stored: None,
+            hovered: None,
             requested: None,
             undo: Vec::new(),
             redo: Vec::new(),

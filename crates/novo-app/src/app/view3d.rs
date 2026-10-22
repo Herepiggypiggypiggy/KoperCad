@@ -625,7 +625,11 @@ impl NovoApp {
                     frame: scene.frame,
                 },
                 &vent_flows,
-                self.cabinet.heat.settings.selected,
+                self.cabinet
+                    .heat
+                    .settings
+                    .hovered
+                    .or(self.cabinet.heat.settings.selected),
             ),
             _ => Vec::new(),
         };
