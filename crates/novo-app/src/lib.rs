@@ -89,6 +89,8 @@ fn command_line(
             profile = args.next().map(std::path::PathBuf::from);
         } else if let Some(dir) = arg.to_str().and_then(|a| a.strip_prefix("--profile-dir=")) {
             profile = Some(std::path::PathBuf::from(dir));
+        } else if arg == SAFE_GRAPHICS_FLAG {
+            // Read by `apply_profile_flag`; not a project file.
         } else if !control::is_control_arg(&arg) && file.is_none() {
             file = Some(std::path::PathBuf::from(arg));
         }
@@ -96,13 +98,46 @@ fn command_line(
     (profile.filter(|p| !p.as_os_str().is_empty()), file)
 }
 
+/// Start with the software renderer, for a PC whose graphics driver fails.
+const SAFE_GRAPHICS_FLAG: &str = "--safe-graphics";
+
+/// A file with this name next to `kopercad.exe` makes the folder portable:
+/// settings, logs and recovery files go to a `data` folder beside the program
+/// instead of the user's profile, so a USB stick or a shared folder carries
+/// everything and the PC is left clean. The portable zip ships the file.
+pub const PORTABLE_MARKER: &str = "kopercad.portable";
+
+/// The profile folder a portable install uses: `data` next to the program,
+/// when the marker file is there.
+fn portable_profile(exe: &std::path::Path) -> Option<std::path::PathBuf> {
+    let dir = exe.parent()?;
+    dir.join(PORTABLE_MARKER)
+        .is_file()
+        .then(|| dir.join("data"))
+}
+
 /// Applies the `--profile-dir` flag. `main` calls it before [`diag::init`], so the
 /// log and crash files go to the profile folder too; [`run`] repeats it (the
 /// first call wins).
 pub fn apply_profile_flag() {
+    gpu::set_safe_graphics(std::env::args_os().skip(1).any(|a| a == SAFE_GRAPHICS_FLAG));
     if let (Some(dir), _) = command_line(std::env::args_os().skip(1)) {
         novo_storage::profile::set_root(dir);
+    } else if std::env::var_os(novo_storage::profile::ENV).is_none()
+        && let Some(dir) = std::env::current_exe()
+            .ok()
+            .and_then(|exe| portable_profile(&exe))
+    {
+        novo_storage::profile::set_root(dir);
     }
+}
+
+/// Whether this run keeps its files beside the program (see [`PORTABLE_MARKER`]).
+pub fn is_portable() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| portable_profile(&exe))
+        .is_some_and(|dir| novo_storage::profile::root().as_deref() == Some(dir.as_path()))
 }
 
 /// Opens the main window and runs until it is closed.
@@ -252,5 +287,25 @@ mod command_line_tests {
         );
         assert_eq!(parse(&["plant.novo"]), (None, Some("plant.novo".into())));
         assert_eq!(parse(&["--profile-dir="]), (None, None));
+    }
+
+    #[test]
+    fn safe_graphics_is_a_flag_not_a_project_file() {
+        assert_eq!(parse(&["--safe-graphics"]), (None, None));
+        assert_eq!(
+            parse(&["--safe-graphics", "plant.kopercad"]),
+            (None, Some("plant.kopercad".into()))
+        );
+    }
+
+    #[test]
+    fn a_marker_beside_the_program_makes_the_folder_portable() {
+        let dir = std::env::temp_dir().join(format!("kc-portable-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("kopercad.exe");
+        assert_eq!(super::portable_profile(&exe), None);
+        std::fs::write(dir.join(super::PORTABLE_MARKER), "").unwrap();
+        assert_eq!(super::portable_profile(&exe), Some(dir.join("data")));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

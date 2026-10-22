@@ -16,7 +16,8 @@ pub struct Candidate {
     pub sort_key: String,
 }
 
-/// One proposed position, mounted on `rail`.
+/// One proposed position (top left), mounted on `rail`: the rail's line runs
+/// through the middle of the device (see [`crate::Rail`]).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Proposed {
     pub id: u64,
@@ -118,6 +119,24 @@ pub fn place_all_below(
         });
         x += w;
         row_h = row_h.max(h);
+    }
+    // Each rail runs through the middle of its row, behind its devices, which
+    // are centred on it: the rail was created at the row's top edge.
+    let heights: Vec<(u64, f64)> = candidates.iter().map(|c| (c.id, c.size.height)).collect();
+    let height_of = |id: u64| heights.iter().find(|(i, _)| *i == id).map_or(0.0, |h| h.1);
+    for rail in &mut plan.rails {
+        let on: Vec<usize> = (0..plan.placements.len())
+            .filter(|&i| plan.placements[i].rail == rail.id)
+            .collect();
+        let row_h = on
+            .iter()
+            .map(|&i| height_of(plan.placements[i].id))
+            .fold(0.0, f64::max);
+        for &i in &on {
+            let h = height_of(plan.placements[i].id);
+            plan.placements[i].y += (row_h - h) / 2.0;
+        }
+        rail.y += row_h / 2.0;
     }
     plan
 }

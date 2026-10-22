@@ -83,6 +83,16 @@ enum Cmd {
     /// app, save screenshots, write an audit report. See docs/testing/qa-suite.md.
     #[command(subcommand)]
     Qa(qa::Qa),
+    /// Write the user manual (HTML, works offline) to a folder. The same pages
+    /// open from Help > User manual in the program.
+    Manual {
+        /// The folder to write into (created if needed).
+        dir: PathBuf,
+        /// A folder of screenshots (`<name>.png`) to include; the pages name
+        /// the ones they want. Without it pages show a caption instead.
+        #[arg(long, value_name = "DIR")]
+        images: Option<PathBuf>,
+    },
     /// Show a summary of a project file.
     Info {
         file: PathBuf,
@@ -484,6 +494,36 @@ where
     }
 }
 
+/// `manual`: writes the site, with the screenshots found in `images`.
+fn manual(dir: &Path, images: Option<&Path>, out: &mut dyn Write) -> Result<i32, Failure> {
+    let mut found: Vec<(String, Vec<u8>)> = Vec::new();
+    if let Some(images) = images {
+        let entries = std::fs::read_dir(images)
+            .map_err(|e| Failure::new(exit::READ, format!("{}: {e}", images.display())))?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "png")
+                && let (Some(stem), Ok(bytes)) = (
+                    path.file_stem().and_then(|s| s.to_str()),
+                    std::fs::read(&path),
+                )
+            {
+                found.push((stem.to_string(), bytes));
+            }
+        }
+        found.sort();
+    }
+    let borrowed: Vec<(&str, &[u8])> = found
+        .iter()
+        .map(|(n, b)| (n.as_str(), b.as_slice()))
+        .collect();
+    let index = novo_workflow::manual::write_site(dir, env!("CARGO_PKG_VERSION"), &borrowed)
+        .map_err(|e| Failure::new(exit::WRITE, format!("{}: {e}", dir.display())))?;
+    writeln!(out, "Manual written: {}", index.display())
+        .map_err(|e| Failure::new(exit::WRITE, e.to_string()))?;
+    Ok(exit::OK)
+}
+
 fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
     match command {
         Cmd::Macros(cmd) => macros::run(cmd, out),
@@ -491,6 +531,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
         Cmd::TestUser(opts) => testuser::run(opts, out),
         Cmd::Qa(cmd) => qa::run(cmd, out),
         Cmd::Parts(cmd) => parts::run(cmd, out),
+        Cmd::Manual { dir, images } => manual(&dir, images.as_deref(), out),
         Cmd::Compare { before, after } => {
             let (a, b) = (read(&before)?, read(&after)?);
             let c = novo_interop::compare::compare_projects(&a, &b);

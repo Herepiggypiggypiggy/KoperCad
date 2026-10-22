@@ -9,11 +9,13 @@ publish = false
 [dependencies]
 novo-core.workspace = true
 novo-layout.workspace = true
+novo-canvas.workspace = true
+novo-editor = { workspace = true, features = ["art"] }
+novo-symbols.workspace = true
+novo-xref.workspace = true
 
 [dev-dependencies]
 novo-app = { path = "../novo-app" }
-novo-canvas.workspace = true
-novo-editor = { workspace = true, features = ["art"] }
 egui.workspace = true
 novo-theme.workspace = true
 novo-parts.workspace = true
@@ -23,7 +25,6 @@ novo-reports.workspace = true
 novo-storage.workspace = true
 tempfile.workspace = true
 rusqlite.workspace = true
-novo-symbols.workspace = true
 novo-terminals = { path = "../novo-terminals" }
 novo-workflow.workspace = true
 serde_json.workspace = true
@@ -32,7 +33,6 @@ novo-cables.workspace = true
 novo-plc.workspace = true
 novo-interop.workspace = true
 zip.workspace = true
-novo-xref.workspace = true
 novo-cli.workspace = true
 novo-py.workspace = true
 novo-numbering.workspace = true

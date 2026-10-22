@@ -131,7 +131,9 @@ jobs:
           $stage = "dist\portable"
           New-Item -ItemType Directory -Force $stage | Out-Null
           Copy-Item target\release\kopercad.exe, target\release\kopercad-cli.exe $stage
-          Copy-Item packaging\windows\portable\run.cmd $stage
+          Copy-Item packaging\windows\portable\run.cmd, packaging\windows\portable\run-safe-graphics.cmd $stage
+          # The marker makes the folder portable: settings and logs go to .\data, not the user profile.
+          New-Item -ItemType File "$stage\kopercad.portable" | Out-Null
           Copy-Item docs\TESTER-README.md "$stage\README.md"
           Copy-Item RELEASE_NOTES.md, THIRD_PARTY_NOTICES.txt $stage
           # LICENSE files appear once the licence is decided (B13); copy whatever exists.

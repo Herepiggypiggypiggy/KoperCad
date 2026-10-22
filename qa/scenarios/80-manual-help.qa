@@ -1,0 +1,56 @@
+@title User manual: Help menu, F1 and the screenshots the manual uses
+@area Help
+@env KOPERCAD_NO_BROWSER=1
+# Pictures first (they must not show the "Manual written" toast), then Help > User manual and F1
+# in three workspaces. The shot names are the ones scripts/build-manual.sh copies into the manual
+# at 1920x1080.
+shot start
+check_layout
+click_text "Open example"
+wait 20
+shot example-schematic
+click_text Help
+wait 5
+expect "User manual"
+expect "Help for this panel"
+shot help-menu
+key Escape
+click_text Cabinet #1
+wait 20
+shot cabinet
+click_text 3D
+wait 30
+shot view-3d
+key ctrl+k
+text manual
+wait 5
+expect "User manual"
+shot command-search
+key Escape
+# F1 gives the page for what is in front.
+key F1
+wait 10
+expect "Manual written"
+click_text Cabinet #1
+wait 20
+key F1
+wait 10
+expect "Manual written"
+click_text Schematic
+wait 20
+key F1
+wait 10
+expect "Manual written"
+# Build mode, on the cabinet fixture, for the workshop page.
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text Reports
+wait 5
+click_text "Build mode..."
+wait 30
+expect "Build mode"
+shot build-mode
+check_layout
+key F1
+wait 10
+expect "Manual written"

@@ -1,0 +1,30 @@
+@title Build mode: a problem with a photo from the camera or gallery
+@area Cabinet
+# Reports > Build mode > Problem… > Add photos…: the picture is kept on the punch item that the problem raises.
+# The native file dialog is answered by the harness.
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text Reports
+wait 5
+click_text "Build mode..."
+wait 30
+expect "Build mode"
+click_text "Problem…" Button
+wait 10
+expect "What is wrong?"
+expect "Add photos"
+shot editor
+check_layout
+text Hole is off by 3 mm
+wait 5
+answer_dialog qa/fixtures/loose-terminal.png
+click_text "Add photos…" Button
+wait 10
+expect "1 photo will be kept"
+shot photo-chosen
+check_layout
+click_text "Raise problem" Button
+wait 10
+expect "1 problem"
+shot raised
+check_layout

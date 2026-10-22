@@ -136,8 +136,7 @@ impl HeatState {
             let built = scenario_from_project(project, structure, &options)
                 .ok()
                 .map(|mut b| {
-                    let extra = self.settings.vents_for(&b.scenario.enclosure);
-                    b.scenario.vents.extend(extra);
+                    self.settings.apply(&mut b.scenario);
                     b
                 });
             let (scenario, plate, messages) = match built {

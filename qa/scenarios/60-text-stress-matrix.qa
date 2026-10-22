@@ -1,0 +1,646 @@
+@title Text stress matrix: every case page, fitted and zoomed (look at the pictures for text on text)
+@area Schematic
+@slow
+@sizes 1366x768
+open qa/fixtures/text-stress-matrix.novo
+wait 30
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text symbols r0 part 1
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot symbols-r0-part-1-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot symbols-r0-part-1-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text symbols r0m part 1
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot symbols-r0m-part-1-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot symbols-r0m-part-1-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text symbols r180 part 1
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot symbols-r180-part-1-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot symbols-r180-part-1-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text symbols r90 part 3
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot symbols-r90-part-3-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot symbols-r90-part-3-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text symbols r270m part 3
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot symbols-r270m-part-3-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot symbols-r270m-part-3-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text dense 32mm part 1
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot dense-32mm-part-1-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot dense-32mm-part-1-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text dense 16mm part 3
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot dense-16mm-part-3-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot dense-16mm-part-3-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text dense 10mm part 1
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot dense-10mm-part-1-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot dense-10mm-part-1-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text terminals row
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot terminals-row-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot terminals-row-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text terminals row mirrored
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot terminals-row-mirrored-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot terminals-row-mirrored-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text terminals row rotated
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot terminals-row-rotated-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot terminals-row-rotated-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text terminals placed left of strip 0
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot terminals-placed-left-of-strip-0-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot terminals-placed-left-of-strip-0-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text terminals placed left of strip 0 mirrored
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot terminals-placed-left-of-strip-0-mirrored-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot terminals-placed-left-of-strip-0-mirrored-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text terminals placed left of strip 90
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot terminals-placed-left-of-strip-90-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot terminals-placed-left-of-strip-90-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text terminals placed left of strip 180
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot terminals-placed-left-of-strip-180-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot terminals-placed-left-of-strip-180-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text terminals placed left of strip 270
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot terminals-placed-left-of-strip-270-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot terminals-placed-left-of-strip-270-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text terminals PE N mixed and stacked strips
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot terminals-pe-n-mixed-and-stacked-strips-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot terminals-pe-n-mixed-and-stacked-strips-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text terminals long names
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot terminals-long-names-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot terminals-long-names-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text terminals side by side strips
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot terminals-side-by-side-strips-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot terminals-side-by-side-strips-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text wire numbers lengths
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot wire-numbers-lengths-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot wire-numbers-lengths-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text wire numbers long text
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot wire-numbers-long-text-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot wire-numbers-long-text-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text wire bundles
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot wire-bundles-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot wire-bundles-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text wires crossing
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot wires-crossing-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot wires-crossing-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text feeds pitch 8mm
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot feeds-pitch-8mm-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot feeds-pitch-8mm-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text feeds pitch 4mm
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot feeds-pitch-4mm-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot feeds-pitch-4mm-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text cables and cores
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot cables-and-cores-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot cables-and-cores-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text long tags and descriptions
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot long-tags-and-descriptions-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot long-tags-and-descriptions-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text symbols on top of each other
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot symbols-on-top-of-each-other-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot symbols-on-top-of-each-other-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text xref coil with 6 contacts
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot xref-coil-with-6-contacts-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot xref-coil-with-6-contacts-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text xref coil with 12 contacts
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot xref-coil-with-12-contacts-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot xref-coil-with-12-contacts-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text free text next to devices
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot free-text-next-to-devices-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot free-text-next-to-devices-zoom
+click_text Pages
+wait 6
+click 113 136
+key ctrl+a
+text content at the frame and title block
+wait 10
+click 100 248
+wait 20
+key Escape
+wait 4
+key Home
+wait 20
+shot content-at-the-frame-and-title-block-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot content-at-the-frame-and-title-block-zoom
