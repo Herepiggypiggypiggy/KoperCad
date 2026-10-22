@@ -30,12 +30,12 @@ how_nl = ["Klik bovenin op 3D in de schakelaar, of voer 3D view uit in het opdra
 title = "Open the 3D view"
 title_nl = "Open het 3D-beeld"
 text = """
-The plate drawing shows width and height only. Click **3D** in the switcher at the top, or run **3D view** from the command field. The plate, the rails and the ducts appear with their real cross-sections (a 35 mm top-hat rail, slotted ducts) and every device stands on its rail at the real width, height and depth of its part.
-Drag a device in the view to move it, or turn or delete it there; the Cabinet tab shows the same layout. The view is rebuilt from the layout whenever that changes.
+Click **3D** in the switcher at the top, or run **3D view** from the command field. The plate, the rails and the ducts appear with their real cross-sections (a 35 mm top-hat rail, slotted ducts) and every device stands on its rail at the width, height and depth of its part (the sample parts' sizes are typical, not checked against data sheets).
+Drag a device in the view to move it; the Cabinet tab shows the same layout.
 """
 text_nl = """
-De plaattekening toont alleen breedte en hoogte. Klik bovenin op **3D** in de schakelaar, of voer **3D view** uit in het opdrachtveld. De plaat, de rails en de kanalen verschijnen met hun echte doorsneden (een hoedprofiel-rail van 35 mm, gesleufde kanalen) en elk component staat op zijn rail met de echte breedte, hoogte en diepte van zijn artikel.
-Sleep een component in het beeld om het te verplaatsen, of draai of verwijder het daar; het tabblad Cabinet toont dezelfde indeling. Het beeld wordt opnieuw opgebouwd zodra de indeling verandert.
+Klik bovenin op **3D** in de schakelaar, of voer **3D view** uit in het opdrachtveld. De plaat, de rails en de kanalen verschijnen met hun echte doorsneden (een hoedprofiel-rail van 35 mm, gesleufde kanalen) en elk component staat op zijn rail met de breedte, hoogte en diepte van zijn artikel (de maten van de voorbeeldartikelen zijn gangbaar, niet gecontroleerd aan de hand van datasheets).
+Sleep een component in het beeld om het te verplaatsen; het tabblad Cabinet toont dezelfde indeling.
 """
 point = { ui = "workspace.view3d" }
 expect = { command = "view.3d" }

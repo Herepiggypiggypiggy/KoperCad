@@ -25,3 +25,4 @@ plus sample projects, against `docs/design/learning-modules.md`.
 
 ## Open questions
 - State checks for the cabinet (`placed`, `rail`, `duct`) and cabinet `solve` ops: asked of the framework thread.
+- A hover line on a 2D device box saying the front is typical, not the maker's drawing (the lesson says it; the Cabinet view has no hover text yet).
