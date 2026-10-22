@@ -5,11 +5,16 @@
 click_text "New project"
 wait 20
 key ctrl+k
-text "motor starter dol"
+# The command, not a macro's name (a name picks that macro already): the list stays unpicked.
+text "place macro"
 wait 5
 key Enter
 wait 10
 expect "Pick a macro to see what it will do."
+# The list is longer than the window: search, then click the row's own text.
+click 237 94
+text motor starter dol
+wait 5
 click_text "Motor starter DOL" Label
 wait 10
 expect_not "Pick a macro to see what it will do."
