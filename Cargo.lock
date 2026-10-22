@@ -2348,6 +2348,7 @@ dependencies = [
  "novo-cli",
  "novo-core",
  "novo-editor",
+ "novo-emc",
  "novo-interop",
  "novo-layout",
  "novo-numbering",

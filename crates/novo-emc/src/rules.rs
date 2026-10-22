@@ -562,7 +562,7 @@ fn segregation(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                             })
                             .sum();
                         metrics.push(Metric {
-                            label: "Induced voltage (estimate)",
+                            label: "Induced voltage",
                             value: format!(
                                 "{volts:.1} V for {} A/us, within a factor of 3",
                                 p.didt_a_per_us
