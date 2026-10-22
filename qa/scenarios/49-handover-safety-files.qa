@@ -22,5 +22,7 @@ shot handover-ask
 click_text "Hand over anyway"
 wait 40
 shot handover-done
+expect_file "~/Documents/KoperCAD/*/1 Drawing set.pdf" 5000
+expect_file "~/Documents/KoperCAD/*/9 Lists.xlsx" 3000
 keep_file "~/Documents/KoperCAD/*/*"
 keep_file "~/Documents/KoperCAD/*safety sheets.pdf"

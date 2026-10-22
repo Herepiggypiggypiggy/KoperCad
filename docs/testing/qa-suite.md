@@ -90,9 +90,18 @@ finding with the steps so far and a picture; a dead app is S1.
 
 ## Exports to read
 
-These scenarios keep the real exported files in `files/` beside the report, so an auditor can open the
-PDF, workbook or XML and check its content, not only that it exists. Run one with
+These scenarios run an export and copy the real file into `files/` beside the report, so a person can
+open the PDF, workbook or XML and read it. **No program checks the content of any of these files.** What
+a scenario checks is that the file was written and is not tiny (`expect_file`, a minimum of 100 to 5,000
+bytes depending on the file; the PLC address plan is the smallest); `keep_file` then copies it, and a
+`keep_file` that matches nothing is itself a finding (S2), so a missing file fails the scenario even
+where there is no `expect_file`. Reading the kept files is a person's job. Run one with
 `scripts/qa.sh --only <name> --out <folder>`.
+
+Scenarios 47 and 50 open a fixture, which the harness copies to `/tmp/kopercad-qa-open-N`, so their
+exports are written there; the others use the profile's `~/Documents/KoperCAD`. Scenario 49 exports the
+handover package of the example project with its one open warning handed over anyway (the "Hand over
+anyway" button), so the folder is of a project that still has an open problem.
 
 | Scenario | Files kept |
 |---|---|
@@ -101,15 +110,15 @@ PDF, workbook or XML and check its content, not only that it exists. Run one wit
 | `44-plc-files` | PLC I/O list, address plan, PLCopen XML, TIA Excel, Studio 5000 CSV (the demo I/O list is imported first, so the files carry tags) |
 | `45-punch-list-step-files` | punch list PDF, STEP cabinet model |
 | `46-export-files-example` | page PDF, report PDF, page DXF, wire production workbook, AutomationML |
-| `47-export-files-cabinet-spec-change` | wiring plan DXF, change report PDF |
+| `47-export-files-wiring-dxf-change-report` | wiring plan DXF, change report PDF |
 | `48-spec-sheet-file` | spec sheet workbook |
 | `49-handover-safety-files` | handover folder (contents, drawing set, revisions, parts, wires, terminals, cables, safety, Excel lists) and the safety function sheets |
 | `50-variant-bulk-edit-files` | variant PDF, bulk edit workbook |
 | `51-pdf-options-eplan-files` | PDF with options (in colour), EPLAN project file |
 | `52-wire-production-page-file` | all-pages PDF with the wire production page added |
 
-Not covered by a file check yet: the plate DXF of a cabinet other than the lesson fixture, the wire
-production Excel for a project with sized wires.
+Not covered yet, and no export has a content check by a program: the plate DXF of a cabinet other than
+the lesson fixture, the wire production Excel for a project with sized wires.
 
 ## The merge gate
 

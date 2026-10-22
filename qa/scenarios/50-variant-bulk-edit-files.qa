@@ -24,5 +24,6 @@ text Export for bulk edit
 wait 4
 key Enter
 wait 20
+expect_file "/tmp/kopercad-qa-open-*/machine-options sheets.xlsx" 3000
+keep_file "/tmp/kopercad-qa-open-*/machine-options sheets.xlsx"
 shot bulk-edit
-keep_file "/tmp/kopercad-qa-open-*/*.xlsx"

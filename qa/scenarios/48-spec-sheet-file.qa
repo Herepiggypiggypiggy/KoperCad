@@ -1,18 +1,14 @@
 @title Spec sheet workbook written and kept for inspection
 @area Reports
-# Placing the Motor starter DOL macro in a new project gives the spec sheet something to list; Ctrl+K "Export the spec sheet" writes the workbook, keep_file copies it.
+# Ctrl+K with the macro's name opens Place macro with it picked; placing it in a new project gives the spec sheet something to list; Ctrl+K "Export the spec sheet" writes the workbook, keep_file copies it.
 click_text "New project"
 wait 20
 key ctrl+k
-text "place macro"
+text "Motor starter DOL"
 wait 5
 key Enter
 wait 10
-click 237 94
-text motor starter dol
-wait 5
-click_text "Motor starter DOL" Label
-wait 10
+expect "Keep the macro's wire numbers"
 click_text Place Button #2
 wait 20
 expect_scene "-K1"
@@ -22,5 +18,6 @@ text Export the spec sheet
 wait 4
 key Enter
 wait 20
+expect_file "~/Documents/KoperCAD/*spec.xlsx" 3000
+keep_file "~/Documents/KoperCAD/*spec.xlsx"
 shot spec
-keep_file "~/Documents/KoperCAD/*"

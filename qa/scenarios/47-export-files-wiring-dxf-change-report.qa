@@ -1,6 +1,6 @@
-@title Cabinet and revision exports kept: wiring plan DXF, spec sheet, change report
+@title Wiring plan DXF and change report written and kept for inspection
 @area Reports
-# The wiring plan DXF needs the Cabinet view open on a cabinet, the spec sheet needs a placed macro, the change report needs an issued revision; keep_file copies each file for inspection.
+# The wiring plan DXF needs the Cabinet view open on a cabinet; the change report needs an issued revision and a change after it (a PLC card added). The files are written next to the opened copy of the fixture (/tmp/kopercad-qa-open-N); keep_file copies each for inspection.
 open qa/fixtures/door-cutouts.novo
 wait 20
 click_text "Cabinet" #1
