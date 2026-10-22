@@ -1,0 +1,16 @@
+@title Lesson card and heat legend: the legend keeps clear of the card, both in view
+@area Cabinet
+# At 1366x768 the card sits in the bottom right; the Temperature legend hangs from the top right and must stay above it.
+click_text "Learn…"
+wait 15
+text cabinet layout
+wait 8
+click_text Start #1
+wait 40
+click_text Cabinet #1
+wait 40
+key shift+h
+wait 60
+shot heat-with-card
+check_blank heat-with-card
+check_layout

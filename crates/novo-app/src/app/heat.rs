@@ -1715,6 +1715,7 @@ fn legend(
         204.0,
     )
     .top(12.0)
+    .above_card()
     .fixed_open()
     .fit()
     .show(ctx, |ui| {

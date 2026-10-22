@@ -841,6 +841,7 @@ impl NovoApp {
         let captions = ui.available_width() >= cabinet_bar::WIDE;
         let caption = |c: &'static str| captions.then_some(c);
         let mut all_placed_note = false;
+        let mut place_all_keyed = false;
         let mut delete_rail: Option<u64> = None;
         let mut move_rail: Option<super::cabinet_rails::RailDrag> = None;
         // Narrower than the fixed part of the bar (a 683 point window), the bar
@@ -2108,6 +2109,7 @@ impl NovoApp {
                             }
                             "cabinet.place-all" if (unplaced > 0 || homeless > 0) && !has_plan => {
                                 ask = Some(Ask::PlaceAll);
+                                place_all_keyed = true;
                             }
                             "cabinet.place-all" if !has_plan => {
                                 all_placed_note = true;
@@ -2234,6 +2236,10 @@ impl NovoApp {
             self.message(Level::Info, "Every device of this panel is placed");
         }
         anchors.extend(cabinet_bar::take_noted(ui.ctx()));
+        // The shortcut ticks a lesson's "click Place all" step like the button.
+        if place_all_keyed {
+            self.learn_event(novo_learn::Event::Clicked("cabinet.place_all".into()));
+        }
         for a in anchors {
             self.anchor(a.id, a.rect, a.label);
             if a.clicked {
@@ -2386,8 +2392,7 @@ impl NovoApp {
 
     /// The plate the Cabinet shows, with its stored layout and the devices
     /// that could go on it: what a canvas action works on. Used by lesson
-    /// replays, which act without the canvas.
-    #[cfg(test)]
+    /// steps ("Do it for me" and the replays), which act without the canvas.
     pub(super) fn cabinet_plate(
         &self,
     ) -> Option<(
