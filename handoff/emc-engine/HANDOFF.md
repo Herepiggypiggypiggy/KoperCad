@@ -16,3 +16,5 @@ Traps
 - A motor wire not in a cable is an EMC-04 finding by design: a bare test wire in a fixture needs a shielded cable first.
 
 People: EMC lead thread and visualisation thread share `handoff/emc/`; the roster with session ids is `coordination/threads.md`.
+
+Views (2026-10-22): `crates/novo-app/src/app/emc_adapter.rs` turns `novo_emc::Picture` into the view3d `Picture`. It takes a `drawn` set of wire ids so a view never shows a finding about a wire it does not draw. Known limits: engine points sit at z = 0 (no heights), no bonding links yet (`bonds` empty), fix buttons do not apply from the card.

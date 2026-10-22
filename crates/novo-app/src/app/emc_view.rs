@@ -200,11 +200,10 @@ impl EmcState {
                 wire_in(project, r.wire, false, path)
             })
             .collect();
-        let pic = emc_stub::build(
-            [layout.plate.width as f32, layout.plate.height as f32],
-            &devices,
-            &wires,
-        );
+        let size = [layout.plate.width as f32, layout.plate.height as f32];
+        let drawn = wires.iter().map(|w| w.id).collect();
+        let pic = super::emc_adapter::from_project(project, id, size, &drawn)
+            .unwrap_or_else(|| emc_stub::build(size, &devices, &wires));
         if let Some(sel) = self.selected
             && pic.hotspot(sel).is_none()
         {
@@ -232,7 +231,10 @@ impl EmcState {
         let key: Key = (id, revision, scene.revision);
         if self.picture.as_ref().map(|p| p.0) != Some(key) {
             let (devices, wires) = inputs(project, scene);
-            let pic = emc_stub::build([scene.frame.width, scene.frame.height], &devices, &wires);
+            let size = [scene.frame.width, scene.frame.height];
+            let drawn = wires.iter().map(|w| w.id).collect();
+            let pic = super::emc_adapter::from_project(project, id, size, &drawn)
+                .unwrap_or_else(|| emc_stub::build(size, &devices, &wires));
             if let Some(sel) = self.selected
                 && pic.hotspot(sel).is_none()
             {
@@ -617,29 +619,31 @@ pub(super) fn panel(
 }
 
 fn layer_chips(ui: &mut egui::Ui, l: &mut EmcLayers, pic: &Picture) {
-    let chip = |ui: &mut egui::Ui, on: &mut bool, text: &str, tip: &str, enabled: bool| {
-        // Not `add_enabled_ui`: a scope per chip cannot wrap onto the next row.
-        if !enabled {
-            ui.add_enabled(false, egui::Button::new(text))
-                .on_disabled_hover_text("Nothing of this kind in this cabinet");
-            return;
-        }
-        let r = novo_theme::widgets::filter_toggle(ui, text, *on).on_hover_text(tip);
-        if r.clicked() {
-            *on = !*on;
-        }
-    };
+    let nothing = "Nothing of this kind in this cabinet";
+    let chip =
+        |ui: &mut egui::Ui, on: &mut bool, text: &str, tip: &str, enabled: bool, off: &str| {
+            // Not `add_enabled_ui`: a scope per chip cannot wrap onto the next row.
+            if !enabled {
+                ui.add_enabled(false, egui::Button::new(text))
+                    .on_disabled_hover_text(off);
+                return;
+            }
+            let r = novo_theme::widgets::filter_toggle(ui, text, *on).on_hover_text(tip);
+            if r.clicked() {
+                *on = !*on;
+            }
+        };
     ui.horizontal_wrapped(|ui| {
         // A chip moves to the next row instead of wrapping its own text.
         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-        chip(ui, &mut l.classes, "Classes", "Wires in the colour of their cable class, devices by role", true);
-        chip(ui, &mut l.halos, "Keep-clear", "A soft band round each noisy run: keep sensitive wires out of it", true);
-        chip(ui, &mut l.sources, "Noise glow", "A glow round each noisy part, as far as its loudness reaches (an index, not a field)", true);
-        chip(ui, &mut l.spots, "Hot spots", "Numbered markers where something is likely to go wrong", true);
-        chip(ui, &mut l.risk, "Exposure map", "How strongly each point of the plate is leaned on by the noisy parts and runs. Geometry only", true);
-        chip(ui, &mut l.loops, "Loops", "The area each pair of go and return wires encloses", !pic.loops.is_empty());
-        chip(ui, &mut l.bonding, "Bonding", "The earth and bonding conductors", !pic.bonds.is_empty());
-        chip(ui, &mut l.shields, "Shields", "Where each cable screen ends", !pic.shields.is_empty());
+        chip(ui, &mut l.classes, "Classes", "Wires in the colour of their cable class, devices by role", true, nothing);
+        chip(ui, &mut l.halos, "Keep-clear", "A soft band round each noisy run: keep sensitive wires out of it", true, nothing);
+        chip(ui, &mut l.sources, "Noise glow", "A glow round each noisy part, as far as its loudness reaches (an index, not a field)", true, nothing);
+        chip(ui, &mut l.spots, "Hot spots", "Numbered markers where something is likely to go wrong", true, nothing);
+        chip(ui, &mut l.risk, "Exposure map", "How strongly each point of the plate is leaned on by the noisy parts and runs. Geometry only", true, nothing);
+        chip(ui, &mut l.loops, "Loops", "The area each pair of go and return wires encloses", !pic.loops.is_empty(), nothing);
+        chip(ui, &mut l.bonding, "Bonding", "The earth and bonding conductors", !pic.bonds.is_empty(), if pic.provenance == Provenance::Engine { "Not drawn yet: the rule engine does not give bonding links" } else { nothing });
+        chip(ui, &mut l.shields, "Shields", "Where each cable screen ends", !pic.shields.is_empty(), nothing);
     });
 }
 
@@ -728,9 +732,11 @@ fn card(ui: &mut egui::Ui, h: &Hotspot, pic: &Picture, tag_of: &dyn Fn(u64) -> S
         ui.label(egui::RichText::new("What would help").strong());
         if h.fixes.iter().any(|f| !f.applicable) {
             ui.label(
-                egui::RichText::new(
-                    "Advice only for now: the buttons do not change the project yet.",
-                )
+                egui::RichText::new(if pic.provenance == Provenance::Engine {
+                    "These buttons do not change the project. Apply a fix from Check > EMC check."
+                } else {
+                    "Advice only for now: the buttons do not change the project yet."
+                })
                 .small()
                 .color(pal.text_secondary),
             );
@@ -738,15 +744,7 @@ fn card(ui: &mut egui::Ui, h: &Hotspot, pic: &Picture, tag_of: &dyn Fn(u64) -> S
         for f in &h.fixes {
             ui.horizontal_wrapped(|ui| {
                 let r = ui.add_enabled(f.applicable, egui::Button::new(&f.label));
-                let tip = if f.applicable {
-                    f.detail.clone()
-                } else {
-                    format!(
-                        "{} Advice only until the rule engine can apply it.",
-                        f.detail
-                    )
-                };
-                r.on_hover_text(tip).on_disabled_hover_text(&f.detail);
+                r.on_hover_text(&f.detail).on_disabled_hover_text(&f.detail);
             });
         }
     }

@@ -44,6 +44,12 @@ pub(super) fn draw(
         egui::pos2(rect.min.x + s.x, rect.min.y + s.y)
     };
     let px_per_mm = (to_screen(1.0, 0.0).x - to_screen(0.0, 0.0).x).abs();
+    // Maps, glows and bands end at the plate edge: they never run over the
+    // tool column or the canvas around the plate.
+    let plate_rect =
+        egui::Rect::from_two_pos(to_screen(0.0, 0.0), to_screen(pic.plate[0], pic.plate[1]))
+            .intersect(rect);
+    let bands = ui.painter_at(plate_rect);
 
     if layers.risk
         && let Some(f) = field
@@ -61,7 +67,7 @@ pub(super) fn draw(
                 );
                 let cell =
                     egui::Rect::from_two_pos(to_screen(x, y), to_screen(x + f.cell, y + f.cell));
-                painter.rect_filled(cell, 0.0, color(st.risk(v), a));
+                bands.rect_filled(cell, 0.0, color(st.risk(v), a));
             }
         }
     }
@@ -72,7 +78,7 @@ pub(super) fn draw(
             let colour = st.colour(Class::Motor);
             for k in 1..=3u8 {
                 let r = reach * f32::from(k) / 3.0 * px_per_mm;
-                painter.circle_filled(to_screen(c[0], c[1]), r, color(colour, 5 + 4 * (4 - k)));
+                bands.circle_filled(to_screen(c[0], c[1]), r, color(colour, 5 + 4 * (4 - k)));
             }
         }
     }
@@ -81,7 +87,7 @@ pub(super) fn draw(
             let pts: Vec<egui::Pos2> = r.path.iter().map(|p| to_screen(p[0], p[1])).collect();
             let c = st.colour(r.class);
             for (k, a) in [(1.0, 9u8), (0.66, 13), (0.33, 18)] {
-                painter.add(egui::Shape::line(
+                bands.add(egui::Shape::line(
                     pts.clone(),
                     egui::Stroke::new(2.0 * r.halo_mm * k * px_per_mm, color(c, a)),
                 ));
@@ -198,6 +204,11 @@ mod tests {
         let pic = d.app.cabinet.emc.picture().expect("a picture of the plate");
         assert!(!pic.runs.is_empty(), "wires are classed");
         assert!(!pic.nodes.is_empty(), "devices have roles");
+        assert_eq!(
+            pic.provenance,
+            novo_view3d::emc::Provenance::Engine,
+            "the rule engine's classes, not the interim guesses"
+        );
     }
 
     #[test]

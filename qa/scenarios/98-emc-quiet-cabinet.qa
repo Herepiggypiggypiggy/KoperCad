@@ -1,0 +1,15 @@
+@title Cabinet plate: EMC view of a quiet cabinet (engine classes, no finding, nothing alarming drawn)
+@area Cabinet
+# A motor starter cabinet with only mains wiring: the engine classes the wires, finds nothing, and says so.
+open qa/fixtures/cabinet-lesson.novo
+wait 20
+key ctrl+k
+wait 6
+text emc view on the plate
+wait 8
+key Enter
+wait 30
+expect "Indicative model"
+expect "No finding"
+shot plate-emc-quiet
+check_layout

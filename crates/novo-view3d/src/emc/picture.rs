@@ -161,6 +161,8 @@ pub enum Kind {
     Loop,
     /// A bonding path is weak or missing.
     Bond,
+    /// A drive has no mains filter.
+    Filter,
 }
 
 impl Kind {
@@ -171,6 +173,7 @@ impl Kind {
             Kind::Shield => "Shield end",
             Kind::Loop => "Loop area",
             Kind::Bond => "Bonding",
+            Kind::Filter => "Filter",
         }
     }
 }

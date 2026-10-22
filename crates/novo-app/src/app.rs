@@ -68,6 +68,7 @@ mod duplicate;
 mod dxf;
 mod electrical;
 mod emc;
+mod emc_adapter;
 mod emc_demo;
 mod emc_plate;
 mod emc_stub;
