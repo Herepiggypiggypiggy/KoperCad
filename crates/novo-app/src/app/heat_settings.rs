@@ -178,7 +178,7 @@ impl VentSpec {
     }
 
     /// Length of the wall along the `u` axis and the other way, mm.
-    fn wall_len(wall: Wall, e: &Enclosure) -> (f64, f64) {
+    pub(super) fn wall_len(wall: Wall, e: &Enclosure) -> (f64, f64) {
         let (w, h, d) = (
             e.interior_width_mm(),
             e.interior_height_mm(),
@@ -613,9 +613,10 @@ impl HeatSettings {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn a_cooling_suggestion_places_its_fans_side_by_side_inside_the_wall() {
+    fn a_cooling_suggestion_places_what_fits_side_by_side_and_says_so() {
+        use super::super::view3d_vents::Suggestion;
         let e = enclosure();
-        let sg = super::super::view3d_vents::Suggestion::for_test(Kind::FilterFan, 3, 180.0);
+        let sg = Suggestion::for_test(Kind::FilterFan, 3, 180.0);
         let specs = sg.specs_for_test(&e);
         assert_eq!(specs.len(), 3);
         assert!(
@@ -625,6 +626,25 @@ mod tests {
         );
         assert!(!specs[0].footprint(&e).overlaps(&specs[1].footprint(&e)));
         assert!(!specs[1].footprint(&e).overlaps(&specs[2].footprint(&e)));
+        // More than the wall holds: only what fits, never overlapping, and the
+        // sentence names the rest.
+        let many = Suggestion::for_test(Kind::FilterFan, 9, 180.0);
+        let placed = many.specs_for_test(&e);
+        assert!(placed.len() < 9 && placed.len() >= 2, "{}", placed.len());
+        for i in 0..placed.len() {
+            for j in i + 1..placed.len() {
+                assert!(!placed[i].footprint(&e).overlaps(&placed[j].footprint(&e)));
+            }
+        }
+        assert!(many.sentence_for_test(&e).contains("add the other"));
+        // The flow given is the one placed (the caller applies the derate).
+        assert_eq!(
+            Suggestion::for_test(Kind::FilterFan, 1, 126.0).specs_for_test(&e)[0].flow_m3h,
+            126.0
+        );
+        // Six on a wide enough wall: all six.
+        let six = Suggestion::for_test(Kind::FilterFan, 6, 100.0);
+        assert!(six.specs_for_test(&e).len() <= 6);
     }
 
     #[test]

@@ -54,6 +54,19 @@ shot airflow-result
 expect "Airflow: lines and arrows are coloured by air speed"
 check_blank airflow-result
 check_layout
+wait_s 30
+click_text Cancel
+wait_s 5
+click_text "1  Filter fan, in the door"
+wait 10
+shot after-cancel
+click_text Auto
+wait 10
+click_text Undo
+wait 10
+expect "from before your last change"
+shot stale-after-edit
+check_layout
 key ctrl+k
 wait 6
 text preferences
