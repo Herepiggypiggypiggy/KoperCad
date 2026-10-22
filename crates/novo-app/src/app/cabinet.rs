@@ -1854,14 +1854,17 @@ impl NovoApp {
                         .sync_plate(project, s, || cache.get(project, s).routes.clone());
                     let field = self.cabinet.emc.exposure();
                     if let Some(pic) = self.cabinet.emc.picture().cloned() {
+                        let shown = super::emc_plate::Shown {
+                            pic: &pic,
+                            field: field.as_deref(),
+                            layers: &self.cabinet.emc.layers,
+                            selected: self.cabinet.emc.selected,
+                        };
                         let picked = super::emc_plate::draw(
                             ui,
                             rect,
                             &self.cabinet.view.viewport,
-                            &pic,
-                            field.as_deref(),
-                            &self.cabinet.emc.layers,
-                            self.cabinet.emc.selected,
+                            &shown,
                             dark,
                         );
                         if let Some(h) = picked {

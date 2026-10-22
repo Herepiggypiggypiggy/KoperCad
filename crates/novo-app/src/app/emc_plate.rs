@@ -12,18 +12,30 @@ fn color(c: [u8; 3], a: u8) -> egui::Color32 {
     egui::Color32::from_rgba_unmultiplied(c[0], c[1], c[2], a)
 }
 
+/// What the plate view draws.
+pub(super) struct Shown<'a> {
+    pub(super) pic: &'a Picture,
+    /// The exposure map of `pic`.
+    pub(super) field: Option<&'a emc::Field>,
+    pub(super) layers: &'a EmcLayers,
+    pub(super) selected: Option<u32>,
+}
+
 /// Paints the picture over the plate. `rect` is the canvas widget's screen
 /// rectangle. Returns the hot spot whose badge was clicked.
 pub(super) fn draw(
     ui: &egui::Ui,
     rect: egui::Rect,
     view: &Viewport,
-    pic: &Picture,
-    field: Option<&emc::Field>,
-    layers: &EmcLayers,
-    selected: Option<u32>,
+    shown: &Shown,
     dark: bool,
 ) -> Option<u32> {
+    let Shown {
+        pic,
+        field,
+        layers,
+        selected,
+    } = *shown;
     let st = style(dark);
     let pal = crate::theme::ui_palette();
     let painter = ui.painter_at(rect);
