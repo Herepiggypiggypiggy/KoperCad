@@ -199,11 +199,10 @@ impl EmcState {
                 wire_in(project, r.wire, false, path)
             })
             .collect();
-        let pic = emc_stub::build(
-            [layout.plate.width as f32, layout.plate.height as f32],
-            &devices,
-            &wires,
-        );
+        let size = [layout.plate.width as f32, layout.plate.height as f32];
+        let drawn = wires.iter().map(|w| w.id).collect();
+        let pic = super::emc_adapter::from_project(project, id, size, &drawn)
+            .unwrap_or_else(|| emc_stub::build(size, &devices, &wires));
         if let Some(sel) = self.selected
             && pic.hotspot(sel).is_none()
         {
@@ -231,7 +230,10 @@ impl EmcState {
         let key: Key = (id, revision, scene.revision);
         if self.picture.as_ref().map(|p| p.0) != Some(key) {
             let (devices, wires) = inputs(project, scene);
-            let pic = emc_stub::build([scene.frame.width, scene.frame.height], &devices, &wires);
+            let size = [scene.frame.width, scene.frame.height];
+            let drawn = wires.iter().map(|w| w.id).collect();
+            let pic = super::emc_adapter::from_project(project, id, size, &drawn)
+                .unwrap_or_else(|| emc_stub::build(size, &devices, &wires));
             if let Some(sel) = self.selected
                 && pic.hotspot(sel).is_none()
             {
@@ -727,9 +729,11 @@ fn card(ui: &mut egui::Ui, h: &Hotspot, pic: &Picture, tag_of: &dyn Fn(u64) -> S
         ui.label(egui::RichText::new("What would help").strong());
         if h.fixes.iter().any(|f| !f.applicable) {
             ui.label(
-                egui::RichText::new(
-                    "Advice only for now: the buttons do not change the project yet.",
-                )
+                egui::RichText::new(if pic.provenance == Provenance::Engine {
+                    "These buttons do not change the project. Apply a fix from Check > EMC check."
+                } else {
+                    "Advice only for now: the buttons do not change the project yet."
+                })
                 .small()
                 .color(pal.text_secondary),
             );
@@ -737,15 +741,7 @@ fn card(ui: &mut egui::Ui, h: &Hotspot, pic: &Picture, tag_of: &dyn Fn(u64) -> S
         for f in &h.fixes {
             ui.horizontal_wrapped(|ui| {
                 let r = ui.add_enabled(f.applicable, egui::Button::new(&f.label));
-                let tip = if f.applicable {
-                    f.detail.clone()
-                } else {
-                    format!(
-                        "{} Advice only until the rule engine can apply it.",
-                        f.detail
-                    )
-                };
-                r.on_hover_text(tip).on_disabled_hover_text(&f.detail);
+                r.on_hover_text(&f.detail).on_disabled_hover_text(&f.detail);
             });
         }
     }

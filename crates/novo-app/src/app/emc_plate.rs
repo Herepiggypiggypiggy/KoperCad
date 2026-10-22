@@ -198,6 +198,11 @@ mod tests {
         let pic = d.app.cabinet.emc.picture().expect("a picture of the plate");
         assert!(!pic.runs.is_empty(), "wires are classed");
         assert!(!pic.nodes.is_empty(), "devices have roles");
+        assert_eq!(
+            pic.provenance,
+            novo_view3d::emc::Provenance::Engine,
+            "the rule engine's classes, not the interim guesses"
+        );
     }
 
     #[test]

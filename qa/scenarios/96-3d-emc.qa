@@ -13,7 +13,7 @@ click_text EMC #1
 wait 30
 shot emc-overview
 check_layout
-click_text "mains beside analog" #1
+click_text "Drive without filter" #1
 wait 15
 shot emc-card
 check_layout
