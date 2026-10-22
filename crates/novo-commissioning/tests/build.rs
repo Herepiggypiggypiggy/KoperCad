@@ -508,15 +508,76 @@ fn the_build_sheet_has_a_row_per_step_with_ticks_problems_and_boxes() {
     mark_done(&mut store, &c.steps[0], "tv", "2026-10-22T08:12:00Z");
     mark_problem(&mut store, &c.tag, &c.steps[1], "bit broke", "tv", "t2");
     let sheet = build_sheet(&plan, &store, 7);
-    assert_eq!(sheet.sections.len(), 1);
+    // One section per phase, the first one carries the progress.
+    assert!(sheet.sections.len() > 1);
     let s = &sheet.sections[0];
     assert!(s.title.contains("+CAB  Build sheet  1 of "), "{}", s.title);
-    let rows = s.text_rows();
+    let rows: Vec<Vec<String>> = sheet.sections.iter().flat_map(|s| s.text_rows()).collect();
     assert_eq!(rows.len(), c.steps.len());
     assert_eq!(rows[0][0], "1");
     assert_eq!(rows[0][5], "[x] tv 10-22 08:12");
-    assert_eq!(rows[1][5], "PROBLEM: bit broke");
+    assert_eq!(rows[1][5], "PROBLEM");
+    assert!(
+        rows[1][6].starts_with("PROBLEM: bit broke"),
+        "{}",
+        rows[1][6]
+    );
     assert_eq!(rows[2][5], BUILD_BOX);
     // Hand work is said on the sheet too.
-    assert!(rows[1][3].contains("by hand"), "{}", rows[1][3]);
+    assert!(rows[1][6].contains("by hand"), "{}", rows[1][6]);
+}
+
+#[test]
+fn a_ticked_step_without_a_name_still_says_so_on_the_sheet() {
+    let (mut doc, h) = starter();
+    cabinet(&mut doc, &h);
+    let plan = plan_of(&doc);
+    let c = &plan.cabinets[0];
+    let mut store = CommissioningStore::new();
+    mark_done(&mut store, &c.steps[0], "", "2026-10-22T08:12:00Z");
+    let rows = build_sheet(&plan, &store, 1).sections[0].text_rows();
+    assert_eq!(rows[0][5], "[x] (no name set) 10-22 08:12");
+}
+
+#[test]
+fn the_build_sheet_prints_every_cell_whole_even_with_long_notes() {
+    let (mut doc, h) = starter();
+    cabinet(&mut doc, &h);
+    let plan = plan_of(&doc);
+    let c = &plan.cabinets[0];
+    let mut store = CommissioningStore::new();
+    let long = "the drill walked off the centre punch and the hole is 3 mm too far left, so the device does not sit square on the plate and the rail must be moved as well";
+    mark_problem(
+        &mut store,
+        &c.tag,
+        &c.steps[1],
+        long,
+        "Tadjiro Velzel",
+        "t2",
+    );
+    mark_done(
+        &mut store,
+        &c.steps[0],
+        "Tadjiro Velzel",
+        "2026-10-22T08:12:00Z",
+    );
+    let sheet = build_sheet(&plan, &store, 1);
+    let options = novo_pdf::ReportPdfOptions {
+        row_mm: sheet
+            .sections
+            .iter()
+            .map(|s| (s.key.clone(), novo_commissioning::build_sheet_row_mm(s)))
+            .collect(),
+        ..novo_pdf::ReportPdfOptions::default()
+    };
+    let bytes = novo_pdf::export_report_pdf(&[&sheet], &options);
+    let pdf = lopdf::Document::load_mem(&bytes).expect("valid pdf");
+    let pages: Vec<u32> = pdf.get_pages().keys().copied().collect();
+    let text = pdf.extract_text(&pages).expect("text");
+    let cut: Vec<&str> = text.lines().filter(|l| l.contains("...")).collect();
+    assert!(cut.is_empty(), "cells were cut: {cut:?}");
+    // The note wraps over lines; its last words are on the sheet.
+    assert!(text.contains("moved as well"), "{text}");
+    // Every page prints the same headers whole.
+    assert!(!text.contains("Do..."), "{text}");
 }

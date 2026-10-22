@@ -29,7 +29,7 @@ pub use build::{
     BuildPhase, BuildPlan, BuildProgress, BuildStep, BuildTick, CabinetPlan, Next, StepKey,
     StepStatus, TickState, keys as build_keys, mark_done, mark_problem, undo as undo_build,
 };
-pub use build_sheet::{BOX as BUILD_BOX, build_sheet};
+pub use build_sheet::{BOX as BUILD_BOX, build_sheet, row_mm as build_sheet_row_mm};
 pub use check::{CheckKind, CheckRecord, CheckState, Target};
 pub use field::{FieldError, FieldPackage, MergeReport};
 pub use photo::{is_photo_name, photo_name};

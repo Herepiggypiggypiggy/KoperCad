@@ -292,7 +292,7 @@ impl NovoApp {
             row_mm: output
                 .sections
                 .iter()
-                .map(|s| (s.key.clone(), 8.0))
+                .map(|s| (s.key.clone(), novo_commissioning::build_sheet_row_mm(s)))
                 .collect(),
             language: self.report_translator(),
             ..novo_pdf::ReportPdfOptions::default()

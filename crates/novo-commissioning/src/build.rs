@@ -704,7 +704,7 @@ fn cabinet(project: &Project, enclosure: &Structure, jobs: &[WireCutJob]) -> Opt
                 let mut caution = Vec::new();
                 if estimate {
                     caution.push(format!(
-                        "The length is an estimate ({}): cut long and trim at the terminal.",
+                        "The length is an estimate (basis: {}). Cut long and trim at the terminal.",
                         job.basis
                     ));
                 }
