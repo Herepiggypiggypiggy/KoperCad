@@ -186,3 +186,54 @@ fn write_signals_fixture() {
     let _ = std::fs::remove_file(&path);
     backend.save(&path).unwrap();
 }
+
+/// Rewrites the fixtures: `cargo test -p novo-app write_diversity_fixtures -- --ignored`.
+/// One states a factor on Q1 and at the supply; the other states ones the
+/// diagram has to refuse (out of range) or cannot use (nothing to scale).
+#[test]
+#[ignore = "writes qa/fixtures/distribution-board-diversity*.novo"]
+fn write_diversity_fixtures() {
+    use crate::backend::ProjectBackend;
+    use novo_checks::single_line::{DIVERSITY_FACTOR, SUPPLY_DIVERSITY_FACTOR};
+    let write = |name: &str, title: &str, devices: &[(&str, f64)], supply: f64| {
+        let mut backend = crate::backend::StorageBackend::default();
+        backend.new_project(title).unwrap();
+        let board = novo_tests::distribution_board(backend.document_mut().unwrap()).unwrap();
+        backend
+            .document_mut()
+            .unwrap()
+            .transact("Diversity", |tx| {
+                for (which, f) in devices {
+                    let device = match *which {
+                        "q1" => board.q1,
+                        "q2" => board.q2,
+                        _ => board.m1,
+                    };
+                    tx.set_property(device, DIVERSITY_FACTOR, Some((*f).into()))?;
+                }
+                novo_checks::standards::set_info_property(
+                    tx,
+                    SUPPLY_DIVERSITY_FACTOR,
+                    Some(supply.into()),
+                )
+            })
+            .unwrap();
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../qa/fixtures")
+            .join(name);
+        let _ = std::fs::remove_file(&path);
+        backend.save(&path).unwrap();
+    };
+    write(
+        "distribution-board-diversity.novo",
+        "Distribution board with diversity (example)",
+        &[("q1", 0.8)],
+        0.9,
+    );
+    write(
+        "distribution-board-diversity-notes.novo",
+        "Distribution board with factors the diagram refuses (example)",
+        &[("q2", 8.0), ("m1", 0.5)],
+        1.5,
+    );
+}

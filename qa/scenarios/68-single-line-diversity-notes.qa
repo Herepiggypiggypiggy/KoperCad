@@ -1,0 +1,18 @@
+@title Single-line diagram: a factor out of range or with nothing to scale is named in the legend
+@area Reports
+# Q2 states 8 (refused), M1 states 0.5 on a stated current (unused), the supply states 1.5 (refused).
+open qa/fixtures/distribution-board-diversity-notes.novo
+wait 20
+key ctrl+k
+wait 4
+text single line
+wait 4
+key Enter
+wait 20
+shot diversity-notes-diagram
+check_blank diversity-notes-diagram
+check_layout
+click_text Schedule #1
+wait 10
+shot diversity-notes-schedule
+check_layout

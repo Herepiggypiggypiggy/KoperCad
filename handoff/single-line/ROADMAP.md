@@ -11,7 +11,7 @@ Scope: a generated power distribution single-line diagram, derived from the proj
 ## Next
 1. CLI export (`kopercad-cli export single-line`).
 2. Single-phase signal loads: DONE in the follow-up PR (lamps and sounders on a control-class net that mains reaches over switched poles are drawn as loads; one-conductor runs are taken phase to neutral, line voltage over √3; 24 V and unvoltaged lamps are named in a note and left off). Still open: solenoids and brakes (coils are never drawn), socket outlets, a single-phase source other than the stated supply.
-3. Diversity factors (today: plain sum, said on the drawing).
+3. Diversity factors: DONE in the follow-up PR (device property `diversity_factor` on the sum below a device, project property `supply.diversity_factor` at the supply, Electrical inputs > Distribution; shown in the box as ×f, in the schedule basis and the legend; out-of-range values are ignored and said). Still open: factors by load type (IEC 60439 table) and a per-group demand calculation.
 4. Short-circuit current along the run: DONE in the follow-up PR (Ik at each box from the supply through the cables; ceiling where data is missing; not carried past a converter; Icu check). Still open: motor contribution, busbar impedance, minimum Ik for disconnection.
 5. Verify ampacity tables and IEC 60204-1 clause numbers against a licensed copy (Tadjiro).
 

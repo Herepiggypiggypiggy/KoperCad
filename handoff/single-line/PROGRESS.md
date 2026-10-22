@@ -8,4 +8,10 @@
 - Kinds Lamp and Sounder; mains test = control net reached from a stated AC line voltage >= 100 V over switched poles and carrying a lamp or sounder.
 - One-conductor runs: phase voltage = line voltage / sqrt(3), marked calculated (assumed when no potential voltage is stated); note in the legend.
 - Fixture `distribution_board_with_signals`, QA scenario 69, pictures in qa/single-line-loads-2026-10-22/.
+2026-10-21 23:30 UTC follow-up PR 2 of 3 (diversity factor): device and supply factors, Electrical inputs field, legend/notes/basis, fixture distribution-board-diversity.novo, QA scenario 65 (/mnt/project-files/qa/single-line-diversity-2026-10-21/)
 2026-10-21 23:00 UTC follow-up PR 1 of 3 (short-circuit current along each run): Node.ik_ka/ik_exact/icu_status, report shows Ik per box, Icu check, notes and legend; QA scenario 58 re-run (/mnt/project-files/qa/single-line-ik-2026-10-21/)
+
+## 2026-10-21 diversity factor, R3 fixes
+- Own "Diversity" column in the schedule; Electrical inputs > Distribution field with hint "none" when empty.
+- Notes for a factor outside 0.1 to 1 and for a factor with nothing to scale.
+- Merged main and the short-circuit PR; QA at 1366x768 and 1920x1080 (scenarios 67, 68).
