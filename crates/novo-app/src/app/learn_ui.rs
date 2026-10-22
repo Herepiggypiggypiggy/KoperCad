@@ -122,7 +122,7 @@ impl NovoApp {
             self.learn.say("learn"),
             canvas,
             super::panel::Side::BottomRight,
-            316.0,
+            super::panel::CORNER_CARD_WIDTH,
         )
         .fixed_open()
         .fit()

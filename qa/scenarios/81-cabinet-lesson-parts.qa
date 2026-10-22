@@ -1,0 +1,22 @@
+@title Cabinet lesson project: parts drawn as devices on rails, in the plate and in 3D
+@area Cabinet
+# Devices show the typical front of their family (screws, poles, vents) with the DIN rail running behind the middle
+# of each; in 3D the same parts have a front per pole, screws and ribs once they are 36 px or more on screen.
+open qa/fixtures/cabinet-lesson.novo
+wait 30
+click_text Cabinet #1
+wait 30
+shot plate
+check_blank plate
+check_layout
+click_text 3D
+wait 60
+scroll 700 300 -30
+wait 40
+scroll 700 300 -30
+wait 40
+scroll 700 300 -30
+wait 40
+shot parts-3d
+check_blank parts-3d
+check_layout

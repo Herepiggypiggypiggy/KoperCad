@@ -106,6 +106,13 @@ impl Live {
 }
 
 impl HeatState {
+    /// The scenario of the cabinet as the Heat view follows it now, with its
+    /// key. `None` when the bridge cannot build one.
+    pub(super) fn current_scenario(&self) -> Option<(Arc<Scenario>, u64)> {
+        let c = self.live.current.as_ref()?;
+        Some((c.scenario.clone()?, c.scenario_key))
+    }
+
     /// Follows the project: marks the result out of date and, with auto on,
     /// re-solves. Cheap when the project revision did not change. `dragging`
     /// holds the automatic start back while a device is in the pointer's
@@ -155,6 +162,7 @@ impl HeatState {
                 self.live.changed_at = now;
             }
             self.live.devices = scenario.as_ref().map_or(0, |s| s.devices.len());
+            self.cooling.parts = novo_thermal::cooling::products_from_project(project);
             let scenario_key = scenario.as_deref().map_or(0, scenario_key);
             self.live.current = Some(Current {
                 key,
@@ -220,6 +228,8 @@ impl HeatState {
             ambient: cur.ambient,
             plate: cur.plate,
             messages: cur.messages.clone(),
+            enclosure: Some(scenario.enclosure.clone()),
+            duct_loss_w: super::heat_cooling::duct_loss_w(&scenario),
             wire_notes: cur.wire_notes.clone(),
         };
         let top = self.settings.top;

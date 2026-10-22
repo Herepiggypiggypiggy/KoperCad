@@ -113,7 +113,7 @@ fn speed_scale(ui: &mut egui::Ui, top_speed: f32) {
             pal.text_secondary,
         );
     }
-    ui.label(egui::RichText::new("m/s").small());
+    ui.label(egui::RichText::new("m/s  Air speed").small());
 }
 
 /// The colour bar with degree ticks.
@@ -155,7 +155,7 @@ fn scale(ui: &mut egui::Ui, range: Range) {
             crate::theme::ui_palette().text_secondary,
         );
     }
-    ui.label(egui::RichText::new("°C").small());
+    ui.label(egui::RichText::new("°C  Temperature").small());
 }
 
 /// The ticks of the scale as (position 0 to 1 along the bar, degrees), only

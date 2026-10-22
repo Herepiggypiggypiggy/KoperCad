@@ -1,0 +1,215 @@
+{
+  "id": "complete-terminals",
+  "category": "complete",
+  "title": "Terminate every open incoming connection of two circuits",
+  "setup": [
+    {
+      "action": "add_page",
+      "args": {
+        "name": "1",
+        "title": "Drive and supply"
+      }
+    },
+    {
+      "action": "place_macro",
+      "args": {
+        "macro": "Motor starter DOL",
+        "page": "1"
+      }
+    },
+    {
+      "action": "place_macro",
+      "args": {
+        "macro": "Power supply 24 V",
+        "page": "1"
+      }
+    }
+  ],
+  "turns": [
+    {
+      "prompt": "Finish the connections on page 1: terminate everything that is still open on terminals with the right potential.",
+      "script": [
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "set_plan",
+              "input": {
+                "steps": [
+                  {
+                    "title": "Find the open pins",
+                    "status": "doing"
+                  },
+                  {
+                    "title": "Terminate them",
+                    "status": "todo"
+                  },
+                  {
+                    "title": "Number and check",
+                    "status": "todo"
+                  }
+                ]
+              }
+            },
+            {
+              "tool": "read_project",
+              "input": {
+                "section": "symbols",
+                "filter": "["
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F1:1",
+                  "potential": "L1"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F1:3",
+                  "potential": "L2"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F1:5",
+                  "potential": "L3"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": {
+                    "symbol_id": 14,
+                    "pin": "1"
+                  },
+                  "potential": "PE"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F3:1",
+                  "potential": "L1"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-K1:A2",
+                  "potential": "N"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F4:1",
+                  "potential": "L1"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F4:3",
+                  "potential": "N"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": {
+                    "symbol_id": 53,
+                    "pin": "1"
+                  },
+                  "potential": "PE"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F5:2",
+                  "potential": "24V"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-G1:M",
+                  "potential": "0V"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "number_wires",
+                "args": {}
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "run_checks",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "text": "Every open connection on page 1 now ends on a terminal: L1/L2/L3, neutral and protective earth for the motor circuit and the supply, 24 V and 0 V on the output side. The design checks report no open pins. I chose the potentials from the pin names and the macros; confirm the 24 V and 0 V terminals match your field wiring. Terminal parts are not assigned.",
+          "calls": []
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "errors_max": 0,
+    "open_pins_max": 0,
+    "all_wires_numbered": true,
+    "verified": true,
+    "plan_shown": true,
+    "keep_existing": true
+  }
+}

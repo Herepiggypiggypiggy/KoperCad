@@ -51,12 +51,12 @@ id = "read-the-screen"
 title = "What is where"
 title_nl = "Wat staat waar"
 text = """
-Every device of **+CAB** that has no place yet waits in the **Unplaced** list on the left, with its size taken from its part.
+Every device of **+CAB** that has no place yet waits in the **Unplaced** list on the left, with its size taken from its part (the sample parts carry typical published sizes, not ones checked against a data sheet).
 The strip under the bar says "0 placed, 8 unplaced" and, once something is wrong, shows a problem count you can click.
 **Place all** fills the plate for you; the other buttons come in later lessons.
 """
 text_nl = """
-Elk component van **+CAB** zonder plek wacht links in de lijst **Unplaced**, met de afmeting uit het artikel.
+Elk component van **+CAB** zonder plek wacht links in de lijst **Unplaced**, met de afmeting uit het artikel (de voorbeeldartikelen hebben gangbare gepubliceerde maten, niet gecontroleerd aan een gegevensblad).
 De strook onder de knoppenbalk zegt "0 placed, 8 unplaced" en toont, zodra er iets mis is, een aantal problemen waarop je kunt klikken.
 **Place all** vult de plaat voor je; de andere knoppen komen in latere lessen.
 """
@@ -76,12 +76,12 @@ title_nl = "Sleep een component op de plaat"
 text = """
 Drag **-F1** from the list to the upper left of the plate and let go.
 While you drag, a box shows where it will land; positions snap to a 5 mm grid.
-Afterwards **-F1** is a 54 x 90 mm box on the plate, gone from the list, and the strip under the bar says "1 placed, 7 unplaced".
+Afterwards **-F1** stands on the plate as its 54 x 90 mm front (terminal screws top and bottom, the typical form of a fuse holder, not the maker's drawing), gone from the list, and the strip under the bar says "1 placed, 7 unplaced".
 """
 text_nl = """
 Sleep **-F1** uit de lijst naar linksboven op de plaat en laat los.
 Tijdens het slepen toont een kader waar het component landt; posities springen naar een raster van 5 mm.
-Daarna staat **-F1** als kader van 54 x 90 mm op de plaat, is het uit de lijst verdwenen en staat in de strook onder de knoppenbalk "1 placed, 7 unplaced".
+Daarna staat **-F1** als voorkant van 54 x 90 mm op de plaat (schroefklemmen boven en onder, de typische vorm van een smeltpatroonhouder, niet de tekening van de fabrikant), is het uit de lijst verdwenen en staat in de strook onder de knoppenbalk "1 placed, 7 unplaced".
 """
 point = { ui = "cabinet.unplaced" }
 expect = { signal = "cabinet_dropped" }

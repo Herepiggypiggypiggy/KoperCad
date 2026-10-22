@@ -9,7 +9,7 @@
 # selection band that the app does not use yet. Stays early until the 3D anchors are registered.
 format = 1
 id = "view-3d"
-version = 2
+version = 3
 status = "ready"
 title = "The cabinet in 3D"
 title_nl = "De kast in 3D"
@@ -25,21 +25,35 @@ project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-3d"
-how = ["Click 3D in the switcher at the top, or run 3D view from the command field.", "The window shows the plate with rails, ducts and devices as solid boxes."]
-how_nl = ["Klik bovenin op 3D in de schakelaar, of voer 3D view uit in het opdrachtveld.", "Het venster toont de plaat met rails, kanalen en componenten als massieve blokken."]
+how = ["Click 3D in the switcher at the top, or run 3D view from the command field.", "The window shows the plate with the rails, the slotted ducts and the devices."]
+how_nl = ["Klik bovenin op 3D in de schakelaar, of voer 3D view uit in het opdrachtveld.", "Het venster toont de plaat met de rails, de gesleufde kanalen en de componenten."]
 title = "Open the 3D view"
 title_nl = "Open het 3D-beeld"
 text = """
-The plate drawing shows width and height only. Click **3D** in the switcher at the top, or run **3D view** from the command field. The plate, the rails, the ducts and every device appear as solid boxes as deep as their parts.
-Drag a device in the view to move it, or turn or delete it there; the Cabinet tab shows the same layout. The view is rebuilt from the layout whenever that changes.
+Click **3D** in the switcher at the top, or run **3D view** from the command field. The plate, the rails and the ducts appear with their real cross-sections (a 35 mm top-hat rail, slotted ducts) and every device stands on its rail at the width, height and depth of its part (the sample parts' sizes are typical, not checked against data sheets).
+Drag a device in the view to move it; the Cabinet tab shows the same layout.
 """
 text_nl = """
-De plaattekening toont alleen breedte en hoogte. Klik bovenin op **3D** in de schakelaar, of voer **3D view** uit in het opdrachtveld. De plaat, de rails, de kanalen en elk component verschijnen als massieve blokken, zo diep als hun artikelen.
-Sleep een component in het beeld om het te verplaatsen, of draai of verwijder het daar; het tabblad Cabinet toont dezelfde indeling. Het beeld wordt opnieuw opgebouwd zodra de indeling verandert.
+Klik bovenin op **3D** in de schakelaar, of voer **3D view** uit in het opdrachtveld. De plaat, de rails en de kanalen verschijnen met hun echte doorsneden (een hoedprofiel-rail van 35 mm, gesleufde kanalen) en elk component staat op zijn rail met de breedte, hoogte en diepte van zijn artikel (de maten van de voorbeeldartikelen zijn gangbaar, niet gecontroleerd aan de hand van datasheets).
+Sleep een component in het beeld om het te verplaatsen; het tabblad Cabinet toont dezelfde indeling.
 """
 point = { ui = "workspace.view3d" }
 expect = { command = "view.3d" }
 solve = [ { command = "view.cabinet" }, { command = "view.3d" } ]
+
+[[step]]
+id = "typical-shapes"
+title = "Parts, not blocks"
+title_nl = "Onderdelen, geen blokken"
+text = """
+Zoom in on a device with the mouse wheel. Each is drawn in the typical form of its family: a breaker with a front per pole and screws, a contactor with covers and a label window, a terminal strip with a rib per block, a supply with vent slots.
+Width, height and depth are the part's own; the details are typical, not the maker's, and a maker model replaces them. Layers can show plain boxes instead.
+"""
+text_nl = """
+Zoom met het muiswiel in op een component. Elk is getekend in de typische vorm van zijn familie: een automaat met een front per pool en schroeven, een contactor met kappen en een etiketvenster, een klemmenstrook met een rib per klem, een voeding met ventilatiesleuven.
+Breedte, hoogte en diepte zijn die van het artikel; de details zijn typisch, niet die van de fabrikant, en een fabrikantmodel vervangt ze. Met Layers zie je gewone blokken.
+"""
+point = { ui = "workspace.view3d" }
 
 [[step]]
 id = "orbit"

@@ -1,0 +1,13 @@
+@title Cabinet toolbar: a project with two panels fits at 1366 wide
+@area Cabinet
+# All panels is shown only with more than one panel; its width must count in the fold so the bar
+# folds into More instead of needing a sideways scroll (CV-200 at 1366 did).
+open qa/fixtures/cable-cross.novo
+wait 20
+resize 1366 768
+wait 10
+click_text Cabinet #1
+wait 30
+shot cabinet-two-panels
+expect "All panels"
+check_layout

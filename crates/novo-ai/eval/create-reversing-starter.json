@@ -1,0 +1,157 @@
+{
+  "id": "create-reversing-starter",
+  "category": "create",
+  "title": "Build a reversing starter with interlock",
+  "setup": [
+    {
+      "action": "add_page",
+      "args": {
+        "name": "1",
+        "title": "Reversing drive"
+      }
+    }
+  ],
+  "turns": [
+    {
+      "prompt": "Add a reversing starter for a 4 kW motor to page 1 with forward and reverse buttons and an interlock. Terminate the incoming supply.",
+      "script": [
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "set_plan",
+              "input": {
+                "steps": [
+                  {
+                    "title": "Place the reversing starter",
+                    "status": "doing"
+                  },
+                  {
+                    "title": "Terminate the supply",
+                    "status": "todo"
+                  },
+                  {
+                    "title": "Check",
+                    "status": "todo"
+                  }
+                ]
+              }
+            },
+            {
+              "tool": "list_macros",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "place_macro",
+                "args": {
+                  "macro": "Motor starter reversing",
+                  "page": "1",
+                  "parameters": {
+                    "power": 4.0
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F1:1",
+                  "potential": "L1"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F1:3",
+                  "potential": "L2"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F1:5",
+                  "potential": "L3"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": {
+                    "symbol_id": 17,
+                    "pin": "1"
+                  },
+                  "potential": "PE"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F3:1",
+                  "potential": "L1"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "number_wires",
+                "args": {}
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "run_checks",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "text": "The reversing starter is in the draft: contactors -K1 (forward) and -K2 (reverse) with the mechanical and electrical interlock from the macro, buttons -S1 to -S3, and the supply on terminals. The design checks report no errors and no open pins. The macro's overload and breaker values are defaults for the 4 kW parameter, so confirm them against the motor plate. This is not a check against a standard.",
+          "calls": []
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "devices_include": [
+      "-K1",
+      "-K2",
+      "-M1"
+    ],
+    "min_devices": 9,
+    "errors_max": 0,
+    "open_pins_max": 0,
+    "verified": true,
+    "plan_shown": true
+  }
+}

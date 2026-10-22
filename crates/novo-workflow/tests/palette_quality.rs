@@ -386,6 +386,18 @@ fn duct_heat_and_wire_heat_find_the_heat_run() {
 }
 
 #[test]
+fn learning_paths_finds_the_learn_window() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    // Help > Learning paths opens the Learn window at its paths; the command field must find it.
+    for query in ["learning paths", "paths", "learn"] {
+        let rows = search(&palette, &keymap, query);
+        let at = position(&rows, "help.learn")
+            .unwrap_or_else(|| panic!("{query:?} does not find Learn"));
+        assert!(at < 3, "{query:?} ranks it {at}th");
+    }
+}
+
+#[test]
 fn handover_ranks_the_handover_package_first() {
     let (palette, keymap) = (Palette::default(), Keymap::workflow());
     let rows = search(&palette, &keymap, "handover");

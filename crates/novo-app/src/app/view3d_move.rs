@@ -85,10 +85,6 @@ pub(super) struct Landing {
     pub blockers: Vec<u64>,
 }
 
-/// How close a device's top left gets to a rail's line before it snaps onto
-/// it, mm.
-pub(super) const RAIL_SNAP_MM: f64 = 8.0;
-
 /// The drag in progress, kept from one frame to the next.
 #[derive(Debug, Default)]
 pub(super) struct MoveState {
@@ -171,12 +167,11 @@ pub(super) fn area(layout: &CabinetLayout, item: ItemId, at: (f64, f64)) -> Opti
     })
 }
 
-/// A device's top left pulled onto a rail or duct line it is next to. A
-/// device sits on a DIN rail with the rail through its middle, so a
-/// horizontal rail sets the device's vertical centre and a vertical one its
-/// horizontal centre. A duct has no devices on it and keeps the old rule: a
-/// horizontal one sets the top, a vertical one the left. The snap only
-/// applies along the line's run, so a device never jumps to a far rail.
+/// A device's top left pulled onto a DIN rail it is next to: the rail's line
+/// runs through the device's centre, the device stays on the rail's run and
+/// lines up with the rail's end or a neighbour on it (see
+/// `novo_layout::mount`). The snap only applies along the rail's run, so a
+/// device never jumps to a far rail.
 pub(super) fn rail_snap(
     layout: &CabinetLayout,
     device: u64,
@@ -186,37 +181,15 @@ pub(super) fn rail_snap(
         return (at, None);
     };
     let f = p.footprint();
-    // (id, x, y, length, vertical, share of the device's size that lies
-    // before its centre: a half for a rail, none for a duct)
-    let lines = layout
-        .rails
-        .iter()
-        .map(|r| (r.id, r.x, r.y, r.length, r.vertical, 0.5))
-        .chain(
-            layout
-                .ducts
-                .iter()
-                .map(|d| (d.id, d.x, d.y, d.length, d.vertical, 0.0)),
-        );
-    let mut best: Option<(f64, u64, (f64, f64))> = None;
-    for (id, x, y, length, vertical, centred) in lines {
-        let (gap, snapped) = if vertical {
-            let along = at.1 + f.h > y && at.1 < y + length;
-            let left = x - f.w * centred;
-            ((at.0 - left).abs(), along.then_some((left, at.1)))
-        } else {
-            let along = at.0 + f.w > x && at.0 < x + length;
-            let top = y - f.h * centred;
-            ((at.1 - top).abs(), along.then_some((at.0, top)))
-        };
-        if gap <= RAIL_SNAP_MM
-            && let Some(to) = snapped
-            && best.is_none_or(|(g, ..)| gap < g)
-        {
-            best = Some((gap, id, to));
-        }
-    }
-    best.map_or((at, None), |(_, id, to)| (to, Some(id)))
+    novo_layout::mount::snap_to_rail(
+        &layout.rails,
+        &layout.placements,
+        device,
+        (f.w, f.h),
+        at,
+        novo_layout::mount::SNAP_GAP_MM,
+    )
+    .map_or((at, None), |m| (m.at, Some(m.rail)))
 }
 
 /// Where `members` land when the pointer has moved `delta` mm on the plate
@@ -602,7 +575,7 @@ pub(super) fn ghost(land: &Landing, frame: &PlateFrame, top_mm: f64) -> Vec<Over
     let (fill, edge): ([u8; 4], [u8; 4]) = if land.clash {
         ([230, 70, 70, 90], [240, 90, 90, 255])
     } else if land.rail.is_some() {
-        // Lined up with a rail or duct.
+        // Lined up on a rail.
         ([80, 200, 130, 80], [110, 225, 155, 255])
     } else {
         ([90, 160, 255, 80], [120, 180, 255, 255])

@@ -1,0 +1,30 @@
+@title Longest lesson step in a narrow window
+@area Learn
+@sizes 1024x600
+key ctrl+k
+wait 4
+text does the
+wait 6
+click_text "Does the protection protect?"
+wait 40
+try click_text "Next"
+wait 30
+try click_text "Do it for me"
+wait 30
+try click_text "Next"
+wait 30
+try click_text "Next"
+wait 30
+try click_text "Do it for me"
+wait 30
+try click_text "Do it for me"
+wait 30
+try click_text "Do it for me"
+wait 30
+shot longest-step-narrow
+check_layout
+# The Protection window is wider than the narrow screen and covers the card: close it to read the card.
+key Escape
+wait 10
+shot longest-step-card
+check_layout

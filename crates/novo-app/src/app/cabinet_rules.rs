@@ -301,6 +301,44 @@ pub(super) fn annotate(
     }
 }
 
+/// The rule text with its `heat` line switched on or off (added when missing),
+/// everything else, comments included, untouched.
+fn set_heat_line(text: &str, on: bool) -> String {
+    let line = if on {
+        "heat on ambient=35 limit=60 margin=15 min_source=10"
+    } else {
+        "heat off"
+    };
+    let mut done = false;
+    let mut out: Vec<String> = text
+        .lines()
+        .map(|l| {
+            let word = l.split_whitespace().next().unwrap_or("");
+            if word.eq_ignore_ascii_case("heat") && !l.trim_start().starts_with('#') {
+                done = true;
+                line.to_owned()
+            } else {
+                l.to_owned()
+            }
+        })
+        .collect();
+    if !done {
+        let at = out
+            .iter()
+            .position(|l| l.trim_start().starts_with("rule "))
+            .unwrap_or(out.len());
+        out.insert(at, line.to_owned());
+    }
+    let mut joined = out.join("\n");
+    joined.push('\n');
+    joined
+}
+
+#[cfg(test)]
+pub(super) fn set_heat_line_for_test(text: &str, on: bool) -> String {
+    set_heat_line(text, on)
+}
+
 /// The floating "Place rules" window: the rule file as text, checked as it is
 /// typed, saved on request.
 pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState) {
@@ -317,6 +355,7 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState) {
                 "Where Place all puts each kind of device. One rule per line: \
                  letter codes, zone (top, middle, bottom), rail (own or shared), \
                  class (power, signal), and gap, above, below in mm. \
+                 `heat on` / `heat off` switches heat-aware placement. \
                  These are practice values, not a standard: change them to your own.",
             );
             ui.add_space(6.0);
@@ -327,6 +366,20 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState) {
                     .desired_width(f32::INFINITY),
             );
             let parsed = RuleSet::parse(&state.text);
+            if let Ok(rules) = &parsed {
+                let mut on = rules.heat.is_some();
+                if ui
+                    .checkbox(&mut on, "Heat-aware placement")
+                    .on_hover_text(
+                        "Spreads hot devices, keeps devices that mind heat away from them \
+                         and below them. Needs power loss and a maximum ambient on the parts. \
+                         A planning score, not a temperature: check the result in the Heat view.",
+                    )
+                    .changed()
+                {
+                    state.text = set_heat_line(&state.text, on);
+                }
+            }
             if let Err(e) = &parsed {
                 ui.colored_label(ui.visuals().error_fg_color, e.to_string());
             }

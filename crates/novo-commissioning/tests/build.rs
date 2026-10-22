@@ -582,6 +582,115 @@ fn the_build_sheet_prints_every_cell_whole_even_with_long_notes() {
     assert!(!text.contains("Do..."), "{text}");
 }
 
+#[test]
+fn claiming_a_step_shows_who_has_it_and_a_release_lets_go() {
+    let (mut doc, h) = starter();
+    cabinet(&mut doc, &h);
+    let plan = plan_of(&doc);
+    let c = &plan.cabinets[0];
+    let mut store = CommissioningStore::new();
+    // With the plate checked, several steps are ready; nobody holds any, so
+    // all of them are for anyone.
+    while c.ready(&store).len() < 2 {
+        let first = c.step(c.ready(&store)[0]).unwrap();
+        mark_done(&mut store, first, "ann", "2026-10-22T08:00:00Z");
+    }
+    let ready = c.ready(&store);
+    assert!(ready.len() >= 2, "{ready:?}");
+    assert_eq!(c.ready_for(&store, "ann"), ready);
+    let (a, b) = (c.step(ready[0]).unwrap(), c.step(ready[1]).unwrap());
+    claim_step(&mut store, a, "bob", "2026-10-22T09:00:00Z");
+    claim_step(&mut store, b, "ann", "2026-10-22T09:01:00Z");
+    assert_eq!(store.build_claim(a.key).unwrap().by, "bob");
+    // Ann is offered what Bob does not hold, and her own.
+    let for_ann = c.ready_for(&store, "ann");
+    assert!(!for_ann.contains(&a.number) && for_ann.contains(&b.number));
+    // Bob lets go: the record stays, empty, so the release can merge.
+    release_step(&mut store, a, "2026-10-22T09:30:00Z");
+    assert!(store.build_claim(a.key).is_none());
+    assert_eq!(store.build_claim_record(a.key).unwrap().by, "");
+    assert!(c.ready_for(&store, "ann").contains(&a.number));
+    // Letting go of a step nobody held writes nothing.
+    let other = c.step(ready[ready.len() - 1]).unwrap();
+    release_step(&mut store, other, "2026-10-22T09:31:00Z");
+    assert!(store.build_claim_record(other.key).is_none() || other.key == b.key);
+}
+
+#[test]
+fn finishing_a_step_lets_go_of_its_claim() {
+    let (mut doc, h) = starter();
+    cabinet(&mut doc, &h);
+    let plan = plan_of(&doc);
+    let c = &plan.cabinets[0];
+    let mut store = CommissioningStore::new();
+    let step = c.step(c.ready(&store)[0]).unwrap();
+    claim_step(&mut store, step, "bob", "2026-10-22T09:00:00Z");
+    mark_done(&mut store, step, "bob", "2026-10-22T09:10:00Z");
+    // Undoing the tick must not bring the old claim back.
+    store.clear_build(step.key);
+    assert!(store.build_claim(step.key).is_none());
+}
+
+#[test]
+fn claims_travel_in_the_field_file_and_the_newer_record_wins_a_release_too() {
+    let (mut doc, h) = starter();
+    cabinet(&mut doc, &h);
+    let plan = plan_of(&doc);
+    let c = &plan.cabinets[0];
+    let (a, b) = (&c.steps[1], &c.steps[2]);
+
+    // The tablet claimed both; the desk claimed a later and released b earlier.
+    let mut tablet = CommissioningStore::new();
+    claim_step(&mut tablet, a, "tablet", "2026-10-22T09:00:00Z");
+    claim_step(&mut tablet, b, "tablet", "2026-10-22T09:05:00Z");
+    let mut desk = CommissioningStore::new();
+    claim_step(&mut desk, a, "desk", "2026-10-22T10:00:00Z");
+    claim_step(&mut desk, b, "desk", "2026-10-22T08:00:00Z");
+    release_step(&mut desk, b, "2026-10-22T08:10:00Z");
+
+    let report = package(&doc, &tablet).merge_into(&mut desk, doc.project());
+    // a: the desk's later claim stays. b: the tablet's later claim replaces the older release.
+    assert_eq!(desk.build_claim(a.key).unwrap().by, "desk");
+    assert_eq!(desk.build_claim(b.key).unwrap().by, "tablet");
+    assert_eq!(report.claims_updated, 1);
+    assert!(report.changed());
+    assert!(report.summary().contains("step claims"));
+
+    // The other way round: a release made later travels to the tablet.
+    let mut desk2 = CommissioningStore::new();
+    claim_step(&mut desk2, a, "desk", "2026-10-22T08:00:00Z");
+    release_step(&mut desk2, a, "2026-10-22T11:00:00Z");
+    let mut tablet2 = CommissioningStore::new();
+    claim_step(&mut tablet2, a, "tablet", "2026-10-22T09:00:00Z");
+    package(&doc, &desk2).merge_into(&mut tablet2, doc.project());
+    assert!(tablet2.build_claim(a.key).is_none());
+
+    // Merging again changes nothing, and a project file round trip keeps them.
+    let again = package(&doc, &tablet).merge_into(&mut desk, doc.project());
+    assert_eq!(again.claims_added + again.claims_updated, 0);
+    let back = CommissioningStore::from_json(&desk.to_json()).unwrap();
+    assert_eq!(back, desk);
+}
+
+#[test]
+fn a_claim_for_another_project_is_skipped_and_an_empty_store_stays_empty() {
+    let (mut doc, h) = starter();
+    cabinet(&mut doc, &h);
+    let plan = plan_of(&doc);
+    let c = &plan.cabinets[0];
+    let mut foreign = c.steps[0].clone();
+    foreign.mark = "+OTHER".into();
+    let mut tablet = CommissioningStore::new();
+    claim_step(&mut tablet, &foreign, "tablet", "t1");
+    let mut desk = CommissioningStore::new();
+    let report = package(&doc, &tablet).merge_into(&mut desk, doc.project());
+    assert_eq!(report.claims_added, 0);
+    assert_eq!(report.mismatched_targets, 1);
+    assert!(desk.is_empty());
+    // A store without claims serialises as before (no `claims` key).
+    assert!(!CommissioningStore::new().to_json().contains("claims"));
+}
+
 /// F2 on the door of a +CAB that has an interior, hinge on `hinge`.
 fn door_device(hinge: novo_layout::enclosure::Hinge) -> (Document, u64) {
     use novo_core::{AnyId, CabinetPlacement, Value};

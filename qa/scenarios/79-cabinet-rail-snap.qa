@@ -1,0 +1,32 @@
+@title Cabinet: a device dragged near its rail clips onto it by its centre, one dragged away leaves it
+@area Cabinet
+@sizes 1366x768
+# The cabinet lesson project after Place all: -K1 (85 mm high) sits on rail 92 with the rail line through its
+# middle (top at y 210). A drag along the rail, a few millimetres off the line, lands back on the line and
+# stays mounted; a drag well clear of every rail leaves the rail. Pictures: devices drawn with their typical
+# fronts (screws, poles, vents), rails behind them.
+open qa/fixtures/cabinet-lesson.novo
+wait 30
+click_text Cabinet #1
+wait 30
+shot plate
+check_blank plate
+check_layout
+click 624 329
+wait 10
+expect "55, 210 mm"
+click 1100 399
+wait 10
+expect "Mounted on"
+shot k1-selected
+drag 624 329 640 334
+wait 20
+expect "210 mm"
+expect_not "55, 210 mm"
+expect "Mounted on"
+shot k1-slid
+drag 640 334 800 436
+wait 20
+expect_not "Mounted on"
+shot k1-off-the-rail
+check_layout

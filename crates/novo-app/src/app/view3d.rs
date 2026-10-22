@@ -107,6 +107,9 @@ pub(crate) struct View3dMode {
     vent_flows: Option<(u64, Vec<super::heat_settings::VentSpec>, Vec<Option<f64>>)>,
     /// The Airflow layer was switched on once for a result with openings.
     auto_flow_done: bool,
+    /// An opening being slid by its label: which, where the pointer first met
+    /// its wall, and how it was then.
+    vent_drag: Option<(usize, glam::Vec3, super::heat_settings::VentSpec)>,
     /// Whether the door was open on the last frame: opening it from closed
     /// reframes the cabinet once so the leaf is not cut off.
     door_was_open: bool,
@@ -192,6 +195,7 @@ impl Default for View3dMode {
             vent_marks: Vec::new(),
             vent_flows: None,
             auto_flow_done: false,
+            vent_drag: None,
             door_was_open: false,
             heat_base: Vec::new(),
             heat_flow: heat_3d::Flow::default(),
@@ -306,6 +310,7 @@ impl NovoApp {
 
     /// The 3D view in the central area.
     pub(super) fn view3d_show(&mut self, ui: &mut egui::Ui) {
+        self.sync_openings(ui.ctx());
         if let Some(text) = self.view3d.notice.take() {
             self.message(super::Level::Info, text);
         }
@@ -478,6 +483,14 @@ impl NovoApp {
             }
         }
         let solution = self.cabinet.heat.solution();
+        // Kept only where the window has the room: in a small window the panels
+        // would not all fit beside the view.
+        if solution.is_none()
+            && mode.controls.heat_panel
+            && ui.ctx().content_rect().height() >= 700.0
+        {
+            heat_strip_placeholder(ui);
+        }
         if let Some(sol) = &solution {
             let tag_of = |raw: u64| {
                 project
@@ -880,6 +893,35 @@ impl NovoApp {
             stored.as_ref(),
             ambient,
         );
+        {
+            // The cooling advice window follows the Heat strip's button and
+            // the command, whether or not the Heat panel is open.
+            let tag_of = |raw: u64| {
+                project
+                    .get::<Device>(DeviceId::from(raw))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_else(|| format!("device {raw}"))
+            };
+            let heat = &mut self.cabinet.heat;
+            heat.advice.poll(ui.ctx());
+            if heat.advice.take_request() {
+                heat.advice
+                    .start(project, id, ambient, &heat.settings, &tag_of);
+            }
+            if heat.advice.is_open() {
+                let now_key = super::heat_sweep::key_of(project, id, ambient, &heat.settings);
+                let at = view_rect.center_top() + egui::vec2(-200.0, 170.0);
+                match heat.advice.show(ui.ctx(), 2, now_key, at) {
+                    Some(super::heat_sweep::Ask::Again) => heat.advice.request(),
+                    Some(super::heat_sweep::Ask::Add(c)) => {
+                        super::heat_sweep::add_pair(&mut heat.settings, &c);
+                        heat.advice.set_added(super::heat_sweep::added_text(&c));
+                        mode.controls.heat_panel = true;
+                    }
+                    None => {}
+                }
+            }
+        }
         if mode.controls.heat_panel {
             let tag_of = |raw: u64| {
                 project
@@ -888,13 +930,21 @@ impl NovoApp {
                     .unwrap_or_else(|| format!("device {raw}"))
             };
             let heat_running = self.cabinet.heat.running();
+            let has_result = self.cabinet.heat.solution().is_some();
+            let suggestion = self.cabinet.heat.solution().and_then(|sol| {
+                super::view3d_vents::suggestion(&sol, &mut self.cabinet.heat.cooling)
+            });
             super::view3d_vents::show(
                 ui.ctx(),
                 view_rect,
                 &mut self.cabinet.heat.settings,
                 vent_enclosure.as_ref(),
-                &vent_flows,
-                heat_running,
+                &super::view3d_vents::Shown {
+                    flows: &vent_flows,
+                    running: heat_running,
+                    stale: stale && has_result,
+                    suggestion: suggestion.as_ref(),
+                },
             );
             if let Some(raw) =
                 view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale, &tag_of)
@@ -1040,11 +1090,51 @@ impl NovoApp {
         }
         // The openings of the Heat panel, labelled where they are: a click on a
         // label opens that opening in the Vents and fans panel.
-        if !mode.vent_markers.is_empty()
-            && let Some(i) =
-                heat_openings::paint_labels(ui, &mode.view, out.rect, scene, &mode.vent_markers)
-        {
-            self.cabinet.heat.settings.selected = Some(i);
+        if !mode.vent_markers.is_empty() {
+            let action =
+                heat_openings::paint_labels(ui, &mode.view, out.rect, scene, &mode.vent_markers);
+            if let Some(i) = action.clicked {
+                self.cabinet.heat.settings.selected = Some(i);
+            }
+            let settings = &mut self.cabinet.heat.settings;
+            // The view's own pointer ray is only set while it is hovered, which it is
+            // not while a label is being dragged: build it from the pointer.
+            let pointer_ray = ui.input(|i| i.pointer.latest_pos()).map(|p| {
+                let r = out.rect;
+                let ndc = glam::Vec2::new(
+                    (p.x - r.min.x) / r.width().max(1.0) * 2.0 - 1.0,
+                    1.0 - (p.y - r.min.y) / r.height().max(1.0) * 2.0,
+                );
+                mode.view.camera.ray(ndc, r.width() / r.height().max(1.0))
+            });
+            match (action.drag, pointer_ray, &vent_enclosure) {
+                (Some(d), Some(ray), Some(e)) => {
+                    let marker = mode.vent_markers.iter().find(|m| m.index == d.index);
+                    let hit =
+                        marker.and_then(|m| ray.plane_hit(m.centre, m.outward).map(|t| ray.at(t)));
+                    if d.started {
+                        settings.selected = Some(d.index);
+                        mode.vent_drag = hit
+                            .zip(settings.vents.get(d.index).copied())
+                            .map(|(h, spec)| (d.index, h, spec));
+                    }
+                    if let (Some((i, start, from)), Some(now)) = (mode.vent_drag, hit)
+                        && i == d.index
+                        && i < settings.vents.len()
+                    {
+                        let to = heat_openings::dragged_to(&from, start, now, e);
+                        if to != settings.vents[i] {
+                            settings.checkpoint_edit();
+                            settings.vents[i] = to;
+                        }
+                    }
+                    if d.stopped {
+                        mode.vent_drag = None;
+                    }
+                }
+                (None, ..) => mode.vent_drag = None,
+                _ => {}
+            }
         }
         if let Some(hover) = out.hover.filter(|h| h.kind == ItemKind::Device)
             && !mode.mv.dragging()
@@ -1561,6 +1651,49 @@ fn run_heat(
     heat.live.is_stale()
 }
 
+/// Height the Heat strip keeps from the moment the Heat panel opens, points:
+/// the controls, the two colour bars and their note. The strip first appears
+/// with the first result; without the room kept, the panels and the cabinet
+/// jumped down by this much under the person's pointer.
+const STRIP_HEIGHT: f32 = 112.0;
+
+/// The strip's place before there is a result: the same rows, empty, so the
+/// room kept reads as the strip waiting for its first run and not as a gap.
+fn heat_strip_placeholder(ui: &mut egui::Ui) {
+    let pal = crate::theme::ui_palette();
+    egui::Frame::new()
+        .fill(ui.visuals().panel_fill)
+        .inner_margin(egui::Margin::symmetric(10, 4))
+        .show(ui, |ui| {
+            ui.set_min_size(egui::vec2(ui.available_width(), STRIP_HEIGHT));
+            ui.horizontal(|ui| {
+                ui.label("Heat");
+                ui.label(
+                    egui::RichText::new("Simulate (Heat panel, right) fills this strip.")
+                        .small()
+                        .color(pal.text_secondary),
+                );
+            });
+            for (unit, name) in [("°C", "Temperature"), ("m/s", "Air speed")] {
+                ui.horizontal(|ui| {
+                    let (bar, _) =
+                        ui.allocate_exact_size(egui::vec2(160.0, 12.0), egui::Sense::hover());
+                    ui.painter().rect_stroke(
+                        bar,
+                        2.0,
+                        egui::Stroke::new(1.0, pal.text_secondary.gamma_multiply(0.5)),
+                        egui::StrokeKind::Inside,
+                    );
+                    ui.label(
+                        egui::RichText::new(format!("{unit}  {name}: after a run"))
+                            .small()
+                            .color(pal.text_secondary),
+                    );
+                });
+            }
+        });
+}
+
 /// The Heat strip above the 3D view: slice, shell and airflow of the last
 /// simulation result (Cabinet > Heat > Simulate makes one).
 fn heat_controls(
@@ -1581,7 +1714,7 @@ fn heat_controls(
         .fill(ui.visuals().panel_fill)
         .inner_margin(egui::Margin::symmetric(10, 4))
         .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
+            ui.set_min_size(egui::vec2(ui.available_width(), STRIP_HEIGHT));
             ui.horizontal_wrapped(|ui| {
         ui.label("Heat");
         ui.checkbox(&mut h.slice, "Slice").on_hover_text(

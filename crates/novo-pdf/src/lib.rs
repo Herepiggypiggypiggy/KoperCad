@@ -433,6 +433,7 @@ pub fn draw_sheets(
                         keep_color: false,
                         bold: *bold,
                         priority: Default::default(),
+                        inside: false,
                     })
                 })
                 .collect();
@@ -473,6 +474,7 @@ pub fn footer_labels(
         keep_color: false,
         bold: false,
         priority: Default::default(),
+        inside: false,
     };
     vec![
         label(left, x, Anchor::CenterLeft),

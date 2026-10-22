@@ -5,6 +5,8 @@ point, glyph advance 0.6 x height). A DXF holds no glyph widths, so this is the 
 estimate the canvas uses; it shows whether the DXF carries the collisions of the page.
 
   python3 -I tools/text-conflicts/dxf_text_overlaps.py FOLDER_OR_FILE.dxf [...]
+
+Not run in CI.
 """
 import glob
 import os

@@ -1911,6 +1911,16 @@ name = "novo-ai"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "novo-cables",
+ "novo-checks",
+ "novo-core",
+ "novo-editor",
+ "novo-numbering",
+ "novo-parts",
+ "novo-py",
+ "novo-reports",
+ "novo-symbols",
+ "novo-workflow",
  "serde",
  "serde_json",
  "tempfile",
@@ -1999,7 +2009,9 @@ name = "novo-cfd"
 version = "0.1.0"
 dependencies = [
  "novo-cfd",
+ "novo-core",
  "novo-layout",
+ "novo-storage",
  "novo-thermal",
  "rayon",
  "thiserror 2.0.21",
@@ -2030,6 +2042,7 @@ dependencies = [
  "calamine",
  "clap",
  "image",
+ "novo-ai",
  "novo-canvas",
  "novo-checks",
  "novo-commissioning",
@@ -2086,6 +2099,15 @@ dependencies = [
  "novo-symbols",
  "novo-terminals",
  "novo-xref",
+]
+
+[[package]]
+name = "novo-emc"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-layout",
+ "novo-routing",
 ]
 
 [[package]]

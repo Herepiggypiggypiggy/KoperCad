@@ -133,6 +133,12 @@ fn boxes(blocks: &[Block]) -> MeshData {
     MeshData::from_boxes(&list)
 }
 
+/// How many modules of `unit` mm fit across `width`, at least one and at
+/// most `most`.
+fn across(width: f32, unit: f32, most: usize) -> usize {
+    ((width / unit).round() as usize).clamp(1, most)
+}
+
 /// The typical mesh of a family: x width and y height centred, z from the
 /// mounting face to the front, filling exactly `size`.
 pub fn mesh(class: DeviceClass, size: Vec3) -> MeshData {
@@ -146,48 +152,139 @@ pub fn mesh(class: DeviceClass, size: Vec3) -> MeshData {
         z1: z1 * d,
     };
     let blocks = match class {
-        // Modular breaker: the body, a narrower stepped front, terminal
-        // cages top and bottom and the toggle.
-        DeviceClass::Protection => vec![
-            b(0.0, 0.0, w, h, 0.0, 0.62),
-            b(0.0, 0.0, w, h * 0.62, 0.62, 0.9),
-            b(0.0, h * 0.42, w * 0.7, h * 0.14, 0.62, 0.8),
-            b(0.0, -h * 0.42, w * 0.7, h * 0.14, 0.62, 0.8),
-            b(0.0, 0.0, w * 0.5, h * 0.1, 0.9, 1.0),
-        ],
-        // Contactor: base, main body, terminal covers, the aux block and
-        // the indicator on the front.
-        DeviceClass::Switching => vec![
-            b(0.0, 0.0, w, h, 0.0, 0.55),
-            b(0.0, 0.0, w * 0.92, h * 0.74, 0.55, 0.86),
-            b(0.0, h * 0.43, w * 0.8, h * 0.14, 0.55, 0.72),
-            b(0.0, -h * 0.43, w * 0.8, h * 0.14, 0.55, 0.72),
-            b(0.0, h * 0.18, w * 0.4, h * 0.14, 0.86, 0.95),
-            b(0.0, -h * 0.12, w * 0.4, h * 0.2, 0.86, 1.0),
-        ],
+        // Modular breaker: one body, a stepped front per pole of about 17.5
+        // mm with terminal cages and screw heads top and bottom, and the
+        // handles joined by a bridge.
+        DeviceClass::Protection => {
+            let n = across(w, 17.5, 6);
+            let pw = w / n as f32;
+            let mut v = vec![b(0.0, 0.0, w, h, 0.0, 0.62)];
+            for i in 0..n {
+                let cx = -w / 2.0 + pw * (i as f32 + 0.5);
+                v.push(b(cx, 0.0, pw * 0.96, h * 0.62, 0.62, 0.9));
+                for s in [-1.0, 1.0] {
+                    v.push(b(cx, s * h * 0.42, pw * 0.76, h * 0.14, 0.62, 0.8));
+                    v.push(b(cx, s * h * 0.455, pw * 0.3, h * 0.05, 0.8, 0.86));
+                }
+                v.push(b(cx, 0.0, pw * 0.5, h * 0.1, 0.9, 1.0));
+            }
+            if n > 1 {
+                v.push(b(0.0, h * 0.05, w - pw * 0.4, h * 0.025, 0.9, 0.95));
+            }
+            v
+        }
+        // Contactor: base, main body, terminal covers with a screw per pole
+        // (about 15 mm), the label window, the aux block and the indicator.
+        DeviceClass::Switching => {
+            let n = across(w, 15.0, 5);
+            let cover = w * 0.8;
+            let pw = cover / n as f32;
+            let mut v = vec![
+                b(0.0, 0.0, w, h, 0.0, 0.55),
+                b(0.0, 0.0, w * 0.92, h * 0.74, 0.55, 0.86),
+                b(0.0, h * 0.43, cover, h * 0.14, 0.55, 0.72),
+                b(0.0, -h * 0.43, cover, h * 0.14, 0.55, 0.72),
+            ];
+            for i in 0..n {
+                let cx = -cover / 2.0 + pw * (i as f32 + 0.5);
+                for s in [-1.0, 1.0] {
+                    v.push(b(cx, s * h * 0.465, pw * 0.4, h * 0.045, 0.72, 0.8));
+                }
+            }
+            v.push(b(0.0, h * 0.18, w * 0.4, h * 0.14, 0.86, 0.95));
+            v.push(b(0.0, -h * 0.12, w * 0.4, h * 0.2, 0.86, 1.0));
+            v.push(b(w * 0.28, h * 0.02, w * 0.12, h * 0.07, 0.86, 0.93));
+            v
+        }
         DeviceClass::Terminal => terminal_blocks(w, h, d),
-        // PLC: housing, the front door, terminal covers, a status strip.
-        DeviceClass::Controller => vec![
-            b(0.0, 0.0, w, h, 0.0, 0.8),
-            b(0.0, 0.0, w * 0.96, h * 0.9, 0.8, 0.92),
-            b(0.0, h * 0.42, w * 0.9, h * 0.12, 0.92, 1.0),
-            b(0.0, -h * 0.42, w * 0.9, h * 0.12, 0.92, 1.0),
-            b(0.0, h * 0.22, w * 0.3, h * 0.05, 0.92, 0.97),
-        ],
-        // Drive: housing, front panel, display, lower terminal cover.
-        DeviceClass::Drive => vec![
-            b(0.0, 0.0, w, h, 0.0, 0.75),
-            b(0.0, h * 0.1, w * 0.86, h * 0.6, 0.75, 0.9),
-            b(0.0, h * 0.2, w * 0.5, h * 0.16, 0.9, 1.0),
-            b(0.0, -h * 0.4, w * 0.92, h * 0.18, 0.75, 0.88),
-        ],
-        // Power supply: housing, terminal bands, adjustment knob.
-        DeviceClass::Supply => vec![
-            b(0.0, 0.0, w, h, 0.0, 0.85),
-            b(0.0, h * 0.43, w * 0.9, h * 0.14, 0.85, 1.0),
-            b(0.0, -h * 0.43, w * 0.9, h * 0.14, 0.85, 1.0),
-            b(w * 0.2, h * 0.1, w * 0.2, h * 0.1, 0.85, 0.95),
-        ],
+        // PLC: housing, the front door, terminal covers with a screw per
+        // 10 mm, a row of status lights and the label strip.
+        DeviceClass::Controller => {
+            let n = across(w * 0.9, 10.0, 8);
+            let pw = w * 0.9 / n as f32;
+            let mut v = vec![
+                b(0.0, 0.0, w, h, 0.0, 0.8),
+                b(0.0, 0.0, w * 0.96, h * 0.9, 0.8, 0.92),
+                b(0.0, h * 0.42, w * 0.9, h * 0.12, 0.92, 1.0),
+                b(0.0, -h * 0.42, w * 0.9, h * 0.12, 0.92, 1.0),
+                b(0.0, h * 0.22, w * 0.3, h * 0.05, 0.92, 0.97),
+            ];
+            for i in 0..n {
+                let cx = -w * 0.45 + pw * (i as f32 + 0.5);
+                v.push(b(cx, h * 0.465, pw * 0.4, h * 0.03, 1.0 - 0.01, 1.0));
+            }
+            for i in 0..4 {
+                v.push(b(
+                    -w * 0.36,
+                    h * (0.1 - 0.08 * i as f32),
+                    w * 0.05,
+                    h * 0.03,
+                    0.92,
+                    0.96,
+                ));
+            }
+            v
+        }
+        // Drive: housing, front panel, display and keypad, a fan grille and
+        // the lower terminal cover.
+        DeviceClass::Drive => {
+            let mut v = vec![
+                b(0.0, 0.0, w, h, 0.0, 0.75),
+                b(0.0, h * 0.1, w * 0.86, h * 0.6, 0.75, 0.9),
+                b(0.0, h * 0.2, w * 0.5, h * 0.16, 0.9, 1.0),
+                b(0.0, -h * 0.4, w * 0.92, h * 0.18, 0.75, 0.88),
+            ];
+            for i in 0..3 {
+                v.push(b(
+                    (i as f32 - 1.0) * w * 0.17,
+                    h * 0.02,
+                    w * 0.12,
+                    h * 0.05,
+                    0.9,
+                    0.96,
+                ));
+            }
+            for i in 0..5 {
+                v.push(b(
+                    (i as f32 - 2.0) * w * 0.12,
+                    -h * 0.17,
+                    w * 0.03,
+                    h * 0.1,
+                    0.9,
+                    0.94,
+                ));
+            }
+            v
+        }
+        // Power supply: housing, terminal bands with a screw per 12 mm, vent
+        // ribs across the front and the adjustment knob.
+        DeviceClass::Supply => {
+            let n = across(w * 0.9, 12.0, 8);
+            let pw = w * 0.9 / n as f32;
+            let mut v = vec![
+                b(0.0, 0.0, w, h, 0.0, 0.85),
+                b(0.0, h * 0.43, w * 0.9, h * 0.14, 0.85, 1.0),
+                b(0.0, -h * 0.43, w * 0.9, h * 0.14, 0.85, 1.0),
+                b(w * 0.2, h * 0.1, w * 0.2, h * 0.1, 0.85, 0.95),
+            ];
+            for i in 0..n {
+                let cx = -w * 0.45 + pw * (i as f32 + 0.5);
+                for s in [-1.0, 1.0] {
+                    v.push(b(cx, s * h * 0.465, pw * 0.4, h * 0.03, 0.99, 1.0));
+                }
+            }
+            for i in 0..5 {
+                v.push(b(
+                    -w * 0.1,
+                    h * (-0.22 + 0.08 * i as f32),
+                    w * 0.5,
+                    h * 0.025,
+                    0.85,
+                    0.9,
+                ));
+            }
+            v
+        }
         // Connector: the base and its shroud.
         DeviceClass::Connector | DeviceClass::Generic => vec![
             b(0.0, 0.0, w, h, 0.0, 0.5),
@@ -279,6 +376,34 @@ mod tests {
             assert!(m.triangles() > 12, "{class:?} is more than a box");
             assert!(m.triangles() < 600, "{class:?} stays light");
         }
+    }
+
+    #[test]
+    fn real_sizes_keep_their_envelope_and_stay_light() {
+        // Typical catalogue sizes: a 4-pole breaker, a contactor, a PLC, a
+        // 24 V supply and a small drive.
+        for (class, size) in [
+            (DeviceClass::Protection, Vec3::new(72.0, 90.0, 70.0)),
+            (DeviceClass::Switching, Vec3::new(45.0, 85.0, 90.0)),
+            (DeviceClass::Controller, Vec3::new(110.0, 100.0, 75.0)),
+            (DeviceClass::Supply, Vec3::new(90.0, 125.0, 120.0)),
+            (DeviceClass::Drive, Vec3::new(70.0, 150.0, 120.0)),
+        ] {
+            let m = mesh(class, size);
+            assert!(
+                (m.bounds.size() - size).abs().max_element() < 1e-3,
+                "{class:?} {}",
+                m.bounds.size()
+            );
+            assert!(m.triangles() < 700, "{class:?} {}", m.triangles());
+        }
+    }
+
+    #[test]
+    fn a_breaker_has_a_front_per_pole() {
+        let one = mesh(DeviceClass::Protection, Vec3::new(17.5, 90.0, 70.0)).triangles();
+        let four = mesh(DeviceClass::Protection, Vec3::new(70.0, 90.0, 70.0)).triangles();
+        assert!(four > 3 * one, "{one} against {four}");
     }
 
     #[test]

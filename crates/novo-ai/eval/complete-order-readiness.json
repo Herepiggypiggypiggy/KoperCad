@@ -1,0 +1,107 @@
+{
+  "id": "complete-order-readiness",
+  "category": "complete",
+  "title": "Read the reports and say what is missing before parts can be ordered, without inventing parts",
+  "setup": [
+    {
+      "action": "add_page",
+      "args": {
+        "name": "1",
+        "title": "Motor"
+      }
+    },
+    {
+      "action": "place_macro",
+      "args": {
+        "macro": "Motor starter DOL",
+        "page": "1"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F1:1",
+        "potential": "L1"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F1:3",
+        "potential": "L2"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F1:5",
+        "potential": "L3"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": {
+          "symbol_id": 14,
+          "pin": "1"
+        },
+        "potential": "PE"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F3:1",
+        "potential": "L1"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-K1:A2",
+        "potential": "N"
+      }
+    },
+    {
+      "action": "number_wires",
+      "args": {}
+    }
+  ],
+  "turns": [
+    {
+      "prompt": "What is still missing before I can order the parts for this project?",
+      "script": [
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "read_report",
+              "input": {}
+            },
+            {
+              "tool": "read_report",
+              "input": {
+                "id": "bom"
+              }
+            },
+            {
+              "tool": "run_checks",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "text": "Not ready to order yet. None of the 17 devices (breakers, contactor, overload relay, motor, buttons and the terminal blocks) has a part assigned, so the bill of materials is empty. I can not choose parts for you: add them from your catalogue or a data sheet, then I can assign them. Ratings are also open: the macro values for breaker and overload need confirming against the motor plate.",
+          "calls": []
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "steps_max": 0,
+    "text_contains": [
+      "part"
+    ],
+    "keep_existing": true
+  }
+}

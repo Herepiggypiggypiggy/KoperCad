@@ -451,7 +451,9 @@ impl NovoApp {
         let mut open = true;
         let mut action: Option<Act> = None;
         let mut paper = self.wb.workshop_paper;
-        super::panel::dialog(ctx, "Bench output", [560.0, 640.0])
+        let tab_before = state.tab;
+        let mut tab_rects: Vec<egui::Rect> = Vec::new();
+        let shown = super::panel::dialog(ctx, "Bench output", [560.0, 640.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 if let Some(ready) = meter {
@@ -466,7 +468,13 @@ impl NovoApp {
                     Tab::Ferrules => 1,
                     Tab::Labels => 2,
                 };
-                if novo_theme::widgets::tabs(ui, &mut tab, &["Cut list", "Ferrules", "Labels"]) {
+                let (changed, rects) = novo_theme::widgets::tabs_with_rects(
+                    ui,
+                    &mut tab,
+                    &["Cut list", "Ferrules", "Labels"],
+                );
+                tab_rects = rects;
+                if changed {
                     state.tab = [Tab::CutList, Tab::Ferrules, Tab::Labels][tab];
                 }
                 ui.add_space(8.0);
@@ -476,6 +484,23 @@ impl NovoApp {
                     Tab::Labels => label_tab(ui, &mut state, &stored_labels, &mut action),
                 }
             });
+        if let Some(shown) = shown {
+            self.anchor("bench.window", shown.response.rect, "Bench output");
+        }
+        for (rect, (id, label)) in tab_rects.iter().zip([
+            ("bench.tab.cut", "Cut list tab"),
+            ("bench.tab.ferrules", "Ferrules tab"),
+            ("bench.tab.labels", "Labels tab"),
+        ]) {
+            self.anchor(id, *rect, label);
+        }
+        if state.tab != tab_before {
+            match state.tab {
+                Tab::Ferrules => self.learn_signal("bench_ferrules"),
+                Tab::Labels => self.learn_signal("bench_labels"),
+                Tab::CutList => {}
+            }
+        }
         self.wb.workshop_paper = paper;
         if open {
             self.wb.bench = Some(state);

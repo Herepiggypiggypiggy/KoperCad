@@ -1,0 +1,118 @@
+format = 1
+id = "your-project-file"
+version = 1
+status = "early"
+title = "Your project file, and what keeps it safe"
+summary = "Save, find your unsaved work after a crash, open a file read-only, and know what happens with older, newer and damaged files."
+track = "start"
+order = 45
+level = "beginner"
+minutes = 6
+topics = ["save", "autosave", "recovery", "read-only", "file"]
+needs = []
+next = ["drawing-standard"]
+project = "@blank"
+title_nl = "Je projectbestand en wat het veilig houdt"
+summary_nl = "Opslaan, je niet-opgeslagen werk terugvinden na een crash, een bestand alleen-lezen openen en weten wat er gebeurt met oudere, nieuwere en beschadigde bestanden."
+
+[[step]]
+id = "one-file"
+title = "One file, on your own disk"
+title_nl = "Eén bestand, op je eigen schijf"
+text = """
+A project is **one file** ending in `.kopercad`. Pages, parts, revisions and the commissioning ticks are all inside it. Nothing is sent anywhere, and copying the file copies the project.
+Older files that end in `.novo` still open.
+"""
+text_nl = """
+Een project is **één bestand** met de extensie `.kopercad`. Pagina's, onderdelen, revisies en de ticks van de inbedrijfstelling zitten er allemaal in. Er wordt niets verstuurd en het bestand kopiëren kopieert het project.
+Oudere bestanden met de extensie `.novo` openen nog steeds.
+"""
+
+[[step]]
+id = "save"
+title = "Save it under a name you will find again"
+title_nl = "Sla het op onder een naam die je terugvindt"
+text = "A new project is not on disk until you save it. **Save as** asks for a place; **Save** after that overwrites the same file in one step that cannot leave half a file: you get the old save or the new one, never a mix."
+text_nl = "Een nieuw project staat pas op schijf als je het opslaat. **Save as** vraagt een plek; **Save** daarna overschrijft hetzelfde bestand in een stap die geen half bestand kan achterlaten: je krijgt de oude of de nieuwe versie, nooit een mengsel."
+how = [
+  "Press {key:file.save}. The file dialog opens.",
+  "Type a name and confirm. The title shows the name and the saved state.",
+]
+how_nl = [
+  "Druk op {key:file.save}. Het bestandsvenster opent.",
+  "Typ een naam en bevestig. De titel toont de naam en de opslagstatus.",
+]
+point = { ui = "cmd.file.save" }
+expect = { command = "file.save" }
+manual = "opens the native file dialog"
+
+[[step]]
+id = "autosave"
+title = "Unsaved work survives a crash"
+title_nl = "Niet-opgeslagen werk overleeft een crash"
+text = """
+While you work, KoperCAD keeps a recovery copy of your unsaved changes in your own app-data folder. If the program stops without closing, the next start asks **Restore unsaved work?**
+“Restore” makes that work the open drawing. Your real file changes only when you press Save. **Discard** throws the recovery copy away.
+"""
+text_nl = """
+Terwijl je werkt bewaart KoperCAD een herstelkopie van je niet-opgeslagen wijzigingen in je eigen app-data-map. Stopt het programma zonder netjes af te sluiten, dan vraagt de volgende start **Restore unsaved work?**
+“Restore” maakt dat werk de open tekening. Je echte bestand verandert pas als je op Save drukt. **Discard** gooit de herstelkopie weg.
+"""
+
+[[step]]
+id = "read-only"
+title = "Look without touching"
+title_nl = "Kijken zonder aan te raken"
+text = "To show a drawing to someone, or to check an old issue, open it **read-only**. Save is off, so nothing can change. A file marked read-only on disk, or in a folder you cannot write to, opens this way by itself with a warning."
+text_nl = "Om een tekening te laten zien, of een oude uitgave na te kijken, open je hem **alleen-lezen**. Save staat uit, dus er kan niets veranderen. Een bestand dat op schijf als alleen-lezen is gemarkeerd, of in een map waarin je niet kunt schrijven, opent zo vanzelf met een waarschuwing."
+how = [
+  "Open the {ui:menu.File} menu, then **Open**, and choose {ui:cmd.file.open_read_only}.",
+  "Pick any project file. The title says (read-only).",
+]
+how_nl = [
+  "Open het menu {ui:menu.File}, dan **Open**, en kies {ui:cmd.file.open_read_only}.",
+  "Kies een projectbestand. De titel zegt (read-only).",
+]
+point = { ui = "cmd.file.open_read_only" }
+expect = { command = "file.open_read_only" }
+manual = "opens the native file dialog"
+
+[[step]]
+id = "versions"
+title = "Older files upgrade, newer files are refused"
+title_nl = "Oudere bestanden worden bijgewerkt, nieuwere geweigerd"
+text = """
+A newer KoperCAD opens an older file and upgrades it, after copying the old file to `name.kopercad.v2.bak` (the number is the old version) so you can go back.
+An **older** KoperCAD **refuses** a file from a newer one and leaves it untouched, with a message that says why. Keep the same version on every machine that edits one project.
+"""
+text_nl = """
+Een nieuwere KoperCAD opent een ouder bestand en werkt het bij, nadat het oude bestand is gekopieerd naar `naam.kopercad.v2.bak` (het getal is de oude versie) zodat je terug kunt.
+Een **oudere** KoperCAD **weigert** een bestand van een nieuwere en laat het ongemoeid, met een melding waarom. Houd op elke machine die één project bewerkt dezelfde versie aan.
+"""
+
+[[step]]
+id = "damaged"
+title = "A damaged file is not the end"
+title_nl = "Een beschadigd bestand is niet het einde"
+text = """
+A file cut short by a full disk or a bad copy is **never edited**. File > Open writes a **recovered copy** beside it (`name.recovered.kopercad`) with every object that could still be read, and says how many were lost.
+The top bar then reads **Recovered copy: check every page** until you press “I have checked every page” in the Issues list. Objects stored in the lost part of the file are gone.
+"""
+text_nl = """
+Een bestand dat is afgekapt door een volle schijf of een slechte kopie wordt **nooit bewerkt**. File > Open schrijft er een **herstelde kopie** naast (`naam.recovered.kopercad`) met alle objecten die nog te lezen waren, en meldt hoeveel er verloren zijn.
+De bovenbalk zegt dan **Recovered copy: check every page** tot je in de lijst met problemen op “I have checked every page” drukt. Objecten uit het verloren deel van het bestand zijn weg.
+"""
+how = [
+  "To do it on purpose for any file, press {key:view.command_palette}, type recover and choose {ui:cmd.file.recover}.",
+]
+how_nl = [
+  "Wil je het bewust met een bestand doen, druk dan op {key:view.command_palette}, typ recover en kies {ui:cmd.file.recover}.",
+]
+point = { ui = "cmd.file.recover" }
+
+[[step]]
+id = "done"
+title = "Back up the file, not the program"
+title_nl = "Maak een back-up van het bestand, niet van het programma"
+text = "The safest habit is boring: save often, and copy the `.kopercad` file to a second place after each milestone. Issue a revision at each milestone too; its snapshot is stored inside the same file and lets you compare or restore a page later."
+text_nl = "De veiligste gewoonte is saai: sla vaak op en kopieer het `.kopercad`-bestand na elke mijlpaal naar een tweede plek. Geef ook bij elke mijlpaal een revisie uit; de momentopname zit in hetzelfde bestand en laat je later een pagina vergelijken of terugzetten."

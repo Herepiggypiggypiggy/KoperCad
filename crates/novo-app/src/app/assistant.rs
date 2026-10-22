@@ -3,11 +3,10 @@
 //! Off until the person turns it on in the window itself: they paste their
 //! own Anthropic API key, choose how much of the project Claude may read and
 //! agree to the notice. Messages run on a background thread; the window only
-//! polls a channel. Claude never edits the project: its suggestions arrive as
-//! cards with Apply and Reject, and Apply goes through the same command path
-//! as the editor, so one Ctrl+Z undoes it. The engine is `novo-ai`.
+//! polls a channel. Claude never edits the real project: it builds in a private draft, its
+//! change sets arrive as cards with Apply and Reject, and Apply goes through one transaction,
+//! so one Ctrl+Z undoes it. The engine is `novo-ai`.
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,12 +17,14 @@ use eframe::egui;
 use novo_ai::agent::{Conversation, Event, TurnResult};
 use novo_ai::api::{ApiError, Client, Transport, UreqTransport};
 use novo_ai::consent::{CONSENT_VERSION, Consent, DataScope, NOTICE};
+use novo_ai::engineer::{
+    ChangeSetOutcome, EngineerHost, PlanItem, Question, Resources, Step, commit,
+};
 use novo_ai::key::{ApiKey, KeySource, KeyStore};
 use novo_ai::models::{self, MODELS};
-use novo_ai::tools::{EditAction, Proposal, Snapshot, SnapshotHost};
 use novo_ai::usage::{Ledger, format_usd, month_of};
-use novo_core::{Command, DeviceTag, Project};
-use serde_json::{Value, json};
+use novo_core::Project;
+use serde_json::Value;
 
 mod datasheet;
 
@@ -38,6 +39,15 @@ pub(super) enum ProposalState {
     Applied,
     Rejected,
     Failed(String),
+    /// A later change set contains these steps and more: only that one can be applied.
+    Superseded,
+}
+
+/// The change set of a turn: what Claude built in its draft, and what the
+/// program itself says about it.
+pub(super) struct Card {
+    pub outcome: ChangeSetOutcome,
+    pub state: ProposalState,
 }
 
 /// Where taking a picture of the window has got to.
@@ -86,18 +96,28 @@ pub(super) enum Entry {
     /// A lookup Claude made, shown small ("Looked at the project outline").
     Tool(String),
     Problem(String),
-    Proposal(Proposal, ProposalState),
+    /// The change set to apply or reject.
+    ChangeSet(Box<Card>),
+    /// The checklist Claude worked through.
+    Plan(Vec<PlanItem>),
+    /// A question Claude waits on; the options answer it.
+    Question(Question),
 }
 
 enum Msg {
     Event(Event),
-    Done(Result<TurnResult, ApiError>, Conversation),
+    Done(
+        Result<TurnResult, ApiError>,
+        Conversation,
+        Box<Option<ChangeSetOutcome>>,
+    ),
 }
 
 /// Everything the window remembers while the app runs.
 pub(super) struct State {
     pub open: bool,
-    proposal_notes: HashMap<u32, String>,
+    /// The plan Claude is showing while it works (replaced by each set_plan).
+    live_plan: Vec<PlanItem>,
     show_settings: bool,
     /// The `CONSENT_VERSION` whose notice has been on screen in full: the box
     /// to agree stays off until it has been, whatever the window height.
@@ -145,7 +165,6 @@ pub(super) struct State {
     /// A wider scope the person picked while Claude is on, waiting for a
     /// second, explicit agreement.
     pending_scope: Option<DataScope>,
-    next_proposal: u32,
     store: Option<KeyStore>,
     transport: TransportFactory,
     /// Set by tests: the clock for the month and consent time.
@@ -237,7 +256,7 @@ impl State {
         let ledger = ledger_path.as_deref().map(Ledger::load).unwrap_or_default();
         Self {
             open: false,
-            proposal_notes: HashMap::new(),
+            live_plan: Vec::new(),
             show_settings: false,
             notice_seen: None,
             notice_rect: None,
@@ -266,7 +285,6 @@ impl State {
             pending_question: None,
             conv_scope: DataScope::None,
             pending_scope: None,
-            next_proposal: 1,
             store,
             transport,
             now,
@@ -324,7 +342,58 @@ impl State {
     pub(super) fn first_proposal_index(&self) -> Option<usize> {
         self.transcript
             .iter()
-            .position(|e| matches!(e, Entry::Proposal(..)))
+            .position(|e| matches!(e, Entry::ChangeSet(..)))
+    }
+
+    /// Tests only: puts a change set of `steps` (action, args), built in a draft of
+    /// `project` by the same engine Claude uses, on a card. `Err` is the reason a step was refused.
+    #[cfg(test)]
+    pub(super) fn test_push_card(
+        &mut self,
+        project: &Project,
+        steps: &[(&str, Value)],
+    ) -> Result<usize, String> {
+        let mut host = EngineerHost::new(
+            project.clone(),
+            Vec::new(),
+            DataScope::Project,
+            Resources::new(Vec::new()),
+            Box::new(|_| novo_ai::tools::Snapshot::default()),
+        );
+        for (action, args) in steps {
+            host.apply(action, args)?;
+        }
+        self.transcript.push(Entry::ChangeSet(Box::new(Card {
+            outcome: host.outcome(),
+            state: ProposalState::Pending,
+        })));
+        Ok(self.transcript.len() - 1)
+    }
+
+    /// Tests only: what the transcript holds, in order.
+    #[cfg(test)]
+    pub(super) fn entry_kinds(&self) -> Vec<&'static str> {
+        self.transcript
+            .iter()
+            .map(|e| match e {
+                Entry::User(_) => "user",
+                Entry::Claude(_) => "claude",
+                Entry::Tool(_) => "tool",
+                Entry::Problem(_) => "problem",
+                Entry::ChangeSet(_) => "changeset",
+                Entry::Plan(_) => "plan",
+                Entry::Question(_) => "question",
+            })
+            .collect()
+    }
+
+    /// Tests only: the change set on the card at `index`.
+    #[cfg(test)]
+    pub(super) fn card_outcome(&self, index: usize) -> Option<&ChangeSetOutcome> {
+        match self.transcript.get(index) {
+            Some(Entry::ChangeSet(c)) => Some(&c.outcome),
+            _ => None,
+        }
     }
 
     #[cfg(test)]
@@ -345,7 +414,7 @@ impl State {
     #[cfg(test)]
     pub(super) fn proposal_state(&self, index: usize) -> Option<ProposalState> {
         match self.transcript.get(index) {
-            Some(Entry::Proposal(_, state)) => Some(state.clone()),
+            Some(Entry::ChangeSet(card)) => Some(card.state.clone()),
             _ => None,
         }
     }
@@ -356,7 +425,19 @@ impl State {
             .iter()
             .map(|e| match e {
                 Entry::User(t) | Entry::Claude(t) | Entry::Tool(t) | Entry::Problem(t) => t.clone(),
-                Entry::Proposal(p, _) => p.summary.clone(),
+                Entry::ChangeSet(c) => c
+                    .outcome
+                    .steps
+                    .iter()
+                    .map(|s| s.summary.clone())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                Entry::Plan(items) => items
+                    .iter()
+                    .map(|i| i.title.clone())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                Entry::Question(q) => q.text.clone(),
             })
             .collect::<Vec<_>>()
             .join("\n")
@@ -420,7 +501,7 @@ impl State {
         self.transcript.clear();
         self.conversation.clear();
         self.notes.clear();
-        self.proposal_notes.clear();
+        self.live_plan.clear();
         self.picture = None;
         self.shot = Shot::Idle;
         self.session_cost = 0.0;
@@ -448,478 +529,7 @@ pub(super) fn ask_claude_later(ctx: &egui::Context, question: String) {
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(ASK_ID), question));
 }
 
-/// The edits Claude may suggest. Each maps to one model command.
-fn edit_actions() -> Vec<EditAction> {
-    vec![
-        EditAction {
-            name: "rename_device",
-            description: "Gives a device a new tag everywhere it is used.",
-            schema: json!({"type": "object", "properties": {
-                "device_id": {"type": "integer", "description": "id from the project data"},
-                "tag": {"type": "string", "description": "IEC 81346 tag such as -K7 or =A1 +B2 -K7"}},
-                "required": ["device_id", "tag"]}),
-        },
-        EditAction {
-            name: "rename_page",
-            description: "Renames a page (references print the page name).",
-            schema: json!({"type": "object", "properties": {
-                "page_id": {"type": "integer"}, "name": {"type": "string"}},
-                "required": ["page_id", "name"]}),
-        },
-        EditAction {
-            name: "assign_part",
-            description: "Assigns a part from the project's parts (section \"parts\") to a device. \
-                          Only available when the person agreed to share the whole project.",
-            schema: json!({"type": "object", "properties": {
-                "device_id": {"type": "integer"}, "part_id": {"type": "integer"}},
-                "required": ["device_id", "part_id"]}),
-        },
-        EditAction {
-            name: "set_property",
-            description: "Sets one named property of a device (text, number or true/false).",
-            schema: json!({"type": "object", "properties": {
-                "device_id": {"type": "integer"},
-                "key": {"type": "string"},
-                "value": {"type": ["string", "number", "boolean"]}},
-                "required": ["device_id", "key", "value"]}),
-        },
-        EditAction {
-            name: "set_wire_number",
-            description: "Sets the number printed on a wire, or clears it with an empty \
-                          number. Use it to resolve wire-number conflicts (section wire_numbers).",
-            schema: json!({"type": "object", "properties": {
-                "wire_id": {"type": "integer", "description": "id from section wires"},
-                "number": {"type": "string",
-                           "description": "the new wire number; empty clears it"}},
-                "required": ["wire_id", "number"]}),
-        },
-        EditAction {
-            name: "add_page",
-            description: "Adds an empty schematic page at the end.",
-            schema: json!({"type": "object", "properties": {
-                "name": {"type": "string"}, "title": {"type": "string"}},
-                "required": ["name"]}),
-        },
-        EditAction {
-            name: "add_device",
-            description: "Adds a device with a tag and description (not drawn on a page yet).",
-            schema: json!({"type": "object", "properties": {
-                "tag": {"type": "string"}, "description": {"type": "string"}},
-                "required": ["tag"]}),
-        },
-    ]
-}
-
-const MAX_KEY_CHARS: usize = 60;
-pub(super) const MAX_VALUE_CHARS: usize = 500;
-
-/// What a proposal would replace, for the card only. It is never sent back to
-/// the model: old values and part names can be above the agreed scope.
-pub(super) fn proposal_note(project: &Project, p: &Proposal) -> Option<String> {
-    if p.action == "set_wire_number" {
-        let wire = project.wire(p.args["wire_id"].as_u64()?.into())?;
-        let name = wire_description(project, wire);
-        return Some(match &wire.number {
-            Some(old) => format!("Replaces the current number of {name}: {old}"),
-            None => format!("{} has no number yet.", capitalised(&name)),
-        });
-    }
-    let device = project.device(p.args["device_id"].as_u64()?.into())?;
-    match p.action.as_str() {
-        "set_property" => {
-            let key = p.args["key"].as_str()?.trim();
-            Some(match device.properties.get(key) {
-                Some(old) => format!("Replaces the current value: {old}"),
-                None => "There is no value yet.".into(),
-            })
-        }
-        "assign_part" if !device.parts.is_empty() => Some(format!(
-            "This device already has {} part(s) assigned.",
-            device.parts.len()
-        )),
-        _ => None,
-    }
-}
-
-/// What a proposal changes in the open project, by id, so the summary can
-/// name the current tag and the check can refuse an id that is not there.
-#[derive(Clone, Default)]
-pub(super) struct Known {
-    devices: HashMap<u64, String>,
-    pages: HashMap<u64, String>,
-    parts: HashMap<u64, String>,
-    /// Wire id to how the wire is named for the person: its two ends and page.
-    wires: HashMap<u64, String>,
-}
-
-/// The wire as the person sees it, without the internal id: "the wire from
-/// -K1:2 to -F2:3 (page Main circuit)".
-fn wire_description(p: &Project, w: &novo_core::Wire) -> String {
-    let end = |e| novo_cables::ends::designation(p, e).unwrap_or_else(|| "an open end".into());
-    let page = p.page(w.page).map_or("?", |g| g.name.as_str());
-    format!(
-        "the wire from {} to {} (page {page})",
-        end(w.from),
-        end(w.to)
-    )
-}
-
-fn capitalised(text: &str) -> String {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .map(|c| c.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
-}
-
-/// Longest wire number accepted.
-const MAX_WIRE_NUMBER_CHARS: usize = 40;
-
-pub(super) fn known_of(p: &Project) -> Known {
-    Known {
-        devices: p
-            .devices()
-            .map(|d| (d.id.raw(), d.tag.to_string()))
-            .collect(),
-        pages: p.pages().map(|g| (g.id.raw(), g.name.clone())).collect(),
-        wires: p
-            .wires()
-            .map(|w| (w.id.raw(), wire_description(p, w)))
-            .collect(),
-        parts: p
-            .parts()
-            .map(|x| {
-                (
-                    x.id.raw(),
-                    format!("{} {}", x.manufacturer, x.order_number)
-                        .trim()
-                        .to_string(),
-                )
-            })
-            .collect(),
-    }
-}
-
-/// What applying a proposal does.
-pub(super) enum Plan {
-    Command(Box<Command>),
-    /// The person's own "Set wire number": the whole net, fixed against
-    /// numbering runs, refused when another net has the number.
-    WireNumber {
-        wire: novo_core::WireId,
-        number: String,
-    },
-}
-
-/// Turns a proposal into the model command, and its one-line summary.
-#[cfg(test)]
-pub(super) fn proposal_command(
-    known: &Known,
-    action: &str,
-    args: &Value,
-) -> Result<(Command, String), String> {
-    match proposal_plan(known, action, args)? {
-        (Plan::Command(command), summary) => Ok((*command, summary)),
-        (Plan::WireNumber { .. }, _) => Err(format!("{action} is not a plain command")),
-    }
-}
-
-/// Turns a proposal into what applying it does, and its one-line summary.
-pub(super) fn proposal_plan(
-    known: &Known,
-    action: &str,
-    args: &Value,
-) -> Result<(Plan, String), String> {
-    if action == "set_wire_number" {
-        return wire_number_plan(known, args);
-    }
-    let (command, summary) = proposal_command_inner(known, action, args)?;
-    Ok((Plan::Command(Box::new(command)), summary))
-}
-
-fn wire_number_plan(known: &Known, args: &Value) -> Result<(Plan, String), String> {
-    let wire = args["wire_id"]
-        .as_u64()
-        .ok_or("wire_id must be a whole number id from the project data")?;
-    let name = known
-        .wires
-        .get(&wire)
-        .ok_or_else(|| format!("there is no wire with id {wire} (see section wires)"))?;
-    let number = args["number"]
-        .as_str()
-        .ok_or("number must be text; use an empty text to clear it")?
-        .trim();
-    if number.chars().count() > MAX_WIRE_NUMBER_CHARS {
-        return Err(format!(
-            "number is longer than {MAX_WIRE_NUMBER_CHARS} characters"
-        ));
-    }
-    if number.chars().any(char::is_control) {
-        return Err("number must not contain control characters or line breaks".into());
-    }
-    let summary = if number.is_empty() {
-        format!("Clear the number of {name} and its net")
-    } else {
-        format!(
-            "Number {name} and its net {number}. The number is fixed: numbering runs leave it alone"
-        )
-    };
-    Ok((
-        Plan::WireNumber {
-            wire: wire.into(),
-            number: number.to_string(),
-        },
-        summary,
-    ))
-}
-
-fn proposal_command_inner(
-    known: &Known,
-    action: &str,
-    args: &Value,
-) -> Result<(Command, String), String> {
-    let id = |key: &str| {
-        args[key]
-            .as_u64()
-            .ok_or_else(|| format!("{key} must be a whole number id from the project data"))
-    };
-    let text = |key: &str| {
-        args[key]
-            .as_str()
-            .map(str::trim)
-            .filter(|t| !t.is_empty())
-            .ok_or_else(|| format!("{key} is missing"))
-    };
-    match action {
-        "rename_device" => {
-            let device = id("device_id")?;
-            let old = known
-                .devices
-                .get(&device)
-                .ok_or_else(|| format!("there is no device with id {device}"))?;
-            let tag = text("tag")?;
-            let parsed = DeviceTag::parse(tag).map_err(|e| format!("tag {tag:?}: {e}"))?;
-            Ok((
-                Command::SetTag {
-                    device: device.into(),
-                    tag: parsed,
-                },
-                format!("Rename device {old} to {tag}"),
-            ))
-        }
-        "rename_page" => {
-            let page = id("page_id")?;
-            let old = known
-                .pages
-                .get(&page)
-                .ok_or_else(|| format!("there is no page with id {page}"))?;
-            let name = text("name")?;
-            Ok((
-                Command::RenamePage {
-                    page: page.into(),
-                    name: name.to_string(),
-                },
-                format!("Rename page {old} to {name}"),
-            ))
-        }
-        "assign_part" => {
-            let device = id("device_id")?;
-            let part = id("part_id")?;
-            let tag = known
-                .devices
-                .get(&device)
-                .ok_or_else(|| format!("there is no device with id {device}"))?;
-            let name = known
-                .parts
-                .get(&part)
-                .ok_or_else(|| format!("there is no part with id {part} (see section parts)"))?;
-            Ok((
-                Command::AssignPart {
-                    device: device.into(),
-                    part: part.into(),
-                },
-                format!("Assign part {name} to {tag}"),
-            ))
-        }
-        "set_property" => {
-            let device = id("device_id")?;
-            let tag = known
-                .devices
-                .get(&device)
-                .ok_or_else(|| format!("there is no device with id {device}"))?;
-            let key = text("key")?;
-            if key.chars().count() > MAX_KEY_CHARS {
-                return Err(format!("key is longer than {MAX_KEY_CHARS} characters"));
-            }
-            let (value, shown) = match &args["value"] {
-                Value::String(s) if s.chars().count() > MAX_VALUE_CHARS => {
-                    return Err(format!("value is longer than {MAX_VALUE_CHARS} characters"));
-                }
-                Value::String(s) => (novo_core::Value::Text(s.clone()), format!("{s:?}")),
-                Value::Bool(b) => (novo_core::Value::Bool(*b), b.to_string()),
-                Value::Number(n) => match n.as_i64() {
-                    Some(i) => (novo_core::Value::Int(i), i.to_string()),
-                    None => {
-                        let f = n.as_f64().unwrap_or_default();
-                        (novo_core::Value::Float(f), f.to_string())
-                    }
-                },
-                _ => return Err("value must be text, a number or true/false".into()),
-            };
-            Ok((
-                Command::SetProperty {
-                    target: novo_core::AnyId::Device(device.into()),
-                    key: key.to_string(),
-                    value: Some(value),
-                },
-                format!("Set {key} of {tag} to {shown}"),
-            ))
-        }
-        "add_page" => {
-            let name = text("name")?;
-            if known.pages.values().any(|n| n == name) {
-                return Err(format!("a page {name} already exists"));
-            }
-            let title = args["title"]
-                .as_str()
-                .unwrap_or_default()
-                .trim()
-                .to_string();
-            let shown = if title.is_empty() {
-                format!("Add page {name}")
-            } else {
-                format!("Add page {name} ({title})")
-            };
-            Ok((
-                Command::AddPage {
-                    name: name.to_string(),
-                    title,
-                    kind: Default::default(),
-                    format: Default::default(),
-                    structure: Default::default(),
-                },
-                shown,
-            ))
-        }
-        "add_device" => {
-            let tag = text("tag")?;
-            let parsed = DeviceTag::parse(tag).map_err(|e| format!("tag {tag:?}: {e}"))?;
-            if known.devices.values().any(|t| t == tag) {
-                return Err(format!("a device {tag} already exists"));
-            }
-            let description = args["description"].as_str().unwrap_or_default().to_string();
-            let shown = if description.is_empty() {
-                format!("Add device {tag}")
-            } else {
-                format!("Add device {tag} ({description})")
-            };
-            Ok((
-                Command::AddDevice {
-                    tag: parsed,
-                    description,
-                    kind: Default::default(),
-                },
-                shown,
-            ))
-        }
-        other => Err(format!("unknown action {other}")),
-    }
-}
-
-/// The project as data, sized by what the person allowed.
-pub(super) fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Snapshot {
-    let mut snap = Snapshot::default();
-    if scope == DataScope::None {
-        return snap;
-    }
-    let devices = novo_py::devices_json(p);
-    let tags: Vec<Value> = devices
-        .as_array()
-        .map(|a| {
-            a.iter()
-                .map(|d| json!({"id": d["id"], "tag": d["tag"]}))
-                .collect()
-        })
-        .unwrap_or_default();
-    snap.outline = json!({
-        "project": {
-            "name": p.info().name,
-            "pages": p.pages().count(),
-            "devices": p.devices().count(),
-            "wires": p.wires().count(),
-            "terminals": p.terminals().count(),
-            "cables": p.cables().count(),
-            "parts": p.parts().count(),
-        },
-        "pages": novo_py::pages_json(p),
-        "devices": tags,
-        "sections_for_read_project": ["pages", "devices", "wires", "nets", "potentials", "terminals", "parts", "problems", "wire_numbers"],
-    });
-    if scope >= DataScope::Selection {
-        let items: Vec<Value> = p
-            .symbols()
-            .filter(|s| selected.contains(&s.id.raw()))
-            .map(|s| {
-                let device = match &s.role {
-                    novo_core::SymbolRole::Device { device, .. } => p.device(*device),
-                    _ => None,
-                };
-                json!({
-                    "symbol_id": s.id.raw(),
-                    "symbol": s.symbol.0,
-                    "page_id": s.page.raw(),
-                    "at_mm": [s.placement.origin.x, s.placement.origin.y],
-                    "device": device.map(|d| json!({
-                        "id": d.id.raw(), "tag": d.tag.to_string(),
-                        "description": d.description})),
-                })
-            })
-            .collect();
-        snap.selection = json!({"selected_symbols": items});
-    }
-    if scope >= DataScope::Project {
-        let mut terminals: Vec<_> = p.terminals().collect();
-        terminals.sort_by_key(|t| t.id);
-        let terminals: Vec<Value> = terminals
-            .into_iter()
-            .map(|t| {
-                json!({"id": t.id.raw(), "strip": t.strip.raw(), "name": t.name,
-                       "designation": p.terminal_designation(t.id)})
-            })
-            .collect();
-        snap.project = json!({
-            "pages": novo_py::pages_json(p),
-            "devices": devices,
-            "wires": novo_py::wires_json(p),
-            "nets": novo_py::nets_json(p),
-            "potentials": novo_py::potentials_json(p),
-            "terminals": terminals,
-            "parts": p.parts().map(|x| json!({
-                "id": x.id.raw(), "manufacturer": x.manufacturer,
-                "order_number": x.order_number, "type_number": x.type_number,
-                "description": x.description})).collect::<Vec<_>>(),
-            // The design checks, read-only: what the Issues list would show.
-            "problems": novo_reports::issues::open(p).iter().map(|q| json!({
-                "kind": format!("{:?}", q.kind),
-                "severity": format!("{:?}", q.severity),
-                "message": q.message,
-                "page_id": q.page.map(|g| g.raw()),
-                "objects": q.at.len(),
-                "rule": q.rule})).collect::<Vec<_>>(),
-            // Wire-number conflicts against the project's own scheme, read only.
-            "wire_numbers": novo_numbering::check(p, &novo_numbering::Scheme::load(p))
-                .iter()
-                .map(|c| json!({
-                    "kind": format!("{:?}", c.kind),
-                    "severity": format!("{:?}", c.severity),
-                    "number": c.number,
-                    "wires": c.wires.iter().map(|w| w.raw()).collect::<Vec<_>>(),
-                    "message": c.message}))
-                .collect::<Vec<_>>(),
-        });
-    }
-    snap
-}
+pub(super) use novo_ai::engineer::snapshot::snapshot_of;
 
 impl NovoApp {
     pub(super) fn open_assistant(&mut self) {
@@ -957,15 +567,27 @@ impl NovoApp {
             return;
         };
         let scope = self.settings.ai.consent.effective();
-        let (snapshot, known) = match self.backend.document() {
-            Some(doc) => (
-                snapshot_of(doc.project(), &self.selected_ids(), scope),
-                known_of(doc.project()),
-            ),
-            None => (Snapshot::default(), Known::default()),
-        };
+        let selected = self.selected_ids();
+        let base = self
+            .backend
+            .document()
+            .map_or_else(|| Project::new(""), |d| d.project().clone());
         let st = &mut self.wb.assistant;
         st.enforce_scope(scope);
+        // Steps of a change set nobody has decided yet are carried into the new
+        // draft, so "and also add ..." builds on them instead of dropping them.
+        let carried: Vec<Step> = st
+            .transcript
+            .iter()
+            .rev()
+            .find_map(|e| match e {
+                Entry::ChangeSet(c) if c.state == ProposalState::Pending => {
+                    Some(c.outcome.steps.clone())
+                }
+                _ => None,
+            })
+            .unwrap_or_default();
+        st.live_plan.clear();
         st.live.clear();
         st.thinking = true;
         st.cancel.store(false, Ordering::Relaxed);
@@ -989,7 +611,6 @@ impl NovoApp {
         }
         let factory = Arc::clone(&st.transport);
         let instant = st.instant_retries;
-        let first = st.next_proposal;
         let (tx, rx) = channel();
         st.running = Some(rx);
         let ctx = ctx.clone();
@@ -998,23 +619,13 @@ impl NovoApp {
             if instant {
                 client = client.with_sleep(|_| {});
             }
-            let validator_known = known;
-            let mut host = SnapshotHost::new(
-                snapshot,
+            let mut host = EngineerHost::new(
+                base,
+                carried,
                 scope,
-                edit_actions(),
-                Box::new(move |action, args| {
-                    // The answer goes back to the model, so it must not reveal
-                    // more than the agreed scope (part names are Whole project).
-                    if matches!(action, "assign_part" | "set_wire_number")
-                        && scope != DataScope::Project
-                    {
-                        return Err(format!("{action} is not allowed above the agreed scope"));
-                    }
-                    proposal_plan(&validator_known, action, args).map(|(_, summary)| summary)
-                }),
-            )
-            .starting_at(first);
+                Resources::new(user_macros()),
+                Box::new(move |p| snapshot_of(p, &selected, scope)),
+            );
             let events = tx.clone();
             let events_ctx = ctx.clone();
             let result = conversation.run_turn(
@@ -1029,7 +640,8 @@ impl NovoApp {
                 },
                 &cancel,
             );
-            let _ = tx.send(Msg::Done(result, conversation));
+            let outcome = Box::new(Some(host.outcome()));
+            let _ = tx.send(Msg::Done(result, conversation, outcome));
             ctx.request_repaint();
         });
     }
@@ -1059,9 +671,13 @@ impl NovoApp {
                     st.live.push_str(&t);
                 }
                 Ok(Msg::Event(Event::Thinking)) => st.thinking = true,
-                Ok(Msg::Event(Event::Tool { name, .. })) => {
+                Ok(Msg::Event(Event::Tool { name, input })) => {
                     st.flush_live();
-                    st.transcript.push(Entry::Tool(tool_phrase(&name).into()));
+                    if name == "set_plan" {
+                        st.live_plan = plan_of(&input);
+                    } else {
+                        st.transcript.push(Entry::Tool(tool_phrase(&name).into()));
+                    }
                 }
                 Ok(Msg::Event(Event::Request {
                     model,
@@ -1076,12 +692,18 @@ impl NovoApp {
                         let _ = st.ledger.save(path);
                     }
                 }
-                Ok(Msg::Done(result, conversation)) => {
+                Ok(Msg::Done(result, conversation, outcome)) => {
                     st.conversation = conversation;
                     st.running = None;
                     st.thinking = false;
                     match result {
                         Ok(turn) => {
+                            st.live_plan.clear();
+                            if let Some(o) = outcome.as_ref()
+                                && !o.plan.is_empty()
+                            {
+                                st.transcript.push(Entry::Plan(o.plan.clone()));
+                            }
                             if st.live.is_empty() {
                                 if !turn.text.is_empty() {
                                     st.transcript.push(Entry::Claude(turn.text));
@@ -1102,15 +724,24 @@ impl NovoApp {
                                         .into(),
                                 ));
                             }
-                            for p in turn.proposals {
-                                st.next_proposal = st.next_proposal.max(p.id + 1);
-                                if let Some(doc) = self.backend.document()
-                                    && let Some(note) = proposal_note(doc.project(), &p)
-                                {
-                                    st.proposal_notes.insert(p.id, note);
+                            if let Some(outcome) = *outcome {
+                                if let Some(q) = outcome.question.clone() {
+                                    st.transcript.push(Entry::Question(q));
                                 }
-                                st.transcript
-                                    .push(Entry::Proposal(p, ProposalState::Pending));
+                                if !outcome.steps.is_empty() {
+                                    // This card holds the earlier pending steps too.
+                                    for e in st.transcript.iter_mut() {
+                                        if let Entry::ChangeSet(c) = e
+                                            && c.state == ProposalState::Pending
+                                        {
+                                            c.state = ProposalState::Superseded;
+                                        }
+                                    }
+                                    st.transcript.push(Entry::ChangeSet(Box::new(Card {
+                                        outcome,
+                                        state: ProposalState::Pending,
+                                    })));
+                                }
                             }
                         }
                         Err(ApiError::Cancelled(_)) => {
@@ -1141,66 +772,62 @@ impl NovoApp {
         }
     }
 
-    /// The same path as Edit > Set wire number: one undo step, the whole net.
-    fn apply_wire_number(&mut self, wire: novo_core::WireId, number: &str) -> ProposalState {
-        let Some(doc) = self.backend.document_mut() else {
-            return ProposalState::Failed("No project is open.".into());
-        };
-        match doc.transact("Set wire number", |tx| {
-            novo_numbering::set_number(tx, wire, number)
-        }) {
-            Ok((_, changes)) => {
-                self.changed_outside_canvas(&changes);
-                ProposalState::Applied
-            }
-            Err(e) => ProposalState::Failed(format!("Wire number: {e}")),
-        }
-    }
-
+    /// Applies or rejects the change set on card `index`. Applying is ONE
+    /// undo step for all of it, and all or nothing: if any step no longer
+    /// fits the project, nothing changes and the card says which.
     fn assistant_decide(&mut self, index: usize, apply: bool) {
-        let known = self
-            .backend
-            .document()
-            .map(|d| known_of(d.project()))
-            .unwrap_or_default();
-        let Some(Entry::Proposal(p, _)) = self.wb.assistant.transcript.get(index) else {
+        let Some(Entry::ChangeSet(card)) = self.wb.assistant.transcript.get(index) else {
             return;
         };
-        let p = p.clone();
+        if card.state != ProposalState::Pending {
+            return;
+        }
+        let steps = card.outcome.steps.clone();
+        let n = steps.len();
         let outcome = if !apply {
             ProposalState::Rejected
         } else if self.backend.is_read_only() || self.commissioning_locks_edits() {
             ProposalState::Failed("The project is read-only right now.".into())
         } else {
-            match proposal_plan(&known, &p.action, &p.args) {
-                Err(why) => ProposalState::Failed(why),
-                Ok((Plan::Command(command), _)) => match self.execute(*command) {
-                    Some(Ok(_)) => ProposalState::Applied,
-                    Some(Err(e)) => ProposalState::Failed(e.to_string()),
-                    None => ProposalState::Failed("No project is open.".into()),
+            let resources = Resources::new(user_macros());
+            let label = if n == 1 {
+                "Claude: ".to_string() + &steps[0].summary
+            } else {
+                format!("Claude: change set of {n} steps")
+            };
+            match self.backend.document_mut() {
+                None => ProposalState::Failed("No project is open.".into()),
+                Some(doc) => match commit(doc, &resources, &steps, &label) {
+                    Ok(changes) => {
+                        self.changed_outside_canvas(&changes);
+                        ProposalState::Applied
+                    }
+                    Err(why) => ProposalState::Failed(why),
                 },
-                Ok((Plan::WireNumber { wire, number }, _)) => self.apply_wire_number(wire, &number),
             }
         };
-        let st = &mut self.wb.assistant;
+        let what = if n == 1 {
+            steps[0].summary.clone()
+        } else {
+            format!("the change set of {n} steps")
+        };
         let note = match &outcome {
-            ProposalState::Applied => {
-                format!("The person applied proposal {}: {}", p.id, p.summary)
-            }
-            ProposalState::Rejected => {
-                format!("The person rejected proposal {}: {}", p.id, p.summary)
-            }
-            ProposalState::Failed(why) => {
-                format!("Proposal {} could not be applied: {why}", p.id)
-            }
-            ProposalState::Pending => String::new(),
+            ProposalState::Applied => format!("The person applied {what}"),
+            ProposalState::Rejected => format!("The person rejected {what}"),
+            ProposalState::Failed(why) => format!("{what} could not be applied: {why}"),
+            ProposalState::Pending | ProposalState::Superseded => String::new(),
         };
-        st.notes.push(note);
+        self.wb.assistant.notes.push(note);
         if outcome == ProposalState::Applied {
-            self.message(Level::Info, format!("{}. Ctrl+Z undoes it.", p.summary));
+            let tail = if n == 1 {
+                "Ctrl+Z undoes it.".to_string()
+            } else {
+                format!("All {n} steps are one undo step: Ctrl+Z undoes them together.")
+            };
+            self.message(Level::Info, format!("{what}. {tail}"));
         }
-        if let Some(Entry::Proposal(_, state)) = self.wb.assistant.transcript.get_mut(index) {
-            *state = outcome;
+        if let Some(Entry::ChangeSet(card)) = self.wb.assistant.transcript.get_mut(index) {
+            card.state = outcome;
         }
     }
 
@@ -1676,6 +1303,7 @@ impl NovoApp {
     ) -> Option<String> {
         let pal = ui_palette();
         let running = self.wb.assistant.running.is_some();
+        let mut answer: Option<String> = None;
         let height = (ui.available_height() - 140.0).max(120.0);
         egui::ScrollArea::vertical()
             .max_height(height)
@@ -1717,33 +1345,25 @@ impl NovoApp {
                         Entry::Problem(t) => {
                             ui.colored_label(pal.error, t);
                         }
-                        Entry::Proposal(p, state) => {
+                        Entry::ChangeSet(card) => change_set_ui(ui, pal, i, card, decide),
+                        Entry::Plan(items) => plan_ui(ui, pal, items),
+                        Entry::Question(q) => {
+                            let open = !running
+                                && self.wb.assistant.transcript[i + 1..]
+                                    .iter()
+                                    .all(|e| !matches!(e, Entry::User(_)));
                             egui::Frame::group(ui.style()).show(ui, |ui| {
-                                ui.label(egui::RichText::new("Suggested change").strong());
-                                ui.label(&p.summary);
-                                if let Some(note) = self.wb.assistant.proposal_notes.get(&p.id) {
-                                    ui.weak(note);
-                                }
-                                match state {
-                                    ProposalState::Pending => {
-                                        ui.horizontal(|ui| {
-                                            if ui.button("Apply").clicked() {
-                                                *decide = Some((i, true));
+                                ui.label(egui::RichText::new("Claude asks").strong());
+                                ui.label(&q.text);
+                                if open {
+                                    ui.horizontal_wrapped(|ui| {
+                                        for o in &q.options {
+                                            if ui.button(o).clicked() {
+                                                answer = Some(o.clone());
                                             }
-                                            if ui.button("Reject").clicked() {
-                                                *decide = Some((i, false));
-                                            }
-                                        });
-                                    }
-                                    ProposalState::Applied => {
-                                        ui.colored_label(pal.success, "Applied. Ctrl+Z undoes it.");
-                                    }
-                                    ProposalState::Rejected => {
-                                        ui.weak("Rejected.");
-                                    }
-                                    ProposalState::Failed(why) => {
-                                        ui.colored_label(pal.error, why);
-                                    }
+                                        }
+                                    });
+                                    ui.weak("Or type your answer below.");
                                 }
                             });
                         }
@@ -1751,6 +1371,9 @@ impl NovoApp {
                 }
                 if running {
                     let st = &self.wb.assistant;
+                    if !st.live_plan.is_empty() {
+                        plan_ui(ui, pal, &st.live_plan);
+                    }
                     if !st.live.is_empty() {
                         ui.add_space(4.0);
                         ui.label(egui::RichText::new("Claude").strong());
@@ -1824,8 +1447,41 @@ impl NovoApp {
                 format_usd(st.spent())
             ));
         });
-        send
+        send.or(answer)
     }
+}
+
+/// The macros the person saved themselves, for Claude to place as well.
+fn user_macros() -> Vec<novo_parts::MacroFile> {
+    let Some(library) = novo_parts::MacroLibrary::user() else {
+        return Vec::new();
+    };
+    let (entries, _) = library.list();
+    entries
+        .iter()
+        .filter_map(|e| library.load(&e.path).ok())
+        .collect()
+}
+
+/// The checklist in a `set_plan` call.
+fn plan_of(input: &Value) -> Vec<PlanItem> {
+    input["steps"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .take(30)
+                .filter_map(|i| {
+                    Some(PlanItem {
+                        title: i["title"].as_str()?.chars().take(160).collect(),
+                        status: match i["status"].as_str() {
+                            Some(s @ ("doing" | "done" | "skipped")) => s.to_string(),
+                            _ => "todo".into(),
+                        },
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn tool_phrase(name: &str) -> &'static str {
@@ -1833,7 +1489,169 @@ fn tool_phrase(name: &str) -> &'static str {
         "project_outline" => "Looked at the project outline",
         "selection" => "Looked at your selection",
         "read_project" => "Read part of the project",
-        "propose_edit" => "Prepared a suggested change",
+        "propose_edit" => "Made an edit in the draft",
+        "run_checks" => "Ran the design checks on the draft",
+        "standards_report" => "Looked at the standards report",
+        "read_report" => "Read a report",
+        "list_macros" => "Looked at the ready-made circuits",
+        "list_symbols" => "Searched the symbol library",
+        "ask_user" => "Asked you a question",
         _ => "Used a tool",
     }
+}
+
+/// The checklist Claude is working through.
+fn plan_ui(ui: &mut egui::Ui, pal: &novo_theme::Palette, items: &[PlanItem]) {
+    egui::Frame::group(ui.style()).show(ui, |ui| {
+        ui.label(egui::RichText::new("Plan").strong());
+        for item in items {
+            ui.horizontal(|ui| {
+                let (rect, _) =
+                    ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
+                let c = rect.center();
+                let p = ui.painter();
+                match item.status.as_str() {
+                    "done" => {
+                        p.circle_filled(c, 5.0, pal.success);
+                    }
+                    "doing" => {
+                        p.circle_stroke(c, 5.0, egui::Stroke::new(2.0, pal.accent));
+                        p.circle_filled(c, 2.0, pal.accent);
+                    }
+                    "skipped" => {
+                        p.line_segment(
+                            [c - egui::vec2(4.0, 0.0), c + egui::vec2(4.0, 0.0)],
+                            egui::Stroke::new(1.5, pal.text_secondary),
+                        );
+                    }
+                    _ => {
+                        p.circle_stroke(c, 5.0, egui::Stroke::new(1.0, pal.text_secondary));
+                    }
+                }
+                let text = egui::RichText::new(format!("{}  ({})", item.title, item.status));
+                ui.label(match item.status.as_str() {
+                    "done" | "skipped" => text.weak(),
+                    "doing" => text.strong(),
+                    _ => text,
+                });
+            });
+        }
+    });
+}
+
+/// The change set Claude built: what it does, what the program's own checks
+/// say about it, and Apply or Reject.
+fn change_set_ui(
+    ui: &mut egui::Ui,
+    pal: &novo_theme::Palette,
+    index: usize,
+    card: &Card,
+    decide: &mut Option<(usize, bool)>,
+) {
+    let o = &card.outcome;
+    let n = o.steps.len();
+    egui::Frame::group(ui.style()).show(ui, |ui| {
+        if n == 1 {
+            ui.label(egui::RichText::new("Suggested change").strong());
+            ui.label(&o.steps[0].summary);
+            if let Some(note) = &o.steps[0].note {
+                ui.weak(note);
+            }
+        } else {
+            ui.label(egui::RichText::new(format!("Change set: {n} steps in a draft")).strong());
+            ui.weak("Nothing is in your project yet.");
+            egui::CollapsingHeader::new(format!("The {n} steps"))
+                .id_salt(("assistant_steps", index))
+                .default_open(false)
+                .show(ui, |ui| {
+                    for (k, s) in o.steps.iter().enumerate() {
+                        ui.label(format!("{}. {}", k + 1, s.summary));
+                        if let Some(note) = &s.note {
+                            ui.weak(note);
+                        }
+                    }
+                });
+        }
+        for line in o.diff.lines() {
+            if line.starts_with("Removed devices") {
+                // Deleting is the one change worth a second look: say it in colour and bold.
+                ui.label(egui::RichText::new(line).strong().color(pal.warning));
+            } else {
+                ui.label(line);
+            }
+        }
+        if !o.dropped.is_empty() {
+            ui.colored_label(
+                pal.warning,
+                format!(
+                    "{} earlier {} no longer fit and were left out: {}",
+                    o.dropped.len(),
+                    if o.dropped.len() == 1 { "step" } else { "steps" },
+                    o.dropped.join("; ")
+                ),
+            );
+        }
+        let c = &o.checks;
+        ui.add_space(2.0);
+        ui.label(egui::RichText::new("Design checks, run by the program").small().strong());
+        let colour = if c.after.errors > 0 {
+            pal.error
+        } else if c.after.warnings > 0 {
+            pal.warning
+        } else {
+            pal.success
+        };
+        ui.horizontal_wrapped(|ui| {
+            ui.weak(format!("Before: {}", c.before.text()));
+            ui.colored_label(colour, format!("After: {}", c.after.text()));
+        });
+        for l in c.new.iter().filter(|l| l.severity != "info").take(5) {
+            ui.colored_label(pal.warning, format!("New {}: {}", l.severity, l.message));
+        }
+        for l in c.resolved.iter().filter(|l| l.severity != "info").take(5) {
+            ui.colored_label(pal.success, format!("Resolved: {}", l.message));
+        }
+        if n > 0 && !o.verified {
+            ui.colored_label(
+                pal.warning,
+                "Claude did not run the checks after its last edit; the numbers above are the program's own.",
+            );
+        }
+        ui.weak(
+            "The checks find drawing problems. They do not show that the design is right or \
+             that it meets a standard.",
+        );
+        match &card.state {
+            ProposalState::Pending => {
+                ui.horizontal(|ui| {
+                    let label = if n == 1 { "Apply" } else { "Apply all (one undo step)" };
+                    if ui.button(label).clicked() {
+                        *decide = Some((index, true));
+                    }
+                    if ui.button("Reject").clicked() {
+                        *decide = Some((index, false));
+                    }
+                });
+            }
+            ProposalState::Applied => {
+                ui.colored_label(
+                    pal.success,
+                    if n == 1 {
+                        "Applied. Ctrl+Z undoes it.".to_string()
+                    } else {
+                        format!("Applied: all {n} steps are one undo step. Ctrl+Z undoes them together.")
+                    },
+                );
+            }
+            ProposalState::Rejected => {
+                ui.weak("Rejected.");
+            }
+            ProposalState::Superseded => {
+                ui.weak("Replaced by the change set below, which includes these steps.");
+            }
+            ProposalState::Failed(why) => {
+                ui.colored_label(pal.error, why);
+            }
+        }
+    });
 }

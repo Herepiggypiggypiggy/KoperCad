@@ -418,8 +418,10 @@ pub fn template_documents(
     Some(template_sheets(&title, &layout, &features))
 }
 
-/// Places a device on the plate at `(x, y)`, or moves it there; it leaves
-/// any rail it was on.
+/// Places a device on the plate at `(x, y)` (its top left), or moves it
+/// there. It is mounted on a DIN rail when the rail's line runs through its
+/// centre and it lies on the rail's run (what the snap of the Cabinet and 3D
+/// views gives), and leaves the rail it was on otherwise.
 pub fn place_device(
     tx: &mut Tx<'_>,
     id: StructureId,
@@ -428,15 +430,61 @@ pub fn place_device(
     y: f64,
     rotated: bool,
 ) -> Result<()> {
+    let rail = mount_of(tx.project(), id, device, (x, y), rotated)
+        .map(|(rail, offset)| (RailId::from(rail), offset));
     tx.execute(Command::PlaceDevice {
         device: DeviceId::from(device),
         structure: id,
         x,
         y,
         rotated,
-        rail: None,
+        rail,
     })
     .map(|_| ())
+}
+
+/// The rail a device standing at `at` on the plate of `id` is mounted on, and
+/// its distance from the rail's start. A device on the door or another
+/// surface is on no rail.
+pub fn mount_of(
+    project: &Project,
+    id: StructureId,
+    device: u64,
+    at: (f64, f64),
+    rotated: bool,
+) -> Option<(u64, f64)> {
+    let dev = project.get::<Device>(DeviceId::from(device))?;
+    let on_other_surface = project
+        .all::<CabinetPlacement>()
+        .filter(|p| p.structure == id && p.device == dev.id)
+        .any(|p| {
+            matches!(
+                p.properties.get(SURFACE_PROPERTY),
+                Some(Value::Text(name))
+                    if !name.trim().is_empty() && !name.trim().eq_ignore_ascii_case(MAIN_PLATE)
+            )
+        });
+    if on_other_surface {
+        return None;
+    }
+    let size = device_size(project, dev);
+    let size = if rotated {
+        (size.height, size.width)
+    } else {
+        (size.width, size.height)
+    };
+    let rails: Vec<Rail> = project
+        .all::<ModelRail>()
+        .filter(|r| r.structure == id && r.kind == RailKind::DinRail)
+        .map(|r| Rail {
+            id: r.id.raw(),
+            x: r.x,
+            y: r.y,
+            length: r.length,
+            vertical: r.vertical,
+        })
+        .collect();
+    crate::mount::mounted_on(&rails, size, at)
 }
 
 fn placement_of(tx: &Tx<'_>, device: u64) -> Option<(novo_core::CabinetPlacementId, bool)> {

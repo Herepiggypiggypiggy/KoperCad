@@ -1,0 +1,171 @@
+# Challenge: the reversing starter cannot reverse. The wire from the forward
+# contactor's interlock contact (-K1 21/22) to the reverse coil (-K2 A1) is missing.
+# Sample project: the program's own "Motor starter reversing" macro, fed
+# (crates/novo-tests/tests/lessons/progression.rs). -S1 stop, -S2 forward, -S3 reverse.
+format = 1
+id = "reversing-starter"
+version = 1
+status = "early"
+kind = "challenge"
+title = "A reversing starter that will not reverse"
+title_nl = "Een omkeerstarter die niet omkeert"
+summary = "Two contactors swap two phases to turn the motor both ways. Reverse is dead: find the broken interlock path, repair it, and see why the two contactors can never be on together."
+summary_nl = "Twee contactoren verwisselen twee fasen om de motor beide kanten op te laten draaien. Omkeren doet niets: zoek het onderbroken blokkeerpad, herstel het en zie waarom de twee contactoren nooit samen aan kunnen staan."
+explain = "The reverse coil **-K2** is fed through the normally closed interlock contact of **-K1**. That contact was not wired to the coil, so **-K2** never saw a supply. With the wire in place, **-K2** pulls in when forward is off, and while it is in, its own interlock contact in the forward branch keeps **-K1** out. Two contactors on together would short two phases at the motor, so this electrical interlock is not optional (a mechanical interlock on the contactors is added in practice; this drawing shows the electrical one)."
+explain_nl = "De spoel van omkeren **-K2** wordt gevoed via het verbreekcontact van **-K1**. Dat contact was niet met de spoel verbonden, dus **-K2** kreeg nooit spanning. Met de draad op zijn plaats trekt **-K2** aan als vooruit uit is, en zolang hij aan is houdt zijn eigen blokkeercontact in de vooruit-tak **-K1** buiten. Twee contactoren tegelijk sluiten twee fasen kort bij de motor, dus deze elektrische blokkering is niet optioneel (in de praktijk komt er ook een mechanische blokkering op de contactoren; deze tekening toont de elektrische)."
+track = "machines"
+order = 10
+level = "intermediate"
+minutes = 8
+topics = ["simulation", "live", "troubleshooting", "interlock", "reversing"]
+needs = ["live-view", "motor-wont-hold"]
+next = ["star-delta-starter"]
+project = "project.json"
+finished = "finished.json"
+page = "Reversing starter"
+
+[[step]]
+id = "live"
+title = "Switch the live view on"
+title_nl = "Zet de live-weergave aan"
+text = """
+This starter has two contactors: **-K1** turns the motor forward, **-K2** swaps two phases so it turns the other way. Try it first, as on site. The live view lets you press the buttons without changing the drawing.
+"""
+text_nl = """
+Deze starter heeft twee contactoren: **-K1** laat de motor vooruit draaien, **-K2** verwisselt twee fasen zodat hij de andere kant op draait. Probeer eerst, zoals ter plaatse. Met de live-weergave druk je op de knoppen zonder de tekening te veranderen.
+"""
+how = [
+  "Press {key:sim.live}.",
+]
+how_nl = [
+  "Druk op {key:sim.live}.",
+]
+expect = { live = true }
+solve = [ { command = "sim.live" } ]
+
+[[step]]
+id = "forward"
+title = "Forward works"
+title_nl = "Vooruit werkt"
+text = """
+**Goal:** press forward (**-S2**) and let go. The contactor **-K1** holds itself in, as in the pump starter.
+"""
+text_nl = """
+**Doel:** druk op vooruit (**-S2**) en laat los. De contactor **-K1** houdt zichzelf vast, zoals bij de pompstarter.
+"""
+hints = [
+  "Click the badge on the forward button -S2 and watch the coil -K1.",
+]
+hints_nl = [
+  "Klik op de knop van vooruit -S2 en kijk naar de spoel -K1.",
+]
+point = { at = { device = "-S2" } }
+expect = { all = [ { coil_on = "-K1" }, { not = { pole_closed = "-S2" } } ] }
+solve = [ { live_pole = { device = "-S2" } } ]
+
+[[step]]
+id = "stop"
+title = "Stop"
+title_nl = "Stop"
+text = """
+**Goal:** press stop (**-S1**). The contactor drops out. Now the motor is standing still and you can try to reverse.
+"""
+text_nl = """
+**Doel:** druk op stop (**-S1**). De contactor valt af. Nu staat de motor stil en kun je proberen om te keren.
+"""
+point = { at = { device = "-S1" } }
+expect = { not = { coil_on = "-K1" } }
+solve = [ { live_pole = { device = "-S1" } } ]
+
+[[step]]
+id = "reverse"
+title = "Goal: reverse must pull in"
+title_nl = "Doel: omkeren moet aantrekken"
+text = """
+**Goal:** press reverse (**-S3**), let go, and the contactor **-K2** stays pulled in. Right now nothing happens. Find out why and repair the drawing.
+"""
+text_nl = """
+**Doel:** druk op omkeren (**-S3**), laat los, en de contactor **-K2** blijft aangetrokken. Nu gebeurt er niets. Zoek uit waarom en herstel de tekening.
+"""
+hints = [
+  "Press reverse and look at the coil -K2. It gets its supply through the contact drawn in series with it. Which pins of that contact and of the coil have no wire?",
+  "The reverse coil sits behind the normally closed contact of -K1 (pins 21 and 22), the interlock. Look at -K2 pin A1 and -K1 pin 22.",
+  "Draw a wire from -K1 pin 22 to the coil -K2 pin A1.",
+]
+hints_nl = [
+  "Druk op omkeren en kijk naar de spoel -K2. Hij krijgt spanning via het contact dat in serie is getekend. Welke pennen van dat contact en van de spoel hebben geen draad?",
+  "De omkeerspoel staat achter het verbreekcontact van -K1 (pennen 21 en 22), de blokkering. Kijk naar -K2 pen A1 en -K1 pen 22.",
+  "Trek een draad van -K1 pen 22 naar de spoel -K2 pen A1.",
+]
+point = { at = { device = "-K2", pin = "A1" } }
+expect = { all = [ { coil_on = "-K2" }, { not = { pole_closed = "-S3" } } ] }
+solve = [
+  { wire = ["-K1:22", "-K2:A1"] },
+  { live_pole = { device = "-S3" } },
+]
+
+[[step]]
+id = "predict"
+title = "Predict: forward while reverse runs"
+title_nl = "Voorspel: vooruit terwijl omkeren loopt"
+text = """
+The motor is turning in reverse (**-K2** is in). You press forward (**-S2**). What does **-K1** do? Think of the contact of **-K2** in the forward branch.
+"""
+text_nl = """
+De motor draait achteruit (**-K2** is aan). Je drukt op vooruit (**-S2**). Wat doet **-K1**? Denk aan het contact van **-K2** in de vooruit-tak.
+"""
+expect = { predicted = true }
+pause = true
+solve = [ { choose = 2 } ]
+[step.predict]
+options = ["It pulls in as well, both contactors are on", "It pulls in and -K2 drops out", "It stays out, -K2 keeps running"]
+options_nl = ["Hij trekt ook aan, beide contactoren zijn aan", "Hij trekt aan en -K2 valt af", "Hij blijft uit, -K2 blijft draaien"]
+answer = 2
+why = "The normally closed contact of **-K2** sits in the forward branch ahead of the **-K1** coil. While **-K2** is in, it is open, so **-K1** gets no supply. That is the interlock: you must press stop first. Both contactors on together would short two phases at the motor."
+why_nl = "Het verbreekcontact van **-K2** staat in de vooruit-tak voor de spoel van **-K1**. Zolang **-K2** aan is, is het open, dus **-K1** krijgt geen spanning. Dat is de blokkering: je moet eerst stop indrukken. Beide contactoren tegelijk sluiten twee fasen kort bij de motor."
+
+[[step]]
+id = "see-interlock"
+title = "See: stop, then forward"
+title_nl = "Kijk: stop, dan vooruit"
+text = """
+Check it. Press stop (**-S1**) so **-K2** drops out, then press forward (**-S2**). Now **-K1** pulls in and **-K2** stays out.
+"""
+text_nl = """
+Controleer het. Druk op stop (**-S1**) zodat **-K2** afvalt en druk dan op vooruit (**-S2**). Nu trekt **-K1** aan en blijft **-K2** uit.
+"""
+hints = [
+  "While -K2 is in, pressing forward does nothing. Press stop first.",
+]
+hints_nl = [
+  "Zolang -K2 aan is, doet vooruit niets. Druk eerst op stop.",
+]
+point = { at = { device = "-S1" } }
+expect = { all = [ { coil_on = "-K1" }, { not = { coil_on = "-K2" } }, { not = { pole_closed = "-S2" } } ] }
+solve = [
+  { live_pole = { device = "-S1" } },
+  { live_pole = { device = "-S2" } },
+]
+
+[[step]]
+id = "power"
+title = "Why two phases are swapped"
+title_nl = "Waarom twee fasen verwisseld zijn"
+text = """
+Open the power side of the drawing. **-K2** feeds the motor with two phases swapped (L1 and L3), so the field turns the other way. Reading step: nothing to change.
+"""
+text_nl = """
+Kijk naar de hoofdstroomzijde van de tekening. **-K2** voedt de motor met twee verwisselde fasen (L1 en L3), zodat het veld de andere kant op draait. Leesstap: er hoeft niets te veranderen.
+"""
+note = [ { at = { device = "-K2" }, text = "Pole 1 and pole 3 are crossed here.", text_nl = "Pool 1 en pool 3 zijn hier gekruist." } ]
+
+[[step]]
+id = "own"
+title = "In your own projects"
+title_nl = "In je eigen projecten"
+text = """
+Place this circuit from the macro browser (Motor starter reversing), feed it, and fault-find it the same way. Pair the electrical interlock with a mechanical one on the contactors for real machines. This lesson shows the electrical interlock only.
+"""
+text_nl = """
+Plaats dit schema uit de macrobrowser (Motor starter reversing), voed het en zoek storingen op dezelfde manier. Combineer de elektrische blokkering met een mechanische op de contactoren voor echte machines. Deze les toont alleen de elektrische blokkering.
+"""

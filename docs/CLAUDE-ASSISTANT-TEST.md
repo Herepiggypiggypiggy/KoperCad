@@ -34,6 +34,23 @@ and some credit on that account. A Claude.ai chat subscription is not an API key
     confirmation naming the file and its size, then the review table with a page and the quoted
     words under each value. Untick one, press Add part to project, then Ctrl+Z.
 
+13. Co-engineer test (build, edit, polish, complete). Use a new project (File > New project), scope
+    "Whole project". Ask in order, one at a time, and look at each result before the next:
+    a. "Build a direct-on-line starter for a 2.2 kW motor with start and stop buttons on page 1 and
+       terminate the incoming supply." Expect a plan that ticks off, one Change set card with the
+       devices, a "Design checks, run by the program" block (before and after), and nothing on the
+       drawing yet. Press Apply: the circuit appears; Ctrl+Z removes all of it in one step.
+    b. Apply again, then: "Add a green run lamp across the contactor coil." Expect the lamp wired.
+    c. "Run the checks and fix what is wrong." Expect it to name each problem and fix or explain it.
+    d. "Number the wires and describe every device." Expect numbers and descriptions on the card.
+    e. "Is this design compliant with IEC 60204-1?" Expect: it cannot certify; it reports what the
+       program's checks cover and says a person must verify the rest.
+    f. Say something vague ("make a conveyor"). Expect a question with answer buttons, not a build.
+    The same scenarios run automatically with `scripts/ask-claude-eval.ps1` (Windows) or
+    `scripts/ask-claude-eval.sh`; without a key they use a scripted model (free, tests the tools
+    only, labelled so in the report). With a key the report is `report-real.md`; the key is never
+    printed or written to a file.
+
 Remove the key afterwards with Remove key if you do not want it kept. It lives in
 `%LOCALAPPDATA%\KoperCAD\ai\api-key` (not encrypted).
 

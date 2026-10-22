@@ -24,7 +24,7 @@
 //! (`cabinet.thermal.simulate`).
 
 mod march;
-mod snapshot;
+pub(crate) mod snapshot;
 mod statement;
 mod steady;
 mod transient;
@@ -35,7 +35,8 @@ use std::time::Instant;
 
 use novo_thermal::Scenario;
 
-use crate::mesh::MeshSettings;
+use crate::large::{AUTO_RATIO, LargeMode, ReduceSettings, expand, reduce};
+use crate::mesh::{MeshSettings, plan_grid_report};
 use crate::result::{CfdSnapshot, CfdSnapshot as Snap, Fidelity};
 use crate::solids::{DuctModel, FlowSetup, SolidsSettings};
 use crate::solver::{CfdError, Control, Solver};
@@ -58,6 +59,9 @@ pub struct CabinetSolver {
     pub radiation: RadMode,
     /// How a wire duct is treated: a slotted (porous) duct by default.
     pub duct: DuctModel,
+    /// Whether a cabinet whose full grid is far over the cell budget runs
+    /// as a reduced model (see [`crate::large`]).
+    pub large: LargeMode,
 }
 
 /// Whether the cabinet solver couples radiation.
@@ -89,7 +93,14 @@ impl CabinetSolver {
             second_order_turbulence: false,
             radiation: RadMode::Auto,
             duct: DuctModel::default(),
+            large: LargeMode::Auto,
         }
+    }
+
+    /// The same solver with another large-cabinet mode.
+    pub fn with_large(mut self, mode: LargeMode) -> CabinetSolver {
+        self.large = mode;
+        self
     }
 
     /// The same solver with another duct model (slot share, porosity): the
@@ -121,8 +132,22 @@ impl CabinetSolver {
     }
 }
 
-impl Solver for CabinetSolver {
-    fn solve(
+impl CabinetSolver {
+    fn mesh_for(&self, fidelity: Fidelity) -> Result<MeshSettings, CfdError> {
+        let lvl = self
+            .tuning
+            .level(fidelity)
+            .ok_or(CfdError::Unsupported(fidelity))?;
+        MeshSettings::for_fidelity(fidelity)
+            .map(|m| MeshSettings {
+                target_cells: lvl.target_cells.unwrap_or(m.target_cells),
+                ..lvl.mesh.unwrap_or(m)
+            })
+            .map_err(|e| CfdError::Setup(e.to_string()))
+    }
+
+    /// The solver on this scenario exactly as given.
+    fn solve_scenario(
         &self,
         scenario: &Scenario,
         fidelity: Fidelity,
@@ -134,12 +159,7 @@ impl Solver for CabinetSolver {
             .level(fidelity)
             .ok_or(CfdError::Unsupported(fidelity))?;
         let t0 = Instant::now();
-        let mesh = MeshSettings::for_fidelity(fidelity)
-            .map(|m| MeshSettings {
-                target_cells: lvl.target_cells.unwrap_or(m.target_cells),
-                ..lvl.mesh.unwrap_or(m)
-            })
-            .map_err(|e| CfdError::Setup(e.to_string()))?;
+        let mesh = self.mesh_for(fidelity)?;
         let st = SolidsSettings {
             mesh,
             solid_speedup: lvl.solid_speedup,
@@ -257,6 +277,37 @@ impl Solver for CabinetSolver {
             }
             publish(&snap);
         }
+    }
+}
+
+impl Solver for CabinetSolver {
+    fn solve(
+        &self,
+        scenario: &Scenario,
+        fidelity: Fidelity,
+        control: &Control,
+        publish: &mut dyn FnMut(&CfdSnapshot),
+    ) -> Result<CfdSnapshot, CfdError> {
+        let mesh = self.mesh_for(fidelity)?;
+        let reduce_it = match self.large {
+            LargeMode::Off => false,
+            LargeMode::Force => true,
+            LargeMode::Auto => plan_grid_report(scenario, &mesh)
+                .is_ok_and(|p| p.grid.cells() as f64 > AUTO_RATIO * mesh.target_cells as f64),
+        };
+        if !reduce_it {
+            return self.solve_scenario(scenario, fidelity, control, publish);
+        }
+        let red = reduce(
+            scenario,
+            &ReduceSettings {
+                mesh,
+                ..ReduceSettings::for_cells(mesh.target_cells)
+            },
+        );
+        let mut inner = |s: &CfdSnapshot| publish(&expand(s, &red, scenario));
+        let done = self.solve_scenario(&red.scenario, fidelity, control, &mut inner)?;
+        Ok(expand(&done, &red, scenario))
     }
 }
 

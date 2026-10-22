@@ -1,0 +1,264 @@
+{
+  "id": "create-plc-conveyor",
+  "category": "create",
+  "title": "A PLC-controlled conveyor section: motor starter, 24 V supply and the input card",
+  "setup": [
+    {
+      "action": "add_page",
+      "args": {
+        "name": "1",
+        "title": "Conveyor"
+      }
+    }
+  ],
+  "turns": [
+    {
+      "prompt": "Set up a conveyor section on page 1: a 1.5 kW motor starter, a 24 V supply and the PLC input card with start, stop, key switch and float switch. Terminate everything that comes from outside.",
+      "script": [
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "set_plan",
+              "input": {
+                "steps": [
+                  {
+                    "title": "Place the motor starter",
+                    "status": "doing"
+                  },
+                  {
+                    "title": "Place the 24 V supply",
+                    "status": "todo"
+                  },
+                  {
+                    "title": "Place the PLC input card",
+                    "status": "todo"
+                  },
+                  {
+                    "title": "Terminate the incoming connections",
+                    "status": "todo"
+                  },
+                  {
+                    "title": "Number and check",
+                    "status": "todo"
+                  }
+                ]
+              }
+            },
+            {
+              "tool": "list_macros",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "place_macro",
+                "args": {
+                  "macro": "Motor starter DOL",
+                  "page": "1",
+                  "parameters": {
+                    "power": 1.5
+                  }
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "place_macro",
+                "args": {
+                  "macro": "Power supply 24 V",
+                  "page": "1"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "place_macro",
+                "args": {
+                  "macro": "PLC input card",
+                  "page": "1"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F1:1",
+                  "potential": "L1"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F1:3",
+                  "potential": "L2"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F1:5",
+                  "potential": "L3"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": {
+                    "symbol_id": 14,
+                    "pin": "1"
+                  },
+                  "potential": "PE"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F3:1",
+                  "potential": "L1"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-K1:A2",
+                  "potential": "N"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F4:1",
+                  "potential": "L1"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F4:3",
+                  "potential": "N"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": {
+                    "symbol_id": 53,
+                    "pin": "1"
+                  },
+                  "potential": "PE"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F5:2",
+                  "potential": "24V"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-G1:M",
+                  "potential": "0V"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-A1:M",
+                  "potential": "0V"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "number_wires",
+                "args": {}
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "run_checks",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "text": "The conveyor section is in the draft on page 1: the motor starter (-K1, -M1), the 24 V supply (-G1) and the PLC input card (-A1, -A2) with its four inputs. The incoming connections end on terminals -X1 to -X7. The design checks report no errors and no open pins. I did not assign PLC addresses or parts, and the ratings are the macro defaults: check the supply size against the load.",
+          "calls": []
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "devices_include": [
+      "-K1",
+      "-M1",
+      "-G1",
+      "-A1"
+    ],
+    "min_devices": 14,
+    "errors_max": 0,
+    "open_pins_max": 0,
+    "verified": true,
+    "plan_shown": true
+  }
+}

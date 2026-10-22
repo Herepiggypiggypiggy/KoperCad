@@ -9,13 +9,15 @@
 
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
+
 use novo_cfd::turb::TurbModel;
 use novo_cfd::{Fidelity, Solver};
 use novo_thermal::model::{Enclosure, Fan, FanMode, Opening, Placement, Scenario, Vent};
 
 /// The wall an opening sits in. The door is the front of the cabinet, where
 /// filter fans usually go.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) enum Wall {
     Top,
     Bottom,
@@ -40,7 +42,7 @@ impl Wall {
 }
 
 /// What the opening is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) enum Kind {
     /// A passive grille or louvre: air goes where the pressure and the warm
     /// air push it.
@@ -89,6 +91,19 @@ pub(super) struct Footprint {
 }
 
 impl Footprint {
+    /// True when the two faces lie on the same wall and share area.
+    pub(super) fn overlaps(&self, other: &Footprint) -> bool {
+        self.wall == other.wall
+            && (0..3).all(|k| {
+                let flat = self.hi[k] - self.lo[k] < 1e-6 || other.hi[k] - other.lo[k] < 1e-6;
+                if flat {
+                    self.lo[k] <= other.hi[k] && other.lo[k] <= self.hi[k]
+                } else {
+                    self.lo[k] < other.hi[k] && other.lo[k] < self.hi[k]
+                }
+            })
+    }
+
     /// The direction air moves when it enters through this face, in the
     /// solver frame.
     pub(super) fn inward(&self) -> [f64; 3] {
@@ -107,7 +122,8 @@ impl Footprint {
 }
 
 /// One grille, fan or filter fan as the panel edits it.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub(super) struct VentSpec {
     pub kind: Kind,
     pub wall: Wall,
@@ -137,6 +153,12 @@ pub(super) struct Preset {
     pub spec: VentSpec,
 }
 
+impl Default for VentSpec {
+    fn default() -> Self {
+        VentSpec::new(Wall::Left)
+    }
+}
+
 impl VentSpec {
     /// A louvred grille in `wall`, centred and sized for a first look; the
     /// person edits it from there.
@@ -156,7 +178,7 @@ impl VentSpec {
     }
 
     /// Length of the wall along the `u` axis and the other way, mm.
-    fn wall_len(wall: Wall, e: &Enclosure) -> (f64, f64) {
+    pub(super) fn wall_len(wall: Wall, e: &Enclosure) -> (f64, f64) {
         let (w, h, d) = (
             e.interior_width_mm(),
             e.interior_height_mm(),
@@ -171,7 +193,32 @@ impl VentSpec {
 
     /// This opening moved and cut down until it lies inside its wall: nothing
     /// hangs over an edge, so the area the solver sees is the area drawn.
-    pub(super) fn fitted(mut self, e: &Enclosure) -> VentSpec {
+    pub(super) fn fitted(self, e: &Enclosure) -> VentSpec {
+        self.finite().fitted_finite(e)
+    }
+
+    /// Every number finite: one that is not a number (typed, or from a damaged
+    /// file) falls back to the starting value instead of reaching the
+    /// geometry or the stored text (a NaN is stored as null and loses the list).
+    pub(super) fn finite(mut self) -> VentSpec {
+        let start = VentSpec::new(self.wall);
+        for (v, d) in [
+            (&mut self.u_mm, 0.0),
+            (&mut self.v_mm, 0.0),
+            (&mut self.width_mm, start.width_mm),
+            (&mut self.height_mm, start.height_mm),
+            (&mut self.free_fraction, start.free_fraction),
+            (&mut self.flow_m3h, start.flow_m3h),
+            (&mut self.pressure_pa, start.pressure_pa),
+        ] {
+            if !v.is_finite() {
+                *v = d;
+            }
+        }
+        self
+    }
+
+    fn fitted_finite(mut self, e: &Enclosure) -> VentSpec {
         let (along, across) = Self::wall_len(self.wall, e);
         self.width_mm = self.width_mm.clamp(MIN_SIZE_MM, along.max(MIN_SIZE_MM));
         self.height_mm = self.height_mm.clamp(MIN_SIZE_MM, across.max(MIN_SIZE_MM));
@@ -419,6 +466,11 @@ pub(super) struct HeatSettings {
     pub selected: Option<usize>,
     /// A drag or a typed value is under way: it is one undo step.
     editing: bool,
+    /// What the project holds for the shown enclosure, as last read or
+    /// written (see `heat_openings_store`).
+    pub(super) stored: Option<(novo_core::StructureId, String)>,
+    /// A command (Ctrl+K) asked for this preset to be added; the panel does it.
+    pub(super) requested: Option<usize>,
     undo: Vec<Vec<VentSpec>>,
     redo: Vec<Vec<VentSpec>>,
 }
@@ -431,6 +483,8 @@ impl Default for HeatSettings {
             vents: Vec::new(),
             selected: None,
             editing: false,
+            stored: None,
+            requested: None,
             undo: Vec::new(),
             redo: Vec::new(),
         }
@@ -483,6 +537,21 @@ impl HeatSettings {
         self.editing = false;
     }
 
+    /// Pairs of openings that cover the same part of a wall: their flow would
+    /// be counted twice.
+    pub(super) fn overlapping(&self, e: &Enclosure) -> Vec<(usize, usize)> {
+        let feet: Vec<Footprint> = self.vents.iter().map(|v| v.footprint(e)).collect();
+        let mut pairs = Vec::new();
+        for i in 0..feet.len() {
+            for j in i + 1..feet.len() {
+                if feet[i].overlaps(&feet[j]) {
+                    pairs.push((i, j));
+                }
+            }
+        }
+        pairs
+    }
+
     pub(super) fn can_undo(&self) -> bool {
         !self.undo.is_empty()
     }
@@ -503,6 +572,20 @@ impl HeatSettings {
             self.undo.push(std::mem::replace(&mut self.vents, after));
             self.fix_selection();
         }
+    }
+
+    /// Replaces the openings with what the project holds (opened, or undone
+    /// there); the panel's own undo starts over.
+    pub(super) fn load(&mut self, vents: Vec<VentSpec>) {
+        self.vents = vents;
+        self.undo.clear();
+        self.redo.clear();
+        self.editing = false;
+        self.fix_selection();
+    }
+
+    pub(super) fn is_editing(&self) -> bool {
+        self.editing
     }
 
     fn fix_selection(&mut self) {
@@ -529,6 +612,62 @@ impl HeatSettings {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_cooling_suggestion_places_what_fits_side_by_side_and_says_so() {
+        use super::super::view3d_vents::Suggestion;
+        let e = enclosure();
+        let sg = Suggestion::for_test(Kind::FilterFan, 3, 180.0);
+        let specs = sg.specs_for_test(&e);
+        assert_eq!(specs.len(), 3);
+        assert!(
+            specs
+                .iter()
+                .all(|v| v.kind == Kind::FilterFan && v.flow_m3h == 180.0)
+        );
+        assert!(!specs[0].footprint(&e).overlaps(&specs[1].footprint(&e)));
+        assert!(!specs[1].footprint(&e).overlaps(&specs[2].footprint(&e)));
+        // More than the wall holds: only what fits, never overlapping, and the
+        // sentence names the rest.
+        let many = Suggestion::for_test(Kind::FilterFan, 9, 180.0);
+        let placed = many.specs_for_test(&e);
+        assert!(placed.len() < 9 && placed.len() >= 2, "{}", placed.len());
+        for i in 0..placed.len() {
+            for j in i + 1..placed.len() {
+                assert!(!placed[i].footprint(&e).overlaps(&placed[j].footprint(&e)));
+            }
+        }
+        assert!(many.sentence_for_test(&e).contains("add the other"));
+        // The flow given is the one placed (the caller applies the derate).
+        assert_eq!(
+            Suggestion::for_test(Kind::FilterFan, 1, 126.0).specs_for_test(&e)[0].flow_m3h,
+            126.0
+        );
+        // Six on a wide enough wall: all six.
+        let six = Suggestion::for_test(Kind::FilterFan, 6, 100.0);
+        assert!(six.specs_for_test(&e).len() <= 6);
+    }
+
+    #[test]
+    fn identical_openings_are_reported_as_overlapping_and_apart_ones_are_not() {
+        let e = enclosure();
+        let a = VentSpec::presets(&e)[2].spec;
+        let mut set = HeatSettings::default();
+        set.add(a);
+        set.add(a);
+        assert_eq!(set.overlapping(&e), vec![(0, 1)]);
+        let mut b = a;
+        b.u_mm = if a.u_mm > 300.0 {
+            60.0
+        } else {
+            e.interior_width_mm() - 60.0
+        };
+        set.vents[1] = b;
+        let far = set.vents[1]
+            .footprint(&e)
+            .overlaps(&set.vents[0].footprint(&e));
+        assert!(!far || b.width_mm > 200.0, "{b:?}");
+    }
+
     use super::*;
     use novo_layout::Rect;
     use novo_layout::sizing::{Installation, Material};
@@ -645,6 +784,25 @@ mod tests {
         assert_eq!(v.to_fan(&enclosure()).unwrap().mode, FanMode::Exhaust);
         assert_eq!(v.set_direction(), Some(false));
         assert!(v.to_vent(&enclosure()).is_none());
+    }
+
+    #[test]
+    fn a_number_that_is_not_a_number_falls_back_instead_of_reaching_the_geometry() {
+        let e = enclosure();
+        let mut v = VentSpec::new(Wall::Door);
+        v.width_mm = f64::NAN;
+        v.height_mm = f64::INFINITY;
+        v.u_mm = f64::NAN;
+        v.v_mm = f64::NEG_INFINITY;
+        v.flow_m3h = f64::NAN;
+        let f = v.footprint(&e);
+        assert!(f.lo.iter().chain(&f.hi).all(|x| x.is_finite()), "{f:?}");
+        assert!(f.hi[0] > f.lo[0] && f.hi[1] > f.lo[1]);
+        let fan = VentSpec {
+            kind: Kind::Fan,
+            ..v
+        };
+        assert!(fan.to_fan(&e).unwrap().free_flow_m3h.is_finite());
     }
 
     #[test]

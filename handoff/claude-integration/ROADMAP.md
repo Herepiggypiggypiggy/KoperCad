@@ -22,3 +22,7 @@ Next, in order
 
 Open questions
 - Whether to offer a Claude-subscription sign-in later (API key only today).
+
+- [x] Co-engineer: draft change sets, plan, questions, checks, eval harness (2026-10-22)
+- [ ] First real-model eval run and prompt tuning (needs Tadjiro's key)
+- [ ] Cabinet layout, text tidy, simulation and Autopilot actions for Claude

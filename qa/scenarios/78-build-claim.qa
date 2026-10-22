@@ -1,0 +1,21 @@
+@title Build mode: take a step so a second person does not reach for the same one
+@area Cabinet
+# Reports > Build mode: "I take this step" shows who is on a step; "Let go" gives it back. The claim is kept in the project and travels in the field file.
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text Reports
+wait 5
+click_text "Build mode..."
+wait 30
+expect "I take this step"
+shot before
+check_layout
+click_text "I take this step" Button
+wait 10
+expect "has this step"
+shot taken
+check_layout
+click_text "Let go" Button
+wait 10
+expect "I take this step"
+shot let-go

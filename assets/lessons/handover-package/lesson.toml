@@ -1,0 +1,131 @@
+format = 1
+id = "handover-package"
+version = 1
+status = "early"
+title = "Hand the project over to the customer"
+summary = "Preview what will print, save plot sets, and write one folder with drawings, lists, revisions, commissioning and safety, after the program has told you what is still open."
+track = "outputs"
+order = 70
+level = "intermediate"
+minutes = 8
+topics = ["handover", "print preview", "plot set", "pdf", "customer"]
+needs = ["pdf-export", "standards-check"]
+next = ["commissioning"]
+project = "@example"
+title_nl = "Draag het project over aan de klant"
+summary_nl = "Bekijk vooraf wat er print, bewaar plotsets en schrijf een map met tekeningen, lijsten, revisies, inbedrijfstelling en veiligheid, nadat het programma heeft gezegd wat er nog openstaat."
+
+[[step]]
+id = "why"
+title = "One folder instead of eleven attachments"
+title_nl = "Een map in plaats van elf bijlagen"
+text = """
+The customer expects more than a PDF: the drawings, the parts list, the wire list, the terminal plan, the cable schedule, the revisions, the commissioning record, the safety functions and an Excel with the lists.
+The **handover package** writes all of that in one folder, reusing the exports you already know, and a **contents page** that says what each file is and what is exact or estimated.
+"""
+text_nl = """
+De klant verwacht meer dan een pdf: de tekeningen, de onderdelenlijst, de draadlijst, het klemmenplan, de kabellijst, de revisies, het inbedrijfstellingsrapport, de veiligheidsfuncties en een Excel met de lijsten.
+Het **overdrachtspakket** schrijft dat alles in een map, met de bestaande exports, en een **inhoudspagina** die zegt wat elk bestand is en wat exact of geschat is.
+"""
+
+[[step]]
+id = "preview"
+title = "See the paper before it prints"
+title_nl = "Zie het papier voordat het print"
+text = """
+**Print preview** shows every sheet on the paper it will print on: paper size, orientation, scale, margins and page numbers. A warning appears when a sheet is cut off.
+The preview is drawn from the same placement the PDF writer uses, so what you see is what is written.
+"""
+text_nl = """
+**Print preview** toont elk vel op het papier waarop het print: papierformaat, oriëntatie, schaal, marges en paginanummers. Een waarschuwing verschijnt als een vel wordt afgesneden.
+De voorvertoning is getekend met dezelfde plaatsing als de pdf-schrijver gebruikt, dus wat je ziet wordt geschreven.
+"""
+how = [
+  "Open the {ui:menu.File} menu, then **Export print**, and choose {ui:cmd.export.print_preview}.",
+  "Change the paper or the scale on the left and watch the sheet in the middle.",
+]
+how_nl = [
+  "Open het menu {ui:menu.File}, dan **Export print**, en kies {ui:cmd.export.print_preview}.",
+  "Verander papier of schaal links en kijk naar het vel in het midden.",
+]
+point = { ui = "cmd.export.print_preview" }
+expect = { command = "export.print_preview" }
+solve = [ { command = "export.print_preview" } ]
+
+[[step]]
+id = "plot-sets"
+title = "A plot set is a named way to print"
+title_nl = "Een plotset is een benoemde manier van printen"
+text = "A **plot set** keeps a choice of pages with its own paper and scale: for example “A3 full set” and “A4 control circuit only”. Sets are kept with the project, and **Save every plot set** writes one PDF per set. The handover package writes each of them too."
+text_nl = "Een **plotset** bewaart een keuze van pagina's met eigen papier en schaal: bijvoorbeeld “A3 volledige set” en “A4 alleen sturing”. Sets worden met het project bewaard en **Save every plot set** schrijft een pdf per set. Het overdrachtspakket schrijft ze ook allemaal."
+
+[[step]]
+id = "scale"
+title = "Check the printer before you trust 1:1"
+title_nl = "Controleer de printer voordat je 1:1 vertrouwt"
+text = "Anything printed to be measured, such as a drilling template, must come out at 100 %. The **print scale check** page has a ruler of known length: print it, hold a tape to it, and only then print the real thing. Printer drivers that fit to page silently change the scale."
+text_nl = "Alles wat wordt geprint om op te meten, zoals een boorsjabloon, moet op 100 % uitkomen. De pagina **print scale check** heeft een lineaal van bekende lengte: print hem, houd er een meetlint langs en print pas daarna het echte werk. Printerdrivers die aanpassen aan de pagina veranderen de schaal ongemerkt."
+how = [
+  "Press {key:view.command_palette}, type scale check and choose {ui:cmd.export.scale_check}.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ scale check en kies {ui:cmd.export.scale_check}.",
+]
+point = { ui = "cmd.export.scale_check" }
+expect = { command = "export.scale_check" }
+manual = "writes a PDF next to the project file"
+
+[[step]]
+id = "start"
+title = "Start the handover"
+title_nl = "Start de overdracht"
+text = "The command first checks the design. If problems are open it **asks**, instead of writing a folder the customer would read as finished."
+text_nl = "Het commando controleert eerst het ontwerp. Staan er problemen open, dan **vraagt** het dat, in plaats van een map te schrijven die de klant als af zou lezen."
+how = [
+  "Open {ui:menu.File}, then **Export reports**, and choose {ui:cmd.export.handover}.",
+  "Or press {key:view.command_palette}, type handover and press Enter.",
+]
+how_nl = [
+  "Open {ui:menu.File}, dan **Export reports**, en kies {ui:cmd.export.handover}.",
+  "Of druk op {key:view.command_palette}, typ handover en druk op Enter.",
+]
+point = { ui = "cmd.export.handover" }
+expect = { opened = "handover.anyway" }
+solve = [ { command = "export.handover" } ]
+
+[[step]]
+id = "ask"
+title = "Read the question"
+title_nl = "Lees de vraag"
+text = """
+The question lists each open error or warning with a **Show** link that jumps to it. {ui:handover.fix} closes the question and opens the Issues list. {ui:handover.anyway} writes the package and also lists the open problems on the contents page and in the drawing set, so the customer sees them.
+That is deliberate: an honest package beats a clean-looking one.
+"""
+text_nl = """
+De vraag noemt elke openstaande fout of waarschuwing met een link **Show** die ernaartoe springt. {ui:handover.fix} sluit de vraag en opent de lijst met problemen. {ui:handover.anyway} schrijft het pakket en zet de open problemen ook op de inhoudspagina en in de tekeningenset, zodat de klant ze ziet.
+Dat is bewust: een eerlijk pakket gaat voor een schoon ogend pakket.
+"""
+point = { ui = "handover.fix" }
+
+[[step]]
+id = "write"
+title = "Write the package"
+title_nl = "Schrijf het pakket"
+text = """
+Press {ui:handover.anyway} for this practice run. The folder is `<project> handover <date>` next to the project. A file with nothing to say is left out and the contents page names the reason: no commissioning started, no safety functions, no mounting plate.
+Files of an earlier package in the same folder are replaced; a Workshop folder from an earlier run that this one does not write is left alone and the contents page says so.
+"""
+text_nl = """
+Druk voor deze oefenronde op {ui:handover.anyway}. De map is `<project> handover <datum>` naast het project. Een bestand zonder inhoud blijft weg en de inhoudspagina noemt de reden: geen inbedrijfstelling gestart, geen veiligheidsfuncties, geen montageplaat.
+Bestanden van een eerder pakket in dezelfde map worden vervangen; een Workshop-map van een eerdere keer die deze keer niet wordt geschreven blijft staan en de inhoudspagina zegt dat.
+"""
+point = { ui = "handover.anyway" }
+expect = { clicked = "handover.anyway" }
+manual = "writes a folder next to the project; QA scenario 49-handover-safety-files keeps the files"
+
+[[step]]
+id = "done"
+title = "Open the contents first"
+title_nl = "Open eerst de inhoud"
+text = "Send the customer the folder, and read `0 Contents.pdf` yourself first: it is written last, so it describes what really happened, including everything that was left out."
+text_nl = "Stuur de klant de map en lees zelf eerst `0 Contents.pdf`: die wordt als laatste geschreven en beschrijft dus wat er echt gebeurd is, inclusief alles wat is weggelaten."

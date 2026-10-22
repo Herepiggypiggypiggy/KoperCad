@@ -1,0 +1,200 @@
+{
+  "id": "polish-descriptions",
+  "category": "polish",
+  "title": "Give the page a title and describe the devices so the lists read well",
+  "setup": [
+    {
+      "action": "add_page",
+      "args": {
+        "name": "1",
+        "title": "Motor"
+      }
+    },
+    {
+      "action": "place_macro",
+      "args": {
+        "macro": "Motor starter DOL",
+        "page": "1"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F1:1",
+        "potential": "L1"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F1:3",
+        "potential": "L2"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F1:5",
+        "potential": "L3"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": {
+          "symbol_id": 14,
+          "pin": "1"
+        },
+        "potential": "PE"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F3:1",
+        "potential": "L1"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-K1:A2",
+        "potential": "N"
+      }
+    },
+    {
+      "action": "number_wires",
+      "args": {}
+    }
+  ],
+  "turns": [
+    {
+      "prompt": "Polish page 1: give it a clear title and make sure every device has a useful description.",
+      "script": [
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "read_project",
+              "input": {
+                "section": "devices",
+                "limit": 40
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "set_page",
+                "args": {
+                  "page": "1",
+                  "title": "Motor starter, direct on line, 2.2 kW"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "describe_device",
+                "args": {
+                  "device": "-F1",
+                  "text": "Main circuit breaker"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "describe_device",
+                "args": {
+                  "device": "-F2",
+                  "text": "Motor overload relay"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "describe_device",
+                "args": {
+                  "device": "-F3",
+                  "text": "Control circuit breaker"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "describe_device",
+                "args": {
+                  "device": "-K1",
+                  "text": "Motor contactor"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "describe_device",
+                "args": {
+                  "device": "-M1",
+                  "text": "Three-phase motor, 2.2 kW"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "describe_device",
+                "args": {
+                  "device": "-S1",
+                  "text": "Stop button"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "describe_device",
+                "args": {
+                  "device": "-S2",
+                  "text": "Start button"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "run_checks",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "text": "Page 1 is titled and the seven devices of the starter have a plain description. I only changed texts: no wiring, tags or ratings. The terminal strips -X1 to -X3 keep their names. Check the wording of -S1 and -S2 against the buttons you actually fit.",
+          "calls": []
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "described": [
+      "-F1",
+      "-F2",
+      "-F3",
+      "-K1",
+      "-M1",
+      "-S1",
+      "-S2"
+    ],
+    "errors_max": 0,
+    "keep_existing": true
+  }
+}

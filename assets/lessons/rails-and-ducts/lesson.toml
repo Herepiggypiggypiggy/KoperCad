@@ -4,12 +4,13 @@
 # Since #612 Place all adds the joining trunk duct and the Rails and ducts list (cabinet.rails,
 # Ctrl+Shift+R) selects, moves, turns and deletes rails and ducts. Verified against main (e2fa0013): the inspector fields (Mounted on, Place rule, Position), the
 # Plate card, the Rules window and the Cut list window. Place all makes the rails and ducts; the
-# lesson only opens the editing list and does not ask for new ones. A device dragged by hand leaves its rail
-# (novo_layout::model::place_device passes rail: None).
+# lesson only opens the editing list and does not ask for new ones. A rail runs through the middle of the devices
+# on it (the rail line is each device's centre), a device dropped with its centre on the line of a rail over its run
+# is mounted on it (novo_layout::model::place_device, mount.rs) and one dropped anywhere else leaves its rail.
 # Needs from the Cabinet owner: the anchors named below.
 format = 1
 id = "rails-and-ducts"
-version = 2
+version = 3
 status = "ready"
 title = "Rails and wiring ducts"
 title_nl = "Rails en bedradingskanalen"
@@ -18,7 +19,7 @@ summary_nl = "Zie hoe componenten op DIN-rails zitten, waarom Place all kanalen 
 track = "cabinet"
 order = 20
 level = "beginner"
-minutes = 8
+minutes = 9
 topics = ["cabinet", "rails", "ducts"]
 needs = ["cabinet-layout"]
 next = ["wire-routing"]
@@ -51,11 +52,13 @@ title_nl = "Een component kent zijn rail"
 text = """
 Click **-K1**. The inspector shows **Mounted on** with the number of its rail, **Position** in millimetres from the plate corner,
 and **Place rule**: the rule that decided where it goes, for example "rule A K zone=middle rail=own class=signal".
+The rail runs through the middle of the device, behind it, like a real DIN rail: the line of the rail is the centre of the device.
 A device that sits on a rail moves with it; the rail is the real mounting.
 """
 text_nl = """
 Klik op **-K1**. De inspector toont **Mounted on** met het nummer van de rail, **Position** in millimeters vanaf de hoek van de plaat
 en **Place rule**: de regel die bepaalde waar het komt, bijvoorbeeld "rule A K zone=middle rail=own class=signal".
+De rail loopt door het midden van het component, erachter, zoals een echte DIN-rail: de lijn van de rail is het midden van het component.
 Een component op een rail beweegt met de rail mee; de rail is de echte bevestiging.
 """
 point = { ui = "cabinet.inspector" }
@@ -103,22 +106,56 @@ expect = { clicked = "cabinet.plate" }
 solve = [ { ui_click = "cabinet.plate" } ]
 
 [[step]]
-id = "move-off-rail"
-how = ["Press the mouse button on -K1.", "Drag it a little to the right and let go.", "Mounted on is gone from the inspector."]
-how_nl = ["Druk de muisknop in op -K1.", "Sleep het een stukje naar rechts en laat los.", "Mounted on is weg uit de inspecteur."]
-title = "Drag a device off its rail"
-title_nl = "Sleep een component van zijn rail"
+id = "slide-along"
+how = ["Press the mouse button on -K1.", "Drag it a little to the right along the rail and let go.", "Mounted on is still in the inspector."]
+how_nl = ["Druk de muisknop in op -K1.", "Sleep het een stukje naar rechts langs de rail en laat los.", "Mounted on staat nog in de inspecteur."]
+title = "Slide a device along its rail"
+title_nl = "Schuif een component langs zijn rail"
 text = """
-Drag **-K1** a little to the right and let go. It lands on the 5 mm grid, and **Mounted on** disappears from the inspector:
-a device you place by hand no longer belongs to a rail, so the rail does not move it and the cut list no longer counts its width.
+Drag **-K1** a little to the right and let go. While you drag, the box pulls onto the rail by its centre: it jumps onto the line when its middle comes within 15 mm of the rail, and it lines up with the rail's end or a neighbour when it gets close.
+**-K1** is still on its rail and **Mounted on** stays in the inspector, with **Position** a few millimetres further along.
 """
 text_nl = """
-Sleep **-K1** een stukje naar rechts en laat los. Het landt op het raster van 5 mm en **Mounted on** verdwijnt uit de inspector:
-een component dat je met de hand plaatst hoort niet meer bij een rail, dus de rail verplaatst het niet en de zaaglijst telt de breedte niet meer mee.
+Sleep **-K1** een stukje naar rechts en laat los. Tijdens het slepen trekt het component zich met zijn midden op de rail: het kader springt op de lijn als zijn midden binnen 15 mm van de rail komt en het sluit aan op het einde van de rail of op een buur als het dichtbij komt.
+**-K1** zit nog op zijn rail en **Mounted on** blijft in de inspecteur staan, met **Position** een paar millimeter verder.
 """
 point = { ui = "cabinet.canvas" }
 expect = { signal = "cabinet_dropped" }
 solve = [ { cabinet_place = { device = "-K1", x = 75, y = 210 } } ]
+
+[[step]]
+id = "undo-slide"
+how = ["Press {key:edit.undo}.", "-K1 is back where it was."]
+how_nl = ["Druk op {key:edit.undo}.", "-K1 staat weer waar het stond."]
+title = "Put it back"
+title_nl = "Zet het terug"
+text = """
+Press {key:edit.undo}. **-K1** returns to its place on the rail.
+"""
+text_nl = """
+Druk op {key:edit.undo}. **-K1** staat weer op zijn plek op de rail.
+"""
+point = { ui = "cabinet.canvas" }
+expect = { command = "edit.undo" }
+solve = [ { command = "edit.undo" } ]
+
+[[step]]
+id = "move-off-rail"
+how = ["Press the mouse button on -K1.", "Drag it into the open space lower down, well clear of the rail, and let go.", "Mounted on is gone from the inspector."]
+how_nl = ["Druk de muisknop in op -K1.", "Sleep het naar de open ruimte lager op de plaat, ruim van de rail af, en laat los.", "Mounted on is weg uit de inspecteur."]
+title = "Drag a device off its rail"
+title_nl = "Sleep een component van zijn rail"
+text = """
+Drag **-K1** into the open space lower down, well clear of its rail, and let go. It lands on the 5 mm grid, and **Mounted on** disappears from the inspector:
+a device that is not on a rail line no longer belongs to one, so the rail does not move it and the cut list no longer counts its width.
+"""
+text_nl = """
+Sleep **-K1** naar de open ruimte lager op de plaat, ruim van zijn rail af, en laat los. Het landt op het raster van 5 mm en **Mounted on** verdwijnt uit de inspector:
+een component dat niet op de lijn van een rail staat hoort niet meer bij een rail, dus de rail verplaatst het niet en de zaaglijst telt de breedte niet meer mee.
+"""
+point = { ui = "cabinet.canvas" }
+expect = { signal = "cabinet_dropped" }
+solve = [ { cabinet_place = { device = "-K1", x = 300, y = 360 } } ]
 
 [[step]]
 id = "undo"

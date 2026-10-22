@@ -1,0 +1,38 @@
+@title Cabinet: heat-aware Place all
+@area Cabinet
+# Made-up cabinet (qa/fixtures/heat-place-all.novo, built by the heat_place_all example): three 45 W drives and eight PLC modules with a 45 C limit, no device placed yet. Place all keeps the modules out of the drives' plume, says what it did, and the Place rules window has the switch. The fixture is planning values, not maker data.
+open qa/fixtures/heat-place-all.novo
+wait 20
+click_text Cabinet #1
+wait 20
+shot cabinet-before
+key ctrl+k
+wait 4
+text place all
+wait 6
+key Enter
+wait 30
+expect "Heat-aware"
+shot cabinet-place-all-preview
+check_layout
+check_blank cabinet-place-all-preview
+key Enter
+wait 20
+shot cabinet-placed
+check_layout
+# The inspector says why a moved device is where it is (planning score, model; not measured heat).
+click_text Table
+wait 10
+click_text A1
+wait 10
+shot inspector-why-moved
+check_layout
+key ctrl+k
+wait 4
+text place rules
+wait 6
+key Enter
+wait 20
+expect "Heat-aware placement"
+shot place-rules-heat-switch
+check_layout

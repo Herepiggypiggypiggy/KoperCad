@@ -1,0 +1,190 @@
+{
+  "id": "create-dol-starter",
+  "category": "create",
+  "title": "Build a direct-on-line starter with its supply terminals from one sentence",
+  "turns": [
+    {
+      "prompt": "Build a direct-on-line starter for a 2.2 kW three-phase motor with start and stop buttons on a new page 1, and terminate the incoming supply.",
+      "script": [
+        {
+          "text": "I'll plan this, check what ready-made circuits exist, then build it in a draft you can review.",
+          "calls": [
+            {
+              "tool": "set_plan",
+              "input": {
+                "steps": [
+                  {
+                    "title": "Look at the project and the ready-made circuits",
+                    "status": "doing"
+                  },
+                  {
+                    "title": "Place a DOL starter on page 1",
+                    "status": "todo"
+                  },
+                  {
+                    "title": "Terminate the supply, control and earth",
+                    "status": "todo"
+                  },
+                  {
+                    "title": "Number the wires",
+                    "status": "todo"
+                  },
+                  {
+                    "title": "Run the design checks and fix what they find",
+                    "status": "todo"
+                  }
+                ]
+              }
+            },
+            {
+              "tool": "project_outline",
+              "input": {}
+            },
+            {
+              "tool": "list_macros",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "text": "The Motor starter DOL macro matches, with start/stop, self-hold and overload. I'll put it on a new page.",
+          "calls": [
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "add_page",
+                "args": {
+                  "name": "1",
+                  "title": "Motor"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "place_macro",
+                "args": {
+                  "macro": "Motor starter DOL",
+                  "page": "1",
+                  "parameters": {
+                    "power": 2.2
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "text": "Now the supply: three phases and the control supply, then neutral and protective earth.",
+          "calls": [
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F1:1",
+                  "potential": "L1"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F1:3",
+                  "potential": "L2"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F1:5",
+                  "potential": "L3"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": {
+                    "symbol_id": 14,
+                    "pin": "1"
+                  },
+                  "potential": "PE"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-F3:1",
+                  "potential": "L1"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "terminate_pin",
+                "args": {
+                  "pin": "-K1:A2",
+                  "potential": "N"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "text": "Numbering the new wires and checking.",
+          "calls": [
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "number_wires",
+                "args": {}
+              }
+            },
+            {
+              "tool": "run_checks",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "text": "Built in your draft on page 1: a 2.2 kW direct-on-line starter with start/stop buttons, overload and control breaker, and the supply on terminals -X1 to -X3 (L1/L2/L3, control, neutral, earth). The design checks find no errors and no open pins. Two things I did not decide for you: the breaker and overload ratings come from the macro, so check them against the motor's data sheet, and no parts are assigned yet. I did not check the design against any standard.",
+          "calls": []
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "devices_include": [
+      "-K1",
+      "-M1",
+      "-F1",
+      "-F2",
+      "-S1",
+      "-S2",
+      "-X1"
+    ],
+    "min_devices": 9,
+    "min_wires": 20,
+    "errors_max": 0,
+    "open_pins_max": 0,
+    "all_wires_numbered": true,
+    "verified": true,
+    "plan_shown": true,
+    "text_contains": [
+      "not decide",
+      "data sheet"
+    ]
+  }
+}

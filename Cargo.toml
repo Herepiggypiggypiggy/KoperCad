@@ -22,6 +22,7 @@ novo-cli = { path = "crates/novo-cli" }
 novo-commissioning = { path = "crates/novo-commissioning" }
 novo-core = { path = "crates/novo-core" }
 novo-editor = { path = "crates/novo-editor" }
+novo-emc = { path = "crates/novo-emc" }
 novo-interop = { path = "crates/novo-interop" }
 novo-layout = { path = "crates/novo-layout" }
 novo-numbering = { path = "crates/novo-numbering" }

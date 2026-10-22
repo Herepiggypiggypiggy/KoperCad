@@ -1,0 +1,5775 @@
+{
+  "format": 1,
+  "info": {
+    "name": "",
+    "description": "",
+    "rules": {
+      "terminals": {
+        "same_name": "join",
+        "join_link": "connector"
+      },
+      "potentials": {
+        "from_terminal_names": true
+      }
+    },
+    "properties": {}
+  },
+  "next_id": 119,
+  "parts": [],
+  "potentials": [
+    {
+      "id": 100,
+      "name": "L1",
+      "kind": "line",
+      "voltage": 400.0,
+      "properties": {}
+    },
+    {
+      "id": 103,
+      "name": "L2",
+      "kind": "line",
+      "voltage": 400.0,
+      "properties": {}
+    },
+    {
+      "id": 106,
+      "name": "L3",
+      "kind": "line",
+      "voltage": 400.0,
+      "properties": {}
+    },
+    {
+      "id": 109,
+      "name": "PE",
+      "kind": "protective_earth",
+      "voltage": null,
+      "properties": {}
+    },
+    {
+      "id": 112,
+      "name": "L",
+      "kind": "line",
+      "voltage": 230.0,
+      "properties": {}
+    },
+    {
+      "id": 115,
+      "name": "N",
+      "kind": "neutral",
+      "voltage": null,
+      "properties": {}
+    }
+  ],
+  "pages": [
+    {
+      "id": 1,
+      "name": "1",
+      "title": "Crane hoist",
+      "kind": {
+        "type": "schematic"
+      },
+      "format": {
+        "size": "A3",
+        "landscape": true,
+        "columns": 10
+      },
+      "properties": {}
+    }
+  ],
+  "devices": [
+    {
+      "id": 3,
+      "tag": "-F1",
+      "description": "Main circuit fuses",
+      "kind": "general",
+      "parts": [],
+      "properties": {}
+    },
+    {
+      "id": 4,
+      "tag": "-K1",
+      "description": "Hoist up contactor",
+      "kind": "general",
+      "parts": [],
+      "properties": {}
+    },
+    {
+      "id": 5,
+      "tag": "-K2",
+      "description": "Hoist down contactor",
+      "kind": "general",
+      "parts": [],
+      "properties": {}
+    },
+    {
+      "id": 6,
+      "tag": "-F2",
+      "description": "Overload relay",
+      "kind": "general",
+      "parts": [],
+      "properties": {}
+    },
+    {
+      "id": 7,
+      "tag": "-M1",
+      "description": "Hoist motor 5.5 kW",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "power_kw": 5.5
+      }
+    },
+    {
+      "id": 8,
+      "tag": "-Y1",
+      "description": "Hoist brake",
+      "kind": "general",
+      "parts": [],
+      "properties": {}
+    },
+    {
+      "id": 9,
+      "tag": "-F3",
+      "description": "Control circuit breaker",
+      "kind": "general",
+      "parts": [],
+      "properties": {}
+    },
+    {
+      "id": 10,
+      "tag": "-S1",
+      "description": "Emergency stop",
+      "kind": "general",
+      "parts": [],
+      "properties": {}
+    },
+    {
+      "id": 11,
+      "tag": "-S2",
+      "description": "Up",
+      "kind": "general",
+      "parts": [],
+      "properties": {}
+    },
+    {
+      "id": 12,
+      "tag": "-S3",
+      "description": "Down",
+      "kind": "general",
+      "parts": [],
+      "properties": {}
+    },
+    {
+      "id": 13,
+      "tag": "-B1",
+      "description": "Upper end limit",
+      "kind": "general",
+      "parts": [],
+      "properties": {}
+    },
+    {
+      "id": 14,
+      "tag": "-B2",
+      "description": "Lower end limit",
+      "kind": "general",
+      "parts": [],
+      "properties": {}
+    }
+  ],
+  "terminals": [],
+  "symbols": [
+    {
+      "id": 15,
+      "page": 1,
+      "symbol": "iec/protection/fuse_3p",
+      "placement": {
+        "origin": {
+          "x": 60.0,
+          "y": 60.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 3,
+        "main": true
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "2",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        },
+        {
+          "name": "3",
+          "offset": {
+            "x": 8.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "4",
+          "offset": {
+            "x": 8.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        },
+        {
+          "name": "5",
+          "offset": {
+            "x": 16.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "6",
+          "offset": {
+            "x": 16.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          4,
+          5
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 16,
+      "page": 1,
+      "symbol": "iec/contactors/main_3p",
+      "placement": {
+        "origin": {
+          "x": 60.0,
+          "y": 92.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 4,
+        "main": false
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "2",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        },
+        {
+          "name": "3",
+          "offset": {
+            "x": 8.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "4",
+          "offset": {
+            "x": 8.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        },
+        {
+          "name": "5",
+          "offset": {
+            "x": 16.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "6",
+          "offset": {
+            "x": 16.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          4,
+          5
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 17,
+      "page": 1,
+      "symbol": "iec/contactors/main_3p",
+      "placement": {
+        "origin": {
+          "x": 100.0,
+          "y": 92.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 5,
+        "main": false
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "2",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        },
+        {
+          "name": "3",
+          "offset": {
+            "x": 8.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "4",
+          "offset": {
+            "x": 8.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        },
+        {
+          "name": "5",
+          "offset": {
+            "x": 16.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "6",
+          "offset": {
+            "x": 16.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          4,
+          5
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 18,
+      "page": 1,
+      "symbol": "iec/protection/overload_relay",
+      "placement": {
+        "origin": {
+          "x": 60.0,
+          "y": 124.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 6,
+        "main": true
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "2",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        },
+        {
+          "name": "3",
+          "offset": {
+            "x": 8.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "4",
+          "offset": {
+            "x": 8.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        },
+        {
+          "name": "5",
+          "offset": {
+            "x": 16.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "6",
+          "offset": {
+            "x": 16.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          4,
+          5
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 19,
+      "page": 1,
+      "symbol": "iec/motors/motor_3ph",
+      "placement": {
+        "origin": {
+          "x": 60.0,
+          "y": 170.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 7,
+        "main": true
+      },
+      "pins": [
+        {
+          "name": "U1",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "V1",
+          "offset": {
+            "x": 8.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "W1",
+          "offset": {
+            "x": 16.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "PE",
+          "offset": {
+            "x": 24.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        }
+      ],
+      "bridges": [],
+      "properties": {}
+    },
+    {
+      "id": 20,
+      "page": 1,
+      "symbol": "iec/terminals/terminal_pe",
+      "placement": {
+        "origin": {
+          "x": 124.0,
+          "y": 60.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "unassigned"
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "2",
+          "offset": {
+            "x": 0.0,
+            "y": 8.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [
+        [
+          0,
+          1
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 21,
+      "page": 1,
+      "symbol": "iec/protection/mcb_1p",
+      "placement": {
+        "origin": {
+          "x": 160.0,
+          "y": 60.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 9,
+        "main": true
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "2",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 22,
+      "page": 1,
+      "symbol": "iec/operators/emergency_stop",
+      "placement": {
+        "origin": {
+          "x": 160.0,
+          "y": 84.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 10,
+        "main": true
+      },
+      "pins": [
+        {
+          "name": "11",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "12",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 23,
+      "page": 1,
+      "symbol": "iec/contacts/thermal_nc",
+      "placement": {
+        "origin": {
+          "x": 160.0,
+          "y": 108.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 6,
+        "main": false
+      },
+      "pins": [
+        {
+          "name": "95",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "96",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 24,
+      "page": 1,
+      "symbol": "iec/operators/pushbutton_no",
+      "placement": {
+        "origin": {
+          "x": 180.0,
+          "y": 148.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 11,
+        "main": true
+      },
+      "pins": [
+        {
+          "name": "13",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "14",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 25,
+      "page": 1,
+      "symbol": "iec/contacts/position_nc",
+      "placement": {
+        "origin": {
+          "x": 180.0,
+          "y": 172.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 13,
+        "main": true
+      },
+      "pins": [
+        {
+          "name": "21",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "22",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 26,
+      "page": 1,
+      "symbol": "iec/contacts/nc",
+      "placement": {
+        "origin": {
+          "x": 180.0,
+          "y": 196.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 5,
+        "main": false
+      },
+      "pins": [
+        {
+          "name": "21",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "22",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 27,
+      "page": 1,
+      "symbol": "iec/coils/contactor",
+      "placement": {
+        "origin": {
+          "x": 180.0,
+          "y": 220.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 4,
+        "main": true
+      },
+      "pins": [
+        {
+          "name": "A1",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "A2",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "properties": {}
+    },
+    {
+      "id": 28,
+      "page": 1,
+      "symbol": "iec/operators/pushbutton_no",
+      "placement": {
+        "origin": {
+          "x": 220.0,
+          "y": 148.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 12,
+        "main": true
+      },
+      "pins": [
+        {
+          "name": "13",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "14",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 29,
+      "page": 1,
+      "symbol": "iec/contacts/position_nc",
+      "placement": {
+        "origin": {
+          "x": 220.0,
+          "y": 172.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 14,
+        "main": true
+      },
+      "pins": [
+        {
+          "name": "21",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "22",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 30,
+      "page": 1,
+      "symbol": "iec/contacts/nc",
+      "placement": {
+        "origin": {
+          "x": 220.0,
+          "y": 196.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 4,
+        "main": false
+      },
+      "pins": [
+        {
+          "name": "21",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "22",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 31,
+      "page": 1,
+      "symbol": "iec/coils/contactor",
+      "placement": {
+        "origin": {
+          "x": 220.0,
+          "y": 220.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 5,
+        "main": true
+      },
+      "pins": [
+        {
+          "name": "A1",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "A2",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "properties": {}
+    },
+    {
+      "id": 32,
+      "page": 1,
+      "symbol": "iec/contacts/no",
+      "placement": {
+        "origin": {
+          "x": 260.0,
+          "y": 148.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 4,
+        "main": false
+      },
+      "pins": [
+        {
+          "name": "13",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "14",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 33,
+      "page": 1,
+      "symbol": "iec/contacts/no",
+      "placement": {
+        "origin": {
+          "x": 276.0,
+          "y": 148.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 5,
+        "main": false
+      },
+      "pins": [
+        {
+          "name": "13",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "14",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 34,
+      "page": 1,
+      "symbol": "iec/coils/brake",
+      "placement": {
+        "origin": {
+          "x": 260.0,
+          "y": 184.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 8,
+        "main": true
+      },
+      "pins": [
+        {
+          "name": "A1",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "A2",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "properties": {}
+    },
+    {
+      "id": 101,
+      "page": 1,
+      "symbol": "iec/connectivity/potential_feed",
+      "placement": {
+        "origin": {
+          "x": 60.0,
+          "y": 46.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "potential_feed",
+        "potential": 100
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 8.0
+          }
+        }
+      ],
+      "bridges": [],
+      "properties": {}
+    },
+    {
+      "id": 104,
+      "page": 1,
+      "symbol": "iec/connectivity/potential_feed",
+      "placement": {
+        "origin": {
+          "x": 68.0,
+          "y": 46.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "potential_feed",
+        "potential": 103
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 8.0
+          }
+        }
+      ],
+      "bridges": [],
+      "properties": {}
+    },
+    {
+      "id": 107,
+      "page": 1,
+      "symbol": "iec/connectivity/potential_feed",
+      "placement": {
+        "origin": {
+          "x": 76.0,
+          "y": 46.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "potential_feed",
+        "potential": 106
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 8.0
+          }
+        }
+      ],
+      "bridges": [],
+      "properties": {}
+    },
+    {
+      "id": 110,
+      "page": 1,
+      "symbol": "iec/connectivity/potential_feed",
+      "placement": {
+        "origin": {
+          "x": 124.0,
+          "y": 46.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "potential_feed",
+        "potential": 109
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 8.0
+          }
+        }
+      ],
+      "bridges": [],
+      "properties": {}
+    },
+    {
+      "id": 113,
+      "page": 1,
+      "symbol": "iec/connectivity/potential_feed",
+      "placement": {
+        "origin": {
+          "x": 160.0,
+          "y": 46.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "potential_feed",
+        "potential": 112
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 8.0
+          }
+        }
+      ],
+      "bridges": [],
+      "properties": {}
+    },
+    {
+      "id": 116,
+      "page": 1,
+      "symbol": "iec/connectivity/potential_feed",
+      "placement": {
+        "origin": {
+          "x": 180.0,
+          "y": 234.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "potential_feed",
+        "potential": 115
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 8.0
+          }
+        }
+      ],
+      "bridges": [],
+      "properties": {}
+    }
+  ],
+  "junctions": [
+    {
+      "id": 35,
+      "page": 1,
+      "position": {
+        "x": 60.0,
+        "y": 88.0
+      }
+    },
+    {
+      "id": 36,
+      "page": 1,
+      "position": {
+        "x": 60.0,
+        "y": 112.0
+      }
+    },
+    {
+      "id": 37,
+      "page": 1,
+      "position": {
+        "x": 68.0,
+        "y": 84.0
+      }
+    },
+    {
+      "id": 38,
+      "page": 1,
+      "position": {
+        "x": 68.0,
+        "y": 116.0
+      }
+    },
+    {
+      "id": 39,
+      "page": 1,
+      "position": {
+        "x": 76.0,
+        "y": 80.0
+      }
+    },
+    {
+      "id": 40,
+      "page": 1,
+      "position": {
+        "x": 76.0,
+        "y": 120.0
+      }
+    },
+    {
+      "id": 41,
+      "page": 1,
+      "position": {
+        "x": 260.0,
+        "y": 172.0
+      }
+    },
+    {
+      "id": 42,
+      "page": 1,
+      "position": {
+        "x": 276.0,
+        "y": 172.0
+      }
+    },
+    {
+      "id": 43,
+      "page": 1,
+      "position": {
+        "x": 160.0,
+        "y": 132.0
+      }
+    },
+    {
+      "id": 44,
+      "page": 1,
+      "position": {
+        "x": 180.0,
+        "y": 132.0
+      }
+    },
+    {
+      "id": 45,
+      "page": 1,
+      "position": {
+        "x": 220.0,
+        "y": 132.0
+      }
+    },
+    {
+      "id": 46,
+      "page": 1,
+      "position": {
+        "x": 260.0,
+        "y": 132.0
+      }
+    },
+    {
+      "id": 47,
+      "page": 1,
+      "position": {
+        "x": 276.0,
+        "y": 132.0
+      }
+    },
+    {
+      "id": 48,
+      "page": 1,
+      "position": {
+        "x": 180.0,
+        "y": 252.0
+      }
+    },
+    {
+      "id": 49,
+      "page": 1,
+      "position": {
+        "x": 220.0,
+        "y": 252.0
+      }
+    },
+    {
+      "id": 50,
+      "page": 1,
+      "position": {
+        "x": 260.0,
+        "y": 252.0
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": 51,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 15,
+        "pin": 1
+      },
+      "to": {
+        "type": "junction",
+        "junction": 35
+      },
+      "route": [],
+      "number": "1",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 52,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 35
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 16,
+        "pin": 0
+      },
+      "route": [],
+      "number": "1",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 53,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 35
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 17,
+        "pin": 4
+      },
+      "route": [
+        {
+          "x": 116.0,
+          "y": 88.0
+        }
+      ],
+      "number": "1",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 54,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 16,
+        "pin": 1
+      },
+      "to": {
+        "type": "junction",
+        "junction": 36
+      },
+      "route": [],
+      "number": "2",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 55,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 36
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 18,
+        "pin": 0
+      },
+      "route": [],
+      "number": "2",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 56,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 17,
+        "pin": 1
+      },
+      "to": {
+        "type": "junction",
+        "junction": 36
+      },
+      "route": [
+        {
+          "x": 100.0,
+          "y": 112.0
+        }
+      ],
+      "number": "2",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 57,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 18,
+        "pin": 1
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 19,
+        "pin": 0
+      },
+      "route": [],
+      "number": "3",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 58,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 15,
+        "pin": 3
+      },
+      "to": {
+        "type": "junction",
+        "junction": 37
+      },
+      "route": [],
+      "number": "4",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 59,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 37
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 16,
+        "pin": 2
+      },
+      "route": [],
+      "number": "4",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 60,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 37
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 17,
+        "pin": 2
+      },
+      "route": [
+        {
+          "x": 108.0,
+          "y": 84.0
+        }
+      ],
+      "number": "4",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 61,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 16,
+        "pin": 3
+      },
+      "to": {
+        "type": "junction",
+        "junction": 38
+      },
+      "route": [],
+      "number": "5",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 62,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 38
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 18,
+        "pin": 2
+      },
+      "route": [],
+      "number": "5",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 63,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 17,
+        "pin": 3
+      },
+      "to": {
+        "type": "junction",
+        "junction": 38
+      },
+      "route": [
+        {
+          "x": 108.0,
+          "y": 116.0
+        }
+      ],
+      "number": "5",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 64,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 18,
+        "pin": 3
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 19,
+        "pin": 1
+      },
+      "route": [],
+      "number": "6",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 65,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 15,
+        "pin": 5
+      },
+      "to": {
+        "type": "junction",
+        "junction": 39
+      },
+      "route": [],
+      "number": "7",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 66,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 39
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 16,
+        "pin": 4
+      },
+      "route": [],
+      "number": "7",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 67,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 39
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 17,
+        "pin": 0
+      },
+      "route": [
+        {
+          "x": 100.0,
+          "y": 80.0
+        }
+      ],
+      "number": "7",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 68,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 16,
+        "pin": 5
+      },
+      "to": {
+        "type": "junction",
+        "junction": 40
+      },
+      "route": [],
+      "number": "8",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 69,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 40
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 18,
+        "pin": 4
+      },
+      "route": [],
+      "number": "8",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 70,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 17,
+        "pin": 5
+      },
+      "to": {
+        "type": "junction",
+        "junction": 40
+      },
+      "route": [
+        {
+          "x": 116.0,
+          "y": 120.0
+        }
+      ],
+      "number": "8",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 71,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 18,
+        "pin": 5
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 19,
+        "pin": 2
+      },
+      "route": [],
+      "number": "9",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 72,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 20,
+        "pin": 1
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 19,
+        "pin": 3
+      },
+      "route": [
+        {
+          "x": 124.0,
+          "y": 119.0
+        },
+        {
+          "x": 84.0,
+          "y": 119.0
+        }
+      ],
+      "number": "10",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 73,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 21,
+        "pin": 1
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 22,
+        "pin": 0
+      },
+      "route": [],
+      "number": "11",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 74,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 22,
+        "pin": 1
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 23,
+        "pin": 0
+      },
+      "route": [],
+      "number": "12",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 75,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 24,
+        "pin": 1
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 25,
+        "pin": 0
+      },
+      "route": [],
+      "number": "14",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 76,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 25,
+        "pin": 1
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 26,
+        "pin": 0
+      },
+      "route": [],
+      "number": "15",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 77,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 26,
+        "pin": 1
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 27,
+        "pin": 0
+      },
+      "route": [],
+      "number": "16",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 78,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 28,
+        "pin": 1
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 29,
+        "pin": 0
+      },
+      "route": [],
+      "number": "18",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 79,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 29,
+        "pin": 1
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 30,
+        "pin": 0
+      },
+      "route": [],
+      "number": "19",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 80,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 30,
+        "pin": 1
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 31,
+        "pin": 0
+      },
+      "route": [],
+      "number": "20",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 82,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 41
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 34,
+        "pin": 0
+      },
+      "route": [],
+      "number": "21",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 83,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 41
+      },
+      "to": {
+        "type": "junction",
+        "junction": 42
+      },
+      "route": [],
+      "number": "21",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 84,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 42
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 33,
+        "pin": 1
+      },
+      "route": [],
+      "number": "21",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 85,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 43
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 23,
+        "pin": 1
+      },
+      "route": [],
+      "number": "13",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 86,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 43
+      },
+      "to": {
+        "type": "junction",
+        "junction": 44
+      },
+      "route": [],
+      "number": "13",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 87,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 44
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 24,
+        "pin": 0
+      },
+      "route": [],
+      "number": "13",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 88,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 44
+      },
+      "to": {
+        "type": "junction",
+        "junction": 45
+      },
+      "route": [],
+      "number": "13",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 89,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 45
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 28,
+        "pin": 0
+      },
+      "route": [],
+      "number": "13",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 90,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 45
+      },
+      "to": {
+        "type": "junction",
+        "junction": 46
+      },
+      "route": [],
+      "number": "13",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 91,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 46
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 32,
+        "pin": 0
+      },
+      "route": [],
+      "number": "13",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 92,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 46
+      },
+      "to": {
+        "type": "junction",
+        "junction": 47
+      },
+      "route": [],
+      "number": "13",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 93,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 47
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 33,
+        "pin": 0
+      },
+      "route": [],
+      "number": "13",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 94,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 48
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 27,
+        "pin": 1
+      },
+      "route": [],
+      "number": "17",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 95,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 48
+      },
+      "to": {
+        "type": "junction",
+        "junction": 49
+      },
+      "route": [],
+      "number": "17",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 96,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 49
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 31,
+        "pin": 1
+      },
+      "route": [],
+      "number": "17",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 97,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 49
+      },
+      "to": {
+        "type": "junction",
+        "junction": 50
+      },
+      "route": [],
+      "number": "17",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 98,
+      "page": 1,
+      "from": {
+        "type": "junction",
+        "junction": 50
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 34,
+        "pin": 1
+      },
+      "route": [],
+      "number": "17",
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 102,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 101,
+        "pin": 0
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 15,
+        "pin": 0
+      },
+      "route": [],
+      "number": null,
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 105,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 104,
+        "pin": 0
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 15,
+        "pin": 2
+      },
+      "route": [],
+      "number": null,
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 108,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 107,
+        "pin": 0
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 15,
+        "pin": 4
+      },
+      "route": [],
+      "number": null,
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 111,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 110,
+        "pin": 0
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 20,
+        "pin": 0
+      },
+      "route": [],
+      "number": null,
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 114,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 113,
+        "pin": 0
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 21,
+        "pin": 0
+      },
+      "route": [],
+      "number": null,
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 117,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 116,
+        "pin": 0
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 27,
+        "pin": 1
+      },
+      "route": [],
+      "number": null,
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 118,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 32,
+        "pin": 1
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 33,
+        "pin": 1
+      },
+      "route": [],
+      "number": null,
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    }
+  ],
+  "cables": [],
+  "block_definitions": [
+    {
+      "id": 2,
+      "name": "Crane hoist up/down",
+      "description": "Hoist motor with up and down contactors, hold-to-run buttons, end limit switches, emergency stop and a brake released by either contactor",
+      "parameters": [
+        {
+          "name": "power",
+          "default": 5.5,
+          "description": "Motor power in kW"
+        }
+      ],
+      "members": [
+        {
+          "record": "device",
+          "id": 2,
+          "tag": "-F1",
+          "description": "Main circuit fuses",
+          "kind": "general",
+          "parts": [],
+          "properties": {}
+        },
+        {
+          "record": "device",
+          "id": 3,
+          "tag": "-K1",
+          "description": "Hoist up contactor",
+          "kind": "general",
+          "parts": [],
+          "properties": {}
+        },
+        {
+          "record": "device",
+          "id": 4,
+          "tag": "-K2",
+          "description": "Hoist down contactor",
+          "kind": "general",
+          "parts": [],
+          "properties": {}
+        },
+        {
+          "record": "device",
+          "id": 5,
+          "tag": "-F2",
+          "description": "Overload relay",
+          "kind": "general",
+          "parts": [],
+          "properties": {}
+        },
+        {
+          "record": "device",
+          "id": 6,
+          "tag": "-M1",
+          "description": "Hoist motor {power} kW",
+          "kind": "general",
+          "parts": [],
+          "properties": {
+            "power_kw": "{power}"
+          }
+        },
+        {
+          "record": "device",
+          "id": 7,
+          "tag": "-Y1",
+          "description": "Hoist brake",
+          "kind": "general",
+          "parts": [],
+          "properties": {}
+        },
+        {
+          "record": "device",
+          "id": 8,
+          "tag": "-F3",
+          "description": "Control circuit breaker",
+          "kind": "general",
+          "parts": [],
+          "properties": {}
+        },
+        {
+          "record": "device",
+          "id": 9,
+          "tag": "-S0",
+          "description": "Emergency stop",
+          "kind": "general",
+          "parts": [],
+          "properties": {}
+        },
+        {
+          "record": "device",
+          "id": 10,
+          "tag": "-S1",
+          "description": "Up",
+          "kind": "general",
+          "parts": [],
+          "properties": {}
+        },
+        {
+          "record": "device",
+          "id": 11,
+          "tag": "-S2",
+          "description": "Down",
+          "kind": "general",
+          "parts": [],
+          "properties": {}
+        },
+        {
+          "record": "device",
+          "id": 12,
+          "tag": "-B1",
+          "description": "Upper end limit",
+          "kind": "general",
+          "parts": [],
+          "properties": {}
+        },
+        {
+          "record": "device",
+          "id": 13,
+          "tag": "-B2",
+          "description": "Lower end limit",
+          "kind": "general",
+          "parts": [],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 14,
+          "page": 0,
+          "symbol": "iec/protection/fuse_3p",
+          "placement": {
+            "origin": {
+              "x": 40.0,
+              "y": 40.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 2,
+            "main": true
+          },
+          "pins": [
+            {
+              "name": "1",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "2",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            },
+            {
+              "name": "3",
+              "offset": {
+                "x": 8.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "4",
+              "offset": {
+                "x": 8.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            },
+            {
+              "name": "5",
+              "offset": {
+                "x": 16.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "6",
+              "offset": {
+                "x": 16.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ],
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              5
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 15,
+          "page": 0,
+          "symbol": "iec/contactors/main_3p",
+          "placement": {
+            "origin": {
+              "x": 40.0,
+              "y": 72.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 3,
+            "main": false
+          },
+          "pins": [
+            {
+              "name": "1",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "2",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            },
+            {
+              "name": "3",
+              "offset": {
+                "x": 8.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "4",
+              "offset": {
+                "x": 8.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            },
+            {
+              "name": "5",
+              "offset": {
+                "x": 16.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "6",
+              "offset": {
+                "x": 16.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ],
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              5
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 16,
+          "page": 0,
+          "symbol": "iec/contactors/main_3p",
+          "placement": {
+            "origin": {
+              "x": 80.0,
+              "y": 72.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 4,
+            "main": false
+          },
+          "pins": [
+            {
+              "name": "1",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "2",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            },
+            {
+              "name": "3",
+              "offset": {
+                "x": 8.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "4",
+              "offset": {
+                "x": 8.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            },
+            {
+              "name": "5",
+              "offset": {
+                "x": 16.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "6",
+              "offset": {
+                "x": 16.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ],
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              5
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 17,
+          "page": 0,
+          "symbol": "iec/protection/overload_relay",
+          "placement": {
+            "origin": {
+              "x": 40.0,
+              "y": 104.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 5,
+            "main": true
+          },
+          "pins": [
+            {
+              "name": "1",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "2",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            },
+            {
+              "name": "3",
+              "offset": {
+                "x": 8.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "4",
+              "offset": {
+                "x": 8.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            },
+            {
+              "name": "5",
+              "offset": {
+                "x": 16.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "6",
+              "offset": {
+                "x": 16.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [
+            [
+              0,
+              1
+            ],
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              5
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 18,
+          "page": 0,
+          "symbol": "iec/motors/motor_3ph",
+          "placement": {
+            "origin": {
+              "x": 40.0,
+              "y": 150.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 6,
+            "main": true
+          },
+          "pins": [
+            {
+              "name": "U1",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "V1",
+              "offset": {
+                "x": 8.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "W1",
+              "offset": {
+                "x": 16.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "PE",
+              "offset": {
+                "x": 24.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            }
+          ],
+          "bridges": [],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 46,
+          "page": 0,
+          "symbol": "iec/terminals/terminal_pe",
+          "placement": {
+            "origin": {
+              "x": 104.0,
+              "y": 40.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "unassigned"
+          },
+          "pins": [
+            {
+              "name": "1",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "2",
+              "offset": {
+                "x": 0.0,
+                "y": 8.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [
+            [
+              0,
+              1
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 48,
+          "page": 0,
+          "symbol": "iec/protection/mcb_1p",
+          "placement": {
+            "origin": {
+              "x": 140.0,
+              "y": 40.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 8,
+            "main": true
+          },
+          "pins": [
+            {
+              "name": "1",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "2",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 49,
+          "page": 0,
+          "symbol": "iec/operators/emergency_stop",
+          "placement": {
+            "origin": {
+              "x": 140.0,
+              "y": 64.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 9,
+            "main": true
+          },
+          "pins": [
+            {
+              "name": "11",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "12",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 50,
+          "page": 0,
+          "symbol": "iec/contacts/thermal_nc",
+          "placement": {
+            "origin": {
+              "x": 140.0,
+              "y": 88.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 5,
+            "main": false
+          },
+          "pins": [
+            {
+              "name": "95",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "96",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 53,
+          "page": 0,
+          "symbol": "iec/operators/pushbutton_no",
+          "placement": {
+            "origin": {
+              "x": 160.0,
+              "y": 128.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 10,
+            "main": true
+          },
+          "pins": [
+            {
+              "name": "13",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "14",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 54,
+          "page": 0,
+          "symbol": "iec/contacts/position_nc",
+          "placement": {
+            "origin": {
+              "x": 160.0,
+              "y": 152.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 12,
+            "main": true
+          },
+          "pins": [
+            {
+              "name": "21",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "22",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 55,
+          "page": 0,
+          "symbol": "iec/contacts/nc",
+          "placement": {
+            "origin": {
+              "x": 160.0,
+              "y": 176.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 4,
+            "main": false
+          },
+          "pins": [
+            {
+              "name": "21",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "22",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 56,
+          "page": 0,
+          "symbol": "iec/coils/contactor",
+          "placement": {
+            "origin": {
+              "x": 160.0,
+              "y": 200.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 3,
+            "main": true
+          },
+          "pins": [
+            {
+              "name": "A1",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "A2",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 60,
+          "page": 0,
+          "symbol": "iec/operators/pushbutton_no",
+          "placement": {
+            "origin": {
+              "x": 200.0,
+              "y": 128.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 11,
+            "main": true
+          },
+          "pins": [
+            {
+              "name": "13",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "14",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 61,
+          "page": 0,
+          "symbol": "iec/contacts/position_nc",
+          "placement": {
+            "origin": {
+              "x": 200.0,
+              "y": 152.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 13,
+            "main": true
+          },
+          "pins": [
+            {
+              "name": "21",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "22",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 62,
+          "page": 0,
+          "symbol": "iec/contacts/nc",
+          "placement": {
+            "origin": {
+              "x": 200.0,
+              "y": 176.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 3,
+            "main": false
+          },
+          "pins": [
+            {
+              "name": "21",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "22",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 63,
+          "page": 0,
+          "symbol": "iec/coils/contactor",
+          "placement": {
+            "origin": {
+              "x": 200.0,
+              "y": 200.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 4,
+            "main": true
+          },
+          "pins": [
+            {
+              "name": "A1",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "A2",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 67,
+          "page": 0,
+          "symbol": "iec/contacts/no",
+          "placement": {
+            "origin": {
+              "x": 240.0,
+              "y": 128.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 3,
+            "main": false
+          },
+          "pins": [
+            {
+              "name": "13",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "14",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 68,
+          "page": 0,
+          "symbol": "iec/contacts/no",
+          "placement": {
+            "origin": {
+              "x": 256.0,
+              "y": 128.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 4,
+            "main": false
+          },
+          "pins": [
+            {
+              "name": "13",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "14",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ]
+          ],
+          "properties": {}
+        },
+        {
+          "record": "symbol",
+          "id": 69,
+          "page": 0,
+          "symbol": "iec/coils/brake",
+          "placement": {
+            "origin": {
+              "x": 240.0,
+              "y": 164.0
+            },
+            "rotation": "0",
+            "mirrored": false
+          },
+          "role": {
+            "type": "device",
+            "device": 7,
+            "main": true
+          },
+          "pins": [
+            {
+              "name": "A1",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "A2",
+              "offset": {
+                "x": 0.0,
+                "y": 16.0
+              },
+              "direction": "down"
+            }
+          ],
+          "bridges": [],
+          "properties": {}
+        },
+        {
+          "record": "junction",
+          "id": 19,
+          "page": 0,
+          "position": {
+            "x": 40.0,
+            "y": 68.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 23,
+          "page": 0,
+          "position": {
+            "x": 40.0,
+            "y": 92.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 28,
+          "page": 0,
+          "position": {
+            "x": 48.0,
+            "y": 64.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 32,
+          "page": 0,
+          "position": {
+            "x": 48.0,
+            "y": 96.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 37,
+          "page": 0,
+          "position": {
+            "x": 56.0,
+            "y": 60.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 41,
+          "page": 0,
+          "position": {
+            "x": 56.0,
+            "y": 100.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 70,
+          "page": 0,
+          "position": {
+            "x": 240.0,
+            "y": 152.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 73,
+          "page": 0,
+          "position": {
+            "x": 256.0,
+            "y": 152.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 76,
+          "page": 0,
+          "position": {
+            "x": 140.0,
+            "y": 112.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 78,
+          "page": 0,
+          "position": {
+            "x": 160.0,
+            "y": 112.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 81,
+          "page": 0,
+          "position": {
+            "x": 200.0,
+            "y": 112.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 84,
+          "page": 0,
+          "position": {
+            "x": 240.0,
+            "y": 112.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 87,
+          "page": 0,
+          "position": {
+            "x": 256.0,
+            "y": 112.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 90,
+          "page": 0,
+          "position": {
+            "x": 160.0,
+            "y": 232.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 92,
+          "page": 0,
+          "position": {
+            "x": 200.0,
+            "y": 232.0
+          }
+        },
+        {
+          "record": "junction",
+          "id": 95,
+          "page": 0,
+          "position": {
+            "x": 240.0,
+            "y": 232.0
+          }
+        },
+        {
+          "record": "wire",
+          "id": 20,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 14,
+            "pin": 1
+          },
+          "to": {
+            "type": "junction",
+            "junction": 19
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 21,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 19
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 15,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 22,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 19
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 16,
+            "pin": 4
+          },
+          "route": [
+            {
+              "x": 96.0,
+              "y": 68.0
+            }
+          ],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 24,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 15,
+            "pin": 1
+          },
+          "to": {
+            "type": "junction",
+            "junction": 23
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 25,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 23
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 17,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 26,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 16,
+            "pin": 1
+          },
+          "to": {
+            "type": "junction",
+            "junction": 23
+          },
+          "route": [
+            {
+              "x": 80.0,
+              "y": 92.0
+            }
+          ],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 27,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 17,
+            "pin": 1
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 18,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 29,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 14,
+            "pin": 3
+          },
+          "to": {
+            "type": "junction",
+            "junction": 28
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 30,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 28
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 15,
+            "pin": 2
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 31,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 28
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 16,
+            "pin": 2
+          },
+          "route": [
+            {
+              "x": 88.0,
+              "y": 64.0
+            }
+          ],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 33,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 15,
+            "pin": 3
+          },
+          "to": {
+            "type": "junction",
+            "junction": 32
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 34,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 32
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 17,
+            "pin": 2
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 35,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 16,
+            "pin": 3
+          },
+          "to": {
+            "type": "junction",
+            "junction": 32
+          },
+          "route": [
+            {
+              "x": 88.0,
+              "y": 96.0
+            }
+          ],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 36,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 17,
+            "pin": 3
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 18,
+            "pin": 1
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 38,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 14,
+            "pin": 5
+          },
+          "to": {
+            "type": "junction",
+            "junction": 37
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 39,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 37
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 15,
+            "pin": 4
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 40,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 37
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 16,
+            "pin": 0
+          },
+          "route": [
+            {
+              "x": 80.0,
+              "y": 60.0
+            }
+          ],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 42,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 15,
+            "pin": 5
+          },
+          "to": {
+            "type": "junction",
+            "junction": 41
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 43,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 41
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 17,
+            "pin": 4
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 44,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 16,
+            "pin": 5
+          },
+          "to": {
+            "type": "junction",
+            "junction": 41
+          },
+          "route": [
+            {
+              "x": 96.0,
+              "y": 100.0
+            }
+          ],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 45,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 17,
+            "pin": 5
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 18,
+            "pin": 2
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 47,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 46,
+            "pin": 1
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 18,
+            "pin": 3
+          },
+          "route": [
+            {
+              "x": 104.0,
+              "y": 99.0
+            },
+            {
+              "x": 64.0,
+              "y": 99.0
+            }
+          ],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 51,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 48,
+            "pin": 1
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 49,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 52,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 49,
+            "pin": 1
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 50,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 57,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 53,
+            "pin": 1
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 54,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 58,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 54,
+            "pin": 1
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 55,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 59,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 55,
+            "pin": 1
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 56,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 64,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 60,
+            "pin": 1
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 61,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 65,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 61,
+            "pin": 1
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 62,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 66,
+          "page": 0,
+          "from": {
+            "type": "pin",
+            "symbol": 62,
+            "pin": 1
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 63,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 71,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 70
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 67,
+            "pin": 1
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 72,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 70
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 69,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 74,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 70
+          },
+          "to": {
+            "type": "junction",
+            "junction": 73
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 75,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 73
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 68,
+            "pin": 1
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 77,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 76
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 50,
+            "pin": 1
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 79,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 76
+          },
+          "to": {
+            "type": "junction",
+            "junction": 78
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 80,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 78
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 53,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 82,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 78
+          },
+          "to": {
+            "type": "junction",
+            "junction": 81
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 83,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 81
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 60,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 85,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 81
+          },
+          "to": {
+            "type": "junction",
+            "junction": 84
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 86,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 84
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 67,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 88,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 84
+          },
+          "to": {
+            "type": "junction",
+            "junction": 87
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 89,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 87
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 68,
+            "pin": 0
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 91,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 90
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 56,
+            "pin": 1
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 93,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 90
+          },
+          "to": {
+            "type": "junction",
+            "junction": 92
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 94,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 92
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 63,
+            "pin": 1
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 96,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 92
+          },
+          "to": {
+            "type": "junction",
+            "junction": 95
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        },
+        {
+          "record": "wire",
+          "id": 97,
+          "page": 0,
+          "from": {
+            "type": "junction",
+            "junction": 95
+          },
+          "to": {
+            "type": "pin",
+            "symbol": 69,
+            "pin": 1
+          },
+          "route": [],
+          "number": null,
+          "color": null,
+          "cross_section_mm2": null,
+          "properties": {}
+        }
+      ],
+      "properties": {}
+    }
+  ],
+  "block_instances": [
+    {
+      "id": 99,
+      "definition": 2,
+      "page": 1,
+      "origin": {
+        "x": 20.0,
+        "y": 20.0
+      },
+      "values": [],
+      "members": [
+        {
+          "template": {
+            "kind": "device",
+            "id": 2
+          },
+          "actual": {
+            "kind": "device",
+            "id": 3
+          }
+        },
+        {
+          "template": {
+            "kind": "device",
+            "id": 3
+          },
+          "actual": {
+            "kind": "device",
+            "id": 4
+          }
+        },
+        {
+          "template": {
+            "kind": "device",
+            "id": 4
+          },
+          "actual": {
+            "kind": "device",
+            "id": 5
+          }
+        },
+        {
+          "template": {
+            "kind": "device",
+            "id": 5
+          },
+          "actual": {
+            "kind": "device",
+            "id": 6
+          }
+        },
+        {
+          "template": {
+            "kind": "device",
+            "id": 6
+          },
+          "actual": {
+            "kind": "device",
+            "id": 7
+          }
+        },
+        {
+          "template": {
+            "kind": "device",
+            "id": 7
+          },
+          "actual": {
+            "kind": "device",
+            "id": 8
+          }
+        },
+        {
+          "template": {
+            "kind": "device",
+            "id": 8
+          },
+          "actual": {
+            "kind": "device",
+            "id": 9
+          }
+        },
+        {
+          "template": {
+            "kind": "device",
+            "id": 9
+          },
+          "actual": {
+            "kind": "device",
+            "id": 10
+          }
+        },
+        {
+          "template": {
+            "kind": "device",
+            "id": 10
+          },
+          "actual": {
+            "kind": "device",
+            "id": 11
+          }
+        },
+        {
+          "template": {
+            "kind": "device",
+            "id": 11
+          },
+          "actual": {
+            "kind": "device",
+            "id": 12
+          }
+        },
+        {
+          "template": {
+            "kind": "device",
+            "id": 12
+          },
+          "actual": {
+            "kind": "device",
+            "id": 13
+          }
+        },
+        {
+          "template": {
+            "kind": "device",
+            "id": 13
+          },
+          "actual": {
+            "kind": "device",
+            "id": 14
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 14
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 15
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 15
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 16
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 16
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 17
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 17
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 18
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 18
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 19
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 46
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 20
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 48
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 21
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 49
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 22
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 50
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 23
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 53
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 24
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 54
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 25
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 55
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 26
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 56
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 27
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 60
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 28
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 61
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 29
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 62
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 30
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 63
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 31
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 67
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 32
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 68
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 33
+          }
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 69
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 34
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 19
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 35
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 23
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 36
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 28
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 37
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 32
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 38
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 37
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 39
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 41
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 40
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 70
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 41
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 73
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 42
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 76
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 43
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 78
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 44
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 81
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 45
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 84
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 46
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 87
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 47
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 90
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 48
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 92
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 49
+          }
+        },
+        {
+          "template": {
+            "kind": "junction",
+            "id": 95
+          },
+          "actual": {
+            "kind": "junction",
+            "id": 50
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 20
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 51
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 21
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 52
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 22
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 53
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 24
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 54
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 25
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 55
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 26
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 56
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 27
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 57
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 29
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 58
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 30
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 59
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 31
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 60
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 33
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 61
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 34
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 62
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 35
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 63
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 36
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 64
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 38
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 65
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 39
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 66
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 40
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 67
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 42
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 68
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 43
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 69
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 44
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 70
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 45
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 71
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 47
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 72
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 51
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 73
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 52
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 74
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 57
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 75
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 58
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 76
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 59
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 77
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 64
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 78
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 65
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 79
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 66
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 80
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 72
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 82
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 74
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 83
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 75
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 84
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 77
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 85
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 79
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 86
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 80
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 87
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 82
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 88
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 83
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 89
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 85
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 90
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 86
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 91
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 88
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 92
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 89
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 93
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 91
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 94
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 93
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 95
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 94
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 96
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 96
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 97
+          }
+        },
+        {
+          "template": {
+            "kind": "wire",
+            "id": 97
+          },
+          "actual": {
+            "kind": "wire",
+            "id": 98
+          }
+        }
+      ],
+      "detached": "Wire#81 was deleted",
+      "properties": {}
+    }
+  ]
+}

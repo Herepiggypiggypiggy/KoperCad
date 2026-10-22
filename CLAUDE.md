@@ -68,6 +68,7 @@ coordinator in its own small PR first.
 | `novo-heatview` | Thermal visuals | Heat field engine: contours, hot spots, streamlines, compare, synthetic field (pure, no UI deps) |
 | `novo-thermal` | Thermal simulation | Physical heat and airflow simulation engine (pure, depends on novo-layout) |
 | `novo-numbering` | Wire numbering | Wire and potential numbering: schemes, stable fill, renumber, locks, conflicts (design `docs/design/wire-numbering.md`) |
+| `novo-emc` | EMC rule engine | EMC classification, geometric indices, analytic estimates and rules EMC-01..18; findings go to `novo-checks` (plan `docs/EMC.md`, pure, depends on novo-core, novo-routing, novo-layout) |
 | `novo-tests` | Tester | Cross-crate tests and the Gate 1 fixture |
 | `novo-app` | WS-01 | Application shell, wiring crates together |
 

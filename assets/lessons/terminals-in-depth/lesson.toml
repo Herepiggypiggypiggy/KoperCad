@@ -1,0 +1,153 @@
+format = 1
+id = "terminals-in-depth"
+version = 1
+status = "early"
+title = "Tidy a terminal strip"
+summary = "Rename and renumber terminals with a preview, join duplicates, add spares, change a terminal's kind and level, and bring back a proposal you declined."
+track = "terminals"
+order = 15
+level = "intermediate"
+minutes = 8
+topics = ["terminals", "strip", "rename", "renumber", "spares", "kind", "level"]
+needs = ["terminal-strips"]
+next = ["connection-screens"]
+project = "../terminal-strips/finished.json"
+title_nl = "Maak een klemmenstrook netjes"
+summary_nl = "Hernoem en hernummer klemmen met een voorbeeld, voeg dubbelen samen, voeg reserveklemmen toe, wijzig soort en niveau van een klem en haal een afgewezen voorstel terug."
+
+[[step]]
+id = "why"
+title = "A strip that was accepted is not yet finished"
+title_nl = "Een geaccepteerde strook is nog niet af"
+text = """
+Accepting proposals gives you a strip fast. The strip you hand to a panel builder also has spare terminals, gap-free numbers, the right kind for each terminal and the order the wires leave the cabinet in.
+Every edit here is a **command** with the same name in the menu and the command field, and each one is **one undo step**.
+"""
+text_nl = """
+Voorstellen accepteren geeft je snel een strook. De strook die je aan een kastenbouwer geeft heeft ook reserveklemmen, nummers zonder gaten, de juiste soort per klem en de volgorde waarin de draden de kast verlaten.
+Elke bewerking hier is een **commando** met dezelfde naam in het menu en het commandoveld, en elk is **één undo-stap**.
+"""
+
+[[step]]
+id = "pick"
+title = "Pick a strip"
+title_nl = "Kies een strook"
+text = "The Terminals drawer shows the strip of what is selected. Open it and look at the numbers in the first column."
+text_nl = "De lade Terminals toont de strook van wat geselecteerd is. Open hem en kijk naar de nummers in de eerste kolom."
+how = [
+  "Press {key:view.terminals_drawer}.",
+]
+how_nl = [
+  "Druk op {key:view.terminals_drawer}.",
+]
+point = { ui = "drawer.terminals" }
+expect = { opened = "drawer.terminals" }
+solve = [ { command = "view.terminals_drawer" } ]
+
+[[step]]
+id = "rename"
+title = "Rename with find and replace"
+title_nl = "Hernoem met zoeken en vervangen"
+text = "**Rename terminals** is a find and replace across the strip with a preview of every old and new name before it is applied. Use it to turn L1, L2, L3 into 1L1, 1L2, 1L3 for a new supply, or to fix a typo that ran through a whole row."
+text_nl = "**Rename terminals** is zoeken en vervangen over de strook met een voorbeeld van elke oude en nieuwe naam voordat het wordt toegepast. Gebruik het om L1, L2, L3 te veranderen in 1L1, 1L2, 1L3 voor een nieuwe voeding, of een typefout te herstellen die door een hele rij liep."
+how = [
+  "Press {key:view.command_palette}, type **rename terminals** and choose {ui:cmd.terminal.rename}.",
+  "Read the preview, then close the window without applying it.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **rename terminals** en kies {ui:cmd.terminal.rename}.",
+  "Lees het voorbeeld en sluit het venster zonder toe te passen.",
+]
+point = { ui = "cmd.terminal.rename" }
+expect = { command = "terminal.rename" }
+solve = [ { command = "terminal.rename" } ]
+
+[[step]]
+id = "renumber"
+title = "Close the gaps"
+title_nl = "Sluit de gaten"
+text = "After deleting and adding, a strip reads 1, 2, 5, 6, 9. **Renumber terminals** puts 1, 2, 3, 4, 5 in the order of the strip, again with a preview. Wires and cross references follow because they point at the terminal, not at its number."
+text_nl = "Na verwijderen en toevoegen leest een strook 1, 2, 5, 6, 9. **Renumber terminals** zet 1, 2, 3, 4, 5 in de volgorde van de strook, weer met een voorbeeld. Draden en kruisverwijzingen volgen omdat ze naar de klem wijzen, niet naar zijn nummer."
+how = [
+  "Press {key:view.command_palette}, type **renumber terminals** and choose {ui:cmd.terminal.renumber}.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **renumber terminals** en kies {ui:cmd.terminal.renumber}.",
+]
+point = { ui = "cmd.terminal.renumber" }
+expect = { command = "terminal.renumber" }
+solve = [ { command = "terminal.renumber" } ]
+
+[[step]]
+id = "join"
+title = "Two terminals with the same name are one terminal"
+title_nl = "Twee klemmen met dezelfde naam zijn één klem"
+text = """
+The program's rule: terminals of one strip with the **same name** are the same physical terminal, drawn in two places. **Join duplicate terminals** merges the records that were created separately, for example by importing or by copying a page.
+If there is nothing to join, the program says **No duplicate terminals on this strip**. That is the answer you want.
+"""
+text_nl = """
+De regel van het programma: klemmen van één strook met dezelfde **naam** zijn dezelfde fysieke klem, op twee plaatsen getekend. **Join duplicate terminals** voegt de records samen die apart zijn ontstaan, bijvoorbeeld door importeren of een pagina kopiëren.
+Is er niets samen te voegen, dan zegt het programma **No duplicate terminals on this strip**. Dat is het antwoord dat je wilt.
+"""
+how = [
+  "Press {key:view.command_palette}, type **join duplicate** and choose {ui:cmd.terminal.join_duplicates}.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **join duplicate** en kies {ui:cmd.terminal.join_duplicates}.",
+]
+point = { ui = "cmd.terminal.join_duplicates" }
+expect = { command = "terminal.join_duplicates" }
+solve = [ { command = "terminal.join_duplicates" } ]
+
+[[step]]
+id = "spares"
+title = "Leave room for the next change"
+title_nl = "Laat ruimte voor de volgende wijziging"
+text = "A strip with no free terminal turns every later change into a rebuild. **Add spare terminals** appends unwired terminals at the end of the strip, so the panel builder fits and numbers them now and the customer can use them later."
+text_nl = "Een strook zonder vrije klem maakt elke latere wijziging tot een verbouwing. **Add spare terminals** voegt onbedrade klemmen toe aan het eind van de strook, zodat de kastenbouwer ze nu monteert en nummert en de klant ze later kan gebruiken."
+how = [
+  "Press {key:view.command_palette}, type **spare** and choose {ui:cmd.terminal.add_spares}.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **spare** en kies {ui:cmd.terminal.add_spares}.",
+]
+point = { ui = "cmd.terminal.add_spares" }
+expect = { command = "terminal.add_spares" }
+solve = [ { command = "terminal.add_spares" } ]
+
+[[step]]
+id = "kind"
+title = "Kind, level and jumper"
+title_nl = "Soort, niveau en brug"
+text = """
+Tick terminals in the table, then **Set terminal kind**: feed-through, PE, N, fuse or disconnect. The kind decides the symbol and how the checks treat the terminal.
+**Set terminal level** (1 to 4) puts a terminal on a deck of a multi-level block, and **Set terminal jumper** numbers the bridge between terminals. Without a tick the commands say **Tick terminals in the table first**.
+"""
+text_nl = """
+Vink klemmen aan in de tabel en kies **Set terminal kind**: doorgang, PE, N, zekering of scheider. De soort bepaalt het symbool en hoe de controles de klem behandelen.
+**Set terminal level** (1 tot 4) zet een klem op een niveau van een meerlagig blok en **Set terminal jumper** nummert de brug tussen klemmen. Zonder vinkje zeggen de commando's **Tick terminals in the table first**.
+"""
+
+[[step]]
+id = "order"
+title = "Put them in the order the wires leave"
+title_nl = "Zet ze in de volgorde waarin de draden vertrekken"
+text = "**Move terminal up in strip** and **Move terminal down in strip** reorder the selected terminals. A good order groups a motor's three phases and its earth together, so the panel builder wires one cable at a time."
+text_nl = "**Move terminal up in strip** en **Move terminal down in strip** wijzigen de volgorde van de geselecteerde klemmen. Een goede volgorde groepeert de drie fasen van een motor en zijn aarde, zodat de kastenbouwer een kabel tegelijk bedraadt."
+
+[[step]]
+id = "restore"
+title = "Change your mind about a declined proposal"
+title_nl = "Bedenk je over een afgewezen voorstel"
+text = "Deleting a terminal proposal declines it for good, so it does not come back every time the drawing changes. **Restore declined terminal proposals** brings them all back. If there is none it says **No declined terminal proposals**."
+text_nl = "Een klemvoorstel verwijderen wijst het voorgoed af, zodat het niet bij elke tekenwijziging terugkomt. **Restore declined terminal proposals** brengt ze allemaal terug. Is er geen, dan zegt het **No declined terminal proposals**."
+how = [
+  "Press {key:view.command_palette}, type **declined** and choose {ui:cmd.terminal.restore_declined}.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **declined** en kies {ui:cmd.terminal.restore_declined}.",
+]
+point = { ui = "cmd.terminal.restore_declined" }
+expect = { command = "terminal.restore_declined" }
+solve = [ { command = "terminal.restore_declined" } ]

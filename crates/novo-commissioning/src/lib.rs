@@ -26,8 +26,9 @@ mod store;
 mod walk;
 
 pub use build::{
-    BuildPhase, BuildPlan, BuildProgress, BuildStep, BuildTick, CabinetPlan, Next, StepKey,
-    StepStatus, TickState, keys as build_keys, mark_done, mark_problem, undo as undo_build,
+    BuildClaim, BuildPhase, BuildPlan, BuildProgress, BuildStep, BuildTick, CabinetPlan, Next,
+    StepKey, StepStatus, TickState, claim as claim_step, keys as build_keys, mark_done,
+    mark_problem, release as release_step, undo as undo_build,
 };
 pub use build_sheet::{BOX as BUILD_BOX, build_sheet, row_mm as build_sheet_row_mm};
 pub use check::{CheckKind, CheckRecord, CheckState, Target};

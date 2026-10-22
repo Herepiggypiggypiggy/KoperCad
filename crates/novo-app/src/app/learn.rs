@@ -50,6 +50,12 @@ pub(crate) const SIGNALS: &[&str] = &[
     "cabinet_removed",
     "cabinet_plan_accepted",
     "wire_cut_exported",
+    "standards_chosen",
+    "bench_ferrules",
+    "bench_labels",
+    "build_step_done",
+    "supply_current_set",
+    "autopilot_applied",
 ];
 
 /// Every control a lesson may point at. A control joins this list when its
@@ -96,6 +102,8 @@ pub(crate) const ANCHORS: &[&str] = &[
     "heat.chips",
     "heat.legend",
     "heat.simulate",
+    "heat.cooling_advice",
+    "heat.cooler_layout",
     "cabinet.canvas",
     "workspace.view3d",
     "switcher.schematic",
@@ -138,6 +146,30 @@ pub(crate) const ANCHORS: &[&str] = &[
     "issues.restore",
     "macro.place",
     "macros.window",
+    "standards.iec60204",
+    "standards.nfpa79",
+    "standards.ul508a",
+    "standards.inputs",
+    "standards.calculations",
+    "standards.save_pdf",
+    "bench.window",
+    "bench.tab.cut",
+    "bench.tab.ferrules",
+    "bench.tab.labels",
+    "build.screen",
+    "build.done",
+    "build.problem",
+    "handover.fix",
+    "handover.anyway",
+    "protection.tab.curves",
+    "protection.tab.selectivity",
+    "protection.tab.rating",
+    "protection.supply",
+    "calc.tab.circuits",
+    "calc.tab.starters",
+    "calc.tab.sccr",
+    "autopilot.window",
+    "autopilot.accept_all",
 ];
 
 /// A frame the replay gate draws between two editor calls.
@@ -645,6 +677,21 @@ impl NovoApp {
         }
     }
 
+    /// [`anchor`](Self::anchor) for a control drawn where the response is not
+    /// at hand: whether it was clicked this frame is given.
+    pub(super) fn anchor_clicked(
+        &mut self,
+        id: &str,
+        rect: egui::Rect,
+        label: &str,
+        clicked: bool,
+    ) {
+        self.anchor(id, rect, label);
+        if clicked {
+            self.learn_event(Event::Clicked(id.to_owned()));
+        }
+    }
+
     /// The tool in hand and the keys that take a proposal.
     pub(super) fn learn_watch(&mut self, ctx: &egui::Context) {
         if self.learn.run.is_none() {
@@ -896,6 +943,11 @@ impl NovoApp {
         let readable = view.canvas.reveal_zoom;
         let margin = view.canvas.reveal_margin;
         view.canvas.viewport.reveal(&bounds, margin, readable);
+        // A step near the sheet's edge centres on empty paper: keep the view inside the sheet,
+        // so no black band shows beside it.
+        if let Some(sheet) = view.scene().map(|s| s.scene().bounds()) {
+            view.canvas.keep_in_sheet(&sheet);
+        }
     }
 
     /// Where a canvas target is on its page, in millimetres.

@@ -567,7 +567,37 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["warmte simuleren", "kast doorrekenen"],
     ),
+    nl(
+        "heat.cooling_advice",
+        &[],
+        &["koeladvies", "ventilator plaatsen", "ventilatieroosters"],
+    ),
+    nl(
+        "heat.cooler_layout",
+        &[],
+        &[
+            "koelere indeling",
+            "indeling optimaliseren",
+            "warmte verplaatsen",
+        ],
+    ),
     nl("heat.airflow", &[], &["luchtstroom", "luchtstroming"]),
+    nl(
+        "heat.vents",
+        &[],
+        &["ventilatieopening", "ventilatieopeningen", "ventilator"],
+    ),
+    nl(
+        "heat.add_filter_fan",
+        &[],
+        &["filterventilator", "ventilator met filter"],
+    ),
+    nl("heat.add_grille", &[], &["rooster", "ventilatierooster"]),
+    nl(
+        "heat.add_exhaust_fan",
+        &[],
+        &["afzuigventilator", "uitblaasventilator"],
+    ),
     nl("heat.contours", &[], &["isothermen", "warmtelijnen"]),
     nl(
         "cabinet.size-enclosure",
