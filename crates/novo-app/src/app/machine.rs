@@ -582,14 +582,22 @@ pub(crate) fn with_option_column(project: &Project, output: &mut ReportOutput) {
         if texts.iter().all(String::is_empty) {
             continue;
         }
-        section.columns.push(Column::new("option", "Option", 22.0));
+        // Next to the first column (tag, position, page), so it is on screen
+        // without scrolling at a small window.
+        let at = 1.min(section.columns.len());
+        section
+            .columns
+            .insert(at, Column::new("option", "Option", 22.0));
         for (row, text) in section.rows.iter_mut().zip(texts) {
             row.cells.resize(section.columns.len() - 1, Cell::Empty);
-            row.cells.push(if text.is_empty() {
-                Cell::Empty
-            } else {
-                Cell::text(text)
-            });
+            row.cells.insert(
+                at,
+                if text.is_empty() {
+                    Cell::Empty
+                } else {
+                    Cell::text(text)
+                },
+            );
         }
     }
 }

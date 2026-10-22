@@ -12,6 +12,9 @@ key PageDown
 wait 6
 shot fan-off-ghosted
 check_layout
+move 313 190
+wait 4
+shot fan-off-hover-why
 key ctrl+k
 wait 3
 text ghost what the options leave out
