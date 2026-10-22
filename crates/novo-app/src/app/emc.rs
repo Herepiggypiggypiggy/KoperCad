@@ -97,6 +97,9 @@ impl NovoApp {
                 {
                     turn = Some(on);
                 }
+                if !enabled {
+                    ui.weak("Off: the findings below are a preview and do not appear in the Issues list.");
+                }
                 ui.weak(format!(
                     "{} Findings are rules on what is drawn, geometric indices and closed-form estimates with planning distances from common practice; clause numbers are unverified.",
                     novo_emc::DESIGN_AID

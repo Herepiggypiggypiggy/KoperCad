@@ -513,3 +513,17 @@ fn a_loop_finding_carries_its_polygon_and_no_estimate_is_given_above_the_band() 
         Status::NotEvaluated
     );
 }
+
+#[test]
+fn not_checked_names_every_catalogue_rule_that_is_not_built() {
+    let text = NOT_CHECKED.join(" ");
+    for n in 1..=18 {
+        let id = format!("EMC-{n:02}");
+        let built = novo_emc::RULES.iter().any(|r| r.id == id);
+        assert_eq!(
+            text.contains(&id),
+            !built,
+            "{id}: built rules must not be listed as not built, and the others must be"
+        );
+    }
+}

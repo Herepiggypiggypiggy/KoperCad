@@ -284,8 +284,7 @@ pub const NOT_CHECKED: &[&str] = &[
     "Radiated and conducted emission margins (needs a measurement or a full-wave solver).",
     "Real filter insertion loss and drive-maker limits on motor cable length.",
     "Enclosure shielding: seams, slots, gaskets and cavity resonances.",
-    "Surge, burst and ESD paths into the cabinet (EMC-12, EMC-16 are not built yet).",
-    "Return current through the plate instead of its own conductor (EMC-10).",
+    "Rules not built yet, so they say nothing either way: EMC-03 crossing angles, EMC-06 shield carried through terminals, EMC-08 motor cable length against the filter, EMC-10 return through the plate, EMC-12 door bonding and ESD, EMC-13 coil suppression, EMC-15 24 V supply and return, EMC-16 surge protection, EMC-18 ferrite advice.",
     "Anything above about 30 MHz: cable lengths approach a wavelength fraction there.",
     "Compliance with any standard. Compliance is shown by measurement on the finished machine.",
 ];
