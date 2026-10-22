@@ -223,7 +223,15 @@ mod tests {
     #[test]
     fn a_device_lines_up_beside_its_neighbour() {
         let n = placed(2, 50.0, 355.0, 45.0, 90.0, Some(7));
-        let m = snap_to_rail(&[rail()], &[n.clone()], 1, (18.0, 90.0), (98.0, 355.0), 5.0).unwrap();
+        let m = snap_to_rail(
+            &[rail()],
+            std::slice::from_ref(&n),
+            1,
+            (18.0, 90.0),
+            (98.0, 355.0),
+            5.0,
+        )
+        .unwrap();
         assert_eq!(m.at.0, 100.0, "right edge 95 plus the gap");
         assert_eq!(m.offset, 50.0);
         // Far from it: left where it is.
