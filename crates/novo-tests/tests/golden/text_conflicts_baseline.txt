@@ -14,7 +14,7 @@
 120	potential feed name / symbol line (neighbour)
 1	potential feed name / text inside symbol art (neighbour)
 4	strip name / frame line (neighbour)
-31	strip name / symbol line (neighbour)
+11	strip name / symbol line (neighbour)
 232	terminal name / symbol line (neighbour)
 1	terminal name / terminal name (neighbour)
 1	terminal name / terminal name (neighbour) [tight]
