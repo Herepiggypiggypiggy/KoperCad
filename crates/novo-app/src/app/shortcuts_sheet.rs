@@ -11,45 +11,9 @@ use novo_workflow::language;
 use super::NovoApp;
 use super::workbench::app_runs;
 
-/// Key and pointer behaviours that are not a single key press, so the
-/// keymap cannot list them. Shown as text rows under "Hold and tap".
-pub(super) const GESTURES: &[(&str, &str, &[&str])] = &[
-    (
-        "Q (hold)",
-        "Opens the place wheel; a tap places a symbol",
-        &["wheel", "place", "radial"],
-    ),
-    (
-        "Space (hold) + drag",
-        "Pans the drawing",
-        &["pan", "move", "scroll"],
-    ),
-    (
-        "Shift while moving a symbol",
-        "Does the other of leave wires / take wires along",
-        &["move", "wires", "carry"],
-    ),
-    (
-        "Shift+W while drawing a wire",
-        "Switches between corners and straight lines",
-        &["wire", "corner", "lines"],
-    ),
-    (
-        "Q while drawing a wire",
-        "Ends the wire on the part under the pointer",
-        &["wire", "end", "part"],
-    ),
-    (
-        "Tab while drawing a wire",
-        "Cycles the connection point of a multi-pin part",
-        &["wire", "pin", "cycle"],
-    ),
-    (
-        "Mouse wheel",
-        "Zooms around the pointer",
-        &["zoom", "scroll"],
-    ),
-];
+/// Key and pointer behaviours that are not a single key press; the list is
+/// shared with the manual (`novo_workflow::manual`).
+pub(super) use novo_workflow::manual::GESTURES;
 
 /// One line of the sheet.
 #[derive(Debug, Clone, PartialEq, Eq)]

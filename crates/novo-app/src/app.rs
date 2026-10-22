@@ -137,6 +137,7 @@ mod macro_editor;
 #[cfg(test)]
 mod macro_editor_tests;
 mod macro_thumb;
+mod manual;
 mod menu_bar;
 mod model_labels;
 mod net_trace;
@@ -1406,6 +1407,7 @@ impl NovoApp {
                     || *id == "cabinet.door"
                     || *id == "cabinet.surface"
                     || *id == "view.command_field_here"
+                    || matches!(*id, "help.manual" | "help.context")
                     || *id == "view.3d"
                     || id.starts_with("layout.")
                     || *id == "view.3d_door"

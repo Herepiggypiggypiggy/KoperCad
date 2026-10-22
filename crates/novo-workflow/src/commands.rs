@@ -1976,6 +1976,28 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "help.manual",
+        "User manual",
+        "View",
+        &[
+            "help",
+            "manual",
+            "documentation",
+            "docs",
+            "guide",
+            "handbook",
+            "reference",
+        ],
+        Needs::Nothing,
+    ),
+    cmd(
+        "help.context",
+        "Help for this panel",
+        "View",
+        &["help", "f1", "this", "explain", "manual", "panel"],
+        Needs::Nothing,
+    ),
+    cmd(
         "help.whats_new",
         "What's new",
         "View",
