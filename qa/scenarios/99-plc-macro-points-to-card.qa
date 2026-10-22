@@ -13,11 +13,11 @@ text plc input card
 wait 5
 click_text "PLC input card" Label
 wait 10
-expect "Add PLC card"
+expect "Symbols only"
 shot macro-picked
 click_text Place Button #2
 wait 20
 expect_scene "-A2"
-expect "Add PLC card"
+expect "Symbols only"
 shot macro-placed
 check_layout

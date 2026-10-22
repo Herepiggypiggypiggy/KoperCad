@@ -169,9 +169,11 @@ impl Default for PlaceWindow {
     }
 }
 
-/// Said after a macro with PLC channel symbols is placed: the symbols alone
-/// give no addresses, so the I/O list and PLC overview stay empty.
-const PLC_CARD_NOTE: &str = " · These are drawn symbols only: add the card with Draw > PLC > Add PLC card to get addresses and the I/O list";
+/// Shown in the Place window under the preview of a macro with PLC channel
+/// symbols: the symbols alone give no addresses, so the I/O list and PLC
+/// overview stay empty.
+const PLC_CARD_NOTE: &str =
+    "Symbols only: no addresses or I/O list until you add a PLC card (Draw > PLC > Add PLC card)";
 
 /// Whether the macro draws PLC input or output channels (not just a supply
 /// or CPU), which need a registered card to show in the I/O list.
@@ -570,6 +572,15 @@ impl NovoApp {
                         match &shown.report {
                             Ok(report) => {
                                 ui.label(describe(report));
+                                if draws_plc_channels(&shown.definition) {
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(PLC_CARD_NOTE)
+                                                .color(crate::theme::ui_palette().warning),
+                                        )
+                                        .wrap(),
+                                    );
+                                }
                             }
                             Err(reason) => {
                                 novo_theme::widgets::banner(
@@ -639,10 +650,14 @@ impl NovoApp {
                 if let Some(view) = self.canvas.schematic() {
                     view.select_ids(&ids);
                 }
-                let mut text = format!("Placed {name} · {}", describe(&placed.report));
-                if plc_note {
-                    text += PLC_CARD_NOTE;
-                }
+                let text = if plc_note {
+                    format!(
+                        "Placed {name} (symbols only: use Draw > PLC > Add PLC card for addresses) · {}",
+                        describe(&placed.report)
+                    )
+                } else {
+                    format!("Placed {name} · {}", describe(&placed.report))
+                };
                 self.message(Level::Info, text);
                 self.wb.macro_place.open = false;
             }

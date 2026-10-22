@@ -209,7 +209,7 @@ fn start_stop_latch() -> Result<MacroFile> {
 fn plc_input_card() -> Result<MacroFile> {
     capture(
         "PLC input card",
-        "Four digital inputs on a 24 V PLC card with a push button, stop button, key switch and float switch. Drawn symbols only: use Draw > PLC > Add PLC card for addresses and the I/O list",
+        "Four digital inputs on a 24 V PLC card with a push button, stop button, key switch and float switch",
         Vec::new(),
         &["plc", "input", "digital input", "i/o", "24 V", "sensor"],
         |s| {
