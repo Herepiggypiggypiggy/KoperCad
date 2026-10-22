@@ -203,6 +203,49 @@ fn the_build_sheet_pdf_lands_next_to_the_project_with_the_ticks_on_it() {
 }
 
 #[test]
+fn a_problem_keeps_its_photos_on_the_punch_item_and_in_the_project() {
+    let (dir, mut d) = started();
+    cabinet(&mut d);
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.build", None);
+    d.frame();
+    d.frame();
+    let (id, cab_tag) = {
+        let plan = novo_commissioning::BuildPlan::of(d.app.backend.document().unwrap().project());
+        let cab = &plan.cabinets[0];
+        let step = &cab.steps[0];
+        let mode = d.app.wb.commissioning.as_mut().unwrap();
+        let id = novo_commissioning::mark_problem(
+            &mut mode.store,
+            &cab.tag,
+            step,
+            "hole is off",
+            "tv",
+            "2026-10-22T08:00:00Z",
+        );
+        mode.dirty = true;
+        (id, cab.tag.clone())
+    };
+    assert!(!cab_tag.is_empty());
+    let picture = dir.path().join("IMG_0002.png");
+    std::fs::write(&picture, b"a picture of the hole").unwrap();
+    assert_eq!(
+        d.app
+            .keep_problem_photos(id, std::slice::from_ref(&picture)),
+        1
+    );
+    // the same picture again is not a second photo
+    assert_eq!(
+        d.app
+            .keep_problem_photos(id, std::slice::from_ref(&picture)),
+        0
+    );
+    let json = d.app.backend.commissioning_json().unwrap();
+    let store = novo_commissioning::CommissioningStore::from_json(&json).unwrap();
+    assert_eq!(store.punch(id).unwrap().photos.len(), 1);
+}
+
+#[test]
 fn a_device_step_can_be_shown_on_the_plate_and_in_3d_and_build_mode_steps_aside() {
     use super::workspace::Workspace;
     let (_dir, mut d) = started();
@@ -219,7 +262,7 @@ fn a_device_step_can_be_shown_on_the_plate_and_in_3d_and_build_mode_steps_aside(
         .and_then(|b| b.plan.clone())
         .and_then(|(_, p)| p.cabinets[0].steps.iter().find_map(|s| s.device))
         .expect("a device step");
-    d.app.show_device(device, false);
+    d.app.show_device(device, "+CAB1", None, false);
     d.app.wb.build.as_mut().unwrap().away = true;
     d.frame();
     d.frame();
@@ -231,8 +274,69 @@ fn a_device_step_can_be_shown_on_the_plate_and_in_3d_and_build_mode_steps_aside(
     d.frame();
     assert!(d.app.wb.build.is_some());
     assert_eq!(ticks(&d), 0);
-    d.app.show_device(device, true);
+    d.app.show_device(device, "+CAB1", None, true);
     d.frame();
     d.frame();
     assert_eq!(d.app.workspace(), Workspace::View3d);
+}
+
+#[test]
+fn showing_a_device_switches_the_cabinet_to_the_step_s_own_plate_not_the_table() {
+    let (_dir, mut d) = started();
+    cabinet(&mut d);
+    let device = d
+        .app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .devices()
+        .next()
+        .unwrap()
+        .id
+        .raw();
+    // Another cabinet is on show, in table face, on a door surface.
+    d.app.cabinet.location = Some(DeviceTag::parse("+OTHER").unwrap());
+    d.app.cabinet.table = true;
+    d.app.cabinet.surface = Some("door".to_owned());
+    d.app.show_device(device, "+CAB1", Some("door"), false);
+    assert_eq!(d.app.cabinet.surface.as_deref(), Some("door"));
+    d.app.show_device(device, "+CAB1", None, false);
+    assert_eq!(
+        d.app.cabinet.location,
+        Some(DeviceTag::parse("+CAB1").unwrap())
+    );
+    assert!(!d.app.cabinet.table);
+    assert_eq!(d.app.cabinet.surface, None);
+    assert_eq!(d.app.cabinet_selected(), vec![device]);
+}
+
+#[test]
+fn a_claim_by_someone_else_is_kept_in_the_project_and_the_screen_draws_with_it() {
+    let (_dir, mut d) = started();
+    cabinet(&mut d);
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.build", None);
+    d.frame();
+    d.frame();
+    let plan = novo_commissioning::BuildPlan::of(d.app.backend.document().unwrap().project());
+    let step = &plan.cabinets[0].steps[0];
+    {
+        let mode = d.app.wb.commissioning.as_mut().unwrap();
+        mode.who = "ann".into();
+        novo_commissioning::claim_step(&mut mode.store, step, "bob", "2026-10-22T09:00:00Z");
+        mode.dirty = true;
+    }
+    for size in [egui::vec2(1366.0, 768.0), egui::vec2(683.0, 384.0)] {
+        d.frame_sized(size, Vec::new());
+        d.frame_sized(size, Vec::new());
+        assert!(d.app.wb.build.is_some());
+    }
+    let json = d.app.backend.commissioning_json().unwrap();
+    let store = novo_commissioning::CommissioningStore::from_json(&json).unwrap();
+    assert_eq!(store.build_claim(step.key).unwrap().by, "bob");
+    // Taking the step over is a newer claim by ann.
+    let mode = d.app.wb.commissioning.as_mut().unwrap();
+    novo_commissioning::claim_step(&mut mode.store, step, "ann", "2026-10-22T09:30:00Z");
+    assert_eq!(mode.store.build_claim(step.key).unwrap().by, "ann");
 }

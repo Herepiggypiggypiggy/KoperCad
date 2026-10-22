@@ -86,3 +86,4 @@ No step needs admin rights. If one asks for it, stop and say so.
   last saved version. After a normal close there is no dialog at the next start.
 
 Send the result to the thread you got the build from, or write it next to the build number.
+- Windows: F1 opens the manual page via rundll32; check the heading anchor survives in the default browser

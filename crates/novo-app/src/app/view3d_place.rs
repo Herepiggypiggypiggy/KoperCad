@@ -212,12 +212,13 @@ mod tests {
     }
 
     #[test]
-    fn near_a_rail_the_top_edge_snaps_onto_its_line() {
+    fn near_a_rail_the_middle_snaps_onto_its_line() {
         let l = layout();
-        // Centre 45 mm above the rail line puts the top about 4 mm off it.
-        let land = landing(&l, &cand(2), (200.0, 403.0 + 45.0 - 4.0)).unwrap();
+        // The 90 mm device is centred on the rail line, so its top is 45 mm
+        // above it. A pointer centre 4 mm above the rail line is 4 mm off.
+        let land = landing(&l, &cand(2), (200.0, 400.0 - 4.0)).unwrap();
         assert_eq!(land.rail, Some(7));
-        assert_eq!(land.at.1, 400.0);
+        assert_eq!(land.at.1, 355.0);
     }
 
     #[test]

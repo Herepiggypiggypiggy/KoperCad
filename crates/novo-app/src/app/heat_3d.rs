@@ -82,6 +82,8 @@ impl Place {
 
 /// Opacity of the slice and of the shell.
 const SLICE_ALPHA: u8 = 190;
+/// The slice's opacity while the airflow lines are on.
+const SLICE_ALPHA_WITH_LINES: u8 = 105;
 const SHELL_ALPHA: u8 = 110;
 /// Most cells across a slice.
 const SLICE_CELLS: f64 = 120.0;
@@ -171,7 +173,18 @@ pub(crate) fn overlays(
         out.push(Overlay::Mesh(m));
     }
     if settings.slice
-        && let Some(m) = slice_mesh(snap, place, range, settings.axis, settings.slice_at)
+        && let Some(m) = slice_mesh_with(
+            snap,
+            place,
+            range,
+            settings.axis,
+            settings.slice_at,
+            if settings.lines {
+                SLICE_ALPHA_WITH_LINES
+            } else {
+                SLICE_ALPHA
+            },
+        )
     {
         out.push(Overlay::Mesh(m));
     }
@@ -232,12 +245,26 @@ pub(crate) fn slice_offset(snap: &CfdSnapshot, axis: Axis, at: f32) -> f64 {
 
 /// The plane at `at` (0 to 1 along `axis`) as coloured quads; cells inside
 /// solids are left out so devices stay visible.
+#[cfg(test)]
 pub(crate) fn slice_mesh(
     snap: &CfdSnapshot,
     place: Place,
     range: Range,
     axis: Axis,
     at: f32,
+) -> Option<OverlayMesh> {
+    slice_mesh_with(snap, place, range, axis, at, SLICE_ALPHA)
+}
+
+/// [`slice_mesh`] with its own opacity: lighter while the airflow lines are
+/// on, so the devices and the lines show through it.
+pub(crate) fn slice_mesh_with(
+    snap: &CfdSnapshot,
+    place: Place,
+    range: Range,
+    axis: Axis,
+    at: f32,
+    alpha: u8,
 ) -> Option<OverlayMesh> {
     let offset = slice_offset(snap, axis, at);
     let window = cfd::whole_window(snap, axis);
@@ -268,7 +295,7 @@ pub(crate) fn slice_mesh(
                 continue;
             }
             let rgb = heat::ramp(range.t(f64::from(s.temperature.values[r * g.cols + c])));
-            let colour = [rgb[0], rgb[1], rgb[2], SLICE_ALPHA];
+            let colour = [rgb[0], rgb[1], rgb[2], alpha];
             let (u0, v0) = (
                 window.u0 + c as f64 * g.cell_w,
                 window.v0 + r as f64 * g.cell_h,
@@ -329,8 +356,15 @@ pub(crate) struct Flow {
 }
 
 /// Traces streamlines from a lattice of seeds in front of the devices.
+#[cfg(test)]
 pub(crate) fn flow(snap: &CfdSnapshot, place: Place) -> Flow {
-    const SEEDS: usize = 6;
+    flow_from(snap, place, &[])
+}
+
+/// As [`flow`], with more seeds in the solver frame, mm: the air coming in at
+/// the openings, so it can be followed from the vent through the cabinet.
+pub(crate) fn flow_from(snap: &CfdSnapshot, place: Place, extra: &[[f64; 3]]) -> Flow {
+    const SEEDS: usize = 5;
     if !snap.is_consistent() {
         return Flow::default();
     }
@@ -344,6 +378,7 @@ pub(crate) fn flow(snap: &CfdSnapshot, place: Place) -> Flow {
             seeds.push([x0 + f(i) * (x1 - x0), y0 + f(j) * (y1 - y0), z]);
         }
     }
+    seeds.extend(extra.iter().copied().filter(|p| cfd::inside(snap, *p)));
     let mut out = Flow::default();
     for line in cfd::streamlines(snap, &seeds, Trace::default()) {
         if line.len() < 2 {
@@ -371,9 +406,88 @@ pub(crate) fn flow(snap: &CfdSnapshot, place: Place) -> Flow {
     out
 }
 
-/// The streamlines as polylines; faster air is more opaque.
+/// The colour of air at `t` (0 to 1) of the fastest air: still air is a
+/// medium blue, the fastest a saturated lime, through cyan and green (no white
+/// end: it vanished on the light look). It stays
+/// clear of the temperature ramp (purple to yellow) so the two never read as
+/// one scale, and every step is readable on the dark and on the light view.
+pub(crate) fn speed_rgb(t: f32) -> [u8; 3] {
+    const STOPS: [(f32, [f32; 3]); 4] = [
+        (0.0, [60.0, 120.0, 255.0]),
+        (0.4, [20.0, 200.0, 230.0]),
+        (0.75, [60.0, 215.0, 110.0]),
+        (1.0, [205.0, 240.0, 40.0]),
+    ];
+    let t = if t.is_nan() { 0.0 } else { t.clamp(0.0, 1.0) };
+    let k = STOPS
+        .windows(2)
+        .position(|w| t <= w[1].0)
+        .unwrap_or(STOPS.len() - 2);
+    let (a, b) = (STOPS[k], STOPS[k + 1]);
+    let f = (t - a.0) / (b.0 - a.0);
+    let mix = |i: usize| (a.1[i] + (b.1[i] - a.1[i]) * f).round() as u8;
+    [mix(0), mix(1), mix(2)]
+}
+
+/// Distance between arrowheads on a line, mm, and the size of one.
+const ARROW_EVERY_MM: f32 = 130.0;
+const ARROW_LEN_MM: f32 = 15.0;
+/// Air slower than this share of the fastest gets no arrowheads.
+const ARROW_MIN_SHARE: f32 = 0.04;
+
+/// The streamlines as polylines coloured by air speed, with an arrowhead
+/// every so often showing the way the air goes.
 pub(crate) fn stream_lines(flow: &Flow) -> OverlayLines {
-    stream_lines_in(flow, [110, 200, 255], 2)
+    let top = flow.top.max(1e-9);
+    let mut out = OverlayLines {
+        width_px: 2.3,
+        order: 2,
+        ..Default::default()
+    };
+    let colour = |v: f32| {
+        let c = speed_rgb(v / top);
+        [
+            c[0],
+            c[1],
+            c[2],
+            (150.0 + 105.0 * v / top).clamp(150.0, 255.0) as u8,
+        ]
+    };
+    // The lines first, then the arrowheads: one polyline each.
+    let mut heads: Vec<([Vec3; 3], [u8; 4])> = Vec::new();
+    for line in &flow.lines {
+        out.starts.push(out.positions.len() as u32);
+        for (p, v) in line.points.iter().zip(&line.speed) {
+            out.positions.push(*p);
+            out.colors.push(colour(*v));
+        }
+        let len = line.along.last().copied().unwrap_or(0.0);
+        let mut s = 0.5 * ARROW_EVERY_MM;
+        while s < len {
+            let (a, b) = (at(line, (s - 3.0).max(0.0)), at(line, (s + 3.0).min(len)));
+            let v = line.speed[line
+                .along
+                .partition_point(|x| *x <= s)
+                .min(line.speed.len() - 1)];
+            let dir = (b - a).normalize_or_zero();
+            if dir != Vec3::ZERO && v >= ARROW_MIN_SHARE * top {
+                let tip = at(line, s);
+                let up = if dir.y.abs() > 0.95 { Vec3::X } else { Vec3::Y };
+                let side = dir.cross(up).normalize_or_zero() * (0.45 * ARROW_LEN_MM);
+                let back = -dir * ARROW_LEN_MM;
+                heads.push(([tip + back + side, tip, tip + back - side], colour(v)));
+            }
+            s += ARROW_EVERY_MM;
+        }
+    }
+    for (points, c) in heads {
+        out.starts.push(out.positions.len() as u32);
+        for p in points {
+            out.positions.push(p);
+            out.colors.push(c);
+        }
+    }
+    out
 }
 
 /// Lines in `rgb`, more opaque where the value on the line is higher.

@@ -289,9 +289,93 @@ text = "{done}/{total} done · {minutes} min"
 text_nl = "{done}/{total} klaar · {minutes} min"
 
 [do_first]
-text = "Do first:"
-text_nl = "Doe eerst:"
+text = "Builds on:"
+text_nl = "Bouwt voort op:"
 
 [lesson_chip]
 text = "Lesson: {title}"
 text_nl = "Les: {title}"
+
+[suite_home]
+text = "Home"
+text_nl = "Start"
+
+[suite_paths]
+text = "Learning paths"
+text_nl = "Leerpaden"
+
+[suite_topics]
+text = "Topics"
+text_nl = "Onderwerpen"
+
+[back_home]
+text = "Back to Home"
+text_nl = "Terug naar start"
+
+[open_topic]
+text = "Show lessons"
+text_nl = "Lessen tonen"
+
+[level_all]
+text = "All levels"
+text_nl = "Alle niveaus"
+
+[level_beginner]
+text = "Beginner"
+text_nl = "Beginner"
+
+[level_intermediate]
+text = "Intermediate"
+text_nl = "Gevorderd"
+
+[level_advanced]
+text = "Advanced"
+text_nl = "Expert"
+
+[level_range]
+text = "{from} to {to}"
+text_nl = "{from} tot {to}"
+
+[results_count]
+text = "{n} lessons"
+text_nl = "{n} lessen"
+
+[clear_filters]
+text = "Clear search and level"
+text_nl = "Zoekopdracht en niveau wissen"
+
+[pick_up]
+text = "Also under way"
+text_nl = "Ook bezig"
+
+[steps_done]
+text = "{n} of {total} steps"
+text_nl = "{n} van {total} stappen"
+
+[status_done]
+text = "Done"
+text_nl = "Klaar"
+
+[reason_resume_now]
+text = "You are in this lesson"
+text_nl = "Je bent in deze les"
+
+[reason_resume]
+text = "Pick up where you left off"
+text_nl = "Ga verder waar je was"
+
+[reason_continue_path]
+text = "Next in {path}"
+text_nl = "Volgende in {path}"
+
+[reason_next]
+text = "Recommended next"
+text_nl = "Aanbevolen als volgende"
+
+[reason_first]
+text = "A good place to start"
+text_nl = "Een goede plek om te beginnen"
+
+[no_level]
+text = "No lessons at this level here yet."
+text_nl = "Hier nog geen lessen op dit niveau."

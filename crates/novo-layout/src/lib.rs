@@ -267,7 +267,10 @@ pub fn fits(plate: &Plate, placements: &[Placement]) -> (f64, f64) {
 }
 
 /// A horizontal DIN rail or duct on the plate; devices on it are lined up
-/// along `length`, starting at `x`.
+/// along `length`, starting at `x`. `(x, y)` is the start of the rail's centre
+/// line, and the devices on it are centred on that line (a horizontal rail
+/// passes through the vertical middle of each device, a vertical one through
+/// its horizontal middle), as a DIN rail does behind the devices it carries.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Rail {
     pub id: u64,
@@ -281,8 +284,8 @@ pub struct Rail {
 /// How wide a DIN rail lies on the plate across its run: the 35 mm of a
 /// TS 35 top-hat rail, centred on [`Rail`]'s line. Ducts and rows keep out of
 /// this band, not just off the line. The band is the planner's model of the
-/// rail (a TS 35 centred on the line at the devices' top edge), not a
-/// measured rail position.
+/// rail (a TS 35 centred on the line, which runs through the middle of the
+/// devices on it), not a measured rail position.
 pub const RAIL_BAND_MM: f64 = 35.0;
 
 /// Default duct cross-section in mm when the model has none yet.

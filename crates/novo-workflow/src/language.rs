@@ -271,6 +271,21 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     nl("help.about", &[], &["over", "versie"]),
+    nl(
+        "help.manual",
+        &["handleiding"],
+        &[
+            "handleiding",
+            "gebruikershandleiding",
+            "documentatie",
+            "hulp",
+        ],
+    ),
+    nl(
+        "help.context",
+        &[],
+        &["hulp bij dit venster", "uitleg bij dit venster"],
+    ),
     // Draw
     nl(
         "tool.repeat",
@@ -553,6 +568,22 @@ pub const DUTCH: &[Aliases] = &[
         &["warmte simuleren", "kast doorrekenen"],
     ),
     nl("heat.airflow", &[], &["luchtstroom", "luchtstroming"]),
+    nl(
+        "heat.vents",
+        &[],
+        &["ventilatieopening", "ventilatieopeningen", "ventilator"],
+    ),
+    nl(
+        "heat.add_filter_fan",
+        &[],
+        &["filterventilator", "ventilator met filter"],
+    ),
+    nl("heat.add_grille", &[], &["rooster", "ventilatierooster"]),
+    nl(
+        "heat.add_exhaust_fan",
+        &[],
+        &["afzuigventilator", "uitblaasventilator"],
+    ),
     nl("heat.contours", &[], &["isothermen", "warmtelijnen"]),
     nl(
         "cabinet.size-enclosure",

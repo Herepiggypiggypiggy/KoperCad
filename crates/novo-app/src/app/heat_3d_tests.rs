@@ -144,9 +144,11 @@ fn the_shell_sits_where_the_temperature_reaches_the_level() {
 
 #[test]
 fn streamlines_run_downwind_in_the_scene_frame() {
-    let l = stream_lines(&flow(&snapshot(), place()));
+    let fl = flow(&snapshot(), place());
+    let l = stream_lines(&fl);
     assert!(l.is_valid() && !l.starts.is_empty());
-    for (k, &s) in l.starts.iter().enumerate() {
+    // The lines come first; the arrowheads after them.
+    for (k, &s) in l.starts.iter().take(fl.lines.len()).enumerate() {
         let end = l
             .starts
             .get(k + 1)

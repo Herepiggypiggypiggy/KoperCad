@@ -141,6 +141,7 @@ pub fn layout(
             table.labels.push(
                 Label::new(Vec2::new(x, cy), s.clone(), h)
                     .anchored(Anchor::CenterLeft)
+                    .inside()
                     .colored(text),
             );
         }
