@@ -5,13 +5,35 @@ use std::sync::Arc;
 use eframe::egui;
 use novo_ai::api::testing::Script;
 use novo_ai::consent::{Consent, DataScope};
+use novo_ai::engineer::{Resources, actions};
 use novo_ai::key::{ApiKey, KeyStore};
-use novo_ai::tools::Proposal;
 use serde_json::{Value, json};
 
 use super::assistant::*;
 use super::gate1_tests::Drive;
 use crate::actions::Action;
+
+/// What an action would do to a copy of `project`: its one-line summary, or the reason it is refused.
+fn run_action(project: &novo_core::Project, action: &str, args: &Value) -> Result<String, String> {
+    let mut copy = project.clone();
+    actions::run_on(&mut copy, &Resources::new(Vec::new()).env(), action, args)
+}
+
+/// Puts one action on a card and applies it through the window's own path.
+fn apply_step(d: &mut Drive, action: &str, args: Value) -> Result<String, String> {
+    let project = d.app.document().unwrap().project().clone();
+    let summary = run_action(&project, action, &args)?;
+    let index = d
+        .app
+        .wb
+        .assistant
+        .test_push_card(&project, &[(action, args)])?;
+    d.app.assistant_test_decide(index, true);
+    match d.app.wb.assistant.proposal_state(index) {
+        Some(ProposalState::Applied) => Ok(summary),
+        other => Err(format!("not applied: {other:?}")),
+    }
+}
 
 fn queue<const N: usize>(script: &Script, replies: [Value; N]) {
     for r in replies {
@@ -186,7 +208,7 @@ fn a_proposal_applies_as_one_undo_step() {
     let last: Value = serde_json::from_str(&seen.last().unwrap().body).unwrap();
     let msgs = last["messages"].as_array().unwrap();
     let user = msgs.last().unwrap()["content"].as_str().unwrap();
-    assert!(user.contains("The person applied proposal 1"), "{user}");
+    assert!(user.contains("The person applied Rename device"), "{user}");
     drop(seen);
     let ctx = s.d.ctx.clone();
     s.d.app.run(&ctx, Action::Undo);
@@ -253,18 +275,11 @@ fn the_monthly_limit_blocks_a_message_without_sending_it() {
 
 #[test]
 fn bad_proposals_are_refused_with_a_reason() {
-    use novo_core::{DeviceTag, Project};
-    let p = Project::new("x");
-    let known = known_of(&p);
-    let r = proposal_command(
-        &known,
-        "rename_device",
-        &json!({"device_id": 5, "tag": "-K1"}),
-    );
+    let p = novo_core::Project::new("x");
+    let r = run_action(&p, "rename_device", &json!({"device_id": 5, "tag": "-K1"}));
     assert!(r.unwrap_err().contains("no device"));
-    let r = proposal_command(&known, "delete_all", &json!({}));
+    let r = run_action(&p, "delete_all", &json!({}));
     assert!(r.is_err());
-    let _ = DeviceTag::parse("-K1").unwrap();
 }
 
 #[test]
@@ -357,15 +372,13 @@ fn the_other_edits_apply_and_undo() {
         let dv = p.devices().next().unwrap();
         (dv.id.raw(), dv.tag.to_string())
     };
-    let known = known_of(d.app.document().unwrap().project());
-    let (cmd, summary) = proposal_command(
-        &known,
+    let summary = apply_step(
+        &mut d,
         "set_property",
-        &json!({"device_id": dev, "key": "note", "value": "check"}),
+        json!({"device_id": dev, "key": "note", "value": "check"}),
     )
     .unwrap();
     assert!(summary.contains(&tag) && summary.contains("note"));
-    assert!(d.app.execute(cmd).unwrap().is_ok());
     let prop = |d: &Drive| {
         d.app
             .document()
@@ -379,42 +392,35 @@ fn the_other_edits_apply_and_undo() {
     };
     assert!(prop(&d).is_some());
     // The card says what the next change replaces.
-    let again = Proposal {
-        id: 1,
-        action: "set_property".into(),
-        args: json!({"device_id": dev, "key": "note", "value": "other"}),
-        summary: String::new(),
-    };
-    let note = proposal_note(d.app.document().unwrap().project(), &again).unwrap();
+    let note = actions::note_before(
+        d.app.document().unwrap().project(),
+        "set_property",
+        &json!({"device_id": dev, "key": "note", "value": "other"}),
+    )
+    .unwrap();
     assert!(note.contains("check"), "{note}");
     d.app.run(&ctx, Action::Undo);
     assert!(prop(&d).is_none(), "one undo removes the property");
     // Long keys and values are refused.
-    let long = "x".repeat(MAX_VALUE_CHARS + 1);
+    let long = "x".repeat(501);
     assert!(
-        proposal_command(
-            &known,
+        run_action(
+            d.app.document().unwrap().project(),
             "set_property",
             &json!({"device_id": dev, "key": "note", "value": long}),
         )
         .is_err()
     );
-    let (cmd, summary) = proposal_command(
-        &known,
-        "add_page",
-        &json!({"name": "ZZ1", "title": "Added"}),
-    )
-    .unwrap();
-    assert_eq!(summary, "Add page ZZ1 (Added)");
     let pages = d.app.document().unwrap().project().pages().count();
-    assert!(d.app.execute(cmd).unwrap().is_ok());
+    let summary = apply_step(&mut d, "add_page", json!({"name": "ZZ1", "title": "Added"})).unwrap();
+    assert_eq!(summary, "Add page ZZ1 (Added)");
     assert_eq!(
         d.app.document().unwrap().project().pages().count(),
         pages + 1
     );
     // A part that is not there is refused with the section to look in.
-    let e = proposal_command(
-        &known,
+    let e = run_action(
+        d.app.document().unwrap().project(),
         "assign_part",
         &json!({"device_id": dev, "part_id": 999_999}),
     )
@@ -441,14 +447,13 @@ fn the_other_edits_apply_and_undo() {
         .map(|x| x.id)
         .find(|id| !before.contains(id))
         .expect("the example has a part not on the first device");
-    let (cmd, summary) = proposal_command(
-        &known,
+    let summary = apply_step(
+        &mut d,
         "assign_part",
-        &json!({"device_id": dev, "part_id": part.raw()}),
+        json!({"device_id": dev, "part_id": part.raw()}),
     )
     .unwrap();
     assert!(summary.starts_with("Assign part"));
-    assert!(d.app.execute(cmd).unwrap().is_ok());
     assert!(parts_of(&d).contains(&part));
     d.app.run(&ctx, Action::Undo);
     assert_eq!(parts_of(&d), before);
@@ -1084,15 +1089,13 @@ fn no_network_and_a_rate_limit_end_in_a_plain_message_after_the_retries() {
 fn the_wire_card_names_the_wire_by_its_ends_not_its_id() {
     let s = setup(DataScope::Project);
     let project = s.d.app.document().unwrap().project();
-    let known = known_of(project);
     let (id, _) = first_wire(&s);
-    let (plan, summary) = proposal_plan(
-        &known,
+    let summary = run_action(
+        project,
         "set_wire_number",
         &json!({"wire_id": id, "number": "L1-77"}),
     )
     .unwrap();
-    assert!(matches!(plan, Plan::WireNumber { .. }));
     assert!(summary.starts_with("Number the wire from "), "{summary}");
     assert!(
         summary.contains(" to ") && summary.contains("(page "),
@@ -1106,8 +1109,8 @@ fn the_wire_card_names_the_wire_by_its_ends_not_its_id() {
         !summary.contains(&format!("wire {id}")) && !summary.contains(&format!("#{id}")),
         "no internal id: {summary}"
     );
-    let (_, clear) = proposal_plan(
-        &known,
+    let clear = run_action(
+        project,
         "set_wire_number",
         &json!({"wire_id": id, "number": ""}),
     )
@@ -1117,14 +1120,10 @@ fn the_wire_card_names_the_wire_by_its_ends_not_its_id() {
         "{clear}"
     );
     // The card's note names the wire too, and says what is replaced.
-    let note = proposal_note(
+    let note = actions::note_before(
         project,
-        &Proposal {
-            id: 1,
-            action: "set_wire_number".into(),
-            args: json!({"wire_id": id, "number": "L1-77"}),
-            summary,
-        },
+        "set_wire_number",
+        &json!({"wire_id": id, "number": "L1-77"}),
     )
     .unwrap();
     assert!(note.contains("the wire from "), "{note}");
@@ -1134,11 +1133,10 @@ fn the_wire_card_names_the_wire_by_its_ends_not_its_id() {
 #[test]
 fn wire_numbers_with_control_characters_are_refused() {
     let s = setup(DataScope::Project);
-    let known = known_of(s.d.app.document().unwrap().project());
     let (id, _) = first_wire(&s);
     for bad in ["A\nB", "A\u{7}", "\tX\u{0}"] {
-        let r = proposal_plan(
-            &known,
+        let r = run_action(
+            s.d.app.document().unwrap().project(),
             "set_wire_number",
             &json!({"wire_id": id, "number": bad}),
         );
@@ -1147,7 +1145,7 @@ fn wire_numbers_with_control_characters_are_refused() {
 }
 
 #[test]
-fn a_number_another_net_has_is_refused_with_a_reason_on_the_card() {
+fn a_number_another_net_has_is_refused_with_a_reason_and_no_card() {
     let mut s = setup(DataScope::Project);
     let (wire, before, taken) = {
         let p = s.d.app.document().unwrap().project();
@@ -1163,15 +1161,22 @@ fn a_number_another_net_has_is_refused_with_a_reason_on_the_card() {
         )
     };
     propose_wire(&mut s, wire, &taken);
-    let index = s.d.app.wb.assistant.first_proposal_index().expect("a card");
-    s.d.app.assistant_test_decide(index, true);
+    // The draft refuses it, so Claude is told why and the person gets no card to apply.
+    assert!(s.d.app.wb.assistant.first_proposal_index().is_none());
     assert_eq!(first_wire(&s).1, before, "nothing changed");
-    match s.d.app.wb.assistant.proposal_state(index) {
-        Some(ProposalState::Failed(why)) => {
-            assert!(why.contains("already used on another net"), "{why}")
-        }
-        other => panic!("the card should show the refusal, not {other:?}"),
-    }
+    let seen = s.script.seen.lock().unwrap();
+    let last: Value = serde_json::from_str(&seen.last().unwrap().body).unwrap();
+    let told = last["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|m| m["content"].as_array())
+        .flatten()
+        .filter(|c| c["type"] == "tool_result")
+        .map(|c| c["content"].as_str().unwrap_or_default().to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(told.contains("already used on another net"), "{told}");
 }
 
 #[test]
@@ -1253,4 +1258,233 @@ fn on_a_small_window_the_box_stays_off_until_the_notice_has_been_in_view() {
         s.d.app.wb.assistant.turn_on_ready(),
         "now it can be pressed"
     );
+}
+
+/// The scripted replies of a shipped evaluation scenario, queued for the window.
+fn queue_scenario(s: &Setup, id: &str, turn: usize) {
+    let scenario = novo_ai::eval::builtin()
+        .into_iter()
+        .find(|x| x.id == id)
+        .expect("the scenario ships");
+    let replies: Vec<Value> = scenario.turns[turn]
+        .script
+        .iter()
+        .enumerate()
+        .map(|(n, r)| {
+            let mut content = Vec::new();
+            if !r.text.is_empty() {
+                content.push(json!({"type": "text", "text": r.text}));
+            }
+            for (i, c) in r.calls.iter().enumerate() {
+                content.push(json!({"type": "tool_use", "id": format!("t{turn}_{n}_{i}"),
+                                    "name": c.tool, "input": c.input}));
+            }
+            json!({"content": content,
+                   "stop_reason": if r.calls.is_empty() { "end_turn" } else { "tool_use" },
+                   "model": "claude-opus-5-5", "usage": {"input_tokens": 1000, "output_tokens": 100}})
+        })
+        .collect();
+    for r in replies {
+        s.script.push(200, r);
+    }
+}
+
+/// A window on an empty project (no example loaded).
+fn setup_empty(scope: DataScope) -> Setup {
+    let mut s = setup(scope);
+    let ctx = s.d.ctx.clone();
+    s.d.app.run(&ctx, Action::NewProject);
+    s.d.frame();
+    s
+}
+
+fn device_tags(s: &Setup) -> Vec<String> {
+    let mut t: Vec<String> =
+        s.d.app
+            .document()
+            .unwrap()
+            .project()
+            .devices()
+            .map(|d| d.tag.to_string())
+            .collect();
+    t.sort();
+    t
+}
+
+#[test]
+fn claude_builds_a_starter_in_a_draft_and_the_whole_set_is_one_undo_step() {
+    let mut s = setup_empty(DataScope::Project);
+    assert!(device_tags(&s).is_empty());
+    queue_scenario(&s, "create-dol-starter", 0);
+    ask(&mut s, "Build a direct-on-line starter");
+    // Nothing is in the project until the person applies.
+    assert!(
+        device_tags(&s).is_empty(),
+        "the draft must not touch the project"
+    );
+    let kinds = s.d.app.wb.assistant.entry_kinds();
+    assert!(kinds.contains(&"plan"), "{kinds:?}");
+    let index =
+        s.d.app
+            .wb
+            .assistant
+            .first_proposal_index()
+            .expect("a change set");
+    let outcome = s.d.app.wb.assistant.card_outcome(index).unwrap().clone();
+    assert!(outcome.steps.len() >= 8, "{}", outcome.steps.len());
+    assert!(
+        outcome.verified,
+        "Claude ran the checks after its last edit"
+    );
+    assert_eq!(outcome.checks.after.errors, 0);
+    assert!(outcome.diff.devices_added.contains(&"-M1".to_string()));
+    let depth = s.d.app.document().unwrap().undo_depth();
+    s.d.app.assistant_test_decide(index, true);
+    assert_eq!(
+        s.d.app.wb.assistant.proposal_state(index),
+        Some(ProposalState::Applied)
+    );
+    assert!(device_tags(&s).contains(&"-M1".to_string()));
+    assert_eq!(
+        s.d.app.document().unwrap().undo_depth(),
+        depth + 1,
+        "all steps are one undo step"
+    );
+    // The decision is told to Claude with the next message.
+    assert!(
+        s.d.app
+            .wb
+            .assistant
+            .transcript_text()
+            .contains("Place macro")
+    );
+    let ctx = s.d.ctx.clone();
+    s.d.app.run(&ctx, Action::Undo);
+    assert!(
+        device_tags(&s).is_empty(),
+        "one Ctrl+Z takes back everything"
+    );
+}
+
+#[test]
+fn rejecting_a_change_set_leaves_the_project_untouched() {
+    let mut s = setup_empty(DataScope::Project);
+    queue_scenario(&s, "create-dol-starter", 0);
+    ask(&mut s, "Build a direct-on-line starter");
+    let index = s.d.app.wb.assistant.first_proposal_index().unwrap();
+    let depth = s.d.app.document().unwrap().undo_depth();
+    s.d.app.assistant_test_decide(index, false);
+    assert_eq!(
+        s.d.app.wb.assistant.proposal_state(index),
+        Some(ProposalState::Rejected)
+    );
+    assert!(device_tags(&s).is_empty());
+    assert_eq!(s.d.app.document().unwrap().undo_depth(), depth);
+}
+
+#[test]
+fn a_question_stops_the_turn_and_the_answer_builds_on_it() {
+    let mut s = setup_empty(DataScope::Project);
+    queue_scenario(&s, "ask-before-building", 0);
+    ask(&mut s, "Add a motor starter.");
+    let kinds = s.d.app.wb.assistant.entry_kinds();
+    assert!(kinds.contains(&"question"), "{kinds:?}");
+    assert!(
+        s.d.app.wb.assistant.first_proposal_index().is_none(),
+        "no edits before the answer"
+    );
+    queue_scenario(&s, "ask-before-building", 1);
+    ask(&mut s, "7.5 kW, 400 V, page 1.");
+    let index =
+        s.d.app
+            .wb
+            .assistant
+            .first_proposal_index()
+            .expect("a change set");
+    s.d.app.assistant_test_decide(index, true);
+    assert!(device_tags(&s).contains(&"-M1".to_string()));
+}
+
+#[test]
+fn an_undecided_change_set_is_carried_into_the_next_request() {
+    let mut s = setup_empty(DataScope::Project);
+    let first = [
+        tool(
+            "a1",
+            "propose_edit",
+            json!({"action": "add_page", "args": {"name": "2", "title": "Motor"}}),
+        ),
+        text("Page added to the draft."),
+    ];
+    queue(&s.script, first);
+    ask(&mut s, "Add a page");
+    let first_index = s.d.app.wb.assistant.first_proposal_index().unwrap();
+    let second = [
+        tool(
+            "b1",
+            "propose_edit",
+            json!({"action": "place_macro", "args": {"macro": "Motor starter DOL", "page": "2"}}),
+        ),
+        text("Starter added."),
+    ];
+    queue(&s.script, second);
+    ask(&mut s, "Now put a starter on it");
+    // The first card was replaced by one that holds both steps.
+    assert_eq!(
+        s.d.app.wb.assistant.proposal_state(first_index),
+        Some(ProposalState::Superseded)
+    );
+    let kinds = s.d.app.wb.assistant.entry_kinds();
+    let second_index = kinds.iter().rposition(|k| *k == "changeset").unwrap();
+    assert_ne!(first_index, second_index);
+    assert_eq!(
+        s.d.app
+            .wb
+            .assistant
+            .card_outcome(second_index)
+            .unwrap()
+            .steps
+            .len(),
+        2
+    );
+    // A superseded card cannot be applied.
+    s.d.app.assistant_test_decide(first_index, true);
+    assert!(device_tags(&s).is_empty());
+    s.d.app.assistant_test_decide(second_index, true);
+    assert!(device_tags(&s).contains(&"-M1".to_string()));
+}
+
+#[test]
+fn a_change_set_that_no_longer_fits_changes_nothing() {
+    let mut s = setup_empty(DataScope::Project);
+    queue(
+        &s.script,
+        [
+            tool(
+                "a1",
+                "propose_edit",
+                json!({"action": "add_page", "args": {"name": "2"}}),
+            ),
+            text("Page added to the draft."),
+        ],
+    );
+    ask(&mut s, "Add a page 2");
+    let index = s.d.app.wb.assistant.first_proposal_index().unwrap();
+    // The person makes a page 1 of their own before deciding.
+    let project = s.d.app.document().unwrap().project().clone();
+    let own =
+        s.d.app
+            .wb
+            .assistant
+            .test_push_card(&project, &[("add_page", json!({"name": "2"}))])
+            .unwrap();
+    s.d.app.assistant_test_decide(own, true);
+    let depth = s.d.app.document().unwrap().undo_depth();
+    s.d.app.assistant_test_decide(index, true);
+    match s.d.app.wb.assistant.proposal_state(index) {
+        Some(ProposalState::Failed(why)) => assert!(why.contains("Step 1"), "{why}"),
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+    assert!(device_tags(&s).is_empty(), "all or nothing");
+    assert_eq!(s.d.app.document().unwrap().undo_depth(), depth);
 }

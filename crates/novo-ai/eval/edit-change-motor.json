@@ -1,0 +1,147 @@
+{
+  "id": "edit-change-motor",
+  "category": "edit",
+  "title": "Change the motor and say what else has to follow",
+  "setup": [
+    {
+      "action": "add_page",
+      "args": {
+        "name": "1",
+        "title": "Motor"
+      }
+    },
+    {
+      "action": "place_macro",
+      "args": {
+        "macro": "Motor starter DOL",
+        "page": "1"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F1:1",
+        "potential": "L1"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F1:3",
+        "potential": "L2"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F1:5",
+        "potential": "L3"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": {
+          "symbol_id": 14,
+          "pin": "1"
+        },
+        "potential": "PE"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F3:1",
+        "potential": "L1"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-K1:A2",
+        "potential": "N"
+      }
+    },
+    {
+      "action": "number_wires",
+      "args": {}
+    }
+  ],
+  "turns": [
+    {
+      "prompt": "The motor is now 5.5 kW and drives the feed pump. Update the project.",
+      "script": [
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "read_project",
+              "input": {
+                "section": "devices",
+                "filter": "-M1"
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "set_property",
+                "args": {
+                  "device": "-M1",
+                  "key": "power_kw",
+                  "value": 5.5
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "describe_device",
+                "args": {
+                  "device": "-M1",
+                  "text": "Feed pump motor, 5.5 kW"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "run_checks",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "text": "I changed the motor -M1 to 5.5 kW and described it as the feed pump motor. I did not touch anything else, and the rest does not follow by itself: the breaker -F1, the overload relay -F2, the contactor -K1 and the wire cross-sections were sized for the old motor. Re-size them from the motor's rated current (Autopilot can propose wire sizes) and assign parts that fit. The design checks do not test whether the protection suits the new motor.",
+          "calls": []
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "properties": [
+      {
+        "device": "-M1",
+        "key": "power_kw",
+        "value": "5.5"
+      }
+    ],
+    "described": [
+      "-M1"
+    ],
+    "errors_max": 0,
+    "keep_existing": true,
+    "steps_max": 3,
+    "text_contains": [
+      "overload",
+      "-F1"
+    ]
+  }
+}
