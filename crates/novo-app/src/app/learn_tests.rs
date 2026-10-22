@@ -452,6 +452,24 @@ fn the_shipped_lessons_lint_without_errors_against_this_build() {
 }
 
 #[test]
+fn no_shipped_lesson_names_a_control_this_build_does_not_register() {
+    // The lint only warns for a lesson that is still early access, and a step
+    // waiting for a control that never comes cannot be finished (Drawing
+    // standard once waited for two).
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    let report = d.app.learn.lint_report();
+    let missing: Vec<String> = report
+        .findings
+        .iter()
+        .filter(|f| f.message.contains("anchor") && f.message.contains("is not in this build"))
+        .map(ToString::to_string)
+        .collect();
+    assert!(missing.is_empty(), "{}", missing.join("\n"));
+}
+
+#[test]
 fn a_ready_lesson_naming_a_missing_anchor_is_coming_soon() {
     let (_dir, mut d) = drive();
     let mut files = files();
@@ -996,6 +1014,50 @@ fn the_inspector_keeps_above_the_lesson_card_at_1366() {
     assert!(
         inspector.max.y <= card.min.y || inspector.max.x <= card.min.x,
         "the inspector {inspector:?} covers the lesson card {card:?}"
+    );
+}
+
+#[test]
+fn starting_a_lesson_clears_the_search_so_learn_reopens_on_its_home_page() {
+    let (_dir, mut d) = drive();
+    d.app.learn.filter = "wheel".into();
+    d.app.start_lesson("tiny");
+    assert!(d.app.learn.filter.is_empty());
+}
+
+#[test]
+fn page_down_changes_the_page_with_the_pointer_on_the_lesson_card() {
+    let (_dir, mut d) = drive();
+    d.app.start_lesson("tiny");
+    let size = eframe::egui::vec2(1366.0, 768.0);
+    for _ in 0..3 {
+        d.frame_sized(size, Vec::new());
+    }
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "page.new", None);
+    d.app.run_command(&ctx, "nav.previous_page", None);
+    for _ in 0..3 {
+        d.frame_sized(size, Vec::new());
+    }
+    let first = d.app.current_page().expect("a page");
+    let card = d
+        .ctx
+        .memory(|m| m.area_rect(super::panel::id("lesson_card")))
+        .expect("the card is shown");
+    let key = |pressed| eframe::egui::Event::Key {
+        key: eframe::egui::Key::PageDown,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: eframe::egui::Modifiers::NONE,
+    };
+    d.frame_sized(size, vec![eframe::egui::Event::PointerMoved(card.center())]);
+    d.frame_sized(size, vec![key(true), key(false)]);
+    d.frame_sized(size, Vec::new());
+    assert_ne!(
+        d.app.current_page(),
+        Some(first),
+        "Page Down is taken with the pointer on the card"
     );
 }
 

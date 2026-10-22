@@ -222,6 +222,8 @@ const KNOWN_VERBS: &[&str] = &[
     "click_text",
     "click",
     "move",
+    "mouse_down",
+    "mouse_up",
     "drag",
     "scroll",
     "key",
@@ -997,6 +999,11 @@ impl Ctx<'_> {
                 {
                     args["button"] = json!(button);
                 }
+                self.srv.tool(&words[0], &args).map(|_| ())
+            }
+            // Press or release at a point and leave it, to take a picture mid-drag (`move` between).
+            "mouse_down" | "mouse_up" => {
+                let args = json!({"x": num(1, "x")?, "y": num(2, "y")?});
                 self.srv.tool(&words[0], &args).map(|_| ())
             }
             "drag" => {

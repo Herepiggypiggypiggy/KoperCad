@@ -81,12 +81,14 @@ De toetsen die je elke dag gebruikt kunnen de jouwe zijn. Een tekstbestand in je
 """
 how = [
   "Open the shortcut sheet with {key:view.shortcuts} to see every key you have now.",
+  "Close the sheet again with {key:edit.escape}: while it is open it sits over this card and the first click only closes it.",
   "Create the file **keymap.txt** in **%APPDATA%\\KoperCAD** with Notepad.",
   "Write one line per key, command first: for example **tool.cable = F6**.",
   "Restart KoperCAD. The shortcut sheet now shows your key.",
 ]
 how_nl = [
   "Open het toetsenoverzicht met {key:view.shortcuts} om elke toets te zien die je nu hebt.",
+  "Sluit het overzicht weer met {key:edit.escape}: zolang het open is, ligt het over deze kaart en sluit de eerste klik alleen het overzicht.",
   "Maak het bestand **keymap.txt** in **%APPDATA%\\KoperCAD** met Kladblok.",
   "Schrijf één regel per toets, eerst de opdracht: bijvoorbeeld **tool.cable = F6**.",
   "Start KoperCAD opnieuw. Het toetsenoverzicht toont nu jouw toets.",

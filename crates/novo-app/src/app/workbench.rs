@@ -810,7 +810,10 @@ impl NovoApp {
     pub(super) fn track_pointer(&mut self, ctx: &egui::Context) {
         let at = ctx.pointer_hover_pos();
         self.wb.pointer_world = match (at, self.wb.canvas_area, self.canvas.schematic_ref()) {
-            (Some(at), Some((_, rect)), Some(view)) if rect.contains(at) => {
+            // Not through a window or the lesson card lying over the drawing.
+            (Some(at), Some((layer, rect)), Some(view))
+                if rect.contains(at) && ctx.layer_id_at(at).is_none_or(|l| l == layer) =>
+            {
                 let local = at - rect.min;
                 let w = view
                     .canvas
@@ -835,6 +838,14 @@ impl NovoApp {
         }
         if command == "edit.delete" {
             return self.declines_proposal();
+        }
+        // The editor reads the page keys only while the pointer is on the
+        // drawing; with it on the lesson card or a panel nobody would.
+        if matches!(command, "nav.next_page" | "nav.previous_page")
+            && self.workspace() == Workspace::Schematic
+            && self.wb.pointer_world.is_none()
+        {
+            return self.is_open();
         }
         if EDITOR_KEYS.contains(&command) {
             return false;
