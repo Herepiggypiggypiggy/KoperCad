@@ -228,6 +228,16 @@ pub static FAMILIES: &[Family] = &[
         fix: "Open the Cabinet view: move the device, resize the duct, or enter the missing dimension on the part.",
     },
     Family {
+        id: "emc",
+        title: "EMC design rules",
+        what: "Wires of different EMC classes keep their distance and their own ducts and cables, motor cables are shielded and terminated all round, drives have a filter close by, shield pigtails are short, loops are small, drives and filters sit on bare metal, and sensitive devices keep away from drives.",
+        kinds: &[ProblemKind::Emc],
+        source: "Wire classes read from the drawing (drive outputs, safety and analog devices, potentials) or set on the wire, routed paths from the cabinet, shield and bonding facts stated on cables, enclosures and devices (emc.* properties).",
+        assumptions: "Rule-based and analytic models with planning values from common installation practice, not a standard; clause numbers are unverified. Radiated and conducted emission margins, filter insertion loss, enclosure shielding and surge paths are not computed. This is a design aid, never a compliance statement or a test result.",
+        reliance: Reliance::Model,
+        fix: "Check > EMC check lists each finding with its reason and suggestion; open the Cabinet view to move a run or a device.",
+    },
+    Family {
         id: "parts",
         title: "Parts and data",
         what: "Every device and cable has a part, so the lists, loads and heat can be worked out.",
@@ -320,6 +330,8 @@ impl Row {
     /// verdict from the standard.
     pub fn result_text(&self) -> String {
         match (self.verdict, self.family.reliance) {
+            // The EMC family never says "met": nothing was found by a design aid.
+            (Verdict::Pass, _) if self.family.id == "emc" => "No finding (design aid)".to_owned(),
             (Verdict::Pass, Reliance::Planning) => "Met (planning values)".to_owned(),
             (Verdict::Pass, Reliance::Model) => "Met (estimate)".to_owned(),
             (v, _) => v.label().to_owned(),
@@ -369,6 +381,7 @@ fn examined(project: &Project, id: &str) -> usize {
         "terminals-cables-plc" => project.terminals().count() + project.cables().count(),
         "cabinet" => project.devices().count(),
         "parts" => project.devices().count() + project.cables().count(),
+        "emc" if novo_emc::project::is_enabled(project) => project.wires().count(),
         _ => 0,
     }
 }
@@ -441,6 +454,17 @@ fn missing(project: &Project, id: &str, heat: Option<&HeatFact>) -> Vec<String> 
             }
             Some(_) => {}
         },
+        "emc" => {
+            if !novo_emc::project::is_enabled(project) {
+                out.push("The EMC check is off: turn it on in Check > EMC check to include the EMC rules".to_owned());
+            } else {
+                let report = novo_emc::project::analyse_project(project);
+                for rule in report.rules.iter().filter(|r| r.status == novo_emc::Status::NotEvaluated) {
+                    out.push(format!("{}: {}", rule.rule, rule.note));
+                }
+                out.extend(novo_emc::NOT_CHECKED.iter().map(|t| format!("Not checked: {t}")));
+            }
+        }
         _ => {}
     }
     out
@@ -534,6 +558,30 @@ fn evidence(
                 out.push(h.sentence.clone());
                 out.extend(h.cooling.iter().cloned());
             }
+        }
+        "emc" if novo_emc::project::is_enabled(project) => {
+            let report = novo_emc::project::analyse_project(project);
+            let input = novo_emc::project::input_of(project, &project.netlist());
+            let classes: Vec<String> = novo_emc::project::class_counts(&input)
+                .into_iter()
+                .map(|(c, n)| format!("{n} {}", c.label().to_lowercase()))
+                .collect();
+            if !classes.is_empty() {
+                out.push(format!("Wire classes: {}", classes.join(", ")));
+            }
+            let worst = report.runs.iter().map(|s| s.points).max().unwrap_or(0);
+            out.push(format!(
+                "{} EMC rules ran; the highest risk score of a wire is {worst} of 100 (a sum of listed reasons, not a measurement)",
+                report.rules.iter().filter(|r| !matches!(r.status, novo_emc::Status::NotApplicable)).count()
+            ));
+            out.extend(report.assumptions.iter().map(|a| {
+                format!(
+                    "Assumed: {}: {} ({})",
+                    a.name,
+                    a.value,
+                    if a.user_set { "set in this project" } else { "program default" }
+                )
+            }));
         }
         _ => {}
     }
@@ -748,6 +796,10 @@ mod tests {
         for r in &mut rows {
             r.verdict = Verdict::Pass;
             let text = r.result_text();
+            if r.family.id == "emc" {
+                assert_eq!(text, "No finding (design aid)");
+                continue;
+            }
             match r.family.reliance {
                 Reliance::Exact => assert_eq!(text, "Pass"),
                 Reliance::Planning => assert_eq!(text, "Met (planning values)"),

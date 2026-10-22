@@ -2023,6 +2023,7 @@ version = "0.1.0"
 dependencies = [
  "novo-cables",
  "novo-core",
+ "novo-emc",
  "novo-layout",
  "novo-parts",
  "novo-plc",
