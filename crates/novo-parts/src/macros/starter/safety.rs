@@ -24,7 +24,7 @@ fn wire_via(
 fn safety_estop_relay() -> Result<MacroFile> {
     capture(
         "Emergency stop with safety relay",
-        "Two-channel emergency stop monitored by a safety relay with a reset button and two redundant contactor coils",
+        "Wiring example: two-channel emergency stop on a safety relay with a reset button and two contactor coils. The category and performance level depend on the relay type and the whole circuit; nothing here is validated as a safety design",
         Vec::new(),
         &[
             "safety",
@@ -71,7 +71,7 @@ fn safety_estop_relay() -> Result<MacroFile> {
 fn plc_network() -> Result<MacroFile> {
     capture(
         "PLC network with switch",
-        "PLC CPU on an Ethernet switch with a frequency converter and an operator panel as network devices",
+        "PLC CPU on an Ethernet switch with two network devices. -T1 is the network port of a frequency converter (give it the converter's tag so both symbols share one device); -A3 is the port of an operator panel",
         Vec::new(),
         &[
             "plc", "network", "ethernet", "switch", "profinet", "hmi", "drive", "fieldbus",

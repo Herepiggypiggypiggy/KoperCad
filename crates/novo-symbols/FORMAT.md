@@ -152,7 +152,7 @@ read-only install folder.
 
 ## Safety, PLC and network symbols
 
-Block symbols (safety relay, CPU, switch) have their pins on the top and bottom
+Block symbols (safety relay, CPU, switch) are manufacturer-neutral drawings in the IEC pack, not 60617 graphics, and have their pins on the top and bottom
 edge, one pin per terminal and 8 mm apart, so a wire runs straight to a device
 above or below. Side pins (`dir = "right"` for the CPU's network ports, `"left"` for
 a switch's supply) are used only where a block would otherwise need more than

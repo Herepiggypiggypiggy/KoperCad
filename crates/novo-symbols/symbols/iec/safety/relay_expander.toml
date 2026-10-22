@@ -1,7 +1,7 @@
 format = 1
 id = "iec/safety/relay_expander"
 name = "Safety contact expander"
-description = "Output expansion for a safety relay: A1/A2 supply, Y1-Y2 feedback loop to the base unit, four safety make contacts 13-14 to 43-44."
+description = "Output expansion for a safety relay: A1/A2 supply, Y1-Y2 feedback loop to the base unit, four safety make contacts 13-14 to 43-44. Drawing symbol only: no safety function, category or PL/SIL is evaluated. IEC pack block symbol (a manufacturer-neutral drawing, not a 60617 graphic)."
 standard = "IEC 60617"
 category = "safety"
 function = "safety.relay.expander"

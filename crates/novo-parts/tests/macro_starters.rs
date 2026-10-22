@@ -244,6 +244,48 @@ fn safety_macro_wires_both_channels_and_both_contactors() {
         .count();
     // Reset, two channels out and back, two coil feeds.
     assert_eq!(wires, 7);
+    // Pin level: reset on S34, channel 1 on S11/S12, channel 2 on S21/S22,
+    // coils on the 14 and 24 safety contacts.
+    let mut pair = Vec::new();
+    let project_pin = |id: novo_core::SymbolId, pin: u16| -> (String, String) {
+        let sym = f
+            .definition
+            .members
+            .iter()
+            .find_map(|m| match m {
+                Record::Symbol(s) if s.id == id => Some(s),
+                _ => None,
+            })
+            .expect("wire ends on a symbol of the macro");
+        (
+            sym.symbol.0.to_string(),
+            sym.pins[pin as usize].name.clone(),
+        )
+    };
+    for m in &f.definition.members {
+        let Record::Wire(w) = m else { continue };
+        let (Some(a), Some(b)) = (w.from.as_pin(), w.to.as_pin()) else {
+            continue;
+        };
+        let (ka, pa) = project_pin(a.symbol, a.pin);
+        let (kb, pb) = project_pin(b.symbol, b.pin);
+        pair.push(format!("{ka}:{pa}-{kb}:{pb}"));
+    }
+    pair.sort();
+    for expected in [
+        "iec/operators/pushbutton_no:14-iec/safety/relay:S34",
+        "iec/safety/relay:14-iec/coils/contactor:A1",
+        "iec/safety/relay:24-iec/coils/contactor:A1",
+        "iec/safety/relay:S11-iec/safety/emergency_stop_2ch:11",
+        "iec/safety/relay:S21-iec/safety/emergency_stop_2ch:21",
+        "iec/safety/emergency_stop_2ch:12-iec/safety/relay:S12",
+        "iec/safety/emergency_stop_2ch:22-iec/safety/relay:S22",
+    ] {
+        assert!(
+            pair.contains(&expected.to_string()),
+            "{expected} not in {pair:#?}"
+        );
+    }
 }
 
 #[test]

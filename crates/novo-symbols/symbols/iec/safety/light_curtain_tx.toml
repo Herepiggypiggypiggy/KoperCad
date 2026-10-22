@@ -1,7 +1,7 @@
 format = 1
 id = "iec/safety/light_curtain_tx"
 name = "Safety light curtain, transmitter"
-description = "Transmitter of an electro-sensitive protective device (type 4 light curtain): 24 V supply L+ and M."
+description = "Transmitter of an light curtain (for example type 4): 24 V supply L+ and M. Drawing symbol only: no safety function, category or PL/SIL is evaluated."
 standard = "IEC 60617"
 category = "safety"
 function = "safety.lightcurtain.tx"
