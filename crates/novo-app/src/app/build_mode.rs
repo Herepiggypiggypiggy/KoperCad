@@ -634,11 +634,9 @@ fn card(
             // easy to miss and too small for a finger.
             let h = if state.large { 48.0 } else { 30.0 };
             let show = |ui: &mut egui::Ui, label: &str| {
-                ui.add_sized(
-                    [label.len() as f32 * 7.5 + 28.0, h],
-                    egui::Button::new(label),
-                )
-                .clicked()
+                // The width follows the (possibly translated) label.
+                ui.add(egui::Button::new(label).min_size(egui::vec2(0.0, h)))
+                    .clicked()
             };
             ui.add_space(6.0);
             ui.horizontal_wrapped(|ui| {
