@@ -1,0 +1,22 @@
+@title Live view says when no supply is defined
+@area Schematic
+# A new project has no feeds: nothing can light up. The Live card says so and
+# offers to place a feed or add the supply circuit; Why? gives the same answer.
+fresh
+wait 20
+click_text "New project"
+wait 40
+key shift+l
+wait 30
+shot live-no-supply
+tree supply
+expect "No supply is defined in this drawing"
+expect "Place a feed"
+expect "Add supply circuit"
+check_layout
+click_text "Why?"
+wait 10
+expect "Until a feed is placed"
+click_text "Place a feed"
+wait 20
+shot live-place-feed
