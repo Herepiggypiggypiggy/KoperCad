@@ -90,6 +90,7 @@ mod heat_legend;
 mod heat_live;
 #[cfg(test)]
 mod heat_live_tests;
+mod heat_openings;
 mod heat_probe;
 mod heat_progress;
 #[cfg(test)]
@@ -242,6 +243,9 @@ mod view3d_surfaces;
 #[cfg(test)]
 mod view3d_tests;
 mod view3d_tip;
+mod view3d_vents;
+#[cfg(test)]
+mod view3d_vents_tests;
 mod view3d_views;
 mod view3d_wires;
 mod whats_new;
