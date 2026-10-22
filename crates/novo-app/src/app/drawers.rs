@@ -5,6 +5,7 @@
 
 use eframe::egui;
 use novo_core::{AnyId, CableId, Project, natural_cmp};
+use novo_terminals::Grouping;
 use novo_xref::Place;
 
 use super::cable_controls::{CableAction, CableEdit, cable_controls};
@@ -24,6 +25,10 @@ pub(super) enum DrawerAction {
     Cable(CableId, CableAction),
     AcceptCables,
     AcceptTerminals,
+    /// The strip grouping of new terminals, saved with the project.
+    SetGrouping(novo_terminals::Grouping),
+    /// Set the location of the selected devices (the Devices tab).
+    SetLocation(String),
     Terminal(ToolbarAction),
     /// Accept one proposed cable (its first wire's raw id), maybe on
     /// another type.
@@ -84,6 +89,7 @@ impl NovoApp {
             Drawer::Cables => cable_proposals.len(),
             Drawer::Devices => 0,
         };
+        let grouping = novo_terminals::grouping(project);
         let chip = match tab {
             Drawer::Terminals => self.learn.chip("terminals"),
             Drawer::Cables => self.learn.chip("cables"),
@@ -138,6 +144,23 @@ impl NovoApp {
                             if tab == Drawer::Terminals {
                                 let response =
                                     ui.small_button(format!("Accept {proposed} proposed"));
+                                let mut chosen = grouping;
+                                egui::ComboBox::from_id_salt("strip_grouping")
+                                    .selected_text(grouping.label())
+                                    .show_ui(ui, |ui| {
+                                        for g in [Grouping::ByClass, Grouping::Single] {
+                                            ui.selectable_value(&mut chosen, g, g.label());
+                                        }
+                                    })
+                                    .response
+                                    .on_hover_text(
+                                        "Which strip new terminals go on: one per kind of \
+                                         wire (power -X1, control -X2, signals -X3, PE -X4) \
+                                         or one per location",
+                                    );
+                                if chosen != grouping {
+                                    actions.push(DrawerAction::SetGrouping(chosen));
+                                }
                                 spots.push((
                                     "drawer.terminals.accept".into(),
                                     response.rect,
@@ -211,7 +234,7 @@ impl NovoApp {
                     }
                     Drawer::Devices => {
                         let rows = device_rows(project, &selected);
-                        devices_tab(ui, &rows, &mut actions);
+                        devices_tab(ui, &rows, &mut self.wb.location_edit, &mut actions);
                     }
                 }
             });
@@ -234,6 +257,8 @@ impl NovoApp {
                 DrawerAction::Cable(cable, action) => self.cable_action(cable, action),
                 DrawerAction::AcceptCables => self.accept_cable_proposals(),
                 DrawerAction::AcceptTerminals => self.accept_all_proposals(),
+                DrawerAction::SetGrouping(g) => self.set_strip_grouping(g),
+                DrawerAction::SetLocation(text) => self.set_selection_location(&text),
                 DrawerAction::Terminal(ToolbarAction::Command(id)) => self.wb.queued.push(id),
                 DrawerAction::Terminal(ToolbarAction::Pick(strip)) => {
                     self.wb.terminal_edit.picked = Some(strip);
@@ -464,12 +489,43 @@ fn device_rows(project: &Project, selected: &[AnyId]) -> Vec<DeviceRow> {
     rows
 }
 
-fn devices_tab(ui: &mut egui::Ui, rows: &[DeviceRow], actions: &mut Vec<DrawerAction>) {
+fn devices_tab(
+    ui: &mut egui::Ui,
+    rows: &[DeviceRow],
+    location: &mut String,
+    actions: &mut Vec<DrawerAction>,
+) {
     if rows.is_empty() {
         ui.weak("No devices yet. Place a symbol with I.");
         return;
     }
-    ui.weak(format!("{} devices", rows.len()));
+    let selected = rows.iter().filter(|r| r.selected).count();
+    ui.horizontal(|ui| {
+        ui.weak(format!("{} devices", rows.len()));
+        ui.separator();
+        if selected == 0 {
+            ui.weak("Select devices (click, or drag a box) to set their location");
+            return;
+        }
+        ui.label(format!("Set location of {selected} selected:"));
+        let field = ui.add(
+            egui::TextEdit::singleline(location)
+                .hint_text("+FIELD (empty clears)")
+                .desired_width(140.0)
+                .id(egui::Id::new("devices_location")),
+        );
+        let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        if (ui.button("Set location").clicked() || enter) && !location.trim().is_empty() {
+            actions.push(DrawerAction::SetLocation(std::mem::take(location)));
+        }
+        if ui
+            .small_button("Clear")
+            .on_hover_text("Take the selected devices out of any location")
+            .clicked()
+        {
+            actions.push(DrawerAction::SetLocation(String::new()));
+        }
+    });
     egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
         egui::Grid::new("devices")
             .striped(true)

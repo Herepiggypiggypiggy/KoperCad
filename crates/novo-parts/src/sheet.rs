@@ -612,6 +612,25 @@ fn part_label(project: &Project, parts: &[PartId]) -> String {
 }
 
 /// Collects the per-target values of one row into a [`RowValue`].
+/// The sheet row that sets the location part of tags.
+const LOCATION_KEY: &str = "location";
+
+fn tag_of(record: &Record) -> Option<&DeviceTag> {
+    match record {
+        Record::Device(d) => Some(&d.tag),
+        Record::Cable(c) => Some(&c.tag),
+        _ => None,
+    }
+}
+
+/// `+CAB+DOOR` for a two-level location, empty for none.
+fn location_text(tag: &DeviceTag) -> String {
+    tag.levels(novo_core::Aspect::Location)
+        .iter()
+        .map(|l| format!("+{l}"))
+        .collect()
+}
+
 fn combine(values: impl IntoIterator<Item = String>) -> RowValue {
     let distinct: BTreeSet<String> = values.into_iter().collect();
     match distinct.len() {
@@ -706,6 +725,24 @@ impl PropertySheet {
                 },
                 synonyms: spec.map_or(&[], |s| s.synonyms),
                 order: spec.map_or(50, |s| s.order),
+                overrides_part: false,
+            });
+        }
+
+        // Where the selection is: the location part of every tag, so a
+        // whole group moves to +FIELD in one edit.
+        // (Wires or junctions caught by a box selection are left alone.)
+        if records.iter().any(|r| tag_of(r).is_some()) {
+            rows.push(Row {
+                key: RowKey::Field(LOCATION_KEY.into()),
+                label: "Location".into(),
+                group: Group::Common,
+                value: combine(records.iter().filter_map(tag_of).map(location_text)),
+                editable: true,
+                unit: None,
+                choices: &[],
+                synonyms: &["place", "site", "area", "plant", "locatie", "standort"],
+                order: 5,
                 overrides_part: false,
             });
         }
@@ -953,6 +990,7 @@ impl PropertySheet {
             RowKey::PartField(_) => return Err(EditError::ReadOnly(label)),
             RowKey::PartData(name) => self.edit_property(project, name, &label, input)?,
             RowKey::Field(field) if field == "tag" => self.edit_tag(project, input)?,
+            RowKey::Field(field) if field == LOCATION_KEY => self.edit_location(project, input)?,
             RowKey::Field(field) => self.edit_field(project, field, &label, input)?,
             RowKey::Property(name) => self.edit_property(project, name, &label, input)?,
         };
@@ -1029,6 +1067,75 @@ impl PropertySheet {
             label
         };
         Some(Command::Batch { label, commands })
+    }
+
+    /// Sets the location of every selected device and cable, keeping each
+    /// one's function and product. An empty input clears the location.
+    /// Refused, with nothing changed, when a new tag is already used by
+    /// something outside the selection or two selected objects would end
+    /// up with the same tag.
+    fn edit_location(&self, project: &Project, input: &str) -> Result<Vec<Command>, EditError> {
+        let text = input.trim();
+        let levels: Vec<String> = if text.is_empty() {
+            Vec::new()
+        } else {
+            let text = if text.starts_with('+') {
+                text.to_owned()
+            } else {
+                format!("+{text}")
+            };
+            DeviceTag::parse(&text)
+                .map_err(|e| EditError::InvalidTag(e.to_string()))?
+                .levels(novo_core::Aspect::Location)
+                .to_vec()
+        };
+        let mut changes: Vec<(AnyId, DeviceTag)> = Vec::new();
+        for &target in &self.targets {
+            let Some(current) = project.record(target).as_ref().and_then(tag_of).cloned() else {
+                continue;
+            };
+            let mut tag = current.clone();
+            *tag.levels_mut(novo_core::Aspect::Location) = levels.clone();
+            if tag != current {
+                changes.push((target, tag));
+            }
+        }
+        let moved: BTreeSet<AnyId> = changes.iter().map(|(id, _)| *id).collect();
+        let mut seen: BTreeSet<DeviceTag> = BTreeSet::new();
+        for (_, tag) in &changes {
+            let outside = project
+                .devices()
+                .filter(|d| &d.tag == tag)
+                .map(|d| AnyId::from(d.id))
+                .chain(
+                    project
+                        .cables()
+                        .filter(|c| &c.tag == tag)
+                        .map(|c| AnyId::from(c.id)),
+                )
+                .any(|id| !moved.contains(&id));
+            if outside || !seen.insert(tag.clone()) {
+                return Err(EditError::TagInUse {
+                    tag: tag.to_string(),
+                });
+            }
+        }
+        let mut commands = Vec::with_capacity(changes.len());
+        for (target, tag) in changes {
+            commands.push(match target {
+                AnyId::Device(device) => Command::SetTag { device, tag },
+                _ => {
+                    let Some(Record::Cable(mut cable)) = project.record(target) else {
+                        continue;
+                    };
+                    cable.tag = tag;
+                    Command::Replace {
+                        record: Record::Cable(cable),
+                    }
+                }
+            });
+        }
+        Ok(commands)
     }
 
     fn edit_tag(&self, project: &Project, input: &str) -> Result<Vec<Command>, EditError> {

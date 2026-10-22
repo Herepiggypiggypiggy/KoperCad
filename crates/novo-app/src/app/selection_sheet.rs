@@ -383,6 +383,42 @@ impl NovoApp {
         }
     }
 
+    /// Sets the location of every selected device: the Devices tab's "Set
+    /// location" field. One command, one undo step; an empty text clears it.
+    pub(super) fn set_selection_location(&mut self, text: &str) {
+        let selection = self.selection();
+        let Some(doc) = self.backend.document() else {
+            return;
+        };
+        let sheet = PropertySheet::build(doc.project(), &selection);
+        let key = RowKey::Field("location".into());
+        if sheet.row(&key).is_none() {
+            self.message(Level::Info, "Select devices first");
+            return;
+        }
+        let count = selected_devices(doc.project(), &selection).len();
+        match sheet.edit(doc.project(), &key, text) {
+            Ok(Some(command)) => match self.execute(command) {
+                Some(Ok(_)) => {
+                    let place = text.trim();
+                    let said = if place.is_empty() {
+                        format!("Location cleared on {count}")
+                    } else {
+                        format!(
+                            "Location set on {count}: +{}",
+                            place.trim_start_matches('+')
+                        )
+                    };
+                    self.message(Level::Info, said);
+                }
+                Some(Err(e)) => self.message(Level::Error, format!("Could not set it: {e}")),
+                None => {}
+            },
+            Ok(None) => self.message(Level::Info, "They are already there"),
+            Err(e) => self.message(Level::Warning, e.to_string()),
+        }
+    }
+
     /// Gives the whole selection one catalog part: one undo step.
     pub(super) fn assign_selection_part(&mut self, key: &PartKey) {
         let selection = self.selection();

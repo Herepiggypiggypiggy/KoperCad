@@ -21,7 +21,8 @@ This is the first beta for test users. Start with [`docs/TESTER-README.md`](docs
 
 **Intelligence**
 - Cross references between coils and contacts, with jumps.
-- Terminal strips with connection screens, cables with cores and shields, PLC cards and I/O lists.
+- Terminal strips with connection screens (proposed terminals go on strips by kind: power, control, signals, protective earth), cables with cores and shields, PLC cards and I/O lists.
+- Set the location of a whole selection at once (Devices tab, Inspector).
 - Design checks with severity and location, a standards check (IEC 60204-1, NFPA 79, UL 508A rules),
   protection curves and selectivity, cable and wire sizing, functional-safety functions.
 - Revisions: issue a revision (optionally locking the pages), freeze pages, compare two revisions, restore a page or the project. Scripts and imports that write into a locked page are refused until it is unlocked.

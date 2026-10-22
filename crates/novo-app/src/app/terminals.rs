@@ -143,6 +143,19 @@ impl NovoApp {
         self.message(Level::Info, format!("Accepted {summary}"));
     }
 
+    /// Saves how new terminals are spread over strips (one undo step).
+    pub(super) fn set_strip_grouping(&mut self, grouping: novo_terminals::Grouping) {
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        match doc.transact("Terminal strip grouping", |tx| {
+            novo_terminals::set_grouping(tx, grouping)
+        }) {
+            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
+        }
+    }
+
     pub(super) fn accept_terminals(&mut self, label: &str, suggestions: &[Suggestion]) {
         let Some(doc) = self.backend.document_mut() else {
             return;

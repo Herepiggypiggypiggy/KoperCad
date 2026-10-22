@@ -1985,3 +1985,120 @@ fn connecting_keeps_existing_jumper_groups_and_merges_them() {
         .unwrap();
     assert!((0..5).all(|i| jumper(&doc, ts[i]) == Some(1)));
 }
+
+/// Four wires leave the cabinet: L1, +24 V, PE and one with no potential.
+fn boundary_with_potentials(doc: &mut Document) {
+    doc.transact("Draw", |tx| {
+        let page = tx.add_page("1")?;
+        let k1 = tx.add_device(tag("+CAB-K1"), "")?;
+        let m1 = tx.add_device(tag("+FLD-M1"), "")?;
+        let ks = row_of_pins(tx, page, k1, &["1", "2", "3", "4"], 40.0, 20.0)?;
+        let ms = row_of_pins(tx, page, m1, &["U", "V", "W", "PE"], 40.0, 100.0)?;
+        let wires: Vec<WireId> = (0..4)
+            .map(|i| tx.connect(Endpoint::pin(ks, i), Endpoint::pin(ms, i)))
+            .collect::<Result<_>>()?;
+        tx.assign_potentials(
+            &wires[..3],
+            vec![
+                novo_core::PotentialSpec::new("L1", PotentialKind::Line, Some(400.0)),
+                novo_core::PotentialSpec::new("+24V", PotentialKind::DcPositive, Some(24.0)),
+                novo_core::PotentialSpec::new("PE", PotentialKind::ProtectiveEarth, None),
+            ],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn proposals_split_by_power_control_and_earth_per_location() {
+    let mut doc = Document::default();
+    boundary_with_potentials(&mut doc);
+    assert_eq!(grouping(doc.project()), Grouping::ByClass);
+    let suggestions = suggest_terminals(doc.project());
+    let by_class: Vec<(StripClass, String)> = suggestions
+        .iter()
+        .map(|s| (s.class, s.strip.to_string()))
+        .collect();
+    assert_eq!(
+        by_class,
+        vec![
+            (StripClass::Power, "+CAB-X1".into()),
+            (StripClass::Control, "+CAB-X2".into()),
+            (StripClass::Earth, "+CAB-X4".into()),
+            // No potential yet: stays on the first strip.
+            (StripClass::Unassigned, "+CAB-X1".into()),
+        ]
+    );
+    assert_eq!(
+        summarize_suggestions(&suggestions),
+        "2 terminals on +CAB-X1, 1 terminal on +CAB-X2, 1 terminal on +CAB-X4"
+    );
+    doc.transact("Accept", |tx| accept_suggestions(tx, &suggestions))
+        .unwrap();
+    let names: Vec<(String, Vec<String>)> = strips(doc.project())
+        .into_iter()
+        .map(|s| {
+            let tag = doc.project().device(s).unwrap().tag.to_string();
+            (tag, names_of(doc.project(), s))
+        })
+        .collect();
+    assert!(names.contains(&("+CAB-X4".into(), vec!["PE".into()])));
+    assert!(names.contains(&("+CAB-X2".into(), vec!["1".into()])));
+}
+
+#[test]
+fn the_single_strip_setting_keeps_one_strip_and_is_one_undo_step() {
+    let mut doc = Document::default();
+    boundary_with_potentials(&mut doc);
+    doc.transact("Grouping", |tx| set_grouping(tx, Grouping::Single))
+        .unwrap();
+    assert_eq!(grouping(doc.project()), Grouping::Single);
+    let suggestions = suggest_terminals(doc.project());
+    assert_eq!(suggestions.len(), 4);
+    assert!(suggestions.iter().all(|s| s.strip.to_string() == "+CAB-X1"));
+    // The explicit variant ignores the saved setting.
+    assert_eq!(
+        suggest_terminals_with(doc.project(), Grouping::ByClass)
+            .iter()
+            .map(|s| s.strip.to_string())
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        3
+    );
+    doc.undo().unwrap();
+    assert_eq!(grouping(doc.project()), Grouping::ByClass);
+}
+
+#[test]
+fn an_extra_low_voltage_signal_potential_is_control_and_a_high_one_is_power() {
+    let mut doc = Document::default();
+    doc.transact("Draw", |tx| {
+        let page = tx.add_page("1")?;
+        let k1 = tx.add_device(tag("+CAB-K1"), "")?;
+        let m1 = tx.add_device(tag("+FLD-M1"), "")?;
+        let ks = row_of_pins(tx, page, k1, &["1", "2", "3"], 40.0, 20.0)?;
+        let ms = row_of_pins(tx, page, m1, &["1", "2", "3"], 40.0, 100.0)?;
+        let wires: Vec<WireId> = (0..3)
+            .map(|i| tx.connect(Endpoint::pin(ks, i), Endpoint::pin(ms, i)))
+            .collect::<Result<_>>()?;
+        tx.assign_potentials(
+            &wires,
+            vec![
+                novo_core::PotentialSpec::new("S230", PotentialKind::Signal, Some(230.0)),
+                novo_core::PotentialSpec::new("S24", PotentialKind::Signal, Some(24.0)),
+                novo_core::PotentialSpec::new("IO", PotentialKind::Signal, None),
+            ],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+    let classes: Vec<StripClass> = suggest_terminals(doc.project())
+        .iter()
+        .map(|s| s.class)
+        .collect();
+    assert_eq!(
+        classes,
+        vec![StripClass::Power, StripClass::Control, StripClass::Signal]
+    );
+}

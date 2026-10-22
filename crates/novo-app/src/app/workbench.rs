@@ -152,6 +152,8 @@ pub(crate) struct Workbench {
     pub(super) drawer_cable: Option<novo_core::CableId>,
     /// The strip editor of the Terminals tab.
     pub(super) terminal_edit: super::terminal_edit::TerminalEdit,
+    /// The location typed in the Devices drawer's "Set location" field.
+    pub(super) location_edit: String,
     /// The terminal proposal Enter accepts, an index into this page's.
     pub(super) proposal: usize,
     /// Where the pointer was when Space went down, until it comes up.
@@ -321,6 +323,7 @@ impl Default for Workbench {
             drawer: None,
             drawer_cable: None,
             terminal_edit: Default::default(),
+            location_edit: String::new(),
             part_catalog: Default::default(),
             cable_edit: Default::default(),
             proposal: 0,
