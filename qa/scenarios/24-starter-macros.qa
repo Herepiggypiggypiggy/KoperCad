@@ -194,3 +194,27 @@ shot 16-picked
 click_text Place #2
 wait 20
 shot 16-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Emergency stop with safety relay"
+wait 10
+key Return
+wait 20
+shot 17-picked
+click_text Place #2
+wait 20
+shot 17-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "PLC network with switch"
+wait 10
+key Return
+wait 20
+shot 18-picked
+click_text Place #2
+wait 20
+shot 18-placed

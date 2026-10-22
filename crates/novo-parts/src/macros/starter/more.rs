@@ -614,7 +614,7 @@ fn heater_thermostat() -> Result<MacroFile> {
 fn three_phase_supply() -> Result<MacroFile> {
     capture(
         "Three-phase supply",
-        "Three-phase incomer with main switch, outgoing breaker, control circuit breaker and N and PE terminals",
+        "Three-phase incomer with main switch, outgoing breaker, control circuit breaker, and N and PE terminal symbols",
         Vec::new(),
         &[
             "supply",
