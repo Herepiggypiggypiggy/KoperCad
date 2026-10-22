@@ -1,0 +1,8 @@
+Prijslijst oktober 2026 (voorbeeldgegevens, geen echte fabrikant)
+
+Fabrikant,Bestelnummer,Omschrijving,Bedrijfsstroom (A),Warmteverlies W,Spoel,Aansluitwijze,Aantal klemmen,Prijs,Prijsdatum,Prijseenheid,Leverstatus
+Example Maker,NL-100,Contactor 9 A,9,1.3,24,Schroef,3,45.00,05-10-2026,100,leverbaar
+Example Maker,NL-101,Hulprelais 6 A,6,0.4,230,Veer,2,12.00,2026-10-01,1,uit productie
+Example Maker,NL-100,Contactor 9 A (nieuwe uitvoering),,,,,,47.50,12-10-2026,100,
+Example Maker,NL-102,Kabel per meter,,,,,,2.10,31-02-2026,per meter,leverbaar
+Example Maker,NL-103,Motorbeveiliging,16,4.5,,Schroef,3,31.00,2026-10-01,1,

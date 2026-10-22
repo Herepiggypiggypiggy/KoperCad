@@ -32,7 +32,7 @@ const MAX_DIMENSION_MM: f64 = 3000.0;
 
 #[derive(Debug, Error)]
 pub enum InboxError {
-    #[error("cannot read {path}: {source}")]
+    #[error("cannot read {}: {}", path.display(), crate::plain::plain_io_error(source))]
     Io {
         path: PathBuf,
         source: std::io::Error,
