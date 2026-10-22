@@ -50,6 +50,8 @@ row becomes, then add the parts. Nothing is added before that last click.
 | ETIM, ECLASS | `EC000066`, `27-14-11-01`, `27141101` | codes |
 | Lifecycle, connection method | words in EN, DE, NL | enum |
 
+Lifecycle words are matched as whole words, withdrawn wordings first: `inactive`, `nicht lieferbar`, `not in production` and `no longer available` are discontinued, never active; a word that only contains an active word (`proactive`) is unknown.
+
 A unit inside a cell beats the column's unit. A cell with no unit anywhere is taken
 in the stored unit and the Rows step says so. Decimal commas, thousands separators
 (`1.234,56`) and Excel's power-of-ten order numbers (`1.23E+11`, digits lost) are

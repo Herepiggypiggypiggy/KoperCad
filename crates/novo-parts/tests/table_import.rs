@@ -725,3 +725,54 @@ fn a_withdrawn_part_is_never_read_as_active() {
         assert_eq!(part.lifecycle, want, "{}", part.order_number);
     }
 }
+
+#[test]
+fn lifecycle_words_are_whole_words_and_a_negation_is_never_active() {
+    let cases: &[(&str, Lifecycle)] = &[
+        ("active", Lifecycle::Active),
+        ("Active (in production)", Lifecycle::Active),
+        ("In Produktion", Lifecycle::Unknown),
+        ("aktiv", Lifecycle::Active),
+        ("actief", Lifecycle::Active),
+        ("A", Lifecycle::Active),
+        ("lieferbar", Lifecycle::Active),
+        ("leverbaar", Lifecycle::Active),
+        ("available", Lifecycle::Active),
+        ("Serienprodukte", Lifecycle::Active),
+        ("current", Lifecycle::Active),
+        ("inactive", Lifecycle::Discontinued),
+        ("Inactief", Lifecycle::Discontinued),
+        ("inaktiv", Lifecycle::Discontinued),
+        ("not in production", Lifecycle::Discontinued),
+        ("no longer available", Lifecycle::Discontinued),
+        ("no longer in production", Lifecycle::Discontinued),
+        ("nicht lieferbar", Lifecycle::Discontinued),
+        ("nicht mehr lieferbar", Lifecycle::Discontinued),
+        ("niet meer leverbaar", Lifecycle::Discontinued),
+        ("geen serienprodukt", Lifecycle::Discontinued),
+        ("not current", Lifecycle::Discontinued),
+        ("discontinued", Lifecycle::Discontinued),
+        ("Abgekündigte Serie", Lifecycle::Discontinued),
+        ("phase-out", Lifecycle::PhasingOut),
+        ("Auslaufartikel", Lifecycle::PhasingOut),
+        ("uitlopend model", Lifecycle::PhasingOut),
+        ("end of life", Lifecycle::PhasingOut),
+        ("uit productie", Lifecycle::PhasingOut),
+        // A word that only contains an active word is not one.
+        ("proactive", Lifecycle::Unknown),
+        ("reactivated soon", Lifecycle::Unknown),
+        ("unknown", Lifecycle::Unknown),
+        ("", Lifecycle::Unknown),
+    ];
+    let mut text = String::from("Maker,Order no,Status\n");
+    for (i, (status, _)) in cases.iter().enumerate() {
+        text.push_str(&format!("Example Maker,L-{i:02},\"{status}\"\n"));
+    }
+    let sheet = csv_sheet(&text);
+    let mapping = Mapping::suggest(&sheet, 0);
+    let p = preview(&sheet, &mapping);
+    assert_eq!(p.parts.len(), cases.len());
+    for (part, (status, want)) in p.parts.iter().zip(cases) {
+        assert_eq!(part.lifecycle, *want, "status \"{status}\"");
+    }
+}
