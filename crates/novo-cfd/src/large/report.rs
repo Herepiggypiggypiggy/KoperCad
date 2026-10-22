@@ -63,7 +63,9 @@ impl LargeReport {
         v.push(
             "Devices inside a block show the air temperature of the block and a housing \
              temperature estimated from their own loss and the block's film coefficient; the \
-             bands are wide. Read them as a screening, not as a surface temperature."
+             bands are wide. Read them as a screening, not as a surface temperature: a lumped device is shown \
+             as marginal at most, never as over its limit, because its air temperature is the \
+             block's. Run a finer level to resolve it."
                 .into(),
         );
         if self.over_budget {
@@ -110,6 +112,8 @@ pub struct Convergence {
     pub imbalance: f64,
     /// Change of the monitored device temperatures over the last window, K.
     pub drift_k: f64,
+    /// One short line for a narrow panel.
+    pub headline: String,
     /// Sentences for the dialog, most important first.
     pub lines: Vec<String>,
 }
@@ -169,8 +173,23 @@ pub fn convergence(s: &CfdSnapshot) -> Convergence {
              window (limit {DRIFT_LIMIT_K} K)."
         ));
     }
+    let headline = match verdict {
+        Verdict::Converged if lines.len() > 1 => {
+            format!(
+                "Steady, but check: balance {:.1} % off, drift {drift:.2} K",
+                100.0 * imbalance
+            )
+        }
+        Verdict::Converged => format!("Converged at {} iterations", p.iteration),
+        Verdict::Early => "Just started".to_string(),
+        Verdict::NotConverged => format!(
+            "Not converged: balance {:.1} % off, drift {drift:.2} K",
+            100.0 * imbalance
+        ),
+    };
     Convergence {
         verdict,
+        headline,
         iterations: p.iteration,
         residual,
         imbalance,

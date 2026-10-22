@@ -1809,16 +1809,23 @@ fn legend(
                             crate::theme::ui_palette().text_primary,
                         ))
                         .on_hover_text(conv.lines.join("\n"));
-                        // A large cabinet runs as a reduced model: say so next
-                        // to the level, with what was lumped.
+                        // A large cabinet runs as a reduced model: a fold-away line
+                        // next to the level keeps the legend short.
                         if let Some(r) = novo_cfd::large::reduced_summary(&sol.snapshot) {
-                            ui.label(small(r, crate::theme::ui_palette().text_secondary))
-                                .on_hover_text(
+                            egui::CollapsingHeader::new(small(
+                                "Reduced model",
+                                crate::theme::ui_palette().text_secondary,
+                            ))
+                            .default_open(false)
+                            .show(ui, |ui| {
+                                ui.label(small(r, crate::theme::ui_palette().text_secondary));
+                                ui.label(small(
                                     "Cold devices are lumped into row blocks and thin ducts and \
-                                     rails are widened to porous strips, so a big cabinet fits the \
-                                     cell budget. Devices that make real heat keep their shape. \
-                                     Details under Notes on this run.",
-                                );
+                                     rails are widened to porous strips so a big cabinet fits \
+                                     the cell budget. More under Notes on this run.",
+                                    crate::theme::ui_palette().text_secondary,
+                                ));
+                            });
                         }
                         if stale {
                             ui.label(small(
@@ -1827,13 +1834,12 @@ fn legend(
                             ));
                         }
                         // Not converged, or "steady" with a poor heat balance or
-                        // drifting temperatures: say it in numbers.
+                        // drifting temperatures: one line here, the numbers on hover.
                         if conv.verdict != novo_cfd::large::Verdict::Converged
                             || conv.lines.len() > 1
                         {
-                            for line in &conv.lines {
-                                ui.label(small(line, t::WARNING));
-                            }
+                            ui.label(small(&conv.headline, crate::theme::ui_palette().warning))
+                                .on_hover_text(conv.lines.join("\n"));
                         }
                         let a = &sol.snapshot.accuracy;
                         // The status line above already names the level.

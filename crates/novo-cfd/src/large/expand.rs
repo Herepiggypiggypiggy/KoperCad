@@ -53,6 +53,11 @@ pub fn expand(snap: &CfdSnapshot, red: &Reduction, original: &Scenario) -> CfdSn
                 r.air_band_c = br.air_band_c;
             }
             apply_margins(&mut r);
+            // A lumped device's temperature is an estimate built on its block's
+            // air: it may be marginal, but it is never called over its limit.
+            if b.members.len() > 1 && r.status == Status::Over {
+                r.status = Status::Marginal;
+            }
             devices.push(r);
             let share = if block_loss > 0.0 {
                 d.loss_w / block_loss
@@ -88,6 +93,12 @@ pub fn expand(snap: &CfdSnapshot, red: &Reduction, original: &Scenario) -> CfdSn
     }
 
     // device hot spots again from the per-device results; air spots stay
+    let lumped: Vec<u64> = red
+        .blocks
+        .iter()
+        .filter(|b| b.members.len() > 1)
+        .flat_map(|b| b.members.iter().map(|&i| original.devices[i].id))
+        .collect();
     out.hot_spots.retain(|h| h.kind == HotSpotKind::Air);
     let mean_air = mean_air(snap);
     let mut ranked: Vec<&DeviceResult> = out
@@ -112,6 +123,9 @@ pub fn expand(snap: &CfdSnapshot, red: &Reduction, original: &Scenario) -> CfdSn
                 above_mean_k: d.surface_c - mean_air,
                 reason: if d.status == Status::Over {
                     "over its temperature limit".into()
+                } else if lumped.contains(&d.id) && d.margin_k.is_some_and(|m| m < 0.0) {
+                    "estimated over its limit from a lumped block; not resolved, run a finer level"
+                        .into()
                 } else {
                     "within its limit, but not at the pessimistic end of the estimate".into()
                 },

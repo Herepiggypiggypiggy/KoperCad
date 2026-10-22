@@ -297,3 +297,27 @@ fn the_convergence_verdict_says_when_a_run_stopped_early() {
     assert_ne!(c.verdict, Verdict::Converged, "{:?}", c.lines);
     assert!(c.lines[0].contains("not final") || c.lines[0].contains("Just started"));
 }
+
+#[test]
+fn a_lumped_device_is_marginal_at_most_never_over() {
+    let mut scn = cabinet(24);
+    // limits the air will exceed: every cold device would read Over
+    for d in scn.devices.iter_mut().skip(1) {
+        d.rated_max_ambient_c = Some(25.2);
+        d.rated_max_surface_c = Some(25.5);
+    }
+    let s = run(&scn, 3000, LargeMode::Force);
+    let cold: Vec<_> = s.devices.iter().filter(|d| d.id != HOT).collect();
+    assert_eq!(cold.len(), 24);
+    assert!(cold.iter().all(|d| d.status != Status::Over));
+    assert!(cold.iter().any(|d| d.status == Status::Marginal));
+    // the margin itself stays honest (negative), the status is capped
+    assert!(cold.iter().any(|d| d.margin_k.is_some_and(|m| m < 0.0)));
+    assert!(
+        s.hot_spots
+            .iter()
+            .any(|h| h.reason.contains("lumped block")),
+        "{:?}",
+        s.hot_spots
+    );
+}

@@ -10,10 +10,16 @@ wait 3
 text Simulate heat of the cabinet
 wait 4
 key Enter
-wait 60
+wait 20
 shot heat-running
+wait_s 40
+shot legend-midrun
 wait_s 200
-expect "Reduced model: "
+expect "Reduced model"
 shot heat-result
+click_text "Reduced model"
+wait 10
+expect "Reduced model: "
+shot legend-reduced-open
 check_blank heat-result
 check_layout
