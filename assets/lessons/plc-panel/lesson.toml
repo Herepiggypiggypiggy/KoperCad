@@ -1,6 +1,6 @@
 # Cabinet track: a bigger panel. Sample project: a PLC with its 24 V supply, a drive, relays,
 # breakers and three terminal strips, 15 devices on an 800 x 1000 mm plate (project.json, nothing
-# placed). finished.json is the same panel after Place all with the standard rules. Both come from
+# placed). finished.json is the same panel after Place all with the standard rules only (the app's heat-aware Place all moves the hot parts, so a learner's result differs; the text does not pin positions). Both come from
 # `cargo run -p novo-app --example plc_panel_lesson -- assets/lessons`.
 # Part numbers are illustrative; sizes and losses are typical for the family, not data-sheet values.
 format = 1
@@ -46,12 +46,12 @@ how_nl = ["Klik op Place all in de groep Place, of druk op Ctrl+Shift+P.", "Er v
 title = "Place all fifteen"
 title_nl = "Plaats alle vijftien"
 text = """
-Click {ui:cabinet.place_all}. Five rails come out: the breakers and the supply on the top one, the PLC with its two modules on the second, the two relays and the contactor on the third, the drive alone on the fourth, and all three strips side by side on the bottom one.
-Ducts run between the rows. The preview shows the devices before anything is stored.
+Click {ui:cabinet.place_all}. The rules group the parts by kind on DIN rails: the breakers and the supply, the PLC with its two modules, the relays and the contactor, the drive, and the three terminal strips at the bottom, with ducts between the rows.
+The preview is heat-aware: it may move the hot parts (the drive, the supply) away from the PLC, and its message says how many parts it placed differently. Nothing is stored until you accept.
 """
 text_nl = """
-Klik op {ui:cabinet.place_all}. Er komen vijf rails uit: de automaten en de voeding op de bovenste, de PLC met zijn twee modules op de tweede, de twee relais en de contactor op de derde, de omvormer alleen op de vierde en alle drie de strips naast elkaar op de onderste.
-Kanalen lopen tussen de rijen. Het voorbeeld toont de componenten voordat er iets wordt opgeslagen.
+Klik op {ui:cabinet.place_all}. De regels groeperen de componenten per soort op DIN-rails: de automaten en de voeding, de PLC met zijn twee modules, de relais en de contactor, de omvormer en onderaan de drie klemmenstroken, met kanalen tussen de rijen.
+Het voorbeeld houdt rekening met warmte: het kan de hete componenten (omvormer, voeding) van de PLC wegzetten, en de melding zegt hoeveel componenten het anders plaatste. Er wordt niets opgeslagen tot je accepteert.
 """
 point = { ui = "cabinet.place_all" }
 expect = { clicked = "cabinet.place_all" }
