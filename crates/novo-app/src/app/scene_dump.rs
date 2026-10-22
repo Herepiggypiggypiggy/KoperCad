@@ -48,6 +48,21 @@ impl NovoApp {
             .schematic_ref()
             .map(|v| v.selection().iter().map(|id| id.raw()).collect())
             .unwrap_or_default();
+        // Text conflicts of the open page (docs/TEXT-PLACEMENT.md, stage 0).
+        let text_audit = self
+            .canvas
+            .schematic_ref()
+            .and_then(|v| v.scene())
+            .map(|s| {
+                let a = novo_canvas::text_audit::audit(s.scene());
+                json!({
+                    "labels": a.labels,
+                    "text_on_text": a.text_on_text.len(),
+                    "text_on_symbol": a.text_on_ink.len(),
+                    "text_on_wire": a.text_on_wire.len(),
+                    "conflicts": a.describe(),
+                })
+            });
         let mut cabinets = Vec::new();
         for s in p.structures().filter(|s| s.plate.is_some()) {
             let Some(layout) = novo_layout::model::load(p, s.id) else {
@@ -93,6 +108,7 @@ impl NovoApp {
                 "id": pg.id.raw(), "name": pg.name, "title": pg.title})),
             "pages": novo_py::pages_json(p),
             "page_symbols": symbols,
+            "text_audit": text_audit,
             "selected_ids": selected,
             "devices": novo_py::devices_json(p),
             "wires": novo_py::wires_json(p),

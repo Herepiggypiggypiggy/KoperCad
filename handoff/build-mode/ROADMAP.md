@@ -10,7 +10,7 @@ Done (PR claude/project-thread-naa4la):
 Next, in order:
 1. DONE (PR show-device): device step on the Cabinet canvas and in 3D, Build mode steps aside behind a bar.
 2. DONE (PR build-mode-pdf): Print sheet... writes the build sheet PDF.
-3. Door and wall steps in their own surface coordinates (today door devices say "Fit on the door").
+3. DONE (PR build-mode-surfaces): door and wall devices give their position in the surface's own measures and Show opens that surface.
 4. ~~Photos on a problem~~ done (PR build-mode-photos): chosen in the problem editor, kept on the punch item. Live camera capture is not done.
 5. DONE (PR build-mode-claims): "I take this step", merged through the field file (newest record wins, a release is a record).
 

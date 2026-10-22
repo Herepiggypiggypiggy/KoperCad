@@ -1,0 +1,23 @@
+@title About dialog, licence and support links
+@area Start
+# Installer and first-run polish: the About card names the maker, licence,
+# release notes and the two support buttons.
+key ctrl+k
+wait 6
+text about
+wait 8
+key Return
+wait 8
+expect "Version"
+expect "Made by KoperVonk"
+expect "Release notes"
+expect "Ask Claude"
+expect "Graphics:"
+expect "MIT licence"
+expect "Copy version info"
+expect "Open log folder"
+shot about
+check_layout
+click_text "Close"
+wait 4
+expect_not "Made by KoperVonk"

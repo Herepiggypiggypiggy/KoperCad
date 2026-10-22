@@ -690,3 +690,113 @@ fn a_claim_for_another_project_is_skipped_and_an_empty_store_stays_empty() {
     // A store without claims serialises as before (no `claims` key).
     assert!(!CommissioningStore::new().to_json().contains("claims"));
 }
+
+/// F2 on the door of a +CAB that has an interior, hinge on `hinge`.
+fn door_device(hinge: novo_layout::enclosure::Hinge) -> (Document, u64) {
+    use novo_core::{AnyId, CabinetPlacement, Value};
+    use novo_layout::enclosure::{Door, Enclosure};
+    let (mut doc, h) = starter();
+    let cab = cabinet(&mut doc, &h);
+    doc.transact("Door", |tx| {
+        novo_layout::model::set_enclosure(
+            tx,
+            cab,
+            &Enclosure {
+                width: 800.0,
+                height: 600.0,
+                depth: 250.0,
+                plate_setback: 20.0,
+                door: Some(Door {
+                    hinge,
+                    max_angle: 90.0,
+                    inner_depth: 30.0,
+                }),
+                front_clearance: None,
+                hinge_side_clearance: None,
+            },
+        )?;
+        let id = tx
+            .project()
+            .all::<CabinetPlacement>()
+            .find(|p| p.structure == cab && p.device == h.f2)
+            .map(|p| p.id)
+            .expect("F2 is placed");
+        tx.set_property(
+            AnyId::CabinetPlacement(id),
+            "surface",
+            Some(Value::Text("door".into())),
+        )
+    })
+    .expect("door");
+    (doc, h.f2.raw())
+}
+
+fn door_step(plan: &BuildPlan, device: u64) -> BuildStep {
+    plan.cabinets[0]
+        .steps
+        .iter()
+        .find(|s| s.device == Some(device) && s.phase == BuildPhase::Devices)
+        .expect("device step")
+        .clone()
+}
+
+#[test]
+fn a_door_device_says_where_it_goes_from_the_hinge_edge_and_names_its_surface() {
+    use novo_layout::enclosure::Hinge;
+    let (doc, f2) = door_device(Hinge::Left);
+    let left = door_step(&plan_of(&doc), f2);
+    assert_eq!(left.surface.as_deref(), Some("door"));
+    let text = left.details.join(" | ");
+    // F2 was placed at x 80, y 400 on the plate: the same numbers in door mm.
+    assert!(
+        text.contains("80 mm from the hinge edge and 400 mm down from the top edge"),
+        "{text}"
+    );
+    assert!(text.contains("planned one"), "{text}");
+    let (doc, f2) = door_device(Hinge::Right);
+    let right = door_step(&plan_of(&doc), f2);
+    let text = right.details.join(" | ");
+    // The hinge is on the other side: the distance is measured from the right edge.
+    assert!(!text.contains("80 mm from the hinge edge"), "{text}");
+    // The door is 800 wide (the interior): 800 - 80 - the footprint's width.
+    let project = doc.project();
+    let cab = project
+        .structures()
+        .find(|s| s.enclosure)
+        .expect("cabinet")
+        .id;
+    let layout = novo_layout::model::load(project, cab).expect("layout");
+    let w = layout
+        .placements
+        .iter()
+        .find(|p| p.id == f2)
+        .expect("placed")
+        .footprint()
+        .w;
+    let want = format!(
+        "{} mm from the hinge edge and 400 mm down",
+        800.0 - 80.0 - w
+    );
+    assert!(text.contains(&want), "{text} / wanted {want}");
+    // The door and walls are planning geometry: the step says so.
+    assert!(text.contains("not measured"), "{text}");
+}
+
+#[test]
+fn a_plate_device_has_no_surface_and_moving_a_door_device_changes_the_fingerprint() {
+    use novo_layout::enclosure::Hinge;
+    let (doc, f2) = door_device(Hinge::Left);
+    let plan = plan_of(&doc);
+    let c = &plan.cabinets[0];
+    assert!(
+        c.steps
+            .iter()
+            .filter(|s| s.device != Some(f2))
+            .all(|s| s.surface.is_none())
+    );
+    let (doc2, f2b) = door_device(Hinge::Right);
+    assert_ne!(
+        door_step(&plan, f2).fingerprint(),
+        door_step(&plan_of(&doc2), f2b).fingerprint()
+    );
+}
