@@ -1,0 +1,19 @@
+@title Build mode prints a build sheet PDF with the ticks
+@area Reports
+# Reports > Build mode > Print sheet: one table per cabinet, ticked steps show who and when.
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text Reports
+wait 5
+click_text "Build mode..."
+wait 30
+click_text "Done" Button
+wait 10
+click_text "Done" Button
+wait 10
+click_text "Print sheet…" Button
+wait 40
+expect_file "/tmp/kopercad-qa-open-*/door-cutouts build sheet.pdf" 1500
+keep_file "/tmp/kopercad-qa-open-*/door-cutouts build sheet.pdf"
+shot written
+check_layout

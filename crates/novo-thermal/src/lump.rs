@@ -7,6 +7,9 @@
 //! at the Coarse level that is meant to have 6 000 to 50 000, and ends at its
 //! time cap without converging.
 //!
+//! Rows are devices on the same centre line (rails run through the middle of
+//! their devices).
+//!
 //! This module replaces runs of small, low-loss devices that stand next to
 //! each other on the same row by one block with the sum of their losses.
 //! What is kept: every device at or above [`Settings::keep_min_w`] stays
@@ -18,6 +21,10 @@
 
 use crate::model::*;
 use novo_layout::Rect;
+
+fn centre_y(r: &Rect) -> f64 {
+    r.y + r.h / 2.0
+}
 
 /// Choices of the reduction.
 #[derive(Debug, Clone, PartialEq)]
@@ -58,11 +65,13 @@ impl Lumped {
 /// Lumps cold neighbours; see the module text. Deterministic; the original
 /// scenario is untouched.
 pub fn lump_cold_neighbours(scn: &Scenario, settings: &Settings) -> Lumped {
-    // Rows are devices with the same top edge, left to right.
+    // Rows are devices with the same centre line, left to right.
     let mut order: Vec<usize> = (0..scn.devices.len()).collect();
     order.sort_by(|a, b| {
         let (fa, fb) = (scn.devices[*a].footprint, scn.devices[*b].footprint);
-        fa.y.total_cmp(&fb.y).then(fa.x.total_cmp(&fb.x))
+        centre_y(&fa)
+            .total_cmp(&centre_y(&fb))
+            .then(fa.x.total_cmp(&fb.x))
     });
     let cold = |i: usize| scn.devices[i].loss_w < settings.keep_min_w;
     let mut groups: Vec<Vec<usize>> = Vec::new();
@@ -74,7 +83,7 @@ pub fn lump_cold_neighbours(scn: &Scenario, settings: &Settings) -> Lumped {
                 let last = scn.devices[*g.last().expect("group is not empty")].footprint;
                 cold(g[0])
                     && g.iter().all(|m| cold(*m))
-                    && (first.y - f.y).abs() < 1.0
+                    && (centre_y(&first) - centre_y(&f)).abs() < 1.0
                     && f.x - last.right() <= settings.max_gap_mm
                     && f.x - last.right() >= 0.0
                     && f.right() - first.x <= settings.max_width_mm

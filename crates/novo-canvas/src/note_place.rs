@@ -130,7 +130,7 @@ fn parts_touch(primitives: &[Primitive], labels: &[Label], rect: &Aabb) -> bool 
 
 /// Lines count along their length, so the corner of an L-shaped wire does
 /// not block the empty space inside the L.
-fn shape_touches(shape: &Shape, rect: &Aabb) -> bool {
+pub(crate) fn shape_touches(shape: &Shape, rect: &Aabb) -> bool {
     match shape {
         Shape::Line { a, b } => geom::segment_intersects_aabb(*a, *b, rect),
         Shape::Polyline { points, closed } => {

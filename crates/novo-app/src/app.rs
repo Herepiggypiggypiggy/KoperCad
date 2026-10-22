@@ -93,6 +93,8 @@ mod heat_legend;
 mod heat_live;
 #[cfg(test)]
 mod heat_live_tests;
+mod heat_openings;
+mod heat_openings_store;
 mod heat_probe;
 mod heat_progress;
 #[cfg(test)]
@@ -119,6 +121,7 @@ mod learn;
 mod learn_demo;
 mod learn_labels;
 mod learn_solve;
+mod learn_suite;
 mod learn_ui;
 mod link;
 mod live;
@@ -138,6 +141,7 @@ mod macro_editor;
 #[cfg(test)]
 mod macro_editor_tests;
 mod macro_thumb;
+mod manual;
 mod menu_bar;
 mod model_labels;
 mod net_trace;
@@ -245,6 +249,9 @@ mod view3d_surfaces;
 #[cfg(test)]
 mod view3d_tests;
 mod view3d_tip;
+mod view3d_vents;
+#[cfg(test)]
+mod view3d_vents_tests;
 mod view3d_views;
 mod view3d_wires;
 mod whats_new;
@@ -1193,6 +1200,9 @@ impl NovoApp {
         self.learn_project_changed();
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
+        // The openings of the Heat panel belong to the project's enclosure.
+        self.cabinet.heat.settings.load(Vec::new());
+        self.cabinet.heat.settings.stored = None;
         // The live view, an open drawer and a preview belong to the project
         // they were opened on; a lesson (or any project) starts clean.
         self.wb.live = Default::default();
@@ -1404,6 +1414,7 @@ impl NovoApp {
                     || *id == "cabinet.door"
                     || *id == "cabinet.surface"
                     || *id == "view.command_field_here"
+                    || matches!(*id, "help.manual" | "help.context")
                     || *id == "view.3d"
                     || id.starts_with("layout.")
                     || *id == "view.3d_door"
@@ -2479,8 +2490,10 @@ impl NovoApp {
         if !self.show_about {
             return;
         }
+        let mut open_log = false;
+        let mut copy_info = false;
         let modal = egui::Modal::new(egui::Id::new("about")).show(ctx, |ui| {
-            ui.set_width(360.0);
+            ui.set_width(380.0);
             ui.vertical_centered(|ui| {
                 novo_theme::brand::lockup(ui, 56.0);
                 ui.add_space(novo_theme::space::L);
@@ -2491,16 +2504,71 @@ impl NovoApp {
                     crate::diag::BUILD_COMMIT,
                     crate::diag::BUILD_TIME
                 ));
-                ui.add_space(novo_theme::space::L);
+                if crate::is_portable() {
+                    ui.weak(
+                        "Portable: settings, logs and default-saved projects are in the data folder beside the program",
+                    );
+                }
+                if crate::gpu::safe_graphics() {
+                    ui.weak("Started with --safe-graphics (software renderer asked for)");
+                }
+                if let Some(gpu) = crate::diag::gpu() {
+                    ui.weak(format!("Graphics: {gpu}"));
+                }
+                ui.add_space(novo_theme::space::M);
+                ui.label("Made by KoperVonk");
+                ui.weak("Free software, MIT or Apache-2.0, at your choice");
+                ui.weak("Works offline. Nothing is sent unless you use Ask Claude,");
+                ui.weak("which sends your question to Anthropic with your own key.");
+                ui.add_space(novo_theme::space::M);
+                ui.columns(2, |cols| {
+                    cols[0].vertical_centered(|ui| {
+                        ui.hyperlink_to("Release notes", ABOUT_RELEASES_URL);
+                        ui.hyperlink_to("Third-party notices", ABOUT_NOTICES_URL);
+                    });
+                    cols[1].vertical_centered(|ui| {
+                        ui.hyperlink_to("MIT licence", ABOUT_LICENCE_URL);
+                        ui.hyperlink_to("Apache-2.0 licence", ABOUT_LICENCE_APACHE_URL);
+                    });
+                });
+                ui.add_space(novo_theme::space::M);
+                ui.columns(2, |cols| {
+                    cols[0].vertical_centered(|ui| {
+                        copy_info = ui
+                            .button("Copy version info")
+                            .on_hover_text(
+                                "Version, build, system and graphics, to paste into a message",
+                            )
+                            .clicked();
+                    });
+                    cols[1].vertical_centered(|ui| {
+                        open_log = ui.button("Open log folder").clicked();
+                    });
+                });
+                ui.add_space(novo_theme::space::M);
                 ui.button("Close").clicked()
             })
             .inner
         });
+        if copy_info {
+            self.copy_problem_report(ctx);
+        }
+        if open_log {
+            self.open_log_folder();
+        }
         if modal.inner || modal.should_close() {
             self.show_about = false;
         }
     }
 }
+
+const ABOUT_RELEASES_URL: &str = "https://github.com/Herepiggypiggypiggy/kopercad/releases";
+const ABOUT_LICENCE_URL: &str =
+    "https://github.com/Herepiggypiggypiggy/kopercad/blob/main/LICENSE-MIT";
+const ABOUT_LICENCE_APACHE_URL: &str =
+    "https://github.com/Herepiggypiggypiggy/kopercad/blob/main/LICENSE-APACHE";
+const ABOUT_NOTICES_URL: &str =
+    "https://github.com/Herepiggypiggypiggy/kopercad/blob/main/THIRD_PARTY_NOTICES.txt";
 
 impl eframe::App for NovoApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {

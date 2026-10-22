@@ -267,7 +267,10 @@ pub fn fits(plate: &Plate, placements: &[Placement]) -> (f64, f64) {
 }
 
 /// A horizontal DIN rail or duct on the plate; devices on it are lined up
-/// along `length`, starting at `x`.
+/// along `length`, starting at `x`. `(x, y)` is the start of the rail's centre
+/// line, and the devices on it are centred on that line (a horizontal rail
+/// passes through the vertical middle of each device, a vertical one through
+/// its horizontal middle), as a DIN rail does behind the devices it carries.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Rail {
     pub id: u64,
@@ -277,6 +280,13 @@ pub struct Rail {
     /// Runs down from `(x, y)` instead of to the right.
     pub vertical: bool,
 }
+
+/// How wide a DIN rail lies on the plate across its run: the 35 mm of a
+/// TS 35 top-hat rail, centred on [`Rail`]'s line. Ducts and rows keep out of
+/// this band, not just off the line. The band is the planner's model of the
+/// rail (a TS 35 centred on the line, which runs through the middle of the
+/// devices on it), not a measured rail position.
+pub const RAIL_BAND_MM: f64 = 35.0;
 
 /// Default duct cross-section in mm when the model has none yet.
 pub const DEFAULT_DUCT_MM: f64 = 30.0;
@@ -360,34 +370,40 @@ pub struct DuctOverlap {
     pub hit: DuctHit,
 }
 
-/// Ducts that lie over a rail or a device. A rail is its centre line, so a
-/// duct that ends next to a rail, or a rail beside a duct, is clear; touching
-/// edges do not count.
+/// Ducts that lie over a rail or a device. A rail is its band
+/// ([`RAIL_BAND_MM`] across, centred on its line); touching edges do not
+/// count, so a duct may sit against a rail.
 pub fn duct_overlaps(ducts: &[Duct], rails: &[Rail], placements: &[Placement]) -> Vec<DuctOverlap> {
     const EPS: f64 = 1e-6;
     let mut out = Vec::new();
     for d in ducts {
         let f = d.footprint();
         for r in rails {
-            // The rail's line against the duct's rectangle.
-            let (across, from, to, lo, hi) = if r.vertical {
-                (r.x, r.y, r.y + r.length, f.y, f.bottom())
-            } else {
-                (r.y, r.x, r.x + r.length, f.x, f.right())
-            };
-            let (side_lo, side_hi) = if r.vertical {
-                (f.x, f.right())
-            } else {
-                (f.y, f.bottom())
-            };
-            if across > side_lo + EPS && across < side_hi - EPS {
-                let by = to.min(hi) - from.max(lo);
-                if by > EPS {
-                    out.push(DuctOverlap {
-                        duct: d.id,
-                        hit: DuctHit::Rail { id: r.id, by },
-                    });
+            let half = RAIL_BAND_MM / 2.0;
+            let band = if r.vertical {
+                Rect {
+                    x: r.x - half,
+                    y: r.y,
+                    w: RAIL_BAND_MM,
+                    h: r.length,
                 }
+            } else {
+                Rect {
+                    x: r.x,
+                    y: r.y - half,
+                    w: r.length,
+                    h: RAIL_BAND_MM,
+                }
+            };
+            let w = band.right().min(f.right()) - band.x.max(f.x);
+            let h = band.bottom().min(f.bottom()) - band.y.max(f.y);
+            if w > EPS && h > EPS {
+                // How far the duct lies over the rail along the rail's run.
+                let by = if r.vertical { h } else { w };
+                out.push(DuctOverlap {
+                    duct: d.id,
+                    hit: DuctHit::Rail { id: r.id, by },
+                });
             }
         }
         for p in placements {
@@ -425,6 +441,36 @@ mod tests {
             margins: Margins::default(),
             rail: None,
         }
+    }
+
+    #[test]
+    fn a_duct_over_the_rail_band_overlaps_though_not_the_line() {
+        let rail = Rail {
+            id: 1,
+            x: 0.0,
+            y: 100.0,
+            length: 300.0,
+            vertical: false,
+        };
+        let duct = |y: f64| Duct {
+            id: 9,
+            x: 0.0,
+            y,
+            length: 300.0,
+            width: 25.0,
+            vertical: false,
+        };
+        // Centre 70: the duct spans 57.5 to 82.5, the band starts at 82.5.
+        assert!(duct_overlaps(&[duct(70.0)], std::slice::from_ref(&rail), &[]).is_empty());
+        // Centre 75 reaches 87.5: 5 mm into the band, though 12.5 mm from the line.
+        let hit = duct_overlaps(&[duct(75.0)], std::slice::from_ref(&rail), &[]);
+        assert_eq!(
+            hit,
+            vec![DuctOverlap {
+                duct: 9,
+                hit: DuctHit::Rail { id: 1, by: 300.0 }
+            }]
+        );
     }
 
     #[test]

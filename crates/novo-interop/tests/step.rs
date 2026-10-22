@@ -89,10 +89,11 @@ fn our_own_reader_finds_the_solids_back() {
     .expect("the reader accepts the file");
     let size = g.size_mm();
     // The housing is 600 x 800 inside, 2 mm walls, 3 mm plate and 2 mm back
-    // wall behind it, a 250 mm interior and a 2 mm door; the top DIN rail
-    // overhangs the plate by 7.5 mm. The same box OpenCASCADE reports for
-    // this file: x -2..602, y -2..807.5, z -5..252.
-    let expect = [604.0, 809.5, 257.0];
+    // wall behind it, a 250 mm interior and a 2 mm door. The DIN rails run
+    // through the middle of their devices, so none overhangs the plate. The
+    // box: x -2..602, y -2..802, z -5..252 (it was 807.5 high while the top
+    // rail's band stuck 7.5 mm out above the plate).
+    let expect = [604.0, 804.0, 257.0];
     for (got, want) in size.iter().zip(expect) {
         assert!(
             (f64::from(*got) - want).abs() < 0.5,

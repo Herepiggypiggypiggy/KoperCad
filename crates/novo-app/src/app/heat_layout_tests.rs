@@ -46,7 +46,7 @@ fn cabinet(with_rails: bool) -> (Project, StructureId) {
                     rails.push(tx.add_rail(
                         cab,
                         20.0,
-                        40.0 + 350.0 * f64::from(row),
+                        150.0 + 350.0 * f64::from(row),
                         760.0,
                         RailKind::DinRail,
                     )?);
@@ -70,7 +70,7 @@ fn cabinet(with_rails: bool) -> (Project, StructureId) {
                     device: d,
                     structure: cab,
                     x,
-                    y: 40.0 + 350.0 * f64::from(row),
+                    y: 150.0 + 350.0 * f64::from(row) - h / 2.0,
                     rotated: false,
                     rail: rails.get(row as usize).map(|r| (*r, x - 20.0)),
                 })?;

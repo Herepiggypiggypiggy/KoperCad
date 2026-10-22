@@ -21,6 +21,11 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppMaker}
 AppPublisherURL=https://github.com/Herepiggypiggypiggy/kopercad
+AppSupportURL=https://github.com/Herepiggypiggypiggy/kopercad/issues
+AppUpdatesURL=https://github.com/Herepiggypiggypiggy/kopercad/releases
+; An update over a running copy closes it instead of failing on a locked exe.
+CloseApplications=yes
+RestartApplications=no
 ; Strictly per-user: no admin rights are ever requested, everything goes to
 ; %LOCALAPPDATA% and HKCU.
 DefaultDirName={localappdata}\Programs\{#AppName}
@@ -57,6 +62,8 @@ Source: "{#RepoRoot}\LICENSE*"; DestDir: "{app}"; Flags: ignoreversion skipifsou
 [Icons]
 Name: "{userprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{userdesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
+; For a PC whose graphics driver fails: the software renderer, slower but it starts.
+Name: "{userprograms}\{#AppName} (safe graphics)"; Filename: "{app}\{#AppExe}"; Parameters: "--safe-graphics"; Comment: "Start with the software renderer if the normal start fails"
 
 [Registry]
 Root: HKCU; Subkey: "Software\Classes\.kopercad"; ValueType: string; ValueName: ""; ValueData: "KoperCAD.Project"; Flags: uninsdeletevalue; Tasks: associate
@@ -75,5 +82,33 @@ Type: files; Name: "{userprograms}\{#OldAppName}.lnk"
 Type: files; Name: "{userdesktop}\{#OldAppName}.lnk"
 Type: files; Name: "{app}\novoelectric.exe"
 
+[UninstallDelete]
+Type: files; Name: "{userprograms}\{#AppName} (safe graphics).lnk"
+
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+{ The program is removed; projects are never touched. Settings, logs and the
+  recovery files stay unless the user asks for them to go too, so a later
+  reinstall finds the same preferences. }
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Local, Roaming: String;
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    Local := ExpandConstant('{localappdata}\KoperCAD');
+    Roaming := ExpandConstant('{userappdata}\KoperCAD');
+    if (DirExists(Local) or DirExists(Roaming)) and (not UninstallSilent) then
+      if MsgBox('Also remove KoperCAD data from this PC?' + #13#10 + #13#10 +
+                'This deletes your settings, parts catalog, macros, templates, report designs, ' +
+                'logs, and the recovery copies of unsaved work.' + #13#10 +
+                'Your saved project files are never deleted.' + #13#10 + #13#10 +
+                'Choose No to keep everything for a later reinstall.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      begin
+        DelTree(Local, True, True, True);
+        DelTree(Roaming, True, True, True);
+      end;
+  end;
+end;

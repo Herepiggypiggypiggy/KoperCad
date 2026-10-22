@@ -7,7 +7,10 @@ use novo_layout::rules::{
     Class, GapSource, Gaps, RuleSet, Spec, UnplacedWhy, Zone, place_all_explained, place_all_rules,
 };
 use novo_layout::stock::{Stock, optimise, rail_pieces};
-use novo_layout::{Placement, Plate, Size, collisions, outside, rail_overflows};
+use novo_layout::{
+    Duct, Placement, Plate, RAIL_BAND_MM, Rail, Size, collisions, duct_overlaps, outside,
+    rail_overflows,
+};
 
 fn spec(id: u64, kind: &str, w: f64, h: f64) -> Spec {
     Spec {
@@ -89,7 +92,9 @@ fn rows_of_one_class_share_a_duct() {
     assert_eq!(d.class, Class::Signal);
     let (_, y1) = at(&plan, 1);
     let (_, y2) = at(&plan, 2);
-    // Centred in the space between the two rows.
+    // Centred in the space between the two rows. The rails run through the
+    // middle of 90 mm rows, so their 35 mm bands lie behind the devices and
+    // the duct has the whole space.
     assert!((d.y - ((y1 + 90.0 + y2) / 2.0)).abs() < 1e-9);
     assert_eq!((d.width, d.height), (25.0, 60.0));
 }
@@ -102,6 +107,9 @@ fn separation_off_gives_one_duct_and_the_normal_row_gap() {
     let plan = place_all_rules(&plate(), &specs, &rules, 1, 0.0);
     let (_, qy) = at(&plan, 1);
     let (_, ky) = at(&plan, 2);
+    // Rows as tall as the rail band (35 mm) hide it behind their devices, so
+    // the 40 mm row gap holds the 25 mm duct with 10 mm to the devices above
+    // and 5 mm to the lower rail's band.
     assert_eq!(ky - (qy + 90.0), rules.row_gap);
     assert_eq!(row_ducts(&plan).len(), 1);
 }
@@ -603,4 +611,87 @@ fn the_trunk_is_dropped_when_the_narrower_plate_would_lose_a_device() {
     assert!(plan.unplaced.is_empty());
     assert!(why.trunk_dropped && !why.trunk);
     assert!(plan.ducts.iter().all(|d| !d.vertical));
+}
+
+/// The planner's rails are lines on the plate but real rails are 35 mm bands;
+/// no planned duct may lie over the band of any rail, whatever the rules.
+#[test]
+fn planned_ducts_clear_the_rail_bands() {
+    for separation in [0.0, 40.0] {
+        let specs = vec![
+            spec(1, "Q", 18.0, 90.0),
+            spec(2, "K", 45.0, 90.0),
+            spec(3, "A", 100.0, 20.0),
+            spec(4, "T", 80.0, 150.0),
+            spec(5, "X", 6.0, 30.0),
+        ];
+        let mut rules = RuleSet::standard();
+        rules.separation = separation;
+        let plan = place_all_rules(&plate(), &specs, &rules, 1, 0.0);
+        assert!(plan.unplaced.is_empty(), "{:?}", plan.unplaced);
+        let rails: Vec<Rail> = plan.rails.clone();
+        let ducts: Vec<Duct> = plan
+            .ducts
+            .iter()
+            .enumerate()
+            .map(|(i, d)| Duct {
+                id: i as u64 + 1,
+                x: d.x,
+                y: d.y,
+                length: d.length,
+                width: d.width,
+                vertical: d.vertical,
+            })
+            .collect();
+        let found = duct_overlaps(&ducts, &rails, &placements(&plan, &specs));
+        assert!(found.is_empty(), "separation {separation}: {found:?}");
+    }
+}
+
+/// A rail runs through the middle of its row and the devices on it are centred
+/// on its line, whatever their heights, so a part sits on the rail where it
+/// would be screwed on.
+#[test]
+fn devices_are_centred_on_their_rail() {
+    let specs = vec![
+        spec(1, "K", 45.0, 90.0),
+        spec(2, "K", 45.0, 60.0),
+        spec(3, "K", 18.0, 90.0),
+    ];
+    let plan = place_all_rules(&plate(), &specs, &RuleSet::standard(), 1, 0.0);
+    assert!(plan.unplaced.is_empty());
+    for p in &plan.placements {
+        let h = specs.iter().find(|s| s.id == p.id).unwrap().size.height;
+        let rail = plan.rails.iter().find(|r| r.id == p.rail).unwrap();
+        assert!((p.y + h / 2.0 - rail.y).abs() < 1e-9, "device {}", p.id);
+    }
+}
+
+/// A row lower than the 35 mm band has the band showing above and below its
+/// devices; the first row starts far enough down to keep it on the plate, and
+/// the ducts keep out of it.
+#[test]
+fn a_low_first_row_keeps_its_band_on_the_plate() {
+    let specs = vec![spec(1, "A", 100.0, 20.0), spec(2, "T", 80.0, 150.0)];
+    let p = plate();
+    let plan = place_all_rules(&p, &specs, &RuleSet::standard(), 1, 0.0);
+    let first = plan.rails.iter().map(|r| r.y).fold(f64::MAX, f64::min);
+    assert!(first - RAIL_BAND_MM / 2.0 >= p.usable().y - 1e-9, "{first}");
+    assert_eq!(first - RAIL_BAND_MM / 2.0, p.usable().y);
+}
+
+/// The same at the bottom edge: a last row lower than the band ends far enough
+/// above the plate's edge for the band to stay on the usable area.
+#[test]
+fn a_low_last_row_keeps_its_band_on_the_plate() {
+    let specs = vec![spec(1, "Q", 18.0, 90.0), spec(2, "X", 40.0, 20.0)];
+    let p = plate();
+    let plan = place_all_rules(&p, &specs, &RuleSet::standard(), 1, 0.0);
+    assert!(plan.unplaced.is_empty(), "{:?}", plan.unplaced);
+    let last = plan.rails.iter().map(|r| r.y).fold(f64::MIN, f64::max);
+    let usable = p.usable();
+    assert!(
+        last + RAIL_BAND_MM / 2.0 <= usable.y + usable.h + 1e-9,
+        "{last}"
+    );
 }

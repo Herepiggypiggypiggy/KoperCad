@@ -208,6 +208,20 @@ fn the_table_face_toggles_and_problems_are_in_words() {
         hover.contains("-K3: Reaches past the usable plate"),
         "{hover}"
     );
+    assert!(
+        hover.ends_with("Click to list them and select the device."),
+        "{hover}"
+    );
+    // With no device problem the hint does not promise a device to select.
+    let empty = CabinetLayout::new(Plate {
+        width: 200.0,
+        height: 200.0,
+        margin: 10.0,
+    });
+    assert_eq!(
+        super::cabinet::problem_summary(&empty, &name),
+        "Click to list the problems."
+    );
 }
 
 #[test]

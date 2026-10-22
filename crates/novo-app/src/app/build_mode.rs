@@ -17,8 +17,8 @@ use std::rc::Rc;
 
 use eframe::egui;
 use novo_commissioning::{
-    BuildPhase, BuildPlan, BuildStep, CabinetPlan, Next, StepStatus, mark_done, mark_problem,
-    undo_build,
+    BuildPhase, BuildPlan, BuildStep, CabinetPlan, Next, StepStatus, claim_step, mark_done,
+    mark_problem, release_step, undo_build,
 };
 use novo_core::WireId;
 use novo_theme::widgets::{self, Level as Tone};
@@ -42,6 +42,9 @@ pub(crate) struct BuildState {
     focus: Option<usize>,
     /// The note being typed for a problem; `Some` while the editor is open.
     problem: Option<String>,
+    /// Pictures chosen for the problem being typed; kept with the punch item
+    /// when it is raised.
+    photos: Vec<std::path::PathBuf>,
     /// Large buttons and text, on for a window the size of a tablet.
     large: bool,
     /// Build mode is stepped aside to show something in another workspace;
@@ -58,6 +61,7 @@ impl BuildState {
             cabinet: 0,
             focus: None,
             problem: None,
+            photos: Vec::new(),
             large,
             away: false,
             history: Vec::new(),
@@ -79,7 +83,12 @@ struct Asked {
     close: bool,
     export: bool,
     import: bool,
+    sheet: bool,
     show: Option<Show>,
+    /// "Add photos…" was pressed in the problem editor.
+    pick_photos: bool,
+    /// Punch item raised with pictures to keep on it.
+    attach: Option<(u64, Vec<std::path::PathBuf>)>,
     /// A step was ticked, taken back or parked: the store changed.
     changed: bool,
 }
@@ -164,9 +173,11 @@ impl NovoApp {
                     .as_ref()
                     .and_then(|p| p.cabinets.get(state.cabinet))
                     .and_then(|c| {
-                        match state.focus.or_else(|| match c.next(&mode.store) {
-                            Next::Ready(n) | Next::Blocked { step: n, .. } => Some(n),
-                            Next::Finished => None,
+                        match state.focus.or_else(|| {
+                            match c.next_for(&mode.store, or_unknown(&mode.who)) {
+                                Next::Ready(n) | Next::Blocked { step: n, .. } => Some(n),
+                                Next::Finished => None,
+                            }
                         }) {
                             Some(n) => c.step(n).map(|s| format!("Step {n}: {}", s.title)),
                             None => None,
@@ -207,8 +218,26 @@ impl NovoApp {
                 self.backend.set_commissioning_json(&json);
             }
         }
+        if asked.pick_photos
+            && let Some(paths) = Self::pick_photo_files()
+        {
+            for path in paths {
+                if !state.photos.contains(&path) {
+                    state.photos.push(path);
+                }
+            }
+        }
+        if let Some((id, paths)) = asked.attach.take() {
+            self.keep_problem_photos(id, &paths);
+        }
         if asked.export {
             self.export_field_results();
+        }
+        if asked.sheet {
+            let plan = state.plan.as_ref().map(|(_, p)| Rc::clone(p));
+            if let Some(plan) = plan {
+                self.export_build_sheet(&plan);
+            }
         }
         if asked.import {
             self.import_field_results();
@@ -218,10 +247,28 @@ impl NovoApp {
             // Build mode steps aside (a bar brings it back) so the other
             // workspace can be seen.
             state.away = true;
+            let cab = state
+                .plan
+                .as_ref()
+                .and_then(|(_, p)| p.cabinets.get(state.cabinet));
+            let tag = cab.map(|c| c.tag.clone()).unwrap_or_default();
+            // A device fitted on the door or a wall is shown on that surface.
+            let surface = |device: u64| {
+                cab.and_then(|c| {
+                    c.steps
+                        .iter()
+                        .find(|s| s.device == Some(device) && s.phase == BuildPhase::Devices)
+                })
+                .and_then(|s| s.surface.clone())
+            };
             match show {
                 Show::Wire3d(wire) => self.show_wire_in_3d(wire),
-                Show::DevicePlate(device) => self.show_device(device, false),
-                Show::Device3d(device) => self.show_device(device, true),
+                Show::DevicePlate(device) => {
+                    self.show_device(device, &tag, surface(device).as_deref(), false)
+                }
+                Show::Device3d(device) => {
+                    self.show_device(device, &tag, surface(device).as_deref(), true)
+                }
             }
             self.wb.build = Some(state);
             return;
@@ -256,7 +303,7 @@ impl NovoApp {
                 && let Some(cab) = plan.cabinets.get(state.cabinet)
             {
                 let number = state.focus.filter(|&n| cab.step(n).is_some()).or(
-                    match cab.next(&mode.store) {
+                    match cab.next_for(&mode.store, or_unknown(&who)) {
                         Next::Ready(n) | Next::Blocked { step: n, .. } => Some(n),
                         Next::Finished => None,
                     },
@@ -277,6 +324,16 @@ impl NovoApp {
         taken
     }
 
+    /// Keeps the pictures chosen in the problem editor on the punch item the
+    /// problem raised, the same way the Commissioning workspace does.
+    pub(super) fn keep_problem_photos(&mut self, id: u64, paths: &[std::path::PathBuf]) -> usize {
+        // Flush first: the item must be in the store the photos go to.
+        self.flush_commissioning();
+        let added = self.attach_photo_files(id, paths);
+        self.flush_commissioning();
+        added
+    }
+
     /// Writes the commissioning data to the project when it changed.
     fn flush_commissioning(&mut self) {
         if let Some(mode) = self.wb.commissioning.as_mut()
@@ -288,10 +345,79 @@ impl NovoApp {
         }
     }
 
+    /// Writes the build sheet PDF next to the project (`<project> build
+    /// sheet.pdf`), replacing only a file of this program's own making.
+    pub(super) fn export_build_sheet(&mut self, plan: &BuildPlan) -> Option<std::path::PathBuf> {
+        let (dir, stem) = self.export_base()?;
+        let path = super::pdf::replaceable_path(&dir.join(format!("{stem} build sheet.pdf")));
+        self.export_build_sheet_to(plan, &path)
+    }
+
+    pub(super) fn export_build_sheet_to(
+        &mut self,
+        plan: &BuildPlan,
+        path: &std::path::Path,
+    ) -> Option<std::path::PathBuf> {
+        self.load_commissioning();
+        let name = self.machine_title().unwrap_or_default();
+        let revision = self
+            .backend
+            .document()
+            .map_or(0, |d| d.project().revision());
+        let store = self.wb.commissioning.as_ref().map(|m| m.store.clone())?;
+        let output = novo_commissioning::build_sheet(plan, &store, revision);
+        if output.sections.is_empty() {
+            self.message(
+                Level::Warning,
+                "No cabinet has a mounting plate yet, so there is no build sheet.",
+            );
+            return None;
+        }
+        let options = novo_pdf::ReportPdfOptions {
+            title: format!("{name}  Build sheet"),
+            row_mm: output
+                .sections
+                .iter()
+                .map(|s| (s.key.clone(), novo_commissioning::build_sheet_row_mm(s)))
+                .collect(),
+            language: self.report_translator(),
+            ..novo_pdf::ReportPdfOptions::default()
+        };
+        let bytes = novo_pdf::export_report_pdf(&[&output], &options);
+        let replaced = path.exists();
+        match super::pdf::write_replacing(path, &bytes) {
+            Ok(()) => {
+                let verb = if replaced { "Replaced" } else { "Exported" };
+                self.message_file(format!("{verb} {}", path.display()), path);
+                Some(path.to_owned())
+            }
+            Err(e) => {
+                self.message(
+                    Level::Error,
+                    format!("Could not export the build sheet: {e}"),
+                );
+                None
+            }
+        }
+    }
+
     /// Selects the device on the Cabinet canvas and shows it there or, with
-    /// `three_d`, in the 3D view (which follows the plate's selection).
-    pub(super) fn show_device(&mut self, device: u64, three_d: bool) {
+    /// `three_d`, in the 3D view (which follows the plate's selection). The
+    /// Cabinet switches to the step's own cabinet (`tag`), its plate and not
+    /// the table face, so a project with several cabinets shows the right one.
+    pub(super) fn show_device(
+        &mut self,
+        device: u64,
+        tag: &str,
+        surface: Option<&str>,
+        three_d: bool,
+    ) {
         self.flush_commissioning();
+        if let Ok(location) = novo_core::DeviceTag::parse(tag) {
+            self.cabinet.location = Some(location);
+        }
+        self.cabinet.surface = surface.map(str::to_owned);
+        self.cabinet.table = false;
         self.cabinet.view.selection.apply(
             [novo_canvas::cabinet::box_item(device)],
             novo_canvas::selection::SelectOp::Replace,
@@ -351,6 +477,7 @@ fn screen(
                 state.cabinet = chosen;
                 state.focus = None;
                 state.problem = None;
+                state.photos.clear();
             }
         } else if let Some(c) = plan.cabinets.first() {
             ui.label(egui::RichText::new(&c.tag).strong());
@@ -359,6 +486,12 @@ fn screen(
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if widgets::ghost_button(ui, "Close").clicked() {
                 asked.close = true;
+            }
+            if widgets::ghost_button(ui, "Print sheet…")
+                .on_hover_text("A PDF of every step with its tick, for the workshop wall")
+                .clicked()
+            {
+                asked.sheet = true;
             }
             if widgets::ghost_button(ui, "Import ticks…")
                 .on_hover_text("Merge a .kcfield file from the tablet; the newer decision wins")
@@ -413,7 +546,7 @@ fn screen(
     );
     ui.add_space(8.0);
 
-    let next = cab.next(&mode.store);
+    let next = cab.next_for(&mode.store, or_unknown(who));
     let shown = state
         .focus
         .filter(|&n| cab.step(n).is_some())
@@ -494,9 +627,10 @@ fn step_list(
                             );
                             ui.add(
                                 egui::Label::new(egui::RichText::new(format!(
-                                    "{}  {}",
+                                    "{}  {}{}",
                                     step.number,
-                                    short(step)
+                                    short(step),
+                                    claimed_by(mode, step, status)
                                 )))
                                 .truncate(),
                             );
@@ -509,11 +643,26 @@ fn step_list(
                         if r.clicked() {
                             state.focus = Some(step.number);
                             state.problem = None;
+                            state.photos.clear();
                         }
                     }
                 });
             }
         });
+}
+
+/// " · bob" on an open step somebody has taken.
+fn claimed_by(
+    mode: &super::commissioning::CommissioningMode,
+    step: &BuildStep,
+    status: StepStatus,
+) -> String {
+    match mode.store.build_claim(step.key) {
+        Some(c) if matches!(status, StepStatus::Open | StepStatus::Changed) => {
+            format!("  · {}", c.by)
+        }
+        _ => String::new(),
+    }
 }
 
 /// What a list row says: the mark, or the start of the instruction.
@@ -617,17 +766,27 @@ fn card(
             }
             ui.add_space(10.0);
             status_and_buttons(ui, state, cab, mode, step, status, who, asked);
-            ui.horizontal(|ui| {
+            // Real buttons, in the size of the others: a bare text link is
+            // easy to miss and too small for a finger.
+            let h = if state.large { 48.0 } else { 30.0 };
+            let show = |ui: &mut egui::Ui, label: &str| {
+                // The width follows the (possibly translated) label.
+                ui.add(egui::Button::new(label).min_size(egui::vec2(0.0, h)))
+                    .clicked()
+            };
+            ui.add_space(6.0);
+            ui.horizontal_wrapped(|ui| {
                 if let Some(device) = step.device {
-                    if widgets::ghost_button(ui, "Show on the plate").clicked() {
+                    let on = format!("Show on the {}", step.surface.as_deref().unwrap_or("plate"));
+                    if show(ui, &on) {
                         asked.show = Some(Show::DevicePlate(device));
                     }
-                    if widgets::ghost_button(ui, "Show in 3D").clicked() {
+                    if show(ui, "Show in 3D") {
                         asked.show = Some(Show::Device3d(device));
                     }
                 }
                 if let Some(&w) = step.wires.first()
-                    && widgets::ghost_button(ui, "Show the wire in 3D").clicked()
+                    && show(ui, "Show the wire in 3D")
                 {
                     asked.show = Some(Show::Wire3d(w));
                 }
@@ -729,6 +888,72 @@ fn status_and_buttons(
         _ => {}
     }
 
+    // Who has this step: two people on one cabinet do not reach for the same
+    // device. A claim is a signal, not a lock. Without a name (set under
+    // Commissioning) the claim reads "someone", which cannot tell two people apart.
+    if state.problem.is_none() && matches!(status, StepStatus::Open | StepStatus::Changed) {
+        let me = or_unknown(who);
+        let held = mode.store.build_claim(step.key).cloned();
+        let h = if state.large { 48.0 } else { 30.0 };
+        match held {
+            Some(c) if c.by != me => {
+                widgets::banner(
+                    ui,
+                    Tone::Warning,
+                    &format!(
+                        "{} took this step at {} UTC. Do another step, or take it over.",
+                        c.by,
+                        c.at.get(11..16).unwrap_or(&c.at)
+                    ),
+                    |_| {},
+                );
+                ui.add_space(4.0);
+                if ui
+                    .add(egui::Button::new("Take it over").min_size(egui::vec2(0.0, h)))
+                    .clicked()
+                {
+                    claim_step(&mut mode.store, step, me, &now());
+                    mode.dirty = true;
+                    asked.changed = true;
+                }
+                ui.add_space(6.0);
+            }
+            Some(_) => {
+                ui.horizontal(|ui| {
+                    ui.label(if who.trim().is_empty() {
+                        "Someone has this step. Set your name in Commissioning to tell who."
+                    } else {
+                        "You have this step."
+                    });
+                    if ui
+                        .add(egui::Button::new("Let go").min_size(egui::vec2(0.0, h)))
+                        .clicked()
+                    {
+                        release_step(&mut mode.store, step, &now());
+                        mode.dirty = true;
+                        asked.changed = true;
+                    }
+                });
+                ui.add_space(4.0);
+            }
+            None => {
+                let r = ui
+                    .add(egui::Button::new("I take this step").min_size(egui::vec2(0.0, h)))
+                    .on_hover_text(if who.trim().is_empty() {
+                        "Shows the others that someone is on this step. Set your name in Commissioning so they see who."
+                    } else {
+                        "Shows the others that you are on this step"
+                    });
+                if r.clicked() {
+                    claim_step(&mut mode.store, step, me, &now());
+                    mode.dirty = true;
+                    asked.changed = true;
+                }
+                ui.add_space(4.0);
+            }
+        }
+    }
+
     if let Some(note) = state.problem.as_mut() {
         ui.label("What is wrong? Engineering reads this on the punch list.");
         let r = ui.add(
@@ -744,15 +969,38 @@ fn status_and_buttons(
                 .add_enabled(!text.is_empty(), egui::Button::new("Raise problem"))
                 .clicked();
             cancel = ui.button("Cancel").clicked();
+            if ui
+                .button("📷  Add photos…")
+                .on_hover_text("Pictures from a camera or the tablet's gallery")
+                .clicked()
+            {
+                asked.pick_photos = true;
+            }
         });
+        if !state.photos.is_empty() {
+            ui.horizontal(|ui| {
+                ui.label(format!(
+                    "{} photo{} will be kept on the punch item",
+                    state.photos.len(),
+                    if state.photos.len() == 1 { "" } else { "s" }
+                ));
+                if ui.small_button("Remove").clicked() {
+                    state.photos.clear();
+                }
+            });
+        }
         if raise {
-            mark_problem(&mut mode.store, &cab.tag, step, &text, who, &now());
+            let id = mark_problem(&mut mode.store, &cab.tag, step, &text, who, &now());
+            if !state.photos.is_empty() {
+                asked.attach = Some((id, std::mem::take(&mut state.photos)));
+            }
             mode.dirty = true;
             asked.changed = true;
             state.problem = None;
             state.focus = None;
         } else if cancel {
             state.problem = None;
+            state.photos.clear();
         }
         return;
     }
@@ -851,9 +1099,17 @@ fn ready_now(
     ui.horizontal_wrapped(|ui| {
         for &n in ready.iter().take(12) {
             let Some(step) = cab.step(n) else { continue };
-            if widgets::chip(ui, &format!("{n} {}", short(step)), false)
-                .on_hover_text(&step.title)
-                .clicked()
+            if widgets::chip(
+                ui,
+                &format!(
+                    "{n} {}{}",
+                    short(step),
+                    claimed_by(mode, step, cab.status(&mode.store, step))
+                ),
+                false,
+            )
+            .on_hover_text(&step.title)
+            .clicked()
             {
                 state.focus = Some(n);
             }
@@ -889,8 +1145,10 @@ fn away_bar(ctx: &egui::Context, rect: egui::Rect, step: &str) -> bool {
     let mut back = false;
     egui::Area::new(egui::Id::new("build_mode_away"))
         .order(egui::Order::Middle)
-        .pivot(egui::Align2::CENTER_BOTTOM)
-        .fixed_pos(egui::pos2(rect.center().x, rect.bottom() - 14.0))
+        // Bottom left: the Cabinet's lowest device and the 3D view's
+        // controls sit towards the middle and the right.
+        .pivot(egui::Align2::LEFT_BOTTOM)
+        .fixed_pos(egui::pos2(rect.left() + 14.0, rect.bottom() - 14.0))
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.horizontal(|ui| {

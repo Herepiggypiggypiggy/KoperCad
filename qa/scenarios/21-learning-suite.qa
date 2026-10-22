@@ -1,0 +1,50 @@
+@title Learning suite: Home, a path, a topic, search and the level chips
+@area Learning
+click_text "Learn…"
+wait 15
+shot suite-home
+check_layout
+text motor
+wait 8
+shot suite-search
+check_layout
+click_text "Clear search and level"
+wait 6
+click_text "First hour" #1
+wait 10
+shot suite-path
+check_layout
+click_text "Home" #1
+wait 6
+click_text "Cabinet and panel building" #1
+wait 10
+shot suite-topic
+check_layout
+click_text "Advanced"
+wait 8
+shot suite-level-advanced
+check_layout
+click_text "All levels"
+wait 6
+key Escape
+key Escape
+wait 6
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 6
+click_text "Learn…"
+wait 15
+shot suite-home-light
+check_layout
+click_text "Panel builder" #1
+wait 10
+shot suite-path-light
+check_layout
+key Escape

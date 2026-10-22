@@ -1009,10 +1009,7 @@ pub(super) fn start_run(
     };
     match novo_thermal::bridge::scenario_from_project(project, enclosure, &options) {
         Ok(mut bridge) => {
-            bridge
-                .scenario
-                .vents
-                .extend(state.settings.vents_for(&bridge.scenario.enclosure));
+            state.settings.apply(&mut bridge.scenario);
             let plate = bridge.scenario.enclosure.plate;
             let meta = Meta {
                 scenario_key: super::heat_live::scenario_key(&bridge.scenario),

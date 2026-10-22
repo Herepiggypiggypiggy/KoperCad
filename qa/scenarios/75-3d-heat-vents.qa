@@ -1,0 +1,68 @@
+@title 3D Heat: vents and fans drawn in the cabinet, airflow coloured by speed
+@area 3D
+# Vents and fans panel: add a filter fan low on the door and two grilles; they show on their walls with arrows and labels before any run; a Quick run then shows the airflow from them, coloured by air speed with a legend.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+expect "Vents and fans"
+shot panel-empty
+click_text "Add opening"
+wait 10
+shot add-menu
+click_text "Filter fan, low on the door"
+wait 10
+click_text "Add opening"
+wait 10
+click_text "Grille, high on the right wall"
+wait 20
+expect "Filter fan"
+expect "Grille, in the right wall"
+shot added-before-run
+check_layout
+click_text Undo
+wait 10
+expect_not "Grille, in the right wall"
+click_text Redo
+wait 10
+expect "Grille, in the right wall"
+key ctrl+k
+wait 6
+text add exhaust fan
+wait 8
+key Enter
+wait 20
+expect "3  Fan"
+shot added-by-command
+click_text "2  Grille, in the right wall"
+wait 10
+expect "Free area"
+click_text "1  Filter fan, in the door"
+wait 10
+expect "Blows"
+expect "Height above floor"
+shot fan-selected
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 45
+shot airflow-result
+expect "Airflow: lines and arrows are coloured by air speed"
+check_blank airflow-result
+check_layout
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 20
+shot airflow-light
+check_layout

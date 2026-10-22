@@ -6,6 +6,7 @@
 //! both directions shift by the same origin.
 
 use novo_core::{Command, DeviceId, Project, RailId, Result, StructureId, Tx};
+use novo_layout::RAIL_BAND_MM;
 use novo_layout::model::{enclosure_of, load};
 
 use crate::model::Scenario;
@@ -42,37 +43,63 @@ pub fn rows(project: &Project, enclosure: StructureId, scenario: &Scenario) -> O
     let usable = layout.plate.usable();
     let mut rails: Vec<&novo_layout::Rail> = layout.rails.iter().filter(|r| !r.vertical).collect();
     rails.sort_by(|a, b| a.y.total_cmp(&b.y));
-    let row_tops: Vec<f64> = rails.iter().map(|r| r.y).collect();
-    let ducts: Vec<f64> = layout
+    let rail_index = |rail: u64| rails.iter().position(|r| r.id == rail);
+    let row_of: Vec<Option<usize>> = scenario
+        .devices
+        .iter()
+        .map(|d| {
+            let rail = layout.placements.iter().find(|p| p.id == d.id)?.rail?;
+            rail_index(rail)
+        })
+        .collect();
+    // Half the height of the tallest device each rail carries: devices are
+    // centred on the rail's line, so that much reaches up and down from it.
+    let half: Vec<f64> = (0..rails.len())
+        .map(|i| {
+            scenario
+                .devices
+                .iter()
+                .zip(&row_of)
+                .filter(|(_, r)| **r == Some(i))
+                .map(|(d, _)| d.footprint.h / 2.0)
+                .fold(RAIL_BAND_MM / 2.0, f64::max)
+        })
+        .collect();
+    let duct_tops: Vec<f64> = layout
         .ducts
         .iter()
         .filter(|d| !d.vertical)
         .map(|d| d.y - d.width / 2.0)
         .collect();
+    let duct_bottoms: Vec<f64> = layout
+        .ducts
+        .iter()
+        .filter(|d| !d.vertical)
+        .map(|d| d.y + d.width / 2.0)
+        .collect();
     let rows: Vec<Row> = rails
         .iter()
-        .map(|r| {
-            let below = row_tops
-                .iter()
-                .copied()
-                .filter(|y| *y > r.y + 1.0)
-                .chain(ducts.iter().copied().filter(|y| *y > r.y + 1.0))
+        .enumerate()
+        .map(|(i, r)| {
+            let line = r.y;
+            let up = (0..i)
+                .filter(|j| rails[*j].y < line - 1.0)
+                .map(|j| rails[j].y + half[j])
+                .chain(duct_bottoms.iter().copied().filter(|y| *y < line - 1.0))
+                .fold(usable.y, f64::max);
+            let down = ((i + 1)..rails.len())
+                .filter(|j| rails[*j].y > line + 1.0)
+                .map(|j| rails[j].y - half[j])
+                .chain(duct_tops.iter().copied().filter(|y| *y > line + 1.0))
                 .fold(usable.bottom(), f64::min);
+            let room = ((line - up).min(down - line) - ROW_CLEAR_MM).max(0.0);
             Row {
                 id: r.id,
                 x_min: r.x + ox,
                 x_max: (r.x + r.length).min(usable.right()) + ox,
-                y_top: r.y + oy,
-                height_mm: (below - r.y - ROW_CLEAR_MM).max(0.0),
+                y_line: line + oy,
+                height_mm: 2.0 * room,
             }
-        })
-        .collect();
-    let row_of = scenario
-        .devices
-        .iter()
-        .map(|d| {
-            let rail = layout.placements.iter().find(|p| p.id == d.id)?.rail?;
-            rows.iter().position(|row| row.id == rail)
         })
         .collect();
     Some(Rows { rows, row_of })

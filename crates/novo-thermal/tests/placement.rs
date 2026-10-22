@@ -42,7 +42,7 @@ fn cabinet() -> (Project, StructureId, u64, u64, Vec<u64>) {
                 let id = tx.add_rail(
                     cab,
                     20.0,
-                    40.0 + 350.0 * f64::from(row),
+                    150.0 + 350.0 * f64::from(row),
                     760.0,
                     RailKind::DinRail,
                 )?;
@@ -73,7 +73,7 @@ fn cabinet() -> (Project, StructureId, u64, u64, Vec<u64>) {
                     device: d,
                     structure: cab,
                     x,
-                    y: 40.0 + 350.0 * row as f64,
+                    y: 150.0 + 350.0 * row as f64 - h / 2.0,
                     rotated: false,
                     rail: Some((rail, x - 20.0)),
                 })?;
@@ -101,9 +101,18 @@ fn the_rails_become_rows_and_each_device_knows_its_row() {
     let (ox, oy) = plate_origin(&p, cab).unwrap();
     assert!((r.rows[0].x_min - (20.0 + ox)).abs() < 1e-6);
     assert!((r.rows[0].x_max - (780.0 + ox)).abs() < 1e-6);
-    assert!((r.rows[0].y_top - (40.0 + oy)).abs() < 1e-6);
-    // Room under a row: up to the next rail row less the clearance.
-    assert!((r.rows[0].height_mm - (350.0 - 5.0)).abs() < 1e-6);
+    assert!((r.rows[0].y_line - (150.0 + oy)).abs() < 1e-6);
+    // Room around a row: devices are centred on the line, so a device of
+    // that height keeps the clearance to the rows that carry devices above
+    // and below (the first row has the plate edge above and the 90 mm
+    // device of row 1 below).
+    let top = load(&p, cab).unwrap().plate.usable().y;
+    let expect = 2.0 * ((150.0 - top).min(350.0 - 45.0) - 5.0);
+    assert!(
+        (r.rows[0].height_mm - expect).abs() < 1e-6,
+        "{}",
+        r.rows[0].height_mm
+    );
 }
 
 #[test]
@@ -124,6 +133,14 @@ fn a_search_then_apply_puts_the_device_on_a_rail_in_one_undo_step() {
         let placed = layout.placements.iter().find(|q| q.id == m.id).unwrap();
         assert!(rails.contains(&placed.rail.expect("still on a rail")));
         assert_eq!(placed.rail, Some(m.to_row));
+        // Centred on the rail's line, as the layout planner stands devices.
+        let line = layout.rails.iter().find(|q| q.id == m.to_row).unwrap().y;
+        let h = if placed.rotated {
+            placed.size.width
+        } else {
+            placed.size.height
+        };
+        assert!((placed.y + h / 2.0 - line).abs() < 1e-6, "{}", m.id);
     }
     // The scenario built again from the project shows the search's layout.
     let again = scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap();

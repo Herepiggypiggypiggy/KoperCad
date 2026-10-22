@@ -45,9 +45,10 @@ pub struct Row {
     /// Where devices may stand along the rail, mm, interior frame.
     pub x_min: f64,
     pub x_max: f64,
-    /// Top of the devices on this rail, mm.
-    pub y_top: f64,
-    /// Room under `y_top` before the next duct or rail row, mm.
+    /// The rail's centre line, mm: devices on it are centred on this line.
+    pub y_line: f64,
+    /// Tallest device that fits when centred on the line without touching
+    /// the row above or below (or a duct), mm.
     pub height_mm: f64,
 }
 
@@ -462,7 +463,7 @@ fn candidates(cur: &Layout<'_>, m: usize, score: &Summary, settings: &Settings) 
             for x in xs {
                 let rect = Rect {
                     x: x.max(a),
-                    y: row.y_top,
+                    y: row.y_line - h / 2.0,
                     w,
                     h,
                 };
@@ -525,13 +526,13 @@ fn candidates(cur: &Layout<'_>, m: usize, score: &Summary, settings: &Settings) 
             // Each takes the other's place, centred on the old centre.
             let nm = Rect {
                 x: fp.x + fp.w / 2.0 - w / 2.0,
-                y: cur.rows[rp].y_top,
+                y: cur.rows[rp].y_line - h / 2.0,
                 w,
                 h,
             };
             let np = Rect {
                 x: fm.x + fm.w / 2.0 - fp.w / 2.0,
-                y: cur.rows[rm].y_top,
+                y: cur.rows[rm].y_line - fp.h / 2.0,
                 w: fp.w,
                 h: fp.h,
             };
@@ -632,7 +633,7 @@ mod tests {
                 id: 100 + i,
                 x_min: 60.0,
                 x_max: 840.0,
-                y_top: 60.0 + 350.0 * i as f64,
+                y_line: 105.0 + 350.0 * i as f64,
                 height_mm: 300.0,
             })
             .collect()
@@ -716,7 +717,7 @@ mod tests {
         for m in &s.moves {
             let r = rows.iter().find(|r| r.id == m.to_row).unwrap();
             assert!(m.to.x >= r.x_min - 1e-6 && m.to.right() <= r.x_max + 1e-6);
-            assert!((m.to.y - r.y_top).abs() < 1e-6);
+            assert!((m.to.y + m.to.h / 2.0 - r.y_line).abs() < 1e-6);
         }
         let d = &s.scenario.devices;
         assert!(!d[0].footprint.overlaps(&d[1].footprint));

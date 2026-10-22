@@ -82,6 +82,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.eplan_export_script", under("File", "Import")),
     ("parts.import_folder", under("File", "Import parts")),
     ("plc.import_tags", under("File", "Import")),
+    ("help.manual", at("Help")),
+    ("help.context", at("Help")),
     ("help.walkthrough", at("Help")),
     ("help.show_hints", at("Help")),
     ("help.whats_new", at("Help")),
@@ -243,6 +245,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("heat.toggle", under("View", "Layers")),
     ("heat.airflow", under("View", "Layers")),
     ("heat.contours", under("View", "Layers")),
+    ("heat.vents", under("View", "Layers")),
     // Lessons live with Help
     ("help.learn", at("Help")),
     ("ai.assistant", at("Help")),
@@ -539,6 +542,8 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
         "Help",
         &[
             &[
+                "help.manual",
+                "help.context",
                 "help.next_lesson",
                 "help.learn",
                 "ai.assistant",

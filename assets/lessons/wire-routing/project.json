@@ -1891,7 +1891,7 @@
       "id": 91,
       "structure": 81,
       "x": 55.0,
-      "y": 10.0,
+      "y": 55.0,
       "length": 535.0,
       "kind": "din_rail",
       "properties": {}
@@ -1900,7 +1900,7 @@
       "id": 92,
       "structure": 81,
       "x": 55.0,
-      "y": 210.0,
+      "y": 252.5,
       "length": 535.0,
       "kind": "din_rail",
       "properties": {}
@@ -1909,7 +1909,7 @@
       "id": 93,
       "structure": 81,
       "x": 55.0,
-      "y": 335.0,
+      "y": 352.5,
       "length": 535.0,
       "kind": "din_rail",
       "properties": {}
@@ -1918,7 +1918,7 @@
       "id": 94,
       "structure": 81,
       "x": 55.0,
-      "y": 550.0,
+      "y": 605.0,
       "length": 535.0,
       "kind": "din_rail",
       "properties": {}
@@ -1927,7 +1927,7 @@
       "id": 95,
       "structure": 81,
       "x": 55.0,
-      "y": 740.0,
+      "y": 765.0,
       "length": 535.0,
       "kind": "din_rail",
       "properties": {}
@@ -1975,7 +1975,7 @@
       "id": 99,
       "structure": 81,
       "x": 32.5,
-      "y": 457.5,
+      "y": 460.0,
       "length": 557.5,
       "kind": "duct",
       "width": 25.0,
@@ -2028,7 +2028,7 @@
       "device": 11,
       "structure": 81,
       "x": 119.0,
-      "y": 10.0,
+      "y": 17.5,
       "rail": 91,
       "rail_offset": 64.0,
       "properties": {}
@@ -2058,7 +2058,7 @@
       "device": 15,
       "structure": 81,
       "x": 55.0,
-      "y": 335.0,
+      "y": 337.5,
       "rail": 93,
       "rail_offset": 0.0,
       "properties": {}
@@ -2068,7 +2068,7 @@
       "device": 16,
       "structure": 81,
       "x": 95.0,
-      "y": 335.0,
+      "y": 337.5,
       "rail": 93,
       "rail_offset": 40.0,
       "properties": {}
