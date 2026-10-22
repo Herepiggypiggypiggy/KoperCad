@@ -43,7 +43,7 @@ ChangesAssociations=yes
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "associate"; Description: "Open .novo project files with {#AppName}"; GroupDescription: "File types:"
+Name: "associate"; Description: "Open .kopercad (and older .novo) project files with {#AppName}"; GroupDescription: "File types:"
 
 [Files]
 Source: "{#RepoRoot}\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
@@ -59,7 +59,9 @@ Name: "{userprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{userdesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Registry]
+Root: HKCU; Subkey: "Software\Classes\.kopercad"; ValueType: string; ValueName: ""; ValueData: "KoperCAD.Project"; Flags: uninsdeletevalue; Tasks: associate
 Root: HKCU; Subkey: "Software\Classes\.novo"; ValueType: string; ValueName: ""; ValueData: "KoperCAD.Project"; Flags: uninsdeletevalue; Tasks: associate
+; Older projects keep the .novo extension and still open from Explorer.
 Root: HKCU; Subkey: "Software\Classes\KoperCAD.Project"; ValueType: string; ValueName: ""; ValueData: "KoperCAD project"; Flags: uninsdeletekey; Tasks: associate
 Root: HKCU; Subkey: "Software\Classes\KoperCAD.Project\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExe},0"; Tasks: associate
 Root: HKCU; Subkey: "Software\Classes\KoperCAD.Project\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: associate

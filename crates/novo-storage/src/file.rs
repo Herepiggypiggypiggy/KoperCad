@@ -12,8 +12,23 @@ use crate::error::{Result, StorageError, is_busy, is_not_a_database, is_read_onl
 use crate::schema::{self, APPLICATION_ID, MIGRATIONS, Migration};
 use crate::session::AUTOSAVE_SUFFIX;
 
-/// File name extension of project files.
-pub const PROJECT_EXTENSION: &str = "novo";
+/// File name extension new project files are saved with.
+pub const PROJECT_EXTENSION: &str = "kopercad";
+
+/// The extension projects had before the product was renamed. Such files
+/// still open, and are kept as they are until the user saves a copy as
+/// `.kopercad`.
+pub const LEGACY_PROJECT_EXTENSION: &str = "novo";
+
+/// Every extension a project file may carry, current first.
+pub const PROJECT_EXTENSIONS: [&str; 2] = [PROJECT_EXTENSION, LEGACY_PROJECT_EXTENSION];
+
+/// Whether `ext` (without the dot) is a project file extension, ignoring case.
+pub fn is_project_extension(ext: &std::ffi::OsStr) -> bool {
+    PROJECT_EXTENSIONS
+        .iter()
+        .any(|e| ext.eq_ignore_ascii_case(e))
+}
 
 /// What a file is for. Autosave files share the project file's schema.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

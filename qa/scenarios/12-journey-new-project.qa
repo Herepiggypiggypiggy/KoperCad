@@ -32,13 +32,13 @@ click_text Check #1
 wait 6
 shot check-menu
 key Escape
-answer_dialog ~/Documents/KoperCAD/new-project.novo
+answer_dialog ~/Documents/KoperCAD/new-project.kopercad
 key ctrl+s
 wait 20
 shot saved
-expect_file ~/Documents/KoperCAD/new-project.novo 4000
+expect_file ~/Documents/KoperCAD/new-project.kopercad 4000
 check_layout
-open ~/Documents/KoperCAD/new-project.novo
+open ~/Documents/KoperCAD/new-project.kopercad
 wait 20
 expect_scene K1
 shot reopened

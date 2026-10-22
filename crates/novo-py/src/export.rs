@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use novo_core::Project;
 use novo_reports::{CsvOptions, ReportOutput};
-use novo_storage::{AUTOSAVE_SUFFIX, PROJECT_EXTENSION};
+use novo_storage::{AUTOSAVE_SUFFIX, PROJECT_EXTENSIONS};
 use serde_json::{Value, json};
 
 use crate::{Result, ScriptError};
@@ -146,15 +146,17 @@ pub fn report_bytes_in(
 const SQLITE_MAGIC: &[u8] = b"SQLite format 3\0";
 
 /// Whether `path` is, or looks like, a project or recovery file: by name
-/// (`*.novo`, `*.novo.autosave`) or, for an existing file, by content.
+/// (`*.kopercad`, `*.novo`, and `.autosave` of either) or, for an existing file, by content.
 pub fn is_project_path(path: &Path) -> bool {
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy().to_ascii_lowercase())
         .unwrap_or_default();
-    let ext = format!(".{PROJECT_EXTENSION}");
-    if name.ends_with(&ext) || name.ends_with(&format!("{ext}{AUTOSAVE_SUFFIX}")) {
-        return true;
+    for ext in PROJECT_EXTENSIONS {
+        let ext = format!(".{ext}");
+        if name.ends_with(&ext) || name.ends_with(&format!("{ext}{AUTOSAVE_SUFFIX}")) {
+            return true;
+        }
     }
     let mut head = [0u8; 16];
     std::fs::File::open(path)

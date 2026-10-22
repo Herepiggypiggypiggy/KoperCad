@@ -35,7 +35,7 @@ No step needs admin rights. If one asks for it, stop and say so.
 ## 4. Installer upgrade (only if you use the installer)
 
 1. Run the new `KoperCAD-<version>-setup.exe` over an older install. No admin prompt appears.
-2. After it: one Start menu entry and one desktop icon (if chosen), double-clicking a `.novo` file
+2. After it: one Start menu entry and one desktop icon (if chosen), double-clicking a `.kopercad` (or older `.novo`) file
    opens KoperCAD, and no `novoelectric.exe` is left in `%LOCALAPPDATA%\Programs\KoperCAD`.
 
 ## 5. Editor points to confirm

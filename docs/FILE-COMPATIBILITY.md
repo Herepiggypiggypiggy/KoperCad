@@ -1,6 +1,6 @@
 # Project file compatibility
 
-A KoperCAD project is one `.novo` file: a SQLite database (`crates/novo-storage`). Two numbers decide whether a build can read it.
+A KoperCAD project is one `.kopercad` file (files from before the rename end in `.novo` and still open): a SQLite database (`crates/novo-storage`). Two numbers decide whether a build can read it.
 
 | Number | Where | Meaning |
 | --- | --- | --- |

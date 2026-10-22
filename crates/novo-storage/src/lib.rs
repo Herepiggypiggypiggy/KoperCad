@@ -42,7 +42,10 @@ pub mod schema;
 mod session;
 
 pub use error::{Result, StorageError};
-pub use file::{PROJECT_EXTENSION, ProjectFile};
+pub use file::{
+    LEGACY_PROJECT_EXTENSION, PROJECT_EXTENSION, PROJECT_EXTENSIONS, ProjectFile,
+    is_project_extension,
+};
 pub use salvage::{Salvage, salvage};
 pub use session::{
     AUTOSAVE_SUFFIX, DEFAULT_AUTOSAVE_INTERVAL, Opened, Recovered, Session, SetAside,

@@ -9,7 +9,7 @@
 //!   so canvas edits share the undo history. The schematic editor
 //!   (`novo-editor` on `novo-canvas`) plugs in here as [`EditorCanvas`].
 //!
-//! [`StorageBackend`] keeps projects in `.novo` files with autosave and crash
+//! [`StorageBackend`] keeps projects in `.kopercad` files (older `.novo` files still open) with autosave and crash
 //! recovery. [`MemoryBackend`] and [`PlaceholderCanvas`] stand in for tests
 //! and until the canvas is wired.
 
@@ -58,6 +58,9 @@ pub const LEGACY_DATA_DIR_NAME: &str = "NovoElectric";
 
 /// File extension of a KoperCAD project file, without the dot.
 pub const PROJECT_EXTENSION: &str = novo_storage::PROJECT_EXTENSION;
+
+/// Every extension the Open dialog lists: `.kopercad` and the older `.novo`.
+pub const PROJECT_EXTENSIONS: [&str; 2] = novo_storage::PROJECT_EXTENSIONS;
 
 /// Smallest window, in points; narrower and the top bar no longer fits. A
 /// 1366 x 768 laptop at 200% scaling offers

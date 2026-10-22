@@ -36,11 +36,11 @@ shot page2-placed
 key ctrl+z
 wait 6
 shot page2-undone
-answer_dialog ~/Documents/KoperCAD/two-pages.novo
+answer_dialog ~/Documents/KoperCAD/two-pages.kopercad
 key ctrl+s
 wait 20
-expect_file ~/Documents/KoperCAD/two-pages.novo 4000
-open ~/Documents/KoperCAD/two-pages.novo
+expect_file ~/Documents/KoperCAD/two-pages.kopercad 4000
+open ~/Documents/KoperCAD/two-pages.kopercad
 wait 30
 expect_scene F1
 shot reopened-page1
