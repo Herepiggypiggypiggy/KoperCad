@@ -182,7 +182,7 @@ pub(super) fn card(
     )
     .fit()
     .fixed_open()
-    .top(super::view3d_controls::BELOW)
+    .top(super::view3d_controls::below(ctx))
     .bottom_room(bottom_room)
     .show(ctx, |ui| {
         // Rows close together: the card has to fit above the statistics.

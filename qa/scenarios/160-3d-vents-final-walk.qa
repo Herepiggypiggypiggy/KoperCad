@@ -1,0 +1,52 @@
+@title 3D vents, final walk: hot run, the proposal card, add by card, save under a new name, reopen, run again
+@area 3D
+@sizes 1280x688 1366x768 1920x1080
+# The whole vent workflow on the hot cabinet: a Quick run shows T1 over its limit, the Cooling selection proposes a filter fan and the Vents and fans card offers it with the exhaust grille that lets the air through; one press adds both, the project is saved under a new name and reopened, the openings are still there, and a second run draws them and the air.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 45
+shot 01-hot-result
+check_layout
+check_blank 01-hot-result
+expect "Cooling selection"
+expect "Cooling selection proposes"
+expect "A grille of about"
+click_text "Add the filter fan and a grille to the cabinet"
+wait 10
+expect "Already added"
+expect "Grille, in the right wall"
+# Auto is on: adding the openings starts a new run, and the list is locked until it ends.
+shot 02-fan-and-grille-added-run-started
+wait_s 150
+expect_not "No air moves"
+shot 03-fan-and-grille-result
+check_layout
+check_blank 03-fan-and-grille-result
+answer_dialog ~/Documents/KoperCAD/vents-final-walk.kopercad
+key ctrl+shift+s
+wait 20
+expect_file ~/Documents/KoperCAD/vents-final-walk.kopercad 4000
+open ~/Documents/KoperCAD/vents-final-walk.kopercad
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+expect "Filter fan"
+expect "Grille, in the right wall"
+shot 05-reopened
+check_layout
+click_text Simulate #2
+wait_s 45
+shot 06-second-run
+check_layout
+check_blank 06-second-run

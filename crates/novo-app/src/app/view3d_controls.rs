@@ -118,8 +118,38 @@ impl Controls {
 /// Wide enough for every toggle and the door slider on one row.
 const TOOLBAR_WIDTH: f32 = 980.0;
 
+/// Where the panels under the toolbar start: the compact toolbar of a short
+/// window is one row, so they start higher.
+pub(super) fn below(ctx: &egui::Context) -> f32 {
+    if short_window(ctx) {
+        first_inset(ctx) + 14.0
+    } else {
+        BELOW
+    }
+}
+
+/// A window shorter than this (a 1280 x 688 one) gets the compact toolbar.
+/// The window, not the view: the view shrinks when the Heat strip opens, and
+/// the camera is fitted once, before that.
+const SHORT_WINDOW: f32 = 720.0;
+
+fn short_window(ctx: &egui::Context) -> bool {
+    ctx.content_rect().height() < SHORT_WINDOW
+}
+
 /// Where a panel under the toolbar starts, from the top of the view.
 pub(super) const BELOW: f32 = 140.0;
+
+/// What the toolbar is assumed to cover before it has been drawn once, which
+/// is when the first fit of the camera happens.
+fn first_inset(ctx: &egui::Context) -> f32 {
+    if short_window(ctx) {
+        // One row of buttons, no title bar.
+        56.0
+    } else {
+        BELOW
+    }
+}
 
 /// How much of the view's height the toolbar covers at the top, as a
 /// fraction: a fit frames the model below it. Before the toolbar has been
@@ -127,7 +157,7 @@ pub(super) const BELOW: f32 = 140.0;
 pub(super) fn toolbar_inset(ctx: &egui::Context, view: egui::Rect) -> f32 {
     let covered = ctx
         .memory(|m| m.area_rect(super::panel::id("view3d_toolbar")))
-        .map_or(BELOW, |r| r.bottom() - view.top());
+        .map_or(first_inset(ctx), |r| r.bottom() - view.top());
     (covered / view.height().max(1.0)).clamp(0.0, 0.4)
 }
 
@@ -151,7 +181,10 @@ pub(super) fn toolbar(
     let width = TOOLBAR_WIDTH
         .min(view.width() - super::view3d_heat::CUBE_SIZE - 3.0 * MARGIN)
         .max(300.0);
-    super::panel::Panel::new(
+    // In a short window the title bar's row is cabinet height: the toolbar
+    // loses its title (it is still dragged by its body) and the cabinet is
+    // framed below one row instead of two.
+    let panel = super::panel::Panel::new(
         "view3d_toolbar",
         "3D view",
         view,
@@ -159,8 +192,13 @@ pub(super) fn toolbar(
         width,
     )
     .top(MARGIN)
-    .fit()
-    .show(ctx, |ui| {
+    .fit();
+    let panel = if short_window(ctx) {
+        panel.bare()
+    } else {
+        panel
+    };
+    panel.show(ctx, |ui| {
         ui.horizontal_wrapped(|ui| {
             // Layers: things that are drawn or not, in one popover.
             let n_on = [
@@ -506,6 +544,32 @@ fn toggle(ui: &mut egui::Ui, on: &mut bool, name: &str, hint: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The content rect of a window of this height, after one frame.
+    fn ctx_of_height(height: f32) -> egui::Context {
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1280.0, height),
+            )),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |_| {});
+        out.textures_delta.clear();
+        ctx
+    }
+
+    #[test]
+    fn a_short_window_gets_the_compact_toolbar_and_panels_start_higher() {
+        let short = ctx_of_height(688.0);
+        let tall = ctx_of_height(768.0);
+        assert!(short_window(&short) && !short_window(&tall));
+        assert!(below(&short) < below(&tall));
+        assert_eq!(below(&tall), BELOW);
+        // The panels start under the one-row toolbar that the camera is fitted for.
+        assert!(below(&short) > first_inset(&short));
+    }
 
     #[test]
     fn the_quiet_defaults_hide_badges_and_the_heat_panel() {

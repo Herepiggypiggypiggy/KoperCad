@@ -1552,7 +1552,7 @@ impl NovoApp {
                     // and the Heat panel, the bottom left the statistics.
                     cabinet_inspector::Room {
                         left: true,
-                        top: Some(view3d_controls::BELOW),
+                        top: Some(view3d_controls::below(ui.ctx())),
                         bottom: if self.view3d.stats.shown {
                             super::view3d_stats::ROOM
                         } else {
