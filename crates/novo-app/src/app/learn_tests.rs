@@ -867,14 +867,15 @@ fn the_window_lists_a_chosen_path_in_its_order() {
         "[[path]]\nid = \"only\"\ntitle = \"Only path\"\nlessons = [\"tiny\"]\n".into(),
     );
     d.app.learn.use_files(files);
-    let entries: Vec<_> = d.app.learn.catalog.visible(false).cloned().collect();
-    let groups = d.app.lesson_groups(&entries);
-    assert_eq!(groups[0].0, "Basics", "tracks by default");
+    assert_eq!(d.app.suite_section(), super::learn_suite::Section::Home);
     d.app.learn.only_path = Some("only".into());
-    let groups = d.app.lesson_groups(&entries);
-    assert_eq!(groups.len(), 1);
-    assert_eq!(groups[0].0, "Only path");
-    assert_eq!(groups[0].2[0].lesson.id, "tiny");
+    assert_eq!(
+        d.app.suite_section(),
+        super::learn_suite::Section::Path("only".into())
+    );
+    let rows = d.app.suite_matches(&d.app.suite_section(), &[]);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].lesson.id, "tiny");
     d.app.learn.window = true;
     d.frame();
     d.app.run_command(&d.ctx.clone(), "help.learn", None);
@@ -1341,4 +1342,79 @@ fn every_anchor_the_shell_registers_is_in_the_list() {
         missing.is_empty(),
         "anchors drawn but not in ANCHORS: {missing:?}"
     );
+}
+
+#[test]
+fn the_suite_recommends_the_running_lesson_then_the_next_one() {
+    let (_dir, mut d) = drive();
+    let (entry, reason) = d.app.recommendation().expect("something to do");
+    assert_eq!(entry.lesson.id, "tiny");
+    assert_eq!(reason, d.app.learn.say("reason_first"));
+    d.app.start_lesson("tiny");
+    d.frame();
+    let (_, reason) = d.app.recommendation().unwrap();
+    assert_eq!(reason, d.app.learn.say("reason_resume_now"));
+}
+
+#[test]
+fn the_suite_draws_with_every_real_lesson_at_both_sizes_and_a_small_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.learn.window = true;
+    let paths: Vec<String> = d
+        .app
+        .learn
+        .catalog
+        .paths
+        .iter()
+        .map(|p| p.id.clone())
+        .collect();
+    let tracks: Vec<String> = d
+        .app
+        .learn
+        .catalog
+        .tracks
+        .iter()
+        .map(|t| t.id.clone())
+        .collect();
+    assert!(!paths.is_empty() && !tracks.is_empty());
+    for size in [
+        eframe::egui::vec2(1366.0, 768.0),
+        eframe::egui::vec2(1920.0, 1080.0),
+        eframe::egui::vec2(640.0, 480.0),
+    ] {
+        d.app.learn.only_path = None;
+        d.app.learn.only_track = None;
+        d.frame_sized(size, vec![]);
+        for p in &paths {
+            d.app.learn.only_path = Some(p.clone());
+            d.frame_sized(size, vec![]);
+        }
+        d.app.learn.only_path = None;
+        for t in &tracks {
+            d.app.learn.only_track = Some(t.clone());
+            d.frame_sized(size, vec![]);
+        }
+        d.app.learn.only_track = None;
+        d.app.learn.level = Some(novo_learn::lesson::Level::Advanced);
+        d.app.learn.filter = "cab".into();
+        d.frame_sized(size, vec![]);
+        d.app.learn.level = None;
+        d.app.learn.filter.clear();
+    }
+    assert!(d.app.learn.window, "drawing never closes it");
+}
+
+#[test]
+fn the_level_chip_narrows_the_lessons_and_a_prerequisite_never_blocks() {
+    let (_dir, mut d) = drive();
+    let home = super::learn_suite::Section::Home;
+    assert_eq!(d.app.suite_matches(&home, &[]).len(), 1);
+    d.app.learn.level = Some(novo_learn::lesson::Level::Advanced);
+    assert!(d.app.suite_matches(&home, &[]).is_empty());
+    d.app.learn.level = None;
+    assert_eq!(d.app.suite_matches(&home, &["tiny".to_owned()]).len(), 1);
+    assert!(d.app.suite_matches(&home, &["zzz".to_owned()]).is_empty());
 }

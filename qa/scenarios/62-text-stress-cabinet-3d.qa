@@ -1,0 +1,19 @@
+@title Crowded cabinet: device tags on the plate and 3D labels (look at the pictures for text on text)
+@area Cabinet
+@slow
+@sizes 1366x768 1920x1080
+open qa/fixtures/text-stress-cabinet.novo
+wait 30
+click_text Cabinet #1
+wait 40
+shot cabinet-fit
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot cabinet-zoom
+click_text 3D #1
+wait 60
+shot 3d

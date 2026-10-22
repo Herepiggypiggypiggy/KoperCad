@@ -41,10 +41,25 @@ as tall as their longest text, so nothing is cut with "..." on paper. Only the p
 drill step, when it is long, is replaced by "see the drilling template" (the 1:1 template has
 the positions); part lists and wire ends are always printed.
 
+A device fitted on the door, a wall, the roof, the floor or an extra plate says so in its title
+("Fit -S0 on the door") and gives its position in that surface's own measures: on the door from the
+hinge edge and down from the top edge (the same from the inside of the open door), on a side wall from the
+back wall, on the roof or floor from the left and in from the back, and on an extra plate from the corner the
+Cabinet's Surface picker takes as 0, 0. The numbers are the planned position of the device, said so on the
+step. The door, walls, roof and floor are planned from the enclosure's inside size with no wall
+thickness, and the step says it is not measured: measure the real surface before you mark it. The button then reads **Show on the door** and opens that surface in the Cabinet.
+
 A device step also has **Show on the plate** and **Show in 3D**: Build mode steps
 aside behind a "Back to Build mode" bar at the bottom left of the window, the device is
 selected in the Cabinet canvas or the 3D view, and the bar brings you back to the
 same step. While it is stepped aside Space and Escape do not touch the build.
+
+**Taking a step.** "I take this step" tells the others you are on it: your name (set under
+Commissioning; "someone" without one) shows next to the step in the list and in "Also ready now",
+and someone else's card says who took it and offers "Take it over". "Let go" gives it back. Build
+mode offers a free step first when the next one is held. A claim is a signal, not a lock: anyone can
+still do the step, and the newest claim or release wins when the files are merged, in the same
+`.kcfield` file as the ticks. Two people with no name set cannot be told apart.
 
 ## Honest limits
 

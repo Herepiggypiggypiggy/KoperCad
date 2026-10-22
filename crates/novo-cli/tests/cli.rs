@@ -1135,3 +1135,33 @@ fn export_the_single_line_schedule() {
     );
     assert!(run.out.contains("Iz A"), "{}", run.out);
 }
+
+#[test]
+fn manual_writes_the_site_with_the_pictures_it_is_given() {
+    let tmp = tempfile::tempdir().unwrap();
+    let images = tmp.path().join("shots");
+    std::fs::create_dir(&images).unwrap();
+    std::fs::write(images.join("cabinet.png"), b"png").unwrap();
+    let out_dir = tmp.path().join("manual");
+    let out_arg = out_dir.to_str().unwrap();
+    let run = novo(&["manual", out_arg, "--images", images.to_str().unwrap()]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(run.out.contains("index.html"), "{}", run.out);
+    for page in [
+        "index.html",
+        "commands.html",
+        "shortcuts.html",
+        "cabinet.html",
+    ] {
+        assert!(out_dir.join(page).is_file(), "{page}");
+    }
+    assert_eq!(
+        std::fs::read(out_dir.join("images/cabinet.png")).unwrap(),
+        b"png"
+    );
+    let cabinet = std::fs::read_to_string(out_dir.join("cabinet.html")).unwrap();
+    assert!(cabinet.contains("<img src=\"images/cabinet.png\""));
+    // A missing image folder is a read error, not a half-written manual.
+    let bad = novo(&["manual", out_arg, "--images", "/no/such/folder"]);
+    assert_eq!(bad.code, exit::READ);
+}

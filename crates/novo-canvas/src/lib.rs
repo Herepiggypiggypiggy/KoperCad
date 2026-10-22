@@ -40,6 +40,7 @@ pub mod snap;
 pub mod style;
 pub mod tessellate;
 pub mod text;
+pub mod text_audit;
 pub mod viewport;
 #[cfg(feature = "egui")]
 pub mod widget;

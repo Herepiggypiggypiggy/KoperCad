@@ -139,6 +139,11 @@ pub fn set_gpu(description: String) {
     let _ = GPU.set(description);
 }
 
+/// The graphics adapter in use, once the window has opened.
+pub fn gpu() -> Option<String> {
+    GPU.get().cloned()
+}
+
 /// The text a tester pastes into a message: version, build, system, graphics
 /// and the last log lines.
 pub fn problem_report() -> String {
