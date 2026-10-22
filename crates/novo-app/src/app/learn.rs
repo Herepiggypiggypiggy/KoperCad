@@ -942,6 +942,11 @@ impl NovoApp {
         let readable = view.canvas.reveal_zoom;
         let margin = view.canvas.reveal_margin;
         view.canvas.viewport.reveal(&bounds, margin, readable);
+        // A step near the sheet's edge centres on empty paper: keep the view inside the sheet,
+        // so no black band shows beside it.
+        if let Some(sheet) = view.scene().map(|s| s.scene().bounds()) {
+            view.canvas.keep_in_sheet(&sheet);
+        }
     }
 
     /// Where a canvas target is on its page, in millimetres.

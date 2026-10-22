@@ -1,0 +1,17 @@
+@title Lesson step: no black band beside the sheet after a reveal near the edge
+@area Learn
+# Creative round 25: a running lesson showed the page shifted, with empty paper and a black band at the left.
+# After a step reveal the view stays inside the sheet (a 24 px margin outside the frame, as a fit has).
+# The picture is the evidence (the unit test pins the numbers); the sheet is not shown whole at a readable zoom.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text learn
+wait 6
+key Enter
+wait 30
+click_text Start
+wait 60
+shot lesson-running
+check_layout
