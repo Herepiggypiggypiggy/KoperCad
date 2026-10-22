@@ -3348,10 +3348,7 @@ mod tests {
                                 mirrored,
                             },
                             vec![Pin::new("A1", 0.0, -3.0), Pin::new("A2", 0.0, 3.0)],
-                            SymbolRole::Device {
-                                device,
-                                main: true,
-                            },
+                            SymbolRole::Device { device, main: true },
                         )?;
                         Ok((page, sym))
                     })
