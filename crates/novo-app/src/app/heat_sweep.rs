@@ -28,6 +28,11 @@ use novo_thermal::sweep::{
 
 use super::heat_settings::{HeatSettings, Kind, VentSpec, Wall};
 
+/// The window's one statement of what the numbers are. The sweep's own first
+/// note ("Model estimate: ...") is hidden as a duplicate, so every caveat it
+/// carries must be said here.
+pub(super) const FOOTER: &str = "Model estimate: the 2D heat model with planning values, the losses you entered and the wire heat in the ducts. Not validated against measurements, and the 2D slice does not see the depth of the cabinet. Check the winner with Simulate in 3D after adding it.";
+
 /// Width of the window, points.
 const WIDTH: f32 = 400.0;
 /// Tallest the list of options gets before it scrolls, points: the window
@@ -334,9 +339,7 @@ impl CoolingAdvice {
                     .show(ui, |ui| body(ui, found, stale, &mut ask));
                 ui.add_space(6.0);
                 ui.label(
-                    egui::RichText::new(
-                        "Model estimate: the 2D heat model with planning values and the losses you entered. Not validated against measurements, and the 2D slice does not see the depth of the cabinet. Check the winner with Simulate in 3D after adding it.",
-                    )
+                    egui::RichText::new(FOOTER)
                     .small()
                     .color(pal.text_secondary),
                 );
