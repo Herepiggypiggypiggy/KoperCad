@@ -1241,6 +1241,7 @@ impl NovoApp {
         .top(10.0)
         .fixed_open()
         .fit()
+        .scrolls()
         .show(ctx, |ui| {
             if ui
                 .small_button("✕ Close")

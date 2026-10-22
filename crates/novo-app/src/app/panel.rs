@@ -60,6 +60,7 @@ pub(super) struct Panel {
     bottom: f32,
     height: Option<f32>,
     fit: bool,
+    scroll: bool,
     title_bar: bool,
     above_card: bool,
 }
@@ -84,6 +85,7 @@ impl Panel {
             bottom: 0.0,
             height: None,
             fit: false,
+            scroll: false,
             title_bar: true,
             above_card: false,
         }
@@ -113,6 +115,13 @@ impl Panel {
     /// resizable: for toolbars and cards. It can still be dragged.
     pub(super) fn fit(mut self) -> Self {
         self.fit = true;
+        self
+    }
+
+    /// A fitted panel whose content can outgrow the canvas scrolls instead of
+    /// being cut at the bottom (cards with a list of unknown length).
+    pub(super) fn scrolls(mut self) -> Self {
+        self.scroll = true;
         self
     }
 
@@ -201,7 +210,7 @@ impl Panel {
             .min_width(MIN_WIDTH.min(self.width))
             .min_height(MIN_HEIGHT.min(max_height))
             .max_height(max_height)
-            .scroll([false, !self.fit]);
+            .scroll([false, !self.fit || self.scroll]);
         if self.fit {
             // Without resizing the width is the content's; wrapped rows wrap here.
             window = window.max_width(self.width);
@@ -545,6 +554,55 @@ mod tests {
 
     fn canvas() -> egui::Rect {
         egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(1200.0, 800.0))
+    }
+
+    #[test]
+    fn a_fit_panel_taller_than_the_canvas_scrolls_instead_of_being_cut() {
+        let ctx = egui::Context::default();
+        let last_y = |events: Vec<egui::Event>| {
+            let mut y = 0.0;
+            let mut out = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(canvas()),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    let panel = Panel::new("tall", "Tall", canvas(), Side::Left, 240.0)
+                        .fit()
+                        .scrolls();
+                    panel.show(ctx, |ui| {
+                        for n in 0..80 {
+                            let r = ui.label(format!("row {n}"));
+                            if n == 79 {
+                                y = r.rect.top();
+                            }
+                        }
+                    });
+                },
+            );
+            out.textures_delta.clear();
+            y
+        };
+        last_y(vec![]);
+        let before = last_y(vec![]);
+        assert!(
+            before > canvas().bottom(),
+            "the content is taller than the canvas: {before}"
+        );
+        let over_panel = egui::pos2(100.0, 200.0);
+        last_y(vec![egui::Event::PointerMoved(over_panel)]);
+        let after = last_y(vec![egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -400.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: egui::Modifiers::NONE,
+        }]);
+        let settled = last_y(vec![]);
+        assert!(
+            settled.min(after) < before - 100.0,
+            "the wheel scrolled the panel: {before} -> {after} / {settled}"
+        );
     }
 
     fn frame(ctx: &egui::Context, side: Side) -> egui::Rect {

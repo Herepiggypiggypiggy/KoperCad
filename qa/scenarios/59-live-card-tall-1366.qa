@@ -1,0 +1,18 @@
+@title Live potentials card: a card taller than the window scrolls instead of being cut off at 1366x768
+@area Live
+# QA round 1350 coverage: the Live card of the reversing, crane and conveyor lessons ran past the
+# bottom edge with no way to reach its last controls. Here the example's card on the control circuit
+# page is shown in a window only 520 high, so it is taller than the pane.
+click_text "Open example"
+wait 20
+key shift+l
+wait 40
+shot live-card
+click_text "Go to page 2 Control circuit"
+wait 30
+shot live-card-control
+# A low window makes the card taller than the pane: its last controls must still be reachable.
+resize 1366 520
+wait 20
+shot live-card-low-window
+check_layout
