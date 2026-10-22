@@ -6,7 +6,9 @@
 use eframe::egui;
 use novo_core::{AnyId, Document, PageId, Point, SymbolId};
 use novo_editor::tool::{EditorKey, WiringMode};
-use novo_learn::lesson::{SolveOp, WireOp};
+use novo_learn::lesson::{CabinetStep, SolveOp, WireOp};
+
+use super::cabinet::Ask;
 
 use super::NovoApp;
 use super::workspace::Workspace;
@@ -57,8 +59,58 @@ impl NovoApp {
             SolveOp::AssignPart(a) => self.solve_assign_part(&a.assign_part),
             SolveOp::Rename(r) => self.solve_rename(&r.rename.target, &r.rename.to),
             SolveOp::SetPotential(p) => self.solve_set_potential(&p.set_potential),
+            SolveOp::CabinetPlace(c) => {
+                let a = &c.cabinet_place;
+                self.solve_cabinet(&a.device, |id| Ask::Drop(id, a.x, a.y))
+            }
+            SolveOp::CabinetRotate(c) => {
+                self.solve_cabinet(&c.cabinet_rotate, |id| Ask::Rotate(vec![id]))
+            }
+            SolveOp::CabinetRemove(c) => {
+                self.solve_cabinet(&c.cabinet_remove, |id| Ask::Remove(vec![id]))
+            }
+            SolveOp::Cabinet(c) => self.solve_cabinet_preview(c.cabinet),
             _ => return None,
         })
+    }
+
+    /// A Cabinet edit of one device, as the plate's own gesture does it.
+    fn solve_cabinet(&mut self, tag: &str, ask: impl FnOnce(u64) -> Ask) -> Result<(), String> {
+        let (structure, layout, cands) = self
+            .cabinet_plate()
+            .ok_or("the Cabinet shows no plate (open it first)")?;
+        let id = self
+            .solve_doc()?
+            .project()
+            .devices()
+            .find(|d| novo_learn::check::tag_matches(&d.tag, tag))
+            .map(|d| d.id.raw())
+            .ok_or_else(|| format!("nothing named `{tag}`"))?;
+        self.cabinet_ask(ask(id), Some(structure), layout, &cands);
+        Ok(())
+    }
+
+    /// Place all (raises the preview) or accepting it, as the plate's buttons do.
+    fn solve_cabinet_preview(&mut self, step: CabinetStep) -> Result<(), String> {
+        let (structure, layout, cands) = self
+            .cabinet_plate()
+            .ok_or("the Cabinet shows no plate (open it first)")?;
+        match step {
+            CabinetStep::PlaceAll => {
+                self.cabinet_ask(Ask::PlaceAll, Some(structure), layout, &cands);
+                if self.cabinet.preview.is_none() {
+                    return Err("Place all found nothing to place".into());
+                }
+                self.learn_event(novo_learn::Event::Clicked("cabinet.place_all".into()));
+            }
+            CabinetStep::Accept => {
+                if self.cabinet.preview.is_none() {
+                    return Err("there is no Place all preview to accept".into());
+                }
+                self.cabinet_ask(Ask::Accept, Some(structure), None, &[]);
+            }
+        }
+        Ok(())
     }
 
     fn solve_place(&mut self, a: &novo_learn::lesson::PlaceArgs) -> Result<(), String> {

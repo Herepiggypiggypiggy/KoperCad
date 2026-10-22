@@ -62,6 +62,11 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl("file.example", &[], &["voorbeeld openen", "voorbeeld"]),
+    nl(
+        "file.example_emc",
+        &[],
+        &["emc voorbeeld", "storing voorbeeld"],
+    ),
     nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
     nl(
         "help.walkthrough",
@@ -568,6 +573,11 @@ pub const DUTCH: &[Aliases] = &[
         &["warmte simuleren", "kast doorrekenen"],
     ),
     nl(
+        "heat.cooling_advice",
+        &[],
+        &["koeladvies", "ventilator plaatsen", "ventilatieroosters"],
+    ),
+    nl(
         "heat.cooler_layout",
         &[],
         &[
@@ -936,6 +946,11 @@ pub const DUTCH: &[Aliases] = &[
         "view.3d_spread_v",
         &["gelijkmatig verdelen verticaal in 3d"],
         &["verdelen", "gelijk"],
+    ),
+    nl(
+        "view.emc",
+        &["emc weergave tonen"],
+        &["emc", "storing", "kabelklassen", "afscherming"],
     ),
     nl(
         "view.3d_wire_runs",

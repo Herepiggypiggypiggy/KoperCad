@@ -535,6 +535,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_section",
     "view.3d_save_view",
     "view.3d_wire_runs",
+    "view.emc",
     "view.3d_hints",
     "view.3d_select_devices",
     "view.3d_select_rails",
@@ -657,6 +658,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "heat.airflow",
     "heat.contours",
     "heat.simulate",
+    "heat.cooling_advice",
     "heat.cooler_layout",
     "heat.vents",
     "heat.add_filter_fan",
@@ -973,6 +975,14 @@ impl NovoApp {
                 }
                 self.cabinet.heat.command(id);
             }
+            "heat.cooling_advice" if self.is_open() => {
+                // Stays in the 3D view when it is the one open.
+                if self.workspace() != Workspace::View3d {
+                    self.switch_workspace(Workspace::Cabinet);
+                    self.cabinet.table = false;
+                }
+                self.cabinet.heat.command(id);
+            }
             "heat.vents" | "heat.add_filter_fan" | "heat.add_grille" | "heat.add_exhaust_fan"
                 if self.is_open() =>
             {
@@ -1191,6 +1201,10 @@ impl NovoApp {
                 if self.view3d.wire_runs {
                     self.view3d.controls.layers.wires = true;
                 }
+            }
+            "view.emc" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.controls.emc ^= true;
             }
             "view.3d_hints" => {
                 self.switch_workspace(Workspace::View3d);

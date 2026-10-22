@@ -1418,3 +1418,59 @@ fn the_level_chip_narrows_the_lessons_and_a_prerequisite_never_blocks() {
     assert_eq!(d.app.suite_matches(&home, &["tiny".to_owned()]).len(), 1);
     assert!(d.app.suite_matches(&home, &["zzz".to_owned()]).is_empty());
 }
+
+#[test]
+fn skip_runs_a_cabinet_step_in_the_live_app() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.start_lesson("cabinet-layout");
+    d.frame();
+    let ctx = d.ctx.clone();
+    let placements = |d: &Drive| {
+        let project = d.doc().project();
+        project
+            .structures()
+            .find(|s| s.enclosure)
+            .and_then(|s| novo_layout::model::load(project, s.id))
+            .map_or(0, |l| l.placements.len())
+    };
+    // Open the Cabinet, read the screen, then the drag step: the solve places -F1.
+    for _ in 0..3 {
+        d.app.learn_skip(&ctx);
+        d.frame();
+    }
+    assert_eq!(placements(&d), 1, "Do it for me placed -F1 on the plate");
+}
+
+#[test]
+fn the_place_all_shortcut_ticks_the_click_step_like_the_button() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.start_lesson("cabinet-layout");
+    d.frame();
+    let ctx = d.ctx.clone();
+    for _ in 0..30 {
+        let at_place_all = d
+            .app
+            .learn
+            .run
+            .as_ref()
+            .and_then(|r| r.step())
+            .is_some_and(|s| s.id == "place-all");
+        if at_place_all {
+            break;
+        }
+        d.app.learn_skip(&ctx);
+        d.frame();
+    }
+    d.frame();
+    d.app.run_command(&ctx, "cabinet.place-all", None);
+    d.frame();
+    d.frame();
+    let phase = d.app.learn.run.as_ref().map(|r| r.phase());
+    assert_eq!(phase, Some(novo_learn::Phase::Ticked), "the step is ticked");
+}

@@ -18,3 +18,4 @@ key ctrl+n
 wait 30
 shot 2-after-new-project
 check_layout
+expect_not "Build mode"

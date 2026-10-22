@@ -51,6 +51,9 @@ struct Running {
 /// State of the search and its window.
 #[derive(Default)]
 pub(super) struct LayoutSearch {
+    /// Knobs of the search; tests lower them to keep a run short.
+    #[cfg(test)]
+    pub(super) settings: Option<Settings>,
     requested: bool,
     run: Option<Running>,
     pub(super) found: Option<Found>,
@@ -141,9 +144,13 @@ impl LayoutSearch {
         let (tx, rx) = mpsc::channel();
         let c = control.clone();
         let scn = (*scenario).clone();
+        #[cfg(test)]
+        let settings = self.settings.clone().unwrap_or_default();
+        #[cfg(not(test))]
+        let settings = Settings::default();
         std::thread::spawn(move || {
-            let result = suggest_with(&scn, &r.rows, &r.row_of, &Settings::default(), &c)
-                .map_err(|e| e.to_string());
+            let result =
+                suggest_with(&scn, &r.rows, &r.row_of, &settings, &c).map_err(|e| e.to_string());
             let _ = tx.send(result);
         });
         self.run = Some(Running {

@@ -164,8 +164,15 @@ impl Violation {
 }
 
 /// The zone a device belongs to under the rules, and the rule that says so.
-fn zone_of(rules: &RuleSet, spec: &Spec) -> (Zone, Option<usize>, bool) {
+fn zone_of(
+    rules: &RuleSet,
+    spec: &Spec,
+    lowered: &HashMap<u64, Zone>,
+) -> (Zone, Option<usize>, bool) {
     let (index, rule) = rules.rule_for_kind(&spec.kind);
+    if let Some(zone) = lowered.get(&spec.id) {
+        return (*zone, index, false);
+    }
     if let Some(h) = rules.hot
         && spec.loss_w.is_some_and(|w| w >= h.min_loss_w)
     {
@@ -185,6 +192,8 @@ pub fn check(
 ) -> Vec<Violation> {
     let spec_of: HashMap<u64, &Spec> = specs.iter().map(|s| (s.id, s)).collect();
     let mut out = Vec::new();
+    // Sensitive devices the heat step brought below the hot zone.
+    let lowered = crate::heat::zone_override(rules, specs);
 
     let mut ordered: Vec<&Placement> = placements
         .iter()
@@ -204,7 +213,7 @@ pub fn check(
     let mut zs: Vec<Z> = ordered
         .iter()
         .map(|p| {
-            let (zone, rule, hot) = zone_of(rules, spec_of[&p.id]);
+            let (zone, rule, hot) = zone_of(rules, spec_of[&p.id], &lowered);
             let f = p.footprint();
             Z {
                 id: p.id,
@@ -257,7 +266,7 @@ pub fn check(
     for p in &ordered {
         let spec = spec_of[&p.id];
         let foot = p.footprint();
-        let (_, rule_index, _) = zone_of(rules, spec);
+        let (_, rule_index, _) = zone_of(rules, spec, &lowered);
         out.extend(clearances(p, spec, &foot, &ordered, rules, rule_index));
     }
     out.extend(separations(ducts, rules));

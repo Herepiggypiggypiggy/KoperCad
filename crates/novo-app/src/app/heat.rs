@@ -139,6 +139,8 @@ pub(super) struct HeatState {
     pub(super) time: super::heat_time::TimeLine,
     /// The next run is a heat-up over time, not a steady state.
     transient_wanted: bool,
+    /// The vent and fan sweep (`heat.cooling_advice`).
+    pub(super) advice: super::heat_sweep::CoolingAdvice,
     /// The search for a cooler layout of the rails (`heat.cooler_layout`).
     pub(super) layout: super::heat_layout::LayoutSearch,
 }
@@ -198,6 +200,7 @@ impl HeatState {
             cooling: super::heat_cooling::CoolingSettings::default(),
             time: super::heat_time::TimeLine::new(),
             transient_wanted: false,
+            advice: Default::default(),
             layout: Default::default(),
         }
     }
@@ -471,6 +474,7 @@ impl HeatState {
         match id {
             "heat.toggle" => self.on = !self.on,
             "heat.simulate" => self.request_run(),
+            "heat.cooling_advice" => self.advice.request(),
             "heat.cooler_layout" => {
                 self.on = true;
                 self.layout.request();
@@ -915,6 +919,20 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
         super::cabinet_bar::note_ctx(ui.ctx(), "heat.simulate", "Simulate button", &simulate);
         if simulate.clicked() {
             state.request_run();
+        }
+        let advice = ui
+            .add_enabled(!state.advice.running(), egui::Button::new("Cooling advice"))
+            .on_hover_text(
+                "Try where a pair of vents or fans goes and how big, and show the best few with before and after temperatures",
+            );
+        super::cabinet_bar::note_ctx(
+            ui.ctx(),
+            "heat.cooling_advice",
+            "Cooling advice button",
+            &advice,
+        );
+        if advice.clicked() {
+            state.advice.request();
         }
         let cooler = ui
             .add_enabled(!state.layout.running(), egui::Button::new("Cooler layout"))
@@ -1736,6 +1754,7 @@ fn legend(
         204.0,
     )
     .top(12.0)
+    .above_card()
     .fixed_open()
     .fit()
     .show(ctx, |ui| {
@@ -1752,7 +1771,10 @@ fn legend(
                 // Room for the top tick label, which hangs above the bar.
                 ui.add_space(6.0);
                 // A short canvas gets a shorter colour bar, so the notes below stay in view.
-                let height = if rect.height() < 620.0 { 110.0 } else { 180.0 };
+                // With a lesson card in the corner the legend has only the room above it.
+                let room = rect.height() - super::panel::reserved_bottom_right(ui.ctx());
+                let full: f32 = if rect.height() < 620.0 { 110.0 } else { 180.0 };
+                let height = full.min((room - 250.0).max(30.0));
                 let (bar, _) =
                     ui.allocate_exact_size(Vec2::new(14.0, height), egui::Sense::hover());
                 let mut mesh = egui::Mesh::default();
@@ -1816,8 +1838,7 @@ fn legend(
                 match &cache.source {
                     Source::Synthetic => {
                         ui.label(small(
-                            "Preview model from the part losses, not a solver result. \
-                             Press Simulate for a real run.",
+                            "Preview from part losses, not a solver result. Simulate runs it.",
                             t::TEXT_MUTED,
                         ));
                     }

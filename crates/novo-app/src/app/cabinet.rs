@@ -238,6 +238,8 @@ pub(super) enum Ask {
     ),
     /// Cut rails to new lengths (rail id, length in mm), from the cut list.
     SetRailLengths(Vec<(u64, f64)>),
+    /// Put a pair of openings from the cooling advice in the project's Vents and fans.
+    CoolingPair(novo_thermal::sweep::Candidate),
     /// Put the devices of an accepted cooler layout at their new places.
     CoolerLayout(StructureId, Vec<novo_thermal::placement::Move>),
 }
@@ -316,6 +318,13 @@ pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> Stri
     }
 }
 
+/// "TAG: problem", the problem's first letter lower case after the colon.
+fn after_tag(tag: &str, line: &str) -> String {
+    let mut chars = line.chars();
+    let first = chars.next().map(|c| c.to_lowercase().to_string());
+    format!("{tag}: {}{}", first.unwrap_or_default(), chars.as_str())
+}
+
 /// What is wrong with a placed device, in words: the hover text of its mark
 /// and the table's Problems column.
 pub(super) fn problem_lines(
@@ -370,6 +379,14 @@ pub(super) fn problem_lines(
             ));
         }
     }
+    for &(device, _, off) in &report.off_centre {
+        if device == id {
+            lines.push(format!(
+                "Sits {:.0} mm off the middle of its rail: drag it onto the rail",
+                off.abs()
+            ));
+        }
+    }
     if let Some(p) = layout.placements.iter().find(|p| p.id == id) {
         for &(rail, over) in &report.rail_overflows {
             if p.rail == Some(rail) {
@@ -393,7 +410,7 @@ pub(super) fn problem_summary(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> S
                 .into_iter()
                 .map(move |l| (p.id, l))
         })
-        .map(|(id, l)| format!("{}: {l}", tag_of(id)))
+        .map(|(id, l)| after_tag(&tag_of(id), &l))
         .collect();
     // A device problem can be selected from the list; a panel-level one cannot.
     let hint = if lines.is_empty() {
@@ -732,6 +749,7 @@ impl NovoApp {
                     + r.opening_conflicts.len()
                     + s.opening_problems.len()
                     + r.duct_overlaps.len()
+                    + r.off_centre.len()
                     + s.door_report().map_or(0, |d| d.problems())
                     + s.swing_report().map_or(0, |d| d.problems());
                 (l.placements.len(), l.unplaced(&cands).len(), problems)
@@ -843,6 +861,7 @@ impl NovoApp {
         let captions = ui.available_width() >= cabinet_bar::WIDE;
         let caption = |c: &'static str| captions.then_some(c);
         let mut all_placed_note = false;
+        let mut place_all_keyed = false;
         let mut delete_rail: Option<u64> = None;
         let mut move_rail: Option<super::cabinet_rails::RailDrag> = None;
         // Narrower than the fixed part of the bar (a 683 point window), the bar
@@ -1320,10 +1339,22 @@ impl NovoApp {
                 .preview
                 .as_ref()
                 .map_or((0, 0), |p| (p.placements.len(), p.unplaced.len()));
+            let heat = self
+                .cabinet
+                .rules
+                .explain
+                .as_ref()
+                .and_then(|e| e.heat.as_ref())
+                .map(|h| h.message());
             let mut text = format!(
-                "Preview: {n} {} would be placed. Nothing is stored until you accept.",
+                "Preview{}: {n} {} would be placed. Nothing is stored until you accept.",
+                if heat.is_some() { " (heat-aware)" } else { "" },
                 if n == 1 { "device" } else { "devices" }
             );
+            if let Some(heat) = heat {
+                text.push(' ');
+                text.push_str(&heat);
+            }
             if left > 0 {
                 text.push_str(&format!(" {left} do not fit."));
             }
@@ -1423,7 +1454,7 @@ impl NovoApp {
                                 continue;
                             }
                             if ui
-                                .button(format!("{}: {}", tag_of(p.id), lines.join("; ")))
+                                .button(after_tag(&tag_of(p.id), &lines.join("; ")))
                                 .clicked()
                             {
                                 ask = Some(Ask::Select(p.id));
@@ -1665,6 +1696,20 @@ impl NovoApp {
                             .fail("Open an enclosure with a mounting plate to simulate".into()),
                     }
                 }
+                self.cabinet.heat.advice.poll(ui.ctx());
+                if self.cabinet.heat.advice.take_request() {
+                    match structure {
+                        Some(s) => {
+                            let ambient = self.sizing.request().ambient_max;
+                            let h = &mut self.cabinet.heat;
+                            h.advice.start(project, s, ambient, &h.settings, &tag_of);
+                        }
+                        None => self.cabinet.heat.fail(
+                            "Open an enclosure with a mounting plate to ask for cooling advice"
+                                .into(),
+                        ),
+                    }
+                }
                 self.cabinet.heat.layout.poll(ui.ctx());
                 if self.cabinet.heat.layout.take_request() {
                     match structure {
@@ -1679,6 +1724,18 @@ impl NovoApp {
                             "Open an enclosure with a mounting plate to search for a cooler layout"
                                 .into(),
                         ),
+                    }
+                }
+                if self.cabinet.heat.advice.is_open() {
+                    let ambient = self.sizing.request().ambient_max;
+                    let now_key = structure.map_or(0, |s| {
+                        super::heat_sweep::key_of(project, s, ambient, &self.cabinet.heat.settings)
+                    });
+                    let at = ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0);
+                    match self.cabinet.heat.advice.show(ui.ctx(), 1, now_key, at) {
+                        Some(super::heat_sweep::Ask::Again) => self.cabinet.heat.advice.request(),
+                        Some(super::heat_sweep::Ask::Add(c)) => ask = Some(Ask::CoolingPair(c)),
+                        None => {}
                     }
                 }
                 let now_key = self.cabinet.heat.current_scenario().map(|(_, k)| k);
@@ -2141,6 +2198,7 @@ impl NovoApp {
                             }
                             "cabinet.place-all" if (unplaced > 0 || homeless > 0) && !has_plan => {
                                 ask = Some(Ask::PlaceAll);
+                                place_all_keyed = true;
                             }
                             "cabinet.place-all" if !has_plan => {
                                 all_placed_note = true;
@@ -2267,6 +2325,10 @@ impl NovoApp {
             self.message(Level::Info, "Every device of this panel is placed");
         }
         anchors.extend(cabinet_bar::take_noted(ui.ctx()));
+        // The shortcut ticks a lesson's "click Place all" step like the button.
+        if place_all_keyed {
+            self.learn_event(novo_learn::Event::Clicked("cabinet.place_all".into()));
+        }
         for a in anchors {
             self.anchor(a.id, a.rect, a.label);
             if a.clicked {
@@ -2419,8 +2481,7 @@ impl NovoApp {
 
     /// The plate the Cabinet shows, with its stored layout and the devices
     /// that could go on it: what a canvas action works on. Used by lesson
-    /// replays, which act without the canvas.
-    #[cfg(test)]
+    /// steps ("Do it for me" and the replays), which act without the canvas.
     pub(super) fn cabinet_plate(
         &self,
     ) -> Option<(
@@ -2635,6 +2696,19 @@ impl NovoApp {
                 }) {
                     self.learn_signal("cabinet_dropped");
                 }
+            }
+            Ask::CoolingPair(c) => {
+                // Read the project's list first, so adding to a list the 3D
+                // view has not looked at yet keeps what is already there.
+                self.sync_openings_now();
+                super::heat_sweep::add_pair(&mut self.cabinet.heat.settings, &c);
+                self.sync_openings_now();
+                // The 3D view opens with the list showing the pair.
+                self.view3d.controls.heat_panel = true;
+                self.cabinet
+                    .heat
+                    .advice
+                    .set_added(super::heat_sweep::added_text(&c));
             }
             Ask::CoolerLayout(enclosure, moves) => {
                 let count = moves.len();

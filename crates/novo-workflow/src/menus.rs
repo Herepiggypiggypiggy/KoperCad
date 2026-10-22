@@ -206,6 +206,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.3d_section", under("View", "3D")),
     ("view.3d_save_view", under("View", "3D")),
     ("view.3d_wire_runs", under("View", "3D")),
+    ("view.emc", under("View", "3D")),
     ("view.3d_hints", under("View", "3D")),
     ("view.3d_select_devices", under("View", "3D")),
     ("view.3d_select_rails", under("View", "3D")),

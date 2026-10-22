@@ -663,6 +663,12 @@ pub struct PageScene {
     /// The first terminal symbol of each run of one strip on this page,
     /// with the strip's tag it shows (see [`strip_heads`]).
     strip_heads: HashMap<SymbolId, String>,
+    /// Terminals of a crowded row that put their name on a second level
+    /// (see [`terminal_levels`]): the shift along the symbol's own y axis.
+    name_levels: HashMap<SymbolId, f32>,
+    /// Terminals with another strip's terminals just left of them on the
+    /// row: a strip name they head goes above (see `terminal_crowds`).
+    crowded: std::collections::HashSet<SymbolId>,
     /// The wire part under the pointer or selected, drawn emphasised.
     focus: Option<WirePart>,
     /// Wires drawn in another colour and width than the style's; see
@@ -794,6 +800,8 @@ impl PageScene {
             sheet: None,
             revisions: None,
             strip_heads: HashMap::new(),
+            name_levels: HashMap::new(),
+            crowded: Default::default(),
             focus: None,
             wire_looks: HashMap::new(),
             wire_cables: HashMap::new(),
@@ -1111,6 +1119,8 @@ impl PageScene {
         self.frame(project);
         self.draw_underlay();
         self.strip_heads = strip_heads(project, self.page);
+        self.name_levels = terminal_levels(project, self.page);
+        self.crowded = terminal_crowds(project, self.page);
         let contents = project.page_contents(self.page);
         for id in contents.symbols {
             self.sync_symbol(project, id, art);
@@ -1235,7 +1245,13 @@ impl PageScene {
                     // A removed symbol may have split a run.
                     || project
                         .symbol(*s)
-                        .is_none_or(|s| matches!(s.role, SymbolRole::Terminal { .. }))
+                        .is_none_or(|s| {
+                            // A device beside a terminal row takes room its names used.
+                            matches!(
+                                s.role,
+                                SymbolRole::Terminal { .. } | SymbolRole::Device { .. }
+                            )
+                        })
             }
             _ => false,
         });
@@ -1248,6 +1264,22 @@ impl PageScene {
                 }
             }
             self.strip_heads = heads;
+            // A terminal that moved or was added changes the pitch of its
+            // row: every terminal whose level changed is drawn again.
+            let levels = terminal_levels(project, self.page);
+            for (s, level) in self.name_levels.iter().chain(&levels) {
+                if self.name_levels.get(s) != Some(level) || levels.get(s) != Some(level) {
+                    dirty.insert(AnyId::Symbol(*s));
+                }
+            }
+            self.name_levels = levels;
+            let crowded = terminal_crowds(project, self.page);
+            dirty.extend(
+                self.crowded
+                    .symmetric_difference(&crowded)
+                    .map(|s| AnyId::Symbol(*s)),
+            );
+            self.crowded = crowded;
         }
         // A junction's glyph follows the wires leaving it, before and after
         // the edit (a removed wire is gone from the project).
@@ -1606,9 +1638,10 @@ impl PageScene {
                     .filter_map(|i| sym.pin_position(i))
                     .map(vec),
             );
+            let level = self.name_levels.get(&id).copied().unwrap_or(0.0);
             let (pos, anchor) = match art.tag_anchor(sym) {
                 Some((p, a)) => (
-                    place.affine().transform_point2(p),
+                    place.affine().transform_point2(p + Vec2::new(0.0, level)),
                     tag_anchor_after(a, &place),
                 ),
                 None if b.is_empty() => (origin + Vec2::new(5.0, 0.0), Anchor::CenterLeft),
@@ -1626,6 +1659,7 @@ impl PageScene {
             item.labels.insert(0, label);
         }
         if let Some(strip) = self.strip_heads.get(&id) {
+            let crowded = self.crowded.contains(&id);
             // Left of the run's first terminal and of every label already
             // on its row (the terminal's own name, a pin number), so the
             // two never overlap at any zoom: label boxes are in mm.
@@ -1646,11 +1680,15 @@ impl PageScene {
                     x = x.min(lb.min.x);
                 }
             }
-            item.labels.push(
-                Label::new(Vec2::new(x - 2.0, y), strip.clone(), h)
-                    .anchored(Anchor::CenterRight)
-                    .colored(self.style.tag_color),
-            );
+            let label = if crowded && !b.is_empty() {
+                // Another strip's terminals stand just left: its names
+                // would run into this one, so the name goes above.
+                Label::new(Vec2::new(x - 1.0, b.min.y - 0.5), strip.clone(), h)
+                    .anchored(Anchor::BottomRight)
+            } else {
+                Label::new(Vec2::new(x - 2.0, y), strip.clone(), h).anchored(Anchor::CenterRight)
+            };
+            item.labels.push(label.colored(self.style.tag_color));
         }
         let slot = self
             .notes
@@ -2143,6 +2181,154 @@ impl PageScene {
         }
         self.put(id.into(), item);
     }
+}
+
+/// Two names of one row of terminals, in mm, need this much room between
+/// them besides their own width: the terminal's body and some air.
+const NAME_ROOM: f64 = 4.6;
+
+/// Shift of a terminal's name along its symbol's y axis, mm, for rows so
+/// tight that the names would run into the next terminal: the terminals of
+/// the row put their names on two levels, alternately, so each name has
+/// twice the width. Only terminals whose wires run up and down (a row side
+/// by side on the page); a column of terminals has room already.
+fn terminal_levels(project: &Project, page: PageId) -> HashMap<SymbolId, f32> {
+    use novo_core::Rotation;
+    // Level shift: the name's anchor sits at the body's middle, 4 mm down.
+    const LEVEL: f32 = 2.4;
+    // One strip per row: where another strip starts in the row its name
+    // sits among these terminals (a strip name is placed per run, stage 3b).
+    // Per (row, strip): x, symbol and name width.
+    type Row = Vec<(f64, SymbolId, f64)>;
+    let mut rows: HashMap<(i64, novo_core::DeviceId), Row> = HashMap::new();
+    let mut tagged: Vec<(i64, f64)> = Vec::new();
+    for id in project.page_contents(page).symbols {
+        let Some(sym) = project.symbol(id) else {
+            continue;
+        };
+        if !matches!(sym.placement.rotation, Rotation::R0 | Rotation::R180) {
+            continue;
+        }
+        if matches!(sym.role, SymbolRole::Device { .. }) {
+            // Its tag hangs below the body: no name goes down there.
+            tagged.push((
+                (sym.placement.origin.y / 2.5).round() as i64,
+                sym.placement.origin.x,
+            ));
+            continue;
+        }
+        if !matches!(sym.role, SymbolRole::Terminal { .. }) {
+            continue;
+        }
+        let Some(text) = symbol_text(project, sym) else {
+            continue;
+        };
+        let width = text.chars().count() as f64 * 3.0 * f64::from(crate::text::ADVANCE);
+        let SymbolRole::Terminal { terminals } = &sym.role else {
+            continue;
+        };
+        let Some(strip) = terminals
+            .first()
+            .and_then(|t| project.terminal(*t))
+            .map(|t| t.strip)
+        else {
+            continue;
+        };
+        let row = (sym.placement.origin.y / 2.5).round() as i64;
+        rows.entry((row, strip))
+            .or_default()
+            .push((sym.placement.origin.x, id, width));
+    }
+    let mut levels = HashMap::new();
+    for ((row_key, _), mut row) in rows {
+        row.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+        // Runs: neighbours at most STRIP_RUN_GAP apart.
+        let mut start = 0;
+        while start < row.len() {
+            let mut end = start + 1;
+            while end < row.len() && row[end].0 - row[end - 1].0 <= STRIP_RUN_GAP {
+                end += 1;
+            }
+            let run = &row[start..end];
+            let pitch = run
+                .windows(2)
+                .map(|w| w[1].0 - w[0].0)
+                .fold(f64::INFINITY, f64::min);
+            let widest = run.iter().map(|r| r.2).fold(0.0, f64::max);
+            if run.len() > 1 && pitch < widest + NAME_ROOM {
+                for (i, (x, id, _)) in run.iter().enumerate() {
+                    let under_tag = tagged
+                        .iter()
+                        .any(|(r, tx)| *r == row_key && (tx - x).abs() < 8.0);
+                    levels.insert(
+                        *id,
+                        if i % 2 == 0 {
+                            -LEVEL
+                        } else if under_tag {
+                            0.0
+                        } else {
+                            LEVEL
+                        },
+                    );
+                }
+            }
+            start = end;
+        }
+    }
+    levels
+}
+
+/// The terminals with a terminal of another strip within `CROWD` to their
+/// left on the same row: a strip name placed left of them would run into
+/// that strip's terminal names.
+fn terminal_crowds(project: &Project, page: PageId) -> std::collections::HashSet<SymbolId> {
+    const CROWD: f64 = 40.0;
+    // Per row: x, symbol and its strip (none for a device, such as a PE box).
+    type Entry = (f64, SymbolId, Option<novo_core::DeviceId>);
+    let mut rows: HashMap<i64, Vec<Entry>> = HashMap::new();
+    for id in project.page_contents(page).symbols {
+        let Some(sym) = project.symbol(id) else {
+            continue;
+        };
+        let strip = match &sym.role {
+            SymbolRole::Terminal { terminals } => {
+                let Some(t) = terminals.first().and_then(|t| project.terminal(*t)) else {
+                    continue;
+                };
+                Some(t.strip)
+            }
+            SymbolRole::Device { .. } => None,
+            _ => continue,
+        };
+        let o = sym.placement.origin;
+        rows.entry((o.y / 2.5).round() as i64)
+            .or_default()
+            .push((o.x, id, strip));
+    }
+    let mut crowded = std::collections::HashSet::new();
+    for (_, mut row) in rows {
+        row.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+        for (i, (x, id, strip)) in row.iter().enumerate() {
+            if strip.is_none() {
+                continue;
+            }
+            // A device (a PE block, a wide marker) has its origin
+            // somewhere inside its body: it counts a little to the right too.
+            let device_near = row
+                .iter()
+                .any(|(px, _, s)| s.is_none() && (-14.0..=CROWD).contains(&(x - px)));
+            let other = device_near
+                || row[..i]
+                    .iter()
+                    .rev()
+                    .take_while(|(px, ..)| x - px <= CROWD)
+                    .any(|(px, _, s)| px < x && s != strip);
+            if other {
+                crowded.insert(*id);
+            }
+        }
+    }
+    crowded
 }
 
 /// The anchor of a tag whose library position was moved by `place`. The tag
@@ -3309,6 +3495,150 @@ mod tests {
                     || b.min.y >= a.max.y,
                 "{rotation:?}: strip label {b:?} overlaps the terminal name {a:?}"
             );
+        }
+    }
+
+    #[test]
+    fn names_of_close_terminals_stand_on_two_levels() {
+        struct Name;
+        impl SymbolArt for Name {
+            fn artwork(&self, _: &SymbolInstance) -> Option<Vec<Primitive>> {
+                None
+            }
+            fn tag_anchor(&self, _: &SymbolInstance) -> Option<(Vec2, Anchor)> {
+                Some((Vec2::new(0.0, 4.0), Anchor::Center))
+            }
+        }
+        let mut doc = Document::default();
+        let ((page, syms), _) = doc
+            .transact("strip", |tx| {
+                let page = tx.add_page("1")?;
+                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                let mut syms = Vec::new();
+                for k in 0..4 {
+                    let t = tx.add_terminal(x1, format!("{}", 10 + k))?;
+                    syms.push(tx.place_symbol(
+                        page,
+                        "iec/terminal",
+                        MPlacement {
+                            origin: Point::new(100.0 + 4.0 * f64::from(k), 50.0),
+                            rotation: novo_core::Rotation::R0,
+                            mirrored: false,
+                        },
+                        vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                        SymbolRole::Terminal { terminals: vec![t] },
+                    )?);
+                }
+                Ok((page, syms))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &Name);
+        let name = |i: usize, text: &str| {
+            let item = ps.scene().get(item_id(syms[i])).unwrap();
+            item.labels
+                .iter()
+                .find(|l| l.text == text)
+                .unwrap()
+                .bounds()
+        };
+        let (a, b) = (name(0, "10"), name(1, "11"));
+        // Neighbours on different levels never overlap.
+        assert!(a.min.y >= b.max.y || b.min.y >= a.max.y, "{a:?} {b:?}");
+    }
+
+    #[test]
+    fn a_strip_name_goes_above_when_another_strip_stands_left() {
+        let mut doc = Document::default();
+        let ((page, head), _) = doc
+            .transact("strips", |tx| {
+                let page = tx.add_page("1")?;
+                let mut head = None;
+                for (strip, x) in [("-X1", 100.0), ("-X2", 112.0)] {
+                    let s = tx.add_terminal_strip(DeviceTag::parse(strip)?)?;
+                    let t = tx.add_terminal(s, "1")?;
+                    let sym = tx.place_symbol(
+                        page,
+                        "iec/terminal",
+                        MPlacement {
+                            origin: Point::new(x, 50.0),
+                            rotation: novo_core::Rotation::R0,
+                            mirrored: false,
+                        },
+                        vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                        SymbolRole::Terminal { terminals: vec![t] },
+                    )?;
+                    head = Some(sym);
+                }
+                Ok((page, head.unwrap()))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let item = ps.scene().get(item_id(head)).unwrap();
+        let strip = item.labels.iter().find(|l| l.text == "-X2").unwrap();
+        // Above the row, not left of it where -X1's terminal stands.
+        assert!(strip.pos.y < 50.0, "{:?}", strip.pos);
+    }
+
+    #[test]
+    fn a_device_moved_beside_terminals_redraws_their_names() {
+        let mut doc = Document::default();
+        let ((page, syms, dev), _) = doc
+            .transact("row", |tx| {
+                let page = tx.add_page("1")?;
+                let s = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                let mut syms = Vec::new();
+                for k in 0..3 {
+                    let t = tx.add_terminal(s, format!("{k}"))?;
+                    syms.push(tx.place_symbol(
+                        page,
+                        "iec/terminal",
+                        MPlacement {
+                            origin: Point::new(100.0 + 4.0 * f64::from(k), 50.0),
+                            rotation: novo_core::Rotation::R0,
+                            mirrored: false,
+                        },
+                        vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                        SymbolRole::Terminal { terminals: vec![t] },
+                    )?);
+                }
+                let d = tx.add_device(DeviceTag::parse("-K1")?, "Coil")?;
+                let dev = tx.place_symbol(
+                    page,
+                    "iec/coil",
+                    MPlacement {
+                        origin: Point::new(100.0, 80.0),
+                        rotation: novo_core::Rotation::R0,
+                        mirrored: false,
+                    },
+                    vec![Pin::new("A1", 0.0, -2.5), Pin::new("A2", 0.0, 2.5)],
+                    SymbolRole::Device {
+                        device: d,
+                        main: true,
+                    },
+                )?;
+                Ok((page, syms, dev))
+            })
+            .unwrap();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let (_, changes) = doc
+            .transact("move", |tx| {
+                tx.move_symbol(
+                    dev,
+                    MPlacement {
+                        origin: Point::new(102.0, 50.0),
+                        rotation: novo_core::Rotation::R0,
+                        mirrored: false,
+                    },
+                )
+            })
+            .unwrap();
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        // The refresh ran: the page agrees with a scene built afresh.
+        let fresh = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let y_of =
+            |ps: &PageScene, i: usize| ps.scene().get(item_id(syms[i])).unwrap().labels[0].pos.y;
+        for i in 0..3 {
+            assert_eq!(y_of(&ps, i), y_of(&fresh, i));
         }
     }
 

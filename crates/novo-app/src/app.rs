@@ -68,8 +68,11 @@ mod duplicate;
 mod dxf;
 mod electrical;
 mod emc;
+mod emc_demo;
+mod emc_stub;
 #[cfg(test)]
 mod emc_tests;
+mod emc_view;
 mod eplan_export;
 mod eplan_import;
 mod eplan_parts;
@@ -108,6 +111,9 @@ mod heat_run;
 mod heat_run_tests;
 mod heat_settings;
 mod heat_spots;
+mod heat_sweep;
+#[cfg(test)]
+mod heat_sweep_tests;
 mod heat_time;
 #[cfg(test)]
 mod heat_time_tests;
@@ -495,6 +501,7 @@ enum Leaving {
     Recover,
     OpenPath(PathBuf),
     Example,
+    EmcExample,
     Practice,
     Close,
     Quit,
@@ -825,6 +832,7 @@ impl NovoApp {
             Action::OpenReadOnly => self.leave_then(ctx, Leaving::OpenReadOnly),
             Action::RecoverProject => self.leave_then(ctx, Leaving::Recover),
             Action::OpenExample => self.leave_then(ctx, Leaving::Example),
+            Action::OpenEmcExample => self.leave_then(ctx, Leaving::EmcExample),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
             Action::Learn => self.learn_run_command("help.learn", None),
@@ -975,6 +983,7 @@ impl NovoApp {
             }
             Leaving::OpenPath(path) => self.open_path(&path),
             Leaving::Example => self.open_example(),
+            Leaving::EmcExample => self.open_emc_example(),
             Leaving::Practice => self.start_practice(),
             Leaving::Close => self.close_project(),
             Leaving::Quit => {
@@ -1443,6 +1452,7 @@ impl NovoApp {
                     || id.starts_with("view.3d_align")
                     || id.starts_with("view.3d_spread")
                     || *id == "view.3d_wire_runs"
+                    || *id == "view.emc"
                     || *id == "view.3d_duplicate"
                     || (*id == "edit.duplicate" && in_3d)
                     || *id == "view.3d_position"

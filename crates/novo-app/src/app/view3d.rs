@@ -143,6 +143,8 @@ pub(crate) struct View3dMode {
     pub(super) run_marks: Vec<novo_view3d::Overlay>,
     /// The Wire runs list is open.
     pub(super) wire_runs: bool,
+    /// The EMC view: class colours, keep-clear zones, hot spots.
+    pub(super) emc: super::emc_view::EmcState,
     /// The toolbar's layers and door.
     pub(super) controls: Controls,
     /// The legend of mouse and keys.
@@ -212,6 +214,7 @@ impl Default for View3dMode {
             runs_settle: Default::default(),
             run_marks: Vec::new(),
             wire_runs: false,
+            emc: Default::default(),
             controls: Controls::default(),
             hints: Hints::default(),
             stats: Stats::default(),
@@ -625,7 +628,11 @@ impl NovoApp {
                     frame: scene.frame,
                 },
                 &vent_flows,
-                self.cabinet.heat.settings.selected,
+                self.cabinet
+                    .heat
+                    .settings
+                    .hovered
+                    .or(self.cabinet.heat.settings.selected),
             ),
             _ => Vec::new(),
         };
@@ -723,6 +730,9 @@ impl NovoApp {
             }))
             .collect();
         ghost.extend(mode.measure.overlays());
+        let dark = ui.visuals().dark_mode;
+        mode.emc.on = mode.controls.emc;
+        ghost_changed |= mode.emc.sync(project, id, revision, scene, dark);
         let mut heat_changed = false;
         if !mode.probe.on {
             mode.probe.at = None;
@@ -798,6 +808,7 @@ impl NovoApp {
             all.extend(mode.pin_marks.iter().cloned());
             all.extend(mode.vent_marks.iter().cloned());
             all.extend(mode.run_marks.iter().cloned());
+            all.extend(mode.emc.overlays().iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker.clone());
             mode.view.set_overlays(all);
@@ -808,6 +819,7 @@ impl NovoApp {
             all.extend(mode.pin_marks.iter().cloned());
             all.extend(mode.vent_marks.iter().cloned());
             all.extend(mode.run_marks.iter().cloned());
+            all.extend(mode.emc.overlays().iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker);
             let time = ui.input(|i| i.time);
@@ -893,6 +905,35 @@ impl NovoApp {
             stored.as_ref(),
             ambient,
         );
+        {
+            // The cooling advice window follows the Heat strip's button and
+            // the command, whether or not the Heat panel is open.
+            let tag_of = |raw: u64| {
+                project
+                    .get::<Device>(DeviceId::from(raw))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_else(|| format!("device {raw}"))
+            };
+            let heat = &mut self.cabinet.heat;
+            heat.advice.poll(ui.ctx());
+            if heat.advice.take_request() {
+                heat.advice
+                    .start(project, id, ambient, &heat.settings, &tag_of);
+            }
+            if heat.advice.is_open() {
+                let now_key = super::heat_sweep::key_of(project, id, ambient, &heat.settings);
+                let at = view_rect.center_top() + egui::vec2(-200.0, 170.0);
+                match heat.advice.show(ui.ctx(), 2, now_key, at) {
+                    Some(super::heat_sweep::Ask::Again) => heat.advice.request(),
+                    Some(super::heat_sweep::Ask::Add(c)) => {
+                        super::heat_sweep::add_pair(&mut heat.settings, &c);
+                        heat.advice.set_added(super::heat_sweep::added_text(&c));
+                        mode.controls.heat_panel = true;
+                    }
+                    None => {}
+                }
+            }
+        }
         if mode.controls.heat_panel {
             let tag_of = |raw: u64| {
                 project
@@ -927,6 +968,9 @@ impl NovoApp {
                         .fit(scene, ui.input(|i| i.time), options.reduced_motion);
                 }
             }
+        } else {
+            // A closed panel marks nothing in the cabinet.
+            self.cabinet.heat.settings.hovered = None;
         }
         if let Some(text) = empty_hint {
             ui.painter().text(
@@ -983,9 +1027,13 @@ impl NovoApp {
             }
             _ => None,
         };
+        let emc_scene = match shown {
+            None => mode.emc.tinted(scene, dark),
+            Some(_) => None,
+        };
         let out = mode.view.show(
             ui,
-            shown.unwrap_or(scene),
+            emc_scene.as_ref().unwrap_or(shown.unwrap_or(scene)),
             &mode.library,
             &Look::for_theme(theme),
             options,
@@ -1039,6 +1087,32 @@ impl NovoApp {
                     mode.measure.on = false;
                 }
             }
+        }
+        if mode.emc.on {
+            if let Some(pic) = mode.emc.picture().cloned() {
+                if mode.emc.layers.spots
+                    && let Some(h) = super::emc_view::paint_badges(
+                        ui,
+                        &mode.view,
+                        out.rect,
+                        scene,
+                        &pic,
+                        mode.emc.selected,
+                        dark,
+                    )
+                {
+                    mode.emc.selected = (mode.emc.selected != Some(h)).then_some(h);
+                }
+                let tag_of = |raw: u64| {
+                    project
+                        .get::<Device>(DeviceId::from(raw))
+                        .and_then(|d| d.tag.device_code().map(|c| format!("-{c}")))
+                        .unwrap_or_else(|| format!("device {raw}"))
+                };
+                super::emc_view::panel(ui.ctx(), view_rect, &mut mode.emc, &tag_of);
+                super::emc_view::legend(ui.ctx(), view_rect, &mode.emc, dark);
+            }
+            mode.controls.emc = mode.emc.on;
         }
         if mode.heat.labels
             && let Some(sol) = &solution
