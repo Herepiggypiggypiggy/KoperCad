@@ -128,7 +128,7 @@ pub fn has_supply(netlist: &Netlist) -> bool {
 pub const NO_SUPPLY: &str = "No supply is defined in this drawing";
 
 /// What to do about it, in words.
-pub const NO_SUPPLY_FIX: &str = "Nothing can be energized until a feed gives L1, L2, L3, N or PE a potential. Place a feed on each open supply point and right-click it to set its potential.";
+pub const NO_SUPPLY_FIX: &str = "Nothing can be energized until a feed gives L1, L2, L3, N or PE a potential. Place a feed (L1, L2, L3, N, PE) or add the supply circuit, then right-click a feed to set its potential.";
 
 /// One line of the answer; `symbol` is the device the line is about, which a
 /// view can make clickable ("why is that one open?").

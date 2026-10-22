@@ -9,7 +9,7 @@ Done (PR claude/project-thread-naa4la):
 
 Next, in order:
 1. DONE (PR show-device): device step on the Cabinet canvas and in 3D, Build mode steps aside behind a bar.
-2. Build-mode PDF per cabinet with the ticks printed (the paper twin).
+2. DONE (PR build-mode-pdf): Print sheet... writes the build sheet PDF.
 3. Door and wall steps in their own surface coordinates (today door devices say "Fit on the door").
 4. ~~Photos on a problem~~ done (PR build-mode-photos): chosen in the problem editor, kept on the punch item. Live camera capture is not done.
 5. Per-person claim of a step (two people on one cabinet) merged through the field file.

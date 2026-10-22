@@ -13,6 +13,8 @@ tree supply
 expect "No supply is defined in this drawing"
 expect "Place a feed"
 expect "Add supply circuit"
+expect "no supply is defined yet"
+expect "Place a feed (L1, L2, L3, N, PE)"
 check_layout
 click_text "Why?"
 wait 10
