@@ -1,7 +1,7 @@
 @title 3D vents: the proposal card with a grille already in the cabinet adds only the fan
 @area 3D
 @sizes 1366x768 1920x1080
-# On the hot cabinet a grille of the default size is added by hand first. It is big enough for the proposed filter fan, so the card says nothing about a grille and its button adds the fan alone.
+# On the hot cabinet a grille of the default size is added by hand first. It is big enough for the proposed filter fan, so the card says nothing about a grille and its button adds the fan alone. The run started by adding it is finished before the shot, so the card is idle.
 open qa/fixtures/cabinet-cooling-advice.novo
 wait 20
 click_text 3D #1
@@ -20,7 +20,8 @@ click_text "Add opening"
 wait 10
 click_text "Grille, high on the right wall"
 wait 20
-wait_s 150
+wait_s 200
+expect_not "Locked while the run goes"
 expect "Grille, in the right wall"
 expect "Cooling selection proposes"
 expect_not "smaller than this flow needs"

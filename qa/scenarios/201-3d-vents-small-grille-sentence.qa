@@ -1,0 +1,23 @@
+@title 3D vents: a grille that is too small is said so and the proposal brings its own
+@area 3D
+@sizes 1366x768 1920x1080
+# The hot cabinet already holds one 30 x 30 mm grille (fixture made by qa/fixtures/make_vents_fixtures.py). It is no way out for the proposed filter fan, so the card says so and offers the fan with a grille of its own on top. The run is finished before the shot.
+open qa/fixtures/cabinet-vents-small-grille.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 150
+expect_not "Locked while the run goes"
+expect "Cooling selection proposes"
+expect "A grille of about"
+expect "smaller than this flow needs"
+shot 01-small-grille-card
+check_layout
+check_blank 01-small-grille-card
