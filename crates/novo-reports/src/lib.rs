@@ -114,7 +114,8 @@ mod wires;
 pub use assembly::{AssemblyChecklist, BOX as ASSEMBLY_BOX};
 pub use bench::{
     BenchCut, FerruleCount, FerruleSize, FerruleStandard, FerruleTable, STANDARD_KEY, TICK_BOX,
-    bench_jobs, ends_without_ferrule, ferrule_counts, is_estimate, with_spares,
+    bench_jobs, ends_with_stated_processing, ends_without_ferrule, ferrule_counts, is_estimate,
+    with_spares,
 };
 pub use bom::BillOfMaterials;
 pub use counts::{WireSet, count_text, headline_count, wire_set_mismatch};

@@ -469,7 +469,7 @@ fn duct_legend(project: &Project, plans: &Plans) -> BTreeMap<u64, (String, Strin
 fn assign_tracks(project: &Project, jobs: &mut [WireCutJob], plans: &Plans) {
     let legend = duct_legend(project, plans);
     let names: BTreeMap<u64, String> = legend.iter().map(|(d, (n, _))| (*d, n.clone())).collect();
-    let name = |d: &u64| names.get(d).cloned().unwrap_or_else(|| format!("D{d}"));
+    let name = |d: &u64| names.get(d).cloned().unwrap_or_else(|| "duct ?".to_owned());
     // The same ducts walked the other way are the same physical track.
     let key = |ducts: &[u64]| {
         let mut rev = ducts.to_vec();
@@ -575,13 +575,13 @@ pub const JOB_COLUMNS: [&str; 23] = [
     "Label B",
     "From",
     "To",
+    "Length basis",
     "Direction",
     "Processing A",
     "Processing B",
     "Bundle",
     "Seq",
     "Track",
-    "Length basis",
     "End basis",
 ];
 
@@ -607,13 +607,13 @@ fn job_cells(n: usize, j: &WireCutJob) -> Vec<Cell> {
         Cell::text(j.end_b.label.clone()),
         Cell::text(j.end_a.designation.clone()),
         Cell::text(j.end_b.designation.clone()),
+        Cell::text(j.basis.clone()),
         Cell::text(j.direction.clone()),
         Cell::text(j.end_a.processing.clone()),
         Cell::text(j.end_b.processing.clone()),
         j.bundle.map(i64::from).into(),
         j.sequence.map(i64::from).into(),
         Cell::text(j.track.clone()),
-        Cell::text(j.basis.clone()),
         Cell::text(end_basis_text(j)),
     ]
 }
@@ -748,10 +748,10 @@ impl Report for WireCut {
             let wires: Vec<AnyId> = j.wires.iter().map(|w| AnyId::from(*w)).collect();
             let pick = |idx: &[usize]| idx.iter().map(|&k| cells[k].clone()).collect::<Vec<_>>();
             cuts.push(
-                pick(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 21]),
+                pick(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
                 wires.clone(),
             );
-            production.push(pick(&[0, 1, 15, 16, 17, 18, 19, 20, 22]), wires);
+            production.push(pick(&[0, 1, 16, 17, 18, 19, 20, 21, 22]), wires);
         }
 
         // Stock per cross-section and colour: pieces and metres, as cut.

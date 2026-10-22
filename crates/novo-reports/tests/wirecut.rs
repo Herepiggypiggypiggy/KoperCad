@@ -333,6 +333,25 @@ fn end_processing_is_stated_by_the_wire_else_proposed_and_labelled() {
     assert_eq!(j.end_a.ferrule, None, "a lug replaces the ferrule");
     assert_eq!(j.end_a.sleeve_text().as_deref(), Some("Ring lug M5"));
     assert_eq!(novo_reports::end_basis_text(j), "stated");
+    // The ferrule sheet does not call a stated lug "ferrule switched off".
+    let table = novo_reports::FerruleTable::build(
+        doc.project(),
+        &jobs,
+        &novo_reports::FerruleStandard::of(doc.project()),
+    );
+    let text = format!(
+        "{:?}",
+        table
+            .sections
+            .iter()
+            .map(|s| s.text_rows())
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        text.contains("Terminal or lug stated on the wire"),
+        "{text}"
+    );
+    assert_eq!(novo_reports::ends_with_stated_processing(&jobs), 2);
 }
 
 #[test]
