@@ -55,7 +55,7 @@ expect "Airflow: lines and arrows are coloured by air speed"
 check_blank airflow-result
 check_layout
 wait_s 5
-shot after-cancel
+shot after-run
 expect "at free air; this run moves about"
 move 170 560
 wait 5
