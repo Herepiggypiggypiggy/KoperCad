@@ -359,15 +359,42 @@ fn heat_aware_place_all_lowers_a_sensitive_breaker_and_the_rule_check_agrees() {
         .raw();
     assert!(
         why.describe(q1, &d.app.cabinet.rules.rules)
-            .contains("brought it below the hot zone")
-            || why
-                .describe(q1, &d.app.cabinet.rules.rules)
-                .contains("below the hot zone")
+            .contains("brought it below the hot zone"),
+        "{}",
+        why.describe(q1, &d.app.cabinet.rules.rules)
     );
     d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
     d.frame();
-    // The place rules check does not call the lowered breaker out of its zone.
+    // The breaker (top zone by its rule) now sits below the hot drive, and the
+    // place rules check does not call it out of its zone.
+    let layout = novo_layout::model::load(project(&d), cab).unwrap();
+    let y_of = |tag: &str| {
+        let id = project(&d)
+            .all::<novo_core::Device>()
+            .find(|dev| dev.tag.to_string().ends_with(tag))
+            .unwrap()
+            .id
+            .raw();
+        layout
+            .placements
+            .iter()
+            .find(|p| p.id == id)
+            .unwrap()
+            .footprint()
+    };
+    assert!(
+        y_of("-Q1").y >= y_of("-T1").bottom(),
+        "breaker is below the drive"
+    );
     let judged = cabinet_rules::judge(project(&d), cab, &d.app.cabinet.rules.rules);
+    assert!(
+        !judged.violations.iter().any(|v| matches!(
+            v.problem,
+            novo_layout::check::Problem::WrongZone { device, .. } if device == q1
+        )),
+        "{:?}",
+        judged.violations
+    );
     assert!(judged.violations.is_empty(), "{:?}", judged.violations);
 }
 

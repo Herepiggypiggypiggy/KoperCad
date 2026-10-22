@@ -161,7 +161,10 @@ fn every_placement_says_which_rule_put_it_there() {
     ];
     specs[2].loss_w = Some(40.0);
     specs[1].gaps.right = Some(25.0);
-    let rules = RuleSet::standard();
+    // This tests the plain rules planner: the heat step (on by default) would
+    // slide the hot K along its rail.
+    let mut rules = RuleSet::standard();
+    rules.heat = None;
     let (plan, why) = place_all_explained(&plate(), &specs, &rules, 1, 0.0);
     assert_eq!(why.decisions.len(), plan.placements.len());
     let q = why.decision(1).unwrap();

@@ -192,9 +192,11 @@ measurements) is the judge: `crates/novo-tests/examples/heat_place_all.rs` runs
 Place all with and without the step on a project and prints devices over their
 limit, margins and air temperatures; `crates/novo-tests/tests/heat_place_all.rs`
 asserts the made-up cabinet of `novo_tests::heat_cabinet` goes from 8 devices over
-their limit to 0. On the CV-200 conveyor (assumed sizes and losses, 460 W) the two
+their limit to 0. On a customer conveyor cabinet (assumed sizes and losses, 460 W; kept out of the repository) the two
 devices over their limit stay over (a 165 W drive with a 40 C limit in a closed
-cabinet is not a placement problem); the other devices gain about 1.7 K on average.
+cabinet is not a placement problem); the other devices gain about 1.7 K on average, which is within the solver's own wobble of about 1 K (that run is reported as not converged), so it is not a validated gain.
+
+Default on: the standard rule set and any rule file without a `heat` line now place by heat when parts carry loss data, so Place all output changes for those projects; `heat off` restores the plain rules.
 
 Where the user finds it: Cabinet, **Place all** (the message says what the heat step
 did; the inspector says why a moved device is where it is), and **Rules**, the

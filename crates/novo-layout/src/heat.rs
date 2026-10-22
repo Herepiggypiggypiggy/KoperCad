@@ -183,16 +183,19 @@ pub fn zone_override(rules: &RuleSet, specs: &[Spec]) -> HashMap<u64, Zone> {
     let (Some(h), Some(hot)) = (rules.heat, rules.hot) else {
         return HashMap::new();
     };
-    if !specs
-        .iter()
-        .any(|s| s.loss_w.is_some_and(|w| w >= hot.min_loss_w))
-    {
+    // The same sources the search runs for (`min_source_w`), so the override
+    // and the plan never disagree.
+    let source = |s: &Spec| {
+        s.loss_w
+            .is_some_and(|w| w >= hot.min_loss_w && w >= h.min_source_w)
+    };
+    if !specs.iter().any(source) {
         return HashMap::new();
     }
     specs
         .iter()
         .filter(|s| is_sensitive(s, &h))
-        .filter(|s| !s.loss_w.is_some_and(|w| w >= hot.min_loss_w))
+        .filter(|s| !source(s))
         .filter_map(|s| {
             let (_, rule) = rules.rule_for_kind(&s.kind);
             (rule.zone < hot.zone).then_some((s.id, hot.zone))
@@ -288,7 +291,7 @@ fn travel(plan: &Plan, from: &HashMap<u64, Rect>) -> f64 {
 
 /// How much of the cabinet's total loss a device at the very top sees more of
 /// than one at the bottom (the stratification of the air), in the same units
-/// as the pair kernel. About 12 K of 35 K of total rise for the CV-200.
+/// as the pair kernel. About a third of the total temperature rise of a typical drive cabinet.
 const STRATIFICATION: f64 = 1.0;
 /// Rows (rails with their ducts) a move may add to the rules' plan, and what
 /// each costs in score. Spreading hot devices sometimes needs another row, but
@@ -298,7 +301,6 @@ const ROW_COST: f64 = 150.0;
 /// Weight of a millimetre of travel against the coupling score. A device that
 /// moves 1 m has to buy at least this much coupling back.
 const TRAVEL_COST_PER_MM: f64 = 0.02;
-/// Most layouts one search tries.
 /// Slides tried for a device, mm.
 const SLIDES: [f64; 4] = [120.0, 300.0, 600.0, 1000.0];
 
@@ -464,18 +466,8 @@ pub(crate) fn optimise(
                 )
             })
             .collect();
-        for id in tw.zone.keys() {
-            tw.why.insert(*id, HeatWhy::Lowered);
-        }
-        for s in specs {
-            let why = if s.loss_w.is_some_and(|w| w >= h.min_source_w) {
-                HeatWhy::Source
-            } else if sensitive.contains(&s.id) {
-                HeatWhy::Sensitive
-            } else {
-                continue;
-            };
-            tw.why.entry(s.id).or_insert(why);
+        for (id, why) in reasons(specs, &h, &sensitive, &tw.zone) {
+            tw.why.entry(id).or_insert(why);
         }
         if best.as_ref().is_none_or(|b| cost < b.0) {
             best = Some((cost, score, plan, why, tw));
@@ -492,12 +484,28 @@ pub(crate) fn optimise(
         unchanged: true,
         ..HeatSummary::default()
     };
-    let Some((cost, score, _plan, _why, tw)) = best.filter(|b| b.0 < base_cost * 0.995) else {
+    let Some((_, score, _plan, _why, tw)) = best.filter(|b| b.0 < base_cost * 0.995) else {
+        // Nothing beat the rules' own order, but a sensitive device the rules put above
+        // the hot zone is still brought down: the rule check judges by the same override,
+        // so the result must not depend on the score.
+        if !zones.is_empty() {
+            let tw = Tweaks {
+                zone: zones.clone(),
+                sensitive: sensitive.clone(),
+                why: reasons(specs, &h, &sensitive, &zones),
+                ..Tweaks::default()
+            };
+            let (plan, mut why) = plan_around(plate, specs, rules, first, top, blocked, &tw);
+            if plan.unplaced.len() <= plan0.unplaced.len() {
+                summary.lowered = zones.len();
+                why.heat = Some(summary);
+                return Some((plan, why));
+            }
+        }
         let mut why = why0;
         why.heat = Some(summary);
         return Some((plan0, why));
     };
-    let _ = cost;
     // Plan once more with the reasons in place, so every decision carries its own.
     let (plan, mut why) = plan_around(plate, specs, rules, first, top, blocked, &tw);
     summary.unchanged = false;
@@ -516,6 +524,30 @@ pub(crate) fn optimise(
     summary.tried = search.tried;
     why.heat = Some(summary);
     Some((plan, why))
+}
+
+/// Why each device that the heat step looked at is where it is, when it did not
+/// move it: lowered below the hot zone, a source, or a device that minds heat.
+fn reasons(
+    specs: &[Spec],
+    h: &HeatPlace,
+    sensitive: &HashSet<u64>,
+    lowered: &HashMap<u64, Zone>,
+) -> HashMap<u64, HeatWhy> {
+    let mut out = HashMap::new();
+    for s in specs {
+        let why = if lowered.contains_key(&s.id) {
+            HeatWhy::Lowered
+        } else if s.loss_w.is_some_and(|w| w >= h.min_source_w) {
+            HeatWhy::Source
+        } else if sensitive.contains(&s.id) {
+            HeatWhy::Sensitive
+        } else {
+            continue;
+        };
+        out.insert(s.id, why);
+    }
+    out
 }
 
 fn zone_of(rules: &RuleSet, spec: &Spec) -> Zone {
@@ -710,13 +742,30 @@ mod tests {
         }
     }
 
+    /// The plan's devices as placements, for the rule check.
+    fn placements(plan: &Plan, specs: &[Spec]) -> Vec<crate::Placement> {
+        plan.placements
+            .iter()
+            .map(|p| crate::Placement {
+                id: p.id,
+                x: p.x,
+                y: p.y,
+                rotated: false,
+                size: specs.iter().find(|s| s.id == p.id).unwrap().size,
+                clearance: None,
+                margins: Default::default(),
+                rail: Some(p.rail),
+            })
+            .collect()
+    }
+
     #[test]
-    fn sensitive_device_is_brought_below_the_hot_zone() {
+    fn sensitive_device_is_brought_below_the_hot_zone_and_the_rule_check_agrees() {
         // A breaker with a 45 C limit would sit in the top zone, above a hot drive.
         let specs = vec![
             spec(1, "Q", 45.0, 90.0, 1.0, Some(45.0)),
             spec(2, "Q", 45.0, 90.0, 1.0, Some(60.0)),
-            spec(3, "T", 200.0, 300.0, 120.0, Some(40.0)),
+            spec(3, "T", 200.0, 300.0, 120.0, Some(60.0)),
         ];
         let rules = RuleSet::standard();
         let over = zone_override(&rules, &specs);
@@ -724,11 +773,54 @@ mod tests {
         assert!(!over.contains_key(&2));
         let (plan, why) = crate::rules::place_all_around(&plate(), &specs, &rules, 1, 0.0, &[]);
         let b = boxes(&plan, &specs);
-        assert!(b[&1].y > b[&3].bottom() - 1.0 || b[&1].y >= b[&2].y);
+        // The ordinary breaker is on top; the sensitive one sits below the hot drive.
+        assert!(b[&2].y < b[&3].y);
+        assert!(b[&1].y >= b[&3].bottom(), "{:?}", b);
         assert_eq!(why.decision(1).and_then(|d| d.heat), Some(HeatWhy::Lowered));
-        // The rule check agrees with where the device went.
-        let placements: Vec<crate::Placement> = Vec::new();
-        let _ = placements;
+        let found = crate::check::check(&placements(&plan, &specs), &plan.ducts, &specs, &rules);
+        assert!(found.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn the_rule_check_is_quiet_whether_or_not_the_search_wins() {
+        // Small and big sources and plates, tight and loose limits: the result of
+        // Place all never depends on the score for the rule check. Also covers
+        // a `min_source` above the hot rule's threshold.
+        let mut unchanged = 0;
+        for (hot_w, limit, w, h, min_source) in [
+            (25.0, 50.0, 400.0, 500.0, 10.0),
+            (25.0, 45.0, 300.0, 700.0, 10.0),
+            (30.0, 50.0, 1200.0, 1000.0, 10.0),
+            (60.0, 45.0, 600.0, 900.0, 10.0),
+            (120.0, 48.0, 500.0, 800.0, 10.0),
+            (40.0, 45.0, 800.0, 800.0, 50.0),
+        ] {
+            let specs = vec![
+                spec(1, "Q", 18.0, 90.0, 0.5, Some(limit)),
+                spec(2, "Q", 18.0, 90.0, 0.5, Some(60.0)),
+                spec(3, "T", 100.0, 150.0, hot_w, Some(60.0)),
+                spec(4, "K", 45.0, 90.0, 3.0, Some(60.0)),
+            ];
+            let mut rules = RuleSet::standard();
+            rules.heat = Some(HeatPlace {
+                min_source_w: min_source,
+                ..HeatPlace::default()
+            });
+            let plate = Plate {
+                width: w,
+                height: h,
+                margin: 10.0,
+            };
+            let (plan, why) = crate::rules::place_all_around(&plate, &specs, &rules, 1, 0.0, &[]);
+            let found =
+                crate::check::check(&placements(&plan, &specs), &plan.ducts, &specs, &rules);
+            assert!(
+                found.is_empty(),
+                "{hot_w} W, limit {limit}, plate {w}x{h}: {found:?}"
+            );
+            unchanged += why.heat.is_some_and(|s| s.unchanged) as usize;
+        }
+        eprintln!("unchanged in {unchanged} of 6");
     }
 
     #[test]
