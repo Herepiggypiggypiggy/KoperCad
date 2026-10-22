@@ -81,6 +81,11 @@ impl LayoutSearch {
         self.open = true;
     }
 
+    /// A search is asked for and not yet taken up.
+    pub(super) fn pending(&self) -> bool {
+        self.requested
+    }
+
     pub(super) fn take_request(&mut self) -> bool {
         std::mem::take(&mut self.requested)
     }

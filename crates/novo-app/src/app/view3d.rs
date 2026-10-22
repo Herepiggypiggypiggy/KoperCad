@@ -934,6 +934,19 @@ impl NovoApp {
                 }
             }
         }
+        if self.cabinet.heat.layout.pending() {
+            // The suggestions are drawn on the plate: the button of the 3D
+            // panel takes the person to the Cabinet view, which runs the
+            // search (it also tells when nothing is worth moving).
+            self.switch_workspace(super::workspace::Workspace::Cabinet);
+            self.cabinet.table = false;
+            self.cabinet.heat.on = true;
+            self.message(
+                super::Level::Info,
+                "Cooler layout: searching in the Cabinet view, where the suggestions are shown on the plate.",
+            );
+            return;
+        }
         if mode.controls.heat_panel {
             let tag_of = |raw: u64| {
                 project
