@@ -178,7 +178,7 @@ impl VentSpec {
     }
 
     /// Length of the wall along the `u` axis and the other way, mm.
-    fn wall_len(wall: Wall, e: &Enclosure) -> (f64, f64) {
+    pub(super) fn wall_len(wall: Wall, e: &Enclosure) -> (f64, f64) {
         let (w, h, d) = (
             e.interior_width_mm(),
             e.interior_height_mm(),
@@ -193,9 +193,14 @@ impl VentSpec {
 
     /// This opening moved and cut down until it lies inside its wall: nothing
     /// hangs over an edge, so the area the solver sees is the area drawn.
-    pub(super) fn fitted(mut self, e: &Enclosure) -> VentSpec {
-        // A number that is not a number (typed, or from a damaged file) falls
-        // back to the starting value instead of reaching the geometry.
+    pub(super) fn fitted(self, e: &Enclosure) -> VentSpec {
+        self.finite().fitted_finite(e)
+    }
+
+    /// Every number finite: one that is not a number (typed, or from a damaged
+    /// file) falls back to the starting value instead of reaching the
+    /// geometry or the stored text (a NaN is stored as null and loses the list).
+    pub(super) fn finite(mut self) -> VentSpec {
         let start = VentSpec::new(self.wall);
         for (v, d) in [
             (&mut self.u_mm, 0.0),
@@ -210,6 +215,10 @@ impl VentSpec {
                 *v = d;
             }
         }
+        self
+    }
+
+    fn fitted_finite(mut self, e: &Enclosure) -> VentSpec {
         let (along, across) = Self::wall_len(self.wall, e);
         self.width_mm = self.width_mm.clamp(MIN_SIZE_MM, along.max(MIN_SIZE_MM));
         self.height_mm = self.height_mm.clamp(MIN_SIZE_MM, across.max(MIN_SIZE_MM));
@@ -603,6 +612,41 @@ impl HeatSettings {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_cooling_suggestion_places_what_fits_side_by_side_and_says_so() {
+        use super::super::view3d_vents::Suggestion;
+        let e = enclosure();
+        let sg = Suggestion::for_test(Kind::FilterFan, 3, 180.0);
+        let specs = sg.specs_for_test(&e);
+        assert_eq!(specs.len(), 3);
+        assert!(
+            specs
+                .iter()
+                .all(|v| v.kind == Kind::FilterFan && v.flow_m3h == 180.0)
+        );
+        assert!(!specs[0].footprint(&e).overlaps(&specs[1].footprint(&e)));
+        assert!(!specs[1].footprint(&e).overlaps(&specs[2].footprint(&e)));
+        // More than the wall holds: only what fits, never overlapping, and the
+        // sentence names the rest.
+        let many = Suggestion::for_test(Kind::FilterFan, 9, 180.0);
+        let placed = many.specs_for_test(&e);
+        assert!(placed.len() < 9 && placed.len() >= 2, "{}", placed.len());
+        for i in 0..placed.len() {
+            for j in i + 1..placed.len() {
+                assert!(!placed[i].footprint(&e).overlaps(&placed[j].footprint(&e)));
+            }
+        }
+        assert!(many.sentence_for_test(&e).contains("add the other"));
+        // The flow given is the one placed (the caller applies the derate).
+        assert_eq!(
+            Suggestion::for_test(Kind::FilterFan, 1, 126.0).specs_for_test(&e)[0].flow_m3h,
+            126.0
+        );
+        // Six on a wide enough wall: all six.
+        let six = Suggestion::for_test(Kind::FilterFan, 6, 100.0);
+        assert!(six.specs_for_test(&e).len() <= 6);
+    }
+
     #[test]
     fn identical_openings_are_reported_as_overlapping_and_apart_ones_are_not() {
         let e = enclosure();
