@@ -7,3 +7,10 @@
 
 2026-10-21 (round 3, branch claude/data-safety-undo-save): `crates/novo-tests/tests/undo_across_save.rs`: seeded random runs (10 seeds x 160 steps) of edits (place, move, remove symbol, device or wire with cascades, add and delete pages, junctions), undo, redo, saves and autosaves on the motor starter: after every save the file equals the drawing (Unix; closed file on all platforms); a crash leaves the last save in the file and the drawing in the recovery file. A second test saves while editing, undoes the whole history, saves (file = start project), redoes everything, saves (file = final drawing). Passed first time, no bug found. Note: the id counter (`next_id`) stays high after undoing everything on purpose (ids are never reused), so the start comparison ignores that one line.
 2026-10-21 (branch claude/data-safety-kill-save-guard): follow-up to the merged kill tests, from Reviewer A's non-blocking notes: the child process is killed when the test scope ends (no orphan if an assert fails between spawn and kill), and the "kills inside a save" floor is 3 of 6 instead of 4.
+
+## Recovery made discoverable (2026-10-22)
+
+- New command `file.recover`, "Recover a damaged project": Ctrl+K (words: recover, repair, corrupt, salvage, broken), File > Open submenu, and a quiet "File damaged? Recover it…" line on the start screen. It asks for the damaged file and opens a recovered copy beside it; the damaged file is only read.
+- The "damaged" warning now names the recovered copy and points at the command.
+- Control mode: `open_file {path, recover?}` answers the next file dialog and starts Open (or the recovery command), so QA can open damaged fixtures.
+- Tests: palette ranking, menu placement, message text, nothing-readable case; QA scenarios 36 (message) and 37 (start screen, Ctrl+K, File menu). Pictures in /mnt/project-files/qa/recover-discoverable/.

@@ -1156,6 +1156,7 @@ impl Ctx<'_> {
                     "file.new",
                     "file.open",
                     "file.open_read_only",
+                    "file.recover",
                     "file.close",
                     "file.quit",
                 ];

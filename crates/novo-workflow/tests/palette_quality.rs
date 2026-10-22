@@ -435,3 +435,22 @@ fn the_single_line_diagram_is_found_by_what_people_call_it() {
         );
     }
 }
+
+#[test]
+fn recovering_a_damaged_project_is_found_by_the_words_people_try() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for word in [
+        "recover",
+        "recover a damaged",
+        "repair",
+        "corrupt",
+        "salvage",
+    ] {
+        let rows = search(&palette, &keymap, word);
+        assert_eq!(
+            rows[0].target,
+            Target::Command("file.recover"),
+            "`{word}` should list the recovery command first"
+        );
+    }
+}

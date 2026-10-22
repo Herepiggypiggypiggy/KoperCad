@@ -1,0 +1,30 @@
+@title Recovering a damaged project can be found
+@area Start
+# The recovery of a damaged file used to be reachable only by opening the file. It is now on the
+# start screen, in File > Open and in Ctrl+K under the words people try.
+shot start-recover
+expect "File damaged? Recover it"
+check_layout
+key ctrl+k
+text recover
+wait 4
+shot palette-recover
+expect "Recover a damaged project"
+key Escape
+wait 4
+key ctrl+k
+text corrupt
+wait 4
+expect "Recover a damaged project"
+shot palette-corrupt
+key Escape
+wait 4
+click_text File #1
+wait 6
+shot menu-file
+move 110 412
+wait 6
+shot menu-open-submenu
+expect "Recover a damaged project"
+key Escape
+check_layout

@@ -332,6 +332,8 @@ mod protection_tests;
 #[cfg(test)]
 mod read_only_tests;
 #[cfg(test)]
+mod recover_tests;
+#[cfg(test)]
 mod reopen_fit_tests;
 #[cfg(test)]
 mod route_all_tests;
@@ -466,6 +468,7 @@ enum Leaving {
     New,
     Open,
     OpenReadOnly,
+    Recover,
     OpenPath(PathBuf),
     Example,
     Practice,
@@ -792,6 +795,7 @@ impl NovoApp {
             Action::NewProject => self.leave_then(ctx, Leaving::New),
             Action::OpenProject => self.leave_then(ctx, Leaving::Open),
             Action::OpenReadOnly => self.leave_then(ctx, Leaving::OpenReadOnly),
+            Action::RecoverProject => self.leave_then(ctx, Leaving::Recover),
             Action::OpenExample => self.leave_then(ctx, Leaving::Example),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
@@ -921,6 +925,17 @@ impl NovoApp {
                     self.open_path_as(&path, true);
                 }
             }
+            Leaving::Recover => {
+                let mut dialog = crate::dialogs::FileDialog::new()
+                    .set_title("Recover a damaged project: pick the damaged file")
+                    .add_filter("KoperCAD project", &[PROJECT_EXTENSION]);
+                if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
+                    dialog = dialog.set_directory(dir);
+                }
+                if let Some(path) = dialog.pick_file() {
+                    self.recover_path(&path);
+                }
+            }
             Leaving::OpenPath(path) => self.open_path(&path),
             Leaving::Example => self.open_example(),
             Leaving::Practice => self.start_practice(),
@@ -1009,6 +1024,31 @@ impl NovoApp {
         }
     }
 
+    /// The Recover command: a file that reads fine opens as itself (nothing is
+    /// written, nothing is called damaged); only a file that fails as corrupt
+    /// goes to salvage. Other failures (not found, locked) report as in Open.
+    fn recover_path(&mut self, path: &Path) {
+        match novo_storage::ProjectFile::read(path) {
+            Err(novo_storage::StorageError::Corrupt { .. }) => self.open_salvaged(path),
+            Err(_) => self.open_path(path),
+            Ok(_) => {
+                self.open_path(path);
+                if self.project_path.as_deref() == Some(path) {
+                    let name = path.file_name().map_or_else(
+                        || path.display().to_string(),
+                        |n| n.to_string_lossy().into_owned(),
+                    );
+                    self.message(
+                        Level::Info,
+                        format!(
+                            "{name} is not damaged, so it was opened as it is. No copy was written."
+                        ),
+                    );
+                }
+            }
+        }
+    }
+
     /// Opens the damaged project at `path` as a recovered copy, and says
     /// plainly what was and was not read back. The damaged file is only read.
     fn open_salvaged(&mut self, path: &Path) {
@@ -1024,8 +1064,12 @@ impl NovoApp {
                     self.raise(
                         Level::Warning,
                         format!(
-                            "{name} is damaged. {}. This is a recovered copy; {name} itself was not changed.",
-                            salvaged.summary()
+                            "{name} is damaged. {}. This is a recovered copy, written beside the original as {}; {name} itself was not changed. Ctrl+K, \"Recover a damaged project\" does the same for any file.",
+                            salvaged.summary(),
+                            copy.file_name().map_or_else(
+                                || copy.display().to_string(),
+                                |n| n.to_string_lossy().into_owned()
+                            )
                         ),
                         Some(copy),
                     );
@@ -2109,6 +2153,25 @@ impl NovoApp {
                 }
                 for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
                     self.action_button(ui, a, picked);
+                }
+                // Quiet, not a headline: most people never need it, and the ones
+                // who do look for the word "recover".
+                let recover = ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new("File damaged? Recover it…")
+                                .underline()
+                                .color(ui.visuals().hyperlink_color),
+                        )
+                        .frame(false),
+                    )
+                    .on_hover_text(
+                        "Reads what can be read from a damaged project and opens it as a \
+                         recovered copy beside it. The damaged file is not changed.",
+                    );
+                if recover.clicked() {
+                    let ctx = ui.ctx().clone();
+                    self.leave_then(&ctx, Leaving::Recover);
                 }
                 // Ways to learn, named as such and each with what it is, so the
                 // two are not read as copies of each other.
