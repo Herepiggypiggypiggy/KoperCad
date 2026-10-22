@@ -194,9 +194,17 @@ fn a_problem_keeps_its_photos_on_the_punch_item_and_in_the_project() {
     assert!(!cab_tag.is_empty());
     let picture = dir.path().join("IMG_0002.png");
     std::fs::write(&picture, b"a picture of the hole").unwrap();
-    assert_eq!(d.app.keep_problem_photos(id, &[picture.clone()]), 1);
+    assert_eq!(
+        d.app
+            .keep_problem_photos(id, std::slice::from_ref(&picture)),
+        1
+    );
     // the same picture again is not a second photo
-    assert_eq!(d.app.keep_problem_photos(id, &[picture]), 0);
+    assert_eq!(
+        d.app
+            .keep_problem_photos(id, std::slice::from_ref(&picture)),
+        0
+    );
     let json = d.app.backend.commissioning_json().unwrap();
     let store = novo_commissioning::CommissioningStore::from_json(&json).unwrap();
     assert_eq!(store.punch(id).unwrap().photos.len(), 1);
