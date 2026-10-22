@@ -243,6 +243,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("heat.toggle", under("View", "Layers")),
     ("heat.airflow", under("View", "Layers")),
     ("heat.contours", under("View", "Layers")),
+    ("heat.vents", under("View", "Layers")),
     // Lessons live with Help
     ("help.learn", at("Help")),
     ("ai.assistant", at("Help")),

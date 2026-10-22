@@ -460,6 +460,8 @@ pub(super) struct HeatSettings {
     /// What the project holds for the shown enclosure, as last read or
     /// written (see `heat_openings_store`).
     pub(super) stored: Option<(novo_core::StructureId, String)>,
+    /// A command (Ctrl+K) asked for this preset to be added; the panel does it.
+    pub(super) requested: Option<usize>,
     undo: Vec<Vec<VentSpec>>,
     redo: Vec<Vec<VentSpec>>,
 }
@@ -473,6 +475,7 @@ impl Default for HeatSettings {
             selected: None,
             editing: false,
             stored: None,
+            requested: None,
             undo: Vec::new(),
             redo: Vec::new(),
         }

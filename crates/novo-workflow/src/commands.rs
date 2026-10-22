@@ -1743,6 +1743,36 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "heat.vents",
+        "Vents and fans",
+        "View",
+        &[
+            "vent", "vents", "fan", "grille", "opening", "airflow", "cooling", "cabinet",
+        ],
+        Needs::Project,
+    ),
+    cmd(
+        "heat.add_filter_fan",
+        "Add filter fan",
+        "View",
+        &["vent", "fan", "filter", "opening", "door", "cooling"],
+        Needs::Project,
+    ),
+    cmd(
+        "heat.add_grille",
+        "Add grille",
+        "View",
+        &["vent", "grille", "opening", "louvre", "cooling"],
+        Needs::Project,
+    ),
+    cmd(
+        "heat.add_exhaust_fan",
+        "Add exhaust fan",
+        "View",
+        &["vent", "fan", "exhaust", "opening", "top", "cooling"],
+        Needs::Project,
+    ),
+    cmd(
         "heat.contours",
         "Show or hide heat contours",
         "View",

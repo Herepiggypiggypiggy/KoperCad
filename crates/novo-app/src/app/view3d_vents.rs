@@ -65,6 +65,12 @@ fn body(
                 .color(pal.warning),
         );
     }
+    if let Some(k) = settings.requested.take()
+        && !running
+        && let Some(p) = VentSpec::presets(e).get(k)
+    {
+        settings.add(p.spec);
+    }
     ui.add_enabled_ui(!running, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.menu_button("Add opening", |ui| {

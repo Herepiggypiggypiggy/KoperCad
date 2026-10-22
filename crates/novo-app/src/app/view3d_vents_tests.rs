@@ -245,3 +245,26 @@ fn dragging_a_label_slides_the_opening_and_is_one_undo_step() {
     let back = d.app.cabinet.heat.settings.vents[0];
     assert_eq!((back.u_mm, back.v_mm), (before.u_mm, before.v_mm));
 }
+
+/// The Ctrl+K commands open the panel in the 3D view and add the opening.
+#[test]
+fn the_vent_commands_open_the_panel_and_add_the_opening() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let size = egui::vec2(1366.0, 768.0);
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "heat.add_filter_fan", None);
+    for _ in 0..4 {
+        d.frame_sized(size, Vec::new());
+    }
+    assert!(d.app.view3d.controls.heat_panel, "the panel is open");
+    let vents = &d.app.cabinet.heat.settings.vents;
+    assert_eq!(vents.len(), 1);
+    assert_eq!(vents[0].kind, super::heat_settings::Kind::FilterFan);
+    d.app.run_command(&ctx, "heat.add_exhaust_fan", None);
+    d.app.run_command(&ctx, "heat.vents", None);
+    for _ in 0..4 {
+        d.frame_sized(size, Vec::new());
+    }
+    assert_eq!(d.app.cabinet.heat.settings.vents.len(), 2);
+}
