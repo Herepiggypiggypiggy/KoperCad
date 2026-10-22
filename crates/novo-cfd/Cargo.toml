@@ -16,6 +16,8 @@ thiserror.workspace = true
 demo = []
 
 [dev-dependencies]
+novo-core.workspace = true
+novo-storage.workspace = true
 novo-cfd = { path = ".", features = ["demo"] }
 
 [lints]

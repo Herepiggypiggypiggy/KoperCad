@@ -1824,18 +1824,43 @@ fn legend(
                     Source::Solved(sol) => {
                         let p = &sol.snapshot.progress;
                         let validated = sol.snapshot.accuracy.validated;
+                        let conv = novo_cfd::large::convergence(&sol.snapshot);
                         ui.label(small(
                             &status_label(p, validated),
                             crate::theme::ui_palette().text_primary,
-                        ));
+                        ))
+                        .on_hover_text(conv.lines.join("\n"));
+                        // A large cabinet runs as a reduced model: a fold-away line
+                        // next to the level keeps the legend short.
+                        if let Some(r) = novo_cfd::large::reduced_summary(&sol.snapshot) {
+                            egui::CollapsingHeader::new(small(
+                                "Reduced model",
+                                crate::theme::ui_palette().text_secondary,
+                            ))
+                            .default_open(false)
+                            .show(ui, |ui| {
+                                ui.label(small(r, crate::theme::ui_palette().text_secondary));
+                                ui.label(small(
+                                    "Cold devices are lumped into row blocks and thin ducts and \
+                                     rails are widened to porous strips so a big cabinet fits \
+                                     the cell budget. More under Notes on this run.",
+                                    crate::theme::ui_palette().text_secondary,
+                                ));
+                            });
+                        }
                         if stale {
                             ui.label(small(
                                 "Out of date: the layout changed since this run.",
                                 t::WARNING,
                             ));
                         }
-                        if !p.converged {
-                            ui.label(small("Not converged.", t::WARNING));
+                        // Not converged, or "steady" with a poor heat balance or
+                        // drifting temperatures: one line here, the numbers on hover.
+                        if conv.verdict != novo_cfd::large::Verdict::Converged
+                            || conv.lines.len() > 1
+                        {
+                            ui.label(small(&conv.headline, crate::theme::ui_palette().warning))
+                                .on_hover_text(conv.lines.join("\n"));
                         }
                         let a = &sol.snapshot.accuracy;
                         // The status line above already names the level.

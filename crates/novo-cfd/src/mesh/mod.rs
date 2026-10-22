@@ -23,7 +23,7 @@ mod regions;
 pub use axis::Spacing;
 pub use classify::{BodyResolution, CellClass, Mesh, MixedCell};
 pub use preview::MeshPreview;
-pub use regions::{Region, domain_mm, regions, regions_with};
+pub use regions::{Region, domain_mm, opening_spans, regions, regions_with};
 
 use novo_thermal::Scenario;
 

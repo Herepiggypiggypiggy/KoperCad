@@ -112,3 +112,19 @@ Each becomes a `validation_*` test when its lane lands; the sign-off PR for a la
 > estimates and carry the uncertainty of the input loss data and boundary conditions.
 
 Model limits are those of design section 7.
+
+## Reduced model for large cabinets (lane CFD-LARGE)
+
+A cabinet whose full grid is over 1.5 times the level budget runs as a reduced model (`novo-cfd/src/large`, see its module doc). Model against model, not against a measurement; `ENCLOSURE_VALIDATED` stays false.
+
+| Case | Quantity | Result |
+| --- | --- | --- |
+| Drive 60 W and 3 cold devices side by side, reduced (5.8 k cells) against full (9.4 k cells), `tests/large.rs` | housing rise of the drive / air rise round it | -0.2 % / -1.0 % (test limits 5 % and 15 %) |
+| Same, reduced at 3.7 k cells | air rise round the drive | -30 % (the air next to a hot device depends on the grid; at 10.5 k cells it is +10 %) |
+| Same, cold devices | air round them | 0.7 to 1.8 K above the full run (test limit 3 K) |
+| CV-200 (115 devices, 460 W, planning losses), Coarse / Medium / Fine | cells, time (4 cores), converged | 6.5 k, 36 s / 19.6 k, 44 s / 47.6 k, 6 min; heat imbalance 0.0 / 0.3 / 0.1 % |
+| Same | drive housing temperature / margin to its limit | 89 / 95 / 86 C and -7.2 / -7.9 / -8.0 K (the 2D model gives about -15 K) |
+| Full scenario of the same cabinet at Coarse | cells, result | 1.48 M, not converged in 180 s |
+| Example cabinet (7 devices) at Coarse | cells | 199 k full, 12.7 k reduced |
+
+Read with care: the reduced grid is a lumped, shifted copy of the cabinet. Devices inside a lumped block show the block's air temperature and a housing temperature estimated from their own loss and the block's film coefficient, with wide bands. Reproduce: `cargo run --release -p novo-cfd --example large_cabinet -- FILE.novo coarse|medium|fine solve`.

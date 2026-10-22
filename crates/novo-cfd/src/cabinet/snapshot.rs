@@ -389,7 +389,7 @@ impl<'a> View<'a> {
 }
 
 /// Margin and status from the bands, the rule of `novo-thermal`.
-fn apply_margins(d: &mut DeviceResult) {
+pub(crate) fn apply_margins(d: &mut DeviceResult) {
     let margin = |amb: f64, surf: f64| -> Option<f64> {
         let a = d.rated_max_ambient_c.map(|m| m - amb);
         let b = d.rated_max_surface_c.map(|m| m - surf);
