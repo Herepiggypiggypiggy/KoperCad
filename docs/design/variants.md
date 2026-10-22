@@ -71,7 +71,7 @@ counted and named as 0 W); the Cabinet workspace and Commissioning mode do not a
 On the drawing, what the choice leaves out stays visible but veiled with a dashed outline (View > Layers, "Ghost what
 the options leave out"; hover says "Left out: only with Cooling fan"), so switching an option back is a look, not a
 search. Only straight wires are veiled; a routed wire's box would cover active neighbours. The device list, wire list,
-bill of materials, cut list and contents get an *Option* column when some row is tied to an option.
+bill of materials, cut list and contents get an *Option* column in the Reports view when some row is tied to an option; the PDF and the Excel "Export all" do not carry it yet.
 
 ## Expression language (`novo_workflow::expr`)
 

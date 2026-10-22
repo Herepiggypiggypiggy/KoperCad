@@ -491,8 +491,6 @@ impl NovoApp {
     }
 }
 
-/// The option an argument starts with (its id or its label, in any case) and
-/// the rest of the argument.
 /// Reports whose rows say which option they need.
 const OPTION_REPORTS: &[&str] = &["bom", "devices", "wires", "cutlist", "toc"];
 
@@ -602,6 +600,8 @@ pub(crate) fn with_option_column(project: &Project, output: &mut ReportOutput) {
     }
 }
 
+/// The option an argument starts with (its id or its label, in any case) and
+/// the rest of the argument.
 fn find_option<'a>(defs: &'a [OptionDef], argument: &'a str) -> Option<(&'a OptionDef, &'a str)> {
     let lower = argument.to_lowercase();
     let mut best: Option<(&OptionDef, usize)> = None;
