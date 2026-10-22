@@ -116,6 +116,7 @@ mod learn;
 mod learn_demo;
 mod learn_labels;
 mod learn_solve;
+mod learn_suite;
 mod learn_ui;
 mod link;
 mod live;
