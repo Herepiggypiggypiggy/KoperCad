@@ -292,6 +292,13 @@ pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> Stri
     }
 }
 
+/// "TAG: problem", the problem's first letter lower case after the colon.
+fn after_tag(tag: &str, line: &str) -> String {
+    let mut chars = line.chars();
+    let first = chars.next().map(|c| c.to_lowercase().to_string());
+    format!("{tag}: {}{}", first.unwrap_or_default(), chars.as_str())
+}
+
 /// What is wrong with a placed device, in words: the hover text of its mark
 /// and the table's Problems column.
 pub(super) fn problem_lines(
@@ -349,7 +356,7 @@ pub(super) fn problem_lines(
     for &(device, _, off) in &report.off_centre {
         if device == id {
             lines.push(format!(
-                "Sits {:.0} mm off the middle of its rail: run Place all or drag it onto the rail",
+                "Sits {:.0} mm off the middle of its rail: run Place all (it moves every device) or drag it onto the rail",
                 off.abs()
             ));
         }
@@ -377,7 +384,7 @@ pub(super) fn problem_summary(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> S
                 .into_iter()
                 .map(move |l| (p.id, l))
         })
-        .map(|(id, l)| format!("{}: {l}", tag_of(id)))
+        .map(|(id, l)| after_tag(&tag_of(id), &l))
         .collect();
     // A device problem can be selected from the list; a panel-level one cannot.
     let hint = if lines.is_empty() {
@@ -1402,7 +1409,7 @@ impl NovoApp {
                                 continue;
                             }
                             if ui
-                                .button(format!("{}: {}", tag_of(p.id), lines.join("; ")))
+                                .button(after_tag(&tag_of(p.id), &lines.join("; ")))
                                 .clicked()
                             {
                                 ask = Some(Ask::Select(p.id));

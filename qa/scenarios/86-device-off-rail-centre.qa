@@ -12,3 +12,20 @@ expect "off the middle of its rail"
 expect "run Place all"
 shot problems-named
 check_layout
+key Escape
+wait 3
+click 627 190
+wait 10
+scroll 1190 500 -900
+wait 5
+expect "off the middle of its rail"
+shot inspector-line
+check_layout
+key ctrl+k
+wait 3
+text issues
+wait 4
+key Enter
+wait 10
+expect "off the middle of its DIN rail"
+shot check-list-row

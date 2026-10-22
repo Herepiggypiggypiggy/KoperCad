@@ -203,9 +203,9 @@ fn the_table_face_toggles_and_problems_are_in_words() {
     assert!(c.iter().any(|t| t.contains("guess")));
     // The pill's hover text names every problem, with the device tag.
     let hover = super::cabinet::problem_summary(&l, &name);
-    assert!(hover.contains("-K1: Overlaps -K2"), "{hover}");
+    assert!(hover.contains("-K1: overlaps -K2"), "{hover}");
     assert!(
-        hover.contains("-K3: Reaches past the usable plate"),
+        hover.contains("-K3: reaches past the usable plate"),
         "{hover}"
     );
     assert!(
@@ -257,11 +257,13 @@ fn a_device_off_the_middle_of_its_rail_says_so_and_counts_as_a_problem() {
     let lines = super::cabinet::problem_lines(&l, 2, &name);
     assert_eq!(
         lines,
-        vec!["Sits 45 mm off the middle of its rail: run Place all or drag it onto the rail"]
+        vec![
+            "Sits 45 mm off the middle of its rail: run Place all (it moves every device) or drag it onto the rail"
+        ]
     );
     assert!(!l.report().is_clean());
     let hover = super::cabinet::problem_summary(&l, &name);
-    assert!(hover.contains("-K2: Sits 45 mm off the middle"), "{hover}");
+    assert!(hover.contains("-K2: sits 45 mm off the middle"), "{hover}");
 }
 
 #[test]

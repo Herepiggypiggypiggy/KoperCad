@@ -231,7 +231,7 @@ pub(crate) fn layout(cx: &Context<'_>, out: &mut Vec<Problem>) {
                 vec![AnyId::Device(DeviceId::from(device))],
                 format!(
                     "{} sits {} mm off the middle of its DIN rail on the plate of {}: \
-                     run Place all or drag it onto the rail",
+                     run Place all (it moves every device) or drag it onto the rail",
                     tag(device),
                     off.abs().round(),
                     structure.tag
