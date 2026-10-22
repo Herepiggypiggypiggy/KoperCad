@@ -132,7 +132,12 @@ impl HeatState {
             format!("{:?}", self.settings.vents).hash(&mut h);
             h.finish()
         };
-        let key = (structure, project.revision(), ambient.to_bits(), vents);
+        let key = (
+            structure,
+            project.revision() ^ (self.machine << 40),
+            ambient.to_bits(),
+            vents,
+        );
         if self.live.current.as_ref().map(|c| c.key) != Some(key) {
             let wires = super::heat_wires::wire_heat(project, structure);
             let options = BridgeOptions {

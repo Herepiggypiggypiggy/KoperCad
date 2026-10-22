@@ -62,6 +62,8 @@ pub(super) struct LayoutSearch {
     pub(super) found: Option<Found>,
     notice: Option<String>,
     open: bool,
+    /// The option choice leaves devices out (set each frame by the view).
+    pub(super) left_out: bool,
 }
 
 /// What the window asks the app to do.
@@ -248,6 +250,7 @@ impl LayoutSearch {
             .default_width(WIDTH)
             .show(ctx, |ui| {
                 ui.set_max_width(WIDTH);
+                super::heat_cooling::left_out_line(ui, self.left_out);
                 if let Some(run) = &self.run {
                     ui.horizontal(|ui| {
                         ui.add(egui::Spinner::new());

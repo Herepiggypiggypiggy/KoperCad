@@ -66,7 +66,15 @@ with it, on every page.
 
 Limits, said plainly: cost is not shown because project parts carry no prices; the heat figure is the sum of the
 loss figures of the parts (a model of what the devices put in, not a temperature; devices without a figure are
-counted and named as 0 W); the Cabinet workspace and Commissioning mode do not apply the choice yet.
+counted and named as 0 W).
+
+Cabinet and Commissioning follow the choice too. The Cabinet plate stays the full working project, so the spot of
+optional equipment stays reserved: devices the choice leaves out are veiled with a dashed outline (hover says "Left
+out: only with Cooling fan") and put no heat in the Heat view, the cooling advice or the cooler layout. Those three
+treat left-out devices as absent (their results say so), so a layout they propose can overlap a reserved spot; check
+it before the option goes on. Commissioning lists, counts and reports only what the choice includes (the project name in the report
+carries the choice); results already entered for left-out items stay in the file. The title block's "Sheet 1 of 3"
+counts the pages of the working project, left-out pages included.
 
 On the drawing, what the choice leaves out stays visible but veiled with a dashed outline (View > Layers, "Ghost what
 the options leave out"; hover says "Left out: only with Cooling fan"), so switching an option back is a look, not a

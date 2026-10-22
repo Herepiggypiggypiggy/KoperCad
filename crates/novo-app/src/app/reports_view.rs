@@ -222,9 +222,13 @@ impl NovoApp {
         // Which machine these lists describe.
         let mut change_options = false;
         if let Some(info) = self.machine_info() {
+            let names = self.left_out_names();
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(format!("Machine: {}", info.summary)).strong());
-                ui.weak(info.left_out());
+                let left_out = ui.weak(info.left_out());
+                if !names.is_empty() {
+                    left_out.on_hover_text(names);
+                }
                 if ui
                     .small_button("Change options")
                     .on_hover_text("Open Project options and variants")

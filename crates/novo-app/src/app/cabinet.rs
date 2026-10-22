@@ -9,7 +9,7 @@ use novo_canvas::cabinet::{
 };
 use novo_canvas::widget::CanvasView;
 use novo_canvas::{Vec2, vec2};
-use novo_core::{Command, Device, DeviceId, DeviceTag, MountingPlate, StructureId};
+use novo_core::{AnyId, Command, Device, DeviceId, DeviceTag, MountingPlate, Project, StructureId};
 use novo_layout::model::{
     apply_plan, candidates, load, place_device, rotate_device, set_enclosure, set_plate,
     unplace_device,
@@ -596,10 +596,17 @@ impl NovoApp {
         // The open redlines are outlined on the plate, so their store has to
         // be there even when Commissioning has not been visited.
         self.load_commissioning();
+        // The plate is the full working project, so the spot of equipment an
+        // option leaves out stays reserved (veiled below). Heat, the part
+        // that counts what is in the machine, follows the choice.
+        let choice = self.machine_variant();
+        let generation = self.machine_generation();
+        let left_out = self.machine_inactive();
         let Some(doc) = self.backend.document() else {
             return;
         };
         let project = doc.project();
+        let heat_project: &Project = choice.as_deref().unwrap_or(project);
 
         // The panels: every location with pages, plus every enclosure.
         let mut locations: Vec<DeviceTag> =
@@ -1702,7 +1709,12 @@ impl NovoApp {
                 // at a narrow window the Heat toggle sits in More, unseen.
                 self.cabinet.heat.poll(ui.ctx());
                 let heat_input = self.cabinet.heat.on.then(|| {
-                    let items = super::heat::items_of(project, &shown, &tag_of);
+                    // What the choice leaves out puts no heat in.
+                    let mut in_machine = shown.clone();
+                    in_machine
+                        .placements
+                        .retain(|p| !left_out.contains(&AnyId::Device(DeviceId::from(p.id))));
+                    let items = super::heat::items_of(heat_project, &in_machine, &tag_of);
                     super::heat::Input {
                         plate: (shown.plate.width, shown.plate.height),
                         ambient: self.sizing.request().ambient_max,
@@ -1714,8 +1726,10 @@ impl NovoApp {
                 if let (Some(s), true) = (structure, heat_input.is_some()) {
                     let ambient = self.sizing.request().ambient_max;
                     let dragging = self.cabinet.drag.is_some();
+                    self.cabinet.heat.machine = generation;
+                    self.cabinet.heat.set_left_out(!left_out.is_empty());
                     self.cabinet.heat.sync_live(
-                        project,
+                        heat_project,
                         s,
                         ambient,
                         dragging,
@@ -1726,7 +1740,7 @@ impl NovoApp {
                 if self.cabinet.heat.take_request() {
                     match (structure, &heat_input) {
                         (Some(s), Some(input)) => {
-                            super::heat::start_run(&mut self.cabinet.heat, project, s, input)
+                            super::heat::start_run(&mut self.cabinet.heat, heat_project, s, input)
                         }
                         _ => self
                             .cabinet
@@ -1740,7 +1754,8 @@ impl NovoApp {
                         Some(s) => {
                             let ambient = self.sizing.request().ambient_max;
                             let h = &mut self.cabinet.heat;
-                            h.advice.start(project, s, ambient, &h.settings, &tag_of);
+                            h.advice
+                                .start(heat_project, s, ambient, &h.settings, &tag_of);
                         }
                         None => self.cabinet.heat.fail(
                             "Open an enclosure with a mounting plate to ask for cooling advice"
@@ -1756,7 +1771,7 @@ impl NovoApp {
                             self.cabinet
                                 .heat
                                 .layout
-                                .start(project, s, scenario, &tag_of);
+                                .start(heat_project, s, scenario, &tag_of);
                         }
                         None => self.cabinet.heat.fail(
                             "Open an enclosure with a mounting plate to search for a cooler layout"
@@ -1900,6 +1915,22 @@ impl NovoApp {
                         }
                     }
                 }
+                let veiled = super::machine::left_out_boxes(project, &left_out, &shown);
+                // Said in the device's own hover, so only one tooltip shows.
+                let mut left_out_note: Option<String> = None;
+                if !veiled.is_empty() {
+                    let rect = out.response.rect;
+                    let hovered = super::machine::draw_left_out(
+                        &ui.painter_at(rect),
+                        rect,
+                        &self.cabinet.view.viewport,
+                        &veiled,
+                        ui.ctx()
+                            .pointer_hover_pos()
+                            .filter(|_| out.response.hovered()),
+                    );
+                    left_out_note = hovered;
+                }
                 if let Some(s) = structure {
                     let rect = out.response.rect;
                     let zoom = f64::from(self.cabinet.view.viewport.zoom.max(0.01));
@@ -2016,6 +2047,10 @@ impl NovoApp {
                     let lines = problem_lines(&shown, id, &tag_of);
                     out.response.clone().on_hover_ui_at_pointer(|ui| {
                         ui.strong(tag_of(id));
+                        if let Some(note) = &left_out_note {
+                            ui.label(note);
+                            return;
+                        }
                         if lines.is_empty() {
                             ui.weak("No problems");
                         }

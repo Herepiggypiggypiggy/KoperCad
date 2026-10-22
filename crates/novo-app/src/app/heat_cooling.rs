@@ -40,6 +40,20 @@ pub(super) struct CoolingSettings {
     mine: Option<Vec<Product>>,
     /// What the last import or load said.
     pub notice: Option<String>,
+    /// The option choice leaves devices out of the cabinet: the result says
+    /// so (set by the Cabinet and the 3D view each frame).
+    pub left_out: bool,
+}
+
+/// The line under a heat result when the option choice leaves devices out.
+pub(super) fn left_out_line(ui: &mut egui::Ui, left_out: bool) {
+    if left_out {
+        ui.label(
+            egui::RichText::new("Counts only what the option choice includes; the veiled spots are kept free but not checked.")
+                .small()
+                .color(crate::theme::ui_palette().text_secondary),
+        );
+    }
 }
 
 impl CoolingSettings {
@@ -239,6 +253,7 @@ pub(super) fn show(
 ) {
     let pal = crate::theme::ui_palette();
     let small = |text: &str, colour: egui::Color32| egui::RichText::new(text).small().color(colour);
+    left_out_line(ui, settings.left_out);
     let summary = fold_summary(sol, settings);
     let header = egui::CollapsingHeader::new("Cooling selection")
         .id_salt("heat_cooling")

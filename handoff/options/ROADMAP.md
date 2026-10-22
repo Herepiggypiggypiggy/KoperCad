@@ -12,7 +12,7 @@ Scope: options as a switch on the drawing. Engine (`novo_workflow::options`) and
 - QA fixture `qa/fixtures/machine-options.novo` + scenario `qa/scenarios/43-machine-options.qa`.
 
 ## Next
-- Cabinet workspace and Commissioning mode apply the choice (today they edit/read the full working project).
+- Done 2026-10-22: Cabinet plate veils left-out devices, heat follows the choice; Commissioning follows the choice.
 - Done 2026-10-22: ghost objects of an off option on the schematic canvas; Option column on device list, wire list, BOM, cut list, contents.
 - Cost difference once parts carry prices.
 - Straight wires only are veiled (a routed wire's box would veil active neighbours); per-segment ghosts would fix it.

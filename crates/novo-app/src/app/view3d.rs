@@ -321,6 +321,7 @@ impl NovoApp {
         // the Cabinet keeps editing the full working project.
         let choice = self.machine_variant();
         let generation = self.machine_generation();
+        let any_left_out = !self.machine_inactive().is_empty();
         let Some(document) = self.backend.document() else {
             return;
         };
@@ -482,6 +483,8 @@ impl NovoApp {
             if heat.solution().is_some() || heat.running() || heat.on {
                 let moving = !mode.mv.landings().is_empty();
                 let now = ui.input(|i| i.time);
+                heat.machine = generation;
+                heat.set_left_out(any_left_out);
                 heat.sync_live(project, id, ambient, moving, now, ui.ctx());
             }
         }
