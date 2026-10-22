@@ -139,11 +139,11 @@ title_nl = "Zet de geplaatste symbolen om"
 # twin (`iec/coils/contactor` -> `nfpa/coils/contactor`); tags, pins, positions,
 # wires, parts and roles are untouched; the rule becomes "nfpa".
 text = """
-In the same window, press {ui:settings.standard.switch}.
+In the Project settings window (reopen it with {key:view.command_palette} and **standard** if it closed), press {ui:settings.standard.switch}.
 Every symbol on every page gets the NFPA drawing of the same device.
 """
 text_nl = """
-Druk in hetzelfde venster op {ui:settings.standard.switch}.
+Druk in het venster Project settings (open het opnieuw met {key:view.command_palette} en **standard** als het dicht ging) op {ui:settings.standard.switch}.
 Elk symbool op elke pagina krijgt de NFPA-tekening van hetzelfde apparaat.
 """
 point = { ui = "settings.standard.switch" }
