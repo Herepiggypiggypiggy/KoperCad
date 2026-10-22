@@ -273,3 +273,29 @@ fn salvage_says_when_only_the_project_information_was_lost() {
     saved(&path, 1);
     assert!(!salvage(&path).unwrap().info_lost);
 }
+
+#[test]
+fn a_damaged_legacy_novo_file_gets_a_recovered_copy_with_the_same_extension() {
+    let (dir, path) = temp();
+    saved(&path, 60);
+    let bytes = fs::read(&path).unwrap();
+    fs::write(&path, &bytes[..bytes.len() * 6 / 10]).unwrap();
+    let salvaged = salvage(&path).unwrap();
+    assert_eq!(salvaged.copy, dir.path().join("plant.recovered.novo"));
+
+    let kc = dir.path().join("mill.kopercad");
+    saved(&kc, 60);
+    let bytes = fs::read(&kc).unwrap();
+    fs::write(&kc, &bytes[..bytes.len() * 6 / 10]).unwrap();
+    let salvaged = salvage(&kc).unwrap();
+    assert_eq!(salvaged.copy, dir.path().join("mill.recovered.kopercad"));
+}
+
+#[test]
+fn both_extensions_are_project_extensions() {
+    use std::ffi::OsStr;
+    assert_eq!(novo_storage::PROJECT_EXTENSION, "kopercad");
+    assert!(novo_storage::is_project_extension(OsStr::new("kopercad")));
+    assert!(novo_storage::is_project_extension(OsStr::new("NOVO")));
+    assert!(!novo_storage::is_project_extension(OsStr::new("pdf")));
+}

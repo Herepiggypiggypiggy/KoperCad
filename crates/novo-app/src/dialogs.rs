@@ -56,6 +56,7 @@ fn harness(
     title: &str,
     dir: &Option<PathBuf>,
     name: &Option<String>,
+    filters: &[String],
 ) -> Option<Vec<PathBuf>> {
     let mut guard = HARNESS.lock().ok()?;
     let Some(h) = guard.as_mut() else {
@@ -68,6 +69,9 @@ fn harness(
     }
     if let Some(d) = dir {
         line.push_str(&format!(" in {}", d.display()));
+    }
+    if !filters.is_empty() {
+        line.push_str(&format!(" filter {}", filters.join(", ")));
     }
     line.push_str(match &answer {
         Some(a) if !a.is_empty() => " -> answered",
@@ -83,6 +87,7 @@ pub struct FileDialog {
     title: String,
     dir: Option<PathBuf>,
     name: Option<String>,
+    filters: Vec<String>,
 }
 
 impl FileDialog {
@@ -92,6 +97,7 @@ impl FileDialog {
             title: String::new(),
             dir: None,
             name: None,
+            filters: Vec::new(),
         }
     }
 
@@ -103,6 +109,12 @@ impl FileDialog {
     }
 
     pub fn add_filter(mut self, name: impl Into<String>, extensions: &[impl ToString]) -> Self {
+        let name = name.into();
+        let list: Vec<String> = extensions
+            .iter()
+            .map(|e| format!(".{}", e.to_string()))
+            .collect();
+        self.filters.push(format!("{name} ({})", list.join(" ")));
         self.inner = self.inner.add_filter(name, extensions);
         self
     }
@@ -121,28 +133,52 @@ impl FileDialog {
     }
 
     pub fn pick_file(self) -> Option<PathBuf> {
-        match harness("open file", &self.title, &self.dir, &self.name) {
+        match harness(
+            "open file",
+            &self.title,
+            &self.dir,
+            &self.name,
+            &self.filters,
+        ) {
             Some(a) => a.into_iter().next(),
             None => self.inner.pick_file(),
         }
     }
 
     pub fn pick_files(self) -> Option<Vec<PathBuf>> {
-        match harness("open files", &self.title, &self.dir, &self.name) {
+        match harness(
+            "open files",
+            &self.title,
+            &self.dir,
+            &self.name,
+            &self.filters,
+        ) {
             Some(a) => Some(a).filter(|a| !a.is_empty()),
             None => self.inner.pick_files(),
         }
     }
 
     pub fn pick_folder(self) -> Option<PathBuf> {
-        match harness("choose folder", &self.title, &self.dir, &self.name) {
+        match harness(
+            "choose folder",
+            &self.title,
+            &self.dir,
+            &self.name,
+            &self.filters,
+        ) {
             Some(a) => a.into_iter().next(),
             None => self.inner.pick_folder(),
         }
     }
 
     pub fn save_file(self) -> Option<PathBuf> {
-        match harness("save file", &self.title, &self.dir, &self.name) {
+        match harness(
+            "save file",
+            &self.title,
+            &self.dir,
+            &self.name,
+            &self.filters,
+        ) {
             Some(a) => a.into_iter().next(),
             None => self.inner.save_file(),
         }

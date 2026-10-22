@@ -378,7 +378,7 @@ use pages::PageView;
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
-use crate::{APP_NAME, PROJECT_EXTENSION};
+use crate::{APP_NAME, PROJECT_EXTENSION, PROJECT_EXTENSIONS};
 use novo_theme::widgets::primary_button;
 pub(crate) use revisions::index_rule;
 use workbench::Workbench;
@@ -918,7 +918,7 @@ impl NovoApp {
             Leaving::Open => {
                 let mut dialog = crate::dialogs::FileDialog::new()
                     .set_title("Open project")
-                    .add_filter("KoperCAD project", &[PROJECT_EXTENSION]);
+                    .add_filter("KoperCAD project", &PROJECT_EXTENSIONS);
                 if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
                     dialog = dialog.set_directory(dir);
                 }
@@ -929,7 +929,7 @@ impl NovoApp {
             Leaving::OpenReadOnly => {
                 let mut dialog = crate::dialogs::FileDialog::new()
                     .set_title("Open project read-only")
-                    .add_filter("KoperCAD project", &[PROJECT_EXTENSION]);
+                    .add_filter("KoperCAD project", &PROJECT_EXTENSIONS);
                 if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
                     dialog = dialog.set_directory(dir);
                 }
@@ -940,7 +940,7 @@ impl NovoApp {
             Leaving::Recover => {
                 let mut dialog = crate::dialogs::FileDialog::new()
                     .set_title("Recover a damaged project: pick the damaged file")
-                    .add_filter("KoperCAD project", &[PROJECT_EXTENSION]);
+                    .add_filter("KoperCAD project", &PROJECT_EXTENSIONS);
                 if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
                     dialog = dialog.set_directory(dir);
                 }
@@ -2568,7 +2568,7 @@ fn projects_dir() -> Option<PathBuf> {
         .map(|docs| crate::migrate::projects_dir_in(&docs))
 }
 
-/// `<name>.novo`, with the characters Windows forbids in file names replaced.
+/// `<name>.kopercad`, with the characters Windows forbids in file names replaced.
 fn project_file_name(name: &str) -> String {
     let name: String = name
         .trim()
@@ -2770,9 +2770,9 @@ mod tests {
 
     #[test]
     fn project_file_names_are_safe_on_windows() {
-        assert_eq!(project_file_name("Pump station"), "Pump station.novo");
-        assert_eq!(project_file_name("A/B: C?"), "A_B_ C_.novo");
-        assert_eq!(project_file_name(" . "), "Untitled.novo");
+        assert_eq!(project_file_name("Pump station"), "Pump station.kopercad");
+        assert_eq!(project_file_name("A/B: C?"), "A_B_ C_.kopercad");
+        assert_eq!(project_file_name(" . "), "Untitled.kopercad");
     }
 
     #[test]
@@ -2929,6 +2929,30 @@ mod tests {
         let mut reopened = storage_app();
         reopened.open_path(&path);
         assert_eq!(page_count(&reopened), 2, "{:?}", reopened.messages());
+    }
+
+    #[test]
+    fn an_old_novo_file_opens_and_save_as_offers_kopercad() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("plant.novo");
+        let mut app = storage_app();
+        app.run(&themed_ctx(), Action::NewProject);
+        assert!(app.save_to(&old));
+        app.run(&themed_ctx(), Action::CloseProject);
+
+        let mut reopened = storage_app();
+        reopened.open_path(&old);
+        assert!(reopened.is_open(), "{:?}", reopened.messages());
+        // Plain Save keeps the file it was opened from.
+        assert!(reopened.save());
+        assert_eq!(reopened.project_path.as_deref(), Some(old.as_path()));
+        // The name Save As suggests, and the Open dialog's filter, use the new extension.
+        assert_eq!(project_file_name("plant"), "plant.kopercad");
+        assert_eq!(PROJECT_EXTENSIONS, ["kopercad", "novo"]);
+        let copy = dir.path().join("plant.kopercad");
+        assert!(reopened.name_and_save(&copy));
+        assert_eq!(reopened.project_path.as_deref(), Some(copy.as_path()));
+        assert!(old.exists() && copy.exists());
     }
 
     #[test]

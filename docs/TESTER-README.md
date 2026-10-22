@@ -82,7 +82,7 @@ Everything is in your own user profile. You can look at it all in File Explorer
 
 * Projects: Documents\KoperCAD (or Documents\NovoElectric if you used an earlier
   test build; the program keeps using that folder). A project is one file ending
-  in .novo. Copy it, mail it, back it up like any file.
+  in .kopercad (older projects: .novo, which still open). Copy it, mail it, back it up like any file.
 * Settings, your parts catalogue, your key bindings and your own templates:
   %APPDATA%\KoperCAD
 * Recovery files (the autosave of a project while you work on it):
@@ -96,7 +96,7 @@ settings.
 
 Autosave: while a project is open the program saves a recovery copy regularly.
 If it stops unexpectedly (a crash, a power cut), start it again and it offers the
-recovered work. A clean close removes the recovery file. Your .novo file is only
+recovered work. A clean close removes the recovery file. Your .kopercad file is only
 changed when you press Ctrl+S.
 
 Uninstalling (Windows Settings > Apps) removes the program and leaves your
@@ -117,7 +117,7 @@ A short report that we can act on is worth more than a long one. Please:
    * what you did, step by step, starting from the start screen
    * what you expected, and what happened instead
    * a screenshot if you can (Win+Shift+S)
-   * the project file (.novo), if it is not private. It is a small file.
+   * the project file (.kopercad or .novo), if it is not private. It is a small file.
 3. After a crash, KoperCAD offers to open the crash report the next time you start it. You
    can also choose Help > **Open log folder** (%LOCALAPPDATA%\KoperCAD\logs) and send the
    newest crash-*.txt together with the project file.

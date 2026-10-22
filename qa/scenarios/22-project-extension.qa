@@ -1,0 +1,16 @@
+@title Project files: old .novo opens, Save As writes .kopercad
+@area Files
+# The golden v0.1 file is an old .novo project. It must open; Save As is answered with a .kopercad
+# path and must write it. The native Open/Save dialogs are answered by the harness (their filter
+# and suggested name go to the dialog log, see docs/testing/qa-suite.md).
+open crates/novo-tests/tests/golden/v0.1-motor-starter.novo
+wait 20
+expect_scene K1
+shot old-novo-opened
+check_layout
+answer_dialog ~/Documents/KoperCAD/starter.kopercad
+key ctrl+shift+s
+wait 20
+expect_file "~/Documents/KoperCAD/starter.kopercad" 4096
+shot saved-as-kopercad
+check_layout

@@ -562,7 +562,11 @@ fn gap_create_open_and_save_through_the_app() {
             .map(|entries| {
                 entries
                     .filter_map(Result::ok)
-                    .filter(|e| e.path().extension().is_some_and(|x| x == "novo"))
+                    .filter(|e| {
+                        e.path()
+                            .extension()
+                            .is_some_and(novo_storage::is_project_extension)
+                    })
                     .count()
             })
             .unwrap_or(0)

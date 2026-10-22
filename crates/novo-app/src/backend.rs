@@ -6,7 +6,7 @@
 //! does that for undo and redo, and [`crate::OpenPage`] does it for the
 //! canvas.
 //!
-//! [`StorageBackend`] keeps the project in a `.novo` file through
+//! [`StorageBackend`] keeps the project in a `.kopercad` file (older `.novo` still opens) through
 //! `novo-storage`; [`MemoryBackend`] keeps it in memory, for tests.
 
 use std::fmt;
@@ -259,14 +259,14 @@ pub trait ProjectBackend {
     }
 }
 
-/// The real backend: one `.novo` file per project. A saved project is
+/// The real backend: one `.kopercad` file per project. A saved project is
 /// written to its file as it changes (each [`ProjectBackend::tick`] and on
 /// close), so there is nothing to lose and no "save changes?" question.
 ///
 /// With an untitled folder set, a new project is kept in a file there from
 /// the start, autosaved to a recovery file so its work survives a crash.
 /// The first save moves it to the chosen file. Closing it with work keeps
-/// it there as `kept-*.novo`, offered through `unsaved_projects`; closing
+/// it there as `kept-*.kopercad`, offered through `unsaved_projects`; closing
 /// it untouched deletes it.
 #[derive(Default)]
 pub struct StorageBackend {
@@ -709,7 +709,7 @@ impl ProjectBackend for StorageBackend {
             .map(|e| e.path())
             .filter(|p| {
                 p.extension()
-                    .is_some_and(|e| e == novo_storage::PROJECT_EXTENSION)
+                    .is_some_and(novo_storage::is_project_extension)
                     && p.file_name()
                         .and_then(|n| n.to_str())
                         .is_some_and(|n| n.starts_with(KEPT))
@@ -739,7 +739,7 @@ impl ProjectBackend for StorageBackend {
             .map(|e| e.path())
             .filter(|p| {
                 p.extension()
-                    .is_some_and(|e| e == novo_storage::PROJECT_EXTENSION)
+                    .is_some_and(novo_storage::is_project_extension)
             })
             .map(|p| {
                 let modified = p
@@ -1447,7 +1447,7 @@ pub(crate) mod tests {
         assert_eq!(
             files_in(dir.path())
                 .iter()
-                .filter(|f| f.ends_with(".novo"))
+                .filter(|f| f.ends_with(".kopercad"))
                 .count(),
             1,
             "{:?}",

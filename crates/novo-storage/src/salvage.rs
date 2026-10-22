@@ -6,7 +6,7 @@
 //! would risk making it worse. Salvage never writes to the damaged file. It
 //! reads it read-only, object by object, keeps every object that is
 //! readable and consistent, and writes them as a new, clean project file
-//! beside the original (`<name>.recovered.novo`). The user chooses whether
+//! beside the original (`<name>.recovered.<ext>`, same extension as the original). The user chooses whether
 //! to continue in the copy.
 //!
 //! What it cannot do: bring back objects on pages the file no longer holds.
@@ -20,7 +20,7 @@ use novo_core::{JSON_FORMAT_VERSION, Project, ProjectInfo, Record};
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 
 use crate::error::{Result, StorageError};
-use crate::file::{DecodeError, ProjectFile, decode, sibling};
+use crate::file::{DecodeError, PROJECT_EXTENSION, ProjectFile, decode, sibling};
 use crate::schema::{self, APPLICATION_ID};
 
 /// What [`salvage`] read back from a damaged file.
@@ -204,17 +204,22 @@ fn assemble(info: ProjectInfo, next_id: u64, records: Vec<Record>) -> (Project, 
     (project, pending.len())
 }
 
-/// `<name>.recovered.novo`, or `<name>.recovered-2.novo` and so on if that
-/// is taken, so an earlier recovered copy is never replaced.
+/// `<name>.recovered.<ext>`, or `<name>.recovered-2.<ext>` and so on if that
+/// is taken, so an earlier recovered copy is never replaced. `<ext>` is the
+/// damaged file's own extension (`.novo` stays `.novo`), `.kopercad` when it
+/// has none.
 fn free_copy_name(path: &Path) -> PathBuf {
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
     let dir = path.parent().unwrap_or(Path::new(""));
-    let first = dir.join(format!("{stem}.recovered.novo"));
+    let ext = path
+        .extension()
+        .map_or_else(|| PROJECT_EXTENSION.into(), |e| e.to_string_lossy());
+    let first = dir.join(format!("{stem}.recovered.{ext}"));
     if !first.exists() {
         return first;
     }
     (2..)
-        .map(|n| dir.join(format!("{stem}.recovered-{n}.novo")))
+        .map(|n| dir.join(format!("{stem}.recovered-{n}.{ext}")))
         .find(|p| !p.exists() && !sibling(p, "-journal").exists())
         .expect("an unused name exists")
 }

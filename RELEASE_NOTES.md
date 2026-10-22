@@ -8,6 +8,9 @@ network.
 
 This is the first beta for test users. Start with [`docs/TESTER-README.md`](docs/TESTER-README.md).
 
+Project files now end in `.kopercad`. Files from earlier builds (`.novo`) still open; use File > Save As
+to keep a copy as `.kopercad`.
+
 ## What is in it
 
 **Drawing**
