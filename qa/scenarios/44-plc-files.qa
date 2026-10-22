@@ -1,0 +1,57 @@
+@title PLC exports: I/O list, PLCopen, TIA, Studio 5000 and address plan written and kept
+@area Reports
+# The demo I/O list (crates/novo-plc/tests/fixtures/io-list-demo.csv) is imported into the example project, so the cards carry tags and addresses; every PLC export command then writes its file next to the project and keep_file copies it for inspection.
+click_text "Open example"
+wait 20
+answer_dialog crates/novo-plc/tests/fixtures/io-list-demo.csv
+key ctrl+k
+wait 4
+text import io list
+wait 6
+key Enter
+wait 20
+key Enter
+wait 30
+key ctrl+k
+text Export PLC I/O list
+wait 4
+key Enter
+wait 15
+expect_file "~/Documents/KoperCAD/*PLC I-O list.csv" 300
+keep_file "~/Documents/KoperCAD/*PLC I-O list.csv"
+shot csv
+key ctrl+k
+text Export PLC tags (PLCopen
+wait 4
+key Enter
+wait 15
+expect_file "~/Documents/KoperCAD/*PLC Line 1.xml" 500
+keep_file "~/Documents/KoperCAD/*PLC Line 1.xml"
+keep_file "~/Documents/KoperCAD/*PLC Line 2.xml"
+shot plcopen
+key ctrl+k
+text Export PLC tags for TIA
+wait 4
+key Enter
+wait 15
+expect_file "~/Documents/KoperCAD/*PLC Line 1.xlsx" 3000
+keep_file "~/Documents/KoperCAD/*PLC Line 1.xlsx"
+keep_file "~/Documents/KoperCAD/*PLC Line 2.xlsx"
+shot tia
+key ctrl+k
+text Export PLC tags for Studio
+wait 4
+key Enter
+wait 15
+expect_file "~/Documents/KoperCAD/*PLC Line 1.csv" 300
+keep_file "~/Documents/KoperCAD/*PLC Line 1.csv"
+keep_file "~/Documents/KoperCAD/*PLC Line 2.csv"
+shot studio
+key ctrl+k
+text Export PLC address plan
+wait 4
+key Enter
+wait 15
+expect_file "~/Documents/KoperCAD/*PLC address plan.csv" 100
+keep_file "~/Documents/KoperCAD/*PLC address plan.csv"
+shot address-plan
