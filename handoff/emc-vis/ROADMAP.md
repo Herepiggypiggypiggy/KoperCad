@@ -3,7 +3,7 @@
 Scope: how EMC shows in KoperCAD (3D cabinet, plate, schematic). Reads findings only through the `Picture` interface; the rule engine thread owns `novo-emc`.
 
 Done
-- Concepts (corridors and layers chosen), `Picture` interface, overlays, exposure map, stub, 3D EMC view, panel, legend, EMC example, QA scenario 43-3d-emc.
+- Concepts (corridors and layers chosen), `Picture` interface, overlays, exposure map, stub, 3D EMC view, panel, legend, EMC example, QA scenario 96-3d-emc.
 
 Next, one PR each
 1. 2D mirror on the cabinet plate (hook near `cabinet_routes::draw` in cabinet.rs).
