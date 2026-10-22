@@ -33,6 +33,8 @@ fn reason(action: &str, e: impl std::fmt::Display) -> ModelError {
 pub fn run(tx: &mut Tx<'_>, env: &Env<'_>, action: &str, args: &Value) -> Result<String, String> {
     match action {
         "add_page" => add_page(tx, args),
+        "rename_page" => rename_page(tx, args),
+        "add_device" => add_device(tx, args),
         "set_page" => set_page(tx, args),
         "place_macro" => place_macro(tx, env, args),
         "place_symbol" => place_symbol(tx, env, args),
@@ -98,6 +100,19 @@ pub fn catalogue() -> Vec<EditAction> {
             description: "Adds an empty schematic page at the end.",
             schema: json!({"type": "object", "properties": {
                 "name": {"type": "string"}, "title": {"type": "string"}}, "required": ["name"]}),
+        },
+        EditAction {
+            name: "rename_page",
+            description: "Renames a page (references print the page name).",
+            schema: json!({"type": "object", "properties": {
+                "page": page, "name": {"type": "string"}}, "required": ["page", "name"]}),
+        },
+        EditAction {
+            name: "add_device",
+            description: "Adds a device with a tag and description that is not drawn on a page \
+                          yet (rarely what you want: place_symbol and place_macro create devices).",
+            schema: json!({"type": "object", "properties": {
+                "tag": {"type": "string"}, "description": {"type": "string"}}, "required": ["tag"]}),
         },
         EditAction {
             name: "set_page",
@@ -198,9 +213,11 @@ pub fn catalogue() -> Vec<EditAction> {
         EditAction {
             name: "set_wire_number",
             description: "Sets the number printed on the wire at a pin (and its whole net); an \
-                          empty number clears it. The number is then fixed against numbering runs.",
+                          empty number clears it. The number is then fixed against numbering \
+                          runs. Give pin (tag:pin) or wire_id from section wires.",
             schema: json!({"type": "object", "properties": {
-                "pin": pin, "number": {"type": "string"}}, "required": ["pin", "number"]}),
+                "pin": pin, "wire_id": {"type": "integer"}, "number": {"type": "string"}},
+                "required": ["number"]}),
         },
         EditAction {
             name: "number_wires",
@@ -245,7 +262,7 @@ fn add_page(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
 }
 
 fn set_page(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
-    let page = resolve::page(tx.project(), &need(args, "page")?)?;
+    let page = resolve::page_arg(tx.project(), args)?;
     let old = tx
         .project()
         .page(page)
@@ -292,7 +309,7 @@ fn place_macro(tx: &mut Tx<'_>, env: &Env<'_>, args: &Value) -> Result<String, S
             let names: Vec<&str> = env.macros.iter().map(|m| m.name.as_str()).collect();
             format!("there is no macro {wanted:?}. Macros: {names:?}")
         })?;
-    let page = resolve::page(tx.project(), &need(args, "page")?)?;
+    let page = resolve::page_arg(tx.project(), args)?;
     let at = origin(tx.project(), page, args)?;
     let mut options = novo_workflow::macro_place::PlaceOptions {
         parts: file
@@ -414,7 +431,7 @@ fn place_symbol(tx: &mut Tx<'_>, env: &Env<'_>, args: &Value) -> Result<String, 
         .get(&wanted)
         .or_else(|| env.library.by_alias(&wanted))
         .ok_or_else(|| format!("there is no symbol {wanted:?}; use list_symbols to search"))?;
-    let page = resolve::page(tx.project(), &need(args, "page")?)?;
+    let page = resolve::page_arg(tx.project(), args)?;
     let at = origin(tx.project(), page, args)?;
     let rotation = match args["rotation"].as_u64().unwrap_or(0) {
         0 => Rotation::R0,
@@ -548,7 +565,7 @@ fn connect(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
 }
 
 fn set_property(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
-    let device = resolve::device(tx.project(), &need(args, "device")?)?;
+    let device = resolve::device_arg(tx.project(), args)?;
     let tag = tx
         .project()
         .device(device)
@@ -575,7 +592,7 @@ fn set_property(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
 }
 
 fn rename_device(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
-    let device = resolve::device(tx.project(), &need(args, "device")?)?;
+    let device = resolve::device_arg(tx.project(), args)?;
     let old = tx
         .project()
         .device(device)
@@ -591,13 +608,13 @@ fn rename_device(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
 }
 
 fn assign_part(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
-    let device = resolve::device(tx.project(), &need(args, "device")?)?;
+    let device = resolve::device_arg(tx.project(), args)?;
     let tag = tx
         .project()
         .device(device)
         .map(|d| d.tag.to_string())
         .unwrap_or_default();
-    let part = resolve::part(tx.project(), &need(args, "part")?)?;
+    let part = resolve::part_arg(tx.project(), args)?;
     let name = tx
         .project()
         .part(part)
@@ -612,32 +629,46 @@ fn assign_part(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
 }
 
 fn set_wire_number(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
-    let at = resolve::pin(tx.project(), &args["pin"])?;
-    let wires: Vec<_> = tx.project().wires_at(at.end).collect();
-    let wire = match wires.as_slice() {
-        [one] => *one,
-        [] => return Err("there is no wire on that pin yet; connect it first".into()),
-        _ => {
-            return Err(
-                "several wires leave that pin; number the net at a pin with one wire".into(),
-            );
+    let wire = if let Some(id) = args["wire_id"].as_u64() {
+        tx.project()
+            .wire(id.into())
+            .map(|w| w.id)
+            .ok_or_else(|| format!("there is no wire with id {id} (see section wires)"))?
+    } else {
+        let at = resolve::pin(tx.project(), &args["pin"])?;
+        let wires: Vec<_> = tx.project().wires_at(at.end).collect();
+        match wires.as_slice() {
+            [one] => *one,
+            [] => return Err("there is no wire on that pin yet; connect it first".into()),
+            _ => {
+                return Err(
+                    "several wires leave that pin; number the net at a pin with one wire".into(),
+                );
+            }
         }
     };
-    let number = args["number"]
-        .as_str()
-        .or(args["number"].as_i64().map(|_| ""))
-        .map(|_| text_of(&args["number"]).unwrap_or_default())
-        .ok_or("number must be text; use an empty text to clear it")?;
-    if number.chars().count() > 40 || number.chars().any(char::is_control) {
-        return Err("number is too long or contains control characters".into());
+    let number = match &args["number"] {
+        Value::String(s) => s.trim().to_string(),
+        Value::Number(n) => n.to_string(),
+        _ => return Err("number must be text; use an empty text to clear it".into()),
+    };
+    if number.chars().count() > 40 {
+        return Err("number is longer than 40 characters".into());
     }
+    if number.chars().any(char::is_control) {
+        return Err("number must not contain control characters or line breaks".into());
+    }
+    let name = tx
+        .project()
+        .wire(wire)
+        .map(|w| resolve::wire_description(tx.project(), w))
+        .unwrap_or_default();
     novo_numbering::set_number(tx, wire, &number).map_err(|e| e.to_string())?;
     Ok(if number.is_empty() {
-        format!("Clear the wire number at {}", args["pin"])
+        format!("Clear the number of {name} and its net")
     } else {
         format!(
-            "Number the net at {} {number} (fixed against numbering runs)",
-            args["pin"]
+            "Number {name} and its net {number}. The number is fixed: numbering runs leave it alone"
         )
     })
 }
@@ -656,7 +687,7 @@ fn device_symbols(project: &Project, device: novo_core::DeviceId) -> Vec<AnyId> 
 }
 
 fn remove_device(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
-    let device = resolve::device(tx.project(), &need(args, "device")?)?;
+    let device = resolve::device_arg(tx.project(), args)?;
     let tag = tx
         .project()
         .device(device)
@@ -678,7 +709,7 @@ fn remove_device(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
 }
 
 fn move_device(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
-    let device = resolve::device(tx.project(), &need(args, "device")?)?;
+    let device = resolve::device_arg(tx.project(), args)?;
     let tag = tx
         .project()
         .device(device)
@@ -792,7 +823,7 @@ fn terminate_pin(tx: &mut Tx<'_>, env: &Env<'_>, args: &Value) -> Result<String,
 }
 
 fn describe_device(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
-    let device = resolve::device(tx.project(), &need(args, "device")?)?;
+    let device = resolve::device_arg(tx.project(), args)?;
     let tag = tx
         .project()
         .device(device)
@@ -834,4 +865,86 @@ fn select_standards(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
                 .join(", ")
         )
     })
+}
+
+fn rename_page(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
+    let page = resolve::page_arg(tx.project(), args)?;
+    let old = tx
+        .project()
+        .page(page)
+        .map(|p| p.name.clone())
+        .unwrap_or_default();
+    let name = need(args, "name")?;
+    if tx.project().pages().any(|p| p.name == name && p.id != page) {
+        return Err(format!("a page {name} already exists"));
+    }
+    tx.execute(novo_core::Command::RenamePage {
+        page,
+        name: name.clone(),
+    })
+    .map_err(|e| e.to_string())?;
+    Ok(format!("Rename page {old} to {name}"))
+}
+
+fn add_device(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
+    let tag = need(args, "tag")?;
+    let parsed = DeviceTag::parse(&tag).map_err(|e| format!("tag {tag:?}: {e}"))?;
+    if tx.project().devices().any(|d| d.tag.to_string() == tag) {
+        return Err(format!("a device {tag} already exists"));
+    }
+    let description = args["description"].as_str().unwrap_or_default().to_string();
+    tx.add_device(parsed, description.clone())
+        .map_err(|e| e.to_string())?;
+    Ok(if description.is_empty() {
+        format!("Add device {tag}")
+    } else {
+        format!("Add device {tag} ({description})")
+    })
+}
+
+/// What a step would replace, for the card only. Computed from the draft
+/// before the step runs and never sent back to the model: old values and part
+/// names can be above the agreed scope.
+pub fn note_before(project: &Project, action: &str, args: &Value) -> Option<String> {
+    if action == "set_wire_number" {
+        let wire = args["wire_id"].as_u64().map(|id| id.into()).or_else(|| {
+            let at = resolve::pin(project, &args["pin"]).ok()?;
+            let mut wires = project.wires_at(at.end);
+            let first = wires.next()?;
+            wires.next().is_none().then_some(first)
+        })?;
+        let wire = project.wire(wire)?;
+        let name = resolve::wire_description(project, wire);
+        return Some(match &wire.number {
+            Some(old) => format!("Replaces the current number of {name}: {old}"),
+            None => {
+                let mut c = name.chars();
+                let cap: String = c
+                    .next()
+                    .map(|f| f.to_uppercase().chain(c).collect())
+                    .unwrap_or_default();
+                format!("{cap} has no number yet.")
+            }
+        });
+    }
+    let device = resolve::device_arg(project, args).ok()?;
+    let device = project.device(device)?;
+    match action {
+        "set_property" => {
+            let key = args["key"].as_str()?.trim();
+            Some(match device.properties.get(key) {
+                Some(old) => format!("Replaces the current value: {old}"),
+                None => "There is no value yet.".into(),
+            })
+        }
+        "assign_part" if !device.parts.is_empty() => Some(format!(
+            "This device already has {} part(s) assigned.",
+            device.parts.len()
+        )),
+        "describe_device" if !device.description.is_empty() => Some(format!(
+            "Replaces the current description: {:?}",
+            device.description
+        )),
+        _ => None,
+    }
 }

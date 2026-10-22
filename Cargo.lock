@@ -1911,6 +1911,7 @@ name = "novo-ai"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "novo-cables",
  "novo-checks",
  "novo-core",
  "novo-editor",

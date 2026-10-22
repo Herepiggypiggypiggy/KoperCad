@@ -20,6 +20,8 @@ pub struct Step {
     pub args: Value,
     /// One line the person reads, written by the program.
     pub summary: String,
+    /// What the step replaces, for the card only (never sent to the model).
+    pub note: Option<String>,
 }
 
 /// An item of the plan Claude shows while it works.
@@ -77,7 +79,7 @@ impl Resources {
         }
     }
 
-    fn env(&self) -> Env<'_> {
+    pub fn env(&self) -> Env<'_> {
         Env {
             library: self.library,
             macros: &self.macros,
@@ -188,11 +190,13 @@ impl EngineerHost {
                 "this change set already has {MAX_STEPS} steps; stop and let the person apply it"
             ));
         }
+        let note = actions::note_before(&self.draft, action, args);
         let summary = actions::run_on(&mut self.draft, &self.resources.env(), action, args)?;
         self.steps.push(Step {
             action: action.to_string(),
             args: args.clone(),
             summary: summary.clone(),
+            note,
         });
         self.verified = false;
         Ok(summary)
@@ -242,6 +246,16 @@ impl EngineerHost {
             return self.denied(DataScope::Outline);
         }
         let action = input["action"].as_str().unwrap_or_default();
+        // Part names and wire lists are above the outline: the answer to these
+        // two goes back to the model, so they need the whole project.
+        if matches!(action, "assign_part" | "set_wire_number")
+            && !self.scope.allows(DataScope::Project)
+        {
+            return ToolReply {
+                text: format!("{action} is not allowed above the agreed scope"),
+                is_error: true,
+            };
+        }
         let args = if input["args"].is_null() {
             json!({})
         } else {

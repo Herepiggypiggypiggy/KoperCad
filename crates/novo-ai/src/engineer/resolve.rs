@@ -226,3 +226,57 @@ fn terminal_pin(
         .ok_or_else(|| format!("terminal {shown}:{name} is not drawn on a page"))?;
     in_symbol(project, symbol, side)
 }
+
+/// The device named by `device` (a tag) or, as older prompts wrote it, `device_id`.
+pub fn device_arg(project: &Project, args: &Value) -> Result<DeviceId, String> {
+    if let Some(text) = text_of(&args["device"]) {
+        return device(project, &text);
+    }
+    match args["device_id"].as_u64() {
+        Some(id) => project
+            .device(id.into())
+            .map(|d| d.id)
+            .ok_or_else(|| format!("there is no device with id {id}")),
+        None => Err("device is missing (give its tag, e.g. -K1)".into()),
+    }
+}
+
+/// The page named by `page` (a name) or `page_id`.
+pub fn page_arg(project: &Project, args: &Value) -> Result<PageId, String> {
+    if let Some(text) = text_of(&args["page"]) {
+        return page(project, &text);
+    }
+    match args["page_id"].as_u64() {
+        Some(id) => project
+            .page(id.into())
+            .map(|p| p.id)
+            .ok_or_else(|| format!("there is no page with id {id}")),
+        None => Err("page is missing (give its name)".into()),
+    }
+}
+
+/// The part named by `part` or `part_id`.
+pub fn part_arg(project: &Project, args: &Value) -> Result<PartId, String> {
+    if let Some(text) = text_of(&args["part"]) {
+        return part(project, &text);
+    }
+    match args["part_id"].as_u64() {
+        Some(id) => project
+            .part(id.into())
+            .map(|p| p.id)
+            .ok_or_else(|| format!("there is no part with id {id} (see section parts)")),
+        None => Err("part is missing".into()),
+    }
+}
+
+/// A wire as the person sees it, without the internal id: "the wire from
+/// -K1:2 to -F2:3 (page Main circuit)".
+pub fn wire_description(p: &Project, w: &novo_core::Wire) -> String {
+    let end = |e| novo_cables::ends::designation(p, e).unwrap_or_else(|| "an open end".into());
+    let page = p.page(w.page).map_or("?", |g| g.name.as_str());
+    format!(
+        "the wire from {} to {} (page {page})",
+        end(w.from),
+        end(w.to)
+    )
+}

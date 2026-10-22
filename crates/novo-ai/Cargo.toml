@@ -19,6 +19,7 @@ novo-parts.workspace = true
 novo-checks.workspace = true
 novo-reports.workspace = true
 novo-numbering.workspace = true
+novo-cables.workspace = true
 novo-py.workspace = true
 
 [dev-dependencies]
