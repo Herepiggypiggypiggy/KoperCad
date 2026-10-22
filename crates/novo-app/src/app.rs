@@ -91,6 +91,7 @@ mod heat_live;
 #[cfg(test)]
 mod heat_live_tests;
 mod heat_openings;
+mod heat_openings_store;
 mod heat_probe;
 mod heat_progress;
 #[cfg(test)]

@@ -49,7 +49,7 @@ pub(super) fn phase_line(running: bool, has_result: bool, stale: bool) -> (&'sta
             false,
         ),
         (false, true, true) => (
-            "Out of date: the layout changed after this run. Simulate again.",
+            "Out of date: the layout or the vents and fans changed after this run. Simulate again.",
             true,
         ),
         (false, true, false) => (
@@ -104,11 +104,16 @@ pub(super) fn show(
                     }
                 });
         }
-        egui::CollapsingHeader::new("Settings for the next run")
-            .id_salt("view3d_heat_settings")
-            .show(ui, |ui| {
-                ui.add_enabled_ui(!running, |ui| settings(ui, state));
-            });
+        // Closed while a run goes: the form below the fold only hid the Cancel
+        // row and could not be used anyway.
+        let mut settings_header = egui::CollapsingHeader::new("Settings for the next run")
+            .id_salt("view3d_heat_settings");
+        if running {
+            settings_header = settings_header.open(Some(false));
+        }
+        settings_header.show(ui, |ui| {
+            ui.add_enabled_ui(!running, |ui| settings(ui, state));
+        });
         egui::CollapsingHeader::new("What is this?")
             .id_salt("view3d_heat_about")
             .show(ui, |ui| about(ui, state));
