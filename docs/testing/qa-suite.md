@@ -106,9 +106,10 @@ PDF, workbook or XML and check its content, not only that it exists. Run one wit
 | `49-handover-safety-files` | handover folder (contents, drawing set, revisions, parts, wires, terminals, cables, safety, Excel lists) and the safety function sheets |
 | `50-variant-bulk-edit-files` | variant PDF, bulk edit workbook |
 | `51-pdf-options-eplan-files` | PDF with options (in colour), EPLAN project file |
+| `52-wire-production-page-file` | all-pages PDF with the wire production page added |
 
-Not covered by a file check yet: the wire production page (it adds a page to the project, no file), the
-plate DXF of a cabinet other than the lesson fixture.
+Not covered by a file check yet: the plate DXF of a cabinet other than the lesson fixture, the wire
+production Excel for a project with sized wires.
 
 ## The merge gate
 

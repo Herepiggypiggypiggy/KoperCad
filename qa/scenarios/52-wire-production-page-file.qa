@@ -1,0 +1,23 @@
+@title Wire production page added and exported as PDF, kept for inspection
+@area Reports
+# Add wire production page puts the cut list into the project as page 60; Export PDF with options (all pages) writes it with the drawing, keep_file copies the PDF.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text Add wire production page
+wait 4
+key Enter
+wait 20
+shot page-added
+key ctrl+k
+wait 4
+text Export PDF with options
+wait 4
+key Enter
+wait 10
+click_text "Export" Button #1
+wait 40
+expect_file "~/Documents/KoperCAD/*.pdf" 5000
+keep_file "~/Documents/KoperCAD/*.pdf"
+shot all-pages-pdf
