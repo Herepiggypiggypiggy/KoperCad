@@ -1,0 +1,19 @@
+@title Large cabinet heat: runs as a reduced model and says so
+@area Heat
+# The crowded fixture (59 devices) needs 730 000 cells at full resolution; the run lumps its cold devices, widens ducts and rails to porous strips and still finishes. The legend names the reduced model and the convergence. Waits are real seconds: the solver runs on the wall clock.
+open qa/fixtures/text-stress-cabinet.novo
+wait 30
+click_text Cabinet #1
+wait 30
+key ctrl+k
+wait 3
+text Simulate heat of the cabinet
+wait 4
+key Enter
+wait 60
+shot heat-running
+wait_s 200
+expect "Reduced model: "
+shot heat-result
+check_blank heat-result
+check_layout

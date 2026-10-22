@@ -1999,7 +1999,9 @@ name = "novo-cfd"
 version = "0.1.0"
 dependencies = [
  "novo-cfd",
+ "novo-core",
  "novo-layout",
+ "novo-storage",
  "novo-thermal",
  "rayon",
  "thiserror 2.0.21",

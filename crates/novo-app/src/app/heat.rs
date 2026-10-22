@@ -1782,18 +1782,37 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                     Source::Solved(sol) => {
                         let p = &sol.snapshot.progress;
                         let validated = sol.snapshot.accuracy.validated;
+                        let conv = novo_cfd::large::convergence(&sol.snapshot);
                         ui.label(small(
                             &status_label(p, validated),
                             crate::theme::ui_palette().text_primary,
-                        ));
+                        ))
+                        .on_hover_text(conv.lines.join("\n"));
+                        // A large cabinet runs as a reduced model: say so next
+                        // to the level, with what was lumped.
+                        if let Some(r) = novo_cfd::large::reduced_summary(&sol.snapshot) {
+                            ui.label(small(r, crate::theme::ui_palette().text_secondary))
+                                .on_hover_text(
+                                    "Cold devices are lumped into row blocks and thin ducts and \
+                                     rails are widened to porous strips, so a big cabinet fits the \
+                                     cell budget. Devices that make real heat keep their shape. \
+                                     Details under Notes on this run.",
+                                );
+                        }
                         if stale {
                             ui.label(small(
                                 "Out of date: the layout changed since this run.",
                                 t::WARNING,
                             ));
                         }
-                        if !p.converged {
-                            ui.label(small("Not converged.", t::WARNING));
+                        // Not converged, or "steady" with a poor heat balance or
+                        // drifting temperatures: say it in numbers.
+                        if conv.verdict != novo_cfd::large::Verdict::Converged
+                            || conv.lines.len() > 1
+                        {
+                            for line in &conv.lines {
+                                ui.label(small(line, t::WARNING));
+                            }
                         }
                         let a = &sol.snapshot.accuracy;
                         // The status line above already names the level.
