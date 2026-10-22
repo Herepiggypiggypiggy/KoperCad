@@ -9,7 +9,6 @@
 use eframe::egui;
 use novo_commissioning::{
     Change, Redline, RedlineState, Target, TargetInfo, apply_commands, revision_description,
-    targets,
 };
 use novo_core::{Command, PageId, Project};
 use novo_theme::{Palette, icons, space, widgets};
@@ -61,7 +60,8 @@ pub(super) fn redlines_tab(
     current: Option<PageId>,
     go: &mut Option<Place>,
 ) -> Option<RedlineAction> {
-    let all = targets(project);
+    let index = mode.index(project);
+    let all = index.all();
     let mut action = None;
     let info = mode
         .selected

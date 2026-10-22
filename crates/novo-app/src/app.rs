@@ -370,6 +370,8 @@ mod reopen_fit_tests;
 #[cfg(test)]
 mod route_all_tests;
 #[cfg(test)]
+mod scale_tests;
+#[cfg(test)]
 mod shortcuts_sheet_tests;
 #[cfg(test)]
 mod small_window_tests;

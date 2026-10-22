@@ -18,8 +18,9 @@ use novo_canvas::marks::{Mark, MarkKind};
 use novo_canvas::model::item_id;
 use novo_commissioning::{
     CheckKind, CheckRecord, CheckState, CommissioningStore, FieldPackage, Progress, PunchItem,
-    PunchState, RedlineState, Scope, Severity, Signature, Target, TargetInfo, WalkOrder, WalkScope,
-    WireKind, WirePlan, WireStep, next_open, next_open_with, progress, targets, walk_order_with,
+    PunchState, RedlineState, Scope, Severity, Signature, Target, TargetIndex, TargetInfo,
+    WalkOrder, WalkScope, WireKind, WirePlan, WireStep, next_open, next_open_in_order,
+    walk_order_in,
 };
 use novo_core::{PageId, Project, WireId};
 use novo_pdf::{ReportFileFormat, ReportPdfOptions};
@@ -60,6 +61,9 @@ pub(super) enum Tab {
     Redlines,
 }
 
+/// What a kept walking order was built for: project revision, scope, order.
+type WalkKey = (u64, WalkScope, WalkOrder);
+
 /// Commissioning mode's data and panel state.
 pub(crate) struct CommissioningMode {
     pub(super) store: CommissioningStore,
@@ -94,6 +98,11 @@ pub(crate) struct CommissioningMode {
     /// The wire figures of the walk (ends, ferrules, length), kept until the
     /// project changes: computing them routes every wire.
     plan: Option<(u64, Rc<WirePlan>)>,
+    /// The targets with a page index, kept until the project changes: the
+    /// list asks for the progress of every page on every frame.
+    index: Option<(u64, Rc<TargetIndex>)>,
+    /// The walking order for the scope and order chosen, kept the same way.
+    walk: Option<(WalkKey, Rc<Vec<TargetInfo>>)>,
     /// What "Next open" and Space visit: everything, or the wires only.
     pub(super) scope: WalkScope,
     /// The order the wires are walked in.
@@ -138,6 +147,8 @@ impl CommissioningMode {
             signing: None,
             viewer: Default::default(),
             plan: None,
+            index: None,
+            walk: None,
             scope: WalkScope::Wires,
             order: WalkOrder::Number,
             fail_pending: None,
@@ -162,6 +173,35 @@ impl CommissioningMode {
         }
     }
 
+    /// The project's targets for the revision it is at.
+    pub(super) fn index(&mut self, project: &Project) -> Rc<TargetIndex> {
+        let revision = project.revision();
+        match &self.index {
+            Some((r, index)) if *r == revision => Rc::clone(index),
+            _ => {
+                let index = Rc::new(TargetIndex::of(project));
+                self.index = Some((revision, Rc::clone(&index)));
+                index
+            }
+        }
+    }
+
+    /// The walking order for the scope and order chosen.
+    fn walk_order(&mut self, project: &Project) -> Rc<Vec<TargetInfo>> {
+        let key: WalkKey = (project.revision(), self.scope, self.order);
+        if let Some((k, order)) = &self.walk
+            && *k == key
+        {
+            return Rc::clone(order);
+        }
+        let (index, plan) = (self.index(project), self.plan(project));
+        let order = Rc::new(walk_order_in(
+            project, &index, &plan, self.scope, self.order,
+        ));
+        self.walk = Some((key, Rc::clone(&order)));
+        order
+    }
+
     /// The next open target after `from` in the chosen walking order.
     fn next(
         &mut self,
@@ -169,16 +209,8 @@ impl CommissioningMode {
         from: Option<Target>,
         current: Option<PageId>,
     ) -> Option<TargetInfo> {
-        let plan = self.plan(project);
-        next_open_with(
-            project,
-            &plan,
-            &self.store,
-            from,
-            current,
-            self.scope,
-            self.order,
-        )
+        let order = self.walk_order(project);
+        next_open_in_order(&order, &self.store, from, current)
     }
 
     /// Fail for a check: the first press opens the Note with the wire's ends
@@ -262,8 +294,13 @@ impl CommissioningMode {
         }
         self.dirty = true;
         self.finished = false;
-        if let Some(info) = targets(project).into_iter().find(|i| i.target == target) {
-            self.walk_to(project, &info, current, go);
+        if let Some(info) = self
+            .index(project)
+            .all()
+            .iter()
+            .find(|i| i.target == target)
+        {
+            self.walk_to(project, info, current, go);
         }
         true
     }
@@ -510,14 +547,14 @@ impl NovoApp {
         if self.outline_mode != OutlineMode::Commissioning {
             return Vec::new();
         }
-        let (Some(mode), Some(doc)) = (self.wb.commissioning.as_ref(), self.backend.document())
+        let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
         else {
             return Vec::new();
         };
         let project = doc.project();
         let mut marks = Vec::new();
-        let infos = targets(project);
-        for info in infos.iter().filter(|i| i.pages.contains(&page)) {
+        let index = mode.index(project);
+        for info in index.on_page(page) {
             let (kind, what) = match target_state(&mode.store, info.target) {
                 CheckState::Failed => (MarkKind::Error, "✖ Failed"),
                 CheckState::Passed => (MarkKind::Added, "✔ Passed"),
@@ -534,10 +571,7 @@ impl NovoApp {
             .redlines()
             .filter(|r| r.state == RedlineState::Open)
         {
-            let Some(info) = infos
-                .iter()
-                .find(|i| i.target == redline.target && i.pages.contains(&page))
-            else {
+            let Some(info) = index.on_page(page).find(|i| i.target == redline.target) else {
                 continue;
             };
             for id in shown_on(project, info.target.any_id(), page) {
@@ -623,7 +657,7 @@ impl NovoApp {
             progress_bar(
                 ui,
                 "Project",
-                progress(project, &mode.store, Scope::Project),
+                mode.index(project).progress(&mode.store, Scope::Project),
             );
             // On a tablet the walk card needs the height: one bar is enough.
             let walking_on_tablet = tablet && mode.selected.is_some() && mode.tab == Tab::Checks;
@@ -634,7 +668,7 @@ impl NovoApp {
                 progress_bar(
                     ui,
                     "This page",
-                    progress(project, &mode.store, Scope::Page(page)),
+                    mode.index(project).progress(&mode.store, Scope::Page(page)),
                 );
             }
             ui.add_space(space::M);
@@ -1130,7 +1164,8 @@ fn checks_tab(
         mode.fail_pending = None;
         mode.note.clear();
     }
-    let all = targets(project);
+    let index = mode.index(project);
+    let all = index.all();
     let pages = project.pages_in_order();
     let plan = mode.plan(project);
     let next = mode.next(project, mode.selected, current);
@@ -1321,13 +1356,12 @@ fn checks_tab(
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 1.0;
             for page in &pages {
-                let on_page: Vec<&TargetInfo> =
-                    all.iter().filter(|i| i.pages.contains(&page.id)).collect();
+                let on_page: Vec<&TargetInfo> = index.on_page(page.id).collect();
                 if on_page.is_empty() {
                     continue;
                 }
                 let open = mode.open_pages.contains(&page.id);
-                let done = progress(project, &mode.store, Scope::Page(page.id));
+                let done = index.progress(&mode.store, Scope::Page(page.id));
                 let name = if page.title.is_empty() {
                     page.name.clone()
                 } else {
@@ -1502,8 +1536,7 @@ fn walk_card(
         .iter()
         .filter(|&&c| mode.store.state(info.target, c) == CheckState::Pending)
         .count();
-    let plan = mode.plan(project);
-    let order = walk_order_with(project, &plan, mode.scope, mode.order);
+    let order = mode.walk_order(project);
     if let Some(at) = order.iter().position(|i| i.target == info.target) {
         ui.label(
             egui::RichText::new(format!("{} of {}", at + 1, order.len()))
@@ -1801,7 +1834,8 @@ fn punch_tab(
         }
         ui.checkbox(&mut mode.show_closed, "Show closed");
     });
-    let all = targets(project);
+    let index = mode.index(project);
+    let all = index.all();
     let items: Vec<PunchItem> = mode
         .store
         .punch_items()
