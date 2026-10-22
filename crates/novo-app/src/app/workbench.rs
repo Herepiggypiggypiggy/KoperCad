@@ -96,6 +96,8 @@ pub(crate) struct Workbench {
     pub(super) issue: Option<super::revisions::IssueDraft>,
     pub(super) restore_ask: Option<super::revisions::RestoreAsk>,
     pub(super) handover_ask: Option<super::handover::HandoverAsk>,
+    /// The question before writing ticked the review notes in.
+    pub(super) handover_notes: bool,
     /// The Compare revisions window, while it is open.
     pub(super) compare: Option<super::compare::CompareWindow>,
     /// The Fault scenarios window, while it is open.
@@ -304,6 +306,7 @@ impl Default for Workbench {
             issue: None,
             restore_ask: None,
             handover_ask: None,
+            handover_notes: false,
             compare: None,
             faults: None,
             add_fault: None,

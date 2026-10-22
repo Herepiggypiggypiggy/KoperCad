@@ -11,7 +11,7 @@
 //! | `7 Commissioning record.pdf` | checks, punch items and sign-offs, when commissioning started |
 //! | `8 Safety functions.pdf` | when safety functions are defined |
 //! | `9 Lists.xlsx` | parts, devices, wires, terminals and cables for Excel |
-//! | `10 Review notes.pdf` | the review notes, open and resolved, when there are any |
+//! | `10 Review notes.pdf` | the review notes, open and resolved, only when ticked in the question before writing |
 //! | `Workshop/` | the workshop pack, when there is a mounting plate or a wire |
 //!
 //! Every file reuses the export that already exists for it. A file with
@@ -129,16 +129,22 @@ pub(crate) struct HandoverAsk {
     summary: Summary,
     /// Every error, then every warning.
     pub(super) lines: Vec<AskLine>,
+    /// How many review notes the project has: they are remarks between the
+    /// people working on it, so the package leaves them out unless asked.
+    notes: usize,
 }
 
 impl NovoApp {
     /// The `export.handover` command: writes the package at once when the
-    /// design checks have no error or warning, else asks first (see
-    /// [`NovoApp::handover_ask_dialog`]).
+    /// design checks have no error or warning and there are no review notes,
+    /// else asks first (see [`NovoApp::handover_ask_dialog`]).
     pub(super) fn ask_handover(&mut self) {
+        self.ensure_notes_loaded();
+        let notes = self.wb.notes.store().map_or(0, |s| s.len());
+        self.wb.handover_notes = false;
         let problems = self.problems();
         let summary = Summary::of(problems);
-        if summary.errors + summary.warnings == 0 {
+        if summary.errors + summary.warnings == 0 && notes == 0 {
             self.export_handover();
             return;
         }
@@ -159,7 +165,11 @@ impl NovoApp {
             .map(line)
             .collect();
         lines.sort_by_key(|l| !l.error);
-        self.wb.handover_ask = Some(HandoverAsk { summary, lines });
+        self.wb.handover_ask = Some(HandoverAsk {
+            summary,
+            lines,
+            notes,
+        });
     }
 
     pub(super) fn handover_ask_dialog(&mut self, ctx: &egui::Context) {
@@ -171,14 +181,21 @@ impl NovoApp {
         let mut marks: Vec<(&'static str, egui::Rect, &'static str, bool)> = Vec::new();
         let modal = egui::Modal::new(egui::Id::new("handover_ask")).show(ctx, |ui| {
             ui.set_width(460.0);
-            ui.heading("The design still has open problems");
+            let problems = !ask.lines.is_empty();
+            ui.heading(if problems {
+                "The design still has open problems"
+            } else {
+                "Hand over the project"
+            });
             ui.add_space(4.0);
-            let verb = if ask.lines.len() == 1 { "remains" } else { "remain" };
-            ui.label(format!(
-                "{} {verb}. Handing over anyway lists them on the contents page and in the drawing set, so the customer would see them.",
-                ask.summary.pill_text()
-            ));
-            ui.add_space(4.0);
+            if problems {
+                let verb = if ask.lines.len() == 1 { "remains" } else { "remain" };
+                ui.label(format!(
+                    "{} {verb}. Handing over anyway lists them on the contents page and in the drawing set, so the customer would see them.",
+                    ask.summary.pill_text()
+                ));
+                ui.add_space(4.0);
+            }
             egui::ScrollArea::vertical()
                 .max_height(220.0)
                 .auto_shrink([false, true])
@@ -198,9 +215,20 @@ impl NovoApp {
                         });
                     }
                 });
+            if ask.notes > 0 {
+                ui.add_space(4.0);
+                ui.checkbox(
+                    &mut self.wb.handover_notes,
+                    format!(
+                        "Include the {} review note{} (remarks between the people on the project) as 10 Review notes.pdf",
+                        ask.notes,
+                        if ask.notes == 1 { "" } else { "s" }
+                    ),
+                );
+            }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                let first = ui.button("Fix these first");
+                let first = ui.button(if ask.lines.is_empty() { "Cancel" } else { "Fix these first" });
                 marks.push(("handover.fix", first.rect, "Fix these first", false));
                 if first.clicked() {
                     fix = true;
@@ -366,17 +394,24 @@ impl NovoApp {
             r,
         );
 
-        // 10. Review notes, when anyone left one.
+        // 10. Review notes: remarks between the people on the project, so
+        // only when the person ticked them in the question before writing.
         self.ensure_notes_loaded();
+        let include_notes = std::mem::take(&mut self.wb.handover_notes);
         let notes_table = {
             let project = self.backend.document()?.project();
-            self.wb.notes.store().filter(|s| !s.is_empty()).map(|s| {
-                novo_revisions::notes_table(project, s, &novo_revisions::NoteFilter::default())
-            })
+            self.wb
+                .notes
+                .store()
+                .filter(|s| include_notes && !s.is_empty())
+                .map(|s| {
+                    novo_revisions::notes_table(project, s, &novo_revisions::NoteFilter::default())
+                })
         };
         let r = match &notes_table {
             Some(table) => self.handover_pdf(&folder.join("10 Review notes.pdf"), &[table], &date),
-            None => Err("no review notes".to_owned()),
+            None if include_notes => Err("no review notes".to_owned()),
+            None => Err("left out: review notes are internal unless ticked".to_owned()),
         };
         note(
             &mut files,

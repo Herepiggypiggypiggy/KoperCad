@@ -31,6 +31,11 @@ text handover
 wait 6
 key Enter
 wait 8
+expect "Include the 1 review note"
+shot handover-ask-notes-unticked
+click_text "Include the 1 review note (remarks between the people on the project) as 10 Review notes.pdf"
+wait 3
+shot handover-ask-notes-ticked
 click_text "Hand over anyway"
 wait 40
 expect_file "~/Documents/KoperCAD/Motor starter (example) handover */10 Review notes.pdf" 1000

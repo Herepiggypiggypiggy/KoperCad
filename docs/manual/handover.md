@@ -28,7 +28,7 @@ Leave a comment on what you are looking at, for the next reader or for yourself.
 - A note has an author (your initials from Revisions), a date, an **Open** or **Resolved** status and a thread of replies. A reply to a resolved note opens it again.
 - Open notes show as a speech bubble on their object or spot, and the status bar counts them. Click a note in the list to go to it; **Check > Next open review note** walks them page by page.
 - The list filters by Open / Resolved / All, by who wrote or answered, by the page on screen, and by words in the note, its replies or the object's name.
-- File > Export print > **Export PDF with options…** can print the open notes as numbered bubbles on the pages and add a list at the end. The handover package carries `10 Review notes.pdf` with every note, open and resolved, when there is one.
+- File > Export print > **Export PDF with options…** can print the open notes as numbered bubbles on the pages and add a list at the end. Because notes are remarks between the people on the project, the handover package leaves them out unless you tick "Include the review notes" in the question it asks before writing; then it carries `10 Review notes.pdf` with every note, open and resolved.
 - The notes are kept in the project file but are not part of the drawing: they are not undone with it, they do not count as a change for revisions, and deleting one asks a second click. A note whose object was deleted stays in the list and says so.
 
 ## The final set

@@ -345,7 +345,7 @@ fn the_pdf_prints_open_notes_as_bubbles_and_a_list_only_when_asked() {
 }
 
 #[test]
-fn the_handover_package_gets_a_notes_file_only_when_there_are_notes() {
+fn the_handover_package_leaves_the_notes_out_unless_they_are_ticked() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive(&dir);
     d.place("mcb3", 80.0, 48.0);
@@ -359,11 +359,58 @@ fn the_handover_package_gets_a_notes_file_only_when_there_are_notes() {
         .add_note(NoteTarget::page(page), "Look at the cover")
         .unwrap();
     d.app.resolve_note(id);
+    // Notes exist but were not ticked: still absent.
+    let default = dir.path().join("handover-default");
+    assert!(d.app.export_handover_to(&default).is_some());
+    assert!(
+        !default.join("10 Review notes.pdf").exists(),
+        "internal remarks do not go to the customer by default"
+    );
+    // Ticked in the question before writing: present, and only for that run.
+    d.app.wb.handover_notes = true;
     let with = dir.path().join("handover-with");
     assert!(d.app.export_handover_to(&with).is_some());
-    let bytes = std::fs::read(with.join("10 Review notes.pdf")).unwrap();
-    assert!(bytes.starts_with(b"%PDF"));
+    assert!(
+        std::fs::read(with.join("10 Review notes.pdf"))
+            .unwrap()
+            .starts_with(b"%PDF")
+    );
+    assert!(!d.app.wb.handover_notes, "the tick is used once");
     assert!(with.join("0 Contents.pdf").exists());
+}
+
+#[test]
+fn the_handover_command_asks_about_the_notes_and_the_tick_starts_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive(&dir);
+    d.place("mcb3", 80.0, 48.0);
+    let page = d.app.current_page.unwrap();
+    d.app.add_note(NoteTarget::page(page), "Internal remark");
+    d.app.wb.handover_notes = true;
+    d.app.ask_handover();
+    assert!(
+        d.app.wb.handover_ask.is_some(),
+        "notes make it ask even with no problems"
+    );
+    assert!(!d.app.wb.handover_notes, "the tick starts off every time");
+    d.frame();
+}
+
+#[test]
+fn a_project_without_the_notes_sidecar_opens_with_no_notes() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive(&dir);
+    assert_eq!(d.app.backend.review_notes_json(), None);
+    let file = dir.path().join("Plain.novo");
+    assert!(d.app.save_to(&file));
+    d.app.run(&d.ctx.clone(), Action::CloseProject);
+    d.frame();
+    let mut e = Drive::new(&dir.path().join("untitled2"));
+    e.app.open_path(&file);
+    e.frame();
+    e.app.ensure_notes_loaded();
+    assert!(e.app.wb.notes.store().unwrap().is_empty());
+    assert_eq!(e.app.wb.notes.open_count(), 0);
 }
 
 #[test]

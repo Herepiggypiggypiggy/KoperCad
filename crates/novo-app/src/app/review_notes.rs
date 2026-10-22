@@ -687,7 +687,7 @@ fn notes_body(
                 .hint_text(format!("{} Search notes", icons::MAGNIFYING_GLASS))
                 .desired_width(150.0),
         );
-        if widgets::filter_toggle(ui, "This page", notes.this_page)
+        if widgets::chip(ui, "This page", notes.this_page)
             .on_hover_text("Only the notes on the page on screen")
             .clicked()
         {
@@ -805,7 +805,7 @@ fn notes_body(
         .unwrap_or(0);
     if open_shown > 1
         && ui
-            .small_button(format!("Resolve the {open_shown} shown"))
+            .small_button(format!("Resolve these {open_shown} notes"))
             .on_hover_text("Marks every open note in this list as resolved")
             .clicked()
     {
@@ -963,7 +963,7 @@ fn note_card(
                     }
                 } else if ui
                     .small_button(icons::TRASH)
-                    .on_hover_text("Delete this note and its replies")
+                    .on_hover_text("Delete note and its replies (asks to confirm)")
                     .clicked()
                 {
                     notes.confirm_delete = Some(id);
