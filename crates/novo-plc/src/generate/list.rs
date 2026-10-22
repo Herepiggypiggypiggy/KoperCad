@@ -327,6 +327,11 @@ fn label(tag: &str, description: &str) -> String {
 pub fn read_address(text: &str) -> Option<AddrKey> {
     let compact: String = text.chars().filter(|c| !c.is_whitespace()).collect();
     let upper = compact.trim_start_matches('%').to_ascii_uppercase();
+    // Siemens peripheral words: PIW256 / PQW256 (English), PEW256 / PAW256 (German).
+    let upper = match upper.as_bytes() {
+        [b'P', b'I' | b'Q' | b'E' | b'A', b'W', b'0'..=b'9', ..] => upper[1..].to_owned(),
+        _ => upper,
+    };
     let mut chars = upper.chars();
     let first = chars.next()?;
     let second = chars.next()?;
@@ -442,6 +447,22 @@ mod tests {
             })
         );
         assert_eq!(read_address("M0.0"), None);
+        let word = |space, byte| Some(AddrKey::Word { space, byte });
+        assert_eq!(read_address("PIW256"), word(Space::Input, 256));
+        assert_eq!(read_address("PQW256"), word(Space::Output, 256));
+        assert_eq!(read_address("%piw 258"), word(Space::Input, 258));
+        assert_eq!(read_address("PEW256"), word(Space::Input, 256));
+        assert_eq!(read_address("PAW256"), word(Space::Output, 256));
+        assert_eq!(read_address("PIB256"), None);
+        assert_eq!(read_address("PW256"), None);
+        let word = |space, byte| Some(AddrKey::Word { space, byte });
+        assert_eq!(read_address("PIW256"), word(Space::Input, 256));
+        assert_eq!(read_address("PQW256"), word(Space::Output, 256));
+        assert_eq!(read_address("%piw 258"), word(Space::Input, 258));
+        assert_eq!(read_address("PEW256"), word(Space::Input, 256));
+        assert_eq!(read_address("PAW256"), word(Space::Output, 256));
+        assert_eq!(read_address("PIB256"), None);
+        assert_eq!(read_address("PW256"), None);
     }
 
     #[test]

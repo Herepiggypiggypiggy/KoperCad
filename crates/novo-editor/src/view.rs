@@ -128,6 +128,11 @@ struct ContextMenu {
     xref: Vec<novo_xref::XrefAction>,
     page: PageId,
     opened: bool,
+    /// The menu's size last frame, to keep it on screen.
+    size: egui::Vec2,
+    /// Where the potential chips were drawn last frame, for the tests.
+    #[cfg(test)]
+    chip_rects: Vec<egui::Rect>,
 }
 
 /// One page of the schematic on screen, with the editor's tools.
@@ -1277,6 +1282,9 @@ impl SchematicView {
                 xref,
                 page,
                 opened: true,
+                size: egui::Vec2::ZERO,
+                #[cfg(test)]
+                chip_rects: Vec::new(),
             });
         }
 
@@ -1848,9 +1856,24 @@ impl SchematicView {
         let repeat = self.editor.repeat_label();
         let proposals = self.editor.proposals().len();
         let mut chosen: Option<MenuChoice> = None;
+        // egui's own constrain moves the drawing but not the hit areas of a
+        // fixed-position area, so a tall menu low on the screen showed
+        // shifted and ignored clicks. Place it within the screen here.
+        let screen = ctx.content_rect();
+        let at = egui::pos2(
+            menu.anchor
+                .x
+                .min(screen.right() - menu.size.x)
+                .max(screen.left()),
+            menu.anchor
+                .y
+                .min(screen.bottom() - menu.size.y)
+                .max(screen.top()),
+        );
         let area = egui::Area::new(egui::Id::new("novo-editor-context"))
             .order(egui::Order::Foreground)
-            .fixed_pos(menu.anchor)
+            .constrain(false)
+            .fixed_pos(at)
             .show(ctx, |ui| {
                 egui::Frame::menu(ui.style()).show(ui, |ui| {
                     ui.set_min_width(220.0);
@@ -1951,10 +1974,18 @@ impl SchematicView {
                                 None => "Potential: mixed".to_string(),
                             }),
                         );
-                        ui.horizontal_wrapped(|ui| {
+                        #[cfg(test)]
+                        menu.chip_rects.clear();
+                        // One row that sets the menu's width: a wrapping row asks
+                        // for the width the menu is taking from it, wraps and
+                        // unwraps every frame, and the menu jumps with it.
+                        ui.horizontal(|ui| {
                             for (i, chip) in feed.chips.iter().enumerate() {
                                 let on = feed.current.as_deref() == Some(chip.name.as_str());
-                                if ui.add(egui::Button::selectable(on, &chip.name)).clicked() {
+                                let button = ui.add(egui::Button::selectable(on, &chip.name));
+                                #[cfg(test)]
+                                menu.chip_rects.push(button.rect);
+                                if button.clicked() {
                                     chosen = Some(MenuChoice::Chip(i));
                                 }
                             }
@@ -2003,7 +2034,7 @@ impl SchematicView {
                     }
                     if let Some(w) = &menu.wire_override {
                         ui.add_enabled(false, egui::Button::new("Override potential"));
-                        ui.horizontal_wrapped(|ui| {
+                        ui.horizontal(|ui| {
                             for (i, chip) in w.chips.iter().enumerate() {
                                 if ui.button(&chip.name).clicked() {
                                     chosen = Some(MenuChoice::WireOverride(i));
@@ -2209,6 +2240,7 @@ impl SchematicView {
             && ctx.input(|i| i.pointer.any_pressed())
             && !area.response.contains_pointer();
         menu.opened = false;
+        menu.size = area.response.rect.size();
         let anchor = menu.anchor;
         let wires = menu.potentials.wires.clone();
         let device = menu.device;
@@ -2736,6 +2768,93 @@ mod tests {
             "Declare source: 3~ 400 V (L1, L2, L3)"
         );
         assert!(!menu.empty);
+    }
+
+    /// Right-click a feed placed at screen height `y_from_bottom` above the
+    /// canvas bottom, click the chip `name`, and report the feed's potential.
+    fn pick_chip_at(y_from_bottom: f32, name: &str) -> String {
+        let mut h = Harness::new();
+        h.view
+            .editor
+            .begin_place("iec/connectivity/potential_feed", None);
+        let bottom = h.view.rect.height() - y_from_bottom;
+        let world = h
+            .view
+            .canvas
+            .viewport
+            .screen_to_world(Vec2::new(200.0, bottom));
+        let (x, y) = (f64::from(world.x), f64::from(world.y));
+        h.click(x, y, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let feed = h.doc.project().symbols().next().expect("feed").id;
+        h.view.select(&[AnyId::Symbol(feed)]);
+        h.click(x, y, egui::PointerButton::Secondary);
+        h.frame(Vec::new());
+        let menu = h.view.menu.as_ref().expect("context menu");
+        let at = menu
+            .feed
+            .as_ref()
+            .and_then(|f| f.chips.iter().position(|c| c.name == name))
+            .expect("chip");
+        let rect = menu.chip_rects[at];
+        assert!(
+            h.ctx.content_rect().contains_rect(rect),
+            "chip {rect:?} is off screen"
+        );
+        let pos = rect.center();
+        let button = |pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        };
+        h.frame(vec![egui::Event::PointerMoved(pos)]);
+        h.frame(vec![button(true)]);
+        h.frame(vec![button(false)]);
+        h.frame(Vec::new());
+        let SymbolRole::PotentialFeed { potential } =
+            h.doc.project().symbol(feed).unwrap().role.clone()
+        else {
+            panic!("not a feed");
+        };
+        h.doc.project().potential(potential).unwrap().name.clone()
+    }
+
+    #[test]
+    fn the_feed_menu_keeps_its_place_and_size_from_frame_to_frame() {
+        let mut h = Harness::new();
+        h.view
+            .editor
+            .begin_place("iec/connectivity/potential_feed", None);
+        let world = h
+            .view
+            .canvas
+            .viewport
+            .screen_to_world(Vec2::new(200.0, h.view.rect.height() - 30.0));
+        let (x, y) = (f64::from(world.x), f64::from(world.y));
+        h.click(x, y, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let feed = h.doc.project().symbols().next().unwrap().id;
+        h.view.select(&[AnyId::Symbol(feed)]);
+        h.click(x, y, egui::PointerButton::Secondary);
+        let mut seen = Vec::new();
+        for _ in 0..8 {
+            h.frame(Vec::new());
+            let menu = h.view.menu.as_ref().unwrap();
+            seen.push((menu.size, menu.chip_rects.clone()));
+        }
+        assert!(seen.windows(2).all(|w| w[0] == w[1]), "{seen:?}");
+    }
+
+    #[test]
+    fn a_chip_of_the_feed_menu_works_near_the_top_of_the_canvas() {
+        assert_eq!(pick_chip_at(700.0, "+24 V"), "+24 V");
+    }
+
+    #[test]
+    fn a_chip_of_the_feed_menu_works_low_on_the_canvas() {
+        assert_eq!(pick_chip_at(30.0, "+24 V"), "+24 V");
+        assert_eq!(pick_chip_at(30.0, "L3"), "L3");
     }
 
     /// Places a fuse and a contactor facing it at `x`, which leaves

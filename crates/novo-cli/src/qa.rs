@@ -975,7 +975,13 @@ impl Ctx<'_> {
                 self.srv.tool("click", &args).map(|_| ())
             }
             "click" | "move" => {
-                let args = json!({"x": num(1, "x")?, "y": num(2, "y")?});
+                let mut args = json!({"x": num(1, "x")?, "y": num(2, "y")?});
+                // `click X Y right` (or `middle`) presses that button.
+                if words[0] == "click"
+                    && let Some(button) = words.get(3)
+                {
+                    args["button"] = json!(button);
+                }
                 self.srv.tool(&words[0], &args).map(|_| ())
             }
             "drag" => {
