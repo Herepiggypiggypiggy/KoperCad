@@ -1,0 +1,28 @@
+@title Ctrl+K finds the drilling template and cut-out cards (door, cut-out, drill template)
+@area Reports
+# The cut-out cards and drilling template are written by the Workshop pack; the palette must lead there for the words people use.
+open qa/fixtures/door-cutouts.novo
+wait 20
+key ctrl+k
+wait 4
+text cut-out
+wait 4
+expect "Export workshop pack"
+shot palette-cut-out
+check_layout
+key Escape
+wait 3
+key ctrl+k
+wait 4
+text door
+wait 4
+expect "Export workshop pack"
+shot palette-door
+key Escape
+wait 3
+key ctrl+k
+wait 4
+text drill template
+wait 4
+expect "Export workshop pack"
+shot palette-drill-template
