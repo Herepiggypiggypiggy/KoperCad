@@ -166,3 +166,38 @@ fn opening_the_commissioning_workspace_closes_it() {
     d.frame();
     assert!(d.app.wb.build.is_none());
 }
+
+#[test]
+fn a_device_step_can_be_shown_on_the_plate_and_in_3d_and_build_mode_steps_aside() {
+    use super::workspace::Workspace;
+    let (_dir, mut d) = started();
+    cabinet(&mut d);
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.build", None);
+    d.frame();
+    d.frame();
+    let device = d
+        .app
+        .wb
+        .build
+        .as_ref()
+        .and_then(|b| b.plan.clone())
+        .and_then(|(_, p)| p.cabinets[0].steps.iter().find_map(|s| s.device))
+        .expect("a device step");
+    d.app.show_device(device, false);
+    d.app.wb.build.as_mut().unwrap().away = true;
+    d.frame();
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
+    assert_eq!(d.app.cabinet_selected(), vec![device]);
+    // Stepped aside: Space does not tick, Escape does not close.
+    tap_space(&mut d);
+    d.key(egui::Key::Escape, egui::Modifiers::NONE);
+    d.frame();
+    assert!(d.app.wb.build.is_some());
+    assert_eq!(ticks(&d), 0);
+    d.app.show_device(device, true);
+    d.frame();
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+}
