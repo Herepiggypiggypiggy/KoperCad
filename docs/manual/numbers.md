@@ -19,7 +19,7 @@ The cabinet heat view solves heat conduction and air flow on a grid (2D in the C
 What that does and does not mean:
 
 - The flow and heat core matches the benchmarks closely (a few percent at worst).
-- The whole enclosure result is **not** yet validated against a measurement or IEC 60890. In a sealed enclosure the 3D mean air rise has been about 13% below the IEC 60890 hand calculation. With a fan, the heat balance is only good to about 3% on one window.
+- The whole enclosure result is **not** yet validated against a measurement or IEC 60890. In a sealed enclosure the 3D mean air rise has been about 13% below the IEC 60890 hand calculation. With a fan, the heat balance is only good to about 3% on one window; that is the figure in the program's own label (Help > About the numbers), and the fan-into-a-vent flow in `docs/thermal-validation.md` is within 3% too.
 - The 2D mean air temperature with a fan is a low estimate against the 3D result.
 - A heat run that stops early says so (**stalled**).
 

@@ -20,7 +20,7 @@ Everything is in your own user profile and nothing needs administrator rights.
 | `.novo` | A project from before the rename. Still opens. |
 | `.kcfield` | A field file: commissioning results and Build mode ticks, exchanged between desk and tablet. It holds no drawing. |
 | `.pdf`, `.xlsx`, `.csv` | Exports: drawings, reports, label and bench data |
-| `.dxf`, `.step` | Imports: DXF as a background or drawing, STEP for part shapes |
+| `.dxf`, `.step` | DXF: imported as a background and exported per page or as a wiring plan. STEP: imported for part shapes and exported for the cabinet. |
 
 ## Compatibility promises
 

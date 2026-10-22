@@ -70,7 +70,9 @@ fn file_url(path: &std::path::Path, anchor: &str) -> String {
 }
 
 /// Opens a page in the default browser (per user, no elevation). Windows
-/// hands the URL to the default handler so the heading anchor is kept.
+/// hands the URL to the default handler; whether the heading anchor survives
+/// depends on the default browser (untested, on the Windows check list), and
+/// if it is lost the page still opens at the top.
 fn open_page(path: &std::path::Path, anchor: &str) -> Result<(), String> {
     let url = file_url(path, anchor);
     let mut command = if cfg!(windows) {
