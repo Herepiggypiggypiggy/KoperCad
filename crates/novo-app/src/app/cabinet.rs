@@ -1727,6 +1727,7 @@ impl NovoApp {
                     let ambient = self.sizing.request().ambient_max;
                     let dragging = self.cabinet.drag.is_some();
                     self.cabinet.heat.machine = generation;
+                    self.cabinet.heat.set_left_out(!left_out.is_empty());
                     self.cabinet.heat.sync_live(
                         heat_project,
                         s,
@@ -1915,6 +1916,8 @@ impl NovoApp {
                     }
                 }
                 let veiled = super::machine::left_out_boxes(project, &left_out, &shown);
+                // Said in the device's own hover, so only one tooltip shows.
+                let mut left_out_note: Option<String> = None;
                 if !veiled.is_empty() {
                     let rect = out.response.rect;
                     let hovered = super::machine::draw_left_out(
@@ -1926,9 +1929,7 @@ impl NovoApp {
                             .pointer_hover_pos()
                             .filter(|_| out.response.hovered()),
                     );
-                    if let Some(text) = hovered {
-                        out.response.clone().on_hover_text(text);
-                    }
+                    left_out_note = hovered;
                 }
                 if let Some(s) = structure {
                     let rect = out.response.rect;
@@ -2046,6 +2047,10 @@ impl NovoApp {
                     let lines = problem_lines(&shown, id, &tag_of);
                     out.response.clone().on_hover_ui_at_pointer(|ui| {
                         ui.strong(tag_of(id));
+                        if let Some(note) = &left_out_note {
+                            ui.label(note);
+                            return;
+                        }
                         if lines.is_empty() {
                             ui.weak("No problems");
                         }

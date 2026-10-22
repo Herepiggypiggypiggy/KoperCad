@@ -255,9 +255,14 @@ fn build_sheets(reports: &[&ReportOutput], options: &ReportPdfOptions) -> Vec<Sh
         // row height.
         for section in &report.sections {
             let setup = setup_for(options, &section.key);
+            // Not `..report.clone()`: that copies every section's rows for
+            // each section, which is quadratic in the sections of a report
+            // (a 600-page project has hundreds of cable and strip sections).
             let single = ReportOutput {
+                report: report.report.clone(),
+                title: report.title.clone(),
+                revision: report.revision,
                 sections: vec![section.clone()],
-                ..(*report).clone()
             };
             let mut pages = paginate(&single, &setup);
             // A flowing section starts under the previous one when a few

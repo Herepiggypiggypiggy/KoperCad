@@ -72,6 +72,8 @@ pub(super) struct CoolingAdvice {
     /// The view the window opened in (1 Cabinet, 2 3D): it closes when the
     /// person goes to the other one.
     view: Option<u8>,
+    /// The option choice leaves devices out (set each frame by the view).
+    pub(super) left_out: bool,
 }
 
 /// What the window asks the app to do.
@@ -296,6 +298,7 @@ impl CoolingAdvice {
             .show(ctx, |ui| {
                 ui.set_max_width(WIDTH);
                 ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
+                super::heat_cooling::left_out_line(ui, self.left_out);
                 if let Some(run) = &self.run {
                     ui.horizontal(|ui| {
                         ui.add(egui::Spinner::new());

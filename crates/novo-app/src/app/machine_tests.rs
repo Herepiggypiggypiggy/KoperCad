@@ -693,3 +693,24 @@ fn the_ghost_switch_hides_the_veil_and_the_header_names_what_is_left_out() {
     assert!(!names.contains("-K1"), "{names}");
     let _ = ids;
 }
+
+#[test]
+fn commissioning_counts_follow_a_switch_of_option_without_any_edit() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    machine(&mut d);
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    let total = |d: &mut Drive| d.app.commissioning_progress().unwrap().total;
+    let off = total(&mut d);
+    d.app
+        .run_command(&ctx, "project.option", Some("conveyor on"));
+    d.frame();
+    let on = total(&mut d);
+    assert!(on > off, "the conveyor adds checks: {on} vs {off}");
+    d.app
+        .run_command(&ctx, "project.option", Some("conveyor off"));
+    d.frame();
+    assert_eq!(total(&mut d), off, "and takes them away again");
+}

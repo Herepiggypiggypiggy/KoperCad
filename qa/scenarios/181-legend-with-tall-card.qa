@@ -1,0 +1,33 @@
+@title Heat legend under a lesson card: the scale lies flat, ticks are readable, the notes scroll
+@area Cabinet
+# The card parked in the bottom right leaves the Temperature legend little height. Its scale then lies flat with thinned ticks, and the notes below scroll (solid bar) instead of being cut off.
+# After Place all is accepted the legend also gets the total-loss line, so at 1280x688 it overflows; the scroll step reaches the last note.
+click_text "Learn…"
+wait 15
+text cabinet layout
+wait 8
+click_text Start #1
+wait 40
+click_text Cabinet #1
+wait 40
+key shift+h
+wait 60
+shot legend-at-run-size
+check_blank legend-at-run-size
+expect "Preview from part losses"
+key ctrl+shift+p
+wait 40
+key Enter
+wait 60
+resize 1280 688
+wait 60
+shot legend-squeezed
+check_blank legend-squeezed
+expect "Total loss"
+check_layout
+scroll 1165 235 -200
+wait 20
+shot legend-scrolled-down
+scroll 1165 235 200
+wait 20
+shot legend-scrolled-back

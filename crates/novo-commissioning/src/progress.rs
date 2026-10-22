@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use novo_core::{DeviceKind, PageId, Project};
 
@@ -142,11 +142,65 @@ fn in_scope(info: &TargetInfo, scope: Scope<'_>) -> bool {
 }
 
 pub fn progress(project: &Project, store: &CommissioningStore, scope: Scope<'_>) -> Progress {
-    let mut out = Progress::default();
-    for info in targets(project).iter().filter(|i| in_scope(i, scope)) {
-        add(&mut out, info, store);
+    TargetIndex::of(project).progress(store, scope)
+}
+
+/// The targets of a project, built once and looked up by page. The window
+/// asks for the progress of every page on every frame; with 600 pages,
+/// building the targets for each of them took seconds a frame. Build it
+/// once per project revision and keep it for as long as that revision
+/// shows.
+#[derive(Debug, Clone, Default)]
+pub struct TargetIndex {
+    all: Vec<TargetInfo>,
+    by_page: HashMap<PageId, Vec<usize>>,
+}
+
+impl TargetIndex {
+    pub fn of(project: &Project) -> Self {
+        Self::from_targets(targets(project))
     }
-    out
+
+    pub fn from_targets(all: Vec<TargetInfo>) -> Self {
+        let mut by_page: HashMap<PageId, Vec<usize>> = HashMap::new();
+        for (i, info) in all.iter().enumerate() {
+            for page in &info.pages {
+                by_page.entry(*page).or_default().push(i);
+            }
+        }
+        TargetIndex { all, by_page }
+    }
+
+    /// Every target, in wire, terminal, device order.
+    pub fn all(&self) -> &[TargetInfo] {
+        &self.all
+    }
+
+    /// The targets drawn on `page`, in the order of [`TargetIndex::all`].
+    pub fn on_page(&self, page: PageId) -> impl Iterator<Item = &TargetInfo> {
+        self.by_page
+            .get(&page)
+            .into_iter()
+            .flatten()
+            .map(|&i| &self.all[i])
+    }
+
+    pub fn progress(&self, store: &CommissioningStore, scope: Scope<'_>) -> Progress {
+        let mut out = Progress::default();
+        match scope {
+            Scope::Page(page) => {
+                for info in self.on_page(page) {
+                    add(&mut out, info, store);
+                }
+            }
+            _ => {
+                for info in self.all.iter().filter(|i| in_scope(i, scope)) {
+                    add(&mut out, info, store);
+                }
+            }
+        }
+        out
+    }
 }
 
 /// Progress for every page that has a target, in page order. A target drawn
