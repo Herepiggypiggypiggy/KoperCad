@@ -11,6 +11,7 @@ pub mod cutout_cards;
 pub mod drill;
 pub mod enclosure;
 pub mod model;
+pub mod mount;
 pub mod openings;
 pub mod plan;
 pub mod plate_drawing;
