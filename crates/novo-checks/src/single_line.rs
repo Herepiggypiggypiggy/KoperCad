@@ -37,6 +37,12 @@
 //! licensed copy ([`TableSet::disclosure`]); the clause numbers in
 //! [`crate::calc_view::clause`] are not verified against the standard text.
 //!
+//! The short-circuit current at each box is the stated supply fault level
+//! through the cable impedance of every run on the way ([`Node::ik_ka`],
+//! three-phase maximum, conductors at 20 °C); it is a ceiling where a run has
+//! no data, absent past a converter, and a device whose rated breaking
+//! capacity is below it fails.
+//!
 //! What it leaves out, and says so in [`SingleLine::notes`]: diversity (the
 //! current of a distribution device is the arithmetic sum of what hangs on
 //! it), the reactive part of the voltage drop when no power factor is
@@ -45,6 +51,23 @@
 //! transformer or power supply.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+
+/// Device property: a diversity (simultaneity) factor, 0.1 to 1, applied to
+/// the sum of the currents of what hangs below the device.
+pub const DIVERSITY_FACTOR: &str = "diversity_factor";
+/// Project property: the same factor for the sum at the supply.
+pub const SUPPLY_DIVERSITY_FACTOR: &str = "supply.diversity_factor";
+
+/// A stated factor, `Ok(None)` when none is stated, `Err` when it is not a
+/// number from 0.1 to 1 (a factor above 1 or near zero is a typing slip, not
+/// a diversity).
+fn diversity(raw: Option<f64>) -> Result<Option<f64>, ()> {
+    match raw {
+        None => Ok(None),
+        Some(f) if (0.1..=1.0).contains(&f) => Ok(Some(f)),
+        Some(_) => Err(()),
+    }
+}
 
 use novo_core::{
     DeviceId, Endpoint, NetId, Netlist, PotentialKind, Project, SymbolId, SymbolInstance,
@@ -56,6 +79,7 @@ use crate::calc::cable::{Circuit, Loaded, Method};
 use crate::calc::circuit::Status;
 use crate::calc::drop::{Run, Supply};
 use crate::calc::motor::full_load_current;
+use crate::calc::short_circuit::{Impedance, Source, cable_impedance, ik3_max};
 use crate::calc::starter::{typical_cos_phi, typical_efficiency};
 use crate::calc::tables::TableSet;
 use crate::calc_checks::{
@@ -319,6 +343,13 @@ pub struct Verdict {
     pub status: Status,
     /// Titles of the rows that fail.
     pub failing: Vec<String>,
+    /// `status` without the "Breaking capacity" row.
+    pub status_without_breaking: Status,
+    /// The Calculations sheet fails Icu against the level at the device
+    /// from the supply data alone. Where the diagram has an Ik along the run
+    /// it judges Icu against that instead (`icu_status`) and the row is
+    /// taken out of `status` and `failing`.
+    pub breaking_row_failed: bool,
     /// Maximum three-phase short-circuit current at the device, kA.
     pub ik_max_ka: Option<f64>,
     /// Inputs the calculation lacks, named by property.
@@ -355,6 +386,23 @@ pub struct Node {
     pub loads_without_current: usize,
     pub link: Option<Link>,
     pub verdict: Option<Verdict>,
+    /// The diversity factor applied to the sum of the currents below this
+    /// box, as stated on the device (the supply: in the project).
+    pub diversity: Option<f64>,
+    /// Maximum three-phase short-circuit current at the box's incoming
+    /// terminals, kA: the supply's fault level through the cables of every
+    /// run on the way (IEC 60909-0, low-voltage simplification, resistance at
+    /// 20 °C). Missing past a transformer or power supply and on runs that are
+    /// not three-phase.
+    pub ik_ka: Figure,
+    /// Whether every run from the supply has a length and a cross-section.
+    /// When false, `ik_ka` is a ceiling: the cable impedance of the runs
+    /// without data is left out.
+    pub ik_exact: bool,
+    /// The box cannot break the current there: `Fail` when the figure is
+    /// exact and above the rated breaking capacity, `Warning` when only the
+    /// ceiling is above it.
+    pub icu_status: Status,
     /// Hops from the supply.
     pub depth: usize,
 }
@@ -367,6 +415,7 @@ impl Node {
                 .verdict
                 .as_ref()
                 .is_some_and(|v| v.status == Status::Fail)
+            || self.icu_status == Status::Fail
     }
 }
 
@@ -1306,6 +1355,10 @@ pub fn single_line(
         loads_without_current: 0,
         link: None,
         verdict: None,
+        diversity: None,
+        ik_ka: supply_ik_fig,
+        ik_exact: true,
+        icu_status: Status::Pass,
         depth: 0,
     }];
     let mut node_of_item: Vec<usize> = vec![usize::MAX; items.len()];
@@ -1360,18 +1413,30 @@ pub fn single_line(
         };
         let verdict = verdicts.get(&item.device).and_then(|entry| {
             let report = entry.report.as_ref()?;
-            let mut status = Status::Pass;
-            for row in &report.rows {
-                status = match (status, row.status) {
-                    (Status::Fail, _) | (_, Status::Fail) => Status::Fail,
-                    (Status::Warning, _) | (_, Status::Warning) => Status::Warning,
-                    (Status::Unknown, _) | (_, Status::Unknown) => Status::Unknown,
-                    _ => Status::Pass,
-                };
-            }
+            let fold = |skip_breaking: bool| {
+                let mut status = Status::Pass;
+                for row in report
+                    .rows
+                    .iter()
+                    .filter(|r| !(skip_breaking && r.title == "Breaking capacity"))
+                {
+                    status = match (status, row.status) {
+                        (Status::Fail, _) | (_, Status::Fail) => Status::Fail,
+                        (Status::Warning, _) | (_, Status::Warning) => Status::Warning,
+                        (Status::Unknown, _) | (_, Status::Unknown) => Status::Unknown,
+                        _ => Status::Pass,
+                    };
+                }
+                status
+            };
             Some(Verdict {
-                status,
+                status: fold(false),
+                status_without_breaking: fold(true),
                 failing: report.failures().map(|r| r.title.to_owned()).collect(),
+                breaking_row_failed: report
+                    .rows
+                    .iter()
+                    .any(|r| r.title == "Breaking capacity" && r.status == Status::Fail),
                 ik_max_ka: report.at_device.as_ref().map(|f| f.ik3_max_a / 1000.0),
                 missing: entry.missing.clone(),
             })
@@ -1398,6 +1463,10 @@ pub fn single_line(
             } else {
                 None
             },
+            diversity: None,
+            ik_ka: Figure::MISSING,
+            ik_exact: false,
+            icu_status: Status::Pass,
             depth: 0,
         });
     }
@@ -1458,6 +1527,9 @@ pub fn single_line(
     }
 
     // Currents, from the leaves up.
+    let mut diversity_applied: Vec<(String, f64)> = Vec::new();
+    let mut diversity_unused: Vec<String> = Vec::new();
+    let mut diversity_invalid: Vec<String> = Vec::new();
     let mut order_up: Vec<usize> = (1..nodes.len()).collect();
     order_up.sort_by_key(|n| std::cmp::Reverse(nodes[*n].depth));
     for &id in &order_up {
@@ -1468,6 +1540,18 @@ pub fn single_line(
             .unwrap_or(voltage);
         let three_phase = runs.get(&id).is_none_or(|r| r.3.three_phase);
         let kids: Vec<usize> = nodes[id].children.clone();
+        let raw_factor = device_number(project, item.device, DIVERSITY_FACTOR);
+        let factor = match diversity(raw_factor) {
+            Ok(f) => f,
+            Err(()) => {
+                diversity_invalid.push(format!(
+                    "the factor at {} is {}",
+                    nodes[id].tag,
+                    raw_factor.map_or_else(|| "not a number".to_owned(), fmt)
+                ));
+                None
+            }
+        };
         let (own, basis): (Figure, String) = if let Some(a) = stated_on_wire.get(&id) {
             (
                 Figure::stated(*a),
@@ -1510,6 +1594,9 @@ pub fn single_line(
             (Figure::MISSING, String::new())
         };
         if !own.is_missing() {
+            if factor.is_some() {
+                diversity_unused.push(nodes[id].tag.clone());
+            }
             nodes[id].current_a = own;
             nodes[id].current_basis = basis;
             nodes[id].loads_without_current = 0;
@@ -1558,9 +1645,14 @@ pub fn single_line(
             }
         }
         if counted > 0 {
+            if let Some(f) = factor {
+                sum *= f;
+                nodes[id].diversity = Some(f);
+                diversity_applied.push((nodes[id].tag.clone(), f));
+            }
             nodes[id].current_a = Figure::calculated(sum);
             nodes[id].current_basis = format!(
-                "{} {} branch{} below{}, no diversity",
+                "{} {} branch{} below{}{}",
                 if converter {
                     "output power of"
                 } else {
@@ -1573,11 +1665,18 @@ pub fn single_line(
                 } else {
                     ""
                 },
+                match factor {
+                    Some(f) => format!(" × {} diversity", fmt(f)),
+                    None => ", no diversity".to_owned(),
+                },
             );
         } else if item.kind.is_load() {
             nodes[id].loads_without_current = 1;
         } else {
             nodes[id].loads_without_current = without;
+        }
+        if counted == 0 && factor.is_some() {
+            diversity_unused.push(nodes[id].tag.clone());
         }
         if counted > 0 {
             nodes[id].loads_without_current = without;
@@ -1598,9 +1697,31 @@ pub fn single_line(
                 None => without += nodes[k].loads_without_current.max(1),
             }
         }
+        let raw_supply = number(props, SUPPLY_DIVERSITY_FACTOR);
+        let supply_factor = match diversity(raw_supply) {
+            Ok(f) => f,
+            Err(()) => {
+                diversity_invalid.push(format!(
+                    "the factor at the supply is {}",
+                    raw_supply.map_or_else(|| "not a number".to_owned(), fmt)
+                ));
+                None
+            }
+        };
         if counted > 0 {
+            let basis = match supply_factor {
+                Some(f) => {
+                    sum *= f;
+                    nodes[0].diversity = Some(f);
+                    diversity_applied.push(("the supply".to_owned(), f));
+                    format!("sum of the branches × {} diversity", fmt(f))
+                }
+                None => "sum of the branches, no diversity".to_owned(),
+            };
             nodes[0].current_a = Figure::calculated(sum);
-            nodes[0].current_basis = "sum of the branches, no diversity".to_owned();
+            nodes[0].current_basis = basis;
+        } else if supply_factor.is_some() {
+            diversity_unused.push("the supply".to_owned());
         }
         nodes[0].loads_without_current = without;
     }
@@ -1611,6 +1732,13 @@ pub fn single_line(
     let mut protector_above: HashMap<usize, Option<(String, f64)>> = HashMap::new();
     let mut restarted: Vec<String> = Vec::new();
     protector_above.insert(0, None);
+    // The cable impedance from the supply to each box, and whether every run
+    // on the way is complete. `None` past a converter or without a source.
+    let source = supply_ik.and_then(|ik| Source::from_ik(ik, voltage));
+    let mut ik_state: HashMap<usize, Option<(Impedance, bool)>> = HashMap::new();
+    ik_state.insert(0, source.map(|_| (Impedance::default(), true)));
+    let mut ik_through_converter = false;
+    let mut breaking_judged_along_run = false;
     for &id in &order_down {
         let parent_id = nodes[id].parent.unwrap_or(0);
         let above = protector_above.get(&parent_id).cloned().flatten();
@@ -1624,7 +1752,18 @@ pub fn single_line(
             above.clone()
         };
         protector_above.insert(id, own);
+        let parent_is_converter =
+            matches!(nodes[parent_id].kind, Kind::Transformer | Kind::PowerSupply);
+        if parent_is_converter && nodes[parent_id].ik_ka.value.is_some() {
+            ik_through_converter = true;
+        }
+        let parent_ik = if parent_is_converter {
+            None
+        } else {
+            ik_state.get(&parent_id).copied().flatten()
+        };
         let Some((route, _net, poles, facts)) = runs.remove(&id) else {
+            ik_state.insert(id, parent_ik);
             continue;
         };
         let inline_tags: Vec<String> = route
@@ -1693,6 +1832,41 @@ pub fn single_line(
                 fmt(drop_limit)
             ));
         }
+        let state = match (source, parent_ik) {
+            (Some(_), Some((mut z, mut exact))) if link.three_phase => {
+                exact &= link.complete && link.traced;
+                for seg in &link.segments {
+                    match (seg.section_mm2.value, seg.length_m.value) {
+                        (Some(sec), Some(len)) => match cable_impedance(sec, len, 20.0) {
+                            Some(c) => z = z + c,
+                            None => exact = false,
+                        },
+                        _ => exact = false,
+                    }
+                }
+                Some((z, exact))
+            }
+            _ => None,
+        };
+        ik_state.insert(id, state);
+        if let (Some(src), Some((z, exact))) = (source, state) {
+            let ik = ik3_max(&src, &[z]) / 1000.0;
+            nodes[id].ik_ka = Figure::calculated(ik);
+            nodes[id].ik_exact = exact;
+            if let Some(v) = nodes[id].verdict.as_mut()
+                && v.breaking_row_failed
+            {
+                v.status = v.status_without_breaking;
+                v.failing.retain(|t| t != "Breaking capacity");
+                breaking_judged_along_run = true;
+            }
+            if let Some(icu) = nodes[id].breaking_ka.value
+                && nodes[id].kind.is_protective()
+                && ik > icu
+            {
+                nodes[id].icu_status = if exact { Status::Fail } else { Status::Warning };
+            }
+        }
         nodes[id].link = Some(link);
     }
 
@@ -1708,6 +1882,28 @@ pub fn single_line(
             unfed_tags.join(", ")
         ));
     }
+    if !diversity_applied.is_empty() {
+        notes[0] = format!(
+            "Currents above a distribution device are the arithmetic sum of the loads below it, times the diversity factor of its own level where one is stated ({}); factors on several levels multiply, and everywhere else no diversity or simultaneity factor is applied.",
+            diversity_applied
+                .iter()
+                .map(|(tag, f)| format!("{tag} {}", fmt(*f)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    if !diversity_unused.is_empty() {
+        notes.push(format!(
+            "A diversity factor is stated but not used at {}: its current is stated or nothing with a current hangs below it.",
+            diversity_unused.join(", ")
+        ));
+    }
+    if !diversity_invalid.is_empty() {
+        notes.push(format!(
+            "Ignored, no factor applied: {}; a diversity factor must be a number from 0.1 to 1.",
+            diversity_invalid.join(", ")
+        ));
+    }
     restarted.sort_by(|a, b| natural_cmp(a, b));
     restarted.dedup();
     if !restarted.is_empty() {
@@ -1715,6 +1911,34 @@ pub fn single_line(
             "ΔU Σ is counted again from the output of {}: percentages of two voltages are not added.",
             restarted.join(", ")
         ));
+    }
+    if breaking_judged_along_run {
+        notes.push(
+            "Icu is checked against Ik along the run, which the cable impedance lowers; the Calculations window compares with the supply fault level alone, so it can fail a device that passes here."
+                .to_owned(),
+        );
+    }
+    if ik_through_converter {
+        notes.push(
+            "Short-circuit current is not carried through a transformer or power supply: boxes behind one show no Ik."
+                .to_owned(),
+        );
+    }
+    if nodes.iter().skip(1).any(|n| n.ik_ka.value.is_some()) {
+        notes.push(
+            "Ik is the three-phase maximum (IEC 60909-0, low-voltage simplification): the stated supply fault level through the cable impedance of each run, conductors at 20 °C; motor contribution and busbar impedance are left out."
+                .to_owned(),
+        );
+    }
+    if nodes
+        .iter()
+        .skip(1)
+        .any(|n| n.ik_ka.value.is_some() && !n.ik_exact)
+    {
+        notes.push(
+            "Ik is a ceiling (shown as ≤) where a run above has no length or cross-section: its cable impedance is left out."
+                .to_owned(),
+        );
     }
     let links = || nodes.iter().filter_map(|n| n.link.as_ref());
     let mut assumed: Vec<&'static str> = links()

@@ -22,3 +22,6 @@ crates/novo-storage/tests/fixtures/*.json text eol=lf
 # Append-only progress logs: concurrent branches each add lines at the end, so a merge keeps both
 # sides instead of stopping on a conflict.
 handoff/**/PROGRESS.md merge=union
+
+# Files written by the release candidates: byte for byte, never converted.
+crates/novo-tests/tests/golden/releases/** -text

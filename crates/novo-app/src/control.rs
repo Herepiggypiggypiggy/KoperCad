@@ -31,6 +31,10 @@
 //!   the UI thread) and `period_ms` (start of one frame to the start of the
 //!   next, so with the GPU submit and present). Mean, median, 95th percentile
 //!   and worst, after 5 warm-up frames.
+//! - `open_file` `{path, recover?}`: opens the project at `path` the way a person
+//!   does: answers the next file dialog with `path` and starts File > Open
+//!   (Ctrl+O). With `recover: true` it runs the command "Recover a damaged
+//!   project" from the palette (Ctrl+K) instead, so QA can open damaged fixtures.
 //! - `wait` `{frames?}`, `resize` `{w,h}`, `quit`.
 //!
 //! Every input command ends with a few settle frames before it replies, so a
@@ -574,6 +578,36 @@ impl Control {
                     }
                 }
                 crate::dialogs::queue_answer(paths);
+            }
+            "open_file" => {
+                let Some(path) = req.get("path").and_then(Value::as_str) else {
+                    return fail("open_file needs path".into());
+                };
+                crate::dialogs::queue_answer(vec![path.into()]);
+                let recover = req.get("recover").and_then(Value::as_bool) == Some(true);
+                let key = |key: egui::Key, m: Modifiers| {
+                    [true, false].map(|pressed| {
+                        Step::Events(vec![Event::Key {
+                            key,
+                            physical_key: Some(key),
+                            pressed,
+                            repeat: false,
+                            modifiers: m,
+                        }])
+                    })
+                };
+                if recover {
+                    steps.extend(key(egui::Key::K, Modifiers::COMMAND));
+                    steps.push_back(Step::Idle(2));
+                    steps.push_back(Step::Events(vec![Event::Text(
+                        "Recover a damaged project".into(),
+                    )]));
+                    steps.push_back(Step::Idle(2));
+                    steps.extend(key(egui::Key::Enter, Modifiers::NONE));
+                } else {
+                    steps.extend(key(egui::Key::O, Modifiers::COMMAND));
+                }
+                steps.push_back(Step::Idle(SETTLE_FRAMES));
             }
             "dialogs" => {
                 let (log, waiting) = crate::dialogs::take_log();

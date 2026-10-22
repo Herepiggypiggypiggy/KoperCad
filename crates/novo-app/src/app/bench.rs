@@ -1265,15 +1265,26 @@ fn print_check(ui: &mut egui::Ui, check: &mut [String; 3], act: &mut Option<Act>
         }
         ui.label("Printed square measures");
         for (i, text) in check.iter_mut().take(2).enumerate() {
-            ui.add(
+            let name = if i == 0 {
+                "Square width"
+            } else {
+                "Square height"
+            };
+            let response = ui.add(
                 egui::TextEdit::singleline(text)
                     .desired_width(48.0)
                     .hint_text(if i == 0 { "width" } else { "height" }),
             );
+            // Named for screen readers and the QA harness (the hint is not a label).
+            response
+                .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, name));
             ui.label(if i == 0 { "x" } else { "mm" });
         }
         ui.label("printed at");
-        ui.add(egui::TextEdit::singleline(&mut check[2]).desired_width(40.0));
+        let response = ui.add(egui::TextEdit::singleline(&mut check[2]).desired_width(40.0));
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Printed at percent")
+        });
         ui.label("%");
     });
     if let (Some(w), Some(h), Some(at)) = (

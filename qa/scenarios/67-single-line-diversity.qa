@@ -1,0 +1,41 @@
+@title Single-line diagram: the diversity factor, unset and set, in the inputs window, the box and the schedule
+@area Reports
+# The supply factor entry in Check > Electrical inputs, empty and set; then the diagram and schedule of a board with factors.
+open qa/fixtures/distribution-board.novo
+wait 20
+key ctrl+k
+wait 4
+text electrical inputs
+wait 4
+key Enter
+wait 10
+shot electrical-inputs-factor-empty
+check_layout
+expect "Diversity factor at the supply"
+key Escape
+wait 4
+open qa/fixtures/distribution-board-diversity.novo
+wait 20
+key ctrl+k
+wait 4
+text electrical inputs
+wait 4
+key Enter
+wait 10
+shot electrical-inputs-factor-set
+check_layout
+key Escape
+wait 4
+key ctrl+k
+wait 4
+text single line
+wait 4
+key Enter
+wait 20
+shot diversity-diagram
+check_blank diversity-diagram
+check_layout
+click_text Schedule #1
+wait 10
+shot diversity-schedule
+check_layout

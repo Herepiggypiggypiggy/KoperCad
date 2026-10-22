@@ -553,7 +553,7 @@ fn no_pf_note_when_every_run_states_one() {
 }
 
 /// A 24 V load behind a power supply fed from the heater breaker's side of
-/// the board: 48 W at 24 V is 2 A out and 0.12 A in at 400 V.
+/// the board: 48 W at 24 V is 2 A out and 0.069 A in on three phases at 400 V.
 fn board_with_psu() -> (Document, Board, DeviceId, DeviceId) {
     let (mut doc, b) = board();
     let (psu, load) = doc
@@ -568,7 +568,7 @@ fn board_with_psu() -> (Document, Board, DeviceId, DeviceId) {
                 page,
                 "iec/supplies/power_supply",
                 at(0.0),
-                pins(&["L1", "L2", "+", "-"]),
+                pins(&["L1", "L2", "L3", "+", "-"]),
                 SymbolRole::Device {
                     device: d,
                     main: true,
@@ -581,7 +581,7 @@ fn board_with_psu() -> (Document, Board, DeviceId, DeviceId) {
                 pins(&["1"]),
                 SymbolRole::PotentialFeed { potential: plus },
             )?;
-            tx.connect(Endpoint::pin(fp, 0), Endpoint::pin(s, 2))?;
+            tx.connect(Endpoint::pin(fp, 0), Endpoint::pin(s, 3))?;
             let fm = tx.place_symbol(
                 page,
                 "iec/connectivity/potential_feed",
@@ -589,7 +589,7 @@ fn board_with_psu() -> (Document, Board, DeviceId, DeviceId) {
                 pins(&["1"]),
                 SymbolRole::PotentialFeed { potential: minus },
             )?;
-            tx.connect(Endpoint::pin(fm, 0), Endpoint::pin(s, 3))?;
+            tx.connect(Endpoint::pin(fm, 0), Endpoint::pin(s, 4))?;
             let l = tx.add_device(DeviceTag::parse("=A1+FLD-E2")?, "Lamp bank")?;
             let ls = tx.place_symbol(
                 page,
@@ -602,7 +602,7 @@ fn board_with_psu() -> (Document, Board, DeviceId, DeviceId) {
                 },
             )?;
             tx.set_property(l, "power_kw", Some(0.048.into()))?;
-            for (i, out) in [2u16, 3].into_iter().enumerate() {
+            for (i, out) in [3u16, 4].into_iter().enumerate() {
                 let w = tx.connect(Endpoint::pin(s, out), Endpoint::pin(ls, i as u16))?;
                 tx.update::<Wire>(w, |w| w.cross_section_mm2 = Some(1.5))?;
                 tx.set_property(w, "length_m", Some(5.0.into()))?;
@@ -632,7 +632,7 @@ fn behind_a_power_supply_the_input_current_is_power_not_summed_amps() {
         (sym(b.q4), sym(psu))
     };
     doc.transact("Feed", |tx| {
-        for (i, pin) in [1u16, 3].into_iter().enumerate() {
+        for (i, pin) in [1u16, 3, 5].into_iter().enumerate() {
             let w = tx.connect(Endpoint::pin(q4s, pin), Endpoint::pin(psus, i as u16))?;
             tx.update::<Wire>(w, |w| w.cross_section_mm2 = Some(2.5))?;
             tx.set_property(w, "length_m", Some(1.0.into()))?;
@@ -645,8 +645,8 @@ fn behind_a_power_supply_the_input_current_is_power_not_summed_amps() {
     let converter = node(&sl, p, psu);
     let amps = converter.current_a.value.expect("input current known");
     assert!(
-        (amps - 0.12).abs() < 0.02,
-        "the supply must carry 0.12 A in, not the 2 A out: {amps}"
+        (amps - 0.0693).abs() < 0.005,
+        "the supply must carry 0.069 A in, not the 2 A out: {amps}"
     );
     assert!(
         converter
@@ -720,4 +720,263 @@ fn a_single_phase_motor_current_uses_efficiency_and_power_factor() {
             .contains("typical efficiency and power factor")
     );
     assert!(motor.current_a.value.unwrap() > p * 1000.0 / 400.0 * 1.2);
+}
+
+#[test]
+fn ik_is_the_supply_level_through_the_cable_impedance_of_every_run() {
+    use novo_checks::calc::short_circuit::{Impedance, Source, cable_impedance, ik3_max};
+    let (doc, b) = board();
+    let sl = build(&doc);
+    let p = doc.project();
+    let source = Source::from_ik(10.0, 400.0).unwrap();
+    // Q1: 25 mm², 10 m from the supply. Q2 hangs on Q1 with 16 mm², 5 m.
+    let z1 = cable_impedance(25.0, 10.0, 20.0).unwrap();
+    let z2 = z1 + cable_impedance(16.0, 5.0, 20.0).unwrap();
+    let ik = |z: Impedance| ik3_max(&source, &[z]) / 1000.0;
+    let q1 = sl
+        .nodes
+        .iter()
+        .find(|n| n.kind == Kind::Breaker && n.tag.ends_with("-Q1"))
+        .unwrap();
+    assert!((q1.ik_ka.value.unwrap() - ik(z1)).abs() < 1e-9);
+    assert!(q1.ik_exact);
+    assert_eq!(q1.ik_ka.origin, Origin::Calculated);
+    let q2 = sl
+        .nodes
+        .iter()
+        .find(|n| n.kind == Kind::Breaker && n.tag.ends_with("-Q2"))
+        .unwrap();
+    assert!((q2.ik_ka.value.unwrap() - ik(z2)).abs() < 1e-9);
+    // Hand check: Zs (2.4 + j24.1) mΩ plus 25 mm² and 10 m (7.1 + j0.8) mΩ is
+    // |Z| = 26.7 mΩ, so 1.05 · 400 V / (√3 · 26.7 mΩ) is about 9.1 kA.
+    assert!(
+        (q1.ik_ka.value.unwrap() - 9.1).abs() < 0.1,
+        "{:?}",
+        q1.ik_ka
+    );
+    // Further down it only gets lower.
+    assert!(q2.ik_ka.value.unwrap() < q1.ik_ka.value.unwrap());
+    assert!(q1.ik_ka.value.unwrap() < sl.supply_ik_ka.value.unwrap());
+    let _ = (p, b);
+    assert!(
+        sl.notes
+            .iter()
+            .any(|n| n.starts_with("Ik is the three-phase maximum"))
+    );
+    assert!(!sl.notes.iter().any(|n| n.contains("ceiling")));
+}
+
+#[test]
+fn a_run_without_data_makes_ik_a_ceiling_and_says_so() {
+    let (mut doc, b) = board();
+    // Take the length off every wire of the Q2 run.
+    let wires = b.wires["q2"];
+    doc.transact("No length", |tx| {
+        for w in &wires {
+            tx.set_property(*w, "length_m", None)?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let sl = build(&doc);
+    let q2 = sl
+        .nodes
+        .iter()
+        .find(|n| n.kind == Kind::Breaker && n.tag.ends_with("-Q2"))
+        .unwrap();
+    assert!(!q2.ik_exact);
+    assert!(q2.ik_ka.value.is_some());
+    assert!(sl.notes.iter().any(|n| n.contains("ceiling")));
+}
+
+#[test]
+fn a_device_that_cannot_break_the_fault_current_there_fails() {
+    const BREAKING_CAPACITY_KA: &str = "breaking_capacity_ka";
+    let (mut doc, b) = board();
+    // Q1 sees about 9.1 kA: 6 kA is too little, 10 kA is enough.
+    doc.transact("Icu", |tx| {
+        tx.set_property(b.q1, BREAKING_CAPACITY_KA, Some(6.0.into()))?;
+        tx.set_property(b.q2, BREAKING_CAPACITY_KA, Some(10.0.into()))
+    })
+    .unwrap();
+    let sl = build(&doc);
+    let p = doc.project();
+    let q1 = node(&sl, p, b.q1);
+    assert_eq!(q1.icu_status, Status::Fail);
+    assert!(q1.fails());
+    assert_eq!(node(&sl, p, b.q2).icu_status, Status::Pass);
+}
+
+#[test]
+fn icu_between_the_run_level_and_the_supply_level_does_not_fail_the_verdict() {
+    const BREAKING_CAPACITY_KA: &str = "breaking_capacity_ka";
+    let (mut doc, b) = board();
+    let probe = build(&doc);
+    let supply = probe.supply_ik_ka.value.unwrap();
+    let run = node(&probe, doc.project(), b.q1).ik_ka.value.unwrap();
+    assert!(run < supply);
+    let icu = (run + supply) / 2.0;
+    doc.transact("Icu", |tx| {
+        tx.set_property(b.q1, BREAKING_CAPACITY_KA, Some(icu.into()))
+    })
+    .unwrap();
+    let sl = build(&doc);
+    let q1 = node(&sl, doc.project(), b.q1);
+    assert_eq!(q1.icu_status, Status::Pass);
+    let v = q1.verdict.as_ref().expect("a verdict");
+    assert!(!v.failing.iter().any(|t| t == "Breaking capacity"), "{v:?}");
+    assert!(!q1.fails(), "{v:?}");
+    assert!(
+        v.breaking_row_failed,
+        "the sheet compares with the supply level"
+    );
+    assert!(
+        sl.notes
+            .iter()
+            .any(|n| n.starts_with("Icu is checked against Ik along the run"))
+    );
+}
+
+#[test]
+fn ik_is_not_carried_through_a_power_supply() {
+    let (mut doc, b, psu, load) = board_with_psu();
+    let (q4s, psus) = {
+        let p = doc.project();
+        let sym = |d: DeviceId| {
+            p.symbols()
+                .find(|s| matches!(s.role, SymbolRole::Device { device, .. } if device == d))
+                .map(|s| s.id)
+                .unwrap()
+        };
+        (sym(b.q4), sym(psu))
+    };
+    doc.transact("Feed", |tx| {
+        for (i, pin) in [1u16, 3, 5].into_iter().enumerate() {
+            let w = tx.connect(Endpoint::pin(q4s, pin), Endpoint::pin(psus, i as u16))?;
+            tx.update::<Wire>(w, |w| w.cross_section_mm2 = Some(2.5))?;
+            tx.set_property(w, "length_m", Some(1.0.into()))?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let sl = build(&doc);
+    let p = doc.project();
+    assert!(node(&sl, p, psu).ik_ka.value.is_some(), "its input has one");
+    assert!(node(&sl, p, load).ik_ka.value.is_none());
+    assert!(
+        sl.notes
+            .iter()
+            .any(|n| n.starts_with("Short-circuit current is not carried"))
+    );
+}
+
+const DIVERSITY: &str = "diversity_factor";
+const SUPPLY_DIVERSITY: &str = "supply.diversity_factor";
+
+/// The plain sum of the board: M1 12 A, M2 4.58 A, the heater 8.66 A.
+fn plain_sum(sl: &SingleLine, doc: &Document, b: &Board) -> f64 {
+    let p = doc.project();
+    node(sl, p, b.m1).current_a.value.unwrap()
+        + node(sl, p, b.m2).current_a.value.unwrap()
+        + node(sl, p, b.heater).current_a.value.unwrap()
+}
+
+#[test]
+fn without_a_factor_nothing_changes_and_the_note_says_no_diversity() {
+    let (doc, b) = board();
+    let sl = build(&doc);
+    let q1 = node(&sl, doc.project(), b.q1);
+    assert_eq!(q1.diversity, None);
+    assert!(
+        q1.current_basis.ends_with("no diversity"),
+        "{}",
+        q1.current_basis
+    );
+    assert!(sl.notes[0].contains("no diversity or simultaneity factor is applied"));
+    assert!(!sl.notes[0].contains("times the diversity factor"));
+}
+
+#[test]
+fn a_stated_device_factor_scales_the_sum_below_it_and_is_named() {
+    let (mut doc, b) = board();
+    let plain = plain_sum(&build(&doc), &doc, &b);
+    doc.transact("Diversity", |tx| {
+        tx.set_property(b.q1, DIVERSITY, Some(0.8.into()))
+    })
+    .unwrap();
+    let sl = build(&doc);
+    let p = doc.project();
+    let q1 = node(&sl, p, b.q1);
+    assert_eq!(q1.diversity, Some(0.8));
+    assert!((q1.current_a.value.unwrap() - 0.8 * plain).abs() < 1e-9);
+    assert_eq!(q1.current_a.origin, Origin::Calculated);
+    assert!(
+        q1.current_basis.ends_with("× 0.8 diversity"),
+        "{}",
+        q1.current_basis
+    );
+    // Branches under it keep their own currents; the supply sums Q1 as it is.
+    assert!((node(&sl, p, b.m1).current_a.value.unwrap() - 12.0).abs() < 1e-9);
+    assert!((sl.nodes[0].current_a.value.unwrap() - 0.8 * plain).abs() < 1e-9);
+    assert!(sl.notes[0].contains("times the diversity factor of its own level"));
+    assert!(sl.notes[0].contains("0.8"));
+    // The run into Q1 carries the reduced current, so Ib and the drop follow it.
+    let link = q1.link.as_ref().unwrap();
+    assert!((link.current_a.value.unwrap() - 0.8 * plain).abs() < 1e-9);
+}
+
+#[test]
+fn a_project_factor_scales_the_sum_at_the_supply_only() {
+    let (mut doc, b) = board();
+    let plain = plain_sum(&build(&doc), &doc, &b);
+    doc.transact("Diversity", |tx| {
+        novo_checks::standards::set_info_property(tx, SUPPLY_DIVERSITY, Some(0.7.into()))
+    })
+    .unwrap();
+    let sl = build(&doc);
+    let q1 = node(&sl, doc.project(), b.q1);
+    assert!(
+        (q1.current_a.value.unwrap() - plain).abs() < 1e-9,
+        "Q1 is not scaled"
+    );
+    assert!((sl.nodes[0].current_a.value.unwrap() - 0.7 * plain).abs() < 1e-9);
+    assert_eq!(sl.nodes[0].diversity, Some(0.7));
+    assert!(sl.nodes[0].current_basis.contains("× 0.7 diversity"));
+    assert!(sl.notes[0].contains("the supply 0.7"));
+}
+
+#[test]
+fn a_factor_outside_zero_point_one_to_one_is_ignored_and_said() {
+    let (mut doc, b) = board();
+    let plain = plain_sum(&build(&doc), &doc, &b);
+    doc.transact("Diversity", |tx| {
+        tx.set_property(b.q1, DIVERSITY, Some(8.0.into()))
+    })
+    .unwrap();
+    let sl = build(&doc);
+    let q1 = node(&sl, doc.project(), b.q1);
+    assert_eq!(q1.diversity, None);
+    assert!((q1.current_a.value.unwrap() - plain).abs() < 1e-9);
+    assert!(
+        sl.notes
+            .iter()
+            .any(|n| n.starts_with("Ignored, no factor applied") && n.contains("is 8"))
+    );
+}
+
+#[test]
+fn a_factor_where_the_current_is_stated_is_reported_as_unused() {
+    let (mut doc, b) = board();
+    // M1 states its own current: a factor on it has nothing to scale.
+    doc.transact("Diversity", |tx| {
+        tx.set_property(b.m1, DIVERSITY, Some(0.5.into()))
+    })
+    .unwrap();
+    let sl = build(&doc);
+    assert!((node(&sl, doc.project(), b.m1).current_a.value.unwrap() - 12.0).abs() < 1e-9);
+    assert!(
+        sl.notes
+            .iter()
+            .any(|n| n.starts_with("A diversity factor is stated but not used at"))
+    );
 }

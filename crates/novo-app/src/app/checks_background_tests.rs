@@ -35,6 +35,31 @@ fn add_symbols(d: &mut Drive, n: usize) {
     .unwrap();
 }
 
+/// Like [`add_symbols`] but tells the backend, as the app's edit path does, so
+/// saves and autosaves include the edit.
+fn add_symbols_recorded(d: &mut Drive, n: usize) {
+    let page = d.app.current_page().expect("a page is shown");
+    let doc = d.app.backend.document_mut().unwrap();
+    let (_, changes) = doc
+        .transact("Many symbols", |tx| {
+            for i in 0..n {
+                tx.place_symbol(
+                    page,
+                    "iec/contacts/no",
+                    novo_core::Placement::at(novo_core::Point::new(10.0 * (i % 100) as f64, 60.0)),
+                    vec![
+                        novo_core::Pin::new("1", 0.0, 0.0),
+                        novo_core::Pin::new("2", 0.0, 10.0),
+                    ],
+                    novo_core::SymbolRole::Unassigned,
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    d.app.backend.record(&changes);
+}
+
 fn wait_for_checks(d: &mut Drive) {
     for _ in 0..400 {
         d.frame();
@@ -162,5 +187,104 @@ fn a_dead_worker_falls_back_to_the_foreground_check() {
     assert_eq!(
         d.app.wb.check_started, started,
         "no new worker for a failed revision"
+    );
+}
+
+/// The project file as the next start would read it, while the app still has
+/// it open: a copy of the bytes (an open project holds the file's lock, and
+/// on Windows a locked file cannot be copied, so this is Unix only).
+#[cfg(unix)]
+fn on_disk_while_open(path: &std::path::Path) -> String {
+    let dir = tempfile::tempdir().unwrap();
+    let copy = dir.path().join("copy.novo");
+    std::fs::copy(path, &copy).unwrap();
+    novo_storage::ProjectFile::read(&copy).unwrap().to_json()
+}
+
+/// Gives the backend its chance to write, as the app loop does each frame.
+fn write_tick(d: &mut Drive) {
+    d.app.next_tick = std::time::Instant::now() - std::time::Duration::from_secs(1);
+    let ctx = d.ctx.clone();
+    d.app.tick(&ctx);
+}
+
+/// A saved big project keeps writing its edits to the file while the design
+/// check runs on a worker: the worker reads a snapshot, so it neither holds
+/// the file nor sees half an edit, and what lands on disk is the drawing.
+#[test]
+fn a_saved_big_project_keeps_writing_while_a_check_runs() {
+    let (dir, mut d) = big_project();
+    let path = dir.path().join("plant.novo");
+    assert!(d.app.save_to(&path));
+
+    // A check is in flight for the saved revision.
+    add_symbols_recorded(&mut d, 3);
+    let _ = d.app.shown_problems();
+    assert!(d.app.wb.check_job.is_some(), "a worker is running");
+
+    // Edits and writes alternate while it runs, and after every write the
+    // file is the drawing as it stands.
+    for round in 0..4 {
+        add_symbols_recorded(&mut d, 1);
+        let _ = d.app.shown_problems();
+        assert!(d.app.is_dirty(), "round {round}: the edit is unsaved");
+        write_tick(&mut d);
+        assert!(!d.app.autosave_failing, "round {round}: the write failed");
+        assert!(!d.app.is_dirty(), "round {round}: written, so not unsaved");
+        #[cfg(unix)]
+        assert_eq!(
+            on_disk_while_open(&path),
+            d.app.document().unwrap().project().to_json(),
+            "round {round}"
+        );
+    }
+
+    // The checks catch up without having changed the drawing.
+    let before = d.app.document().unwrap().project().to_json();
+    wait_for_checks(&mut d);
+    assert_eq!(d.app.document().unwrap().project().to_json(), before);
+    assert!(!d.app.checks_pending());
+
+    // Closed, the file is the drawing, on every platform.
+    d.app.backend.close().unwrap();
+    assert_eq!(
+        novo_storage::ProjectFile::read(&path).unwrap().to_json(),
+        before
+    );
+}
+
+/// An untitled big project autosaves to its recovery file while a check
+/// runs, and a crash then offers exactly the drawing as it stood.
+#[test]
+fn an_untitled_big_project_autosaves_while_a_check_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_symbols_recorded(&mut d, 1600);
+    let _ = d.app.shown_problems();
+    assert!(d.app.wb.check_job.is_some(), "a worker is running");
+    add_symbols_recorded(&mut d, 2);
+    let _ = d.app.shown_problems();
+    let project_json = d.app.document().unwrap().project().to_json();
+
+    // The autosave interval has passed.
+    d.app
+        .backend
+        .set_autosave_interval(std::time::Duration::ZERO);
+    write_tick(&mut d);
+    assert!(!d.app.autosave_failing);
+    wait_for_checks(&mut d);
+
+    // Closing with work keeps the recovery file; it holds the drawing.
+    d.app.backend.close().unwrap();
+    let kept = d.app.backend.unsaved_projects();
+    assert_eq!(kept.len(), 1, "one project with unsaved work is kept");
+    assert_eq!(
+        novo_storage::ProjectFile::read(&kept[0].0)
+            .unwrap()
+            .to_json(),
+        project_json
     );
 }

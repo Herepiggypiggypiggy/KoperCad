@@ -1,0 +1,20 @@
+@title Workshop pack: every file it writes is kept for inspection
+@area Reports
+# Reports > Bench output > "Workshop pack (folder)" writes the bench packet, the 1:1 drilling template, plate sheet, print scale check, labels; keep_file copies them next to the report so the PDFs can be opened.
+click_text "Open example"
+wait 20
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+click_text "Workshop pack (folder)"
+wait 60
+expect_file "~/Documents/KoperCAD/*workshop/0 Print scale check.pdf" 1500
+expect_file "~/Documents/KoperCAD/*workshop/0 Bench packet.pdf" 1500
+expect_file "~/Documents/KoperCAD/*workshop/1 Drilling template*.pdf" 1500
+keep_file "~/Documents/KoperCAD/*workshop/0 Print scale check.pdf"
+keep_file "~/Documents/KoperCAD/*workshop/0 Bench packet.pdf"
+keep_file "~/Documents/KoperCAD/*workshop/1 Drilling template*.pdf"
+keep_file "~/Documents/KoperCAD/*workshop/1 Plate full size*.pdf"
+keep_file "~/Documents/KoperCAD/*workshop/2 Labels.pdf"
+shot written

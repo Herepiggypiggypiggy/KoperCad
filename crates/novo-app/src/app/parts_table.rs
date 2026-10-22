@@ -744,6 +744,11 @@ fn footer_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, cancel: &mut bool
                 p.text_primary
             },
             text,
+        )
+        .on_hover_text(
+            "Not imported: rows that cannot be a part (no order number, no maker, a mangled order number). \
+             Repeated: rows of an order number that appears more than once, left out by the rule chosen in the Rows step. \
+             The Rows step says why for every row.",
         );
     } else {
         ui.colored_label(

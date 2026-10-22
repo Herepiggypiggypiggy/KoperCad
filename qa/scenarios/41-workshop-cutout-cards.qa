@@ -1,0 +1,16 @@
+@title Workshop pack with door cut-outs: cut-out cards kept for inspection
+@area Reports
+# A cabinet whose door carries cut-outs (qa/fixtures/door-cutouts.novo, made from the cabinet lesson project by the qa_fixture_from_json example): the Workshop pack also writes "1 Cut-out cards" with one card per cut-out shape; keep_file copies it next to the report.
+# The project is opened from a copy in /tmp/kopercad-qa-open-N, so the pack is written beside that copy.
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+click_text "Workshop pack (folder)"
+wait 60
+expect_file "/tmp/kopercad-qa-open-*/door-cutouts workshop/1 Cut-out cards*.pdf" 1500
+keep_file "/tmp/kopercad-qa-open-*/door-cutouts workshop/1 Cut-out cards*.pdf"
+keep_file "/tmp/kopercad-qa-open-*/door-cutouts workshop/1 Drilling template*.pdf"
+shot written
