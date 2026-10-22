@@ -28,10 +28,10 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `whats_new.pill`: {ui:whats_new.pill} shows **What's new**
 - `drawer.terminals`: {ui:drawer.terminals} shows **Terminals drawer**
 - `drawer.terminals.tab`: {ui:drawer.terminals.tab} shows **Terminals tab**
+- `drawer.terminals.accept`: {ui:drawer.terminals.accept} shows **Accept proposed terminals**
 - `drawer.cables`: {ui:drawer.cables} shows **Cables drawer**
 - `drawer.cables.tab`: {ui:drawer.cables.tab} shows **Cables tab**
 - `drawer.cables.accept`: {ui:drawer.cables.accept} shows **Accept proposed cables**
-- `drawer.terminals.accept`: {ui:drawer.terminals.accept} shows **Accept proposed terminals**
 - `drawer.devices`: {ui:drawer.devices} shows **Devices drawer**
 - `drawer.devices.tab`: {ui:drawer.devices.tab} shows **Devices tab**
 - `live.card`: {ui:live.card} shows **Live potentials**
