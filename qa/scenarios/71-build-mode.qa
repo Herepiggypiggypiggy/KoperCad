@@ -34,7 +34,7 @@ text Rail is too short
 wait 5
 click_text "Raise problem" Button
 wait 10
-expect "of"
+expect "1 problem"
 shot problem-raised
 check_layout
 click_text "Back" Button

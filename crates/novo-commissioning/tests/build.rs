@@ -468,7 +468,7 @@ fn ticks_for_another_project_or_a_deleted_part_are_skipped() {
 }
 
 #[test]
-fn stale_ticks_are_pruned() {
+fn stale_ticks_are_pruned_only_when_asked() {
     let (mut doc, h) = starter();
     cabinet(&mut doc, &h);
     let plan = plan_of(&doc);
@@ -481,4 +481,19 @@ fn stale_ticks_are_pruned() {
     assert_eq!(store.build_ticks().count(), 2);
     store.retain_build(&build_keys(&plan));
     assert_eq!(store.build_ticks().count(), 1);
+}
+
+#[test]
+fn a_problem_parked_twice_reuses_its_punch_item() {
+    let (mut doc, h) = starter();
+    cabinet(&mut doc, &h);
+    let plan = plan_of(&doc);
+    let c = &plan.cabinets[0];
+    let mut store = CommissioningStore::new();
+    let a = mark_problem(&mut store, &c.tag, &c.steps[1], "first", "tv", "t1");
+    undo_build(&mut store, c.steps[1].key);
+    let b = mark_problem(&mut store, &c.tag, &c.steps[1], "second", "tv", "t2");
+    assert_eq!(a, b);
+    assert_eq!(store.punch_items().count(), 1);
+    assert_eq!(store.punch(a).unwrap().note, "second");
 }

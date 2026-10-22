@@ -353,6 +353,12 @@ fn surface_id(surface: &Surface) -> u64 {
     h >> 20
 }
 
+/// One decimal, for positions that are marked and drilled by hand.
+fn mm1(v: f64) -> String {
+    let s = format!("{v:.1}");
+    s.strip_suffix(".0").map_or(s.clone(), str::to_owned)
+}
+
 fn mm(v: f64) -> String {
     novo_layout::drill::mm(v)
 }
@@ -361,9 +367,13 @@ fn mm(v: f64) -> String {
 /// protective earth, 2.5 mm² and up is power, the rest is control.
 fn circuit_rank(job: &WireCutJob) -> u8 {
     let colour = job.colour.to_lowercase();
-    let earth = colour.contains("gnye")
-        || colour.contains("pe")
-        || (colour.contains("green") && colour.contains("yellow"));
+    // Whole words, so "grey pearl" is not earth.
+    let words: Vec<&str> = colour
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .collect();
+    let has = |w: &str| words.contains(&w);
+    let earth = has("gnye") || has("pe") || (has("green") && has("yellow"));
     if earth {
         2
     } else if job.cross_section_mm2.is_some_and(|s| s >= 2.5) {
@@ -539,13 +549,13 @@ fn cabinet(project: &Project, enclosure: &Structure, jobs: &[WireCutJob]) -> Opt
                 .holes
                 .iter()
                 .filter(|h| h.surface == surface && h.dia == dia)
-                .map(|h| format!("({}, {})", mm(h.x), mm(h.y)))
+                .map(|h| format!("({}, {})", mm1(h.x), mm1(h.y)))
                 .collect();
             let on = surface.name();
             let n = push(
                 BuildPhase::Drill,
                 (surface_id(&surface) << 20) | (dia * 100.0).round() as u64,
-                format!("{} mm", mm(dia)),
+                format!("dia {} mm", mm(dia)),
                 format!(
                     "Drill {count} hole{} dia {} mm in the {}",
                     if count == 1 { "" } else { "s" },
@@ -553,7 +563,7 @@ fn cabinet(project: &Project, enclosure: &Structure, jobs: &[WireCutJob]) -> Opt
                     on.to_lowercase()
                 ),
                 vec![
-                    "Positions in mm from the top left, x then y:".to_owned(),
+                    "Positions in mm from the top left corner, across then down:".to_owned(),
                     rows.join("  "),
                 ],
                 Some(
@@ -572,11 +582,11 @@ fn cabinet(project: &Project, enclosure: &Structure, jobs: &[WireCutJob]) -> Opt
                 (1 << 62) | (surface_id(&c.surface) << 20) | c.no as u64,
                 format!("C{}", c.no),
                 format!(
-                    "Cut out {} in the {} at x {}, y {}",
+                    "Cut out {} in the {}, centre {} mm right and {} mm down from the top left",
                     c.shape.describe(),
                     c.surface.name().to_lowercase(),
-                    mm(c.x),
-                    mm(c.y)
+                    mm1(c.x),
+                    mm1(c.y)
                 ),
                 vec![format!("For {}", c.source)],
                 Some("Marked from the template and cut by hand: file to the line.".to_owned()),
@@ -839,6 +849,19 @@ pub fn mark_problem(
         by: by.to_owned(),
         at: at.to_owned(),
     });
+    let title = format!("Build {cabinet_tag} step {}: {}", step.number, step.title);
+    // A step parked again after Back reuses its open item.
+    let existing = store
+        .punch_items()
+        .find(|p| p.title == title && p.state == PunchState::Open)
+        .cloned();
+    if let Some(item) = existing {
+        let mut item = item;
+        item.note = note.to_owned();
+        let id = item.id;
+        store.put_punch(item);
+        return id;
+    }
     let target = step
         .device
         .filter(|_| step.phase == BuildPhase::Devices)
@@ -846,7 +869,7 @@ pub fn mark_problem(
         .or_else(|| step.wires.first().map(|&w| Target::Wire(w)));
     store.add_punch(PunchItem {
         id: 0,
-        title: format!("Build {cabinet_tag} step {}: {}", step.number, step.title),
+        title,
         note: note.to_owned(),
         severity: Severity::Major,
         state: PunchState::Open,

@@ -36,6 +36,10 @@ others says which. The progress bar counts done, problems and changed steps.
 - A ticked step remembers a fingerprint of its text. If the design changes so the
   step reads differently (a device moved, a wire got longer) it shows as
   "Changed" and counts as open again.
+- Ticks are never deleted by redrawing: if a step disappears (a deleted device) and comes back (undo), its tick is still there. A tick that matches no step is simply not shown, and a field file merge skips it.
+- Merging has no tombstones, like the commissioning checks: a tick taken back with Undo on one machine comes back if the other machine still has it and its tick is newer than the undo is old. Desk and tablet should run the same build; an older program drops ticks it does not know.
+- Undoing a Problem leaves its punch item (close it in Commissioning); raising the problem again on the same step reuses the open item.
+- Space and Enter tick a step even when it still waits for others (the banner is advice, because the workshop sometimes fits things out of order). The step is ticked as it stands.
 - A wire that is part of two connections gets one step each. A wire between two
   cabinets has a step in each cabinet.
 

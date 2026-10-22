@@ -17,8 +17,8 @@ use std::rc::Rc;
 
 use eframe::egui;
 use novo_commissioning::{
-    BuildPhase, BuildPlan, BuildStep, CabinetPlan, Next, StepStatus, build_keys, mark_done,
-    mark_problem, undo_build,
+    BuildPhase, BuildPlan, BuildStep, CabinetPlan, Next, StepStatus, mark_done, mark_problem,
+    undo_build,
 };
 use novo_core::WireId;
 use novo_theme::widgets::{self, Level as Tone};
@@ -141,12 +141,8 @@ impl NovoApp {
                 .is_none_or(|(rev, _)| *rev != project.revision());
             if stale {
                 let plan = BuildPlan::of(project);
-                // Ticks of steps the design no longer has go.
-                let before = mode.store.build_ticks().count();
-                mode.store.retain_build(&build_keys(&plan));
-                if mode.store.build_ticks().count() != before {
-                    mode.dirty = true;
-                }
+                // Ticks of steps the design no longer has are kept: they are
+                // the record of work done, and an undo can bring the step back.
                 state.cabinet = state.cabinet.min(plan.cabinets.len().saturating_sub(1));
                 state.plan = Some((project.revision(), Rc::new(plan)));
             }
@@ -336,7 +332,7 @@ fn screen(
     let progress = cab.progress(&mode.store);
     widgets::progress_bar(
         ui,
-        &format!("{} built", cab.tag),
+        &format!("Building {}", cab.tag),
         &format!(
             "{} of {} steps{}{}",
             progress.done,
