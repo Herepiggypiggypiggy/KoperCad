@@ -680,34 +680,49 @@ pub(crate) fn connection_kind(text: &str) -> ConnectionKind {
     }
 }
 
+/// The lifecycle a status text says. Words are matched as whole words (a
+/// trailing `*` in a phrase lets its last word be the start of a longer
+/// one), so `inactive` is not `active`; withdrawn wordings are tested before
+/// active ones, and an active word after a negation (`not in production`,
+/// `no longer available`) is withdrawn, never active.
 pub(crate) fn lifecycle_of(text: &str) -> Lifecycle {
-    let t = text.trim().to_lowercase();
-    let any = |ws: &[&str]| ws.iter().any(|w| t.contains(w));
-    if any(&[
+    const PHASING_OUT: &[&str] = &[
         "end of commercialisation",
         "end of commercialization",
         "phase out",
-        "phase-out",
         "phasing out",
-        "auslauf",
-        "uitlopend",
+        "auslauf*",
+        "uitlopend*",
         "end of life",
         "last time buy",
-    ]) {
-        Lifecycle::PhasingOut
-    } else if any(&[
+        "uit productie",
+        "uit het assortiment",
+        "wordt vervangen",
+    ];
+    const DISCONTINUED: &[&str] = &[
         "discontinued",
-        "abgekündigt",
-        "abgekuendigt",
+        "abgekündigt*",
+        "abgekuendigt*",
         "obsolete",
         "withdrawn",
         "vervallen",
+        "inactive",
+        "inactief",
+        "inaktiv",
         "not available",
+        "unavailable",
+        "niet meer leverbaar",
+        "niet leverbaar",
+        "onleverbaar",
+        "niet beschikbaar",
+        "nicht lieferbar",
+        "unlieferbar",
+        "nicht verfügbar",
+        "nicht verfuegbar",
         "nicht mehr",
         "end of service",
-    ]) {
-        Lifecycle::Discontinued
-    } else if any(&[
+    ];
+    const ACTIVE: &[&str] = &[
         "active",
         "aktiv",
         "in production",
@@ -716,9 +731,45 @@ pub(crate) fn lifecycle_of(text: &str) -> Lifecycle {
         "commercialized",
         "current",
         "actief",
-        "serienprodukt",
-    ]) || t == "a"
-    {
+        "leverbaar",
+        "lieferbar",
+        "serienprodukt*",
+    ];
+    const NEGATORS: &[&str] = &[
+        "not", "no", "non", "nicht", "kein", "keine", "niet", "geen", "without", "ohne", "zonder",
+    ];
+    let words: Vec<String> = text
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_owned)
+        .collect();
+    // Where a phrase starts in the words, if it occurs as whole words.
+    let find = |phrase: &str| -> Option<usize> {
+        let want: Vec<&str> = phrase.split(' ').collect();
+        (0..words.len()).find(|&i| {
+            want.iter().enumerate().all(|(k, w)| {
+                words
+                    .get(i + k)
+                    .is_some_and(|have| match w.strip_suffix('*') {
+                        Some(stem) => have.starts_with(stem),
+                        None => have == w,
+                    })
+            })
+        })
+    };
+    let any = |list: &[&str]| list.iter().any(|p| find(p).is_some());
+    if any(PHASING_OUT) {
+        Lifecycle::PhasingOut
+    } else if any(DISCONTINUED) {
+        Lifecycle::Discontinued
+    } else if let Some(at) = ACTIVE.iter().filter_map(|p| find(p)).min() {
+        if words[..at].iter().any(|w| NEGATORS.contains(&w.as_str())) {
+            Lifecycle::Discontinued
+        } else {
+            Lifecycle::Active
+        }
+    } else if words == ["a"] {
         Lifecycle::Active
     } else {
         Lifecycle::Unknown

@@ -1,0 +1,31 @@
+format = 1
+id = "iec/network/port_rs485"
+name = "Fieldbus port RS-485"
+description = "RS-485 fieldbus port with data lines A and B and cable shield SH (PROFIBUS DP, Modbus RTU)."
+standard = "IEC 60617"
+category = "network"
+function = "network.port.fieldbus"
+keywords = ["rs485", "rs-485", "profibus", "modbus", "fieldbus", "serial", "veldbus"]
+aliases = ["rs485"]
+
+connections = [
+  { id = "A", at = [0, 0], dir = "up" },
+  { id = "B", at = [8, 0], dir = "up" },
+  { id = "SH", at = [16, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "rect", at = [-4, 4], size = [28, 8] },
+  { kind = "text", at = [10, 8], text = "RS485", size = 2.2 },
+]
+
+[behavior]
+kind = "load"
+type = "network_port"

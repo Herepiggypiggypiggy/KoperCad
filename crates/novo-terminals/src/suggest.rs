@@ -37,6 +37,7 @@ fn is_dismissed(project: &Project, wire: &novo_core::Wire) -> bool {
         || matches!(wire.properties.get(DISMISS_KEY), Some(Value::Bool(false)))
 }
 
+use crate::grouping::{Grouping, StripClass, class_of_wire, grouping};
 use crate::place::{Drop, Placed, place_terminals};
 use crate::strings;
 
@@ -50,6 +51,9 @@ pub struct Suggestion {
     /// Tag of the strip it would go on: the cabinet side's location plus
     /// `-X1`, or an existing strip there.
     pub strip: DeviceTag,
+    /// What the wire carries, which picks the strip under
+    /// [`Grouping::ByClass`].
+    pub class: StripClass,
     /// The device on the cabinet (internal) side and on the field side.
     pub internal: DeviceId,
     pub external: DeviceId,
@@ -186,13 +190,36 @@ fn structure(tag: &DeviceTag) -> DeviceTag {
     }
 }
 
-/// The strip for terminals at `location`: an existing strip with exactly
-/// that function and location (lowest tag first), else `-X1` there.
-fn strip_tag(project: &Project, location: &DeviceTag) -> DeviceTag {
+/// The strip for terminals of `class` at `location`. Under
+/// [`Grouping::Single`] an existing strip with exactly that function and
+/// location (lowest tag first), else `-X1` there. Under
+/// [`Grouping::ByClass`] the same for power and unassigned wires, and the
+/// class's own strip ([`StripClass::strip_name`]), created when missing,
+/// for the others.
+fn strip_tag(
+    project: &Project,
+    location: &DeviceTag,
+    class: StripClass,
+    grouping: Grouping,
+) -> DeviceTag {
+    let main = matches!(class, StripClass::Power | StripClass::Unassigned);
+    if grouping == Grouping::ByClass && !main {
+        let mut tag = location.clone();
+        tag.product = vec![class.strip_name().into()];
+        return tag;
+    }
     let mut strips: Vec<&DeviceTag> = project
         .devices()
         .filter(|d| d.kind == DeviceKind::TerminalStrip && structure(&d.tag) == *location)
         .map(|d| &d.tag)
+        // The main strip keeps an existing one, but never another class's.
+        .filter(|t| {
+            grouping == Grouping::Single
+                || !StripClass::ALL
+                    .iter()
+                    .filter(|c| !matches!(c, StripClass::Power | StripClass::Unassigned))
+                    .any(|c| t.product == [c.strip_name()])
+        })
         .collect();
     strips.sort_by(|a, b| novo_core::natural_cmp(&a.to_string(), &b.to_string()).then(a.cmp(b)));
     match strips.first() {
@@ -228,6 +255,13 @@ fn midpoint_of_longest_stretch(project: &Project, wire: WireId) -> Option<Point>
 /// first in drawing order that starts at a cabinet-side pin, else the
 /// first. Declining that one declines the connection.
 pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
+    suggest_terminals_with(project, grouping(project))
+}
+
+/// [`suggest_terminals`] with the strips chosen by `grouping` instead of
+/// the project's saved one.
+pub fn suggest_terminals_with(project: &Project, grouping: Grouping) -> Vec<Suggestion> {
+    let netlist = project.netlist();
     let mut strips: BTreeSet<&[String]> = BTreeSet::new();
     let mut counts: BTreeMap<&[String], usize> = BTreeMap::new();
     // Counted by place, so devices on a cabinet's door count for it.
@@ -295,6 +329,7 @@ pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
         let Some(at) = midpoint_of_longest_stretch(project, w.id) else {
             continue;
         };
+        let class = class_of_wire(project, &netlist, w);
         found.push((
             connection,
             internal_end.as_pin().is_none(),
@@ -309,7 +344,10 @@ pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
                         location: place.location.to_vec(),
                         product: Vec::new(),
                     },
+                    class,
+                    grouping,
                 ),
+                class,
                 internal: internal.id,
                 external: external.id,
             },

@@ -459,6 +459,42 @@ fn the_single_line_diagram_is_found_by_what_people_call_it() {
 }
 
 #[test]
+fn the_table_import_ranks_first_for_its_own_name() {
+    // Audit C-53: "import parts from a table" opened the folder import
+    // ("Import parts from a folder: from a table") and the real command was third.
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for query in [
+        "Import parts from a table",
+        "import parts from a table (csv or excel)",
+        "import parts from a tab",
+        "import parts table",
+        "import excel parts",
+    ] {
+        let rows = search(&palette, &keymap, query);
+        assert_eq!(
+            rows[0].target,
+            Target::Command("parts.import_table"),
+            "{query}: {:?}",
+            rows.iter().take(3).map(|r| &r.label).collect::<Vec<_>>()
+        );
+        assert!(
+            rows.iter().all(|r| !r.label.contains(": from a table")),
+            "{query}: a garbled run row is offered"
+        );
+    }
+    // The folder import stays reachable by its name and by the old words.
+    let rows = search(&palette, &keymap, "import parts from a folder");
+    assert_eq!(rows[0].target, Target::Command("parts.import_folder"));
+    assert!(
+        position(
+            &search(&palette, &keymap, "import catalog"),
+            "parts.import_folder"
+        )
+        .is_some()
+    );
+}
+
+#[test]
 fn recovering_a_damaged_project_is_found_by_the_words_people_try() {
     let (palette, keymap) = (Palette::default(), Keymap::workflow());
     for word in [
@@ -475,4 +511,20 @@ fn recovering_a_damaged_project_is_found_by_the_words_people_try() {
             "`{word}` should list the recovery command first"
         );
     }
+}
+
+#[test]
+fn a_typed_label_beats_a_shorter_verb_run_on_the_rest() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    // `import parts` is a verb of the folder importer, but the whole phrase is
+    // the start of the table importer's label: Enter must open the table one.
+    for query in [
+        "import parts from a table",
+        "Import parts from a table (CSV",
+    ] {
+        let rows = search(&palette, &keymap, query);
+        assert_eq!(position(&rows, "parts.import_table"), Some(0), "{query:?}");
+    }
+    let rows = search(&palette, &keymap, "import parts from a folder");
+    assert_eq!(position(&rows, "parts.import_folder"), Some(0));
 }

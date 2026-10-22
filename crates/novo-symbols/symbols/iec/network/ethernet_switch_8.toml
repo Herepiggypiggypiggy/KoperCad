@@ -1,0 +1,47 @@
+format = 1
+id = "iec/network/ethernet_switch_8"
+name = "Ethernet switch, 8 ports"
+description = "Industrial Ethernet switch with eight ports P1 to P8 and a 24 V supply L+, M. Manufacturer-neutral block symbol: the box and pin layout are not defined by IEC 60617."
+standard = "IEC 60617"
+category = "network"
+function = "network.switch.ethernet"
+keywords = ["switch", "ethernet", "network", "profinet", "unmanaged", "managed", "netwerk", "lan"]
+aliases = ["sw8"]
+
+connections = [
+  { id = "P1", at = [0, 0], dir = "up" },
+  { id = "P2", at = [8, 0], dir = "up" },
+  { id = "P3", at = [16, 0], dir = "up" },
+  { id = "P4", at = [24, 0], dir = "up" },
+  { id = "P5", at = [0, 24], dir = "down" },
+  { id = "P6", at = [8, 24], dir = "down" },
+  { id = "P7", at = [16, 24], dir = "down" },
+  { id = "P8", at = [24, 24], dir = "down" },
+  { id = "L+", at = [-8, 8], dir = "left" },
+  { id = "M", at = [-8, 16], dir = "left" },
+]
+
+anchors = [
+  { role = "tag", at = [-10, 12], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "line", from = [24, 0], to = [24, 4] },
+  { kind = "line", from = [0, 20], to = [0, 24] },
+  { kind = "line", from = [8, 20], to = [8, 24] },
+  { kind = "line", from = [16, 20], to = [16, 24] },
+  { kind = "line", from = [24, 20], to = [24, 24] },
+  { kind = "line", from = [-8, 8], to = [-4, 8] },
+  { kind = "line", from = [-8, 16], to = [-4, 16] },
+  { kind = "rect", at = [-4, 4], size = [32, 16] },
+  { kind = "text", at = [12, 10], text = "ETH", size = 2.2 },
+  { kind = "text", at = [12, 15], text = "SWITCH", size = 2.2 },
+]
+
+[behavior]
+kind = "load"
+type = "ethernet_switch"
+poles = [["L+", "M"]]

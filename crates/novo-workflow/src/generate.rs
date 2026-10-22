@@ -402,6 +402,10 @@ fn extent(def: &BlockDefinition) -> (f64, f64) {
     (max_x - min_x, max_y - min_y)
 }
 
+fn snap(v: f64, grid: f64) -> f64 {
+    (v / grid).round() * grid
+}
+
 /// The template-coordinate corner a definition's drawing starts at.
 fn corner(def: &BlockDefinition) -> Point {
     let (mut min_x, mut min_y) = (f64::MAX, f64::MAX);
@@ -541,7 +545,13 @@ pub fn generate(
             }
             let corner = corner(&row.definition);
             let at = cursor.take(w, h);
-            let origin = Point::new(at.x - corner.x, at.y - corner.y);
+            // On the snap grid, so the pins of a generated block line up with what the
+            // designer places next (a feed row, a wire corner); the corner is only a
+            // padded bounding box and sits off the grid.
+            let origin = Point::new(
+                snap(at.x - corner.x, novo_symbols::GRID),
+                snap(at.y - corner.y, novo_symbols::GRID),
+            );
             let placed = place_parametric(
                 tx,
                 &row.definition,

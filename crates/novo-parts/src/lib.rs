@@ -40,6 +40,7 @@ mod library;
 mod macros;
 mod panel;
 mod pins;
+mod plain;
 mod quality;
 mod recipes;
 mod schema;
@@ -96,6 +97,7 @@ pub use pins::{
     POSITIONS_SOURCE_KEY, POSITIONS_SOURCE_PROPERTY, placed_terminals, positions_estimated,
     terminal_position, write_properties as write_terminal_positions,
 };
+pub use plain::plain_io_error;
 pub use quality::{
     Completeness, Conflict, Criterion, Decision, DuplicateGroup, DuplicateReason, Fill, Finding,
     Grade, PartQuality, QualityReport, QueueItem, REVIEW_FILE_NAME, REVIEW_FORMAT_VERSION,
@@ -125,9 +127,10 @@ pub use tablefile::{
     MAX_FILE_BYTES, MAX_ROWS, Sheet, TABLE_EXTENSIONS, TableError, TableFile, too_large_file,
 };
 pub use tablemap::{
-    ColumnMap, MEASURES, Mapping, Measure, SavedMappings, Target, guess_header_row, measure,
-    saved_mappings_path, split_header, stored_unit,
+    ColumnMap, DuplicateRule, MEASURES, Mapping, Measure, SavedMappings, Target, guess_header_row,
+    measure, saved_mappings_path, split_header, stored_unit,
 };
 pub use tablepreview::{
-    Counts, Coverage, ImportPreview, Issue, PreviewRow, RowStatus, Severity, build_preview,
+    Counts, Coverage, ImportPreview, Issue, PreviewRow, RepeatedPart, RowStatus, Severity,
+    build_preview, rows_text,
 };

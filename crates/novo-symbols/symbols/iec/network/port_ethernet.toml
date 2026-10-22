@@ -1,0 +1,27 @@
+format = 1
+id = "iec/network/port_ethernet"
+name = "Ethernet port"
+description = "One Ethernet port (RJ45 or M12) of a device, drawn as one network connection P1. Gives a device such as a drive, HMI or sensor its place on the network; use the tag of the device it belongs to."
+standard = "IEC 60617"
+category = "network"
+function = "network.port.ethernet"
+keywords = ["ethernet", "port", "rj45", "m12", "profinet", "network", "netwerk"]
+aliases = ["eth"]
+
+connections = [
+  { id = "P1", at = [0, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "rect", at = [-4, 4], size = [12, 8] },
+  { kind = "text", at = [2, 8], text = "LAN", size = 2.2 },
+]
+
+[behavior]
+kind = "load"
+type = "network_port"

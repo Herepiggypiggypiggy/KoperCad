@@ -266,7 +266,15 @@ fn feeder_drawing() -> Document {
     let kit = Kit::new();
     let mut doc = Document::new(Project::new("Pump and valve feeder"));
     doc.transact("Draw the pump and valve feeder", |tx| {
-        tx.set_info(|i| i.description = FEEDER_DESCRIPTION.into())?;
+        tx.set_info(|i| {
+            i.description = FEEDER_DESCRIPTION.into();
+            // The lessons teach one strip per location; new projects put
+            // power, control, signals and PE on separate strips.
+            i.properties.insert(
+                novo_terminals::GROUPING_KEY.into(),
+                novo_core::Value::Text(novo_terminals::Grouping::Single.key().into()),
+            );
+        })?;
         let page = tx.add_page("1")?;
         tx.update::<novo_core::Page>(page, |p| p.title = FEEDER_PAGE.into())?;
 

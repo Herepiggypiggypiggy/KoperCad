@@ -24,7 +24,7 @@ fn a_company_folder_is_listed_and_a_macro_is_copied_to_my_macros() {
     assert!(b.has_company());
     assert!(b.entries().is_empty(), "still showing my (empty) library");
     b.show_company(true);
-    assert_eq!(b.entries().len(), 15);
+    assert_eq!(b.entries().len(), 18);
 
     b.selected = Some("Starter/E-stop chain.kcmacro".into());
     let thumb = b.thumbnail().expect("a picture of the selected macro");

@@ -119,3 +119,70 @@ fn a_file_over_the_size_cap_is_refused_before_it_is_read() {
             .contains("larger than")
     );
 }
+
+#[test]
+fn an_old_error_toast_is_cleared_when_the_dialog_opens() {
+    let (dir, mut d) = open();
+    d.app
+        .message(crate::app::Level::Error, "Parts import: Not a directory");
+    assert!(d.app.messages.iter().any(|m| !m.dismissed));
+    let file = dir.path().join("liste.csv");
+    std::fs::write(&file, TABLE.as_bytes()).unwrap();
+    assert!(
+        d.app
+            .import_parts_table_from(&file, Some(dir.path().join("c.json")), None)
+    );
+    assert!(d.app.messages.iter().all(|m| m.dismissed));
+    assert!(d.app.wb.parts_table.is_some());
+}
+
+#[test]
+fn repeated_order_numbers_are_listed_in_the_dialog_and_the_choice_is_applied() {
+    use novo_parts::DuplicateRule;
+    let (dir, mut d) = open();
+    let file = dir.path().join("twice.csv");
+    std::fs::write(
+        &file,
+        "Maker,Order no,Description\nExample Maker,R-1,Old text\nExample Maker,R-2,Other\nExample Maker,R-1,New text\n",
+    )
+    .unwrap();
+    let cat = dir.path().join("catalog.json");
+    assert!(d.app.import_parts_table_from(
+        &file,
+        Some(cat.clone()),
+        Some(dir.path().join("maps.json"))
+    ));
+    d.frame();
+    let import = d.app.wb.parts_table.as_ref().unwrap();
+    assert_eq!(import.preview.repeated.len(), 1);
+    assert!(import.preview.summary().contains("1 repeated order number"));
+    let kept = |d: &Drive| {
+        let p = &d.app.wb.parts_table.as_ref().unwrap().preview;
+        p.parts
+            .iter()
+            .find(|x| x.order_number == "R-1")
+            .unwrap()
+            .description
+            .clone()
+    };
+    assert_eq!(kept(&d), "New text");
+    let import = d.app.wb.parts_table.as_mut().unwrap();
+    import.mapping.duplicates = DuplicateRule::KeepFirst;
+    import.refresh();
+    assert_eq!(kept(&d), "Old text");
+    d.frame();
+}
+
+#[test]
+fn a_file_picked_as_a_folder_is_said_in_words() {
+    let (dir, mut d) = open();
+    let file = dir.path().join("liste.csv");
+    std::fs::write(&file, TABLE.as_bytes()).unwrap();
+    assert!(
+        !d.app
+            .bulk_import_from(&file, Some(&dir.path().join("c.json")))
+    );
+    let text = d.app.messages().last().unwrap().text.clone();
+    assert!(text.contains("is a file, not a folder"), "{text}");
+    assert!(!text.contains("os error"), "{text}");
+}

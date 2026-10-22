@@ -17,7 +17,9 @@
 //!   (egui's AccessKit tree).
 //! - `move` `{x,y}`, `click` `{x,y,button?,count?,modifiers?}`,
 //!   `down`/`up` `{x?,y?,button?}` (hold a button while looking),
-//!   `drag` `{from:[x,y],to:[x,y],button?,steps?}`, `scroll` `{x,y,dx?,dy?}`.
+//!   `drag` `{from:[x,y],to:[x,y],button?,steps?}`, `scroll` `{x,y,dx?,dy?,unit?}`
+//!   (`unit` "point", the default, pans like a trackpad; "line" and "page" zoom the
+//!   canvas like a mouse wheel).
 //! - `key` `{keys}`, for example `"Enter"` or `"ctrl+shift+k"`; `text` `{text}`.
 //! - `scene`: the open project as data: page symbols, selection, devices,
 //!   wires, nets, cabinet layouts.
@@ -713,8 +715,14 @@ impl Control {
                 self.pointer = p;
                 steps.push_back(Step::Events(vec![Event::PointerMoved(p)]));
                 steps.push_back(Step::Idle(1));
+                // A real wheel reports lines (zoom on the canvas); a trackpad reports points (pan).
+                let unit = match req.get("unit").and_then(Value::as_str) {
+                    Some("line") => egui::MouseWheelUnit::Line,
+                    Some("page") => egui::MouseWheelUnit::Page,
+                    _ => egui::MouseWheelUnit::Point,
+                };
                 steps.push_back(Step::Events(vec![Event::MouseWheel {
-                    unit: egui::MouseWheelUnit::Point,
+                    unit,
                     delta: egui::vec2(num("dx").unwrap_or(0.0), num("dy").unwrap_or(0.0)),
                     phase: egui::TouchPhase::Move,
                     modifiers: mods,

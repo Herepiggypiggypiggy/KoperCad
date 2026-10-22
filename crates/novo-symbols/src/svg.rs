@@ -79,6 +79,16 @@ pub fn to_svg(symbol: &Symbol, options: &SvgOptions) -> String {
             max = [max[0].max(a.at[0] + 8.0), max[1].max(a.at[1] + 2.0)];
         }
     }
+    if options.show_connections {
+        // Room for the designation printed beyond a left or right pin.
+        for c in &symbol.connections {
+            let v = c.dir.vector();
+            if v[0] != 0.0 {
+                min[0] = min[0].min(c.at[0] + v[0] * 6.0);
+                max[0] = max[0].max(c.at[0] + v[0] * 6.0);
+            }
+        }
+    }
     let m = options.margin;
     let (x, y) = (min[0] - m, min[1] - m);
     let (w, h) = (max[0] - min[0] + 2.0 * m, max[1] - min[1] + 2.0 * m);

@@ -1,0 +1,18 @@
+@title Single-line diagram: lamps and sounders on a one-phase feeder
+@area Reports
+# A one-pole breaker feeds two lamps and a sounder at the phase voltage; a 24 V lamp stays off the diagram and is named in the notes.
+open qa/fixtures/distribution-board-lighting.novo
+wait 20
+key ctrl+k
+wait 4
+text single line
+wait 4
+key Enter
+wait 20
+shot single-line-lighting
+check_blank single-line-lighting
+check_layout
+click_text Schedule #1
+wait 10
+shot single-line-lighting-schedule
+check_layout

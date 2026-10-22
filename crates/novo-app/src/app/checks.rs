@@ -187,6 +187,11 @@ impl NovoApp {
         let response = if pending && self.wb.problems.is_none() {
             // Nothing finished yet: "No issues" would be a claim not yet checked.
             ui.weak("Checking…")
+        } else if self.wb.recovered.is_some() && summary.errors + summary.warnings == 0 {
+            // A clean result on a copy that lost content proves nothing.
+            novo_theme::widgets::recovered_pill(ui).on_hover_text(
+                "This project was rebuilt from a damaged file. The checks only see what survived. Click for what it holds and what was left out.",
+            )
         } else {
             let response = novo_theme::widgets::issue_pill(ui, summary.errors, summary.warnings);
             if pending {
@@ -231,7 +236,43 @@ impl NovoApp {
         clicked
     }
 
+    /// The note at the top of the Issues list on a recovered copy: what it
+    /// holds, what was left out, and the button that says it was checked.
+    fn recovered_note(&mut self, ui: &mut egui::Ui) {
+        let Some(lines) = self.wb.recovered.clone() else {
+            return;
+        };
+        let p = crate::theme::ui_palette();
+        let mut checked = false;
+        egui::Frame::new()
+            .stroke(egui::Stroke::new(1.0, p.warning))
+            .inner_margin(egui::Margin::same(8))
+            .corner_radius(4.0)
+            .show(ui, |ui| {
+                ui.label(
+                    egui::RichText::new(format!(
+                        "{}  {}",
+                        novo_theme::icons::status::WARNING,
+                        novo_theme::widgets::RECOVERED_PILL
+                    ))
+                    .color(p.warning)
+                    .strong(),
+                );
+                for line in &lines {
+                    ui.label(line);
+                }
+                let button = ui.button("I have checked every page");
+                self.learn_row("issues.list", "I have checked every page", button.rect);
+                checked = button.clicked();
+            });
+        ui.add_space(6.0);
+        if checked {
+            self.wb.recovered = None;
+        }
+    }
+
     fn issues_list_rows(&mut self, ui: &mut egui::Ui) -> bool {
+        self.recovered_note(ui);
         let summary = Summary::of(self.shown_problems());
         let counts = [summary.errors, summary.warnings, summary.infos];
         ui.horizontal_wrapped(|ui| {

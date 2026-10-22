@@ -24,3 +24,9 @@ The QA box needs `apt-get update && apt-get install -y xvfb openbox mesa-vulkan-
 - "This file is" defaults to Not stated, so values carry no maker source unless the person says so.
 - `recipes::{connection_kind, lifecycle_of, currency_of}` became `pub(crate)` for reuse.
 - Real maker files have not been seen: suggestion words come from public wording and made-up samples.
+
+## Follow-up (2026-10-22)
+- QA: `import_table FILE` opens the import on a file (docs/testing/qa-suite.md); scenario `61-parts-table-audit.qa`, fixture `qa/fixtures/parts/price-list-nl.csv` (made up).
+- New mapping targets `price_date` and `price_per`; `Mapping.duplicates` (`DuplicateRule`) is saved with the mapping; `ImportPreview.repeated` lists repeated order numbers.
+- `novo_parts::plain_io_error` turns OS errors into words; use it for any new file read that is shown to a person.
+- Not done: AWG conductor sizes (not a linear unit), one part per several rows.

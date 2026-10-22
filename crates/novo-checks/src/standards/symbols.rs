@@ -223,9 +223,25 @@ pub(crate) fn classify(key: &str) -> Class {
         "terminals" => Class::Terminal,
         "earth" => Class::Earth,
         "sensors" => Class::Sensor,
+        // Safety relays, light curtains, PLC CPUs, remote I/O nodes and
+        // network parts are devices of their own; no rule covers them yet.
+        "network" => Class::Other,
+        "safety" => {
+            if name.starts_with("emergency_stop") {
+                Class::EmergencyStop
+            } else if name.starts_with("door_switch") {
+                Class::Contact
+            } else if name.starts_with("light_curtain") {
+                Class::Sensor
+            } else {
+                Class::Other
+            }
+        }
         "plc" => {
             if name == "power_supply" {
                 Class::PowerSupply
+            } else if name == "cpu" || name == "remote_io" {
+                Class::Other
             } else {
                 Class::PlcIo
             }
@@ -243,7 +259,7 @@ pub(crate) fn class_of(symbol: &SymbolInstance) -> Class {
 /// (`_no`), when the key says.
 pub(crate) fn is_break_contact(key: &str) -> Option<bool> {
     let (_, name) = parts(key);
-    if name.ends_with("_nc") || name == "emergency_stop" {
+    if name.ends_with("_nc") || name.starts_with("emergency_stop") {
         Some(true)
     } else if name.ends_with("_no") {
         Some(false)

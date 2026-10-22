@@ -123,6 +123,19 @@ impl NovoApp {
             today: today(),
             dry_run: false,
         };
+        if folder.is_file() {
+            let name = folder
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            self.message(
+                Level::Error,
+                format!(
+                    "Parts import: {name} is a file, not a folder. To import one CSV or Excel file use File > Import parts > Import parts from a table."
+                ),
+            );
+            return false;
+        }
         match import_inbox(folder, catalog_path, &opts) {
             Ok(report) => {
                 self.message(Level::Info, summary_line(&report));

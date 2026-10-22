@@ -1,0 +1,44 @@
+@title Set location for several devices, then terminals land on strips by kind
+@area Terminals
+@sizes 1920x1080
+# Fixture: a motor and a sensor drawn at the cabinet (+CAB), as the starter macros do.
+open qa/fixtures/strip-grouping.novo
+wait 30
+key ctrl+k
+wait 3
+text devices
+wait 4
+key Enter
+wait 20
+click 300 200
+key Home
+wait 20
+shot a-before
+drag 340 480 960 660
+wait 10
+shot b-two-selected
+wait 20
+expect "Set location of 2 selected"
+
+click 570 786
+text +FIELD
+key Enter
+wait 20
+expect "+FIELD"
+shot c-after-set-location
+check_layout
+# The field devices now sit across a location boundary: seven terminals are proposed. By default they
+# go on strips by kind, not all on one.
+click 293 748
+wait 10
+expect "Accept 7 proposed"
+shot d-terminals-proposed
+check_layout
+click_text "Accept 7 proposed"
+wait 20
+expect_scene "=A1+CAB-X1"
+expect_scene "=A1+CAB-X2"
+expect_scene "=A1+CAB-X3"
+expect_scene "=A1+CAB-X4"
+shot e-strips-by-kind
+check_layout

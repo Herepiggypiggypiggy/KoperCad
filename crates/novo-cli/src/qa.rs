@@ -216,6 +216,7 @@ const KNOWN_VERBS: &[&str] = &[
     "library",
     "shot",
     "wait",
+    "wait_s",
     "frame_stats",
     "resize",
     "click_text",
@@ -226,6 +227,7 @@ const KNOWN_VERBS: &[&str] = &[
     "key",
     "text",
     "answer_dialog",
+    "import_table",
     "expect",
     "expect_not",
     "expect_scene",
@@ -902,6 +904,14 @@ impl Ctx<'_> {
                     .tool("wait", &json!({"frames": frames}))
                     .map(|_| ())
             }
+            "wait_s" => {
+                // Real seconds, for work that runs on the wall clock (a
+                // solver on its own thread); `wait` counts frames, which
+                // pass faster in a small window.
+                let secs = num(1, "seconds")?.clamp(0.0, 300.0);
+                std::thread::sleep(std::time::Duration::from_secs_f64(secs));
+                self.srv.tool("wait", &json!({"frames": 4})).map(|_| ())
+            }
             "frame_stats" => {
                 // `frame_stats [pan|zoom|none] [frames]`: how long frames take
                 // with the page moving; the numbers go into the step list.
@@ -975,7 +985,13 @@ impl Ctx<'_> {
                 self.srv.tool("click", &args).map(|_| ())
             }
             "click" | "move" => {
-                let args = json!({"x": num(1, "x")?, "y": num(2, "y")?});
+                let mut args = json!({"x": num(1, "x")?, "y": num(2, "y")?});
+                // `click X Y right` (or `middle`) presses that button.
+                if words[0] == "click"
+                    && let Some(button) = words.get(3)
+                {
+                    args["button"] = json!(button);
+                }
                 self.srv.tool(&words[0], &args).map(|_| ())
             }
             "drag" => {
@@ -1009,6 +1025,23 @@ impl Ctx<'_> {
                 self.srv
                     .tool("answer_dialog", &json!({"path": p.to_string_lossy()}))
                     .map(|_| ())
+            }
+            "import_table" => {
+                // `import_table FILE`: File > Import parts > Import parts from a
+                // table, with the file dialog answered, so a scenario can
+                // screenshot the mapping, rows and refusal screens.
+                let file = need(1, "a table file")?.to_owned();
+                let w = |s: &[&str]| s.iter().map(|x| (*x).to_owned()).collect::<Vec<_>>();
+                self.step(&w(&["answer_dialog", &file]))?;
+                self.step(&w(&["click_text", "File"]))?;
+                self.step(&w(&["wait", "4"]))?;
+                self.step(&w(&["click_text", "Import parts"]))?;
+                self.step(&w(&["wait", "4"]))?;
+                self.step(&w(&[
+                    "click_text",
+                    "Import parts from a table (CSV or Excel)",
+                ]))?;
+                self.step(&w(&["wait", "20"]))
             }
             "expect" | "expect_not" => {
                 let want = need(1, "text")?.to_lowercase();
@@ -1876,7 +1909,10 @@ mod tests {
         assert!(all.len() >= 7);
         for sc in &all {
             for st in &sc.steps {
-                if matches!(st.words[0].as_str(), "open" | "answer_dialog")
+                if matches!(
+                    st.words[0].as_str(),
+                    "open" | "answer_dialog" | "import_table"
+                )
                     && !st.words[1].starts_with("~/")
                     // Generated on demand (scale_bench --save-project), not shipped.
                     && !st.words[1].starts_with("target/")

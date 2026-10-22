@@ -28,6 +28,13 @@ Next: expose thin fns for macro.save (define_block + MacroLibrary save) and macr
 (cse_01B1jpjzeDiXvWoBCsv1BWt9). Draft PRs, small, no build, no admin rights. After a push, message the
 reviewer with the head SHA; once READY do not push.
 
-## Starter macros (2026-10-21)
+## Starter macros (2026-10-22)
 
-15 starters now ship: the original four in `starter.rs` plus eleven in `starter/more.rs`, drawn through a `Kit` helper that takes pins, bridges and pass-through from the symbol library. Search words live in each macro's tags. Next ideas: ATEX/Dahlander pole-changing, two-speed, autotransformer start, valve with feedback.
+18 starters ship: the original four in `starter.rs`, twelve in `starter/more.rs` plus the three-phase supply, and the two safety/network ones in `starter/safety.rs`. Every symbol comes from the library through `Sheet::put` (pins with directions and spare points, bridges, pass-through), so a macro cannot drift from its symbols. Where wires meet, `Sheet::bus` builds a chain of junctions so no two wires share a stretch; `orthogonal_routes` gives every other wire a right-angle route.
+
+Entry points (what the user connects): the line phases L1 L2 L3 on the top row, the PE terminal next to them (`terminal_pe` pin 1, wired through to the motor or drive PE), the control supply above the control breaker, and one N rail (a junction) or the single coil's A2. The "Three-phase supply" macro (main switch, power breaker, control breaker, PE and N terminals) has matching outputs. `crates/novo-tests/tests/starter_macros_clean.rs` holds the exact list of open points per starter, so a change that opens another one fails the test. Terminals and potential feeds cannot be part of a block (novo-core), so PE potential and supply feeds stay the user's to add.
+
+Next ideas: ATEX/Dahlander pole-changing, two-speed, autotransformer start, valve with feedback; connecting a supply macro to a starter in one gesture needs a core feature (auto-connect of aligned pins).
+
+
+Refreshing installed starters: `install_starters` skips files that already exist, so a library that has the starters installed keeps the old content. To get the fixed ones, delete the `Starter` folder in My macros (or Company macros) and open the macro browser again. Versioned replacement of unedited starters is a follow-up.

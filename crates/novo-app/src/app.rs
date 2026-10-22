@@ -33,6 +33,8 @@ mod cable_controls;
 mod cable_cores;
 #[cfg(test)]
 mod cable_cores_tests;
+#[cfg(test)]
+mod cable_proposals_fixture_tests;
 mod calculations;
 #[cfg(test)]
 mod calculations_tests;
@@ -187,6 +189,8 @@ mod standards_report;
 #[cfg(test)]
 mod standards_report_tests;
 mod status_bar;
+#[cfg(test)]
+mod strip_grouping_tests;
 mod symbol_folder;
 mod symbol_preview;
 mod terminal_edit;
@@ -856,6 +860,14 @@ impl NovoApp {
         self.raise(level, text.into(), None);
     }
 
+    /// Takes every toast off the screen (they stay in the log). A dialog that
+    /// opens calls this so an old error does not sit over it.
+    pub(super) fn dismiss_toasts(&mut self) {
+        for m in &mut self.messages {
+            m.dismissed = true;
+        }
+    }
+
     /// Reports a file that was written: the toast names it and offers to
     /// open its folder.
     pub(super) fn message_file(&mut self, text: impl Into<String>, file: &Path) {
@@ -1061,11 +1073,15 @@ impl NovoApp {
                 let copy = salvaged.copy.clone();
                 self.open_path_as(&copy, false);
                 if self.project_path.as_deref() == Some(copy.as_path()) {
+                    // Until the person says they checked it, no green
+                    // "No issues": the checks only see what survived.
+                    self.wb.recovered = Some(salvaged.report_lines());
                     self.raise(
                         Level::Warning,
                         format!(
-                            "{name} is damaged. {}. This is a recovered copy, written beside the original as {}; {name} itself was not changed. Ctrl+K, \"Recover a damaged project\" does the same for any file.",
+                            "{name} is damaged. {}. In the copy: {}. This is a recovered copy, written beside the original as {}; {name} itself was not changed. Check every page. Ctrl+K, \"Recover a damaged project\" does the same for any file.",
                             salvaged.summary(),
+                            salvaged.kept_text(),
                             copy.file_name().map_or_else(
                                 || copy.display().to_string(),
                                 |n| n.to_string_lossy().into_owned()
@@ -1165,6 +1181,7 @@ impl NovoApp {
         self.wb.live = Default::default();
         self.wb.drawer = None;
         self.wb.renumber = None;
+        self.wb.recovered = None;
         self.wb.field.close();
         self.wb.commissioning = None;
         self.wb.sheet = 0;
@@ -1741,6 +1758,9 @@ impl NovoApp {
             "Not saved"
         } else if self.is_dirty() {
             "Saving"
+        } else if self.wb.recovered.is_some() {
+            // Saved, yes, but the file is a rebuilt copy: not the same claim.
+            "Saved (recovered copy)"
         } else {
             "Saved"
         }

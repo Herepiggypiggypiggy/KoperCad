@@ -62,10 +62,12 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `fresh` | restart with no project |
 | `library DIR` | restart with this parts library (a folder holding `records.json` and the files it names) copied into the profile, so maker models and other library files are there from the start; every later launch of the scenario has it too |
 | `click_text "Label" [Role] [#n]` | click the enabled widget with this label (exact match first); `#2` = second match (a label can be a menu and a workspace button) |
-| `click X Y`, `move X Y`, `drag X1 Y1 X2 Y2`, `scroll X Y DY` | pointer, window points |
+| `click X Y [right\|middle]`, `move X Y`, `drag X1 Y1 X2 Y2`, `scroll X Y DY` | pointer, window points |
 | `key ctrl+k Escape`, `text some words` | keyboard |
 | `answer_dialog FILE` | the next native file dialog gets this path (queue it first) |
-| `wait N`, `resize W H` | run N frames; resize the window |
+| `import_table FILE` | File > Import parts > Import parts from a table, with the file dialog answered with FILE; leaves the mapping (or the refusal) on screen |
+| `wait N`, `resize W H` | run N frames (at most 600); resize the window |
+| `wait_s N` | sleep N real seconds (at most 300), then run a few frames: for work on the wall clock such as the heat solver; `wait` counts frames, which pass faster in a small window |
 | `frame_stats [pan\|zoom\|none] [frames]` | run frames (default 120) while the page pans, zooms or stands still, and report UI pass and whole-frame times (mean, median, p95, worst, in ms); they appear under "Measurements" in `report.md`. On a box without a GPU the whole-frame time includes software rasterising: read the UI pass as the program's own cost |
 | `shot label` | labelled screenshot |
 | `expect "text"`, `expect_not "text"` | a label or value containing the text is (not) in the widget tree; a miss is a finding (S3) |

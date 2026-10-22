@@ -1,0 +1,30 @@
+format = 1
+id = "iec/network/bus_terminator"
+name = "Bus terminating resistor"
+description = "120 ohm terminating resistor between the two data lines at the end of an RS-485 or CAN bus."
+standard = "IEC 60617"
+category = "network"
+function = "network.terminator"
+keywords = ["terminator", "termination", "120 ohm", "rs485", "can", "bus", "afsluitweerstand"]
+aliases = ["busterm"]
+
+connections = [
+  { id = "A", at = [0, 0], dir = "up" },
+  { id = "B", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-4, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "rect", at = [-1.5, 4], size = [3, 8] },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+  { kind = "text", at = [5, 8], text = "120", size = 1.8 },
+]
+
+[behavior]
+kind = "passive"
+type = "resistor"
+poles = [["A", "B"]]
