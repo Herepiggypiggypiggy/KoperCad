@@ -87,4 +87,4 @@ The six lessons after wire-routing start from `../wire-routing/project.json`.
 - A rail line is the middle of the devices on it (#1356). `novo_layout::mount` holds the snap (`snap_to_rail`, reach 15 mm from the device centre, 6 mm along the run) and `mounted_on` (0.5 mm exact check); `model::place_device` records the rail when the device centre is on a rail line and the device lies on its run, so a drop that is not on a line leaves the rail.
 - Lessons that drop devices by `cabinet_place` must give a top left whose centre is on the rail line to stay mounted: -K1 on rail 92 is (x, 210); -F2 (x, 17.5); -T1 (x, 550). The rails-and-ducts steps `slide-along` and `move-off-rail` rely on it.
 - 3D: typical shapes are drawn from 36 px when the mesh has at most 800 triangles (`cull::lod_for_part`); heavy maker models still wait for 160 px.
-- QA: `scripts/qa.sh run qa/scenarios/74-cabinet-rail-snap.qa` (1366x768 only, the clicks are window points).
+- QA: `scripts/qa.sh run qa/scenarios/79-cabinet-rail-snap.qa` (1366x768 only, the clicks are window points).
