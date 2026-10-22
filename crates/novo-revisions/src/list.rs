@@ -85,7 +85,7 @@ fn label(change: &Change, old: &Project, new: &Project) -> String {
 }
 
 /// A short name for an object, from the state it exists in.
-fn name_of(project: &Project, id: AnyId) -> Option<String> {
+pub(crate) fn name_of(project: &Project, id: AnyId) -> Option<String> {
     Some(match id {
         AnyId::Page(p) => {
             let p = project.page(p)?;

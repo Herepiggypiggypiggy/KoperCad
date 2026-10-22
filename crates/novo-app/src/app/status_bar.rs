@@ -59,9 +59,9 @@ fn machine_chip_label(summary: &str) -> String {
 }
 
 /// A mode that is on, with the command that turns it off.
-struct ModeChip {
-    label: String,
-    command: &'static str,
+pub(super) struct ModeChip {
+    pub(super) label: String,
+    pub(super) command: &'static str,
     hover: String,
 }
 
@@ -302,7 +302,7 @@ impl NovoApp {
     }
 
     /// The modes that are on, each with the command that switches it off.
-    fn mode_chips(&self) -> Vec<ModeChip> {
+    pub(super) fn mode_chips(&self) -> Vec<ModeChip> {
         let mut chips = Vec::new();
         // The machine's choice is shown wherever the documents come from.
         if let Some(info) = self.machine_info() {
@@ -341,6 +341,18 @@ impl NovoApp {
                 label: format!("{} Page locked ({locked})", novo_theme::icons::LOCK_SIMPLE),
                 command: "revision.unlock_page",
                 hover: "This page is locked with the issued revision. Click to unlock it".into(),
+            });
+        }
+        let open_notes = self.wb.notes.open_count();
+        if open_notes > 0 {
+            chips.push(ModeChip {
+                label: format!(
+                    "{} {open_notes} open note{}",
+                    novo_theme::icons::CHAT_TEXT,
+                    if open_notes == 1 { "" } else { "s" }
+                ),
+                command: "notes.panel",
+                hover: "Review notes: open the list".into(),
             });
         }
         if self.wb.changes.is_some() {

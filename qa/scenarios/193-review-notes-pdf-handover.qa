@@ -1,0 +1,43 @@
+@title Review notes: printed as bubbles and a list in the PDF, and in the handover package
+@area Reports
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text add review note
+wait 6
+key Enter
+wait 10
+text Check the cable lengths
+click_text "Add as Me"
+wait 6
+key ctrl+k
+wait 4
+text Export PDF with options
+wait 4
+key Enter
+wait 10
+expect "Open review notes"
+shot pdf-options-notes
+click_text "Open review notes (bubbles and a list)"
+wait 3
+click_text "Export" Button #1
+wait 40
+expect_file "~/Documents/KoperCAD/*.pdf" 5000
+keep_file "~/Documents/KoperCAD/*.pdf"
+key ctrl+k
+wait 4
+text handover
+wait 6
+key Enter
+wait 8
+expect "Include the 1 review note"
+shot handover-ask-notes-unticked
+click_text "Include the 1 review note (remarks between the people on the project) as 10 Review notes.pdf"
+wait 3
+shot handover-ask-notes-ticked
+click_text "Hand over anyway"
+wait 40
+expect_file "~/Documents/KoperCAD/Motor starter (example) handover */10 Review notes.pdf" 1000
+keep_file "~/Documents/KoperCAD/Motor starter (example) handover */10 Review notes.pdf"
+shot handover-done

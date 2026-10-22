@@ -1,0 +1,24 @@
+@title Review notes: write a note on the page, see it in the panel and the status bar
+@area Schematic
+# Ctrl+K "add review note" with nothing selected: the form offers the page first; the note lands in the Open list and the status bar counts it.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text add review note
+wait 6
+key Enter
+wait 10
+expect "Review notes"
+expect "About"
+shot form
+text Title block still says draft
+wait 4
+shot form-typed
+click_text "Add as Me"
+wait 8
+expect "N1"
+expect "Title block still says draft"
+expect "1 open note"
+shot panel-one-note
+check_layout

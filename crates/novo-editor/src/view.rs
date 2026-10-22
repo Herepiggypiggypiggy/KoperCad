@@ -154,6 +154,9 @@ pub struct SchematicView {
     goto: Option<PageId>,
     /// Commands the context menu asked the shell to run, by workflow id.
     commands: Vec<&'static str>,
+    /// Where on the page the right click that opened the context menu was
+    /// (page coordinates, mm), for commands that act at that spot.
+    pub menu_world: Option<novo_core::Point>,
     /// The key shown beside a context-menu row, by workflow id; the shell
     /// fills it from the keymap so the menu never names a key that is not
     /// bound.
@@ -307,6 +310,7 @@ impl SchematicView {
             status: None,
             goto: None,
             commands: Vec::new(),
+            menu_world: None,
             shortcuts: HashMap::new(),
             band_count: None,
             move_carries: true,
@@ -473,6 +477,7 @@ impl SchematicView {
         "nav.all_references",
         "xref.link",
         "view.fit",
+        "notes.add",
         "proposal.accept_all",
         "terminal.toggle_pe",
         "terminal.strip_up",
@@ -1265,6 +1270,9 @@ impl SchematicView {
                 _ => Vec::new(),
             };
             let anchor = ctx.pointer_latest_pos().unwrap_or(rect.center());
+            self.menu_world = out
+                .cursor_raw
+                .map(|w| novo_core::Point::new(f64::from(w.x), f64::from(w.y)));
             self.menu = Some(ContextMenu {
                 anchor,
                 empty: selection.is_empty(),
@@ -1929,6 +1937,9 @@ impl SchematicView {
                         if menu_row(ui, &self.shortcuts, "Zoom to fit", "view.fit") {
                             chosen = Some(MenuChoice::Command("view.fit"));
                         }
+                        if menu_row(ui, &self.shortcuts, "Add review note…", "notes.add") {
+                            chosen = Some(MenuChoice::Command("notes.add"));
+                        }
                         ui.menu_button("Page", |ui| {
                             if ui.button("New page after this").clicked() {
                                 chosen = Some(MenuChoice::NewPage);
@@ -2222,6 +2233,9 @@ impl SchematicView {
                         ui.horizontal(|ui| rows(ui));
                     } else {
                         rows(ui);
+                    }
+                    if menu_row(ui, &self.shortcuts, "Add review note…", "notes.add") {
+                        chosen = Some(MenuChoice::Command("notes.add"));
                     }
                     ui.separator();
                     for (label, id, choice) in [

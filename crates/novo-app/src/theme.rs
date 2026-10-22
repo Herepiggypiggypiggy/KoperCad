@@ -99,6 +99,11 @@ fn canvas_style_from(p: &CanvasPalette) -> CanvasStyle {
         modified: color(p.modified),
         removed: color(p.removed),
         mark_text: color(p.mark_text),
+        // The bubble of a review note is the proposal hue, solid.
+        note: {
+            let [r, g, b, _] = p.proposal;
+            color([r, g, b, 0xFF])
+        },
     }
 }
 

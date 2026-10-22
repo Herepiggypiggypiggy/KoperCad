@@ -711,6 +711,21 @@ pub const DUTCH: &[Aliases] = &[
     // Check
     nl("check.problems", &["problemen", "fouten"], &["controles"]),
     nl(
+        "notes.panel",
+        &["opmerkingen", "beoordelingsnotities"],
+        &["commentaar", "feedback", "reviewnotities"],
+    ),
+    nl(
+        "notes.add",
+        &["opmerking toevoegen", "opmerking"],
+        &["commentaar toevoegen", "notitie"],
+    ),
+    nl(
+        "notes.next",
+        &[],
+        &["volgende opmerking", "volgende open opmerking"],
+    ),
+    nl(
         "check.calculations",
         &[],
         &[

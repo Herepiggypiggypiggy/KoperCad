@@ -504,6 +504,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
                 "check.safety",
             ],
             &["check.next_problem", "check.previous_problem"],
+            &["notes.panel", "notes.add", "notes.next"],
         ],
     ),
     (

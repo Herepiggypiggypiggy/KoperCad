@@ -201,6 +201,10 @@ impl NovoApp {
                     "Mark pages changed since the last revision",
                 );
                 ui.checkbox(&mut c.checks_appendix, "Design checks after the drawing");
+                ui.checkbox(
+                    &mut c.review_notes,
+                    "Open review notes (bubbles and a list)",
+                );
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     ui.label("Look");

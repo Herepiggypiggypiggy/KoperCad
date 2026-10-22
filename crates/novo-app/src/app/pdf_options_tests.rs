@@ -90,6 +90,7 @@ fn the_command_opens_the_dialog_and_export_follows_the_choice() {
         bookmarks: false,
         links: false,
         checks_appendix: false,
+        review_notes: false,
         title: "Pump skid".into(),
         ..Default::default()
     };

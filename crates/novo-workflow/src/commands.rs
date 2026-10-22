@@ -2487,6 +2487,33 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["problems"],
     ),
+    verb(
+        cmd(
+            "notes.panel",
+            "Review notes",
+            "Check",
+            &["comments", "remarks", "feedback", "review", "open notes"],
+            Needs::Project,
+        ),
+        &["notes", "review notes"],
+    ),
+    verb(
+        cmd(
+            "notes.add",
+            "Add review note",
+            "Check",
+            &["comment", "remark", "feedback", "mark for review"],
+            Needs::Project,
+        ),
+        &["add note", "note"],
+    ),
+    cmd(
+        "notes.next",
+        "Next open review note",
+        "Check",
+        &["comment", "walk through", "review"],
+        Needs::Project,
+    ),
     cmd(
         "check.emc",
         "EMC check",

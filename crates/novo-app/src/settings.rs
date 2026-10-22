@@ -167,6 +167,9 @@ pub struct PdfChoice {
     pub changed_marks: bool,
     /// The design checks as report pages after the drawing.
     pub checks_appendix: bool,
+    /// The open review notes as numbered bubbles on the pages, and a list of
+    /// them after the drawing.
+    pub review_notes: bool,
     /// `"black"` (print style) or `"colour"`.
     pub look: String,
     /// The document title; empty uses the project name.
@@ -184,6 +187,7 @@ impl Default for PdfChoice {
             title_revisions: true,
             changed_marks: true,
             checks_appendix: true,
+            review_notes: false,
             look: "black".into(),
             title: String::new(),
         }

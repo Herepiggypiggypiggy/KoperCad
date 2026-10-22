@@ -140,6 +140,16 @@ impl NovoApp {
             } else {
                 None
             },
+            extra_appendices: if choice.review_notes {
+                self.notes_appendix(true).into_iter().collect()
+            } else {
+                Vec::new()
+            },
+            markers: if choice.review_notes {
+                self.notes_pdf_markers()
+            } else {
+                Default::default()
+            },
             print,
         }
     }
