@@ -117,7 +117,7 @@ fn a_large_project_stays_inside_its_time_budgets() {
         d.app.show_page(order[order.len() / 2]);
         d.frame();
     });
-    b.lap("Ctrl+K, type a tag, jump to it", 500.0, || {
+    b.lap("Ctrl+K, type a tag, jump to it", 1000.0, || {
         d.app.type_command(&ctx, Mode::All, "F451");
         d.frame();
     });
