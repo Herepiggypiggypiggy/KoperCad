@@ -209,6 +209,25 @@ fn cutting_rails_to_length_is_one_undo_step() {
 }
 
 #[test]
+fn the_cut_list_names_ducts_as_the_wire_production_report_does() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let cab = cabinet(&mut d);
+    place_all(&mut d, cab);
+    let lists = cabinet_rules::cut_lists(project(&d), cab).unwrap();
+    let names = novo_reports::duct_names(project(&d));
+    assert!(!lists.ducts.is_empty() && !names.is_empty());
+    assert_eq!(lists.duct_names, names);
+    // Every piece in the bars is a duct rail that has a D-name.
+    for (_, _, plan) in &lists.ducts {
+        for bar in &plan.bars {
+            let line = bar.line(&plan.stock, &|id: u64| lists.duct_names[&id].clone());
+            assert!(line.contains('D') && !line.contains("duct ?"), "{line}");
+        }
+    }
+}
+
+#[test]
 fn the_rules_file_is_read_saved_and_a_bad_one_falls_back_with_the_reason() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join(RULES_FILE);

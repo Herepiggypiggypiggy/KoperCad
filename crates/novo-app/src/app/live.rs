@@ -702,6 +702,22 @@ pub(super) fn legend(
     legend
 }
 
+/// The status-bar line when Live switches on: it names only what exists, so
+/// it never points at pole badges or buttons the page does not have.
+fn live_status(supply: bool, badges: bool) -> &'static str {
+    match (supply, badges) {
+        (false, _) => {
+            "Live potentials: no supply is defined yet. Place a feed or add the supply circuit from the Live card"
+        }
+        (true, true) => {
+            "Live potentials: the plant is at rest, break contacts closed. Click a pole badge to switch the device, hold a pushbutton"
+        }
+        (true, false) => {
+            "Live potentials: the plant is at rest. This page has no switched contacts; use Why? to ask about a wire or a device"
+        }
+    }
+}
+
 impl NovoApp {
     /// Shift+L: the live potentials view on or off.
     pub(super) fn toggle_live(&mut self) {
@@ -711,10 +727,18 @@ impl NovoApp {
                 self.wb.live.reset_poles(doc.project());
             }
             self.tour_tick("live");
-            self.message(
-                Level::Info,
-                "Live potentials: the plant is at rest, break contacts closed. Click a pole badge to switch the device, hold a pushbutton",
-            );
+            let (supply, badges) = match (self.current_page, self.backend.document()) {
+                (Some(page), Some(doc)) => {
+                    let project = doc.project();
+                    let solved = self.wb.live.solved(project, 0.0);
+                    (
+                        novo_sim::explain::has_supply(&solved.netlist),
+                        !pole_badges(project, page, &solved.settled.poles).is_empty(),
+                    )
+                }
+                _ => (true, true),
+            };
+            self.message(Level::Info, live_status(supply, badges));
         }
     }
 
@@ -806,6 +830,7 @@ impl NovoApp {
         let story = novo_sim::explain::story(project, &solved.settled, &states, &|s| {
             symbol_name(project, s)
         });
+        let supply = novo_sim::explain::has_supply(&solved.netlist);
         let answer = why_target.map(|target| {
             let name = |s: SymbolId| symbol_name(project, s);
             match target {
@@ -1198,6 +1223,8 @@ impl NovoApp {
         let why_mode = self.wb.live.why_mode;
         let operators = self.wb.live.operate.list(project, page, &poles);
         let mut go_to: Option<PageId> = None;
+        let mut place_feed = false;
+        let mut add_supply = false;
         let has_buttons = operators.iter().any(|o| o.momentary);
         let elsewhere = if story.is_none() && !has_buttons {
             self.wb.live.operate.elsewhere(project, page)
@@ -1222,13 +1249,40 @@ impl NovoApp {
             {
                 leave = true;
             }
+            if !supply {
+                // Nothing can light up, whatever is pressed: say so first.
+                ui.colored_label(
+                    crate::theme::ui_palette().warning,
+                    egui::RichText::new(novo_sim::explain::NO_SUPPLY).strong(),
+                );
+                ui.add(egui::Label::new(novo_sim::explain::NO_SUPPLY_FIX).wrap());
+                ui.horizontal_wrapped(|ui| {
+                    if ui
+                        .small_button("Place a feed")
+                        .on_hover_text("Start the Place tool with one potential feed. Click to put it on an open supply point, then right-click it to set L1, L2, L3, N or PE")
+                        .clicked()
+                    {
+                        place_feed = true;
+                    }
+                    if ui
+                        .small_button("Add supply circuit…")
+                        .on_hover_text("Open the Three-phase supply macro: main switch and breakers, with open points for L1 L2 L3, N and PE")
+                        .clicked()
+                    {
+                        add_supply = true;
+                    }
+                });
+                ui.add_space(2.0);
+            }
             if badges.is_empty() {
                 ui.weak("No switched contacts on this page");
             } else {
                 let said = story.as_deref().unwrap_or("Nothing is switched on yet.");
-                ui.add(egui::Label::new(egui::RichText::new(said).strong()).wrap())
-                    .on_hover_text(format!("{closed} of {} poles closed", badges.len()));
-                if story.is_none() && !has_buttons {
+                if supply {
+                    ui.add(egui::Label::new(egui::RichText::new(said).strong()).wrap())
+                        .on_hover_text(format!("{closed} of {} poles closed", badges.len()));
+                }
+                if story.is_none() && supply && !has_buttons {
                     // The buttons are on another page: say where.
                     match &elsewhere {
                         Some((page, name)) => {
@@ -1241,7 +1295,7 @@ impl NovoApp {
                             ui.weak("This drawing has no push button to press.");
                         }
                     }
-                } else if story.is_none() {
+                } else if story.is_none() && supply {
                     ui.weak("Hold a push button below.");
                 }
                 if ui
@@ -1338,6 +1392,9 @@ impl NovoApp {
             });
             if why_mode && answer.is_none() {
                 ui.weak("Click a wire or a device");
+                if !supply {
+                    ui.weak("Until a feed is placed the answer is always: no supply.");
+                }
             }
             if let Some(a) = &answer {
                 ui.add(egui::Label::new(egui::RichText::new(&a.title).strong()).wrap());
@@ -1404,6 +1461,12 @@ impl NovoApp {
         }
         if let Some(page) = go_to {
             self.show_page(page);
+        }
+        if place_feed {
+            self.begin_place(novo_editor::potential::FEED_SYMBOL, None);
+        }
+        if add_supply {
+            self.open_macro_place(Some("Three-phase supply"));
         }
         if toggle_why {
             self.wb.live.why_mode ^= true;
@@ -1508,6 +1571,15 @@ fn symbol_name(project: &Project, symbol: SymbolId) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_status_line_names_only_what_the_page_has() {
+        assert!(live_status(false, false).contains("no supply"));
+        assert!(!live_status(false, true).contains("pole badge"));
+        assert!(live_status(true, true).contains("pole badge"));
+        let bare = live_status(true, false);
+        assert!(!bare.contains("pole badge") && bare.contains("Why?"));
+    }
+
     use super::*;
     use novo_core::{Document, Endpoint, Pin, Placement, Point};
 

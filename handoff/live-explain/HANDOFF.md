@@ -6,3 +6,4 @@ Resume: `CARGO_TARGET_DIR=/tmp/kc-target cargo test -p novo-sim`, `cargo test -p
 
 Decisions: routes minimise open poles then poles, so the named cause is the cheapest repair. Potentials, not currents: no flow direction, so no animated pulses. The shipped example has no control circuit (no pushbuttons), so the Operate list is empty there; unit tests use a latch and a reversing interlock.
 Reviewer: R4 (live/sim area). Merge lead by PR parity.
+No-supply (C-56): a drawing where no net defines a potential shows a banner in the Live card; Why? answers 'No supply is defined' for any wire or device. Scenario qa/scenarios/08-live-no-supply.qa.

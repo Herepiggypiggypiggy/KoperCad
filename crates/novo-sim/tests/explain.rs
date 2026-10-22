@@ -360,3 +360,38 @@ fn a_dead_coil_answer_marks_the_break_and_the_wires_to_light() {
     assert!(a.breaks.contains(&l.s1) || a.breaks.contains(&l.seal));
     assert!(!a.nets.is_empty());
 }
+
+#[test]
+fn a_drawing_with_no_supply_says_so_for_every_question() {
+    use novo_sim::explain::{NO_SUPPLY, answer_net, answer_symbol, has_supply};
+    // The star-delta macro in a new project: devices and open points, no feed.
+    let mut doc = Document::default();
+    let ((coil, k1), _) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            let k1 = tx.add_device(DeviceTag::product("K1"), "")?;
+            let coil = put(tx, page, COIL, 0.0, dev(k1, true));
+            let contact = put(tx, page, KNO, 20.0, dev(k1, false));
+            tx.connect(Endpoint::pin(contact, 1), Endpoint::pin(coil, 0))?;
+            Ok((coil, k1))
+        })
+        .unwrap();
+    let _ = k1;
+    let project = doc.project();
+    let netlist = project.netlist();
+    assert!(!has_supply(&netlist));
+    let none = BTreeSet::new();
+    let settled = settle(project, &netlist, &rest_state(project), &none, &none);
+    let a = answer_symbol(project, &netlist, &settled, &none, coil, &names);
+    assert!(a.dead);
+    assert_eq!(a.lines[0].text, NO_SUPPLY);
+    assert!(a.lines[1].text.contains("feed"));
+    let net = netlist.net_of(Endpoint::pin(coil, 0)).unwrap();
+    let w = answer_net(project, &netlist, &settled, net, &names);
+    assert_eq!(w.lines[0].text, NO_SUPPLY);
+    assert!(w.dead);
+
+    // With a feed the drawing has a supply again.
+    let l = latch();
+    assert!(has_supply(&l.doc.project().netlist()));
+}

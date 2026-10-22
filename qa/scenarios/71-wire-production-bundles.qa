@@ -9,7 +9,14 @@ click_text "Bench output..."
 wait 20
 expect "Bundle"
 expect "Track"
-scroll 350 500 -700
+scroll 350 500 -300
+wait 2
+shot track-legend-note
+click_text "Export bench cut list (PDF)"
+wait 30
+expect_file "~/Documents/KoperCAD/*.pdf" 1500
+keep_file "~/Documents/KoperCAD/*.pdf"
+scroll 350 500 -400
 wait 2
 shot cut-list
 check_layout
