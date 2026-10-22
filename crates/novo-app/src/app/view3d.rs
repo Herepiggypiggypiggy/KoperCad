@@ -901,14 +901,20 @@ impl NovoApp {
                     .unwrap_or_else(|| format!("device {raw}"))
             };
             let heat_running = self.cabinet.heat.running();
+            let suggestion = self.cabinet.heat.solution().and_then(|sol| {
+                super::view3d_vents::suggestion(&sol, &mut self.cabinet.heat.cooling)
+            });
             super::view3d_vents::show(
                 ui.ctx(),
                 view_rect,
                 &mut self.cabinet.heat.settings,
                 vent_enclosure.as_ref(),
-                &vent_flows,
-                heat_running,
-                stale,
+                &super::view3d_vents::Shown {
+                    flows: &vent_flows,
+                    running: heat_running,
+                    stale,
+                    suggestion: suggestion.as_ref(),
+                },
             );
             if let Some(raw) =
                 view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale, &tag_of)

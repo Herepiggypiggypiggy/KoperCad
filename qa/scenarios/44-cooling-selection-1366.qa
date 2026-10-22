@@ -1,0 +1,58 @@
+@title Cooling selection (1366): finished run, proposal, balance, closed enclosure, scrolling, Cabinet panel
+@area Heat
+@sizes 1366x768
+# Heat run of the cabinet with sized wires (Quick, so it finishes in the harness), then the Cooling selection section of the Heat panel with the run finished. The hot case holds the inside at the outside temperature: a fan is out and a cooling unit is proposed. The panel scrolls to the caveat. The same section sits in the Cabinet Temperature panel.
+open qa/fixtures/cabinet-wire-heat.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 200
+expect_not "Preliminary"
+move 700 650
+wait 10
+click_text "Cooling selection"
+wait 10
+shot natural
+check_layout
+click_text "40.0 °C"
+key ctrl+a
+text 35
+key Enter
+wait 20
+shot proposal
+check_blank proposal
+move 1190 450
+wait 5
+scroll 1190 450 -150
+wait 10
+shot scrolled-to-caveat
+expect "maker's selection tool decides"
+click_text "Must stay closed (no fans)"
+wait 10
+shot closed
+check_layout
+click_text Cabinet #1
+wait 30
+key ctrl+k
+wait 3
+text Simulate heat of the cabinet
+wait 4
+key Enter
+wait_s 150
+click_text "Cooling selection"
+wait 10
+shot cabinet-panel
+check_blank cabinet-panel
+check_layout
+move 1270 450
+wait 5
+scroll 1270 450 -400
+wait 10
+shot cabinet-panel-scrolled

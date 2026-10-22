@@ -11,6 +11,16 @@ use super::heat_settings::{HeatSettings, Kind, MIN_SIZE_MM, VentSpec, Wall};
 
 const WIDTH: f32 = 316.0;
 
+/// What the shown result says to the panel.
+pub(super) struct Shown<'a> {
+    /// Air measured through each opening of the shown result (empty without one).
+    pub flows: &'a [Option<f64>],
+    pub running: bool,
+    /// The result is from before the last change.
+    pub stale: bool,
+    pub suggestion: Option<&'a Suggestion>,
+}
+
 /// The panel, left side of the 3D view under the toolbar. `flows` is the air
 /// measured through each opening of the shown result (empty without one).
 pub(super) fn show(
@@ -18,10 +28,10 @@ pub(super) fn show(
     view: egui::Rect,
     settings: &mut HeatSettings,
     enclosure: Option<&Enclosure>,
-    flows: &[Option<f64>],
-    running: bool,
-    stale: bool,
+    shown: &Shown,
 ) {
+    let flows = shown.flows;
+    let (running, stale, suggestion) = (shown.running, shown.stale, shown.suggestion);
     super::panel::Panel::new(
         "view3d_vents",
         "Vents and fans",
@@ -39,7 +49,7 @@ pub(super) fn show(
             .max_height(room)
             .auto_shrink([false, true])
             .show(ui, |ui| {
-                body(ui, settings, enclosure, flows, running, stale)
+                body(ui, settings, enclosure, flows, running, stale, suggestion)
             });
     });
 }
@@ -51,6 +61,7 @@ fn body(
     flows: &[Option<f64>],
     running: bool,
     stale: bool,
+    suggestion: Option<&Suggestion>,
 ) {
     // Long notes wrap inside the panel instead of stretching it.
     ui.set_max_width(WIDTH - 24.0);
@@ -179,6 +190,23 @@ fn body(
                 b + 1
             ),
         );
+    }
+    if let Some(sg) = suggestion {
+        ui.add_space(4.0);
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.label(muted(&sg.text));
+            ui.add_enabled_ui(!running, |ui| {
+                if ui
+                    .button(format!("Add {} to the cabinet", sg.button))
+                    .on_hover_text("From the Cooling selection of the Heat panel")
+                    .clicked()
+                {
+                    for spec in sg.specs(e) {
+                        settings.add(spec);
+                    }
+                }
+            });
+        });
     }
     if stale && !flows.is_empty() {
         ui.add_space(4.0);
@@ -427,4 +455,81 @@ fn editor(ui: &mut egui::Ui, v: &mut VentSpec, i: usize, e: &Enclosure) {
                 .color(crate::theme::ui_palette().text_secondary),
         );
     }
+}
+
+/// A fan the Cooling selection proposes, ready to place: its sentence, the
+/// button text and the openings that would be added.
+pub(super) struct Suggestion {
+    text: String,
+    button: String,
+    kind: Kind,
+    count: usize,
+    flow_m3h: f64,
+}
+
+#[cfg(test)]
+impl Suggestion {
+    pub(super) fn for_test(kind: Kind, count: usize, flow_m3h: f64) -> Suggestion {
+        Suggestion {
+            text: String::new(),
+            button: String::new(),
+            kind,
+            count,
+            flow_m3h,
+        }
+    }
+
+    pub(super) fn specs_for_test(&self, e: &Enclosure) -> Vec<VentSpec> {
+        self.specs(e)
+    }
+}
+
+impl Suggestion {
+    /// The openings to add, spread along their wall and fitted inside it.
+    fn specs(&self, e: &Enclosure) -> Vec<VentSpec> {
+        let presets = VentSpec::presets(e);
+        let base = match self.kind {
+            Kind::FilterFan => presets[2].spec,
+            _ => presets[4].spec,
+        };
+        let n = self.count.clamp(1, 4);
+        (0..n)
+            .map(|i| {
+                let mut v = base;
+                v.flow_m3h = self.flow_m3h;
+                v.u_mm += (i as f64 - 0.5 * (n as f64 - 1.0)) * (v.width_mm + 20.0);
+                v.fitted(e)
+            })
+            .collect()
+    }
+}
+
+/// The proposal of the Cooling selection when it is a fan or a filter fan.
+pub(super) fn suggestion(
+    sol: &super::heat_run::Solution,
+    cooling: &mut super::heat_cooling::CoolingSettings,
+) -> Option<Suggestion> {
+    use novo_thermal::cooling::Kind as Cool;
+    let (_, selection) = super::heat_cooling::selection_for(sol, cooling)?;
+    let choice = selection.proposal()?;
+    let kind = match choice.product.kind {
+        Cool::Fan => Kind::Fan,
+        Cool::FilterFan => Kind::FilterFan,
+        Cool::CoolingUnit => return None,
+    };
+    let name = &choice.product.name;
+    Some(Suggestion {
+        text: format!(
+            "Cooling selection proposes {} × {name} ({:.0} m³/h installed, model estimate).",
+            choice.count, choice.total
+        ),
+        button: if choice.count > 1 {
+            format!("{} openings", choice.count.min(4))
+        } else {
+            "the fan".into()
+        },
+        kind,
+        count: choice.count,
+        flow_m3h: choice.product.airflow_m3h,
+    })
 }

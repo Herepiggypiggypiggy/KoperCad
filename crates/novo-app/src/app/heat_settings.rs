@@ -613,6 +613,21 @@ impl HeatSettings {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn a_cooling_suggestion_places_its_fans_side_by_side_inside_the_wall() {
+        let e = enclosure();
+        let sg = super::super::view3d_vents::Suggestion::for_test(Kind::FilterFan, 3, 180.0);
+        let specs = sg.specs_for_test(&e);
+        assert_eq!(specs.len(), 3);
+        assert!(
+            specs
+                .iter()
+                .all(|v| v.kind == Kind::FilterFan && v.flow_m3h == 180.0)
+        );
+        assert!(!specs[0].footprint(&e).overlaps(&specs[1].footprint(&e)));
+        assert!(!specs[1].footprint(&e).overlaps(&specs[2].footprint(&e)));
+    }
+
+    #[test]
     fn identical_openings_are_reported_as_overlapping_and_apart_ones_are_not() {
         let e = enclosure();
         let a = VentSpec::presets(&e)[2].spec;
