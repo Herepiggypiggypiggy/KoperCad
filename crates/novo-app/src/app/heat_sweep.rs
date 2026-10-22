@@ -136,11 +136,6 @@ impl CoolingAdvice {
         self.run.is_some()
     }
 
-    #[cfg(test)]
-    pub(super) fn notice(&self) -> Option<&str> {
-        self.notice.as_deref()
-    }
-
     pub(super) fn close(&mut self) {
         if let Some(r) = &self.run {
             r.control.cancel.store(true, Ordering::Relaxed);
