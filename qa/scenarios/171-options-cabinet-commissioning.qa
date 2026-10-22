@@ -8,8 +8,10 @@ click_text Cabinet #1
 wait 20
 shot cabinet-fan-off
 check_layout
-move 642 370
-wait 4
+move 640 370
+wait 3
+move 642 372
+wait 8
 shot cabinet-fan-off-hover
 click_text Commissioning #1
 wait 20
