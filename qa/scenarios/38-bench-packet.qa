@@ -13,6 +13,7 @@ check_layout
 click_text "Bench packet (PDF)"
 wait 30
 expect_file "~/Documents/KoperCAD/*bench packet.pdf" 1500
+keep_file "~/Documents/KoperCAD/*bench packet.pdf"
 shot written
 key ctrl+k
 wait 4
