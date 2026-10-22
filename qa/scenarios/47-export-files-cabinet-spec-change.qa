@@ -1,0 +1,43 @@
+@title Cabinet and revision exports kept: wiring plan DXF, spec sheet, change report
+@area Reports
+# The wiring plan DXF needs the Cabinet view open on a cabinet, the spec sheet needs a placed macro, the change report needs an issued revision; keep_file copies each file for inspection.
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text "Cabinet" #1
+wait 15
+key ctrl+k
+wait 4
+text Export wiring plan as DXF
+wait 4
+key Enter
+wait 20
+expect_file "/tmp/kopercad-qa-open-*/door-cutouts wiring CAB.dxf" 3000
+keep_file "/tmp/kopercad-qa-open-*/door-cutouts wiring CAB.dxf"
+shot wiring-dxf
+key ctrl+k
+wait 4
+text Issue revision
+wait 4
+key Enter
+wait 10
+expect "Issue revision A"
+text Test change for the change report
+wait 3
+key Enter
+wait 15
+shot issued
+key ctrl+k
+wait 4
+text add card DI16 DQ8
+wait 5
+key Enter
+wait 10
+key ctrl+k
+wait 4
+text Export change report
+wait 4
+key Enter
+wait 20
+expect_file "/tmp/kopercad-qa-open-*/door-cutouts changes A.pdf" 1500
+keep_file "/tmp/kopercad-qa-open-*/door-cutouts changes A.pdf"
+shot change-report
