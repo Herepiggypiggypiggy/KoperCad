@@ -17,6 +17,9 @@ wait_s 120
 expect "Apply the moves"
 expect "Model estimate"
 shot found
+scroll 500 400 -800
+wait 4
+shot found-scrolled
 check_layout
 click_text "Apply the moves"
 wait 20

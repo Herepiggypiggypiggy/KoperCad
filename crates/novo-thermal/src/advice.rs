@@ -353,11 +353,11 @@ fn move_gain(before: &Score, after: &Score, index: usize) -> f64 {
 fn effect_text(before: &Score, after: &Score) -> String {
     match (before.worst_margin, after.worst_margin) {
         (Some(b), Some(a)) => format!(
-            "The tightest margin goes from {b:+.0} K to {a:+.0} K; the hottest air from {:.0} to {:.0} C (model estimate).",
+            "The tightest margin goes from {b:+.0} K to {a:+.0} K; the hottest air from {:.0} to {:.0} °C (model estimate).",
             before.max_air, after.max_air
         ),
         _ => format!(
-            "The hottest air goes from {:.0} to {:.0} C (model estimate).",
+            "The hottest air goes from {:.0} to {:.0} °C (model estimate).",
             before.max_air, after.max_air
         ),
     }
