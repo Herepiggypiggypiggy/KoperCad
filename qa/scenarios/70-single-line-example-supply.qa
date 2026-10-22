@@ -1,0 +1,19 @@
+@title Single-line diagram: the example with stated supply data, overload relay box, Enter supply data
+@area Reports
+# The bundled example states a 400 V supply with 10 kA, so the diagram shows figures and not question marks. The overload relay is a box on the motor feeder. The button opens the Electrical inputs.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text single line
+wait 4
+key Enter
+wait 20
+shot example-single-line
+check_blank example-single-line
+check_layout
+click_text "Enter supply data"
+wait 6
+expect "Electrical inputs"
+shot example-single-line-supply-data
+check_layout

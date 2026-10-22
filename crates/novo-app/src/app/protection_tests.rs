@@ -106,10 +106,11 @@ fn the_fault_current_typed_in_the_window_is_saved_with_the_project() {
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::OpenExample);
     d.frame();
-    assert_eq!(supply_property(&d), None);
+    // The example states a 6 kA supply.
+    assert_eq!(supply_property(&d), Some(Value::Float(6.0)));
     // The box is being dragged: the value is live but not yet saved.
     d.app.protection.set_supply_for_test(Some(12.5));
-    assert_eq!(supply_property(&d), None);
+    assert_eq!(supply_property(&d), Some(Value::Float(6.0)));
     assert!(d.app.apply_protection_edit(Edit::Supply(Some(12.5))));
     assert_eq!(supply_property(&d), Some(Value::Float(12.5)));
     d.app.run(&ctx, Action::Protection);
@@ -118,7 +119,7 @@ fn the_fault_current_typed_in_the_window_is_saved_with_the_project() {
     assert_eq!(study.supply_ka, Some(12.5), "shown again from the project");
     // One undo step, and zero clears it.
     d.app.run(&ctx, Action::Undo);
-    assert_eq!(supply_property(&d), None);
+    assert_eq!(supply_property(&d), Some(Value::Float(6.0)));
     assert!(d.app.apply_protection_edit(Edit::Supply(Some(8.0))));
     assert!(d.app.apply_protection_edit(Edit::Supply(None)));
     assert_eq!(supply_property(&d), None);

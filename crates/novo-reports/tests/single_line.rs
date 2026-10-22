@@ -446,3 +446,22 @@ fn a_stated_diversity_factor_is_in_the_schedule_the_drawing_and_the_legend() {
     let plain = drawn(&board()).join(" ");
     assert!(plain.contains("(no diversity)"));
 }
+
+#[test]
+fn a_breaker_with_little_margin_over_ik_says_the_motor_contribution_is_missing() {
+    let mut doc = Document::default();
+    distribution_board_with_signals(&mut doc).unwrap();
+    let out = SingleLineDiagram.generate(doc.project());
+    let section = &out.sections[0];
+    let col = |key: &str| section.column(key).unwrap();
+    let q1 = section
+        .rows
+        .iter()
+        .find(|r| r.cells[col("tag")].to_string() == "=A1+CAB-Q1")
+        .unwrap();
+    let why = q1.cells[col("why")].to_string();
+    assert!(
+        why.contains("within 4 %") && why.contains("motor contribution"),
+        "{why}"
+    );
+}
