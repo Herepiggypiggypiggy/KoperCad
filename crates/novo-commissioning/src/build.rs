@@ -144,6 +144,10 @@ pub struct BuildStep {
     pub after: Vec<usize>,
     /// The device this step is about, for jumping to it in the other views.
     pub device: Option<u64>,
+    /// The surface a device is fitted on when it is not the mounting plate
+    /// (`door`, `left`, `roof`, `plate2`, ...), by the name the Cabinet's
+    /// Surface picker uses.
+    pub surface: Option<String>,
     pub wires: Vec<WireId>,
     fingerprint: String,
 }
@@ -462,6 +466,7 @@ fn cabinet(project: &Project, enclosure: &Structure, jobs: &[WireCutJob]) -> Opt
             caution,
             after,
             device,
+            surface: None,
             wires,
             fingerprint,
         });
@@ -638,6 +643,9 @@ fn cabinet(project: &Project, enclosure: &Structure, jobs: &[WireCutJob]) -> Opt
                 if let Some(d) = project.get::<novo_core::Device>(novo_core::DeviceId::from(id)) {
                     details.push(part_text(project, d));
                 }
+                if let Some(surface) = layout.off_plate.get(&id) {
+                    details.extend(surface_position(&layout, id, surface));
+                }
                 let guessed = report.guessed.contains(&id);
                 let title = match layout.off_plate.get(&id) {
                     Some(surface) => format!("Fit {} on the {surface}", s.mark),
@@ -788,11 +796,91 @@ fn cabinet(project: &Project, enclosure: &Structure, jobs: &[WireCutJob]) -> Opt
             vec![],
         );
     }
+    for step in &mut out {
+        step.surface = step
+            .device
+            .filter(|_| step.phase == BuildPhase::Devices)
+            .and_then(|d| layout.off_plate.get(&d).cloned());
+    }
     Some(CabinetPlan {
         cabinet: cab,
         tag,
         steps: out,
     })
+}
+
+/// Where a device off the mounting plate goes, in words a person with a
+/// ruler can follow. The layout keeps its position as the top left corner in
+/// the surface's own millimetres; the door is stored as seen from the front,
+/// but a person fits it on the inside of the open door, so it is given from
+/// the hinge edge, which is the same from either side.
+fn surface_position(
+    layout: &novo_layout::state::CabinetLayout,
+    id: u64,
+    surface: &str,
+) -> Vec<String> {
+    use novo_layout::surfaces::SurfaceKind;
+    let Some(p) = layout.placements.iter().find(|p| p.id == id) else {
+        return Vec::new();
+    };
+    let r = p.footprint();
+    let kind = SurfaceKind::from_name(surface);
+    let width = layout.surface_sizes.get(surface).map(|(w, _)| *w);
+    let line = match kind {
+        Some(SurfaceKind::Door) => {
+            let hinge = layout.enclosure.and_then(|e| e.door).map(|d| d.hinge);
+            match (hinge, width) {
+                (Some(novo_layout::enclosure::Hinge::Right), Some(w)) => format!(
+                    "Door: {} mm from the hinge edge and {} mm down from the top edge, to the nearest corner of the device, on the inside of the door",
+                    mm1(w - r.x - r.w),
+                    mm1(r.y)
+                ),
+                (Some(novo_layout::enclosure::Hinge::Left), _) => format!(
+                    "Door: {} mm from the hinge edge and {} mm down from the top edge, to the nearest corner of the device, on the inside of the door",
+                    mm1(r.x),
+                    mm1(r.y)
+                ),
+                _ => format!(
+                    "Door: {} mm from the left edge seen from the front and {} mm down from the top edge",
+                    mm1(r.x),
+                    mm1(r.y)
+                ),
+            }
+        }
+        Some(SurfaceKind::LeftWall | SurfaceKind::RightWall) => format!(
+            "{}: {} mm from the back wall and {} mm down from the top edge, on the inside",
+            surface_label(surface),
+            mm1(r.x),
+            mm1(r.y)
+        ),
+        Some(SurfaceKind::Roof | SurfaceKind::Floor) => format!(
+            "{}: {} mm from the left seen from the front and {} mm in from the back wall, on the inside",
+            surface_label(surface),
+            mm1(r.x),
+            mm1(r.y)
+        ),
+        _ => format!(
+            "{}: {} mm across and {} mm down from the corner the Cabinet's Surface picker takes as 0, 0",
+            surface_label(surface),
+            mm1(r.x),
+            mm1(r.y)
+        ),
+    };
+    vec![
+        line,
+        format!(
+            "The device is {} x {} mm; this position is the planned one, check it against the real device",
+            mm1(r.w),
+            mm1(r.h)
+        ),
+    ]
+}
+
+fn surface_label(surface: &str) -> String {
+    let mut c = surface.chars();
+    c.next()
+        .map(|f| f.to_uppercase().chain(c).collect())
+        .unwrap_or_default()
 }
 
 fn part_text(project: &Project, device: &novo_core::Device) -> String {

@@ -1,0 +1,26 @@
+@title Build mode: a device on the door says where it goes from the hinge edge and shows on the door
+@area Cabinet
+# S0 and S1 are on the door in this fixture. Their steps give the position from the hinge edge, and Show on the door opens the door surface.
+open qa/fixtures/door-device.novo
+wait 20
+click_text Reports
+wait 5
+click_text "Build mode..."
+wait 30
+click_text "Devices  0/8"
+wait 10
+click_text "23  =A1+CAB-S0"
+wait 10
+expect "Fit =A1+CAB-S0 on the door"
+expect "from the hinge edge"
+expect "Show on the door"
+shot door-step
+check_layout
+click_text "Show on the door" Button
+wait 20
+expect "Back to Build mode"
+shot on-the-door
+check_layout
+click_text "Back to Build mode" Button
+wait 10
+expect "from the hinge edge"
