@@ -483,7 +483,12 @@ impl NovoApp {
             }
         }
         let solution = self.cabinet.heat.solution();
-        if solution.is_none() && mode.controls.heat_panel {
+        // Kept only where the window has the room: in a small window the panels
+        // would not all fit beside the view.
+        if solution.is_none()
+            && mode.controls.heat_panel
+            && ui.ctx().content_rect().height() >= 700.0
+        {
             heat_strip_placeholder(ui);
         }
         if let Some(sol) = &solution {
