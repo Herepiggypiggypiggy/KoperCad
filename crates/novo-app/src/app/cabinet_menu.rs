@@ -89,6 +89,7 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
                 Some(("Door open or closed", "view.3d_door")),
                 Some(("Enclosure on or off", "view.3d_shell")),
                 Some(("Wires on or off", "view.3d_wires")),
+                Some(("Slotted ducts on or off", "view.3d_slotted_ducts")),
                 Some(("Shadows on or off", "view.3d_shadows")),
                 Some(("Ambient occlusion on or off", "view.3d_ssao")),
                 Some(("Dimensions on or off", "view.3d_dimensions")),

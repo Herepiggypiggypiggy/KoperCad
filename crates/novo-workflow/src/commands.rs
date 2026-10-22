@@ -1352,6 +1352,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_slotted_ducts",
+        "Show or hide slotted (fingered) ducts in 3D",
+        "View",
+        &[
+            "slotted ducts",
+            "slotted duct",
+            "fingered ducts",
+            "finger duct",
+            "fingers",
+            "slots",
+            "wiring duct",
+            "trunking",
+            "solid ducts",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_shadows",
         "Show or hide shadows in 3D",
         "View",
