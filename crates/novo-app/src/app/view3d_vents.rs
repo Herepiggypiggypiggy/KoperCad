@@ -144,9 +144,8 @@ fn body(
                 spec.kind.label(),
                 heat_openings::wall_phrase(spec.wall)
             );
-            let row = ui
-                .selectable_label(open, title)
-                .on_hover_text("Open it here and mark it in the cabinet");
+            // No tooltip: it would sit on the row that is being pointed at.
+            let row = ui.selectable_label(open, title);
             if row.hovered() {
                 settings.hovered = Some(i);
             }

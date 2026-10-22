@@ -25,3 +25,7 @@ move 125 434
 wait 10
 shot row-hovered
 check_layout
+click_text "✔ Heat"
+wait 20
+shot panel-closed
+expect_not "Vents and fans"

@@ -368,4 +368,9 @@ fn hovering_a_row_marks_its_opening_in_the_cabinet() {
     d.frame_sized(size, Vec::new());
     d.frame_sized(size, Vec::new());
     assert_eq!(marked(&d), vec![false, false], "and let go again");
+    // Closing the panel while a row is under the pointer leaves nothing marked.
+    d.app.cabinet.heat.settings.hovered = Some(1);
+    d.app.view3d.controls.heat_panel = false;
+    d.frame_sized(size, Vec::new());
+    assert_eq!(d.app.cabinet.heat.settings.hovered, None);
 }
