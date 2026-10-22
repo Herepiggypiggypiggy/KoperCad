@@ -405,7 +405,7 @@ pub(super) fn reserve_bottom_right(ctx: &egui::Context, height: f32) {
     ctx.data_mut(|d| d.insert_temp(corner_id(), height));
 }
 
-fn reserved_bottom_right(ctx: &egui::Context) -> f32 {
+pub(super) fn reserved_bottom_right(ctx: &egui::Context) -> f32 {
     ctx.data(|d| d.get_temp::<f32>(corner_id())).unwrap_or(0.0)
 }
 
