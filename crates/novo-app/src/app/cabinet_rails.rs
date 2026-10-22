@@ -680,13 +680,13 @@ impl super::NovoApp {
         };
         if !done.skipped.is_empty() {
             text.push_str(&format!(
-                "; {} left alone, a duct is in the way",
+                "; {} left alone: it would run under a duct",
                 done.skipped.len()
             ));
         }
         if done.still_off > 0 {
             text.push_str(&format!(
-                "; {} still off the middle (shorter ones)",
+                "; {} off the middle: not the tallest on its rail",
                 done.still_off
             ));
         }
