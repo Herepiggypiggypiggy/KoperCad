@@ -10,6 +10,8 @@ click_text "New cabinet..."
 wait 10
 key Enter
 wait 20
+click_text Cabinet #1
+wait 20
 expect "Set the size of the mounting plate"
 shot no-plate
 key ctrl+k
