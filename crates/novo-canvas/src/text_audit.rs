@@ -7,14 +7,17 @@
 //! read the same numbers.
 //!
 //! Not counted: a label over the drawing of its own item (the `M` inside a
-//! motor circle is meant to be there), and anything on the page frame and
-//! underlay layers except the frame's own text as a place a label must not sit.
+//! motor circle is meant to be there), and ink on the page frame and underlay
+//! layers. Their text does count as text a label must not sit on, and a
+//! label there is compared with other labels like any other. Rotated labels
+//! are measured by their rotated box against labels, symbols and wires.
 
 use glam::Vec2;
 
 use crate::geom::Aabb;
 use crate::note_place::shape_touches;
 use crate::scene::{ItemId, Scene};
+use crate::shape::{Placement, Shape};
 use crate::text::Label;
 
 /// Overlaps smaller than this, in mm, are rounding noise of the estimated boxes.
@@ -102,9 +105,7 @@ pub fn audit(scene: &Scene) -> TextAudit {
             .filter(|(_, l)| !l.text.is_empty())
         {
             out.labels += 1;
-            if name == FRAME || name == UNDERLAY {
-                continue;
-            }
+            let page_furniture = name == FRAME || name == UNDERLAY;
             let b = label.bounds();
             let probe = b.expand(TOLERANCE);
             let me = subject(*id, i, label);
@@ -135,13 +136,17 @@ pub fn audit(scene: &Scene) -> TextAudit {
                         });
                     }
                 }
-                if other_id == *id || other_name == FRAME || other_name == UNDERLAY {
+                if page_furniture
+                    || other_id == *id
+                    || other_name == FRAME
+                    || other_name == UNDERLAY
+                {
                     continue;
                 }
                 if other
                     .primitives
                     .iter()
-                    .any(|p| shape_touches(&p.shape, &inset(&b)))
+                    .any(|p| touches(&p.shape, label, &b))
                 {
                     let c = Conflict {
                         label: me.clone(),
@@ -180,6 +185,26 @@ fn inset(b: &Aabb) -> Aabb {
         b.min + Vec2::splat(TOLERANCE),
         b.max - Vec2::splat(TOLERANCE),
     )
+}
+
+/// True when `shape` touches the label's box. A rotated label is tested in
+/// its own frame, where the box is axis aligned, so a label at an angle is
+/// not measured by the bigger axis-aligned box around it.
+fn touches(shape: &Shape, label: &Label, bounds: &Aabb) -> bool {
+    if label.rotation.abs() < 1e-6 {
+        return shape_touches(shape, &inset(bounds));
+    }
+    let back = Vec2::from_angle(-label.rotation);
+    let to_local = Placement {
+        offset: -back.rotate(label.pos),
+        rotation: -label.rotation,
+        mirror: false,
+        scale: 1.0,
+    };
+    let mut upright = label.clone();
+    upright.pos = Vec2::ZERO;
+    upright.rotation = 0.0;
+    shape_touches(&shape.transformed(&to_local), &inset(&upright.bounds()))
 }
 
 /// True when the two (possibly rotated) boxes overlap by more than the tolerance.
@@ -313,5 +338,47 @@ mod tests {
         let first = audit(&s);
         assert_eq!(first.text_on_text.len(), 1);
         assert_eq!(audit(&s), first);
+    }
+
+    #[test]
+    fn page_text_and_a_label_conflict_whatever_the_ids() {
+        for (frame_id, label_id) in [(1, 2), (2, 1)] {
+            let (mut s, _, sym) = scene();
+            let frame = s.add_layer(Layer::new(FRAME, -10));
+            s.insert(
+                ItemId(frame_id),
+                Item::new(frame).with_label(label(0.0, 0.0, "Motor starter")),
+            );
+            s.insert(
+                ItemId(label_id),
+                Item::new(sym).with_label(label(2.0, 0.0, "-K1")),
+            );
+            assert_eq!(
+                audit(&s).text_on_text.len(),
+                1,
+                "ids {frame_id}, {label_id}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_label_at_an_angle_is_measured_by_its_own_box() {
+        let (mut s, wires, sym) = scene();
+        let slanted = label(0.0, 0.0, "12345678").rotated(std::f32::consts::FRAC_PI_4);
+        s.insert(ItemId(1), Item::new(sym).with_label(slanted));
+        // The box of the slanted text is far from this wire, though the
+        // axis-aligned box around it reaches it.
+        let mut w = Item::new(wires);
+        w.primitives
+            .push(line(Vec2::new(8.0, 0.0), Vec2::new(8.0, 3.0)));
+        s.insert(ItemId(2), w);
+        assert_eq!(audit(&s).text_on_wire.len(), 0);
+        // A wire through the text does count.
+        let mut through = Item::new(wires);
+        through
+            .primitives
+            .push(line(Vec2::new(3.0, 3.0), Vec2::new(4.0, 4.0)));
+        s.insert(ItemId(3), through);
+        assert_eq!(audit(&s).text_on_wire.len(), 1);
     }
 }
