@@ -16,6 +16,9 @@ mod bench;
 mod bench_packet;
 #[cfg(test)]
 mod bench_packet_tests;
+mod build_mode;
+#[cfg(test)]
+mod build_mode_tests;
 mod cabinet;
 mod cabinet_bar;
 mod cabinet_door;
@@ -1507,6 +1510,7 @@ impl NovoApp {
         self.learn_watch(&ctx);
         self.learn_step(&ctx);
         self.learn_overlay(&ctx, canvas_rect);
+        self.build_mode(&ctx, canvas_rect);
         self.toasts(&ctx, canvas_rect);
 
         self.occurrences_popup(&ctx, canvas_rect);

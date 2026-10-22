@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::build::BuildPlan;
 use crate::check::{CheckKind, Target};
 use crate::photo::{self, is_photo_name};
 use crate::progress::targets;
@@ -81,6 +82,8 @@ pub struct MergeReport {
     pub punch_updated: usize,
     pub redlines_added: usize,
     pub redlines_updated: usize,
+    pub build_added: usize,
+    pub build_updated: usize,
     /// Photos attached to items that were already here.
     pub photos_added: usize,
 }
@@ -93,6 +96,8 @@ impl MergeReport {
             + self.punch_updated
             + self.redlines_added
             + self.redlines_updated
+            + self.build_added
+            + self.build_updated
             + self.photos_added
             > 0
     }
@@ -106,6 +111,12 @@ impl MergeReport {
             text.push_str(&format!(
                 ", {} new and {} changed redlines",
                 self.redlines_added, self.redlines_updated
+            ));
+        }
+        if self.build_added + self.build_updated > 0 {
+            text.push_str(&format!(
+                ", {} new and {} changed build steps",
+                self.build_added, self.build_updated
             ));
         }
         if self.photos_added > 0 {
@@ -336,6 +347,32 @@ impl FieldPackage {
                         store.put_redline(redline);
                         report.redlines_updated += 1;
                     }
+                }
+            }
+        }
+        if self.store.build_ticks().next().is_some() {
+            // Computing the plan routes every wire: only when ticks came.
+            let plan = BuildPlan::of(project);
+            for incoming in self.store.build_ticks() {
+                let Some((_, step)) = plan.find(incoming.key) else {
+                    report.unknown_targets += 1;
+                    continue;
+                };
+                if step.mark != incoming.mark {
+                    report.mismatched_targets += 1;
+                    continue;
+                }
+                match store.build_tick(incoming.key) {
+                    None => {
+                        store.put_build(incoming.clone());
+                        report.build_added += 1;
+                    }
+                    Some(have) if have == incoming => {}
+                    Some(have) if have.at < incoming.at => {
+                        store.put_build(incoming.clone());
+                        report.build_updated += 1;
+                    }
+                    Some(_) => report.checks_kept += 1,
                 }
             }
         }

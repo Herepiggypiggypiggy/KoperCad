@@ -1,0 +1,45 @@
+@title Build mode: guided assembly and wiring of a cabinet, tick off, problem, progress
+@area Cabinet
+# Reports > Build mode: one step at a time with a big Done button, the progress of the cabinet,
+# a traffic light per step. The fixture is the cabinet lesson project with door cut-outs.
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text Reports
+wait 5
+click_text "Build mode..."
+wait 30
+expect "Build mode"
+expect "Step 1 of"
+expect "Check the plate"
+shot start
+check_blank start
+check_layout
+click_text "Done" Button
+wait 10
+expect "Step 2 of"
+expect "Drill"
+shot after-first-tick
+check_layout
+click_text "Done" Button
+wait 10
+click_text "Done" Button
+wait 10
+shot third-step
+check_layout
+click_text "Problem…" Button
+wait 10
+expect "What is wrong?"
+shot problem-editor
+text Rail is too short
+wait 5
+click_text "Raise problem" Button
+wait 10
+expect "of"
+shot problem-raised
+check_layout
+click_text "Back" Button
+wait 10
+shot back
+key Escape
+wait 10
+expect_not "Step 1 of"

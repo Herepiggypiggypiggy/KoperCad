@@ -1150,6 +1150,17 @@ pub const DUTCH: &[Aliases] = &[
         &["werkbank", "adereindhulzen", "etiketten", "draadsnijlijst"],
     ),
     nl(
+        "view.build",
+        &["bouwmodus", "open bouwmodus"],
+        &[
+            "montage",
+            "bedrading",
+            "stap voor stap",
+            "tablet",
+            "afvinken",
+        ],
+    ),
+    nl(
         "report.designer",
         &["rapportontwerper", "open rapportontwerper"],
         &["sjabloon", "titelblok", "ontwerper"],
