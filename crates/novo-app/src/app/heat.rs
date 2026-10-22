@@ -1740,6 +1740,24 @@ fn nearest_edge_point(card: Rect, p: Pos2) -> Pos2 {
     )
 }
 
+/// Two tick labels need this much bar between them to stay readable: a line
+/// of text high on an upright bar, a number wide on a flat one.
+const TICK_GAP: f32 = 14.0;
+const TICK_GAP_FLAT: f32 = 24.0;
+
+/// Every `n`th tick (the lowest kept) so that neighbours are at least `gap`
+/// apart on a bar `height` long: a short bar shows 40 and 60 rather than
+/// five numbers printed over each other.
+fn thin_ticks(ticks: Vec<f64>, range: range::Range, height: f32, gap: f32) -> Vec<f64> {
+    let apart = |step: usize| {
+        ticks
+            .windows(step + 1)
+            .all(|w| (range.t(w[step]) - range.t(w[0])) * height >= gap)
+    };
+    let step = (1..=ticks.len().max(1)).find(|&n| apart(n)).unwrap_or(1);
+    ticks.into_iter().step_by(step).collect()
+}
+
 fn legend(
     ctx: &egui::Context,
     rect: Rect,
@@ -1759,167 +1777,201 @@ fn legend(
     .above_card()
     .fixed_open()
     .fit()
+    // The notes can outgrow the room above a lesson card: the panel scrolls
+    // them (its own bar always shows) instead of cutting them off.
+    .scrolls()
+    .scroll_bar_always()
     .show(ctx, |ui| {
-        // The notes can outgrow a short window; scroll them instead of
-        // running off the bottom (a fitted panel does not scroll itself).
-        egui::ScrollArea::vertical()
-            // The window is at most the canvas less its top gap and the bottom
-            // strip; the title bar and frame take the rest of the difference.
-            .max_height(ui.available_height().min(rect.height() - 130.0).max(100.0))
-            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-            .auto_shrink([true, true])
-            .show(ui, |ui| {
-                ui.set_width(180.0);
-                // Room for the top tick label, which hangs above the bar.
-                ui.add_space(6.0);
-                // A short canvas gets a shorter colour bar, so the notes below stay in view.
-                // With a lesson card in the corner the legend has only the room above it.
-                let room = rect.height() - super::panel::reserved_bottom_right(ui.ctx());
-                let full: f32 = if rect.height() < 620.0 { 110.0 } else { 180.0 };
-                let height = full.min((room - 250.0).max(30.0));
-                let (bar, _) =
-                    ui.allocate_exact_size(Vec2::new(14.0, height), egui::Sense::hover());
-                let mut mesh = egui::Mesh::default();
-                let steps = 24;
-                for s in 0..=steps {
-                    let f = s as f32 / steps as f32;
-                    let y = bar.bottom() - f * height;
-                    let c = rgb(heat::ramp(f), 1.0);
-                    mesh.colored_vertex(Pos2::new(bar.left(), y), c);
-                    mesh.colored_vertex(Pos2::new(bar.right(), y), c);
-                }
-                for s in 0..steps as u32 {
-                    let i = s * 2;
-                    mesh.add_triangle(i, i + 1, i + 2);
-                    mesh.add_triangle(i + 1, i + 3, i + 2);
-                }
-                let p = ui.painter();
-                p.add(Shape::mesh(mesh));
-                for tick in range::ticks(cache.range) {
-                    let y = bar.bottom() - cache.range.t(tick) * height;
-                    p.line_segment(
-                        [Pos2::new(bar.right(), y), Pos2::new(bar.right() + 5.0, y)],
-                        Stroke::new(1.0, t::TEXT_MUTED),
-                    );
-                    p.text(
-                        Pos2::new(bar.right() + 9.0, y),
-                        Align2::LEFT_CENTER,
-                        format!("{tick:.0}"),
-                        FontId::monospace(t::FONT_SMALL),
-                        t::TEXT_MUTED,
-                    );
-                }
-                ui.label(
-                    egui::RichText::new(format!("°C · ambient {:.0}", cache.ambient))
-                        .small()
-                        .color(t::TEXT_MUTED),
+        ui.set_width(180.0);
+        // A short canvas gets a shorter colour bar, so the notes below stay in view.
+        // With a lesson card in the corner the legend has only the room above it.
+        let room = rect.height() - super::panel::reserved_bottom_right(ui.ctx());
+        let full: f32 = if rect.height() < 620.0 { 110.0 } else { 180.0 };
+        // An upright bar shorter than this leaves no room to label: with a lesson
+        // card parked below, the scale lies flat to save height.
+        let flat = room - 250.0 < 90.0;
+        let height = full.min((room - 250.0).max(90.0));
+        // Room for the top tick label, which hangs above an upright bar.
+        if !flat {
+            ui.add_space(6.0);
+        }
+        if flat {
+            let (bar, _) =
+                ui.allocate_exact_size(Vec2::new(168.0, 10.0 + 16.0), egui::Sense::hover());
+            let (len, top) = (160.0, bar.top());
+            let mut mesh = egui::Mesh::default();
+            let steps = 24;
+            for s in 0..=steps {
+                let f = s as f32 / steps as f32;
+                let x = bar.left() + 4.0 + f * len;
+                let c = rgb(heat::ramp(f), 1.0);
+                mesh.colored_vertex(Pos2::new(x, top), c);
+                mesh.colored_vertex(Pos2::new(x, top + 10.0), c);
+            }
+            for s in 0..steps as u32 {
+                let i = s * 2;
+                mesh.add_triangle(i, i + 1, i + 2);
+                mesh.add_triangle(i + 1, i + 3, i + 2);
+            }
+            let p = ui.painter();
+            p.add(Shape::mesh(mesh));
+            for tick in thin_ticks(range::ticks(cache.range), cache.range, len, TICK_GAP_FLAT) {
+                let x = bar.left() + 4.0 + cache.range.t(tick) * len;
+                p.line_segment(
+                    [Pos2::new(x, top + 10.0), Pos2::new(x, top + 13.0)],
+                    Stroke::new(1.0, t::TEXT_MUTED),
                 );
-                ui.add_space(4.0);
-                let small = |text: &str, color| egui::RichText::new(text).small().color(color);
-                let (total_w, with_data, unknown) = totals(input);
-                if with_data > 0 {
-                    ui.label(small(
-                        &format!("Total loss {total_w:.0} W (devices)"),
-                        crate::theme::ui_palette().text_primary,
-                    ));
+                p.text(
+                    Pos2::new(x, top + 14.0),
+                    Align2::CENTER_TOP,
+                    format!("{tick:.0}"),
+                    FontId::monospace(t::FONT_SMALL),
+                    t::TEXT_MUTED,
+                );
+            }
+        } else {
+            let (bar, _) = ui.allocate_exact_size(Vec2::new(14.0, height), egui::Sense::hover());
+            let mut mesh = egui::Mesh::default();
+            let steps = 24;
+            for s in 0..=steps {
+                let f = s as f32 / steps as f32;
+                let y = bar.bottom() - f * height;
+                let c = rgb(heat::ramp(f), 1.0);
+                mesh.colored_vertex(Pos2::new(bar.left(), y), c);
+                mesh.colored_vertex(Pos2::new(bar.right(), y), c);
+            }
+            for s in 0..steps as u32 {
+                let i = s * 2;
+                mesh.add_triangle(i, i + 1, i + 2);
+                mesh.add_triangle(i + 1, i + 3, i + 2);
+            }
+            let p = ui.painter();
+            p.add(Shape::mesh(mesh));
+            for tick in thin_ticks(range::ticks(cache.range), cache.range, height, TICK_GAP) {
+                let y = bar.bottom() - cache.range.t(tick) * height;
+                p.line_segment(
+                    [Pos2::new(bar.right(), y), Pos2::new(bar.right() + 5.0, y)],
+                    Stroke::new(1.0, t::TEXT_MUTED),
+                );
+                p.text(
+                    Pos2::new(bar.right() + 9.0, y),
+                    Align2::LEFT_CENTER,
+                    format!("{tick:.0}"),
+                    FontId::monospace(t::FONT_SMALL),
+                    t::TEXT_MUTED,
+                );
+            }
+        }
+        ui.label(
+            egui::RichText::new(format!("°C · ambient {:.0}", cache.ambient))
+                .small()
+                .color(t::TEXT_MUTED),
+        );
+        if !flat {
+            ui.add_space(4.0);
+        }
+        let small = |text: &str, color| egui::RichText::new(text).small().color(color);
+        let (total_w, with_data, unknown) = totals(input);
+        if with_data > 0 {
+            ui.label(small(
+                &format!("Total loss {total_w:.0} W (devices)"),
+                crate::theme::ui_palette().text_primary,
+            ));
+        }
+        if let Some(note) = estimate_note(input) {
+            ui.label(small(&note, t::WARNING));
+        }
+        if unknown > 0 {
+            let (noun, verb) = if unknown == 1 {
+                ("device", "has")
+            } else {
+                ("devices", "have")
+            };
+            ui.label(small(
+                &format!("{unknown} {noun} {verb} no loss data (shown dashed)"),
+                t::WARNING,
+            ));
+        }
+        match &cache.source {
+            Source::Synthetic => {
+                ui.label(small(
+                    "Preview from part losses, not a solver result. Simulate runs it.",
+                    t::TEXT_MUTED,
+                ));
+            }
+            Source::Solved(sol) => {
+                let p = &sol.snapshot.progress;
+                let validated = sol.snapshot.accuracy.validated;
+                let conv = novo_cfd::large::convergence(&sol.snapshot);
+                ui.label(small(
+                    &status_label(p, validated),
+                    crate::theme::ui_palette().text_primary,
+                ))
+                .on_hover_text(conv.lines.join("\n"));
+                // A large cabinet runs as a reduced model: a fold-away line
+                // next to the level keeps the legend short.
+                if let Some(r) = novo_cfd::large::reduced_summary(&sol.snapshot) {
+                    egui::CollapsingHeader::new(small(
+                        "Reduced model",
+                        crate::theme::ui_palette().text_secondary,
+                    ))
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        ui.label(small(r, crate::theme::ui_palette().text_secondary));
+                        ui.label(small(
+                            "Cold devices are lumped into row blocks and thin ducts and \
+                                     rails are widened to porous strips so a big cabinet fits \
+                                     the cell budget. More under Notes on this run.",
+                            crate::theme::ui_palette().text_secondary,
+                        ));
+                    });
                 }
-                if let Some(note) = estimate_note(input) {
-                    ui.label(small(&note, t::WARNING));
-                }
-                if unknown > 0 {
-                    let (noun, verb) = if unknown == 1 {
-                        ("device", "has")
-                    } else {
-                        ("devices", "have")
-                    };
+                if stale {
                     ui.label(small(
-                        &format!("{unknown} {noun} {verb} no loss data (shown dashed)"),
+                        "Out of date: the layout changed since this run.",
                         t::WARNING,
                     ));
                 }
-                match &cache.source {
-                    Source::Synthetic => {
-                        ui.label(small(
-                            "Preview from part losses, not a solver result. Simulate runs it.",
-                            t::TEXT_MUTED,
-                        ));
-                    }
-                    Source::Solved(sol) => {
-                        let p = &sol.snapshot.progress;
-                        let validated = sol.snapshot.accuracy.validated;
-                        let conv = novo_cfd::large::convergence(&sol.snapshot);
-                        ui.label(small(
-                            &status_label(p, validated),
-                            crate::theme::ui_palette().text_primary,
-                        ))
+                // Not converged, or "steady" with a poor heat balance or
+                // drifting temperatures: one line here, the numbers on hover.
+                if conv.verdict != novo_cfd::large::Verdict::Converged || conv.lines.len() > 1 {
+                    ui.label(small(&conv.headline, crate::theme::ui_palette().warning))
                         .on_hover_text(conv.lines.join("\n"));
-                        // A large cabinet runs as a reduced model: a fold-away line
-                        // next to the level keeps the legend short.
-                        if let Some(r) = novo_cfd::large::reduced_summary(&sol.snapshot) {
-                            egui::CollapsingHeader::new(small(
-                                "Reduced model",
-                                crate::theme::ui_palette().text_secondary,
-                            ))
-                            .default_open(false)
-                            .show(ui, |ui| {
-                                ui.label(small(r, crate::theme::ui_palette().text_secondary));
-                                ui.label(small(
-                                    "Cold devices are lumped into row blocks and thin ducts and \
-                                     rails are widened to porous strips so a big cabinet fits \
-                                     the cell budget. More under Notes on this run.",
-                                    crate::theme::ui_palette().text_secondary,
-                                ));
-                            });
-                        }
-                        if stale {
-                            ui.label(small(
-                                "Out of date: the layout changed since this run.",
-                                t::WARNING,
-                            ));
-                        }
-                        // Not converged, or "steady" with a poor heat balance or
-                        // drifting temperatures: one line here, the numbers on hover.
-                        if conv.verdict != novo_cfd::large::Verdict::Converged
-                            || conv.lines.len() > 1
-                        {
-                            ui.label(small(&conv.headline, crate::theme::ui_palette().warning))
-                                .on_hover_text(conv.lines.join("\n"));
-                        }
-                        let a = &sol.snapshot.accuracy;
-                        // The status line above already names the level.
-                        let headline = without_level_name(&a.headline, p.fidelity.label());
-                        if !headline.is_empty() {
-                            ui.label(small(&headline, t::TEXT_MUTED));
-                        }
-                        // Warnings stay in view; the run's detailed notes fold away
-                        // so a short window is not cut off mid-sentence.
-                        for m in &sol.messages {
-                            ui.label(small(m, t::WARNING));
-                        }
-                        super::heat_cooling::show(ui, sol, cooling, stale, false);
-                        // The headline fits the narrow panel; what it rests on is
-                        // on hover here and in full in the 3D Heat panel.
-                        if let Some((head, basis)) = sol.wire_notes.split_first() {
-                            ui.label(small(head, crate::theme::ui_palette().text_secondary))
-                                .on_hover_text(basis.join("\n\n"));
-                        }
-                        if !sol.snapshot.notes.is_empty() {
-                            let pal = crate::theme::ui_palette();
-                            let shown = sol.snapshot.notes.iter().take(4);
-                            egui::CollapsingHeader::new(small(
-                                &format!("Notes on this run ({})", shown.len()),
-                                pal.text_secondary,
-                            ))
-                            .default_open(false)
-                            .show(ui, |ui| {
-                                for n in shown {
-                                    ui.label(small(n, pal.text_secondary));
-                                }
-                            });
-                        }
-                    }
                 }
-            });
+                let a = &sol.snapshot.accuracy;
+                // The status line above already names the level.
+                let headline = without_level_name(&a.headline, p.fidelity.label());
+                if !headline.is_empty() {
+                    ui.label(small(&headline, t::TEXT_MUTED));
+                }
+                // Warnings stay in view; the run's detailed notes fold away
+                // so a short window is not cut off mid-sentence.
+                for m in &sol.messages {
+                    ui.label(small(m, t::WARNING));
+                }
+                super::heat_cooling::show(ui, sol, cooling, stale, false);
+                // The headline fits the narrow panel; what it rests on is
+                // on hover here and in full in the 3D Heat panel.
+                if let Some((head, basis)) = sol.wire_notes.split_first() {
+                    ui.label(small(head, crate::theme::ui_palette().text_secondary))
+                        .on_hover_text(basis.join("\n\n"));
+                }
+                if !sol.snapshot.notes.is_empty() {
+                    let pal = crate::theme::ui_palette();
+                    let shown = sol.snapshot.notes.iter().take(4);
+                    egui::CollapsingHeader::new(small(
+                        &format!("Notes on this run ({})", shown.len()),
+                        pal.text_secondary,
+                    ))
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        for n in shown {
+                            ui.label(small(n, pal.text_secondary));
+                        }
+                    });
+                }
+            }
+        }
     });
     // The whole panel, title bar and frame, is what the tour points at.
     if let Some(shown) = shown {
@@ -1936,6 +1988,19 @@ fn legend(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_short_bar_drops_ticks_until_the_labels_are_apart() {
+        let r = novo_heatview::range::Range { lo: 35.0, hi: 60.0 };
+        let all = range::ticks(r);
+        assert!(all.len() >= 5);
+        let kept = thin_ticks(all.clone(), r, 30.0, TICK_GAP);
+        assert!(kept.len() < all.len() && !kept.is_empty());
+        let gap = |a: f64, b: f64| (r.t(b) - r.t(a)) * 30.0;
+        assert!(kept.windows(2).all(|w| gap(w[0], w[1]) >= TICK_GAP));
+        // A tall bar keeps every tick.
+        assert_eq!(thin_ticks(all.clone(), r, 180.0, TICK_GAP), all);
+    }
 
     fn input() -> Input {
         Input {

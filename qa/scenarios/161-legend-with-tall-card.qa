@@ -1,0 +1,17 @@
+@title Heat legend under a lesson card: the scale lies flat, ticks are readable, the notes below show
+@area Cabinet
+# The card parked in the bottom right leaves the Temperature legend little height. Its scale then lies flat with thinned ticks, and the notes scroll (solid bar) instead of being cut off.
+click_text "Learn…"
+wait 15
+text cabinet layout
+wait 8
+click_text Start #1
+wait 40
+click_text Cabinet #1
+wait 40
+key shift+h
+wait 60
+shot legend-under-card
+check_blank legend-under-card
+expect "Preview from part losses"
+check_layout
