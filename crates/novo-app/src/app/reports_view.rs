@@ -1240,13 +1240,13 @@ mod tests {
 fn empty_report_hint(id: &str) -> &'static str {
     match id {
         "io" => {
-            "Nothing to list yet: this project has no PLC channels. Add a PLC card (Ctrl+K \"Add PLC card\") or import a signal list (Ctrl+K \"Import I/O list\")."
+            "Nothing to list yet: this project has no PLC channels. Add a PLC card (Ctrl+K, type \"add plc card\") or import a signal list (Ctrl+K, type \"import io list\")."
         }
         "plugs" => {
-            "Nothing to list yet: no plug or socket is drawn. Place a connector from the symbol list (Q) and its pins are listed here with their wires."
+            "Nothing to list yet: no plug or socket is drawn. Place a plug or socket symbol (Q, then type \"plug\") and its pins are listed here with their wires."
         }
         "terminals" => {
-            "Nothing to list yet: no terminal strip is drawn. Place terminal symbols (Q \"terminal\") with a strip name such as -X1."
+            "Nothing to list yet: no terminal strip is drawn. Place terminal symbols (Q, then type \"terminal\") with a strip name such as -X1."
         }
         "cables" | "cableschedule" => {
             "Nothing to list yet: no cable is drawn. Use the Cable tool to draw one between devices."

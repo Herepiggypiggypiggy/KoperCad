@@ -554,3 +554,28 @@ fn a_typed_label_beats_a_shorter_verb_run_on_the_rest() {
     let rows = search(&palette, &keymap, "import parts from a folder");
     assert_eq!(position(&rows, "parts.import_folder"), Some(0));
 }
+
+/// The empty-report hints quote these words for Ctrl+K; each must land on its command.
+#[test]
+fn the_words_an_empty_report_hint_quotes_find_their_command() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for (query, command) in [
+        ("import io list", "plc.import_list"),
+        ("add plc card", "plc.add_card"),
+    ] {
+        let rows = search(&palette, &keymap, query);
+        assert_eq!(rows[0].target, Target::Command(command), "{query}");
+    }
+}
+
+#[test]
+fn the_symbol_words_an_empty_report_hint_quotes_find_symbols() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for query in ["plug", "terminal"] {
+        let rows = search(&palette, &keymap, query);
+        assert!(
+            rows.iter().any(|r| matches!(r.target, Target::Symbol(_))),
+            "{query} finds no symbol"
+        );
+    }
+}

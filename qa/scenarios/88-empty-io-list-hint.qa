@@ -9,4 +9,5 @@ click_text "I/O list"
 wait 20
 shot io-list-empty
 expect "no PLC channels"
+expect "import io list"
 check_layout
