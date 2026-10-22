@@ -215,6 +215,8 @@ or the current folder, and `finding` attaches only pictures from the shots folde
 `scripts/qa.sh` is a bash script: run it from Git Bash (no admin rights needed).
 `KOPERCAD_BIN_DIR` can point at the folder holding `kopercad.exe` and
 `kopercad-cli.exe` (for example the unzipped portable build) instead of `target/debug`.
+
+`qa.sh` finds the folder cargo really builds into (`CARGO_TARGET_DIR` included), prints the program path, build time and git HEAD, and refuses to run (exit 4) when the program is older than the newest source file. `report.md` repeats the path, build time and git HEAD in its header and shows a warning when `kopercad-cli qa run` finds the program older than the source or the HEAD commit.
 Not verified on Windows yet.
 
 ## Gaps, said plainly

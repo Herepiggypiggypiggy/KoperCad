@@ -9,7 +9,14 @@
 #   scripts/qa.sh list                what scenarios exist
 set -euo pipefail
 cd "$(dirname "$0")/.."
-bin=${KOPERCAD_BIN_DIR:-target/debug}
+# The folder cargo really builds into (CARGO_TARGET_DIR or .cargo/config can move it away from ./target):
+# running a stale kopercad from ./target/debug instead of the fresh build gave wrong pictures.
+if [ -z "${KOPERCAD_BIN_DIR:-}" ]; then
+  tdir=$(cargo metadata --format-version 1 --no-deps 2>/dev/null | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')
+  bin=${tdir:-${CARGO_TARGET_DIR:-target}}/debug
+else
+  bin=$KOPERCAD_BIN_DIR
+fi
 # Linux without a screen needs a virtual one: name what is missing before the run fails.
 if [ "$(uname -s)" = Linux ] && [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
   missing=""
@@ -35,6 +42,13 @@ if [ -z "${KOPERCAD_BIN_DIR:-}" ]; then
 elif [ ! -x "$bin/kopercad" ] || [ ! -x "$bin/kopercad-cli" ]; then
   echo "qa.sh: no kopercad and kopercad-cli in $bin" >&2
   exit 3
+fi
+echo "qa.sh: program $bin/kopercad (built $(date -r "$bin/kopercad" '+%F %T' 2>/dev/null || echo unknown)), git $(git rev-parse --short=10 HEAD 2>/dev/null || echo unknown)" >&2
+# After our own build the program is newer than every source file; if not, the build went elsewhere.
+if [ -z "${KOPERCAD_BIN_DIR:-}" ] && [ -n "$(find crates assets Cargo.toml Cargo.lock -type f -not -path '*/target/*' -newer "$bin/kopercad" -print -quit 2>/dev/null)" ]; then
+  echo "qa.sh: REFUSING to run: $bin/kopercad is older than the source, so the pictures would show old code." >&2
+  echo "  cargo built into another folder? Set KOPERCAD_BIN_DIR to the folder with the fresh kopercad and kopercad-cli." >&2
+  exit 4
 fi
 case ${1:-run} in
   list) shift; exec "$bin/kopercad-cli" qa list "$@" ;;
