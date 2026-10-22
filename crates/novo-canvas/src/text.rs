@@ -61,6 +61,10 @@ pub struct Label {
     /// What is hidden first when the screen is too small to read everything
     /// (see [`crate::declutter`]).
     pub priority: crate::declutter::Priority,
+    /// Meant to sit on its own item's drawing (the `M` inside a motor, the
+    /// cells of a contact table). The text audit does not count such a label
+    /// over its own item; every other label does.
+    pub inside: bool,
 }
 
 /// Average glyph advance relative to the font size, used for the estimated
@@ -99,11 +103,18 @@ impl Label {
             keep_color: false,
             bold: false,
             priority: crate::declutter::Priority::Primary,
+            inside: false,
         }
     }
 
     /// Marks the label as secondary text: the first to go when the drawing
     /// is too small to read it.
+    /// Marks the label as part of its item's drawing (see [`Label::inside`]).
+    pub fn inside(mut self) -> Self {
+        self.inside = true;
+        self
+    }
+
     pub fn secondary(mut self) -> Self {
         self.priority = crate::declutter::Priority::Secondary;
         self

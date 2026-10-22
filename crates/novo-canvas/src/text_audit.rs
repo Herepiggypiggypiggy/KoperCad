@@ -6,8 +6,9 @@
 //! The scene dump, the QA reports and the optional `text.conflict` check all
 //! read the same numbers.
 //!
-//! Not counted: a label over the drawing of its own item (the `M` inside a
-//! motor circle is meant to be there), and ink on the page frame and underlay
+//! Not counted: a label marked [`Label::inside`] over the drawing of its own
+//! item (the `M` inside a motor circle is meant to be there; a device tag over
+//! its own symbol is not), and ink on the page frame and underlay
 //! layers. Their text does count as text a label must not sit on, and a
 //! label there is compared with other labels like any other. Rotated labels
 //! are measured by their rotated box against labels, symbols and wires.
@@ -22,6 +23,9 @@ use crate::text::Label;
 
 /// Overlaps smaller than this, in mm, are rounding noise of the estimated boxes.
 const TOLERANCE: f32 = 0.05;
+
+/// Air between two texts, in mm, below which they read as one smear.
+pub const TIGHT: f32 = 0.5;
 
 /// Layer names the scene's model adapter uses.
 const WIRES: &str = "Wires";
@@ -54,11 +58,18 @@ pub struct TextAudit {
     pub text_on_text: Vec<Conflict>,
     pub text_on_ink: Vec<Conflict>,
     pub text_on_wire: Vec<Conflict>,
+    /// Two texts closer than [`TIGHT`] but not overlapping.
+    pub tight: Vec<Conflict>,
+    /// A label whose box leaves the sheet.
+    pub outside_sheet: Vec<Conflict>,
 }
 
 impl TextAudit {
     pub fn total(&self) -> usize {
-        self.text_on_text.len() + self.text_on_ink.len() + self.text_on_wire.len()
+        self.text_on_text.len()
+            + self.text_on_ink.len()
+            + self.text_on_wire.len()
+            + self.outside_sheet.len()
     }
 
     /// One line per conflict, for reports.
@@ -77,6 +88,12 @@ impl TextAudit {
         out.extend(self.text_on_text.iter().map(|c| line("text on text", c)));
         out.extend(self.text_on_ink.iter().map(|c| line("text on symbol", c)));
         out.extend(self.text_on_wire.iter().map(|c| line("text on wire", c)));
+        out.extend(self.tight.iter().map(|c| line("texts too close", c)));
+        out.extend(
+            self.outside_sheet
+                .iter()
+                .map(|c| line("text outside the sheet", c)),
+        );
         out
     }
 }
@@ -107,8 +124,18 @@ pub fn audit(scene: &Scene) -> TextAudit {
             out.labels += 1;
             let page_furniture = name == FRAME || name == UNDERLAY;
             let b = label.bounds();
-            let probe = b.expand(TOLERANCE);
+            let probe = b.expand(TIGHT);
             let me = subject(*id, i, label);
+            if let Some(sheet) = scene.sheet().filter(|_| !page_furniture)
+                && !(sheet.rect.contains_point(b.min) && sheet.rect.contains_point(b.max))
+            {
+                out.outside_sheet.push(Conflict {
+                    label: me.clone(),
+                    other: None,
+                    other_item: *id,
+                    at: b.center(),
+                });
+            }
             for other_id in sorted(scene.query(&probe)) {
                 let Some(other) = scene.get(other_id) else {
                     continue;
@@ -127,17 +154,22 @@ pub fn audit(scene: &Scene) -> TextAudit {
                     if (other_id, j) <= (*id, i) {
                         continue;
                     }
-                    if boxes_overlap(label, ol) {
-                        out.text_on_text.push(Conflict {
+                    let pair = |kind: &mut Vec<Conflict>| {
+                        kind.push(Conflict {
                             label: me.clone(),
                             other: Some(subject(other_id, j, ol)),
                             other_item: other_id,
                             at: b.center(),
-                        });
+                        })
+                    };
+                    if boxes_within(label, ol, -TOLERANCE) {
+                        pair(&mut out.text_on_text);
+                    } else if boxes_within(label, ol, TIGHT) {
+                        pair(&mut out.tight);
                     }
                 }
                 if page_furniture
-                    || other_id == *id
+                    || (other_id == *id && label.inside)
                     || other_name == FRAME
                     || other_name == UNDERLAY
                 {
@@ -207,8 +239,10 @@ fn touches(shape: &Shape, label: &Label, bounds: &Aabb) -> bool {
     shape_touches(&shape.transformed(&to_local), &inset(&upright.bounds()))
 }
 
-/// True when the two (possibly rotated) boxes overlap by more than the tolerance.
-fn boxes_overlap(a: &Label, b: &Label) -> bool {
+/// True when the two (possibly rotated) boxes are closer than `gap` mm:
+/// a negative gap asks for an overlap deeper than that much, a positive one
+/// for less air than that between them.
+fn boxes_within(a: &Label, b: &Label, gap: f32) -> bool {
     let (ca, cb) = (a.corners(), b.corners());
     for poly in [&ca, &cb] {
         for i in 0..4 {
@@ -219,7 +253,7 @@ fn boxes_overlap(a: &Label, b: &Label) -> bool {
             }
             let (a0, a1) = project(&ca, axis);
             let (b0, b1) = project(&cb, axis);
-            if a1 - b0 <= TOLERANCE || b1 - a0 <= TOLERANCE {
+            if a1 - b0 <= -gap || b1 - a0 <= -gap {
                 return false;
             }
         }
@@ -321,7 +355,7 @@ mod tests {
     #[test]
     fn a_label_over_its_own_symbol_is_meant() {
         let (mut s, _, sym) = scene();
-        let mut m = Item::new(sym).with_label(label(-1.0, 0.0, "M"));
+        let mut m = Item::new(sym).with_label(label(-1.0, 0.0, "M").inside());
         m.primitives
             .push(line(Vec2::new(0.0, -5.0), Vec2::new(0.0, 5.0)));
         s.insert(ItemId(1), m);
@@ -380,5 +414,56 @@ mod tests {
             .push(line(Vec2::new(3.0, 3.0), Vec2::new(4.0, 4.0)));
         s.insert(ItemId(3), through);
         assert_eq!(audit(&s).text_on_wire.len(), 1);
+    }
+
+    #[test]
+    fn a_tag_over_its_own_symbol_counts_but_art_text_does_not() {
+        let (mut s, _, sym) = scene();
+        let mut k = Item::new(sym).with_label(label(-1.0, 0.0, "-K1"));
+        k.primitives
+            .push(line(Vec2::new(0.0, -5.0), Vec2::new(0.0, 5.0)));
+        s.insert(ItemId(1), k);
+        assert_eq!(audit(&s).text_on_ink.len(), 1);
+    }
+
+    #[test]
+    fn texts_with_little_air_are_tight_and_apart_or_overlapping_are_not() {
+        let (mut s, _, sym) = scene();
+        let w = label(0.0, 0.0, "-K1").bounds().max.x;
+        s.insert(ItemId(1), Item::new(sym).with_label(label(0.0, 0.0, "-K1")));
+        s.insert(
+            ItemId(2),
+            Item::new(sym).with_label(label(w + 0.3, 0.0, "-K2")),
+        );
+        s.insert(
+            ItemId(3),
+            Item::new(sym).with_label(label(w + 0.3 + w + 2.0, 0.0, "-K3")),
+        );
+        let a = audit(&s);
+        assert_eq!((a.tight.len(), a.text_on_text.len()), (1, 0));
+        s.insert(ItemId(4), Item::new(sym).with_label(label(1.0, 0.0, "x")));
+        let a = audit(&s);
+        assert_eq!(a.text_on_text.len(), 1);
+    }
+
+    #[test]
+    fn a_label_leaving_the_sheet_is_counted() {
+        let (mut s, _, sym) = scene();
+        s.set_sheet(Some(crate::scene::Sheet {
+            rect: Aabb::from_corners(Vec2::ZERO, Vec2::new(100.0, 100.0)),
+            fill: None,
+            lines: Vec::new(),
+        }));
+        s.insert(
+            ItemId(1),
+            Item::new(sym).with_label(label(10.0, 10.0, "-K1")),
+        );
+        s.insert(
+            ItemId(2),
+            Item::new(sym).with_label(label(95.0, 10.0, "-K1234567")),
+        );
+        let a = audit(&s);
+        assert_eq!(a.outside_sheet.len(), 1);
+        assert_eq!(a.outside_sheet[0].label.item, ItemId(2));
     }
 }

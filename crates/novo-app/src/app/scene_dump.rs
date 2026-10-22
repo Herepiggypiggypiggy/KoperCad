@@ -60,6 +60,8 @@ impl NovoApp {
                     "text_on_text": a.text_on_text.len(),
                     "text_on_symbol": a.text_on_ink.len(),
                     "text_on_wire": a.text_on_wire.len(),
+                    "texts_too_close": a.tight.len(),
+                    "text_outside_sheet": a.outside_sheet.len(),
                     "conflicts": a.describe(),
                 })
             });

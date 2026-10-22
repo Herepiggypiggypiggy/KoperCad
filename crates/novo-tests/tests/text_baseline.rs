@@ -22,6 +22,7 @@ fn motor_starter_text_conflicts_do_not_grow() {
     let style = ModelStyle::default();
     let art = novo_editor::art::LibraryArt::new(&library, style.symbol);
     let mut sum = (0, 0, 0);
+    let (mut tight, mut outside) = (0, 0);
     for page in [m.main_page, m.control_page] {
         let a = audit(PageScene::new(p, page, &art).scene());
         assert!(a.labels > 0);
@@ -31,7 +32,11 @@ fn motor_starter_text_conflicts_do_not_grow() {
         sum.0 += a.text_on_text.len();
         sum.1 += a.text_on_ink.len();
         sum.2 += a.text_on_wire.len();
+        tight += a.tight.len();
+        outside += a.outside_sheet.len();
     }
-    eprintln!("text conflicts (text, symbol, wire): {sum:?}");
+    eprintln!("text conflicts (text, symbol, wire): {sum:?}, tight {tight}, outside {outside}");
+    // Texts with under 0.5 mm of air, and labels leaving the sheet: none today.
+    assert_eq!((tight, outside), (0, 0));
     assert!(sum.0 <= BASELINE.0 && sum.1 <= BASELINE.1 && sum.2 <= BASELINE.2);
 }
