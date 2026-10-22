@@ -59,7 +59,7 @@ pub(super) const SUPPLY: [Field; 8] = [
         calc::SUPPLY_MIN_SHORT_CIRCUIT_KA,
         "Short-circuit current Ik (min)",
         "kA",
-        "8",
+        "4",
     ),
     field(calc::SUPPLY_TRANSFORMER_KVA, "Transformer", "kVA", "630"),
     field(calc::SUPPLY_UK_PERCENT, "Transformer uk", "%", "4"),

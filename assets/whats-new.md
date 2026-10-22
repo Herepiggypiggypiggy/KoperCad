@@ -5,7 +5,7 @@ seen once they open the list. Add an entry when a feature PR merges. -->
 
 ## 2026-10-22-a · The single-line diagram: supply data, lamps, overload relays
 Where: Reports > Single-line diagram.
-The diagram has an "Enter supply data" button that opens the Electrical inputs, and the example project now states a 400 V, 6 kA supply so it shows figures. Lamps and sounders on a mains feeder are drawn; a load on one line conductor is taken at the phase voltage (231 V from 400 V). An overload relay in a feeder is drawn as a box on the wire. Lamps on 24 V circuits stay off and are named in a note.
+The diagram has an "Enter supply data" button that opens the Electrical inputs, and the example project now states an illustrative 400 V, 6 kA supply (replace it with yours) so it shows figures. Lamps and sounders on a mains feeder are drawn; a load on one line conductor is taken at the phase voltage (231 V from 400 V). An overload relay in a feeder is drawn as a box on the wire. Lamps on 24 V circuits stay off and are named in a note.
 
 ## 2026-10-21-f · Wires between two cabinets are drawn to each entry
 Where: 3D workspace, click a wire that ends in another cabinet.
