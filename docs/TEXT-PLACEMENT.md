@@ -44,7 +44,7 @@ What goes wrong, in order of how often it shows up:
 2. Defined homes. Each text class has an ordered list of slots per symbol kind, side and orientation. The first slot
    that is free wins. Free space is not searched blindly before the defined slots are used up.
 3. Deterministic. The same drawing always gives the same layout, independent of the order things were drawn in.
-4. Stable. Editing one device moves only texts near it. A text that is still valid where it was does not move.
+4. Stable. Layout is a pure function of the drawing (principle 3), so stability means locality: an edit can only change texts inside its dirty region (section 7); everything outside gets exactly the layout a fresh run would give. There is no layout history.
 5. Sticky overrides. A text the user moved stays exactly there, and other texts route around it.
 6. Honest. When a text cannot be placed cleanly it is shortened (full text on hover) or moved with a leader line.
    It is never silently drawn on top of something else, and a page that still has a conflict says so in the checks.
@@ -137,16 +137,15 @@ snapped to 0.05 mm before comparing.
 
 ## 7. Stability, overrides, performance
 
-* Hysteresis. Each placed text remembers its slot index. On re-layout it keeps that slot while it is still free;
-  it goes back to a better slot only when the better one is free and the text was not displaced by an edit that
-  has since been undone. Open and close of a file reproduce the same layout because the slot index is derived from
-  the drawing, not stored, except for user overrides.
+* No hysteresis, by decision. The layout is a pure function of the drawing and its stored user overrides, never of edit history. A text takes the first free slot in the fixed order, so undoing an edit restores the earlier layout, and a saved and reopened file lays out identically. The cost is that a text may move to a better slot when a neighbour is deleted; that is local to the dirty region and is the defined behaviour.
 * Dirty region. An edit marks its owner's box grown by 25 mm (the farthest search) dirty. Only requests that touch
-  the region are re-solved, in the same global order. A cached result for the rest is reused.
+  the region are re-solved, in the same global order; the rest reuse the cached result, which equals what a fresh run gives
+  because nothing they depend on changed. If a re-solve changes a text near the region's border, the region grows to include its
+  neighbours and repeats until nothing outside changes.
 * Overrides. Dragging a text stores `TextPlacement.offset` (texts) or the note offset (notes), as today. The
   Inspector and the right-click menu get "Reset text position" (one text) and the Edit menu "Tidy texts on this page"
   (clears all unpinned overrides that were set by a drag, asks first). Overrides are kept through undo.
-* Budget. Full page of 2000 texts under 50 ms, incremental edit under 5 ms, measured by a benchmark in
+* Budget. Targets, not yet measured: full page of 2000 texts under 50 ms, incremental edit under 5 ms, to be measured by a benchmark in
   `novo-tests`. Only the open page is laid out; other pages are laid out when opened, when printed and by
   `kopercad-cli check`. A 600-page project never lays out more than one page on the UI thread.
 * Setting. Preferences, Drawing: "Text placement" Automatic (default) or "Keep as placed" (never auto-moves
@@ -193,20 +192,20 @@ Tester B, "weird and large" (fuzz and real projects):
   asserting the invariants: no overlap unless flagged conflict, layout identical on two runs, identical after a
   save and reopen, identical when symbols are inserted in a different order, and a single edit changes only labels
   within 25 mm.
-* Edit storms: move, rotate, delete, undo and redo 200 random edits; the layout after must equal a fresh layout
-  of the final drawing (except pinned texts).
+* Edit storms: move, rotate, delete, undo and redo 200 random edits; the incremental layout after must equal a fresh
+  layout of the final drawing exactly (pinned texts are part of the drawing).
 * Examples and fixtures: motor starter, the crane import, the AML import, the 600-page scale project; record the
   counts before and after each stage.
 * Timing: full-page and incremental timings against the budget in section 7.
 
 Each tester files findings as `audit/text/<n>.md` with the scenario, a screenshot at 1366x768 and 1920x1080, and the
-colliding pair. Findings become regression scenarios in `tests/qa/scenarios` and unit tests in the engine.
+colliding pair. Findings become regression scenarios in `qa/scenarios` and unit tests in the engine.
 
 ## 10. Stages (each is a pull request with tests and QA screenshots at 1366x768 and 1920x1080)
 
 | Stage | Content | Where the user sees it |
 | --- | --- | --- |
-| 0 | Measurement: overlap counts in the scene dump and `kopercad-cli qa`, `text.conflict` check (reporting only), generator for the stress pages (Tester A), baseline numbers in this document | Check panel shows "Text conflicts"; nothing moves yet |
+| 0 | Measurement (the `text.conflict` check is off by default until stage 2, so existing pages do not light up at once; the measurement is visible in the scene dump and QA reports, and the check is switched on in the check panel): overlap counts in the scene dump and `kopercad-cli qa`, `text.conflict` check (reporting only), generator for the stress pages (Tester A), baseline numbers in this document | Scene dump and QA report show the counts; optional "Text conflicts" check; nothing moves yet |
 | 1 | Engine `textlayout`: obstacles index, slots, search, cost, determinism, hysteresis, with unit and property tests; not yet wired | Not visible |
 | 2 | Devices: tag, description, pin text, symbol-kind slot tables, side-aware transform | Tags and pin numbers stop colliding when symbols are rotated, mirrored or neighbours |
 | 3 | Terminals and strips: row logic, rotated names, strip name at run start | The terminal strip case from the report |
