@@ -370,8 +370,11 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState) {
 /// The bars to buy for the rails and ducts of the plate.
 pub(super) struct CutLists {
     pub rails: Option<(CutPlan, Vec<Piece>)>,
-    /// One list per duct cross-section, with the duct numbers (1 up).
+    /// One list per duct cross-section; the pieces are the duct rail ids.
     pub ducts: Vec<(f64, f64, CutPlan)>,
+    /// The short name of every duct (`D1`): the name the wire production
+    /// report and the bench sheets print as a wire's track.
+    pub duct_names: std::collections::BTreeMap<u64, String>,
 }
 
 pub(super) fn cut_lists(project: &Project, structure: StructureId) -> Option<CutLists> {
@@ -382,10 +385,16 @@ pub(super) fn cut_lists(project: &Project, structure: StructureId) -> Option<Cut
         (optimise(&pieces, stock), pieces)
     });
     let all = ducts(project, structure);
+    // `ducts` lists the plate's duct rails in model order: the same order here.
+    let rail_ids: Vec<u64> = project
+        .all::<novo_core::Rail>()
+        .filter(|r| r.structure == structure && r.kind == novo_core::RailKind::Duct)
+        .map(|r| r.id.raw())
+        .collect();
     let mut sections: Vec<(f64, f64, Vec<Piece>)> = Vec::new();
     for (n, d) in all.iter().enumerate() {
         let piece = Piece {
-            id: n as u64 + 1,
+            id: rail_ids.get(n).copied().unwrap_or(n as u64 + 1),
             min: d.length,
             max: d.length,
         };
@@ -403,6 +412,7 @@ pub(super) fn cut_lists(project: &Project, structure: StructureId) -> Option<Cut
             .into_iter()
             .map(|(w, h, pieces)| (w, h, optimise(&pieces, stock)))
             .collect(),
+        duct_names: novo_reports::duct_names(project),
     })
 }
 
@@ -472,7 +482,13 @@ pub(super) fn show_cut_window(
             for (w, h, plan) in &lists.ducts {
                 ui.strong(format!("Duct {w:.0} x {h:.0}"));
                 summary(ui, plan);
-                let label = |id: u64| format!("Duct {id}");
+                let label = |id: u64| {
+                    lists
+                        .duct_names
+                        .get(&id)
+                        .cloned()
+                        .unwrap_or_else(|| "duct ?".to_owned())
+                };
                 for (n, bar) in plan.bars.iter().enumerate() {
                     ui.label(format!("{}. {}", n + 1, bar.line(&plan.stock, &label)));
                 }

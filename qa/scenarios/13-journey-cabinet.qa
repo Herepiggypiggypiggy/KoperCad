@@ -37,6 +37,7 @@ text Rail and duct cut list
 wait 6
 key Enter
 wait 30
+expect "D1"
 shot cabinet-cutlist
 check_layout
 click_text 3D
