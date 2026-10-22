@@ -165,6 +165,27 @@ impl CabinetState {
     }
 }
 
+/// Where a device with its top left at `at` lands: snapped onto a DIN rail
+/// when its centre is near the rail's line (the rail runs through the middle
+/// of the device) and it is over the rail's run, lined up with a neighbour or
+/// the end of the rail; else where it is.
+fn rail_landing(
+    layout: &CabinetLayout,
+    device: u64,
+    size: (f64, f64),
+    at: (f64, f64),
+) -> (f64, f64) {
+    novo_layout::mount::snap_to_rail(
+        &layout.rails,
+        &layout.placements,
+        device,
+        size,
+        at,
+        novo_layout::mount::SNAP_GAP_MM,
+    )
+    .map_or(at, |m| m.at)
+}
+
 /// What the header strip asked for this frame.
 pub(super) enum Ask {
     Panel(DeviceTag),
@@ -257,6 +278,7 @@ pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> Stri
                 x: r.x as f32,
                 y: r.y as f32,
                 length: r.length as f32,
+                vertical: r.vertical,
             })
             .collect(),
         ducts: layout
@@ -1859,9 +1881,14 @@ impl NovoApp {
                         (out.response.dnd_release_payload::<u64>(), out.cursor_raw)
                         && let Some(c) = cands.iter().find(|c| c.id == *id)
                     {
-                        let (x, y) = layout.snapped(
-                            f64::from(at.x) - c.size.width / 2.0,
-                            f64::from(at.y) - c.size.height / 2.0,
+                        let (x, y) = rail_landing(
+                            layout,
+                            c.id,
+                            (c.size.width, c.size.height),
+                            layout.snapped(
+                                f64::from(at.x) - c.size.width / 2.0,
+                                f64::from(at.y) - c.size.height / 2.0,
+                            ),
                         );
                         ask = Some(Ask::Drop(*id, x, y));
                     }
@@ -1871,9 +1898,14 @@ impl NovoApp {
                         (out.response.dnd_hover_payload::<u64>(), out.cursor_raw)
                         && let Some(c) = cands.iter().find(|c| c.id == *id)
                     {
-                        let (x, y) = layout.snapped(
-                            f64::from(at.x) - c.size.width / 2.0,
-                            f64::from(at.y) - c.size.height / 2.0,
+                        let (x, y) = rail_landing(
+                            layout,
+                            c.id,
+                            (c.size.width, c.size.height),
+                            layout.snapped(
+                                f64::from(at.x) - c.size.width / 2.0,
+                                f64::from(at.y) - c.size.height / 2.0,
+                            ),
                         );
                         self.cabinet.ghost = Some((*id, x, y));
                     }
@@ -1995,9 +2027,16 @@ impl NovoApp {
                         }
                     }
                     if let (Some(d), Some(at)) = (self.cabinet.drag.as_mut(), out.cursor_raw) {
-                        let (x, y) =
+                        let at =
                             layout.snapped(f64::from(at.x - d.grab.x), f64::from(at.y - d.grab.y));
-                        d.at = (x, y);
+                        d.at = layout
+                            .placements
+                            .iter()
+                            .find(|p| p.id == d.id)
+                            .map_or(at, |p| {
+                                let f = p.footprint();
+                                rail_landing(layout, d.id, (f.w, f.h), at)
+                            });
                     }
                     if out.response.drag_stopped()
                         && let Some(d) = self.cabinet.drag.take()

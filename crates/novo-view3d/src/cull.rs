@@ -45,10 +45,39 @@ pub fn lod_for(size_px: f32, levels: usize) -> Option<usize> {
     Some(want.min(levels - 1))
 }
 
+/// A mesh with at most this many triangles is light enough to be drawn in
+/// full for every device on screen: the typical shapes (a breaker, a
+/// contactor, a terminal strip) are some hundreds.
+pub const LIGHT_MESH_TRIANGLES: usize = 800;
+/// From this size on screen a light mesh is drawn in full: the poles, screws
+/// and vents of a part read at about 36 px, long before a heavy maker model
+/// is worth its triangles.
+pub const LIGHT_DETAIL_PX: f32 = 36.0;
+
+/// Like [`lod_for`], for a part whose most detailed level has
+/// `detailed_triangles`: a light one shows its details from
+/// [`LIGHT_DETAIL_PX`], where a heavy maker model waits for 160 px.
+pub fn lod_for_part(size_px: f32, levels: usize, detailed_triangles: usize) -> Option<usize> {
+    if levels > 0 && size_px >= LIGHT_DETAIL_PX && detailed_triangles <= LIGHT_MESH_TRIANGLES {
+        return Some(0);
+    }
+    lod_for(size_px, levels)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::scene::{Item, ItemId, ItemKind, PlateFrame, Pose, Shape};
+
+    #[test]
+    fn a_light_part_shows_its_details_early_and_a_heavy_one_late() {
+        assert_eq!(lod_for_part(50.0, 2, 300), Some(0));
+        assert_eq!(lod_for_part(50.0, 2, 50_000), Some(1));
+        assert_eq!(lod_for_part(200.0, 2, 50_000), Some(0));
+        assert_eq!(lod_for_part(20.0, 2, 300), Some(1));
+        assert_eq!(lod_for_part(2.0, 2, 300), None);
+        assert_eq!(lod_for_part(50.0, 0, 300), None);
+    }
     use glam::Vec3;
 
     fn scene_with(positions: &[Vec3]) -> Scene {
