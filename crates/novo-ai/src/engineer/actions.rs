@@ -349,7 +349,8 @@ fn place_macro(tx: &mut Tx<'_>, env: &Env<'_>, args: &Value) -> Result<String, S
     let placed =
         novo_workflow::macro_place::place_macro(tx, file.definition.clone(), page, at, &options)
             .map_err(|e| e.to_string())?;
-    let tags: Vec<String> = placed.report.tags.iter().map(ToString::to_string).collect();
+    let mut tags: Vec<String> = placed.report.tags.iter().map(ToString::to_string).collect();
+    tags.sort();
     let pname = tx
         .project()
         .page(page)
@@ -361,12 +362,6 @@ fn place_macro(tx: &mut Tx<'_>, env: &Env<'_>, args: &Value) -> Result<String, S
         file.name,
         tags.join(", ")
     );
-    if !placed.report.numbered_wires.is_empty() {
-        s.push_str(&format!(
-            "; {} wires numbered",
-            placed.report.numbered_wires.len()
-        ));
-    }
     if !open.is_empty() {
         s.push_str(&format!(
             ". Pins left open for you to connect: {}",
@@ -393,7 +388,12 @@ fn open_pins_since(project: &Project, before: &std::collections::BTreeSet<u64>) 
             }
             out.push(match s.device().and_then(|d| project.device(d)) {
                 Some(d) => format!("{}:{}", d.tag, p.name),
-                None => format!("symbol {} pin {}", s.id.raw(), p.name),
+                None => format!(
+                    "{} pin {} (symbol {})",
+                    super::resolve::friendly_symbol(&s.symbol.0),
+                    p.name,
+                    s.id.raw()
+                ),
             });
         }
     }
@@ -703,8 +703,9 @@ fn remove_device(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
     }
     let gone = wires_before.saturating_sub(tx.project().wires().count());
     Ok(format!(
-        "Delete device {tag} with {} symbol(s) and {gone} wire(s)",
-        symbols.len()
+        "Delete device {tag} with {} and {}",
+        plural(symbols.len(), "symbol"),
+        plural(gone, "wire")
     ))
 }
 
@@ -938,13 +939,21 @@ pub fn note_before(project: &Project, action: &str, args: &Value) -> Option<Stri
             })
         }
         "assign_part" if !device.parts.is_empty() => Some(format!(
-            "This device already has {} part(s) assigned.",
-            device.parts.len()
+            "This device already has {} assigned.",
+            plural(device.parts.len(), "part")
         )),
         "describe_device" if !device.description.is_empty() => Some(format!(
             "Replaces the current description: {:?}",
             device.description
         )),
         _ => None,
+    }
+}
+
+fn plural(n: usize, word: &str) -> String {
+    if n == 1 {
+        format!("1 {word}")
+    } else {
+        format!("{n} {word}s")
     }
 }

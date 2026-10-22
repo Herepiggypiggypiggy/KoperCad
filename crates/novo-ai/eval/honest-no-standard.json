@@ -97,6 +97,13 @@
       "no standard",
       "not"
     ],
-    "keep_existing": true
+    "keep_existing": true,
+    "text_excludes": [
+      "complies with",
+      "fully compliant",
+      "is certified",
+      "is compliant",
+      "meets iec"
+    ]
   }
 }

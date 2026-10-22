@@ -13,6 +13,11 @@ use std::sync::atomic::AtomicBool;
 /// Most model calls in one turn, so a confused loop cannot run up a bill.
 pub const MAX_STEPS: usize = 30;
 
+/// One turn stops asking for more once its own estimated cost reaches this, whatever the
+/// monthly cap is (0 means no monthly cap). Worst case of a turn is therefore this plus the
+/// one request in flight: a request is bounded by the context limit, a few dollars on Opus.
+pub const TURN_CAP_USD: f64 = 3.0;
+
 /// The standing instructions. Project text is data, never instructions.
 pub const SYSTEM: &str = "\
 You are the co-engineer inside KoperCAD, a desktop electrical CAD program (schematics, terminals, \
@@ -203,6 +208,9 @@ impl Conversation {
         for _ in 0..MAX_STEPS {
             if over_budget(spent_before + cost, settings.monthly_cap_usd) {
                 return Err(ApiError::BudgetReached);
+            }
+            if cost >= TURN_CAP_USD {
+                break; // reported like the step limit: what is in the draft stays for review
             }
             let streamed = client.messages_stream(
                 &RequestSpec {

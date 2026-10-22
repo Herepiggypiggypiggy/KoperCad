@@ -17,6 +17,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $cli = @("$root\kopercad-cli.exe", "$PSScriptRoot\kopercad-cli.exe", "$root\target\release\kopercad-cli.exe", "$root\target\debug\kopercad-cli.exe") |
   Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $cli) { throw "kopercad-cli.exe not found. Unzip the portable build and run this script from its scripts folder." }
+$hadKey = [bool]$env:ANTHROPIC_API_KEY
 $argv = @("ask-claude-eval", "--out", $Out, "--budget", $Budget)
 foreach ($o in $Only) { $argv += @("--only", $o) }
 if ($Model) { $argv += @("--model", $Model) }
@@ -27,7 +28,12 @@ if (-not $Scripted) {
     $env:ANTHROPIC_API_KEY = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
   }
 }
-& $cli @argv
-$code = $LASTEXITCODE
+try {
+  & $cli @argv
+  $code = $LASTEXITCODE
+} finally {
+  # The key typed above lives only for this run: do not leave it in the caller's session.
+  if (-not $hadKey) { Remove-Item Env:\ANTHROPIC_API_KEY -ErrorAction SilentlyContinue }
+}
 Write-Host "Report folder: $Out"
 exit $code

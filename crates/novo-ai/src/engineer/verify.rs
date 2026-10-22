@@ -32,7 +32,7 @@ pub fn problems(project: &Project) -> Vec<Line> {
         .map(|p| Line {
             severity: severity_name(p.severity),
             kind: format!("{:?}", p.kind),
-            message: p.message.clone(),
+            message: friendly_message(&p.message),
             page: p.page.and_then(|g| project.page(g)).map(|g| g.name.clone()),
         })
         .collect();
@@ -60,9 +60,13 @@ impl Tally {
         t
     }
     pub fn text(&self) -> String {
+        let n =
+            |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
         format!(
-            "{} error(s), {} warning(s), {} note(s)",
-            self.errors, self.warnings, self.infos
+            "{}, {}, {}",
+            n(self.errors, "error", "errors"),
+            n(self.warnings, "warning", "warnings"),
+            n(self.infos, "note", "notes")
         )
     }
 }
@@ -228,6 +232,7 @@ pub fn diff(before: &Project, after: &Project) -> Diff {
             d.devices_removed.push(dev.tag.to_string());
         }
     }
+    d.devices_added.sort();
     d.symbols_added = after
         .symbols()
         .filter(|s| before.symbol(s.id).is_none())
@@ -277,22 +282,33 @@ impl Diff {
                 .collect();
             out.push(format!("Renamed: {}", r.join(", ")));
         }
+        let count =
+            |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+        let both = |added: usize, removed: usize, one: &str, many: &str| {
+            let mut parts = Vec::new();
+            if added > 0 {
+                parts.push(format!("{} added", count(added, one, many)));
+            }
+            if removed > 0 {
+                parts.push(format!("{} removed", count(removed, one, many)));
+            }
+            parts.join(", ")
+        };
         if self.symbols_added + self.symbols_removed > 0 {
-            out.push(format!(
-                "Symbols drawn: +{} / -{}",
-                self.symbols_added, self.symbols_removed
+            out.push(both(
+                self.symbols_added,
+                self.symbols_removed,
+                "symbol",
+                "symbols",
             ));
         }
         if self.wires_added + self.wires_removed > 0 {
-            out.push(format!(
-                "Wires: +{} / -{}",
-                self.wires_added, self.wires_removed
-            ));
+            out.push(both(self.wires_added, self.wires_removed, "wire", "wires"));
         }
         if self.wire_numbers_set > 0 {
             out.push(format!(
-                "Wire numbers set or changed: {}",
-                self.wire_numbers_set
+                "{} set or changed",
+                count(self.wire_numbers_set, "wire number", "wire numbers")
             ));
         }
         if self.properties_changed > 0 {
@@ -308,5 +324,45 @@ impl Diff {
             ));
         }
         out
+    }
+}
+
+/// A check message that starts with a library symbol id (a symbol without a device,
+/// such as a PE terminal) names it in words instead.
+fn friendly_message(message: &str) -> String {
+    match message.split_once(": ") {
+        Some((head, rest)) if head.contains('/') && !head.contains(' ') => {
+            let name = super::resolve::friendly_symbol(head);
+            let mut c = name.chars();
+            let name = c
+                .next()
+                .map(|f| f.to_uppercase().collect::<String>() + c.as_str())
+                .unwrap_or(name);
+            format!("{name}: {rest}")
+        }
+        _ => message.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod wording_tests {
+    use super::*;
+
+    #[test]
+    fn plurals_are_real_and_library_ids_are_named_in_words() {
+        let t = Tally {
+            errors: 0,
+            warnings: 1,
+            infos: 7,
+        };
+        assert_eq!(t.text(), "0 errors, 1 warning, 7 notes");
+        assert_eq!(
+            friendly_message("iec/terminals/terminal_pe: 1 not connected"),
+            "Protective earth terminal: 1 not connected"
+        );
+        assert_eq!(
+            friendly_message("-K1: A2 not connected"),
+            "-K1: A2 not connected"
+        );
     }
 }

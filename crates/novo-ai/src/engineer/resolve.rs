@@ -115,15 +115,10 @@ pub fn pin(project: &Project, spec: &Value) -> Result<PinRef, String> {
         let pin = text_of(&spec["pin"]).ok_or("pin is missing")?;
         return in_symbol(project, SymbolId::from(sym), &pin);
     }
-    if let Some(rest) = spec.as_str().and_then(|s| s.strip_prefix("symbol ")) {
-        let (id, pin) = rest
-            .split_once(" pin ")
-            .ok_or("write an unnamed symbol's pin as `symbol 14 pin 1`")?;
-        let id: u64 = id
-            .trim()
-            .parse()
-            .map_err(|_| format!("bad symbol number {id:?}"))?;
-        return in_symbol(project, SymbolId::from(id), pin.trim());
+    if let Some(text) = spec.as_str()
+        && let Some((id, pin)) = unnamed_pin(text)
+    {
+        return in_symbol(project, SymbolId::from(id), &pin);
     }
     let (dev, rest) = match spec {
         Value::String(s) => {
@@ -291,16 +286,45 @@ pub fn wire_description(p: &Project, w: &novo_core::Wire) -> String {
     )
 }
 
+/// A person's name for a library symbol that has no device: `iec/terminals/terminal_pe`
+/// is a "protective earth terminal".
+pub fn friendly_symbol(library_id: &str) -> String {
+    let last = library_id.rsplit('/').next().unwrap_or(library_id);
+    match last {
+        "terminal_pe" => "protective earth terminal".to_string(),
+        "terminal_n" => "neutral terminal".to_string(),
+        other => other.replace('_', " "),
+    }
+}
+
+/// `protective earth terminal pin 1 (symbol 14)`, or the short `symbol 14 pin 1`.
+fn unnamed_pin(text: &str) -> Option<(u64, String)> {
+    let text = text.trim();
+    if let Some(rest) = text.strip_prefix("symbol ") {
+        let (id, pin) = rest.split_once(" pin ")?;
+        return Some((id.trim().parse().ok()?, pin.trim().to_string()));
+    }
+    let (head, tail) = text.rsplit_once(" (symbol ")?;
+    let id = tail.strip_suffix(')')?.trim().parse().ok()?;
+    let (_, pin) = head.rsplit_once(" pin ")?;
+    Some((id, pin.trim().to_string()))
+}
+
 #[cfg(test)]
 mod symbol_pin_tests {
     use super::*;
 
     #[test]
-    fn an_unnamed_symbols_pin_can_be_written_as_text() {
-        let p = Project::new("t");
-        let e = pin(&p, &serde_json::json!("symbol 7 pin 1")).unwrap_err();
-        assert!(!e.contains("not a pin address"), "{e}");
-        let e = pin(&p, &serde_json::json!("symbol seven")).unwrap_err();
-        assert!(e.contains("symbol 14 pin 1"), "{e}");
+    fn an_unnamed_pin_is_written_for_people_and_read_back() {
+        assert_eq!(unnamed_pin("symbol 7 pin 1"), Some((7, "1".into())));
+        assert_eq!(
+            unnamed_pin("protective earth terminal pin 1 (symbol 14)"),
+            Some((14, "1".into()))
+        );
+        assert_eq!(unnamed_pin("-K1:A1"), None);
+        assert_eq!(
+            friendly_symbol("iec/terminals/terminal_pe"),
+            "protective earth terminal"
+        );
     }
 }

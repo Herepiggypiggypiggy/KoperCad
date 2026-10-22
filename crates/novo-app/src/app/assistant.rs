@@ -3,9 +3,9 @@
 //! Off until the person turns it on in the window itself: they paste their
 //! own Anthropic API key, choose how much of the project Claude may read and
 //! agree to the notice. Messages run on a background thread; the window only
-//! polls a channel. Claude never edits the project: its suggestions arrive as
-//! cards with Apply and Reject, and Apply goes through the same command path
-//! as the editor, so one Ctrl+Z undoes it. The engine is `novo-ai`.
+//! polls a channel. Claude never edits the real project: it builds in a private draft, its
+//! change sets arrive as cards with Apply and Reject, and Apply goes through one transaction,
+//! so one Ctrl+Z undoes it. The engine is `novo-ai`.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -1573,14 +1573,20 @@ fn change_set_ui(
                 });
         }
         for line in o.diff.lines() {
-            ui.label(line);
+            if line.starts_with("Removed devices") {
+                // Deleting is the one change worth a second look: say it in colour and bold.
+                ui.label(egui::RichText::new(line).strong().color(pal.warning));
+            } else {
+                ui.label(line);
+            }
         }
         if !o.dropped.is_empty() {
             ui.colored_label(
                 pal.warning,
                 format!(
-                    "{} earlier step(s) no longer fit and were left out: {}",
+                    "{} earlier {} no longer fit and were left out: {}",
                     o.dropped.len(),
+                    if o.dropped.len() == 1 { "step" } else { "steps" },
                     o.dropped.join("; ")
                 ),
             );
