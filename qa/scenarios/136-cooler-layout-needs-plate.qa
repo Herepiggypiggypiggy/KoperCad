@@ -1,6 +1,9 @@
 @title Cooler layout without a plate: the Cabinet says why and keeps saying it
 @area Heat
 # A search asked for on a cabinet with no plate yet is dropped. The empty state names the reason and the sentence stays on screen, not for one frame.
+fresh
+key ctrl+n
+wait 20
 click_text Cabinet #1
 wait 20
 click_text "New cabinet..."
