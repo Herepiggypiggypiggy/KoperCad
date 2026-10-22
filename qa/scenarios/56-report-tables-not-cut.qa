@@ -1,0 +1,23 @@
+@title Report tables: printed cells are not cut
+@area Export
+# The drawing PDF carries the generated report pages. Their columns share the page width by what the
+# text needs, so no cell ends in an ellipsis while the page has room. The file is kept for opening.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text Add wire production page
+wait 6
+key Enter
+wait 10
+shot wire-production-page
+key ctrl+k
+wait 4
+text Export PDF
+wait 6
+key Enter
+wait 40
+shot export-pdf
+check_layout
+expect_file ~/Documents/KoperCAD/*.pdf 2000
+keep_file ~/Documents/KoperCAD/*.pdf
