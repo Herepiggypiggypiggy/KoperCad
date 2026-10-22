@@ -138,3 +138,51 @@ fn applying_a_suggestion_is_one_undo_step_and_undo_restores_it() {
     d.frame();
     assert_eq!(devices(&d), before);
 }
+
+#[test]
+fn stating_a_current_is_one_undo_step_and_brings_the_field_estimate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    cabinet(&mut d);
+    d.frame();
+    let report =
+        |d: &Drive| novo_emc::project::analyse_project(d.app.backend.document().unwrap().project());
+    let wire = d
+        .app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .wires()
+        .next()
+        .unwrap()
+        .id;
+    let st = |r: &novo_emc::Report| r.rules.iter().find(|x| x.rule == "EMC-19").unwrap().status;
+    assert_eq!(st(&report(&d)), novo_emc::Status::NotEvaluated);
+    let depth = d.app.backend.document().unwrap().undo_depth();
+    d.app.emc_set_current(wire.raw(), Some(12.0));
+    d.frame();
+    assert_eq!(d.app.backend.document().unwrap().undo_depth(), depth + 1);
+    let r = report(&d);
+    let field = r.field.as_ref().unwrap();
+    assert_eq!(field.currents.len(), 1);
+    assert_eq!(field.currents[0].amps, 12.0);
+    assert!(field.currents[0].declared);
+    // A setting is one step too, and clearing it restores the default.
+    d.app.emc_set_setting("field_hz", Some(Value::Float(150.0)));
+    d.frame();
+    assert_eq!(report(&d).field.unwrap().hz, 150.0);
+    d.app.emc_set_setting("field_hz", None);
+    d.frame();
+    assert_eq!(report(&d).field.unwrap().hz, 50.0);
+    // The window draws with the section in it.
+    d.app.run_command(&d.ctx.clone(), "check.emc", None);
+    d.frame();
+    d.frame();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    d.app.run(&ctx, Action::Undo);
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(st(&report(&d)), novo_emc::Status::NotEvaluated);
+}

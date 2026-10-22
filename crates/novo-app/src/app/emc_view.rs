@@ -455,15 +455,32 @@ pub(super) fn legend(ctx: &egui::Context, view: egui::Rect, state: &EmcState, da
             );
         }
         if layers.risk {
-            ramp_bar(ui, &st, "calm", "heavily leaned on");
-            ui.label(
-                egui::RichText::new("Exposure index: distances only")
-                    .small()
-                    .color(pal.text_secondary),
-            );
+            match pic.field.as_ref().and_then(|f| f.ends.as_ref()) {
+                Some((lo, mid, hi)) => {
+                    heading(ui, "Exposure map (model)");
+                    ramp_bar(ui, &st, lo, Some(mid), hi);
+                    ui.label(
+                        egui::RichText::new(
+                            "Magnetic field of the drawn currents: a model, order of magnitude. The planning value is at the tick.",
+                        )
+                        .small()
+                        .color(pal.text_secondary),
+                    );
+                }
+                None => {
+                    heading(ui, "Exposure map");
+                    ramp_bar(ui, &st, "calm", None, "heavily leaned on");
+                    ui.label(
+                        egui::RichText::new("Exposure index: distances only")
+                            .small()
+                            .color(pal.text_secondary),
+                    );
+                }
+            }
         }
         if layers.spots {
-            ramp_bar(ui, &st, "low risk", "high risk");
+            heading(ui, "Hot spots");
+            ramp_bar(ui, &st, "low risk", None, "high risk");
         }
         if layers.bonding {
             ui.horizontal(|ui| {
@@ -485,7 +502,12 @@ pub(super) fn legend(ctx: &egui::Context, view: egui::Rect, state: &EmcState, da
     });
 }
 
-fn ramp_bar(ui: &mut egui::Ui, st: &Style, from: &str, to: &str) {
+fn heading(ui: &mut egui::Ui, text: &str) {
+    ui.add_space(2.0);
+    ui.label(egui::RichText::new(text).small().strong());
+}
+
+fn ramp_bar(ui: &mut egui::Ui, st: &Style, from: &str, mid: Option<&str>, to: &str) {
     let pal = crate::theme::ui_palette();
     let (r, _) = ui.allocate_exact_size(egui::vec2(180.0, 10.0), egui::Sense::hover());
     let n = 24;
@@ -500,12 +522,39 @@ fn ramp_bar(ui: &mut egui::Ui, st: &Style, from: &str, to: &str) {
         );
         ui.painter().rect_filled(seg, 0.0, color(st.risk(t0)));
     }
-    ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(from).small().color(pal.text_secondary));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(egui::RichText::new(to).small().color(pal.text_secondary));
-        });
-    });
+    let (row, _) = ui.allocate_exact_size(egui::vec2(180.0, 14.0), egui::Sense::hover());
+    let font = egui::FontId::proportional(11.0);
+    let p = ui.painter();
+    if mid.is_some() {
+        let x = r.center().x;
+        p.line_segment(
+            [egui::pos2(x, r.top()), egui::pos2(x, r.bottom() + 3.0)],
+            egui::Stroke::new(1.5, pal.text_primary),
+        );
+    }
+    p.text(
+        row.left_center(),
+        egui::Align2::LEFT_CENTER,
+        from,
+        font.clone(),
+        pal.text_secondary,
+    );
+    if let Some(m) = mid {
+        p.text(
+            row.center(),
+            egui::Align2::CENTER_CENTER,
+            m,
+            font.clone(),
+            pal.text_secondary,
+        );
+    }
+    p.text(
+        row.right_center(),
+        egui::Align2::RIGHT_CENTER,
+        to,
+        font,
+        pal.text_secondary,
+    );
 }
 
 /// The EMC panel: honesty line, layers, the hot spots and the picked one.
@@ -640,7 +689,12 @@ fn layer_chips(ui: &mut egui::Ui, l: &mut EmcLayers, pic: &Picture) {
         chip(ui, &mut l.halos, "Keep-clear", "A soft band round each noisy run: keep sensitive wires out of it", true, nothing);
         chip(ui, &mut l.sources, "Noise glow", "A glow round each noisy part, as far as its loudness reaches (an index, not a field)", true, nothing);
         chip(ui, &mut l.spots, "Hot spots", "Numbered markers where something is likely to go wrong", true, nothing);
-        chip(ui, &mut l.risk, "Exposure map", "How strongly each point of the plate is leaned on by the noisy parts and runs. Geometry only", true, nothing);
+        let exposure_tip = if pic.field.is_some() {
+            "The magnetic field of the currents in the drawn wires, a little above the plate. A model with stated assumptions, not a measurement"
+        } else {
+            "How strongly each point of the plate is leaned on by the noisy parts and runs. Geometry only"
+        };
+        chip(ui, &mut l.risk, "Exposure map", exposure_tip, true, nothing);
         chip(ui, &mut l.loops, "Loops", "The area each pair of go and return wires encloses", !pic.loops.is_empty(), nothing);
         chip(ui, &mut l.bonding, "Bonding", "The earth and bonding conductors", !pic.bonds.is_empty(), if pic.provenance == Provenance::Engine { "Not drawn yet: the rule engine does not give bonding links" } else { nothing });
         chip(ui, &mut l.shields, "Shields", "Where each cable screen ends", !pic.shields.is_empty(), nothing);

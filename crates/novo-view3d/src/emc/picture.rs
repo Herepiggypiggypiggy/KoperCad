@@ -163,6 +163,9 @@ pub enum Kind {
     Bond,
     /// A drive has no mains filter.
     Filter,
+    /// The magnetic field estimate: a device in a strong field, or a wire
+    /// picking up a voltage from it.
+    Field,
 }
 
 impl Kind {
@@ -174,6 +177,7 @@ impl Kind {
             Kind::Loop => "Loop area",
             Kind::Bond => "Bonding",
             Kind::Filter => "Filter",
+            Kind::Field => "Magnetic field",
         }
     }
 }
@@ -369,6 +373,9 @@ pub struct Field {
     pub values: Vec<f32>,
     /// What the map is, as the legend says it.
     pub label: String,
+    /// What the ends and the middle of the colour ramp stand for ("1.3 \u{b5}T",
+    /// "12.6 \u{b5}T", "126 \u{b5}T"), when the values are a physical quantity and not an index.
+    pub ends: Option<(String, String, String)>,
 }
 
 impl Field {

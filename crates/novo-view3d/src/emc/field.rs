@@ -104,6 +104,7 @@ pub fn exposure(pic: &Picture) -> Field {
         ny,
         values,
         label: "Exposure index (geometry only)".into(),
+        ends: None,
     }
 }
 
@@ -205,6 +206,7 @@ mod tests {
             ny: 1,
             values: vec![0.5],
             label: "engine".into(),
+            ends: None,
         });
         assert_eq!(exposure(&q).label, "engine");
     }
