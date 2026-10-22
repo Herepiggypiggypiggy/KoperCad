@@ -1891,7 +1891,8 @@ pub fn single_line(
             ik_state.get(&parent_id).copied().flatten()
         };
         let Some((route, _net, poles, facts)) = runs.remove(&id) else {
-            ik_state.insert(id, parent_ik);
+            // No run to add the impedance of: what is below can only be a ceiling.
+            ik_state.insert(id, parent_ik.map(|(z, _)| (z, false)));
             continue;
         };
         phase_voltage_used |= facts.phase_to_neutral;
@@ -2085,7 +2086,7 @@ pub fn single_line(
     }
     if nodes.iter().skip(1).any(|n| n.ik_ka.value.is_some()) {
         notes.push(
-            "Ik is the three-phase maximum (IEC 60909-0, low-voltage simplification): the stated supply fault level through the cable impedance of each run, conductors at 20 °C; motor contribution and busbar impedance are left out."
+            "Ik is the three-phase maximum (IEC 60909-0, low-voltage simplification): the stated supply fault level through the cable impedance of each run, conductors at 20 °C; motor contribution and busbar impedance are left out, so the real maximum can be higher."
                 .to_owned(),
         );
     }

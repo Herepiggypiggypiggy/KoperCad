@@ -15,3 +15,9 @@
 - Own "Diversity" column in the schedule; Electrical inputs > Distribution field with hint "none" when empty.
 - Notes for a factor outside 0.1 to 1 and for a factor with nothing to scale.
 - Merged main and the short-circuit PR; QA at 1366x768 and 1920x1080 (scenarios 67, 68).
+
+## 2026-10-22 supply data, example, relay box
+- "Enter supply data" button on the diagram window (opens Electrical inputs); the example states 400 V and 6 kA (6 kA so the example's control-circuit protection still passes).
+- Overload relay drawn as a box on the feeder wire; label shifts right.
+- Nits from #1292 reviews: no-link box makes children's Ik a ceiling; Why names the missing motor contribution when Icu is within 20 % of Ik; Ik note says the real maximum can be higher.
+- QA scenario 70, pictures in qa/single-line-supply-2026-10-22/.

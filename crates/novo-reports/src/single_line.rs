@@ -322,6 +322,19 @@ fn row(sl: &SingleLine, node: &Node) -> (Vec<Cell>, Vec<AnyId>) {
             fmt(node.ik_ka.value.unwrap_or_default()),
             fmt(node.breaking_ka.value.unwrap_or_default())
         )),
+        Status::Pass => {
+            if let (Some(ik), Some(icu)) = (node.ik_ka.value, node.breaking_ka.value)
+                && icu > 0.0
+                && ik > 0.8 * icu
+            {
+                why.push(format!(
+                    "Ik {} kA is within {} % of the breaking capacity {} kA, and the motor contribution is not included",
+                    fmt(ik),
+                    fmt(((icu - ik) / icu * 100.0).max(0.0).round()),
+                    fmt(icu)
+                ));
+            }
+        }
         _ => {}
     }
     let check = match (
@@ -876,6 +889,23 @@ fn level_y(level: usize) -> f64 {
     level as f64 * (BOX_H + LINK_H)
 }
 
+/// Width the run label gives way to a relay box drawn on the wire, mm.
+const RELAY_SHIFT: f64 = 3.6;
+
+/// An overload relay wired into the run, drawn as a box on the wire just above
+/// the child. Returns how far the run's label moves right to clear it.
+fn relay_box(c: &mut Canvas, x: f64, bottom: f64, link: &Link) -> f64 {
+    if link.inline.is_empty() {
+        return 0.0;
+    }
+    let cy = bottom - 5.0;
+    c.rect(x, cy, 4.6, 6.0);
+    c.line((x - 1.6, cy + 1.2), (x - 0.5, cy - 1.2), false);
+    c.line((x - 0.5, cy - 1.2), (x + 0.6, cy + 1.2), false);
+    c.line((x + 0.6, cy + 1.2), (x + 1.6, cy - 1.2), false);
+    RELAY_SHIFT
+}
+
 /// Draws the run from a parent's bottom to a child's top, with its label.
 fn draw_run(
     c: &mut Canvas,
@@ -897,15 +927,16 @@ fn draw_run(
         c.line((to_x, mid), (to_x, bottom), heavy);
     }
     let Some(link) = link else { return };
+    let shift = relay_box(c, to_x, bottom, link);
     let lines = link_lines(link);
     let h = 2.9;
     let straight = (from_x - to_x).abs() < 0.01;
     let y0 = if straight { top + 1.0 } else { mid + 0.5 };
     for (i, text) in lines.iter().enumerate() {
         c.text(
-            to_x + 1.2,
+            to_x + 1.2 + shift,
             y0 + h * i as f64,
-            PITCH_MM - 3.0,
+            PITCH_MM - 3.0 - shift,
             h,
             text,
             SMALL_MM,
@@ -918,9 +949,9 @@ fn draw_run(
         let why = format!("FAIL {}", link.fail_codes.join(", "));
         let why = why.as_str();
         c.text(
-            to_x + 1.2,
+            to_x + 1.2 + shift,
             y0 + h * n,
-            PITCH_MM - 3.0,
+            PITCH_MM - 3.0 - shift,
             h,
             why,
             SMALL_MM,
@@ -1125,12 +1156,13 @@ pub fn sheet_layout_of(sl: &SingleLine, index: usize, setup: &PageSetup) -> Opti
             link.is_some_and(|l| l.status == Status::Fail),
         );
         if let Some(link) = link {
+            let shift = relay_box(&mut c, *cx, level_y(1), link);
             let lines = link_lines(link);
             for (i, text) in lines.iter().enumerate() {
                 c.text(
-                    *cx + 1.2,
+                    *cx + 1.2 + shift,
                     bus_y + 0.5 + 2.9 * i as f64,
-                    PITCH_MM - 3.0,
+                    PITCH_MM - 3.0 - shift,
                     2.9,
                     text,
                     SMALL_MM,

@@ -106,6 +106,7 @@ impl NovoApp {
     /// workspace shows, so the table is left out.
     pub(super) fn single_line_view(&mut self, ui: &mut egui::Ui) -> bool {
         let sheets = self.single_line_sheets();
+        let mut open_inputs = false;
         let view = &mut self.single_line_view;
         view.sheet = view.sheet.min(sheets.len().saturating_sub(1));
         ui.horizontal(|ui| {
@@ -145,7 +146,22 @@ impl NovoApp {
                     view.zoom = (if view.zoom == 0.0 { 1.0 } else { view.zoom } * 1.25).min(4.0);
                 }
             }
+            ui.separator();
+            if ui
+                .small_button("Enter supply data")
+                .on_hover_text(
+                    "Supply voltage, short-circuit current or transformer, diversity: the \
+                     numbers the short-circuit current and the voltage drop start from",
+                )
+                .clicked()
+            {
+                open_inputs = true;
+            }
         });
+        if open_inputs {
+            self.toggle_electrical_open();
+        }
+        let view = &self.single_line_view;
         if view.schedule {
             return false;
         }
