@@ -114,6 +114,13 @@ pub(crate) const REPORT_COMMANDS: &[(&str, &str)] = &[
     ("report.singleline", "singleline"),
 ];
 
+impl ReportsView {
+    /// Drops the list's row counts and any worker: another project is open.
+    pub(super) fn forget_counts(&mut self) {
+        self.counts = ListCounts::default();
+    }
+}
+
 impl NovoApp {
     /// Opens the Reports workspace on report `id`.
     pub(crate) fn show_report(&mut self, id: &str) {
@@ -1040,6 +1047,64 @@ mod tests {
             "stale counts after undo"
         );
         assert_eq!(wait(&mut d), first, "undo gives the first counts back");
+    }
+
+    #[test]
+    fn opening_another_file_at_the_same_revision_does_not_keep_the_old_counts() {
+        use novo_tests::{BigSpec, big_project};
+        let dir = tempfile::tempdir().unwrap();
+        let make = |name: &str, feeders: usize| {
+            let mut doc = novo_core::Document::default();
+            big_project(&mut doc, BigSpec::new(feeders)).unwrap();
+            let path = dir.path().join(name);
+            novo_storage::ProjectFile::create(&path, doc.project()).unwrap();
+            path
+        };
+        let (a, b) = (make("a.kopercad", 3), make("b.kopercad", 9));
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        let counts_of = |d: &mut Drive, path: &Path| {
+            d.app.open_path(path);
+            d.frame();
+            for _ in 0..600 {
+                let counts = d.app.list_counts(&ctx);
+                if !counts.is_empty() {
+                    return counts;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            panic!("the worker never answered");
+        };
+        let sync = |d: &Drive| {
+            let project = d.doc().project();
+            let mut live = novo_reports::LiveReports::standard();
+            let ids: Vec<String> = live.ids().into_iter().map(str::to_owned).collect();
+            ids.into_iter()
+                .map(|id| {
+                    let n = live
+                        .get(project, &id)
+                        .map_or(0, |o| novo_reports::headline_count(&id, o).0);
+                    (id, n)
+                })
+                .collect::<std::collections::HashMap<_, _>>()
+        };
+        let first = counts_of(&mut d, &a);
+        assert_eq!(first, sync(&d));
+        let revision = d.doc().project().revision();
+        d.app.open_path(&b);
+        d.frame();
+        assert_eq!(
+            d.doc().project().revision(),
+            revision,
+            "not the same revision"
+        );
+        assert!(
+            d.app.list_counts(&ctx).is_empty(),
+            "the other file's counts are shown"
+        );
+        let second = counts_of(&mut d, &b);
+        assert_eq!(second, sync(&d));
+        assert_ne!(second, first, "the two projects have the same counts");
     }
 
     #[test]

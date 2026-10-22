@@ -1222,6 +1222,8 @@ impl NovoApp {
         self.learn_project_changed();
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
+        // Row counts are keyed by revision, which two projects can share.
+        self.reports_view.forget_counts();
         // The openings of the Heat panel belong to the project's enclosure.
         self.cabinet.heat.settings.load(Vec::new());
         self.cabinet.heat.settings.stored = None;
