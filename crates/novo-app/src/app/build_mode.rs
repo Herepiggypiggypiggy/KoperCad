@@ -91,6 +91,12 @@ struct Asked {
     attach: Option<(u64, Vec<std::path::PathBuf>)>,
     /// A step was ticked, taken back or parked: the store changed.
     changed: bool,
+    /// The Done button was pressed (or its keys), for the lesson.
+    done: bool,
+    /// Where the step controls were drawn, for the lesson pointer.
+    done_rect: Option<egui::Rect>,
+    problem_rect: Option<egui::Rect>,
+    screen_rect: Option<egui::Rect>,
 }
 
 fn tone_of(status: StepStatus) -> Tone {
@@ -191,6 +197,7 @@ impl NovoApp {
             } else if let Some(plan) = plan {
                 let p = crate::theme::ui_palette();
                 let id = egui::Id::new("build_mode");
+                asked.screen_rect = Some(rect);
                 egui::Area::new(id)
                     .order(egui::Order::Middle)
                     .fixed_pos(rect.min)
@@ -217,6 +224,18 @@ impl NovoApp {
                 let json = mode.store.to_json();
                 self.backend.set_commissioning_json(&json);
             }
+        }
+        for (id, rect, label) in [
+            ("build.screen", asked.screen_rect, "Build mode"),
+            ("build.done", asked.done_rect, "Done button"),
+            ("build.problem", asked.problem_rect, "Problem button"),
+        ] {
+            if let Some(rect) = rect {
+                self.anchor(id, rect, label);
+            }
+        }
+        if asked.done {
+            self.learn_signal("build_step_done");
         }
         if asked.pick_photos
             && let Some(paths) = Self::pick_photo_files()
@@ -291,6 +310,7 @@ impl NovoApp {
         // Typing a problem note: the space belongs to the text; stepped
         // aside, Build mode is not on screen.
         let mut taken = state.problem.is_some() || state.away;
+        let mut ticked = false;
         if !taken {
             let who = self
                 .wb
@@ -314,6 +334,7 @@ impl NovoApp {
                     state.focus = None;
                     mode.dirty = true;
                     taken = true;
+                    ticked = true;
                 }
             }
             if taken {
@@ -321,6 +342,9 @@ impl NovoApp {
             }
         }
         self.wb.build = Some(state);
+        if ticked {
+            self.learn_signal("build_step_done");
+        }
         taken
     }
 
@@ -1025,7 +1049,9 @@ fn status_and_buttons(
     let space_done = ui.input(|i| i.key_pressed(egui::Key::Enter))
         && !ui.ctx().egui_wants_keyboard_input()
         && ui.ctx().memory(|m| m.focused().is_none());
+    asked.done_rect = Some(done.rect);
     if done.clicked() || space_done {
+        asked.done = true;
         mark_done(&mut mode.store, step, who, &now());
         state.history.push(step.key);
         mode.dirty = true;
@@ -1035,10 +1061,9 @@ fn status_and_buttons(
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         let h = if state.large { 48.0 } else { 30.0 };
-        if ui
-            .add_sized([140.0, h], egui::Button::new("⚠  Problem…"))
-            .clicked()
-        {
+        let problem = ui.add_sized([140.0, h], egui::Button::new("⚠  Problem…"));
+        asked.problem_rect = Some(problem.rect);
+        if problem.clicked() {
             state.problem = Some(String::new());
         }
         let can_back = state.history.last().is_some();

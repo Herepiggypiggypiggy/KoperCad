@@ -315,6 +315,18 @@ impl Drive {
         self.app.cabinet.plate_card = false;
         self.app.wb.numbering = None;
         self.app.wb.wheel = None;
+        // The windows the outputs and checks lessons open (standards, calculations,
+        // protection, safety, bench output, autopilot, Build mode, print preview).
+        self.app.standards_open = false;
+        self.app.wb.calculations = None;
+        self.app.wb.electrical = None;
+        self.app.wb.safety = None;
+        self.app.wb.bench = None;
+        self.app.wb.build = None;
+        self.app.wb.autopilot = None;
+        self.app.wb.handover_ask = None;
+        self.app.wb.print_preview = None;
+        self.app.protection.open = false;
         // And so would a dialog (settings, shortcuts): Escape closes each.
         // The dialogs that lessons leave open stay, as they did before
         // Escape closed dialogs.

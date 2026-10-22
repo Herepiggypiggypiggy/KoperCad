@@ -1,0 +1,120 @@
+format = 1
+id = "build-mode"
+version = 1
+status = "early"
+title = "Build the cabinet one step at a time"
+summary = "Walk the plate in the order the workshop works, tick each step with one big button, raise a problem to the punch list and carry the ticks between a tablet and the desk."
+track = "cabinet"
+order = 95
+level = "intermediate"
+minutes = 7
+topics = ["build mode", "assembly", "workshop", "tablet", "punch list"]
+needs = ["workshop-pack"]
+next = ["commissioning"]
+project = "@example"
+title_nl = "Bouw de kast stap voor stap"
+summary_nl = "Loop over de plaat in de volgorde waarin de werkplaats werkt, vink elke stap af met een grote knop, meld een probleem op de restpuntenlijst en neem de vinkjes mee tussen tablet en bureau."
+
+[[step]]
+id = "why"
+title = "The plan, one step on the screen"
+title_nl = "Het plan, een stap op het scherm"
+text = """
+At the plate you do not want a drawing set. {ui:build.screen} shows one step at a time in large type, in the order the workshop works: prepare the plate, drill, rails and ducts, devices, wires, labels, check.
+It runs locally on a laptop or a Windows tablet, with no server and no account.
+"""
+text_nl = """
+Aan de plaat wil je geen tekeningenset. {ui:build.screen} toont een stap tegelijk in grote letters, in de volgorde waarin de werkplaats werkt: plaat voorbereiden, boren, rails en kanalen, apparaten, draden, labels, controle.
+Het draait lokaal op een laptop of Windows-tablet, zonder server en zonder account.
+"""
+
+[[step]]
+id = "open"
+title = "Open Build mode"
+title_nl = "Open Build mode"
+text = "It needs a cabinet with a mounting plate; the example has one. If your project has none, the screen says so and tells you where to make it."
+text_nl = "Het heeft een kast met montageplaat nodig; het voorbeeld heeft er een. Heeft jouw project er geen, dan zegt het scherm dat en waar je er een maakt."
+how = [
+  "Open {ui:menu.Reports} and choose {ui:cmd.view.build}.",
+  "Or press {key:view.command_palette}, type build mode and press Enter.",
+]
+how_nl = [
+  "Open {ui:menu.Reports} en kies {ui:cmd.view.build}.",
+  "Of druk op {key:view.command_palette}, typ build mode en druk op Enter.",
+]
+point = { ui = "cmd.view.build" }
+expect = { command = "view.build" }
+solve = [ { command = "view.build" } ]
+
+[[step]]
+id = "read"
+title = "Read the card"
+title_nl = "Lees de kaart"
+text = """
+The card says **Step n of N** and what to do: which holes to drill at which diameter, which rail to cut and where to fit it, which device clips on after its rail.
+A traffic light per step shows open, done, problem or changed. **Also ready now** lists steps that can be done at the same time, so two people can work on different devices.
+"""
+text_nl = """
+De kaart zegt **Step n of N** en wat te doen: welke gaten met welke diameter te boren, welke rail af te korten en waar te monteren, welk apparaat na zijn rail op de rail klikt.
+Een stoplicht per stap toont open, klaar, probleem of gewijzigd. **Also ready now** noemt stappen die tegelijk kunnen, zodat twee mensen aan verschillende apparaten werken.
+"""
+point = { ui = "build.screen" }
+
+[[step]]
+id = "done"
+title = "Tick a step"
+title_nl = "Vink een stap af"
+text = "One big button, built for gloves and a tablet. Space or Enter ticks it too. The tick is stored in the project with your name and the time, beside the commissioning results."
+text_nl = "Een grote knop, gemaakt voor handschoenen en een tablet. Spatie of Enter vinkt ook af. Het vinkje wordt met je naam en de tijd in het project bewaard, naast de resultaten van de inbedrijfstelling."
+how = [
+  "Press {ui:build.done}, or Space.",
+  "The next step comes up and the progress bar moves.",
+]
+how_nl = [
+  "Druk op {ui:build.done}, of op de spatie.",
+  "De volgende stap verschijnt en de voortgangsbalk schuift.",
+]
+point = { ui = "build.done" }
+expect = { signal = "build_step_done" }
+solve = [ { ui_click = "build.done" } ]
+
+[[step]]
+id = "problem"
+title = "Raise a problem instead of working around it"
+title_nl = "Meld een probleem in plaats van eromheen te werken"
+text = "If a hole does not line up or a wire is too short, press “Problem…” and say what is wrong. It lands on the punch list in Commissioning, linked to the device or wire, and engineering reads it there. The step keeps its red light until someone resolves it."
+text_nl = "Past een gat niet of is een draad te kort, druk dan op “Problem…” en zeg wat er fout is. Het komt op de restpuntenlijst in Commissioning, gekoppeld aan het apparaat of de draad, en engineering leest het daar. De stap houdt zijn rode licht tot iemand het oplost."
+point = { ui = "build.problem" }
+
+[[step]]
+id = "changed"
+title = "A ticked step can come back"
+title_nl = "Een afgevinkte stap kan terugkomen"
+text = """
+Each tick remembers a fingerprint of the step's text. If the design changes so the step reads differently (a device moved, a wire got longer) the step shows **Changed** and counts as open again: look, then confirm.
+Ticks are never deleted by redrawing, so an undo that brings a step back brings its tick back too.
+"""
+text_nl = """
+Elk vinkje onthoudt een vingerafdruk van de tekst van de stap. Verandert het ontwerp zodat de stap anders leest (een apparaat verschoven, een draad langer) dan toont de stap **Changed** en telt hij weer als open: kijk en bevestig opnieuw.
+Vinkjes worden nooit gewist door opnieuw tekenen, dus een undo die een stap terugbrengt brengt ook zijn vinkje terug.
+"""
+
+[[step]]
+id = "tablet"
+title = "Carry the ticks between tablet and desk"
+title_nl = "Neem de vinkjes mee tussen tablet en bureau"
+text = "On a tablet without a network, **Export ticks…** writes a `.kcfield` file. At the desk, **Import ticks…** merges it: the newer decision wins for each step. Run the same KoperCAD version on both; an older program drops ticks it does not know."
+text_nl = "Op een tablet zonder netwerk schrijft **Export ticks…** een `.kcfield`-bestand. Aan het bureau voegt **Import ticks…** het samen: per stap wint de nieuwste beslissing. Draai op beide dezelfde KoperCAD-versie; een oudere versie laat vinkjes vallen die ze niet kent."
+
+[[step]]
+id = "limits"
+title = "What it does not know"
+title_nl = "Wat het niet weet"
+text = """
+Wires are cut and holes drilled by hand: a step says what and where, it does not drive a machine. Guessed part sizes, estimated wire lengths and a missing cross-section are **said on the step**.
+The power, control and earth grouping follows common practice (green-yellow is earth, 2.5 mm² and up is power), not a reading of your schematic. Press Esc to leave.
+"""
+text_nl = """
+Draden worden met de hand afgekort en gaten met de hand geboord: een stap zegt wat en waar, hij stuurt geen machine. Geraden onderdeelmaten, geschatte draadlengtes en een ontbrekende doorsnede worden **op de stap gezegd**.
+De indeling in kracht, sturing en aarde volgt de gangbare praktijk (groen-geel is aarde, 2,5 mm² en meer is kracht), niet een lezing van je schema. Druk op Esc om te sluiten.
+"""

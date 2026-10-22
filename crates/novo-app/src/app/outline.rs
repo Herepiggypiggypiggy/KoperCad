@@ -1513,6 +1513,7 @@ impl NovoApp {
         if !self.ol.focused
             || rect.is_none()
             || self.ol.dialog_open()
+            || self.modal_open()
             || self.outline_mode != super::OutlineMode::Pages
             || ctx.egui_wants_keyboard_input()
             || self.backend.document().is_none()
