@@ -153,6 +153,7 @@ impl HeatState {
                 self.live.changed_at = now;
             }
             self.live.devices = scenario.as_ref().map_or(0, |s| s.devices.len());
+            self.cooling.parts = novo_thermal::cooling::products_from_project(project);
             let scenario_key = scenario.as_deref().map_or(0, scenario_key);
             self.live.current = Some(Current {
                 key,
@@ -217,6 +218,7 @@ impl HeatState {
             ambient: cur.ambient,
             plate: cur.plate,
             messages: cur.messages.clone(),
+            enclosure: Some(scenario.enclosure.clone()),
         };
         let top = self.settings.top;
         self.start_to((*scenario).clone(), meta, top);

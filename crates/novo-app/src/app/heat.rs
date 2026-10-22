@@ -81,6 +81,9 @@ pub(super) struct Meta {
     pub ambient: f64,
     pub plate: [f64; 4],
     pub messages: Vec<String>,
+    /// The enclosure the run solved (outside size, wall, installation), for
+    /// the cooling selection.
+    pub enclosure: Option<novo_thermal::Enclosure>,
 }
 
 pub(super) struct HeatState {
@@ -125,6 +128,8 @@ pub(super) struct HeatState {
     notice: Option<String>,
     /// Quality level, turbulence model and vents of the next run.
     pub settings: HeatSettings,
+    /// Target and product lists of the cooling selection.
+    pub(super) cooling: super::heat_cooling::CoolingSettings,
     /// The heat-up over time: frames and the slider over them.
     pub(super) time: super::heat_time::TimeLine,
     /// The next run is a heat-up over time, not a steady state.
@@ -183,6 +188,7 @@ impl HeatState {
             test_solver: None,
             notice: None,
             settings: HeatSettings::default(),
+            cooling: super::heat_cooling::CoolingSettings::default(),
             time: super::heat_time::TimeLine::new(),
             transient_wanted: false,
         }
@@ -357,6 +363,7 @@ impl HeatState {
                             ambient: m.ambient,
                             plate: m.plate,
                             messages: m.messages.clone(),
+                            enclosure: m.enclosure.clone(),
                         }));
                     }
                 }
@@ -417,6 +424,7 @@ impl HeatState {
                         ambient: m.ambient,
                         plate: m.plate,
                         messages: m.messages,
+                        enclosure: m.enclosure,
                     });
                     self.time.push(f.time_s, f.load_factor, solution);
                 }
@@ -992,6 +1000,7 @@ pub(super) fn start_run(
                 ambient: input.ambient,
                 plate: [plate.x, plate.y, plate.w, plate.h],
                 messages: bridge.report.messages(),
+                enclosure: Some(bridge.scenario.enclosure.clone()),
             };
             state.start(bridge.scenario, meta);
         }
@@ -1105,7 +1114,7 @@ pub(super) fn paint_over(
         };
         heat_compare::legend(ui.ctx(), rect, d, &tag);
     } else {
-        legend(ui.ctx(), rect, cache, input, stale);
+        legend(ui.ctx(), rect, cache, input, stale, &mut state.cooling);
     }
     if let Some(d) = state.side_diff(cache) {
         paint_side_a(&painter, cache, d, input, &to_screen);
@@ -1680,7 +1689,14 @@ fn nearest_edge_point(card: Rect, p: Pos2) -> Pos2 {
     )
 }
 
-fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: bool) {
+fn legend(
+    ctx: &egui::Context,
+    rect: Rect,
+    cache: &Cache,
+    input: &Input,
+    stale: bool,
+    cooling: &mut super::heat_cooling::CoolingSettings,
+) {
     let shown = super::panel::Panel::new(
         "heat_legend",
         "Temperature",
@@ -1801,6 +1817,7 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                         for m in &sol.messages {
                             ui.label(small(m, t::WARNING));
                         }
+                        super::heat_cooling::show(ui, sol, cooling, stale, false);
                         if !sol.snapshot.notes.is_empty() {
                             let pal = crate::theme::ui_palette();
                             let shown = sol.snapshot.notes.iter().take(4);
@@ -2096,6 +2113,7 @@ mod tests {
             ambient: i.ambient,
             plate: [50.0, 50.0, 600.0, 800.0],
             messages: vec!["1 device has no loss data".into()],
+            enclosure: None,
         }
     }
 
@@ -2312,7 +2330,14 @@ mod tests {
         let cache = build(&inp);
         for _ in 0..2 {
             let mut out = ctx.run_ui(raw.clone(), |ui| {
-                legend(ui.ctx(), canvas, &cache, &inp, true);
+                legend(
+                    ui.ctx(),
+                    canvas,
+                    &cache,
+                    &inp,
+                    true,
+                    &mut crate::app::heat_cooling::CoolingSettings::default(),
+                );
             });
             out.textures_delta.clear();
         }

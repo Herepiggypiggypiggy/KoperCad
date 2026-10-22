@@ -88,6 +88,8 @@ pub(super) fn show(
         }));
         if let Some(sol) = state.solution() {
             jump = verdict_line(ui, &sol.snapshot, tag_of, stale, state.running());
+            let running = state.running();
+            super::heat_cooling::show(ui, &sol, &mut state.cooling, stale, running);
         }
         ui.horizontal_wrapped(|ui| heat::simulate_controls_with(ui, state, false));
         let running = state.running();
