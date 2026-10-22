@@ -1290,10 +1290,22 @@ impl NovoApp {
                 .preview
                 .as_ref()
                 .map_or((0, 0), |p| (p.placements.len(), p.unplaced.len()));
+            let heat = self
+                .cabinet
+                .rules
+                .explain
+                .as_ref()
+                .and_then(|e| e.heat.as_ref())
+                .map(|h| h.message());
             let mut text = format!(
-                "Preview: {n} {} would be placed. Nothing is stored until you accept.",
+                "Preview{}: {n} {} would be placed. Nothing is stored until you accept.",
+                if heat.is_some() { " (heat-aware)" } else { "" },
                 if n == 1 { "device" } else { "devices" }
             );
+            if let Some(heat) = heat {
+                text.push(' ');
+                text.push_str(&heat);
+            }
             if left > 0 {
                 text.push_str(&format!(" {left} do not fit."));
             }
@@ -2520,16 +2532,6 @@ impl NovoApp {
                                 "The plate is too small to keep power and signal ducts apart; \
                                  the separation was given up to fit every device",
                             );
-                        }
-                        if let Some(heat) = self
-                            .cabinet
-                            .rules
-                            .explain
-                            .as_ref()
-                            .and_then(|e| e.heat.as_ref())
-                        {
-                            let text = heat.message();
-                            self.message(Level::Info, text);
                         }
                         self.cabinet.preview = Some(plan);
                     }

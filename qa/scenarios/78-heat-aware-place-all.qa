@@ -20,6 +20,13 @@ key Enter
 wait 20
 shot cabinet-placed
 check_layout
+# The inspector says why a moved device is where it is (planning score, model; not measured heat).
+click_text Table
+wait 10
+click_text A1
+wait 10
+shot inspector-why-moved
+check_layout
 key ctrl+k
 wait 4
 text place rules

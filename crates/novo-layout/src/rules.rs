@@ -748,6 +748,7 @@ impl Explanation {
         if let Some(why) = d.heat {
             out.push_str("; ");
             out.push_str(why.text());
+            out.push_str(" (planning model, not measured heat)");
         }
         out.push('.');
         out

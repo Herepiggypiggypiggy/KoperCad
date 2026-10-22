@@ -67,6 +67,10 @@ pub enum HeatWhy {
     Shielded,
     /// Its rule puts it above the hot zone; it was brought below the heat.
     Lowered,
+    /// A heat source that was not moved: its place already keeps it clear.
+    Source,
+    /// Minds heat and was not moved: its place is already clear of the plume.
+    Sensitive,
 }
 
 impl HeatWhy {
@@ -74,6 +78,12 @@ impl HeatWhy {
         match self {
             HeatWhy::Spread => "the heat step moved it to keep its heat off devices that mind it",
             HeatWhy::Shielded => "the heat step moved it away from a heat source",
+            HeatWhy::Source => {
+                "it is a heat source: the heat step checked it is kept clear of devices that mind heat"
+            }
+            HeatWhy::Sensitive => {
+                "it minds heat: the heat step checked it is not beside or above a heat source"
+            }
             HeatWhy::Lowered => {
                 "the heat step brought it below the hot zone, because heat rises into what is above"
             }
@@ -115,22 +125,22 @@ impl HeatSummary {
 
     /// One honest sentence for the message after Place all.
     pub fn message(&self) -> String {
+        let plural =
+            |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+        let sources = plural(self.sources, "heat source", "heat sources");
         if self.unchanged {
             return format!(
-                "Heat-aware: {} heat source(s); the rules' layout was already the best of {} tried.",
-                self.sources, self.tried
+                "Heat-aware: {sources}; the rules' layout was already the best of {} tried (planning score, model).",
+                self.tried
             );
         }
         let rows = match self.extra_rows {
             0 => String::new(),
-            1 => ", using 1 more rail".to_owned(),
-            n => format!(", using {n} more rails"),
+            n => format!(", {} more", plural(n, "rail", "rails")),
         };
         format!(
-            "Heat-aware: {} heat source(s), {} device(s) placed differently{rows}; heat coupling {:.0}% lower \
-             (a planning score, not a temperature).",
-            self.sources,
-            self.moved,
+            "Heat-aware: {sources}, {} placed differently{rows}; heat coupling {:.0}% lower (planning score, model, not a temperature).",
+            plural(self.moved, "device", "devices"),
             100.0 * self.gain()
         )
     }
@@ -456,6 +466,16 @@ pub(crate) fn optimise(
             .collect();
         for id in tw.zone.keys() {
             tw.why.insert(*id, HeatWhy::Lowered);
+        }
+        for s in specs {
+            let why = if s.loss_w.is_some_and(|w| w >= h.min_source_w) {
+                HeatWhy::Source
+            } else if sensitive.contains(&s.id) {
+                HeatWhy::Sensitive
+            } else {
+                continue;
+            };
+            tw.why.entry(s.id).or_insert(why);
         }
         if best.as_ref().is_none_or(|b| cost < b.0) {
             best = Some((cost, score, plan, why, tw));
