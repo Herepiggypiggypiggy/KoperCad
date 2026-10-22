@@ -39,7 +39,14 @@ fn fills_a_row_then_starts_a_new_rail() {
     // usable width 200: 4 x 45 + 3 x 10 = 210 > 200, so 3 per row.
     assert_eq!(plan.rails.len(), 2);
     assert_eq!(plan.placements.iter().filter(|p| p.rail == 1).count(), 3);
-    assert_eq!(plan.placements[3].y, plan.rails[0].y + 90.0 + ROW_GAP_MM);
+    // The next row starts a device height and a row gap below the first row's
+    // devices; each rail runs through the middle of its row.
+    assert_eq!(
+        plan.placements[3].y,
+        plan.placements[0].y + 90.0 + ROW_GAP_MM
+    );
+    assert_eq!(plan.rails[0].y, plan.placements[0].y + 45.0);
+    assert_eq!(plan.rails[1].y, plan.placements[3].y + 45.0);
     assert!(plan.unplaced.is_empty());
 }
 

@@ -93,11 +93,10 @@ fn rows_of_one_class_share_a_duct() {
     assert_eq!(d.class, Class::Signal);
     let (_, y1) = at(&plan, 1);
     let (_, y2) = at(&plan, 2);
-    // Centred in the free space between the two rows: from the devices above
-    // to the lower rail's 35 mm band, which reaches 17.5 mm up from the rail
-    // line along the top of the lower row's devices.
-    assert!((d.y - ((y1 + 90.0 + y2 - RAIL_BAND_MM / 2.0) / 2.0)).abs() < 1e-9);
-    assert!(duct_rect(d).bottom() <= y2 - RAIL_BAND_MM / 2.0 + 1e-9);
+    // Centred in the space between the two rows. The rails run through the
+    // middle of 90 mm rows, so their 35 mm bands lie behind the devices and
+    // the duct has the whole space.
+    assert!((d.y - ((y1 + 90.0 + y2) / 2.0)).abs() < 1e-9);
     assert_eq!((d.width, d.height), (25.0, 60.0));
 }
 
@@ -109,14 +108,10 @@ fn separation_off_gives_one_duct_and_the_normal_row_gap() {
     let plan = place_all_rules(&plate(), &specs, &rules, 1, 0.0);
     let (_, qy) = at(&plan, 1);
     let (_, ky) = at(&plan, 2);
-    // The 40 mm row gap is not enough for a 25 mm duct between the devices
-    // above and the lower rail's band (17.5 mm up from its line), so the gap
-    // grows to: duct + 10 to the devices + 5 to the band + the band's 17.5.
-    assert_eq!(
-        ky - (qy + 90.0),
-        rules.duct_width + DUCT_CLEAR_MM + RAIL_DUCT_CLEAR_MM + RAIL_BAND_MM / 2.0
-    );
-    assert!(ky - (qy + 90.0) > rules.row_gap);
+    // Rows as tall as the rail band (35 mm) hide it behind their devices, so
+    // the 40 mm row gap holds the 25 mm duct with 10 mm to the devices above
+    // and 5 mm to the lower rail's band.
+    assert_eq!(ky - (qy + 90.0), rules.row_gap);
     assert_eq!(row_ducts(&plan).len(), 1);
 }
 
@@ -124,9 +119,7 @@ fn separation_off_gives_one_duct_and_the_normal_row_gap() {
 fn a_small_plate_gives_up_the_separation_before_leaving_a_device_off() {
     let small = Plate {
         width: 300.0,
-        // Three rows of 90 mm need two row gaps of 57.5 mm (duct and rail
-        // band) but not the 127.5 mm each that the separation asks.
-        height: 420.0,
+        height: 400.0,
         margin: 10.0,
     };
     let specs = vec![
@@ -654,4 +647,36 @@ fn planned_ducts_clear_the_rail_bands() {
         let found = duct_overlaps(&ducts, &rails, &placements(&plan, &specs));
         assert!(found.is_empty(), "separation {separation}: {found:?}");
     }
+}
+
+/// A rail runs through the middle of its row and the devices on it are centred
+/// on its line, whatever their heights, so a part sits on the rail where it
+/// would be screwed on.
+#[test]
+fn devices_are_centred_on_their_rail() {
+    let specs = vec![
+        spec(1, "K", 45.0, 90.0),
+        spec(2, "K", 45.0, 60.0),
+        spec(3, "K", 18.0, 90.0),
+    ];
+    let plan = place_all_rules(&plate(), &specs, &RuleSet::standard(), 1, 0.0);
+    assert!(plan.unplaced.is_empty());
+    for p in &plan.placements {
+        let h = specs.iter().find(|s| s.id == p.id).unwrap().size.height;
+        let rail = plan.rails.iter().find(|r| r.id == p.rail).unwrap();
+        assert!((p.y + h / 2.0 - rail.y).abs() < 1e-9, "device {}", p.id);
+    }
+}
+
+/// A row lower than the 35 mm band has the band showing above and below its
+/// devices; the first row starts far enough down to keep it on the plate, and
+/// the ducts keep out of it.
+#[test]
+fn a_low_first_row_keeps_its_band_on_the_plate() {
+    let specs = vec![spec(1, "A", 100.0, 20.0), spec(2, "T", 80.0, 150.0)];
+    let p = plate();
+    let plan = place_all_rules(&p, &specs, &RuleSet::standard(), 1, 0.0);
+    let first = plan.rails.iter().map(|r| r.y).fold(f64::MAX, f64::min);
+    assert!(first - RAIL_BAND_MM / 2.0 >= p.usable().y - 1e-9, "{first}");
+    assert_eq!(first - RAIL_BAND_MM / 2.0, p.usable().y);
 }

@@ -346,9 +346,12 @@ fn an_empty_rule_file_has_no_rules_and_everything_falls_in_the_middle() {
     let specs = vec![spec(1, "X", 6.0, 60.0), spec(2, "Q", 18.0, 90.0)];
     let p = plate();
     let plan = place_all_rules(&p, &specs, &set, 1, 0.0);
-    // Both are shared in the middle, so they sit on one rail from the top.
+    // Both are shared in the middle, so they sit on one rail from the top,
+    // centred on it: the taller one (90 mm) starts at the top of the plate.
     assert_eq!(at(&plan, 1).2, at(&plan, 2).2);
-    assert_eq!(at(&plan, 1).1, p.usable().y);
+    assert_eq!(at(&plan, 2).1, p.usable().y);
+    assert_eq!(at(&plan, 1).1, p.usable().y + 15.0);
+    assert_eq!(plan.rails[0].y, p.usable().y + 45.0);
 }
 
 #[test]

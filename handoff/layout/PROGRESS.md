@@ -34,3 +34,7 @@ Cabinet: #372/#378 (canvas and edit), #403 (table face, hover text) merged. #461
 ## 2026-10-22 Rail band spacing
 - Rails are 35 mm bands (`RAIL_BAND_MM`) centred on the rail line, which runs along the top of the row's devices. The planner now keeps the space between rows at least duct + 10 (devices) + 5 (band) + 17.5 (band), and ducts sit clear of the band; `duct_overlaps` tests the band, not the line.
 - Rail and device positions are unchanged, so drill templates, cut lists and 3D rails are as before; ducts and row gaps moved (min 57.5 mm with a 25 mm duct, 127.5+ when separated). Open: the first row's band reaches 17.5 mm above the usable area.
+
+## 2026-10-22 Rails run through the device centre
+- A rail line is now the middle of the devices on it (horizontal rail: vertical middle of each device; vertical: horizontal middle), not their top edge. The planners put each device at `rail.y - height/2`; the 3D drag snaps a device's centre to a rail line (ducts keep the old rule). Rows at least 35 mm high hide the rail band behind their devices, so the row gap is the plain 40 mm again; a lower row has its band showing, which the planner keeps clear (first row included).
+- Drill templates, cut lists and 3D use the rail line unchanged (rail positions move with the rows). Lesson projects regenerated with `panel_lessons`. Older saved plans keep the rail at the device top edge until Place all is run again.

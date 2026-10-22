@@ -267,7 +267,10 @@ pub fn fits(plate: &Plate, placements: &[Placement]) -> (f64, f64) {
 }
 
 /// A horizontal DIN rail or duct on the plate; devices on it are lined up
-/// along `length`, starting at `x`.
+/// along `length`, starting at `x`. `(x, y)` is the start of the rail's centre
+/// line, and the devices on it are centred on that line (a horizontal rail
+/// passes through the vertical middle of each device, a vertical one through
+/// its horizontal middle), as a DIN rail does behind the devices it carries.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Rail {
     pub id: u64,
