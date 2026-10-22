@@ -41,6 +41,9 @@ pub(crate) struct Controls {
     pub(super) missing_data: bool,
     /// The Heat panel in the right-hand slot, under the view cube.
     pub(super) heat_panel: bool,
+    /// The EMC view: class colours, keep-clear zones and hot spots, with its
+    /// panel and legend (View > EMC).
+    pub(super) emc: bool,
     /// The door, walls, roof, floor and extra plates as faint panes (View
     /// > Cabinet > Cabinet surfaces picks one to highlight).
     pub(super) surfaces: bool,
@@ -69,6 +72,7 @@ impl Default for Controls {
             restore: false,
             missing_data: false,
             heat_panel: false,
+            emc: false,
             surfaces: false,
             pins: false,
             duct_fill: false,
@@ -295,6 +299,13 @@ pub(super) fn toolbar(
                 &mut controls.heat_panel,
                 "Heat",
                 "The Heat panel: simulate how heat and air move in this cabinet",
+            );
+            toggle(
+                ui,
+                &mut controls.emc,
+                "EMC",
+                "Electromagnetic compatibility: cable classes, keep-clear zones round noisy runs and \
+                 numbered hot spots, as an indicative model (View > EMC)",
             );
             changed.views = super::view3d_views::menu(ui, views);
             command = selection_menu(ui, selected, controls.hidden.len());

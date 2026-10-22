@@ -17,6 +17,7 @@ pub mod device_shape;
 pub mod dimension;
 pub mod door;
 pub mod drag_plane;
+pub mod emc;
 pub mod feel;
 pub mod governor;
 pub mod hide;

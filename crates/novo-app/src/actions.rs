@@ -11,6 +11,7 @@ pub enum Action {
     OpenReadOnly,
     RecoverProject,
     OpenExample,
+    OpenEmcExample,
     TryFastKeys,
     ShowWalkthrough,
     Learn,
@@ -42,6 +43,7 @@ impl Action {
         Action::OpenReadOnly,
         Action::RecoverProject,
         Action::OpenExample,
+        Action::OpenEmcExample,
         Action::TryFastKeys,
         Action::ShowWalkthrough,
         Action::Learn,
@@ -75,6 +77,7 @@ impl Action {
             Action::OpenReadOnly => "file.open_read_only",
             Action::RecoverProject => "file.recover",
             Action::OpenExample => "file.example",
+            Action::OpenEmcExample => "file.example_emc",
             Action::TryFastKeys => "file.practice",
             Action::ShowWalkthrough => "help.walkthrough",
             Action::Learn => "help.learn",
@@ -111,6 +114,7 @@ impl Action {
             Action::OpenReadOnly => "Open read-only…",
             Action::RecoverProject => "Recover a damaged project…",
             Action::OpenExample => "Open example",
+            Action::OpenEmcExample => "Open EMC example",
             Action::TryFastKeys => "Try the fast keys",
             Action::ShowWalkthrough => "Fast keys card on this project",
             Action::Learn => "Learn…",
@@ -145,6 +149,7 @@ impl Action {
             | Action::OpenReadOnly
             | Action::RecoverProject
             | Action::OpenExample
+            | Action::OpenEmcExample
             | Action::TryFastKeys
             | Action::SaveProject
             | Action::SaveProjectAs
@@ -192,6 +197,7 @@ impl Action {
             | Action::OpenReadOnly
             | Action::RecoverProject
             | Action::OpenExample
+            | Action::OpenEmcExample
             | Action::TryFastKeys
             | Action::ShowWalkthrough
             | Action::Learn
