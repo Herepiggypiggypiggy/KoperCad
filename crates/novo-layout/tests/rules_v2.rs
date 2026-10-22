@@ -6,7 +6,6 @@ use novo_layout::plan::{Plan, PlannedDuct};
 use novo_layout::rules::{
     Class, GapSource, Gaps, RuleSet, Spec, UnplacedWhy, Zone, place_all_explained, place_all_rules,
 };
-use novo_layout::rules::{DUCT_CLEAR_MM, RAIL_DUCT_CLEAR_MM};
 use novo_layout::stock::{Stock, optimise, rail_pieces};
 use novo_layout::{
     Duct, Placement, Plate, RAIL_BAND_MM, Rail, Size, collisions, duct_overlaps, outside,
