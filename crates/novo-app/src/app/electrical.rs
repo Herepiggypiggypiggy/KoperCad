@@ -80,9 +80,15 @@ pub(super) const SUPPLY: [Field; 8] = [
     ),
 ];
 
-pub(super) const LIMITS: [Field; 2] = [
+pub(super) const LIMITS: [Field; 3] = [
     field(calc::VOLTAGE_DROP_PCT, "Voltage-drop limit", "%", "5"),
     field(keys::PANEL_SCCR_KA, "Panel SCCR (marked)", "kA", "10"),
+    field(
+        super::heat_wires::WIRE_CURRENT_FACTOR,
+        "Wire heat: share of load current (0 to 1)",
+        "",
+        "1",
+    ),
 ];
 
 pub(super) const MACHINE: [Field; 4] = [

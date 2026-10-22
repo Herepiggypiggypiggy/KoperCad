@@ -56,6 +56,7 @@ fn cabinet() -> Scenario {
                 h: 1000.0,
             },
             blockage: None,
+            loss_w: 0.0,
         }],
         vents: vec![],
         fans: vec![],

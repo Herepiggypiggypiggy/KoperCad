@@ -43,6 +43,7 @@ fn main() {
             kind: ObstacleKind::Duct,
             rect: r(100.0, 200.0, 40.0, 800.0),
             blockage: None,
+            loss_w: 0.0,
         }],
         vents: vec![],
         fans: vec![],

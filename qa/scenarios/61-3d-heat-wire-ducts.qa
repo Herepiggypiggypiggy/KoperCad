@@ -1,0 +1,105 @@
+@title 3D view: heat run with the wire heat of the ducts
+@area 3D
+@slow
+# Finished Quick run of the cabinet whose power wires are sized: the Heat panel lists the wire heat in the ducts and what it rests on. Needs a release build to finish in minutes.
+open qa/fixtures/cabinet-wire-heat.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+expect "Fine. Hottest"
+click_text "Wire heat in the ducts"
+wait 10
+expect "Wires in ducts add"
+expect_not "Preliminary"
+move 700 650
+wait 10
+shot heat-wires-3d
+check_blank heat-wires-3d
+check_layout

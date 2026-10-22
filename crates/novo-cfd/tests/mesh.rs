@@ -41,12 +41,14 @@ fn scenario() -> Scenario {
                 kind: ObstacleKind::Duct,
                 rect: rect(100.0, 200.0, 30.0, 700.0),
                 blockage: None,
+                loss_w: 0.0,
             },
             // Overlaps device 7 on purpose.
             Obstacle {
                 kind: ObstacleKind::Rail,
                 rect: rect(180.0, 380.0, 200.0, 35.0),
                 blockage: None,
+                loss_w: 0.0,
             },
         ],
         vents: vec![],

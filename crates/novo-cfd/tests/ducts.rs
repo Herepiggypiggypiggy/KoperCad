@@ -101,6 +101,7 @@ fn scenario_with_duct(rect: novo_layout::Rect) -> novo_thermal::Scenario {
             kind: ObstacleKind::Duct,
             rect,
             blockage: None,
+            loss_w: 0.0,
         }],
         vents: vec![],
         fans: vec![],

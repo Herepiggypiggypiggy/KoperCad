@@ -28,6 +28,8 @@ pub(super) struct Solution {
     pub plate: [f64; 4],
     /// What the bridge found missing ("3 devices have no loss data").
     pub messages: Vec<String>,
+    /// What the wire heat in the ducts rests on.
+    pub wire_notes: Vec<String>,
 }
 
 pub(super) enum Event {

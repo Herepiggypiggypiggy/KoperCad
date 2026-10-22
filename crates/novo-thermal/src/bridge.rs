@@ -60,6 +60,10 @@ pub struct BridgeOptions {
     pub installation: Installation,
     pub wall_mm: f64,
     pub params: Params,
+    /// Heat of the wires lying in each duct, W, by duct (rail) id, from
+    /// [`crate::wires`]. The caller finds the wires and their currents; the
+    /// bridge only places the heat on the duct obstacle. Empty = none.
+    pub duct_loss_w: std::collections::BTreeMap<u64, f64>,
 }
 
 impl Default for BridgeOptions {
@@ -70,6 +74,7 @@ impl Default for BridgeOptions {
             installation: Installation::Wall,
             wall_mm: DEFAULT_WALL_MM,
             params: Params::default(),
+            duct_loss_w: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -110,6 +115,9 @@ pub struct BridgeReport {
     pub total_loss_w: f64,
     /// Ducts with no height in the model (the solver takes the width).
     pub unsized_ducts: usize,
+    /// Heat of the wires in this enclosure's ducts that went into the
+    /// scenario, W (not part of `total_loss_w`).
+    pub duct_loss_w: f64,
 }
 
 impl BridgeReport {
@@ -353,10 +361,18 @@ pub fn scenario_from_project(
         if height.is_none() {
             report.unsized_ducts += 1;
         }
+        let wire_loss = options.duct_loss_w.get(&duct.id).copied().unwrap_or(0.0);
+        let wire_loss = if wire_loss.is_finite() && wire_loss > 0.0 {
+            wire_loss
+        } else {
+            0.0
+        };
+        report.duct_loss_w += wire_loss;
         obstacles.push(Obstacle {
             kind: ObstacleKind::Duct,
             rect: shift(duct.footprint()),
             blockage: Some((height.unwrap_or(duct.width) / air_depth).clamp(0.01, 1.0)),
+            loss_w: wire_loss,
         });
     }
     for rail in &layout.rails {
@@ -374,6 +390,7 @@ pub fn scenario_from_project(
             kind: ObstacleKind::Rail,
             rect: shift(Rect { x, y, w, h }),
             blockage: None,
+            loss_w: 0.0,
         });
     }
 

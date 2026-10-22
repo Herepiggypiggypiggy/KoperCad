@@ -38,7 +38,7 @@ This is the first beta for test users. Start with [`docs/TESTER-README.md`](docs
   parts and drill rows.
 - Wire routing through the ducts gives wire lengths.
 - 3D view of the cabinet with orbit, measure, align, section plane and walls, roof, floor and extra plates.
-- Heat and airflow model with hot spots, compare and move-and-solve. See "Numbers" below. Wire ducts now stand as high as their cross-section and are air in the heat slice, so heat results for projects with ducts differ from earlier builds.
+- Heat and airflow model with hot spots, compare and move-and-solve. See "Numbers" below. Wire ducts now stand as high as their cross-section and are air in the heat slice, so heat results for projects with ducts differ from earlier builds. The heat of the power wires lying in the ducts (I²R from the load current, cross-section and routed length) now heats the duct cells in the 2D and 3D heat runs; the Temperature panel says what it rests on. It is a planning upper value (copper at the insulation's highest temperature, no diversity unless Check > Electrical inputs states one).
 
 **Simulation and commissioning**
 - Live view (`Shift+L`): hold a pushbutton, latch a contactor, watch coils, contacts, timers, lamps and motors.
