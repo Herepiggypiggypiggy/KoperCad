@@ -374,6 +374,18 @@ fn cut_out_and_drill_template_searches_find_the_workshop_pack() {
 }
 
 #[test]
+fn duct_heat_and_wire_heat_find_the_heat_run() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    // The heat of the wires in the cable ducts comes with the heat run.
+    for query in ["duct heat", "wire heat"] {
+        let rows = search(&palette, &keymap, query);
+        let at = position(&rows, "heat.simulate")
+            .unwrap_or_else(|| panic!("{query:?} does not find the heat run"));
+        assert!(at < 3, "{query:?} ranks it {at}th");
+    }
+}
+
+#[test]
 fn handover_ranks_the_handover_package_first() {
     let (palette, keymap) = (Palette::default(), Keymap::workflow());
     let rows = search(&palette, &keymap, "handover");
