@@ -1209,6 +1209,18 @@ impl NovoApp {
         self.wb.field.close();
         self.wb.commissioning = None;
         self.wb.sheet = 0;
+        // Build mode takes the whole canvas and the output windows show the old
+        // project's numbers: none may sit over the new project (or a lesson card).
+        self.wb.build = None;
+        self.wb.bench = None;
+        self.wb.autopilot = None;
+        self.wb.handover_ask = None;
+        self.wb.print_preview = None;
+        self.wb.calculations = None;
+        self.wb.electrical = None;
+        self.wb.safety = None;
+        self.protection.open = false;
+        self.standards_open = false;
         self.cabinet.result = None;
         self.add_generated_pages();
         // Nothing to commission in a closed project.
