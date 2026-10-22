@@ -353,6 +353,61 @@ pub fn rail_overflows(rails: &[Rail], placements: &[Placement]) -> Vec<(u64, f64
         .collect()
 }
 
+/// Where a rail's line moves to so that it runs through the middle of its
+/// devices.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RailShift {
+    pub rail: u64,
+    /// The rail's new start, in mm. Only the coordinate across the run changes.
+    pub x: f64,
+    pub y: f64,
+    /// How far the line moves (positive: down or to the right).
+    pub by: f64,
+}
+
+/// Moves each DIN rail's line onto the middle of the devices mounted on it,
+/// leaving the devices where they are. A rail with devices of different
+/// heights follows the tallest one (the one that fills the 35 mm of the
+/// rail); the shorter ones stay as placed. Rails without devices, and rails
+/// already within 0.05 mm, are left alone.
+pub fn centre_rails(rails: &[Rail], placements: &[Placement]) -> Vec<RailShift> {
+    rails
+        .iter()
+        .filter_map(|rail| {
+            let (mid, _) = placements
+                .iter()
+                .filter(|p| p.rail == Some(rail.id))
+                .map(|p| {
+                    let f = p.footprint();
+                    if rail.vertical {
+                        (f.x + f.w / 2.0, f.w)
+                    } else {
+                        (f.y + f.h / 2.0, f.h)
+                    }
+                })
+                .fold(None::<(f64, f64)>, |best, c| match best {
+                    Some(b) if b.1 >= c.1 => Some(b),
+                    _ => Some(c),
+                })?;
+            let line = if rail.vertical { rail.x } else { rail.y };
+            let by = mid - line;
+            (by.abs() > 0.05).then(|| {
+                let (x, y) = if rail.vertical {
+                    (mid, rail.y)
+                } else {
+                    (rail.x, mid)
+                };
+                RailShift {
+                    rail: rail.id,
+                    x,
+                    y,
+                    by,
+                }
+            })
+        })
+        .collect()
+}
+
 /// What a duct lies over.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DuctHit {
@@ -442,6 +497,52 @@ mod tests {
             margins: Margins::default(),
             rail: None,
         }
+    }
+
+    #[test]
+    fn a_rail_moves_to_the_middle_of_its_devices_which_stay_put() {
+        let rails = [
+            Rail {
+                id: 1,
+                x: 10.0,
+                y: 100.0,
+                length: 300.0,
+                vertical: false,
+            },
+            Rail {
+                id: 2,
+                x: 50.0,
+                y: 20.0,
+                length: 200.0,
+                vertical: true,
+            },
+            Rail {
+                id: 3,
+                x: 0.0,
+                y: 400.0,
+                length: 100.0,
+                vertical: false,
+            },
+        ];
+        let mut a = p(1, 20.0, 100.0, 40.0, 90.0);
+        a.rail = Some(1);
+        let mut small = p(2, 80.0, 110.0, 20.0, 20.0);
+        small.rail = Some(1);
+        let mut v = p(3, 60.0, 30.0, 40.0, 50.0);
+        v.rail = Some(2);
+        let shifts = centre_rails(&rails, &[a.clone(), small, v]);
+        // Rail 1 follows the tallest device (middle 145); rail 2 runs down
+        // through the middle of its device (x 80); rail 3 has no devices.
+        assert_eq!(shifts.len(), 2);
+        assert_eq!((shifts[0].rail, shifts[0].x, shifts[0].y), (1, 10.0, 145.0));
+        assert_eq!(shifts[0].by, 45.0);
+        assert_eq!((shifts[1].rail, shifts[1].x, shifts[1].y), (2, 80.0, 20.0));
+        // Centred already: nothing to do.
+        let done = [Rail {
+            y: 145.0,
+            ..rails[0]
+        }];
+        assert!(centre_rails(&done, &[a]).is_empty());
     }
 
     #[test]

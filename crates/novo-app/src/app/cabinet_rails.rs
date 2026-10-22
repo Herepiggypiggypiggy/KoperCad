@@ -35,6 +35,8 @@ pub(super) enum RailAsk {
     /// Dragged on the plate: the rail's new start.
     MoveTo(u64, f64, f64),
     Delete(u64),
+    /// Put every DIN rail's line on the middle of its devices, which stay put.
+    CentreRails,
     /// The lesson chip: start or continue this lesson.
     Lesson(String),
 }
@@ -329,6 +331,16 @@ pub(super) fn show_window(
                     });
                 }
                 if ui
+                    .button("Centre rails on devices")
+                    .on_hover_text(
+                        "Moves each DIN rail onto the middle of its devices; \
+                         the devices stay where they are. One undo step.",
+                    )
+                    .clicked()
+                {
+                    ask = Some(RailAsk::CentreRails);
+                }
+                if ui
                     .button("Add vertical duct")
                     .on_hover_text("A trunk that joins the ducts between the rows")
                     .clicked()
@@ -607,6 +619,7 @@ impl super::NovoApp {
                         .map(|_| ())
                 });
             }
+            RailAsk::CentreRails => self.centre_cabinet_rails(structure),
             // Handled before the match.
             RailAsk::Lesson(_) => {}
             RailAsk::Delete(id) => {
@@ -619,6 +632,44 @@ impl super::NovoApp {
                     self.cabinet.rails.selected = None;
                 }
             }
+        }
+    }
+
+    /// "Centre rails on devices": every DIN rail's line goes to the middle of
+    /// its devices as one undo step. Only the rails move; the devices stay.
+    fn centre_cabinet_rails(&mut self, structure: StructureId) {
+        let Some(layout) = self
+            .backend
+            .document()
+            .and_then(|d| novo_layout::model::load(d.project(), structure))
+        else {
+            return;
+        };
+        let shifts = novo_layout::centre_rails(&layout.rails, &layout.placements);
+        if shifts.is_empty() {
+            self.message(
+                super::Level::Info,
+                "Every rail already runs through the middle of its devices".to_string(),
+            );
+            return;
+        }
+        let count = shifts.len();
+        let moved = self.cabinet_edit("Centre rails on devices", move |tx| {
+            for s in &shifts {
+                // Not `MoveRail`: it carries the devices along.
+                tx.update::<Rail>(RailId::from(s.rail), |r| {
+                    r.x = s.x;
+                    r.y = s.y;
+                })?;
+            }
+            Ok(())
+        });
+        if moved {
+            let plural = if count == 1 { "rail" } else { "rails" };
+            self.message(
+                super::Level::Info,
+                format!("Centred {count} {plural} on their devices; the devices did not move"),
+            );
         }
     }
 }

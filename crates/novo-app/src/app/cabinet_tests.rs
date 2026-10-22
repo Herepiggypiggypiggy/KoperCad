@@ -1776,3 +1776,74 @@ fn a_drop_on_a_rail_line_stays_mounted_and_one_off_it_leaves_the_rail() {
     );
     assert_eq!(on(&d).0.rail, None);
 }
+
+#[test]
+fn centre_rails_moves_only_the_rails_and_is_one_undo_step() {
+    use super::cabinet_rails::RailAsk;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    let layout = novo_layout::model::load(project(&d), cab);
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app.cabinet_ask(Ask::PlaceAll, Some(cab), layout, &cands);
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    d.frame();
+
+    // An old plan: the rails sit 12 mm below the middle of their devices.
+    // (Ducts are rails in the model too; only DIN rails with devices follow.)
+    let l = layout_of(&d, cab).unwrap();
+    let rails: Vec<_> = l
+        .rails
+        .iter()
+        .filter(|r| l.placements.iter().any(|p| p.rail == Some(r.id)))
+        .map(|r| (novo_core::RailId::from(r.id), r.y))
+        .collect();
+    assert!(!rails.is_empty());
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Old plan", |tx| {
+            for (id, y) in &rails {
+                tx.update::<Rail>(*id, |r| r.y = y + 12.0)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let devices = |d: &Drive| -> Vec<(u64, f64, f64)> {
+        let mut v: Vec<_> = project(d)
+            .all::<CabinetPlacement>()
+            .map(|p| (p.id.raw(), p.x, p.y))
+            .collect();
+        v.sort_by_key(|a| a.0);
+        v
+    };
+    let before = devices(&d);
+    let off = |d: &Drive| {
+        let l = layout_of(d, cab).unwrap();
+        novo_layout::centre_rails(&l.rails, &l.placements).len()
+    };
+    assert_eq!(off(&d), rails.len());
+
+    d.app.cabinet_rail_ask(Some(cab), RailAsk::CentreRails);
+    d.frame();
+    assert_eq!(off(&d), 0);
+    for (id, y) in &rails {
+        assert!((project(&d).get::<Rail>(*id).unwrap().y - y).abs() < 1e-6);
+    }
+    assert_eq!(devices(&d), before, "devices must not move");
+
+    // One undo step brings the 12 mm back.
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(off(&d), rails.len());
+    assert_eq!(devices(&d), before);
+}

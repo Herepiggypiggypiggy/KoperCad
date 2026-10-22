@@ -1,0 +1,30 @@
+@title Cabinet: Centre rails on devices puts each rail through the middle of its devices without moving them
+@area Cabinet
+@sizes 1366x768 1920x1080
+# An older plan (qa/fixtures/door-cutouts.novo) has rails off the middle of their devices. The Rails and
+# ducts window (palette: rails) has a Centre rails on devices button: the rails move, the devices do not,
+# and Ctrl+Z puts the rails back in one step. Pictures: before, the window, after.
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text Cabinet #1
+wait 30
+shot before
+key ctrl+k
+wait 3
+text rails and ducts
+wait 4
+key Enter
+wait 10
+expect "Centre rails on devices"
+shot window
+click_text "Centre rails on devices"
+wait 10
+expect "on their devices"
+shot after
+check_layout
+key ctrl+z
+wait 10
+shot undone
+click_text "Centre rails on devices"
+wait 10
+expect "on their devices"
