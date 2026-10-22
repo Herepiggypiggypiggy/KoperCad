@@ -1,0 +1,28 @@
+@title Variant PDF and bulk edit workbook written and kept for inspection
+@area Reports
+# Machine options fixture with the Cooling fan option on: the variant PDF holds the fan page, the bulk edit workbook lists the project's devices; keep_file copies both.
+open qa/fixtures/machine-options.novo
+wait 20
+key ctrl+k
+wait 3
+text option fan on
+wait 4
+key Enter
+wait 10
+key ctrl+k
+wait 4
+text Export PDF of a variant
+wait 4
+key Enter
+wait 20
+expect_file "/tmp/kopercad-qa-open-*/machine-options current.pdf" 3000
+keep_file "/tmp/kopercad-qa-open-*/machine-options current.pdf"
+shot variant-pdf
+key ctrl+k
+wait 4
+text Export for bulk edit
+wait 4
+key Enter
+wait 20
+shot bulk-edit
+keep_file "/tmp/kopercad-qa-open-*/*.xlsx"

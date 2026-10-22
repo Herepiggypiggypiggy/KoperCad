@@ -88,6 +88,28 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 A step that cannot run (widget not found, app gone) ends the scenario: that is a
 finding with the steps so far and a picture; a dead app is S1.
 
+## Exports to read
+
+These scenarios keep the real exported files in `files/` beside the report, so an auditor can open the
+PDF, workbook or XML and check its content, not only that it exists. Run one with
+`scripts/qa.sh --only <name> --out <folder>`.
+
+| Scenario | Files kept |
+|---|---|
+| `38-bench-packet`, `39-scale-frames`, `40-workshop-pack-files`, `41-workshop-cutout-cards`, `42-plate-drawing-files` | bench packet, print scale check, workshop pack, door cut-out cards, plate drawing PDF and DXF |
+| `43-standards-report-files` | standards report PDF and Excel |
+| `44-plc-files` | PLC I/O list, address plan, PLCopen XML, TIA Excel, Studio 5000 CSV (the demo I/O list is imported first, so the files carry tags) |
+| `45-punch-list-step-files` | punch list PDF, STEP cabinet model |
+| `46-export-files-example` | page PDF, report PDF, page DXF, wire production workbook, AutomationML |
+| `47-export-files-cabinet-spec-change` | wiring plan DXF, change report PDF |
+| `48-spec-sheet-file` | spec sheet workbook |
+| `49-handover-safety-files` | handover folder (contents, drawing set, revisions, parts, wires, terminals, cables, safety, Excel lists) and the safety function sheets |
+| `50-variant-bulk-edit-files` | variant PDF, bulk edit workbook |
+| `51-pdf-options-eplan-files` | PDF with options (in colour), EPLAN project file |
+
+Not covered by a file check yet: the wire production page (it adds a page to the project, no file), the
+plate DXF of a cabinet other than the lesson fixture.
+
 ## The merge gate
 
 `scripts/qa.sh run` also writes `summary.md` beside `report.md`: one row per scenario, one column per
