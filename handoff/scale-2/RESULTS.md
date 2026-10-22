@@ -29,7 +29,7 @@ Machine: cloud container, 4 vCPU Xeon 2.1 GHz (shared), 15 GB RAM, no GPU. Relea
 
 ## Budgets (release, 600 pages)
 
-Window: open 1.5 s, first frame 1 s, any steady frame 100 ms, page change 100 ms, Ctrl+K jump 500 ms, enter Cabinet/3D 500 ms, enter Reports 1.5 s, enter Commissioning 600 ms, Autopilot open 1.5 s, bench packet 5 s, standards report 5 s.
+Window: open 1.5 s, first frame 1 s, any steady frame 100 ms, page change 100 ms, Ctrl+K jump 500 ms, enter Cabinet/3D 500 ms, enter Reports 1.5 s, enter Commissioning 600 ms, Autopilot open 1.5 s, bench packet 3 s, standards report 3 s.
 Engine: see `BUDGETS` in `crates/novo-tests/examples/scale_bench.rs`.
 
 ## Still slow, not fixed (ranked)
