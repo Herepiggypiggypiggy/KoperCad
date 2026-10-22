@@ -1473,3 +1473,132 @@ fn starter_catalog_ac3_text_and_data_agree() {
     }
     assert!(checked >= 5, "the starter catalog has AC-3 contactors");
 }
+
+fn location_of(doc: &Document, tag_text: &str) -> Option<String> {
+    doc.project()
+        .devices()
+        .find(|d| d.tag.to_string() == tag_text)
+        .map(|d| {
+            d.tag
+                .levels(novo_core::Aspect::Location)
+                .iter()
+                .map(|l| format!("+{l}"))
+                .collect()
+        })
+}
+
+#[test]
+fn set_location_moves_every_selected_device_in_one_undo_step() {
+    let mut doc = Document::default();
+    let (ids, _) = doc
+        .transact("Draw", |tx| {
+            let mut ids = Vec::new();
+            for t in ["+CAB-M1", "+CAB-B1", "+CAB-S1", "+CAB-K1"] {
+                ids.push(tx.add_device(tag(t), "")?);
+            }
+            Ok(ids)
+        })
+        .unwrap();
+    let selection: Vec<AnyId> = ids[..3].iter().map(|&d| d.into()).collect();
+    let sheet = PropertySheet::build(doc.project(), &selection);
+    let row = sheet.row(&RowKey::Field("location".into())).expect("row");
+    assert!(row.editable);
+    assert_eq!(row.value, RowValue::Same("+CAB".into()));
+    let depth = doc.undo_depth();
+    let command = sheet
+        .edit(doc.project(), &RowKey::Field("location".into()), "FIELD")
+        .unwrap();
+    run(&mut doc, command);
+    assert_eq!(doc.undo_depth(), depth + 1);
+    assert_eq!(location_of(&doc, "+FIELD-M1").as_deref(), Some("+FIELD"));
+    assert_eq!(location_of(&doc, "+FIELD-B1").as_deref(), Some("+FIELD"));
+    assert_eq!(location_of(&doc, "+CAB-K1").as_deref(), Some("+CAB"));
+    doc.undo().unwrap();
+    assert_eq!(location_of(&doc, "+CAB-M1").as_deref(), Some("+CAB"));
+}
+
+#[test]
+fn set_location_keeps_function_and_clears_with_empty_input() {
+    let mut doc = Document::default();
+    let (ids, _) = doc
+        .transact("Draw", |tx| {
+            Ok(vec![
+                tx.add_device(tag("=A1+CAB-K1"), "")?,
+                tx.add_device(tag("=A1+CAB-K2"), "")?,
+            ])
+        })
+        .unwrap();
+    let selection: Vec<AnyId> = ids.iter().map(|&d| d.into()).collect();
+    let sheet = PropertySheet::build(doc.project(), &selection);
+    let key = RowKey::Field("location".into());
+    let command = sheet.edit(doc.project(), &key, "+PANEL").unwrap();
+    run(&mut doc, command);
+    assert!(
+        doc.project()
+            .devices()
+            .any(|d| d.tag.to_string() == "=A1+PANEL-K1")
+    );
+    let sheet = PropertySheet::build(doc.project(), &selection);
+    let command = sheet.edit(doc.project(), &key, "").unwrap();
+    run(&mut doc, command);
+    assert!(
+        doc.project()
+            .devices()
+            .any(|d| d.tag.to_string() == "=A1-K2")
+    );
+}
+
+#[test]
+fn set_location_refuses_a_clash_and_changes_nothing() {
+    let mut doc = Document::default();
+    let (ids, _) = doc
+        .transact("Draw", |tx| {
+            Ok(vec![
+                tx.add_device(tag("+CAB-K1"), "")?,
+                tx.add_device(tag("+FLD-K1"), "")?,
+                tx.add_device(tag("+OTHER-K1"), "")?,
+            ])
+        })
+        .unwrap();
+    let key = RowKey::Field("location".into());
+    // Two selected devices would both become +X-K1.
+    let both: Vec<AnyId> = ids[..2].iter().map(|&d| d.into()).collect();
+    let sheet = PropertySheet::build(doc.project(), &both);
+    assert!(matches!(
+        sheet.edit(doc.project(), &key, "X"),
+        Err(EditError::TagInUse { .. })
+    ));
+    // An unselected device already has the tag.
+    let one: Vec<AnyId> = vec![ids[0].into()];
+    let sheet = PropertySheet::build(doc.project(), &one);
+    assert!(matches!(
+        sheet.edit(doc.project(), &key, "OTHER"),
+        Err(EditError::TagInUse { .. })
+    ));
+    assert_eq!(location_of(&doc, "+CAB-K1").as_deref(), Some("+CAB"));
+    // Moving onto itself is no change.
+    assert!(sheet.edit(doc.project(), &key, "CAB").unwrap().is_none());
+}
+
+#[test]
+fn set_location_ignores_wires_caught_in_a_box_selection() {
+    let mut doc = Document::default();
+    let (device, _) = doc
+        .transact("Draw", |tx| tx.add_device(tag("+CAB-M1"), ""))
+        .unwrap();
+    let junction = doc
+        .transact("Junction", |tx| {
+            let page = tx.add_page("1")?;
+            tx.add_junction(page, novo_core::Point::new(1.0, 1.0))
+        })
+        .map(|(j, _)| j);
+    let mut selection: Vec<AnyId> = vec![device.into()];
+    if let Ok(j) = junction {
+        selection.push(j.into());
+    }
+    let sheet = PropertySheet::build(doc.project(), &selection);
+    let key = RowKey::Field("location".into());
+    let command = sheet.edit(doc.project(), &key, "FIELD").unwrap();
+    run(&mut doc, command);
+    assert_eq!(location_of(&doc, "+FIELD-M1").as_deref(), Some("+FIELD"));
+}

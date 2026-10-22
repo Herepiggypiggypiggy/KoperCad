@@ -12,7 +12,9 @@
         "from_terminal_names": true
       }
     },
-    "properties": {}
+    "properties": {
+      "terminals.strip_grouping": "single"
+    }
   },
   "next_id": 88,
   "parts": [

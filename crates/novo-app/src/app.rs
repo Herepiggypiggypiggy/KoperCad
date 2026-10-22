@@ -189,6 +189,8 @@ mod standards_report;
 #[cfg(test)]
 mod standards_report_tests;
 mod status_bar;
+#[cfg(test)]
+mod strip_grouping_tests;
 mod symbol_folder;
 mod symbol_preview;
 mod terminal_edit;

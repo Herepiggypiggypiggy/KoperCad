@@ -50,6 +50,7 @@
 mod check;
 mod earth;
 mod geometry;
+mod grouping;
 mod move_strip;
 mod naming;
 mod occurrence;
@@ -66,6 +67,7 @@ pub use earth::{
     earthed_terminals, has_pe_override, is_earth_symbol, mark_earthed, reset_pe_override, toggle_pe,
 };
 pub use geometry::{redraw, symbol_length, symbol_pins};
+pub use grouping::{GROUPING_KEY, Grouping, StripClass, grouping, set_grouping};
 pub use move_strip::{MoveTo, move_to_strip};
 pub use naming::{
     base_name_for_potential, compare_names, kind_for_name, kind_for_potential, kind_key,
@@ -92,5 +94,5 @@ pub use style::{
 };
 pub use suggest::{
     DISMISS_KEY, Suggestion, accept_suggestions, dismiss_suggestion, migrate_legacy_dismissals,
-    restore_suggestion, suggest_terminals, summarize_suggestions,
+    restore_suggestion, suggest_terminals, suggest_terminals_with, summarize_suggestions,
 };
