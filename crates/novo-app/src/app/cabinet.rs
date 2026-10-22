@@ -356,7 +356,7 @@ pub(super) fn problem_lines(
     for &(device, _, off) in &report.off_centre {
         if device == id {
             lines.push(format!(
-                "Sits {:.0} mm off the middle of its rail: run Place all (it moves every device) or drag it onto the rail",
+                "Sits {:.0} mm off the middle of its rail: drag it onto the rail",
                 off.abs()
             ));
         }

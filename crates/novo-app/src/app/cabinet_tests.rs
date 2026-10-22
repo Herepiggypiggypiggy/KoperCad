@@ -257,9 +257,7 @@ fn a_device_off_the_middle_of_its_rail_says_so_and_counts_as_a_problem() {
     let lines = super::cabinet::problem_lines(&l, 2, &name);
     assert_eq!(
         lines,
-        vec![
-            "Sits 45 mm off the middle of its rail: run Place all (it moves every device) or drag it onto the rail"
-        ]
+        vec!["Sits 45 mm off the middle of its rail: drag it onto the rail"]
     );
     assert!(!l.report().is_clean());
     let hover = super::cabinet::problem_summary(&l, &name);
