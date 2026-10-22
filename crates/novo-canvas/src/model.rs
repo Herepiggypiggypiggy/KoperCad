@@ -663,6 +663,9 @@ pub struct PageScene {
     /// The first terminal symbol of each run of one strip on this page,
     /// with the strip's tag it shows (see [`strip_heads`]).
     strip_heads: HashMap<SymbolId, String>,
+    /// Terminals of a crowded row that put their name on a second level
+    /// (see [`terminal_levels`]): the shift along the symbol's own y axis.
+    name_levels: HashMap<SymbolId, f32>,
     /// The wire part under the pointer or selected, drawn emphasised.
     focus: Option<WirePart>,
     /// Wires drawn in another colour and width than the style's; see
@@ -794,6 +797,7 @@ impl PageScene {
             sheet: None,
             revisions: None,
             strip_heads: HashMap::new(),
+            name_levels: HashMap::new(),
             focus: None,
             wire_looks: HashMap::new(),
             wire_cables: HashMap::new(),
@@ -1111,6 +1115,7 @@ impl PageScene {
         self.frame(project);
         self.draw_underlay();
         self.strip_heads = strip_heads(project, self.page);
+        self.name_levels = terminal_levels(project, self.page);
         let contents = project.page_contents(self.page);
         for id in contents.symbols {
             self.sync_symbol(project, id, art);
@@ -1248,6 +1253,15 @@ impl PageScene {
                 }
             }
             self.strip_heads = heads;
+            // A terminal that moved or was added changes the pitch of its
+            // row: every terminal whose level changed is drawn again.
+            let levels = terminal_levels(project, self.page);
+            for (s, level) in self.name_levels.iter().chain(&levels) {
+                if self.name_levels.get(s) != Some(level) || levels.get(s) != Some(level) {
+                    dirty.insert(AnyId::Symbol(*s));
+                }
+            }
+            self.name_levels = levels;
         }
         // A junction's glyph follows the wires leaving it, before and after
         // the edit (a removed wire is gone from the project).
@@ -1606,9 +1620,10 @@ impl PageScene {
                     .filter_map(|i| sym.pin_position(i))
                     .map(vec),
             );
+            let level = self.name_levels.get(&id).copied().unwrap_or(0.0);
             let (pos, anchor) = match art.tag_anchor(sym) {
                 Some((p, a)) => (
-                    place.affine().transform_point2(p),
+                    place.affine().transform_point2(p + Vec2::new(0.0, level)),
                     tag_anchor_after(a, &place),
                 ),
                 None if b.is_empty() => (origin + Vec2::new(5.0, 0.0), Anchor::CenterLeft),
@@ -2143,6 +2158,65 @@ impl PageScene {
         }
         self.put(id.into(), item);
     }
+}
+
+/// Two names of one row of terminals, in mm, need this much room between
+/// them besides their own width: the terminal's body and some air.
+const NAME_ROOM: f64 = 4.6;
+
+/// Shift of a terminal's name along its symbol's y axis, mm, for rows so
+/// tight that the names would run into the next terminal: the terminals of
+/// the row put their names on two levels, alternately, so each name has
+/// twice the width. Only terminals whose wires run up and down (a row side
+/// by side on the page); a column of terminals has room already.
+fn terminal_levels(project: &Project, page: PageId) -> HashMap<SymbolId, f32> {
+    use novo_core::Rotation;
+    // Level shift: the name's anchor sits at the body's middle, 4 mm down.
+    const LEVEL: f32 = 2.8;
+    let mut rows: HashMap<i64, Vec<(f64, SymbolId, f64)>> = HashMap::new();
+    for id in project.page_contents(page).symbols {
+        let Some(sym) = project.symbol(id) else {
+            continue;
+        };
+        if !matches!(sym.role, SymbolRole::Terminal { .. })
+            || !matches!(sym.placement.rotation, Rotation::R0 | Rotation::R180)
+        {
+            continue;
+        }
+        let Some(text) = symbol_text(project, sym) else {
+            continue;
+        };
+        let width = text.chars().count() as f64 * 3.0 * f64::from(crate::text::ADVANCE);
+        let row = (sym.placement.origin.y / 2.5).round() as i64;
+        rows.entry(row)
+            .or_default()
+            .push((sym.placement.origin.x, id, width));
+    }
+    let mut levels = HashMap::new();
+    for (_, mut row) in rows {
+        row.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+        // Runs: neighbours at most STRIP_RUN_GAP apart.
+        let mut start = 0;
+        while start < row.len() {
+            let mut end = start + 1;
+            while end < row.len() && row[end].0 - row[end - 1].0 <= STRIP_RUN_GAP {
+                end += 1;
+            }
+            let run = &row[start..end];
+            let pitch = run
+                .windows(2)
+                .map(|w| w[1].0 - w[0].0)
+                .fold(f64::INFINITY, f64::min);
+            let widest = run.iter().map(|r| r.2).fold(0.0, f64::max);
+            if run.len() > 1 && pitch < widest + NAME_ROOM {
+                for (i, (_, id, _)) in run.iter().enumerate() {
+                    levels.insert(*id, if i % 2 == 0 { -LEVEL } else { LEVEL });
+                }
+            }
+            start = end;
+        }
+    }
+    levels
 }
 
 /// The anchor of a tag whose library position was moved by `place`. The tag
