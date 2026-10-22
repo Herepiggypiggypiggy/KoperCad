@@ -2785,6 +2785,11 @@ pub const COMMANDS: &[CommandInfo] = &[
             &[
                 "workshop",
                 "drilling template",
+                "drill template",
+                "cut-out",
+                "cutout",
+                "cut-out cards",
+                "door",
                 "1:1",
                 "bench",
                 "cut list",
@@ -2793,7 +2798,14 @@ pub const COMMANDS: &[CommandInfo] = &[
             ],
             Needs::Project,
         ),
-        &["export workshop", "workshop pack", "drilling template"],
+        &[
+            "export workshop",
+            "workshop pack",
+            "drilling template",
+            "drill template",
+            "cut-out cards",
+            "door cut-outs",
+        ],
     ),
     verb(
         cmd(

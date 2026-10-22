@@ -350,6 +350,28 @@ fn the_3d_run_card_is_found_by_cable_run_and_route() {
 }
 
 #[test]
+fn cut_out_and_drill_template_searches_find_the_workshop_pack() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for query in [
+        "cut-out",
+        "cutout",
+        "cut out",
+        "cut-out cards",
+        "drill template",
+        "door",
+    ] {
+        let rows = search(&palette, &keymap, query);
+        let at = position(&rows, "export.workshop")
+            .unwrap_or_else(|| panic!("{query:?} does not find the workshop pack"));
+        assert!(
+            at < 3,
+            "{query:?} ranks it {at}th: {:?}",
+            rows.iter().take(5).map(|r| &r.target).collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
 fn handover_ranks_the_handover_package_first() {
     let (palette, keymap) = (Palette::default(), Keymap::workflow());
     let rows = search(&palette, &keymap, "handover");
