@@ -2501,22 +2501,32 @@ impl NovoApp {
                 ui.add_space(novo_theme::space::M);
                 ui.label("Made by KoperVonk");
                 ui.weak("Free software, MIT or Apache-2.0, at your choice");
-                ui.weak("Works offline; nothing is sent anywhere");
+                ui.weak("Works offline. Nothing is sent unless you use Ask Claude,");
+                ui.weak("which sends your question to Anthropic with your own key.");
                 ui.add_space(novo_theme::space::M);
-                ui.horizontal_wrapped(|ui| {
-                    ui.hyperlink_to("Release notes", ABOUT_RELEASES_URL);
-                    ui.hyperlink_to("Licence", ABOUT_LICENCE_URL);
-                    ui.hyperlink_to("Third-party notices", ABOUT_NOTICES_URL);
+                ui.columns(2, |cols| {
+                    cols[0].vertical_centered(|ui| {
+                        ui.hyperlink_to("Release notes", ABOUT_RELEASES_URL);
+                        ui.hyperlink_to("Third-party notices", ABOUT_NOTICES_URL);
+                    });
+                    cols[1].vertical_centered(|ui| {
+                        ui.hyperlink_to("MIT licence", ABOUT_LICENCE_URL);
+                        ui.hyperlink_to("Apache-2.0 licence", ABOUT_LICENCE_APACHE_URL);
+                    });
                 });
                 ui.add_space(novo_theme::space::M);
-                ui.horizontal(|ui| {
-                    copy_info = ui
-                        .button("Copy version info")
-                        .on_hover_text(
-                            "Version, build, system and graphics, to paste into a message",
-                        )
-                        .clicked();
-                    open_log = ui.button("Open log folder").clicked();
+                ui.columns(2, |cols| {
+                    cols[0].vertical_centered(|ui| {
+                        copy_info = ui
+                            .button("Copy version info")
+                            .on_hover_text(
+                                "Version, build, system and graphics, to paste into a message",
+                            )
+                            .clicked();
+                    });
+                    cols[1].vertical_centered(|ui| {
+                        open_log = ui.button("Open log folder").clicked();
+                    });
                 });
                 ui.add_space(novo_theme::space::M);
                 ui.button("Close").clicked()
@@ -2538,6 +2548,8 @@ impl NovoApp {
 const ABOUT_RELEASES_URL: &str = "https://github.com/Herepiggypiggypiggy/kopercad/releases";
 const ABOUT_LICENCE_URL: &str =
     "https://github.com/Herepiggypiggypiggy/kopercad/blob/main/LICENSE-MIT";
+const ABOUT_LICENCE_APACHE_URL: &str =
+    "https://github.com/Herepiggypiggypiggy/kopercad/blob/main/LICENSE-APACHE";
 const ABOUT_NOTICES_URL: &str =
     "https://github.com/Herepiggypiggypiggy/kopercad/blob/main/THIRD_PARTY_NOTICES.txt";
 

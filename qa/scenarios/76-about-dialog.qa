@@ -11,7 +11,8 @@ wait 8
 expect "Version"
 expect "Made by KoperVonk"
 expect "Release notes"
-expect "Licence"
+expect "Ask Claude"
+expect "MIT licence"
 expect "Copy version info"
 expect "Open log folder"
 shot about

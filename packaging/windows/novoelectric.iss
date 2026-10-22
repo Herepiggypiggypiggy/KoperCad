@@ -101,8 +101,11 @@ begin
     Local := ExpandConstant('{localappdata}\KoperCAD');
     Roaming := ExpandConstant('{userappdata}\KoperCAD');
     if (DirExists(Local) or DirExists(Roaming)) and (not UninstallSilent) then
-      if MsgBox('Also remove KoperCAD settings, logs and recovery files from this PC?' + #13#10 +
-                'Your project files are never deleted.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      if MsgBox('Also remove KoperCAD data from this PC?' + #13#10 + #13#10 +
+                'This deletes your settings, parts catalog, macros, templates, report designs, ' +
+                'logs, and the recovery copies of unsaved work.' + #13#10 +
+                'Your saved project files are never deleted.' + #13#10 + #13#10 +
+                'Choose No to keep everything for a later reinstall.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
       begin
         DelTree(Local, True, True, True);
         DelTree(Roaming, True, True, True);
