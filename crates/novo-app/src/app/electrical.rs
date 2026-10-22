@@ -26,6 +26,8 @@ pub(super) struct Field {
     pub hint: &'static str,
     /// Whole numbers only (phases).
     pub integer: bool,
+    /// Largest accepted value (a diversity factor is at most 1).
+    pub max: f64,
 }
 
 const fn field(
@@ -40,6 +42,7 @@ const fn field(
         unit,
         hint,
         integer: false,
+        max: f64::INFINITY,
     }
 }
 
@@ -85,6 +88,17 @@ pub(super) const LIMITS: [Field; 2] = [
     field(keys::PANEL_SCCR_KA, "Panel SCCR (marked)", "kA", "10"),
 ];
 
+/// How the single-line diagram sums the currents at the supply; a factor on
+/// one device is a property of that device (`diversity_factor`).
+pub(super) const DISTRIBUTION: [Field; 1] = [Field {
+    key: novo_checks::single_line::SUPPLY_DIVERSITY_FACTOR,
+    label: "Diversity factor at the supply",
+    unit: "(0.1 to 1, e.g. 0.8)",
+    hint: "none",
+    integer: false,
+    max: 1.0,
+}];
+
 pub(super) const MACHINE: [Field; 4] = [
     field(keys::RATED_VOLTAGE_V, "Rated supply voltage", "V", "400"),
     Field {
@@ -93,6 +107,7 @@ pub(super) const MACHINE: [Field; 4] = [
         unit: "",
         hint: "3",
         integer: true,
+        max: f64::INFINITY,
     },
     field(keys::FREQUENCY_HZ, "Frequency", "Hz", "50"),
     field(
@@ -122,8 +137,17 @@ pub(super) fn parse_input(field: &Field, text: &str) -> Result<Option<Value>, St
     let v: f64 = text
         .parse()
         .ok()
-        .filter(|v: &f64| v.is_finite() && *v > 0.0)
-        .ok_or_else(|| format!("\"{text}\" is not a positive number for {}", field.label))?;
+        .filter(|v: &f64| v.is_finite() && *v > 0.0 && *v <= field.max)
+        .ok_or_else(|| {
+            if field.max.is_finite() {
+                format!(
+                    "\"{text}\" is not a number from above 0 to {} for {}",
+                    field.max, field.label
+                )
+            } else {
+                format!("\"{text}\" is not a positive number for {}", field.label)
+            }
+        })?;
     if field.integer {
         if v.fract() != 0.0 {
             return Err(format!("{} is a whole number", field.label));
@@ -196,6 +220,9 @@ impl NovoApp {
                 ui.weak("A transformer (kVA and uk) replaces the Ik value; the network's Sk is optional.");
                 widgets::section_label(ui, "Limits");
                 grid(ui, "electrical_limits", &LIMITS, &project, &mut win, &mut commits);
+                widgets::section_label(ui, "Distribution");
+                grid(ui, "electrical_distribution", &DISTRIBUTION, &project, &mut win, &mut commits);
+                ui.weak("Used by the single-line diagram: the sum of the branch currents at the supply times this factor. Blank means no diversity. A device can state its own in its property diversity_factor.");
                 widgets::section_label(ui, "Machine");
                 grid(ui, "electrical_machine", &MACHINE, &project, &mut win, &mut commits);
                 ui.horizontal(|ui| {

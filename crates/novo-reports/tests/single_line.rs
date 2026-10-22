@@ -378,3 +378,39 @@ fn an_incomplete_check_says_what_is_missing() {
     }
     assert!(seen > 0, "the fixture has breakers without curve or Icu");
 }
+
+#[test]
+fn a_stated_diversity_factor_is_in_the_schedule_the_drawing_and_the_legend() {
+    let mut doc = Document::default();
+    let b = distribution_board(&mut doc).unwrap();
+    doc.transact("Diversity", |tx| {
+        tx.set_property(b.q1, "diversity_factor", Some(0.8.into()))
+    })
+    .unwrap();
+    let out = SingleLineDiagram.generate(doc.project());
+    let section = &out.sections[0];
+    let col = |key: &str| section.column(key).unwrap();
+    let q1 = section
+        .rows
+        .iter()
+        .find(|r| r.cells[col("tag")].to_string() == "=A1+CAB-Q1")
+        .unwrap();
+    assert!(
+        q1.cells[col("ib_basis")]
+            .to_string()
+            .contains("× 0.8 diversity")
+    );
+    let all = drawn(&doc);
+    assert!(
+        all.iter()
+            .any(|t| t.starts_with("Ib 20.") && t.contains("×0.8")),
+        "{all:?}"
+    );
+    let legend = all.join(" ");
+    assert!(legend.contains("times the stated diversity factor"));
+    assert!(legend.contains("times the diversity factor of its own level"));
+    assert!(!legend.contains("(no diversity)"));
+    // Without a factor the legend keeps saying so.
+    let plain = drawn(&board()).join(" ");
+    assert!(plain.contains("(no diversity)"));
+}
