@@ -15,8 +15,9 @@ fn main() -> eframe::Result {
             .set_description(format!(
                 "{e}\n\nKoperCAD needs a graphics driver with Vulkan, DirectX 12 or OpenGL support. \
                  Update the graphics driver, or on a remote desktop or virtual machine start KoperCAD \
-                 on the local screen. Setting the environment variable WGPU_BACKEND to gl or dx12 \
-                 may help.{}",
+                 on the local screen. If it still fails, start KoperCAD (safe graphics) from the Start menu, or run \
+                 kopercad.exe --safe-graphics: it uses the software renderer, which is slower \
+                 but needs no graphics driver.{}",
                 novo_app::diag::log_dir()
                     .map(|d| format!("\n\nThe log is in {}", d.display()))
                     .unwrap_or_default()
