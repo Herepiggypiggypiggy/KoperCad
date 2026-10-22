@@ -827,6 +827,16 @@ pub const DUTCH: &[Aliases] = &[
         &["draden", "bedrading"],
     ),
     nl(
+        "view.3d_slotted_ducts",
+        &["gleufkanalen tonen in 3d"],
+        &[
+            "gleufkanaal",
+            "gleufkanalen",
+            "kabelgoot",
+            "bedradingskanaal",
+        ],
+    ),
+    nl(
         "view.3d_shadows",
         &["schaduw tonen in 3d"],
         &["schaduw", "schaduwen"],

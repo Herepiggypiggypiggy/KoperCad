@@ -86,6 +86,36 @@ fn the_routed_wires_are_in_the_3d_scene_and_the_command_hides_them() {
     assert!(!scene(&d).wires.is_empty(), "and they come back");
 }
 
+#[test]
+fn the_slotted_ducts_command_makes_the_ducts_solid_and_back() {
+    use novo_view3d::scene::{Profile, Shape};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let duct_shapes = |d: &Drive| -> Vec<Shape> {
+        scene(d)
+            .items
+            .iter()
+            .filter(|i| i.id.kind == ItemKind::Duct)
+            .map(|i| i.shape)
+            .collect()
+    };
+    assert_eq!(
+        duct_shapes(&d),
+        vec![Shape::Profile(Profile::SlottedChannel)],
+        "ducts are slotted by default"
+    );
+    d.app.run_command(&ctx, "view.3d_slotted_ducts", None);
+    d.frame();
+    assert_eq!(duct_shapes(&d), vec![Shape::Profile(Profile::Channel)]);
+    d.app.run_command(&ctx, "view.3d_slotted_ducts", None);
+    d.frame();
+    assert_eq!(
+        duct_shapes(&d),
+        vec![Shape::Profile(Profile::SlottedChannel)]
+    );
+}
+
 /// The wires drawn in the scene, as project wire ids.
 fn wire_ids(d: &Drive) -> Vec<WireId> {
     scene(d)
