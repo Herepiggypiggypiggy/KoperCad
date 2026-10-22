@@ -481,6 +481,10 @@ impl NovoApp {
                 self.cabinet.heat.live.synced_revision(),
                 project.revision(),
             ),
+            cooling: super::heat_cooling::report_lines(
+                &sol,
+                &mut self.cabinet.heat.cooling.clone(),
+            ),
         })
     }
 
@@ -589,6 +593,7 @@ mod tests {
                 tone: HeatTone::Fine,
                 sentence: "Fine. Hottest -F1 57 °C.".into(),
                 out_of_date,
+                cooling: Vec::new(),
             }),
             ..DesignInput::default()
         };
