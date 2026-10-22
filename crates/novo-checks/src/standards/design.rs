@@ -575,18 +575,12 @@ fn evidence(
                 "{} EMC rules ran; the highest risk score of a wire is {worst} of 100 (a sum of listed reasons, not a measurement)",
                 report.rules.iter().filter(|r| !matches!(r.status, novo_emc::Status::NotApplicable)).count()
             ));
-            out.extend(report.assumptions.iter().map(|a| {
-                format!(
-                    "Assumed: {}: {} ({})",
-                    a.name,
-                    a.value,
-                    if a.user_set {
-                        "set in this project"
-                    } else {
-                        "program default"
-                    }
-                )
-            }));
+            out.extend(
+                report
+                    .assumptions
+                    .iter()
+                    .map(|a| format!("Assumed: {}: {} ({})", a.name, a.value, a.origin())),
+            );
         }
         _ => {}
     }

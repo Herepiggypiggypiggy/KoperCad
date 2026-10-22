@@ -171,6 +171,20 @@ pub struct Assumption {
     pub property: &'static str,
 }
 
+impl Assumption {
+    /// Where the value comes from, for the line beside it. A value with no
+    /// property is fixed in the program and cannot be edited.
+    pub fn origin(&self) -> &'static str {
+        if self.user_set {
+            "set in this project"
+        } else if self.property.is_empty() {
+            "fixed in the program"
+        } else {
+            "program default"
+        }
+    }
+}
+
 /// A stretch where two runs lie side by side, for drawing a ribbon.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Ribbon {

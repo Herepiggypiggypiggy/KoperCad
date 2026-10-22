@@ -192,7 +192,7 @@ impl NovoApp {
                                 "{}: {}  ({})",
                                 a.name,
                                 a.value,
-                                if a.user_set { "set in this project" } else { "program default, edit with the property" }
+                                if a.property.is_empty() || a.user_set { a.origin() } else { "program default, edit with the property" }
                             ));
                         }
                     });
