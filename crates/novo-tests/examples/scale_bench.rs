@@ -32,6 +32,23 @@ const BUDGETS: &[(&str, f64)] = &[
     ("search", 100.0),
     ("edit one symbol", 100.0),
     ("undo edit", 100.0),
+    // SCALE-2: every other step has a limit too, about four times the
+    // figure measured at 600 pages (RESULTS in handoff/scale-2).
+    ("generate", 1000.0),
+    ("to_json", 1000.0),
+    ("from_json", 1000.0),
+    ("number wires", 500.0),
+    ("design checks", 3000.0),
+    ("wire cut jobs", 500.0),
+    ("report wirecut", 600.0),
+    ("report singleline", 800.0),
+    ("report", 400.0),
+    ("autopilot", 1000.0),
+    ("xref index", 200.0),
+    ("pdf export", 1500.0),
+    ("route all", 300.0),
+    ("3d scene", 300.0),
+    ("3d scenes", 300.0),
 ];
 
 struct Row {

@@ -173,3 +173,60 @@ fn place_order_groups_wires_by_the_device_they_start_on() {
         }
     }
 }
+
+/// The page index and the kept walking order answer the way the functions
+/// that build everything again do.
+#[test]
+fn the_target_index_agrees_with_the_plain_functions() {
+    let mut doc = Document::default();
+    novo_tests::big_project(&mut doc, novo_tests::BigSpec::new(10)).expect("generator");
+    let project = doc.project();
+    let mut store = CommissioningStore::new();
+    let index = TargetIndex::of(project);
+    assert_eq!(index.all(), targets(project).as_slice());
+    // Decide a few checks so the progress is not all zeros.
+    for info in index.all().iter().step_by(7) {
+        for &check in info.target.checks() {
+            store
+                .set_check(CheckRecord {
+                    target: info.target,
+                    check,
+                    state: CheckState::Passed,
+                    by: "t".into(),
+                    at: "now".into(),
+                    value: String::new(),
+                    note: String::new(),
+                })
+                .unwrap();
+        }
+    }
+    assert_eq!(
+        index.progress(&store, Scope::Project),
+        progress(project, &store, Scope::Project)
+    );
+    for page in project.pages() {
+        let on_page: Vec<_> = index.on_page(page.id).collect();
+        let by_filter: Vec<_> = index
+            .all()
+            .iter()
+            .filter(|i| i.pages.contains(&page.id))
+            .collect();
+        assert_eq!(on_page, by_filter);
+        assert_eq!(
+            index.progress(&store, Scope::Page(page.id)),
+            progress(project, &store, Scope::Page(page.id))
+        );
+    }
+    let plan = WirePlan::of(project);
+    for scope in [WalkScope::All, WalkScope::Wires] {
+        for order in [WalkOrder::Number, WalkOrder::Place] {
+            let first = walk_order_in(project, &index, &plan, scope, order);
+            assert_eq!(first, walk_order_with(project, &plan, scope, order));
+            assert!(!first.is_empty());
+            assert_eq!(
+                next_open_in_order(&first, &store, None, None),
+                next_open_with(project, &plan, &store, None, None, scope, order)
+            );
+        }
+    }
+}

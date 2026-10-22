@@ -16,7 +16,7 @@ use novo_core::{Endpoint, PageId, Project, WireId};
 use novo_reports::wire_cut_jobs;
 
 use crate::check::{CheckState, Target};
-use crate::progress::{TargetInfo, targets};
+use crate::progress::{TargetIndex, TargetInfo};
 use crate::store::CommissioningStore;
 
 /// What a drawn wire is made of.
@@ -236,18 +236,37 @@ pub fn walk_order_with(
     scope: WalkScope,
     order: WalkOrder,
 ) -> Vec<TargetInfo> {
+    walk_order_in(project, &TargetIndex::of(project), plan, scope, order)
+}
+
+/// [`walk_order_with`] on targets already built.
+pub fn walk_order_in(
+    project: &Project,
+    index: &TargetIndex,
+    plan: &WirePlan,
+    scope: WalkScope,
+    order: WalkOrder,
+) -> Vec<TargetInfo> {
     if order == WalkOrder::Place {
-        return place_order(project, plan, scope);
+        return place_order(project, index, plan, scope);
     }
-    let all = targets(project);
+    let all = index.all();
+    // Each target belongs to the page it is drawn on first.
+    let mut first_page: std::collections::HashMap<PageId, Vec<&TargetInfo>> =
+        std::collections::HashMap::new();
+    for info in all {
+        if let Some(page) = info.pages.first()
+            && (scope == WalkScope::All || matches!(info.target, Target::Wire(_)))
+        {
+            first_page.entry(*page).or_default().push(info);
+        }
+    }
     let mut out = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for page in project.pages_in_order() {
-        let mut on_page: Vec<&TargetInfo> = all
-            .iter()
-            .filter(|i| i.pages.first() == Some(&page.id))
-            .filter(|i| scope == WalkScope::All || matches!(i.target, Target::Wire(_)))
-            .collect();
+        let Some(mut on_page) = first_page.remove(&page.id) else {
+            continue;
+        };
         // Wires in number order, the way a person works through them; the
         // sort is stable, so terminals and devices keep the project's order.
         on_page.sort_by(|a, b| match (a.target, b.target) {
@@ -273,8 +292,13 @@ pub fn walk_order_with(
 
 /// Wires by their starting device and pin, then the other targets as in
 /// the number order.
-fn place_order(project: &Project, plan: &WirePlan, scope: WalkScope) -> Vec<TargetInfo> {
-    let by_number = walk_order_with(project, plan, scope, WalkOrder::Number);
+fn place_order(
+    project: &Project,
+    index: &TargetIndex,
+    plan: &WirePlan,
+    scope: WalkScope,
+) -> Vec<TargetInfo> {
+    let by_number = walk_order_in(project, index, plan, scope, WalkOrder::Number);
     let (mut wires, rest): (Vec<_>, Vec<_>) = by_number
         .into_iter()
         .partition(|i| matches!(i.target, Target::Wire(_)));
@@ -334,6 +358,16 @@ pub fn next_open_with(
     walk: WalkOrder,
 ) -> Option<TargetInfo> {
     let order = walk_order_with(project, plan, scope, walk);
+    next_open_in_order(&order, store, from, page)
+}
+
+/// [`next_open_with`] on a walking order already built.
+pub fn next_open_in_order(
+    order: &[TargetInfo],
+    store: &CommissioningStore,
+    from: Option<Target>,
+    page: Option<PageId>,
+) -> Option<TargetInfo> {
     let start = from
         .and_then(|t| order.iter().position(|i| i.target == t).map(|p| p + 1))
         .or_else(|| page.and_then(|p| order.iter().position(|i| i.pages.first() == Some(&p))))
