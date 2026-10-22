@@ -96,7 +96,7 @@ PDF, workbook or XML and check its content, not only that it exists. Run one wit
 
 | Scenario | Files kept |
 |---|---|
-| `38-bench-packet`, `39-scale-frames`, `40-workshop-pack-files`, `41-workshop-cutout-cards`, `42-plate-drawing-files` | bench packet, print scale check, workshop pack, door cut-out cards, plate drawing PDF and DXF |
+| `38-bench-packet`, `39-print-scale-check`, `40-workshop-pack-files`, `41-workshop-cutout-cards`, `42-plate-drawing-files` | bench packet, print scale check, workshop pack, door cut-out cards, plate drawing PDF and DXF |
 | `43-standards-report-files` | standards report PDF and Excel |
 | `44-plc-files` | PLC I/O list, address plan, PLCopen XML, TIA Excel, Studio 5000 CSV (the demo I/O list is imported first, so the files carry tags) |
 | `45-punch-list-step-files` | punch list PDF, STEP cabinet model |
