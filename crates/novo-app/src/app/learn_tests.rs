@@ -1474,3 +1474,25 @@ fn the_place_all_shortcut_ticks_the_click_step_like_the_button() {
     let phase = d.app.learn.run.as_ref().map(|r| r.phase());
     assert_eq!(phase, Some(novo_learn::Phase::Ticked), "the step is ticked");
 }
+
+#[test]
+fn the_command_field_row_for_the_lesson_names_the_lesson_like_the_help_menu() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "help.next_lesson", None);
+    d.frame();
+    d.app.wb.field.open(novo_workflow::palette::Mode::All, None);
+    d.app.wb.field.type_text("continue lesson");
+    d.frame();
+    let rows = d.app.with_field(|field, sources| field.rows(sources));
+    let row = rows
+        .iter()
+        .find(|r| {
+            matches!(
+                r.target,
+                novo_workflow::palette::Target::Command("help.next_lesson")
+            )
+        })
+        .expect("`continue lesson` finds the lesson command");
+    assert_eq!(row.label, "Continue lesson: Tiny lesson");
+}

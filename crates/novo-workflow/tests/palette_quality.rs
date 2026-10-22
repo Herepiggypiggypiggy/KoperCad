@@ -554,3 +554,15 @@ fn a_typed_label_beats_a_shorter_verb_run_on_the_rest() {
     let rows = search(&palette, &keymap, "import parts from a folder");
     assert_eq!(position(&rows, "parts.import_folder"), Some(0));
 }
+
+#[test]
+fn continue_lesson_finds_the_lesson_on_offer() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    // Help shows "Continue lesson: <title>" for this command while a lesson is under way.
+    for query in ["continue lesson", "resume lesson", "continue learning"] {
+        let rows = search(&palette, &keymap, query);
+        let at = position(&rows, "help.next_lesson")
+            .unwrap_or_else(|| panic!("{query:?} does not find the lesson command"));
+        assert!(at < 3, "{query:?} ranks it {at}th");
+    }
+}
