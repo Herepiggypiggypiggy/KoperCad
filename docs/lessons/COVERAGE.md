@@ -55,7 +55,7 @@ text is never shown), LC-19 (Excel steps cannot tick), LC-29 (gesture-only steps
 | 25 | Plate drawing, drill table, labels | `panel-plate-drawing`, `panel-labels` | full | yes | |
 | 26 | Heat: preview, simulation, cooling verdict | `heat-and-sizing` | full | yes | 3D heat, airflow, contours, probe, compare (heat is only taught on the 2D plate): `heat-in-3d` |
 | 27 | 3D view: look around | `view-3d` | full | yes | |
-| 28 | 3D editing (move, align, measure, duplicate, place), section plane, saved views, cable and wire runs, duct fill | none | none | yes | `3d-editing-and-runs` |
+| 28 | 3D editing (move, align, measure, duplicate, place), section plane, saved views, cable and wire runs, duct fill | none | none | yes | `editing-in-3d` |
 | 29 | Workshop: bench output, bench packet, ferrule table, assembly checklist, workshop pack | none (cut-lengths, labels, plate drawing are one piece each) | partial | yes | `workshop-pack` |
 | 30 | Build mode at the plate | none | none | yes | `build-mode` |
 | 31 | Commissioning: checks, punch list, report | `commissioning` | full | yes | Photos, redlines, signature, field results: partial |
@@ -107,7 +107,7 @@ walked in the QA harness at 1366x768 and 1920x1080. Order is by how much a missi
 | A, data and trust | `your-project-file`, `protection-and-single-line`, `safety-functions`, `standards-check` | start, outputs | Project lead; First hour gets `your-project-file` |
 | B, the shop floor | `workshop-pack`, `build-mode`, `handover-package`, `autopilot-wires` | cabinet, outputs, circuits | Panel builder, Project lead, Draftsperson |
 | C, craft | `tags-and-pages`, `wiring-craft`, `terminals-in-depth`, `wire-numbering-in-depth` | start, circuits, terminals | Draftsperson |
-| D, depth | `why-and-faults`, `3d-editing-and-runs`, `heat-in-3d`, `plc-lists` | circuits, cabinet, terminals | Panel builder |
+| D, depth | `why-and-faults`, `editing-in-3d`, `heat-in-3d`, `plc-lists` | circuits, cabinet, terminals | Panel builder |
 | E, scale | `variants-and-options`, `bring-a-project-in`, `parts-in-bulk`, `find-your-way`, `ask-claude` | data, start | Project lead |
 
 Rules for the batches: one pull request per batch; paths and `needs` stay valid (the lint fails

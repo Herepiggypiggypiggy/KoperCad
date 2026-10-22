@@ -25,6 +25,8 @@ pub(super) struct AutopilotState {
     ticked: BTreeSet<usize>,
     /// The plan grouped by protective device.
     groups: Vec<Group>,
+    /// Where "Accept all" was drawn this frame, for the lesson pointer.
+    accept_rect: Option<egui::Rect>,
 }
 
 /// The rows ticked when the list opens: everything but the assumed ones,
@@ -95,6 +97,7 @@ impl NovoApp {
             ready,
             ticked,
             groups,
+            accept_rect: None,
         });
     }
 
@@ -112,6 +115,7 @@ impl NovoApp {
         }) {
             return;
         }
+        self.learn_signal("autopilot_applied");
         let (sized, coloured, numbered, cabled, entries) = counts;
         let mut parts = Vec::new();
         if sized > 0 {
@@ -167,12 +171,19 @@ impl NovoApp {
         let mut open = true;
         let mut apply: Option<(BTreeSet<usize>, bool)> = None;
         let mut rule_edits: Vec<(String, Option<Value>)> = Vec::new();
-        super::panel::dialog(ctx, "Autopilot", [620.0, 640.0])
+        state.accept_rect = None;
+        let shown = super::panel::dialog(ctx, "Autopilot", [620.0, 640.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 rules_section(ui, &WireRules::of(project), &mut rule_edits);
                 body(ui, &mut state, &mut apply);
             });
+        if let Some(shown) = shown {
+            self.anchor("autopilot.window", shown.response.rect, "Autopilot");
+        }
+        if let Some(rect) = state.accept_rect {
+            self.anchor("autopilot.accept_all", rect, "Accept all button");
+        }
         if !rule_edits.is_empty() {
             self.edit_project("Wire rules", |tx| {
                 for (key, value) in &rule_edits {
@@ -283,11 +294,11 @@ fn body(
             } else {
                 format!("Accept all ({total})")
             };
-            let go = ui
-                .add_enabled_ui(!sure.is_empty(), |ui| {
-                    novo_theme::widgets::primary_button(ui, &label).clicked()
-                })
-                .inner;
+            let accept = ui.add_enabled_ui(!sure.is_empty(), |ui| {
+                novo_theme::widgets::primary_button(ui, &label).clicked()
+            });
+            state.accept_rect = Some(accept.response.rect);
+            let go = accept.inner;
             if go {
                 *apply = Some((sure, true));
             }

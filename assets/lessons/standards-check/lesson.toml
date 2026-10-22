@@ -1,0 +1,156 @@
+format = 1
+id = "standards-check"
+version = 1
+status = "early"
+title = "Check the drawing against a standard"
+summary = "Tick the standards your machine is built to, read what passes, fails and cannot be judged yet, and save the report for the customer."
+track = "outputs"
+order = 60
+level = "intermediate"
+minutes = 7
+topics = ["standards", "compliance", "report", "iec 60204-1"]
+needs = ["design-checks"]
+next = ["safety-functions"]
+project = "@example"
+title_nl = "Controleer de tekening tegen een norm"
+summary_nl = "Vink de normen aan waarvoor je machine gebouwd is, lees wat slaagt, faalt en nog niet te beoordelen is, en bewaar het rapport voor de klant."
+
+[[step]]
+id = "what-it-is"
+title = "A second pair of eyes, not a certificate"
+title_nl = "Een tweede paar ogen, geen certificaat"
+text = """
+The design checks you know look at the drawing. The **standards check** asks a different question: does the drawing follow the rules of IEC 60204-1, NFPA 79 or UL 508A.
+KoperCAD holds a **subset** of each standard in its own words with a clause pointer. It helps you; you still read the clauses in your own licensed copy.
+"""
+text_nl = """
+De ontwerpcontroles die je kent kijken naar de tekening. De **normcontrole** stelt een andere vraag: volgt de tekening de regels van IEC 60204-1, NFPA 79 of UL 508A.
+KoperCAD kent een **deel** van elke norm in eigen woorden met een verwijzing naar de clausule. Het helpt jou; de clausules lees je nog steeds in je eigen gelicentieerde exemplaar.
+"""
+point = { ui = "menu.Check" }
+
+[[step]]
+id = "open"
+title = "Open the standards check"
+title_nl = "Open de normcontrole"
+text = "It lives in the Check menu next to Problems and Calculations."
+text_nl = "Hij staat in het menu Check naast Problems en Calculations."
+how = [
+  "Open {ui:menu.Check} and choose {ui:cmd.check.standards}.",
+  "Or press {key:view.command_palette}, type standards and press Enter.",
+]
+how_nl = [
+  "Open {ui:menu.Check} en kies {ui:cmd.check.standards}.",
+  "Of druk op {key:view.command_palette}, typ standards en druk op Enter.",
+]
+point = { ui = "cmd.check.standards" }
+expect = { command = "check.standards" }
+solve = [ { command = "check.standards" } ]
+
+[[step]]
+id = "tick"
+title = "Tick the standard you build to"
+title_nl = "Vink de norm aan waarvoor je bouwt"
+text = "A machine for Europe is judged against IEC 60204-1. Ticking it adds its rules to the Issues list and to the count in the top bar, so the same findings follow you while you draw."
+text_nl = "Een machine voor Europa wordt beoordeeld volgens IEC 60204-1. Aanvinken voegt de regels toe aan de lijst met problemen en aan het getal in de bovenbalk, zodat dezelfde bevindingen je volgen terwijl je tekent."
+how = [
+  "Tick {ui:standards.iec60204} under **Check against**.",
+  "The report below fills with one block per rule.",
+]
+how_nl = [
+  "Vink {ui:standards.iec60204} aan onder **Check against**.",
+  "Het rapport eronder vult zich met een blok per regel.",
+]
+point = { ui = "standards.iec60204" }
+expect = { signal = "standards_chosen" }
+solve = [ { ui_click = "standards.iec60204" } ]
+
+[[step]]
+id = "read"
+title = "Read the five words"
+title_nl = "Lees de vijf woorden"
+text = """
+Each rule ends in one of five verdicts: **PASS**, **FAIL**, **PARTIAL**, **NOT EVALUATED** and **n/a** (it does not apply to this machine).
+**NOT EVALUATED is not a pass.** It means the program lacks a number it needs, such as the short-circuit current of the supply. Never read a long report as good because it has few red lines.
+"""
+text_nl = """
+Elke regel eindigt in een van vijf oordelen: **PASS**, **FAIL**, **PARTIAL**, **NOT EVALUATED** en **n/a** (geldt niet voor deze machine).
+**NOT EVALUATED is geen pass.** Het programma mist dan een getal dat het nodig heeft, zoals de kortsluitstroom van de voeding. Lees een lang rapport nooit als goed omdat er weinig rode regels in staan.
+"""
+how = [
+  "Scroll the report and find a rule that says NOT EVALUATED.",
+  "Read what it says is missing: that is what you fill in next.",
+]
+how_nl = [
+  "Scroll door het rapport en zoek een regel die NOT EVALUATED zegt.",
+  "Lees wat er volgens de regel ontbreekt: dat vul je hierna in.",
+]
+
+[[step]]
+id = "inputs"
+title = "Give it the numbers it asks for"
+title_nl = "Geef het de getallen die het vraagt"
+text = "Many rules are open because a machine fact is missing: supply short-circuit current, panel SCCR, whether an e-stop is required. They live in one place, **Electrical inputs**, and the example already states some of them."
+text_nl = "Veel regels zijn open omdat een machinegegeven ontbreekt: kortsluitstroom van de voeding, SCCR van het paneel, of een noodstop verplicht is. Ze staan op een plek, **Electrical inputs**, en het voorbeeld geeft er al een paar."
+how = [
+  "Press {ui:standards.inputs}. The Electrical inputs window opens.",
+  "Look for the supply values. A value you type here is one undo step and updates the report at once.",
+]
+how_nl = [
+  "Druk op {ui:standards.inputs}. Het venster Electrical inputs opent.",
+  "Zoek de voedingswaarden. Een waarde die je hier typt is een undo-stap en werkt het rapport meteen bij.",
+]
+point = { ui = "standards.inputs" }
+expect = { clicked = "standards.inputs" }
+solve = [ { ui_click = "standards.inputs" } ]
+
+[[step]]
+id = "assumptions"
+title = "Assumptions are written down"
+title_nl = "Aannames staan op papier"
+text = "Under **Assumptions** you state how wires are installed (B1 conduit, B2 multicore, C tray) and the ambient temperature. A wire without its own method uses this one, and the report says so. The ampacity tables behind it are **planning values** until you load your licensed copy."
+text_nl = "Onder **Assumptions** geef je aan hoe draden gelegd zijn (B1 buis, B2 meeaderig, C goot) en de omgevingstemperatuur. Een draad zonder eigen methode gebruikt deze en het rapport zegt dat. De stroomtabellen daaronder zijn **planningswaarden** tot je je gelicentieerde exemplaar laadt."
+point = { ui = "standards.calculations" }
+
+[[step]]
+id = "calculations"
+title = "Follow a verdict back to its number"
+title_nl = "Volg een oordeel terug naar zijn getal"
+text = "A verdict you doubt can be traced. The Calculations window shows the number behind it, with the clause, per circuit: cable rating, voltage drop, breaking capacity, short circuit, disconnection."
+text_nl = "Een oordeel waaraan je twijfelt is na te trekken. Het venster Calculations toont het getal erachter, met de clausule, per groep: kabelbelasting, spanningsval, schakelvermogen, kortsluiting, uitschakeling."
+how = [
+  "Press {ui:standards.calculations}.",
+  "Pick a circuit and compare its numbers with the verdict in the report.",
+]
+how_nl = [
+  "Druk op {ui:standards.calculations}.",
+  "Kies een groep en vergelijk de getallen met het oordeel in het rapport.",
+]
+point = { ui = "standards.calculations" }
+expect = { clicked = "standards.calculations" }
+solve = [ { ui_click = "standards.calculations" } ]
+
+[[step]]
+id = "save"
+title = "Hand it to the customer"
+title_nl = "Geef het aan de klant"
+text = "{ui:standards.save_pdf} writes the report next to the project file. There is also a web page that prints on A4 and Copy as Markdown for an email. The notice at the top says it assists the engineer and does not certify. Keep that sentence."
+text_nl = "{ui:standards.save_pdf} schrijft het rapport naast het projectbestand. Er is ook een webpagina die op A4 print en Copy as Markdown voor een mail. De mededeling bovenaan zegt dat het de ingenieur helpt en niets certificeert. Laat die zin staan."
+how = [
+  "Press {ui:standards.save_pdf}. A toast names the file.",
+  "Open the PDF and check the notice on the first page.",
+]
+how_nl = [
+  "Druk op {ui:standards.save_pdf}. Een melding noemt het bestand.",
+  "Open de pdf en controleer de mededeling op de eerste pagina.",
+]
+point = { ui = "standards.save_pdf" }
+expect = { clicked = "standards.save_pdf" }
+manual = "writes a PDF next to the project file; the QA scenario 43-standards-report-files checks the file"
+
+[[step]]
+id = "done"
+title = "A check you can repeat"
+title_nl = "Een controle die je kunt herhalen"
+text = "Run it again after every change; the ticked standards stay in the project. Next: safety functions, the ISO 13849-1 side of the report."
+text_nl = "Draai hem opnieuw na elke wijziging; de aangevinkte normen blijven in het project. Hierna: veiligheidsfuncties, de ISO 13849-1-kant van het rapport."

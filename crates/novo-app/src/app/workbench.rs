@@ -858,8 +858,9 @@ impl NovoApp {
         // Escape belongs to a window floating on top, not the drawing, even
         // with the pointer over it (the drawing would take the key first).
         let window_on_top = super::panel::dialog_on_top(ctx);
+        let modal = self.modal_open();
         if let Some(view) = self.canvas.schematic() {
-            view.yield_escape = window_on_top;
+            view.yield_escape = window_on_top || modal;
         }
     }
 
