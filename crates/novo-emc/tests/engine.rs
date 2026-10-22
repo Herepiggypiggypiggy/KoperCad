@@ -476,8 +476,15 @@ fn the_picture_carries_ribbons_loops_zones_and_the_wording_rule() {
     assert_eq!(pic.zones.len(), 1);
     assert!(pic.assumptions.iter().all(|a| !a.user_set));
     assert!(pic.assumptions.iter().any(|a| {
-        a.name.starts_with("Distance counted across a duct divider") && a.value == "50 mm"
+        a.name.starts_with("Distance counted across a duct divider")
+            && a.value == "50 mm"
+            && a.origin() == "fixed in the program"
     }));
+    assert!(
+        pic.assumptions
+            .iter()
+            .any(|a| a.property == "emc.pigtail_max_mm" && a.origin() == "program default")
+    );
     assert!(pic.not_checked.iter().any(|t| t.contains("Compliance")));
     // The estimate carries its band.
     let hot = pic.hotspots.iter().find(|h| h.rule == "EMC-01").unwrap();
