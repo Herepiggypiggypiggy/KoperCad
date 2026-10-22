@@ -2102,3 +2102,42 @@ fn an_extra_low_voltage_signal_potential_is_control_and_a_high_one_is_power() {
         vec![StripClass::Power, StripClass::Control, StripClass::Signal]
     );
 }
+
+#[test]
+fn a_dc_rail_above_120_volts_is_power_and_one_without_voltage_is_control() {
+    let mut doc = Document::default();
+    doc.transact("Draw", |tx| {
+        let page = tx.add_page("1")?;
+        let k1 = tx.add_device(tag("+CAB-K1"), "")?;
+        let m1 = tx.add_device(tag("+FLD-M1"), "")?;
+        let ks = row_of_pins(tx, page, k1, &["1", "2", "3", "4"], 40.0, 20.0)?;
+        let ms = row_of_pins(tx, page, m1, &["1", "2", "3", "4"], 40.0, 100.0)?;
+        let wires: Vec<WireId> = (0..4)
+            .map(|i| tx.connect(Endpoint::pin(ks, i), Endpoint::pin(ms, i)))
+            .collect::<Result<_>>()?;
+        tx.assign_potentials(
+            &wires,
+            vec![
+                novo_core::PotentialSpec::new("+230V", PotentialKind::DcPositive, Some(230.0)),
+                novo_core::PotentialSpec::new("-600V", PotentialKind::DcNegative, Some(-600.0)),
+                novo_core::PotentialSpec::new("+24V", PotentialKind::DcPositive, Some(24.0)),
+                novo_core::PotentialSpec::new("DC", PotentialKind::DcPositive, None),
+            ],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+    let classes: Vec<StripClass> = suggest_terminals(doc.project())
+        .iter()
+        .map(|s| s.class)
+        .collect();
+    assert_eq!(
+        classes,
+        vec![
+            StripClass::Power,
+            StripClass::Power,
+            StripClass::Control,
+            StripClass::Control
+        ]
+    );
+}

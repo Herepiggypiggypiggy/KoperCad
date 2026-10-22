@@ -414,7 +414,10 @@ impl NovoApp {
                 Some(Err(e)) => self.message(Level::Error, format!("Could not set it: {e}")),
                 None => {}
             },
-            Ok(None) => self.message(Level::Info, "They are already there"),
+            Ok(None) => self.message(
+                Level::Info,
+                "Nothing to change: they already have that location",
+            ),
             Err(e) => self.message(Level::Warning, e.to_string()),
         }
     }

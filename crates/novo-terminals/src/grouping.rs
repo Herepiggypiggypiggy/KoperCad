@@ -2,8 +2,7 @@
 //!
 //! A machine's boundary terminals are not one strip: power, control voltage,
 //! signals and protective earth are wired, labelled and often delivered on
-//! separate strips (IEC 60204-1 keeps protective conductors apart from the
-//! rest). The grouping is a saved project setting
+//! separate strips; protective earth gets its own strip here. The grouping is a saved project setting
 //! ([`GROUPING_KEY`] in the project info properties, one undo step to
 //! change), so it is the user's to choose and travels with the file.
 //!
@@ -18,17 +17,18 @@ use novo_core::{Command, Netlist, PotentialKind, Project, Result, Tx, Value, Wir
 /// The project info property that holds the grouping (`class` or `single`).
 pub const GROUPING_KEY: &str = "terminals.strip_grouping";
 
-/// Voltage above which a conductor counts as power rather than control
-/// (the 50 V AC / 120 V DC extra-low-voltage limit is the usual boundary;
-/// 50 V is the conservative one for anything not known to be DC).
+/// Voltage above which a conductor counts as power rather than control.
+/// The extra-low-voltage limits: 50 V for a signal potential (AC unless
+/// known otherwise), 120 V for a DC rail.
 const CONTROL_LIMIT_VOLTS: f64 = 50.0;
+const DC_CONTROL_LIMIT_VOLTS: f64 = 120.0;
 
 /// What a terminal carries, for choosing its strip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum StripClass {
-    /// Line and neutral conductors, and anything above extra-low voltage.
+    /// Line and neutral conductors, and anything above extra-low voltage (a DC rail above 120 V).
     Power,
-    /// DC rails and extra-low-voltage control supply.
+    /// DC rails up to 120 V (or with no voltage stated) and signal potentials up to 50 V.
     Control,
     /// Signals: a signal potential without a voltage.
     Signal,
@@ -126,7 +126,10 @@ pub(crate) fn class_of_wire(project: &Project, netlist: &Netlist, wire: &Wire) -
     match p.kind {
         PotentialKind::ProtectiveEarth | PotentialKind::Pen => StripClass::Earth,
         PotentialKind::Line | PotentialKind::Neutral => StripClass::Power,
-        PotentialKind::DcPositive | PotentialKind::DcNegative => StripClass::Control,
+        PotentialKind::DcPositive | PotentialKind::DcNegative => match p.voltage {
+            Some(v) if v.abs() > DC_CONTROL_LIMIT_VOLTS => StripClass::Power,
+            _ => StripClass::Control,
+        },
         PotentialKind::Signal => match p.voltage {
             Some(v) if v > CONTROL_LIMIT_VOLTS => StripClass::Power,
             Some(_) => StripClass::Control,

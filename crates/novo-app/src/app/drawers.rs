@@ -155,8 +155,9 @@ impl NovoApp {
                                     .response
                                     .on_hover_text(
                                         "Which strip new terminals go on: one per kind of \
-                                         wire (power -X1, control -X2, signals -X3, PE -X4) \
-                                         or one per location",
+                                         wire (power -X1, control -X2, signals -X3, PE -X4; \
+                                         no potential yet counts as power) or one per \
+                                         location",
                                     );
                                 if chosen != grouping {
                                     actions.push(DrawerAction::SetGrouping(chosen));
@@ -510,7 +511,7 @@ fn devices_tab(
         ui.label(format!("Set location of {selected} selected:"));
         let field = ui.add(
             egui::TextEdit::singleline(location)
-                .hint_text("+FIELD (empty clears)")
+                .hint_text("+FIELD")
                 .desired_width(140.0)
                 .id(egui::Id::new("devices_location")),
         );
