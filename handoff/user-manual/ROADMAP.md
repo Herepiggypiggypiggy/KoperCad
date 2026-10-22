@@ -2,7 +2,7 @@
 
 Scope: an offline manual bundled with the program, organised by task and by menu, with generated reference pages, context help (F1) and Ctrl+K entries.
 
-Done (first PR): generator and Markdown renderer (`novo-workflow::manual`), nine written pages, generated menu/command/shortcut/feature pages, Help > User manual, F1, `kopercad-cli manual`, QA scenario 74, `scripts/build-manual.sh`.
+Done (first PR): generator and Markdown renderer (`novo-workflow::manual`), nine written pages, generated menu/command/shortcut/feature pages, Help > User manual, F1, `kopercad-cli manual`, QA scenario 80, `scripts/build-manual.sh`.
 
 Next, in order:
 1. Screenshots: run `scripts/build-manual.sh` on a machine with the QA packages, commit `docs/manual/images/`, bundle them (fill `IMAGES` in `app/manual.rs` with `include_bytes!`).

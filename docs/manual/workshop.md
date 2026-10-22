@@ -31,7 +31,7 @@ For every cabinet with a mounting plate it shows one step at a time in large typ
 
 Each step has **Done** (Space or Enter also tick it), **Problem** (the note goes to the punch list in Commissioning with a link to the device or wire), and **Back**. "Also ready now" lists steps that can be done at the same time, so two people can work in parallel.
 
-![Build mode on a wire step](images/build-mode.png)
+![Build mode, first step: check the plate](images/build-mode.png)
 
 ### Honest limits
 

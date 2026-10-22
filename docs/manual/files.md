@@ -26,7 +26,7 @@ Everything is in your own user profile and nothing needs administrator rights.
 
 - A newer build opens older files. Before the first write the old file is copied to `<file>.v<old>.bak`.
 - An older build **refuses** a file from a newer build, in words, without touching it.
-- A crash or power cut never leaves half a save: you get the previous save, or the new one.
+- A save is designed not to leave half a file: after a crash or power cut you get the previous save or the new one. A test that kills the program at staggered moments while it saves checks this (`compat_v0_1`); it has been run on Linux only.
 - A write-protected file opens read-only (title says so, Save is disabled; use Save as).
 - A damaged file is never edited. The program salvages what it can into `<name>.recovered.kopercad` beside it, opens that, and shows "Recovered copy: check every page" until you confirm.
 

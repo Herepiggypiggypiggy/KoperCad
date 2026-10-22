@@ -13,7 +13,7 @@ qa=target/manual-qa
 rm -rf "$qa"
 scripts/qa.sh --only manual-help --size 1920x1080 --out "$qa" >&2
 mkdir -p docs/manual/images
-for shot in "$qa"/shots/74-manual-help-1920x1080-*.png; do
+for shot in "$qa"/shots/80-manual-help-1920x1080-*.png; do
   [ -e "$shot" ] || continue
   name=${shot##*-1920x1080-}
   name=${name#[0-9][0-9]-}
