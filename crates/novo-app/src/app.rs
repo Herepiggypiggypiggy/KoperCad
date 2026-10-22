@@ -2492,11 +2492,14 @@ impl NovoApp {
                 ));
                 if crate::is_portable() {
                     ui.weak(
-                        "Portable: settings and logs are in the data folder beside the program",
+                        "Portable: settings, logs and default-saved projects are in the data folder beside the program",
                     );
                 }
                 if crate::gpu::safe_graphics() {
-                    ui.weak("Safe graphics: software renderer (slower)");
+                    ui.weak("Started with --safe-graphics (software renderer asked for)");
+                }
+                if let Some(gpu) = crate::diag::gpu() {
+                    ui.weak(format!("Graphics: {gpu}"));
                 }
                 ui.add_space(novo_theme::space::M);
                 ui.label("Made by KoperVonk");
