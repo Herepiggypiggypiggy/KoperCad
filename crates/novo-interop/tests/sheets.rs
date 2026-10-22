@@ -622,3 +622,28 @@ fn rejected_rows_come_back_as_a_workbook_to_fix_and_reimport() {
     let plan = plan_import(doc.project(), &clean);
     assert!(rejected_workbook(&plan, &clean).is_none());
 }
+
+#[test]
+fn supply_leads_name_their_potential_in_from_and_to() {
+    let (doc, _) = starter();
+    let book = export_project(doc.project());
+    let wires = book.table(TableKind::Wires).unwrap();
+    let (from, to) = (wires.column("From").unwrap(), wires.column("To").unwrap());
+    let ends: Vec<String> = wires
+        .rows
+        .iter()
+        .flat_map(|r| [r.cells[from].clone(), r.cells[to].clone()])
+        .filter_map(|c| match c {
+            Cell::Text(t) => Some(t),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        ends.iter().any(|e| e == "L1 (feed)"),
+        "a supply lead names L1: {ends:?}"
+    );
+    assert!(
+        !ends.iter().any(|e| e == "1"),
+        "no lead is just the bare pin \"1\": {ends:?}"
+    );
+}

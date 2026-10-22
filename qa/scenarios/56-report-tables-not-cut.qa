@@ -21,3 +21,13 @@ shot export-pdf
 check_layout
 expect_file ~/Documents/KoperCAD/*.pdf 2000
 keep_file ~/Documents/KoperCAD/*.pdf
+# The bulk edit workbook names each supply lead (L1 (feed)) instead of the bare pin "1".
+key ctrl+k
+wait 4
+text Export for bulk edit
+wait 6
+key Enter
+wait 20
+shot bulk-edit
+expect_file ~/Documents/KoperCAD/*.xlsx 2000
+keep_file ~/Documents/KoperCAD/*.xlsx
