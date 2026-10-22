@@ -16,3 +16,7 @@ resize 1366 520
 wait 20
 shot live-card-low-window
 check_layout
+# The wheel over the card moves it: the last controls come into view.
+scroll 130 300 -400
+wait 20
+shot live-card-scrolled

@@ -24,6 +24,8 @@ pub(super) const MARGIN: f32 = 12.0;
 /// Space kept above a panel for the top bar, and below it for the status bar.
 const TOP: f32 = 48.0;
 const BOTTOM: f32 = 60.0;
+/// What a window's title bar and frame take from its `max_height`.
+const TITLE_ROOM: f32 = 40.0;
 /// The narrowest a panel can be dragged to.
 const MIN_WIDTH: f32 = 260.0;
 /// The shortest a panel can be dragged to.
@@ -210,7 +212,7 @@ impl Panel {
             .min_width(MIN_WIDTH.min(self.width))
             .min_height(MIN_HEIGHT.min(max_height))
             .max_height(max_height)
-            .scroll([false, !self.fit || self.scroll]);
+            .scroll([false, !self.fit]);
         if self.fit {
             // Without resizing the width is the content's; wrapped rows wrap here.
             window = window.max_width(self.width);
@@ -249,7 +251,25 @@ impl Panel {
         if self.scroll_bar {
             ctx.global_style_mut(|st| st.spacing.scroll = egui::style::ScrollStyle::solid());
         }
-        let shown = window.show(ctx, add);
+        let scrolls = self.fit && self.scroll;
+        if scrolls {
+            // egui would offer a card only its 420 default; the scroll area below
+            // shrinks it back to its content.
+            window = window.default_height(max_height);
+        }
+        let shown = window.show(ctx, |ui| {
+            if scrolls {
+                // The card is as tall as its content up to the canvas, then scrolls
+                // (the window's own scroll area would start at egui's 420 default).
+                egui::ScrollArea::vertical()
+                    .max_height((max_height - TITLE_ROOM).max(MIN_HEIGHT))
+                    .auto_shrink([true, true])
+                    .show(ui, add)
+                    .inner
+            } else {
+                add(ui)
+            }
+        });
         if let Some(scroll) = before {
             ctx.global_style_mut(|st| st.spacing.scroll = scroll);
         }
@@ -556,52 +576,45 @@ mod tests {
         egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(1200.0, 800.0))
     }
 
-    #[test]
-    fn a_fit_panel_taller_than_the_canvas_scrolls_instead_of_being_cut() {
+    /// The height of a fitted, scrolling panel with this many rows.
+    fn scrolling_panel_height(rows: usize) -> f32 {
         let ctx = egui::Context::default();
-        let last_y = |events: Vec<egui::Event>| {
-            let mut y = 0.0;
+        let mut height = 0.0;
+        for _ in 0..6 {
             let mut out = ctx.run_ui(
                 egui::RawInput {
                     screen_rect: Some(canvas()),
-                    events,
                     ..Default::default()
                 },
                 |ctx| {
-                    let panel = Panel::new("tall", "Tall", canvas(), Side::Left, 240.0)
+                    let shown = Panel::new("tall", "Tall", canvas(), Side::Left, 240.0)
                         .fit()
-                        .scrolls();
-                    panel.show(ctx, |ui| {
-                        for n in 0..80 {
-                            let r = ui.label(format!("row {n}"));
-                            if n == 79 {
-                                y = r.rect.top();
+                        .scrolls()
+                        .show(ctx, |ui| {
+                            for n in 0..rows {
+                                ui.label(format!("row {n}"));
                             }
-                        }
-                    });
+                        });
+                    height = shown.map_or(0.0, |r| r.response.rect.height());
                 },
             );
             out.textures_delta.clear();
-            y
-        };
-        last_y(vec![]);
-        let before = last_y(vec![]);
+        }
+        height
+    }
+
+    #[test]
+    fn a_scrolling_card_is_as_tall_as_its_content_up_to_the_canvas() {
+        // The wheel over it is checked in the real app (QA 59, picture "live-card-scrolled").
+        let tall = scrolling_panel_height(80);
         assert!(
-            before > canvas().bottom(),
-            "the content is taller than the canvas: {before}"
+            tall > canvas().height() * 0.8 && tall <= canvas().height(),
+            "taller than the canvas: the card takes the canvas, not egui's 420: {tall}"
         );
-        let over_panel = egui::pos2(100.0, 200.0);
-        last_y(vec![egui::Event::PointerMoved(over_panel)]);
-        let after = last_y(vec![egui::Event::MouseWheel {
-            unit: egui::MouseWheelUnit::Point,
-            delta: egui::vec2(0.0, -400.0),
-            phase: egui::TouchPhase::Move,
-            modifiers: egui::Modifiers::NONE,
-        }]);
-        let settled = last_y(vec![]);
+        let short = scrolling_panel_height(5);
         assert!(
-            settled.min(after) < before - 100.0,
-            "the wheel scrolled the panel: {before} -> {after} / {settled}"
+            short < 200.0,
+            "a short card is its content's height, not the canvas: {short}"
         );
     }
 
