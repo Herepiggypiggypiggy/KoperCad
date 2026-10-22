@@ -166,3 +166,38 @@ fn opening_the_commissioning_workspace_closes_it() {
     d.frame();
     assert!(d.app.wb.build.is_none());
 }
+
+#[test]
+fn the_build_sheet_pdf_lands_next_to_the_project_with_the_ticks_on_it() {
+    let (dir, mut d) = started();
+    let file = dir.path().join("Plant 3.novo");
+    assert!(d.app.save_to(&file));
+    cabinet(&mut d);
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.build", None);
+    d.frame();
+    d.frame();
+    tap_space(&mut d);
+    let plan = d
+        .app
+        .wb
+        .build
+        .as_ref()
+        .and_then(|b| b.plan.clone())
+        .map(|(_, p)| p)
+        .unwrap();
+    let pdf = d.app.export_build_sheet(&plan).expect("written");
+    assert_eq!(pdf, dir.path().join("Plant 3 build sheet.pdf"));
+    let bytes = std::fs::read(&pdf).unwrap();
+    assert!(bytes.starts_with(b"%PDF"));
+    // A second print replaces our own file.
+    d.app.export_build_sheet(&plan).expect("again");
+    assert!(
+        d.app
+            .messages()
+            .last()
+            .unwrap()
+            .text
+            .starts_with("Replaced")
+    );
+}

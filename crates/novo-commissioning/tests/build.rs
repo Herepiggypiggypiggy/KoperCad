@@ -497,3 +497,26 @@ fn a_problem_parked_twice_reuses_its_punch_item() {
     assert_eq!(store.punch_items().count(), 1);
     assert_eq!(store.punch(a).unwrap().note, "second");
 }
+
+#[test]
+fn the_build_sheet_has_a_row_per_step_with_ticks_problems_and_boxes() {
+    let (mut doc, h) = starter();
+    cabinet(&mut doc, &h);
+    let plan = plan_of(&doc);
+    let c = &plan.cabinets[0];
+    let mut store = CommissioningStore::new();
+    mark_done(&mut store, &c.steps[0], "tv", "2026-10-22T08:12:00Z");
+    mark_problem(&mut store, &c.tag, &c.steps[1], "bit broke", "tv", "t2");
+    let sheet = build_sheet(&plan, &store, 7);
+    assert_eq!(sheet.sections.len(), 1);
+    let s = &sheet.sections[0];
+    assert!(s.title.contains("+CAB  Build sheet  1 of "), "{}", s.title);
+    let rows = s.text_rows();
+    assert_eq!(rows.len(), c.steps.len());
+    assert_eq!(rows[0][0], "1");
+    assert_eq!(rows[0][5], "[x] tv 10-22 08:12");
+    assert_eq!(rows[1][5], "PROBLEM: bit broke");
+    assert_eq!(rows[2][5], BUILD_BOX);
+    // Hand work is said on the sheet too.
+    assert!(rows[1][3].contains("by hand"), "{}", rows[1][3]);
+}

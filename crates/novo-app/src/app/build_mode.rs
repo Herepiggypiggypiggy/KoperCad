@@ -35,7 +35,7 @@ const BIG_BUTTON: f32 = 64.0;
 
 /// What Build mode keeps between frames.
 pub(crate) struct BuildState {
-    plan: Option<(u64, Rc<BuildPlan>)>,
+    pub(super) plan: Option<(u64, Rc<BuildPlan>)>,
     /// Index into the plan's cabinets.
     cabinet: usize,
     /// The step the card shows; `None` follows the next step to do.
@@ -67,6 +67,7 @@ struct Asked {
     close: bool,
     export: bool,
     import: bool,
+    sheet: bool,
     show_wire: Option<WireId>,
     /// A step was ticked, taken back or parked: the store changed.
     changed: bool,
@@ -180,6 +181,12 @@ impl NovoApp {
         if asked.export {
             self.export_field_results();
         }
+        if asked.sheet {
+            let plan = state.plan.as_ref().map(|(_, p)| Rc::clone(p));
+            if let Some(plan) = plan {
+                self.export_build_sheet(&plan);
+            }
+        }
         if asked.import {
             self.import_field_results();
             // Ticks came in: draw the card again from the merged store.
@@ -252,6 +259,62 @@ impl NovoApp {
         }
     }
 
+    /// Writes the build sheet PDF next to the project (`<project> build
+    /// sheet.pdf`), replacing only a file of this program's own making.
+    pub(super) fn export_build_sheet(&mut self, plan: &BuildPlan) -> Option<std::path::PathBuf> {
+        let (dir, stem) = self.export_base()?;
+        let path = super::pdf::replaceable_path(&dir.join(format!("{stem} build sheet.pdf")));
+        self.export_build_sheet_to(plan, &path)
+    }
+
+    pub(super) fn export_build_sheet_to(
+        &mut self,
+        plan: &BuildPlan,
+        path: &std::path::Path,
+    ) -> Option<std::path::PathBuf> {
+        self.load_commissioning();
+        let name = self.machine_title().unwrap_or_default();
+        let revision = self
+            .backend
+            .document()
+            .map_or(0, |d| d.project().revision());
+        let store = self.wb.commissioning.as_ref().map(|m| m.store.clone())?;
+        let output = novo_commissioning::build_sheet(plan, &store, revision);
+        if output.sections.is_empty() {
+            self.message(
+                Level::Warning,
+                "No cabinet has a mounting plate yet, so there is no build sheet.",
+            );
+            return None;
+        }
+        let options = novo_pdf::ReportPdfOptions {
+            title: format!("{name}  Build sheet"),
+            row_mm: output
+                .sections
+                .iter()
+                .map(|s| (s.key.clone(), 8.0))
+                .collect(),
+            language: self.report_translator(),
+            ..novo_pdf::ReportPdfOptions::default()
+        };
+        let bytes = novo_pdf::export_report_pdf(&[&output], &options);
+        let replaced = path.exists();
+        match super::pdf::write_replacing(path, &bytes) {
+            Ok(()) => {
+                let verb = if replaced { "Replaced" } else { "Exported" };
+                self.message_file(format!("{verb} {}", path.display()), path);
+                Some(path.to_owned())
+            }
+            Err(e) => {
+                self.message(
+                    Level::Error,
+                    format!("Could not export the build sheet: {e}"),
+                );
+                None
+            }
+        }
+    }
+
     fn message_if_finished(&mut self, state: &BuildState) {
         let (Some((_, plan)), Some(mode)) = (state.plan.as_ref(), self.wb.commissioning.as_ref())
         else {
@@ -307,6 +370,12 @@ fn screen(
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if widgets::ghost_button(ui, "Close").clicked() {
                 asked.close = true;
+            }
+            if widgets::ghost_button(ui, "Print sheet…")
+                .on_hover_text("A PDF of every step with its tick, for the workshop wall")
+                .clicked()
+            {
+                asked.sheet = true;
             }
             if widgets::ghost_button(ui, "Import ticks…")
                 .on_hover_text("Merge a .kcfield file from the tablet; the newer decision wins")
