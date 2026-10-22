@@ -228,7 +228,7 @@ pub fn currents_of(project: &Project, netlist: &Netlist, input: &Input) -> Vec<C
                 };
                 (
                     a,
-                    format!("rated current of {tag} (an upper bound on the load)"),
+                    format!("rated current of {tag} (planning value: the smaller rated current)"),
                     false,
                 )
             }
