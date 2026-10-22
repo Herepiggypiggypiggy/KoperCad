@@ -220,6 +220,8 @@ pub(crate) struct Workbench {
     pub(super) assistant: super::assistant::State,
     /// The Bench output window (cut list, ferrules, labels), while open.
     pub(super) bench: Option<super::bench::BenchState>,
+    /// Build mode (guided assembly and wiring), while open.
+    pub(super) build: Option<super::build_mode::BuildState>,
     /// The Autopilot review list, while open.
     pub(super) autopilot: Option<super::autopilot::AutopilotState>,
     /// Paper of the workshop pack's drilling template.
@@ -358,6 +360,7 @@ impl Default for Workbench {
             background_panel: None,
             assistant: super::assistant::State::new(),
             bench: None,
+            build: None,
             autopilot: None,
             workshop_paper: novo_layout::template::Paper::A4,
             pdf_options: None,
@@ -493,6 +496,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.wiring_dxf",
     "export.wirecut_page",
     "view.bench",
+    "view.build",
     "report.designer",
     "export.bench_cut",
     "export.ferrules",
@@ -1356,6 +1360,7 @@ impl NovoApp {
             "export.wiring_dxf" => self.export_wiring_dxf_of_panel(),
             "export.wirecut_page" => self.add_wire_production_page(),
             "view.bench" => self.open_bench(),
+            "view.build" => self.open_build_mode(),
             "report.designer" => self.open_designer(),
             "export.bench_cut" => {
                 self.export_bench_cut();
@@ -1798,7 +1803,7 @@ impl NovoApp {
         let moved = pointer.map_or(0.0, |p| p.distance(down));
         if released && !panned && moved <= 4.0 {
             // At the cabinet a tap of Space ticks the wire in front of you.
-            if !self.commissioning_space() {
+            if !self.build_space() && !self.commissioning_space() {
                 self.wb.field.open(Mode::All, pointer.or(Some(down)));
             }
         }

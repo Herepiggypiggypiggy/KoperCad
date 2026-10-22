@@ -331,7 +331,7 @@ fn target_state(store: &CommissioningStore, target: Target) -> CheckState {
 /// Touch density (the Large switch) for this panel only: the controls are
 /// 36 pt high and the text a step larger. Without it the panel uses the
 /// controls of the app's density, so a list row is one control high.
-fn touch_density(ui: &mut egui::Ui, large: bool) {
+pub(super) fn touch_density(ui: &mut egui::Ui, large: bool) {
     if !large {
         return;
     }
@@ -791,7 +791,7 @@ impl NovoApp {
 
     /// Opens the 3D view with `wire` selected. The commissioning data is
     /// kept in the project in the frame it changes, so leaving is safe.
-    fn show_wire_in_3d(&mut self, wire: WireId) {
+    pub(super) fn show_wire_in_3d(&mut self, wire: WireId) {
         if let Some(mode) = self.wb.commissioning.as_mut()
             && mode.dirty
         {

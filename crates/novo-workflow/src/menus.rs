@@ -268,6 +268,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("export.bench_packet", under("Reports", "Export")),
     ("export.safety_sheets", under("Reports", "Export")),
     ("view.bench", at("Reports")),
+    ("view.build", at("Reports")),
     ("report.designer", at("Reports")),
     ("export.bench_cut", under("Reports", "Export")),
     ("export.ferrules", under("Reports", "Export")),
@@ -515,7 +516,12 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
                 "report.io",
                 "report.cable_schedule",
             ],
-            &["report.add_page", "report.designer", "view.bench"],
+            &[
+                "report.add_page",
+                "report.designer",
+                "view.bench",
+                "view.build",
+            ],
         ],
     ),
     (

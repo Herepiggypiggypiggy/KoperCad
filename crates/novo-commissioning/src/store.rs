@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::build::{BuildTick, StepKey};
 use crate::check::{CheckKind, CheckRecord, CheckState, Target};
 use crate::punch::{Photo, PunchItem, PunchState, Severity, Signature};
 use crate::redline::{Redline, RedlineState};
@@ -30,6 +31,7 @@ pub struct CommissioningStore {
     punch: BTreeMap<u64, PunchItem>,
     next_punch: u64,
     redlines: BTreeMap<u64, Redline>,
+    build: BTreeMap<StepKey, BuildTick>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -40,6 +42,8 @@ struct StoreData {
     punch: Vec<PunchItem>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     redlines: Vec<Redline>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    build: Vec<BuildTick>,
 }
 
 impl From<StoreData> for CommissioningStore {
@@ -54,6 +58,7 @@ impl From<StoreData> for CommissioningStore {
             punch: data.punch.into_iter().map(|p| (p.id, p)).collect(),
             next_punch,
             redlines: data.redlines.into_iter().map(|r| (r.id, r)).collect(),
+            build: data.build.into_iter().map(|t| (t.key, t)).collect(),
         }
     }
 }
@@ -64,6 +69,7 @@ impl From<CommissioningStore> for StoreData {
             checks: store.checks.into_values().collect(),
             punch: store.punch.into_values().collect(),
             redlines: store.redlines.into_values().collect(),
+            build: store.build.into_values().collect(),
         }
     }
 }
@@ -87,7 +93,10 @@ impl CommissioningStore {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.checks.is_empty() && self.punch.is_empty() && self.redlines.is_empty()
+        self.checks.is_empty()
+            && self.punch.is_empty()
+            && self.redlines.is_empty()
+            && self.build.is_empty()
     }
 
     /// The state of one check; `Pending` when nothing was decided.
@@ -166,6 +175,30 @@ impl CommissioningStore {
     /// Replaces the item with the same id.
     pub(crate) fn put_punch(&mut self, item: PunchItem) {
         self.punch.insert(item.id, item);
+    }
+
+    /// The tick of a build step (Build mode), if one was made.
+    pub fn build_tick(&self, key: StepKey) -> Option<&BuildTick> {
+        self.build.get(&key)
+    }
+
+    pub fn build_ticks(&self) -> impl Iterator<Item = &BuildTick> {
+        self.build.values()
+    }
+
+    /// Stores a build tick as it is (a person's tick, or a merged one).
+    pub fn put_build(&mut self, tick: BuildTick) {
+        self.build.insert(tick.key, tick);
+    }
+
+    /// Takes a build tick back.
+    pub fn clear_build(&mut self, key: StepKey) {
+        self.build.remove(&key);
+    }
+
+    /// Drops ticks of steps the plan no longer has (a device was deleted).
+    pub fn retain_build(&mut self, keep: &std::collections::BTreeSet<StepKey>) {
+        self.build.retain(|k, _| keep.contains(k));
     }
 
     /// Forgets a decision, back to `Pending`.

@@ -2718,6 +2718,28 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "view.build",
+            "Build mode...",
+            "Export",
+            &[
+                "build",
+                "assembly",
+                "assemble",
+                "wiring",
+                "step by step",
+                "guided",
+                "tablet",
+                "workshop",
+                "checklist",
+                "tick",
+                "progress",
+            ],
+            Needs::Project,
+        ),
+        &["build mode", "guided build", "open build mode"],
+    ),
+    verb(
+        cmd(
             "report.designer",
             "Report designer...",
             "Export",
