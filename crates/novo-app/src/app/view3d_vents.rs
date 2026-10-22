@@ -151,6 +151,18 @@ fn body(
     if let Some(i) = remove {
         settings.remove(i);
     }
+    for (a, b) in settings.overlapping(e) {
+        ui.add_space(4.0);
+        ui.colored_label(
+            crate::theme::ui_palette().warning,
+            format!(
+                "Openings {} and {} cover the same part of a wall; their flow would be counted twice. \
+                 Move one.",
+                a + 1,
+                b + 1
+            ),
+        );
+    }
     if let Some(line) = balance_line(flows, settings) {
         ui.add_space(4.0);
         ui.label(muted(&line));

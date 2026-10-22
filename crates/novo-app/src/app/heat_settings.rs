@@ -91,6 +91,19 @@ pub(super) struct Footprint {
 }
 
 impl Footprint {
+    /// True when the two faces lie on the same wall and share area.
+    pub(super) fn overlaps(&self, other: &Footprint) -> bool {
+        self.wall == other.wall
+            && (0..3).all(|k| {
+                let flat = self.hi[k] - self.lo[k] < 1e-6 || other.hi[k] - other.lo[k] < 1e-6;
+                if flat {
+                    self.lo[k] <= other.hi[k] && other.lo[k] <= self.hi[k]
+                } else {
+                    self.lo[k] < other.hi[k] && other.lo[k] < self.hi[k]
+                }
+            })
+    }
+
     /// The direction air moves when it enters through this face, in the
     /// solver frame.
     pub(super) fn inward(&self) -> [f64; 3] {
@@ -512,6 +525,21 @@ impl HeatSettings {
         self.editing = false;
     }
 
+    /// Pairs of openings that cover the same part of a wall: their flow would
+    /// be counted twice.
+    pub(super) fn overlapping(&self, e: &Enclosure) -> Vec<(usize, usize)> {
+        let feet: Vec<Footprint> = self.vents.iter().map(|v| v.footprint(e)).collect();
+        let mut pairs = Vec::new();
+        for i in 0..feet.len() {
+            for j in i + 1..feet.len() {
+                if feet[i].overlaps(&feet[j]) {
+                    pairs.push((i, j));
+                }
+            }
+        }
+        pairs
+    }
+
     pub(super) fn can_undo(&self) -> bool {
         !self.undo.is_empty()
     }
@@ -572,6 +600,27 @@ impl HeatSettings {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn identical_openings_are_reported_as_overlapping_and_apart_ones_are_not() {
+        let e = enclosure();
+        let a = VentSpec::presets(&e)[2].spec;
+        let mut set = HeatSettings::default();
+        set.add(a);
+        set.add(a);
+        assert_eq!(set.overlapping(&e), vec![(0, 1)]);
+        let mut b = a;
+        b.u_mm = if a.u_mm > 300.0 {
+            60.0
+        } else {
+            e.interior_width_mm() - 60.0
+        };
+        set.vents[1] = b;
+        let far = set.vents[1]
+            .footprint(&e)
+            .overlaps(&set.vents[0].footprint(&e));
+        assert!(!far || b.width_mm > 200.0, "{b:?}");
+    }
+
     use super::*;
     use novo_layout::Rect;
     use novo_layout::sizing::{Installation, Material};
