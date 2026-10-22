@@ -1715,7 +1715,7 @@ fn legend(
         "Temperature",
         rect,
         super::panel::Side::Right,
-        164.0,
+        204.0,
     )
     .top(12.0)
     .fixed_open()
@@ -1730,7 +1730,7 @@ fn legend(
             .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
             .auto_shrink([true, true])
             .show(ui, |ui| {
-                ui.set_width(140.0);
+                ui.set_width(180.0);
                 // Room for the top tick label, which hangs above the bar.
                 ui.add_space(6.0);
                 // A short canvas gets a shorter colour bar, so the notes below stay in view.

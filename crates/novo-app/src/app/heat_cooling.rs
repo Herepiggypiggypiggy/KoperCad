@@ -16,7 +16,8 @@ use super::heat_run::Solution;
 /// File name inside the KoperCAD folder under `%APPDATA%`.
 pub const LIST_FILE: &str = "cooling.csv";
 
-/// Target used when no device states a limit, degrees C.
+/// Target used when no device states a limit, and the most the automatic
+/// target starts at, degrees C: a margin under what the devices allow.
 pub const DEFAULT_TARGET_C: f64 = 40.0;
 
 pub fn list_path() -> Option<PathBuf> {
@@ -129,7 +130,7 @@ pub(super) fn basis_for(sol: &Solution, settings: &CoolingSettings) -> Option<Ba
     let devices_w: f64 = sol.snapshot.devices.iter().map(|d| d.loss_w).sum();
     let target = settings
         .target_c
-        .or_else(|| lowest_limit_c(sol))
+        .or_else(|| lowest_limit_c(sol).map(|l| l.min(DEFAULT_TARGET_C)))
         .unwrap_or(DEFAULT_TARGET_C);
     basis_of(
         e,
@@ -266,7 +267,7 @@ pub(super) fn show(
                     )
                     .on_hover_text(match auto_target {
                         Some(t) => format!(
-                            "Starts at the lowest ambient limit among the devices ({t:.0} °C)."
+                            "Devices allow up to {t:.0} °C ambient at the lowest; the target starts at the lower of that and {DEFAULT_TARGET_C:.0} °C."
                         ),
                         None => format!(
                             "No device states an ambient limit, so it starts at {DEFAULT_TARGET_C:.0} °C."
@@ -279,11 +280,11 @@ pub(super) fn show(
                 if settings.target_c.is_some() && ui.small_button("Auto").clicked() {
                     settings.target_c = None;
                 }
+                ui.checkbox(&mut settings.closed, "Must stay closed (no fans)")
+                    .on_hover_text(
+                        "Dust, spray or the IP rating rule out an opening: only a cooling unit is proposed.",
+                    );
             });
-            ui.checkbox(&mut settings.closed, "Must stay closed (no fans)")
-                .on_hover_text(
-                    "Dust, spray or the IP rating rule out an opening: only a cooling unit is proposed.",
-                );
             ui.add_space(2.0);
             for (i, o) in selection.options.iter().enumerate() {
                 let recommended = selection.recommended == Some(i);
@@ -310,6 +311,11 @@ pub(super) fn show(
                 }
                 ui.label(rt);
             }
+            ui.label(small(
+                "Model estimate with planning values: the loss is the run's, the walls follow IEC 60890, \
+                 filters take about a third of a fan's flow. The maker's selection tool decides.",
+                pal.text_secondary,
+            ));
             ui.add_space(2.0);
             egui::CollapsingHeader::new(egui::RichText::new("The balance").small())
                 .id_salt("heat_cooling_balance")
@@ -388,11 +394,6 @@ pub(super) fn show(
             if let Some(notice) = &settings.notice {
                 ui.label(small(notice, pal.text_secondary));
             }
-            ui.label(small(
-                "Model estimate with planning values: the loss is the run's, the walls follow IEC 60890, \
-                 filters take about a third of a fan's flow. The maker's selection tool decides.",
-                pal.text_secondary,
-            ));
         });
 }
 

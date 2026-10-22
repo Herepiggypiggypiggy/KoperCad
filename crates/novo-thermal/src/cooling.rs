@@ -366,6 +366,8 @@ pub struct Need {
     /// Effective surface, m2, and wall coefficient, W/(m2 K).
     pub surface_m2: f64,
     pub k: f64,
+    /// The temperature held inside, degrees C.
+    pub target_c: f64,
     /// `target - ambient`, K (negative when the target is below the ambient).
     pub delta_k: f64,
     /// What the walls carry at the target, W (negative: they bring heat in).
@@ -429,8 +431,8 @@ impl Selection {
         let n = &self.need;
         if n.natural_ok() {
             return format!(
-                "No cooling needed: the walls carry the {:.0} W at {:.0} °C inside (model estimate, planning values).",
-                n.loss_w, n.natural_inside_c
+                "No cooling needed: the walls carry the {:.0} W at {:.0} °C inside, under the {:.0} °C target (model estimate, planning values).",
+                n.loss_w, n.natural_inside_c, n.target_c
             );
         }
         match self.proposal() {
@@ -524,6 +526,11 @@ pub fn need(basis: &Basis) -> Need {
         None
     } else if basis.closed_required {
         Some("the enclosure has to stay closed".to_owned())
+    } else if delta <= 0.0 {
+        Some(
+            "the target is not above the outside temperature, so only a cooling unit can hold it"
+                .to_owned(),
+        )
     } else if delta < MIN_FAN_DELTA_K {
         Some(format!(
             "the target is only {delta:.0} K above the outside air (a fan needs at least {MIN_FAN_DELTA_K:.0} K)"
@@ -536,6 +543,7 @@ pub fn need(basis: &Basis) -> Need {
         loss_w: basis.loss_w,
         surface_m2: surface,
         k,
+        target_c: basis.target_c,
         delta_k: delta,
         wall_w: wall,
         cooling_w: cooling,
@@ -702,6 +710,7 @@ mod tests {
         assert!(s.need.natural_ok());
         assert!(s.recommended.is_none());
         assert!(s.sentence().starts_with("No cooling needed"));
+        assert!(s.sentence().contains("40 °C target"), "{}", s.sentence());
     }
 
     #[test]
