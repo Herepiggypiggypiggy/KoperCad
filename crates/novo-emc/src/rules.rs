@@ -107,6 +107,24 @@ pub static RULES: &[Rule] = &[
         verify: true,
         inputs: "Device positions on the plate",
     },
+    Rule {
+        id: "EMC-19",
+        title: "Magnetic field at a sensitive device",
+        level: Level::Estimate,
+        requirement: "The low-frequency magnetic field of the drawn currents stays under the planning value where a PLC or analog module sits (Biot-Savart on the routed wires, order of magnitude).",
+        source: "Yardstick: the power-frequency magnetic field immunity test levels (IEC 61000-4-8, 10 and 30 A/m); the planning value is a house value, levels not verified",
+        verify: true,
+        inputs: "Currents (`emc.current_a`, or the rated current of a device at an end), routed paths, sensitive devices",
+    },
+    Rule {
+        id: "EMC-20",
+        title: "Voltage induced in a sensitive run",
+        level: Level::Estimate,
+        requirement: "A signal wire beside current-carrying wires picks up less than the planning value, at the line frequency and on a current step (Faraday on the Biot-Savart flux through its loop).",
+        source: "Faraday's law on the field model; the planning value is a house value, not verified",
+        verify: true,
+        inputs: "Currents, routed paths of aggressors and signal wires, go and return of a pair, twisting (`emc.twisted`)",
+    },
 ];
 
 pub fn rule(id: &str) -> &'static Rule {
@@ -148,6 +166,12 @@ fn clamp01(v: f64) -> f64 {
 
 /// Runs every rule.
 pub fn analyse(input: &Input) -> Report {
+    analyse_with_field(input, None)
+}
+
+/// Runs every rule, and with the currents of `field` also the magnetic field
+/// rules EMC-19 and EMC-20.
+pub fn analyse_with_field(input: &Input, field: Option<&crate::field::FieldSetup>) -> Report {
     let cx = Ctx {
         input,
         names: input.runs.iter().map(|r| (r.id, r.name.as_str())).collect(),
@@ -323,6 +347,23 @@ pub fn analyse(input: &Input) -> Report {
         false,
     );
 
+    let mut field_summary = None;
+    if let Some(setup) = field {
+        let outcome = crate::field::evaluate(input, setup);
+        findings.extend(outcome.findings);
+        status.extend(outcome.status);
+        field_summary = Some(outcome.summary);
+    } else {
+        for rule in ["EMC-19", "EMC-20"] {
+            status.push(RuleStatus {
+                rule,
+                status: Status::NotEvaluated,
+                findings: 0,
+                note: "No currents were handed to the engine".to_owned(),
+            });
+        }
+    }
+
     // A fixed order: the worst first, then by rule and subject.
     findings.sort_by(|a, b| {
         a.severity
@@ -341,10 +382,16 @@ pub fn analyse(input: &Input) -> Report {
     let mut report = Report {
         findings,
         rules: status,
+        field: field_summary,
         ..Report::default()
     };
     scores(&cx, &mut report);
     report.assumptions = assumptions(input);
+    if let Some(setup) = field {
+        report
+            .assumptions
+            .extend(crate::field::assumptions(input, setup));
+    }
     report
 }
 

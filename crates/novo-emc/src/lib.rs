@@ -15,6 +15,7 @@
 //!   100, and every point is listed with its reason in [`Score::reasons`].
 
 pub mod class;
+pub mod field;
 pub mod geometry;
 pub mod input;
 pub mod picture;
@@ -23,7 +24,8 @@ pub mod report;
 pub mod rules;
 
 pub use class::{EmcClass, Shield, Termination, default_distance_mm};
+pub use field::{Current, FieldMap, FieldParams, FieldSetup, FieldSummary};
 pub use input::{Device, Duct, FilterState, Finish, Input, Origin, Params, Plate, Role, Run};
 pub use picture::{DESIGN_AID, Picture, picture};
 pub use report::*;
-pub use rules::{RULES, Rule, analyse};
+pub use rules::{RULES, Rule, analyse, analyse_with_field};

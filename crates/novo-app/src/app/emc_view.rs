@@ -455,12 +455,26 @@ pub(super) fn legend(ctx: &egui::Context, view: egui::Rect, state: &EmcState, da
             );
         }
         if layers.risk {
-            ramp_bar(ui, &st, "calm", "heavily leaned on");
-            ui.label(
-                egui::RichText::new("Exposure index: distances only")
-                    .small()
-                    .color(pal.text_secondary),
-            );
+            match pic.field.as_ref().and_then(|f| f.ends.as_ref()) {
+                Some((lo, hi)) => {
+                    ramp_bar(ui, &st, lo, hi);
+                    ui.label(
+                        egui::RichText::new(
+                            "Magnetic field of the drawn currents: a model, order of magnitude. The planning value is the middle of the bar.",
+                        )
+                        .small()
+                        .color(pal.text_secondary),
+                    );
+                }
+                None => {
+                    ramp_bar(ui, &st, "calm", "heavily leaned on");
+                    ui.label(
+                        egui::RichText::new("Exposure index: distances only")
+                            .small()
+                            .color(pal.text_secondary),
+                    );
+                }
+            }
         }
         if layers.spots {
             ramp_bar(ui, &st, "low risk", "high risk");
@@ -640,7 +654,12 @@ fn layer_chips(ui: &mut egui::Ui, l: &mut EmcLayers, pic: &Picture) {
         chip(ui, &mut l.halos, "Keep-clear", "A soft band round each noisy run: keep sensitive wires out of it", true, nothing);
         chip(ui, &mut l.sources, "Noise glow", "A glow round each noisy part, as far as its loudness reaches (an index, not a field)", true, nothing);
         chip(ui, &mut l.spots, "Hot spots", "Numbered markers where something is likely to go wrong", true, nothing);
-        chip(ui, &mut l.risk, "Exposure map", "How strongly each point of the plate is leaned on by the noisy parts and runs. Geometry only", true, nothing);
+        let exposure_tip = if pic.field.is_some() {
+            "The magnetic field of the currents in the drawn wires, a little above the plate. A model with stated assumptions, not a measurement"
+        } else {
+            "How strongly each point of the plate is leaned on by the noisy parts and runs. Geometry only"
+        };
+        chip(ui, &mut l.risk, "Exposure map", exposure_tip, true, nothing);
         chip(ui, &mut l.loops, "Loops", "The area each pair of go and return wires encloses", !pic.loops.is_empty(), nothing);
         chip(ui, &mut l.bonding, "Bonding", "The earth and bonding conductors", !pic.bonds.is_empty(), if pic.provenance == Provenance::Engine { "Not drawn yet: the rule engine does not give bonding links" } else { nothing });
         chip(ui, &mut l.shields, "Shields", "Where each cable screen ends", !pic.shields.is_empty(), nothing);

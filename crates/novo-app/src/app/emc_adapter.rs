@@ -10,7 +10,7 @@
 use std::collections::HashSet;
 
 use novo_emc::report::{Fix as EngineFix, Subject};
-use novo_emc::{EmcClass, Input, NOT_CHECKED, Role, Termination};
+use novo_emc::{EmcClass, FieldSetup, Input, NOT_CHECKED, Role, Termination};
 use novo_view3d::emc::{
     Assumed, Class, Fix, Hotspot, Kind, Level, LoopSheet, Node, Picture, Provenance,
     Role as NodeRole, Run, Shield, ShieldEnd,
@@ -53,6 +53,8 @@ fn short_title(rule: &str) -> &'static str {
         "EMC-11" => "Plate bonding",
         "EMC-14" => "Signal leaves cabinet",
         "EMC-17" => "Sensitive near drive",
+        "EMC-19" => "Field at sensitive device",
+        "EMC-20" => "Induced voltage",
         _ => "EMC finding",
     }
 }
@@ -65,6 +67,7 @@ fn kind_of(rule: &str) -> Kind {
         "EMC-09" => Kind::Loop,
         "EMC-11" => Kind::Bond,
         "EMC-07" => Kind::Filter,
+        "EMC-19" | "EMC-20" => Kind::Field,
         _ => Kind::Proximity,
     }
 }
@@ -154,8 +157,10 @@ pub(crate) fn from_project(
     plate_mm: [f32; 2],
     drawn: &HashSet<u64>,
 ) -> Option<Picture> {
-    let input = novo_emc::project::input_of(project, &project.netlist());
-    let pic = build(&input, plate.raw(), plate_mm, drawn);
+    let netlist = project.netlist();
+    let input = novo_emc::project::input_of(project, &netlist);
+    let field = novo_emc::project::field_setup_of(project, &netlist, &input);
+    let pic = build_with(&input, Some(&field), plate.raw(), plate_mm, drawn);
     (!pic.runs.is_empty() || !pic.nodes.is_empty()).then_some(pic)
 }
 
@@ -164,13 +169,26 @@ pub(crate) fn from_project(
 /// `drawn` holds the wires the host view shows: a run the host leaves out
 /// (no duct route, not in the scene) is left out here too, with the findings
 /// and loops that need it, so the picture never shows what the view cannot.
+#[cfg(test)]
 pub(crate) fn build(
     input: &Input,
     plate: u64,
     plate_mm: [f32; 2],
     drawn: &HashSet<u64>,
 ) -> Picture {
-    let report = novo_emc::analyse(input);
+    build_with(input, None, plate, plate_mm, drawn)
+}
+
+/// Like [`build`], with the currents of the magnetic field estimate: the
+/// exposure map becomes the field slice and EMC-19 and EMC-20 can fire.
+pub(crate) fn build_with(
+    input: &Input,
+    field: Option<&FieldSetup>,
+    plate: u64,
+    plate_mm: [f32; 2],
+    drawn: &HashSet<u64>,
+) -> Picture {
+    let report = novo_emc::analyse_with_field(input, field);
     let pic = novo_emc::picture(input, &report);
     let on_plate = |p: Option<u64>| p == Some(plate);
 
@@ -355,7 +373,7 @@ pub(crate) fn build(
         loops,
         bonds: Vec::new(),
         shields,
-        field: None,
+        field: field.and_then(|f| field_of(input, f, plate, plate_mm)),
         provenance: Provenance::Engine,
         assumptions: pic
             .assumptions
@@ -375,6 +393,49 @@ pub(crate) fn build(
             .collect(),
         not_checked: NOT_CHECKED.iter().map(|s| (*s).to_owned()).collect(),
     }
+}
+
+/// The magnetic field slice of a plate as the views' exposure map: the
+/// colour is the logarithm of the flux density with the planning value in the
+/// middle, and the legend names both ends in microtesla.
+fn field_of(
+    input: &Input,
+    setup: &FieldSetup,
+    plate: u64,
+    plate_mm: [f32; 2],
+) -> Option<novo_view3d::emc::Field> {
+    let m = novo_emc::field::map(
+        input,
+        setup,
+        plate,
+        (f64::from(plate_mm[0]), f64::from(plate_mm[1])),
+    )?;
+    let limit = setup.params.limit_ut;
+    let ut = |v: f64| {
+        if v < 10.0 {
+            format!("{v:.1} \u{b5}T")
+        } else {
+            format!("{v:.0} \u{b5}T")
+        }
+    };
+    Some(novo_view3d::emc::Field {
+        origin: [m.origin.0 as f32, m.origin.1 as f32],
+        cell: m.cell_mm as f32,
+        nx: m.nx,
+        ny: m.ny,
+        values: m
+            .b_ut
+            .iter()
+            .map(|b| novo_emc::field::ramp_value(f64::from(*b), limit))
+            .collect(),
+        label: format!(
+            "Magnetic field estimate, model (strongest {} at {} Hz, {} mm above the plate)",
+            ut(f64::from(m.peak_ut)),
+            setup.params.hz,
+            setup.params.slice_mm
+        ),
+        ends: Some((ut(limit / 10.0), ut(limit * 10.0))),
+    })
 }
 
 #[cfg(test)]
@@ -462,6 +523,60 @@ mod tests {
         assert!(h.runs.contains(&1) && h.runs.contains(&2));
         assert!(pic.not_checked.iter().any(|t| t.contains("Compliance")));
         assert!(pic.assumptions.iter().any(|a| a.contains("divider")));
+    }
+
+    #[test]
+    fn with_currents_the_exposure_map_is_the_field_slice_and_says_so() {
+        use novo_emc::{Current, FieldParams};
+        let mut inp = input();
+        // The analog run's device is a PLC 50 mm from the motor wire.
+        inp.devices.push(Device {
+            id: 9,
+            tag: "-A1".into(),
+            role: Role::Sensitive,
+            plate: Some(1),
+            rect: Some((250.0, 90.0, 60.0, 40.0)),
+            filter: FilterState::Unknown,
+            filter_for: None,
+            bonded: None,
+        });
+        let setup = FieldSetup {
+            currents: vec![Current {
+                run: 1,
+                amps: 16.0,
+                phase_deg: 0.0,
+                source: "test".into(),
+                declared: true,
+                phase_known: true,
+            }],
+            params: FieldParams::default(),
+        };
+        let without = build(&inp, 1, [800.0, 400.0], &all());
+        assert!(without.field.is_none(), "no currents, the index stays");
+        let pic = build_with(&inp, Some(&setup), 1, [800.0, 400.0], &all());
+        let f = pic.field.as_ref().expect("the field slice");
+        assert!(f.label.contains("Magnetic field estimate"), "{}", f.label);
+        assert!(f.label.contains("model"));
+        let (lo, hi) = f.ends.clone().expect("the legend ends");
+        assert!(lo.contains('\u{b5}') && hi.contains('\u{b5}'), "{lo} {hi}");
+        // Strongest on the wire (y = 50), weak at the far side of the plate.
+        assert!(f.at(400.0, 55.0) > f.at(400.0, 395.0));
+        assert!(f.values.iter().all(|v| (0.0..=1.0).contains(v)));
+        let h = pic
+            .hotspots
+            .iter()
+            .find(|h| h.rule == "EMC-19")
+            .expect("the PLC sits in the field");
+        assert_eq!(h.level, Level::Estimate);
+        assert!(h.devices.contains(&9) && h.runs.contains(&1));
+        assert_eq!(h.title, "Field at sensitive device");
+        assert!(
+            h.numbers
+                .iter()
+                .any(|(l, v)| l.contains("Field") && v.contains('\u{b5}'))
+        );
+        assert!(h.band.is_some());
+        assert!(h.assumptions.iter().any(|a| a.text.contains("Frequency")));
     }
 
     #[test]

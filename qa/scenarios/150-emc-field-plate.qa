@@ -1,0 +1,27 @@
+@title Cabinet plate: EMC view with the magnetic field estimate (25 A drive, three phases, PLC beside it)
+@area Cabinet
+@sizes 1366x768 1920x1080
+# Ctrl+K "EMC view on the plate": the exposure map is the field slice of the drawn currents (model), the legend names its ends in microtesla, and the PLC next to the drive has a numbered hot spot.
+open qa/fixtures/emc-field.novo
+wait 20
+key ctrl+k
+wait 6
+text emc view on the plate
+wait 8
+key Enter
+wait 30
+expect "Indicative model"
+shot plate-field-overview
+check_layout
+click_text "Exposure map" #1
+wait 15
+expect "Magnetic field of the drawn currents"
+expect "a model"
+shot plate-field-map
+check_layout
+click_text "Field at sensitive device" #1
+wait 15
+expect "Field at the device"
+expect "Estimate"
+shot plate-field-card
+check_layout

@@ -1,0 +1,39 @@
+@title Check > EMC check: the Magnetic field estimate section (settings, currents with their sources, sensitive devices and wires)
+@area Check
+@sizes 1366x768 1920x1080
+# The window lists each current the estimate uses (the drive's 25 A rating, phases from the U, V and W pins), the field at the PLC and the voltage the analog wire picks up. Findings join the Issues list once the check is on.
+open qa/fixtures/emc-field.novo
+wait 20
+key ctrl+k
+text EMC check
+key enter
+wait 10
+expect "Magnetic field estimate"
+shot field-collapsed
+check_layout
+click_text "Magnetic field estimate"
+wait 10
+expect "rated current of -T1"
+expect "never a measurement"
+shot field-section
+check_layout
+scroll 360 400 -250
+wait 5
+expect "Sensitive devices"
+expect "Sensitive wires"
+shot field-sensitive
+check_layout
+click_text "Run the EMC rules with the design checks"
+wait 10
+expect "EMC-19"
+shot field-findings
+check_layout
+key Escape
+wait 5
+key ctrl+k
+text Problems
+key enter
+wait 10
+expect "EMC-19"
+shot issues-field
+check_layout
