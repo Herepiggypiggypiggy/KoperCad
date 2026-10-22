@@ -1,0 +1,20 @@
+@title New project closes Build mode instead of leaving it over the empty screen
+@area Editor
+key ctrl+k
+wait 4
+text open example
+wait 6
+click_text "Open example"
+wait 40
+key ctrl+k
+wait 4
+text build mode
+wait 6
+key Enter
+wait 30
+shot 1-build-mode-open
+expect "Build mode"
+key ctrl+n
+wait 30
+shot 2-after-new-project
+check_layout
