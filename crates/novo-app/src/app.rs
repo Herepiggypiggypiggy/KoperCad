@@ -33,6 +33,8 @@ mod cable_controls;
 mod cable_cores;
 #[cfg(test)]
 mod cable_cores_tests;
+#[cfg(test)]
+mod cable_proposals_fixture_tests;
 mod calculations;
 #[cfg(test)]
 mod calculations_tests;
