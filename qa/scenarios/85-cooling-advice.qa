@@ -1,0 +1,47 @@
+@title Cooling advice: sweep vent and fan places, show the best few, add one to Vents and fans
+@area Heat
+# A hot cabinet (VFD under PLC modules). Pictures first show the three ways in (Heat strip button, Ctrl+K entry, plate right-click). The sweep tries places and sizes in the 2D model; the window shows the best options with before and after; Add puts the pair in the 3D Heat panel's Vents and fans list, and the window closes when the view changes.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 30
+click_text Cabinet #1
+wait 30
+key ctrl+k
+wait 4
+text Show or hide heat
+wait 6
+key Enter
+wait 20
+expect "Cooling advice"
+shot heat-strip-button
+click 960 520 right
+wait 10
+expect "Cooling advice…"
+shot plate-right-click
+key Escape
+wait 6
+key ctrl+k
+wait 4
+text Cooling advice
+wait 8
+expect "Cooling advice and vent sweep"
+shot ctrl-k-entry
+key Enter
+wait 20
+shot sweeping
+wait_s 90
+expect "Cooling advice"
+expect "Model estimate"
+expect "Tightest margin"
+expect "A try is one run"
+shot advice
+check_layout
+click_text "Add these two to Vents and fans"
+wait 10
+expect "Added"
+shot added
+click_text 3D #1
+wait 40
+expect_not "Model estimate"
+expect "Vents and fans"
+shot in-3d
+check_layout

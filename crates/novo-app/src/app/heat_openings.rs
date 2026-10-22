@@ -69,6 +69,8 @@ pub(super) struct Marker {
     pub half: [f32; 2],
     /// Out of the cabinet.
     pub outward: Vec3,
+    /// The whole wall it sits in, in the scene (corners in order).
+    pub wall: [Vec3; 4],
 }
 
 /// The direction of a solver-frame vector in the scene (y flips).
@@ -125,9 +127,26 @@ pub(super) fn markers(
                 across,
                 half,
                 outward: -to_world(f.inward()),
+                wall: wall_corners(fit.wall, e).map(|p| place.world(p)),
             }
         })
         .collect()
+}
+
+/// The corners of a whole wall in the solver frame.
+fn wall_corners(wall: Wall, e: &novo_thermal::model::Enclosure) -> [[f64; 3]; 4] {
+    let (w, h, d) = (
+        e.interior_width_mm(),
+        e.interior_height_mm(),
+        e.interior_depth_mm(),
+    );
+    match wall {
+        Wall::Top => [[0.0, 0.0, 0.0], [w, 0.0, 0.0], [w, 0.0, d], [0.0, 0.0, d]],
+        Wall::Bottom => [[0.0, h, 0.0], [w, h, 0.0], [w, h, d], [0.0, h, d]],
+        Wall::Left => [[0.0, 0.0, 0.0], [0.0, h, 0.0], [0.0, h, d], [0.0, 0.0, d]],
+        Wall::Right => [[w, 0.0, 0.0], [w, h, 0.0], [w, h, d], [w, 0.0, d]],
+        Wall::Door => [[0.0, 0.0, d], [w, 0.0, d], [w, h, d], [0.0, h, d]],
+    }
 }
 
 impl Marker {
@@ -180,6 +199,15 @@ pub(super) fn overlays(markers: &[Marker]) -> Vec<Overlay> {
     let mut detail = lines(1.6);
     let mut arrows = lines(3.6);
     for m in markers {
+        if m.selected {
+            // The wall it is in, tinted, so "left wall" is not a guess.
+            let base = fill.positions.len() as u32;
+            fill.positions
+                .extend(m.wall.map(|p| p + m.outward * (LIFT_MM * 0.5)));
+            fill.colors.extend([m.colour(38); 4]);
+            fill.indices
+                .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+        }
         let alpha = if m.selected { 150 } else { 85 };
         let c = m.corners(0.0);
         let base = fill.positions.len() as u32;
@@ -309,21 +337,40 @@ pub(super) fn label_lines(m: &Marker) -> [String; 2] {
     [format!("{}  {what}", m.index + 1), format!("{size}{flow}")]
 }
 
-/// Paints the labels over the 3D view; returns the opening whose label was
-/// clicked.
+/// What the person did with the labels this frame.
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub(super) struct LabelAction {
+    /// The label of this opening was clicked.
+    pub clicked: Option<usize>,
+    /// This opening's label is being dragged.
+    pub drag: Option<DragPhase>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct DragPhase {
+    pub index: usize,
+    pub started: bool,
+    pub stopped: bool,
+}
+
+/// How far down from the view's top edge the 3D view toolbar reaches.
+const TOOLBAR_CLEAR: f32 = 112.0;
+
+/// Paints the labels over the 3D view and reports a click on one, or a drag
+/// of one (which slides its opening along the wall).
 pub(super) fn paint_labels(
     ui: &egui::Ui,
     view: &View3d,
     rect: egui::Rect,
     scene: &Scene,
     markers: &[Marker],
-) -> Option<usize> {
+) -> LabelAction {
     let pal = crate::theme::ui_palette();
     let painter = ui.painter().with_clip_rect(rect);
     let bold = egui::FontId::proportional(12.5);
     let small = egui::FontId::proportional(11.0);
     let mut placed: Vec<egui::Rect> = Vec::new();
-    let mut clicked = None;
+    let mut action = LabelAction::default();
     for m in markers {
         let Some(at) = view.project(rect, scene, label_anchor(m)) else {
             continue;
@@ -336,10 +383,16 @@ pub(super) fn paint_labels(
             g1.size().y + g2.size().y + 8.0,
         );
         let mut chip = egui::Rect::from_center_size(at, size);
-        // Keep the chip inside the view and off the others.
+        // Keep the chip inside the view, below the 3D view toolbar and off the others.
+        let top = rect.min.y
+            + if rect.height() > 420.0 {
+                TOOLBAR_CLEAR
+            } else {
+                4.0
+            };
         chip = chip.translate(egui::vec2(
             (rect.min.x + 4.0 - chip.min.x).max(0.0) + (rect.max.x - 4.0 - chip.max.x).min(0.0),
-            (rect.min.y + 4.0 - chip.min.y).max(0.0) + (rect.max.y - 4.0 - chip.max.y).min(0.0),
+            (top - chip.min.y).max(0.0) + (rect.max.y - 4.0 - chip.max.y).min(0.0),
         ));
         while placed.iter().any(|p| p.intersects(chip)) && chip.max.y + size.y < rect.max.y {
             chip = chip.translate(egui::vec2(0.0, size.y + 3.0));
@@ -350,10 +403,17 @@ pub(super) fn paint_labels(
         let response = ui.interact(
             chip,
             egui::Id::new(("heat_opening_label", m.index)),
-            egui::Sense::click(),
+            egui::Sense::click_and_drag(),
         );
         if response.clicked() {
-            clicked = Some(m.index);
+            action.clicked = Some(m.index);
+        }
+        if response.drag_started() || response.dragged() || response.drag_stopped() {
+            action.drag = Some(DragPhase {
+                index: m.index,
+                started: response.drag_started(),
+                stopped: response.drag_stopped(),
+            });
         }
         let stroke = if m.selected || response.hovered() {
             2.5
@@ -377,9 +437,38 @@ pub(super) fn paint_labels(
             g2,
             pal.text_secondary,
         );
-        response.on_hover_text("Click to edit this opening in the Vents and fans panel");
+        response.on_hover_text(
+            "Click to open it in the Vents and fans panel; drag to slide it along its wall",
+        );
     }
-    clicked
+    action
+}
+
+/// Where the opening goes when the pointer has moved from `start` to `now` on
+/// its wall (scene points, mm): it moves with the pointer, snaps to 5 mm and
+/// to the middle of the wall, and is kept inside the wall by `fitted`.
+pub(super) fn dragged_to(
+    from: &VentSpec,
+    start: Vec3,
+    now: Vec3,
+    e: &novo_thermal::model::Enclosure,
+) -> VentSpec {
+    let d = now - start;
+    // Scene y runs up, the solver's down.
+    let (dx, dy) = (f64::from(d.x), -f64::from(d.y));
+    let snap = |v: f64| (v / 5.0).round() * 5.0;
+    let mut out = *from;
+    let (w, h) = (e.interior_width_mm(), e.interior_height_mm());
+    let mid = |v: f64, middle: f64| if (v - middle).abs() < 8.0 { middle } else { v };
+    match from.wall {
+        Wall::Top | Wall::Bottom => out.u_mm = mid(snap(from.u_mm + dx), 0.5 * w),
+        Wall::Left | Wall::Right => out.u_mm = mid(snap(from.u_mm + dy), 0.5 * h),
+        Wall::Door => {
+            out.u_mm = mid(snap(from.u_mm + dx), 0.5 * w);
+            out.v_mm = snap(from.v_mm + dy);
+        }
+    }
+    out.fitted(e)
 }
 
 /// The air through the opening in m3/h, positive into the cabinet, from the
@@ -623,6 +712,50 @@ mod tests {
         let a = arrows(&out);
         assert!(a.positions[0].x > out.centre.x);
         assert!(a.positions[1].x < out.centre.x);
+    }
+
+    #[test]
+    fn dragging_slides_the_opening_along_its_wall_snapped_and_inside_it() {
+        let e = enclosure();
+        let mut left = VentSpec::new(Wall::Left);
+        left.u_mm = 300.0;
+        // Pointer 52 mm up in the scene = 52 mm up the wall = u down by 52.
+        let up = dragged_to(&left, Vec3::ZERO, Vec3::new(0.0, 52.0, 0.0), &e);
+        assert_eq!(up.u_mm, 250.0, "300 - 52 snapped to 5 mm");
+        // Along the wall only: sideways pointer movement changes nothing.
+        let side = dragged_to(&left, Vec3::ZERO, Vec3::new(30.0, 0.0, 40.0), &e);
+        assert_eq!(side.u_mm, 300.0);
+        // Far past the end: kept inside the wall.
+        let far = dragged_to(&left, Vec3::ZERO, Vec3::new(0.0, -9000.0, 0.0), &e);
+        assert_eq!(far.u_mm, 996.0 - 50.0 - 25.0);
+        // Near the middle it snaps to the middle.
+        let mut top = VentSpec::new(Wall::Top);
+        top.u_mm = 100.0;
+        let mid = dragged_to(&top, Vec3::ZERO, Vec3::new(295.0, 0.0, 0.0), &e);
+        assert_eq!(mid.u_mm, 398.0);
+        // The door moves both ways.
+        let mut door = VentSpec::new(Wall::Door);
+        door.u_mm = 200.0;
+        door.v_mm = 200.0;
+        let m = dragged_to(&door, Vec3::ZERO, Vec3::new(100.0, -50.0, 0.0), &e);
+        assert_eq!((m.u_mm, m.v_mm), (300.0, 250.0));
+    }
+
+    #[test]
+    fn the_selected_opening_tints_its_whole_wall() {
+        let e = enclosure();
+        let spec = VentSpec::presets(&e)[0].spec;
+        let mesh_len = |sel| {
+            let ms = markers(&[spec], &e, place(), &[], sel);
+            match &overlays(&ms)[0] {
+                Overlay::Mesh(m) => m.indices.len(),
+                _ => panic!(),
+            }
+        };
+        assert_eq!(mesh_len(Some(0)), mesh_len(None) + 6);
+        let ms = markers(&[spec], &e, place(), &[], Some(0));
+        // The wall quad lies on the left wall, solver x 0 is scene x -20.
+        assert!(ms[0].wall.iter().all(|p| (p.x + 20.0).abs() < 1e-3));
     }
 
     #[test]

@@ -49,7 +49,7 @@ pub(super) fn phase_line(running: bool, has_result: bool, stale: bool) -> (&'sta
             false,
         ),
         (false, true, true) => (
-            "Out of date: the layout changed after this run. Simulate again.",
+            "Out of date: the layout or the vents and fans changed after this run. Simulate again.",
             true,
         ),
         (false, true, false) => (
@@ -78,7 +78,7 @@ pub(super) fn show(
     )
     // Starts under the view cube; the person can drag it anywhere in the view.
     .top(CUBE_MARGIN + CUBE_SIZE + GAP)
-    .height(300.0)
+    .height(420.0)
     .show(ctx, |ui| {
         let (text, warn) = phase_line(state.running(), state.solution().is_some(), stale);
         ui.label(egui::RichText::new(text).small().color(if warn {
@@ -88,6 +88,8 @@ pub(super) fn show(
         }));
         if let Some(sol) = state.solution() {
             jump = verdict_line(ui, &sol.snapshot, tag_of, stale, state.running());
+            let running = state.running();
+            super::heat_cooling::show(ui, &sol, &mut state.cooling, stale, running);
         }
         ui.horizontal_wrapped(|ui| heat::simulate_controls_with(ui, state, false));
         let running = state.running();
@@ -104,11 +106,16 @@ pub(super) fn show(
                     }
                 });
         }
-        egui::CollapsingHeader::new("Settings for the next run")
-            .id_salt("view3d_heat_settings")
-            .show(ui, |ui| {
-                ui.add_enabled_ui(!running, |ui| settings(ui, state));
-            });
+        // Closed while a run goes: the form below the fold only hid the Cancel
+        // row and could not be used anyway.
+        let mut settings_header = egui::CollapsingHeader::new("Settings for the next run")
+            .id_salt("view3d_heat_settings");
+        if running {
+            settings_header = settings_header.open(Some(false));
+        }
+        settings_header.show(ui, |ui| {
+            ui.add_enabled_ui(!running, |ui| settings(ui, state));
+        });
         egui::CollapsingHeader::new("What is this?")
             .id_salt("view3d_heat_about")
             .show(ui, |ui| about(ui, state));

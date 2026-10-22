@@ -115,6 +115,21 @@ pub struct BuildTick {
     pub at: String,
 }
 
+/// A person's "I take this step", so two people on one cabinet do not reach
+/// for the same device. A released claim stays as a record with an empty
+/// `by`, so the release travels through a merge as the newer record (the
+/// same newest-wins rule as a tick).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BuildClaim {
+    pub key: StepKey,
+    /// The step's mark when claimed, so a file from another project is
+    /// told apart on import.
+    pub mark: String,
+    /// Who holds the step; empty when it was released.
+    pub by: String,
+    pub at: String,
+}
+
 /// How a step stands now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepStatus {
@@ -278,6 +293,31 @@ impl CabinetPlan {
             Some((step, waits_for)) => Next::Blocked { step, waits_for },
             None => Next::Finished,
         }
+    }
+
+    /// [`CabinetPlan::next`] for `who`: when the next step is held by someone
+    /// else and another ready step is free (or theirs), that one.
+    pub fn next_for(&self, store: &CommissioningStore, who: &str) -> Next {
+        let next = self.next(store);
+        if let Next::Ready(n) = next
+            && !self.ready_for(store, who).contains(&n)
+            && let Some(&other) = self.ready_for(store, who).first()
+        {
+            return Next::Ready(other);
+        }
+        next
+    }
+
+    /// The ready steps nobody else holds: what `who` can take up now.
+    pub fn ready_for(&self, store: &CommissioningStore, who: &str) -> Vec<usize> {
+        self.ready(store)
+            .into_iter()
+            .filter(|&n| {
+                self.step(n)
+                    .and_then(|s| store.build_claim(s.key))
+                    .is_none_or(|c| c.by == who)
+            })
+            .collect()
     }
 
     /// The steps that can be done now, in order: lets two people work on
@@ -946,8 +986,10 @@ fn part_text(project: &Project, device: &novo_core::Device) -> String {
     }
 }
 
-/// Ticks a step done.
+/// Ticks a step done. A claim on it is let go, so an undone step does not
+/// come back with an old claim.
 pub fn mark_done(store: &mut CommissioningStore, step: &BuildStep, by: &str, at: &str) {
+    release(store, step, at);
     store.put_build(BuildTick {
         key: step.key,
         mark: step.mark.clone(),
@@ -957,6 +999,29 @@ pub fn mark_done(store: &mut CommissioningStore, step: &BuildStep, by: &str, at:
         by: by.to_owned(),
         at: at.to_owned(),
     });
+}
+
+/// `by` takes the step. Nothing stops another person from doing it: a claim
+/// is a signal, and taking a step over replaces it.
+pub fn claim(store: &mut CommissioningStore, step: &BuildStep, by: &str, at: &str) {
+    store.put_claim(BuildClaim {
+        key: step.key,
+        mark: step.mark.clone(),
+        by: by.to_owned(),
+        at: at.to_owned(),
+    });
+}
+
+/// Lets go of a step (the record stays, empty, so the release merges).
+pub fn release(store: &mut CommissioningStore, step: &BuildStep, at: &str) {
+    if store.build_claim_record(step.key).is_some() {
+        store.put_claim(BuildClaim {
+            key: step.key,
+            mark: step.mark.clone(),
+            by: String::new(),
+            at: at.to_owned(),
+        });
+    }
 }
 
 /// Parks a step as a problem and raises a punch item with the note, so

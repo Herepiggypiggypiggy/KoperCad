@@ -179,8 +179,12 @@ impl Candidate {
 
 fn kind_word(p: &Piece, way: &str) -> String {
     match p.fan_flow_m3h {
-        Some(f) => format!("fan {way} ({f:.0} m3/h)"),
-        None => format!("vent {way} ({:.0} cm2)", p.area_cm2()),
+        Some(f) => format!("fan {way} ({f:.0} m³/h)"),
+        None => format!(
+            "vent {way} ({:.0} cm² opening, {:.0} % free)",
+            p.area_cm2(),
+            100.0 * FREE_FRACTION
+        ),
     }
 }
 
@@ -658,7 +662,8 @@ pub fn sweep_with(scn: &Scenario, settings: &Settings, control: &Control) -> Res
     let (base_reading, _, base_state) = run(scn, COARSE_CELL_MM, None)?;
     let mut notes = vec![
         "Model estimate: the 2D heat model with planning values, the losses you entered and the wire heat in the ducts. It has not been checked against measurements, and the 2D slice does not see the depth of the cabinet.".to_string(),
-        "Fans run on a straight-line curve from the free-air flow to a planning shut-off pressure of 60 Pa; use a maker's curve before you buy.".to_string(),
+        "This is a screening: outlet and inlet places are searched one after the other, so it finds a good option, not necessarily the best possible one.".to_string(),
+        "Fans run on a straight-line curve from the free-air flow to a planning shut-off pressure of 60 Pa; use a maker's curve before you buy. The mat of a filter fan is not modelled (a mat typically takes about 30 % off the flow), so size a filter fan up.".to_string(),
     ];
     let sizing_flow_m3h = sizing_flow(scn, &base_reading);
     let trouble = base_reading

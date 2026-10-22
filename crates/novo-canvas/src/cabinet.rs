@@ -23,13 +23,15 @@ pub struct PlateView {
     pub margin: f32,
 }
 
-/// A horizontal DIN rail.
+/// A DIN rail: its centre line starts at `(x, y)` and runs for `length` to
+/// the right, or down when `vertical`; the 35 mm band is centred on it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RailView {
     pub id: u64,
     pub x: f32,
     pub y: f32,
     pub length: f32,
+    pub vertical: bool,
 }
 
 /// A wiring duct: a filled strip, `width` across, running from `(x, y)` for
@@ -238,14 +240,25 @@ impl CabinetScene {
             out.push((PLATE_ITEM, item));
         }
         for r in &view.rails {
-            let a = Vec2::new(r.x, r.y);
-            let b = Vec2::new(r.x + r.length, r.y);
             // 35 mm DIN rail (TH35): a faint band between two edges 35 mm
             // apart, with the 25 mm wide mounting slot down its middle. The
             // slot reads as "rail" where a plain outline read as a box.
-            let (top, bottom) = (Vec2::new(0.0, -17.5), Vec2::new(0.0, 17.5));
+            let (a, b, across) = if r.vertical {
+                (
+                    Vec2::new(r.x, r.y),
+                    Vec2::new(r.x, r.y + r.length),
+                    Vec2::new(1.0, 0.0),
+                )
+            } else {
+                (
+                    Vec2::new(r.x, r.y),
+                    Vec2::new(r.x + r.length, r.y),
+                    Vec2::new(0.0, 1.0),
+                )
+            };
+            let (top, bottom) = (across * -17.5, across * 17.5);
             let stroke = Stroke::world(0.4, s.rail);
-            let slot = Vec2::new(0.0, 2.5);
+            let slot = across * 2.5;
             let item = Item::new(l.rails)
                 .with(Primitive::filled(
                     Shape::rect(a + top, b + bottom),
@@ -341,6 +354,13 @@ impl CabinetScene {
             item.primitives
                 .push(Primitive::stroked(Shape::rect(min, max), stroke));
         }
+        item.primitives.extend(front_details(
+            BoxKind::of_tag(&b.tag),
+            min,
+            max,
+            Stroke::world(0.25, color.with_alpha(170)),
+            color.with_alpha(170),
+        ));
         if !b.tag.is_empty() {
             // A tall device carries its tag along its height: at "fit" the
             // box is a few dozen points wide, so a horizontal tag meets the
@@ -419,6 +439,165 @@ impl CabinetScene {
     }
 }
 
+/// The kind of device a box is, read from the letter code of its tag
+/// (IEC 81346): what the typical front drawn on the box looks like. It is a
+/// typical front of the family, not the maker's drawing; the box itself is the
+/// part's real footprint.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BoxKind {
+    /// Circuit breakers, fuses and isolators (`Q`, `F`).
+    Breaker,
+    /// Contactors, relays and timers (`K`).
+    Contactor,
+    /// Terminal strips (`X`).
+    Terminal,
+    /// Power supplies and transformers (`G`, `T`).
+    Supply,
+    /// PLC parts and drives (`A`, `U`, `V`).
+    Controller,
+    /// Anything else: a plain box.
+    Plain,
+}
+
+impl BoxKind {
+    /// The kind of a device from its tag (`=A1+CAB-K1`, `-Q2`): the letters
+    /// after the last `-`.
+    pub fn of_tag(tag: &str) -> Self {
+        let name = tag.rsplit('-').next().unwrap_or(tag);
+        let letters: String = name
+            .chars()
+            .take_while(|c| c.is_ascii_alphabetic())
+            .collect::<String>()
+            .to_ascii_uppercase();
+        match letters.as_str() {
+            "Q" | "F" => Self::Breaker,
+            "K" | "KA" | "KM" | "KT" => Self::Contactor,
+            "X" => Self::Terminal,
+            "G" | "T" => Self::Supply,
+            "A" | "U" | "V" => Self::Controller,
+            _ => Self::Plain,
+        }
+    }
+}
+
+/// The typical front of a device inside its box: terminal screws, a lever or a
+/// label window, vent slots, drawn from the box's own size so it never leaves
+/// it. Boxes too small for details get none.
+fn front_details(kind: BoxKind, min: Vec2, max: Vec2, line: Stroke, fill: Color) -> Vec<Primitive> {
+    let (w, h) = (max.x - min.x, max.y - min.y);
+    if kind == BoxKind::Plain || w < 12.0 || h < 20.0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let centre = (min + max) * 0.5;
+    let screw = |at: Vec2, r: f32, out: &mut Vec<Primitive>| {
+        out.push(Primitive::stroked(Shape::circle(at, r), line));
+        out.push(Primitive::stroked(
+            Shape::line(at - Vec2::new(r * 0.7, 0.0), at + Vec2::new(r * 0.7, 0.0)),
+            line,
+        ));
+    };
+    // A row of terminal screws across the top and bottom, one per `pitch`.
+    let screw_rows = |pitch: f32, inset: f32, out: &mut Vec<Primitive>| {
+        let n = ((w / pitch).round() as usize).max(1);
+        let r = (pitch * 0.22).clamp(1.2, 3.0);
+        for i in 0..n {
+            let x = min.x + w * (i as f32 + 0.5) / n as f32;
+            screw(Vec2::new(x, min.y + inset), r, out);
+            screw(Vec2::new(x, max.y - inset), r, out);
+        }
+    };
+    match kind {
+        BoxKind::Breaker => {
+            // One pole per 18 mm: screws top and bottom, a stepped front
+            // with the lever of the handle in the middle.
+            screw_rows(18.0, 6.0, &mut out);
+            let lever = Vec2::new((w * 0.55).min(24.0), 12.0_f32.min(h * 0.2)) * 0.5;
+            out.push(Primitive::stroked(
+                Shape::rect(centre - lever, centre + lever),
+                line,
+            ));
+            out.push(Primitive::filled(
+                Shape::rect(
+                    Vec2::new(centre.x - lever.x * 0.9, centre.y - lever.y * 0.9),
+                    Vec2::new(centre.x, centre.y + lever.y * 0.9),
+                ),
+                fill.with_alpha(60),
+            ));
+            let step = h * 0.2;
+            for y in [min.y + step, max.y - step] {
+                out.push(Primitive::stroked(
+                    Shape::line(Vec2::new(min.x, y), Vec2::new(max.x, y)),
+                    line,
+                ));
+            }
+        }
+        BoxKind::Contactor => {
+            // Three power poles over a label window and a coil row.
+            screw_rows(15.0, 6.0, &mut out);
+            let win = Vec2::new(w * 0.34, h * 0.12);
+            out.push(Primitive::stroked(
+                Shape::rect(centre - win, centre + win),
+                line,
+            ));
+            let test = Vec2::splat((w * 0.09).max(1.5));
+            let at = Vec2::new(max.x - w * 0.2, centre.y + h * 0.28);
+            out.push(Primitive::stroked(Shape::rect(at - test, at + test), line));
+            for y in [min.y + h * 0.17, max.y - h * 0.17] {
+                out.push(Primitive::stroked(
+                    Shape::line(Vec2::new(min.x, y), Vec2::new(max.x, y)),
+                    line,
+                ));
+            }
+        }
+        BoxKind::Terminal => {
+            // Blocks side by side, 6 mm each: a rib between two, a screw on each.
+            let n = ((w / 6.0).round() as usize).clamp(1, 40);
+            for i in 0..n {
+                let x0 = min.x + w * i as f32 / n as f32;
+                let x1 = min.x + w * (i as f32 + 1.0) / n as f32;
+                if i > 0 {
+                    out.push(Primitive::stroked(
+                        Shape::line(Vec2::new(x0, min.y), Vec2::new(x0, max.y)),
+                        line,
+                    ));
+                }
+                let r = ((x1 - x0) * 0.22).clamp(0.6, 2.0);
+                screw(Vec2::new((x0 + x1) * 0.5, min.y + h * 0.28), r, &mut out);
+                screw(Vec2::new((x0 + x1) * 0.5, max.y - h * 0.28), r, &mut out);
+            }
+        }
+        BoxKind::Supply => {
+            // Terminals at both ends and vent slots across the body.
+            screw_rows(14.0, 6.0, &mut out);
+            let slots = 5;
+            for i in 0..slots {
+                let y = min.y + h * (0.3 + 0.4 * i as f32 / (slots - 1) as f32);
+                out.push(Primitive::stroked(
+                    Shape::line(Vec2::new(min.x + w * 0.2, y), Vec2::new(max.x - w * 0.2, y)),
+                    line,
+                ));
+            }
+        }
+        BoxKind::Controller => {
+            // A status LED column and a label window between two terminal rows.
+            screw_rows(10.0, 5.0, &mut out);
+            for i in 0..4 {
+                let y = min.y + h * (0.28 + 0.1 * i as f32);
+                out.push(Primitive::stroked(
+                    Shape::circle(Vec2::new(min.x + w * 0.22, y), (w * 0.05).clamp(0.8, 1.6)),
+                    line,
+                ));
+            }
+            let win = Vec2::new(w * 0.3, h * 0.1);
+            let at = Vec2::new(centre.x + w * 0.08, centre.y + h * 0.18);
+            out.push(Primitive::stroked(Shape::rect(at - win, at + win), line));
+        }
+        BoxKind::Plain => {}
+    }
+    out
+}
+
 /// A rectangle's outline cut into dashes.
 fn dashed_rect(min: Vec2, max: Vec2, dash: f32, gap: f32, stroke: Stroke) -> Vec<Primitive> {
     let c = [min, Vec2::new(max.x, min.y), max, Vec2::new(min.x, max.y)];
@@ -450,10 +629,18 @@ pub fn view_bounds(view: &CabinetView) -> Aabb {
         b = b.union(&Aabb::new(Vec2::ZERO, Vec2::new(p.width, p.height)));
     }
     for r in &view.rails {
-        b = b.union(&Aabb::new(
-            Vec2::new(r.x, r.y - 17.5),
-            Vec2::new(r.x + r.length, r.y + 17.5),
-        ));
+        let (min, max) = if r.vertical {
+            (
+                Vec2::new(r.x - 17.5, r.y),
+                Vec2::new(r.x + 17.5, r.y + r.length),
+            )
+        } else {
+            (
+                Vec2::new(r.x, r.y - 17.5),
+                Vec2::new(r.x + r.length, r.y + 17.5),
+            )
+        };
+        b = b.union(&Aabb::new(min, max));
     }
     for d in &view.ducts {
         let (min, max) = d.corners();
@@ -498,6 +685,7 @@ mod tests {
                 x: 40.0,
                 y: 150.0,
                 length: 500.0,
+                vertical: false,
             }],
             ducts: vec![DuctView {
                 id: 9,
@@ -675,5 +863,72 @@ mod tests {
         c.set(&v);
         let duct = c.scene().get(rail_item(9)).unwrap();
         assert_eq!(duct.primitives.len(), 2 + 399 * 2);
+    }
+
+    #[test]
+    fn the_kind_comes_from_the_letters_of_the_tag() {
+        assert_eq!(BoxKind::of_tag("=A1+CAB-K1"), BoxKind::Contactor);
+        assert_eq!(BoxKind::of_tag("-Q12"), BoxKind::Breaker);
+        assert_eq!(BoxKind::of_tag("-F3"), BoxKind::Breaker);
+        assert_eq!(BoxKind::of_tag("-X1"), BoxKind::Terminal);
+        assert_eq!(BoxKind::of_tag("-T1"), BoxKind::Supply);
+        assert_eq!(BoxKind::of_tag("-S0"), BoxKind::Plain);
+        assert_eq!(BoxKind::of_tag(""), BoxKind::Plain);
+    }
+
+    #[test]
+    fn a_front_stays_inside_its_box() {
+        let line = Stroke::world(0.25, Color::rgb(1, 2, 3));
+        for kind in [
+            BoxKind::Breaker,
+            BoxKind::Contactor,
+            BoxKind::Terminal,
+            BoxKind::Supply,
+            BoxKind::Controller,
+        ] {
+            for (w, h) in [
+                (18.0_f32, 90.0_f32),
+                (45.0, 85.0),
+                (54.0, 90.0),
+                (90.0, 110.0),
+            ] {
+                let (min, max) = (Vec2::new(100.0, 200.0), Vec2::new(100.0 + w, 200.0 + h));
+                let prims = front_details(kind, min, max, line, Color::rgb(1, 2, 3));
+                assert!(!prims.is_empty(), "{kind:?} {w}x{h} has a front");
+                for p in &prims {
+                    let b = p.shape.bounds();
+                    assert!(
+                        b.min.x >= min.x - 1e-3
+                            && b.min.y >= min.y - 1e-3
+                            && b.max.x <= max.x + 1e-3
+                            && b.max.y <= max.y + 1e-3,
+                        "{kind:?} {w}x{h}: {b:?}"
+                    );
+                }
+            }
+        }
+        // Too small for details, or a plain box: nothing.
+        let small = front_details(
+            BoxKind::Breaker,
+            Vec2::ZERO,
+            Vec2::new(8.0, 30.0),
+            line,
+            Color::rgb(1, 2, 3),
+        );
+        assert!(small.is_empty());
+    }
+
+    #[test]
+    fn a_vertical_rail_is_a_band_down_the_plate() {
+        let mut v = view();
+        v.rails[0].vertical = true;
+        v.rails[0].x = 100.0;
+        v.rails[0].y = 50.0;
+        v.rails[0].length = 400.0;
+        let b = view_bounds(&v);
+        assert!(b.min.x <= 100.0 - 17.5 + 1e-3 && b.max.y >= 450.0);
+        let mut c = CabinetScene::new(CabinetStyle::default());
+        c.set(&v);
+        assert!(c.scene().get(rail_item(1)).is_some());
     }
 }

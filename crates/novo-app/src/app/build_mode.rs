@@ -17,8 +17,8 @@ use std::rc::Rc;
 
 use eframe::egui;
 use novo_commissioning::{
-    BuildPhase, BuildPlan, BuildStep, CabinetPlan, Next, StepStatus, mark_done, mark_problem,
-    undo_build,
+    BuildPhase, BuildPlan, BuildStep, CabinetPlan, Next, StepStatus, claim_step, mark_done,
+    mark_problem, release_step, undo_build,
 };
 use novo_core::WireId;
 use novo_theme::widgets::{self, Level as Tone};
@@ -173,9 +173,11 @@ impl NovoApp {
                     .as_ref()
                     .and_then(|p| p.cabinets.get(state.cabinet))
                     .and_then(|c| {
-                        match state.focus.or_else(|| match c.next(&mode.store) {
-                            Next::Ready(n) | Next::Blocked { step: n, .. } => Some(n),
-                            Next::Finished => None,
+                        match state.focus.or_else(|| {
+                            match c.next_for(&mode.store, or_unknown(&mode.who)) {
+                                Next::Ready(n) | Next::Blocked { step: n, .. } => Some(n),
+                                Next::Finished => None,
+                            }
                         }) {
                             Some(n) => c.step(n).map(|s| format!("Step {n}: {}", s.title)),
                             None => None,
@@ -301,7 +303,7 @@ impl NovoApp {
                 && let Some(cab) = plan.cabinets.get(state.cabinet)
             {
                 let number = state.focus.filter(|&n| cab.step(n).is_some()).or(
-                    match cab.next(&mode.store) {
+                    match cab.next_for(&mode.store, or_unknown(&who)) {
                         Next::Ready(n) | Next::Blocked { step: n, .. } => Some(n),
                         Next::Finished => None,
                     },
@@ -544,7 +546,7 @@ fn screen(
     );
     ui.add_space(8.0);
 
-    let next = cab.next(&mode.store);
+    let next = cab.next_for(&mode.store, or_unknown(who));
     let shown = state
         .focus
         .filter(|&n| cab.step(n).is_some())
@@ -625,9 +627,10 @@ fn step_list(
                             );
                             ui.add(
                                 egui::Label::new(egui::RichText::new(format!(
-                                    "{}  {}",
+                                    "{}  {}{}",
                                     step.number,
-                                    short(step)
+                                    short(step),
+                                    claimed_by(mode, step, status)
                                 )))
                                 .truncate(),
                             );
@@ -646,6 +649,20 @@ fn step_list(
                 });
             }
         });
+}
+
+/// " · bob" on an open step somebody has taken.
+fn claimed_by(
+    mode: &super::commissioning::CommissioningMode,
+    step: &BuildStep,
+    status: StepStatus,
+) -> String {
+    match mode.store.build_claim(step.key) {
+        Some(c) if matches!(status, StepStatus::Open | StepStatus::Changed) => {
+            format!("  · {}", c.by)
+        }
+        _ => String::new(),
+    }
 }
 
 /// What a list row says: the mark, or the start of the instruction.
@@ -871,6 +888,72 @@ fn status_and_buttons(
         _ => {}
     }
 
+    // Who has this step: two people on one cabinet do not reach for the same
+    // device. A claim is a signal, not a lock. Without a name (set under
+    // Commissioning) the claim reads "someone", which cannot tell two people apart.
+    if state.problem.is_none() && matches!(status, StepStatus::Open | StepStatus::Changed) {
+        let me = or_unknown(who);
+        let held = mode.store.build_claim(step.key).cloned();
+        let h = if state.large { 48.0 } else { 30.0 };
+        match held {
+            Some(c) if c.by != me => {
+                widgets::banner(
+                    ui,
+                    Tone::Warning,
+                    &format!(
+                        "{} took this step at {} UTC. Do another step, or take it over.",
+                        c.by,
+                        c.at.get(11..16).unwrap_or(&c.at)
+                    ),
+                    |_| {},
+                );
+                ui.add_space(4.0);
+                if ui
+                    .add(egui::Button::new("Take it over").min_size(egui::vec2(0.0, h)))
+                    .clicked()
+                {
+                    claim_step(&mut mode.store, step, me, &now());
+                    mode.dirty = true;
+                    asked.changed = true;
+                }
+                ui.add_space(6.0);
+            }
+            Some(_) => {
+                ui.horizontal(|ui| {
+                    ui.label(if who.trim().is_empty() {
+                        "Someone has this step. Set your name in Commissioning to tell who."
+                    } else {
+                        "You have this step."
+                    });
+                    if ui
+                        .add(egui::Button::new("Let go").min_size(egui::vec2(0.0, h)))
+                        .clicked()
+                    {
+                        release_step(&mut mode.store, step, &now());
+                        mode.dirty = true;
+                        asked.changed = true;
+                    }
+                });
+                ui.add_space(4.0);
+            }
+            None => {
+                let r = ui
+                    .add(egui::Button::new("I take this step").min_size(egui::vec2(0.0, h)))
+                    .on_hover_text(if who.trim().is_empty() {
+                        "Shows the others that someone is on this step. Set your name in Commissioning so they see who."
+                    } else {
+                        "Shows the others that you are on this step"
+                    });
+                if r.clicked() {
+                    claim_step(&mut mode.store, step, me, &now());
+                    mode.dirty = true;
+                    asked.changed = true;
+                }
+                ui.add_space(4.0);
+            }
+        }
+    }
+
     if let Some(note) = state.problem.as_mut() {
         ui.label("What is wrong? Engineering reads this on the punch list.");
         let r = ui.add(
@@ -1016,9 +1099,17 @@ fn ready_now(
     ui.horizontal_wrapped(|ui| {
         for &n in ready.iter().take(12) {
             let Some(step) = cab.step(n) else { continue };
-            if widgets::chip(ui, &format!("{n} {}", short(step)), false)
-                .on_hover_text(&step.title)
-                .clicked()
+            if widgets::chip(
+                ui,
+                &format!(
+                    "{n} {}{}",
+                    short(step),
+                    claimed_by(mode, step, cab.status(&mode.store, step))
+                ),
+                false,
+            )
+            .on_hover_text(&step.title)
+            .clicked()
             {
                 state.focus = Some(n);
             }

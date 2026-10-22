@@ -64,10 +64,15 @@ pub(super) struct CoolingAdvice {
     open: bool,
     /// What the last "Add" put in the list, shown in the window.
     added: Option<String>,
+    /// The view the window opened in (1 Cabinet, 2 3D): it closes when the
+    /// person goes to the other one.
+    view: Option<u8>,
 }
 
 /// What the window asks the app to do.
 pub(super) enum Ask {
+    /// Sweep again for the cabinet as it is now.
+    Again,
     /// Put this pair in the list of vents and fans.
     Add(Candidate),
 }
@@ -145,6 +150,7 @@ impl CoolingAdvice {
         self.found = None;
         self.notice = None;
         self.added = None;
+        self.view = None;
     }
 
     /// Says in the window what was added.
@@ -247,9 +253,23 @@ impl CoolingAdvice {
     }
 
     /// The window. `now_key` is [`key_of`] for the cabinet as it is now.
-    pub(super) fn show(&mut self, ctx: &egui::Context, now_key: u64, at: Pos2) -> Option<Ask> {
+    pub(super) fn show(
+        &mut self,
+        ctx: &egui::Context,
+        view: u8,
+        now_key: u64,
+        at: Pos2,
+    ) -> Option<Ask> {
         if !self.open {
             return None;
+        }
+        match self.view {
+            None => self.view = Some(view),
+            Some(v) if v != view => {
+                self.close();
+                return None;
+            }
+            Some(_) => {}
         }
         let mut ask = None;
         let mut close = false;
@@ -267,9 +287,8 @@ impl CoolingAdvice {
                     ui.horizontal(|ui| {
                         ui.add(egui::Spinner::new());
                         ui.label(format!(
-                            "Trying vent and fan places and sizes in the model… {} of {}, {:.0} s",
+                            "Trying vent and fan places and sizes in the model… {} runs so far, {:.0} s",
                             run.control.evaluated.load(Ordering::Relaxed),
-                            run.control.planned.load(Ordering::Relaxed).max(1),
                             run.started.elapsed().as_secs_f64()
                         ));
                     });
@@ -289,10 +308,15 @@ impl CoolingAdvice {
                 };
                 let stale = found.key != now_key;
                 if stale {
-                    ui.colored_label(
-                        pal.warning,
-                        "The cabinet changed after this sweep. Sweep again before adding.",
-                    );
+                    let text = if self.added.is_some() {
+                        "Adding changed the cabinet, so this list is out of date: sweep again for more."
+                    } else {
+                        "The cabinet changed after this sweep, so this list is out of date. Sweep again before adding."
+                    };
+                    ui.label(egui::RichText::new(text).small().color(pal.text_secondary));
+                    if ui.button("Sweep again").clicked() {
+                        ask = Some(Ask::Again);
+                    }
                 }
                 let room = (ctx.content_rect().bottom() - at.y - 170.0).clamp(160.0, MAX_BODY);
                 egui::ScrollArea::vertical()
@@ -323,9 +347,16 @@ fn body(ui: &mut egui::Ui, found: &Found, stale: bool, ask: &mut Option<Ask>) {
     let pal = crate::theme::ui_palette();
     let s = &found.sweep;
     ui.label(egui::RichText::new(headline(s)).strong());
+    ui.label(
+        egui::RichText::new(
+            "A try is one run of the 2D model with a pair of openings added to the cabinet.",
+        )
+        .small()
+        .color(pal.text_secondary),
+    );
     ui.add_space(2.0);
     ui.label(format!(
-        "Now: {} · {} · hottest air {:.0} C",
+        "Now: {} · {} · hottest air {:.0} °C",
         margin_text(s.before.worst_margin_k),
         over_text(s.before.over),
         s.before.max_air_c
@@ -342,7 +373,7 @@ fn body(ui: &mut egui::Ui, found: &Found, stale: bool, ask: &mut Option<Ask>) {
     }
     ui.label(
         egui::RichText::new(format!(
-            "The sizing rule asks for about {:.0} m3/h of fan flow to carry all the loss.",
+            "The sizing rule asks for about {:.0} m³/h of fan flow to carry all the loss.",
             s.sizing_flow_m3h
         ))
         .small()
@@ -377,7 +408,10 @@ fn option(ui: &mut egui::Ui, found: &Found, o: &Outcome, stale: bool, ask: &mut 
             egui::RichText::new(format!("{}. {}", o.rank, o.candidate.pairing.label())).strong(),
         );
         if o.clear {
-            ui.colored_label(pal.success, format!("wins {:.1} K", o.gain_k));
+            ui.colored_label(
+                pal.success,
+                format!("gains {} K", gain_text(before, &o.reading, o.gain_k)),
+            );
         } else {
             ui.colored_label(
                 pal.warning,
@@ -392,7 +426,7 @@ fn option(ui: &mut egui::Ui, found: &Found, o: &Outcome, stale: bool, ask: &mut 
         margin_text(o.reading.worst_margin_k)
     ));
     ui.label(format!(
-        "{} → {} · hottest air {:.0} → {:.0} C",
+        "{} → {} · hottest air {:.0} → {:.0} °C",
         over_text(before.over),
         over_text(o.reading.over),
         before.max_air_c,
@@ -421,7 +455,7 @@ fn option(ui: &mut egui::Ui, found: &Found, o: &Outcome, stale: bool, ask: &mut 
                 .cloned()
                 .unwrap_or_else(|| format!("device {}", d.id));
             format!(
-                "{tag} {:.0} → {:.0} C",
+                "{tag} {:.0} → {:.0} °C",
                 d.surface_before_c, d.surface_after_c
             )
         })
@@ -459,15 +493,31 @@ fn headline(s: &Sweep) -> String {
     }
     match s.winner() {
         Some(w) => format!(
-            "Best of {} tries: {}. It wins {:.1} K of margin in the model.",
+            "Best of {} tries: {}. It gains {} K of margin in the model.",
             s.tried,
             w.candidate.pairing.label().to_lowercase(),
-            w.gain_k
+            gain_text(&s.before, &w.reading, w.gain_k)
         ),
         None => format!(
             "No position or size wins {SIGNIFICANT_K:.0} K or more in the model ({} tries).",
             s.tried
         ),
+    }
+}
+
+/// The gain as the difference of the margins shown, so the three numbers on
+/// the card agree to the last digit.
+fn gain_text(
+    before: &novo_thermal::sweep::Reading,
+    after: &novo_thermal::sweep::Reading,
+    gain: f64,
+) -> String {
+    match (before.worst_margin_k, after.worst_margin_k) {
+        (Some(b), Some(a)) => {
+            let r = |v: f64| (v * 10.0).round() / 10.0;
+            format!("{:.1}", r(a) - r(b))
+        }
+        _ => format!("{gain:.1}"),
     }
 }
 
@@ -487,7 +537,7 @@ fn over_text(n: usize) -> String {
 }
 
 fn flow_text(d: &Delivered) -> String {
-    format!("{:.0} m3/h", d.flow_m3h.abs())
+    format!("{:.0} m³/h", d.flow_m3h.abs())
 }
 
 /// The Vents and fans entry for one piece of a candidate.

@@ -84,6 +84,7 @@ mod heat_cloud;
 mod heat_compare;
 #[cfg(test)]
 mod heat_compare_tests;
+mod heat_cooling;
 #[cfg(test)]
 mod heat_duct_slice_tests;
 mod heat_legend;
@@ -91,6 +92,7 @@ mod heat_live;
 #[cfg(test)]
 mod heat_live_tests;
 mod heat_openings;
+mod heat_openings_store;
 mod heat_probe;
 mod heat_progress;
 #[cfg(test)]
@@ -1199,6 +1201,9 @@ impl NovoApp {
         self.learn_project_changed();
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
+        // The openings of the Heat panel belong to the project's enclosure.
+        self.cabinet.heat.settings.load(Vec::new());
+        self.cabinet.heat.settings.stored = None;
         // The live view, an open drawer and a preview belong to the project
         // they were opened on; a lesson (or any project) starts clean.
         self.wb.live = Default::default();

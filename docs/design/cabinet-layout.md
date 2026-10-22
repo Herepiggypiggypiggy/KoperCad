@@ -40,6 +40,12 @@ devices first (DESIGN §3); unsized ones have no position of their own there.
 - Devices on a rail sit at a rail offset along it; across the rail they are
   centred on it. Free placement (no rail) snaps to the Cabinet canvas grid (default 5 mm), a per-user setting like the
   schematic grid, so the two never disagree silently.
+- Mounting by drag or drop (`novo_layout::mount`): a device whose centre comes within 15 mm of a rail's line, over
+  the rail's run, snaps onto the line, stays on the rail along its run and lines up with the rail's end or a
+  neighbour when within 6 mm. The placement records the rail (`place_device` -> `mounted_on`, 0.5 mm) only when the
+  centre really is on the line and the device lies on the run; a device dropped anywhere else leaves its rail.
+  Ducts are not mounting lines: a device never snaps to one. The 35 mm band is the planner's model of a TS 35
+  rail; real devices differ by a few millimetres in where they clip on.
 
 ## 4. Queries (the engine's first job)
 

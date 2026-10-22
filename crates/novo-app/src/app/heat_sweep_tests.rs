@@ -132,7 +132,7 @@ fn render(a: &mut CoolingAdvice, key: u64) -> String {
     let mut text = String::new();
     for _ in 0..4 {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-            let _ = a.show(ui.ctx(), key, egui::pos2(10.0, 10.0));
+            let _ = a.show(ui.ctx(), 1, key, egui::pos2(10.0, 10.0));
         });
         out.textures_delta.clear();
         text = out
@@ -164,9 +164,9 @@ fn the_window_names_the_model_and_the_numbers() {
         "-14.6 K",
         "+2.0 K",
         "Filter fan in, vent out",
-        "wins 16.6 K",
+        "gains 16.6 K",
         "Add these two to Vents and fans",
-        "246 m3/h",
+        "246 m³/h",
     ] {
         assert!(text.contains(want), "missing {want:?} in:\n{text}");
     }
@@ -202,4 +202,17 @@ fn an_added_pair_shows_in_3d() {
         d.frame_sized(egui::vec2(1366.0, 768.0), Vec::new());
     }
     assert_eq!(d.app.view3d.vent_markers.len(), 2);
+}
+
+#[test]
+fn the_window_closes_when_the_view_changes() {
+    let ctx = egui::Context::default();
+    let mut a = open(16.6);
+    for view in [1, 1, 2] {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let _ = a.show(ui.ctx(), view, 7, egui::pos2(10.0, 10.0));
+        });
+        out.textures_delta.clear();
+    }
+    assert!(!a.is_open() && a.found.is_none());
 }

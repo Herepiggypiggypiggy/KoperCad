@@ -9,7 +9,7 @@ advice and vent sweep"; Cabinet plate right-click "Cooling advice…".
 Files: `crates/novo-thermal/src/sweep.rs` (engine), `crates/novo-thermal/tests/sweep.rs`,
 `crates/novo-app/src/app/heat_sweep.rs` (window, conversion to `VentSpec`), `heat_sweep_tests.rs`,
 wiring in `heat.rs` (button, `advice` field), `cabinet.rs`, `view3d.rs`, `workbench.rs`,
-`cabinet_menu.rs`, `novo-workflow` (command + Dutch words). QA `qa/scenarios/76-cooling-advice.qa`,
+`cabinet_menu.rs`, `novo-workflow` (command + Dutch words). QA `qa/scenarios/85-cooling-advice.qa`,
 fixture `qa/fixtures/cabinet-cooling-advice.novo` (same file as the Cooler layout fixture).
 
 Honesty: every number is the 2D model with planning values (`ENCLOSURE_VALIDATED` stays false). Fan

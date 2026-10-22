@@ -65,6 +65,8 @@ pub struct TextAudit {
 }
 
 impl TextAudit {
+    /// Conflicts that make a page wrong: overlaps and labels off the sheet.
+    /// `tight` pairs are reported but not counted here.
     pub fn total(&self) -> usize {
         self.text_on_text.len()
             + self.text_on_ink.len()
