@@ -66,8 +66,12 @@ with it, on every page.
 
 Limits, said plainly: cost is not shown because project parts carry no prices; the heat figure is the sum of the
 loss figures of the parts (a model of what the devices put in, not a temperature; devices without a figure are
-counted and named as 0 W); the Cabinet workspace and Commissioning mode do not apply the choice yet; ticking a
-device on the schematic does not ghost it when its option is off.
+counted and named as 0 W); the Cabinet workspace and Commissioning mode do not apply the choice yet.
+
+On the drawing, what the choice leaves out stays visible but veiled with a dashed outline (View > Layers, "Ghost what
+the options leave out"; hover says "Left out: only with Cooling fan"), so switching an option back is a look, not a
+search. Only straight wires are veiled; a routed wire's box would cover active neighbours. The device list, wire list,
+bill of materials, cut list and contents get an *Option* column when some row is tied to an option.
 
 ## Expression language (`novo_workflow::expr`)
 
@@ -131,7 +135,7 @@ real windows (variant switch and PDF page counts, a shipped macro generated from
 ## Next
 
 - Macro ghost/browser parameter form in the inspector (Macro threads call `parametric::instantiate`).
-- Option column on the BOM and wire list (the title block and report headers name the choice since the machine view),
-  `kopercad-cli generate`, a Cabinet/Commissioning switch to the choice, ghosting of off objects on the canvas.
+- (Option column and canvas ghosting shipped 2026-10-22.)
+  `kopercad-cli generate`, a Cabinet/Commissioning switch to the choice.
 - Cabinet layout carry-over for generated devices, and `kc.if` editing in the macro save dialog.
 - Multi-language and customer forms belong to brief 11.

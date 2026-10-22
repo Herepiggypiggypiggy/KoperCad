@@ -29,6 +29,10 @@ pub enum MarkKind {
     Modified,
     /// Changes mode: a dashed ghost where something was removed.
     Removed,
+    /// Left out by the machine's current option choice: the object stays on
+    /// the drawing, veiled and outlined, so switching the option back is a
+    /// look, not a search.
+    LeftOut,
 }
 
 impl MarkKind {
@@ -42,7 +46,10 @@ impl MarkKind {
 
     /// Outlines drawn dashed.
     pub fn is_dashed(self) -> bool {
-        matches!(self, MarkKind::Proposal | MarkKind::Removed)
+        matches!(
+            self,
+            MarkKind::Proposal | MarkKind::Removed | MarkKind::LeftOut
+        )
     }
 }
 

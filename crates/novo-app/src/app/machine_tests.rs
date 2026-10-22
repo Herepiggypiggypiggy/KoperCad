@@ -431,3 +431,142 @@ fn the_committed_fixture_opens_with_its_options() {
     assert_eq!(on.devices().count(), off.devices().count() + 3);
     assert!(options::lint(project).is_empty());
 }
+
+fn page_of(d: &Drive, name: &str) -> novo_core::PageId {
+    d.app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .pages()
+        .find(|p| p.name == name)
+        .unwrap()
+        .id
+}
+
+#[test]
+fn what_the_choice_leaves_out_is_ghosted_on_its_page_and_only_there() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let ids = machine(&mut d);
+    let conveyor = page_of(&d, "2");
+    let kinds = |d: &Drive, page| d.app.left_out_marks(page);
+    // Conveyor off: its two symbols and the straight wire between them.
+    let marks = kinds(&d, conveyor);
+    assert_eq!(marks.len(), 3, "{marks:?}");
+    assert!(
+        marks
+            .iter()
+            .all(|m| m.kind == novo_canvas::MarkKind::LeftOut)
+    );
+    assert!(
+        marks
+            .iter()
+            .all(|m| m.text == "Left out: only with Conveyor"),
+        "{marks:?}"
+    );
+    // The main page is untouched.
+    assert!(kinds(&d, ids.main).is_empty());
+    // Conveyor on: nothing is ghosted.
+    d.app
+        .run_command(&ctx, "project.option", Some("conveyor on"));
+    d.frame();
+    assert!(kinds(&d, conveyor).is_empty());
+    // A device tied to a different option names that option.
+    d.app
+        .run_command(&ctx, "project.option", Some("conveyor off"));
+    let k9 = {
+        let p = d.app.backend.document().unwrap().project();
+        match &p.symbol(ids.k9).unwrap().role {
+            SymbolRole::Device { device, .. } => *device,
+            _ => unreachable!(),
+        }
+    };
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Tie K9", |tx| {
+            options::set_condition(tx, k9, Some("opt.fan"))
+        })
+        .unwrap();
+    d.frame();
+    let marks = kinds(&d, ids.main);
+    assert_eq!(marks.len(), 2, "K9's symbol and the wire to it: {marks:?}");
+    assert!(marks.iter().all(|m| m.text == "Left out: only with Fan"));
+}
+
+#[test]
+fn the_lists_say_which_option_a_row_needs_and_stay_plain_without_options() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let ids = machine(&mut d);
+    let k9 = {
+        let p = d.app.backend.document().unwrap().project();
+        match &p.symbol(ids.k9).unwrap().role {
+            SymbolRole::Device { device, .. } => *device,
+            _ => unreachable!(),
+        }
+    };
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Tie K9", |tx| {
+            options::set_condition(tx, k9, Some("opt.fan"))
+        })
+        .unwrap();
+    d.app.run_command(&ctx, "project.option", Some("fan on"));
+    d.app
+        .run_command(&ctx, "project.option", Some("conveyor on"));
+    d.frame();
+    let output = d.app.report_output("devices").unwrap();
+    let section = &output.sections[0];
+    let option = section.column("option").expect("an Option column");
+    let tag = section.column("tag").unwrap();
+    let text = |row: &novo_reports::Row, c: usize| row.cells[c].to_string();
+    let by_tag = |t: &str| {
+        section
+            .rows
+            .iter()
+            .find(|r| text(r, tag).ends_with(t))
+            .unwrap_or_else(|| panic!("{t} in {:?}", section.text_rows()))
+    };
+    assert_eq!(text(by_tag("-K9"), option), "Fan");
+    assert_eq!(text(by_tag("-K2"), option), "Conveyor");
+    assert_eq!(text(by_tag("-K1"), option), "");
+    // The wire list names the option of the device at its end.
+    let wires = d.app.report_output("wires").unwrap();
+    let section = &wires.sections[0];
+    let option = section.column("option").expect("an Option column");
+    let said: Vec<String> = section
+        .rows
+        .iter()
+        .map(|r| r.cells[option].to_string())
+        .collect();
+    assert!(said.iter().any(|t| t == "Fan"), "{said:?}");
+    assert!(said.iter().any(|t| t == "Conveyor"), "{said:?}");
+}
+
+#[test]
+fn a_project_without_options_prints_no_option_column() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    machine(&mut d);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Drop options", |tx| {
+            options::remove_option(tx, "conveyor")?;
+            options::remove_option(tx, "fan")
+        })
+        .unwrap();
+    d.frame();
+    let _ = ctx;
+    let output = d.app.report_output("devices").unwrap();
+    assert!(output.sections.iter().all(|s| s.column("option").is_none()));
+}

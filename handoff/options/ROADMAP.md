@@ -13,6 +13,7 @@ Scope: options as a switch on the drawing. Engine (`novo_workflow::options`) and
 
 ## Next
 - Cabinet workspace and Commissioning mode apply the choice (today they edit/read the full working project).
-- Ghost objects of an off option on the schematic canvas instead of showing them normally.
-- Option column on BOM and wire list; cost difference once parts carry prices.
+- Done 2026-10-22: ghost objects of an off option on the schematic canvas; Option column on device list, wire list, BOM, cut list, contents.
+- Cost difference once parts carry prices.
+- Straight wires only are veiled (a routed wire's box would veil active neighbours); per-segment ghosts would fix it.
 - Cable runs and `kopercad-cli` variant export.
