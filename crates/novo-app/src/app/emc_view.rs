@@ -169,6 +169,7 @@ impl EmcState {
         let routes = routes();
         self.left_out = routes.iter().filter(|r| r.free_air).count();
         let Some(layout) = novo_layout::model::load(project, id) else {
+            self.left_out = 0;
             self.picture = None;
             return;
         };
@@ -436,7 +437,7 @@ pub(super) fn legend(ctx: &egui::Context, view: egui::Rect, state: &EmcState, da
             let n = state.left_out;
             ui.label(
                 egui::RichText::new(format!(
-                    "{n} wire{} with no duct route {} left out of this view (see Routes)",
+                    "{n} wire{} with no duct route {} left out of this view (see Route all)",
                     if n == 1 { "" } else { "s" },
                     if n == 1 { "is" } else { "are" },
                 ))
