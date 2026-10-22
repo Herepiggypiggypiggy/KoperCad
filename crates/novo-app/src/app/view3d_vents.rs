@@ -160,6 +160,9 @@ fn body(
                 (Role::Open, _) => "direction after a run".into(),
             };
             ui.label(muted(&tag));
+            if spec.is_thin_fan() {
+                ui.colored_label(crate::theme::ui_palette().warning, "⚠ thin fan");
+            }
         });
         if open {
             let mut edited = spec;
@@ -171,6 +174,19 @@ fn body(
                     }
                 });
             });
+            if spec.is_thin_fan() {
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(format!(
+                            "Opening {} is a fan only {:.0} mm across: that is smaller than the cut-out of the smallest common cabinet fans (about 38 mm). Check its size and datasheet flow.",
+                            i + 1,
+                            spec.width_mm.min(spec.height_mm)
+                        ))
+                        .color(crate::theme::ui_palette().warning),
+                    )
+                    .wrap(),
+                );
+            }
             if let Some(line) = operating_point(&spec, flow) {
                 ui.label(muted(&line));
             }

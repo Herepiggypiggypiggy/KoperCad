@@ -1,0 +1,51 @@
+@title 3D Heat: a fan thinner than any common cabinet fan shows a warning
+@area 3D
+# Audit V-07: a 500 x 20 mm fan at 100 m3/h was accepted silently. A normal fan, a 40 mm fan and a thin grille slot show no warning.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Add opening"
+wait 10
+click_text "Filter fan, low on the door"
+wait 10
+expect_not "fan only"
+shot normal-fan
+click_text "150 mm"
+key ctrl+a
+text 20
+key Enter
+wait 10
+expect "Opening 1 is a fan only 20 mm across"
+expect "about 38 mm"
+shot thin-fan-warned
+check_layout
+move 170 560
+wait 5
+scroll 170 560 -300
+wait 10
+shot thin-fan-warning-text
+scroll 170 560 300
+wait 10
+click_text "20 mm"
+key ctrl+a
+text 40
+key Enter
+wait 10
+expect_not "fan only"
+shot fan-40-not-warned
+click_text "Add opening"
+wait 10
+click_text "Grille, high on the right wall"
+wait 20
+shot grille-added
+click_text "100 mm"
+key ctrl+a
+text 20
+key Enter
+wait 10
+expect_not "fan only"
+shot thin-grille-not-warned
+check_layout
