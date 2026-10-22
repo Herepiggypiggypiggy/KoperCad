@@ -1,7 +1,7 @@
 format = 1
 id = "iec/network/ethernet_switch_5"
 name = "Ethernet switch, 5 ports"
-description = "Industrial Ethernet switch with five RJ45 or M12 ports P1 to P5 and a 24 V supply L+, M."
+description = "Industrial Ethernet switch with five RJ45 or M12 ports P1 to P5 and a 24 V supply L+, M. IEC pack block symbol (a manufacturer-neutral drawing, not a 60617 graphic)."
 standard = "IEC 60617"
 category = "network"
 function = "network.switch.ethernet"

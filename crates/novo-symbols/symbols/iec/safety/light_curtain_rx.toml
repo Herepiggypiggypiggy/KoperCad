@@ -1,7 +1,7 @@
 format = 1
 id = "iec/safety/light_curtain_rx"
 name = "Safety light curtain, receiver"
-description = "Receiver of a type 4 light curtain: L+ and M supply, RES restart or EDM input, OSSD1 and OSSD2 the two safe semiconductor outputs for the safety relay."
+description = "Receiver of a light curtain (for example type 4): L+ and M supply, RES restart or EDM input, OSSD1 and OSSD2 the two safe semiconductor outputs for the safety relay. Drawing symbol only: no safety function, category or PL/SIL is evaluated."
 standard = "IEC 60617"
 category = "safety"
 function = "safety.lightcurtain.rx"
