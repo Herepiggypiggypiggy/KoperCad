@@ -1,0 +1,25 @@
+@title Potential chip menu works with the feed low on the canvas (RM-12)
+@area Schematic
+@sizes 1920x1080
+# The chips of the feed menu ignored clicks when the menu was shifted up to stay on screen.
+click_text "Open example"
+wait 20
+click 560 131
+wait 4
+drag 560 131 900 980
+wait 6
+shot feed-low
+click 900 980 right
+wait 6
+shot menu-low
+expect "Potential: L1"
+click_text "+24 V"
+wait 8
+shot chip-applied
+check_layout
+# The menu closed and the feed now carries the chosen potential.
+click 900 980 right
+wait 6
+expect "Potential: +24 V"
+shot menu-after
+key Escape
