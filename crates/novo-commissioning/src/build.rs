@@ -115,6 +115,21 @@ pub struct BuildTick {
     pub at: String,
 }
 
+/// A person's "I take this step", so two people on one cabinet do not reach
+/// for the same device. A released claim stays as a record with an empty
+/// `by`, so the release travels through a merge as the newer record (the
+/// same newest-wins rule as a tick).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BuildClaim {
+    pub key: StepKey,
+    /// The step's mark when claimed, so a file from another project is
+    /// told apart on import.
+    pub mark: String,
+    /// Who holds the step; empty when it was released.
+    pub by: String,
+    pub at: String,
+}
+
 /// How a step stands now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepStatus {
@@ -278,6 +293,18 @@ impl CabinetPlan {
 
     /// The steps that can be done now, in order: lets two people work on
     /// different devices at once.
+    /// The ready steps nobody else holds: what `who` can take up now.
+    pub fn ready_for(&self, store: &CommissioningStore, who: &str) -> Vec<usize> {
+        self.ready(store)
+            .into_iter()
+            .filter(|&n| {
+                self.step(n)
+                    .and_then(|s| store.build_claim(s.key))
+                    .is_none_or(|c| c.by == who)
+            })
+            .collect()
+    }
+
     pub fn ready(&self, store: &CommissioningStore) -> Vec<usize> {
         self.steps
             .iter()
@@ -827,6 +854,29 @@ pub fn mark_done(store: &mut CommissioningStore, step: &BuildStep, by: &str, at:
         by: by.to_owned(),
         at: at.to_owned(),
     });
+}
+
+/// `by` takes the step. Nothing stops another person from doing it: a claim
+/// is a signal, and taking a step over replaces it.
+pub fn claim(store: &mut CommissioningStore, step: &BuildStep, by: &str, at: &str) {
+    store.put_claim(BuildClaim {
+        key: step.key,
+        mark: step.mark.clone(),
+        by: by.to_owned(),
+        at: at.to_owned(),
+    });
+}
+
+/// Lets go of a step (the record stays, empty, so the release merges).
+pub fn release(store: &mut CommissioningStore, step: &BuildStep, at: &str) {
+    if store.build_claim_record(step.key).is_some() {
+        store.put_claim(BuildClaim {
+            key: step.key,
+            mark: step.mark.clone(),
+            by: String::new(),
+            at: at.to_owned(),
+        });
+    }
 }
 
 /// Parks a step as a problem and raises a punch item with the note, so
