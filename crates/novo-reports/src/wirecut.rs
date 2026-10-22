@@ -438,9 +438,27 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
     (jobs, plans)
 }
 
-/// Every duct of the plans with its short name (`D1`, `D2`, ... in plan
-/// order) and where it is (`+CAB duct at 80, 120`).
+/// The short name of every duct of the project: `D1`, `D2`, ... in the order
+/// the ducts were added (by id), so the name does not change when the wires are
+/// routed again. The wire production report, the bench sheets and the Cabinet
+/// view all print this name.
+pub fn duct_names(project: &Project) -> BTreeMap<u64, String> {
+    let mut ids: Vec<u64> = project
+        .all::<Rail>()
+        .filter(|r| r.kind == novo_core::RailKind::Duct)
+        .map(|r| r.id.raw())
+        .collect();
+    ids.sort_unstable();
+    ids.into_iter()
+        .enumerate()
+        .map(|(i, id)| (id, format!("D{}", i + 1)))
+        .collect()
+}
+
+/// Every duct of the plans with its short name ([`duct_names`]) and where it is
+/// (`+CAB duct at 80, 120`).
 fn duct_legend(project: &Project, plans: &Plans) -> BTreeMap<u64, (String, String)> {
+    let names = duct_names(project);
     let mut legend: BTreeMap<u64, (String, String)> = BTreeMap::new();
     for (structure, plan) in plans {
         let tag = project
@@ -448,16 +466,17 @@ fn duct_legend(project: &Project, plans: &Plans) -> BTreeMap<u64, (String, Strin
             .map(|s| s.tag.to_string())
             .unwrap_or_default();
         for fill in &plan.fill {
-            let n = legend.len() + 1;
             let place = project
                 .all::<Rail>()
                 .find(|r| r.id.raw() == fill.duct)
                 .map_or(format!("{tag} duct"), |r| {
                     format!("{tag} duct at {:.0}, {:.0}", r.x, r.y)
                 });
-            legend
-                .entry(fill.duct)
-                .or_insert_with(|| (format!("D{n}"), place));
+            let name = names
+                .get(&fill.duct)
+                .cloned()
+                .unwrap_or_else(|| "duct ?".to_owned());
+            legend.entry(fill.duct).or_insert((name, place));
         }
     }
     legend
@@ -485,7 +504,13 @@ fn assign_tracks(project: &Project, jobs: &mut [WireCutJob], plans: &Plans) {
     keys.dedup();
     for j in jobs.iter_mut() {
         if j.ducts.is_empty() {
-            j.track = "not routed".to_owned();
+            // A core of a cable is not laid in a duct wire by wire: the cable is.
+            j.track = if j.cable.is_some() {
+                "in cable"
+            } else {
+                "not routed"
+            }
+            .to_owned();
             j.direction = "A>B as listed".to_owned();
         } else {
             j.track = j.ducts.iter().map(&name).collect::<Vec<_>>().join(" > ");

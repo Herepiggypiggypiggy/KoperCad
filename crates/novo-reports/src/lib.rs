@@ -149,8 +149,8 @@ pub use toc::{PanelContents, TableOfContents};
 pub use wire_defaults::{SIZES_MM2, UnsetWires, WireDefaults, apply_wire_defaults, unset_wires};
 pub use wirecut::{
     CableRun, END_PROCESSING_KEY, FERRULE_KEY, JOB_COLUMNS, STRIP_LENGTH_KEY, StripBasis, WireCut,
-    WireCutJob, WireEnd, cable_runs, end_basis_text, hookup_cut_mm, typical_strip_mm, wire_cut_csv,
-    wire_cut_jobs, wire_cut_jobs_with,
+    WireCutJob, WireEnd, cable_runs, duct_names, end_basis_text, hookup_cut_mm, typical_strip_mm,
+    wire_cut_csv, wire_cut_jobs, wire_cut_jobs_with,
 };
 pub use wires::WireList;
 
