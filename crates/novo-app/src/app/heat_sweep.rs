@@ -28,11 +28,16 @@ use novo_thermal::sweep::{
 
 use super::heat_settings::{HeatSettings, Kind, VentSpec, Wall};
 
+/// The window's one statement of what the numbers are. The sweep's own first
+/// note ("Model estimate: ...") is hidden as a duplicate, so every caveat it
+/// carries must be said here.
+pub(super) const FOOTER: &str = "Model estimate: the 2D heat model with planning values, the losses you entered and the wire heat in the ducts. Not validated against measurements, and the 2D slice does not see the depth of the cabinet. Check the winner with Simulate in 3D after adding it.";
+
 /// Width of the window, points.
 const WIDTH: f32 = 400.0;
 /// Tallest the list of options gets before it scrolls, points: the window
 /// stays small enough to leave the drawing visible.
-const MAX_BODY: f32 = 360.0;
+const MAX_BODY: f32 = 440.0;
 
 /// What a finished sweep found and what it needs to be applied.
 pub(super) struct Found {
@@ -275,6 +280,13 @@ impl CoolingAdvice {
         let mut close = false;
         let mut open = true;
         let pal = crate::theme::ui_palette();
+        // Start high enough that the list has its full height: in a short
+        // window the list used to get a sliver and cut a sentence off.
+        let at = Pos2::new(
+            at.x,
+            at.y.min(ctx.content_rect().bottom() - MAX_BODY - 140.0)
+                .max(60.0),
+        );
         egui::Window::new("Cooling advice")
             .open(&mut open)
             .collapsible(false)
@@ -283,6 +295,7 @@ impl CoolingAdvice {
             .default_width(WIDTH)
             .show(ctx, |ui| {
                 ui.set_max_width(WIDTH);
+                ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
                 if let Some(run) = &self.run {
                     ui.horizontal(|ui| {
                         ui.add(egui::Spinner::new());
@@ -318,16 +331,15 @@ impl CoolingAdvice {
                         ask = Some(Ask::Again);
                     }
                 }
-                let room = (ctx.content_rect().bottom() - at.y - 170.0).clamp(160.0, MAX_BODY);
+                let room = (ctx.content_rect().bottom() - at.y - 130.0).clamp(160.0, MAX_BODY);
                 egui::ScrollArea::vertical()
                     .max_height(room)
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                     .auto_shrink([false, true])
                     .show(ui, |ui| body(ui, found, stale, &mut ask));
                 ui.add_space(6.0);
                 ui.label(
-                    egui::RichText::new(
-                        "Model estimate: the 2D heat model with planning values and the losses you entered. Not validated against measurements. Check the winner with Simulate in 3D after adding it.",
-                    )
+                    egui::RichText::new(FOOTER)
                     .small()
                     .color(pal.text_secondary),
                 );
@@ -384,7 +396,8 @@ fn body(ui: &mut egui::Ui, found: &Found, stale: bool, ask: &mut Option<Ask>) {
         ui.separator();
         option(ui, found, o, stale, ask);
     }
-    for n in &s.notes {
+    // The window's footer already says the numbers are a model estimate.
+    for n in s.notes.iter().filter(|n| !n.starts_with("Model estimate")) {
         ui.add_space(4.0);
         ui.label(egui::RichText::new(n).small().color(pal.text_secondary));
     }

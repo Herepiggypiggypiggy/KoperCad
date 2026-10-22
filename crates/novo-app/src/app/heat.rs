@@ -953,6 +953,8 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
         if let Some(sol) = &state.solution {
             let p = &sol.snapshot.progress;
             let validated = sol.snapshot.accuracy.validated;
+            // Own row: wrapped beside the buttons it split in the middle.
+            ui.end_row();
             ui.label(
                 egui::RichText::new(status_label(p, validated))
                     .small()

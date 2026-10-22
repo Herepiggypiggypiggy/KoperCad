@@ -236,3 +236,16 @@ fn the_window_closes_when_the_view_changes() {
     }
     assert!(!a.is_open() && a.found.is_none());
 }
+
+/// The sweep's own "Model estimate" note is hidden as a duplicate of the
+/// footer, so the footer has to carry what that note says about trust.
+#[test]
+fn the_footer_keeps_the_caveats_of_the_hidden_note() {
+    for caveat in [
+        "wire heat in the ducts",
+        "depth of the cabinet",
+        "Not validated against measurements",
+    ] {
+        assert!(super::heat_sweep::FOOTER.contains(caveat), "{caveat}");
+    }
+}
