@@ -1754,6 +1754,10 @@ pub const COMMANDS: &[CommandInfo] = &[
             "thermal",
             "cabinet",
             "temperature",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "heat.cooler_layout",
         "Suggest a cooler layout",
         "View",
