@@ -1699,8 +1699,10 @@ fn run_heat(
 /// Height the Heat strip keeps from the moment the Heat panel opens, points:
 /// the controls, the two colour bars and their note. The strip first appears
 /// with the first result; without the room kept, the panels and the cabinet
-/// jumped down by this much under the person's pointer.
-const STRIP_HEIGHT: f32 = 112.0;
+/// jumped down by this much under the person's pointer. Assumes the two
+/// colour bars fit one row; a window too narrow for that wraps them back to
+/// two rows and the strip grows past this room.
+const STRIP_HEIGHT: f32 = 84.0;
 
 /// The strip's place before there is a result: the same rows, empty, so the
 /// room kept reads as the strip waiting for its first run and not as a gap.
@@ -1719,8 +1721,8 @@ fn heat_strip_placeholder(ui: &mut egui::Ui) {
                         .color(pal.text_secondary),
                 );
             });
-            for (unit, name) in [("°C", "Temperature"), ("m/s", "Air speed")] {
-                ui.horizontal(|ui| {
+            ui.horizontal(|ui| {
+                for (unit, name) in [("°C", "Temperature"), ("m/s", "Air speed")] {
                     let (bar, _) =
                         ui.allocate_exact_size(egui::vec2(160.0, 12.0), egui::Sense::hover());
                     ui.painter().rect_stroke(
@@ -1734,8 +1736,9 @@ fn heat_strip_placeholder(ui: &mut egui::Ui) {
                             .small()
                             .color(pal.text_secondary),
                     );
-                });
-            }
+                    ui.add_space(14.0);
+                }
+            });
         });
 }
 

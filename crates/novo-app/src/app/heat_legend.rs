@@ -58,12 +58,15 @@ pub(crate) fn strip(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32,
     // Own rows under the controls: a note that wrapped beside the bar broke
     // off at the strip's left edge on a 1366 px screen.
     ui.end_row();
+    // The two colour bars share a row when the strip is wide enough (it wraps
+    // them when not): the strip takes less of a small window.
     if wanted(h) {
         scale(ui, range);
-        ui.end_row();
     }
     if h.lines {
         speed_scale(ui, top_speed);
+    }
+    if wanted(h) || h.lines {
         ui.end_row();
     }
     if !notes.is_empty() {

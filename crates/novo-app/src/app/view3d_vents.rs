@@ -274,9 +274,14 @@ fn operating_point(spec: &VentSpec, measured: Option<f64>) -> Option<String> {
     if !(q.is_finite() && rated.is_finite() && rated > 0.0) {
         return None;
     }
+    let filter = if spec.kind == Kind::FilterFan {
+        " The flow entered is the one with the filter fitted, so the filter's loss is already in it."
+    } else {
+        ""
+    };
     Some(format!(
         "Datasheet {rated:.0} m³/h at free air; this run moves about {q:.0} m³/h ({:.0} %) against \
-         the cabinet's resistance (model; the fan curve is a straight line down to {:.0} Pa).",
+         the cabinet's resistance (model; the fan curve is a straight line down to {:.0} Pa).{filter}",
         100.0 * q / rated,
         spec.pressure_pa
     ))
