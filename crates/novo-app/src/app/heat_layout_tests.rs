@@ -88,7 +88,19 @@ fn tags(p: &Project) -> impl Fn(u64) -> String + '_ {
     }
 }
 
+/// A short search: the tests check what is done with a finding, not how
+/// far the search can go, and a loaded machine must not time them out.
+fn quick() -> novo_thermal::placement::Settings {
+    novo_thermal::placement::Settings {
+        top_k: 3,
+        max_movers: 2,
+        max_moves: 2,
+        ..Default::default()
+    }
+}
+
 fn run(state: &mut HeatState, p: &Project, cab: StructureId) {
+    state.layout.settings = Some(quick());
     let ctx = egui::Context::default();
     state.sync_live(p, cab, 35.0, false, 0.0, &ctx);
     state.command("heat.cooler_layout");
