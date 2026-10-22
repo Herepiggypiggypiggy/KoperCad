@@ -132,6 +132,23 @@ fn map_sheet(pic: &Picture, frame: &PlateFrame, style: &Style) -> Option<Overlay
     mesh_overlay(m, -2)
 }
 
+/// Pulls every vertex of a band back onto the plate rectangle, so a band
+/// ends at the plate edge instead of running over what lies beside it.
+fn clamp_to_plate(m: &mut Mesh, pic: &Picture, frame: &PlateFrame) {
+    let [w, h] = pic.plate;
+    if w <= 0.0 || h <= 0.0 {
+        return;
+    }
+    for v in &mut m.positions {
+        let (x, y) = frame.plate(*v);
+        let (cx, cy) = (x.clamp(0.0, f64::from(w)), y.clamp(0.0, f64::from(h)));
+        if (cx, cy) != (x, y) {
+            let moved = frame.world(cx, cy, 0.0) - frame.world(x, y, 0.0);
+            *v += moved;
+        }
+    }
+}
+
 fn halos(pic: &Picture, frame: &PlateFrame, style: &Style) -> Option<Overlay> {
     let mut m = Mesh::default();
     for r in pic.runs.iter().filter(|r| r.halo_mm > 0.0) {
@@ -148,6 +165,7 @@ fn halos(pic: &Picture, frame: &PlateFrame, style: &Style) -> Option<Overlay> {
             geom::strip(&mut m, &path, r.halo_mm * share, colour, *alpha, *alpha);
         }
     }
+    clamp_to_plate(&mut m, pic, frame);
     mesh_overlay(m, -1)
 }
 
@@ -493,6 +511,26 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_band_ends_at_the_plate_edge() {
+        let mut pic = picture();
+        // 80 mm either side of a run at x = 50 would reach x = -30.
+        pic.runs[0].path = vec![[50.0, 50.0, 5.0], [50.0, 460.0, 5.0]];
+        let Some(Overlay::Mesh(m)) = halos(&pic, &frame(), &style()) else {
+            panic!("a band is drawn");
+        };
+        let f = frame();
+        for p in &m.positions {
+            let (x, y) = f.plate(*p);
+            assert!(
+                (0.0..=400.0).contains(&x) && (0.0..=500.0).contains(&y),
+                "{x} {y}"
+            );
+        }
+        // The part on the plate is still there.
+        assert!(m.positions.iter().any(|p| f.plate(*p).0 > 100.0));
     }
 
     #[test]

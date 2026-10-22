@@ -99,17 +99,47 @@ fn fix_of(rule: &str, i: usize, f: &EngineFix) -> Fix {
     }
 }
 
-/// The longest keep-clear distance the engine plans for a run of this class.
-fn halo_mm(run: &novo_emc::Run) -> f32 {
+/// The keep-clear band of an aggressor run: the planning distance to the
+/// victim classes that really have a run on this plate, cut by its shield.
+/// The band is drawn no wider than a fifth of the plate's short side so the
+/// devices stay readable; the real planning distance is on the card of a
+/// finding.
+fn halo_mm(run: &novo_emc::Run, victims: &[EmcClass], plate_mm: [f32; 2]) -> f32 {
     if !run.class.is_aggressor() {
         return 0.0;
     }
-    let base = EmcClass::ALL
+    let base = victims
         .iter()
         .map(|v| novo_emc::default_distance_mm(run.class, *v))
         .fold(0.0, f64::max);
     let factor = run.shield.map_or(1.0, |s| s.factor(PIGTAIL_MM));
-    (base * factor) as f32
+    let cap = plate_mm[0].min(plate_mm[1]) * 0.2;
+    ((base * factor) as f32).min(cap)
+}
+
+/// Markers closer than this to an earlier one are moved aside so the
+/// numbered badges do not sit on top of each other, mm.
+const MARKER_GAP_MM: f32 = 30.0;
+
+/// Moves a marker that would sit on an earlier one sideways, a step at a
+/// time. The span of a finding still shows where it really is.
+fn spread_markers(hotspots: &mut [Hotspot]) {
+    for i in 1..hotspots.len() {
+        let mut k = 0;
+        while k < 8 {
+            let at = hotspots[i].at;
+            let near = hotspots[..i]
+                .iter()
+                .any(|h| (h.at[0] - at[0]).hypot(h.at[1] - at[1]) < MARKER_GAP_MM);
+            if !near {
+                break;
+            }
+            k += 1;
+            // Right, left, right further ...
+            let side = if k % 2 == 1 { 1.0 } else { -1.0 };
+            hotspots[i].at[0] += side * MARKER_GAP_MM * ((k + 1) / 2) as f32;
+        }
+    }
 }
 
 /// The engine's picture of a plate of the project. `None` when the engine
@@ -141,6 +171,12 @@ pub(crate) fn build(
     let pic = novo_emc::picture(input, &report);
     let on_plate = |p: Option<u64>| p == Some(plate);
 
+    let victims: Vec<EmcClass> = input
+        .runs
+        .iter()
+        .filter(|r| on_plate(r.plate) && drawn.contains(&r.id) && !r.class.is_aggressor())
+        .map(|r| r.class)
+        .collect();
     let runs: Vec<Run> = pic
         .runs
         .iter()
@@ -153,7 +189,7 @@ pub(crate) fn build(
                 class: class_of(r.class),
                 shielded: r.shielded,
                 path: r.path.iter().map(|p| pt(*p)).collect(),
-                halo_mm: src.map_or(0.0, halo_mm),
+                halo_mm: src.map_or(0.0, |x| halo_mm(x, &victims, plate_mm)),
                 class_reason: r.class_reason.clone(),
                 overridden: r.overridden,
             }
@@ -274,6 +310,7 @@ pub(crate) fn build(
         });
     }
 
+    spread_markers(&mut hotspots);
     let loops = pic
         .loops
         .iter()
@@ -404,8 +441,10 @@ mod tests {
             pic.runs.iter().find(|r| r.id == 2).unwrap().class,
             Class::Analog
         );
-        // An unshielded motor run next to an analog run gets a keep-clear halo.
-        assert!(pic.runs.iter().find(|r| r.id == 1).unwrap().halo_mm > 0.0);
+        // An unshielded motor run with an analog run on the plate gets a
+        // keep-clear band, never wider than a fifth of the short side.
+        let halo = pic.runs.iter().find(|r| r.id == 1).unwrap().halo_mm;
+        assert!(halo > 0.0 && halo <= 80.0);
         assert_eq!(pic.runs.iter().find(|r| r.id == 2).unwrap().halo_mm, 0.0);
         let h = pic
             .hotspots
@@ -428,6 +467,44 @@ mod tests {
         let n = pic.nodes.iter().find(|n| n.device == 5).unwrap();
         assert_eq!(n.role, NodeRole::Source);
         assert!(n.level > 0.0 && n.level <= 1.0);
+    }
+
+    #[test]
+    fn markers_on_the_same_spot_are_spread_apart() {
+        let mut i = input();
+        // A second sensitive device beside the first: two findings at one place.
+        i.devices.push(Device {
+            id: 6,
+            tag: "-A1".into(),
+            role: Role::Sensitive,
+            plate: Some(1),
+            rect: Some((110.0, 0.0, 40.0, 40.0)),
+            filter: FilterState::Unknown,
+            filter_for: None,
+            bonded: None,
+        });
+        let pic = build(&i, 1, [800.0, 400.0], &all());
+        for (n, a) in pic.hotspots.iter().enumerate() {
+            for b in &pic.hotspots[n + 1..] {
+                assert!((a.at[0] - b.at[0]).hypot(a.at[1] - b.at[1]) >= MARKER_GAP_MM - 0.01);
+            }
+        }
+    }
+
+    #[test]
+    fn a_project_with_nothing_for_the_engine_falls_back() {
+        let project = novo_core::Project::default();
+        let plate = novo_core::StructureId::from(1);
+        // The views then show the interim picture and its note.
+        assert!(from_project(&project, plate, [800.0, 400.0], &HashSet::new()).is_none());
+    }
+
+    #[test]
+    fn no_victim_on_the_plate_means_no_band() {
+        let mut i = input();
+        i.runs.truncate(1);
+        let pic = build(&i, 1, [800.0, 400.0], &all());
+        assert_eq!(pic.runs[0].halo_mm, 0.0);
     }
 
     #[test]

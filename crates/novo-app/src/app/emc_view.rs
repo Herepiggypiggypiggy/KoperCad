@@ -618,29 +618,31 @@ pub(super) fn panel(
 }
 
 fn layer_chips(ui: &mut egui::Ui, l: &mut EmcLayers, pic: &Picture) {
-    let chip = |ui: &mut egui::Ui, on: &mut bool, text: &str, tip: &str, enabled: bool| {
-        // Not `add_enabled_ui`: a scope per chip cannot wrap onto the next row.
-        if !enabled {
-            ui.add_enabled(false, egui::Button::new(text))
-                .on_disabled_hover_text("Nothing of this kind in this cabinet");
-            return;
-        }
-        let r = novo_theme::widgets::filter_toggle(ui, text, *on).on_hover_text(tip);
-        if r.clicked() {
-            *on = !*on;
-        }
-    };
+    let nothing = "Nothing of this kind in this cabinet";
+    let chip =
+        |ui: &mut egui::Ui, on: &mut bool, text: &str, tip: &str, enabled: bool, off: &str| {
+            // Not `add_enabled_ui`: a scope per chip cannot wrap onto the next row.
+            if !enabled {
+                ui.add_enabled(false, egui::Button::new(text))
+                    .on_disabled_hover_text(off);
+                return;
+            }
+            let r = novo_theme::widgets::filter_toggle(ui, text, *on).on_hover_text(tip);
+            if r.clicked() {
+                *on = !*on;
+            }
+        };
     ui.horizontal_wrapped(|ui| {
         // A chip moves to the next row instead of wrapping its own text.
         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-        chip(ui, &mut l.classes, "Classes", "Wires in the colour of their cable class, devices by role", true);
-        chip(ui, &mut l.halos, "Keep-clear", "A soft band round each noisy run: keep sensitive wires out of it", true);
-        chip(ui, &mut l.sources, "Noise glow", "A glow round each noisy part, as far as its loudness reaches (an index, not a field)", true);
-        chip(ui, &mut l.spots, "Hot spots", "Numbered markers where something is likely to go wrong", true);
-        chip(ui, &mut l.risk, "Exposure map", "How strongly each point of the plate is leaned on by the noisy parts and runs. Geometry only", true);
-        chip(ui, &mut l.loops, "Loops", "The area each pair of go and return wires encloses", !pic.loops.is_empty());
-        chip(ui, &mut l.bonding, "Bonding", "The earth and bonding conductors", !pic.bonds.is_empty());
-        chip(ui, &mut l.shields, "Shields", "Where each cable screen ends", !pic.shields.is_empty());
+        chip(ui, &mut l.classes, "Classes", "Wires in the colour of their cable class, devices by role", true, nothing);
+        chip(ui, &mut l.halos, "Keep-clear", "A soft band round each noisy run: keep sensitive wires out of it", true, nothing);
+        chip(ui, &mut l.sources, "Noise glow", "A glow round each noisy part, as far as its loudness reaches (an index, not a field)", true, nothing);
+        chip(ui, &mut l.spots, "Hot spots", "Numbered markers where something is likely to go wrong", true, nothing);
+        chip(ui, &mut l.risk, "Exposure map", "How strongly each point of the plate is leaned on by the noisy parts and runs. Geometry only", true, nothing);
+        chip(ui, &mut l.loops, "Loops", "The area each pair of go and return wires encloses", !pic.loops.is_empty(), nothing);
+        chip(ui, &mut l.bonding, "Bonding", "The earth and bonding conductors", !pic.bonds.is_empty(), if pic.provenance == Provenance::Engine { "Not drawn yet: the rule engine does not give bonding links" } else { nothing });
+        chip(ui, &mut l.shields, "Shields", "Where each cable screen ends", !pic.shields.is_empty(), nothing);
     });
 }
 
