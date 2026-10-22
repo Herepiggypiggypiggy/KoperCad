@@ -770,13 +770,19 @@ impl NovoApp {
                 + place_key
                     .as_deref()
                     .map_or(0.0, |k| text_width(ui, k) + 12.0);
+            // With more than one panel the All panels button joins Place all and never folds.
+            let all_panels = if locations.len() > 1 {
+                button_width(ui, icons::SQUARES_FOUR, "All panels")
+            } else {
+                0.0
+            };
             let route = if plate_face {
                 GROUP_GAP + button_width(ui, icons::PATH, "Route all")
             } else {
                 0.0
             };
             let view = button_width(ui, "", "Plate") + button_width(ui, "", "Table") + pad;
-            let fixed = 4.0 + GROUP_GAP * 3.0 + panel + place + route + view;
+            let fixed = 4.0 + GROUP_GAP * 3.0 + panel + place + all_panels + route + view;
             let more = GROUP_GAP + button_width(ui, icons::DOTS_THREE, "More");
             let mut items = vec![
                 (
