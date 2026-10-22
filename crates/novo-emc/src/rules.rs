@@ -564,7 +564,7 @@ fn segregation(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                         metrics.push(Metric {
                             label: "Induced voltage",
                             value: format!(
-                                "{volts:.1} V for {} A/us, within a factor of 3",
+                                "about {volts:.1} V (wire height and {} A/us assumed; order of magnitude only, not measured)",
                                 p.didt_a_per_us
                             ),
                             level: Level::Estimate,
