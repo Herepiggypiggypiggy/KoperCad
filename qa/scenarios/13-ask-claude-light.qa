@@ -1,0 +1,50 @@
+@title Ask Claude plan and change set cards in the light look
+@area Assistant
+@env KOPERCAD_AI_REPLAY=qa/replay/build-starter.json
+@env ANTHROPIC_API_KEY=sk-ant-api03-qa-replay-key-0000000000
+# Same answers as scenario 11, shown in the light look; the plan card is scrolled into view.
+click_text "New project"
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 6
+wait 20
+key ctrl+k
+wait 6
+text ask claude
+wait 8
+key Enter
+wait 10
+expect "Test replay"
+scroll 250 300 -300
+wait 4
+click_text "Whole project"
+wait 4
+scroll 250 300 -3000
+wait 4
+shot first-run-consent
+click_text "I have read this and agree"
+wait 4
+click_text "Turn Claude on" Button
+wait 8
+expect "Claude is on"
+click_text "" MultilineTextInput
+wait 3
+text Build a direct-on-line starter on page 1
+click_text Send Button
+wait 60
+expect "Apply"
+shot ask-claude-card-light
+check_layout
+scroll 300 250 600
+wait 4
+expect "Place a direct-on-line starter on page 1"
+shot ask-claude-plan-light
+check_layout

@@ -1,0 +1,39 @@
+@title Ask Claude builds a motor starter in a draft, shows plan and checks, Apply is one step
+@area Assistant
+@env KOPERCAD_AI_REPLAY=qa/replay/build-starter.json
+@env ANTHROPIC_API_KEY=sk-ant-api03-qa-replay-key-0000000000
+# Answers come from qa/replay/build-starter.json, nothing is sent. Consent is given the way a person does.
+click_text "New project"
+wait 20
+key ctrl+k
+wait 6
+text ask claude
+wait 8
+key Enter
+wait 10
+expect "Test replay"
+scroll 250 300 -300
+wait 4
+click_text "Whole project"
+wait 4
+scroll 250 300 -3000
+wait 4
+click_text "I have read this and agree"
+wait 4
+click_text "Turn Claude on" Button
+wait 8
+expect "Claude is on"
+click_text "" MultilineTextInput
+wait 3
+text Build a direct-on-line starter on page 1
+click_text Send Button
+wait 60
+expect "Place a direct-on-line starter on page 1"
+expect "Apply"
+shot ask-claude-build-card
+check_layout
+click_text Apply Button
+wait 10
+expect "Applied"
+shot ask-claude-build-applied
+check_layout

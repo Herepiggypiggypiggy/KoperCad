@@ -82,3 +82,9 @@ The six lessons after wire-routing start from `../wire-routing/project.json`.
 - `cabinet_place = { device, x, y }` (top left on the plate, mm, as a drop), `cabinet_rotate = "-F1"`, `cabinet_remove = "-F1"`, `cabinet = "place_all"` (shows the preview and raises the click on `cabinet.place_all`), `cabinet = "accept"`. They go through `cabinet_ask`, like the canvas.
 - Scripted: cabinet-layout (drag, turn, overlap, take-off, Place all, accept), rails-and-ducts move-off-rail, wire-routing move-device, cut-lengths move-k1, heat-and-sizing move-t1, panel-plate-drawing turn-t1.
 - Still without solve: steps ticked by a `clicked` on a panel button (rules, plate card, cut list, door apply, routes) and wire_cut_exported; they need the runner's `manual` marker or a click op. `workspace.view3d` anchor not yet registered.
+
+## 2026-10-22: rails through the device centre, mounted drops, typical fronts
+- A rail line is the middle of the devices on it (#1356). `novo_layout::mount` holds the snap (`snap_to_rail`, reach 15 mm from the device centre, 6 mm along the run) and `mounted_on` (0.5 mm exact check); `model::place_device` records the rail when the device centre is on a rail line and the device lies on its run, so a drop that is not on a line leaves the rail.
+- Lessons that drop devices by `cabinet_place` must give a top left whose centre is on the rail line to stay mounted: -K1 on rail 92 is (x, 210); -F2 (x, 17.5); -T1 (x, 550). The rails-and-ducts steps `slide-along` and `move-off-rail` rely on it.
+- 3D: typical shapes are drawn from 36 px when the mesh has at most 800 triangles (`cull::lod_for_part`); heavy maker models still wait for 160 px.
+- QA: `scripts/qa.sh run qa/scenarios/79-cabinet-rail-snap.qa` (1366x768 only, the clicks are window points).

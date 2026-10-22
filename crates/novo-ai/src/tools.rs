@@ -4,9 +4,9 @@
 //! person sent the message, filtered by the data scope they agreed to: a tool
 //! that needs a wider scope answers "not allowed" and returns nothing.
 //!
-//! Claude never edits the project. `propose_edit` records a [`Proposal`]; the
-//! app lists it with Apply and Reject buttons and applies it through the
-//! normal command path, so it is one undo step and nothing happens unseen.
+//! Claude never edits the real project. In the app `propose_edit` works on a private draft
+//! (see `engineer`); the app lists the change set with Apply and Reject buttons and applies it
+//! through one transaction, so it is one undo step and nothing happens unseen.
 
 use crate::consent::DataScope;
 use serde_json::{Value, json};
@@ -107,6 +107,11 @@ impl SnapshotHost {
         }
     }
 
+    /// Replaces what the read tools see (the project changed in a draft).
+    pub fn set_snapshot(&mut self, snapshot: Snapshot) {
+        self.snapshot = snapshot;
+    }
+
     /// First proposal id to use (ids continue across turns).
     pub fn starting_at(mut self, next_id: u32) -> Self {
         self.next_id = next_id;
@@ -190,6 +195,11 @@ impl SnapshotHost {
             }
         }
     }
+}
+
+/// [`clip`] for the other tool hosts of this crate.
+pub(crate) fn clip_for_tools(s: &str) -> String {
+    clip(s)
 }
 
 fn clip(s: &str) -> String {

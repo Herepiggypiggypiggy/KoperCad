@@ -84,6 +84,7 @@ mod heat_cloud;
 mod heat_compare;
 #[cfg(test)]
 mod heat_compare_tests;
+mod heat_cooling;
 #[cfg(test)]
 mod heat_duct_slice_tests;
 mod heat_legend;

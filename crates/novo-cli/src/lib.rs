@@ -83,6 +83,15 @@ enum Cmd {
     /// app, save screenshots, write an audit report. See docs/testing/qa-suite.md.
     #[command(subcommand)]
     Qa(qa::Qa),
+    /// Run the Ask Claude evaluation scenarios (scripted model by default; add
+    /// `--real` to use your own API key). See docs/CLAUDE-ASSISTANT-TEST.md.
+    #[command(name = "ask-claude-eval", disable_help_flag = true)]
+    AskClaudeEval {
+        /// Options: --real, --only ID, --list, --model ID, --effort LEVEL,
+        /// --budget USD, --out DIR, --verbose, --replay.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        options: Vec<String>,
+    },
     /// Write the user manual (HTML, works offline) to a folder. The same pages
     /// open from Help > User manual in the program.
     Manual {
@@ -530,6 +539,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
         Cmd::Eplan(cmd) => eplan::run(cmd, out),
         Cmd::TestUser(opts) => testuser::run(opts, out),
         Cmd::Qa(cmd) => qa::run(cmd, out),
+        Cmd::AskClaudeEval { options } => Ok(novo_ai::eval_cli::run(&options, out)),
         Cmd::Parts(cmd) => parts::run(cmd, out),
         Cmd::Manual { dir, images } => manual(&dir, images.as_deref(), out),
         Cmd::Compare { before, after } => {
