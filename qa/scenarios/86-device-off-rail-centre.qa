@@ -10,7 +10,7 @@ shot old-plan
 click_text " problems"
 wait 10
 expect "off the middle of its rail"
-expect "drag it onto the rail"
+expect "Centre rails on devices"
 shot problems-named
 check_layout
 key Escape
