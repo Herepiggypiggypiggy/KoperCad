@@ -71,6 +71,9 @@ impl Kind {
 }
 
 /// Smallest opening, mm.
+/// The smallest side a fan opening is expected to have, mm (small axial fans start near 40 mm).
+pub(super) const MIN_FAN_SIDE_MM: f64 = 40.0;
+
 pub(super) const MIN_SIZE_MM: f64 = 20.0;
 /// Planning size of a fan cut-out and its datasheet ends when the person has
 /// not entered a maker's: stated in the panel as a starting point.
@@ -555,6 +558,17 @@ impl HeatSettings {
         pairs
     }
 
+    /// Fans narrower than [`MIN_FAN_SIDE_MM`] on one side: no real fan is that
+    /// thin, so the size (or the datasheet flow) is probably a slip.
+    pub(super) fn thin_fans(&self) -> Vec<usize> {
+        self.vents
+            .iter()
+            .enumerate()
+            .filter(|(_, v)| v.kind.is_fan() && v.width_mm.min(v.height_mm) < MIN_FAN_SIDE_MM)
+            .map(|(i, _)| i)
+            .collect()
+    }
+
     pub(super) fn can_undo(&self) -> bool {
         !self.undo.is_empty()
     }
@@ -648,6 +662,23 @@ mod tests {
         // Six on a wide enough wall: all six.
         let six = Suggestion::for_test(Kind::FilterFan, 6, 100.0);
         assert!(six.specs_for_test(&e).len() <= 6);
+    }
+
+    #[test]
+    fn only_a_fan_thinner_than_any_real_fan_is_flagged() {
+        let mut set = HeatSettings::default();
+        let mut thin = VentSpec::new(Wall::Top);
+        thin.kind = Kind::Fan;
+        thin.width_mm = 500.0;
+        thin.height_mm = 20.0;
+        let mut ok = thin;
+        ok.height_mm = 120.0;
+        let mut slot = thin;
+        slot.kind = Kind::Grille;
+        set.add(thin);
+        set.add(ok);
+        set.add(slot);
+        assert_eq!(set.thin_fans(), vec![0], "a thin grille slot is fine");
     }
 
     #[test]

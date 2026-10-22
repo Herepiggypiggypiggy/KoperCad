@@ -196,6 +196,17 @@ fn body(
             ),
         );
     }
+    for i in settings.thin_fans() {
+        ui.add_space(4.0);
+        ui.colored_label(
+            crate::theme::ui_palette().warning,
+            format!(
+                "Opening {} is a fan only {:.0} mm across: no fan is that thin, so check its size and datasheet flow.",
+                i + 1,
+                settings.vents[i].width_mm.min(settings.vents[i].height_mm)
+            ),
+        );
+    }
     if let Some(sg) = suggestion {
         ui.add_space(4.0);
         egui::Frame::group(ui.style()).show(ui, |ui| {
