@@ -1,0 +1,30 @@
+@title PDF with options (in colour) and EPLAN project written and kept for inspection
+@area Reports
+# Export PDF with options: all pages in colour; Export EPLAN project (PXF) with the defaults; keep_file copies both files.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text Export PDF with options
+wait 4
+key Enter
+wait 10
+click_text "In colour"
+wait 3
+shot pdf-options-colour
+click_text "Export" Button #1
+wait 40
+expect_file "~/Documents/KoperCAD/*.pdf" 5000
+keep_file "~/Documents/KoperCAD/*.pdf"
+shot pdf-written
+key ctrl+k
+wait 4
+text Export EPLAN project
+wait 4
+key Enter
+wait 10
+click_text "Export" Button #1
+wait 30
+expect_file "~/Documents/KoperCAD/*.epj" 3000
+keep_file "~/Documents/KoperCAD/*.epj"
+shot eplan-written

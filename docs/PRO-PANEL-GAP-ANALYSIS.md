@@ -1,5 +1,113 @@
 # Panel building: what EPLAN Pro Panel does and what KoperCAD should take
 
+## Re-evaluation 2026-10-22 (read this first)
+
+Status: second pass for the owner, research only, no code. Sections 1 to 10 below are the 2026-10-15 original; its
+ranks R1 to R9 have mostly landed, so this section replaces section 4 (matrix) and section 6 (ranking). Where a row
+below disagrees with the original, this section wins.
+
+**How sure each statement is.**
+- *Source*: stated on an EPLAN public page (listed in "Sources 2026-10-22" at the end of this section).
+- *Inferred*: my reading of what the pages imply; EPLAN does not spell it out.
+- *Not confirmed*: pages are silent. Not hands-on: nobody here has run Pro Panel.
+- KoperCAD "Done" means code and tests on main (checked against `crates/` and `handoff/*/HANDOFF.md`), not a hands-on pass on
+  Windows. "Model" means a planning estimate, not validated against a tool or standard.
+
+Owner context: wires are cut and holes drilled by hand. That makes assembly guidance, printed output and part data worth more
+than machine formats. No EPLAN macros, libraries, manual text or motor data were used; the customer-derived notes in
+`interop/` were read for context only and nothing from them is quoted here.
+
+### What Pro Panel does, now (2026 state)
+
+Pro Panel builds a 3D digital twin from the schematic: enclosure and plate, rails, ducts, devices with the maker's real
+dimensions (Data Portal), drill holes and cut-outs, routing rules and wire lengths with duct fill, clearance and thermal
+checks, parts, cutting and wiring lists, and NC data for machining (Rittal Automation Systems) [source]. Wire production data
+goes to wire machines (Rittal WT, Steinhauer, CadCabel, Metzner, Schleuniger, Komax), one licensed format each; the generic
+export lists sequence, colour, cross-section, both ends, length, end processing and direction per end, bundle number,
+connection number and the ducts passed [source]. Smart Production adds step-by-step browser work instructions with 3D, drill
+patterns, wire routes, traffic-light status, questions back to design, change support between versions, order management
+and a dashboard [source]. Pro Panel 2026 added up to ten saved 3D views per project and easier routing configuration
+[source]. Smart Mounting and Smart Wiring pages did not load in detail; their content here is *inferred* from Smart Production.
+
+### Capability table
+
+| # | Capability | Pro Panel | KoperCAD | Notes |
+| --- | --- | --- | --- | --- |
+| 1 | 3D layout space from schematic devices | Source | **Done** | Cabinet workspace plus 3D view (`novo-view3d`), unplaced list, place all with rules and trunk duct |
+| 2 | Maker enclosures and accessories from a configurator (Rittal RiPanel) | Source | **Partial** | Enclosure sizing, door, plate, surfaces exist; no catalog of enclosures, plinths, partitions, accessories with real 3D |
+| 3 | Real part dimensions and 3D models at scale (Data Portal) | Source | **Partial** | Bulk import, BMEcat, maker packs, STEP boxes and meshes, pins from STEP exist; shipped catalog is still tiny; import must run on the owner's PC (PARTS-REAL) |
+| 4 | Rails and ducts, cut to length | Source | **Done** | Rail/duct UI, stock optimiser with kerf and offcuts (`stock.rs`), cut list |
+| 5 | Mounting on plate, door, wall, profiles | Source | **Partial** | Surfaces engine and picker (PANEL-B1/B3); slices of the surface view still landing |
+| 6 | Clearance and collision checks | Source | **Done** (2D, boxes) | Per-part rules, depth, door swing, 3D drag gaps. No mesh-level collision |
+| 7 | Assembly accessibility (tool access, wire entry) | Not confirmed | **Missing** | Clearance zones exist; no screwdriver or wire-bend access check |
+| 8 | Holes and cut-outs from placement | Source | **Done** | Drill table, cut-out cards, plate drawing |
+| 9 | Associative drilling templates and mounting drawings | Source | **Done, printed 1:1** | Workshop pack: tiled 1:1 templates with scale check. Accuracy on paper is an estimate (about 0.5 mm), not measured |
+| 10 | Machine NC data (Perforex, Steinhauer) | Source, licensed | **Missing, by choice** | Only worth it once a machine exists; hand drilling today |
+| 11 | 3D wire routing, lengths, wiring holes | Source | **Done** | `novo-routing`, route all, entry legs, openings, lengths with slack and basis flag |
+| 12 | Duct fill | Source | **Done** | Engine, check, 3D view |
+| 13 | Wire production list (sequence, bundle, end processing, routing track) | Source | **Partial** | Wire cut list, job CSV, ferrule table, strip lengths from standard. Bundle number, per-end routing direction and machine sequence are not there (check the CSV columns before building) |
+| 14 | Wire machine exports (Komax, Schleuniger, Rittal WT, ...) | Source, licensed per format | **Missing, by choice** | No machine named; ask first |
+| 15 | Thermal: loss total, loss map, cooling selection (RiTherm) | Source | **Done beyond, one gap** | IEC 60890 estimate plus own 2D/3D CFD and heat views (model, validation in `docs/thermal-validation.md`). Missing: pick a fan or cooling unit from a catalog |
+| 16 | Busbars in loss and layout | Source (loss only) | **Not checked** | Copper handling exists in sim; no busbar layout confirmed on main |
+| 17 | 2D documents from the 3D model | Source | **Done** | Plate drawing, PDF, DXF |
+| 18 | Reports: BOM, cut list, wire list, labels, ferrules | Source | **Done** | Bench packet bundles them; label sheet stays out by owner choice |
+| 19 | Step-by-step work instructions with 3D, status, change support | Source (Smart Production) | **Partial** | Assembly checklist (PDF) and Bench packet exist; no interactive, tablet-friendly build mode with status |
+| 20 | Wiring guidance per wire (route shown, sequence) | Inferred (Smart Wiring) | **Partial** | Cable runs lit in 3D with card and list; no wire-by-wire work order or bundles |
+| 21 | Questions from the shop to design, change tracking | Source | **Partial** | Commissioning field file (`.kcfield`), punch list with photos, redlines applied as one undo step. Not yet tied to the build order |
+| 22 | Production orders, dashboard, central server | Source | **Skip** | Needs a server; against local-first |
+| 23 | Saved 3D views | Source (2026) | **Done** | `view3d_views.rs` |
+| 24 | Revisions and associative updates | Source | **Done** | Revisions, compare, change report |
+| 25 | EPLAN project import | n/a | **Done in part** | PXF read and layout import (knowledge only) |
+| 26 | Cloud / on-premises deployment | Source | **n/a** | Local by design |
+
+### Where KoperCAD is already ahead or different
+
+Own thermal and airflow solver with 3D heat cloud and flow (Pro Panel hands off to RiTherm), live simulation, commissioning
+and learning modules, per-user install, printed 1:1 templates with a scale check, bench-first outputs for hand work.
+These are *our* claims about KoperCAD; whether Pro Panel lacks equivalents beyond what its public pages list is *inferred*.
+
+### Ranked next lanes
+
+Ranked for ambition and for a hand-building workshop. Effort: S one PR, M two to four, L five or more.
+
+| Rank | Lane | Closes | Effort | Why |
+| --- | --- | --- | --- | --- |
+| 1 | **Real part data at scale** (finish PARTS-REAL: user-run Rittal, Wago, Phoenix, Schneider, Siemens, Eaton, ABB/Hager import, quality report, 3D and pins) | 3, and unlocks 6, 11, 15 | L | Pro Panel's moat is its Data Portal. Every other number depends on it. Owner-wanted |
+| 2 | **Build mode: guided assembly and wiring on a tablet** (interactive checklist in the app: rails, ducts, devices with drill marks, then wire by wire with route and cut length, status per item, "question to design" and change-aware after revisions; reuses `.kcfield` and the commissioning tablet layout) | 19, 20, 21 | L | Biggest gap that matters to hand building; replaces Smart Production without a server. Local, no admin |
+| 3 | **Wire production data parity**: bundle numbers, end processing and direction per end, sequence, routing track in the cut list and CSV; ferrule and strip data per wire; hand-friendly cut order by bundle | 13, 20 | M | Cheap, exact data; also the base for any machine format later |
+| 4 | **Enclosure and accessory catalog**: enclosures, plates, plinths, partitions, door cut-outs with real sizes and 3D, choose-and-place | 2 | M-L | Needs lane 1's importers; makes cabinet start-up as quick as RiPanel |
+| 5 | **Cooling selection**: choose fan, filter or cooling unit from catalog capacity against the heat result; report as "planning value" | 15 | S-M | Completes a chain we already do better than the first half |
+| 6 | **Access and collision with real meshes** (tool access, wire bend, door with devices, STEP meshes, not only boxes) | 6, 7 | L | Ambitious, needs part meshes from lane 1; keep honest labels |
+| 7 | **Busbar and copper layout** (check `copper-discipline` thread first) | 16 | M | Only if the shop builds distribution boards |
+| 8 | **Machine formats** (one wire machine or one drilling machine, from the maker's own spec) | 10, 14 | M each | Wait until the owner names a machine; do not guess |
+| Skip | Production orders and dashboard, cloud, AR | 22, 26 | | Against local-first |
+
+### Proposed new threads
+
+1. Build mode (lane 2). 2. Wire production data parity (lane 3). 3. Enclosure and accessory catalog (lane 4, starts after
+PARTS-REAL imports exist). 4. Cooling selection (lane 5). Lane 1 continues in the existing parts threads. Lanes 6 to 8 wait.
+
+### Wanted and not wanted (unchanged)
+
+Wanted: real part data, printed bench output, standards report. Not wanted: Dutch menus, symbol editor, label sticker sheet.
+
+### Questions for the owner
+
+Which wire machine or drilling machine, if any, will the shop get? Is the shop going to build busbar systems? Does the shop
+want the tablet on the bench (lane 2 shapes the layout)?
+
+### Sources 2026-10-22 (public pages only)
+
+- Pro Panel product page: https://www.eplan.com/us-en/products/eplan-pro-panel/
+- Wire production export: https://www.eplan.help/en-us/Infoportal/Content/Plattform/2026/Content/htm/productionwiringgui_k_start.htm
+- Smart Production: https://www.eplan.com/us-en/products/eplan-smart-production/
+- Panel builder workflow: https://www.eplan.com/us-en/blog/software/eplan-panel-builder-blog-02-7-30-2026
+- Pro Panel 2026 news: https://frame-engineering.de/neue-version-2026-neuerungen-in-pro-panel/ and https://www.eplan.com/us-en/about-us/press/first-sneak-peek-into-the-upcoming-eplan-platform-2026/
+
+---
+
+# Original analysis, 2026-10-15
+
 Status: draft for the owner, 2026-10-15. Research only, no code. It feeds the
 physical-design workstreams (WS-15 layout, WS-16 routing) and the follow-up
 threads in section 8. Where it disagrees with `docs/DESIGN.md` or

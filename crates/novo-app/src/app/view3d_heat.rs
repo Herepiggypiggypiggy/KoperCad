@@ -93,6 +93,19 @@ pub(super) fn show(
         }
         ui.horizontal_wrapped(|ui| heat::simulate_controls_with(ui, state, false));
         let running = state.running();
+        if let Some(sol) = state.solution().filter(|s| !s.wire_notes.is_empty()) {
+            egui::CollapsingHeader::new("Wire heat in the ducts")
+                .id_salt("view3d_heat_wires")
+                .show(ui, |ui| {
+                    for n in &sol.wire_notes {
+                        ui.label(
+                            egui::RichText::new(n)
+                                .small()
+                                .color(crate::theme::ui_palette().text_secondary),
+                        );
+                    }
+                });
+        }
         egui::CollapsingHeader::new("Settings for the next run")
             .id_salt("view3d_heat_settings")
             .show(ui, |ui| {

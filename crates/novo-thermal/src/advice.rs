@@ -120,7 +120,8 @@ pub fn recommend(scn: &Scenario, res: &ThermalResult) -> Result<Vec<Recommendati
     }
 
     // 2. Fan pair, from the flow the sizing rule asks for upwards.
-    let total: f64 = scn.devices.iter().map(|d| d.loss_w).sum();
+    let total: f64 = scn.devices.iter().map(|d| d.loss_w).sum::<f64>()
+        + scn.obstacles.iter().map(|o| o.loss_w).sum::<f64>();
     let limit = trouble
         .iter()
         .filter_map(|d| d.rated_max_ambient_c)

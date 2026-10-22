@@ -83,6 +83,10 @@ pub struct Obstacle {
     /// Share of the air depth it blocks, 0 to 1. `None` = typical for the
     /// kind (duct 0.7, rail 0.15, solid 1.0).
     pub blockage: Option<f64>,
+    /// Heat released inside the obstacle, W: the wires lying in a duct
+    /// (I²R, see [`crate::wires`]). It enters the air of the cells the
+    /// obstacle covers, spread evenly over its footprint. 0 for none.
+    pub loss_w: f64,
 }
 
 impl Obstacle {

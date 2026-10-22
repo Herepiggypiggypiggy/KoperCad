@@ -4,7 +4,8 @@
 use std::collections::BTreeSet;
 
 use novo_core::{
-    AnyId, DeviceKind, DeviceTag, Endpoint, PinRef, Project, Record, TerminalKind, Value,
+    AnyId, DeviceKind, DeviceTag, Endpoint, PinRef, Project, Record, SymbolRole, TerminalKind,
+    Value,
 };
 use novo_parts::{display_value, is_internal_key, parse_number, parse_value};
 
@@ -245,9 +246,19 @@ pub(crate) fn fields(project: &Project, kind: TableKind) -> Vec<Field> {
 
 fn endpoint_text(project: &Project, end: Endpoint) -> String {
     match end {
-        Endpoint::Pin { symbol, pin } => project
-            .pin_designation(PinRef::new(symbol, pin))
-            .unwrap_or_default(),
+        Endpoint::Pin { symbol, pin } => {
+            // A supply lead ends on a feed point whose pin is just "1": name the potential,
+            // as the wire production list does.
+            if let Some(SymbolRole::PotentialFeed { potential }) =
+                project.symbol(symbol).map(|s| &s.role)
+                && let Some(p) = project.potential(*potential)
+            {
+                return format!("{} (feed)", p.name);
+            }
+            project
+                .pin_designation(PinRef::new(symbol, pin))
+                .unwrap_or_default()
+        }
         Endpoint::Junction { .. } => "junction".into(),
         Endpoint::Free { .. } => "open end".into(),
     }

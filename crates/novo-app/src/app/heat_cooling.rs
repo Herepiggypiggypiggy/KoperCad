@@ -106,6 +106,11 @@ fn load_list(path: &Path) -> (Vec<Product>, Vec<cooling::ListError>) {
     }
 }
 
+/// Heat of the wires in the ducts of a scenario, W.
+pub(super) fn duct_loss_w(s: &novo_thermal::Scenario) -> f64 {
+    s.obstacles.iter().map(|o| o.loss_w).sum()
+}
+
 /// The lowest ambient limit among the devices of the result, if any states one.
 pub(super) fn lowest_limit_c(sol: &Solution) -> Option<f64> {
     sol.snapshot
@@ -117,26 +122,47 @@ pub(super) fn lowest_limit_c(sol: &Solution) -> Option<f64> {
 }
 
 /// What the selection is made from; `None` for a result that did not come
-/// with its enclosure (a stub) or that has no heat.
+/// with its enclosure (a stub) or that has no heat. The heat to carry is the
+/// devices' loss plus the heat of the wires in the ducts.
 pub(super) fn basis_for(sol: &Solution, settings: &CoolingSettings) -> Option<Basis> {
     let e = sol.enclosure.as_ref()?;
-    let loss_w: f64 = sol.snapshot.devices.iter().map(|d| d.loss_w).sum();
+    let devices_w: f64 = sol.snapshot.devices.iter().map(|d| d.loss_w).sum();
+    let target = settings
+        .target_c
+        .or_else(|| lowest_limit_c(sol))
+        .unwrap_or(DEFAULT_TARGET_C);
+    basis_of(
+        e,
+        devices_w,
+        sol.duct_loss_w,
+        sol.ambient,
+        target,
+        settings.closed,
+    )
+}
+
+fn basis_of(
+    e: &novo_thermal::Enclosure,
+    devices_w: f64,
+    wires_w: f64,
+    ambient_c: f64,
+    target_c: f64,
+    closed: bool,
+) -> Option<Basis> {
+    let loss_w = devices_w + wires_w.max(0.0);
     if loss_w.is_nan() || loss_w <= 0.0 {
         return None;
     }
     Some(Basis {
         loss_w,
-        ambient_c: sol.ambient,
-        target_c: settings
-            .target_c
-            .or_else(|| lowest_limit_c(sol))
-            .unwrap_or(DEFAULT_TARGET_C),
+        ambient_c,
+        target_c,
         width_mm: e.width_mm,
         height_mm: e.height_mm,
         depth_mm: e.depth_mm,
         material: e.material,
         installation: e.installation,
-        closed_required: settings.closed,
+        closed_required: closed,
     })
 }
 
@@ -170,6 +196,12 @@ pub(super) fn report_lines(sol: &Solution, settings: &mut CoolingSettings) -> Ve
         return Vec::new();
     };
     let mut lines = selection.report_lines(&basis);
+    if sol.duct_loss_w > 0.0 {
+        lines.push(format!(
+            "The heat includes {:.0} W from wires in ducts (planning upper value).",
+            sol.duct_loss_w
+        ));
+    }
     lines.push(
         "Sized for the closed enclosure: vents or fans the run had are not credited.".to_owned(),
     );
@@ -285,7 +317,17 @@ pub(super) fn show(
                     let row = |ui: &mut egui::Ui, text: String| {
                         ui.label(small(&text, pal.text_secondary));
                     };
-                    row(ui, format!("Loss to carry out: {:.0} W", n.loss_w));
+                    let row_text = if sol.duct_loss_w > 0.0 {
+                        format!(
+                            "Loss to carry out: {:.0} W (devices {:.0} W + wires in ducts {:.0} W)",
+                            n.loss_w,
+                            n.loss_w - sol.duct_loss_w,
+                            sol.duct_loss_w
+                        )
+                    } else {
+                        format!("Loss to carry out: {:.0} W", n.loss_w)
+                    };
+                    row(ui, row_text);
                     row(
                         ui,
                         format!(
@@ -365,6 +407,36 @@ fn source_word(source: &Source) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_heat_of_wires_in_ducts_adds_to_the_devices() {
+        use novo_layout::sizing::{Installation, Material};
+        let e = novo_thermal::Enclosure {
+            width_mm: 800.0,
+            height_mm: 1000.0,
+            depth_mm: 300.0,
+            wall_mm: 2.0,
+            material: Material::Steel,
+            installation: Installation::Wall,
+            plate: novo_layout::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 700.0,
+                h: 900.0,
+            },
+        };
+        let devices_only = basis_of(&e, 180.0, 0.0, 35.0, 40.0, false).unwrap();
+        let with_wires = basis_of(&e, 180.0, 120.0, 35.0, 40.0, false).unwrap();
+        assert_eq!(devices_only.loss_w, 180.0);
+        assert_eq!(with_wires.loss_w, 300.0);
+        // Wall carries 58.19 W at 5 K: 121.8 W to cool, 241.8 W with the wires.
+        let a = cooling::need(&devices_only).cooling_w;
+        let b = cooling::need(&with_wires).cooling_w;
+        assert!((a - 121.81).abs() < 0.01 && (b - 241.81).abs() < 0.01);
+        // Wires alone still make a cabinet with no device loss need a size.
+        assert!(basis_of(&e, 0.0, 50.0, 35.0, 40.0, false).is_some());
+        assert!(basis_of(&e, 0.0, 0.0, 35.0, 40.0, false).is_none());
+    }
 
     #[test]
     fn importing_a_list_reads_good_rows_and_counts_the_bad() {

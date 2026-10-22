@@ -1184,3 +1184,58 @@ fn a_locked_page_does_not_freeze_the_reports_built_from_the_project() {
             .any(|r| r.iter().any(|c| c.contains("K77")))
     );
 }
+
+#[test]
+fn a_column_wider_than_its_share_borrows_from_columns_that_do_not_need_theirs() {
+    use novo_reports::{Cell, Column, PageSetup, ReportOutput, ReportPage, Section, layout_page};
+    let mut section = Section::new(
+        "t",
+        "",
+        vec![
+            Column::new("a", "Internal", 30.0),
+            Column::new("b", "Location", 4.0),
+            Column::new("c", "Jumpers", 3.0),
+        ],
+    );
+    section.push(
+        vec![
+            Cell::Text("X".into()),
+            Cell::Text("=A1+CAB/1.1".into()),
+            Cell::Int(1),
+        ],
+        vec![],
+    );
+    let output = ReportOutput {
+        report: "t".into(),
+        title: "T".into(),
+        revision: 0,
+        sections: vec![section],
+    };
+    let setup = PageSetup::default();
+    let page = ReportPage {
+        section: 0,
+        rows: 0..1,
+        continued: false,
+        number: 1,
+        count: 1,
+    };
+    let layout = layout_page(&output, &page, &setup);
+    let width_of = |text: &str| {
+        layout
+            .texts
+            .iter()
+            .find(|t| t.text == text)
+            .unwrap_or_else(|| panic!("{text}"))
+            .width
+    };
+    // About 0.5 of the text height per character is what Helvetica needs.
+    let need = |text: &str| text.chars().count() as f64 * setup.text_mm * 0.5;
+    for text in ["=A1+CAB/1.1", "Jumpers"] {
+        assert!(
+            width_of(text) >= need(text),
+            "{text}: {} < {}",
+            width_of(text),
+            need(text)
+        );
+    }
+}

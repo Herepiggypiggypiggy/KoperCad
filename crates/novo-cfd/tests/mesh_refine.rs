@@ -220,11 +220,13 @@ fn ducts_and_rails_are_resolved_too_and_the_build_is_deterministic() {
             kind: ObstacleKind::Duct,
             rect: rect(100.0, 100.0, 40.0, 500.0),
             blockage: None,
+            loss_w: 0.0,
         },
         Obstacle {
             kind: ObstacleKind::Rail,
             rect: rect(160.0, 640.0, 300.0, 35.0),
             blockage: None,
+            loss_w: 0.0,
         },
     ];
     let a = Mesh::build(&scn, &st(12_000)).unwrap();

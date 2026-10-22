@@ -42,6 +42,7 @@ struct Current {
     plate: [f64; 4],
     ambient: f64,
     messages: Vec<String>,
+    wire_notes: Vec<String>,
 }
 
 #[derive(Default)]
@@ -126,8 +127,10 @@ impl HeatState {
         };
         let key = (structure, project.revision(), ambient.to_bits(), vents);
         if self.live.current.as_ref().map(|c| c.key) != Some(key) {
+            let wires = super::heat_wires::wire_heat(project, structure);
             let options = BridgeOptions {
                 ambient_c: ambient,
+                duct_loss_w: wires.by_duct.clone(),
                 ..Default::default()
             };
             let built = scenario_from_project(project, structure, &options)
@@ -162,6 +165,7 @@ impl HeatState {
                 plate,
                 ambient,
                 messages,
+                wire_notes: wires.notes.clone(),
             });
         }
         let Some(cur) = self.live.current.as_ref() else {
@@ -219,6 +223,8 @@ impl HeatState {
             plate: cur.plate,
             messages: cur.messages.clone(),
             enclosure: Some(scenario.enclosure.clone()),
+            duct_loss_w: super::heat_cooling::duct_loss_w(&scenario),
+            wire_notes: cur.wire_notes.clone(),
         };
         let top = self.settings.top;
         self.start_to((*scenario).clone(), meta, top);

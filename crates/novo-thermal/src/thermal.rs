@@ -215,6 +215,9 @@ pub fn solve_temperatures(s: &Setup, st: &mut State, load: f64, step: Option<&St
         }
         rhs[row] += d.loss_w * load;
     }
+    for &(i, w) in &s.sources {
+        rhs[i] += w * load;
+    }
 
     // Transient storage.
     if let Some(step) = step {
@@ -283,7 +286,7 @@ fn stalled(history: &[f64], tolerance_k: f64) -> bool {
 /// Steady state, starting from a similar solved state when one is given (the
 /// same grid, e.g. the central run for the uncertainty band runs).
 pub fn steady_from(s: &Setup, load: f64, init: Option<&State>) -> State {
-    let total: f64 = s.devices.iter().map(|d| d.loss_w).sum::<f64>() * load;
+    let total: f64 = s.total_loss_w() * load;
     let rise = if s.k_ae > 0.0 { total / s.k_ae } else { 0.0 };
     let n = s.n();
     let mut st = match init {
@@ -384,7 +387,7 @@ pub fn fluxes(s: &Setup, st: &State, load: f64, step: Option<&Step>) -> Fluxes {
             storage += d.capacity * (st.t_dev[k] - step.prev.t_dev[k]) / step.dt;
         }
     }
-    let loss = s.devices.iter().map(|d| d.loss_w).sum::<f64>() * load;
+    let loss = s.total_loss_w() * load;
     Fluxes {
         loss,
         faces,

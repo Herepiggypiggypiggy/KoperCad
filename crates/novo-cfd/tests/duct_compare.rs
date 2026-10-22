@@ -57,6 +57,7 @@ fn scenario(ducts: &[(Rect, Option<f64>)]) -> Scenario {
                 kind: ObstacleKind::Duct,
                 rect: *rect,
                 blockage: *blockage,
+                loss_w: 0.0,
             })
             .collect(),
         vents: vec![

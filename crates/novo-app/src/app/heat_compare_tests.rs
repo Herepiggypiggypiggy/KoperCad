@@ -63,6 +63,8 @@ fn solve(scn: &Scenario, id: u64) -> Solution {
         plate: [p.x, p.y, p.w, p.h],
         messages: Vec::new(),
         enclosure: Some(scn.enclosure.clone()),
+        duct_loss_w: 0.0,
+        wire_notes: Vec::new(),
     }
 }
 

@@ -854,11 +854,13 @@ fn cut_table(ui: &mut egui::Ui, jobs: &[WireCutJob]) {
         col("To", TableAlign::Left),
         col("Cut mm", TableAlign::Right),
         col("Basis", TableAlign::Left),
+        col("Bundle", TableAlign::Left),
+        col("Track", TableAlign::Left),
     ];
     let bar = ui.spacing().scroll.allocated_width() + 4.0;
     let widths = column_widths_min(
         ui.available_width() - bar,
-        &[1.4, 0.8, 1.2, 3.0, 3.0, 1.4, 1.6],
+        &[1.4, 0.8, 1.2, 3.0, 3.0, 1.4, 1.6, 1.1, 1.3],
         &header_min_widths(ui, &columns),
     );
     table_header(ui, &columns, &widths, None);
@@ -888,9 +890,9 @@ fn cut_table(ui: &mut egui::Ui, jobs: &[WireCutJob]) {
         });
 }
 
-/// The seven cells of one cut-list row: wire, mm², colour, from, to, cut
-/// length (`~` when it is an estimate) and basis. Missing values show `-` or `?`.
-pub(super) fn cut_row_texts(j: &WireCutJob) -> [String; 7] {
+/// The nine cells of one cut-list row: wire, mm², colour, from, to, cut
+/// length (`~` when it is an estimate), basis, bundle (`B2 #3`) and track. Missing values show `-` or `?`.
+pub(super) fn cut_row_texts(j: &WireCutJob) -> [String; 9] {
     let or_dash = |s: &str| {
         if s.is_empty() {
             "-".to_owned()
@@ -911,6 +913,8 @@ pub(super) fn cut_row_texts(j: &WireCutJob) -> [String; 7] {
             j.cut_mm
         ),
         j.basis.clone(),
+        j.bundle_text().unwrap_or_else(|| "-".to_owned()),
+        j.track.clone(),
     ]
 }
 

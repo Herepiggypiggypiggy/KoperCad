@@ -21,6 +21,7 @@ mod report;
 pub mod result;
 mod setup;
 mod thermal;
+pub mod wires;
 
 pub use model::*;
 pub use result::*;
@@ -174,7 +175,7 @@ pub fn simulate_transient(
         mean_air_c: st.t_air.iter().sum::<f64>() / s.n() as f64,
         max_air_c: st.t_air.iter().copied().fold(f64::NEG_INFINITY, f64::max),
         device_c: st.t_dev.clone(),
-        loss_w: s.devices.iter().map(|d| d.loss_w).sum::<f64>() * load,
+        loss_w: s.total_loss_w() * load,
     };
     samples.push(sample_of(&s, &st, 0.0, load_at(0.0)));
     let snapshot_of = |s: &Setup, st: &thermal::State, t: f64| {

@@ -297,6 +297,7 @@ fn cabinet_full(cells: usize, scheme: Scheme, vents: bool, fan: bool, duct: bool
                     h: 60.0,
                 },
                 blockage: None,
+                loss_w: 0.0,
             }]
         } else {
             vec![]

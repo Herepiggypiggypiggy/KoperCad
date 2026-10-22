@@ -30,6 +30,10 @@ pub(super) struct Solution {
     pub messages: Vec<String>,
     /// The enclosure the run solved; the cooling selection reads its size.
     pub enclosure: Option<novo_thermal::Enclosure>,
+    /// Heat of the wires in the ducts, W.
+    pub duct_loss_w: f64,
+    /// What the wire heat in the ducts rests on.
+    pub wire_notes: Vec<String>,
 }
 
 pub(super) enum Event {

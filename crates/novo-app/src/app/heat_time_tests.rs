@@ -19,6 +19,8 @@ fn meta() -> Meta {
         plate: [20.0, 20.0, 360.0, 360.0],
         messages: Vec::new(),
         enclosure: None,
+        duct_loss_w: 0.0,
+        wire_notes: Vec::new(),
     }
 }
 
@@ -42,6 +44,8 @@ fn dummy(id: u64) -> Arc<Solution> {
         plate: [20.0, 20.0, 360.0, 360.0],
         messages: Vec::new(),
         enclosure: None,
+        duct_loss_w: 0.0,
+        wire_notes: Vec::new(),
     })
 }
 
