@@ -33,6 +33,7 @@ impl EmcState {
 
 struct Cached {
     report: Report,
+    params: novo_emc::FieldParams,
     classes: Vec<(novo_emc::EmcClass, usize)>,
     names: std::collections::HashMap<u64, String>,
 }
@@ -55,6 +56,152 @@ fn status_text(status: Status) -> &'static str {
     }
 }
 
+/// A number the user drags or types. The edit is kept in the UI until the
+/// drag ends or the field loses focus, so one gesture is one undo step.
+fn number(
+    ui: &mut egui::Ui,
+    salt: impl std::hash::Hash + std::fmt::Debug,
+    value: f64,
+    speed: f64,
+    range: std::ops::RangeInclusive<f64>,
+    suffix: &str,
+    tip: &str,
+) -> Option<f64> {
+    let id = ui.make_persistent_id(salt);
+    let mut v = ui.data(|d| d.get_temp::<f64>(id)).unwrap_or(value);
+    let r = ui
+        .add(
+            egui::DragValue::new(&mut v)
+                .speed(speed)
+                .range(range)
+                .suffix(suffix),
+        )
+        .on_hover_text(tip);
+    if r.dragged() || r.has_focus() {
+        ui.data_mut(|d| d.insert_temp(id, v));
+    }
+    if r.drag_stopped() || r.lost_focus() {
+        ui.data_mut(|d| d.remove_temp::<f64>(id));
+        return ((v - value).abs() > 1e-9).then_some(v);
+    }
+    None
+}
+
+/// The magnetic field estimate: what it assumes, the currents it uses (each
+/// can be stated here), and what it finds at sensitive devices and wires.
+fn field_section(
+    ui: &mut egui::Ui,
+    cached: &Cached,
+    set_current: &mut Option<(u64, Option<f64>)>,
+    set_setting: &mut Option<(&'static str, Option<novo_core::Value>)>,
+) {
+    let p = crate::theme::ui_palette();
+    let Some(field) = &cached.report.field else {
+        return;
+    };
+    let summary = if field.currents.is_empty() {
+        "Magnetic field estimate: no wire has a current yet".to_owned()
+    } else {
+        let worst = field
+            .devices
+            .iter()
+            .max_by(|a, b| a.b_ut.total_cmp(&b.b_ut))
+            .map(|d| format!(", {} sits in about {:.1} \u{b5}T", d.tag, d.b_ut))
+            .unwrap_or_default();
+        format!(
+            "Magnetic field estimate: {} wire{} with a current{worst}",
+            field.currents.len(),
+            if field.currents.len() == 1 { "" } else { "s" }
+        )
+    };
+    egui::CollapsingHeader::new(egui::RichText::new(summary).strong())
+        .id_salt("emc_field_section")
+        .default_open(false)
+        .show(ui, |ui| {
+    ui.weak("A model: the currents below, on the routed wires, add up by Biot-Savart (go and return and the three phases cancel as drawn). Differential current only: no common-mode current, no door or cabinet screening. Order of magnitude, never a measurement.");
+    ui.horizontal_wrapped(|ui| {
+        ui.label("Frequency");
+        if let Some(hz) = number(ui, "emc_field_hz", cached.params.hz, 1.0, 1.0..=30.0e6, " Hz", "Frequency of the currents. From 1 kHz up the plate counts as a conducting plane") {
+            *set_setting = Some(("field_hz", Some(novo_core::Value::Float(hz))));
+        }
+        ui.label("Planning value at a PLC or analog module");
+        if let Some(limit) = number(ui, "emc_field_limit", cached.params.limit_ut, 0.1, 0.1..=1000.0, " \u{b5}T", "The field at a PLC or analog module above which EMC-19 reports (house value, not a standard's limit)") {
+            *set_setting = Some(("field_limit_ut", Some(novo_core::Value::Float(limit))));
+        }
+        let mut image = field.image;
+        if ui
+            .checkbox(&mut image, "Plate is a conducting plane")
+            .on_hover_text("Treats the plate as a conducting plane (a mirror image of the current): right for steep edges, wrong for 50 Hz in a thin plate")
+            .changed()
+        {
+            *set_setting = Some(("plate_image", Some(novo_core::Value::Bool(image))));
+        }
+    });
+    if field.currents.is_empty() {
+        ui.colored_label(p.warning, "No wire has a current yet, so the field is not evaluated. Give a wire its current in the list that appears here, or give the devices at its ends a rated current (Inspector, Rated current).");
+    }
+    for row in &field.currents {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(&row.name);
+            if let Some(amps) = number(ui, ("emc_amps", row.run), row.amps, 0.1, 0.0..=5000.0, " A", "RMS current in this wire. Changing it states the current (emc.current_a), one undo step") {
+                *set_current = Some((row.run, Some(amps)));
+            }
+            ui.weak(format!("{:+.0}\u{b0}  {}{}", row.phase_deg, row.source, if row.routed { "" } else { "; no route on a plate, not in the field" }));
+            if row.declared && ui.small_button("Use rating").on_hover_text("Forget the stated current").clicked() {
+                *set_current = Some((row.run, None));
+            }
+        });
+    }
+    if !field.devices.is_empty() {
+        ui.add_space(4.0);
+        ui.label(egui::RichText::new("Sensitive devices").strong());
+        for d in &field.devices {
+            let colour = if d.b_ut >= field.limit_ut {
+                p.warning
+            } else {
+                p.text_secondary
+            };
+            ui.horizontal_wrapped(|ui| {
+                ui.colored_label(colour, format!("{}: about {:.1} \u{b5}T", d.tag, d.b_ut));
+                ui.weak(format!(
+                    "planning value {:.1} \u{b5}T (largest over the device's footprint)",
+                    field.limit_ut
+                ));
+            });
+        }
+    }
+    if !field.victims.is_empty() {
+        ui.add_space(4.0);
+        ui.label(egui::RichText::new("Sensitive wires").strong());
+        for v in &field.victims {
+            let colour = if v.v_line_mv.max(v.v_edge_mv) >= v.limit_mv {
+                p.warning
+            } else {
+                p.text_secondary
+            };
+            ui.horizontal_wrapped(|ui| {
+                ui.colored_label(
+                    colour,
+                    format!(
+                        "{}: {:.3} mV at {} Hz, {:.1} mV on a current step",
+                        v.name, v.v_line_mv, field.hz, v.v_edge_mv
+                    ),
+                );
+                ui.weak(format!(
+                    "planning value {:.1} mV; {}",
+                    v.limit_mv,
+                    if v.paired {
+                        "go and return drawn"
+                    } else {
+                        "return taken as the plate"
+                    }
+                ));
+            });
+        }
+    }
+        });
+}
+
 impl NovoApp {
     pub(super) fn emc_window(&mut self, ctx: &egui::Context) {
         if !self.emc.open {
@@ -69,8 +216,10 @@ impl NovoApp {
         if self.emc.cache.as_ref().is_none_or(|(r, _)| *r != revision) {
             let netlist = project.netlist();
             let input = emc::input_of(project, &netlist);
-            let report = novo_emc::analyse(&input);
+            let field = emc::field_setup_of(project, &netlist, &input);
+            let report = novo_emc::analyse_with_field(&input, Some(&field));
             let cached = Cached {
+                params: field.params,
                 classes: emc::class_counts(&input).into_iter().collect(),
                 names: input.runs.iter().map(|r| (r.id, r.name.clone())).collect(),
                 report,
@@ -85,6 +234,8 @@ impl NovoApp {
         let p = crate::theme::ui_palette();
         let mut turn: Option<bool> = None;
         let mut apply: Option<Fix> = None;
+        let mut set_current: Option<(u64, Option<f64>)> = None;
+        let mut set_setting: Option<(&'static str, Option<novo_core::Value>)> = None;
         let mut open = true;
         super::panel::dialog(ctx, "EMC check", [680.0, 540.0])
             .open(super::panel::esc(ctx, &mut open))
@@ -120,6 +271,8 @@ impl NovoApp {
                         });
                         ui.weak("Each class is read from the drawing (drive outputs, safety and analog devices, potentials); set `emc.class` on a wire or cable to override it.");
                     }
+                    ui.add_space(6.0);
+                    field_section(ui, cached, &mut set_current, &mut set_setting);
                     ui.add_space(6.0);
                     novo_theme::widgets::section_label(ui, &format!("Findings ({})", report.findings.len()));
                     if report.findings.is_empty() {
@@ -210,6 +363,34 @@ impl NovoApp {
         if let Some(fix) = apply {
             self.emc_apply(&fix);
         }
+        if let Some((wire, amps)) = set_current {
+            self.emc_set_current(wire, amps);
+        }
+        if let Some((key, value)) = set_setting {
+            self.emc_set_setting(key, value);
+        }
+    }
+
+    /// States (or clears) the current of a wire for the field estimate, one undo step.
+    pub(super) fn emc_set_current(&mut self, wire: u64, amps: Option<f64>) {
+        let id = novo_core::WireId::from(wire);
+        self.edit_project("EMC: wire current", |tx| {
+            tx.set_property(id, "emc.current_a", amps.map(novo_core::Value::Float))
+        });
+    }
+
+    /// Sets or clears a project setting of the field estimate (`emc.<key>`), one undo step.
+    pub(super) fn emc_set_setting(&mut self, key: &'static str, value: Option<novo_core::Value>) {
+        self.edit_project("EMC: field setting", |tx| {
+            tx.set_info(|info| match &value {
+                Some(v) => {
+                    info.properties.insert(format!("emc.{key}"), v.clone());
+                }
+                None => {
+                    info.properties.remove(&format!("emc.{key}"));
+                }
+            })
+        });
     }
 
     /// Turns the EMC rules on or off for the project (one undo step).

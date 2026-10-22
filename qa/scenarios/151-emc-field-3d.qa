@@ -1,0 +1,20 @@
+@title 3D view: EMC view with the magnetic field estimate on the plate
+@area 3D
+@sizes 1366x768 1920x1080
+# 3D > EMC: the Exposure map layer shows the field slice (model) with the microtesla ends in the legend and the Estimate card for the PLC.
+open qa/fixtures/emc-field.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text EMC #2
+wait 30
+click_text "Exposure map" #1
+wait 15
+expect "Magnetic field of the drawn currents"
+shot emc-field-3d
+check_layout
+click_text "Field at sensitive device" #1
+wait 15
+expect "Field at the device"
+shot emc-field-3d-card
+check_layout
