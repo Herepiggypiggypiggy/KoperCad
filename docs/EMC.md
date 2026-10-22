@@ -3,7 +3,7 @@
 Status: plan, 2026-10-22. Owner: the EMC lead thread. Siblings: EMC rule engine, EMC visualisation.
 Working notes and lane state: `handoff/emc/`. Clause and table numbers in this document are from the
 author's knowledge and are **unverified** (no licensed copy was read); each one carries a "verify" mark
-in the rule catalogue and must be checked by a person with the standard before any text claims it.
+in the Source column of the rule catalogue (section 5) and must be checked by a person with the standard before any text claims it.
 No standard text is copied here.
 
 ## 1. Aim
@@ -138,28 +138,28 @@ Honesty rules for the lane:
 ## 5. Rule catalogue (first cut)
 
 The rule engine lane turns this into code. Every rule has an id, a plain-language reason, the standard or
-practice it comes from (with the verify mark), the level of its method, and a fix proposal.
+practice it comes from (the Source column; a named clause is always marked verify, and "no clause" means practice only), the level of its method, and a fix proposal.
 
-| Id | Rule | Level | Needs |
-| --- | --- | --- | --- |
-| EMC-01 | Power and signal wires do not share a duct | 0 | Routed paths, class |
-| EMC-02 | Parallel run of aggressor and victim shorter than a limit at the distance set | 1 | Segment geometry |
-| EMC-03 | Crossings of different classes are close to 90 degrees | 1 | Segment geometry |
-| EMC-04 | Motor cable of a drive is shielded, shield on a termination that is 360 degrees at both ends | 0 | Cable, shield data |
-| EMC-05 | Shield pigtail longer than a limit (length in mm shown, impedance at 10 MHz estimated) | 2 | Shield termination |
-| EMC-06 | Shield is carried through terminals without a shield terminal | 0 | Terminal strip, cable |
-| EMC-07 | Drive has an input filter, filter case bonded to plate, filter near the entry, filtered side not parallel to unfiltered side | 0/1 | Part data, layout |
-| EMC-08 | Motor cable length within the maker's limit for the filter chosen | 0 | Part data |
-| EMC-09 | Loop area of a circuit above a limit (go and return not together; power pair, 24 V pair, signal pair) | 1 | Paths of both conductors |
-| EMC-10 | Return through the plate instead of its own conductor for a fast or analog circuit | 1 | Netlist, paths |
-| EMC-11 | Mounting plate, rails and PE bar bonding: bare contact, strap length, painted surface flagged | 0/2 | Bonding facts |
-| EMC-12 | Door bonded to the frame with a short strap; no devices with fast edges on the door without a filtered path | 0 | Cabinet, door |
-| EMC-13 | Inductive loads (coils, valves) have suppression where the family needs it | 0 | Symbols, parts |
-| EMC-14 | Fieldbus or analog cable leaving the cabinet is shielded and bonded at the entry | 0 | Cable, entry |
-| EMC-15 | 24 V DC supply and return routed together; supply not near an AC aggressor | 1 | Paths |
-| EMC-16 | Surge protection at the entry with short leads | 1 | Layout |
-| EMC-17 | Sensitive part (PLC, analog module, encoder interface) distance to aggressor | 1/2 | Layout |
-| EMC-18 | Ferrite suggested on cables leaving the cabinet where a drive or switching supply shares the cabinet (advice, not a finding) | 0 | Cable, parts |
+| Id | Rule | Level | Needs | Source (verify before quoting) |
+| --- | --- | --- | --- | --- |
+| EMC-01 | Power and signal wires do not share a duct | 0 | Routed paths, class | IEC 61000-5-2 / EN 50174-2 segregation practice (verify clause) |
+| EMC-02 | Parallel run of aggressor and victim shorter than a limit at the distance set | 1 | Segment geometry | Practice, maker guides; no clause |
+| EMC-03 | Crossings of different classes are close to 90 degrees | 1 | Segment geometry | Practice, maker guides; no clause |
+| EMC-04 | Motor cable of a drive is shielded, shield on a termination that is 360 degrees at both ends | 0 | Cable, shield data | EN 61800-3 and drive maker manual (verify) |
+| EMC-05 | Shield pigtail longer than a limit (length in mm shown, impedance at 10 MHz estimated) | 2 | Shield termination | Practice; physics of pigtail inductance; no clause |
+| EMC-06 | Shield is carried through terminals without a shield terminal | 0 | Terminal strip, cable | Practice, maker guides; no clause |
+| EMC-07 | Drive has an input filter, filter case bonded to plate, filter near the entry, filtered side not parallel to unfiltered side | 0/1 | Part data, layout | EN 61800-3 and filter maker data (verify) |
+| EMC-08 | Motor cable length within the maker's limit for the filter chosen | 0 | Part data | Drive maker data sheet; no clause |
+| EMC-09 | Loop area of a circuit above a limit (go and return not together; power pair, 24 V pair, signal pair) | 1 | Paths of both conductors | Practice; physics of loop coupling; no clause |
+| EMC-10 | Return through the plate instead of its own conductor for a fast or analog circuit | 1 | Netlist, paths | Practice; no clause |
+| EMC-11 | Mounting plate, rails and PE bar bonding: bare contact, strap length, painted surface flagged | 0/2 | Bonding facts | IEC 60204-1 protective bonding / EMC clauses (verify clause numbers) |
+| EMC-12 | Door bonded to the frame with a short strap; no devices with fast edges on the door without a filtered path | 0 | Cabinet, door | IEC 60204-1 (verify); IEC 61000-4-2 ESD path |
+| EMC-13 | Inductive loads (coils, valves) have suppression where the family needs it | 0 | Symbols, parts | Practice, relay and valve maker data; no clause |
+| EMC-14 | Fieldbus or analog cable leaving the cabinet is shielded and bonded at the entry | 0 | Cable, entry | IEC 61000-5-2 / EN 50174-2 (verify clause); fieldbus installation guides |
+| EMC-15 | 24 V DC supply and return routed together; supply not near an AC aggressor | 1 | Paths | Practice; no clause |
+| EMC-16 | Surge protection at the entry with short leads | 1 | Layout | IEC 61000-4-5 surge path; arrester maker data (verify) |
+| EMC-17 | Sensitive part (PLC, analog module, encoder interface) distance to aggressor | 1/2 | Layout | Practice, device maker guides; no clause |
+| EMC-18 | Ferrite suggested on cables leaving the cabinet where a drive or switching supply shares the cabinet (advice, not a finding) | 0 | Cable, parts | Practice; advice only; no clause |
 
 Findings use the existing problem model (`novo-checks`, severity and location) so they appear in the Checks
 panel, in the standards report and in the handover package without new plumbing.
@@ -216,7 +216,7 @@ Roadmap detail and live state: `handoff/emc/ROADMAP.md`.
 
 | Phase | Content | Lane | Gate |
 | --- | --- | --- | --- |
-| E0 | This plan merged; `novo-emc` crate registered by the coordinator; data decisions | Lead | Plan merged |
+| E0 | This plan merged; the rule engine thread asks the coordinator for `novo-emc` and opens the registration PR first (asked 2026-10-22); data decisions: Properties first | Lead | Plan merged |
 | E1 | EMC classes and shield/bonding facts in the model (properties first); classification from netlist with overrides; rules EMC-01 to EMC-06 on the existing routed paths; findings in Checks panel; Zone and Class views in Cabinet and 3D | Rule engine + Visualisation | Example project shows real findings and the overlay at 1366x768 and 1920x1080 |
 | E2 | Geometry indices (parallel length, distance, crossing angle, loop area); EMC-07 to EMC-12; coupling ribbons and loop sheets; EMC card; report page | Rule engine + Visualisation | Indices validated against hand-computed cases |
 | E3 | Level 2 analytic estimates with ranges (mutual inductance, induced voltage, pigtail impedance, strap inductance); bonding graph view; part EMC data in catalogue; drive macro | Rule engine + Visualisation + Parts | `docs/emc-validation.md` with printed errors |
