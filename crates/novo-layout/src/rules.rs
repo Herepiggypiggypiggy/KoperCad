@@ -44,7 +44,7 @@
 use std::fmt;
 
 use crate::plan::{Candidate, Plan, PlannedDuct, Proposed, ROW_GAP_MM};
-use crate::{DEFAULT_CLEARANCE_MM, Plate, Rail, Rect, Size};
+use crate::{DEFAULT_CLEARANCE_MM, Plate, RAIL_BAND_MM, Rail, Rect, Size};
 
 /// Where on the plate a kind of device goes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -173,6 +173,9 @@ impl KindRule {
 
 /// Room kept between a duct and the rail rows beside it, for wires to fan out.
 pub const DUCT_CLEAR_MM: f64 = 10.0;
+/// Room kept between a duct and the edge of a rail's band (the rail's own
+/// 35 mm are not wire space, but a duct may sit close to them).
+pub const RAIL_DUCT_CLEAR_MM: f64 = 5.0;
 /// Standard duct cross-section (width x height) in millimetres.
 pub const DUCT_WIDTH_MM: f64 = 25.0;
 pub const DUCT_HEIGHT_MM: f64 = 60.0;
@@ -527,6 +530,14 @@ struct Row {
     class: Class,
 }
 
+impl Row {
+    /// How far the rail's band reaches below the row's devices: a row lower
+    /// than half the band has the band sticking out under it.
+    fn band_below(&self) -> f64 {
+        (RAIL_BAND_MM / 2.0 - self.height).max(0.0)
+    }
+}
+
 struct Group {
     zone: Zone,
     order: (usize, usize),
@@ -559,6 +570,9 @@ pub enum RowGapCause {
     Part(u64),
     /// A power row beside a signal row: two ducts, kept `separate` apart.
     Separation,
+    /// The rail's band (35 mm across, centred on the rail line) plus a duct
+    /// and its clearances need more than `row_gap`.
+    RailBand,
 }
 
 /// Why one device is where it is.
@@ -1032,7 +1046,17 @@ fn plan_once(
     // space holds two ducts and the separation between them.
     let separated = rules.separation > 0.0;
     let between_with = |upper: &Row, lower: &Row| -> (f64, RowGapCause) {
+        // The rail line runs along the top edge of the row's devices, so the
+        // lower row's band reaches half its width up into the space between
+        // the rows (and the upper row's band may reach down below its
+        // devices). A duct has to fit between the devices above, the band
+        // below and the clearances of both.
+        let band = RAIL_BAND_MM / 2.0 + upper.band_below();
         let mut best = (rules.row_gap, RowGapCause::RowGap);
+        let duct_room = rules.duct_width + DUCT_CLEAR_MM + RAIL_DUCT_CLEAR_MM + band;
+        if duct_room > best.0 {
+            best = (duct_room, RowGapCause::RailBand);
+        }
         if upper.below > best.0 {
             best = (
                 upper.below,
@@ -1050,7 +1074,7 @@ fn plan_once(
             );
         }
         if separated && upper.class.conflicts(lower.class) {
-            let both = 2.0 * rules.duct_width + rules.separation + 2.0 * DUCT_CLEAR_MM;
+            let both = 2.0 * rules.duct_width + rules.separation + 2.0 * DUCT_CLEAR_MM + band;
             if both > best.0 {
                 best = (both, RowGapCause::Separation);
             }
@@ -1189,8 +1213,8 @@ fn plan_once(
                 rules,
                 duct_x,
                 usable.x + usable.w - duct_x,
-                (py + p.height, p.class),
-                (*y, row.class),
+                (py + p.height + p.band_below(), p.class),
+                (*y - RAIL_BAND_MM / 2.0, row.class),
             );
         }
         previous = Some((*y, row));
@@ -1221,8 +1245,10 @@ fn duct_class(row: Class, other: Class) -> Class {
     }
 }
 
-/// Wiring ducts for the space between two rows (`upper_end` is the bottom
-/// edge of the row above, `lower_start` the top edge of the row below).
+/// Wiring ducts for the space between two rows. `upper` is where the row
+/// above ends and `lower` where the row below starts, each including its
+/// rail's band (35 mm across, centred on the rail line, which runs along the
+/// top edge of the devices): the ducts stay clear of both.
 fn plan_ducts(
     out: &mut Vec<PlannedDuct>,
     rules: &RuleSet,
