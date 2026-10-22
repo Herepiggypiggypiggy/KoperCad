@@ -322,7 +322,7 @@ pub const COMMANDS: &[CommandInfo] = &[
             ],
             Needs::Nothing,
         ),
-        &["import parts", "import catalog"],
+        &["import parts from a folder", "import catalog"],
     ),
     verb(
         cmd(

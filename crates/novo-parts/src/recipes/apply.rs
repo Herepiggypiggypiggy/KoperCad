@@ -693,6 +693,9 @@ pub(crate) fn lifecycle_of(text: &str) -> Lifecycle {
         "uitlopend",
         "end of life",
         "last time buy",
+        "uit productie",
+        "uit het assortiment",
+        "wordt vervangen",
     ]) {
         Lifecycle::PhasingOut
     } else if any(&[
@@ -703,6 +706,8 @@ pub(crate) fn lifecycle_of(text: &str) -> Lifecycle {
         "withdrawn",
         "vervallen",
         "not available",
+        "niet meer leverbaar",
+        "niet leverbaar",
         "nicht mehr",
         "end of service",
     ]) {
@@ -716,6 +721,8 @@ pub(crate) fn lifecycle_of(text: &str) -> Lifecycle {
         "commercialized",
         "current",
         "actief",
+        "leverbaar",
+        "lieferbar",
         "serienprodukt",
     ]) || t == "a"
     {

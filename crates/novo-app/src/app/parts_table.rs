@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 
 use eframe::egui;
 use novo_parts::{
-    Catalog, DataSource, ImportPreview, Mapping, RowStatus, SavedMappings, Severity, TableFile,
-    Target, build_preview, guess_header_row, saved_mappings_path, user_catalog_path,
+    Catalog, DataSource, DuplicateRule, ImportPreview, Mapping, RowStatus, SavedMappings, Severity,
+    TableFile, Target, build_preview, guess_header_row, saved_mappings_path, user_catalog_path,
 };
 use novo_theme::widgets;
 
@@ -117,12 +117,14 @@ impl PartsTableImport {
             self.mapping.default_manufacturer.clone(),
             self.mapping.currency.clone(),
             self.mapping.origin,
+            self.mapping.duplicates,
         );
         self.mapping = Mapping::suggest(self.sheet(), row);
         (
             self.mapping.default_manufacturer,
             self.mapping.currency,
             self.mapping.origin,
+            self.mapping.duplicates,
         ) = keep;
         self.from_saved = false;
         self.refresh();
@@ -213,7 +215,10 @@ impl NovoApp {
         let bytes = match std::fs::read(path) {
             Ok(b) => b,
             Err(e) => {
-                self.message(Level::Error, format!("Could not read {name}: {e}"));
+                self.message(
+                    Level::Error,
+                    format!("Could not read {name}: {}", novo_parts::plain_io_error(&e)),
+                );
                 return false;
             }
         };
@@ -523,9 +528,15 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
         ui.weak("Fix the columns first; the rows are read once the mapping is complete.");
         return;
     }
+    // What the notes above the list take comes off the list's own height, so
+    // the buttons below it stay on a small window.
+    let notes_top = ui.cursor().top();
     for a in &import.preview.assumptions {
         ui.colored_label(p.warning, a);
     }
+    repeated_ui(ui, import);
+    let height = (height - (ui.cursor().top() - notes_top)).max(90.0);
+    let has_date = import.mapping.column_of(&Target::PriceDate).is_some();
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new("What the file tells").weak());
         for c in &import.preview.coverage {
@@ -539,8 +550,10 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
                 p.warning
             };
             ui.colored_label(color, format!("{} {}/{}", c.label, c.have, c.total))
-                .on_hover_text(if price_note {
-                    "Prices are list prices as in the file. Their date is the day of the import, not the date of the price list."
+                .on_hover_text(if price_note && has_date {
+                    "Prices are list prices as in the file, dated with the price list date column (a cell without a readable date gets the day of the import)."
+                } else if price_note {
+                    "Prices are list prices as in the file. Their date is the day of the import, not the date of the price list; map a date column to use the list's own date."
                 } else if c.have == c.total {
                     "Every imported part has this."
                 } else {
@@ -616,6 +629,58 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
                 ));
             }
         });
+}
+
+/// Order numbers that appear in more than one row: how many, which rows, and
+/// the choice of what the catalog gets. Nothing is dropped in silence.
+fn repeated_ui(ui: &mut egui::Ui, import: &mut PartsTableImport) {
+    if import.preview.repeated.is_empty() {
+        return;
+    }
+    let p = crate::theme::ui_palette();
+    let rows: usize = import.preview.repeated.iter().map(|r| r.lines.len()).sum();
+    ui.colored_label(
+        p.warning,
+        format!(
+            "{} order number(s) appear in more than one row ({rows} rows). The catalog keeps one entry per maker and order number: choose what it gets.",
+            import.preview.repeated.len()
+        ),
+    );
+    let labels = [
+        "Last row",
+        "First row",
+        "First row, gaps filled from the others",
+    ];
+    let mut index = DuplicateRule::ALL
+        .iter()
+        .position(|r| *r == import.mapping.duplicates)
+        .unwrap_or(0);
+    ui.horizontal_wrapped(|ui| {
+        if widgets::segmented(ui, &mut index, &labels) {
+            import.mapping.duplicates = DuplicateRule::ALL[index];
+            import.refresh();
+        }
+    });
+    let shown = 4;
+    for r in import.preview.repeated.iter().take(shown) {
+        ui.label(
+            egui::RichText::new(format!(
+                "{} {} is in {}; row {} is used",
+                r.manufacturer,
+                r.order_number,
+                novo_parts::rows_text(&r.lines),
+                r.used
+            ))
+            .small(),
+        );
+    }
+    if import.preview.repeated.len() > shown {
+        ui.weak(format!(
+            "and {} more; every row of them says so below.",
+            import.preview.repeated.len() - shown
+        ));
+    }
+    ui.add_space(4.0);
 }
 
 /// One fixed-width, left-aligned, truncated cell of a row.

@@ -53,6 +53,19 @@ pub const MEASURES: &[Measure] = &[
             "ie",
             "in",
             "current",
+            "ratedcurrentie",
+            "ratedoperatingcurrent",
+            "operatingcurrent",
+            "continuouscurrent",
+            "bemessungsbetriebsstrom",
+            "betriebsstrom",
+            "nennstromie",
+            "werkstroom",
+            "bedrijfsstroom",
+            "stroomsterkte",
+            "ampere",
+            "amps",
+            "nominalestroomie",
         ],
     },
     Measure {
@@ -94,6 +107,14 @@ pub const MEASURES: &[Measure] = &[
             "spanning",
             "voltage",
             "ue",
+            "operatingvoltage",
+            "ratedoperatingvoltageue",
+            "voltagerating",
+            "betriebsspannung",
+            "bemessungsbetriebsspannung",
+            "nennspannungue",
+            "bedrijfsspanning",
+            "nominalespanningue",
         ],
     },
     Measure {
@@ -109,6 +130,15 @@ pub const MEASURES: &[Measure] = &[
             "stuurspanning",
             "ucoil",
             "uc",
+            "coil",
+            "spule",
+            "spoel",
+            "controlcircuitvoltage",
+            "controlsupplyvoltage",
+            "steuerkreisspannung",
+            "stuurstroomspanning",
+            "magnetspoelspanning",
+            "coilvoltageuc",
         ],
     },
     Measure {
@@ -127,6 +157,16 @@ pub const MEASURES: &[Measure] = &[
             "verlies",
             "losses",
             "pv",
+            "totalpowerloss",
+            "dissipatedpower",
+            "heatloss",
+            "thermalloss",
+            "warmeverlust",
+            "warmeabgabe",
+            "warmteverlies",
+            "warmteafgifte",
+            "dissipatie",
+            "verliesvermogen",
         ],
     },
     Measure {
@@ -142,6 +182,16 @@ pub const MEASURES: &[Measure] = &[
             "vermogen",
             "leistung",
             "power",
+            "ratedmotorpower",
+            "motorrating",
+            "outputpower",
+            "ratedoutput",
+            "shaftpower",
+            "abgabeleistung",
+            "nennleistungmotor",
+            "motorvermogen",
+            "asvermogen",
+            "nominaalmotorvermogen",
         ],
     },
     Measure {
@@ -155,6 +205,12 @@ pub const MEASURES: &[Measure] = &[
             "schaltvermogen",
             "ausschaltvermogen",
             "uitschakelvermogen",
+            "icn",
+            "shortcircuitbreakingcapacity",
+            "ratedshortcircuitbreakingcapacity",
+            "schaltvermogenicu",
+            "kortsluitvermogen",
+            "uitschakelvermogenicu",
         ],
     },
     Measure {
@@ -192,6 +248,12 @@ pub const MEASURES: &[Measure] = &[
             "aantalpolen",
             "pole",
             "pol",
+            "numberofpole",
+            "polesnumber",
+            "polenanzahl",
+            "polenaantal",
+            "aantalpool",
+            "pools",
         ],
     },
     Measure {
@@ -205,6 +267,15 @@ pub const MEASURES: &[Measure] = &[
             "leiterquerschnitt",
             "doorsnede",
             "section",
+            "nominalcrosssection",
+            "nennquerschnitt",
+            "wirecrosssection",
+            "cablecrosssection",
+            "kabelquerschnitt",
+            "aderquerschnitt",
+            "kabeldoorsnede",
+            "aderdoorsnede",
+            "nominaledoorsnede",
         ],
     },
     Measure {
@@ -218,6 +289,13 @@ pub const MEASURES: &[Measure] = &[
             "ambienttemperaturemax",
             "umgebungstemperaturmax",
             "maxumgebungstemperatur",
+            "maxoperatingtemperature",
+            "maximumoperatingtemperature",
+            "maxbetriebstemperatur",
+            "maxomgevingstemperatuur",
+            "omgevingstemperatuurmax",
+            "maximaleomgevingstemperatuur",
+            "upperambienttemperature",
         ],
     },
 ];
@@ -250,6 +328,10 @@ pub enum Target {
     /// List price; the currency is the mapping's currency unless the cell
     /// names one.
     Price,
+    /// Date of the price list (`2026-10-15`, `15.10.2026`, an Excel date).
+    PriceDate,
+    /// Pieces the price is for (`100`: the price is per 100 pieces).
+    PricePer,
     Lifecycle,
     /// Connection method: screw, push-in, spring ...
     Connection,
@@ -281,6 +363,8 @@ impl Target {
             Target::Etim => "etim".into(),
             Target::Eclass => "eclass".into(),
             Target::Price => "price".into(),
+            Target::PriceDate => "price_date".into(),
+            Target::PricePer => "price_per".into(),
             Target::Lifecycle => "lifecycle".into(),
             Target::Connection => "connection".into(),
             Target::ConnectionCount => "connection_count".into(),
@@ -308,6 +392,8 @@ impl Target {
             "etim" => Target::Etim,
             "eclass" => Target::Eclass,
             "price" => Target::Price,
+            "price_date" => Target::PriceDate,
+            "price_per" => Target::PricePer,
             "lifecycle" => Target::Lifecycle,
             "connection" => Target::Connection,
             "connection_count" => Target::ConnectionCount,
@@ -350,6 +436,8 @@ impl Target {
             Target::Etim => "ETIM class".into(),
             Target::Eclass => "ECLASS code".into(),
             Target::Price => "List price".into(),
+            Target::PriceDate => "Price list date".into(),
+            Target::PricePer => "Price is per (pieces)".into(),
             Target::Lifecycle => "Lifecycle status".into(),
             Target::Connection => "Connection method".into(),
             Target::ConnectionCount => "Number of connections".into(),
@@ -397,6 +485,8 @@ impl Target {
             Target::Etim,
             Target::Eclass,
             Target::Price,
+            Target::PriceDate,
+            Target::PricePer,
             Target::Lifecycle,
             Target::Connection,
             Target::ConnectionCount,
@@ -468,6 +558,40 @@ pub struct Mapping {
     /// the person did not say, and values stay "source not stated".
     #[serde(default)]
     pub origin: DataSource,
+    /// What happens when two rows have the same maker and order number.
+    #[serde(default)]
+    pub duplicates: DuplicateRule,
+}
+
+/// What to do with rows that have the same maker and order number. The
+/// catalog holds one entry per maker and order number, so two entries cannot
+/// both be kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DuplicateRule {
+    /// The row lowest in the file is used (the order of an update list).
+    #[default]
+    KeepLast,
+    /// The row highest in the file is used.
+    KeepFirst,
+    /// The first row is used and later rows fill the fields it leaves empty.
+    Merge,
+}
+
+impl DuplicateRule {
+    pub const ALL: [DuplicateRule; 3] = [
+        DuplicateRule::KeepLast,
+        DuplicateRule::KeepFirst,
+        DuplicateRule::Merge,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            DuplicateRule::KeepLast => "Keep the last row",
+            DuplicateRule::KeepFirst => "Keep the first row",
+            DuplicateRule::Merge => "Keep the first row and fill its gaps from the others",
+        }
+    }
 }
 
 fn default_currency() -> String {
@@ -567,6 +691,7 @@ impl Mapping {
             default_manufacturer: String::new(),
             currency: default_currency(),
             origin: DataSource::Unknown,
+            duplicates: DuplicateRule::default(),
         }
     }
 
@@ -726,8 +851,74 @@ fn suggest_column(header: &str, samples: &[&str]) -> ColumnMap {
                 "unitprice",
                 "eur",
                 "cost",
+                "grossprice",
+                "catalogprice",
+                "catalogueprice",
+                "retailprice",
+                "msrp",
+                "katalogpreis",
+                "verkaufspreis",
+                "einzelpreis",
+                "listprijs",
+                "adviesprijs",
+                "catalogusprijs",
+                "stuksprijs",
+                "prijsperstuk",
+                "prijsexclbtw",
             ],
             Target::Price,
+        ),
+        (
+            &[
+                "pricedate",
+                "pricelistdate",
+                "datepricelist",
+                "priceeffectivedate",
+                "pricevalidfrom",
+                "validfrom",
+                "validfromdate",
+                "validsince",
+                "effectivedate",
+                "effectivefrom",
+                "preisdatum",
+                "preisstand",
+                "preislistendatum",
+                "preislistenstand",
+                "gultigab",
+                "gultigvon",
+                "gultigkeitsdatum",
+                "gultigabdatum",
+                "prijsdatum",
+                "prijsstand",
+                "prijslijstdatum",
+                "geldigvanaf",
+                "geldigvan",
+                "ingangsdatum",
+            ],
+            Target::PriceDate,
+        ),
+        (
+            &[
+                "per",
+                "priceper",
+                "pricefor",
+                "priceunit",
+                "pricebasis",
+                "pricequantity",
+                "priceqty",
+                "perquantity",
+                "preiseinheit",
+                "preisbasis",
+                "preismenge",
+                "preisproe",
+                "bezugsmenge",
+                "pe",
+                "prijseenheid",
+                "prijsper",
+                "prijsbasis",
+                "prijshoeveelheid",
+            ],
+            Target::PricePer,
         ),
         (
             &[
@@ -738,6 +929,17 @@ fn suggest_column(header: &str, samples: &[&str]) -> ColumnMap {
                 "lebenszyklus",
                 "artikelstatus",
                 "levenscyclus",
+                "lifecyclephase",
+                "lifecyclestage",
+                "productlifecycle",
+                "produktstatus",
+                "produktlebenszyklus",
+                "availability",
+                "verfugbarkeit",
+                "beschikbaarheid",
+                "leverstatus",
+                "levensfase",
+                "plmstatus",
             ],
             Target::Lifecycle,
         ),
@@ -752,6 +954,18 @@ fn suggest_column(header: &str, samples: &[&str]) -> ColumnMap {
                 "anschlusstechnik",
                 "aansluiting",
                 "aansluittype",
+                "connectionsystem",
+                "connectingmethod",
+                "terminaltype",
+                "clampingtype",
+                "clampingsystem",
+                "anschlusssystem",
+                "klemmenart",
+                "klemmentechnik",
+                "aansluitmethode",
+                "aansluitwijze",
+                "aansluitsysteem",
+                "klemtechniek",
             ],
             Target::Connection,
         ),
@@ -765,6 +979,12 @@ fn suggest_column(header: &str, samples: &[&str]) -> ColumnMap {
                 "anzahlanschlusse",
                 "aantalaansluitingen",
                 "terminalpoints",
+                "numberofterminals",
+                "terminalcount",
+                "numberofterminalpoints",
+                "anzahlklemmen",
+                "klemmenanzahl",
+                "aantalklemmen",
             ],
             Target::ConnectionCount,
         ),
@@ -815,9 +1035,17 @@ fn suggest_column(header: &str, samples: &[&str]) -> ColumnMap {
                 "kategorie",
                 "categorie",
                 "devicetype",
-                "producttype",
-                "producttype",
                 "gerateart",
+                "productgroup",
+                "productfamily",
+                "produktgruppe",
+                "produktfamilie",
+                "warengruppe",
+                "artikelgruppe",
+                "productgroep",
+                "productfamilie",
+                "artikelgroep",
+                "apparaatsoort",
             ],
             Target::Function,
         ),
@@ -914,10 +1142,7 @@ pub(crate) fn is_eclass_code(text: &str) -> bool {
 }
 
 fn squash(text: &str) -> String {
-    text.chars()
-        .filter(|c| c.is_alphanumeric())
-        .flat_map(char::to_lowercase)
-        .collect()
+    crate::csv::squash_header(text)
 }
 
 /// A unit as people write it: `ma` is `mA`, `mm2` is `mm²`.
@@ -932,6 +1157,9 @@ fn display_unit(unit: &str) -> String {
         "w" => "W",
         "kw" => "kW",
         "mw" => "mW",
+        "ps" => "PS",
+        "pk" => "pk",
+        "btu/h" => "BTU/h",
         "mm2" => "mm²",
         "cm2" => "cm²",
         "c" | "°c" => "°C",
@@ -942,14 +1170,14 @@ fn display_unit(unit: &str) -> String {
 
 /// Units a header may carry in brackets or after the name.
 const BRACKET_UNITS: &[&str] = &[
-    "a", "ma", "ka", "v", "mv", "kv", "w", "kw", "mw", "hp", "mm", "cm", "m", "in", "mm2", "mm²",
-    "cm2", "°c", "c", "ω/km", "ohm/km",
+    "a", "ma", "ka", "v", "mv", "kv", "w", "kw", "mw", "hp", "ps", "pk", "btu/h", "mm", "cm", "m",
+    "in", "ft", "mm2", "mm²", "cm2", "°c", "c", "ω/km", "ohm/km",
 ];
 
 /// Units recognised after the name without brackets (`Power loss W`). Short
 /// ambiguous ones (`m`, `c`, `in`) are left out: `Type m` is not a unit.
 const TAIL_UNITS: &[&str] = &[
-    "a", "ma", "ka", "v", "kv", "w", "kw", "mw", "mm", "cm", "mm2", "mm²",
+    "a", "ma", "ka", "v", "kv", "w", "kw", "mw", "ps", "mm", "cm", "mm2", "mm²",
 ];
 
 /// Splits `Rated current [A]`, `Nennstrom (A)`, `Verlustleistung in W` and

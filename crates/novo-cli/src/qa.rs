@@ -226,6 +226,7 @@ const KNOWN_VERBS: &[&str] = &[
     "key",
     "text",
     "answer_dialog",
+    "import_table",
     "expect",
     "expect_not",
     "expect_scene",
@@ -1005,6 +1006,23 @@ impl Ctx<'_> {
                 self.srv
                     .tool("answer_dialog", &json!({"path": p.to_string_lossy()}))
                     .map(|_| ())
+            }
+            "import_table" => {
+                // `import_table FILE`: File > Import parts > Import parts from a
+                // table, with the file dialog answered, so a scenario can
+                // screenshot the mapping, rows and refusal screens.
+                let file = need(1, "a table file")?.to_owned();
+                let w = |s: &[&str]| s.iter().map(|x| (*x).to_owned()).collect::<Vec<_>>();
+                self.step(&w(&["answer_dialog", &file]))?;
+                self.step(&w(&["click_text", "File"]))?;
+                self.step(&w(&["wait", "4"]))?;
+                self.step(&w(&["click_text", "Import parts"]))?;
+                self.step(&w(&["wait", "4"]))?;
+                self.step(&w(&[
+                    "click_text",
+                    "Import parts from a table (CSV or Excel)",
+                ]))?;
+                self.step(&w(&["wait", "20"]))
             }
             "expect" | "expect_not" => {
                 let want = need(1, "text")?.to_lowercase();
@@ -1799,7 +1817,10 @@ mod tests {
         assert!(all.len() >= 7);
         for sc in &all {
             for st in &sc.steps {
-                if matches!(st.words[0].as_str(), "open" | "answer_dialog")
+                if matches!(
+                    st.words[0].as_str(),
+                    "open" | "answer_dialog" | "import_table"
+                )
                     && !st.words[1].starts_with("~/")
                     // Generated on demand (scale_bench --save-project), not shipped.
                     && !st.words[1].starts_with("target/")
