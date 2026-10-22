@@ -10,15 +10,19 @@
 //! history and saving gives back the project the run started from (the id
 //! counter stays where the edits left it).
 //!
-//! Not covered here: adding devices, connecting pins, property and wire data
-//! edits, cables, parts, revisions, numbering, Autopilot and generated pages
-//! (a follow-up extends the mix to those).
+//! The basic mix is the list above. The full mix adds cables (proposals or a
+//! hand-made cable with a core), parts (add and assign), issued revisions,
+//! wire numbering runs, Autopilot plans and the generated pages. The same
+//! runs also go over a 600-page project. Not covered: adding devices,
+//! connecting pins, and property or wire data edits.
 
+#[cfg(unix)]
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use novo_core::*;
 use novo_storage::{ProjectFile, Session};
-use novo_tests::motor_starter;
+use novo_tests::{BigSpec, big_project, motor_starter};
 
 /// A small deterministic generator (xorshift), so a failure names its seed.
 struct Rng(u64);
@@ -54,9 +58,125 @@ fn without_counter(json: &str) -> String {
         .join("\n")
 }
 
+/// Which edits a run draws from.
+#[derive(Clone, Copy, PartialEq)]
+enum Mix {
+    /// Symbols, wires, devices, pages and junctions.
+    Basic,
+    /// Also cables, parts, revisions, wire numbering, Autopilot and generated
+    /// pages: the commands that touch many kinds of object in one step.
+    Full,
+}
+
+/// The project a run starts from.
+#[derive(Clone, Copy)]
+enum Setup {
+    Starter,
+    /// 300 feeders: 600 pages.
+    Big600,
+}
+
+fn start_document(setup: Setup) -> Document {
+    let mut doc = Document::default();
+    match setup {
+        Setup::Starter => {
+            motor_starter(&mut doc).unwrap();
+        }
+        Setup::Big600 => {
+            big_project(&mut doc, BigSpec::LARGE).unwrap();
+            assert!(doc.project().pages().count() >= 600);
+        }
+    }
+    doc.clear_history();
+    doc
+}
+
+/// How often each heavy edit changed the drawing, over all runs.
+const HEAVY: [&str; 6] = [
+    "cables",
+    "parts",
+    "revision",
+    "numbering",
+    "autopilot",
+    "generated pages",
+];
+static APPLIED: [AtomicUsize; 6] = [const { AtomicUsize::new(0) }; 6];
+
+/// One edit from the heavy kinds. `None` when it changed nothing.
+fn heavy_edit(doc: &mut Document, rng: &mut Rng) -> Option<ChangeSet> {
+    let kind = rng.below(HEAVY.len());
+    let before = doc.project().revision();
+    let result = match kind {
+        0 => {
+            // The proposals when there are any; otherwise a cable by hand
+            // that carries a wire.
+            let wires: Vec<WireId> = doc.project().wires().map(|w| w.id).collect();
+            let wire = rng.pick(&wires);
+            let tag = format!("=A1-W{}", 10 + rng.below(80));
+            doc.transact("Add cable", |tx| {
+                let proposals = novo_cables::propose::propose_cables(tx.project());
+                if !proposals.is_empty() {
+                    return novo_cables::propose::accept_proposals(tx, &proposals, None)
+                        .map(|_| ());
+                }
+                let tag = DeviceTag::parse(&tag).expect("a valid tag");
+                let cable = tx.add_cable(tag, vec![CableCore::new("1"), CableCore::new("2")])?;
+                tx.assign_core(cable, 0, wire)
+            })
+        }
+        1 => {
+            let devices: Vec<DeviceId> = doc.project().devices().map(|d| d.id).collect();
+            let device = rng.pick(&devices)?;
+            let order = format!("PX{}", rng.below(50));
+            doc.transact("Assign part", |tx| {
+                let part = tx.add_part("Siemens", order)?;
+                tx.assign_part(device, part)
+            })
+        }
+        2 => {
+            let index = format!("R{}", rng.below(6));
+            doc.transact("Issue revision", |tx| {
+                tx.issue_revision(index, "2026-10-21", "TV", "Random run")
+                    .map(|_| ())
+            })
+        }
+        3 => doc.transact("Number wires", |tx| {
+            let plan = novo_numbering::plan(
+                tx.project(),
+                &novo_numbering::Scheme::default(),
+                novo_numbering::Mode::Fill,
+                &novo_numbering::Scope::Project,
+            );
+            plan.apply(tx).map(|_| ())
+        }),
+        4 => {
+            let plan = novo_reports::autopilot::plan_for(
+                doc.project(),
+                &novo_checks::calc::tables::TableSet::builtin(),
+            );
+            doc.transact("Autopilot", |tx| plan.apply(tx, None).map(|_| ()))
+        }
+        _ => {
+            let specs = novo_reports::default_generated_pages(doc.project());
+            doc.transact("Generated pages", |tx| {
+                novo_reports::add_generated_pages(tx, &specs)
+            })
+        }
+    };
+    let (_, changes) = result.ok()?;
+    if doc.project().revision() == before {
+        return None;
+    }
+    APPLIED[kind].fetch_add(1, Ordering::Relaxed);
+    Some(changes)
+}
+
 /// One random edit. An edit the model refuses (the last page, a locked page)
 /// changes nothing and is not an error here.
-fn edit(doc: &mut Document, rng: &mut Rng) -> Option<ChangeSet> {
+fn edit(doc: &mut Document, rng: &mut Rng, mix: Mix) -> Option<ChangeSet> {
+    if mix == Mix::Full && rng.below(100) < 40 {
+        return heavy_edit(doc, rng);
+    }
     let project = doc.project();
     let pages: Vec<PageId> = project.pages().map(|p| p.id).collect();
     let symbols: Vec<SymbolId> = project.symbols().map(|s| s.id).collect();
@@ -141,21 +261,19 @@ fn file_json(path: &Path) -> String {
     ProjectFile::read(&copy).unwrap().to_json()
 }
 
-fn run(seed: u64, steps: usize) -> usize {
+fn run(seed: u64, steps: usize, setup: Setup, mix: Mix) -> usize {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("run.novo");
-    let mut doc = Document::default();
-    motor_starter(&mut doc).unwrap();
-    doc.clear_history();
+    let mut doc = start_document(setup);
     let mut session = Session::create(&path, doc.project()).unwrap();
     let mut saved = doc.project().to_json();
     let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
     let (mut edits, mut undos, mut redos, mut saves) = (0, 0, 0, 0);
 
-    for step in 0..steps {
+    for _step in 0..steps {
         let what = rng.below(100);
         if what < 55 {
-            if let Some(changes) = edit(&mut doc, &mut rng) {
+            if let Some(changes) = edit(&mut doc, &mut rng, mix) {
                 session.record(&changes);
                 edits += 1;
             }
@@ -177,7 +295,7 @@ fn run(seed: u64, steps: usize) -> usize {
             assert_eq!(
                 file_json(&path),
                 saved,
-                "seed {seed}, step {step}: the file after a save"
+                "seed {seed}, step {_step}: the file after a save"
             );
         } else {
             session.autosave(doc.project()).unwrap();
@@ -221,18 +339,16 @@ fn run(seed: u64, steps: usize) -> usize {
 
 /// Undo to the bottom of the history and save: the file is the starting
 /// project; redo to the top and save: the file is the final drawing.
-fn undo_all_then_redo_all(seed: u64, steps: usize) {
+fn undo_all_then_redo_all(seed: u64, steps: usize, mix: Mix) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("history.novo");
-    let mut doc = Document::default();
-    motor_starter(&mut doc).unwrap();
-    doc.clear_history();
+    let mut doc = start_document(Setup::Starter);
     let start = doc.project().to_json();
     let mut session = Session::create(&path, doc.project()).unwrap();
     let mut rng = Rng(seed.wrapping_mul(0xD1B5_4A32_D192_ED03) | 1);
 
     for step in 0..steps {
-        if let Some(changes) = edit(&mut doc, &mut rng) {
+        if let Some(changes) = edit(&mut doc, &mut rng, mix) {
             session.record(&changes);
         }
         // Saves in between, so the undo below crosses many of them.
@@ -280,13 +396,39 @@ fn undo_all_then_redo_all(seed: u64, steps: usize) {
 
 #[test]
 fn random_runs_of_edits_undo_redo_and_saves_reach_the_file_exactly() {
-    let redos: usize = (1..=10).map(|seed| run(seed, 160)).sum();
+    let redos: usize = (1..=10)
+        .map(|seed| run(seed, 160, Setup::Starter, Mix::Basic))
+        .sum();
     assert!(redos > 0, "no redo happened across the seeds");
 }
 
 #[test]
 fn undoing_everything_across_many_saves_and_redoing_it_again_is_exact() {
     for seed in 1..=10 {
-        undo_all_then_redo_all(seed, 120);
+        undo_all_then_redo_all(seed, 120, Mix::Basic);
+    }
+}
+
+#[test]
+fn runs_with_cables_parts_revisions_numbering_autopilot_and_generated_pages_reach_the_file_exactly()
+{
+    for seed in 1..=10 {
+        run(seed, 160, Setup::Starter, Mix::Full);
+    }
+    for seed in 1..=10 {
+        undo_all_then_redo_all(seed, 120, Mix::Full);
+    }
+    for (kind, applied) in HEAVY.iter().zip(&APPLIED) {
+        assert!(
+            applied.load(Ordering::Relaxed) > 0,
+            "no run ever applied {kind}: the mix does not reach it"
+        );
+    }
+}
+
+#[test]
+fn a_600_page_project_reaches_the_file_exactly_through_edits_undo_redo_and_saves() {
+    for seed in 1..=2 {
+        run(seed, 60, Setup::Big600, Mix::Full);
     }
 }

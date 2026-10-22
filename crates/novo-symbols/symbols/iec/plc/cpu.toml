@@ -1,0 +1,43 @@
+format = 1
+id = "iec/plc/cpu"
+name = "PLC CPU"
+description = "PLC central processing unit: 24 V supply L+, M and PE, two industrial Ethernet ports P1 and P2 (PROFINET, EtherNet/IP, Modbus TCP) and an RS-485 fieldbus port A, B, SH. IEC pack block symbol (a manufacturer-neutral drawing, not a 60617 graphic)."
+standard = "IEC 60617"
+category = "plc"
+function = "plc.cpu"
+keywords = ["plc", "cpu", "controller", "profinet", "ethernet", "profibus", "modbus", "central unit", "besturing"]
+aliases = ["cpu"]
+
+connections = [
+  { id = "L+", at = [0, 0], dir = "up" },
+  { id = "M", at = [8, 0], dir = "up" },
+  { id = "PE", at = [16, 0], dir = "up", role = "pe" },
+  { id = "P1", at = [32, 12], dir = "right" },
+  { id = "P2", at = [32, 20], dir = "right" },
+  { id = "A", at = [0, 32], dir = "down" },
+  { id = "B", at = [8, 32], dir = "down" },
+  { id = "SH", at = [16, 32], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 16], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "line", from = [28, 12], to = [32, 12] },
+  { kind = "line", from = [28, 20], to = [32, 20] },
+  { kind = "line", from = [0, 28], to = [0, 32] },
+  { kind = "line", from = [8, 28], to = [8, 32] },
+  { kind = "line", from = [16, 28], to = [16, 32] },
+  { kind = "rect", at = [-4, 4], size = [32, 24] },
+  { kind = "text", at = [12, 11], text = "CPU", size = 3.0 },
+  { kind = "text", at = [12, 21], text = "24 V DC", size = 1.8 },
+]
+
+[behavior]
+kind = "load"
+type = "plc_cpu"
+poles = [["L+", "M"]]

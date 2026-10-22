@@ -1,9 +1,11 @@
 name: Windows build check
 
-# A cheap Windows check for pull requests that touch the CI file or build
-# inputs: it compiles and links the test binaries (no test run), which is where
-# Windows-only failures like the LNK1104 on main 125412fa show up. Full Windows
-# tests still run on main pushes, nightly and manual starts (ci.yml).
+# A Windows check for pull requests that touch the CI file, build inputs or any
+# crate source. It runs the same clippy as the Windows job in ci.yml (so a
+# Windows-only lint blocks the merge instead of turning main red) and compiles
+# and links the test binaries without running them, which is where Windows-only
+# failures like the LNK1104 on main 125412fa show up. Full Windows tests still
+# run on main pushes, nightly and manual starts (ci.yml).
 on:
   pull_request:
     paths:
@@ -14,8 +16,7 @@ on:
       - "rust-toolchain*"
       - ".cargo/**"
       - ".gitattributes"
-      - "crates/*/Cargo.toml"
-      - "crates/*/build.rs"
+      - "crates/**"
 
 concurrency:
   group: windows-pr-${{ github.event.pull_request.number }}
@@ -30,12 +31,16 @@ env:
 
 jobs:
   windows-build:
-    name: windows build (no tests)
+    name: windows clippy and build (no tests)
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - uses: Swatinem/rust-cache@v2
+      # Same command as the Windows job in ci.yml.
+      - run: cargo clippy --workspace --all-targets -- -D warnings
       # Same target selection as the Windows test step in ci.yml.
       - run: cargo test --workspace --exclude novo-cfd --lib --bins --tests --no-run

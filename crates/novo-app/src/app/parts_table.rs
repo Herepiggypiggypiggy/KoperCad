@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 
 use eframe::egui;
 use novo_parts::{
-    Catalog, DataSource, ImportPreview, Mapping, RowStatus, SavedMappings, Severity, TableFile,
-    Target, build_preview, guess_header_row, saved_mappings_path, user_catalog_path,
+    Catalog, DataSource, DuplicateRule, ImportPreview, Mapping, RowStatus, SavedMappings, Severity,
+    TableFile, Target, build_preview, guess_header_row, saved_mappings_path, user_catalog_path,
 };
 use novo_theme::widgets;
 
@@ -117,12 +117,14 @@ impl PartsTableImport {
             self.mapping.default_manufacturer.clone(),
             self.mapping.currency.clone(),
             self.mapping.origin,
+            self.mapping.duplicates,
         );
         self.mapping = Mapping::suggest(self.sheet(), row);
         (
             self.mapping.default_manufacturer,
             self.mapping.currency,
             self.mapping.origin,
+            self.mapping.duplicates,
         ) = keep;
         self.from_saved = false;
         self.refresh();
@@ -213,7 +215,10 @@ impl NovoApp {
         let bytes = match std::fs::read(path) {
             Ok(b) => b,
             Err(e) => {
-                self.message(Level::Error, format!("Could not read {name}: {e}"));
+                self.message(
+                    Level::Error,
+                    format!("Could not read {name}: {}", novo_parts::plain_io_error(&e)),
+                );
                 return false;
             }
         };
@@ -225,6 +230,7 @@ impl NovoApp {
             }
         };
         let existing = existing_catalog(catalog_path.as_deref());
+        self.dismiss_toasts();
         self.wb.parts_table = Some(PartsTableImport::new(
             name,
             table,
@@ -266,8 +272,19 @@ impl NovoApp {
         self.message(
             Level::Info,
             format!(
-                "Parts from {}: {added} added, {} updated, {} not imported",
-                import.file, counts.changed, counts.skipped
+                "Parts from {}: {added} added, {} updated, {} not imported{}",
+                import.file,
+                counts.changed,
+                counts.skipped,
+                if counts.repeated > 0 {
+                    format!(
+                        ", {} repeated {} not separate parts",
+                        counts.repeated,
+                        plural(counts.repeated, "row", "rows")
+                    )
+                } else {
+                    String::new()
+                }
             ),
         );
         if import.catalog_path.is_none()
@@ -523,9 +540,15 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
         ui.weak("Fix the columns first; the rows are read once the mapping is complete.");
         return;
     }
+    // What the notes above the list take comes off the list's own height, so
+    // the buttons below it stay on a small window.
+    let notes_top = ui.cursor().top();
     for a in &import.preview.assumptions {
         ui.colored_label(p.warning, a);
     }
+    repeated_ui(ui, import);
+    let height = (height - (ui.cursor().top() - notes_top)).max(90.0);
+    let has_date = import.mapping.column_of(&Target::PriceDate).is_some();
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new("What the file tells").weak());
         for c in &import.preview.coverage {
@@ -539,8 +562,10 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
                 p.warning
             };
             ui.colored_label(color, format!("{} {}/{}", c.label, c.have, c.total))
-                .on_hover_text(if price_note {
-                    "Prices are list prices as in the file. Their date is the day of the import, not the date of the price list."
+                .on_hover_text(if price_note && has_date {
+                    "Prices are list prices as in the file, dated with the price list date column (a cell without a readable date gets the day of the import)."
+                } else if price_note {
+                    "Prices are list prices as in the file. Their date is the day of the import, not the date of the price list; map a date column to use the list's own date."
                 } else if c.have == c.total {
                     "Every imported part has this."
                 } else {
@@ -579,6 +604,10 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
                     RowStatus::New => ("New", p.success),
                     RowStatus::Changed => ("Replaces entry", p.warning),
                     RowStatus::Unchanged => ("Already there", p.text_secondary),
+                    // A row a repeated-number rule left out is a choice, not an error.
+                    RowStatus::Skipped if row.worst() < Some(Severity::Error) => {
+                        ("Repeated", p.warning)
+                    }
                     RowStatus::Skipped => ("Not imported", p.error),
                 };
                 ui.horizontal(|ui| {
@@ -611,11 +640,73 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
             let total = import.preview.rows.len();
             if total > ROWS_SHOWN && !import.only_checks {
                 ui.weak(format!(
-                    "{} more row(s) not listed; the report saved with the catalog has every finding.",
-                    total - ROWS_SHOWN
+                    "{} more {} not listed; the report saved with the catalog has every finding.",
+                    total - ROWS_SHOWN,
+                    plural(total - ROWS_SHOWN, "row", "rows")
                 ));
             }
         });
+}
+
+/// Order numbers that appear in more than one row: how many, which rows, and
+/// the choice of what the catalog gets. Nothing is dropped in silence.
+fn repeated_ui(ui: &mut egui::Ui, import: &mut PartsTableImport) {
+    if import.preview.repeated.is_empty() {
+        return;
+    }
+    let p = crate::theme::ui_palette();
+    let rows: usize = import.preview.repeated.iter().map(|r| r.lines.len()).sum();
+    ui.colored_label(
+        p.warning,
+        format!(
+            "{} {} more than one row ({rows} rows). The catalog keeps one entry per maker and order number: choose what it gets.",
+            import.preview.repeated.len(),
+            if import.preview.repeated.len() == 1 {
+                "order number appears in"
+            } else {
+                "order numbers appear in"
+            }
+        ),
+    );
+    let labels = [
+        "Last row",
+        "First row",
+        "First row, gaps filled from the others",
+    ];
+    let mut index = DuplicateRule::ALL
+        .iter()
+        .position(|r| *r == import.mapping.duplicates)
+        .unwrap_or(0);
+    ui.horizontal_wrapped(|ui| {
+        if widgets::segmented(ui, &mut index, &labels) {
+            import.mapping.duplicates = DuplicateRule::ALL[index];
+            import.refresh();
+        }
+    });
+    let shown = 4;
+    for r in import.preview.repeated.iter().take(shown) {
+        ui.label(
+            egui::RichText::new(format!(
+                "{} {} is in {}; row {} is used",
+                r.manufacturer,
+                r.order_number,
+                novo_parts::rows_text(&r.lines),
+                r.used
+            ))
+            .small(),
+        );
+    }
+    if import.preview.repeated.len() > shown {
+        ui.weak(format!(
+            "and {} more; every row of them says so below.",
+            import.preview.repeated.len() - shown
+        ));
+    }
+    ui.add_space(4.0);
+}
+
+fn plural(n: usize, one: &'static str, many: &'static str) -> &'static str {
+    if n == 1 { one } else { many }
 }
 
 /// One fixed-width, left-aligned, truncated cell of a row.
@@ -637,8 +728,9 @@ fn footer_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, cancel: &mut bool
     let mut go = false;
     if import.preview.problems.is_empty() {
         let text = format!(
-            "{} row(s): {}{}",
+            "{} {}: {}{}",
             import.preview.rows.len(),
+            plural(import.preview.rows.len(), "row", "rows"),
             import.preview.summary(),
             if counts.warned > 0 {
                 format!(", {} with warnings", counts.warned)
@@ -647,12 +739,17 @@ fn footer_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, cancel: &mut bool
             }
         );
         ui.colored_label(
-            if counts.skipped + counts.warned > 0 {
+            if counts.skipped + counts.warned + counts.repeated > 0 {
                 p.warning
             } else {
                 p.text_primary
             },
             text,
+        )
+        .on_hover_text(
+            "Not imported: rows that cannot be a part (no order number, no maker, a mangled order number). \
+             Repeated: rows of an order number that appears more than once, left out by the rule chosen in the Rows step. \
+             The Rows step says why for every row.",
         );
     } else {
         ui.colored_label(

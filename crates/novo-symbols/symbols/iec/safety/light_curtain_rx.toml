@@ -1,0 +1,42 @@
+format = 1
+id = "iec/safety/light_curtain_rx"
+name = "Safety light curtain, receiver"
+description = "Receiver of a light curtain (for example type 4): L+ and M supply, RES restart or EDM input, OSSD1 and OSSD2 the two safe semiconductor outputs for the safety relay. Drawing symbol only: no safety function, category or PL/SIL is evaluated."
+standard = "IEC 60617"
+category = "safety"
+function = "safety.lightcurtain.rx"
+keywords = ["light curtain", "lichtgordijn", "receiver", "ossd", "espe", "type 4", "safety"]
+aliases = ["lcrx"]
+
+connections = [
+  { id = "L+", at = [0, 0], dir = "up" },
+  { id = "M", at = [8, 0], dir = "up" },
+  { id = "RES", at = [16, 0], dir = "up" },
+  { id = "OSSD1", at = [0, 24], dir = "down" },
+  { id = "OSSD2", at = [8, 24], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-16, 12], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "line", from = [0, 20], to = [0, 24] },
+  { kind = "line", from = [8, 20], to = [8, 24] },
+  { kind = "rect", at = [-4, 4], size = [24, 16] },
+  { kind = "text", at = [10, 12], text = "Rx", size = 2.6 },
+  { kind = "line", from = [-12, 8], to = [-4, 8], stroke = "dashed" },
+  { kind = "line", from = [-12, 12], to = [-4, 12], stroke = "dashed" },
+  { kind = "line", from = [-12, 16], to = [-4, 16], stroke = "dashed" },
+  { kind = "polyline", points = [[-6, 6.8], [-4, 8], [-6, 9.2]] },
+  { kind = "polyline", points = [[-6, 10.8], [-4, 12], [-6, 13.2]] },
+  { kind = "polyline", points = [[-6, 14.8], [-4, 16], [-6, 17.2]] },
+]
+
+[behavior]
+kind = "load"
+type = "light_curtain"
+poles = [["L+", "M"]]

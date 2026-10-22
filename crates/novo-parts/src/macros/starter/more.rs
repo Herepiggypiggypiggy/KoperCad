@@ -25,26 +25,33 @@ pub(super) fn all() -> Vec<fn() -> Result<MacroFile>> {
 }
 
 /// A sheet plus the symbol library.
-struct Kit<'a, 'b, 'c> {
-    s: &'a mut Sheet<'b, 'c>,
+pub(super) struct Kit<'a, 'b, 'c> {
+    pub(super) s: &'a mut Sheet<'b, 'c>,
     lib: Library,
 }
 
 impl<'a, 'b, 'c> Kit<'a, 'b, 'c> {
-    fn new(s: &'a mut Sheet<'b, 'c>) -> Self {
+    pub(super) fn new(s: &'a mut Sheet<'b, 'c>) -> Self {
         Kit {
             s,
             lib: Library::builtin().expect("the built-in symbols load"),
         }
     }
 
-    fn dev(&mut self, tag: &str, description: &str) -> Result<DeviceId> {
+    pub(super) fn dev(&mut self, tag: &str, description: &str) -> Result<DeviceId> {
         self.s.device(tag, description)
     }
 
     /// Places a symbol with the pins, bridges and pass-through paths of its
     /// library entry.
-    fn put(&mut self, key: &str, x: f64, y: f64, device: DeviceId, main: bool) -> Result<SymbolId> {
+    pub(super) fn put(
+        &mut self,
+        key: &str,
+        x: f64,
+        y: f64,
+        device: DeviceId,
+        main: bool,
+    ) -> Result<SymbolId> {
         let sym = self.lib.get(key).expect("starter symbols exist");
         let pins: Vec<Pin> = sym
             .connections
@@ -74,22 +81,22 @@ impl<'a, 'b, 'c> Kit<'a, 'b, 'c> {
         Ok(id)
     }
 
-    fn wire(&mut self, a: (SymbolId, u16), b: (SymbolId, u16)) -> Result<()> {
+    pub(super) fn wire(&mut self, a: (SymbolId, u16), b: (SymbolId, u16)) -> Result<()> {
         self.s.wire(a, b)
     }
 
-    fn junction(&mut self, x: f64, y: f64) -> Result<JunctionId> {
+    pub(super) fn junction(&mut self, x: f64, y: f64) -> Result<JunctionId> {
         self.s.junction(x, y)
     }
 
-    fn pin_to_junction(&mut self, sym: SymbolId, pin: u16, j: JunctionId) -> Result<()> {
+    pub(super) fn pin_to_junction(&mut self, sym: SymbolId, pin: u16, j: JunctionId) -> Result<()> {
         self.s
             .tx
             .connect(Endpoint::pin(sym, pin), Endpoint::junction(j))?;
         Ok(())
     }
 
-    fn junction_to_pin(&mut self, j: JunctionId, sym: SymbolId, pin: u16) -> Result<()> {
+    pub(super) fn junction_to_pin(&mut self, j: JunctionId, sym: SymbolId, pin: u16) -> Result<()> {
         self.s
             .tx
             .connect(Endpoint::junction(j), Endpoint::pin(sym, pin))?;

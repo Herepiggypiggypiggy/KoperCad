@@ -322,6 +322,19 @@ fn row(sl: &SingleLine, node: &Node) -> (Vec<Cell>, Vec<AnyId>) {
             fmt(node.ik_ka.value.unwrap_or_default()),
             fmt(node.breaking_ka.value.unwrap_or_default())
         )),
+        Status::Pass => {
+            if let (Some(ik), Some(icu)) = (node.ik_ka.value, node.breaking_ka.value)
+                && icu > 0.0
+                && ik > 0.8 * icu
+            {
+                why.push(format!(
+                    "Ik {} kA is within {} % of the breaking capacity {} kA, and the motor contribution is not included",
+                    fmt(ik),
+                    fmt(((icu - ik) / icu * 100.0).max(0.0).round()),
+                    fmt(icu)
+                ));
+            }
+        }
         _ => {}
     }
     let check = match (
@@ -652,6 +665,17 @@ impl Canvas {
                 lead(self);
                 self.rect(cx, cy, 3.6, 4.0);
             }
+            Kind::Lamp => {
+                self.circle(cx, cy, 4.2);
+                self.line((cx - 3.0, cy - 3.0), (cx + 3.0, cy + 3.0), false);
+                self.line((cx - 3.0, cy + 3.0), (cx + 3.0, cy - 3.0), false);
+            }
+            Kind::Sounder => {
+                self.rect(cx - 2.0, cy, 3.0, 4.0);
+                self.line((cx - 0.5, cy - 2.0), (cx + 3.5, cy - 4.5), false);
+                self.line((cx - 0.5, cy + 2.0), (cx + 3.5, cy + 4.5), false);
+                self.line((cx + 3.5, cy - 4.5), (cx + 3.5, cy + 4.5), false);
+            }
             Kind::Drive | Kind::SoftStarter | Kind::PowerSupply => {
                 self.rect(cx, cy, 9.0, 8.0);
                 self.line((cx - 4.5, cy + 4.0), (cx + 4.5, cy - 4.0), false);
@@ -769,14 +793,26 @@ fn draw_box(c: &mut Canvas, sl: &SingleLine, node: &Node, cx: f64, y: f64, conti
     );
 }
 
+/// A voltage drop for the drawing: a figure that would print as 0 says it is
+/// small and not zero.
+fn percent(value: f64) -> String {
+    if value > 0.0 && value < 0.005 {
+        "<0.01".to_owned()
+    } else {
+        fmt(value)
+    }
+}
+
 fn link_lines(link: &Link) -> Vec<String> {
     let mut out = Vec::new();
     let section = match link.section_mm2.value {
         Some(s) => format!(
-            "{}x{} mm²{}",
+            "{}x{} mm²{}{}",
             link.poles.max(1),
             fmt(s),
-            mark(link.section_mm2.origin)
+            mark(link.section_mm2.origin),
+            // The neutral of a one-phase feeder is not counted: say so.
+            if link.poles == 1 { " (line)" } else { "" }
         ),
         None => "no cross-section".to_owned(),
     };
@@ -795,13 +831,13 @@ fn link_lines(link: &Link) -> Vec<String> {
         None => length,
     });
     if let Some(d) = link.drop_percent.value {
-        let mut s = format!("ΔU {} %{}", fmt(d), mark(link.drop_percent.origin));
+        let mut s = format!("ΔU {} %{}", percent(d), mark(link.drop_percent.origin));
         if let Some(t) = link.drop_total_percent.value
             && (t - d).abs() > 0.005
         {
             s.push_str(&format!(
                 " Σ {} %{}",
-                fmt(t),
+                percent(t),
                 mark(link.drop_total_percent.origin)
             ));
         }
@@ -853,6 +889,23 @@ fn level_y(level: usize) -> f64 {
     level as f64 * (BOX_H + LINK_H)
 }
 
+/// Width the run label gives way to a relay box drawn on the wire, mm.
+const RELAY_SHIFT: f64 = 3.6;
+
+/// An overload relay wired into the run, drawn as a box on the wire just above
+/// the child. Returns how far the run's label moves right to clear it.
+fn relay_box(c: &mut Canvas, x: f64, bottom: f64, link: &Link) -> f64 {
+    if link.inline.is_empty() {
+        return 0.0;
+    }
+    let cy = bottom - 5.0;
+    c.rect(x, cy, 4.6, 6.0);
+    c.line((x - 1.6, cy + 1.2), (x - 0.5, cy - 1.2), false);
+    c.line((x - 0.5, cy - 1.2), (x + 0.6, cy + 1.2), false);
+    c.line((x + 0.6, cy + 1.2), (x + 1.6, cy - 1.2), false);
+    RELAY_SHIFT
+}
+
 /// Draws the run from a parent's bottom to a child's top, with its label.
 fn draw_run(
     c: &mut Canvas,
@@ -874,15 +927,16 @@ fn draw_run(
         c.line((to_x, mid), (to_x, bottom), heavy);
     }
     let Some(link) = link else { return };
+    let shift = relay_box(c, to_x, bottom, link);
     let lines = link_lines(link);
     let h = 2.9;
     let straight = (from_x - to_x).abs() < 0.01;
     let y0 = if straight { top + 1.0 } else { mid + 0.5 };
     for (i, text) in lines.iter().enumerate() {
         c.text(
-            to_x + 1.2,
+            to_x + 1.2 + shift,
             y0 + h * i as f64,
-            PITCH_MM - 3.0,
+            PITCH_MM - 3.0 - shift,
             h,
             text,
             SMALL_MM,
@@ -895,9 +949,9 @@ fn draw_run(
         let why = format!("FAIL {}", link.fail_codes.join(", "));
         let why = why.as_str();
         c.text(
-            to_x + 1.2,
+            to_x + 1.2 + shift,
             y0 + h * n,
-            PITCH_MM - 3.0,
+            PITCH_MM - 3.0 - shift,
             h,
             why,
             SMALL_MM,
@@ -964,6 +1018,9 @@ fn legend(sl: &SingleLine) -> Vec<String> {
             || note.starts_with("A diversity factor is stated")
             || note.starts_with("Ignored, no factor applied")
             || note.starts_with("ΔU is calculated at power factor 1")
+            || note.starts_with("Lamps and sounders are drawn")
+            || note.starts_with("Not drawn, lamps and sounders")
+            || note.starts_with("A load on one line conductor")
             || note.starts_with("Ik is")
             || note.starts_with("Icu is checked")
             || note.starts_with("Short-circuit current is not carried")
@@ -1099,12 +1156,13 @@ pub fn sheet_layout_of(sl: &SingleLine, index: usize, setup: &PageSetup) -> Opti
             link.is_some_and(|l| l.status == Status::Fail),
         );
         if let Some(link) = link {
+            let shift = relay_box(&mut c, *cx, level_y(1), link);
             let lines = link_lines(link);
             for (i, text) in lines.iter().enumerate() {
                 c.text(
-                    *cx + 1.2,
+                    *cx + 1.2 + shift,
                     bus_y + 0.5 + 2.9 * i as f64,
-                    PITCH_MM - 3.0,
+                    PITCH_MM - 3.0 - shift,
                     2.9,
                     text,
                     SMALL_MM,

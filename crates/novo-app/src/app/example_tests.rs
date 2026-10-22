@@ -73,6 +73,29 @@ fn the_example_has_no_error_level_problem() {
 }
 
 #[test]
+fn the_example_states_its_supply_so_the_single_line_diagram_has_figures() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    let sl = novo_checks::single_line::single_line(
+        d.doc().project(),
+        &d.doc().project().netlist(),
+        &novo_checks::calc::tables::TableSet::builtin(),
+        &Default::default(),
+    );
+    assert!((sl.supply_ik_ka.value.unwrap() - 6.0).abs() < 1e-9);
+    assert!(sl.nodes.iter().skip(1).any(|n| n.ik_ka.value.is_some()));
+    // The motor feeder has its overload relay wired in.
+    assert!(
+        sl.nodes
+            .iter()
+            .filter_map(|n| n.link.as_ref())
+            .any(|l| !l.inline.is_empty())
+    );
+}
+
+#[test]
 fn opening_the_example_twice_gives_the_same_project() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();

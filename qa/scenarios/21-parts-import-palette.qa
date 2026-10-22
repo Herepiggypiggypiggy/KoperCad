@@ -1,0 +1,23 @@
+@title Parts import from the palette: the table importer, and no old error over it
+@area Parts
+@sizes 1366x768 1920x1080
+# Round 21: "import parts from a table" opens the table importer (not the folder one), and an error toast from an earlier try is gone when the dialog opens.
+click_text "Open example"
+wait 20
+answer_dialog qa/fixtures/parts/price-list-de.csv
+click_text File
+wait 4
+click_text "Import parts"
+wait 4
+click_text "Import parts from a folder"
+wait 10
+shot old-error
+key ctrl+k
+text "import parts from a table"
+wait 5
+answer_dialog qa/fixtures/parts/price-list-de.csv
+key Enter
+wait 20
+expect "Import parts from price-list-de.csv"
+shot dialog-over-no-toast
+check_layout

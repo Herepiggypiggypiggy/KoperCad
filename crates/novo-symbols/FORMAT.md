@@ -150,6 +150,20 @@ stored per user (under the user's config directory) and layered over them;
 the editor never writes back into the library files, which may sit in a
 read-only install folder.
 
+## Safety, PLC and network symbols
+
+Block symbols (safety relay, CPU, switch) are manufacturer-neutral drawings in the IEC pack, not 60617 graphics, and have their pins on the top and bottom
+edge, one pin per terminal and 8 mm apart, so a wire runs straight to a device
+above or below. Side pins (`dir = "right"` for the CPU's network ports, `"left"` for
+a switch's supply) are used only where a block would otherwise need more than
+two rows. A network connection is drawn as one wire between two `P` pins: the
+cable (Cat 5e, M12 D-coded) and its cores belong to the cable plan, not the
+symbol. Devices that are not network components themselves (a drive, an operator
+panel) get their port from `network/port_*`, drawn with the device's own tag, like
+the contacts of a relay. Only the IEC pack has these symbols so far; the NFPA pack
+has no counterparts yet (a pack may lack a device). The simulation treats them as
+loads on `L+`/`M` (behavior `load`), not as logic: no safety function is evaluated.
+
 ## Packs
 
 Symbols are grouped into packs, one drawing standard per directory under
@@ -211,6 +225,13 @@ and the choice of simulation model. Lookups match prefixes, so
 | `accessory.terminal.*` | Terminal strip accessories without connections: `end_plate`, `end_bracket` |
 | `load.*`, `source.*`, `meter.*` | Loads, sources (including `source.generator`), instruments |
 | `plc.input.*`, `plc.output.*`, `plc.supply` | PLC channels and supply |
+| `plc.cpu`, `plc.remote_io` | PLC central unit and remote I/O node: 24 V supply, PE, Ethernet ports `P1`, `P2` (and RS-485 `A`, `B`, `SH` on the CPU) |
+| `safety.relay`, `safety.relay.expander` | Safety relay and its contact expander (`A1`/`A2`, channels `S11`..`S22`, reset `S34`, safety contacts `13`..`44`, monitoring `41`-`42`) |
+| `safety.lightcurtain.tx`, `.rx` | Light curtain transmitter and receiver (`OSSD1`, `OSSD2`, `RES`) |
+| `contact.nc.interlock`, `contact.no.interlock` | Guard door interlock switch contacts (two channels `11`-`12`, `21`-`22`; monitoring `33`-`34`) |
+| `network.switch.ethernet` | Ethernet switch, ports `P1`..`Pn`, supply `L+`/`M` |
+| `network.port.ethernet`, `network.port.fieldbus` | A device's network port as a symbol of its own: one pin per Ethernet port (`P1`, `P2`), `A`/`B`/`SH` for RS-485, `CH`/`CL`/`CG` for CAN |
+| `network.terminator` | Bus terminating resistor `A`-`B` |
 
 ## Behavior slot
 

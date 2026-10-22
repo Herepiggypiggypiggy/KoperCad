@@ -1,0 +1,39 @@
+format = 1
+id = "iec/safety/door_switch_nc"
+name = "Guard door switch, 2 break contacts"
+description = "Two-channel safety interlock switch on a guard door (tongue-operated): two positively opened break contacts 11-12 and 21-22."
+standard = "IEC 60617"
+category = "safety"
+function = "contact.nc.interlock"
+keywords = ["door", "guard", "interlock", "safety switch", "tongue", "two channel", "deurschakelaar", "beveiliging"]
+aliases = ["door2", "gd"]
+
+connections = [
+  { id = "11", at = [0, 0], dir = "up" },
+  { id = "12", at = [0, 16], dir = "down" },
+  { id = "21", at = [8, 0], dir = "up" },
+  { id = "22", at = [8, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-16, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [0, 5], to = [3.5, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [4, 4] },
+  { kind = "line", from = [8, 0], to = [8, 5] },
+  { kind = "line", from = [8, 5], to = [11.5, 5] },
+  { kind = "line", from = [8, 16], to = [8, 11] },
+  { kind = "line", from = [8, 11], to = [12, 4] },
+  { kind = "line", from = [9.714, 8], to = [-8, 8], stroke = "dashed" },
+  { kind = "line", from = [-8, 4], to = [-8, 12] },
+  { kind = "rect", at = [-14, 6], size = [6, 4] },
+]
+
+[behavior]
+kind = "contact"
+normally = "closed"
+poles = [["11", "12"], ["21", "22"]]

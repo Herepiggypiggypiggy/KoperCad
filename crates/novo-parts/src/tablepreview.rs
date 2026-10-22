@@ -21,7 +21,7 @@ use crate::schema::{
     ConnectionKind, DataSource, Lifecycle, PartTerminal, Price, Provenance, Side, eng,
 };
 use crate::tablefile::Sheet;
-use crate::tablemap::{Mapping, Target, is_eclass_code, is_etim_class, stored_unit};
+use crate::tablemap::{DuplicateRule, Mapping, Target, is_eclass_code, is_etim_class, stored_unit};
 
 /// How serious a finding is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -91,6 +91,9 @@ pub struct Counts {
     pub changed: usize,
     pub unchanged: usize,
     pub skipped: usize,
+    /// Rows a repeated-order-number rule left out or merged into another
+    /// row: a choice, not an error.
+    pub repeated: usize,
     /// Rows imported with at least one warning.
     pub warned: usize,
 }
@@ -110,6 +113,21 @@ pub struct ImportPreview {
     pub coverage: Vec<Coverage>,
     /// Units that were assumed because neither header nor cell had one.
     pub assumptions: Vec<String>,
+    /// Order numbers that appear in more than one row, and what was done.
+    pub repeated: Vec<RepeatedPart>,
+    /// The rule the repeated rows were read with.
+    pub rule: DuplicateRule,
+}
+
+/// One part that several rows describe.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepeatedPart {
+    pub manufacturer: String,
+    pub order_number: String,
+    /// Rows (1-based) that carry it, in file order.
+    pub lines: Vec<usize>,
+    /// The row whose data is used (the first for a merge).
+    pub used: usize,
 }
 
 impl ImportPreview {
@@ -120,6 +138,7 @@ impl ImportPreview {
                 RowStatus::New => c.new += 1,
                 RowStatus::Changed => c.changed += 1,
                 RowStatus::Unchanged => c.unchanged += 1,
+                RowStatus::Skipped if row.worst() < Some(Severity::Error) => c.repeated += 1,
                 RowStatus::Skipped => c.skipped += 1,
             }
             if row.status != RowStatus::Skipped && row.worst() >= Some(Severity::Warning) {
@@ -152,6 +171,20 @@ impl ImportPreview {
         }
         if c.skipped > 0 {
             parts.push(format!("{} not imported", c.skipped));
+        }
+        if !self.repeated.is_empty() {
+            let n = self.repeated.len();
+            let rows = c.repeated;
+            parts.push(format!(
+                "{n} repeated order {} ({rows} {} {})",
+                if n == 1 { "number" } else { "numbers" },
+                if rows == 1 { "row" } else { "rows" },
+                if self.rule == DuplicateRule::Merge {
+                    "merged into the first row"
+                } else {
+                    "not used"
+                }
+            ));
         }
         parts.join(", ")
     }
@@ -212,6 +245,8 @@ pub fn build_preview(
     let mut rows: Vec<PreviewRow> = Vec::new();
     let mut built: Vec<Option<CatalogPart>> = Vec::new();
     let mut by_key: HashMap<PartKey, usize> = HashMap::new();
+    let mut lines_of: HashMap<PartKey, Vec<usize>> = HashMap::new();
+    let mut order: Vec<(PartKey, String, String)> = Vec::new();
     let mut assumed: BTreeSet<usize> = BTreeSet::new();
     let body = sheet.rows.get(mapping.header_row + 1..).unwrap_or_default();
     for (i, cells) in body.iter().enumerate() {
@@ -234,24 +269,42 @@ pub fn build_preview(
                 row.order_number = part.order_number.clone();
                 row.description = part.description.clone();
                 let key = part.key();
+                let seen = lines_of.entry(key.clone()).or_default();
+                if seen.is_empty() {
+                    order.push((
+                        key.clone(),
+                        part.manufacturer.clone(),
+                        part.order_number.clone(),
+                    ));
+                }
+                seen.push(line);
                 let index = built.len();
                 built.push(Some(part));
-                if let Some(&earlier) = by_key.get(&key) {
-                    built[earlier] = None;
-                    if let Some(old) = rows.iter_mut().find(|r| r.part == Some(earlier)) {
-                        old.part = None;
-                        old.status = RowStatus::Skipped;
-                        old.issues.push(Issue {
-                            severity: Severity::Warning,
-                            column: String::new(),
-                            message: format!(
-                                "the same part is in row {line}, which is used instead"
-                            ),
-                        });
+                match by_key.get(&key).copied() {
+                    None => {
+                        by_key.insert(key, index);
+                        row.part = Some(index);
                     }
+                    Some(earlier) => match mapping.duplicates {
+                        DuplicateRule::KeepLast => {
+                            built[earlier] = None;
+                            if let Some(old) = rows.iter_mut().find(|r| r.part == Some(earlier)) {
+                                old.part = None;
+                                old.status = RowStatus::Skipped;
+                            }
+                            by_key.insert(key, index);
+                            row.part = Some(index);
+                        }
+                        DuplicateRule::KeepFirst => built[index] = None,
+                        DuplicateRule::Merge => {
+                            if let Some(later) = built[index].take()
+                                && let Some(first) = built[earlier].as_mut()
+                            {
+                                fill_gaps(first, &later);
+                            }
+                        }
+                    },
                 }
-                by_key.insert(key, index);
-                row.part = Some(index);
             }
             None => {
                 row.manufacturer = text_at(cells, mapping.column_of(&Target::Manufacturer));
@@ -282,6 +335,66 @@ pub fn build_preview(
     }
     let merge = catalog.preview_merge(&parts);
     let coverage = coverage_of(&parts);
+    let repeated = order
+        .into_iter()
+        .filter_map(|(key, manufacturer, order_number)| {
+            let lines = lines_of.remove(&key)?;
+            (lines.len() > 1).then(|| RepeatedPart {
+                manufacturer,
+                order_number,
+                used: match mapping.duplicates {
+                    DuplicateRule::KeepLast => lines[lines.len() - 1],
+                    _ => lines[0],
+                },
+                lines,
+            })
+        })
+        .collect::<Vec<RepeatedPart>>();
+    // Every row of a repeated part that is not the one used says so, with
+    // the row that is.
+    for group in &repeated {
+        let first = group.lines[0];
+        for &l in &group.lines {
+            let others: Vec<usize> = group.lines.iter().copied().filter(|x| *x != l).collect();
+            let (severity, message) = match mapping.duplicates {
+                DuplicateRule::Merge if l != first => (
+                    Severity::Note,
+                    format!(
+                        "the same part is in {}; this row only fills what row {first} leaves empty",
+                        rows_text(&others)
+                    ),
+                ),
+                DuplicateRule::Merge => (
+                    Severity::Note,
+                    format!(
+                        "the same part is in {}; what this row leaves empty is filled from them",
+                        rows_text(&others)
+                    ),
+                ),
+                _ if l != group.used => (
+                    Severity::Warning,
+                    format!(
+                        "the same part is in row {}, which is used instead",
+                        group.used
+                    ),
+                ),
+                _ => (
+                    Severity::Note,
+                    format!(
+                        "the same part is also in {}; this row is used",
+                        rows_text(&others)
+                    ),
+                ),
+            };
+            if let Some(row) = rows.iter_mut().find(|r| r.line == l) {
+                row.issues.push(Issue {
+                    severity,
+                    column: String::new(),
+                    message,
+                });
+            }
+        }
+    }
     let assumptions = assumed
         .into_iter()
         .filter_map(|c| {
@@ -302,6 +415,69 @@ pub fn build_preview(
         merge,
         coverage,
         assumptions,
+        repeated,
+        rule: mapping.duplicates,
+    }
+}
+
+/// `row 4`, `rows 4 and 6`, `rows 4, 5 and 6`.
+pub fn rows_text(lines: &[usize]) -> String {
+    match lines {
+        [] => "no row".into(),
+        [one] => format!("row {one}"),
+        [init @ .., last] => format!(
+            "rows {} and {last}",
+            init.iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
+/// Fills what `first` leaves empty from `later` (same part, another row).
+fn fill_gaps(first: &mut CatalogPart, later: &CatalogPart) {
+    if first.type_number.is_empty() {
+        first.type_number = later.type_number.clone();
+    }
+    if first.description.is_empty() {
+        first.description = later.description.clone();
+    }
+    if first.letter_codes.is_empty() {
+        first.letter_codes = later.letter_codes.clone();
+    }
+    if first.keywords.is_empty() {
+        first.keywords = later.keywords.clone();
+    }
+    if first.function.is_empty() {
+        first.function = later.function.clone();
+    }
+    if first.dimensions.is_none() {
+        first.dimensions = later.dimensions;
+    }
+    if first.price.is_none() {
+        first.price = later.price.clone();
+    }
+    if first.class.etim.is_none() {
+        first.class.etim = later.class.etim.clone();
+    }
+    if first.class.eclass.is_none() {
+        first.class.eclass = later.class.eclass.clone();
+    }
+    if first.lifecycle == Lifecycle::Unknown {
+        first.lifecycle = later.lifecycle;
+    }
+    if first.terminals.is_empty() {
+        first.terminals = later.terminals.clone();
+    }
+    for (key, value) in &later.data {
+        first
+            .data
+            .entry(key.clone())
+            .or_insert_with(|| value.clone());
+    }
+    for (key, source) in &later.sources {
+        first.sources.entry(key.clone()).or_insert(*source);
     }
 }
 
@@ -327,6 +503,10 @@ struct Draft {
     etim: Option<String>,
     eclass: Option<String>,
     price: Option<(f64, String)>,
+    price_date: Option<String>,
+    price_per: Option<u32>,
+    /// A price basis that is not "pieces" (per metre ...): the price is left out.
+    price_basis_other: Option<String>,
     lifecycle: Lifecycle,
     connection: Option<ConnectionKind>,
     connection_count: Option<usize>,
@@ -455,6 +635,26 @@ fn read_row(
                     d.price = Some((v, currency));
                 }
             }
+            Target::PriceDate => match parse_price_date(raw) {
+                Ok((date, note)) => {
+                    d.price_date = Some(date);
+                    if let Some(note) = note {
+                        warn(Severity::Note, note);
+                    }
+                }
+                Err(why) => warn(
+                    Severity::Warning,
+                    format!("{why}; the price is dated with the day of the import"),
+                ),
+            },
+            Target::PricePer => match price_basis(raw) {
+                Ok(n) => d.price_per = Some(n),
+                Err(PriceBasis::Other) => d.price_basis_other = Some(raw.to_owned()),
+                Err(PriceBasis::Unreadable) => warn(
+                    Severity::Warning,
+                    format!("\"{raw}\" is not a number of pieces; the price is taken as per piece"),
+                ),
+            },
             Target::Lifecycle => {
                 d.lifecycle = lifecycle_of(raw);
                 if d.lifecycle == Lifecycle::Unknown {
@@ -569,6 +769,17 @@ fn read_row(
         });
         return None;
     }
+    if let Some(basis) = d.price_basis_other.take()
+        && d.price.take().is_some()
+    {
+        row.issues.push(Issue {
+            severity: Severity::Warning,
+            column: String::new(),
+            message: format!(
+                "the price is for \"{basis}\", not for pieces; the price is left out because it could not be compared"
+            ),
+        });
+    }
     if let (Some(lo), Some(hi)) = (d.wire_min, d.wire_max)
         && lo > hi
     {
@@ -660,8 +871,8 @@ fn make_part(d: Draft, mapping: &Mapping, file: &str, today: &str) -> CatalogPar
         part.price = Some(Price {
             amount: round(amount),
             currency,
-            per: 1,
-            date: today.to_owned(),
+            per: d.price_per.unwrap_or(1),
+            date: d.price_date.unwrap_or_else(|| today.to_owned()),
         });
     }
     // The person says what the file is; not saying it leaves the source of
@@ -679,6 +890,138 @@ fn make_part(d: Draft, mapping: &Mapping, file: &str, today: &str) -> CatalogPar
     });
     crate::panel::migrate_properties(&mut part.data);
     part
+}
+
+/// A price list date as the date `2026-10-15`, with a note when the reading
+/// is a guess. Reads `2026-10-15`, `15.10.2026`, `15/10/2026` (day first, as
+/// in the German and Dutch lists), `10/2026` (the first of the month) and an
+/// Excel date number.
+pub(crate) fn parse_price_date(raw: &str) -> Result<(String, Option<String>), String> {
+    let t = raw.trim();
+    let date_part = t.split(['T', ' ']).next().unwrap_or(t);
+    let num = |s: &str| s.parse::<u32>().ok();
+    let parts: Vec<&str> = date_part.split(['-', '.', '/']).collect();
+    let valid = |y: u32, m: u32, d: u32| -> Option<String> {
+        let leap = (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400);
+        let days = match m {
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+            4 | 6 | 9 | 11 => 30,
+            2 if leap => 29,
+            2 => 28,
+            _ => return None,
+        };
+        ((1990..=2100).contains(&y) && (1..=days).contains(&d))
+            .then(|| format!("{y:04}-{m:02}-{d:02}"))
+    };
+    let bad = || format!("\"{raw}\" is not a date");
+    // An Excel date number (days since 1899-12-30).
+    if let Ok(serial) = t.replace(',', ".").parse::<f64>()
+        && (25_000.0..80_000.0).contains(&serial)
+    {
+        // Days since 1970-01-01, then the civil date (Howard Hinnant's algorithm).
+        let z = serial.floor() as i64 - 25_569 + 719_468;
+        let era = z.div_euclid(146_097);
+        let doe = z.rem_euclid(146_097);
+        let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+        let y = yoe + era * 400;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+        let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+        let y = (if m <= 2 { y + 1 } else { y }) as u32;
+        return valid(y, m, d).map(|v| (v, None)).ok_or_else(bad);
+    }
+    match parts.as_slice() {
+        [a, b, c] if a.len() == 4 => {
+            let (y, m, d) = (num(a), num(b), num(c));
+            match (y, m, d) {
+                (Some(y), Some(m), Some(d)) => valid(y, m, d).map(|v| (v, None)).ok_or_else(bad),
+                _ => Err(bad()),
+            }
+        }
+        [a, b, c] if c.len() == 4 => {
+            match (num(a), num(b), num(c)) {
+                (Some(d), Some(m), Some(y)) => {
+                    let note = (d <= 12 && m <= 12 && d != m).then(|| {
+                    format!("\"{raw}\" read as day.month.year; month first would be a different date")
+                });
+                    valid(y, m, d).map(|v| (v, note)).ok_or_else(bad)
+                }
+                _ => Err(bad()),
+            }
+        }
+        [a, b] if b.len() == 4 => match (num(a), num(b)) {
+            (Some(m), Some(y)) => valid(y, m, 1)
+                .map(|v| {
+                    (
+                        v,
+                        Some(format!(
+                            "\"{raw}\" has no day; the first of the month is used"
+                        )),
+                    )
+                })
+                .ok_or_else(bad),
+            _ => Err(bad()),
+        },
+        [a, b] if a.len() == 4 => match (num(a), num(b)) {
+            (Some(y), Some(m)) => valid(y, m, 1)
+                .map(|v| {
+                    (
+                        v,
+                        Some(format!(
+                            "\"{raw}\" has no day; the first of the month is used"
+                        )),
+                    )
+                })
+                .ok_or_else(bad),
+            _ => Err(bad()),
+        },
+        _ => Err(bad()),
+    }
+}
+
+enum PriceBasis {
+    /// A unit that is not pieces (metre, kilogram ...).
+    Other,
+    Unreadable,
+}
+
+/// The pieces a price is for: `100`, `per 100`, `100 pcs`, `1000 Stk.`.
+fn price_basis(raw: &str) -> Result<u32, PriceBasis> {
+    const PIECES: &[&str] = &[
+        "piece", "pieces", "pcs", "pc", "stk", "st", "stuk", "stuks", "stck", "stuck", "stück",
+        "e", "ea", "each", "x",
+    ];
+    const OTHER_UNITS: &[&str] = &[
+        "m", "metre", "meter", "mtr", "kg", "l", "litre", "liter", "set", "pair", "pack", "box",
+        "roll", "rol", "paar", "pak", "doos",
+    ];
+    let t = raw.trim().to_lowercase();
+    let t = t
+        .strip_prefix("per ")
+        .or_else(|| t.strip_prefix("pro "))
+        .unwrap_or(&t)
+        .trim();
+    let digits: String = t.chars().take_while(char::is_ascii_digit).collect();
+    let rest = t[digits.len()..].trim().trim_end_matches('.');
+    if digits.is_empty() {
+        return if PIECES.contains(&rest) {
+            Ok(1)
+        } else if OTHER_UNITS.contains(&rest) {
+            Err(PriceBasis::Other)
+        } else {
+            Err(PriceBasis::Unreadable)
+        };
+    }
+    let n = digits.parse::<u32>().map_err(|_| PriceBasis::Unreadable)?;
+    if !(1..=100_000).contains(&n) {
+        return Err(PriceBasis::Unreadable);
+    }
+    if rest.is_empty() || PIECES.contains(&rest) {
+        Ok(n)
+    } else {
+        Err(PriceBasis::Other)
+    }
 }
 
 /// Reads a numeric cell in the column's unit. Pushes the reason and returns

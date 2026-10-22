@@ -33,6 +33,8 @@ mod cable_controls;
 mod cable_cores;
 #[cfg(test)]
 mod cable_cores_tests;
+#[cfg(test)]
+mod cable_proposals_fixture_tests;
 mod calculations;
 #[cfg(test)]
 mod calculations_tests;
@@ -856,6 +858,14 @@ impl NovoApp {
 
     fn message(&mut self, level: Level, text: impl Into<String>) {
         self.raise(level, text.into(), None);
+    }
+
+    /// Takes every toast off the screen (they stay in the log). A dialog that
+    /// opens calls this so an old error does not sit over it.
+    pub(super) fn dismiss_toasts(&mut self) {
+        for m in &mut self.messages {
+            m.dismissed = true;
+        }
     }
 
     /// Reports a file that was written: the toast names it and offers to

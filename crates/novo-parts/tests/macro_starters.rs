@@ -83,7 +83,7 @@ fn installing_starters_is_idempotent_and_keeps_user_edits() {
     let lib = MacroLibrary::new(dir.path().join("Macros"), "user");
     let first = lib.install_starters().unwrap();
     assert!(first.iter().all(|r| matches!(r, Imported::Added(_))));
-    assert_eq!(first.len(), 15);
+    assert_eq!(first.len(), 17);
     let p = "Starter/E-stop chain.kcmacro";
     let mut edited = lib.load(p).unwrap();
     edited.description = "mine".into();
@@ -113,11 +113,11 @@ fn count(file: &novo_parts::MacroFile, key: &str) -> usize {
 }
 
 #[test]
-fn there_are_fifteen_distinct_starters_and_each_one_is_wired() {
+fn there_are_seventeen_distinct_starters_and_each_one_is_wired() {
     let all = starter_macros();
-    assert_eq!(all.len(), 15);
+    assert_eq!(all.len(), 17);
     let names: std::collections::BTreeSet<_> = all.iter().map(|(_, f)| f.name.clone()).collect();
-    assert_eq!(names.len(), 15, "names repeat");
+    assert_eq!(names.len(), 17, "names repeat");
     for (_, f) in &all {
         let wires = f
             .definition
@@ -169,6 +169,8 @@ fn drives_and_circuits_are_found_by_their_everyday_words() {
         ("latch", "Start/stop latch"),
         ("rcbo", "Single-phase supply with 24 V"),
         ("indication", "Contactor with indication"),
+        ("safety relay", "Emergency stop with safety relay"),
+        ("ethernet", "PLC network with switch"),
     ] {
         let hits = lib.search(word);
         assert!(
@@ -214,4 +216,71 @@ fn no_starter_has_a_diagonal_wire_even_after_placing() {
         }
         assert!(wires >= 2, "{} placed {wires} wires", file.name);
     }
+}
+
+#[test]
+fn safety_macro_wires_both_channels_and_both_contactors() {
+    let f = starter("Emergency stop with safety relay");
+    assert_eq!(count(&f, "iec/safety/relay"), 1);
+    assert_eq!(count(&f, "iec/safety/emergency_stop_2ch"), 1);
+    assert_eq!(count(&f, "iec/coils/contactor"), 2, "redundant contactors");
+    let wires = f
+        .definition
+        .members
+        .iter()
+        .filter(|m| matches!(m, Record::Wire(_)))
+        .count();
+    // Reset, two channels out and back, two coil feeds.
+    assert_eq!(wires, 7);
+    // Pin level: reset on S34, channel 1 on S11/S12, channel 2 on S21/S22,
+    // coils on the 14 and 24 safety contacts.
+    let mut pair = Vec::new();
+    let project_pin = |id: novo_core::SymbolId, pin: u16| -> (String, String) {
+        let sym = f
+            .definition
+            .members
+            .iter()
+            .find_map(|m| match m {
+                Record::Symbol(s) if s.id == id => Some(s),
+                _ => None,
+            })
+            .expect("wire ends on a symbol of the macro");
+        (
+            sym.symbol.0.to_string(),
+            sym.pins[pin as usize].name.clone(),
+        )
+    };
+    for m in &f.definition.members {
+        let Record::Wire(w) = m else { continue };
+        let (Some(a), Some(b)) = (w.from.as_pin(), w.to.as_pin()) else {
+            continue;
+        };
+        let (ka, pa) = project_pin(a.symbol, a.pin);
+        let (kb, pb) = project_pin(b.symbol, b.pin);
+        pair.push(format!("{ka}:{pa}-{kb}:{pb}"));
+    }
+    pair.sort();
+    for expected in [
+        "iec/operators/pushbutton_no:14-iec/safety/relay:S34",
+        "iec/safety/relay:14-iec/coils/contactor:A1",
+        "iec/safety/relay:24-iec/coils/contactor:A1",
+        "iec/safety/relay:S11-iec/safety/emergency_stop_2ch:11",
+        "iec/safety/relay:S21-iec/safety/emergency_stop_2ch:21",
+        "iec/safety/emergency_stop_2ch:12-iec/safety/relay:S12",
+        "iec/safety/emergency_stop_2ch:22-iec/safety/relay:S22",
+    ] {
+        assert!(
+            pair.contains(&expected.to_string()),
+            "{expected} not in {pair:#?}"
+        );
+    }
+}
+
+#[test]
+fn network_macro_connects_cpu_switch_and_devices() {
+    let f = starter("PLC network with switch");
+    assert_eq!(count(&f, "iec/plc/cpu"), 1);
+    assert_eq!(count(&f, "iec/network/ethernet_switch_5"), 1);
+    assert_eq!(count(&f, "iec/network/port_ethernet_2p"), 1);
+    assert_eq!(count(&f, "iec/network/port_ethernet"), 1);
 }

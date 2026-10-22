@@ -1,0 +1,18 @@
+@title I/O list with Siemens analog addresses PIW256 and PQW256 (RM-05)
+@area Fixtures
+@sizes 1366x768 1920x1080
+# The list used to answer "PIW256 is not a PLC input or output address"; the review must read them as analog words.
+click_text "Open example"
+wait 20
+answer_dialog crates/novo-plc/tests/fixtures/io-list-siemens-analog.csv
+key ctrl+k
+wait 4
+text import io list
+wait 6
+key Enter
+wait 20
+expect "Import I/O list"
+expect_not "not a PLC input or output address"
+shot siemens-analog-review
+check_layout
+check_blank siemens-analog-review

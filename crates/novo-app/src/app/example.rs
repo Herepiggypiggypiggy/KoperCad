@@ -18,7 +18,8 @@ use super::{Level, NovoApp};
 pub(crate) const EXAMPLE_NAME: &str = "Motor starter (example)";
 
 const EXAMPLE_DESCRIPTION: &str = "Direct-on-line starter for a pump motor: main and control \
-    circuit. The parts are illustrative catalogue entries, not a verified parts list.";
+    circuit. The parts are illustrative catalogue entries, not a verified parts list, and the \
+    400 V / 6 kA supply is an illustrative value to replace with your own.";
 
 /// Draws the example into a project that has only its empty first page, as
 /// one undo step.
@@ -52,6 +53,18 @@ pub(crate) fn build_example_with(
         tx.set_info(|info| {
             info.name = EXAMPLE_NAME.into();
             info.description = EXAMPLE_DESCRIPTION.into();
+            // A plausible small-machine supply (400 V, 6 kA, within what the example's
+            // control-circuit protection breaks), stated, so the calculations and the single-line
+            // diagram start from numbers and not from question marks. Illustrative:
+            // the user replaces them with the installation's own.
+            info.properties.insert(
+                novo_checks::calc_view::inputs::SUPPLY_VOLTAGE_V.into(),
+                400.0.into(),
+            );
+            info.properties.insert(
+                novo_checks::standards::keys::SUPPLY_SHORT_CIRCUIT_KA.into(),
+                6.0.into(),
+            );
         })
     })?;
     Ok(changes)

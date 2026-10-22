@@ -1,0 +1,6 @@
+tag,description,signal type,address,station
+B1,Level transmitter,AI,PIW256,Tank
+B2,Pressure transmitter,,PIW258,Tank
+Y1,Dosing valve,AO,PQW256,Tank
+Y2,Mixer speed,,PAW258,Tank
+S1,Start button,DI,E0.0,Tank
