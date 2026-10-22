@@ -238,6 +238,8 @@ pub(super) enum Ask {
     ),
     /// Cut rails to new lengths (rail id, length in mm), from the cut list.
     SetRailLengths(Vec<(u64, f64)>),
+    /// Put a pair of openings from the cooling advice in the project's Vents and fans.
+    CoolingPair(novo_thermal::sweep::Candidate),
     /// Put the devices of an accepted cooler layout at their new places.
     CoolerLayout(StructureId, Vec<novo_thermal::placement::Move>),
 }
@@ -1678,6 +1680,20 @@ impl NovoApp {
                             .fail("Open an enclosure with a mounting plate to simulate".into()),
                     }
                 }
+                self.cabinet.heat.advice.poll(ui.ctx());
+                if self.cabinet.heat.advice.take_request() {
+                    match structure {
+                        Some(s) => {
+                            let ambient = self.sizing.request().ambient_max;
+                            let h = &mut self.cabinet.heat;
+                            h.advice.start(project, s, ambient, &h.settings, &tag_of);
+                        }
+                        None => self.cabinet.heat.fail(
+                            "Open an enclosure with a mounting plate to ask for cooling advice"
+                                .into(),
+                        ),
+                    }
+                }
                 self.cabinet.heat.layout.poll(ui.ctx());
                 if self.cabinet.heat.layout.take_request() {
                     match structure {
@@ -1692,6 +1708,18 @@ impl NovoApp {
                             "Open an enclosure with a mounting plate to search for a cooler layout"
                                 .into(),
                         ),
+                    }
+                }
+                if self.cabinet.heat.advice.is_open() {
+                    let ambient = self.sizing.request().ambient_max;
+                    let now_key = structure.map_or(0, |s| {
+                        super::heat_sweep::key_of(project, s, ambient, &self.cabinet.heat.settings)
+                    });
+                    let at = ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0);
+                    match self.cabinet.heat.advice.show(ui.ctx(), 1, now_key, at) {
+                        Some(super::heat_sweep::Ask::Again) => self.cabinet.heat.advice.request(),
+                        Some(super::heat_sweep::Ask::Add(c)) => ask = Some(Ask::CoolingPair(c)),
+                        None => {}
                     }
                 }
                 let now_key = self.cabinet.heat.current_scenario().map(|(_, k)| k);
@@ -2652,6 +2680,19 @@ impl NovoApp {
                 }) {
                     self.learn_signal("cabinet_dropped");
                 }
+            }
+            Ask::CoolingPair(c) => {
+                // Read the project's list first, so adding to a list the 3D
+                // view has not looked at yet keeps what is already there.
+                self.sync_openings_now();
+                super::heat_sweep::add_pair(&mut self.cabinet.heat.settings, &c);
+                self.sync_openings_now();
+                // The 3D view opens with the list showing the pair.
+                self.view3d.controls.heat_panel = true;
+                self.cabinet
+                    .heat
+                    .advice
+                    .set_added(super::heat_sweep::added_text(&c));
             }
             Ask::CoolerLayout(enclosure, moves) => {
                 let count = moves.len();

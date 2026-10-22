@@ -893,6 +893,35 @@ impl NovoApp {
             stored.as_ref(),
             ambient,
         );
+        {
+            // The cooling advice window follows the Heat strip's button and
+            // the command, whether or not the Heat panel is open.
+            let tag_of = |raw: u64| {
+                project
+                    .get::<Device>(DeviceId::from(raw))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_else(|| format!("device {raw}"))
+            };
+            let heat = &mut self.cabinet.heat;
+            heat.advice.poll(ui.ctx());
+            if heat.advice.take_request() {
+                heat.advice
+                    .start(project, id, ambient, &heat.settings, &tag_of);
+            }
+            if heat.advice.is_open() {
+                let now_key = super::heat_sweep::key_of(project, id, ambient, &heat.settings);
+                let at = view_rect.center_top() + egui::vec2(-200.0, 170.0);
+                match heat.advice.show(ui.ctx(), 2, now_key, at) {
+                    Some(super::heat_sweep::Ask::Again) => heat.advice.request(),
+                    Some(super::heat_sweep::Ask::Add(c)) => {
+                        super::heat_sweep::add_pair(&mut heat.settings, &c);
+                        heat.advice.set_added(super::heat_sweep::added_text(&c));
+                        mode.controls.heat_panel = true;
+                    }
+                    None => {}
+                }
+            }
+        }
         if mode.controls.heat_panel {
             let tag_of = |raw: u64| {
                 project
