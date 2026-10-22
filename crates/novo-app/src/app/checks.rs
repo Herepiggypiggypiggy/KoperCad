@@ -584,7 +584,13 @@ fn severity_rank(severity: Severity) -> usize {
 fn explain_question(p: &Problem) -> String {
     let rule = p
         .rule
-        .map(|r| format!(" (standards rule {r})"))
+        .map(|r| {
+            if p.kind == novo_checks::ProblemKind::Emc {
+                format!(" (EMC rule {r}, a design aid and not a test result)")
+            } else {
+                format!(" (standards rule {r})")
+            }
+        })
         .unwrap_or_default();
     format!(
         "KoperCAD's design check reports this {:?}{rule}: \"{}\"\n\nExplain in plain words why \

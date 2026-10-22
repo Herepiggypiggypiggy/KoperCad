@@ -610,6 +610,17 @@ pub const DUTCH: &[Aliases] = &[
         &["normen", "normencontrole", "conformiteit", "nen"],
     ),
     nl(
+        "check.emc",
+        &[],
+        &[
+            "emc",
+            "storing",
+            "afscherming",
+            "scheiding",
+            "kabelscheiding",
+        ],
+    ),
+    nl(
         "view.protection",
         &["beveiliging"],
         &[

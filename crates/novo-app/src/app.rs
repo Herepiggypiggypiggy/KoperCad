@@ -67,6 +67,9 @@ mod drawers;
 mod duplicate;
 mod dxf;
 mod electrical;
+mod emc;
+#[cfg(test)]
+mod emc_tests;
 mod eplan_export;
 mod eplan_import;
 mod eplan_parts;
@@ -515,6 +518,8 @@ pub struct NovoApp {
     /// Help > About the numbers is open (app/model_labels.rs).
     show_numbers: bool,
     standards_open: bool,
+    /// The EMC check window (app/emc.rs).
+    emc: emc::EmcState,
     window_title: String,
     /// Opened on the first frame, so errors show in the window.
     open_on_start: Option<PathBuf>,
@@ -634,6 +639,7 @@ impl NovoApp {
             show_whats_new: false,
             show_numbers: false,
             standards_open: false,
+            emc: emc::EmcState::default(),
             window_title: String::new(),
             open_on_start: None,
             started: false,
@@ -781,6 +787,7 @@ impl NovoApp {
             | Action::ZoomToFit
             | Action::SizeEnclosure
             | Action::StandardsCheck
+            | Action::EmcCheck
             | Action::EnclosureList
             | Action::Protection => open,
             Action::MotorStart => open,
@@ -853,6 +860,7 @@ impl NovoApp {
                 self.sizing.editor_open = true;
             }
             Action::StandardsCheck => self.standards_open = true,
+            Action::EmcCheck => self.emc.open = true,
             Action::Protection => self.protection.open = true,
             Action::MotorStart => self.open_motor_start(),
             Action::PinOutline => {
@@ -1225,6 +1233,7 @@ impl NovoApp {
         self.wb.safety = None;
         self.protection.open = false;
         self.standards_open = false;
+        self.emc = emc::EmcState::default();
         self.cabinet.result = None;
         self.add_generated_pages();
         // Nothing to commission in a closed project.
@@ -1549,6 +1558,7 @@ impl NovoApp {
         self.crash_dialog(&ctx);
         self.about_dialog(&ctx);
         self.standards_window(&ctx);
+        self.emc_window(&ctx);
         self.learn_window(&ctx);
         self.motor_start_window(&ctx);
         self.renumber_dialog(&ctx);

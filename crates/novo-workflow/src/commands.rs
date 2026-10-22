@@ -2411,6 +2411,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["problems"],
     ),
     cmd(
+        "check.emc",
+        "EMC check",
+        "Check",
+        &[
+            "emc",
+            "electromagnetic",
+            "compatibility",
+            "interference",
+            "shield",
+            "segregation",
+            "filter",
+            "drive",
+            "noise",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "check.standards",
         "Standards check",
         "Check",
