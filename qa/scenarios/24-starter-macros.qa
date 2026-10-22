@@ -182,3 +182,15 @@ shot 15-picked
 click_text Place #2
 wait 20
 shot 15-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Three-phase supply"
+wait 10
+key Return
+wait 20
+shot 16-picked
+click_text Place #2
+wait 20
+shot 16-placed
