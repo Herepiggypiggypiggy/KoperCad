@@ -1,0 +1,25 @@
+@title Learn home: Ctrl+K finds learning paths, empty level chip is off, no per-lesson Early access tag
+@area Learn
+# Creative round 25: "learning paths" found nothing; the Advanced chip (0 lessons) was clickable and said
+# "Try fewer words"; every lesson carried an Early access tag.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text learning paths
+wait 6
+shot palette
+expect "Learn"
+key Enter
+wait 30
+shot learn-home
+expect "Learn KoperCAD"
+expect "Lessons are early access"
+expect_not "· Early access"
+check_layout
+expect_disabled "Advanced · 0"
+# Starting a lesson: the page must stay in view (round 25 saw a black band at the left).
+click_text Start
+wait 60
+shot lesson-running
+check_layout

@@ -9,6 +9,14 @@ text_nl = "Leren"
 text = "Learn…"
 text_nl = "Leren…"
 
+[learn_title]
+text = "Learn KoperCAD"
+text_nl = "KoperCAD leren"
+
+[early_note]
+text = "Lessons are early access: a step may still be rough."
+text_nl = "Lessen zijn in vroege toegang: een stap kan nog ruw zijn."
+
 [learn_hint]
 text = "Short lessons on a small drawing, with a pointer on the control."
 text_nl = "Korte lessen op een kleine tekening, met een aanwijzer op het bedieningselement."
