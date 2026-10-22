@@ -856,6 +856,14 @@ impl NovoApp {
         self.raise(level, text.into(), None);
     }
 
+    /// Takes every toast off the screen (they stay in the log). A dialog that
+    /// opens calls this so an old error does not sit over it.
+    pub(super) fn dismiss_toasts(&mut self) {
+        for m in &mut self.messages {
+            m.dismissed = true;
+        }
+    }
+
     /// Reports a file that was written: the toast names it and offers to
     /// open its folder.
     pub(super) fn message_file(&mut self, text: impl Into<String>, file: &Path) {

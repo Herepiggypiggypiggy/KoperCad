@@ -119,3 +119,19 @@ fn a_file_over_the_size_cap_is_refused_before_it_is_read() {
             .contains("larger than")
     );
 }
+
+#[test]
+fn an_old_error_toast_is_cleared_when_the_dialog_opens() {
+    let (dir, mut d) = open();
+    d.app
+        .message(crate::app::Level::Error, "Parts import: Not a directory");
+    assert!(d.app.messages.iter().any(|m| !m.dismissed));
+    let file = dir.path().join("liste.csv");
+    std::fs::write(&file, TABLE.as_bytes()).unwrap();
+    assert!(
+        d.app
+            .import_parts_table_from(&file, Some(dir.path().join("c.json")), None)
+    );
+    assert!(d.app.messages.iter().all(|m| m.dismissed));
+    assert!(d.app.wb.parts_table.is_some());
+}

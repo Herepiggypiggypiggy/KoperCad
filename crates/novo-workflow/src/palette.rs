@@ -956,10 +956,18 @@ fn command_rows(
                 .split(|c: char| !c.is_alphanumeric())
                 .any(|w| w.eq_ignore_ascii_case(query))
         });
+    // A query that is the start of a command's whole label names that
+    // command: `import parts from a table` is the table importer, not the
+    // `import parts` verb run on `from a table`.
+    let lower_query = query.to_lowercase();
+    let label_starts_query = COMMANDS
+        .iter()
+        .any(|info| info.label.to_lowercase().starts_with(&lower_query));
     for info in COMMANDS {
         // A verb: bare it runs, with words after it it runs on them.
         if let Some((verb, argument)) = split_verb(info, query)
             && Some(verb.len()) == longest
+            && (argument.is_empty() || !label_starts_query)
         {
             // A Dutch argument runs as its English chip (`pagina` is `page`).
             let argument = language::english_argument(argument);
