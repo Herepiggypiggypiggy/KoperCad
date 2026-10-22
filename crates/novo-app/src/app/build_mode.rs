@@ -901,8 +901,15 @@ fn status_and_buttons(
             }
             Some(_) => {
                 ui.horizontal(|ui| {
-                    ui.label("You have this step.");
-                    if ui.small_button("Let go").clicked() {
+                    ui.label(if who.trim().is_empty() {
+                        "Someone has this step. Set your name in Commissioning to tell who."
+                    } else {
+                        "You have this step."
+                    });
+                    if ui
+                        .add(egui::Button::new("Let go").min_size(egui::vec2(0.0, h)))
+                        .clicked()
+                    {
                         release_step(&mut mode.store, step, &now());
                         mode.dirty = true;
                         asked.changed = true;
