@@ -239,9 +239,11 @@ pub(super) fn paint_badges(
     let painter = ui.painter().with_clip_rect(rect);
     let font = egui::FontId::proportional(12.0);
     let mut picked = None;
-    // Worst last, so the worst badge is on top where they overlap.
+    // Placed worst first; a badge that would cover another moves down, then
+    // drawn weakest first so the worst is on top.
     let mut spots: Vec<&Hotspot> = pic.hotspots.iter().collect();
-    spots.sort_by(|a, b| a.risk.total_cmp(&b.risk));
+    spots.sort_by(|a, b| b.risk.total_cmp(&a.risk));
+    let mut placed: Vec<(&Hotspot, egui::Rect, [u8; 3])> = Vec::new();
     for h in spots {
         let at = scene
             .frame
@@ -249,11 +251,27 @@ pub(super) fn paint_badges(
         let Some(p) = view.project(rect, scene, Vec3::new(at.x, at.y, at.z + 14.0)) else {
             continue;
         };
-        let fill = st.risk(0.55 + 0.45 * h.risk);
-        let text = emc::label(h);
-        let galley = painter.layout_no_wrap(text, font.clone(), text_on(fill));
-        let size = galley.size() + egui::vec2(12.0, 6.0);
-        let chip = egui::Rect::from_center_size(p, size);
+        let size = painter
+            .layout_no_wrap(emc::label(h), font.clone(), egui::Color32::WHITE)
+            .size()
+            + egui::vec2(12.0, 6.0);
+        let mut chip = egui::Rect::from_center_size(p, size);
+        for _ in 0..8 {
+            if placed
+                .iter()
+                .any(|(_, r, _)| r.expand(1.0).intersects(chip))
+            {
+                chip = chip.translate(egui::vec2(0.0, size.y + 2.0));
+            } else {
+                break;
+            }
+        }
+        placed.push((h, chip, st.risk(0.55 + 0.45 * h.risk)));
+    }
+    for (h, chip, fill) in placed.into_iter().rev() {
+        let size = chip.size();
+        let text = text_on(fill);
+        let galley = painter.layout_no_wrap(emc::label(h), font.clone(), text);
         let on = selected == Some(h.id);
         painter.rect(
             chip,
@@ -265,7 +283,7 @@ pub(super) fn paint_badges(
             ),
             egui::StrokeKind::Outside,
         );
-        painter.galley(chip.min + egui::vec2(6.0, 3.0), galley, text_on(fill));
+        painter.galley(chip.min + egui::vec2(6.0, 3.0), galley, text);
         let r = ui.interact(
             chip,
             egui::Id::new(("emc_badge", h.id)),
@@ -427,6 +445,17 @@ pub(super) fn panel(
             ui.add_space(4.0);
             layer_chips(ui, &mut state.layers, &pic);
             ui.separator();
+            egui::CollapsingHeader::new("How far to trust this")
+                .id_salt("emc_trust")
+                .show(ui, |ui| {
+                    for a in &pic.assumptions {
+                        ui.label(egui::RichText::new(format!("Assumed: {a}")).small().color(pal.text_secondary));
+                    }
+                    ui.label(egui::RichText::new("Not checked:").small().strong());
+                    for n in &pic.not_checked {
+                        ui.label(egui::RichText::new(format!("• {n}")).small().color(pal.text_secondary));
+                    }
+                });
             if let Some(h) = state.selected.and_then(|id| pic.hotspot(id)) {
                 card(ui, h, &pic, tag_of);
                 ui.separator();
@@ -468,17 +497,6 @@ pub(super) fn panel(
                     });
             }
             ui.separator();
-            egui::CollapsingHeader::new("How far to trust this")
-                .id_salt("emc_trust")
-                .show(ui, |ui| {
-                    for a in &pic.assumptions {
-                        ui.label(egui::RichText::new(format!("Assumed: {a}")).small().color(pal.text_secondary));
-                    }
-                    ui.label(egui::RichText::new("Not checked:").small().strong());
-                    for n in &pic.not_checked {
-                        ui.label(egui::RichText::new(format!("• {n}")).small().color(pal.text_secondary));
-                    }
-                });
             if ui.button("Close EMC view").clicked() {
                 close = true;
             }
@@ -536,9 +554,13 @@ fn card(ui: &mut egui::Ui, h: &Hotspot, pic: &Picture, tag_of: &dyn Fn(u64) -> S
         ui.label(egui::RichText::new(lvl).small().strong().color(pal.accent))
             .on_hover_text(tip);
         ui.label(
-            egui::RichText::new(format!("{} · {}", h.kind.name(), h.rule))
-                .small()
-                .color(pal.text_secondary),
+            egui::RichText::new(if h.rule.is_empty() {
+                h.kind.name().to_string()
+            } else {
+                format!("{} · {}", h.kind.name(), h.rule)
+            })
+            .small()
+            .color(pal.text_secondary),
         );
         if let Some(band) = &h.band {
             ui.label(
@@ -595,6 +617,15 @@ fn card(ui: &mut egui::Ui, h: &Hotspot, pic: &Picture, tag_of: &dyn Fn(u64) -> S
     if !h.fixes.is_empty() {
         ui.add_space(2.0);
         ui.label(egui::RichText::new("What would help").strong());
+        if h.fixes.iter().any(|f| !f.applicable) {
+            ui.label(
+                egui::RichText::new(
+                    "Advice only for now: the buttons do not change the project yet.",
+                )
+                .small()
+                .color(pal.text_secondary),
+            );
+        }
         for f in &h.fixes {
             ui.horizontal_wrapped(|ui| {
                 let r = ui.add_enabled(f.applicable, egui::Button::new(&f.label));

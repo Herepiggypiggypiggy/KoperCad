@@ -109,6 +109,9 @@ impl WireIn {
     }
 }
 
+/// Said on every interim finding.
+const INTERIM: &str = "Interim index of this view, not the EMC check: its planning values are the view's own, not from a standard (Check > EMC check uses other distances)";
+
 /// Distance asked between an aggressor and a victim run, mm. A default of
 /// this stub: the engine states the real figure per pair.
 pub(crate) fn halo_mm(class: Class) -> f32 {
@@ -513,7 +516,7 @@ pub(crate) fn build(plate: [f32; 2], devices: &[DeviceIn], wires: &[WireIn]) -> 
                 risk,
                 title: format!("{} beside {}", a.class.short(), v.class.short()),
                 why: format!(
-                    "{} ({}) and {} ({}) run side by side. The noisy wire couples into the sensitive one more the longer they run together and the closer they are.",
+                    "Wire {} ({}) and wire {} ({}) run side by side. The noisy wire couples into the sensitive one more the longer they run together and the closer they are.",
                     a.label,
                     a.class.name().to_lowercase(),
                     v.label,
@@ -522,13 +525,13 @@ pub(crate) fn build(plate: [f32; 2], devices: &[DeviceIn], wires: &[WireIn]) -> 
                 numbers: vec![
                     ("Side by side".into(), format!("{:.0} mm", b.length_mm)),
                     ("Closest".into(), format!("{:.0} mm", b.closest_mm)),
-                    ("Distance asked".into(), format!("{asked:.0} mm (default)")),
+                    ("Distance asked".into(), format!("{asked:.0} mm (interim value)")),
                     ("Index".into(), format!("{risk:.2}")),
                 ],
                 runs: vec![a.id, v.id],
                 devices: Vec::new(),
-                rule: "EMC-02".into(),
-                source: String::new(),
+                rule: String::new(),
+                source: INTERIM.into(),
                 band: None,
                 assumptions: Vec::new(),
                 fixes: advice(Kind::Parallel, a, v),
@@ -571,13 +574,13 @@ pub(crate) fn build(plate: [f32; 2], devices: &[DeviceIn], wires: &[WireIn]) -> 
                 ),
                 numbers: vec![
                     ("Gap".into(), format!("{gap:.0} mm")),
-                    ("Keep-clear (default)".into(), format!("{reach:.0} mm")),
+                    ("Keep-clear (interim value)".into(), format!("{reach:.0} mm")),
                     ("Index".into(), format!("{risk:.2}")),
                 ],
                 runs: Vec::new(),
                 devices: vec![s.device, v.device],
-                rule: "EMC-17".into(),
-                source: String::new(),
+                rule: String::new(),
+                source: INTERIM.into(),
                 band: None,
                 assumptions: Vec::new(),
                 fixes: vec![Fix {
@@ -617,7 +620,7 @@ pub(crate) fn build(plate: [f32; 2], devices: &[DeviceIn], wires: &[WireIn]) -> 
     pic.loops = loops(wires, &pic.runs);
     pic.assumptions = vec![
         "Cable classes are guessed from device tag letters and wire colour".into(),
-        "Keep-clear distances are defaults: 80 mm for motor cables, 40 mm for mains, scaled by victim".into(),
+        "Distances, victim weights, loop limits and the cut-off are this view's own interim planning values: not from a standard, not from the EMC rule engine (Check > EMC check uses other distances)".into(),
         "No currents, frequencies or shield data are used".into(),
     ];
     pic

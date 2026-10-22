@@ -12,7 +12,7 @@ use novo_editor::catalog::Catalog;
 use novo_editor::edit::{PlaceOptions, draw_wire, place};
 use novo_editor::geometry::Target;
 
-use super::example::build_example_with;
+use super::example::build_example_named;
 
 /// What the project is called.
 pub(crate) const EMC_EXAMPLE_NAME: &str = "Drive and signals (EMC example)";
@@ -24,7 +24,7 @@ fn tag(text: &str) -> DeviceTag {
 /// Draws the EMC example into a project that has only its empty first page.
 pub(crate) fn build_emc_example(doc: &mut Document) -> ModelResult<novo_core::ChangeSet> {
     let catalog = Catalog::builtin();
-    build_example_with(doc, |tx| draw(tx, &catalog))
+    build_example_named(doc, EMC_EXAMPLE_NAME, |tx| draw(tx, &catalog))
 }
 
 fn put(

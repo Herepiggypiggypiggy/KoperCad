@@ -34,6 +34,15 @@ pub(crate) fn build_example_with(
     doc: &mut Document,
     extra: impl FnOnce(&mut Tx<'_>) -> ModelResult<()>,
 ) -> ModelResult<novo_core::ChangeSet> {
+    build_example_named(doc, EXAMPLE_NAME, extra)
+}
+
+/// [`build_example_with`] under another project name (the EMC example).
+pub(crate) fn build_example_named(
+    doc: &mut Document,
+    name: &str,
+    extra: impl FnOnce(&mut Tx<'_>) -> ModelResult<()>,
+) -> ModelResult<novo_core::ChangeSet> {
     let ((), changes) = doc.transact("Open example", |tx: &mut Tx<'_>| {
         let empty: Vec<_> = tx.project().pages().map(|p| p.id).collect();
         for page in empty {
@@ -51,7 +60,7 @@ pub(crate) fn build_example_with(
         add_cabinet(tx)?;
         add_safety_function(tx)?;
         tx.set_info(|info| {
-            info.name = EXAMPLE_NAME.into();
+            info.name = name.into();
             info.description = EXAMPLE_DESCRIPTION.into();
             // A plausible small-machine supply (400 V, 6 kA, within what the example's
             // control-circuit protection breaks), stated, so the calculations and the single-line
