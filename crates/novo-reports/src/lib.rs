@@ -137,7 +137,7 @@ pub use labels::{LABEL_LINES, LabelLayout, Labels, labels_csv};
 pub use order::{function_of, location_of, location_text, tag_cmp};
 pub use page::{Line, Margins, PageLayout, PageSetup, ReportPage, TextBox, layout_page, paginate};
 pub use plugs::PlugList;
-pub use report::{Dependencies, LiveReports, Report, Reports};
+pub use report::{Dependencies, LiveReports, Report, Reports, set_output_hook};
 pub use schedule::CableSchedule;
 pub use sheets::{GeneratedSheet, SheetFingerprint, fingerprint, sheet_name, sheet_names};
 pub use single_line::SingleLineDiagram;

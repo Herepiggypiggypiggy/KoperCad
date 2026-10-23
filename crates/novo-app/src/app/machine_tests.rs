@@ -714,3 +714,173 @@ fn commissioning_counts_follow_a_switch_of_option_without_any_edit() {
     d.frame();
     assert_eq!(total(&mut d), off, "and takes them away again");
 }
+
+#[test]
+fn every_way_a_list_leaves_the_program_carries_the_option_column() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let ids = machine(&mut d);
+    let k9 = device_of_symbol(&d, ids.k9);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Tie K9", |tx| {
+            options::set_condition(tx, k9, Some("opt.fan"))
+        })
+        .unwrap();
+    d.app.run_command(&ctx, "project.option", Some("fan on"));
+    d.frame();
+    d.app.add_report_page("devices");
+    d.app.add_report_page("wires");
+    d.frame();
+    // The outputs every export reads (Export all, PDF, generated pages).
+    let (reports, project) = d.app.machine_reports().unwrap();
+    let all: Vec<_> = reports
+        .live(&project)
+        .all(&project)
+        .into_iter()
+        .cloned()
+        .collect();
+    let devices = all.iter().find(|o| o.report == "devices").unwrap();
+    assert!(
+        devices.sections[0].column("option").is_some(),
+        "{:?}",
+        devices.sections[0].columns
+    );
+    // The sheet drawn for a generated page (what the PDF prints) has it.
+    let page = project
+        .pages()
+        .find(|p| {
+            matches!(&p.kind, novo_core::PageKind::Generated { generator } if generator == "devices")
+        })
+        .map(|p| p.id);
+    let live = reports.live(&project);
+    let sheets = page
+        .map(|p| live.sheets_of_page(&project, p))
+        .unwrap_or_default();
+    let sheet = sheets.first().expect("a generated device list page");
+    let layout = live.layout_sheet(&project, sheet).unwrap();
+    assert!(format!("{layout:?}").contains("Option"));
+    // The wire list sheet keeps every column header whole beside the new
+    // column (a header wider than its cell is cut off on the sheet and PDF).
+    let wires = project
+        .pages()
+        .find(|p| {
+            matches!(&p.kind, novo_core::PageKind::Generated { generator } if generator == "wires")
+        })
+        .map(|p| p.id)
+        .expect("a generated wire list page");
+    let live = reports.live(&project);
+    let sheet = live.sheets_of_page(&project, wires).remove(0);
+    let layout = live.layout_sheet(&project, &sheet).unwrap();
+    let headers: Vec<_> = layout.texts.iter().filter(|t| t.bold).collect();
+    assert!(
+        headers.iter().any(|t| t.text == "Route length mm"),
+        "{headers:?}"
+    );
+    for t in headers
+        .iter()
+        .filter(|t| t.y < 60.0 && t.text.chars().count() < 20)
+    {
+        let needed = t.text.chars().count() as f64 * t.text_mm * 0.72;
+        assert!(
+            t.width + 1e-6 >= needed,
+            "{} is cut off: {} < {needed}",
+            t.text,
+            t.width
+        );
+    }
+}
+
+#[test]
+fn a_generated_page_does_not_get_the_empty_page_hint() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.empty_page_hint().is_some());
+    let _ = machine(&mut d);
+    d.app.add_report_page("devices");
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    let page = project
+        .pages()
+        .find(|p| matches!(p.kind, novo_core::PageKind::Generated { .. }))
+        .unwrap()
+        .id;
+    assert!(super::tips::page_hint(&d.app.settings, &d.app.wb.keymap, project, page).is_none());
+}
+
+/// The Option column is cached with the report, so an edit it reads must
+/// drop the cached output: this fills the cache first, then edits, and
+/// reads the same `LiveReports` again each time.
+#[test]
+fn the_option_column_follows_edits_after_the_cache_is_filled() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let ids = machine(&mut d);
+    let k9 = device_of_symbol(&d, ids.k9);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Tie K9", |tx| {
+            options::set_condition(tx, k9, Some("opt.fan"))
+        })
+        .unwrap();
+    d.app.run_command(&ctx, "project.option", Some("fan on"));
+    d.frame();
+    let column = |d: &mut Drive| -> Option<Vec<String>> {
+        let project = d.app.backend.document().unwrap().project().clone();
+        let out = d
+            .app
+            .wb
+            .reports
+            .live(&project)
+            .get(&project, "devices")?
+            .clone();
+        let section = &out.sections[0];
+        let at = section.column("option")?;
+        Some(
+            section
+                .rows
+                .iter()
+                .map(|r| r.cells.get(at).map(ToString::to_string).unwrap_or_default())
+                .collect(),
+        )
+    };
+    let edit = |d: &mut Drive,
+                label: &str,
+                f: &dyn Fn(&mut novo_core::Tx<'_>) -> novo_core::Result<()>| {
+        let doc = d.app.backend.document_mut().unwrap();
+        let ((), changes) = doc.transact(label, |tx| f(tx)).unwrap();
+        d.app.changed_outside_canvas(&changes);
+    };
+    let first = column(&mut d).expect("the column exists");
+    assert!(first.iter().any(|t| t.contains("Fan")), "{first:?}");
+    // (a) renaming an option's label
+    edit(&mut d, "Rename", &|tx| {
+        options::define_option(tx, OptionDef::yes_no("fan", "Cooling", false))
+    });
+    let renamed = column(&mut d).unwrap();
+    assert!(renamed.iter().any(|t| t.contains("Cooling")), "{renamed:?}");
+    assert!(!renamed.iter().any(|t| t.contains("Fan")), "{renamed:?}");
+    // (b) a condition on a page
+    let page = ids.main;
+    let before = column(&mut d).unwrap();
+    edit(&mut d, "Tie page", &|tx| {
+        options::set_condition(tx, page, Some("opt.fan"))
+    });
+    let tied = column(&mut d).unwrap();
+    assert_ne!(before, tied, "tying a page changes the column");
+    // (c) removing the options
+    edit(&mut d, "Remove", &|tx| {
+        options::remove_option(tx, "conveyor")?;
+        options::remove_option(tx, "fan")
+    });
+    assert!(column(&mut d).is_none(), "no options, no column");
+}

@@ -611,7 +611,15 @@ pub(super) fn draw_left_out(
 }
 
 /// Reports whose rows say which option they need.
-const OPTION_REPORTS: &[&str] = &["bom", "devices", "wires", "cutlist", "toc"];
+pub(super) const OPTION_REPORTS: &[&str] = &["bom", "devices", "wires", "cutlist", "toc"];
+
+/// What the Option column reads besides the report's own rows: the options
+/// and their labels (project info), the conditions on pages and symbols, and
+/// the devices, wires and terminals `needs_of` falls back to.
+pub(super) fn option_column_reads() -> novo_reports::Dependencies {
+    use novo_core::EntityKind::*;
+    novo_reports::Dependencies::on(&[Page, Symbol, Device, Wire, Terminal, Junction]).with_info()
+}
 
 /// What an object needs, in words: its own condition, else that of the
 /// device it is drawn as (a terminal: its strip; a wire: the devices at its

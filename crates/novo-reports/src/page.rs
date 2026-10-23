@@ -205,6 +205,10 @@ impl PageLayout {
 /// errs on the side of room.
 const CHAR_EM: f64 = 0.6;
 
+/// The same for a bold column header, which the renderers draw wider than
+/// the estimate above ("Route length mm" was cut to "Route length..." at 0.6).
+const HEADER_EM: f64 = 0.72;
+
 /// Column widths in mm that add up to `table_w`. Each column starts from its
 /// declared share ([`Column::width`](crate::Column::width)); a column whose
 /// text (header or any row of the page) is narrower than that share gives the
@@ -212,7 +216,7 @@ const CHAR_EM: f64 = 0.6;
 /// lack, so no cell is cut while the page has room. What is left after every
 /// column has its text goes by the declared shares. A table too wide for the
 /// page still lets the narrow columns keep their text and cuts the wide ones.
-fn column_widths(
+fn shared_widths(
     section: &crate::Section,
     page: &ReportPage,
     setup: &PageSetup,
@@ -284,6 +288,59 @@ fn column_widths(
     if room > 1e-9 {
         for (w, d) in widths.iter_mut().zip(&declared) {
             *w += room * d / table_w;
+        }
+    }
+    widths
+}
+
+/// [`shared_widths`], then every column header made whole: a column whose
+/// header would be cut off takes the width from columns that have more than
+/// their own text needs (the Option column made the wire list's "Route length
+/// mm" disappear that way). When there is not enough slack, the shares stay.
+fn column_widths(
+    section: &crate::Section,
+    page: &ReportPage,
+    setup: &PageSetup,
+    table_w: f64,
+) -> Vec<f64> {
+    let mut widths = shared_widths(section, page, setup, table_w);
+    let width_of = |text: &str, em: f64| {
+        let chars = text.lines().next().map_or(0, |l| l.chars().count());
+        chars as f64 * setup.text_mm * em + 2.0 * setup.padding_mm
+    };
+    // What each column needs to keep its header and its rows whole.
+    let floor: Vec<f64> = section
+        .columns
+        .iter()
+        .enumerate()
+        .map(|(i, column)| {
+            let rows = section.rows[page.rows.clone()].iter().map(|row| {
+                row.cells
+                    .get(i)
+                    .map_or(0.0, |c| width_of(&section.cell_text(c), CHAR_EM))
+            });
+            rows.fold(width_of(&column.header, HEADER_EM), f64::max)
+        })
+        .collect();
+    let deficit: f64 = widths
+        .iter()
+        .zip(&floor)
+        .map(|(w, f)| (*f - w).max(0.0))
+        .sum();
+    let slack: f64 = widths
+        .iter()
+        .zip(&floor)
+        .map(|(w, f)| (w - f).max(0.0))
+        .sum();
+    if deficit <= 1e-9 || slack < deficit {
+        return widths;
+    }
+    let give = deficit / slack;
+    for (w, f) in widths.iter_mut().zip(&floor) {
+        if *w < *f {
+            *w = *f;
+        } else {
+            *w -= (*w - f) * give;
         }
     }
     widths
@@ -416,4 +473,69 @@ pub fn layout_page(report: &ReportOutput, page: &ReportPage, setup: &PageSetup) 
         });
     }
     layout
+}
+
+#[cfg(test)]
+mod header_tests {
+    use super::*;
+    use crate::table::{Cell, Column, Row, Section};
+
+    /// A column added to a full table (the Option column on the wire list)
+    /// must not push another column's header out of its cell.
+    #[test]
+    fn every_header_keeps_its_width_when_another_column_is_added() {
+        let columns = vec![
+            Column::new("a", "Wire no.", 15.0),
+            Column::new("option", "Option", 22.0),
+            Column::new("from", "From", 35.0),
+            Column::new("to", "To", 35.0),
+            Column::new("p", "Potential", 15.0),
+            Column::new("c", "Colour", 12.0),
+            Column::new("mm", "mm²", 10.0).right(),
+            Column::new("cable", "Cable", 25.0),
+            Column::new("loc", "Location", 15.0),
+            Column::new("len", "Route length mm", 14.0).right(),
+            Column::new("basis", "Length basis", 12.0),
+        ];
+        let mut section = Section::new("wires", "", columns);
+        for _ in 0..5 {
+            let cells = [
+                "2",
+                "Cooling fan",
+                "=A1+CAB-F1:2",
+                "=A1+CAB-K1:1",
+                "L1",
+                "",
+                "1.5",
+                "=A1-W1 GNYE",
+                "=A1+CAB/1.1",
+                "200",
+                "routed, no depth",
+            ];
+            section
+                .rows
+                .push(Row::new(cells.map(Cell::text).to_vec(), Vec::new()));
+        }
+        let output = ReportOutput {
+            report: "wires".into(),
+            title: "Wire list".into(),
+            revision: 0,
+            sections: vec![section],
+        };
+        let setup = PageSetup::for_format(PageFormat::default());
+        let pages = paginate(&output, &setup);
+        let layout = layout_page(&output, &pages[0], &setup);
+        let header = layout
+            .texts
+            .iter()
+            .find(|t| t.text == "Route length mm")
+            .expect("the header is on the page");
+        let needed = "Route length mm".chars().count() as f64 * setup.text_mm * CHAR_EM
+            + 2.0 * setup.padding_mm;
+        assert!(
+            header.width + 2.0 * setup.padding_mm >= needed - 1e-6,
+            "{} wide, needs {needed}",
+            header.width
+        );
+    }
 }

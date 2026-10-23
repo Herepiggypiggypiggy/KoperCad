@@ -156,9 +156,7 @@ impl NovoApp {
         }
         let output = {
             let (reports, project) = self.machine_reports()?;
-            let mut output = reports.live(&project).get(&project, id)?.clone();
-            super::machine::with_option_column(&project, &mut output);
-            output
+            reports.live(&project).get(&project, id)?.clone()
         };
         self.reports_view.cache = Some((id.to_owned(), revision, output.clone()));
         Some(output)

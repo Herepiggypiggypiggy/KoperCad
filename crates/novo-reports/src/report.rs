@@ -7,6 +7,39 @@ use novo_core::{ChangeSet, EntityKind, Page, PageKind, Project};
 
 use crate::table::ReportOutput;
 
+/// A step every report output goes through before it is cached, set once by
+/// the application (the machine's option column lives where the option
+/// engine does, which this crate cannot depend on).
+static OUTPUT_HOOK: std::sync::OnceLock<OutputHook> = std::sync::OnceLock::new();
+
+struct OutputHook {
+    step: fn(&Project, &mut ReportOutput),
+    /// The reports the step changes, and what else it reads besides what
+    /// those reports read themselves.
+    reports: &'static [&'static str],
+    reads: Dependencies,
+}
+
+/// Installs the step every [`LiveReports`] output goes through, for the
+/// reports named in `reports`, and `reads`: what the step reads beyond what
+/// those reports read themselves, so an edit to it drops their cached
+/// output. Lists, PDF pages, generated pages and exports all read the
+/// outputs of [`LiveReports`], so they all see what the step adds.
+///
+/// One step per process: the first call wins and a second one is silently
+/// ignored, so do not install another for a different purpose.
+pub fn set_output_hook(
+    step: fn(&Project, &mut ReportOutput),
+    reports: &'static [&'static str],
+    reads: Dependencies,
+) {
+    let _ = OUTPUT_HOOK.set(OutputHook {
+        step,
+        reports,
+        reads,
+    });
+}
+
 /// What a report reads from the model, so an edit that touches none of it
 /// skips the report.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -265,7 +298,14 @@ impl LiveReports {
             if *at == now {
                 continue;
             }
-            if at.revision == since && at.name == now.name && !entry.report.affected_by(changes) {
+            let hooked = OUTPUT_HOOK.get().is_some_and(|h| {
+                h.reports.contains(&entry.report.id()) && h.reads.affected_by(changes)
+            });
+            if at.revision == since
+                && at.name == now.name
+                && !hooked
+                && !entry.report.affected_by(changes)
+            {
                 // Still correct for the new revision: say so, so readers of
                 // `ReportOutput::revision` see it as current.
                 output.revision = now.revision;
@@ -318,7 +358,7 @@ impl LiveReports {
         if matches!(&self.entries[i].output, Some((at, _)) if *at == now) {
             return;
         }
-        let output = if self.entries[i].report.reads_reports() {
+        let mut output = if self.entries[i].report.reads_reports() {
             // Bring the reports it may read current first: those of the
             // project's generated pages (all a contents list reads).
             let generators: Vec<&str> = project
@@ -348,6 +388,11 @@ impl LiveReports {
         } else {
             self.entries[i].report.generate(project)
         };
+        if let Some(hook) = OUTPUT_HOOK.get()
+            && hook.reports.contains(&output.report.as_str())
+        {
+            (hook.step)(project, &mut output);
+        }
         self.entries[i].output = Some((now, output));
     }
 }
