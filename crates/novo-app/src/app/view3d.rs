@@ -489,11 +489,13 @@ impl NovoApp {
             }
         }
         let solution = self.cabinet.heat.solution();
-        // Kept only where the window has the room: in a small window the panels
-        // would not all fit beside the view.
+        // Kept where the window has the room for it: the 1280 x 688 window
+        // the compact toolbar is made for (see `view3d_controls`) is one of
+        // them, so the cabinet is already at its final size before the first
+        // result arrives.
         if solution.is_none()
             && mode.controls.heat_panel
-            && ui.ctx().content_rect().height() >= 700.0
+            && ui.ctx().content_rect().height() >= MIN_STRIP_ROOM_WINDOW
         {
             heat_strip_placeholder(ui);
         }
@@ -1719,6 +1721,10 @@ fn run_heat(
 /// colour bars fit one row; a window too narrow for that wraps them back to
 /// two rows and the strip grows past this room.
 const STRIP_HEIGHT: f32 = 84.0;
+
+/// The shortest window that keeps the strip's room before the first result:
+/// below it the panels beside the view would not all fit.
+const MIN_STRIP_ROOM_WINDOW: f32 = 660.0;
 
 /// The strip's place before there is a result: the same rows, empty, so the
 /// room kept reads as the strip waiting for its first run and not as a gap.

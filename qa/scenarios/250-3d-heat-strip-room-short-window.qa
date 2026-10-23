@@ -1,0 +1,19 @@
+@title 3D heat strip: the cabinet and panels stay where they are when the first result arrives (short window)
+@area 3D
+@sizes 1280x688 1366x768
+# The Heat strip keeps its room from the moment the Heat panel opens. A shot before the first run and one after it show the cabinet and the panels in the same place.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+shot 01-before-first-run
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 60
+shot 02-after-first-result
+check_layout

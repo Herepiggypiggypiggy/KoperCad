@@ -1,0 +1,20 @@
+@title Heat: the temperature scale of a 285 degree cabinet keeps its labels apart
+@area 3D
+@sizes 1366x768 1920x1080
+# The hot cabinet with T1 at 600 W and no openings (fixture made by qa/fixtures/make_heat_scale_fixture.py): the sealed cabinet runs to about 285 degrees, a range of over 250 K. The colour bar in the Heat strip used to print a label every 10 degrees over its 150 px, an unreadable smear; it now takes round steps (50 degrees here) so the labels are apart. The picture is the evidence (drawn text); the finished run is checked.
+open qa/fixtures/cabinet-heat-scale-hot.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 150
+expect_not "Locked while the run goes"
+shot 01-hot-scale
+check_layout
+check_blank 01-hot-scale
