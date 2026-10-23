@@ -139,6 +139,7 @@ mod learn_ui;
 mod link;
 mod live;
 mod live_anim;
+mod live_flow;
 mod machine;
 #[cfg(test)]
 mod machine_tests;
