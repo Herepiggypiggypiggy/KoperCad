@@ -22,6 +22,7 @@ impl NovoApp {
         let mut density = self.settings.xref_density();
         let mut theme = self.settings.theme_choice();
         let mut ui_density = self.settings.density_choice();
+        let mut high_contrast = self.settings.high_contrast();
         let mut autosave = self.settings.autosave_interval().as_secs() as u32;
         let mut dock_labels = self.settings.dock_labels();
         let mut ui_scale = self.settings.ui_scale_factor().to_bits();
@@ -51,6 +52,13 @@ impl NovoApp {
                             (novo_theme::ThemeChoice::Light, "Light"),
                             (novo_theme::ThemeChoice::System, "System"),
                         ],
+                    );
+                    choice(
+                        ui,
+                        "Contrast",
+                        "High uses pure black or white surfaces, full-strength text and outlines, and heavier lines, in the dark or the light theme.",
+                        &mut high_contrast,
+                        &[(false, "Standard"), (true, "High")],
                     );
                     let densities = novo_theme::Density::ALL.map(|d| (d, d.label()));
                     choice(
@@ -211,6 +219,7 @@ impl NovoApp {
         }
         self.settings.appearance_theme = theme.id().into();
         self.settings.appearance_density = ui_density.id().into();
+        self.settings.appearance_contrast = if high_contrast { "high" } else { "" }.into();
         self.settings.set_dock_labels(dock_labels);
         self.settings.ui_scale = (f32::from_bits(ui_scale) * 100.0).round() as u32;
         if density != self.settings.xref_density() {

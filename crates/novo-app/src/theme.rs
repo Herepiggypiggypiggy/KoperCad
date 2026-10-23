@@ -5,7 +5,7 @@ use novo_canvas::cabinet::CabinetStyle;
 use novo_canvas::model::ModelStyle;
 use novo_canvas::widget::CanvasStyle;
 use novo_canvas::{Color, Highlight, Stroke};
-use novo_theme::{CanvasPalette, canvas_palette};
+use novo_theme::CanvasPalette;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Whether the canvases draw with the dark palette. Set once per frame from
@@ -28,8 +28,14 @@ pub fn ui_palette() -> &'static novo_theme::Palette {
     novo_theme::Palette::for_mode(is_dark())
 }
 
-fn palette() -> &'static CanvasPalette {
-    canvas_palette(is_dark())
+/// The canvas colours of the theme and contrast in use.
+pub(crate) fn palette() -> &'static CanvasPalette {
+    novo_theme::canvas_palette_for(is_dark(), novo_theme::high_contrast())
+}
+
+/// The live potential colours of the theme and contrast in use.
+pub(crate) fn potentials() -> &'static novo_theme::PotentialPalette {
+    novo_theme::potential_palette_for(is_dark(), novo_theme::high_contrast())
 }
 
 /// `a` over `b` at `amount` (0..=1), opaque.

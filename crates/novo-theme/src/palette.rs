@@ -10,12 +10,30 @@
 
 use crate::tokens;
 use egui::Color32;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Whether the high contrast palettes are in use. Set from the person's
+/// preference once per frame; every palette lookup follows it.
+static HIGH_CONTRAST: AtomicBool = AtomicBool::new(false);
+
+/// Switches the high contrast palettes on or off; true when that changed.
+pub fn set_high_contrast(on: bool) -> bool {
+    HIGH_CONTRAST.swap(on, Ordering::Relaxed) != on
+}
+
+/// Whether the high contrast palettes are in use.
+pub fn high_contrast() -> bool {
+    HIGH_CONTRAST.load(Ordering::Relaxed)
+}
 
 /// Every colour role the interface uses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Palette {
     /// `true` for the dark theme.
     pub dark: bool,
+    /// `true` for the high contrast variants: maximum text contrast, solid
+    /// outlines and heavier strokes (Preferences > Contrast).
+    pub high_contrast: bool,
     /// Text fields, lists, tables and the area around the drawing sheet.
     pub sunken: Color32,
     /// Docked panels: top bar, outline, drawer.
@@ -110,6 +128,7 @@ impl Palette {
     /// The graphite theme: the token constants.
     pub const DARK: Palette = Palette {
         dark: true,
+        high_contrast: false,
         sunken: tokens::BG_0,
         panel: tokens::BG_1,
         raised: tokens::BG_2,
@@ -160,6 +179,7 @@ impl Palette {
         const ERROR: Color32 = Color32::from_rgb(0xA8, 0x2F, 0x25);
         Palette {
             dark: false,
+            high_contrast: false,
             sunken: Color32::from_rgb(0xFC, 0xFB, 0xFA),
             panel: PANEL,
             raised: Color32::from_rgb(0xFF, 0xFF, 0xFF),
@@ -200,9 +220,123 @@ impl Palette {
         }
     };
 
-    /// The palette for dark or light.
-    pub const fn for_mode(dark: bool) -> &'static Palette {
-        if dark { &Self::DARK } else { &Self::LIGHT }
+    /// High contrast, dark: pure black surfaces, white text (21:1) and white
+    /// outlines on every control, with yellow for focus and the primary
+    /// action. Status colours are bright enough for 7:1 on black.
+    pub const HIGH_CONTRAST_DARK: Palette = {
+        const BLACK: Color32 = Color32::from_rgb(0x00, 0x00, 0x00);
+        const INFO: Color32 = Color32::from_rgb(0x7C, 0xC0, 0xFF);
+        const SUCCESS: Color32 = Color32::from_rgb(0x5C, 0xE6, 0x73);
+        const WARNING: Color32 = Color32::from_rgb(0xFF, 0xB0, 0x3A);
+        const ERROR: Color32 = Color32::from_rgb(0xFF, 0x7A, 0x7A);
+        Palette {
+            dark: true,
+            high_contrast: true,
+            sunken: BLACK,
+            panel: BLACK,
+            raised: Color32::from_rgb(0x0A, 0x0A, 0x0A),
+            control: Color32::from_rgb(0x1C, 0x1C, 0x1C),
+            hover: Color32::from_rgb(0x2E, 0x2E, 0x2E),
+            border_subtle: Color32::from_rgb(0x9A, 0x9A, 0x9A),
+            border_strong: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+            border_control: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+            text_primary: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+            text_strong: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+            text_secondary: Color32::from_rgb(0xE6, 0xE6, 0xE6),
+            text_tertiary: Color32::from_rgb(0xD0, 0xD0, 0xD0),
+            accent: Color32::from_rgb(0xFF, 0xD6, 0x0A),
+            accent_hover: Color32::from_rgb(0xFF, 0xE6, 0x6B),
+            accent_wash: Color32::from_rgb(0x3D, 0x32, 0x00),
+            on_accent: BLACK,
+            info: INFO,
+            success: SUCCESS,
+            warning: WARNING,
+            error: ERROR,
+            info_wash: mix(INFO, BLACK, 16),
+            success_wash: mix(SUCCESS, BLACK, 16),
+            warning_wash: mix(WARNING, BLACK, 16),
+            error_wash: mix(ERROR, BLACK, 16),
+            shadow_alpha: 0,
+            room: Room3d {
+                background_top: BLACK,
+                background_bottom: Color32::from_rgb(0x10, 0x10, 0x10),
+                grid: Color32::from_rgb(0x70, 0x70, 0x70),
+                label_fill: BLACK,
+                label_alpha: 235,
+                label_border: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+                label_text: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+                selection: Color32::from_rgb(0xFF, 0xD6, 0x0A),
+                hover: INFO,
+                edge_percent: 30,
+            },
+        }
+    };
+
+    /// High contrast, light: white surfaces, black text (21:1) and black
+    /// outlines, with a deep blue for focus and the primary action.
+    pub const HIGH_CONTRAST_LIGHT: Palette = {
+        const WHITE: Color32 = Color32::from_rgb(0xFF, 0xFF, 0xFF);
+        const INFO: Color32 = Color32::from_rgb(0x0B, 0x3D, 0x91);
+        const SUCCESS: Color32 = Color32::from_rgb(0x0B, 0x5D, 0x1E);
+        const WARNING: Color32 = Color32::from_rgb(0x6B, 0x3F, 0x00);
+        const ERROR: Color32 = Color32::from_rgb(0x8F, 0x00, 0x00);
+        Palette {
+            dark: false,
+            high_contrast: true,
+            sunken: WHITE,
+            panel: WHITE,
+            raised: WHITE,
+            control: Color32::from_rgb(0xEE, 0xEE, 0xEE),
+            hover: Color32::from_rgb(0xD2, 0xD2, 0xD2),
+            border_subtle: Color32::from_rgb(0x6E, 0x6E, 0x6E),
+            border_strong: Color32::from_rgb(0x00, 0x00, 0x00),
+            border_control: Color32::from_rgb(0x00, 0x00, 0x00),
+            text_primary: Color32::from_rgb(0x00, 0x00, 0x00),
+            text_strong: Color32::from_rgb(0x00, 0x00, 0x00),
+            text_secondary: Color32::from_rgb(0x1A, 0x1A, 0x1A),
+            text_tertiary: Color32::from_rgb(0x33, 0x33, 0x33),
+            accent: Color32::from_rgb(0x0A, 0x3F, 0xA8),
+            accent_hover: Color32::from_rgb(0x07, 0x2C, 0x78),
+            accent_wash: Color32::from_rgb(0xD6, 0xE4, 0xFF),
+            on_accent: WHITE,
+            info: INFO,
+            success: SUCCESS,
+            warning: WARNING,
+            error: ERROR,
+            info_wash: mix(INFO, WHITE, 10),
+            success_wash: mix(SUCCESS, WHITE, 10),
+            warning_wash: mix(WARNING, WHITE, 10),
+            error_wash: mix(ERROR, WHITE, 10),
+            shadow_alpha: 0,
+            room: Room3d {
+                background_top: WHITE,
+                background_bottom: Color32::from_rgb(0xEE, 0xEE, 0xEE),
+                grid: Color32::from_rgb(0x70, 0x70, 0x70),
+                label_fill: WHITE,
+                label_alpha: 235,
+                label_border: Color32::from_rgb(0x00, 0x00, 0x00),
+                label_text: Color32::from_rgb(0x00, 0x00, 0x00),
+                selection: Color32::from_rgb(0x0A, 0x3F, 0xA8),
+                hover: INFO,
+                edge_percent: 60,
+            },
+        }
+    };
+
+    /// The palette for dark or light, in the contrast the person chose
+    /// ([`set_high_contrast`]).
+    pub fn for_mode(dark: bool) -> &'static Palette {
+        Self::pick(dark, high_contrast())
+    }
+
+    /// The palette for `dark` and `high` contrast, whatever the switch says.
+    pub const fn pick(dark: bool, high: bool) -> &'static Palette {
+        match (dark, high) {
+            (true, false) => &Self::DARK,
+            (false, false) => &Self::LIGHT,
+            (true, true) => &Self::HIGH_CONTRAST_DARK,
+            (false, true) => &Self::HIGH_CONTRAST_LIGHT,
+        }
     }
 
     /// The palette of the theme `ui` is drawn in.
@@ -221,7 +355,12 @@ mod tests {
     use super::*;
     use crate::tokens::tests::contrast;
 
-    const BOTH: [&Palette; 2] = [&Palette::DARK, &Palette::LIGHT];
+    const BOTH: [&Palette; 4] = [
+        &Palette::DARK,
+        &Palette::LIGHT,
+        &Palette::HIGH_CONTRAST_DARK,
+        &Palette::HIGH_CONTRAST_LIGHT,
+    ];
 
     fn surfaces(p: &Palette) -> [Color32; 5] {
         [p.sunken, p.panel, p.raised, p.control, p.hover]
@@ -336,6 +475,36 @@ mod tests {
             assert_ne!(r.selection, r.hover);
             assert!(r.grid != r.background_bottom);
         }
+    }
+
+    #[test]
+    fn high_contrast_text_is_black_on_white_or_white_on_black_and_outlines_are_solid() {
+        for p in [&Palette::HIGH_CONTRAST_DARK, &Palette::HIGH_CONTRAST_LIGHT] {
+            assert!(p.high_contrast);
+            for bg in surfaces(p) {
+                assert!(contrast(p.text_primary, bg) >= 12.0, "{bg:?}");
+                assert!(contrast(p.text_secondary, bg) >= 9.0, "{bg:?}");
+                assert!(contrast(p.text_tertiary, bg) >= 7.0, "{bg:?}");
+            }
+            for bg in [p.sunken, p.panel, p.raised] {
+                // Control outlines and hairlines are far above the 3:1 rule.
+                assert!(contrast(p.border_control, bg) >= 15.0, "{bg:?}");
+                assert!(contrast(p.border_subtle, bg) >= 4.5, "{bg:?}");
+                for c in [p.accent, p.success, p.warning, p.error, p.info] {
+                    assert!(contrast(c, bg) >= 7.0, "{c:?} on {bg:?}");
+                }
+            }
+            assert!(contrast(p.on_accent, p.accent) >= 7.0);
+        }
+        const { assert!(!Palette::DARK.high_contrast && !Palette::LIGHT.high_contrast) };
+    }
+
+    #[test]
+    fn the_contrast_choice_picks_one_of_four_palettes() {
+        assert_eq!(*Palette::pick(true, false), Palette::DARK);
+        assert_eq!(*Palette::pick(false, false), Palette::LIGHT);
+        assert_eq!(*Palette::pick(true, true), Palette::HIGH_CONTRAST_DARK);
+        assert_eq!(*Palette::pick(false, true), Palette::HIGH_CONTRAST_LIGHT);
     }
 
     #[test]
