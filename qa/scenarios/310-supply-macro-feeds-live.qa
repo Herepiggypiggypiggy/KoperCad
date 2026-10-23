@@ -22,6 +22,7 @@ shot 01-picked
 click_text Place #2
 wait 20
 expect "N PE fed"
+expect "now wire its outputs"
 shot 02-placed
 key shift+l
 wait 20

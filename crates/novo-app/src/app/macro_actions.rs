@@ -638,7 +638,7 @@ impl NovoApp {
         let origin = macro_place::free_origin(doc.project(), page, PLACE_GAP);
         // The supply circuit in a drawing with no supply: feed its open points.
         let feed_supply =
-            name == supply_feeds::SUPPLY_MACRO && !supply_feeds::has_feed(doc.project());
+            name == supply_feeds::SUPPLY_MACRO && !supply_feeds::has_supply(doc.project());
         let mut fed = 0;
         let result = doc.transact("Place macro", |tx| {
             let placed = macro_place::place_macro(tx, shown.definition, page, origin, &options)?;
@@ -665,7 +665,7 @@ impl NovoApp {
                     )
                 } else if fed > 0 {
                     format!(
-                        "Placed {name}, L1 L2 L3 N PE fed · now wire -F1 to the starter · {}",
+                        "Placed {name}, L1 L2 L3 N PE fed · now wire its outputs to the starter · {}",
                         describe(&placed.report)
                     )
                 } else {

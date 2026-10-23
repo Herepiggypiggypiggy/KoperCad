@@ -6,7 +6,7 @@
 //! button on the Live card; the status line then names the next step.
 
 use novo_core::{
-    BlockInstanceId, Direction, Endpoint, PageId, Pin, Placement, Point, PotentialId,
+    BlockInstanceId, Direction, Endpoint, Netlist, PageId, Pin, Placement, Point, PotentialId,
     PotentialKind, Project, Result, SymbolRole, Tx,
 };
 use novo_editor::edit::draw_wire;
@@ -32,11 +32,10 @@ const POINTS: &[(&str, &str, &str, PotentialKind, f64)] = &[
     ),
 ];
 
-/// True when the drawing already has a potential feed on any page.
-pub(super) fn has_feed(project: &Project) -> bool {
-    project
-        .symbols()
-        .any(|s| matches!(s.role, SymbolRole::PotentialFeed { .. }))
+/// True when the drawing already has a supply, as Live view counts it: a
+/// potential feed or a supply terminal.
+pub(super) fn has_supply(project: &Project) -> bool {
+    novo_sim::explain::has_supply(&Netlist::build(project))
 }
 
 fn potential(tx: &mut Tx<'_>, name: &str, kind: PotentialKind, volts: f64) -> Result<PotentialId> {
@@ -152,7 +151,50 @@ mod tests {
         let mut names: Vec<_> = p.potentials().map(|x| x.name.clone()).collect();
         names.sort();
         assert_eq!(names, ["L1", "L2", "L3", "N", "PE"]);
-        assert!(has_feed(p));
-        assert!(novo_sim::explain::has_supply(&novo_core::Netlist::build(p)));
+        assert!(has_supply(p));
+    }
+
+    fn place(doc: &mut Document) -> usize {
+        let mut count = 0;
+        doc.transact("p", |tx| {
+            let existing = tx.project().pages().next().map(|p| p.id);
+            let page = match existing {
+                Some(page) => page,
+                None => tx.add_page("1")?,
+            };
+            let placed = place_macro(
+                tx,
+                supply().definition,
+                page,
+                Point::new(20.0, 20.0),
+                &PlaceOptions::default(),
+            )?;
+            if !has_supply(tx.project()) {
+                count = feed_open_points(tx, page, placed.instance)?;
+            }
+            Ok(())
+        })
+        .expect("place");
+        count
+    }
+
+    #[test]
+    fn a_second_placement_adds_no_feeds_and_undo_removes_them() {
+        let mut doc = Document::new(Project::new(""));
+        assert_eq!(place(&mut doc), 5);
+        assert_eq!(place(&mut doc), 0, "the drawing has a supply now");
+        assert_eq!(doc.project().potentials().count(), 5);
+        let feeds = |d: &Document| {
+            d.project()
+                .symbols()
+                .filter(|s| matches!(s.role, SymbolRole::PotentialFeed { .. }))
+                .count()
+        };
+        assert_eq!(feeds(&doc), 5);
+        doc.undo().expect("undo the second placement");
+        assert_eq!(feeds(&doc), 5);
+        doc.undo().expect("undo the first placement");
+        assert_eq!(feeds(&doc), 0);
+        assert!(!has_supply(doc.project()));
     }
 }
