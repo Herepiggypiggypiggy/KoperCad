@@ -164,8 +164,8 @@ impl DrillCue {
 
 impl DrillCue {
     /// The cues as lines on the plate of the 3D view: for each hole a ring
-    /// that closes and a bore that opens, fading out. Radii are never below
-    /// 4 mm so a small hole stays legible from across the cabinet.
+    /// that closes and a bore that opens, fading out. The bore is the hole's
+    /// true size; only the ring is kept at 6 mm or more so a small hole shows.
     pub(super) fn lines(
         &self,
         frame: &novo_view3d::PlateFrame,
@@ -204,12 +204,15 @@ impl DrillCue {
             };
             let Some(f) = frame_at(age) else { continue };
             let (x, y, dia) = c.key.xyd();
-            let r = (0.5 * dia).max(6.0);
+            // The bore is the hole's true radius; only the closing ring has a
+            // legibility floor, so a 4 mm hole still shows from across the cabinet.
+            let bore_r = (0.5 * dia).max(0.5);
+            let ring_r = bore_r.max(6.0);
             if f.bore > 0.0 {
-                circle((x, y), r * f64::from(f.bore), 0.9 * f.alpha);
+                circle((x, y), bore_r * f64::from(f.bore), 0.9 * f.alpha);
             }
             if f.ring > 1.02 {
-                circle((x, y), r * f64::from(f.ring), 0.7 * f.alpha);
+                circle((x, y), ring_r * f64::from(f.ring), 0.7 * f.alpha);
             }
         }
         (!out.positions.is_empty()).then_some(out)
@@ -291,6 +294,24 @@ mod tests {
         let c = frame_at(0.8).unwrap();
         assert!(c.alpha < 1.0 && c.alpha > 0.0);
         assert!(frame_at(SECONDS).is_none() && frame_at(-0.1).is_none());
+    }
+
+    #[test]
+    fn the_3d_bore_keeps_the_true_hole_size_and_only_the_ring_is_enlarged() {
+        let frame = novo_view3d::PlateFrame {
+            width: 800.0,
+            height: 600.0,
+        };
+        let mut d = DrillCue::default();
+        d.observe(1, 1, &keys(1), 0.0);
+        d.observe(1, 2, &keys(2), 5.0);
+        let (x, y, _) = d.cues[0].key.xyd();
+        let l = d.lines(&frame, 5.0 + HOLD_AGE, [1, 2, 3]).expect("cue");
+        let c = frame.world(x, y, 0.0);
+        let dist = |p: &glam::Vec3| ((p.x - c.x).powi(2) + (p.y - c.y).powi(2)).sqrt();
+        // The first polyline is the bore: a 4 mm hole stays within 2 mm.
+        let first = l.starts.get(1).map_or(l.positions.len(), |s| *s as usize);
+        assert!(l.positions[..first].iter().all(|p| dist(p) <= 2.0 + 1e-3));
     }
 
     #[test]

@@ -866,8 +866,10 @@ impl NovoApp {
             all.extend(mode.emc.overlays().iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker);
+            let [r, g, b, _] = crate::theme::ui_palette().info.to_srgba_unmultiplied();
+            let cue_rgb = [r, g, b];
             if let Some(t) = cue_time.filter(|_| cue_running)
-                && let Some(l) = mode.drill.lines(&scene.frame, t, [120, 190, 255])
+                && let Some(l) = mode.drill.lines(&scene.frame, t, cue_rgb)
             {
                 all.push(novo_view3d::Overlay::Lines(l));
             }
