@@ -85,6 +85,16 @@ pub fn requested_port() -> Option<u16> {
     })
 }
 
+/// True when the app runs under the test harness and should show still
+/// pictures: ambient animation (spinning fans, flowing air, the drill) would
+/// make screenshots differ run to run. `KOPERCAD_MOTION=1` keeps it on to
+/// test the motion itself.
+pub fn still_pictures() -> bool {
+    static STILL: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *STILL
+        .get_or_init(|| requested_port().is_some() && std::env::var_os("KOPERCAD_MOTION").is_none())
+}
+
 /// True for the flags this module reads, so the startup-file lookup skips them.
 pub fn is_control_arg(arg: &std::ffi::OsStr) -> bool {
     arg.to_str().is_some_and(|a| a.starts_with("--control"))

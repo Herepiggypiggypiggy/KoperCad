@@ -156,6 +156,7 @@ mod macro_thumb;
 mod manual;
 mod menu_bar;
 mod model_labels;
+mod motion;
 mod net_trace;
 mod numbering;
 mod onboarding;
