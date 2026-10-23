@@ -8,3 +8,5 @@
 2026-10-23 Critic C-60: PLC address style (IEC, Siemens, Rockwell, Plain) is now chosen in the Add PLC card dialog and the I/O list header; Ctrl+K siemens/rockwell/address style finds both. Scenario 280.
 
 2026-10-23 Heat legend leftovers: heat.rs colour tokens moved to ui_palette(); legend opens with "Preview, not a solver result". Scenario 290.
+
+2026-10-23 Airflow line halo follows the theme (surface colour at half opacity); contours stay dark by design. Scenario 300.

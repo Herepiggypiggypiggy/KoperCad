@@ -1,0 +1,11 @@
+@title A refused wire start shows a thin amber cross and the reason beside the click
+@area Schematic
+# Polish: no shake or flash. The cross and the one-line reason (the same text as the hint) stay about 2.5 s, fade for the last 150 ms (not at all with Reduce motion) and clear on the next accepted click. The drawn text cannot be read by the harness, so the picture is the evidence.
+click_text "New project"
+wait 20
+click_text Connect
+wait 6
+click 600 300
+wait 6
+shot refused-wire-start
+check_layout
