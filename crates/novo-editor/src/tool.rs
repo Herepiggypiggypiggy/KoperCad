@@ -238,6 +238,9 @@ pub struct Preview {
     pub paths: Vec<Vec<Point>>,
     /// A pin, junction or wire point the next click would connect to.
     pub target: Option<Point>,
+    /// What `target` is, in a few words (`-K1 A2`, `Junction`, `Wire 12`),
+    /// for a small label beside the snap ring.
+    pub target_label: Option<String>,
     /// Proposed wires between facing free pins ([`edit::facing_wires`]),
     /// drawn dashed: before a drop, what the drop would propose; after it,
     /// the proposals Enter accepts.
@@ -2989,6 +2992,7 @@ impl Editor {
     pub fn preview(&self, doc: &Document, page: PageId) -> Preview {
         let mut preview = Preview {
             target: self.target.map(|t| t.position()),
+            target_label: self.target.and_then(|t| target_label(doc.project(), t)),
             ..Preview::default()
         };
         let Some(cursor) = self.cursor else {
@@ -3146,6 +3150,27 @@ impl Editor {
                 .collect();
         }
         preview
+    }
+}
+
+/// What a wiring target is, in a few words: a pin by its device tag and pin
+/// name, a junction, or a wire by its number.
+pub(crate) fn target_label(project: &novo_core::Project, target: Target) -> Option<String> {
+    match target {
+        Target::Endpoint(Endpoint::Pin { symbol, pin }, _) => {
+            let s = project.symbol(symbol)?;
+            let name = &s.pins.get(pin as usize)?.name;
+            Some(match s.device().and_then(|d| project.device(d)) {
+                Some(d) if !d.tag.is_empty() => format!("{} {name}", d.tag),
+                _ => name.clone(),
+            })
+        }
+        Target::Endpoint(Endpoint::Junction { .. }, _) => Some("Junction".into()),
+        Target::Endpoint(Endpoint::Free { .. }, _) => None,
+        Target::Wire(w, _) => Some(match project.wire(w)?.number.as_deref() {
+            Some(n) if !n.is_empty() => format!("Wire {n}"),
+            _ => "Wire".into(),
+        }),
     }
 }
 

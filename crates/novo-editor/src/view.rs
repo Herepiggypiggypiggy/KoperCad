@@ -207,6 +207,8 @@ pub struct SchematicView {
     /// The last refused click: a thin cross where it was and the reason next
     /// to it, for [`REFUSAL_SHOWN`].
     refusal: Option<RefusalMark>,
+    /// The snap target of the wire tool and what it is, for its label.
+    snap_label: Option<(Point, String)>,
     /// Reduce motion: the refusal mark then appears and goes without fading.
     pub reduce_motion: bool,
 }
@@ -362,6 +364,7 @@ impl SchematicView {
             underlay_dirty: false,
             where_shown: None,
             refusal: None,
+            snap_label: None,
             reduce_motion: false,
         }
     }
@@ -742,6 +745,12 @@ impl SchematicView {
             scene.scene_mut().remove(id);
         }
         let preview = self.editor.preview(document, page);
+        self.snap_label = match (&preview.target, &preview.target_label) {
+            (Some(at), Some(text)) if matches!(self.editor.tool(), crate::tool::Tool::Wire(_)) => {
+                Some((*at, text.clone()))
+            }
+            _ => None,
+        };
         let ghost_color = opacity(self.canvas.style.hover.color, GHOST_ALPHA);
         let ghost = Stroke::world(0.35, ghost_color);
         let mut items: Vec<Item> = Vec::new();
@@ -872,6 +881,43 @@ impl SchematicView {
             scene.scene_mut().insert(id, item);
             self.previews.push(id);
         }
+    }
+
+    /// What the wire tool would connect to, in small text beside the snap
+    /// ring. Shown at once and gone when the pointer leaves: no animation.
+    fn paint_snap_label(&self, ui: &egui::Ui) {
+        let Some((at, text)) = &self.snap_label else {
+            return;
+        };
+        let s = self.canvas.viewport.world_to_screen(model::vec(*at));
+        let pos = self.rect.min + egui::vec2(s.x, s.y) + egui::vec2(10.0, -22.0);
+        let painter = ui.painter_at(self.rect);
+        let visuals = ui.visuals();
+        let galley = painter.layout_no_wrap(
+            text.clone(),
+            egui::FontId::proportional(12.0),
+            visuals.text_color(),
+        );
+        let pad = egui::vec2(5.0, 2.0);
+        let size = galley.size() + pad * 2.0;
+        let x = pos
+            .x
+            .min(self.rect.right() - size.x - 4.0)
+            .max(self.rect.left() + 4.0);
+        let y = pos
+            .y
+            .min(self.rect.bottom() - size.y - 4.0)
+            .max(self.rect.top() + 4.0);
+        let frame = egui::Rect::from_min_size(egui::pos2(x, y), size);
+        let [r, g, b, _] = self.canvas.style.hover.color.0;
+        painter.rect(
+            frame,
+            3.0,
+            visuals.window_fill,
+            egui::Stroke::new(1.0, egui::Color32::from_rgb(r, g, b)),
+            egui::StrokeKind::Inside,
+        );
+        painter.galley(frame.min + pad, galley, visuals.text_color());
     }
 
     /// A thin cross where the last click was refused and the reason beside
@@ -1200,6 +1246,7 @@ impl SchematicView {
             };
         }
         self.paint_refusal(ui);
+        self.paint_snap_label(ui);
         // Pin under the pointer: the connect cursor.
         if !self.editor.tool_active() && self.editor.pin_hovered() && response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
@@ -3594,6 +3641,31 @@ mod tests {
         h.view.editor.begin_place("iec/contacts/no", None);
         h.click(220.0, 60.0, egui::PointerButton::Primary);
         assert!(h.view.refusal.is_none());
+    }
+
+    #[test]
+    fn the_wire_tool_labels_the_pin_it_would_connect_to_and_only_then() {
+        let mut h = Harness::new();
+        h.view.editor.auto_connect = false;
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.click(60.0, 60.0, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let origin = h.doc.project().symbols().next().unwrap().placement.origin;
+        let pin = pin_at(&h.doc, origin, "A1");
+        h.view.editor.begin_wire();
+        h.hover(pin.x, pin.y);
+        h.frame(vec![]);
+        let (_, text) = h.view.snap_label.as_ref().expect("a label on the pin");
+        assert!(text.ends_with("A1"), "{text}");
+        // Away from every pin there is no label.
+        h.hover(200.0, 150.0);
+        h.frame(vec![]);
+        assert!(h.view.snap_label.is_none());
+        // And the Select tool never shows one.
+        h.view.editor.leave_tool();
+        h.hover(pin.x, pin.y);
+        h.frame(vec![]);
+        assert!(h.view.snap_label.is_none());
     }
 
     #[test]
