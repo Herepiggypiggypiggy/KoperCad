@@ -177,7 +177,7 @@ impl Anim {
                 egui::Id::new("live_anim"),
             ))
             .with_clip_rect(f.canvas);
-        let palette = novo_theme::CANVAS_DARK;
+        let palette = *crate::theme::palette();
         let sheet = novo_theme::canvas::to_color32(palette.sheet);
         let ink = novo_theme::canvas::to_color32(palette.symbol);
         let mut moving = false;

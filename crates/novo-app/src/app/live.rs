@@ -643,7 +643,7 @@ pub(super) fn load_glows(
 /// How a potential is drawn: its kind first, then its name for the line
 /// conductors, so L1, L2 and L3 stay apart.
 pub(super) fn potential_color(potential: &Potential) -> egui::Color32 {
-    let palette = novo_theme::POTENTIALS_DARK;
+    let palette = *crate::theme::potentials();
     let color = |c| novo_theme::canvas::to_color32(c);
     match potential.kind {
         PotentialKind::ProtectiveEarth => color(palette.protective_earth),
@@ -903,7 +903,7 @@ impl NovoApp {
 
         // Wires: lit in their colour, dimmed when nothing reaches them. The
         // canvas draws them in its wire layer, under the symbols and text.
-        let dead_wire = novo_theme::POTENTIALS_DARK.dead;
+        let dead_wire = crate::theme::potentials().dead;
         let looks = wires
             .iter()
             .map(|wire| {

@@ -545,7 +545,7 @@ pub struct NovoApp {
     /// The first frame has run its start-up work.
     started: bool,
     /// The theme and density last applied to the egui context.
-    appearance_applied: Option<(novo_theme::ThemeChoice, novo_theme::Density)>,
+    appearance_applied: Option<(novo_theme::ThemeChoice, novo_theme::Density, bool)>,
     /// When to give the backend its next chance to autosave.
     next_tick: Instant,
     /// The last autosave failed; reported once until it works again.
@@ -2946,6 +2946,25 @@ mod tests {
             ctx.global_style().spacing.interact_size.y,
             novo_theme::Density::Compact.metrics().control_height
         );
+    }
+
+    #[test]
+    fn the_chosen_contrast_reaches_the_egui_styles_and_back() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.settings.appearance_contrast = "high".into();
+        frame(&ctx, &mut app, Default::default());
+        let style = ctx.global_style();
+        assert_eq!(
+            style.visuals.panel_fill,
+            novo_theme::Palette::HIGH_CONTRAST_DARK.panel
+        );
+        assert_eq!(style.visuals.widgets.inactive.bg_stroke.width, 1.5);
+        app.settings.appearance_contrast = String::new();
+        frame(&ctx, &mut app, Default::default());
+        let style = ctx.global_style();
+        assert_eq!(style.visuals.panel_fill, novo_theme::tokens::BG_1);
+        assert_eq!(style.visuals.widgets.inactive.bg_stroke.width, 1.0);
     }
 
     #[test]
