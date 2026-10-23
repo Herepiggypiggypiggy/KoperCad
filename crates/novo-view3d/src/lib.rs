@@ -26,6 +26,7 @@ pub mod layers;
 pub mod look;
 pub mod math;
 pub mod mesh;
+pub mod motion;
 pub mod overlay;
 pub mod palette;
 pub mod pick;

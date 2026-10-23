@@ -19,13 +19,15 @@ impl NovoApp {
                 .unwrap_or_default(),
             None => Vec::new(),
         };
+        let hovered = std::mem::take(&mut self.wb.hover_preview);
         if let Some(view) = self.canvas.schematic() {
             let lit = view.where_lit();
             view.canvas.set_related(
                 related
                     .into_iter()
                     .map(|s| item_id(AnyId::Symbol(s)))
-                    .chain(lit),
+                    .chain(lit)
+                    .chain(hovered.into_iter().map(item_id)),
             );
         }
     }

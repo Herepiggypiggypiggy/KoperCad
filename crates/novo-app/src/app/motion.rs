@@ -1,6 +1,7 @@
 //! Small shared helpers for interface motion: easing and the fade of a
 //! short-lived element. Everything here is pure, so it is tested without a
-//! window. With Reduce motion on, `toast_alpha` is always fully opaque and
+//! window. The ambient clock (`clock`, `FRAME`) is the one place that decides
+//! whether fans, air and the drill cue move. With Reduce motion on, `toast_alpha` is always fully opaque and
 //! `toast_settled` is always true: nothing eases and nothing asks for repaints.
 
 use eframe::egui;
@@ -10,6 +11,20 @@ use std::time::Duration;
 pub(super) const FADE_IN: Duration = Duration::from_millis(160);
 /// How long the end of a toast's life is spent fading out.
 pub(super) const FADE_OUT: Duration = Duration::from_millis(300);
+
+/// Frame spacing while something moves: 30 pictures a second is smooth for a
+/// slow spin and half the cost of a full redraw rate.
+pub(super) const FRAME: Duration = Duration::from_millis(33);
+
+/// Seconds on the animation clock, or `None` for a still picture: Reduce
+/// motion, the test harness (see `control::still_pictures`), or a window
+/// nobody is looking at.
+pub(super) fn clock(ctx: &egui::Context, reduce_motion: bool) -> Option<f64> {
+    if reduce_motion || crate::control::still_pictures() || !ctx.input(|i| i.focused) {
+        return None;
+    }
+    Some(ctx.input(|i| i.time))
+}
 
 /// Ease-out: fast at the start, settling gently. `t` is clamped to 0..=1.
 pub(super) fn ease_out(t: f32) -> f32 {
@@ -93,5 +108,13 @@ mod tests {
         assert!(!toast_settled(MS(10), Some(MS(4000)), false));
         assert!(!toast_settled(MS(4000), Some(MS(100)), false));
         assert!(toast_settled(MS(1000), Some(MS(4000)), false));
+    }
+
+    #[test]
+    fn the_clock_is_a_still_picture_with_reduce_motion_or_without_focus() {
+        let ctx = egui::Context::default();
+        assert_eq!(clock(&ctx, true), None);
+        // A context nobody has focused yet is not a window being watched.
+        assert_eq!(clock(&ctx, false), None);
     }
 }

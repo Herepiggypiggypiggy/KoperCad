@@ -64,6 +64,7 @@ mod diagnostics;
 mod dialog_ui;
 mod dock;
 mod drawers;
+mod drill_cue;
 mod duplicate;
 mod dxf;
 mod electrical;

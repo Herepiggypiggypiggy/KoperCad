@@ -179,6 +179,8 @@ pub(super) struct InspectorState {
 /// What an inspector click or edit asks for.
 enum InspectorAction {
     Go(Place),
+    /// The pointer rests on a relation: light it on the drawing.
+    Preview(Place),
     Rename(String),
     Describe(String),
     SetDelay(f64),
@@ -501,6 +503,14 @@ impl NovoApp {
         for action in actions {
             match action {
                 InspectorAction::Go(place) => self.jump(place, true),
+                InspectorAction::Preview(place) => {
+                    if let Some(symbol) = place
+                        .symbol
+                        .filter(|_| Some(place.page) == self.current_page)
+                    {
+                        self.wb.hover_preview = vec![AnyId::Symbol(symbol)];
+                    }
+                }
                 InspectorAction::Rename(tag) => {
                     let result = self.with_editor(|editor, doc| editor.rename(doc, device, &tag));
                     if let Some(Err(reason)) = result {
@@ -908,7 +918,11 @@ fn inspector_body(
                 ui.weak("Not drawn yet");
             }
             for relation in &info.relations {
-                if relation_card(ui, relation).clicked() {
+                let card = relation_card(ui, relation);
+                if card.hovered() {
+                    actions.push(InspectorAction::Preview(relation.place));
+                }
+                if card.clicked() {
                     actions.push(InspectorAction::Go(relation.place));
                 }
             }

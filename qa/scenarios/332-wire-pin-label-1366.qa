@@ -1,0 +1,36 @@
+@title The wire tool names the pin it would connect to (1366x768)
+@area Schematic
+@sizes 1366x768
+# Polish: a small label beside the snap ring says what the next click connects to (device tag and pin name), shown at once, no animation. Light look included. Positions are for this window size (the view zooms when the Light look is picked, so the last move differs); the drawn text cannot be read by the harness, so the pictures are the evidence.
+click_text "New project"
+wait 20
+key q
+text coil
+key Return
+click 600 300
+wait 10
+key Escape
+click_text Connect
+wait 6
+move 425 358
+wait 6
+shot pin-label-dark
+move 425 328
+wait 6
+shot pin-label-top-pin
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 6
+click_text Connect
+wait 6
+move 702 413
+wait 6
+shot pin-label-light
+check_layout
