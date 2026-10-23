@@ -2384,6 +2384,8 @@ impl NovoApp {
     fn toasts(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         let now = Instant::now();
         let mut fade_in: Option<Duration> = None;
+        let reduced = self.settings.reduce_motion;
+        let mut easing = false;
         let shown: Vec<usize> = self
             .messages
             .iter()
@@ -2403,6 +2405,11 @@ impl NovoApp {
                 if !left.is_zero() {
                     fade_in = Some(fade_in.map_or(left, |f| f.min(left)));
                 }
+                if !left.is_zero()
+                    && !motion::toast_settled(now - m.at, m.expiry().map(|_| left), reduced)
+                {
+                    easing = true;
+                }
                 !left.is_zero()
             })
             .map(|(i, _)| i)
@@ -2410,6 +2417,9 @@ impl NovoApp {
             .collect();
         if let Some(wait) = fade_in {
             ctx.request_repaint_after(wait);
+        }
+        if easing {
+            ctx.request_repaint();
         }
         if shown.is_empty() {
             return;
@@ -2440,7 +2450,13 @@ impl NovoApp {
                         Level::Warning => ui.visuals().warn_fg_color,
                         Level::Error => ui.visuals().error_fg_color,
                     };
-                    let frame = egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    let alpha = motion::toast_alpha(
+                        now - m.at,
+                        m.expiry().map(|e| e.saturating_sub(now - m.at)),
+                        reduced,
+                    );
+                    let frame = motion::toast_frame(ui.style(), alpha).show(ui, |ui| {
+                        ui.set_opacity(alpha);
                         let shown_text = match &m.file {
                             Some(file) => elide_path(&m.text, file, 36),
                             None => m.text.clone(),

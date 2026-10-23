@@ -95,6 +95,7 @@ impl NovoApp {
                 view.editor.set_connect_mode(mode);
             }
             view.move_carries = carries;
+            view.reduce_motion = self.settings.reduce_motion;
         }
     }
 

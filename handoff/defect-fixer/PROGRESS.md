@@ -6,3 +6,7 @@
 2026-10-23 Heat colour bar: ticks above ~200 C smeared (27 labels on 150 px). Now round 20/50/100 C steps, 26 px apart (heat_legend.rs); scenario 250 with a 285 C fixture; PR open (from Lead A relay of R3 finding).
 
 2026-10-23 Critic C-60: PLC address style (IEC, Siemens, Rockwell, Plain) is now chosen in the Add PLC card dialog and the I/O list header; Ctrl+K siemens/rockwell/address style finds both. Scenario 280.
+
+2026-10-23 Heat legend leftovers: heat.rs colour tokens moved to ui_palette(); legend opens with "Preview, not a solver result". Scenario 290.
+
+2026-10-23 Airflow line halo follows the theme (surface colour at half opacity); contours stay dark by design. Scenario 300.
