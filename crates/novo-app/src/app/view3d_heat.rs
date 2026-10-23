@@ -94,11 +94,14 @@ pub(super) fn show(
         }
         ui.horizontal_wrapped(|ui| heat::simulate_controls_with(ui, state, false));
         let running = state.running();
-        if let Some(sol) = state.solution().filter(|s| !s.wire_notes.is_empty()) {
+        // Kept when there is nothing to show, so the feature can be found and
+        // the fold says why it is empty.
+        if let Some(sol) = state.solution() {
             egui::CollapsingHeader::new("Wire heat in the ducts")
                 .id_salt("view3d_heat_wires")
                 .show(ui, |ui| {
-                    for n in &sol.wire_notes {
+                    let notes = wire_heat_notes(&sol.wire_notes);
+                    for n in &notes {
                         ui.label(
                             egui::RichText::new(n)
                                 .small()
@@ -122,6 +125,20 @@ pub(super) fn show(
             .show(ui, |ui| about(ui, state));
     });
     jump
+}
+
+/// What the "Wire heat in the ducts" fold says: the notes of the result, or
+/// why there are none.
+pub(super) fn wire_heat_notes(notes: &[String]) -> Vec<String> {
+    if notes.is_empty() {
+        vec![String::from(
+            "No wire heat is counted in this result: no wire routed through the ducts has a \
+             known current and cross-section. Route the wires first (Cabinet > Route all), then \
+             Simulate again.",
+        )]
+    } else {
+        notes.to_vec()
+    }
 }
 
 /// The verdict sentence of the shown result, its device name a button that
@@ -311,6 +328,15 @@ fn about(ui: &mut egui::Ui, state: &HeatState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_empty_wire_heat_fold_says_why() {
+        let none = wire_heat_notes(&[]);
+        assert_eq!(none.len(), 1);
+        assert!(none[0].contains("Route the wires first"));
+        let some = vec![String::from("Wires in ducts add 3.0 W (4 wires).")];
+        assert_eq!(wire_heat_notes(&some), some);
+    }
 
     #[test]
     fn each_state_has_its_own_plain_line() {
