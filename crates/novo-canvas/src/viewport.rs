@@ -133,6 +133,15 @@ impl Viewport {
         self.center = bounds.center();
     }
 
+    /// The view `t` of the way (0..=1, already eased) from `from` to `to`:
+    /// the centre moves in a straight line and the zoom by ratio, so a zoom
+    /// in or out feels even at every size.
+    pub fn glide(from: (Vec2, f32), to: (Vec2, f32), t: f32) -> (Vec2, f32) {
+        let t = t.clamp(0.0, 1.0);
+        let zoom = from.1 * (to.1 / from.1).powf(t);
+        (from.0.lerp(to.0, t), zoom)
+    }
+
     /// Uniform data for the GPU: maps world to clip space.
     #[cfg(feature = "gpu")]
     pub(crate) fn clip_transform(&self) -> (Vec2, Vec2) {
@@ -148,6 +157,18 @@ impl Viewport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_glide_starts_at_one_view_and_ends_at_the_other_by_ratio() {
+        let from = (Vec2::new(0.0, 0.0), 1.0);
+        let to = (Vec2::new(100.0, 40.0), 4.0);
+        assert_eq!(Viewport::glide(from, to, 0.0), from);
+        let end = Viewport::glide(from, to, 1.0);
+        assert!((end.0 - to.0).length() < 1e-4 && (end.1 - to.1).abs() < 1e-4);
+        let (c, z) = Viewport::glide(from, to, 0.5);
+        assert_eq!(c, Vec2::new(50.0, 20.0));
+        assert!((z - 2.0).abs() < 1e-4, "{z}");
+    }
 
     #[test]
     fn pixel_snap_puts_the_origin_on_a_pixel() {

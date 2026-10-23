@@ -184,6 +184,7 @@ impl NovoApp {
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_millis(100));
         }
+        self.say_when_issues_are_cleared(&summary, pending);
         let response = if pending && self.wb.problems.is_none() {
             // Nothing finished yet: "No issues" would be a claim not yet checked.
             ui.weak("Checking…")
@@ -219,6 +220,24 @@ impl NovoApp {
         if response.clicked() {
             self.show_issues(true);
         }
+    }
+
+    /// One quiet line when a finished check finds no error or warning where
+    /// the one before found some. Nothing for a project just opened, a check
+    /// still running, a recovered copy or a lesson that hides the checks.
+    fn say_when_issues_are_cleared(&mut self, summary: &Summary, pending: bool) {
+        if self.wb.problems.is_none() {
+            self.wb.last_issue_total = None;
+            return;
+        }
+        if pending || self.wb.recovered.is_some() || self.learn.quiet_checks() {
+            return;
+        }
+        let total = summary.errors + summary.warnings;
+        if issues_cleared(self.wb.last_issue_total, total) {
+            self.message(Level::Info, "No errors or warnings left");
+        }
+        self.wb.last_issue_total = Some(total);
     }
 
     /// The outline's Issues mode (DESIGN.md §3): filter chips with each
@@ -598,4 +617,23 @@ fn explain_question(p: &Problem) -> String {
          it names if you are allowed to. This is your reading, not the program's verdict.",
         p.severity, p.message
     )
+}
+
+/// Whether the count of errors and warnings went from some to none.
+fn issues_cleared(before: Option<usize>, now: usize) -> bool {
+    before.is_some_and(|b| b > 0) && now == 0
+}
+
+#[cfg(test)]
+mod cleared_tests {
+    use super::issues_cleared;
+
+    #[test]
+    fn only_a_drop_from_some_to_none_counts() {
+        assert!(issues_cleared(Some(3), 0));
+        assert!(!issues_cleared(Some(0), 0));
+        assert!(!issues_cleared(None, 0));
+        assert!(!issues_cleared(Some(3), 1));
+        assert!(!issues_cleared(Some(0), 2));
+    }
 }

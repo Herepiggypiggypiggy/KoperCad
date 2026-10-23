@@ -1,0 +1,17 @@
+@title Hovering a wire row in the outline lights that wire on the drawing
+@area Schematic
+@sizes 1920x1080
+# Polish: resting the pointer on a wire row (or a cable row, or an Inspector relation) lights it on the open page with the same quiet "related" outline the cross references use; leaving the row puts it out. Only things on the open page light (a row of another page just shows its tip). The outline is pinned at this size, so this scenario is 1920x1080 only. The pictures are the evidence: first the lit wire 1 at L1, then nothing lit.
+click_text "Open example"
+wait 20
+click_text "Drawn wires"
+wait 6
+click_text "Page 1 (17)"
+wait 6
+move 120 592
+wait 8
+shot wire-row-hovered
+move 1100 500
+wait 8
+shot pointer-away
+check_layout

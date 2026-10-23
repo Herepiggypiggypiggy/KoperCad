@@ -71,6 +71,22 @@ pub(super) fn fan_icon(ui: &mut egui::Ui, size: f32, colour: egui::Color32) -> e
     response
 }
 
+/// How long a jump on a 2D canvas (an outline row, a problem, a cross
+/// reference) glides to its target; none with Reduce motion or under the
+/// test harness, so a jump lands at once. Unit tests run with the egui clock
+/// stopped, so a glide there would never arrive: they get none either (the
+/// canvas has its own glide test).
+pub(super) fn glide_secs(reduce_motion: bool) -> f32 {
+    if reduce_motion || crate::control::still_pictures() || cfg!(test) {
+        0.0
+    } else {
+        GLIDE_SECS
+    }
+}
+
+/// The glide time of a jump.
+pub(super) const GLIDE_SECS: f32 = 0.22;
+
 /// Ease-out: fast at the start, settling gently. `t` is clamped to 0..=1.
 pub(super) fn ease_out(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
@@ -102,6 +118,14 @@ pub(super) fn toast_frame(style: &egui::Style, alpha: f32) -> egui::Frame {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_jump_glides_for_about_a_fifth_of_a_second_and_never_with_reduce_motion() {
+        assert_eq!(glide_secs(true), 0.0);
+        // Under `cfg(test)` the app glide is off, so read the constant's intent
+        // from the source: 0.22 s.
+        assert_eq!(GLIDE_SECS, 0.22);
+    }
 
     #[test]
     fn the_toast_box_fades_with_its_text() {

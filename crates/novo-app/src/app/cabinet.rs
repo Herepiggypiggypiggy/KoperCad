@@ -1836,6 +1836,8 @@ impl NovoApp {
                         egui::Color32::from_rgba_unmultiplied(r, g, b, a),
                     );
                 }
+                self.cabinet.view.glide_secs =
+                    super::motion::glide_secs(self.settings.reduce_motion);
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
                 cabinet_bar::note_rect(
                     ui.ctx(),

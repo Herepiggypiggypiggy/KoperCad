@@ -1,0 +1,35 @@
+@title Live current paths: thin dashes on the wires that carry a load current
+@area Schematic
+@sizes 1366x768
+# Shift+L opens the live view. On the control page nothing conducts at rest, so
+# there is no Current paths switch. Holding start closes the circuit to the
+# contactor coil: the wires on that route get thin dashes, the card offers the
+# switch, and turning it off takes them away.
+click_text "Open example"
+wait 20
+key shift+l
+wait 20
+tree Go
+try click_text "Go to page 2 Control circuit"
+wait 20
+shot at-rest
+expect_not "Current paths"
+mouse_down 75 397
+wait 20
+shot start-held
+expect "Current paths"
+check_layout
+mouse_up 75 397
+wait 20
+shot start-released-sealed-in
+expect "Current paths"
+# A narrow window puts the lit wires under the Live card: no dashes may show through it.
+resize 560 768
+wait 20
+shot wire-under-card
+resize 1366 768
+wait 20
+click_text "Current paths"
+wait 10
+shot paths-off
+expect "Current paths"
