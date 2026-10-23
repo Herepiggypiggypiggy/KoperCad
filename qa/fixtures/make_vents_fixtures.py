@@ -2,6 +2,8 @@
 """Makes the vent fixtures from cabinet-cooling-advice.novo (run from the repo root).
 
   cabinet-vents-small-grille.novo  the hot cabinet with one 30 x 30 mm grille in the right wall
+  cabinet-vents-four-grilles.novo  the hot cabinet with four 60 x 60 mm grilles in the right wall: each too small alone, together enough
+  cabinet-vents-just-over.novo     the same with T1 limit half a kelvin lower, so T1 ends a hair over its limit
   cabinet-vents-at-limit.novo      the hot cabinet with the proposed filter fan and its grille, T1 limit (max_ambient_c) raised so it ends about at its limit
 
 Usage: make_vents_fixtures.py [T1 max_ambient_c for the at-limit file]
@@ -35,4 +37,6 @@ def make(name, openings, t1_limit=None):
 
 
 make("cabinet-vents-small-grille", [dict(GRILLE, width_mm=30.0, height_mm=30.0)])
+make("cabinet-vents-four-grilles", [dict(GRILLE, u_mm=130.0 + 100.0 * i, width_mm=60.0, height_mm=60.0) for i in range(4)])
 make("cabinet-vents-at-limit", [FAN, GRILLE], float(sys.argv[1]) if len(sys.argv) > 1 else 43.0)
+make("cabinet-vents-just-over", [FAN, GRILLE], (float(sys.argv[1]) if len(sys.argv) > 1 else 43.0) - 0.5)

@@ -24,7 +24,7 @@ wait_s 200
 expect_not "Locked while the run goes"
 expect "Grille, in the right wall"
 expect "Cooling selection proposes"
-expect_not "smaller than this flow needs"
+expect_not "too small for this flow"
 expect_not "A grille of about"
 shot 02-grille-then-card
 check_layout

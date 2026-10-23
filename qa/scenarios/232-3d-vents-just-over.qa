@@ -1,0 +1,20 @@
+@title 3D vents: a device a hair over its limit reads just over on the label and in the panel line
+@area 3D
+@sizes 1366x768 1920x1080
+# The same cabinet as scenario 231 with T1 limit lowered by half a kelvin (fixture made by qa/fixtures/make_vents_fixtures.py), so T1 ends between 0 and 0.5 K over. The panel line says "just over its limit" and the label "just over limit" in the Over colour, not "0 K over". Both are drawn text the harness cannot read, so the picture is the evidence; the finished run is checked.
+open qa/fixtures/cabinet-vents-just-over.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 170
+expect_not "Locked while the run goes"
+shot 01-at-its-limit
+check_layout
+check_blank 01-at-its-limit

@@ -685,6 +685,16 @@ mod tests {
         tiny.height_mm = 20.0;
         set.add(tiny);
         assert!(filter.companion_for_test(&e, &set).is_some());
+        // Several small grilles count together: their free areas add up.
+        let mut set = HeatSettings::default();
+        for _ in 0..6 {
+            let mut small = VentSpec::new(Wall::Left);
+            small.width_mm = 100.0;
+            small.height_mm = 100.0;
+            small.free_fraction = 0.5;
+            set.add(small);
+        }
+        assert!(filter.companion_for_test(&e, &set).is_none());
         let mut set = HeatSettings::default();
         // A grille already there, big enough, serves as the other side: nothing is added.
         let mut big = VentSpec::new(Wall::Left);
