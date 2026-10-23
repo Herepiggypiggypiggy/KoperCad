@@ -46,6 +46,40 @@ pub(crate) fn picker(ui: &mut egui::Ui, id: &str, current: AddressStyle) -> Opti
     picked
 }
 
+/// The line under the I/O list header when Rockwell addresses read `?` for the
+/// slot: names the cards with no slot. `None` when every address has one.
+pub(crate) fn missing_slot_note(output: &novo_reports::ReportOutput) -> Option<String> {
+    use novo_reports::Cell;
+    let mut cards: Vec<String> = Vec::new();
+    for section in &output.sections {
+        let card = section.columns.iter().position(|c| c.key == "card");
+        for row in &section.rows {
+            let unslotted = row
+                .cells
+                .iter()
+                .any(|c| matches!(c, Cell::Text(t) if t.starts_with("Local:?:")));
+            if !unslotted {
+                continue;
+            }
+            let name = match card.and_then(|i| row.cells.get(i)) {
+                Some(Cell::Text(t)) if !t.is_empty() => t.clone(),
+                _ => String::from("a card"),
+            };
+            if !cards.contains(&name) {
+                cards.push(name);
+            }
+        }
+    }
+    if cards.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "Slot missing on {}: Rockwell addresses read the card's slot (Local:<slot>:...), shown as \
+         ? until the card has one.",
+        cards.join(", ")
+    ))
+}
+
 impl NovoApp {
     /// The project's address style.
     pub(crate) fn plc_address_style(&self) -> AddressStyle {
@@ -87,5 +121,50 @@ impl NovoApp {
                 false
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use novo_reports::{Cell, Column, ReportOutput, Row, Section};
+
+    fn output(rows: &[(&str, &str)]) -> ReportOutput {
+        let mut section = Section::new(
+            "plc",
+            "PLC",
+            vec![
+                Column::new("address", "Address", 10.0),
+                Column::new("card", "Card", 10.0),
+            ],
+        );
+        for (address, card) in rows {
+            section.rows.push(Row::new(
+                vec![
+                    Cell::Text((*address).to_owned()),
+                    Cell::Text((*card).to_owned()),
+                ],
+                Vec::new(),
+            ));
+        }
+        ReportOutput {
+            report: "io".to_owned(),
+            title: "I/O list".to_owned(),
+            revision: 0,
+            sections: vec![section],
+        }
+    }
+
+    #[test]
+    fn rockwell_addresses_with_no_slot_name_their_card() {
+        let none = output(&[("Local:3:I.Data.0", "-A1"), ("%IX0.0", "-A2")]);
+        assert_eq!(missing_slot_note(&none), None);
+        let some = output(&[
+            ("Local:?:I.Data.0", "-A1"),
+            ("Local:?:O.Data.0", "-A1"),
+            ("Local:?:I.Data.0", "-A3"),
+        ]);
+        let note = missing_slot_note(&some).unwrap();
+        assert!(note.starts_with("Slot missing on -A1, -A3:"), "{note}");
     }
 }

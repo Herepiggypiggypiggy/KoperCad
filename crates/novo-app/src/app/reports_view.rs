@@ -402,6 +402,11 @@ impl NovoApp {
         {
             ui.weak(set.explanation());
         }
+        if id == "io"
+            && let Some(note) = super::plc_style::missing_slot_note(&output)
+        {
+            ui.colored_label(crate::theme::ui_palette().warning, note);
+        }
         ui.separator();
         // The single-line diagram shows its drawing first; its schedule tab
         // falls through to the table.

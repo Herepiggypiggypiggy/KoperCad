@@ -38,6 +38,7 @@ shot io-list-style-open
 click_text Rockwell Button
 wait 20
 expect "Local:"
+expect "Slot missing on -A1"
 shot io-list-rockwell
 check_layout
 check_blank io-list-rockwell
