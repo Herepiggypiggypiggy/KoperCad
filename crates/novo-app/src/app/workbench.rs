@@ -144,6 +144,10 @@ pub(crate) struct Workbench {
     /// Several items to select together on a page, once it is shown (a
     /// cable's core wires from the outline).
     pub(super) pending_items: Option<(PageId, Vec<AnyId>)>,
+    /// What the pointer rests on in a list (an outline wire or cable row, an
+    /// Inspector relation): lit on the drawing, when it is on the open page,
+    /// until the next frame sets it again.
+    pub(super) hover_preview: Vec<AnyId>,
     /// The drawing's layer and rect last frame: a focused widget there is
     /// the canvas, anywhere else a panel.
     pub(super) canvas_area: Option<(egui::LayerId, egui::Rect)>,
@@ -333,6 +337,7 @@ impl Default for Workbench {
             pending_item: None,
             custom_symbols: Default::default(),
             pending_items: None,
+            hover_preview: Vec::new(),
             canvas_area: None,
             occurrences: None,
             drawer: None,

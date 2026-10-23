@@ -352,11 +352,13 @@ impl NovoApp {
     /// page and every cable, each a row that jumps to it (a wire opens its
     /// page and selects it, a cable selects all its wired cores). With a
     /// filter the sections open on what matches.
-    fn net_sections(&self, ui: &mut egui::Ui, filter: &str) -> Option<NetJump> {
+    fn net_sections(&mut self, ui: &mut egui::Ui, filter: &str) -> Option<NetJump> {
         let project = self.backend.document()?.project();
         let filtering = !filter.is_empty();
         let force = filtering.then_some(true);
         let mut jump = None;
+        let mut hover: Vec<AnyId> = Vec::new();
+        let current = self.current_page;
         ui.add_space(6.0);
         let wires = items::wire_count(project);
         egui::CollapsingHeader::new(format!("Drawn wires ({wires})"))
@@ -377,11 +379,13 @@ impl NovoApp {
                     .open(force)
                     .show(ui, |ui| {
                         for wire in &group.wires {
-                            if ui
+                            let row = ui
                                 .selectable_label(false, &wire.text)
-                                .on_hover_text("Open its page and select the wire")
-                                .clicked()
-                            {
+                                .on_hover_text("Open its page and select the wire");
+                            if row.hovered() && Some(group.page) == current {
+                                hover = vec![AnyId::Wire(wire.id)];
+                            }
+                            if row.clicked() {
                                 jump = Some(NetJump::Wire(wire.id));
                             }
                         }
@@ -398,11 +402,13 @@ impl NovoApp {
                     ui.weak("No cable matches");
                 }
                 for cable in list {
-                    if ui
+                    let row = ui
                         .selectable_label(false, &cable.text)
-                        .on_hover_text("Select all wired cores of this cable")
-                        .clicked()
-                    {
+                        .on_hover_text("Select all wired cores of this cable");
+                    if row.hovered() {
+                        hover = cable.wires.iter().map(|w| AnyId::Wire(*w)).collect();
+                    }
+                    if row.clicked() {
                         jump = Some(if cable.wires.is_empty() {
                             NetJump::EmptyCable(cable.text.clone())
                         } else {
@@ -411,6 +417,9 @@ impl NovoApp {
                     }
                 }
             });
+        if !hover.is_empty() {
+            self.wb.hover_preview = hover;
+        }
         jump
     }
 
