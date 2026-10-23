@@ -218,7 +218,9 @@ pub const CANVAS_HIGH_CONTRAST_DARK: CanvasPalette = CanvasPalette {
 
 /// The high contrast light canvas: a white sheet, black ink and deep marks.
 pub const CANVAS_HIGH_CONTRAST_LIGHT: CanvasPalette = CanvasPalette {
-    background: [0xC8, 0xC8, 0xC8, 0xFF],
+    // White like the sheet: the cabinet plate has no fill of its own, so a grey
+    // desk made it grey on grey. The sheet frame still marks the page.
+    background: [0xFF, 0xFF, 0xFF, 0xFF],
     sheet: [0xFF, 0xFF, 0xFF, 0xFF],
     sheet_frame: [0x30, 0x30, 0x30, 0xFF],
     sheet_text: [0x00, 0x00, 0x00, 0xFF],
