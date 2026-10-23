@@ -10,3 +10,5 @@
 2026-10-23 Heat legend leftovers: heat.rs colour tokens moved to ui_palette(); legend opens with "Preview, not a solver result". Scenario 290.
 
 2026-10-23 Airflow line halo follows the theme (surface colour at half opacity); contours stay dark by design. Scenario 300.
+
+2026-10-23 Critic C-61: placing the Three-phase supply in a drawing with no supply now hangs L1 L2 L3 N PE feeds on its open points and the status line says to wire -F1 to the starter. Scenario 310.

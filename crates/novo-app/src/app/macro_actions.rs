@@ -15,7 +15,7 @@ use novo_core::{AnyId, BlockDefinition, Record, Value};
 use novo_parts::{MacroEntry, MacroFile, MacroLibrary};
 use novo_workflow::macro_place::{self, PartRef, PlaceOptions, Report, WireNumbers};
 
-use super::{Level, NovoApp};
+use super::{Level, NovoApp, supply_feeds};
 
 /// Gap between the drawing and a placed macro, in mm.
 const PLACE_GAP: f64 = 20.0;
@@ -636,8 +636,16 @@ impl NovoApp {
             return;
         };
         let origin = macro_place::free_origin(doc.project(), page, PLACE_GAP);
+        // The supply circuit in a drawing with no supply: feed its open points.
+        let feed_supply =
+            name == supply_feeds::SUPPLY_MACRO && !supply_feeds::has_supply(doc.project());
+        let mut fed = 0;
         let result = doc.transact("Place macro", |tx| {
-            macro_place::place_macro(tx, shown.definition, page, origin, &options)
+            let placed = macro_place::place_macro(tx, shown.definition, page, origin, &options)?;
+            if feed_supply {
+                fed = supply_feeds::feed_open_points(tx, page, placed.instance)?;
+            }
+            Ok(placed)
         });
         match result {
             Ok((placed, changes)) => {
@@ -653,6 +661,11 @@ impl NovoApp {
                 let text = if plc_note {
                     format!(
                         "Placed {name} (symbols only: use Draw > PLC > Add PLC card for addresses) · {}",
+                        describe(&placed.report)
+                    )
+                } else if fed > 0 {
+                    format!(
+                        "Placed {name}, L1 L2 L3 N PE fed · now wire its outputs to the starter · {}",
                         describe(&placed.report)
                     )
                 } else {
