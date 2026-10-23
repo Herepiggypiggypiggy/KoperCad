@@ -59,7 +59,7 @@ pub(super) struct Frame {
 }
 
 /// The cue at `age`, or `None` once it is over.
-pub(super) fn frame(age: f64) -> Option<Frame> {
+pub(super) fn frame_at(age: f64) -> Option<Frame> {
     if !(0.0..SECONDS).contains(&age) {
         return None;
     }
@@ -142,7 +142,7 @@ impl DrillCue {
             } else {
                 now - c.start
             };
-            let Some(f) = frame(age) else {
+            let Some(f) = frame_at(age) else {
                 continue;
             };
             let (x, y, dia) = c.key.xyd();
@@ -159,6 +159,60 @@ impl DrillCue {
                 painter.circle_stroke(centre, r * f.ring, egui::Stroke::new(1.0, col(0.7)));
             }
         }
+    }
+}
+
+impl DrillCue {
+    /// The cues as lines on the plate of the 3D view: for each hole a ring
+    /// that closes and a bore that opens, fading out. Radii are never below
+    /// 4 mm so a small hole stays legible from across the cabinet.
+    pub(super) fn lines(
+        &self,
+        frame: &novo_view3d::PlateFrame,
+        now: f64,
+        rgb: [u8; 3],
+    ) -> Option<novo_view3d::OverlayLines> {
+        const SEGMENTS: usize = 24;
+        // Clears a DIN rail (7.5 mm), so a screw under a rail still shows.
+        const LIFT: f64 = 9.0;
+        let mut out = novo_view3d::OverlayLines {
+            width_px: 2.0,
+            order: 60,
+            ..Default::default()
+        };
+        let mut circle = |centre: (f64, f64), r: f64, alpha: f32| {
+            let a = (alpha.clamp(0.0, 1.0) * 255.0) as u8;
+            if a < 6 {
+                return;
+            }
+            out.starts.push(out.positions.len() as u32);
+            for i in 0..=SEGMENTS {
+                let t = i as f64 / SEGMENTS as f64 * std::f64::consts::TAU;
+                out.positions.push(frame.world(
+                    centre.0 + r * t.cos(),
+                    centre.1 + r * t.sin(),
+                    LIFT,
+                ));
+                out.colors.push([rgb[0], rgb[1], rgb[2], a]);
+            }
+        };
+        for c in &self.cues {
+            let age = if crate::control::hold_cues() {
+                HOLD_AGE
+            } else {
+                now - c.start
+            };
+            let Some(f) = frame_at(age) else { continue };
+            let (x, y, dia) = c.key.xyd();
+            let r = (0.5 * dia).max(6.0);
+            if f.bore > 0.0 {
+                circle((x, y), r * f64::from(f.bore), 0.9 * f.alpha);
+            }
+            if f.ring > 1.02 {
+                circle((x, y), r * f64::from(f.ring), 0.7 * f.alpha);
+            }
+        }
+        (!out.positions.is_empty()).then_some(out)
     }
 }
 
@@ -230,12 +284,27 @@ mod tests {
 
     #[test]
     fn the_frame_closes_opens_and_fades() {
-        let a = frame(0.0).unwrap();
+        let a = frame_at(0.0).unwrap();
         assert_eq!((a.ring, a.bore, a.alpha), (3.0, 0.0, 1.0));
-        let b = frame(0.5).unwrap();
+        let b = frame_at(0.5).unwrap();
         assert!((b.ring - 1.0).abs() < 1e-3 && (b.bore - 1.0).abs() < 1e-3);
-        let c = frame(0.8).unwrap();
+        let c = frame_at(0.8).unwrap();
         assert!(c.alpha < 1.0 && c.alpha > 0.0);
-        assert!(frame(SECONDS).is_none() && frame(-0.1).is_none());
+        assert!(frame_at(SECONDS).is_none() && frame_at(-0.1).is_none());
+    }
+
+    #[test]
+    fn plate_lines_sit_above_a_rail_and_are_empty_when_nothing_runs() {
+        let frame = novo_view3d::PlateFrame {
+            width: 800.0,
+            height: 600.0,
+        };
+        let mut d = DrillCue::default();
+        assert!(d.lines(&frame, 0.0, [1, 2, 3]).is_none());
+        d.observe(1, 1, &keys(1), 0.0);
+        d.observe(1, 2, &keys(3), 5.0);
+        let l = d.lines(&frame, 5.3, [1, 2, 3]).expect("cue running");
+        assert!(l.positions.iter().all(|p| p.z > 7.5));
+        assert!(d.lines(&frame, 9.0, [1, 2, 3]).is_none());
     }
 }

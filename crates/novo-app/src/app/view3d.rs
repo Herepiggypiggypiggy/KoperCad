@@ -106,6 +106,10 @@ pub(crate) struct View3dMode {
     pub(super) vent_marks: Vec<novo_view3d::Overlay>,
     /// Whether `vent_marks` was last drawn with fans turning.
     vent_spun: bool,
+    /// New holes on the plate, marked briefly (see `drill_cue`).
+    drill: super::drill_cue::DrillCue,
+    /// Whether the drill cue was drawn last frame.
+    drill_shown: bool,
     vent_flows: Option<(u64, Vec<super::heat_settings::VentSpec>, Vec<Option<f64>>)>,
     /// The Airflow layer was switched on once for a result with openings.
     auto_flow_done: bool,
@@ -198,6 +202,8 @@ impl Default for View3dMode {
             vent_markers: Vec::new(),
             vent_marks: Vec::new(),
             vent_spun: false,
+            drill: Default::default(),
+            drill_shown: false,
             vent_flows: None,
             auto_flow_done: false,
             vent_drag: None,
@@ -767,7 +773,22 @@ impl NovoApp {
         } else {
             None
         };
-        let animating = tracing || spin_time.is_some();
+        // New screw holes are marked on the plate for a moment.
+        if mode.drill.stale(id.raw(), revision) {
+            let holes = super::drill_cue::plate_holes(project, id);
+            mode.drill
+                .observe(id.raw(), revision, &holes, ui.input(|i| i.time));
+        }
+        let cue_time = super::motion::clock(ui.ctx(), self.settings.reduce_motion);
+        let cue_running = cue_time.is_some_and(|t| mode.drill.running(t));
+        if cue_time.is_none() {
+            mode.drill.cues.clear();
+        }
+        if cue_running != mode.drill_shown {
+            mode.drill_shown = cue_running;
+            ghost_changed = true;
+        }
+        let animating = tracing || spin_time.is_some() || cue_running;
         if spin_time.is_some() {
             mode.vent_marks = heat_openings::overlays_at(&mode.vent_markers, spin_time);
         } else if mode.vent_spun {
@@ -845,6 +866,11 @@ impl NovoApp {
             all.extend(mode.emc.overlays().iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker);
+            if let Some(t) = cue_time.filter(|_| cue_running)
+                && let Some(l) = mode.drill.lines(&scene.frame, t, [120, 190, 255])
+            {
+                all.push(novo_view3d::Overlay::Lines(l));
+            }
             if tracing {
                 let time = ui.input(|i| i.time);
                 let t = heat_3d::tracers(&mode.heat_flow, time);
