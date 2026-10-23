@@ -1,0 +1,45 @@
+@title Issues: the row of a chosen problem has a soft highlight, in dark, Light and Reduce motion (run with KOPERCAD_MOTION=hold; still under the harness)
+@area Reports
+@sizes 1366x768
+# 1366x768 only: the steps pin the Issues panel with a fixed click on its pin icon. Open Issues from the status pill, pin the panel (an unpinned panel closes on a click), choose a problem (dark), switch to Light and choose another, then tick Reduce motion and choose a third: no fill. With KOPERCAD_MOTION=hold the highlight is frozen at 0.05 s; under the harness default none is drawn.
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text "8 warnings"
+wait 10
+click 233 69
+wait 5
+shot list
+click 120 220
+wait 10
+shot chosen-dark
+check_layout
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 6
+click 120 300
+wait 10
+shot chosen-light
+check_layout
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+scroll 683 400 -3000
+wait 6
+click_text "Reduce motion"
+wait 10
+key Escape
+wait 6
+click 120 400
+wait 10
+shot chosen-reduced
+check_layout
