@@ -22,6 +22,7 @@ use novo_core::{
     TextContent, WireId,
 };
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 use crate::art::LibraryArt;
 use crate::catalog::Match;
@@ -203,6 +204,35 @@ pub struct SchematicView {
     /// What "Show where it goes" lit up, with the selection it was shown
     /// for; any change of selection puts it out.
     where_shown: Option<(Vec<ItemId>, Vec<ItemId>)>,
+    /// The last refused click: a thin cross where it was and the reason next
+    /// to it, for [`REFUSAL_SHOWN`].
+    refusal: Option<RefusalMark>,
+    /// Reduce motion: the refusal mark then appears and goes without fading.
+    pub reduce_motion: bool,
+}
+
+/// How long the mark of a refused click stays.
+const REFUSAL_SHOWN: Duration = Duration::from_millis(2500);
+/// The last part of that time over which the mark fades out.
+const REFUSAL_FADE: Duration = Duration::from_millis(150);
+
+/// Where a click was refused, why, and when.
+struct RefusalMark {
+    at: Vec2,
+    reason: String,
+    since: Instant,
+}
+
+/// Opacity of the refusal mark `age` after the refusal: full, then a short
+/// fade at the end (none with reduced motion), and gone after [`REFUSAL_SHOWN`].
+fn refusal_alpha(age: Duration, reduced: bool) -> f32 {
+    if age >= REFUSAL_SHOWN {
+        return 0.0;
+    }
+    if reduced {
+        return 1.0;
+    }
+    ((REFUSAL_SHOWN - age).as_secs_f32() / REFUSAL_FADE.as_secs_f32()).min(1.0)
 }
 
 impl Default for SchematicView {
@@ -331,6 +361,8 @@ impl SchematicView {
             underlay: None,
             underlay_dirty: false,
             where_shown: None,
+            refusal: None,
+            reduce_motion: false,
         }
     }
 
@@ -842,6 +874,73 @@ impl SchematicView {
         }
     }
 
+    /// A thin cross where the last click was refused and the reason beside
+    /// it. Quiet on purpose: no motion, and gone after a moment or at the
+    /// next click.
+    fn paint_refusal(&mut self, ui: &egui::Ui) {
+        let Some(mark) = &self.refusal else {
+            return;
+        };
+        let age = mark.since.elapsed();
+        let alpha = refusal_alpha(age, self.reduce_motion);
+        if alpha <= 0.0 {
+            self.refusal = None;
+            return;
+        }
+        let s = self.canvas.viewport.world_to_screen(mark.at);
+        let at = self.rect.min + egui::vec2(s.x, s.y);
+        let painter = ui.painter_at(self.rect);
+        let [r, g, b, _] = self.canvas.style.warning.0;
+        let tint = egui::Color32::from_rgba_unmultiplied(r, g, b, (alpha * 255.0) as u8);
+        let stroke = egui::Stroke::new(1.5, tint);
+        let h = 5.0;
+        painter.line_segment([at + egui::vec2(-h, -h), at + egui::vec2(h, h)], stroke);
+        painter.line_segment([at + egui::vec2(-h, h), at + egui::vec2(h, -h)], stroke);
+        let mut text: String = mark.reason.chars().take(90).collect();
+        if mark.reason.chars().count() > 90 {
+            text.push('…');
+        }
+        let visuals = ui.visuals();
+        let fade = |c: egui::Color32| c.gamma_multiply(alpha);
+        let galley = painter.layout_no_wrap(
+            text,
+            egui::FontId::proportional(12.5),
+            fade(visuals.text_color()),
+        );
+        let pad = egui::vec2(6.0, 3.0);
+        let mut pos = at + egui::vec2(10.0, 8.0);
+        // Keep the whole note inside the drawing.
+        let size = galley.size() + pad * 2.0;
+        pos.x = pos
+            .x
+            .min(self.rect.right() - size.x - 4.0)
+            .max(self.rect.left() + 4.0);
+        pos.y = pos
+            .y
+            .min(self.rect.bottom() - size.y - 4.0)
+            .max(self.rect.top() + 4.0);
+        let frame = egui::Rect::from_min_size(pos, size);
+        painter.rect(
+            frame,
+            3.0,
+            fade(visuals.window_fill),
+            egui::Stroke::new(1.0, tint),
+            egui::StrokeKind::Inside,
+        );
+        painter.galley(pos + pad, galley, visuals.text_color());
+        // Repaint only when something changes: at the fade, then at the end.
+        let fade_at = REFUSAL_SHOWN - REFUSAL_FADE;
+        let wait = if self.reduce_motion {
+            REFUSAL_SHOWN - age
+        } else if age < fade_at {
+            fade_at - age
+        } else {
+            Duration::from_millis(16)
+        };
+        ui.ctx()
+            .request_repaint_after(wait.max(Duration::from_millis(1)));
+    }
+
     fn popup_open(&self) -> bool {
         self.insert.is_some() || self.rename.is_some() || self.menu.is_some()
     }
@@ -1088,8 +1187,19 @@ impl SchematicView {
             && !self.swallow
             && let Some(w) = out.cursor_raw
         {
-            self.editor.click(document, page, point(w), tolerance);
+            let clicked = self.editor.click(document, page, point(w), tolerance);
+            self.refusal = match (clicked, self.editor.notice()) {
+                (crate::tool::Clicked::Refused, Some(reason)) if !reason.is_empty() => {
+                    Some(RefusalMark {
+                        at: w,
+                        reason: reason.to_string(),
+                        since: Instant::now(),
+                    })
+                }
+                _ => None,
+            };
         }
+        self.paint_refusal(ui);
         // Pin under the pointer: the connect cursor.
         if !self.editor.tool_active() && self.editor.pin_hovered() && response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
@@ -3458,6 +3568,32 @@ mod tests {
                 .notice()
                 .is_some_and(|n| n.starts_with("Linked to"))
         );
+    }
+
+    #[test]
+    fn refusal_mark_fades_only_at_the_end_and_never_with_reduced_motion() {
+        let ms = Duration::from_millis;
+        assert_eq!(refusal_alpha(ms(0), false), 1.0);
+        assert_eq!(refusal_alpha(ms(2000), false), 1.0);
+        let end = refusal_alpha(ms(2425), false);
+        assert!(end > 0.3 && end < 0.7, "{end}");
+        assert_eq!(refusal_alpha(ms(2500), false), 0.0);
+        assert_eq!(refusal_alpha(ms(2490), true), 1.0);
+        assert_eq!(refusal_alpha(ms(2500), true), 0.0);
+    }
+
+    #[test]
+    fn a_refused_wire_start_leaves_a_mark_with_the_reason_and_a_good_click_clears_it() {
+        let mut h = Harness::new();
+        h.view.editor.begin_wire();
+        h.click(60.0, 60.0, egui::PointerButton::Primary);
+        let mark = h.view.refusal.as_ref().expect("a refused click is marked");
+        assert!(!mark.reason.is_empty());
+        assert_eq!(Some(mark.reason.as_str()), h.view.editor.notice());
+        h.view.editor.leave_tool();
+        h.view.editor.begin_place("iec/contacts/no", None);
+        h.click(220.0, 60.0, egui::PointerButton::Primary);
+        assert!(h.view.refusal.is_none());
     }
 
     #[test]
