@@ -78,7 +78,7 @@ counts the pages of the working project, left-out pages included.
 
 On the drawing, what the choice leaves out stays visible but veiled with a dashed outline (View > Layers, "Ghost what
 the options leave out"; hover says "Left out: only with Cooling fan"), so switching an option back is a look, not a
-search. Only straight wires are veiled; a routed wire's box would cover active neighbours. The device list, wire list,
+search. Wires are veiled along their own strokes, straight, curved or routed, so a wire never covers an active neighbour. The device list, wire list,
 bill of materials, cut list and contents get an *Option* column in the Reports view when some row is tied to an option; the PDF, the generated report pages and the Excel "Export all" carry it too (one output hook in `novo-reports`, set by the app; the CLI is not hooked).
 
 ## Expression language (`novo_workflow::expr`)

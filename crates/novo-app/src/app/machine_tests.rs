@@ -455,10 +455,12 @@ fn what_the_choice_leaves_out_is_ghosted_on_its_page_and_only_there() {
     // Conveyor off: its two symbols and the straight wire between them.
     let marks = kinds(&d, conveyor);
     assert_eq!(marks.len(), 3, "{marks:?}");
-    assert!(
-        marks
-            .iter()
-            .all(|m| m.kind == novo_canvas::MarkKind::LeftOut)
+    use novo_canvas::MarkKind::{LeftOut, LeftOutPath};
+    assert_eq!(marks.iter().filter(|m| m.kind == LeftOut).count(), 2);
+    assert_eq!(
+        marks.iter().filter(|m| m.kind == LeftOutPath).count(),
+        1,
+        "a wire is veiled along its strokes"
     );
     assert!(
         marks
@@ -677,7 +679,12 @@ fn the_ghost_switch_hides_the_veil_and_the_header_names_what_is_left_out() {
                     .marks
                     .list
                     .iter()
-                    .filter(|m| m.kind == novo_canvas::MarkKind::LeftOut)
+                    .filter(|m| {
+                        matches!(
+                            m.kind,
+                            novo_canvas::MarkKind::LeftOut | novo_canvas::MarkKind::LeftOutPath
+                        )
+                    })
                     .count()
             })
             .unwrap_or(0)
@@ -883,4 +890,41 @@ fn the_option_column_follows_edits_after_the_cache_is_filled() {
         options::remove_option(tx, "fan")
     });
     assert!(column(&mut d).is_none(), "no options, no column");
+}
+
+#[test]
+fn a_routed_wire_of_a_left_out_page_is_ghosted_too() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let _ = machine(&mut d);
+    let conveyor = page_of(&d, "2");
+    let wire = d
+        .app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .wires()
+        .find(|w| w.page == conveyor)
+        .unwrap()
+        .id;
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Route", |tx| {
+            tx.update::<novo_core::Wire>(wire, |w| {
+                w.route = vec![novo_core::Point::new(50.0, 50.0)];
+            })
+        })
+        .unwrap();
+    let marks = d.app.left_out_marks(conveyor);
+    assert_eq!(
+        marks
+            .iter()
+            .filter(|m| m.kind == novo_canvas::MarkKind::LeftOutPath)
+            .count(),
+        1,
+        "{marks:?}"
+    );
 }

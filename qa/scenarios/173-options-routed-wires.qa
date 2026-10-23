@@ -1,0 +1,24 @@
+@title Machine options: a routed wire of a left-out page is veiled along its strokes
+@area Options
+# The Cooling fan page (page 3) of this fixture has two routed wires (wires 20 and 22 bend out to the sides of wire 21). With the fan off the veil
+# follows each wire's own strokes instead of a box, and the hover says why. With the fan on the page is normal.
+open qa/fixtures/machine-options-routed.novo
+wait 20
+expect "Options: no Cooling fan, Supply 400V"
+key PageDown
+wait 4
+key PageDown
+wait 6
+shot fan-off-routed-wires-veiled
+check_layout
+move 313 330
+wait 4
+shot fan-off-routed-wire-hover
+key ctrl+k
+wait 3
+text option fan on
+wait 4
+key Enter
+wait 8
+shot fan-on-routed-wires-normal
+check_layout

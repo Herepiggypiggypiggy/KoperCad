@@ -1250,6 +1250,17 @@ impl CanvasView {
                         painter.add(egui::Shape::line(corners.to_vec(), stroke));
                     }
                 }
+                Placed::Path { segments, .. } => {
+                    // The wire's own strokes: a wide veil in the sheet's
+                    // colour with the dashes on top, as for an outline.
+                    let veil = egui::Stroke::new(8.0, c32(st.background.with_alpha(170)));
+                    let dash = egui::Stroke::new(1.5, c32(st.removed));
+                    for (a, b) in segments {
+                        let line = [at(*a), at(*b)];
+                        painter.line_segment(line, veil);
+                        painter.extend(egui::Shape::dashed_line(&line, dash, 5.0, 3.0));
+                    }
+                }
                 Placed::Glyph { kind, pos, marks } => {
                     let c = at(*pos);
                     let h = marks::GLYPH_SIZE * 0.5;
@@ -1344,6 +1355,23 @@ impl CanvasView {
             && !m.text.is_empty()
         {
             note(at(Vec2::new(r.min.x, r.max.y + 4.0)), &m.text);
+        }
+        // The same for a wire, along its strokes.
+        if let Some(c) = cursor
+            && let Some(Placed::Path { segments, mark, .. }) = placed.iter().find(|p| {
+                matches!(p, Placed::Path { segments, .. } if segments.iter().any(|(a, b)| marks::segment_distance(*a, *b, c) <= marks::PATH_HIT_PX))
+            })
+            && let Some(m) = self.marks.list.get(*mark)
+            && !m.text.is_empty()
+        {
+            let from = segments
+                .iter()
+                .min_by(|(a, b), (c2, d)| {
+                    marks::segment_distance(*a, *b, c)
+                        .total_cmp(&marks::segment_distance(*c2, *d, c))
+                })
+                .map_or(c, |(a, _)| *a);
+            note(at(from + Vec2::new(0.0, 8.0)), &m.text);
         }
         let Some(Placed::Glyph { pos, marks, .. }) =
             cursor.and_then(|c| marks::glyph_at(&placed, c))
