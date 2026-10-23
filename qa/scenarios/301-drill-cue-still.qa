@@ -1,0 +1,16 @@
+@title Cabinet: new plate holes show no animation under the harness
+@area Cabinet
+# The drill cue (a ring closing on each new hole) runs in the live app. The harness and Reduce motion show the plain plate, so pictures are stable. Place all drills the holes of every device and rail.
+click_text "Open example"
+wait 20
+click_text Cabinet #1
+wait 30
+shot plate-before
+key ctrl+k
+wait 4
+text Place all
+wait 6
+key Enter
+wait 20
+shot plate-after-place
+check_layout

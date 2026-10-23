@@ -1,0 +1,2 @@
+- PR 2 (branch claude/drill-cue): drill cue on the Cabinet plate. When an edit adds screw holes (device hole pattern, rail screws) a ring closes on each new hole, the bore opens to its true diameter and fades (0.9 s, max 24 cues). Code: `app/drill_cue.rs`, hook in `cabinet.rs`. Not drawn on first load, other surfaces, with Reduce motion or under the harness. 3D plate version is not built yet.
+- Not run here: the QA harness (box lacks openbox, vulkan, xkbcommon); unit tests, fmt and clippy pass.
