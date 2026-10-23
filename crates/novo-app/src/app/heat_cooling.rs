@@ -277,7 +277,18 @@ pub(super) fn show(
             } else {
                 pal.error
             };
-            ui.label(egui::RichText::new(selection.sentence()).strong().color(colour));
+            // A proposed fan gets a small slow fan beside the sentence.
+            let fan = !(running || stale || n.natural_ok())
+                && selection
+                    .proposal()
+                    .is_some_and(|c| c.product.kind != novo_thermal::cooling::Kind::CoolingUnit);
+            ui.horizontal_wrapped(|ui| {
+                if fan {
+                    super::motion::fan_icon(ui, 16.0, pal.info)
+                        .on_hover_text("Fan proposed. The turning is only a picture; its pace is not the flow.");
+                }
+                ui.label(egui::RichText::new(selection.sentence()).strong().color(colour));
+            });
             if running {
                 ui.label(small(
                     "Preliminary: the run is still going, so this can change.",

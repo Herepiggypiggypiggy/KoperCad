@@ -2717,6 +2717,7 @@ const ABOUT_NOTICES_URL: &str =
 impl eframe::App for NovoApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         fit_window_to_screen(ui.ctx());
+        motion::publish_reduce(ui.ctx(), self.settings.reduce_motion);
         self.show(ui);
         if crate::control::scene_wanted() {
             crate::control::publish_scene(self.scene_json());

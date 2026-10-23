@@ -26,6 +26,51 @@ pub(super) fn clock(ctx: &egui::Context, reduce_motion: bool) -> Option<f64> {
     Some(ctx.input(|i| i.time))
 }
 
+/// The Reduce motion setting, put where code with only a `Ui` can read it.
+pub(super) fn publish_reduce(ctx: &egui::Context, reduce_motion: bool) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("reduce_motion"), reduce_motion));
+}
+
+/// [`clock`] for code that has no settings at hand: it reads what
+/// [`publish_reduce`] left this frame.
+pub(super) fn ambient(ctx: &egui::Context) -> Option<f64> {
+    let reduce = ctx
+        .data(|d| d.get_temp::<bool>(egui::Id::new("reduce_motion")))
+        .unwrap_or(false);
+    clock(ctx, reduce)
+}
+
+/// The corners of the three blades of a small fan icon of radius `r`
+/// centred on `c`, turned by `angle` radians: each blade is a short curl
+/// from the hub to the rim.
+pub(super) fn blade_points(c: egui::Pos2, r: f32, angle: f32) -> [[egui::Pos2; 3]; 3] {
+    let at = |a: f32, rr: f32| c + egui::vec2(rr * a.cos(), rr * a.sin());
+    std::array::from_fn(|k| {
+        let a = angle + k as f32 / 3.0 * std::f32::consts::TAU;
+        [c, at(a + 0.35, 0.55 * r), at(a + 0.7, r)]
+    })
+}
+
+/// A small fan (ring and three blades), 16 points across by default. It
+/// turns slowly while the clock runs and stands still otherwise. It shows
+/// that this proposal is a fan, nothing more: the pace is not the flow.
+pub(super) fn fan_icon(ui: &mut egui::Ui, size: f32, colour: egui::Color32) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
+    let time = ambient(ui.ctx());
+    let angle = novo_view3d::motion::fan_angle(time, 0.0);
+    let (c, r) = (rect.center(), 0.5 * size - 1.0);
+    let stroke = egui::Stroke::new(1.2, colour);
+    let painter = ui.painter_at(rect);
+    painter.circle_stroke(c, r, stroke);
+    for blade in blade_points(c, r, angle) {
+        painter.add(egui::Shape::line(blade.to_vec(), stroke));
+    }
+    if time.is_some() {
+        ui.ctx().request_repaint_after(FRAME);
+    }
+    response
+}
+
 /// Ease-out: fast at the start, settling gently. `t` is clamped to 0..=1.
 pub(super) fn ease_out(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
@@ -116,5 +161,26 @@ mod tests {
         assert_eq!(clock(&ctx, true), None);
         // A context nobody has focused yet is not a window being watched.
         assert_eq!(clock(&ctx, false), None);
+    }
+
+    #[test]
+    fn the_blades_turn_with_the_angle_and_start_at_the_hub() {
+        let c = egui::pos2(10.0, 10.0);
+        let a = blade_points(c, 8.0, 0.0);
+        let b = blade_points(c, 8.0, 1.0);
+        assert!(a.iter().all(|k| k[0] == c));
+        assert_ne!(a[0][2], b[0][2]);
+        // The tips stay on the rim whatever the angle.
+        for k in a.iter().chain(b.iter()) {
+            assert!(((k[2] - c).length() - 8.0).abs() < 1e-3);
+        }
+    }
+
+    #[test]
+    fn a_context_that_was_never_told_is_not_reduced_but_has_no_focus() {
+        let ctx = egui::Context::default();
+        assert_eq!(ambient(&ctx), None);
+        publish_reduce(&ctx, true);
+        assert_eq!(ambient(&ctx), None);
     }
 }
