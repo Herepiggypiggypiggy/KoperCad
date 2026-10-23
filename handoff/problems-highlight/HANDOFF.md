@@ -1,0 +1,2 @@
+# Problems-entry highlight
+Choosing a problem (click or F8/Shift+F8) gives its row in the Issues list a soft info-colour fill that eases out over 0.9 s, and scrolls the row into view. Off with Reduce motion and under the harness (the row is still scrolled to). `KOPERCAD_MOTION=hold` freezes it at 0.3 s for pictures (scenario 308). Cost: repaint at about 30 Hz for 0.9 s after a choice. Code: `checks.rs` `problem_flash`, `motion::flash_strength`.

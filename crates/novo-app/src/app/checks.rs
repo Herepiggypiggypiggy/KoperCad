@@ -345,6 +345,7 @@ impl NovoApp {
                         egui::TextFormat::simple(font, ui.visuals().text_color()),
                     );
                     let row = ui.selectable_label(false, text);
+                    self.problem_flash(ui, *i, &row);
                     self.learn_row("issues.list", &p.message, row.rect);
                     if row.clicked() {
                         go = Some(*i);
@@ -424,6 +425,47 @@ impl NovoApp {
             self.go_problem(i);
         }
         go.is_some()
+    }
+
+    /// A soft highlight on the row of the problem just chosen (a click or
+    /// F8), so the eye finds it in the list; it also scrolls into view. Off
+    /// with Reduce motion: the row is only scrolled to.
+    fn problem_flash(&mut self, ui: &egui::Ui, index: usize, row: &egui::Response) {
+        let Some((at, start)) = self.wb.problem_flash else {
+            return;
+        };
+        if at != index {
+            return;
+        }
+        if start.is_none() {
+            row.scroll_to_me(None);
+        }
+        let Some(now) = super::motion::clock(ui.ctx(), self.settings.reduce_motion) else {
+            self.wb.problem_flash = None;
+            return;
+        };
+        let began = start.unwrap_or(now);
+        let age = if crate::control::hold_cues() {
+            0.3
+        } else {
+            now - began
+        };
+        let strength = super::motion::flash_strength(age);
+        if strength <= 0.0 {
+            self.wb.problem_flash = None;
+            return;
+        }
+        self.wb.problem_flash = Some((at, Some(began)));
+        let pal = crate::theme::ui_palette();
+        let alpha = (strength * 60.0) as u8;
+        ui.painter().rect_filled(
+            row.rect,
+            ui.visuals().widgets.inactive.corner_radius,
+            egui::Color32::from_rgba_unmultiplied(pal.info.r(), pal.info.g(), pal.info.b(), alpha),
+        );
+        if !crate::control::hold_cues() {
+            ui.ctx().request_repaint_after(super::motion::FRAME);
+        }
     }
 
     /// The reason field of a problem being waived.
@@ -560,6 +602,7 @@ impl NovoApp {
             return;
         };
         self.message(Level::Info, problem.message.clone());
+        self.wb.problem_flash = Some((index, None));
         let Some(page) = problem.page else {
             return;
         };
