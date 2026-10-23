@@ -3,6 +3,7 @@
 //! window. With Reduce motion on, `toast_alpha` is always fully opaque and
 //! `toast_settled` is always true: nothing eases and nothing asks for repaints.
 
+use eframe::egui;
 use std::time::Duration;
 
 /// How long a new toast takes to fade in.
@@ -32,9 +33,30 @@ pub(super) fn toast_settled(age: Duration, left: Option<Duration>, reduced: bool
     reduced || (age >= FADE_IN && left.is_none_or(|l| l >= FADE_OUT))
 }
 
+/// The toast's box at opacity `alpha`: fill, border and shadow all fade with
+/// the content (`Ui::set_opacity` alone leaves the box opaque).
+pub(super) fn toast_frame(style: &egui::Style, alpha: f32) -> egui::Frame {
+    egui::Frame::popup(style).multiply_with_opacity(alpha)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_toast_box_fades_with_its_text() {
+        let style = egui::Style::default();
+        let full = toast_frame(&style, 1.0);
+        let half = toast_frame(&style, 0.5);
+        let none = toast_frame(&style, 0.0);
+        assert_eq!(full.fill, egui::Frame::popup(&style).fill);
+        assert!(half.fill.a() < full.fill.a() && half.fill.a() > 0);
+        assert!(half.stroke.color.a() < full.stroke.color.a());
+        assert!(half.shadow.color.a() < full.shadow.color.a());
+        assert_eq!(none.fill.a(), 0);
+        assert_eq!(none.stroke.color.a(), 0);
+        assert_eq!(none.shadow.color.a(), 0);
+    }
 
     const MS: fn(u64) -> Duration = Duration::from_millis;
 

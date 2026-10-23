@@ -2455,7 +2455,7 @@ impl NovoApp {
                         m.expiry().map(|e| e.saturating_sub(now - m.at)),
                         reduced,
                     );
-                    let frame = egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    let frame = motion::toast_frame(ui.style(), alpha).show(ui, |ui| {
                         ui.set_opacity(alpha);
                         let shown_text = match &m.file {
                             Some(file) => elide_path(&m.text, file, 36),
