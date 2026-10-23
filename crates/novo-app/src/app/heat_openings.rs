@@ -17,6 +17,7 @@ use novo_view3d::{Overlay, OverlayLines, OverlayMesh, Scene};
 
 use super::heat_3d::Place;
 use super::heat_settings::{Footprint, Kind, VentSpec, Wall};
+use novo_view3d::motion;
 
 /// Colours: air in, air out, not known yet. The label always says it in words
 /// too.
@@ -189,6 +190,12 @@ fn polyline(out: &mut OverlayLines, points: &[Vec3], colour: [u8; 4]) {
 /// All of the markers as overlays: a translucent fill, the frames, the slats
 /// or rotors and the arrows.
 pub(super) fn overlays(markers: &[Marker]) -> Vec<Overlay> {
+    overlays_at(markers, None)
+}
+
+/// [`overlays`] at a moment of the animation clock: the rotors turned and
+/// pulses of air crossing the openings. `None` is the still picture.
+pub(super) fn overlays_at(markers: &[Marker], time: Option<f64>) -> Vec<Overlay> {
     let mut fill = OverlayMesh {
         translucent: true,
         order: MESH_ORDER,
@@ -198,6 +205,7 @@ pub(super) fn overlays(markers: &[Marker]) -> Vec<Overlay> {
     let mut frame_selected = lines(5.5);
     let mut detail = lines(1.6);
     let mut arrows = lines(3.6);
+    let mut air = lines(2.6);
     for m in markers {
         if m.selected {
             // The wall it is in, tinted, so "left wall" is not a guess.
@@ -243,21 +251,22 @@ pub(super) fn overlays(markers: &[Marker]) -> Vec<Overlay> {
         let faint = m.colour(210);
         match m.spec.kind {
             Kind::Grille => slats(m, &mut detail, faint),
-            Kind::Fan => rotor(m, &mut detail, faint),
+            Kind::Fan => rotor(m, &mut detail, faint, spin(m, time)),
             Kind::FilterFan => {
-                rotor(m, &mut detail, faint);
+                rotor(m, &mut detail, faint, spin(m, time));
                 // The filter frame around the fan.
                 let w = m.corners(5.0);
                 polyline(&mut detail, &[w[0], w[1], w[2], w[3], w[0]], faint);
             }
         }
         arrow(m, &mut arrows);
+        pulses(m, &mut air, time);
     }
     let mut out = Vec::new();
     if !fill.indices.is_empty() {
         out.push(Overlay::Mesh(fill));
     }
-    for l in [detail, frame, frame_selected, arrows] {
+    for l in [detail, frame, frame_selected, arrows, air] {
         if !l.positions.is_empty() {
             out.push(Overlay::Lines(l));
         }
@@ -280,8 +289,58 @@ fn slats(m: &Marker, out: &mut OverlayLines, colour: [u8; 4]) {
     }
 }
 
-/// A ring and three blades.
-fn rotor(m: &Marker, out: &mut OverlayLines, colour: [u8; 4]) {
+/// The blade angle of a fan marker at `time`.
+fn spin(m: &Marker, time: Option<f64>) -> f32 {
+    motion::fan_angle(time, m.spec.flow_m3h as f32)
+}
+
+/// Whether anything in `markers` moves when the clock runs: a fan turns, and
+/// an opening with a known direction carries pulses of air.
+pub(super) fn moves(markers: &[Marker]) -> bool {
+    markers
+        .iter()
+        .any(|m| m.spec.kind.is_fan() || m.role != Role::Open)
+}
+
+/// Short bright dashes that travel along the arrow's line, in the direction of
+/// the air, fading in and out. A model of the way, not of the speed.
+fn pulses(m: &Marker, out: &mut OverlayLines, time: Option<f64>) {
+    const COUNT: usize = 3;
+    let (start, end) = match m.role {
+        Role::In => (
+            m.centre + m.outward * m.arrow_len(),
+            m.centre - m.outward * 0.6 * m.arrow_len(),
+        ),
+        Role::Out => (
+            m.centre - m.outward * 0.6 * m.arrow_len(),
+            m.centre + m.outward * m.arrow_len(),
+        ),
+        Role::Open => return,
+    };
+    let dir = (end - start).normalize_or_zero();
+    let dash = 0.14 * (end - start).length();
+    for k in 0..COUNT {
+        let Some(phase) = motion::air_phase(time, k, COUNT) else {
+            return;
+        };
+        let alpha = (motion::air_fade(phase) * 255.0) as u8;
+        if alpha < 8 {
+            continue;
+        }
+        let head = start + (end - start) * phase;
+        let c = m.role.rgb();
+        let white = [
+            c[0].saturating_add(90),
+            c[1].saturating_add(90),
+            c[2].saturating_add(90),
+            alpha,
+        ];
+        polyline(out, &[head - dir * dash, head], white);
+    }
+}
+
+/// A ring and three blades, turned by `angle` radians.
+fn rotor(m: &Marker, out: &mut OverlayLines, colour: [u8; 4], angle: f32) {
     const SEGMENTS: usize = 28;
     let short = m.half[0].min(m.half[1]);
     let r = (0.9 * short).min(short - 3.0).max(2.0);
@@ -292,7 +351,7 @@ fn rotor(m: &Marker, out: &mut OverlayLines, colour: [u8; 4]) {
         .collect();
     polyline(out, &ring, colour);
     for k in 0..3 {
-        let ang = k as f32 / 3.0 * std::f32::consts::TAU;
+        let ang = angle + k as f32 / 3.0 * std::f32::consts::TAU;
         // A blade curls a little, so the rotor reads as a rotor.
         let mid = at(ang + 0.35, 0.55 * r);
         polyline(out, &[c, mid, at(ang + 0.7, r)], colour);
@@ -637,6 +696,23 @@ mod tests {
         t.u_mm = 400.0;
         let m = marker(t);
         assert_eq!(m.outward, Vec3::new(0.0, 1.0, 0.0));
+    }
+
+    #[test]
+    fn a_still_picture_is_the_old_drawing_and_a_running_one_moves() {
+        let mut fan = VentSpec::new(Wall::Door);
+        fan.kind = Kind::Fan;
+        let m = [marker(fan)];
+        assert!(moves(&m));
+        assert_eq!(overlays(&m), overlays_at(&m, None));
+        assert_eq!(overlays_at(&m, Some(0.3)), overlays_at(&m, Some(0.3)));
+        assert_ne!(overlays_at(&m, Some(0.1)), overlays_at(&m, Some(0.2)));
+    }
+
+    #[test]
+    fn a_grille_with_no_known_direction_stands_still() {
+        let m = [marker(VentSpec::new(Wall::Left))];
+        assert!(!moves(&m));
     }
 
     #[test]

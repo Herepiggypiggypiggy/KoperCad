@@ -197,7 +197,7 @@ impl NovoApp {
                     ui.checkbox(&mut calm, "Reduce motion");
                     hint(
                         ui,
-                        "The live view switches states at once and shows an arrow on running motors instead of spinning them.",
+                        "The live view switches states at once and shows an arrow on running motors instead of spinning them. Fans and air in the 3D view stand still.",
                     );
                 });
             ui.add_space(8.0);

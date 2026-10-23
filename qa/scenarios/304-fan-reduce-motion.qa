@@ -1,0 +1,31 @@
+@title 3D Heat: with Reduce motion on, a fan opening stays a still frame
+@area 3D
+# Run with KOPERCAD_MOTION=1 so motion is possible; Preferences > Reduce motion then has to hold the fan and the air dashes still: the two pictures are identical.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Add opening"
+wait 10
+click_text "Filter fan, low on the door"
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+scroll 683 400 -3000
+wait 6
+shot preferences
+click_text "Reduce motion"
+wait 10
+shot preferences-ticked
+key Escape
+wait 20
+shot reduced-a
+wait 30
+shot reduced-b
+check_layout

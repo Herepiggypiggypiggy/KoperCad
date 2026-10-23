@@ -104,6 +104,8 @@ pub(crate) struct View3dMode {
     /// them for a result (the result id and the openings it was read for).
     pub(super) vent_markers: Vec<heat_openings::Marker>,
     pub(super) vent_marks: Vec<novo_view3d::Overlay>,
+    /// Whether `vent_marks` was last drawn with fans turning.
+    vent_spun: bool,
     vent_flows: Option<(u64, Vec<super::heat_settings::VentSpec>, Vec<Option<f64>>)>,
     /// The Airflow layer was switched on once for a result with openings.
     auto_flow_done: bool,
@@ -195,6 +197,7 @@ impl Default for View3dMode {
             vent_enclosure: None,
             vent_markers: Vec::new(),
             vent_marks: Vec::new(),
+            vent_spun: false,
             vent_flows: None,
             auto_flow_done: false,
             vent_drag: None,
@@ -758,6 +761,21 @@ impl NovoApp {
         let tracing = solution.is_some()
             && (mode.heat.lines || mode.heat.carry)
             && !self.settings.reduce_motion;
+        // Fans turn and air crosses the openings while the view is open.
+        let spin_time = if heat_openings::moves(&mode.vent_markers) {
+            super::motion::clock(ui.ctx(), self.settings.reduce_motion)
+        } else {
+            None
+        };
+        let animating = tracing || spin_time.is_some();
+        if spin_time.is_some() {
+            mode.vent_marks = heat_openings::overlays_at(&mode.vent_markers, spin_time);
+        } else if mode.vent_spun {
+            // Back to the still picture when motion stops.
+            mode.vent_marks = heat_openings::overlays(&mode.vent_markers);
+            ghost_changed = true;
+        }
+        mode.vent_spun = spin_time.is_some();
         if wanted != mode.heat_shown {
             let place = |sol: &super::heat_run::Solution| Place {
                 plate_x: sol.plate[0],
@@ -807,7 +825,7 @@ impl NovoApp {
             .as_ref()
             .zip(mode.probe.at)
             .map(|(sol, at)| probe_marker(sol, at));
-        if !tracing && (heat_changed || ghost_changed || probe_changed) {
+        if !animating && (heat_changed || ghost_changed || probe_changed) {
             let mut all = mode.heat_base.clone();
             all.extend(mode.surface_panes.iter().cloned());
             all.extend(mode.pin_marks.iter().cloned());
@@ -818,7 +836,7 @@ impl NovoApp {
             all.extend(marker.clone());
             mode.view.set_overlays(all);
         }
-        if tracing {
+        if animating {
             let mut all = mode.heat_base.clone();
             all.extend(mode.surface_panes.iter().cloned());
             all.extend(mode.pin_marks.iter().cloned());
@@ -827,19 +845,26 @@ impl NovoApp {
             all.extend(mode.emc.overlays().iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker);
-            let time = ui.input(|i| i.time);
-            let t = heat_3d::tracers(&mode.heat_flow, time);
-            if !t.positions.is_empty() {
-                all.push(novo_view3d::Overlay::Lines(t));
-            }
-            if mode.heat.carry {
-                let t = heat_3d::tracers_in(&mode.heat_carry.flow, time, heat_carry::TRACER_RGB, 6);
+            if tracing {
+                let time = ui.input(|i| i.time);
+                let t = heat_3d::tracers(&mode.heat_flow, time);
                 if !t.positions.is_empty() {
                     all.push(novo_view3d::Overlay::Lines(t));
                 }
+                if mode.heat.carry {
+                    let t =
+                        heat_3d::tracers_in(&mode.heat_carry.flow, time, heat_carry::TRACER_RGB, 6);
+                    if !t.positions.is_empty() {
+                        all.push(novo_view3d::Overlay::Lines(t));
+                    }
+                }
             }
             mode.view.set_overlays(all);
-            ui.ctx().request_repaint();
+            if tracing {
+                ui.ctx().request_repaint();
+            } else {
+                ui.ctx().request_repaint_after(super::motion::FRAME);
+            }
         }
         mode.view.drag_items =
             mode.controls.move_items && !mode.measure.on && mode.place.armed.is_none();
