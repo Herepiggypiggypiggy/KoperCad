@@ -338,13 +338,13 @@ pub(super) fn toolbar(
                 "Heat",
                 "The Heat panel: simulate how heat and air move in this cabinet",
             );
-            toggle(
-                ui,
-                &mut controls.emc,
-                "EMC",
-                "Electromagnetic compatibility: cable classes, keep-clear zones round noisy runs and \
-                 numbered hot spots, as an indicative model (View > EMC)",
+            let emc_hint = format!(
+                "{}: electromagnetic compatibility: cable classes, keep-clear zones round noisy \
+                 runs and numbered hot spots, as an indicative model (View > EMC). Click to {}.",
+                if controls.emc { "On" } else { "Off" },
+                if controls.emc { "hide it" } else { "show it" },
             );
+            toggle(ui, &mut controls.emc, "EMC", &emc_hint);
             changed.views = super::view3d_views::menu(ui, views);
             command = selection_menu(ui, selected, controls.hidden.len());
             section_menu(ui, section, bounds);
