@@ -482,3 +482,35 @@ fn an_io_list_imported_next_to_the_report_pages_gets_the_next_free_page_numbers(
         assert!(names.iter().any(|p| p == n), "{n} in {names:?}");
     }
 }
+
+#[test]
+fn what_a_list_row_rests_on_is_lit_on_the_drawing_for_one_frame_only() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    let wire = d.doc().project().wires().next().unwrap().id;
+    let lit = novo_canvas::model::item_id(novo_core::AnyId::Wire(wire));
+    d.app.wb.hover_preview = vec![novo_core::AnyId::Wire(wire)];
+    d.app.highlight_related();
+    assert!(
+        d.app
+            .canvas
+            .schematic()
+            .unwrap()
+            .canvas
+            .related()
+            .contains(&lit)
+    );
+    // Nothing sets it again: the next frame puts the light out.
+    d.app.highlight_related();
+    assert!(
+        !d.app
+            .canvas
+            .schematic()
+            .unwrap()
+            .canvas
+            .related()
+            .contains(&lit)
+    );
+}
