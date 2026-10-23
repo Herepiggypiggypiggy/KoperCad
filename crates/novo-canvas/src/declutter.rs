@@ -67,6 +67,11 @@ pub struct Candidate {
     pub anchor: Vec2,
     /// Screen box of the label at its own scale.
     pub bounds: Aabb,
+    /// The widest the label may grow, as a multiple of its own size (a
+    /// table cell's text must stay inside its cell); `f32::INFINITY` for
+    /// free text. It is lifted to the floor only as far as this allows,
+    /// never below its own size.
+    pub max_boost: f32,
 }
 
 /// A label that is drawn, and how much to enlarge it (1 when it is at the
@@ -92,7 +97,7 @@ pub fn plan(mut labels: Vec<Candidate>, floor: f32) -> Vec<Placed> {
         let boost = if l.size >= floor {
             1.0
         } else {
-            floor / l.size.max(1e-3)
+            (floor / l.size.max(1e-3)).min(l.max_boost.max(1.0))
         };
         if boost > 1.0 {
             if l.priority == Priority::Secondary && boost > SECONDARY_MAX_BOOST {
@@ -168,7 +173,25 @@ mod tests {
             size,
             anchor: at,
             bounds: Aabb::new(at, at + Vec2::new(w, size)),
+            max_boost: f32::INFINITY,
         }
+    }
+
+    #[test]
+    fn a_label_kept_to_its_cell_is_lifted_only_as_far_as_the_cell_allows() {
+        // Two table headers side by side, each exactly as wide as its cell
+        // at its own size. Lifted to the floor both would overlap and one
+        // would be dropped; kept to their cells both stay.
+        let (size, floor) = (5.0, 9.0);
+        let mut a = cand(0, Priority::Primary, size, Vec2::new(0.0, 0.0), 40.0);
+        let mut b = cand(1, Priority::Primary, size, Vec2::new(40.0, 0.0), 40.0);
+        let both = |a: &Candidate, b: &Candidate| plan(vec![*a, *b], floor).len();
+        assert_eq!(both(&a, &b), 1, "free text collides when lifted");
+        a.max_boost = 1.0;
+        b.max_boost = 1.0;
+        let placed = plan(vec![a, b], floor);
+        assert_eq!(placed.len(), 2);
+        assert!(placed.iter().all(|p| p.boost == 1.0));
     }
 
     #[test]

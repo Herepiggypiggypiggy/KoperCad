@@ -65,6 +65,10 @@ pub struct Label {
     /// cells of a contact table). The text audit does not count such a label
     /// over its own item; every other label does.
     pub inside: bool,
+    /// The widest the label may be drawn, in mm, when the screen lifts it
+    /// to the text floor (a table cell's text stays inside its cell instead
+    /// of colliding with its neighbours); `None` for free text.
+    pub fit_width: Option<f32>,
 }
 
 /// Average glyph advance relative to the font size, used for the estimated
@@ -104,7 +108,14 @@ impl Label {
             bold: false,
             priority: crate::declutter::Priority::Primary,
             inside: false,
+            fit_width: None,
         }
+    }
+
+    /// See [`Label::fit_width`].
+    pub fn fitted_to(mut self, width_mm: f32) -> Self {
+        self.fit_width = Some(width_mm);
+        self
     }
 
     /// Marks the label as part of its item's drawing (see [`Label::inside`]).

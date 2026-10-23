@@ -1,0 +1,36 @@
+@title Generated pages: every column header of a dense table is drawn at 1366x768
+@area Options
+# The Wire list page with the Option column is the densest table of the example. At a small window the canvas lifts small
+# text to the reading floor; a header must be kept inside its own cell (Route length mm used to be dropped).
+open qa/fixtures/machine-options.novo
+wait 20
+key ctrl+k
+wait 3
+text option fan on
+wait 4
+key Enter
+wait 10
+click_text Reports #2
+wait 20
+click_text "Wire list"
+wait 10
+key ctrl+k
+wait 3
+text Add report as drawing page
+wait 4
+key Enter
+wait 10
+click_text Schematic #1
+wait 10
+key PageDown
+wait 3
+key PageDown
+wait 3
+key PageDown
+wait 3
+key PageDown
+wait 3
+key PageDown
+wait 6
+shot wire-list-headers
+check_layout

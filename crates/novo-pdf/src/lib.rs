@@ -144,6 +144,7 @@ fn marker_ops(marker: &PdfMarker) -> Vec<DrawOp> {
             bold: true,
             priority: Default::default(),
             inside: false,
+            fit_width: None,
         }),
     ]
 }
@@ -495,6 +496,7 @@ pub fn draw_sheets(
                         bold: *bold,
                         priority: Default::default(),
                         inside: false,
+                        fit_width: None,
                     })
                 })
                 .collect();
@@ -536,6 +538,7 @@ pub fn footer_labels(
         bold: false,
         priority: Default::default(),
         inside: false,
+        fit_width: None,
     };
     vec![
         label(left, x, Anchor::CenterLeft),

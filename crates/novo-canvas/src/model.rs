@@ -1405,7 +1405,8 @@ impl PageScene {
                         Label::new(pos, text, t.height)
                             .anchored(anchor)
                             .colored(self.style.tag_color)
-                            .bolded(t.bold),
+                            .bolded(t.bold)
+                            .fitted_to(t.size.x),
                     );
                 }
             }
