@@ -1,0 +1,18 @@
+@title Fixing the last warning says so once, quietly
+@area Schematic
+# Polish: when a finished check finds no error or warning where the one before found some, one plain info line says "No errors or warnings left". No glow, no animation. Here a placed coil raises a warning and Undo removes it. The text is in the toast and the status bar.
+click_text "New project"
+wait 20
+key q
+text coil
+key Return
+click 600 300
+wait 10
+key Escape
+wait_s 2
+shot warning-present
+key ctrl+z
+wait_s 2
+expect "No errors or warnings left"
+shot all-clear
+check_layout
