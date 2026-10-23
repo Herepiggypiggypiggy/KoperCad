@@ -1,0 +1,16 @@
+@title About: Check for updates names a failed check in plain words
+@area Start
+@env KOPERCAD_UPDATE_FEED=qa/fixtures/does-not-exist.json
+key ctrl+k
+wait 6
+text about
+wait 8
+key Return
+wait 8
+click_text "Check for updates"
+wait 10
+expect "Could not check"
+shot about-update-failed
+check_layout
+click_text "Close"
+wait 4

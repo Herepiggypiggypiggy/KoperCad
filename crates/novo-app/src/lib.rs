@@ -26,8 +26,11 @@ mod gpu;
 mod keys;
 mod migrate;
 mod model_canvas;
+#[cfg(test)]
+mod packaging_tests;
 mod settings;
 mod theme;
+mod update_check;
 
 pub use actions::{Action, RESERVED_SHORTCUTS};
 pub use app::NovoApp;

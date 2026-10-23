@@ -1,0 +1,25 @@
+@title About: Check for updates answers from a release list
+@area Start
+@env KOPERCAD_UPDATE_FEED=qa/fixtures/release-feed-newer.json
+# The check only runs when the button is pressed. The QA run points it at a
+# local release list so the answer does not depend on the network:
+# KOPERCAD_UPDATE_FEED=qa/fixtures/release-feed-newer.json
+key ctrl+k
+wait 6
+text about
+wait 8
+key Return
+wait 8
+expect "Check for updates"
+expect "Nothing is sent unless you use Ask Claude"
+shot about-update-idle
+check_layout
+click_text "Check for updates"
+wait 10
+expect "is available"
+expect "Open the download page"
+shot about-update-newer
+check_layout
+click_text "Close"
+wait 4
+expect_not "Check for updates"

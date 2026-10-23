@@ -8,3 +8,10 @@ Done in PR "installer-polish-1": portable mode (`kopercad.portable` marker, data
 
 Not done / candidates: first-run language and units pickers (no language setting exists; units are mm by convention; Dutch menus are not wanted), HiDPI proof on real Windows, code signing, winget/scoop manifest, in-app update check (offline-first, would need a decision).
 Windows-only to verify by hand: see PROGRESS.md.
+
+## Installer polish 2 (2026-10-23)
+- About > Check for updates (`update_check.rs`): manual only, asks GitHub's public release list, offers the newest stable `vX.Y.Z` newer than the crate version, links the releases page, downloads nothing. Drafts, prereleases, rc tags and non-version tags (`experimental`) are ignored. Limit: a running release candidate shares the crate version with the final release, so it is only told about a newer version, not a newer candidate. `KOPERCAD_UPDATE_FEED` (file or URL) replaces the feed for QA.
+- `packaging_tests.rs` holds `novoelectric.iss` to the no-admin rule on every platform (lowest privileges, HKCU only, no Program Files/common folders, both extensions, old-name cleanup, close-on-update, uninstall default No).
+- QA scenarios 210 (newer found) and 211 (failed check), pictures in /mnt/project-files/qa/installer-update-check/.
+- Still not done: first-run pickers (no language setting), code signing, winget manifest, automatic (opt-in) update check at start.
+- Review fixes (main reviewer, 2026-10-23): the up-to-date answer reads "No newer stable version found / Release candidates are not checked" (never "newest version"); errors keep a reason, 403/429 get the rate-limit wording; links must start `https://github.com/`; `KOPERCAD_UPDATE_FEED` takes a file or https only. QA scenario 212 pictures the up-to-date answer.
