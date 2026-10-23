@@ -96,6 +96,7 @@ impl NovoApp {
             }
             view.move_carries = carries;
             view.reduce_motion = self.settings.reduce_motion;
+            view.canvas.glide_secs = super::motion::glide_secs(self.settings.reduce_motion);
         }
     }
 
