@@ -1,0 +1,26 @@
+@title Cooling selection: a proposed fan gets a small slow fan icon (still under the harness)
+@area 3D
+@sizes 1366x768 1920x1080
+# Same hot cabinet and Quick run as scenario 110. When a fan or filter fan is proposed a 16 pt fan icon sits before the sentence. It turns slowly in the live app (run with KOPERCAD_MOTION=1: the two pictures differ) and is a fixed frame under the harness and with Reduce motion.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 200
+expect_not "Preliminary"
+move 700 650
+wait 10
+click_text "Cooling selection"
+wait 10
+shot fan-a
+expect "Cooling selection proposes"
+wait 30
+shot fan-b
+check_layout
