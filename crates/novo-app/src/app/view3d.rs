@@ -1715,12 +1715,14 @@ fn run_heat(
 }
 
 /// Height the Heat strip keeps from the moment the Heat panel opens, points:
-/// the controls, the two colour bars and their note. The strip first appears
-/// with the first result; without the room kept, the panels and the cabinet
-/// jumped down by this much under the person's pointer. Assumes the two
-/// colour bars fit one row; a window too narrow for that wraps them back to
-/// two rows and the strip grows past this room.
-const STRIP_HEIGHT: f32 = 84.0;
+/// the controls, the colour bars and a row for the notes of the layers that
+/// are on. The strip first appears with the first result, and turning on
+/// Airflow, Shell, Heat flow and Devices adds the notes row (and wraps the
+/// controls once at 1280 px); without the room kept, the panels and the
+/// cabinet jumped down by this much under the person's pointer. Assumes the
+/// two colour bars fit one row; a window too narrow for that wraps them back
+/// to two rows and the strip grows past this room.
+const STRIP_HEIGHT: f32 = 98.0;
 
 /// The shortest window that keeps the strip's room before the first result:
 /// below it the panels beside the view would not all fit.

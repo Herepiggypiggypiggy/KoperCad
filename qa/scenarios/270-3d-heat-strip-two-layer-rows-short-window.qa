@@ -1,0 +1,27 @@
+@title 3D heat strip: airflow, shell, heat flow and devices on in a short window keep the panels in place
+@area 3D
+@sizes 1280x688 1366x768
+# After the first result the strip holds the temperature bar. Turning on Airflow (a second bar), Shell, Heat flow and Devices adds their notes under the bars and wraps the controls. The toolbar and panels stay where they were: the strip keeps room for the notes row.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 60
+shot 01-first-result
+click_text Airflow
+wait 10
+click_text Shell
+wait 10
+click_text "Heat flow"
+wait 10
+click_text Devices
+wait 20
+shot 02-four-layers-on
+check_layout
