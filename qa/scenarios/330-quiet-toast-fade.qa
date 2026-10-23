@@ -1,0 +1,13 @@
+@title A toast fades in quietly and is fully readable once settled
+@area Layout
+# Polish: toasts ease in over 160 ms and out over 300 ms, opacity only. Reduce motion shows them at full opacity at once (unit tests in app/motion.rs).
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text export pdf
+wait 6
+key Enter
+wait 30
+shot toast-settled
+check_layout
