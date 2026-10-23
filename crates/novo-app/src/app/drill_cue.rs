@@ -16,6 +16,8 @@ use novo_layout::drill::{self, Surface};
 
 /// Seconds a cue lasts.
 pub(super) const SECONDS: f64 = 0.9;
+/// Age a held cue (`KOPERCAD_MOTION=hold`, tests only) is drawn at.
+const HOLD_AGE: f64 = 0.5;
 /// Most cues shown at once: a whole-plate import would otherwise flash.
 pub(super) const MAX_CUES: usize = 24;
 
@@ -119,6 +121,9 @@ impl DrillCue {
 
     /// Forgets finished cues; true while any still runs.
     pub(super) fn running(&mut self, now: f64) -> bool {
+        if crate::control::hold_cues() {
+            return !self.cues.is_empty();
+        }
         self.cues.retain(|c| now - c.start < SECONDS);
         !self.cues.is_empty()
     }
@@ -132,7 +137,12 @@ impl DrillCue {
         colour: egui::Color32,
     ) {
         for c in &self.cues {
-            let Some(f) = frame(now - c.start) else {
+            let age = if crate::control::hold_cues() {
+                HOLD_AGE
+            } else {
+                now - c.start
+            };
+            let Some(f) = frame(age) else {
                 continue;
             };
             let (x, y, dia) = c.key.xyd();

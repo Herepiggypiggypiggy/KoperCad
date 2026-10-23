@@ -13,6 +13,8 @@ wait 4
 key Enter
 wait 10
 click_text "Centre rails on devices"
+wait 2
+key Escape
 wait 20
 shot after
 check_layout
