@@ -139,3 +139,34 @@ fn the_printed_addresses_follow_an_edit_of_a_card_or_the_address_style() {
     let shown = printed(&d, "Pump on").unwrap();
     assert!(shown.starts_with("Local:"), "{shown}");
 }
+
+#[test]
+fn the_address_style_is_chosen_in_the_card_dialog_and_in_one_undo_step() {
+    use novo_plc::AddressStyle;
+    let (_dir, mut d) = project();
+    assert_eq!(d.app.plc_address_style(), AddressStyle::Iec);
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "plc.add_card", None);
+    d.frame();
+    let form = d.app.wb.plc_card.as_mut().expect("the dialog is open");
+    assert_eq!(form.style, AddressStyle::Iec);
+    form.style = AddressStyle::Siemens;
+    let depth = d.doc().undo_depth();
+    assert!(d.app.confirm_plc_card());
+    assert_eq!(d.app.plc_address_style(), AddressStyle::Siemens);
+    // The card and the style are two steps; the style one undoes alone.
+    assert_eq!(d.doc().undo_depth(), depth + 2);
+    d.app.set_plc_address_style(AddressStyle::Rockwell);
+    assert_eq!(d.app.plc_address_style(), AddressStyle::Rockwell);
+    // Same style again: nothing happens.
+    let depth = d.doc().undo_depth();
+    assert!(!d.app.set_plc_address_style(AddressStyle::Rockwell));
+    assert_eq!(d.doc().undo_depth(), depth);
+    // A second dialog starts from the style the project has.
+    d.app.run_command(&ctx, "plc.add_card", None);
+    d.frame();
+    assert_eq!(
+        d.app.wb.plc_card.as_ref().unwrap().style,
+        AddressStyle::Rockwell
+    );
+}
