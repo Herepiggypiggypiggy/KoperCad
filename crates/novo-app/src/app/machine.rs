@@ -210,7 +210,7 @@ impl NovoApp {
     }
 
     /// The marks that ghost what the choice leaves out on `page`: every
-    /// symbol, and every straight wire, of a left-out page or device, veiled
+    /// symbol, and every wire, of a left-out page or device, veiled
     /// and outlined, with the condition in words on hover. The working
     /// project keeps them, so switching the option back needs no undo.
     pub(super) fn left_out_marks(&self, page: novo_core::PageId) -> Vec<novo_canvas::Mark> {
@@ -243,13 +243,12 @@ impl NovoApp {
                 marks.push(Mark::on(MarkKind::LeftOut, item_id(id)).with_text(words(id)));
             }
         }
-        for w in project
-            .wires()
-            .filter(|w| w.page == page && w.route.is_empty())
-        {
+        // A wire is veiled along its own strokes, straight, curved or
+        // routed, so its box never covers an active neighbour.
+        for w in project.wires().filter(|w| w.page == page) {
             let id = AnyId::Wire(w.id);
             if inactive.contains(&id) {
-                marks.push(Mark::on(MarkKind::LeftOut, item_id(id)).with_text(words(id)));
+                marks.push(Mark::on(MarkKind::LeftOutPath, item_id(id)).with_text(words(id)));
             }
         }
         marks

@@ -36,6 +36,10 @@ pub enum MarkKind {
     /// the drawing, veiled and outlined, so switching the option back is a
     /// look, not a search.
     LeftOut,
+    /// [`MarkKind::LeftOut`] for a wire: the veil and dashes follow the
+    /// wire's own strokes, so a curved or routed wire does not cover its
+    /// active neighbours the way its bounding box would.
+    LeftOutPath,
 }
 
 impl MarkKind {
@@ -120,6 +124,47 @@ pub enum Placed {
         rect: Aabb,
         mark: usize,
     },
+    /// The strokes of a wire (screen segments), for [`MarkKind::LeftOutPath`].
+    Path {
+        kind: MarkKind,
+        segments: Vec<(Vec2, Vec2)>,
+        mark: usize,
+    },
+}
+
+/// How close (screen points) the pointer must be to a [`Placed::Path`] for
+/// its note.
+pub const PATH_HIT_PX: f32 = 6.0;
+
+/// The straight pieces of an item's line strokes, in world units.
+fn line_pieces(item: &crate::Item) -> Vec<(Vec2, Vec2)> {
+    use crate::Shape;
+    let mut out = Vec::new();
+    for p in &item.primitives {
+        match &p.shape {
+            Shape::Line { a, b } => out.push((*a, *b)),
+            Shape::Polyline { points, closed } => {
+                out.extend(points.windows(2).map(|w| (w[0], w[1])));
+                if *closed && points.len() > 2 {
+                    out.push((points[points.len() - 1], points[0]));
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Distance from `c` to the segment `a`-`b`.
+pub fn segment_distance(a: Vec2, b: Vec2, c: Vec2) -> f32 {
+    let ab = b - a;
+    let len2 = ab.length_squared();
+    let t = if len2 <= f32::EPSILON {
+        0.0
+    } else {
+        ((c - a).dot(ab) / len2).clamp(0.0, 1.0)
+    };
+    (a + ab * t).distance(c)
 }
 
 /// Places the visible marks for this view. Glyphs of the same kind that
@@ -133,6 +178,24 @@ pub fn layout(marks: &Marks, scene: &Scene, view: &Viewport) -> Vec<Placed> {
     let mut cells: BTreeMap<(MarkKind, i32, i32), (Vec2, Vec<usize>)> = BTreeMap::new();
     for (i, m) in marks.list.iter().enumerate() {
         if m.kind == MarkKind::Override && !marks.show_overrides {
+            continue;
+        }
+        if m.kind == MarkKind::LeftOutPath
+            && let MarkTarget::Item(id) = m.target
+            && let Some(item) = scene.get(id)
+        {
+            let segments: Vec<(Vec2, Vec2)> = line_pieces(item)
+                .into_iter()
+                .map(|(a, b)| (view.world_to_screen(a), view.world_to_screen(b)))
+                .filter(|(a, b)| Aabb::from_corners(*a, *b).intersects(&screen))
+                .collect();
+            if !segments.is_empty() {
+                out.push(Placed::Path {
+                    kind: m.kind,
+                    segments,
+                    mark: i,
+                });
+            }
             continue;
         }
         let world = match m.target {
@@ -212,6 +275,7 @@ fn top_left(p: &Placed) -> f32 {
     match p {
         Placed::Outline { rect, .. } => rect.min.y * 1e4 + rect.min.x,
         Placed::Glyph { pos, .. } => pos.y * 1e4 + pos.x,
+        Placed::Path { segments, .. } => segments.first().map_or(0.0, |(a, _)| a.y * 1e4 + a.x),
     }
 }
 
@@ -219,6 +283,10 @@ fn distance(p: &Placed, c: Vec2) -> f32 {
     match p {
         Placed::Outline { rect, .. } => rect.distance_to_point(c),
         Placed::Glyph { pos, .. } => pos.distance(c),
+        Placed::Path { segments, .. } => segments
+            .iter()
+            .map(|(a, b)| segment_distance(*a, *b, c))
+            .fold(f32::INFINITY, f32::min),
     }
 }
 
@@ -226,7 +294,7 @@ fn distance(p: &Placed, c: Vec2) -> f32 {
 pub fn glyph_at(placed: &[Placed], cursor: Vec2) -> Option<&Placed> {
     placed.iter().find(|p| match p {
         Placed::Glyph { pos, .. } => pos.distance(cursor) <= GLYPH_SIZE * 0.75,
-        Placed::Outline { .. } => false,
+        Placed::Outline { .. } | Placed::Path { .. } => false,
     })
 }
 
@@ -385,5 +453,40 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn a_left_out_wire_is_veiled_along_its_strokes_not_its_box() {
+        let mut s = Scene::new();
+        let id = ItemId(1);
+        // An L-shaped route: its box would also cover the empty corner.
+        s.insert(
+            id,
+            Item::new(LayerId(0)).with(Primitive::stroked(
+                Shape::Polyline {
+                    points: vec![
+                        Vec2::new(0.0, 0.0),
+                        Vec2::new(40.0, 0.0),
+                        Vec2::new(40.0, 40.0),
+                    ],
+                    closed: false,
+                },
+                Stroke::default(),
+            )),
+        );
+        let marks = Marks {
+            list: vec![Mark::on(MarkKind::LeftOutPath, id)],
+            ..Default::default()
+        };
+        let placed = layout(&marks, &s, &view(4.0));
+        let Some(Placed::Path { segments, .. }) = placed.first() else {
+            panic!("{placed:?}");
+        };
+        assert_eq!(segments.len(), 2);
+        // The empty corner is far from the strokes.
+        let corner = view(4.0).world_to_screen(Vec2::new(0.0, 40.0));
+        assert!(distance(&placed[0], corner) > PATH_HIT_PX);
+        let on = view(4.0).world_to_screen(Vec2::new(20.0, 0.0));
+        assert!(distance(&placed[0], on) <= 0.01);
     }
 }
