@@ -218,10 +218,13 @@ fn body(
             let specs = sg.specs(e);
             let companion = sg.companion(e, settings);
             ui.label(muted(&sg.sentence(e, companion.as_ref())));
-            if companion.is_some() && settings.vents.iter().any(|v| v.kind == Kind::Grille) {
-                ui.label(muted(
-                    "The grilles already in the cabinet are too small for this flow, so this one comes on top of it.",
-                ));
+            let grilles = settings.vents.iter().filter(|v| v.kind == Kind::Grille).count();
+            if companion.is_some() && grilles > 0 {
+                ui.label(muted(if grilles == 1 {
+                    "The grille already in the cabinet is too small for this flow, so this one comes on top of it."
+                } else {
+                    "The grilles already in the cabinet are too small for this flow together, so this one comes on top of them."
+                }));
             }
             let held = settings.vents.iter().filter(|v| v.kind == sg.kind).count();
             let added = held >= specs.len();

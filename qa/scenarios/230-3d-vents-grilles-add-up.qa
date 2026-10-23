@@ -16,7 +16,7 @@ click_text Simulate #2
 wait_s 150
 expect_not "Locked while the run goes"
 expect "Cooling selection proposes"
-expect_not "smaller than this flow needs"
+expect_not "too small for this flow"
 expect_not "A grille of about"
 shot 01-four-grilles-card
 check_layout
