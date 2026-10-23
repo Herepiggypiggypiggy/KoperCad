@@ -496,7 +496,7 @@ mod tests {
             }
             assert!(contrast(p.on_accent, p.accent) >= 7.0);
         }
-        assert!(!Palette::DARK.high_contrast && !Palette::LIGHT.high_contrast);
+        const { assert!(!Palette::DARK.high_contrast && !Palette::LIGHT.high_contrast) };
     }
 
     #[test]
