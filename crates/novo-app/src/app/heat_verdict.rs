@@ -79,14 +79,20 @@ pub(crate) fn verdict(snap: &CfdSnapshot, tag_of: &dyn Fn(u64) -> String) -> Opt
             } else {
                 String::new()
             };
+            let over = -first.margin_k.unwrap_or(0.0);
+            // Under half a kelvin "0 K over" would read as no excess at all.
+            let by = if over < 0.5 {
+                String::from("just over")
+            } else {
+                format!("{over:.0} K over")
+            };
             Verdict {
                 tone: Tone::TooHot,
                 lead: String::from("Too hot: "),
                 device,
                 tail: format!(
-                    " reaches {:.0} °C, {:.0} K over its limit{more}.{no_limit_note}",
-                    first.surface_c,
-                    -first.margin_k.unwrap_or(0.0)
+                    " reaches {:.0} °C, {by} its limit{more}.{no_limit_note}",
+                    first.surface_c
                 ),
             }
         }
@@ -100,11 +106,17 @@ pub(crate) fn verdict(snap: &CfdSnapshot, tag_of: &dyn Fn(u64) -> String) -> Opt
             tone: Tone::Fine,
             lead: String::from("Fine. Hottest "),
             device,
-            tail: format!(
-                " {:.0} °C, {:.0} K under its limit.{no_limit_note}",
-                first.surface_c,
-                first.margin_k.unwrap_or(0.0)
-            ),
+            tail: {
+                let under = first.margin_k.unwrap_or(0.0);
+                if under < 0.5 {
+                    format!(" {:.0} °C, at its limit.{no_limit_note}", first.surface_c)
+                } else {
+                    format!(
+                        " {:.0} °C, {under:.0} K under its limit.{no_limit_note}",
+                        first.surface_c
+                    )
+                }
+            },
         },
         Status::NoLimit => Verdict {
             tone: Tone::Unknown,
@@ -117,15 +129,18 @@ pub(crate) fn verdict(snap: &CfdSnapshot, tag_of: &dyn Fn(u64) -> String) -> Opt
 
 fn marginal_tail(r: &Row, no_limit_note: &str) -> String {
     let under = r.margin_k.unwrap_or(0.0);
+    // Under half a kelvin "0 K under" claims a side it cannot claim.
+    let place = if under < 0.5 {
+        format!("is at its limit ({:.0} °C)", r.surface_c)
+    } else {
+        format!("is {under:.0} K under its limit at {:.0} °C", r.surface_c)
+    };
     match r.margin_pessimistic_k {
         Some(p) if p < 0.0 => format!(
-            " is {under:.0} K under its limit at {:.0} °C, but the model's uncertainty band reaches {:.0} K over.{no_limit_note}",
-            r.surface_c, -p
+            " {place}, but the model's uncertainty band reaches {:.0} K over.{no_limit_note}",
+            -p
         ),
-        _ => format!(
-            " is {under:.0} K under its limit at {:.0} °C.{no_limit_note}",
-            r.surface_c
-        ),
+        _ => format!(" {place}.{no_limit_note}"),
     }
 }
 
@@ -222,6 +237,19 @@ mod tests {
         assert_eq!(v.tone, Tone::Tight);
         assert!(v.text().contains("2 K under its limit at 70 °C"));
         assert!(v.text().contains("reaches 3 K over"));
+    }
+
+    #[test]
+    fn under_half_a_kelvin_claims_no_side_of_the_limit() {
+        let v = with(vec![dev(1, 83.0, Status::Marginal, Some(0.2), Some(-2.0))]).unwrap();
+        assert_eq!(
+            v.text(),
+            "Tight: -F1 is at its limit (83 °C), but the model's uncertainty band reaches 2 K over."
+        );
+        let v = with(vec![dev(1, 83.0, Status::Ok, Some(0.3), Some(0.1))]).unwrap();
+        assert_eq!(v.text(), "Fine. Hottest -F1 83 °C, at its limit.");
+        let v = with(vec![dev(1, 83.0, Status::Over, Some(-0.3), Some(-1.0))]).unwrap();
+        assert_eq!(v.text(), "Too hot: -F1 reaches 83 °C, just over its limit.");
     }
 
     #[test]

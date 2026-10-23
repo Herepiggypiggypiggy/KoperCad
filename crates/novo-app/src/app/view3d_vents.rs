@@ -220,7 +220,7 @@ fn body(
             ui.label(muted(&sg.sentence(e, companion.as_ref())));
             if companion.is_some() && settings.vents.iter().any(|v| v.kind == Kind::Grille) {
                 ui.label(muted(
-                    "The grille already in the cabinet is smaller than this flow needs, so this one comes on top of it.",
+                    "The grilles already in the cabinet are too small for this flow, so this one comes on top of it.",
                 ));
             }
             let held = settings.vents.iter().filter(|v| v.kind == sg.kind).count();
@@ -611,16 +611,20 @@ impl Suggestion {
     /// one already (a grille, or a fan the other way).
     fn companion(&self, e: &Enclosure, settings: &HeatSettings) -> Option<VentSpec> {
         let exhaust_fan = self.kind != Kind::FilterFan;
-        // Free area the flow needs, mm²; a grille under half of it is no way
-        // out for this fan.
+        // Free area the flow needs, mm²; grilles together under half of it are
+        // no way out for this fan.
         let need_mm2 = self.total_m3h / 3600.0 / GRILLE_SPEED_M_S * 1e6;
-        let has_other_side = settings.vents.iter().any(|v| {
-            if v.kind == Kind::Grille {
-                v.width_mm * v.height_mm * v.free_fraction >= 0.5 * need_mm2
-            } else {
-                v.exhaust != exhaust_fan
-            }
-        });
+        let grille_mm2: f64 = settings
+            .vents
+            .iter()
+            .filter(|v| v.kind == Kind::Grille)
+            .map(|v| v.width_mm * v.height_mm * v.free_fraction)
+            .sum();
+        let has_other_side = grille_mm2 >= 0.5 * need_mm2
+            || settings
+                .vents
+                .iter()
+                .any(|v| v.kind != Kind::Grille && v.exhaust != exhaust_fan);
         if has_other_side {
             return None;
         }
