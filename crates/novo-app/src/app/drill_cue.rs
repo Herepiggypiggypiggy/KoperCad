@@ -18,6 +18,12 @@ use novo_layout::drill::{self, Surface};
 pub(super) const SECONDS: f64 = 0.9;
 /// Age a held cue (`KOPERCAD_MOTION=hold`, tests only) is drawn at.
 const HOLD_AGE: f64 = 0.5;
+/// The frozen frame of the 3D cue in `KOPERCAD_MOTION=hold` pictures: the
+/// ring has closed to its resting size and the bore is mostly open.
+const HOLD_AGE_3D: f64 = 0.3;
+/// Smallest radius of the 3D ring: the whole cabinet is a few hundred pixels
+/// tall, so a 4 mm hole needs a larger ring to be seen.
+const RING_FLOOR_MM: f64 = 14.0;
 /// Most cues shown at once: a whole-plate import would otherwise flash.
 pub(super) const MAX_CUES: usize = 24;
 
@@ -165,7 +171,7 @@ impl DrillCue {
 impl DrillCue {
     /// The cues as lines on the plate of the 3D view: for each hole a ring
     /// that closes and a bore that opens, fading out. The bore is the hole's
-    /// true size; only the ring is kept at 6 mm or more so a small hole shows.
+    /// true size; only the ring is kept at 14 mm or more so a small hole shows.
     pub(super) fn lines(
         &self,
         frame: &novo_view3d::PlateFrame,
@@ -176,7 +182,7 @@ impl DrillCue {
         // Clears a DIN rail (7.5 mm), so a screw under a rail still shows.
         const LIFT: f64 = 9.0;
         let mut out = novo_view3d::OverlayLines {
-            width_px: 2.0,
+            width_px: 2.5,
             order: 60,
             ..Default::default()
         };
@@ -198,7 +204,7 @@ impl DrillCue {
         };
         for c in &self.cues {
             let age = if crate::control::hold_cues() {
-                HOLD_AGE
+                HOLD_AGE_3D
             } else {
                 now - c.start
             };
@@ -207,13 +213,12 @@ impl DrillCue {
             // The bore is the hole's true radius; only the closing ring has a
             // legibility floor, so a 4 mm hole still shows from across the cabinet.
             let bore_r = (0.5 * dia).max(0.5);
-            let ring_r = bore_r.max(6.0);
+            let ring_r = bore_r.max(RING_FLOOR_MM);
             if f.bore > 0.0 {
                 circle((x, y), bore_r * f64::from(f.bore), 0.9 * f.alpha);
             }
-            if f.ring > 1.02 {
-                circle((x, y), ring_r * f64::from(f.ring), 0.7 * f.alpha);
-            }
+            // The ring settles at its floor size around the bore while it fades.
+            circle((x, y), ring_r * f64::from(f.ring.max(1.0)), 0.7 * f.alpha);
         }
         (!out.positions.is_empty()).then_some(out)
     }
