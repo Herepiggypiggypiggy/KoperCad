@@ -1,7 +1,7 @@
 @title 3D: the wire heat fold stays when no wires are routed and says why, and the EMC button says it is off
 @area 3D
 @sizes 1366x768 1920x1080
-# The hot cabinet fixture has no routed wires. After a run the Heat panel keeps its "Wire heat in the ducts" fold and, opened, says to route the wires first (it used to vanish). Hovering the EMC button in the 3D toolbar reads "Off: ... Click to show it", so the dim button is seen as a switch that is off, not a disabled one. Both are drawn text the harness cannot read, so the pictures are the evidence.
+# The hot cabinet fixture has no routed wires. After a run the Heat panel keeps its "Wire heat in the ducts" fold and, opened, says either no wires are routed or none has a known current (it used to vanish). Hovering the EMC button in the 3D toolbar reads "Off: ... Click to show it", so the dim button is seen as a switch that is off, not a disabled one. Both are drawn text the harness cannot read, so the pictures are the evidence.
 open qa/fixtures/cabinet-cooling-advice.novo
 wait 20
 click_text 3D #1
@@ -18,7 +18,7 @@ expect_not "Locked while the run goes"
 expect "Wire heat in the ducts"
 click_text "Wire heat in the ducts"
 wait 10
-expect "Route the wires first"
+expect "route them first"
 shot 01-wire-heat-fold
 check_layout
 move 299 218

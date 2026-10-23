@@ -132,9 +132,9 @@ pub(super) fn show(
 pub(super) fn wire_heat_notes(notes: &[String]) -> Vec<String> {
     if notes.is_empty() {
         vec![String::from(
-            "No wire heat is counted in this result: no wire routed through the ducts has a \
-             known current and cross-section. Route the wires first (Cabinet > Route all), then \
-             Simulate again.",
+            "No wire heat is counted in this result: either no wires are routed through the ducts, \
+             or none of those has a known current and cross-section. If the wires are not routed \
+             yet, route them first (Cabinet > Route all), then Simulate again.",
         )]
     } else {
         notes.to_vec()
@@ -333,7 +333,7 @@ mod tests {
     fn an_empty_wire_heat_fold_says_why() {
         let none = wire_heat_notes(&[]);
         assert_eq!(none.len(), 1);
-        assert!(none[0].contains("Route the wires first"));
+        assert!(none[0].contains("route them first"));
         let some = vec![String::from("Wires in ducts add 3.0 W (4 wires).")];
         assert_eq!(wire_heat_notes(&some), some);
     }
