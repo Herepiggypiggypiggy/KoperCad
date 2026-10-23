@@ -118,11 +118,11 @@ const GAP: f32 = 7.0;
 const BREATH_SECS: f64 = 3.2;
 
 /// Opacity of the dashes at `time` seconds; `None` (a still picture or
-/// Reduce motion) is a steady 0.7.
+/// Reduce motion) is a steady 0.85.
 pub(super) fn dash_alpha(time: Option<f64>) -> f32 {
-    time.map_or(0.7, |t| {
+    time.map_or(0.85, |t| {
         let phase = (t / BREATH_SECS * std::f64::consts::TAU).sin() as f32;
-        0.65 + 0.2 * phase
+        0.8 + 0.15 * phase
     })
 }
 
@@ -186,10 +186,10 @@ mod tests {
 
     #[test]
     fn a_still_picture_has_a_steady_quiet_alpha_and_motion_stays_gentle() {
-        assert_eq!(dash_alpha(None), 0.7);
+        assert_eq!(dash_alpha(None), 0.85);
         for i in 0..64 {
             let a = dash_alpha(Some(f64::from(i) * 0.1));
-            assert!((0.45..=0.85).contains(&a), "{a}");
+            assert!((0.65..=0.95).contains(&a), "{a}");
         }
     }
 }

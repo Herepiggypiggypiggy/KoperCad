@@ -23,6 +23,12 @@ mouse_up 75 397
 wait 20
 shot start-released-sealed-in
 expect "Current paths"
+# A narrow window puts the lit wires under the Live card: no dashes may show through it.
+resize 560 768
+wait 20
+shot wire-under-card
+resize 1366 768
+wait 20
 click_text "Current paths"
 wait 10
 shot paths-off

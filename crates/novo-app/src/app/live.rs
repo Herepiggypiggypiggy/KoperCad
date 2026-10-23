@@ -964,8 +964,9 @@ impl NovoApp {
         if !flow.is_empty() {
             let time = super::motion::clock(ctx, self.settings.reduce_motion);
             let painter = ctx
+                // Background: above the canvas, below every card and badge.
                 .layer_painter(egui::LayerId::new(
-                    egui::Order::Middle,
+                    egui::Order::Background,
                     egui::Id::new("live_flow"),
                 ))
                 .with_clip_rect(canvas);
