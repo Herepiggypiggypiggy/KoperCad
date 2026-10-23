@@ -45,6 +45,10 @@ pub(super) const GLIDE_SECS: f32 = 0.22;
 /// How long the row of a chosen problem keeps its soft highlight.
 pub(super) const FLASH_SECS: f64 = 0.9;
 
+/// Alpha of the highlight at full strength (out of 255): clear on a dark list
+/// and still visible on a light one.
+pub(super) const FLASH_PEAK_ALPHA: f32 = 100.0;
+
 /// Strength (0..=1) of the highlight `age` seconds after a problem row was
 /// chosen: full at once, easing out to nothing.
 pub(super) fn flash_strength(age: f64) -> f32 {

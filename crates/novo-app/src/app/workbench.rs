@@ -202,9 +202,9 @@ pub(crate) struct Workbench {
     pub(super) issue_filter: [bool; 3],
     /// F8 position in the problem list.
     pub(super) problem_at: Option<usize>,
-    /// The problem row just chosen (its index in the list) and the clock
-    /// time its highlight started, set when the row is first drawn.
-    pub(super) problem_flash: Option<(usize, Option<f64>)>,
+    /// The problem row just chosen: its index in the list, when it was
+    /// chosen, the project revision, and whether the list scrolled to it.
+    pub(super) problem_flash: Option<(usize, std::time::Instant, u64, bool)>,
     /// A problem being waived (its index in the list) and the reason typed.
     pub(super) waiving: Option<(usize, String)>,
     /// The last PDF written, for tests and the toast.
