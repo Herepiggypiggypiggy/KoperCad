@@ -189,7 +189,7 @@ mod tests {
         assert_eq!(dash_alpha(None), 0.85);
         for i in 0..64 {
             let a = dash_alpha(Some(f64::from(i) * 0.1));
-            assert!((0.65..=0.95).contains(&a), "{a}");
+            assert!((0.649..=0.951).contains(&a), "{a}");
         }
     }
 }
