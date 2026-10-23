@@ -168,6 +168,8 @@ impl CommissioningMode {
     /// What the caches of the mode are keyed on: the project's revision with
     /// the machine copy's generation mixed in (a copy has revision numbers of
     /// its own, so a bare revision can match across a switch of option).
+    /// The generation sits above bit 40, so this assumes revisions stay
+    /// below 2^40 (a revision is one per edit; that is a trillion edits).
     fn cache_revision(&self, project: &Project) -> u64 {
         project.revision() ^ (self.generation << 40)
     }

@@ -128,6 +128,13 @@ pub(super) fn page_hint(
     project: &novo_core::Project,
     page: novo_core::PageId,
 ) -> Option<String> {
+    // A generated page is a table the program draws; nothing is placed on it.
+    if project
+        .page(page)
+        .is_some_and(|p| matches!(p.kind, novo_core::PageKind::Generated { .. }))
+    {
+        return None;
+    }
     let symbols = project.symbols().filter(|s| s.page == page).count();
     let id = match symbols {
         0 => "empty_page",

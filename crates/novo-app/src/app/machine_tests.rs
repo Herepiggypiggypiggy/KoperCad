@@ -733,6 +733,7 @@ fn every_way_a_list_leaves_the_program_carries_the_option_column() {
     d.app.run_command(&ctx, "project.option", Some("fan on"));
     d.frame();
     d.app.add_report_page("devices");
+    d.app.add_report_page("wires");
     d.frame();
     // The outputs every export reads (Export all, PDF, generated pages).
     let (reports, project) = d.app.machine_reports().unwrap();
@@ -762,4 +763,53 @@ fn every_way_a_list_leaves_the_program_carries_the_option_column() {
     let sheet = sheets.first().expect("a generated device list page");
     let layout = live.layout_sheet(&project, sheet).unwrap();
     assert!(format!("{layout:?}").contains("Option"));
+    // The wire list sheet keeps every column header whole beside the new
+    // column (a header wider than its cell is cut off on the sheet and PDF).
+    let wires = project
+        .pages()
+        .find(|p| {
+            matches!(&p.kind, novo_core::PageKind::Generated { generator } if generator == "wires")
+        })
+        .map(|p| p.id)
+        .expect("a generated wire list page");
+    let live = reports.live(&project);
+    let sheet = live.sheets_of_page(&project, wires).remove(0);
+    let layout = live.layout_sheet(&project, &sheet).unwrap();
+    let headers: Vec<_> = layout.texts.iter().filter(|t| t.bold).collect();
+    assert!(
+        headers.iter().any(|t| t.text == "Route length mm"),
+        "{headers:?}"
+    );
+    for t in headers
+        .iter()
+        .filter(|t| t.y < 60.0 && t.text.chars().count() < 20)
+    {
+        let needed = t.text.chars().count() as f64 * t.text_mm * 0.72;
+        assert!(
+            t.width + 1e-6 >= needed,
+            "{} is cut off: {} < {needed}",
+            t.text,
+            t.width
+        );
+    }
+}
+
+#[test]
+fn a_generated_page_does_not_get_the_empty_page_hint() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.empty_page_hint().is_some());
+    let _ = machine(&mut d);
+    d.app.add_report_page("devices");
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    let page = project
+        .pages()
+        .find(|p| matches!(p.kind, novo_core::PageKind::Generated { .. }))
+        .unwrap()
+        .id;
+    assert!(super::tips::page_hint(&d.app.settings, &d.app.wb.keymap, project, page).is_none());
 }
