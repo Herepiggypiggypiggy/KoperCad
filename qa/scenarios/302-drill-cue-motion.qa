@@ -1,0 +1,21 @@
+@title Cabinet: drill cue visible after Centre rails on devices (run with KOPERCAD_MOTION=hold)
+@area Cabinet
+# The drill cue (a ring closing on each new hole) runs in the live app. The harness and Reduce motion show the plain plate, so pictures are stable; scenario 302 is run with KOPERCAD_MOTION=hold (cues frozen at 0.5 s) and centres the rails, closes the dialog, waits for the cue to finish, then Ctrl+Z puts the rails back and the picture is taken right after, so the restored screw holes are new (fixture with rails off the middle of their devices).
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text Cabinet #1
+wait 30
+shot before
+key ctrl+k
+wait 3
+text rails and ducts
+wait 4
+key Enter
+wait 10
+click_text "Centre rails on devices"
+wait 2
+key Escape
+wait 60
+key ctrl+z
+shot after-undo
+check_layout

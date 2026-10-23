@@ -112,6 +112,8 @@ pub(super) struct CabinetState {
     pub(super) menu: Option<super::cabinet_menu::PlateMenu>,
     /// Where the plate canvas was drawn last frame (for tests and menus).
     pub(super) plate_rect: Option<egui::Rect>,
+    /// New holes marked briefly after an edit drills them.
+    drill_cue: super::drill_cue::DrillCue,
 }
 
 /// A placed device being dragged across the plate.
@@ -164,6 +166,7 @@ impl CabinetState {
             rails: Default::default(),
             menu: None,
             plate_rect: None,
+            drill_cue: Default::default(),
         }
     }
 }
@@ -1930,6 +1933,29 @@ impl NovoApp {
                             .filter(|_| out.response.hovered()),
                     );
                     left_out_note = hovered;
+                }
+                if let (Some(s), false) = (structure, on_surface) {
+                    let revision = project.revision();
+                    let plate = s.raw();
+                    let now = ui.input(|i| i.time);
+                    if self.cabinet.drill_cue.stale(plate, revision) {
+                        let holes = super::drill_cue::plate_holes(project, s);
+                        self.cabinet.drill_cue.observe(plate, revision, &holes, now);
+                    }
+                    if let Some(now) = super::motion::clock(ui.ctx(), self.settings.reduce_motion)
+                        && self.cabinet.drill_cue.running(now)
+                    {
+                        self.cabinet.drill_cue.paint(
+                            &ui.painter_at(out.response.rect),
+                            out.response.rect,
+                            &self.cabinet.view.viewport,
+                            now,
+                            crate::theme::ui_palette().info,
+                        );
+                        ui.ctx().request_repaint_after(super::motion::FRAME);
+                    } else if self.settings.reduce_motion || crate::control::still_pictures() {
+                        self.cabinet.drill_cue.cues.clear();
+                    }
                 }
                 if let Some(s) = structure {
                     let rect = out.response.rect;
