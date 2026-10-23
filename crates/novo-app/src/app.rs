@@ -525,6 +525,8 @@ pub struct NovoApp {
     wb: Workbench,
     messages: Vec<Message>,
     show_about: bool,
+    /// About > Check for updates: the running check or its answer.
+    update_check: UpdateCheck,
     /// The crash report the last run left behind, until answered.
     crash_report: Option<PathBuf>,
     /// The What's new list is open (app/whats_new.rs).
@@ -649,6 +651,7 @@ impl NovoApp {
             wb,
             messages: Vec::new(),
             show_about: false,
+            update_check: UpdateCheck::Idle,
             crash_report: None,
             show_whats_new: false,
             show_numbers: false,
@@ -2531,12 +2534,32 @@ impl NovoApp {
         }
     }
 
+    /// Moves a finished check from its thread into the dialog.
+    fn poll_update_check(&mut self, ctx: &egui::Context) {
+        if let UpdateCheck::Checking(rx) = &self.update_check {
+            match rx.try_recv() {
+                Ok(outcome) => self.update_check = UpdateCheck::Done(outcome),
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    ctx.request_repaint_after(std::time::Duration::from_millis(100));
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.update_check = UpdateCheck::Done(crate::update_check::Outcome::Failed(
+                        "The check stopped unexpectedly".into(),
+                    ));
+                }
+            }
+        }
+    }
+
     fn about_dialog(&mut self, ctx: &egui::Context) {
         if !self.show_about {
             return;
         }
         let mut open_log = false;
         let mut copy_info = false;
+        let mut start_check = false;
+        self.poll_update_check(ctx);
+        let update_state = &self.update_check;
         let modal = egui::Modal::new(egui::Id::new("about")).show(ctx, |ui| {
             ui.set_width(380.0);
             ui.vertical_centered(|ui| {
@@ -2563,8 +2586,9 @@ impl NovoApp {
                 ui.add_space(novo_theme::space::M);
                 ui.label("Made by KoperVonk");
                 ui.weak("Free software, MIT or Apache-2.0, at your choice");
-                ui.weak("Works offline. Nothing is sent unless you use Ask Claude,");
-                ui.weak("which sends your question to Anthropic with your own key.");
+                ui.weak("Works offline. Nothing is sent unless you use Ask Claude");
+                ui.weak("(your question goes to Anthropic with your own key)");
+                ui.weak("or press Check for updates (asks GitHub for the release list).");
                 ui.add_space(novo_theme::space::M);
                 ui.columns(2, |cols| {
                     cols[0].vertical_centered(|ui| {
@@ -2576,6 +2600,40 @@ impl NovoApp {
                         ui.hyperlink_to("Apache-2.0 licence", ABOUT_LICENCE_APACHE_URL);
                     });
                 });
+                ui.add_space(novo_theme::space::M);
+                match update_state {
+                    UpdateCheck::Checking(_) => {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label("Asking GitHub for the newest release");
+                        });
+                    }
+                    other => {
+                        start_check = ui
+                            .button("Check for updates")
+                            .on_hover_text(
+                                "Asks GitHub for the release list, only when you press this. Nothing is downloaded or installed.",
+                            )
+                            .clicked();
+                        match other {
+                            UpdateCheck::Done(crate::update_check::Outcome::UpToDate) => {
+                                ui.label("You have the newest version");
+                            }
+                            UpdateCheck::Done(crate::update_check::Outcome::Newer {
+                                tag,
+                                url,
+                            }) => {
+                                ui.label(format!("{tag} is available"));
+                                ui.hyperlink_to("Open the download page", url);
+                                ui.weak("Run the new installer over this copy; your projects stay as they are");
+                            }
+                            UpdateCheck::Done(crate::update_check::Outcome::Failed(why)) => {
+                                ui.label(format!("Could not check: {why}"));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
                 ui.add_space(novo_theme::space::M);
                 ui.columns(2, |cols| {
                     cols[0].vertical_centered(|ui| {
@@ -2595,6 +2653,13 @@ impl NovoApp {
             })
             .inner
         });
+        if start_check {
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(crate::update_check::check());
+            });
+            self.update_check = UpdateCheck::Checking(rx);
+        }
         if copy_info {
             self.copy_problem_report(ctx);
         }
@@ -2605,6 +2670,13 @@ impl NovoApp {
             self.show_about = false;
         }
     }
+}
+
+/// The state of About > Check for updates.
+enum UpdateCheck {
+    Idle,
+    Checking(std::sync::mpsc::Receiver<crate::update_check::Outcome>),
+    Done(crate::update_check::Outcome),
 }
 
 const ABOUT_RELEASES_URL: &str = "https://github.com/Herepiggypiggypiggy/kopercad/releases";
