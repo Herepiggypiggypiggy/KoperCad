@@ -80,6 +80,9 @@ fn body(
     ui.label(muted(
         "Where air gets in (blue) and out (orange). Grey: the direction is known after a run.",
     ));
+    ui.label(muted(
+        "Motion is only an illustration of direction; its speed is not the air speed.",
+    ));
     if running {
         ui.label(
             egui::RichText::new("Locked while the run goes: Cancel it to edit.")

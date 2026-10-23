@@ -1,0 +1,17 @@
+@title 3D Heat: fan opening in motion (run with KOPERCAD_MOTION=1)
+@area 3D
+# Fans turn and air dashes cross the openings in the live app; the harness (and Reduce motion) shows the still frame, so screenshots are deterministic.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Add opening"
+wait 10
+click_text "Filter fan, low on the door"
+wait 20
+shot fan-still-a
+wait 30
+shot fan-still-b
+check_layout
