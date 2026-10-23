@@ -681,6 +681,12 @@ fn distance(i: &Item, p: &Peak) -> f64 {
     dx.hypot(dy)
 }
 
+/// `c` with its opacity set to `alpha` (0 to 1).
+fn with_alpha(c: Color32, alpha: f32) -> Color32 {
+    let [r, g, b, _] = c.to_array();
+    rgb([r, g, b], alpha)
+}
+
 fn rgb(c: [u8; 3], alpha: f32) -> Color32 {
     Color32::from_rgba_unmultiplied(
         c[0],
@@ -1402,7 +1408,12 @@ fn paint_airflow(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64,
         let width = 1.0 + 1.4 * (mean / top).clamp(0.0, 1.0);
         painter.add(Shape::line(
             pts.clone(),
-            Stroke::new(width + 1.6, rgb([0x0E, 0x0E, 0x10], 0.5)),
+            // The halo is the surface colour, so the line keeps its edge on
+            // the dark and on the light theme.
+            Stroke::new(
+                width + 1.6,
+                with_alpha(crate::theme::ui_palette().sunken, 0.5),
+            ),
         ));
         painter.add(Shape::line(
             pts.clone(),
