@@ -482,3 +482,35 @@ fn an_io_list_imported_next_to_the_report_pages_gets_the_next_free_page_numbers(
         assert!(names.iter().any(|p| p == n), "{n} in {names:?}");
     }
 }
+
+#[test]
+fn clearing_the_last_warning_says_so_once_and_opening_a_project_does_not() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    for _ in 0..200 {
+        d.frame();
+        if !d.app.checks_pending() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    d.frame();
+    let said = |d: &Drive| {
+        d.app
+            .messages()
+            .iter()
+            .filter(|m| m.text == "No errors or warnings left")
+            .count()
+    };
+    let before = d.app.wb.last_issue_total;
+    assert!(before.is_some_and(|n| n > 0), "the example has a warning");
+    assert_eq!(said(&d), 0);
+    // The warning is fixed: the next finished check is clean.
+    let revision = d.doc().project().revision();
+    d.app.wb.problems = Some((revision, Vec::new()));
+    d.frame();
+    assert_eq!(said(&d), 1);
+    d.frame();
+    assert_eq!(said(&d), 1, "once, not every frame");
+}
