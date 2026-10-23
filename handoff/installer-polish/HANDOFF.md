@@ -14,3 +14,4 @@ Windows-only to verify by hand: see PROGRESS.md.
 - `packaging_tests.rs` holds `novoelectric.iss` to the no-admin rule on every platform (lowest privileges, HKCU only, no Program Files/common folders, both extensions, old-name cleanup, close-on-update, uninstall default No).
 - QA scenarios 210 (newer found) and 211 (failed check), pictures in /mnt/project-files/qa/installer-update-check/.
 - Still not done: first-run pickers (no language setting), code signing, winget manifest, automatic (opt-in) update check at start.
+- Review fixes (main reviewer, 2026-10-23): the up-to-date answer reads "No newer stable version found / Release candidates are not checked" (never "newest version"); errors keep a reason, 403/429 get the rate-limit wording; links must start `https://github.com/`; `KOPERCAD_UPDATE_FEED` takes a file or https only. QA scenario 212 pictures the up-to-date answer.

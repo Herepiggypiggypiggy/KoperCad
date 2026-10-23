@@ -2612,12 +2612,13 @@ impl NovoApp {
                         start_check = ui
                             .button("Check for updates")
                             .on_hover_text(
-                                "Asks GitHub for the release list, only when you press this. Nothing is downloaded or installed.",
+                                "Asks GitHub for the release list, only when you press this. Looks for a newer stable version; release candidates are not checked. Nothing is downloaded or installed.",
                             )
                             .clicked();
                         match other {
                             UpdateCheck::Done(crate::update_check::Outcome::UpToDate) => {
-                                ui.label("You have the newest version");
+                                ui.label("No newer stable version found");
+                                ui.weak("Release candidates are not checked");
                             }
                             UpdateCheck::Done(crate::update_check::Outcome::Newer {
                                 tag,

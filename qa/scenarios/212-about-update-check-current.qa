@@ -1,0 +1,18 @@
+@title About: Check for updates says what it checked when nothing newer exists
+@area Start
+@env KOPERCAD_UPDATE_FEED=qa/fixtures/release-feed-current.json
+key ctrl+k
+wait 6
+text about
+wait 8
+key Return
+wait 8
+click_text "Check for updates"
+wait 10
+expect "No newer stable version found"
+expect "Release candidates are not checked"
+expect_not "newest version"
+shot about-update-current
+check_layout
+click_text "Close"
+wait 4

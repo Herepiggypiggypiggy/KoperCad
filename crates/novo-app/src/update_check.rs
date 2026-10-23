@@ -16,7 +16,8 @@ pub const FEED_URL: &str =
     "https://api.github.com/repos/Herepiggypiggypiggy/kopercad/releases?per_page=30";
 /// Where the answer sends the user.
 pub const RELEASES_PAGE: &str = "https://github.com/Herepiggypiggypiggy/kopercad/releases";
-/// A file path (or URL) read instead of GitHub; used by the QA scenarios.
+/// A file path (or an `https://` URL) read instead of GitHub; a QA hook that
+/// no screen or setting mentions. Plain `http://` is refused.
 pub const FEED_ENV: &str = "KOPERCAD_UPDATE_FEED";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,9 +89,11 @@ pub fn newest_newer(current: &str, feed_json: &str) -> Outcome {
             continue;
         }
         if best.as_ref().is_none_or(|(b, _, _)| v > *b) {
+            // Only a page on github.com becomes a link.
             let url = item
                 .get("html_url")
                 .and_then(|u| u.as_str())
+                .filter(|u| u.starts_with("https://github.com/"))
                 .unwrap_or(RELEASES_PAGE)
                 .to_string();
             best = Some((v, tag.to_string(), url));
@@ -104,7 +107,10 @@ pub fn newest_newer(current: &str, feed_json: &str) -> Outcome {
 
 fn read_feed(source: Option<&str>) -> Result<String, String> {
     match source {
-        Some(src) if !src.starts_with("http") => {
+        Some(src) if src.starts_with("http://") => Err(format!(
+            "{FEED_ENV}: plain http is not used, give an https address or a file"
+        )),
+        Some(src) if !src.starts_with("https://") => {
             std::fs::read_to_string(src).map_err(|e| format!("{src}: {e}"))
         }
         Some(url) => get(url),
@@ -126,9 +132,15 @@ fn get(url: &str) -> Result<String, String> {
         )
         .header("Accept", "application/vnd.github+json")
         .call()
-        .map_err(|_| "No connection to GitHub (the program is fine offline)".to_string())?;
+        .map_err(|e| format!("No answer from GitHub ({e}). The program itself works offline"))?;
     if !resp.status().is_success() {
-        return Err(format!("GitHub answered with status {}", resp.status()));
+        let code = resp.status().as_u16();
+        if code == 403 || code == 429 {
+            return Err(format!(
+                "GitHub refused the request (status {code}); it allows only a few unsigned requests per hour from one address, try again later"
+            ));
+        }
+        return Err(format!("GitHub answered with status {code}"));
     }
     resp.body_mut()
         .read_to_string()
@@ -156,7 +168,7 @@ mod tests {
             .iter()
             .map(|(t, d, p)| {
                 format!(
-                    r#"{{"tag_name":"{t}","draft":{d},"prerelease":{p},"html_url":"https://example.test/{t}"}}"#
+                    r#"{{"tag_name":"{t}","draft":{d},"prerelease":{p},"html_url":"https://github.com/example/{t}"}}"#
                 )
             })
             .collect();
@@ -170,7 +182,7 @@ mod tests {
             newest_newer("0.1.0", &f),
             Outcome::Newer {
                 tag: "v0.1.1".into(),
-                url: "https://example.test/v0.1.1".into()
+                url: "https://github.com/example/v0.1.1".into()
             }
         );
     }
@@ -232,6 +244,26 @@ mod tests {
         ));
         assert_eq!(newest_newer("0.1.0", "[]"), Outcome::UpToDate);
         assert!(matches!(newest_newer("x", "[]"), Outcome::Failed(_)));
+    }
+
+    #[test]
+    fn a_link_off_github_falls_back_to_the_releases_page() {
+        let f = r#"[{"tag_name":"v0.2.0","draft":false,"prerelease":false,"html_url":"https://evil.test/x"}]"#;
+        assert_eq!(
+            newest_newer("0.1.0", f),
+            Outcome::Newer {
+                tag: "v0.2.0".into(),
+                url: RELEASES_PAGE.into()
+            }
+        );
+    }
+
+    #[test]
+    fn plain_http_feeds_are_refused() {
+        let Outcome::Failed(why) = check_from(Some("http://example.test/feed")) else {
+            panic!("expected failure");
+        };
+        assert!(why.contains("plain http"), "{why}");
     }
 
     #[test]
