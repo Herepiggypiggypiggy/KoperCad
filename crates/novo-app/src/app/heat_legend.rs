@@ -13,6 +13,9 @@ const BAR_H: f32 = 10.0;
 const LABEL_H: f32 = 16.0;
 const TICK_PAD: f32 = 12.0;
 const STEPS: usize = 48;
+/// Least room between two degree labels on the bar: a three-digit label at the
+/// small font is about 20 px wide.
+const TICK_GAP: f32 = 26.0;
 
 /// The lines of text under the scale, one per layer that needs explaining.
 pub(crate) fn notes(h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) -> Vec<String> {
@@ -162,9 +165,22 @@ fn scale(ui: &mut egui::Ui, range: Range) {
 }
 
 /// The ticks of the scale as (position 0 to 1 along the bar, degrees), only
-/// those that fit on the bar.
+/// those that fit on the bar. A wide range (a 285 °C cabinet) takes round
+/// steps of 20, 50 or 100 degrees so the labels never print over each other.
 pub(crate) fn tick_marks(range: Range) -> Vec<(f32, f64)> {
-    range::ticks(range)
+    let span = range.hi - range.lo;
+    let mut ticks = range::ticks(range);
+    if span.is_finite() && span > 0.0 {
+        let base = if span < 30.0 { 5.0 } else { 10.0 };
+        let room = |step: f64| step / span * f64::from(BAR_LEN) >= f64::from(TICK_GAP);
+        if let Some(step) = [base, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0]
+            .into_iter()
+            .find(|&s| s >= base && room(s))
+        {
+            ticks = range::levels(range, step);
+        }
+    }
+    ticks
         .into_iter()
         .map(|v| (range.t(v), v))
         .filter(|(f, _)| (0.0..=1.0).contains(f))
@@ -220,6 +236,19 @@ mod tests {
         assert!(t.len() >= 2);
         assert!(t.iter().all(|(f, _)| (0.0..=1.0).contains(f)));
         assert!(t.windows(2).all(|w| w[0].0 < w[1].0 && w[0].1 < w[1].1));
+    }
+
+    #[test]
+    fn a_hot_range_keeps_its_labels_apart() {
+        for hi in [60.0, 120.0, 200.0, 285.0, 600.0] {
+            let t = tick_marks(Range { lo: 20.0, hi });
+            assert!(t.len() >= 2, "hi {hi}");
+            assert!(
+                t.windows(2)
+                    .all(|w| (w[1].0 - w[0].0) * BAR_LEN >= TICK_GAP - 0.01),
+                "hi {hi}: {t:?}"
+            );
+        }
     }
 
     #[test]
