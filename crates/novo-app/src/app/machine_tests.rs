@@ -813,3 +813,74 @@ fn a_generated_page_does_not_get_the_empty_page_hint() {
         .id;
     assert!(super::tips::page_hint(&d.app.settings, &d.app.wb.keymap, project, page).is_none());
 }
+
+/// The Option column is cached with the report, so an edit it reads must
+/// drop the cached output: this fills the cache first, then edits, and
+/// reads the same `LiveReports` again each time.
+#[test]
+fn the_option_column_follows_edits_after_the_cache_is_filled() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let ids = machine(&mut d);
+    let k9 = device_of_symbol(&d, ids.k9);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Tie K9", |tx| {
+            options::set_condition(tx, k9, Some("opt.fan"))
+        })
+        .unwrap();
+    d.app.run_command(&ctx, "project.option", Some("fan on"));
+    d.frame();
+    let column = |d: &mut Drive| -> Option<Vec<String>> {
+        let project = d.app.backend.document().unwrap().project().clone();
+        let out = d
+            .app
+            .wb
+            .reports
+            .live(&project)
+            .get(&project, "devices")?
+            .clone();
+        let section = &out.sections[0];
+        let at = section.column("option")?;
+        Some(
+            section
+                .rows
+                .iter()
+                .map(|r| r.cells.get(at).map(ToString::to_string).unwrap_or_default())
+                .collect(),
+        )
+    };
+    let edit = |d: &mut Drive,
+                label: &str,
+                f: &dyn Fn(&mut novo_core::Tx<'_>) -> novo_core::Result<()>| {
+        let doc = d.app.backend.document_mut().unwrap();
+        let ((), changes) = doc.transact(label, |tx| f(tx)).unwrap();
+        d.app.changed_outside_canvas(&changes);
+    };
+    let first = column(&mut d).expect("the column exists");
+    assert!(first.iter().any(|t| t.contains("Fan")), "{first:?}");
+    // (a) renaming an option's label
+    edit(&mut d, "Rename", &|tx| {
+        options::define_option(tx, OptionDef::yes_no("fan", "Cooling", false))
+    });
+    let renamed = column(&mut d).unwrap();
+    assert!(renamed.iter().any(|t| t.contains("Cooling")), "{renamed:?}");
+    assert!(!renamed.iter().any(|t| t.contains("Fan")), "{renamed:?}");
+    // (b) a condition on a page
+    let page = ids.main;
+    let before = column(&mut d).unwrap();
+    edit(&mut d, "Tie page", &|tx| {
+        options::set_condition(tx, page, Some("opt.fan"))
+    });
+    let tied = column(&mut d).unwrap();
+    assert_ne!(before, tied, "tying a page changes the column");
+    // (c) removing the options
+    edit(&mut d, "Remove", &|tx| {
+        options::remove_option(tx, "conveyor")?;
+        options::remove_option(tx, "fan")
+    });
+    assert!(column(&mut d).is_none(), "no options, no column");
+}

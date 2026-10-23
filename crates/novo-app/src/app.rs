@@ -639,7 +639,11 @@ impl NovoApp {
     ) -> Self {
         // Every report output, whether it is listed, exported, paged for the
         // PDF or drawn as a generated page, names the option its rows need.
-        novo_reports::set_output_hook(machine::with_option_column);
+        novo_reports::set_output_hook(
+            machine::with_option_column,
+            machine::OPTION_REPORTS,
+            machine::option_column_reads(),
+        );
         let wb = Workbench::with_recent(&settings.recent_actions);
         let mut backend = backend;
         backend.set_autosave_interval(settings.autosave_interval());

@@ -10,14 +10,34 @@ use crate::table::ReportOutput;
 /// A step every report output goes through before it is cached, set once by
 /// the application (the machine's option column lives where the option
 /// engine does, which this crate cannot depend on).
-static OUTPUT_HOOK: std::sync::OnceLock<fn(&Project, &mut ReportOutput)> =
-    std::sync::OnceLock::new();
+static OUTPUT_HOOK: std::sync::OnceLock<OutputHook> = std::sync::OnceLock::new();
 
-/// Installs the step every [`LiveReports`] output goes through (the first
-/// call wins). Lists, PDF pages, generated pages and exports all read the
+struct OutputHook {
+    step: fn(&Project, &mut ReportOutput),
+    /// The reports the step changes, and what else it reads besides what
+    /// those reports read themselves.
+    reports: &'static [&'static str],
+    reads: Dependencies,
+}
+
+/// Installs the step every [`LiveReports`] output goes through, for the
+/// reports named in `reports`, and `reads`: what the step reads beyond what
+/// those reports read themselves, so an edit to it drops their cached
+/// output. Lists, PDF pages, generated pages and exports all read the
 /// outputs of [`LiveReports`], so they all see what the step adds.
-pub fn set_output_hook(hook: fn(&Project, &mut ReportOutput)) {
-    let _ = OUTPUT_HOOK.set(hook);
+///
+/// One step per process: the first call wins and a second one is silently
+/// ignored, so do not install another for a different purpose.
+pub fn set_output_hook(
+    step: fn(&Project, &mut ReportOutput),
+    reports: &'static [&'static str],
+    reads: Dependencies,
+) {
+    let _ = OUTPUT_HOOK.set(OutputHook {
+        step,
+        reports,
+        reads,
+    });
 }
 
 /// What a report reads from the model, so an edit that touches none of it
@@ -278,7 +298,14 @@ impl LiveReports {
             if *at == now {
                 continue;
             }
-            if at.revision == since && at.name == now.name && !entry.report.affected_by(changes) {
+            let hooked = OUTPUT_HOOK.get().is_some_and(|h| {
+                h.reports.contains(&entry.report.id()) && h.reads.affected_by(changes)
+            });
+            if at.revision == since
+                && at.name == now.name
+                && !hooked
+                && !entry.report.affected_by(changes)
+            {
                 // Still correct for the new revision: say so, so readers of
                 // `ReportOutput::revision` see it as current.
                 output.revision = now.revision;
@@ -361,8 +388,10 @@ impl LiveReports {
         } else {
             self.entries[i].report.generate(project)
         };
-        if let Some(hook) = OUTPUT_HOOK.get() {
-            hook(project, &mut output);
+        if let Some(hook) = OUTPUT_HOOK.get()
+            && hook.reports.contains(&output.report.as_str())
+        {
+            (hook.step)(project, &mut output);
         }
         self.entries[i].output = Some((now, output));
     }
