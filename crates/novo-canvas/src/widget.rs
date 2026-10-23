@@ -272,6 +272,10 @@ pub struct CanvasView {
     pub reveal_zoom: f32,
     /// Screen points a revealed target keeps from the canvas edges.
     pub reveal_margin: f32,
+    /// Seconds a jump ([`Self::reveal`]) takes to glide to its target; 0
+    /// (the default) moves at once. Any drag, wheel or pinch stops a glide
+    /// where it is.
+    pub glide_secs: f32,
     /// A font family with a bold face, for [`Label::bold`](crate::Label)
     /// text. When it is `None` or not registered with egui, bold is faked
     /// with a second pass shifted along the baseline.
@@ -314,7 +318,16 @@ pub struct CanvasView {
     fit_settle: Option<FitSettle>,
     /// What to bring into view; see [`Self::reveal`].
     reveal_pending: Option<PendingReveal>,
+    /// A jump gliding to its target: where it started, where it ends and
+    /// when it began (egui time).
+    glide: Option<Glide>,
     stats: FrameStats,
+}
+
+struct Glide {
+    from: (Vec2, f32),
+    to: (Vec2, f32),
+    start: f64,
 }
 
 /// A pan that kept the sheet clear of a card, so it can be undone.
@@ -495,6 +508,8 @@ impl CanvasView {
             reveal_pending: None,
             reveal_zoom: 4.0,
             reveal_margin: 48.0,
+            glide_secs: 0.0,
+            glide: None,
             bold_family: None,
             stats: FrameStats::default(),
         }
@@ -750,6 +765,30 @@ impl CanvasView {
         self.fit_settle = Some(settle);
     }
 
+    /// Moves a gliding jump along, or drops it when the person takes the
+    /// view (drag, wheel, pinch) or the glide is off.
+    fn step_glide(&mut self, ui: &egui::Ui, response: &egui::Response) {
+        let Some(g) = &self.glide else {
+            return;
+        };
+        let taken = response.dragged()
+            || ui.input(|i| i.smooth_scroll_delta != egui::Vec2::ZERO || i.zoom_delta() != 1.0);
+        if taken || self.glide_secs <= 0.0 {
+            self.glide = None;
+            return;
+        }
+        let t = ((ui.input(|i| i.time) - g.start) / f64::from(self.glide_secs)) as f32;
+        let eased = 1.0 - (1.0 - t.clamp(0.0, 1.0)).powi(3);
+        let (center, zoom) = Viewport::glide(g.from, g.to, eased);
+        self.viewport.center = center;
+        self.viewport.zoom = zoom;
+        if t >= 1.0 {
+            self.glide = None;
+        } else {
+            ui.ctx().request_repaint();
+        }
+    }
+
     fn show_in_rect(
         &mut self,
         ui: &mut egui::Ui,
@@ -762,6 +801,7 @@ impl CanvasView {
             && let Some(kind) = self.fit_pending.take()
         {
             self.card_shift = None;
+            self.glide = None;
             self.fit_scene(scene, kind);
             self.fit_settle = Some(FitSettle::of(kind, &self.viewport, self.fit_reserve_bottom));
         } else {
@@ -780,13 +820,27 @@ impl CanvasView {
                 .filter_map(|id| scene.item_bounds(*id))
                 .fold(pending.area, |b, i| b.union(&i));
             if !bounds.is_empty() {
+                let before = (self.viewport.center, self.viewport.zoom);
                 self.viewport
                     .reveal(&bounds, self.reveal_margin, self.reveal_zoom);
+                let after = (self.viewport.center, self.viewport.zoom);
+                // A real move glides: back to where it was, then on by time.
+                let far = (after.0 - before.0).length() * after.1 > 2.0
+                    || (after.1 / before.1 - 1.0).abs() > 0.02;
+                if self.glide_secs > 0.0 && far {
+                    (self.viewport.center, self.viewport.zoom) = before;
+                    self.glide = Some(Glide {
+                        from: before,
+                        to: after,
+                        start: ui.input(|i| i.time),
+                    });
+                }
             } else if pending.frames > 1 {
                 pending.frames -= 1;
                 self.reveal_pending = Some(pending);
             }
         }
+        self.step_glide(ui, &response);
         let to_local = |p: egui::Pos2| Vec2::new(p.x - rect.min.x, p.y - rect.min.y);
         let hover_local = response.hover_pos().map(to_local);
         let context_click = self.handle_navigation(ui, &response, hover_local, scene);
@@ -1912,6 +1966,37 @@ mod tests {
         let (_, esc) = frame(&ctx, &mut view, &scene, vec![key]);
         assert_eq!(esc, None);
         assert_eq!(view.selection.len(), 1);
+    }
+
+    /// With a glide time set, a jump starts where the view was and arrives
+    /// when the time is up; with none it lands at once.
+    #[test]
+    fn a_jump_glides_when_asked_and_lands_when_the_time_is_up() {
+        let (ctx, mut view, scene) = setup();
+        view.glide_secs = 0.22;
+        view.viewport.center = Vec2::new(5000.0, 5000.0);
+        view.viewport.zoom = 4.0;
+        view.reveal([ItemId(1)]);
+        frame(&ctx, &mut view, &scene, vec![]);
+        assert!(view.glide.is_some(), "the jump is gliding");
+        assert!(
+            (view.viewport.center - Vec2::new(5000.0, 5000.0)).length() < 50.0,
+            "it starts where the view was: {}",
+            view.viewport.center
+        );
+        view.glide.as_mut().unwrap().start -= 1.0;
+        frame(&ctx, &mut view, &scene, vec![]);
+        assert!(view.glide.is_none());
+        let at = view.viewport.world_to_screen(Vec2::new(50.0, 0.0));
+        assert!((at - Vec2::new(400.0, 300.0)).length() < 1.0, "{at}");
+        // Switched off mid-glide (Reduce motion): the view stops being moved.
+        view.viewport.center = Vec2::new(5000.0, 5000.0);
+        view.reveal([ItemId(1)]);
+        frame(&ctx, &mut view, &scene, vec![]);
+        assert!(view.glide.is_some());
+        view.glide_secs = 0.0;
+        frame(&ctx, &mut view, &scene, vec![]);
+        assert!(view.glide.is_none());
     }
 
     /// A reveal waits for a frame whose scene holds its target (a jump to
