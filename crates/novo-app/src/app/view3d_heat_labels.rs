@@ -28,6 +28,7 @@ pub(super) struct Label {
 fn text(r: &Row) -> String {
     match r.margin_k {
         // A margin, not a temperature rise: say which side of the limit it is.
+        Some(m) if m.abs() < 0.5 => format!("{}  {:.0} °C · at its limit", r.tag, r.surface_c),
         Some(m) if m < 0.0 => format!("{}  {:.0} °C · {:.0} K over", r.tag, r.surface_c, -m),
         Some(m) => format!("{}  {:.0} °C · {m:.0} K under limit", r.tag, r.surface_c),
         None => format!("{}  {:.0} °C", r.tag, r.surface_c),
@@ -148,12 +149,15 @@ mod tests {
             dev(1, 57.0, 5.0, Status::Ok, Some(8.0)),
             dev(2, 91.0, 5.0, Status::Over, Some(-3.0)),
             dev(3, 40.0, 5.0, Status::NoLimit, None),
+            dev(4, 60.0, 5.0, Status::Ok, Some(0.2)),
         ];
         let l = labels(&s, &tag);
+        // Under half a kelvin neither side is claimed.
+        assert!(l.iter().any(|l| l.text == "-F4  60 °C · at its limit"));
         assert_eq!(l[0].text, "-F2  91 °C · 3 K over");
         assert_eq!(l[0].status, Status::Over);
-        assert_eq!(l[1].text, "-F1  57 °C · 8 K under limit");
-        assert_eq!(l[2].text, "-F3  40 °C");
+        assert!(l.iter().any(|l| l.text == "-F1  57 °C · 8 K under limit"));
+        assert!(l.iter().any(|l| l.text == "-F3  40 °C"));
     }
 
     #[test]

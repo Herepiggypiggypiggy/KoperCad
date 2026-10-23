@@ -1,0 +1,20 @@
+@title 3D vents: a device within half a kelvin of its limit reads at its limit
+@area 3D
+@sizes 1366x768 1920x1080
+# The hot cabinet with the filter fan and its grille already in, and T1's limit set (by qa/fixtures/make_vents_fixtures.py) so the run ends within half a kelvin of it. The label on the picture says "at its limit" instead of claiming a side (drawn on the canvas, so only the picture shows it); the run finishing is checked.
+open qa/fixtures/cabinet-vents-at-limit.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 170
+expect_not "Locked while the run goes"
+shot 01-at-its-limit
+check_layout
+check_blank 01-at-its-limit
