@@ -183,6 +183,7 @@ mod plc_list;
 #[cfg(test)]
 mod plc_list_tests;
 mod plc_run;
+mod plc_style;
 mod potentials;
 mod preferences;
 mod print_preview;

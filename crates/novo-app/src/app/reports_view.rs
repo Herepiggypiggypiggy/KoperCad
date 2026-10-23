@@ -290,6 +290,8 @@ impl NovoApp {
         let mut add_page = false;
         let mut preview = false;
         let mut lesson = None;
+        let mut style_pick = None;
+        let current_style = self.plc_address_style();
         let topic = if id == "report.wires" || id == "report.wirecut" {
             "wire list"
         } else {
@@ -322,6 +324,10 @@ impl NovoApp {
             ui.heading(&output.title);
             let (n, noun) = novo_reports::headline_count(&id, &output);
             ui.weak(novo_reports::count_text(n, noun));
+            if id == "io" {
+                ui.label("Addresses");
+                style_pick = super::plc_style::picker(ui, "io_address_style", current_style);
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(8.0);
                 lesson = chip_button(ui, chip.as_ref());
@@ -396,6 +402,11 @@ impl NovoApp {
         {
             ui.weak(set.explanation());
         }
+        if id == "io"
+            && let Some(note) = super::plc_style::missing_slot_note(&output)
+        {
+            ui.colored_label(crate::theme::ui_palette().warning, note);
+        }
         ui.separator();
         // The single-line diagram shows its drawing first; its schedule tab
         // falls through to the table.
@@ -423,6 +434,9 @@ impl NovoApp {
         };
         self.reports_view.reveal = false;
         jump = jump.or(clicked);
+        if let Some(style) = style_pick {
+            self.set_plc_address_style(style);
+        }
         if let Some(format) = export {
             self.export_report(&id, format);
         }

@@ -1,0 +1,44 @@
+@title PLC: the address style is chosen in the Add PLC card dialog and in the I/O list
+@area Schematic
+@sizes 1366x768 1920x1080
+# Critical audit C-60: the engine writes four address styles but nothing offered them. The card dialog has an "Address style" row, Ctrl+K "siemens" finds the card dialog and the I/O list, and the I/O list header has an "Addresses" choice. Siemens writes digital %I4.3 where IEC writes %IX4.3 (analog %IW6 is the same in both); Rockwell writes slot and channel.
+click_text "New project"
+wait 20
+key ctrl+k
+text "siemens"
+wait 5
+shot palette-siemens
+key Escape
+wait 3
+key ctrl+k
+text "add plc card"
+wait 5
+key Enter
+wait 10
+expect "Add PLC card"
+expect "Address style"
+click_text "IEC 61131"
+wait 5
+shot dialog-style-open
+click_text Siemens Button
+wait 5
+shot dialog-siemens
+click_text "Add card"
+wait 10
+click_text Reports #2
+wait 10
+click_text "I/O list"
+wait 20
+expect "Addresses"
+shot io-list-siemens
+check_layout
+click 475 53
+wait 5
+shot io-list-style-open
+click_text Rockwell Button
+wait 20
+expect "Local:"
+expect "Slot missing on -A1"
+shot io-list-rockwell
+check_layout
+check_blank io-list-rockwell

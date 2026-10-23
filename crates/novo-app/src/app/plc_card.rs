@@ -12,7 +12,7 @@ use novo_core::{DeviceTag, Project, Value};
 use novo_editor::naming::next_device_tag;
 use novo_plc::card::start_key;
 use novo_plc::commands::{NewCardLayout, add_card};
-use novo_plc::{CardLayout, ChannelType, PlcIndex, Space, cards, next_start};
+use novo_plc::{AddressStyle, CardLayout, ChannelType, PlcIndex, Space, cards, next_start};
 
 use super::{Level, NovoApp};
 
@@ -28,6 +28,8 @@ pub(crate) struct PlcCardForm {
     pub start_input: String,
     /// First output byte; empty for the next free one.
     pub start_output: String,
+    /// How the project writes its addresses; applied with the card.
+    pub style: AddressStyle,
     pub problem: Option<String>,
 }
 
@@ -131,6 +133,7 @@ impl NovoApp {
         }
         self.wb.plc_card = Some(PlcCardForm {
             counts: [16, 8, 0, 0, 0],
+            style: self.plc_address_style(),
             ..PlcCardForm::default()
         });
     }
@@ -199,7 +202,11 @@ impl NovoApp {
         match form.check(doc.project()) {
             Ok((layout, slot, starts)) => {
                 self.wb.plc_card = None;
-                self.plc_add_card_with(layout, form.station.trim(), slot, starts)
+                let added = self.plc_add_card_with(layout, form.station.trim(), slot, starts);
+                if added {
+                    self.set_plc_address_style(form.style);
+                }
+                added
             }
             Err(e) => {
                 if let Some(f) = self.wb.plc_card.as_mut() {
@@ -274,6 +281,12 @@ impl NovoApp {
                             .hint_text(hints[1].as_str())
                             .desired_width(120.0),
                     );
+                    ui.end_row();
+                    ui.label("Address style");
+                    if let Some(style) = super::plc_style::picker(ui, "plc_card_style", form.style)
+                    {
+                        form.style = style;
+                    }
                     ui.end_row();
                 });
             ui.add_space(4.0);

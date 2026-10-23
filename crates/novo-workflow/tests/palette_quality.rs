@@ -591,3 +591,18 @@ fn continue_lesson_finds_the_lesson_on_offer() {
         assert!(at < 3, "{query:?} ranks it {at}th");
     }
 }
+
+/// A PLC address style is found by the vendor's name: it leads to the places that have the choice.
+#[test]
+fn siemens_and_rockwell_find_the_places_that_choose_the_address_style() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for query in ["siemens", "rockwell", "address style"] {
+        let rows = search(&palette, &keymap, query);
+        for command in ["plc.add_card", "report.io"] {
+            assert!(
+                position(&rows, command).is_some_and(|p| p < 8),
+                "{query}: {command} is not among the first rows"
+            );
+        }
+    }
+}
