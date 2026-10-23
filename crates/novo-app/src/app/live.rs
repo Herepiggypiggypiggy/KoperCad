@@ -58,6 +58,8 @@ pub(crate) struct LiveView {
     /// Click mode of "Why?": the next click on a wire or device asks why it
     /// is lit or dead (Alt+click does the same without the mode).
     pub(super) why_mode: bool,
+    /// The current-path dashes are switched off (they are on by default).
+    hide_flow: bool,
     /// The frame whose Escape was handled, so a repeated pass of one frame
     /// does not step back twice.
     escaped_in: Option<u64>,
@@ -804,6 +806,7 @@ impl NovoApp {
         live.plc.sync(project, view.editor.catalog.library());
         let dt = f64::from(ctx.input(|i| i.stable_dt));
         let why_target = live.why;
+        let hide_flow_marks = live.hide_flow;
         let solved = live.solved(project, dt);
         let timing = solved.settled.timing.then_some(solved.settled.remaining);
         let wires = lit_wires(project, page, &solved.netlist, &solved.settled.solution);
@@ -875,6 +878,23 @@ impl NovoApp {
             .analysis(project, &solved.netlist, &solved.settled.poles)
             .clone();
         let glows = load_glows(project, page, &solved.netlist, &solved.settled.solution);
+        let sinks: BTreeSet<SymbolId> =
+            loads_on(project, &solved.netlist, &solved.settled.solution)
+                .into_iter()
+                .filter(|s| analysis.load(*s).is_none_or(|f| f.current > 1e-6))
+                .chain(energized.iter().copied())
+                .collect();
+        let flow = if hide_flow_marks {
+            BTreeSet::new()
+        } else {
+            super::live_flow::flow_nets(
+                project,
+                &solved.netlist,
+                &solved.settled.solution,
+                &solved.settled.poles,
+                &sinks,
+            )
+        };
         let timers = novo_sim::timer_progress(project, live.timer_clock());
         let names: BTreeMap<SymbolId, String> = badges
             .iter()
@@ -939,6 +959,33 @@ impl NovoApp {
             view.set_wire_looks(project, looks);
         }
 
+        // Current paths: thin dashes on the wires that lie on a route to a
+        // device drawing current. A model of where, not how much or which way.
+        if !flow.is_empty() {
+            let time = super::motion::clock(ctx, self.settings.reduce_motion);
+            let painter = ctx
+                .layer_painter(egui::LayerId::new(
+                    egui::Order::Middle,
+                    egui::Id::new("live_flow"),
+                ))
+                .with_clip_rect(canvas);
+            let ink = crate::theme::ui_palette().text_strong;
+            let stroke =
+                egui::Stroke::new(1.6, ink.gamma_multiply(super::live_flow::dash_alpha(time)));
+            for wire in wires
+                .iter()
+                .filter(|w| w.net.is_some_and(|n| flow.contains(&n)))
+            {
+                let screen: Vec<egui::Pos2> = wire.points.iter().map(|p| to_screen(*p)).collect();
+                for [a, b] in super::live_flow::dashes(&screen) {
+                    painter.line_segment([a, b], stroke);
+                }
+            }
+            if time.is_some() {
+                ctx.request_repaint_after(super::motion::FRAME);
+            }
+        }
+
         // Hovering a wire says what it carries right now.
         if let Some(pointer) = ctx.pointer_hover_pos()
             && canvas.contains(pointer)
@@ -967,6 +1014,12 @@ impl NovoApp {
                     ),
                 };
                 let text = match wire.net {
+                    Some(net) if flow.contains(&net) => {
+                        format!(
+                            "{text} · on a current path · {}",
+                            super::simulate::reading_text(analysis.net(net))
+                        )
+                    }
                     Some(net) if !matches!(wire.live, Live::Shorted(_)) => {
                         format!(
                             "{text} · {}",
@@ -1218,6 +1271,8 @@ impl NovoApp {
         let plc_running = self.wb.live.plc.is_running();
         let mut open_motor: Option<SymbolId> = None;
         let mut toggle_why = false;
+        let mut toggle_flow = false;
+        let hide_flow = self.wb.live.hide_flow;
         let mut clear_why = false;
         let mut follow: Option<SymbolId> = None;
         let why_mode = self.wb.live.why_mode;
@@ -1376,6 +1431,18 @@ impl NovoApp {
             if let Some(left) = timing {
                 ui.weak(format!("A timer is running, {left:.1} s left"));
             }
+            if !flow.is_empty() || hide_flow {
+                let mut shown = !hide_flow;
+                if ui
+                    .checkbox(&mut shown, "Current paths")
+                    .on_hover_text(
+                        "Thin dashes on the wires that lie on a route to a device drawing current, as the model works it out from the closed contacts. They show where, not how much or which way",
+                    )
+                    .changed()
+                {
+                    toggle_flow = true;
+                }
+            }
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 if ui
@@ -1451,6 +1518,7 @@ impl NovoApp {
         if leave
             || open_all
             || toggle_why
+            || toggle_flow
             || asked.is_some()
             || follow.is_some()
             || clicked.is_some()
@@ -1468,6 +1536,9 @@ impl NovoApp {
         }
         if add_supply {
             self.open_macro_place(Some("Three-phase supply"));
+        }
+        if toggle_flow {
+            self.wb.live.hide_flow ^= true;
         }
         if toggle_why {
             self.wb.live.why_mode ^= true;
@@ -1641,6 +1712,59 @@ mod tests {
         assert_eq!(carrying(&mut live), 1);
         live.flip_together(doc.project(), contact, 0);
         assert!(live.poles.is_closed(contact, 0));
+    }
+
+    #[test]
+    fn current_paths_run_from_a_supply_to_the_load_and_skip_dead_ends() {
+        let mut doc = Document::default();
+        let (contact, stub, load) = doc
+            .transact("Draw", |tx| {
+                let page = tx.add_page("1")?;
+                let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+                let n = tx.add_potential("N", PotentialKind::Neutral)?;
+                let feed = block(tx, page, 0.0, SymbolRole::PotentialFeed { potential: l1 });
+                let neutral = block(tx, page, 200.0, SymbolRole::PotentialFeed { potential: n });
+                let contact = block(tx, page, 40.0, SymbolRole::Unassigned);
+                tx.update::<novo_core::SymbolInstance>(contact, |s| {
+                    s.pass_through = vec![vec![0, 1]]
+                })?;
+                let load = block(tx, page, 80.0, SymbolRole::Unassigned);
+                // A second closed contact leading to a symbol nothing flows in.
+                let stub = block(tx, page, 120.0, SymbolRole::Unassigned);
+                tx.update::<novo_core::SymbolInstance>(stub, |s| {
+                    s.pass_through = vec![vec![0, 1]]
+                })?;
+                let beyond = block(tx, page, 160.0, SymbolRole::Unassigned);
+                tx.connect(Endpoint::pin(feed, 1), Endpoint::pin(contact, 0))?;
+                tx.connect(Endpoint::pin(contact, 1), Endpoint::pin(load, 0))?;
+                tx.connect(Endpoint::pin(contact, 1), Endpoint::pin(stub, 0))?;
+                tx.connect(Endpoint::pin(stub, 1), Endpoint::pin(beyond, 0))?;
+                tx.connect(Endpoint::pin(load, 1), Endpoint::pin(neutral, 1))?;
+                Ok((contact, stub, load))
+            })
+            .unwrap()
+            .0;
+        let project = doc.project();
+        let sinks = BTreeSet::from([load]);
+        let paths = |poles: &PoleState| {
+            let netlist = project.netlist();
+            let solution = novo_sim::solve(project, &netlist, poles);
+            let nets =
+                super::super::live_flow::flow_nets(project, &netlist, &solution, poles, &sinks);
+            let on = |s: SymbolId, pin: u16| {
+                netlist
+                    .net_of(Endpoint::pin(s, pin))
+                    .is_some_and(|n| nets.contains(&n))
+            };
+            (on(contact, 0), on(contact, 1), on(stub, 1))
+        };
+        // At rest nothing is closed, so no route exists.
+        assert_eq!(paths(&PoleState::all_open()), (false, false, false));
+        let mut poles = PoleState::all_open();
+        poles.set(contact, 0, true);
+        poles.set(stub, 0, true);
+        // Feed side and load side are on the route; the stub beyond is not.
+        assert_eq!(paths(&poles), (true, true, false));
     }
 
     fn part(
