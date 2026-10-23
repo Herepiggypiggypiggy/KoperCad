@@ -10,7 +10,8 @@ pub(super) const FRAME: std::time::Duration = std::time::Duration::from_millis(3
 
 /// Seconds on the animation clock, or `None` for a still picture.
 pub(super) fn clock(ctx: &egui::Context, reduce_motion: bool) -> Option<f64> {
-    if reduce_motion || crate::control::still_pictures() {
+    // A window nobody is looking at stops redrawing.
+    if reduce_motion || crate::control::still_pictures() || !ctx.input(|i| i.focused) {
         return None;
     }
     Some(ctx.input(|i| i.time))
