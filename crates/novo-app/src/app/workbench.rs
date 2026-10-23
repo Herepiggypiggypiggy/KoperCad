@@ -191,6 +191,9 @@ pub(crate) struct Workbench {
     /// The revision whose background check died, and how many were started.
     pub(super) check_failed: Option<u64>,
     pub(super) check_started: u32,
+    /// Errors plus warnings the last finished check found, to say once when
+    /// the last one is fixed.
+    pub(super) last_issue_total: Option<usize>,
     /// Where the issue pill was drawn, so its own click does not close
     /// the outline it opens.
     pub(super) pill_rect: egui::Rect,
@@ -361,6 +364,7 @@ impl Default for Workbench {
             check_job: None,
             check_failed: None,
             check_started: 0,
+            last_issue_total: None,
             pill_rect: egui::Rect::NOTHING,
             issue_filter: [true; 3],
             problem_at: None,

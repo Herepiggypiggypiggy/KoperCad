@@ -484,6 +484,71 @@ fn an_io_list_imported_next_to_the_report_pages_gets_the_next_free_page_numbers(
 }
 
 #[test]
+fn clearing_the_last_warning_says_so_once_and_opening_a_project_does_not() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    for _ in 0..200 {
+        d.frame();
+        if !d.app.checks_pending() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    d.frame();
+    let said = |d: &Drive| {
+        d.app
+            .messages()
+            .iter()
+            .filter(|m| m.text == "No errors or warnings left")
+            .count()
+    };
+    let before = d.app.wb.last_issue_total;
+    assert!(before.is_some_and(|n| n > 0), "the example has a warning");
+    assert_eq!(said(&d), 0);
+    // The warning is fixed: the next finished check is clean.
+    let revision = d.doc().project().revision();
+    d.app.wb.problems = Some((revision, Vec::new()));
+    d.frame();
+    assert_eq!(said(&d), 1);
+    d.frame();
+    assert_eq!(said(&d), 1, "once, not every frame");
+}
+
+#[test]
+fn a_new_project_after_one_with_warnings_does_not_say_the_issues_were_cleared() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    for _ in 0..200 {
+        d.frame();
+        if !d.app.checks_pending() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    d.frame();
+    assert!(d.app.wb.last_issue_total.is_some_and(|n| n > 0));
+    d.app.run(&ctx, Action::NewProject);
+    for _ in 0..200 {
+        d.frame();
+        if !d.app.checks_pending() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    d.frame();
+    d.frame();
+    let said = d
+        .app
+        .messages()
+        .iter()
+        .filter(|m| m.text == "No errors or warnings left")
+        .count();
+    assert_eq!(said, 0, "nothing was fixed, the project is new");
+}
+
+#[test]
 fn what_a_list_row_rests_on_is_lit_on_the_drawing_for_one_frame_only() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
