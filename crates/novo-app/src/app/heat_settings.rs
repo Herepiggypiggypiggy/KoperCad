@@ -714,6 +714,32 @@ mod tests {
     }
 
     #[test]
+    fn a_big_flow_gets_a_wide_grille_not_a_square_cut_short_by_the_wall() {
+        use super::super::view3d_vents::Suggestion;
+        let e = enclosure();
+        let set = HeatSettings::default();
+        let need = |m3h: f64| m3h / 3600.0 / 1.5 * 1e6;
+        // 600 m3/h: the old 400 mm square, cut to the 300 mm deep wall, was
+        // far too small; the grille now runs along the wall instead.
+        let big = Suggestion::for_test(Kind::FilterFan, 1, 600.0);
+        let g = big.companion_for_test(&e, &set).unwrap();
+        assert!(g.width_mm * g.height_mm * g.free_fraction >= 0.95 * need(600.0));
+        assert!(g.width_mm > g.height_mm);
+        assert!(
+            !big.sentence_with_companion_for_test(&e, &g)
+                .contains("second grille")
+        );
+        // More than the wall can hold: the card says so and asks for a second one.
+        let huge = Suggestion::for_test(Kind::FilterFan, 1, 5000.0);
+        let g = huge.companion_for_test(&e, &set).unwrap();
+        assert!(g.width_mm * g.height_mm * g.free_fraction < 0.95 * need(5000.0));
+        assert!(
+            huge.sentence_with_companion_for_test(&e, &g)
+                .contains("second grille")
+        );
+    }
+
+    #[test]
     fn only_a_fan_thinner_than_any_real_fan_is_flagged() {
         let mut set = HeatSettings::default();
         let mut thin = VentSpec::new(Wall::Top);

@@ -566,6 +566,14 @@ impl Suggestion {
         self.sentence(e, None)
     }
 
+    pub(super) fn sentence_with_companion_for_test(
+        &self,
+        e: &Enclosure,
+        companion: &VentSpec,
+    ) -> String {
+        self.sentence(e, Some(companion))
+    }
+
     pub(super) fn companion_for_test(
         &self,
         e: &Enclosure,
@@ -639,10 +647,25 @@ impl Suggestion {
         };
         // Free area for the proposed flow at about 1.5 m/s through the slots.
         let free_m2 = self.total_m3h / 3600.0 / GRILLE_SPEED_M_S;
-        let side = (free_m2 / grille.free_fraction.max(0.05)).sqrt() * 1000.0;
+        let gross_mm2 = free_m2 * 1e6 / grille.free_fraction.max(0.05);
+        let side = gross_mm2.sqrt();
         grille.width_mm = side.clamp(100.0, 400.0);
         grille.height_mm = side.clamp(100.0, 400.0);
-        Some(grille.fitted(e))
+        let mut grille = grille.fitted(e);
+        // A big flow or a shallow wall leaves the square short: widen it
+        // along the wall, as far as the wall goes.
+        if grille.width_mm * grille.height_mm < gross_mm2 {
+            grille.width_mm = gross_mm2 / grille.height_mm;
+            grille = grille.fitted(e);
+        }
+        Some(grille)
+    }
+
+    /// True when the grille offered is as big as its wall allows and still
+    /// under what the flow needs.
+    fn companion_is_short(&self, g: &VentSpec) -> bool {
+        let need_mm2 = self.total_m3h / 3600.0 / GRILLE_SPEED_M_S * 1e6;
+        g.width_mm * g.height_mm * g.free_fraction < 0.95 * need_mm2
     }
 
     fn button(&self, placed: usize, with_grille: bool) -> String {
@@ -677,6 +700,9 @@ impl Suggestion {
                 " A grille of about {:.0} × {:.0} mm goes with it: a fan alone moves no air in a closed cabinet.",
                 g.width_mm, g.height_mm
             ));
+            if self.companion_is_short(g) {
+                text.push_str(" That is as big as the wall allows and still short of this flow: add a second grille by hand.");
+            }
         }
         text
     }

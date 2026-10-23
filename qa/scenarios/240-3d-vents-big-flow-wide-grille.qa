@@ -1,0 +1,22 @@
+@title 3D vents: a big flow gets a wide grille that runs along the wall
+@area 3D
+@sizes 1366x768 1920x1080
+# The hot cabinet with T1 at 600 W (fixture made by qa/fixtures/make_vents_fixtures.py): the cooling selection proposes a large flow. The grille offered with it is no longer a 400 mm square cut short by the shallow wall but a wide one that runs along the wall, and the card says so if even that is short. The run is finished before the shot.
+open qa/fixtures/cabinet-vents-big-flow.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 150
+expect_not "Locked while the run goes"
+expect "Cooling selection proposes"
+expect "A grille of about"
+shot 01-big-flow-card
+check_layout
+check_blank 01-big-flow-card
