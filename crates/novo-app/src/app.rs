@@ -221,6 +221,7 @@ mod standards_report_tests;
 mod status_bar;
 #[cfg(test)]
 mod strip_grouping_tests;
+mod supply_feeds;
 mod symbol_folder;
 mod symbol_preview;
 mod terminal_edit;
