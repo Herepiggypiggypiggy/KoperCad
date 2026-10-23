@@ -364,6 +364,7 @@ impl NovoApp {
                         egui::TextFormat::simple(font, ui.visuals().text_color()),
                     );
                     let row = ui.selectable_label(false, text);
+                    self.problem_flash(ui, *i, &row);
                     self.learn_row("issues.list", &p.message, row.rect);
                     if row.clicked() {
                         go = Some(*i);
@@ -443,6 +444,46 @@ impl NovoApp {
             self.go_problem(i);
         }
         go.is_some()
+    }
+
+    /// A soft highlight on the row of the problem just chosen (a click or
+    /// F8), so the eye finds it in the list; it also scrolls into view. Off
+    /// with Reduce motion: the row is only scrolled to.
+    fn problem_flash(&mut self, ui: &egui::Ui, index: usize, row: &egui::Response) {
+        let Some((at, chosen, revision, scrolled)) = self.wb.problem_flash else {
+            return;
+        };
+        if at != index {
+            return;
+        }
+        let now_revision = self
+            .backend
+            .document()
+            .map_or(0, |doc| doc.project().revision());
+        // A choice nobody saw (F8 with the list closed) must not fire later.
+        let Some(age) = flash_age(chosen.elapsed().as_secs_f64(), revision, now_revision) else {
+            self.wb.problem_flash = None;
+            return;
+        };
+        if !scrolled {
+            row.scroll_to_me(None);
+            self.wb.problem_flash = Some((at, chosen, revision, true));
+        }
+        if super::motion::clock(ui.ctx(), self.settings.reduce_motion).is_none() {
+            return;
+        }
+        let hold = crate::control::hold_cues();
+        let strength = super::motion::flash_strength(if hold { 0.05 } else { age });
+        let pal = crate::theme::ui_palette();
+        let alpha = (strength * super::motion::FLASH_PEAK_ALPHA) as u8;
+        ui.painter().rect_filled(
+            row.rect,
+            ui.visuals().widgets.inactive.corner_radius,
+            egui::Color32::from_rgba_unmultiplied(pal.info.r(), pal.info.g(), pal.info.b(), alpha),
+        );
+        if !hold {
+            ui.ctx().request_repaint_after(super::motion::FRAME);
+        }
     }
 
     /// The reason field of a problem being waived.
@@ -579,6 +620,11 @@ impl NovoApp {
             return;
         };
         self.message(Level::Info, problem.message.clone());
+        let revision = self
+            .backend
+            .document()
+            .map_or(0, |doc| doc.project().revision());
+        self.wb.problem_flash = Some((index, std::time::Instant::now(), revision, false));
         let Some(page) = problem.page else {
             return;
         };
@@ -588,6 +634,13 @@ impl NovoApp {
         });
         self.jump(Place { page, symbol }, true);
     }
+}
+
+/// Seconds since a problem was chosen, or `None` once the choice is stale:
+/// the highlight has run out or the project changed since, so the index may
+/// now name another problem.
+fn flash_age(elapsed: f64, chosen_revision: u64, revision: u64) -> Option<f64> {
+    (chosen_revision == revision && elapsed < super::motion::FLASH_SECS).then_some(elapsed)
 }
 
 /// The filter slot and sort order of a severity.
@@ -617,6 +670,18 @@ fn explain_question(p: &Problem) -> String {
          it names if you are allowed to. This is your reading, not the program's verdict.",
         p.severity, p.message
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_choice_nobody_drew_goes_stale_with_time_and_with_edits() {
+        assert_eq!(flash_age(0.2, 5, 5), Some(0.2));
+        assert_eq!(flash_age(2.0, 5, 5), None, "too late");
+        assert_eq!(flash_age(0.2, 5, 6), None, "the list changed");
+    }
 }
 
 /// Whether the count of errors and warnings went from some to none.

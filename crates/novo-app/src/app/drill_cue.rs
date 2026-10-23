@@ -18,6 +18,12 @@ use novo_layout::drill::{self, Surface};
 pub(super) const SECONDS: f64 = 0.9;
 /// Age a held cue (`KOPERCAD_MOTION=hold`, tests only) is drawn at.
 const HOLD_AGE: f64 = 0.5;
+/// The frozen frame of the 3D cue in `KOPERCAD_MOTION=hold` pictures: the
+/// ring has closed to its resting size and the bore is mostly open.
+const HOLD_AGE_3D: f64 = 0.3;
+/// Smallest radius of the 3D ring: the whole cabinet is a few hundred pixels
+/// tall, so a 4 mm hole needs a larger ring to be seen.
+const RING_FLOOR_MM: f64 = 14.0;
 /// Most cues shown at once: a whole-plate import would otherwise flash.
 pub(super) const MAX_CUES: usize = 24;
 
@@ -59,7 +65,7 @@ pub(super) struct Frame {
 }
 
 /// The cue at `age`, or `None` once it is over.
-pub(super) fn frame(age: f64) -> Option<Frame> {
+pub(super) fn frame_at(age: f64) -> Option<Frame> {
     if !(0.0..SECONDS).contains(&age) {
         return None;
     }
@@ -142,7 +148,7 @@ impl DrillCue {
             } else {
                 now - c.start
             };
-            let Some(f) = frame(age) else {
+            let Some(f) = frame_at(age) else {
                 continue;
             };
             let (x, y, dia) = c.key.xyd();
@@ -159,6 +165,62 @@ impl DrillCue {
                 painter.circle_stroke(centre, r * f.ring, egui::Stroke::new(1.0, col(0.7)));
             }
         }
+    }
+}
+
+impl DrillCue {
+    /// The cues as lines on the plate of the 3D view: for each hole a ring
+    /// that closes and a bore that opens, fading out. The bore is the hole's
+    /// true size; only the ring is kept at 14 mm or more so a small hole shows.
+    pub(super) fn lines(
+        &self,
+        frame: &novo_view3d::PlateFrame,
+        now: f64,
+        rgb: [u8; 3],
+    ) -> Option<novo_view3d::OverlayLines> {
+        const SEGMENTS: usize = 24;
+        // Clears a DIN rail (7.5 mm), so a screw under a rail still shows.
+        const LIFT: f64 = 9.0;
+        let mut out = novo_view3d::OverlayLines {
+            width_px: 2.5,
+            order: 60,
+            ..Default::default()
+        };
+        let mut circle = |centre: (f64, f64), r: f64, alpha: f32| {
+            let a = (alpha.clamp(0.0, 1.0) * 255.0) as u8;
+            if a < 6 {
+                return;
+            }
+            out.starts.push(out.positions.len() as u32);
+            for i in 0..=SEGMENTS {
+                let t = i as f64 / SEGMENTS as f64 * std::f64::consts::TAU;
+                out.positions.push(frame.world(
+                    centre.0 + r * t.cos(),
+                    centre.1 + r * t.sin(),
+                    LIFT,
+                ));
+                out.colors.push([rgb[0], rgb[1], rgb[2], a]);
+            }
+        };
+        for c in &self.cues {
+            let age = if crate::control::hold_cues() {
+                HOLD_AGE_3D
+            } else {
+                now - c.start
+            };
+            let Some(f) = frame_at(age) else { continue };
+            let (x, y, dia) = c.key.xyd();
+            // The bore is the hole's true radius; only the closing ring has a
+            // legibility floor, so a 4 mm hole still shows from across the cabinet.
+            let bore_r = (0.5 * dia).max(0.5);
+            let ring_r = bore_r.max(RING_FLOOR_MM);
+            if f.bore > 0.0 {
+                circle((x, y), bore_r * f64::from(f.bore), 0.9 * f.alpha);
+            }
+            // The ring settles at its floor size around the bore while it fades.
+            circle((x, y), ring_r * f64::from(f.ring.max(1.0)), 0.7 * f.alpha);
+        }
+        (!out.positions.is_empty()).then_some(out)
     }
 }
 
@@ -230,12 +292,45 @@ mod tests {
 
     #[test]
     fn the_frame_closes_opens_and_fades() {
-        let a = frame(0.0).unwrap();
+        let a = frame_at(0.0).unwrap();
         assert_eq!((a.ring, a.bore, a.alpha), (3.0, 0.0, 1.0));
-        let b = frame(0.5).unwrap();
+        let b = frame_at(0.5).unwrap();
         assert!((b.ring - 1.0).abs() < 1e-3 && (b.bore - 1.0).abs() < 1e-3);
-        let c = frame(0.8).unwrap();
+        let c = frame_at(0.8).unwrap();
         assert!(c.alpha < 1.0 && c.alpha > 0.0);
-        assert!(frame(SECONDS).is_none() && frame(-0.1).is_none());
+        assert!(frame_at(SECONDS).is_none() && frame_at(-0.1).is_none());
+    }
+
+    #[test]
+    fn the_3d_bore_keeps_the_true_hole_size_and_only_the_ring_is_enlarged() {
+        let frame = novo_view3d::PlateFrame {
+            width: 800.0,
+            height: 600.0,
+        };
+        let mut d = DrillCue::default();
+        d.observe(1, 1, &keys(1), 0.0);
+        d.observe(1, 2, &keys(2), 5.0);
+        let (x, y, _) = d.cues[0].key.xyd();
+        let l = d.lines(&frame, 5.0 + HOLD_AGE, [1, 2, 3]).expect("cue");
+        let c = frame.world(x, y, 0.0);
+        let dist = |p: &glam::Vec3| ((p.x - c.x).powi(2) + (p.y - c.y).powi(2)).sqrt();
+        // The first polyline is the bore: a 4 mm hole stays within 2 mm.
+        let first = l.starts.get(1).map_or(l.positions.len(), |s| *s as usize);
+        assert!(l.positions[..first].iter().all(|p| dist(p) <= 2.0 + 1e-3));
+    }
+
+    #[test]
+    fn plate_lines_sit_above_a_rail_and_are_empty_when_nothing_runs() {
+        let frame = novo_view3d::PlateFrame {
+            width: 800.0,
+            height: 600.0,
+        };
+        let mut d = DrillCue::default();
+        assert!(d.lines(&frame, 0.0, [1, 2, 3]).is_none());
+        d.observe(1, 1, &keys(1), 0.0);
+        d.observe(1, 2, &keys(3), 5.0);
+        let l = d.lines(&frame, 5.3, [1, 2, 3]).expect("cue running");
+        assert!(l.positions.iter().all(|p| p.z > 7.5));
+        assert!(d.lines(&frame, 9.0, [1, 2, 3]).is_none());
     }
 }

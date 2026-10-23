@@ -87,6 +87,22 @@ pub(super) fn glide_secs(reduce_motion: bool) -> f32 {
 /// The glide time of a jump.
 pub(super) const GLIDE_SECS: f32 = 0.22;
 
+/// How long the row of a chosen problem keeps its soft highlight.
+pub(super) const FLASH_SECS: f64 = 0.9;
+
+/// Alpha of the highlight at full strength (out of 255): clear on a dark list
+/// and still visible on a light one.
+pub(super) const FLASH_PEAK_ALPHA: f32 = 100.0;
+
+/// Strength (0..=1) of the highlight `age` seconds after a problem row was
+/// chosen: full at once, easing out to nothing.
+pub(super) fn flash_strength(age: f64) -> f32 {
+    if !(0.0..FLASH_SECS).contains(&age) {
+        return 0.0;
+    }
+    1.0 - ease_out((age / FLASH_SECS) as f32)
+}
+
 /// Ease-out: fast at the start, settling gently. `t` is clamped to 0..=1.
 pub(super) fn ease_out(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
@@ -118,6 +134,14 @@ pub(super) fn toast_frame(style: &egui::Style, alpha: f32) -> egui::Frame {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_problem_highlight_starts_strong_and_is_gone_after_a_second() {
+        assert!(flash_strength(0.0) > 0.99);
+        assert!(flash_strength(0.45) < flash_strength(0.1));
+        assert_eq!(flash_strength(FLASH_SECS), 0.0);
+        assert_eq!(flash_strength(-1.0), 0.0);
+    }
 
     #[test]
     fn a_jump_glides_for_about_a_fifth_of_a_second_and_never_with_reduce_motion() {

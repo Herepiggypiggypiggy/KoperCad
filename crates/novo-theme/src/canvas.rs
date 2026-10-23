@@ -185,17 +185,126 @@ pub const POTENTIALS_LIGHT: PotentialPalette = PotentialPalette {
     ],
 };
 
+/// The high contrast dark canvas: a black sheet, white ink and bright,
+/// saturated marks. The grid stays quiet; everything drawn is 7:1 or more.
+pub const CANVAS_HIGH_CONTRAST_DARK: CanvasPalette = CanvasPalette {
+    background: [0x14, 0x14, 0x14, 0xFF],
+    sheet: [0x00, 0x00, 0x00, 0xFF],
+    sheet_frame: [0xD0, 0xD0, 0xD0, 0xFF],
+    sheet_text: [0xFF, 0xFF, 0xFF, 0xFF],
+    grid_minor: [0x3A, 0x3A, 0x3A, 0xFF],
+    grid_major: [0x66, 0x66, 0x66, 0xFF],
+    symbol: [0xFF, 0xFF, 0xFF, 0xFF],
+    wire: [0x5C, 0xB8, 0xFF, 0xFF],
+    text: [0xFF, 0xFF, 0xFF, 0xFF],
+    cross_reference: [0x9E, 0xD0, 0xFF, 0xFF],
+    connection_point: [0x6C, 0xF0, 0x84, 0xFF],
+    selection: [0xFF, 0xD6, 0x0A, 0xFF],
+    hover: [0x9E, 0xD0, 0xFF, 0xFF],
+    rubber_band: [0x9E, 0xD0, 0xFF, 0xFF],
+    error: [0xFF, 0x7A, 0x7A, 0xFF],
+    warning: [0xFF, 0xB0, 0x3A, 0xFF],
+    proposal: [0x9E, 0xD0, 0xFF, 0xB0],
+    override_mark: [0xE0, 0xE0, 0xE0, 0xFF],
+    added: [0x6C, 0xF0, 0x84, 0xA0],
+    modified: [0xFF, 0xB0, 0x3A, 0xA0],
+    removed: [0xFF, 0x7A, 0x7A, 0xA0],
+    mark_text: [0xFF, 0xFF, 0xFF, 0xFF],
+    snap_marker: [0xB0, 0xB0, 0xB0, 0xFF],
+    junction: [0xFF, 0x9A, 0x5C, 0xFF],
+    wire_end: [0xFF, 0x9A, 0x5C, 0xFF],
+    unconnected_flag: [0xFF, 0xB0, 0x3A, 0xFF],
+};
+
+/// The high contrast light canvas: a white sheet, black ink and deep marks.
+pub const CANVAS_HIGH_CONTRAST_LIGHT: CanvasPalette = CanvasPalette {
+    background: [0xC8, 0xC8, 0xC8, 0xFF],
+    sheet: [0xFF, 0xFF, 0xFF, 0xFF],
+    sheet_frame: [0x30, 0x30, 0x30, 0xFF],
+    sheet_text: [0x00, 0x00, 0x00, 0xFF],
+    grid_minor: [0xC4, 0xC4, 0xC4, 0xFF],
+    grid_major: [0x96, 0x96, 0x96, 0xFF],
+    symbol: [0x00, 0x00, 0x00, 0xFF],
+    wire: [0x0A, 0x3F, 0xC8, 0xFF],
+    text: [0x00, 0x00, 0x00, 0xFF],
+    cross_reference: [0x0B, 0x3D, 0x91, 0xFF],
+    connection_point: [0x0B, 0x5D, 0x1E, 0xFF],
+    selection: [0x8F, 0x33, 0x00, 0xFF],
+    hover: [0x0B, 0x3D, 0x91, 0xFF],
+    rubber_band: [0x0B, 0x3D, 0x91, 0xFF],
+    error: [0x8F, 0x00, 0x00, 0xFF],
+    warning: [0x6B, 0x3F, 0x00, 0xFF],
+    proposal: [0x0B, 0x3D, 0x91, 0xB0],
+    override_mark: [0x33, 0x33, 0x33, 0xFF],
+    added: [0x0B, 0x5D, 0x1E, 0xA0],
+    modified: [0x6B, 0x3F, 0x00, 0xA0],
+    removed: [0x8F, 0x00, 0x00, 0xA0],
+    mark_text: [0x00, 0x00, 0x00, 0xFF],
+    snap_marker: [0x55, 0x55, 0x55, 0xFF],
+    junction: [0x7A, 0x2E, 0x00, 0xFF],
+    wire_end: [0x7A, 0x2E, 0x00, 0xFF],
+    unconnected_flag: [0x6B, 0x3F, 0x00, 0xFF],
+};
+
+/// The high contrast dark potential palette: bright on black.
+pub const POTENTIALS_HIGH_CONTRAST_DARK: PotentialPalette = PotentialPalette {
+    protective_earth: [0x6C, 0xF0, 0x84, 0xFF],
+    pen: [0xC8, 0xE8, 0x5C, 0xFF],
+    neutral: [0x6C, 0xA8, 0xFF, 0xFF],
+    dc_positive: [0xFF, 0x7A, 0x7A, 0xFF],
+    dc_negative: [0x9C, 0xA8, 0xFF, 0xFF],
+    dead: [0x9A, 0x9A, 0x9A, 0xFF],
+    line: [
+        [0xFF, 0xB0, 0x3A, 0xFF],
+        [0xE8, 0x8C, 0xFF, 0xFF],
+        [0x4F, 0xE0, 0xF0, 0xFF],
+        [0xF0, 0xF0, 0x5C, 0xFF],
+    ],
+};
+
+/// The high contrast light potential palette: deep on white.
+pub const POTENTIALS_HIGH_CONTRAST_LIGHT: PotentialPalette = PotentialPalette {
+    protective_earth: [0x0B, 0x5D, 0x1E, 0xFF],
+    pen: [0x4A, 0x5C, 0x00, 0xFF],
+    neutral: [0x0A, 0x3F, 0xC8, 0xFF],
+    dc_positive: [0x9E, 0x00, 0x00, 0xFF],
+    dc_negative: [0x30, 0x34, 0x9E, 0xFF],
+    dead: [0x6E, 0x6E, 0x6E, 0xFF],
+    line: [
+        [0x8A, 0x4B, 0x00, 0xFF],
+        [0x7A, 0x1F, 0x96, 0xFF],
+        [0x00, 0x68, 0x78, 0xFF],
+        [0x55, 0x55, 0x00, 0xFF],
+    ],
+};
+
 /// The canvas palette for dark or light.
 pub const fn canvas_palette(dark: bool) -> &'static CanvasPalette {
-    if dark { &CANVAS_DARK } else { &CANVAS_LIGHT }
+    canvas_palette_for(dark, false)
+}
+
+/// The canvas palette for dark or light at normal or high contrast.
+pub const fn canvas_palette_for(dark: bool, high: bool) -> &'static CanvasPalette {
+    match (dark, high) {
+        (true, false) => &CANVAS_DARK,
+        (false, false) => &CANVAS_LIGHT,
+        (true, true) => &CANVAS_HIGH_CONTRAST_DARK,
+        (false, true) => &CANVAS_HIGH_CONTRAST_LIGHT,
+    }
 }
 
 /// The potential palette for dark or light.
 pub const fn potential_palette(dark: bool) -> &'static PotentialPalette {
-    if dark {
-        &POTENTIALS_DARK
-    } else {
-        &POTENTIALS_LIGHT
+    potential_palette_for(dark, false)
+}
+
+/// The potential palette for dark or light at normal or high contrast.
+pub const fn potential_palette_for(dark: bool, high: bool) -> &'static PotentialPalette {
+    match (dark, high) {
+        (true, false) => &POTENTIALS_DARK,
+        (false, false) => &POTENTIALS_LIGHT,
+        (true, true) => &POTENTIALS_HIGH_CONTRAST_DARK,
+        (false, true) => &POTENTIALS_HIGH_CONTRAST_LIGHT,
     }
 }
 
@@ -203,9 +312,41 @@ pub const fn potential_palette(dark: bool) -> &'static PotentialPalette {
 mod tests {
     use super::*;
 
+    const ALL_CANVAS: [CanvasPalette; 4] = [
+        CANVAS_DARK,
+        CANVAS_LIGHT,
+        CANVAS_HIGH_CONTRAST_DARK,
+        CANVAS_HIGH_CONTRAST_LIGHT,
+    ];
+    const ALL_PAIRS: [(PotentialPalette, CanvasPalette); 4] = [
+        (POTENTIALS_DARK, CANVAS_DARK),
+        (POTENTIALS_LIGHT, CANVAS_LIGHT),
+        (POTENTIALS_HIGH_CONTRAST_DARK, CANVAS_HIGH_CONTRAST_DARK),
+        (POTENTIALS_HIGH_CONTRAST_LIGHT, CANVAS_HIGH_CONTRAST_LIGHT),
+    ];
+
+    #[test]
+    fn high_contrast_drawing_colours_are_7_to_1_on_the_sheet() {
+        for p in [CANVAS_HIGH_CONTRAST_DARK, CANVAS_HIGH_CONTRAST_LIGHT] {
+            let sheet = to_color32(p.sheet);
+            for c in [
+                p.symbol,
+                p.wire,
+                p.text,
+                p.sheet_text,
+                p.error,
+                p.warning,
+                p.selection,
+            ] {
+                let ratio = crate::tokens::tests::contrast(to_color32(c), sheet);
+                assert!(ratio >= 7.0, "{c:?}: {ratio}");
+            }
+        }
+    }
+
     #[test]
     fn drawing_colours_stand_out_from_the_sheet() {
-        for p in [CANVAS_DARK, CANVAS_LIGHT] {
+        for p in ALL_CANVAS {
             let grey = |c: [u8; 4]| (c[0] as u32 + c[1] as u32 + c[2] as u32) / 3;
             // How far a colour sits from the sheet, light or dark.
             let away = |c: [u8; 4]| grey(c).abs_diff(grey(p.sheet));
@@ -220,7 +361,7 @@ mod tests {
 
     #[test]
     fn drawing_colours_meet_wcag_aa_on_the_sheet() {
-        for p in [CANVAS_DARK, CANVAS_LIGHT] {
+        for p in ALL_CANVAS {
             let sheet = to_color32(p.sheet);
             for c in [
                 p.symbol,
@@ -244,7 +385,7 @@ mod tests {
 
     #[test]
     fn grid_dots_show_on_the_sheet_without_competing_with_the_drawing() {
-        for p in [CANVAS_DARK, CANVAS_LIGHT] {
+        for p in ALL_CANVAS {
             let sheet = to_color32(p.sheet);
             let minor = crate::tokens::tests::contrast(to_color32(p.grid_minor), sheet);
             let major = crate::tokens::tests::contrast(to_color32(p.grid_major), sheet);
@@ -257,7 +398,7 @@ mod tests {
 
     #[test]
     fn wires_are_told_apart_from_symbols_and_junctions_are_not_the_selection() {
-        for p in [CANVAS_DARK, CANVAS_LIGHT] {
+        for p in ALL_CANVAS {
             let ratio = crate::tokens::tests::contrast(to_color32(p.symbol), to_color32(p.wire));
             assert!(ratio >= 2.0, "symbol against wire: {ratio}");
             let rgb = |c: [u8; 4]| [c[0], c[1], c[2]];
@@ -270,7 +411,7 @@ mod tests {
 
     #[test]
     fn marks_follow_the_design_rules() {
-        for p in [CANVAS_DARK, CANVAS_LIGHT] {
+        for p in ALL_CANVAS {
             let marks = [
                 p.proposal,
                 p.override_mark,
@@ -301,10 +442,7 @@ mod tests {
 
     #[test]
     fn potential_colours_are_readable_on_the_sheet_and_tell_the_conductors_apart() {
-        for (p, canvas) in [
-            (POTENTIALS_DARK, CANVAS_DARK),
-            (POTENTIALS_LIGHT, CANVAS_LIGHT),
-        ] {
+        for (p, canvas) in ALL_PAIRS {
             let sheet = to_color32(canvas.sheet);
             let all: Vec<[u8; 4]> = [
                 p.protective_earth,
@@ -341,10 +479,7 @@ mod tests {
 
     #[test]
     fn a_wire_without_potential_stays_visible_and_is_told_apart() {
-        for (p, canvas) in [
-            (POTENTIALS_DARK, CANVAS_DARK),
-            (POTENTIALS_LIGHT, CANVAS_LIGHT),
-        ] {
+        for (p, canvas) in ALL_PAIRS {
             let contrast = |a: [u8; 4], b: [u8; 4]| {
                 crate::tokens::tests::contrast(to_color32(a), to_color32(b))
             };

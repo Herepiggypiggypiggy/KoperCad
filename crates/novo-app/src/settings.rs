@@ -56,6 +56,9 @@ pub struct Settings {
     pub appearance_theme: String,
     /// The interface density, `"standard"` (empty), `"compact"` or `"touch"`.
     pub appearance_density: String,
+    /// `"high"` for the high contrast palettes; empty (the default) is the
+    /// standard contrast.
+    pub appearance_contrast: String,
     /// Words beside the dock icons: `""` (auto: when the canvas has room),
     /// `"always"` or `"never"` (icons only, names stay in the tooltips).
     pub dock_labels: String,
@@ -329,6 +332,11 @@ impl Settings {
             200 => 2.0,
             _ => 1.0,
         }
+    }
+
+    /// Whether the person chose high contrast.
+    pub fn high_contrast(&self) -> bool {
+        self.appearance_contrast == "high"
     }
 
     /// The density the person chose; standard by default.

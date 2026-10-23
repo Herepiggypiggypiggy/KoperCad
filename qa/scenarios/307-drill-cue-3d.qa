@@ -1,0 +1,24 @@
+@title 3D: the drill cue marks new plate holes (run with KOPERCAD_MOTION=hold; still under the harness)
+@area 3D
+# Same fixture and edit as scenario 302. The 3D workspace is opened once (it learns the plate's holes), then Centre rails on devices is run in the Cabinet; coming back to 3D marks the holes the edit moved with rings and bores on the plate. Under the harness default no cue is drawn, so the picture is the plain 3D view.
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text 3D #1
+wait 40
+shot before
+click_text Cabinet #1
+wait 30
+key ctrl+k
+wait 3
+text rails and ducts
+wait 4
+key Enter
+wait 10
+click_text "Centre rails on devices"
+wait 2
+key Escape
+wait 10
+click_text 3D #1
+wait 20
+shot back-in-3d
+check_layout

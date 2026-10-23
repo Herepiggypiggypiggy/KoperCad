@@ -12,12 +12,14 @@ use egui::{
 pub fn visuals_for(p: &Palette) -> Visuals {
     let control = CornerRadius::same(RADIUS_CONTROL);
     let window = CornerRadius::same(RADIUS_WINDOW);
+    // High contrast draws outlines and glyph strokes heavier.
+    let line = if p.high_contrast { 1.5 } else { 1.0 };
     let widget = |bg: Color32, border: Color32, fg: Color32| WidgetVisuals {
         bg_fill: bg,
         weak_bg_fill: bg,
-        bg_stroke: Stroke::new(1.0, border),
+        bg_stroke: Stroke::new(line, border),
         corner_radius: control,
-        fg_stroke: Stroke::new(1.0, fg),
+        fg_stroke: Stroke::new(line, fg),
         expansion: 0.0,
     };
     let base = if p.dark {
@@ -52,7 +54,7 @@ pub fn visuals_for(p: &Palette) -> Visuals {
         // keyboard focus ring.
         selection: Selection {
             bg_fill: p.accent_wash,
-            stroke: Stroke::new(1.5, p.accent),
+            stroke: Stroke::new(if p.high_contrast { 2.5 } else { 1.5 }, p.accent),
         },
         hyperlink_color: p.info,
         faint_bg_color: if p.dark {
@@ -68,7 +70,7 @@ pub fn visuals_for(p: &Palette) -> Visuals {
         window_corner_radius: window,
         window_shadow: shadow(6, 20, p.shadow_alpha),
         window_fill: p.raised,
-        window_stroke: Stroke::new(1.0, p.border_subtle),
+        window_stroke: Stroke::new(line, p.border_subtle),
         menu_corner_radius: window,
         panel_fill: p.panel,
         popup_shadow: shadow(3, 10, p.shadow_alpha.saturating_sub(10)),
@@ -159,8 +161,14 @@ pub fn set_theme(ctx: &egui::Context, theme: ThemeChoice) {
 
 /// Re-applies both themes at `density`.
 pub fn set_density(ctx: &egui::Context, density: Density) {
-    ctx.set_style_of(Theme::Dark, style_for(&Palette::DARK, density));
-    ctx.set_style_of(Theme::Light, style_for(&Palette::LIGHT, density));
+    set_density_for(ctx, density, crate::palette::high_contrast());
+}
+
+/// [`set_density`] for the high or standard contrast palettes, whatever the
+/// global switch says.
+pub fn set_density_for(ctx: &egui::Context, density: Density, high: bool) {
+    ctx.set_style_of(Theme::Dark, style_for(Palette::pick(true, high), density));
+    ctx.set_style_of(Theme::Light, style_for(Palette::pick(false, high), density));
 }
 
 #[cfg(test)]

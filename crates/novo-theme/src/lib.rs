@@ -22,12 +22,15 @@ pub mod tokens;
 pub mod widgets;
 
 pub use canvas::{
-    CANVAS_DARK, CANVAS_LIGHT, CanvasPalette, POTENTIALS_DARK, POTENTIALS_LIGHT, PotentialPalette,
-    canvas_palette, potential_palette,
+    CANVAS_DARK, CANVAS_HIGH_CONTRAST_DARK, CANVAS_HIGH_CONTRAST_LIGHT, CANVAS_LIGHT,
+    CanvasPalette, POTENTIALS_DARK, POTENTIALS_HIGH_CONTRAST_DARK, POTENTIALS_HIGH_CONTRAST_LIGHT,
+    POTENTIALS_LIGHT, PotentialPalette, canvas_palette, canvas_palette_for, potential_palette,
+    potential_palette_for,
 };
 pub use density::{Density, Metrics, ThemeChoice};
 pub use metrics::{dialog_width, icon_size, radius, space};
-pub use palette::Palette;
+pub use palette::{Palette, high_contrast, set_high_contrast};
 pub use style::{
-    apply, apply_with, set_density, set_theme, style, style_for, visuals, visuals_for,
+    apply, apply_with, set_density, set_density_for, set_theme, style, style_for, visuals,
+    visuals_for,
 };

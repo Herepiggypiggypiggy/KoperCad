@@ -9,9 +9,16 @@ impl NovoApp {
     /// the canvases when the resolved theme (dark or light) differs from
     /// the one they were drawn with. Cheap when nothing changed.
     pub(super) fn sync_appearance(&mut self, ctx: &egui::Context) {
-        let choice = (self.settings.theme_choice(), self.settings.density_choice());
+        let choice = (
+            self.settings.theme_choice(),
+            self.settings.density_choice(),
+            self.settings.high_contrast(),
+        );
+        let mut restyle = false;
         if self.appearance_applied != Some(choice) {
-            novo_theme::set_density(ctx, choice.1);
+            // The contrast first: the egui styles are built from it.
+            restyle = novo_theme::set_high_contrast(choice.2);
+            novo_theme::set_density_for(ctx, choice.1, choice.2);
             novo_theme::set_theme(ctx, choice.0);
             self.appearance_applied = Some(choice);
         }
@@ -23,7 +30,7 @@ impl NovoApp {
             ctx.set_zoom_factor(scale);
             ctx.data_mut(|d| d.insert_temp(id, scale));
         }
-        if crate::theme::set_dark(ctx.theme() == egui::Theme::Dark) {
+        if crate::theme::set_dark(ctx.theme() == egui::Theme::Dark) || restyle {
             self.canvas.restyle();
             self.cabinet.restyle();
         }
