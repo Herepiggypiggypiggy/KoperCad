@@ -546,7 +546,9 @@ fn a_new_project_after_one_with_warnings_does_not_say_the_issues_were_cleared() 
         .filter(|m| m.text == "No errors or warnings left")
         .count();
     assert_eq!(said, 0, "nothing was fixed, the project is new");
+}
 
+#[test]
 fn what_a_list_row_rests_on_is_lit_on_the_drawing_for_one_frame_only() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
