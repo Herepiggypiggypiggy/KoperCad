@@ -1,16 +1,18 @@
-@title Cabinet: new plate holes show no animation under the harness
+@title Cabinet: Centre rails on devices shows no drill animation under the harness
 @area Cabinet
-# The drill cue (a ring closing on each new hole) runs in the live app. The harness and Reduce motion show the plain plate, so pictures are stable. Place all drills the holes of every device and rail.
-click_text "Open example"
+# The drill cue (a ring closing on each new hole) runs in the live app. The harness and Reduce motion show the plain plate, so pictures are stable; scenario 302 is run with KOPERCAD_MOTION=1 and takes its picture a frame after the rails moved and their screw holes are new (fixture with rails off the middle of their devices).
+open qa/fixtures/door-cutouts.novo
 wait 20
 click_text Cabinet #1
 wait 30
-shot plate-before
+shot before
 key ctrl+k
+wait 3
+text rails and ducts
 wait 4
-text Place all
-wait 6
 key Enter
+wait 10
+click_text "Centre rails on devices"
 wait 20
-shot plate-after-place
+shot after
 check_layout
