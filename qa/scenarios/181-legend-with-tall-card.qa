@@ -14,7 +14,7 @@ key shift+h
 wait 60
 shot legend-at-run-size
 check_blank legend-at-run-size
-expect "Preview from part losses"
+expect "Preview, not a solver result"
 key ctrl+shift+p
 wait 40
 key Enter

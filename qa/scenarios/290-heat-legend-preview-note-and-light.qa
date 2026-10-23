@@ -1,0 +1,27 @@
+@title Heat legend: the preview note comes first, and the heat map's labels and legend follow the light theme
+@area Cabinet
+@sizes 1366x768 1920x1080
+# The Temperature legend now opens with "Preview, not a solver result" while the map is the part-loss preview, so scrolling the legend never hides it. The heat view's own colours (legend text, device labels, borders, the airflow lines) come from the theme palette, so the Light theme reads properly instead of keeping dark-theme colours. The pictures are the evidence (drawn text).
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text Cabinet #1
+wait 30
+key shift+h
+wait 60
+expect "Preview, not a solver result"
+shot heat-dark
+check_layout
+check_blank heat-dark
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 20
+shot heat-light
+check_layout
+check_blank heat-light

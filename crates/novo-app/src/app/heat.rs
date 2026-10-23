@@ -970,13 +970,17 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
             ui.label(
                 egui::RichText::new(status_label(p, validated))
                     .small()
-                    .color(t::TEXT_MUTED),
+                    .color(crate::theme::ui_palette().text_secondary),
             );
         }
     }
     super::heat_live::controls(ui, state, chip);
     if let Some(n) = &state.notice {
-        ui.label(egui::RichText::new(n).small().color(t::WARNING));
+        ui.label(
+            egui::RichText::new(n)
+                .small()
+                .color(crate::theme::ui_palette().warning),
+        );
     }
 }
 
@@ -1205,7 +1209,7 @@ fn paint_side_a(
     painter.rect_stroke(
         Rect::from_two_pos(a, b),
         0.0,
-        Stroke::new(1.0, t::BORDER_STRONG),
+        Stroke::new(1.0, crate::theme::ui_palette().border_strong),
         egui::StrokeKind::Inside,
     );
     for i in &input.items {
@@ -1214,7 +1218,7 @@ fn paint_side_a(
         let r = Rect::from_two_pos(p0, p1);
         let colour = match d.a_surface.iter().find(|(id, _)| *id == i.id) {
             Some((_, temp)) => rgb(heat::ramp(cache.range.t(*temp)), 1.0),
-            None => t::TEXT_MUTED,
+            None => crate::theme::ui_palette().text_secondary,
         };
         painter.rect_stroke(r, 2.0, Stroke::new(2.0, colour), egui::StrokeKind::Inside);
     }
@@ -1224,14 +1228,14 @@ fn paint_side_a(
         Align2::LEFT_BOTTOM,
         "A (kept)",
         font.clone(),
-        t::TEXT,
+        crate::theme::ui_palette().text_primary,
     );
     painter.text(
         to_screen(0.0, 0.0) + Vec2::new(0.0, -6.0),
         Align2::LEFT_BOTTOM,
         "B (new)",
         font,
-        t::TEXT,
+        crate::theme::ui_palette().text_primary,
     );
 }
 
@@ -1261,7 +1265,7 @@ fn wipe_handle(
     let painter = ui.painter_at(rect);
     painter.line_segment(
         [Pos2::new(x, rect.min.y), Pos2::new(x, rect.max.y)],
-        Stroke::new(2.0, t::TEXT),
+        Stroke::new(2.0, crate::theme::ui_palette().text_primary),
     );
     let font = FontId::proportional(t::FONT_SMALL);
     painter.text(
@@ -1269,14 +1273,14 @@ fn wipe_handle(
         Align2::RIGHT_CENTER,
         "A",
         font.clone(),
-        t::TEXT,
+        crate::theme::ui_palette().text_primary,
     );
     painter.text(
         Pos2::new(x + 8.0, rect.min.y + 12.0),
         Align2::LEFT_CENTER,
         "B",
         font,
-        t::TEXT,
+        crate::theme::ui_palette().text_primary,
     );
     split
 }
@@ -1370,10 +1374,16 @@ fn paint_contours(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64
                     Align2::CENTER_CENTER,
                     &text,
                     font.clone(),
-                    t::BG_0,
+                    crate::theme::ui_palette().sunken,
                 );
             }
-            painter.text(pos, Align2::CENTER_CENTER, text, font, t::TEXT);
+            painter.text(
+                pos,
+                Align2::CENTER_CENTER,
+                text,
+                font,
+                crate::theme::ui_palette().text_primary,
+            );
         }
     }
 }
@@ -1394,7 +1404,10 @@ fn paint_airflow(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64,
             pts.clone(),
             Stroke::new(width + 1.6, rgb([0x0E, 0x0E, 0x10], 0.5)),
         ));
-        painter.add(Shape::line(pts.clone(), Stroke::new(width, t::INFO)));
+        painter.add(Shape::line(
+            pts.clone(),
+            Stroke::new(width, crate::theme::ui_palette().info),
+        ));
         // An arrowhead about every 70 points of screen length.
         let mut run = 0.0;
         for w in pts.windows(2) {
@@ -1405,7 +1418,7 @@ fn paint_airflow(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64,
                 let n = Vec2::new(-d.y, d.x);
                 painter.add(Shape::line(
                     vec![w[1] - d * 6.0 + n * 3.5, w[1], w[1] - d * 6.0 - n * 3.5],
-                    Stroke::new(width, t::INFO),
+                    Stroke::new(width, crate::theme::ui_palette().info),
                 ));
             }
         }
@@ -1432,7 +1445,7 @@ fn paint_rims(
             ];
             painter.extend(Shape::dashed_line(
                 &corners,
-                Stroke::new(1.5, t::TEXT_MUTED),
+                Stroke::new(1.5, crate::theme::ui_palette().text_secondary),
                 6.0,
                 4.0,
             ));
@@ -1536,7 +1549,11 @@ fn paint_badges(
         };
         let measure = |text: &str| {
             painter
-                .layout_no_wrap(text.to_owned(), font.clone(), t::TEXT)
+                .layout_no_wrap(
+                    text.to_owned(),
+                    font.clone(),
+                    crate::theme::ui_palette().text_primary,
+                )
                 .size()
                 .x
                 + 30.0
@@ -1568,19 +1585,19 @@ fn paint_badges(
             (reading_text, w)
         };
         placed.push(rect_for(width));
-        let dot = t::TEXT_MUTED;
+        let dot = crate::theme::ui_palette().text_secondary;
         let dot = match verdict {
-            Verdict::Ok => t::SUCCESS,
-            Verdict::Near => t::WARNING,
-            Verdict::Over => t::ERROR,
+            Verdict::Ok => crate::theme::ui_palette().success,
+            Verdict::Near => crate::theme::ui_palette().warning,
+            Verdict::Over => crate::theme::ui_palette().error,
             Verdict::Unknown => dot,
         };
         let pill = rect_for(width);
         painter.rect(
             pill,
             10.0,
-            t::BG_2,
-            Stroke::new(1.0, t::BORDER_STRONG),
+            crate::theme::ui_palette().raised,
+            Stroke::new(1.0, crate::theme::ui_palette().border_strong),
             egui::StrokeKind::Inside,
         );
         painter.circle_filled(pill.left_center() + Vec2::new(11.0, 0.0), 4.0, dot);
@@ -1589,7 +1606,7 @@ fn paint_badges(
             Align2::LEFT_CENTER,
             text,
             font.clone(),
-            t::TEXT,
+            crate::theme::ui_palette().text_primary,
         );
     }
     placed
@@ -1611,8 +1628,8 @@ fn paint_no_data(
     painter.rect(
         pill,
         10.0,
-        t::BG_2,
-        Stroke::new(1.0, t::BORDER_STRONG),
+        crate::theme::ui_palette().raised,
+        Stroke::new(1.0, crate::theme::ui_palette().border_strong),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -1620,7 +1637,7 @@ fn paint_no_data(
         Align2::CENTER_CENTER,
         "no data",
         font.clone(),
-        t::TEXT_MUTED,
+        crate::theme::ui_palette().text_secondary,
     );
     Some(pill)
 }
@@ -1704,7 +1721,11 @@ fn paint_peaks(
     let mut placed: Vec<Rect> = badges.to_vec();
     for (p, tag) in &cache.peaks {
         let at = to_screen(p.x, p.y);
-        painter.circle_stroke(at, 4.0, Stroke::new(1.5, t::TEXT));
+        painter.circle_stroke(
+            at,
+            4.0,
+            Stroke::new(1.5, crate::theme::ui_palette().text_primary),
+        );
         // The peak is the field's temperature at that point; the device badge
         // is the device's own surface. Say which is which, and give both when
         // they differ, so a tag never carries two different numbers unexplained.
@@ -1769,6 +1790,9 @@ fn thin_ticks(ticks: Vec<f64>, range: range::Range, height: f32, gap: f32) -> Ve
     let step = (1..=ticks.len().max(1)).find(|&n| apart(n)).unwrap_or(1);
     ticks.into_iter().step_by(step).collect()
 }
+
+/// The one line the legend starts with while the map is a preview.
+const PREVIEW_NOTE: &str = "Preview, not a solver result";
 
 fn legend(
     ctx: &egui::Context,
@@ -1883,6 +1907,15 @@ fn legend(
             ui.add_space(4.0);
         }
         let small = |text: &str, color| egui::RichText::new(text).small().color(color);
+        // First under the scale, so a scrolled legend never hides that the
+        // colours are not a solver result.
+        if matches!(cache.source, Source::Synthetic) {
+            ui.label(small(
+                PREVIEW_NOTE,
+                crate::theme::ui_palette().text_secondary,
+            ))
+            .on_hover_text("Worked out from the part losses alone. Simulate runs the solver.");
+        }
         let (total_w, with_data, unknown) = totals(input);
         if with_data > 0 {
             ui.label(small(
@@ -1905,12 +1938,7 @@ fn legend(
             ));
         }
         match &cache.source {
-            Source::Synthetic => {
-                ui.label(small(
-                    "Preview from part losses, not a solver result. Simulate runs it.",
-                    crate::theme::ui_palette().text_secondary,
-                ));
-            }
+            Source::Synthetic => {}
             Source::Solved(sol) => {
                 let p = &sol.snapshot.progress;
                 let validated = sol.snapshot.accuracy.validated;
