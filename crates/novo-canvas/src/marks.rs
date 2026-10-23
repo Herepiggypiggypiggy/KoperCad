@@ -152,6 +152,18 @@ fn line_pieces(item: &crate::Item) -> Vec<(Vec2, Vec2)> {
             _ => {}
         }
     }
+    // A wire's strokes can be collected twice (a cable core draws along its
+    // wire): the same piece, in either direction, is veiled once, or the
+    // translucent veil would be laid on twice.
+    let key = |(a, b): &(Vec2, Vec2)| {
+        let (a, b) = (
+            a.to_array().map(f32::to_bits),
+            b.to_array().map(f32::to_bits),
+        );
+        if a <= b { (a, b) } else { (b, a) }
+    };
+    let mut seen = std::collections::BTreeSet::new();
+    out.retain(|piece| seen.insert(key(piece)));
     out
 }
 
@@ -483,6 +495,18 @@ mod tests {
             panic!("{placed:?}");
         };
         assert_eq!(segments.len(), 2);
+        // The same strokes twice (a reversed copy too) are veiled once.
+        let mut doubled = s.get(id).unwrap().clone();
+        doubled.primitives.push(Primitive::stroked(
+            Shape::line(Vec2::new(40.0, 40.0), Vec2::new(40.0, 0.0)),
+            Stroke::default(),
+        ));
+        s.insert(id, doubled);
+        let placed = layout(&marks, &s, &view(4.0));
+        let Some(Placed::Path { segments, .. }) = placed.first() else {
+            panic!("{placed:?}");
+        };
+        assert_eq!(segments.len(), 2, "no piece twice");
         // The empty corner is far from the strokes.
         let corner = view(4.0).world_to_screen(Vec2::new(0.0, 40.0));
         assert!(distance(&placed[0], corner) > PATH_HIT_PX);

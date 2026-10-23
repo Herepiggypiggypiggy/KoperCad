@@ -1438,12 +1438,17 @@ impl CanvasView {
                         self.viewport.world_to_screen(b.min),
                         self.viewport.world_to_screen(b.max),
                     );
+                    let bounds = Aabb::from_corners(p, q);
+                    let max_boost = l.fit_width.map_or(f32::INFINITY, |w| {
+                        w * self.viewport.zoom / bounds.size().x.max(1e-3)
+                    });
                     Some(crate::declutter::Candidate {
                         key,
                         priority: l.priority,
                         size,
                         anchor: a,
-                        bounds: Aabb::from_corners(p, q),
+                        bounds,
+                        max_boost,
                     })
                 })
                 .collect();
