@@ -205,10 +205,17 @@ impl Camera {
     /// its height, 0 to 0.5) clear: a toolbar floats there and must not cover
     /// the model.
     pub fn fit_below(&mut self, bounds: &Aabb, aspect: f32, top: f32) {
+        self.fit_between(bounds, aspect, top, 0.0);
+    }
+
+    /// As [`Camera::fit_below`], and keeps the bottom `bottom` of the view
+    /// clear too (a strip floats there). Both are fractions of the height.
+    pub fn fit_between(&mut self, bounds: &Aabb, aspect: f32, top: f32, bottom: f32) {
         if bounds.is_empty() {
             return;
         }
         let top = top.clamp(0.0, 0.5);
+        let bottom = bottom.clamp(0.0, 0.5).min(0.9 - top);
         let target = bounds.center();
         let (right, up, _) = self.basis();
         let dir = self.dir();
@@ -216,7 +223,7 @@ impl Camera {
         let tan_h = tan_v * aspect;
         // The model fills the lower part: its centre sits `top` of the
         // half-height below the middle, and the room above shrinks to match.
-        let room = 1.0 - top;
+        let room = 1.0 - top - bottom;
         let mut d = MIN_DISTANCE;
         for c in bounds.corners() {
             let rel = c - target;
@@ -229,7 +236,7 @@ impl Camera {
         }
         let distance = (d * 1.08).clamp(MIN_DISTANCE, MAX_DISTANCE);
         // Looking at a point above the model puts the model lower on screen.
-        self.target = target + up * (top * tan_v * distance);
+        self.target = target + up * ((top - bottom) * tan_v * distance);
         self.distance = distance;
     }
 
@@ -313,6 +320,30 @@ mod tests {
                     // covers the top `top` of the height, which is 2 * top.
                     assert!(
                         ndc.y <= 1.0 - 2.0 * top + 1e-3 && ndc.y >= -1.0 && ndc.x.abs() <= 1.0,
+                        "{projection:?} {preset:?}: {ndc}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_fit_between_a_toolbar_and_a_strip_keeps_every_corner_clear_of_both() {
+        let (top, bottom) = (0.2, 0.12);
+        for projection in [Projection::Perspective, Projection::Orthographic] {
+            for preset in [ViewPreset::Front, ViewPreset::Iso, ViewPreset::Top] {
+                let mut c = Camera {
+                    projection,
+                    ..Camera::default()
+                };
+                c.set_preset(preset);
+                c.fit_between(&bounds(), 1.6, top, bottom);
+                for corner in bounds().corners() {
+                    let (ndc, _) = c.project(corner, 1.6, &bounds()).unwrap();
+                    assert!(
+                        ndc.y <= 1.0 - 2.0 * top + 1e-3
+                            && ndc.y >= -1.0 + 2.0 * bottom - 1e-3
+                            && ndc.x.abs() <= 1.0,
                         "{projection:?} {preset:?}: {ndc}"
                     );
                 }

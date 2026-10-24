@@ -236,6 +236,7 @@ mod userkeymap;
 mod variants;
 mod view3d;
 mod view3d_align;
+mod view3d_build_order;
 mod view3d_controls;
 mod view3d_drag_gaps;
 mod view3d_duct_fill;
@@ -1249,6 +1250,8 @@ impl NovoApp {
         // The live view, an open drawer and a preview belong to the project
         // they were opened on; a lesson (or any project) starts clean.
         self.wb.live = Default::default();
+        // The build order belongs to the cabinet it was opened on.
+        self.view3d.controls.assembly = None;
         // Classes cached for the old project (keyed by a revision two projects
         // can share) and a focused class do not carry over; the overlay's on/off does.
         self.wb.emc_sch.forget();

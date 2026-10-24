@@ -487,6 +487,9 @@ pub struct View3d {
     /// The top of the view, as a fraction of its height, that a floating
     /// toolbar covers: a fit frames the model below it.
     pub top_inset: f32,
+    /// The bottom of the view a floating strip covers, as a fraction of its
+    /// height: a fit frames the model above it.
+    pub bottom_inset: f32,
     label_fades: HashMap<ItemId, Fade>,
     overlays: Arc<Vec<Overlay>>,
     overlay_revision: u64,
@@ -519,6 +522,7 @@ impl View3d {
             alt_cycle: None,
             last_aspect: 1.0,
             top_inset: 0.0,
+            bottom_inset: 0.0,
             label_fades: HashMap::new(),
             overlays: Arc::new(Vec::new()),
             overlay_revision: 0,
@@ -721,7 +725,7 @@ impl View3d {
     pub fn fit(&mut self, scene: &Scene, now: f64, reduced: bool) {
         let b = self.framing_bounds(scene);
         let mut to = self.camera;
-        to.fit_below(&b, self.last_aspect, self.top_inset);
+        to.fit_between(&b, self.last_aspect, self.top_inset, self.bottom_inset);
         self.animate_to(to, now, reduced);
     }
 
@@ -847,7 +851,8 @@ impl View3d {
         let bounds = scene.bounds();
 
         if self.needs_fit && !bounds.is_empty() {
-            self.camera.fit_below(&bounds, aspect, self.top_inset);
+            self.camera
+                .fit_between(&bounds, aspect, self.top_inset, self.bottom_inset);
             self.needs_fit = false;
             self.transition = None;
             self.last_activity = now;

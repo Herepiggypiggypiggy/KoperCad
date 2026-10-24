@@ -549,6 +549,9 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_wires",
     "view.3d_slotted_ducts",
     "view.3d_shadows",
+    "view.3d_assembly",
+    "view.3d_assembly_next",
+    "view.3d_assembly_previous",
     "view.3d_finish",
     "view.3d_align_left",
     "view.3d_align_hcentre",
@@ -1179,6 +1182,21 @@ impl NovoApp {
             "view.3d_shadows" => {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.controls.shadows ^= true;
+            }
+            "view.3d_assembly" => {
+                self.switch_workspace(Workspace::View3d);
+                let c = &mut self.view3d.controls;
+                c.assembly = if c.assembly.is_some() { None } else { Some(0) };
+            }
+            "view.3d_assembly_next" | "view.3d_assembly_previous" => {
+                self.switch_workspace(Workspace::View3d);
+                let last = self.view3d.assembly_steps.len();
+                let c = &mut self.view3d.controls;
+                c.assembly = super::view3d_build_order::step_by(
+                    c.assembly,
+                    last,
+                    id == "view.3d_assembly_next",
+                );
             }
             "view.3d_finish" => {
                 self.switch_workspace(Workspace::View3d);
