@@ -919,6 +919,11 @@ pub const DUTCH: &[Aliases] = &[
         &["schaduw", "schaduwen"],
     ),
     nl(
+        "view.3d_finish",
+        &["metaalafwerking tonen in 3d"],
+        &["afwerking", "materiaal", "geborsteld"],
+    ),
+    nl(
         "view.3d_measure",
         &["afstand meten in 3d"],
         &["meten", "afstand", "liniaal"],

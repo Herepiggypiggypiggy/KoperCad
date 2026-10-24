@@ -1619,6 +1619,7 @@ fn frame_key(
         state.display.edges,
         state.display.labels,
         state.display.shadows,
+        state.display.finish,
     )
         .hash(&mut h);
     state
@@ -2072,6 +2073,7 @@ mod key_tests {
             |s: &mut ViewState| s.display.edges = !s.display.edges,
             |s: &mut ViewState| s.display.labels = !s.display.labels,
             |s: &mut ViewState| s.display.shadows = !s.display.shadows,
+            |s: &mut ViewState| s.display.finish = !s.display.finish,
         ] {
             let mut s = base.clone();
             flip(&mut s);

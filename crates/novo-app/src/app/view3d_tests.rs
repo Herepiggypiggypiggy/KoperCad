@@ -564,6 +564,21 @@ fn the_shadows_command_toggles_the_views_shadows() {
 }
 
 #[test]
+fn the_metal_finish_command_toggles_the_views_finish() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.frame();
+    assert!(d.app.view3d.view.state.display.finish, "on by default");
+    d.app.run_command(&ctx, "view.3d_finish", None);
+    d.frame();
+    assert!(!d.app.view3d.view.state.display.finish);
+    d.app.run_command(&ctx, "view.3d_finish", None);
+    d.frame();
+    assert!(d.app.view3d.view.state.display.finish);
+}
+
+#[test]
 fn simulate_runs_from_the_3d_view_without_leaving_it() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());

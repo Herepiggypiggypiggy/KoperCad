@@ -1,0 +1,26 @@
+@title 3D view: metal finish on the plate and rails, and the switch back to flat colours
+@area 3D
+# Layers > Metal finish (also View > 3D > Metal finish). On: a faint brushed grain on the plate and streaks along the rails. Off: the flat colours as before. The pictures are the same view with the switch on and off.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 40
+shot finish-on
+check_layout
+key ctrl+k
+wait 6
+text front view
+wait 8
+key Enter
+wait 40
+shot front-on
+click_text "Layers"
+wait 8
+shot layers-menu
+expect "Metal finish"
+click_text "Metal finish"
+wait 8
+key Escape
+wait 30
+shot front-off
+check_layout
