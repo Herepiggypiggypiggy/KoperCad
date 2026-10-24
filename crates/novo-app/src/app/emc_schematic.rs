@@ -16,7 +16,7 @@ use std::sync::Arc;
 use eframe::egui;
 use novo_canvas::model::WireLook;
 use novo_core::{AnyId, PageId, Project, WireId};
-use novo_emc::{EmcClass, Fix, Origin};
+use novo_emc::{EmcClass, Fix, Origin, Shield, Termination};
 use novo_view3d::emc::Class;
 
 use super::NovoApp;
@@ -37,12 +37,55 @@ pub(super) struct Info {
     pub reason: String,
     pub name: String,
     pub shielded: bool,
+    pub cable: Option<u64>,
+}
+
+/// One finding of the EMC check that is about a cable.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct CableFinding {
+    pub rule: &'static str,
+    pub level: novo_emc::Level,
+    pub message: String,
+    pub fixes: Vec<Fix>,
+}
+
+/// What the card of a cable shows.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct CableInfo {
+    pub tag: String,
+    /// Cores that carry a wire or a signal, the shield core not counted.
+    pub cores: usize,
+    pub wires: usize,
+    /// The shield and how its ends are made, when the cable has one.
+    pub shield: Option<Shield>,
+    pub twisted: bool,
+    pub findings: Vec<CableFinding>,
+}
+
+fn fix_cable(fix: &Fix) -> Option<u64> {
+    match fix {
+        Fix::AddShield { cable }
+        | Fix::Terminate360 { cable }
+        | Fix::ShortenPigtail { cable, .. } => Some(*cable),
+        _ => None,
+    }
+}
+
+/// An end of a shield in words.
+pub(super) fn termination_word(t: Termination) -> String {
+    match t {
+        Termination::Full360 => "bonded all round".to_owned(),
+        Termination::Pigtail(mm) => format!("on a pigtail of {} mm", mm.round() as i64),
+        Termination::Open => "not connected".to_owned(),
+        Termination::Unknown => "not stated".to_owned(),
+    }
 }
 
 /// The class of every wire of the project, once per revision.
 #[derive(Debug, Default, PartialEq)]
 pub(super) struct Data {
     pub wires: HashMap<u64, Info>,
+    pub cables: HashMap<u64, CableInfo>,
 }
 
 impl Data {
@@ -63,11 +106,43 @@ impl Data {
                         reason: r.class_reason.clone(),
                         name: r.name.clone(),
                         shielded: r.shield.is_some(),
+                        cable: r.cable,
                     },
                 )
             })
             .collect();
-        Data { wires }
+        let mut cables: HashMap<u64, CableInfo> = HashMap::new();
+        for r in &input.runs {
+            let Some(c) = r.cable else { continue };
+            let cable = project.cable(novo_core::CableId::from(c));
+            let e = cables.entry(c).or_insert_with(|| CableInfo {
+                tag: cable.map_or_else(|| format!("cable {c}"), |k| k.tag.to_string()),
+                cores: cable.map_or(0, |k| k.cores.iter().filter(|x| !x.shield).count()),
+                wires: 0,
+                shield: None,
+                twisted: false,
+                findings: Vec::new(),
+            });
+            e.wires += 1;
+            e.shield = e.shield.or(r.shield);
+            e.twisted |= r.twisted;
+        }
+        let report = novo_emc::analyse(&input);
+        for f in &report.findings {
+            for (c, info) in cables.iter_mut() {
+                let about = f.subjects.contains(&novo_emc::Subject::Cable(*c))
+                    || f.fixes.iter().any(|x| fix_cable(x) == Some(*c));
+                if about {
+                    info.findings.push(CableFinding {
+                        rule: f.rule,
+                        level: f.level,
+                        message: f.message.clone(),
+                        fixes: f.fixes.clone(),
+                    });
+                }
+            }
+        }
+        Data { wires, cables }
     }
 
     /// Wires of `page` per class, and how many of them are guessed.
@@ -320,6 +395,7 @@ impl NovoApp {
         let pal = crate::theme::ui_palette();
         let mut focus_to = focus;
         let mut set: Option<(WireId, Option<EmcClass>)> = None;
+        let mut apply: Option<Fix> = None;
         let mut off = false;
         let card = picked
             .first()
@@ -404,6 +480,68 @@ impl NovoApp {
                         .small()
                         .color(pal.text_secondary),
                 );
+                if let Some(cable) = info.cable.and_then(|c| data.cables.get(&c)) {
+                    ui.separator();
+                    ui.label(egui::RichText::new(format!("Cable {}", cable.tag)).strong());
+                    ui.label(format!(
+                        "{} core{}, {} wire{} drawn, {}",
+                        cable.cores,
+                        if cable.cores == 1 { "" } else { "s" },
+                        cable.wires,
+                        if cable.wires == 1 { "" } else { "s" },
+                        if cable.twisted { "twisted" } else { "not stated as twisted" },
+                    ));
+                    match &cable.shield {
+                        Some(sh) => ui.label(format!(
+                            "Shield: end A {}, end B {}",
+                            termination_word(sh.a),
+                            termination_word(sh.b)
+                        )),
+                        None => ui.label("No shield core"),
+                    };
+                    for f in &cable.findings {
+                        ui.add_space(2.0);
+                        ui.label(
+                            egui::RichText::new(format!("{}  {}", f.rule, f.level.label()))
+                                .small()
+                                .strong(),
+                        );
+                        ui.label(egui::RichText::new(&f.message).small());
+                        for fix in &f.fixes {
+                            if fix_cable(fix).is_none() {
+                                continue;
+                            }
+                            if fix.applicable() {
+                                if ui
+                                    .small_button(format!("Apply: {}", fix.hint()))
+                                    .on_hover_text("One undo step; the EMC check re-reads the cable")
+                                    .clicked()
+                                {
+                                    apply = Some(fix.clone());
+                                }
+                            } else {
+                                ui.label(
+                                    egui::RichText::new(format!("By hand: {}", fix.hint()))
+                                        .small()
+                                        .color(pal.text_secondary),
+                                );
+                            }
+                        }
+                    }
+                    if cable.findings.is_empty() {
+                        ui.label(
+                            egui::RichText::new("No finding about this cable. That is not a statement that it is fine.")
+                                .small()
+                                .color(pal.text_secondary),
+                        );
+                    }
+                    ui.label(
+                        egui::RichText::new("Indicative: a design aid, not a test result.")
+                            .small()
+                            .color(pal.text_secondary),
+                    );
+                }
+                ui.separator();
                 ui.label(egui::RichText::new("Set the class").small().strong());
                 ui.horizontal_wrapped(|ui| {
                     for c in EmcClass::ALL {
@@ -441,6 +579,9 @@ impl NovoApp {
         self.wb.emc_sch.focus = focus_to;
         if let Some((wire, class)) = set {
             self.emc_set_class(wire, class);
+        }
+        if let Some(fix) = apply {
+            self.emc_apply(&fix);
         }
         if off {
             self.toggle_emc_nets();
@@ -555,5 +696,34 @@ mod tests {
         d.frame();
         let back = data(&d).wires[&wire.raw()].clone();
         assert_eq!((back.class, back.origin), (was.class, Origin::Guessed));
+    }
+
+    #[test]
+    fn the_motor_cable_has_a_card_and_its_shield_fix_is_one_undo_step() {
+        let (_dir, mut d) = example();
+        let data = data(&d);
+        let (cable, info) = data
+            .cables
+            .iter()
+            .find(|(_, c)| {
+                c.findings
+                    .iter()
+                    .any(|f| f.fixes.iter().any(|x| matches!(x, Fix::AddShield { .. })))
+            })
+            .map(|(c, i)| (*c, i.clone()))
+            .unwrap_or_else(|| panic!("no cable with a shield finding: {:#?}", data.cables));
+        assert!(info.shield.is_none() && info.wires >= 1 && info.cores >= 1);
+        let depth = d.app.backend.document().unwrap().undo_depth();
+        d.app.emc_apply(&Fix::AddShield { cable });
+        d.frame();
+        assert_eq!(d.app.backend.document().unwrap().undo_depth(), depth + 1);
+        let after = Data::of(d.app.backend.document().unwrap().project());
+        assert!(
+            after.cables[&cable]
+                .findings
+                .iter()
+                .all(|f| !f.fixes.iter().any(|x| matches!(x, Fix::AddShield { .. }))),
+            "the shield finding stays after the fix"
+        );
     }
 }

@@ -23,8 +23,8 @@ use novo_thermal::bridge::{BridgeOptions, scenario_from_project};
 use novo_thermal::cooling::{Kind as FanKind, Product};
 use novo_thermal::model::{Enclosure, Placement};
 use novo_thermal::sweep::{
-    Candidate, Control, Delivered, Outcome, Pairing, Piece, SIGNIFICANT_K, Settings, Sweep,
-    sweep_with,
+    Candidate, Control, Delivered, DeviceChange, Outcome, Pairing, Piece, SIGNIFICANT_K, Settings,
+    Sweep, sweep_with,
 };
 
 use super::heat_settings::{HeatSettings, Kind, VentSpec, Wall};
@@ -66,6 +66,17 @@ struct Running {
     fans: Vec<Product>,
 }
 
+/// The 2D prediction for the pair the person added, and the list it was
+/// added to: the comparison is only shown for a 3D result of that same list.
+struct Check {
+    vents: String,
+    /// The project revision when the first current 3D result of that list came
+    /// in; a later edit of devices or losses changes it and hides the comparison.
+    revision: Option<u64>,
+    devices: Vec<DeviceChange>,
+    tags: BTreeMap<u64, String>,
+}
+
 /// State of the sweep and its window.
 #[derive(Default)]
 pub(super) struct CoolingAdvice {
@@ -76,6 +87,16 @@ pub(super) struct CoolingAdvice {
     open: bool,
     /// What the last "Add" put in the list, shown in the window.
     added: Option<String>,
+    /// What the 2D model predicted for the pair that was added, kept to put
+    /// next to the 3D result of the same openings.
+    check: Option<Check>,
+    /// The latest 3D result for the cabinet as it is now (device, housing
+    /// °C), set by the view each frame; `None` while it runs or is out of
+    /// date.
+    three_d: Option<Vec<(u64, f64)>>,
+    /// The Vents and fans list as it is now, in the form `Check` keeps.
+    vents_now: String,
+    revision_now: u64,
     /// The view the window opened in (1 Cabinet, 2 3D): it closes when the
     /// person goes to the other one.
     view: Option<u8>,
@@ -228,12 +249,60 @@ impl CoolingAdvice {
         self.found = None;
         self.notice = None;
         self.added = None;
+        self.check = None;
         self.view = None;
     }
 
     /// Says in the window what was added.
     pub(super) fn set_added(&mut self, text: String) {
         self.added = Some(text);
+    }
+
+    /// Keeps what the 2D model predicted for `c`, the pair just added to
+    /// `vents`, so the 3D result of that list can be put next to it.
+    pub(super) fn record_added(&mut self, c: &Candidate, vents: &[VentSpec]) {
+        self.check = self.found.as_ref().and_then(|f| {
+            let outcome = f.sweep.best.iter().find(|o| &o.candidate == c)?;
+            Some(Check {
+                vents: vents_text(vents),
+                revision: None,
+                devices: outcome.devices.clone(),
+                tags: f.tags.clone(),
+            })
+        });
+    }
+
+    /// Hands the window the 3D result and the list as they are now. Called
+    /// every frame the window may show; `three_d` is `None` while a run goes
+    /// or the result is out of date.
+    pub(super) fn observe(
+        &mut self,
+        three_d: Option<Vec<(u64, f64)>>,
+        vents: &[VentSpec],
+        revision: u64,
+    ) {
+        self.vents_now = vents_text(vents);
+        self.three_d = three_d;
+        self.revision_now = revision;
+        if let (Some(c), Some(_)) = (&mut self.check, &self.three_d)
+            && c.vents == self.vents_now
+            && c.revision.is_none()
+        {
+            c.revision = Some(revision);
+        }
+    }
+
+    /// The comparison lines, when the 3D result is for the list the pair was
+    /// added to and the project has not changed since that result came in.
+    fn comparison(&self) -> Vec<String> {
+        match (&self.check, &self.three_d) {
+            (Some(c), Some(rows))
+                if c.vents == self.vents_now && c.revision == Some(self.revision_now) =>
+            {
+                comparison_lines(c, rows)
+            }
+            _ => Vec::new(),
+        }
     }
 
     /// Starts the sweep from the cabinet as the project has it now, with the
@@ -401,6 +470,18 @@ impl CoolingAdvice {
                 }
                 if let Some(a) = &self.added {
                     ui.colored_label(pal.success, a);
+                }
+                let compare = self.comparison();
+                if !compare.is_empty() {
+                    ui.add_space(2.0);
+                    for (i, line) in compare.iter().enumerate() {
+                        let text = egui::RichText::new(line).small();
+                        ui.label(if i == 0 {
+                            text.strong()
+                        } else {
+                            text.color(pal.text_secondary)
+                        });
+                    }
                 }
                 let Some(found) = &self.found else {
                     return;
@@ -680,6 +761,80 @@ fn over_text(n: usize) -> String {
 
 fn flow_text(d: &Delivered) -> String {
     format!("{:.0} m³/h", d.flow_m3h.abs())
+}
+
+/// The list as text, to tell whether two moments hold the same openings.
+fn vents_text(vents: &[VentSpec]) -> String {
+    format!("{vents:?}")
+}
+
+/// What the 3D run of the cabinet says for each device (housing °C), from
+/// its result; `None` while the run goes or the result is out of date.
+pub(super) fn three_d_rows(heat: &super::heat::HeatState) -> Option<Vec<(u64, f64)>> {
+    if heat.running() || heat.live.is_stale() {
+        return None;
+    }
+    let solution = heat.solution()?;
+    Some(
+        solution
+            .snapshot
+            .devices
+            .iter()
+            .filter(|d| d.loss_w > 0.0)
+            .map(|d| (d.id, d.surface_c))
+            .collect(),
+    )
+}
+
+/// The 2D prediction next to the 3D result, device by device. The first line
+/// says what the numbers are: two models, neither a measurement.
+fn comparison_lines(check: &Check, three_d: &[(u64, f64)]) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut worst_gap = 0.0_f64;
+    for d in check
+        .devices
+        .iter()
+        .filter(|d| (d.surface_before_c - d.surface_after_c).abs() >= 0.5)
+    {
+        let Some(&(_, now)) = three_d.iter().find(|(id, _)| *id == d.id) else {
+            continue;
+        };
+        let tag = check
+            .tags
+            .get(&d.id)
+            .filter(|t| !t.is_empty())
+            .cloned()
+            .unwrap_or_else(|| format!("device {}", d.id));
+        let gap = now - d.surface_after_c;
+        worst_gap = worst_gap.max(gap.abs());
+        lines.push(format!(
+            "{tag}: the 2D model predicted {:.0} °C (from {:.0}); the 3D run gives {now:.0} °C, {}.",
+            d.surface_after_c,
+            d.surface_before_c,
+            gap_text(gap)
+        ));
+    }
+    if lines.is_empty() {
+        return lines;
+    }
+    lines.insert(
+        0,
+        "Model comparison for the pair you added: 2D prediction against this 3D run (two models, not a measurement).".into(),
+    );
+    lines.push(format!(
+        "Largest gap {worst_gap:.0} K. The 2D model does not see the depth of the cabinet; the 3D run does. Both are models and neither is validated; where they differ by more than a few kelvin, trust neither without a measurement."
+    ));
+    lines
+}
+
+fn gap_text(gap_k: f64) -> String {
+    if gap_k.abs() < 0.5 {
+        "the same".into()
+    } else if gap_k > 0.0 {
+        format!("{gap_k:.0} K hotter than predicted")
+    } else {
+        format!("{:.0} K cooler than predicted", -gap_k)
+    }
 }
 
 /// The Vents and fans entry for one piece of a candidate.

@@ -51,7 +51,7 @@ fn wire(
     page: novo_core::PageId,
     a: (SymbolId, u16),
     b: (SymbolId, u16),
-) -> ModelResult<()> {
+) -> ModelResult<novo_core::WireId> {
     let target = |tx: &Tx<'_>, (symbol, pin): (SymbolId, u16)| {
         let end = Endpoint::pin(symbol, pin);
         let at = tx
@@ -61,7 +61,7 @@ fn wire(
         Target::Endpoint(end, at)
     };
     let (from, to) = (target(tx, a), target(tx, b));
-    draw_wire(tx, page, from, &[], to).map(|_| ())
+    draw_wire(tx, page, from, &[], to)
 }
 
 fn draw(tx: &mut Tx<'_>, catalog: &Catalog) -> ModelResult<()> {
@@ -120,8 +120,20 @@ fn draw(tx: &mut Tx<'_>, catalog: &Catalog) -> ModelResult<()> {
         )?);
     }
     // Drive pins: L1 L2 L3 PE U V W PE2.
+    let mut motor_wires = Vec::new();
     for (terminal, pin) in motor_out.iter().zip([4u16, 5, 6, 7]) {
-        wire(tx, page, (drive, pin), (*terminal, 0))?;
+        motor_wires.push(wire(tx, page, (drive, pin), (*terminal, 0))?);
+    }
+    // An unshielded four-core cable: the first draft the EMC cards start from.
+    let cable = tx.add_cable(
+        tag("=A1+CAB-W2"),
+        ["U", "V", "W", "PE"]
+            .iter()
+            .map(|n| novo_core::CableCore::new(*n))
+            .collect(),
+    )?;
+    for (core, wire) in motor_wires.iter().enumerate() {
+        tx.assign_core(cable, core, Some(*wire))?;
     }
 
     // 24 V supply, PLC and one analog input, with its field terminal.

@@ -22,6 +22,8 @@ pub(crate) struct Controls {
     pub(super) move_items: bool,
     /// Soft shadows from the key light.
     pub(super) shadows: bool,
+    /// Build order: how many steps are done, `None` for the whole cabinet.
+    pub(super) assembly: Option<usize>,
     /// Brushed grain on the plate, streaks on rails.
     pub(super) finish: bool,
     /// Devices, rails and ducts the user hid; the project is untouched.
@@ -65,6 +67,7 @@ impl Default for Controls {
             door_deg: 0.0,
             move_items: true,
             shadows: true,
+            assembly: None,
             finish: true,
             hidden: BTreeSet::new(),
             ssao: true,
@@ -211,6 +214,7 @@ pub(super) fn toolbar(
                 controls.layers.shapes,
                 controls.layers.slots,
                 controls.shadows,
+                controls.assembly.is_some(),
                 controls.finish,
                 controls.ssao && controls.ssao_available,
                 controls.missing_data,
@@ -277,6 +281,17 @@ pub(super) fn toolbar(
                          typed, amber when estimated. Set them in the Parts window > \
                          Connection points.",
                     );
+                    let building = controls.assembly.is_some();
+                    if novo_theme::widgets::filter_toggle(ui, "Build order", building)
+                        .on_hover_text(
+                            "Step through the build order of this cabinet: rails, ducts, devices, \
+                             then wires, the same order as the printed assembly pack. The part a \
+                             step adds is shown in blue (View > 3D > Build order).",
+                        )
+                        .clicked()
+                    {
+                        controls.assembly = if building { None } else { Some(0) };
+                    }
                     toggle(
                         ui,
                         &mut controls.shadows,

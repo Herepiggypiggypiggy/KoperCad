@@ -5,3 +5,4 @@
 2026-10-22 17:10 UTC #1396 merged; follow-up PR: legend says 'Route all', left_out reset when the layout cannot load, QA 97 @sizes, QA 100 picture with 4 wires left out
 2026-10-22 17:20 UTC #1396 merged; follow-up PR: legend says 'Route all', left_out reset when the layout cannot load, QA 97 @sizes, QA 100 picture with 4 wires left out
 2026-10-24 UTC schematic net-class overlay built on main 975b1d7: wire looks by class, tags, panel, wire card with set class (one undo step), command view.emc_nets, QA 154 at both sizes dark and light, evidence /mnt/project-files/emc/evidence-schematic/
+2026-10-24 UTC #1453 merged. Cable card and one-click shield fixes in the schematic net-class panel; EMC example gets motor cable =A1+CAB-W2; QA 156 (1366) and 157 (1920).

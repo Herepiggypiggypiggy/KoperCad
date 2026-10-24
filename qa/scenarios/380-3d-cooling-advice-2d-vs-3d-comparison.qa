@@ -1,0 +1,29 @@
+@title Cooling advice: after adding a pair, the 3D run is put next to the 2D prediction
+@area 3D
+@sizes 1366x768 1920x1080
+# The hot cabinet in 3D. Cooling advice finds a pair in the 2D model; Add puts it in Vents and fans and the Heat run goes again (Quick, coarse). When that 3D result is current the advice window adds a "Model comparison" block: per device the 2D prediction, the 3D result and the gap, labelled as two models and not a measurement. The picture is the evidence; the numbers are model numbers.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 60
+click_text "Cooling advice"
+wait_s 90
+expect "Tightest margin"
+click_text "Add these two to Vents and fans"
+wait 10
+expect "Added"
+shot added-before-3d-result
+wait_s 330
+expect "Model comparison"
+expect "not a measurement"
+shot comparison
+check_layout
+check_blank comparison

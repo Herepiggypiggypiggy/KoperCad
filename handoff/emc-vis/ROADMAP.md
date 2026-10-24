@@ -12,3 +12,5 @@ Next, one PR each
 4. Adapter from `novo-emc` (engine PR #1387) replacing the stub; stub findings carry no rule id until then; fix buttons wired to commands.
 
 Open: hot spot badges overlap when two sit close; frame the camera on the cabinet when the view opens.
+
+3. DONE (PR cable cards): cable card with findings and Apply (add shield, ends all round) in the schematic panel, QA 156/157.
