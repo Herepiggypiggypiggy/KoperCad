@@ -21,7 +21,11 @@ wait 20
 shot 01-picked
 click_text Place #2
 wait 20
-expect "wires joined to the starter"
+# Six wires: L1 L2 L3, the control breaker, PE and N (the coil return rail).
+# With every entry joined the open-point warning clears, and that line
+# replaces the "Placed ..." one in the status bar.
+expect "No errors or warnings left"
+expect "No issues"
 shot 02-placed
 check_layout
 key shift+l
