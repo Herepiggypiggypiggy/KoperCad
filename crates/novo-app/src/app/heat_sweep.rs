@@ -358,11 +358,18 @@ impl CoolingAdvice {
         let pal = crate::theme::ui_palette();
         // Start high enough that the list has its full height: in a short
         // window the list used to get a sliver and cut a sentence off.
-        let at = Pos2::new(
-            at.x,
-            at.y.min(ctx.content_rect().bottom() - MAX_BODY - 140.0)
-                .max(60.0),
-        );
+        // In 3D the window is pinned under the view cube: a short view gets a
+        // shorter list instead of a window that slides up over the cube.
+        let pinned = view == 2;
+        let at = if pinned {
+            at
+        } else {
+            Pos2::new(
+                at.x,
+                at.y.min(ctx.content_rect().bottom() - MAX_BODY - 140.0)
+                    .max(60.0),
+            )
+        };
         egui::Window::new("Cooling advice")
             .open(&mut open)
             .collapsible(false)
@@ -408,7 +415,10 @@ impl CoolingAdvice {
                         ask = Some(Ask::Again);
                     }
                 }
-                let room = (ctx.content_rect().bottom() - at.y - 130.0).clamp(160.0, MAX_BODY);
+                // Pinned: leave room for the lines that appear above the list
+                // after Add, so the window does not grow past the screen.
+                let spare = if pinned { 230.0 } else { 130.0 };
+                let room = (ctx.content_rect().bottom() - at.y - spare).clamp(120.0, MAX_BODY);
                 egui::ScrollArea::vertical()
                     .max_height(room)
                     .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
