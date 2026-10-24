@@ -472,18 +472,8 @@ impl CoolingAdvice {
                     ui.colored_label(pal.success, a);
                 }
                 let compare = self.comparison();
-                if !compare.is_empty() {
-                    ui.add_space(2.0);
-                    for (i, line) in compare.iter().enumerate() {
-                        let text = egui::RichText::new(line).small();
-                        ui.label(if i == 0 {
-                            text.strong()
-                        } else {
-                            text.color(pal.text_secondary)
-                        });
-                    }
-                }
                 let Some(found) = &self.found else {
+                    show_comparison(ui, &compare);
                     return;
                 };
                 let stale = found.key != now_key;
@@ -506,7 +496,12 @@ impl CoolingAdvice {
                     .max_height(room)
                     .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                     .auto_shrink([false, true])
-                    .show(ui, |ui| body(ui, found, stale, &mut ask));
+                    .show(ui, |ui| {
+                        // Inside the scroll area: with the block shown the window
+                        // used to grow to full height over the top bar.
+                        show_comparison(ui, &compare);
+                        body(ui, found, stale, &mut ask);
+                    });
                 ui.add_space(6.0);
                 ui.label(
                     egui::RichText::new(FOOTER)
@@ -522,6 +517,22 @@ impl CoolingAdvice {
             self.close();
         }
         ask
+    }
+}
+
+fn show_comparison(ui: &mut egui::Ui, compare: &[String]) {
+    let pal = crate::theme::ui_palette();
+    if compare.is_empty() {
+        return;
+    }
+    ui.add_space(2.0);
+    for (i, line) in compare.iter().enumerate() {
+        let text = egui::RichText::new(line).small();
+        ui.label(if i == 0 {
+            text.strong()
+        } else {
+            text.color(pal.text_secondary)
+        });
     }
 }
 
