@@ -1106,7 +1106,10 @@ impl NovoApp {
                 .fixed_pos(at)
                 .show(ctx, |ui| {
                     let (rect, response) = ui
-                        .allocate_exact_size(egui::Vec2::splat(BADGE * 2.4), egui::Sense::click());
+                        .allocate_exact_size(
+                            egui::Vec2::splat(BADGE * 2.4),
+                            egui::Sense::click_and_drag(),
+                        );
                     let p = ui.painter();
                     if break_symbols.contains(&badge.symbol) {
                         // The open contact a "Why?" answer points at.
@@ -1392,7 +1395,14 @@ impl NovoApp {
                                         op.symbol,
                                     ))),
                                     |ui| {
-                                        ui.add(egui::Button::new(op.action).selected(op.active))
+                                        // Click and drag: a plain click sense stops counting
+                                        // as pressed after egui's click delay (0.8 s), so a
+                                        // button held longer would spring back early.
+                                        ui.add(
+                                            egui::Button::new(op.action)
+                                                .selected(op.active)
+                                                .sense(egui::Sense::click_and_drag()),
+                                        )
                                     },
                                 )
                                 .inner;

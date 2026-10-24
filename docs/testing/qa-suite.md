@@ -63,7 +63,7 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `library DIR` | restart with this parts library (a folder holding `records.json` and the files it names) copied into the profile, so maker models and other library files are there from the start; every later launch of the scenario has it too |
 | `click_text "Label" [Role] [#n]` | click the enabled widget with this label (exact match first); `#2` = second match (a label can be a menu and a workspace button) |
 | `click X Y [right\|middle]`, `move X Y`, `drag X1 Y1 X2 Y2`, `scroll X Y DY` | pointer, window points |
-| `mouse_down X Y`, `mouse_up X Y` | press or release and leave it, so `move` and `shot` can capture the middle of a drag or hold a Live view pushbutton (the Operate rows' "Hold to press"): the press lasts about 18 frames in the harness, so check right after it |
+| `mouse_down X Y`, `mouse_up X Y` | press or release and leave it, so `move` and `shot` can capture the middle of a drag or hold a Live view pushbutton (the Operate rows' "Hold to press") for as long as the scenario needs |
 | `key ctrl+k Escape`, `text some words` | keyboard |
 | `answer_dialog FILE` | the next native file dialog gets this path (queue it first) |
 | `import_table FILE` | File > Import parts > Import parts from a table, with the file dialog answered with FILE; leaves the mapping (or the refusal) on screen |
