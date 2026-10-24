@@ -217,6 +217,7 @@ pub(crate) struct Workbench {
     pub(super) sheet_exports: std::collections::BTreeMap<PathBuf, u64>,
     /// The live potentials view (Shift+L).
     pub(super) live: super::live::LiveView,
+    pub(super) emc_sch: super::emc_schematic::EmcSchematic,
     /// Electrical values for the live view and the motor start window.
     pub(super) sim: super::simulate::SimState,
     /// Changes mode, while it is on.
@@ -376,6 +377,7 @@ impl Default for Workbench {
             last_export: None,
             sheet_exports: Default::default(),
             live: Default::default(),
+            emc_sch: Default::default(),
             sim: super::simulate::SimState::new(),
             changes: None,
             changes_closed: false,
@@ -547,6 +549,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_wires",
     "view.3d_slotted_ducts",
     "view.3d_shadows",
+    "view.3d_finish",
     "view.3d_align_left",
     "view.3d_align_hcentre",
     "view.3d_align_right",
@@ -564,6 +567,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_save_view",
     "view.3d_wire_runs",
     "view.emc",
+    "view.emc_nets",
     "view.3d_hints",
     "view.3d_select_devices",
     "view.3d_select_rails",
@@ -1176,6 +1180,10 @@ impl NovoApp {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.controls.shadows ^= true;
             }
+            "view.3d_finish" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.controls.finish ^= true;
+            }
             "view.3d_slotted_ducts" => {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.controls.layers.slots ^= true;
@@ -1242,6 +1250,7 @@ impl NovoApp {
                     self.view3d.controls.layers.wires = true;
                 }
             }
+            "view.emc_nets" => self.toggle_emc_nets(),
             "view.emc" => {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.controls.emc ^= true;

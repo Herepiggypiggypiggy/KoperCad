@@ -181,6 +181,7 @@ names go through the command palette and keymap (`novo-workflow`); the UI integr
 | Focus mode (dim the unselected) | 3D toolbar toggle, palette | `view.focus` |
 | Saved views | View menu list, palette ("View: name") | `view.save`, `view.recall`, `view.delete_saved` |
 | Labels on or off | 3D toolbar toggle | `view.labels` |
+| Metal finish (faint brushed grain on the plate, streaks on rails; off gives flat colours) | 3D toolbar Layers menu, View > 3D > Metal finish | `view.3d_finish` |
 | Quality tier | Settings, 3D view: Auto, Low, Standard, High (Auto is the default) | per user setting |
 | Theme | follows the app; Settings, 3D view: Follow app, Dark, Light | per user setting |
 | Reduce motion | follows the system; Settings, 3D view: Follow system, On, Off | per user setting |

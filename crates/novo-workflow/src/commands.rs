@@ -1391,6 +1391,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_finish",
+        "Show or hide the metal surface finish in 3D",
+        "View",
+        &["finish", "materials", "brushed", "grain", "metal"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_measure",
         "Measure distances in 3D",
         "View",
@@ -1451,6 +1458,22 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Spread devices down in 3D",
         "View",
         &["distribute", "spread", "equal space", "gaps"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.emc_nets",
+        "EMC net classes on the schematic: each wire in the colour of its cable class (indicative)",
+        "View",
+        &[
+            "emc",
+            "net class",
+            "cable class",
+            "wire class",
+            "segregation",
+            "interference",
+            "noise",
+            "schematic",
+        ],
         Needs::Project,
     ),
     cmd(

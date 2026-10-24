@@ -758,7 +758,7 @@ impl NovoApp {
     }
 
     /// Hands the canvas the wire looks of the live view (none when it is off).
-    fn light_wires(&mut self, looks: HashMap<WireId, WireLook>) {
+    pub(super) fn light_wires(&mut self, looks: HashMap<WireId, WireLook>) {
         let Some(doc) = self.backend.document() else {
             return;
         };
@@ -770,7 +770,10 @@ impl NovoApp {
     /// Paints the live view over the canvas and shows its card and badges.
     pub(super) fn live_view(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         if !self.wb.live.on {
-            self.light_wires(HashMap::new());
+            // The EMC net class overlay lights the wires itself.
+            if !self.wb.emc_sch.on {
+                self.light_wires(HashMap::new());
+            }
             return;
         }
         // Escape, when nothing else is using it (the command field, the
@@ -787,7 +790,10 @@ impl NovoApp {
             self.wb.live.escape();
         }
         if !self.wb.live.on {
-            self.light_wires(HashMap::new());
+            // The EMC net class overlay lights the wires itself.
+            if !self.wb.emc_sch.on {
+                self.light_wires(HashMap::new());
+            }
             return;
         }
         let (Some(page), Some(doc)) = (self.current_page, self.backend.document()) else {

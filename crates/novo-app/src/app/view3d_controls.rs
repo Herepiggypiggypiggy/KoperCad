@@ -22,6 +22,8 @@ pub(crate) struct Controls {
     pub(super) move_items: bool,
     /// Soft shadows from the key light.
     pub(super) shadows: bool,
+    /// Brushed grain on the plate, streaks on rails.
+    pub(super) finish: bool,
     /// Devices, rails and ducts the user hid; the project is untouched.
     pub(super) hidden: BTreeSet<ItemId>,
     /// Screen-space ambient occlusion (the frame governor may pause it).
@@ -63,6 +65,7 @@ impl Default for Controls {
             door_deg: 0.0,
             move_items: true,
             shadows: true,
+            finish: true,
             hidden: BTreeSet::new(),
             ssao: true,
             ssao_available: true,
@@ -208,6 +211,7 @@ pub(super) fn toolbar(
                 controls.layers.shapes,
                 controls.layers.slots,
                 controls.shadows,
+                controls.finish,
                 controls.ssao && controls.ssao_available,
                 controls.missing_data,
                 controls.surfaces,
@@ -278,6 +282,15 @@ pub(super) fn toolbar(
                         &mut controls.shadows,
                         "Shadows",
                         "Soft shadows from the key light (View > 3D > Shadows)",
+                    );
+                    toggle(
+                        ui,
+                        &mut controls.finish,
+                        "Metal finish",
+                        "A faint brushed grain and soft patches on the plate and streaks \
+                         along the rails. It is subtle by design: broad patches show in the \
+                         overview, the fine grain only when you zoom in. Off: plain flat \
+                         colours (View > 3D > Metal finish).",
                     );
                     if controls.ssao_available {
                         toggle(

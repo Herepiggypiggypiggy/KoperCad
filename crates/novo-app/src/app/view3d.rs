@@ -906,6 +906,7 @@ impl NovoApp {
         mode.view.drag_items =
             mode.controls.move_items && !mode.measure.on && mode.place.armed.is_none();
         mode.view.state.display.shadows = mode.controls.shadows;
+        mode.view.state.display.finish = mode.controls.finish;
         // Switching occlusion off and on asks for full quality back, the same
         // as "Restore quality" (one governor, one restore path).
         if mode.controls.ssao && !mode.view.state.display.ssao {

@@ -157,7 +157,8 @@ struct Instance {
     scale: [f32; 3],
     color: [u8; 4],
     edge: [u8; 4],
-    /// Highlight strength in `x` (the rest is padding).
+    /// Highlight strength in `x`, surface finish in `y` (0 none, 1 plate
+    /// grain, 2 rail streaks), its strength in `z`; `w` is padding.
     spec: [u8; 4],
 }
 
@@ -1349,7 +1350,11 @@ impl Renderer {
                 scale: scale.to_array(),
                 color,
                 edge,
-                spec: spec_byte(look.surface(item.id.kind).specular, item.translucent),
+                spec: spec_byte(
+                    look.surface(item.id.kind).specular,
+                    item.translucent,
+                    finish_of(item.id.kind, frame.state.display.finish),
+                ),
             };
             if item.translucent {
                 blended.push((dist, key, inst));
@@ -1386,7 +1391,7 @@ impl Renderer {
                             scale: [2.0 * r, 2.0 * r, piece.length()],
                             color,
                             edge,
-                            spec: spec_byte(look.surface(ItemKind::Wire).specular, false),
+                            spec: spec_byte(look.surface(ItemKind::Wire).specular, false, 0),
                         });
                     };
                     match striped {
@@ -1971,13 +1976,25 @@ fn shadow_key(scene: &Scene, state: &ViewState, light_vp: &Mat4) -> u64 {
 }
 
 /// The highlight strength as a byte; translucent shells have none.
-fn spec_byte(strength: f32, translucent: bool) -> [u8; 4] {
+/// Surface finish of a kind (shader: 1 plate grain, 2 rail streaks), 0 when
+/// the switch is off or the kind has none.
+fn finish_of(kind: ItemKind, on: bool) -> u8 {
+    match (on, kind) {
+        (true, ItemKind::Plate) => 1,
+        (true, ItemKind::Rail) => 2,
+        _ => 0,
+    }
+}
+
+fn spec_byte(strength: f32, translucent: bool, finish: u8) -> [u8; 4] {
     let v = if translucent {
         0.0
     } else {
         strength.clamp(0.0, 1.0)
     };
-    [(v * 255.0).round() as u8, 0, 0, 0]
+    // The finish id rides in a normalised byte; the shader scales it back.
+    let finish = if translucent { 0 } else { finish };
+    [(v * 255.0).round() as u8, finish, 0, 0]
 }
 
 fn apply(base: Rgb, h: &Highlight) -> (Rgb, Rgb) {
