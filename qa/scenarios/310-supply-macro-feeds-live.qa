@@ -21,7 +21,7 @@ wait 20
 shot 01-picked
 click_text Place #2
 wait 20
-expect "N PE fed and joined to the starter"
+expect "wires joined to the starter"
 shot 02-placed
 check_layout
 key shift+l

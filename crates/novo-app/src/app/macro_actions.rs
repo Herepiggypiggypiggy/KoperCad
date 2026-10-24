@@ -647,7 +647,7 @@ impl NovoApp {
                 fed = supply_feeds::feed_open_points(tx, page, placed.instance)?;
             }
             // The supply and the circuit it feeds, in either order.
-            joined = supply_feeds::join_starter(tx, page)?;
+            joined = supply_feeds::join_starter(tx, page, placed.instance)?;
             Ok(placed)
         });
         match result {
@@ -668,7 +668,7 @@ impl NovoApp {
                     )
                 } else if fed > 0 && joined > 0 {
                     format!(
-                        "Placed {name}, L1 L2 L3 N PE fed and joined to the starter ({joined} wires) · {}",
+                        "Placed {name}, L1 L2 L3 N PE fed · {joined} wires joined to the starter's open entries · {}",
                         describe(&placed.report)
                     )
                 } else if fed > 0 {
@@ -678,7 +678,7 @@ impl NovoApp {
                     )
                 } else if joined > 0 {
                     format!(
-                        "Placed {name}, joined to the Three-phase supply ({joined} wires) · {}",
+                        "Placed {name}, {joined} wires joined to the Three-phase supply · {}",
                         describe(&placed.report)
                     )
                 } else {
