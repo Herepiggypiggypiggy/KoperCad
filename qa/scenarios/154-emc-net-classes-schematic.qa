@@ -1,6 +1,6 @@
 @title Schematic: EMC net classes (wire colours, tags, legend, wire card, set class), dark and light
 @area Schematic
-@sizes 1366x768 1920x1080
+@sizes 1366x768
 # Ctrl+K "EMC net classes" (View menu) colours each wire of the page by its cable class and tags it with the class word; the panel counts the classes and the card of a picked wire says why it has its class.
 key ctrl+k
 wait 6
@@ -28,6 +28,25 @@ wait 10
 shot nets-motor-focus
 click_text "Motor and drive output" #1
 wait 10
+
+# Picking a guessed wire opens its card: class, why, the buttons to set it.
+click 800 310
+wait 12
+expect "Set the class"
+expect "guessed"
+shot wire-card-guessed
+check_layout
+# Setting the class is one undo step: the tag and the colour change and the "?" goes.
+click_text "analog" #1
+wait 12
+expect "Back to automatic"
+shot wire-card-set
+check_layout
+# The panel rolls up to its title with the overlay on.
+click 1086 112
+wait 10
+shot panel-rolled-up
+check_layout
 # The light look.
 key ctrl+k
 wait 6

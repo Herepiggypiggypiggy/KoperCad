@@ -230,7 +230,8 @@ impl NovoApp {
         let data = self.wb.emc_sch.data(project);
         let focus = self.wb.emc_sch.focus;
         let live = self.wb.live.on;
-        let picked: Vec<WireId> = self
+        // A whole wire (double click) or a corner or run of one (a click).
+        let mut picked: Vec<WireId> = self
             .selection()
             .into_iter()
             .filter_map(|id| match id {
@@ -238,6 +239,9 @@ impl NovoApp {
                 _ => None,
             })
             .collect();
+        if let Some(w) = view.picked_wire_part() {
+            picked.push(w);
+        }
         let (counts, guessed) = data.counts(project, page);
         let total: usize = counts.iter().sum();
 

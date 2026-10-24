@@ -638,6 +638,11 @@ impl SchematicView {
             .collect()
     }
 
+    /// The wire a click picked a corner or a run of, when one is picked.
+    pub fn picked_wire_part(&self) -> Option<WireId> {
+        self.wire_part.map(|p| p.wire)
+    }
+
     /// Width and height in mm of the box around the selection.
     pub fn selection_size(&self) -> Option<(f64, f64)> {
         let scene = self.scene.as_ref()?;
