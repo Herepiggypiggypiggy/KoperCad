@@ -579,6 +579,18 @@ fn note_offset(sym: &SymbolInstance) -> Option<Vec2> {
     (dx.is_some() || dy.is_some()).then(|| Vec2::new(dx.unwrap_or(0.0), dy.unwrap_or(0.0)))
 }
 
+/// A device's tag in its symbol's item (the first label): where the symbol's
+/// library asks for it, and where it is drawn after the free place search
+/// (see `PageScene::place_tags`).
+#[derive(Clone, Debug)]
+struct TagSlot {
+    preferred: (Vec2, Anchor),
+    /// The symbol's ink, which the free places are measured from.
+    ink: crate::Aabb,
+    /// Where the tag is drawn now.
+    at: (Vec2, Anchor),
+}
+
 /// A note in its symbol's item: its text, or under a coil its contact
 /// table, drawn after everything else the item has.
 #[derive(Clone, Debug)]
@@ -656,6 +668,8 @@ pub struct PageScene {
     /// drawn from, so it can be placed again when the drawing around it
     /// changes (see [`crate::note_place`]).
     note_slots: HashMap<SymbolId, NoteSlot>,
+    /// Device tags that may move off their library place.
+    tag_slots: HashMap<SymbolId, TagSlot>,
     /// What a generated page shows; see [`Self::set_sheet`].
     sheet: Option<SheetContent>,
     /// The revision fields of the title block; see [`Self::set_revisions`].
@@ -797,6 +811,7 @@ impl PageScene {
             text_hosts: HashMap::new(),
             notes: HashMap::new(),
             note_slots: HashMap::new(),
+            tag_slots: HashMap::new(),
             sheet: None,
             revisions: None,
             strip_heads: HashMap::new(),
@@ -1116,6 +1131,7 @@ impl PageScene {
         self.wire_junctions.clear();
         self.text_hosts.clear();
         self.note_slots.clear();
+        self.tag_slots.clear();
         self.frame(project);
         self.draw_underlay();
         self.strip_heads = strip_heads(project, self.page);
@@ -1135,6 +1151,7 @@ impl PageScene {
         for id in contents.texts {
             self.sync_text(project, id);
         }
+        self.place_tags(None);
         self.refresh_notes(None);
     }
 
@@ -1324,6 +1341,8 @@ impl PageScene {
             }
             touched.extend(self.scene.item_bounds(key));
         }
+        let moved = self.place_tags(Some(&touched));
+        touched.extend(moved);
         self.refresh_notes(Some(&touched));
         self.scene.revision() != rev
     }
@@ -1591,6 +1610,7 @@ impl PageScene {
         let Some(sym) = project.symbol(id).filter(|s| s.page == self.page) else {
             self.remove(id.into());
             self.note_slots.remove(&id);
+            self.tag_slots.remove(&id);
             return;
         };
         let place = placement(&sym.placement);
@@ -1630,6 +1650,7 @@ impl PageScene {
         let text =
             symbol_text(project, sym).filter(|_| !tag_text && !repeats_pin_tag(project, sym));
         let mut tag = None;
+        let mut tag_slot = None;
         if let Some(text) = text {
             // To the right of the placed symbol, vertically centred on its
             // pins, whatever its rotation or mirroring.
@@ -1658,6 +1679,9 @@ impl PageScene {
                 .colored(self.style.tag_color);
             tag = Some(label.clone());
             item.labels.insert(0, label);
+            if matches!(sym.role, SymbolRole::Device { .. }) {
+                tag_slot = Some((pos, anchor));
+            }
         }
         if let Some(strip) = self.strip_heads.get(&id) {
             let crowded = self.crowded.contains(&id);
@@ -1702,6 +1726,10 @@ impl PageScene {
             };
             item.labels.push(label.colored(self.style.tag_color));
         }
+        let ink = item
+            .primitives
+            .iter()
+            .fold(crate::Aabb::EMPTY, |b, p| b.union(&p.shape.bounds()));
         let slot = self
             .notes
             .get(&id)
@@ -1710,6 +1738,21 @@ impl PageScene {
             Some(slot) => self.note_slots.insert(id, slot),
             None => self.note_slots.remove(&id),
         };
+        match tag_slot {
+            Some(at) if !ink.is_empty() => {
+                self.tag_slots.insert(
+                    id,
+                    TagSlot {
+                        preferred: at,
+                        ink,
+                        at,
+                    },
+                );
+            }
+            _ => {
+                self.tag_slots.remove(&id);
+            }
+        }
         self.put(id.into(), item);
     }
 
@@ -1865,6 +1908,7 @@ impl PageScene {
             own_id: item_id(AnyId::Symbol(id)),
             keep: (slot.primitives, slot.labels),
             later: &later,
+            no_tag: &|_| false,
         };
         let height = self.style.tag_height;
         for at in crate::note_place::candidates(preferred, &slot.ink, height) {
@@ -1874,6 +1918,91 @@ impl PageScene {
             }
         }
         preferred
+    }
+
+    /// Places every device tag against the drawing as it is now: the tag
+    /// stays where its symbol's library asks for it unless wires, symbols or
+    /// text cover that place, and then moves to the first free place of the
+    /// same fixed list the notes use. Tags go down one symbol at a time in
+    /// id order and a tag keeps clear only of the tags before it, so the
+    /// result does not depend on where the others happen to be drawn at the
+    /// moment. `changed` limits the work to tags near those boxes (more
+    /// tags may then move, a tag moving back is found the same way).
+    /// Returns where tags were and are now, for the notes to follow.
+    fn place_tags(&mut self, changed: Option<&[crate::Aabb]>) -> Vec<crate::Aabb> {
+        let mut ids: Vec<SymbolId> = self.tag_slots.keys().copied().collect();
+        ids.sort();
+        let mut changed: Option<Vec<crate::Aabb>> = changed.map(<[_]>::to_vec);
+        let mut touched = Vec::new();
+        let height = self.style.tag_height;
+        for id in ids {
+            let key = item_id(AnyId::Symbol(id));
+            let Some(item) = self.scene.get(key) else {
+                continue;
+            };
+            let slot = &self.tag_slots[&id];
+            if let Some(boxes) = &changed {
+                // Near a changed box, or where the tag is drawn now.
+                let reach = slot.ink.expand(crate::note_place::MAX_RING + 8.0 * height);
+                if !boxes.iter().any(|b| b.intersects(&reach)) {
+                    continue;
+                }
+            }
+            let Some(base) = item.labels.first().cloned() else {
+                continue;
+            };
+            let mut own = item.clone();
+            own.labels.remove(0);
+            let later_tag = |k: ItemId| {
+                matches!(self.ids.get(&k), Some(AnyId::Symbol(s)) if *s > id
+                    && self.tag_slots.contains_key(s))
+            };
+            let obstacles = crate::note_place::Obstacles {
+                scene: &self.scene,
+                own: &own,
+                own_id: key,
+                keep: (own.primitives.len(), own.labels.len()),
+                later: &|_| None,
+                no_tag: &later_tag,
+            };
+            let mut at = slot.preferred;
+            for cand in crate::note_place::candidates(slot.preferred, &slot.ink, height) {
+                let mut label = base.clone();
+                label.pos = cand.0;
+                label.anchor = cand.1;
+                let b = label.bounds().expand(crate::note_place::PAD);
+                let on_frame = self.scene.sheet().is_some_and(|sheet| {
+                    !(sheet.rect.contains_point(b.min) && sheet.rect.contains_point(b.max))
+                        || sheet
+                            .lines
+                            .iter()
+                            .any(|(p, q)| crate::geom::segment_intersects_aabb(*p, *q, &b))
+                });
+                if !on_frame && !obstacles.blocks(&[], std::slice::from_ref(&label)) {
+                    at = cand;
+                    break;
+                }
+            }
+            if at == slot.at && at == (base.pos, base.anchor) {
+                continue;
+            }
+            let before = self.scene.item_bounds(key);
+            let mut item = item.clone();
+            item.labels[0].pos = at.0;
+            item.labels[0].anchor = at.1;
+            self.scene.insert(key, item);
+            if let Some(slot) = self.tag_slots.get_mut(&id) {
+                slot.at = at;
+            }
+            let after = self.scene.item_bounds(key);
+            for b in before.into_iter().chain(after) {
+                touched.push(b);
+                if let Some(boxes) = &mut changed {
+                    boxes.push(b);
+                }
+            }
+        }
+        touched
     }
 
     /// Places every note again against the drawing as it is now: a wire
@@ -3695,6 +3824,90 @@ mod tests {
         let strip = item.labels.iter().find(|l| l.text == "-X2").unwrap();
         // Below the head's own row (y grows down), not on it.
         assert!(strip.pos.y > 72.0, "{:?}", strip.pos);
+    }
+
+    /// Two coils 10 mm apart whose library tag stands right of the symbol,
+    /// on top of the next coil.
+    fn coils_with_right_tags(doc: &mut Document, second_x: f64) -> (PageId, SymbolId, SymbolId) {
+        let ((page, a, b), _) = doc
+            .transact("coils", |tx| {
+                let page = tx.add_page("1")?;
+                let mut ids = Vec::new();
+                for (tag, x) in [("-K1", 100.0), ("-K2", second_x)] {
+                    let d = tx.add_device(DeviceTag::parse(tag)?, "Coil")?;
+                    ids.push(tx.place_symbol(
+                        page,
+                        "iec/coil",
+                        MPlacement::at(Point::new(x, 50.0)),
+                        vec![Pin::new("A1", 0.0, -5.0), Pin::new("A2", 0.0, 5.0)],
+                        SymbolRole::Device {
+                            device: d,
+                            main: true,
+                        },
+                    )?);
+                }
+                Ok((page, ids[0], ids[1]))
+            })
+            .unwrap();
+        (page, a, b)
+    }
+
+    struct RightTag;
+    impl SymbolArt for RightTag {
+        fn artwork(&self, _: &SymbolInstance) -> Option<Vec<Primitive>> {
+            Some(vec![Primitive::stroked(
+                Shape::rect(Vec2::new(-3.0, -5.0), Vec2::new(3.0, 5.0)),
+                Stroke::world(0.25, crate::Color::rgb(255, 255, 255)),
+            )])
+        }
+        fn tag_anchor(&self, _: &SymbolInstance) -> Option<(Vec2, Anchor)> {
+            Some((Vec2::new(4.0, 0.0), Anchor::CenterLeft))
+        }
+    }
+
+    #[test]
+    fn a_device_tag_moves_off_the_next_symbol_and_back() {
+        let mut doc = Document::default();
+        let (page, a, _) = coils_with_right_tags(&mut doc, 108.0);
+        let ps = PageScene::new(doc.project(), page, &RightTag);
+        let tag = &ps.scene().get(item_id(a)).unwrap().labels[0];
+        // The library place (right of the coil, x 104) is on the next coil
+        // at 105..111: the tag moved to a free place instead.
+        let b = tag.bounds();
+        assert!(
+            b.max.x < 105.0 || b.min.x > 111.0 || b.min.y > 55.0 || b.max.y < 45.0,
+            "{b:?}"
+        );
+        // Far apart again: the library place is free and the tag is there.
+        let mut doc = Document::default();
+        let (page, a, _) = coils_with_right_tags(&mut doc, 140.0);
+        let ps = PageScene::new(doc.project(), page, &RightTag);
+        let tag = &ps.scene().get(item_id(a)).unwrap().labels[0];
+        assert_eq!(tag.pos, Vec2::new(104.0, 50.0));
+    }
+
+    #[test]
+    fn device_tags_after_an_edit_equal_a_fresh_build() {
+        let mut doc = Document::default();
+        let (page, a, b) = coils_with_right_tags(&mut doc, 140.0);
+        let mut ps = PageScene::new(doc.project(), page, &RightTag);
+        // The second coil moves next to the first, then back.
+        for x in [108.0, 140.0, 108.0] {
+            let (_, changes) = doc
+                .transact("move", |tx| {
+                    tx.move_symbol(b, MPlacement::at(Point::new(x, 50.0)))
+                })
+                .unwrap();
+            ps.apply(doc.project(), &changes, &RightTag);
+            let fresh = PageScene::new(doc.project(), page, &RightTag);
+            for s in [a, b] {
+                let (l1, l2) = (
+                    &ps.scene().get(item_id(s)).unwrap().labels[0],
+                    &fresh.scene().get(item_id(s)).unwrap().labels[0],
+                );
+                assert_eq!((l1.pos, l1.anchor), (l2.pos, l2.anchor), "x {x}");
+            }
+        }
     }
 
     #[test]
