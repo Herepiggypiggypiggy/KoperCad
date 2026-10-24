@@ -732,6 +732,8 @@ fn the_plate_is_darker_around_a_device_than_far_from_it() {
     let mut state = ViewState::default();
     state.display.shadows = false;
     state.display.edges = false;
+    // The finish textures the plate; this test needs it a single flat grey.
+    state.display.finish = false;
     let (mut open, mut occluded) = (Look::light(), Look::light());
     open.contact_shade = 0.0;
     occluded.contact_shade = 0.8;
