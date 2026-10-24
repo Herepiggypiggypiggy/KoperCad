@@ -9,7 +9,20 @@ use novo_thermal::sweep::{
 };
 
 use super::heat_settings::{HeatSettings, Kind, Wall};
-use super::heat_sweep::{CoolingAdvice, Found, add_pair, spec_of, specs_of};
+use super::heat_sweep::{
+    CoolingAdvice, Found, add_pair, real_fans, settings_for, spec_of, specs_of,
+};
+use novo_thermal::cooling::{Kind as FanKind, Product, Source};
+
+fn product(name: &str, kind: FanKind, flow: f64, source: Source) -> Product {
+    Product {
+        name: name.into(),
+        kind,
+        airflow_m3h: flow,
+        cooling_w: 0.0,
+        source,
+    }
+}
 
 fn fan(placement: Placement, side: f64, flow: f64) -> Piece {
     Piece {
@@ -248,4 +261,81 @@ fn the_footer_keeps_the_caveats_of_the_hidden_note() {
     ] {
         assert!(super::heat_sweep::FOOTER.contains(caveat), "{caveat}");
     }
+}
+
+#[test]
+fn the_ladder_comes_from_real_fans_and_falls_back_to_the_generic_one() {
+    let generic = settings_for(&[]).fan_flows_m3h;
+    assert_eq!(generic, novo_thermal::sweep::FAN_FLOWS_M3H.to_vec());
+    let mine = vec![
+        product("Fan B", FanKind::Fan, 300.0, Source::Mine),
+        product("Fan A", FanKind::FilterFan, 120.0, Source::Part("A".into())),
+        product("Fan A again", FanKind::Fan, 120.0, Source::Mine),
+    ];
+    assert_eq!(settings_for(&mine).fan_flows_m3h, vec![120.0, 300.0]);
+}
+
+#[test]
+fn only_real_fans_count_not_planning_sizes_or_units() {
+    let all = vec![
+        product("Generic", FanKind::FilterFan, 250.0, Source::Planning),
+        product("Unit", FanKind::CoolingUnit, 0.0, Source::Mine),
+        product("Mine", FanKind::Fan, 90.0, Source::Mine),
+    ];
+    let real = real_fans(all);
+    assert_eq!(real.len(), 1);
+    assert_eq!(real[0].name, "Mine");
+}
+
+#[test]
+fn many_real_sizes_are_thinned_to_a_bounded_ladder() {
+    let many: Vec<Product> = (1..=30)
+        .map(|i| product("F", FanKind::Fan, 50.0 * i as f64, Source::Mine))
+        .collect();
+    let flows = settings_for(&many).fan_flows_m3h;
+    assert!(flows.len() <= 8);
+    assert_eq!(flows.first(), Some(&50.0));
+    assert_eq!(flows.last(), Some(&1500.0));
+}
+
+#[test]
+fn the_window_names_the_article_behind_a_fan() {
+    let mut a = CoolingAdvice::default();
+    a.request();
+    let fans = vec![product("SK 3238", FanKind::FilterFan, 400.0, Source::Mine)];
+    a.set_found_for_test(found(7, 16.6).with_fans_for_test(fans));
+    let text = render(&mut a, 7);
+    assert!(text.contains("Fan: SK 3238 (400 m³/h free air)"), "{text}");
+    assert!(text.contains("(1 sizes)"), "{text}");
+    let plain = render(&mut open(16.6), 7);
+    assert!(!plain.contains("Fan: "), "{plain}");
+}
+
+#[test]
+fn equal_flow_articles_are_all_named() {
+    let mut a = CoolingAdvice::default();
+    a.request();
+    let fans = vec![
+        product("Fan A", FanKind::Fan, 400.0, Source::Mine),
+        product("Fan B", FanKind::FilterFan, 400.0, Source::Part("B".into())),
+    ];
+    a.set_found_for_test(found(7, 16.6).with_fans_for_test(fans));
+    let text = render(&mut a, 7);
+    assert!(
+        text.contains("Fan: Fan A or Fan B (400 m³/h free air, same flow)"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_changed_fan_list_changes_the_key() {
+    let p = novo_core::Project::new("t");
+    let s = super::heat_settings::HeatSettings::default();
+    let id = novo_core::StructureId::from(1);
+    let one = vec![product("A", FanKind::Fan, 100.0, Source::Mine)];
+    let two = vec![product("A", FanKind::Fan, 200.0, Source::Mine)];
+    let k = |f: &[Product]| super::heat_sweep::key_of(&p, id, 25.0, &s, f);
+    assert_eq!(k(&one), k(&one));
+    assert_ne!(k(&one), k(&two));
+    assert_ne!(k(&one), k(&[]));
 }

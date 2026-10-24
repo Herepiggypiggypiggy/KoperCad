@@ -1757,8 +1757,9 @@ impl NovoApp {
                         Some(s) => {
                             let ambient = self.sizing.request().ambient_max;
                             let h = &mut self.cabinet.heat;
+                            let fans = super::heat_sweep::fans_of(&mut h.cooling, heat_project);
                             h.advice
-                                .start(heat_project, s, ambient, &h.settings, &tag_of);
+                                .start(heat_project, s, ambient, &h.settings, fans, &tag_of);
                         }
                         None => self.cabinet.heat.fail(
                             "Open an enclosure with a mounting plate to ask for cooling advice"
@@ -1784,8 +1785,10 @@ impl NovoApp {
                 }
                 if self.cabinet.heat.advice.is_open() {
                     let ambient = self.sizing.request().ambient_max;
+                    let h = &mut self.cabinet.heat;
+                    let fans = super::heat_sweep::fans_of(&mut h.cooling, project);
                     let now_key = structure.map_or(0, |s| {
-                        super::heat_sweep::key_of(project, s, ambient, &self.cabinet.heat.settings)
+                        super::heat_sweep::key_of(project, s, ambient, &h.settings, &fans)
                     });
                     let at = ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0);
                     match self.cabinet.heat.advice.show(ui.ctx(), 1, now_key, at) {
