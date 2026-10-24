@@ -16,6 +16,10 @@ use novo_view3d::emc::{
     Role as NodeRole, Run, Shield, ShieldEnd,
 };
 
+/// How far the bond outline is drawn outside the mounting area, mm, so the
+/// line is not hidden by the device's own body.
+const BOND_MARGIN_MM: f64 = 8.0;
+
 /// Height of a device body above the plate when the model has none, mm.
 const BODY_HEIGHT_MM: f32 = 60.0;
 
@@ -74,6 +78,23 @@ fn kind_of(rule: &str) -> Kind {
 
 fn pt(p: (f64, f64)) -> [f32; 3] {
     [p.0 as f32, p.1 as f32, 0.0]
+}
+
+/// A closed rectangle outline pushed outwards by `margin` on every side.
+fn grown(outline: &[(f64, f64)], margin: f64) -> Vec<[f32; 3]> {
+    let (cx, cy) = outline
+        .iter()
+        .fold((0.0, 0.0), |a, p| (a.0 + p.0, a.1 + p.1));
+    let n = outline.len().max(1) as f64;
+    let (cx, cy) = (cx / n, cy / n);
+    outline
+        .iter()
+        .map(|p| {
+            let dx = if p.0 >= cx { margin } else { -margin };
+            let dy = if p.1 >= cy { margin } else { -margin };
+            pt((p.0 + dx, p.1 + dy))
+        })
+        .collect()
 }
 
 fn end_of(t: Termination) -> ShieldEnd {
@@ -377,7 +398,7 @@ pub(crate) fn build_with(
             .filter(|b| b.plate == plate)
             .map(|b| Bond {
                 label: format!("{}: {}", b.tag, b.reason),
-                path: b.outline.iter().map(|p| pt(*p)).collect(),
+                path: grown(&b.outline, BOND_MARGIN_MM),
                 quality: match b.quality {
                     novo_emc::BondQuality::Good => Quality::Good,
                     novo_emc::BondQuality::Weak => Quality::Weak,

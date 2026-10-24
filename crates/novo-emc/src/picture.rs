@@ -256,7 +256,7 @@ pub fn bonds(input: &Input) -> Vec<Bond> {
                 ),
                 (_, Some(Finish::Painted)) => (
                     BondQuality::Weak,
-                    format!("plate {} is painted where the case sits", plate.tag),
+                    format!("plate {} is painted, so no contact at high frequency until the mounting area is scraped bare, even if bonding is stated", plate.tag),
                 ),
                 (Some(true), _) => (
                     BondQuality::Good,
