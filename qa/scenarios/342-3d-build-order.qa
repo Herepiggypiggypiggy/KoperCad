@@ -1,6 +1,6 @@
 @title 3D view: Build order steps from the plate to the wires
 @area 3D
-# Toolbar > Build order (also View > 3D > Build order). A strip at the bottom shows the step; Next and Previous add or take away one kind of part, and what a step adds is shown in blue.
+# Layers > Build order (also View > 3D > Build order). A strip at the bottom shows the step; Next and Previous add or take away one part, and what a step adds is shown in blue.
 click_text "Open example"
 wait 20
 click_text 3D #1
@@ -11,7 +11,11 @@ text front view
 wait 8
 key Enter
 wait 30
+click_text "Layers"
+wait 8
 click_text "Build order"
+wait 8
+key Escape
 wait 30
 shot step-0-start
 expect "Start (0 of 17)"

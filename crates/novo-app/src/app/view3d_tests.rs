@@ -620,7 +620,10 @@ fn the_build_order_steps_through_the_cabinet_and_highlights_what_a_step_adds() {
     assert_eq!(d.app.view3d.controls.assembly, None);
     assert!(d.app.view3d.view.state.related.is_empty());
     assert_eq!(kinds(&d).len(), full);
-    assert_eq!(d.app.view3d.view.bottom_inset, 0.0, "the room is given back");
+    assert_eq!(
+        d.app.view3d.view.bottom_inset, 0.0,
+        "the room is given back"
+    );
 
     // A new or opened project does not inherit the build order.
     d.app.run_command(&ctx, "view.3d_assembly", None);

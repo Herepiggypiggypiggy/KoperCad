@@ -276,6 +276,17 @@ pub(super) fn toolbar(
                          typed, amber when estimated. Set them in the Parts window > \
                          Connection points.",
                     );
+                    let building = controls.assembly.is_some();
+                    if novo_theme::widgets::filter_toggle(ui, "Build order", building)
+                        .on_hover_text(
+                            "Step through the build order of this cabinet: rails, ducts, devices, \
+                             then wires, the same order as the printed assembly pack. The part a \
+                             step adds is shown in blue (View > 3D > Build order).",
+                        )
+                        .clicked()
+                    {
+                        controls.assembly = if building { None } else { Some(0) };
+                    }
                     toggle(
                         ui,
                         &mut controls.shadows,
@@ -360,17 +371,6 @@ pub(super) fn toolbar(
                  rectangle around it: the free space it asks for (View > 3D > \
                  Dimensions)",
             );
-            let building = controls.assembly.is_some();
-            if novo_theme::widgets::filter_toggle(ui, "Build order", building)
-                .on_hover_text(
-                    "Step through the build order of this cabinet: rails, ducts, devices, \
-                     then wires, the same order as the printed assembly pack. The part a \
-                     step adds is shown in blue (View > 3D > Build order).",
-                )
-                .clicked()
-            {
-                controls.assembly = if building { None } else { Some(0) };
-            }
             // A tool, not a layer: next to the other measuring control.
             toggle(
                 ui,
