@@ -25,6 +25,12 @@ struct Cab {
 /// feeds a motor at the right, and an analog module at the left reads a
 /// transmitter at the right: both wires run the length of the duct.
 fn cabinet() -> Cab {
+    cabinet_with(false)
+}
+
+/// With `bonding`: a painted plate and a drive 170 mm deep, for the bonding
+/// and height layers of the EMC views.
+fn cabinet_with(bonding: bool) -> Cab {
     let mut project = Project::new("EMC");
     let (ids, _) = project
         .transact("build", |tx| {
@@ -75,6 +81,11 @@ fn cabinet() -> Cab {
             let (_m, s_motor) = place("-M1", "iec/motors/motor_3ph", &["U1"], 700.0, 190.0)?;
             let (plc, s_plc) = place("-A1", "iec/plc/analog_input", &["AI1"], 100.0, 190.0)?;
             let (_b, s_b) = place("-B1", "iec/sensors/transmitter", &["1"], 640.0, 190.0)?;
+            if bonding {
+                tx.set_property(cab, "emc.finish", Some(Value::Text("painted".into())))?;
+                tx.set_property(drive, "depth_mm", Some(Value::Float(170.0)))?;
+                tx.set_property(plc, "depth_mm", Some(Value::Float(110.0)))?;
+            }
             let motor_wire = tx.connect(Endpoint::pin(s_drive, 1), Endpoint::pin(s_motor, 0))?;
             let analog_wire = tx.connect(Endpoint::pin(s_plc, 0), Endpoint::pin(s_b, 0))?;
             Ok((drive, plc, motor_wire, analog_wire, duct, cab))
@@ -111,4 +122,29 @@ fn the_committed_fixture_has_findings_with_the_check_on() {
         !report.findings.is_empty(),
         "the fixture must show findings: regenerate it"
     );
+}
+
+fn bonding_path() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../qa/fixtures/emc-cabinet-bonding.novo")
+}
+
+#[test]
+fn the_bonding_fixture_has_a_weak_bond_and_stated_heights() {
+    if std::env::var_os("KOPERCAD_WRITE_FIXTURES").is_some() {
+        let c = cabinet_with(true);
+        let path = bonding_path();
+        let _ = std::fs::remove_file(&path);
+        novo_storage::ProjectFile::create(&path, &c.project).expect("fixture is written");
+    }
+    let project = novo_storage::ProjectFile::open(bonding_path())
+        .and_then(|f| f.load())
+        .expect("fixture opens");
+    let pic = novo_emc::project::picture_of(&project);
+    let report = novo_emc::project::analyse_project(&project);
+    assert_eq!(pic.bonds.len(), 1, "the drive on the painted plate");
+    assert_eq!(pic.bonds[0].quality, novo_emc::BondQuality::Weak);
+    let heights: Vec<_> = pic.zones.iter().map(|z| z.height_mm).collect();
+    assert!(heights.contains(&Some(170.0)), "{heights:?}");
+    assert!(report.findings.iter().any(|f| f.rule == "EMC-11"));
 }

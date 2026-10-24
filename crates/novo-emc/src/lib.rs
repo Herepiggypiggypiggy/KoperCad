@@ -26,6 +26,6 @@ pub mod rules;
 pub use class::{EmcClass, Shield, Termination, default_distance_mm};
 pub use field::{Current, FieldMap, FieldParams, FieldSetup, FieldSummary};
 pub use input::{Device, Duct, FilterState, Finish, Input, Origin, Params, Plate, Role, Run};
-pub use picture::{DESIGN_AID, Picture, picture};
+pub use picture::{Bond, BondQuality, DESIGN_AID, Picture, picture};
 pub use report::*;
 pub use rules::{RULES, Rule, analyse, analyse_with_field};

@@ -349,6 +349,7 @@ fn dev(id: u64, tag: &str, role: Role, rect: (f64, f64, f64, f64)) -> Device {
         filter: FilterState::Unknown,
         filter_for: None,
         bonded: None,
+        height_mm: None,
     }
 }
 
@@ -536,4 +537,60 @@ fn not_checked_names_every_catalogue_rule_that_is_not_built() {
             "{id}: built rules must not be listed as not built, and the others must be"
         );
     }
+}
+
+#[test]
+fn bonds_follow_stated_finish_and_bonding() {
+    use novo_emc::picture::BondQuality::{Bad, Good, Weak};
+    let mut i = input(vec![], vec![]);
+    let mut drive = dev(1, "-U1", Role::Drive, (100.0, 50.0, 80.0, 200.0));
+    let mut filter = dev(2, "-Z1", Role::Filter, (10.0, 50.0, 60.0, 120.0));
+    let other = dev(3, "-K1", Role::Noisy, (300.0, 50.0, 40.0, 40.0));
+    // Nothing stated about the plate or the case: no bond is invented.
+    i.plates[0].finish = None;
+    i.devices = vec![drive.clone(), filter.clone(), other.clone()];
+    let none = report_picture(&i);
+    assert!(none.bonds.is_empty());
+
+    // Bare plate: good for both; only drives and filters get a bond.
+    i.plates[0].finish = Some(Finish::Conductive);
+    i.devices = vec![drive.clone(), filter.clone(), other.clone()];
+    let p = report_picture(&i);
+    assert_eq!(p.bonds.len(), 2);
+    assert!(p.bonds.iter().all(|b| b.quality == Good));
+    // The outline is the mounting rectangle, closed.
+    let b = &p.bonds[0];
+    assert_eq!(b.outline.first(), b.outline.last());
+    assert_eq!(b.outline[2], (180.0, 250.0));
+
+    // Painted plate: weak, and the same fact EMC-11 reports.
+    i.plates[0].finish = Some(Finish::Painted);
+    let p = report_picture(&i);
+    assert!(p.bonds.iter().all(|b| b.quality == Weak));
+    assert!(p.bonds[0].reason.contains("painted"));
+
+    // Stated as not bonded beats the finish; stated bonded on an unknown
+    // finish is good.
+    i.plates[0].finish = None;
+    drive.bonded = Some(false);
+    filter.bonded = Some(true);
+    i.devices = vec![drive, filter, other];
+    let p = report_picture(&i);
+    assert_eq!(p.bonds[0].quality, Bad);
+    assert_eq!(p.bonds[1].quality, Good);
+}
+
+#[test]
+fn zones_carry_the_stated_height() {
+    let mut i = input(vec![], vec![]);
+    let mut d = dev(1, "-U1", Role::Drive, (0.0, 0.0, 80.0, 200.0));
+    d.height_mm = Some(175.0);
+    i.devices = vec![d, dev(2, "-Z1", Role::Filter, (100.0, 0.0, 60.0, 100.0))];
+    let p = report_picture(&i);
+    assert_eq!(p.zones[0].height_mm, Some(175.0));
+    assert_eq!(p.zones[1].height_mm, None);
+}
+
+fn report_picture(i: &Input) -> novo_emc::Picture {
+    novo_emc::picture(i, &novo_emc::analyse(i))
 }

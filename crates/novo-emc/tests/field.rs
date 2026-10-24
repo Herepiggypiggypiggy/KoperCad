@@ -35,6 +35,7 @@ fn plc(y: f64) -> Device {
         filter: FilterState::Unknown,
         filter_for: None,
         bonded: None,
+        height_mm: None,
     }
 }
 

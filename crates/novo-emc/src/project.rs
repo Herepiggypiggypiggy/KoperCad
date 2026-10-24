@@ -651,6 +651,7 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
             filter,
             filter_for: text(&d.properties, "emc.filter_for").map(str::to_owned),
             bonded: d.properties.get("emc.bonded").and_then(as_bool),
+            height_mm: novo_layout::model::device_depth(project, d).filter(|h| *h > 0.0),
         });
     }
 

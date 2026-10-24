@@ -7,7 +7,7 @@
 //! card and report.
 
 use crate::class::EmcClass;
-use crate::input::{Input, Origin, P, Role};
+use crate::input::{Finish, Input, Origin, P, Role};
 use crate::report::{Assumption, Band, Finding, Level, Metric, Report, Ribbon, Severity, Subject};
 
 /// Said on every card and report.
@@ -65,7 +65,35 @@ pub struct Zone {
     pub plate: u64,
     /// x, y, width, height on the plate, mm.
     pub rect: (f64, f64, f64, f64),
+    /// How far it stands off the plate, mm, when its depth is stated.
+    pub height_mm: Option<f64>,
     pub score: u32,
+}
+
+/// How well a case makes metal contact with its plate, from what the project
+/// states. A rule on stated facts, not a measured contact resistance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BondQuality {
+    /// Bare or galvanised plate and no statement against bonding.
+    Good,
+    /// Painted plate: no contact at high frequency until scraped bare.
+    Weak,
+    /// Stated as not bonded.
+    Bad,
+}
+
+/// One case-to-plate link: the mounting area of a drive or filter.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Bond {
+    pub device: u64,
+    pub tag: String,
+    pub plate: u64,
+    /// The contact area as a closed outline on the plate (first point
+    /// repeated at the end).
+    pub outline: Vec<P>,
+    pub quality: BondQuality,
+    /// Why, in words, naming the stated facts the rule used.
+    pub reason: String,
 }
 
 /// A place to mark, with what the card shows for it.
@@ -92,6 +120,11 @@ pub struct Picture {
     pub pairs: Vec<PicturePair>,
     pub loops: Vec<PictureLoop>,
     pub zones: Vec<Zone>,
+    /// Case-to-plate links of drives and filters whose bonding the project
+    /// states (plate finish or `emc.bonded`). Rule-based (the same facts as
+    /// EMC-11), not a measurement; plate to enclosure and PE bar links are
+    /// not modelled.
+    pub bonds: Vec<Bond>,
     pub hotspots: Vec<Hotspot>,
     /// Every setting the numbers rest on, marked default or set in the project.
     pub assumptions: Vec<Assumption>,
@@ -184,6 +217,7 @@ pub fn picture(input: &Input, report: &Report) -> Picture {
                 role: d.role,
                 plate: d.plate?,
                 rect: d.rect?,
+                height_mm: d.height_mm,
                 score: report
                     .score_of(Subject::Device(d.id))
                     .map_or(0, |s| s.points),
@@ -195,11 +229,55 @@ pub fn picture(input: &Input, report: &Report) -> Picture {
         pairs,
         loops,
         zones,
+        bonds: bonds(input),
         hotspots,
         assumptions: report.assumptions.clone(),
         not_checked: crate::report::NOT_CHECKED,
         note: DESIGN_AID,
     }
+}
+
+/// The case-to-plate links the project states something about. A drive or
+/// filter with neither a plate finish nor `emc.bonded` stated gets no bond
+/// rather than a guessed one.
+pub fn bonds(input: &Input) -> Vec<Bond> {
+    input
+        .devices
+        .iter()
+        .filter(|d| matches!(d.role, Role::Drive | Role::Filter))
+        .filter_map(|d| {
+            let plate_id = d.plate?;
+            let (x, y, w, h) = d.rect?;
+            let plate = input.plates.iter().find(|p| p.id == plate_id)?;
+            let (quality, reason) = match (d.bonded, plate.finish) {
+                (Some(false), _) => (
+                    BondQuality::Bad,
+                    "stated as not bonded to the plate".to_owned(),
+                ),
+                (_, Some(Finish::Painted)) => (
+                    BondQuality::Weak,
+                    format!("plate {} is painted where the case sits", plate.tag),
+                ),
+                (Some(true), _) => (
+                    BondQuality::Good,
+                    "stated as bonded to the plate".to_owned(),
+                ),
+                (None, Some(Finish::Conductive)) => (
+                    BondQuality::Good,
+                    format!("plate {} is bare or galvanised", plate.tag),
+                ),
+                (None, None) => return None,
+            };
+            Some(Bond {
+                device: d.id,
+                tag: d.tag.clone(),
+                plate: plate_id,
+                outline: vec![(x, y), (x + w, y), (x + w, y + h), (x, y + h), (x, y)],
+                quality,
+                reason,
+            })
+        })
+        .collect()
 }
 
 /// Area of a closed polygon in cm2 (shoelace).
