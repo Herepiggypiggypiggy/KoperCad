@@ -167,6 +167,8 @@ type HeatSceneKey = (u64, u64, Option<(u64, u64)>);
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Pending {
     Fit,
+    /// Frame the selection with its surroundings (a part picked elsewhere).
+    FlyTo,
     Preset(ViewPreset),
 }
 
@@ -475,11 +477,18 @@ impl NovoApp {
                 .map(|d| ItemId::new(ItemKind::Device, d))
                 .collect();
             mode.synced = (cabinet_rev, mode.view.state.selection.clone());
+            // A selection that came from another workspace is flown to, not
+            // jumped to: the camera glides to frame it (a jump with Reduce
+            // motion). Nothing else is waiting for the camera.
+            if !mode.view.state.selection.is_empty() && mode.pending.is_none() {
+                mode.pending = Some(Pending::FlyTo);
+            }
         }
 
         let now = ui.input(|i| i.time);
         match mode.pending.take() {
             Some(Pending::Fit) => mode.view.fit(scene, now, options.reduced_motion),
+            Some(Pending::FlyTo) => mode.view.fly_to(scene, now, options.reduced_motion),
             Some(Pending::Preset(p)) => mode.view.go_to(p, scene, now, options.reduced_motion),
             None => {}
         }
