@@ -13,6 +13,13 @@ use novo_editor::edit::draw_wire;
 use novo_editor::geometry::Target;
 use novo_editor::potential::FEED_PE_SYMBOL;
 
+/// A pin or junction and where it is.
+type Spot = (Endpoint, Point);
+
+/// One wire to draw: from a supply output to an entry, which the wire
+/// reaches from below when the flag is set.
+type Join = (Spot, Spot, bool);
+
 /// The macro these feeds belong to.
 pub(super) const SUPPLY_MACRO: &str = "Three-phase supply";
 
@@ -248,7 +255,7 @@ pub(super) fn join_starter(
                 })
             })
     };
-    let mut pairs: Vec<((Endpoint, Point), (Endpoint, Point), bool)> = Vec::new();
+    let mut pairs: Vec<Join> = Vec::new();
     if let Some(entries) = phases {
         let outs: Vec<_> = ["2", "4", "6"]
             .iter()
