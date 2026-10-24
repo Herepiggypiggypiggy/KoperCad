@@ -675,7 +675,7 @@ fn step_list(
         });
 }
 
-/// " · bob" on an open step somebody has taken.
+/// " · bob" on an open step somebody has taken; " · you" when it is yours.
 fn claimed_by(
     mode: &super::commissioning::CommissioningMode,
     step: &BuildStep,
@@ -683,9 +683,19 @@ fn claimed_by(
 ) -> String {
     match mode.store.build_claim(step.key) {
         Some(c) if matches!(status, StepStatus::Open | StepStatus::Changed) => {
-            format!("  · {}", c.by)
+            format!("  · {}", claim_tag(&c.by, &mode.who))
         }
         _ => String::new(),
+    }
+}
+
+/// Who a claim reads as in a list row: "you" for the one who took it (also
+/// when no name is set and the claim is kept as "someone"), else the name.
+pub(super) fn claim_tag(by: &str, who: &str) -> String {
+    if by == or_unknown(who) {
+        "you".to_owned()
+    } else {
+        by.to_owned()
     }
 }
 
@@ -914,7 +924,8 @@ fn status_and_buttons(
 
     // Who has this step: two people on one cabinet do not reach for the same
     // device. A claim is a signal, not a lock. Without a name (set under
-    // Commissioning) the claim reads "someone", which cannot tell two people apart.
+    // Commissioning) the claim is kept as "someone", which cannot tell two people
+    // apart; the one who took it still reads "You have this step".
     if state.problem.is_none() && matches!(status, StepStatus::Open | StepStatus::Changed) {
         let me = or_unknown(who);
         let held = mode.store.build_claim(step.key).cloned();
@@ -945,7 +956,7 @@ fn status_and_buttons(
             Some(_) => {
                 ui.horizontal(|ui| {
                     ui.label(if who.trim().is_empty() {
-                        "Someone has this step. Set your name in Commissioning to tell who."
+                        "You have this step. Set your name in Commissioning so the others see who."
                     } else {
                         "You have this step."
                     });
