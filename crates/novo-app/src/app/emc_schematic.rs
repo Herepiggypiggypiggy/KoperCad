@@ -396,7 +396,11 @@ impl NovoApp {
                     if info.shielded { ", shielded cable" } else { "" }
                 ));
                 ui.label(
-                    egui::RichText::new(format!("{}: {}", origin_word(info.origin), info.reason))
+                    egui::RichText::new(if info.origin == Origin::Declared {
+                        origin_word(info.origin).to_owned()
+                    } else {
+                        format!("{}: {}", origin_word(info.origin), info.reason)
+                    })
                         .small()
                         .color(pal.text_secondary),
                 );
