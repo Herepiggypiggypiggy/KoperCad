@@ -340,3 +340,14 @@ fn a_claim_by_someone_else_is_kept_in_the_project_and_the_screen_draws_with_it()
     novo_commissioning::claim_step(&mut mode.store, step, "ann", "2026-10-22T09:30:00Z");
     assert_eq!(mode.store.build_claim(step.key).unwrap().by, "ann");
 }
+
+#[test]
+fn a_claim_reads_as_yours_only_when_a_name_says_so() {
+    use super::build_mode::claim_tag;
+    // Nobody set a name: it may be a colleague's claim, so it is not "you".
+    assert_eq!(claim_tag("someone", ""), "taken");
+    assert_eq!(claim_tag("someone", "ann"), "taken");
+    assert_eq!(claim_tag("ann", "ann"), "you");
+    assert_eq!(claim_tag("bob", "ann"), "bob");
+    assert_eq!(claim_tag("bob", ""), "bob");
+}

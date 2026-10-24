@@ -1,0 +1,27 @@
+@title Cooling advice sizes its fans from the project's fan parts and names the article
+@area Heat
+# The hot cabinet with four fan parts in the catalog (two share 300 m3/h). The sweep's fan sizes are those four, each fan option names its article (equal flows both named) and the footer says where the sizes come from.
+open qa/fixtures/cabinet-cooling-fans.novo
+wait 30
+click_text Cabinet #1
+wait 30
+key ctrl+k
+wait 4
+text Show or hide heat
+wait 6
+key Enter
+wait 20
+key ctrl+k
+wait 4
+text Cooling advice
+wait 8
+expect "Cooling advice and vent sweep"
+key Enter
+wait 20
+wait_s 90
+expect "Cooling advice"
+expect "Model estimate"
+expect "Fan: QA"
+expect "Fan sizes come from your parts and cooling list"
+shot advice-fans
+check_layout

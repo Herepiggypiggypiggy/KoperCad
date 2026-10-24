@@ -172,6 +172,8 @@ type HeatSceneKey = (u64, u64, Option<(u64, u64)>);
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Pending {
     Fit,
+    /// Frame the selection with its surroundings (a part picked elsewhere).
+    FlyTo,
     Preset(ViewPreset),
 }
 
@@ -497,11 +499,18 @@ impl NovoApp {
                 .map(|d| ItemId::new(ItemKind::Device, d))
                 .collect();
             mode.synced = (cabinet_rev, mode.view.state.selection.clone());
+            // A selection that came from another workspace is flown to, not
+            // jumped to: the camera glides to frame it (a jump with Reduce
+            // motion). Nothing else is waiting for the camera.
+            if !mode.view.state.selection.is_empty() && mode.pending.is_none() {
+                mode.pending = Some(Pending::FlyTo);
+            }
         }
 
         let now = ui.input(|i| i.time);
         match mode.pending.take() {
             Some(Pending::Fit) => mode.view.fit(scene, now, options.reduced_motion),
+            Some(Pending::FlyTo) => mode.view.fly_to(scene, now, options.reduced_motion),
             Some(Pending::Preset(p)) => mode.view.go_to(p, scene, now, options.reduced_motion),
             None => {}
         }
@@ -926,6 +935,7 @@ impl NovoApp {
             }
             _ => BTreeSet::new(),
         };
+        mode.view.state.display.finish = mode.controls.finish;
         // Switching occlusion off and on asks for full quality back, the same
         // as "Restore quality" (one governor, one restore path).
         if mode.controls.ssao && !mode.view.state.display.ssao {
@@ -1018,11 +1028,14 @@ impl NovoApp {
             let heat = &mut self.cabinet.heat;
             heat.advice.poll(ui.ctx());
             if heat.advice.take_request() {
+                let fans = super::heat_sweep::fans_of(&mut heat.cooling, project);
                 heat.advice
-                    .start(project, id, ambient, &heat.settings, &tag_of);
+                    .start(project, id, ambient, &heat.settings, fans, &tag_of);
             }
             if heat.advice.is_open() {
-                let now_key = super::heat_sweep::key_of(project, id, ambient, &heat.settings);
+                let fans = super::heat_sweep::fans_of(&mut heat.cooling, project);
+                let now_key =
+                    super::heat_sweep::key_of(project, id, ambient, &heat.settings, &fans);
                 let at = view_rect.center_top() + egui::vec2(-200.0, 170.0);
                 match heat.advice.show(ui.ctx(), 2, now_key, at) {
                     Some(super::heat_sweep::Ask::Again) => heat.advice.request(),

@@ -634,6 +634,62 @@ fn the_build_order_steps_through_the_cabinet_and_highlights_what_a_step_adds() {
 }
 
 #[test]
+fn the_metal_finish_command_toggles_the_views_finish() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.frame();
+    assert!(d.app.view3d.view.state.display.finish, "on by default");
+    d.app.run_command(&ctx, "view.3d_finish", None);
+    d.frame();
+    assert!(!d.app.view3d.view.state.display.finish);
+    d.app.run_command(&ctx, "view.3d_finish", None);
+    d.frame();
+    assert!(d.app.view3d.view.state.display.finish);
+}
+
+#[test]
+fn a_part_picked_in_the_cabinet_is_flown_to_when_the_3d_view_opens() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.3d", None);
+    d.frame();
+    d.frame();
+    let (device, whole) = {
+        let (_, _, scene) = d.app.view3d.built.as_ref().expect("scene is built");
+        let item = scene
+            .items
+            .iter()
+            .rev()
+            .find(|i| i.id.kind == ItemKind::Device)
+            .expect("a device");
+        (item.id, d.app.view3d.view.camera.target)
+    };
+    let centre = {
+        let (_, _, scene) = d.app.view3d.built.as_ref().unwrap();
+        scene.world_bounds(scene.get(device).unwrap()).center()
+    };
+    // Reduce motion: the move lands at once, so the test needs no clock.
+    d.app.settings.reduce_motion = true;
+    d.app.run_command(&ctx, "view.cabinet", None);
+    d.frame();
+    d.app.cabinet.view.selection.apply(
+        [novo_canvas::cabinet::box_item(device.raw)],
+        novo_canvas::selection::SelectOp::Replace,
+    );
+    d.app.run_command(&ctx, "view.3d", None);
+    for _ in 0..4 {
+        d.frame();
+    }
+    let at = d.app.view3d.view.camera.target;
+    assert!(
+        (at - centre).length() < (whole - centre).length(),
+        "the camera moved towards the part: {at:?} from {whole:?}, part at {centre:?}"
+    );
+}
+
+#[test]
 fn simulate_runs_from_the_3d_view_without_leaving_it() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());

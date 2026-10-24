@@ -72,6 +72,7 @@ mod emc;
 mod emc_adapter;
 mod emc_demo;
 mod emc_plate;
+mod emc_schematic;
 mod emc_stub;
 #[cfg(test)]
 mod emc_tests;
@@ -1251,6 +1252,9 @@ impl NovoApp {
         self.wb.live = Default::default();
         // The build order belongs to the cabinet it was opened on.
         self.view3d.controls.assembly = None;
+        // Classes cached for the old project (keyed by a revision two projects
+        // can share) and a focused class do not carry over; the overlay's on/off does.
+        self.wb.emc_sch.forget();
         // A new project is not a fix: the issue count starts over.
         self.wb.last_issue_total = None;
         self.wb.problems = None;
@@ -1485,6 +1489,7 @@ impl NovoApp {
                     || id.starts_with("view.3d_spread")
                     || *id == "view.3d_wire_runs"
                     || *id == "view.emc"
+                    || *id == "view.emc_nets"
                     || *id == "view.3d_duplicate"
                     || (*id == "edit.duplicate" && in_3d)
                     || *id == "view.3d_position"
@@ -1583,6 +1588,7 @@ impl NovoApp {
             self.empty_sheet_ghost(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
             self.live_view(&ctx, canvas_rect);
+            self.emc_schematic(&ctx, canvas_rect);
             self.plc_window(&ctx);
             self.tour_watch(&ctx);
             self.walkthrough_card(&ctx, canvas_rect);

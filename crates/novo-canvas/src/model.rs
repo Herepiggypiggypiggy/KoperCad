@@ -1681,7 +1681,18 @@ impl PageScene {
                     x = x.min(lb.min.x);
                 }
             }
-            let label = if crowded && !b.is_empty() {
+            let label = if crowded
+                && !b.is_empty()
+                && matches!(
+                    sym.placement.rotation,
+                    novo_core::Rotation::R90 | novo_core::Rotation::R270
+                ) {
+                // A rotated column: another strip or a device stands above
+                // its head and its tag hangs left of the head's row, so the
+                // name drops to the gap between the first two terminals.
+                Label::new(Vec2::new(x - 2.0, y + h * 1.2), strip.clone(), h)
+                    .anchored(Anchor::CenterRight)
+            } else if crowded && !b.is_empty() {
                 // Another strip's terminals stand just left: its names
                 // would run into this one, so the name goes above.
                 Label::new(Vec2::new(x - 1.0, b.min.y - 0.5), strip.clone(), h)
@@ -2283,14 +2294,18 @@ fn terminal_levels(project: &Project, page: PageId) -> HashMap<SymbolId, f32> {
 /// left on the same row: a strip name placed left of them would run into
 /// that strip's terminal names.
 fn terminal_crowds(project: &Project, page: PageId) -> std::collections::HashSet<SymbolId> {
+    use novo_core::Rotation;
     const CROWD: f64 = 40.0;
-    // Per row: x, symbol and its strip (none for a device, such as a PE box).
+    // Per line (a row of horizontal terminals, a column of rotated ones):
+    // position along it, symbol and its strip (none for a device, such as
+    // a PE block). A device is on both kinds of line.
     type Entry = (f64, SymbolId, Option<novo_core::DeviceId>);
-    let mut rows: HashMap<i64, Vec<Entry>> = HashMap::new();
+    let mut rows: HashMap<(bool, i64), Vec<Entry>> = HashMap::new();
     for id in project.page_contents(page).symbols {
         let Some(sym) = project.symbol(id) else {
             continue;
         };
+        let o = sym.placement.origin;
         let strip = match &sym.role {
             SymbolRole::Terminal { terminals } => {
                 let Some(t) = terminals.first().and_then(|t| project.terminal(*t)) else {
@@ -2301,10 +2316,17 @@ fn terminal_crowds(project: &Project, page: PageId) -> std::collections::HashSet
             SymbolRole::Device { .. } => None,
             _ => continue,
         };
-        let o = sym.placement.origin;
-        rows.entry((o.y / 2.5).round() as i64)
-            .or_default()
-            .push((o.x, id, strip));
+        let vertical = matches!(sym.placement.rotation, Rotation::R90 | Rotation::R270);
+        if strip.is_none() || !vertical {
+            rows.entry((false, (o.y / 2.5).round() as i64))
+                .or_default()
+                .push((o.x, id, strip));
+        }
+        if strip.is_none() || vertical {
+            rows.entry((true, (o.x / 2.5).round() as i64))
+                .or_default()
+                .push((o.y, id, strip));
+        }
     }
     let mut crowded = std::collections::HashSet::new();
     for (_, mut row) in rows {
@@ -2314,7 +2336,7 @@ fn terminal_crowds(project: &Project, page: PageId) -> std::collections::HashSet
                 continue;
             }
             // A device (a PE block, a wide marker) has its origin
-            // somewhere inside its body: it counts a little to the right too.
+            // somewhere inside its body: it counts a little behind too.
             let device_near = row
                 .iter()
                 .any(|(px, _, s)| s.is_none() && (-14.0..=CROWD).contains(&(x - px)));
@@ -3641,6 +3663,38 @@ mod tests {
         for i in 0..3 {
             assert_eq!(y_of(&ps, i), y_of(&fresh, i));
         }
+    }
+
+    #[test]
+    fn a_rotated_strip_name_drops_between_terminals_when_another_strip_is_above() {
+        let mut doc = Document::default();
+        let ((page, head), _) = doc
+            .transact("columns", |tx| {
+                let page = tx.add_page("1")?;
+                let mut head = None;
+                for (strip, y) in [("-X1", 60.0), ("-X2", 72.0)] {
+                    let s = tx.add_terminal_strip(DeviceTag::parse(strip)?)?;
+                    let t = tx.add_terminal(s, "1")?;
+                    head = Some(tx.place_symbol(
+                        page,
+                        "iec/terminal",
+                        MPlacement {
+                            origin: Point::new(100.0, y),
+                            rotation: novo_core::Rotation::R90,
+                            mirrored: false,
+                        },
+                        vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                        SymbolRole::Terminal { terminals: vec![t] },
+                    )?);
+                }
+                Ok((page, head.unwrap()))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let item = ps.scene().get(item_id(head)).unwrap();
+        let strip = item.labels.iter().find(|l| l.text == "-X2").unwrap();
+        // Below the head's own row (y grows down), not on it.
+        assert!(strip.pos.y > 72.0, "{:?}", strip.pos);
     }
 
     #[test]

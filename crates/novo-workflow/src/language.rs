@@ -934,6 +934,11 @@ pub const DUTCH: &[Aliases] = &[
         &["vorige stap"],
     ),
     nl(
+        "view.3d_finish",
+        &["metaalafwerking tonen in 3d"],
+        &["afwerking", "materiaal", "geborsteld"],
+    ),
+    nl(
         "view.3d_measure",
         &["afstand meten in 3d"],
         &["meten", "afstand", "liniaal"],
@@ -977,6 +982,11 @@ pub const DUTCH: &[Aliases] = &[
         "view.3d_spread_v",
         &["gelijkmatig verdelen verticaal in 3d"],
         &["verdelen", "gelijk"],
+    ),
+    nl(
+        "view.emc_nets",
+        &["emc netklassen tonen op het schema"],
+        &["emc", "netklasse", "kabelklasse", "storing"],
     ),
     nl(
         "view.emc",

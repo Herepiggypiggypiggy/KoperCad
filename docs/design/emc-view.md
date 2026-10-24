@@ -23,6 +23,12 @@ The view reads one plain-data `Picture` (`novo-view3d::emc::picture`): runs with
 
 Provenance says where the picture came from: `Synthetic` (demonstration), `Stub` (today), `Engine` (novo-emc). The stub (`novo-app/src/app/emc_stub.rs`) guesses classes from the symbol family, pin names and wire colours, measures parallel stretches and distances from the routed wires, and says so on the panel. When `novo-emc` exists, only an adapter that builds a `Picture` from it replaces the stub; `emc_view` and the overlays stay.
 
+## Net classes on the schematic
+
+**View > EMC net classes** (or Ctrl+K "EMC net classes") colours every wire of the open page by its cable class, through the canvas wire looks (`novo-app/src/app/emc_schematic.rs`). Each wire also carries a small tag with the class word, so the class never rests on colour alone; a guessed class reads "control ?". The class is the one the EMC check uses (`novo_emc::project::input_of`): set by hand (`emc.class`), read from the drawing, or guessed, and the panel says how many are guessed.
+
+The panel counts the classes (a click keeps one class in colour and steps the rest back). Picking a wire shows its class, where the class came from and why, and buttons to set the class by hand or go back to automatic: one undo step each, through the same fix the EMC check applies (`Fix::DeclareClass`). The live view colours wires by potential and wins while it is on; the panel says so.
+
 ## Not in this change
 
-The schematic net-class overlay, one-click fixes that edit the project, per-cable cards.
+Per-cable cards, and the other one-click fixes on the schematic.

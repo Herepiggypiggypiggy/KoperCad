@@ -9,3 +9,5 @@ Traps: IEC letter codes are ambiguous (VFD and PSU are T, PLC is K), so classes 
 Rule lead: requests in /mnt/project-files/emc/requests-to-visualisation.md are all met.
 
 2D plate: `emc_plate.rs` draws the Picture over the plate; the picture comes from `EmcState::sync_plate` (routes of the Cabinet overlay plus plate placements). Commands: `cabinet.emc`. QA `qa/scenarios/97-cabinet-emc.qa`, evidence /mnt/project-files/emc/evidence-plate/.
+
+Schematic: `emc_schematic.rs` (command `view.emc_nets`, View menu, Ctrl+K). Classes come from `novo_emc::project::input_of`, drawn through `set_wire_looks`; live view wins while on. QA `qa/scenarios/154-emc-net-classes-schematic.qa`, evidence /mnt/project-files/emc/evidence-schematic/.
