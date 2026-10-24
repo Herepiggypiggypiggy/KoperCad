@@ -354,7 +354,7 @@ fn added_window() -> (CoolingAdvice, Vec<super::heat_settings::VentSpec>) {
 fn the_3d_result_is_put_next_to_the_2d_prediction_as_two_models() {
     let (mut a, vents) = added_window();
     // The 2D model said 52 °C (from 75); the 3D run gives 58.
-    a.observe(Some(vec![(1, 58.0)]), &vents);
+    a.observe(Some(vec![(1, 58.0)]), &vents, 5);
     let text = render(&mut a, 7);
     for want in [
         "Model comparison",
@@ -364,8 +364,8 @@ fn the_3d_result_is_put_next_to_the_2d_prediction_as_two_models() {
         "6 K hotter than predicted",
         "Largest gap 6 K",
         "depth of the cabinet",
-        "a coarse model too and not validated",
-        "Neither is a measurement",
+        "neither is validated",
+        "trust neither without a measurement",
     ] {
         assert!(text.contains(want), "missing {want:?} in:\n{text}");
     }
@@ -376,12 +376,12 @@ fn the_3d_result_is_put_next_to_the_2d_prediction_as_two_models() {
 fn the_comparison_waits_for_a_current_3d_result_of_the_same_list() {
     let (mut a, vents) = added_window();
     // A run that goes, or a result out of date, gives no rows.
-    a.observe(None, &vents);
+    a.observe(None, &vents, 5);
     assert!(!render(&mut a, 7).contains("Model comparison"));
     // Another list than the one the pair made: no comparison either.
     let mut other = vents.clone();
     other.pop();
-    a.observe(Some(vec![(1, 58.0)]), &other);
+    a.observe(Some(vec![(1, 58.0)]), &other, 5);
     assert!(!render(&mut a, 7).contains("Model comparison"));
     // A pair that was not from the sweep leaves nothing to compare.
     let mut b = open(16.6);
@@ -389,17 +389,28 @@ fn the_comparison_waits_for_a_current_3d_result_of_the_same_list() {
     let mut c = candidate();
     c.outlet = vent(Placement::Top { x_mm: 999.0 });
     b.record_added(&c, &vents);
-    b.observe(Some(vec![(1, 58.0)]), &vents);
+    b.observe(Some(vec![(1, 58.0)]), &vents, 5);
     assert!(!render(&mut b, 7).contains("Model comparison"));
 }
 
 #[test]
 fn a_3d_result_equal_to_the_prediction_says_the_same() {
     let (mut a, vents) = added_window();
-    a.observe(Some(vec![(1, 52.2)]), &vents);
+    a.observe(Some(vec![(1, 52.2)]), &vents, 5);
     let text = render(&mut a, 7);
     assert!(text.contains("the same"), "{text}");
-    a.observe(Some(vec![(1, 45.0)]), &vents);
+    a.observe(Some(vec![(1, 45.0)]), &vents, 5);
     let text = render(&mut a, 7);
     assert!(text.contains("7 K cooler than predicted"), "{text}");
+}
+
+/// A device or loss edited after the 3D result came in: the old 2D prediction
+/// is not put next to a later run of another project state.
+#[test]
+fn a_project_change_after_the_result_hides_the_comparison() {
+    let (mut a, vents) = added_window();
+    a.observe(Some(vec![(1, 58.0)]), &vents, 5);
+    assert!(render(&mut a, 7).contains("Model comparison"));
+    a.observe(Some(vec![(1, 70.0)]), &vents, 6);
+    assert!(!render(&mut a, 7).contains("Model comparison"));
 }

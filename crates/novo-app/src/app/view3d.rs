@@ -991,7 +991,8 @@ impl NovoApp {
             if heat.advice.is_open() {
                 let fans = super::heat_sweep::fans_of(&mut heat.cooling, project);
                 let rows = super::heat_sweep::three_d_rows(heat);
-                heat.advice.observe(rows, &heat.settings.vents);
+                heat.advice
+                    .observe(rows, &heat.settings.vents, project.revision());
                 let now_key =
                     super::heat_sweep::key_of(project, id, ambient, &heat.settings, &fans);
                 let at = view_rect.center_top() + egui::vec2(-200.0, 170.0);

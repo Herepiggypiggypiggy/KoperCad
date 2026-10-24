@@ -68,6 +68,9 @@ struct Running {
 /// added to: the comparison is only shown for a 3D result of that same list.
 struct Check {
     vents: String,
+    /// The project revision when the first current 3D result of that list came
+    /// in; a later edit of devices or losses changes it and hides the comparison.
+    revision: Option<u64>,
     devices: Vec<DeviceChange>,
     tags: BTreeMap<u64, String>,
 }
@@ -91,6 +94,7 @@ pub(super) struct CoolingAdvice {
     three_d: Option<Vec<(u64, f64)>>,
     /// The Vents and fans list as it is now, in the form `Check` keeps.
     vents_now: String,
+    revision_now: u64,
     /// The view the window opened in (1 Cabinet, 2 3D): it closes when the
     /// person goes to the other one.
     view: Option<u8>,
@@ -259,6 +263,7 @@ impl CoolingAdvice {
             let outcome = f.sweep.best.iter().find(|o| &o.candidate == c)?;
             Some(Check {
                 vents: vents_text(vents),
+                revision: None,
                 devices: outcome.devices.clone(),
                 tags: f.tags.clone(),
             })
@@ -268,16 +273,32 @@ impl CoolingAdvice {
     /// Hands the window the 3D result and the list as they are now. Called
     /// every frame the window may show; `three_d` is `None` while a run goes
     /// or the result is out of date.
-    pub(super) fn observe(&mut self, three_d: Option<Vec<(u64, f64)>>, vents: &[VentSpec]) {
-        self.three_d = three_d;
+    pub(super) fn observe(
+        &mut self,
+        three_d: Option<Vec<(u64, f64)>>,
+        vents: &[VentSpec],
+        revision: u64,
+    ) {
         self.vents_now = vents_text(vents);
+        self.three_d = three_d;
+        self.revision_now = revision;
+        if let (Some(c), Some(_)) = (&mut self.check, &self.three_d)
+            && c.vents == self.vents_now
+            && c.revision.is_none()
+        {
+            c.revision = Some(revision);
+        }
     }
 
     /// The comparison lines, when the 3D result is for the list the pair was
-    /// added to.
+    /// added to and the project has not changed since that result came in.
     fn comparison(&self) -> Vec<String> {
         match (&self.check, &self.three_d) {
-            (Some(c), Some(rows)) if c.vents == self.vents_now => comparison_lines(c, rows),
+            (Some(c), Some(rows))
+                if c.vents == self.vents_now && c.revision == Some(self.revision_now) =>
+            {
+                comparison_lines(c, rows)
+            }
             _ => Vec::new(),
         }
     }
@@ -779,7 +800,7 @@ fn comparison_lines(check: &Check, three_d: &[(u64, f64)]) -> Vec<String> {
         "Model comparison for the pair you added: 2D prediction against this 3D run (two models, not a measurement).".into(),
     );
     lines.push(format!(
-        "Largest gap {worst_gap:.0} K. The 2D model does not see the depth of the cabinet; the 3D run does, but it is a coarse model too and not validated. Neither is a measurement: measure before you rely on either."
+        "Largest gap {worst_gap:.0} K. The 2D model does not see the depth of the cabinet; the 3D run does. Both are models and neither is validated; where they differ by more than a few kelvin, trust neither without a measurement."
     ));
     lines
 }

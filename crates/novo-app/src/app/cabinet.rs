@@ -1786,7 +1786,8 @@ impl NovoApp {
                 if self.cabinet.heat.advice.is_open() {
                     let rows = super::heat_sweep::three_d_rows(&self.cabinet.heat);
                     let heat = &mut self.cabinet.heat;
-                    heat.advice.observe(rows, &heat.settings.vents);
+                    heat.advice
+                        .observe(rows, &heat.settings.vents, project.revision());
                     let ambient = self.sizing.request().ambient_max;
                     let h = &mut self.cabinet.heat;
                     let fans = super::heat_sweep::fans_of(&mut h.cooling, project);
