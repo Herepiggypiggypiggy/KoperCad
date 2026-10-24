@@ -211,6 +211,7 @@ pub(super) fn toolbar(
                 controls.layers.shapes,
                 controls.layers.slots,
                 controls.shadows,
+                controls.assembly.is_some(),
                 controls.ssao && controls.ssao_available,
                 controls.missing_data,
                 controls.surfaces,

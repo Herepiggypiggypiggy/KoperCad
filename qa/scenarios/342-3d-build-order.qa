@@ -13,10 +13,17 @@ key Enter
 wait 30
 click_text "Layers"
 wait 8
+shot layers-menu
+expect "Build order"
 click_text "Build order"
 wait 8
 key Escape
 wait 30
+click_text "Layers"
+wait 8
+shot layers-menu-build-order-on
+key Escape
+wait 20
 shot step-0-start
 expect "Start (0 of 17)"
 check_layout
