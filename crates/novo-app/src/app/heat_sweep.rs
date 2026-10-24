@@ -720,7 +720,6 @@ fn flow_text(d: &Delivered) -> String {
     format!("{:.0} m³/h", d.flow_m3h.abs())
 }
 
-/// The Vents and fans entry for one piece of a candidate.
 /// The list as text, to tell whether two moments hold the same openings.
 fn vents_text(vents: &[VentSpec]) -> String {
     format!("{vents:?}")
@@ -780,7 +779,7 @@ fn comparison_lines(check: &Check, three_d: &[(u64, f64)]) -> Vec<String> {
         "Model comparison for the pair you added: 2D prediction against this 3D run (two models, not a measurement).".into(),
     );
     lines.push(format!(
-        "Largest gap {worst_gap:.0} K. The 2D model does not see the depth of the cabinet; the 3D run does, so go by it, and by a measurement before you rely on either."
+        "Largest gap {worst_gap:.0} K. The 2D model does not see the depth of the cabinet; the 3D run does, but it is a coarse model too and not validated. Neither is a measurement: measure before you rely on either."
     ));
     lines
 }
@@ -795,6 +794,7 @@ fn gap_text(gap_k: f64) -> String {
     }
 }
 
+/// The Vents and fans entry for one piece of a candidate.
 pub(super) fn spec_of(piece: &Piece, inlet: bool) -> VentSpec {
     let o = &piece.opening;
     let (wall, u, v) = match o.placement {

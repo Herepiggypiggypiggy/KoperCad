@@ -364,9 +364,12 @@ fn the_3d_result_is_put_next_to_the_2d_prediction_as_two_models() {
         "6 K hotter than predicted",
         "Largest gap 6 K",
         "depth of the cabinet",
+        "a coarse model too and not validated",
+        "Neither is a measurement",
     ] {
         assert!(text.contains(want), "missing {want:?} in:\n{text}");
     }
+    assert!(!text.contains("go by it"), "{text}");
 }
 
 #[test]
