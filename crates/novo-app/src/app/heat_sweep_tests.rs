@@ -306,7 +306,36 @@ fn the_window_names_the_article_behind_a_fan() {
     a.set_found_for_test(found(7, 16.6).with_fans_for_test(fans));
     let text = render(&mut a, 7);
     assert!(text.contains("Fan: SK 3238 (400 m³/h free air)"), "{text}");
-    assert!(text.contains("from 1 fan(s) in your parts"), "{text}");
+    assert!(text.contains("(1 sizes)"), "{text}");
     let plain = render(&mut open(16.6), 7);
     assert!(!plain.contains("Fan: "), "{plain}");
+}
+
+#[test]
+fn equal_flow_articles_are_all_named() {
+    let mut a = CoolingAdvice::default();
+    a.request();
+    let fans = vec![
+        product("Fan A", FanKind::Fan, 400.0, Source::Mine),
+        product("Fan B", FanKind::FilterFan, 400.0, Source::Part("B".into())),
+    ];
+    a.set_found_for_test(found(7, 16.6).with_fans_for_test(fans));
+    let text = render(&mut a, 7);
+    assert!(
+        text.contains("Fan: Fan A or Fan B (400 m³/h free air, same flow)"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_changed_fan_list_changes_the_key() {
+    let p = novo_core::Project::new("t");
+    let s = super::heat_settings::HeatSettings::default();
+    let id = novo_core::StructureId::from(1);
+    let one = vec![product("A", FanKind::Fan, 100.0, Source::Mine)];
+    let two = vec![product("A", FanKind::Fan, 200.0, Source::Mine)];
+    let k = |f: &[Product]| super::heat_sweep::key_of(&p, id, 25.0, &s, f);
+    assert_eq!(k(&one), k(&one));
+    assert_ne!(k(&one), k(&two));
+    assert_ne!(k(&one), k(&[]));
 }

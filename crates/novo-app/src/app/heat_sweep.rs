@@ -99,6 +99,16 @@ pub(super) fn real_fans(products: Vec<Product>) -> Vec<Product> {
         .collect()
 }
 
+/// The fans the sweep sizes from for this project: the parts, as the project
+/// has them now, and the person's list.
+pub(super) fn fans_of(
+    cooling: &mut super::heat_cooling::CoolingSettings,
+    project: &Project,
+) -> Vec<Product> {
+    cooling.parts = novo_thermal::cooling::products_from_project(project);
+    real_fans(cooling.products())
+}
+
 /// Most fan sizes the ladder takes from real products, to bound the cost.
 const MAX_REAL_SIZES: usize = 8;
 
@@ -123,22 +133,30 @@ pub(super) fn settings_for(fans: &[Product]) -> Settings {
 }
 
 /// The article behind a fan of the sweep, when the ladder came from real ones.
-fn product_for<'a>(fans: &'a [Product], piece: &Piece) -> Option<&'a Product> {
-    let flow = piece.fan_flow_m3h?;
-    fans.iter().find(|p| (p.airflow_m3h - flow).abs() < 0.5)
+fn products_for<'a>(fans: &'a [Product], piece: &Piece) -> Vec<&'a Product> {
+    let Some(flow) = piece.fan_flow_m3h else {
+        return Vec::new();
+    };
+    fans.iter()
+        .filter(|p| (p.airflow_m3h - flow).abs() < 0.5)
+        .collect()
 }
 
 /// Identity of the cabinet the sweep is for: changes with the project and
-/// with the openings already set.
+/// with the openings already set and with the fans the sizes come from.
 pub(super) fn key_of(
     project: &Project,
     structure: StructureId,
     ambient: f64,
     settings: &HeatSettings,
+    fans: &[Product],
 ) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     (structure, project.revision(), ambient.to_bits()).hash(&mut h);
     format!("{:?}", settings.vents).hash(&mut h);
+    for f in fans {
+        (&f.name, f.airflow_m3h.to_bits()).hash(&mut h);
+    }
     h.finish()
 }
 
@@ -254,7 +272,7 @@ impl CoolingAdvice {
                 Some("No device stands on the plate, so there is no heat to cool.".into());
             return;
         }
-        let key = key_of(project, structure, ambient, settings);
+        let key = key_of(project, structure, ambient, settings, &fans);
         let tags = scenario
             .devices
             .iter()
@@ -458,8 +476,8 @@ fn body(ui: &mut egui::Ui, found: &Found, stale: bool, ask: &mut Option<Ask>) {
     if !found.fans.is_empty() {
         ui.label(
             egui::RichText::new(format!(
-                "Fan sizes come from {} fan(s) in your parts and cooling list, not the generic ladder.",
-                found.fans.len()
+                "Fan sizes come from your parts and cooling list ({} sizes), not the generic ladder.",
+                settings_for(&found.fans).fan_flows_m3h.len()
             ))
             .small()
             .color(pal.text_secondary),
@@ -514,11 +532,20 @@ fn option(ui: &mut egui::Ui, found: &Found, o: &Outcome, stale: bool, ask: &mut 
         o.reading.max_air_c
     ));
     for piece in [&o.candidate.inlet, &o.candidate.outlet] {
-        if let Some(product) = product_for(&found.fans, piece) {
+        let products = products_for(&found.fans, piece);
+        if let (false, Some(flow)) = (products.is_empty(), piece.fan_flow_m3h) {
+            let names: Vec<&str> = products.iter().take(3).map(|p| p.name.as_str()).collect();
+            let more = if products.len() > 3 { " or others" } else { "" };
             ui.label(
                 egui::RichText::new(format!(
-                    "Fan: {} ({:.0} m³/h free air)",
-                    product.name, product.airflow_m3h
+                    "Fan: {}{more} ({:.0} m³/h free air{})",
+                    names.join(" or "),
+                    flow,
+                    if products.len() > 1 {
+                        ", same flow"
+                    } else {
+                        ""
+                    }
                 ))
                 .small()
                 .color(pal.text_secondary),
