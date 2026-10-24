@@ -417,7 +417,7 @@ impl CoolingAdvice {
                 }
                 // Pinned: leave room for the lines that appear above the list
                 // after Add, so the window does not grow past the screen.
-                let spare = if pinned { 230.0 } else { 130.0 };
+                let spare = if pinned { 290.0 } else { 130.0 };
                 let room = (ctx.content_rect().bottom() - at.y - spare).clamp(120.0, MAX_BODY);
                 egui::ScrollArea::vertical()
                     .max_height(room)
