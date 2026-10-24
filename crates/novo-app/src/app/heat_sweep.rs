@@ -358,7 +358,7 @@ impl CoolingAdvice {
         let pal = crate::theme::ui_palette();
         // Start high enough that the list has its full height: in a short
         // window the list used to get a sliver and cut a sentence off.
-        // In 3D the window is pinned under the view cube: a short view gets a
+        // In 3D the window is pinned beside the view cube: a short view gets a
         // shorter list instead of a window that slides up over the cube.
         let pinned = view == 2;
         let at = if pinned {
