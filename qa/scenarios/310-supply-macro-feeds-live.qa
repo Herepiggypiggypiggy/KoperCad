@@ -1,8 +1,8 @@
 @title Three-phase supply is fed when placed after the starter
 @area Live
 # Star-delta starter, then the Three-phase supply. The supply brings its own
-# L1 L2 L3 N PE feeds, so Live view no longer says there is no supply, and the
-# status line names the next step (wire the outputs to the starter).
+# L1 L2 L3 N PE feeds and is joined to the starter's open entries, so Live
+# view has a supply and the starter is fed. A supply alone says what to wire.
 fresh
 click_text "New project"
 wait 20
@@ -21,10 +21,22 @@ wait 20
 shot 01-picked
 click_text Place #2
 wait 20
-expect "N PE fed"
-expect "now wire its outputs"
+expect "N PE fed and joined to the starter"
 shot 02-placed
+check_layout
 key shift+l
 wait 20
 expect_not "No supply is defined"
 shot 03-live
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Three-phase supply"
+wait 10
+key Return
+wait 20
+click_text Place #2
+wait 20
+expect "now wire its outputs"
+shot 04-supply-alone

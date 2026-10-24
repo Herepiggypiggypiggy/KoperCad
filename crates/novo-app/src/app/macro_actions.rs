@@ -640,11 +640,14 @@ impl NovoApp {
         let feed_supply =
             name == supply_feeds::SUPPLY_MACRO && !supply_feeds::has_supply(doc.project());
         let mut fed = 0;
+        let mut joined = 0;
         let result = doc.transact("Place macro", |tx| {
             let placed = macro_place::place_macro(tx, shown.definition, page, origin, &options)?;
             if feed_supply {
                 fed = supply_feeds::feed_open_points(tx, page, placed.instance)?;
             }
+            // The supply and the circuit it feeds, in either order.
+            joined = supply_feeds::join_starter(tx, page)?;
             Ok(placed)
         });
         match result {
@@ -663,9 +666,19 @@ impl NovoApp {
                         "Placed {name} (symbols only: use Draw > PLC > Add PLC card for addresses) · {}",
                         describe(&placed.report)
                     )
+                } else if fed > 0 && joined > 0 {
+                    format!(
+                        "Placed {name}, L1 L2 L3 N PE fed and joined to the starter ({joined} wires) · {}",
+                        describe(&placed.report)
+                    )
                 } else if fed > 0 {
                     format!(
                         "Placed {name}, L1 L2 L3 N PE fed · now wire its outputs to the starter · {}",
+                        describe(&placed.report)
+                    )
+                } else if joined > 0 {
+                    format!(
+                        "Placed {name}, joined to the Three-phase supply ({joined} wires) · {}",
                         describe(&placed.report)
                     )
                 } else {
