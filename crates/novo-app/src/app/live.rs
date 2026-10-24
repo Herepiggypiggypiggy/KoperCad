@@ -1383,7 +1383,19 @@ impl NovoApp {
                                 ui.label(&op.label);
                                 ui.weak(format!("{} · {}", op.kind, op.state));
                             });
-                            let response = ui.add(egui::Button::new(op.action).selected(op.active));
+                            // An explicit id: an id from the widget count shifts
+                            // when the lines above change, which drops a held press.
+                            let response = ui
+                                .scope_builder(
+                                    egui::UiBuilder::new().id(egui::Id::new((
+                                        "live_operate_button",
+                                        op.symbol,
+                                    ))),
+                                    |ui| {
+                                        ui.add(egui::Button::new(op.action).selected(op.active))
+                                    },
+                                )
+                                .inner;
                             let tip = if op.momentary {
                                 "Hold the mouse button down; it springs back when you let go"
                             } else {
