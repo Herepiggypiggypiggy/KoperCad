@@ -1,0 +1,29 @@
+@title Live view: hold a pushbutton
+@area Schematic
+@sizes 1366x768
+# mouse_down on an Operate button holds it: the row reads "pressed", the
+# button is lit and the contactor pulls in; mouse_up lets it go. Two things
+# used to drop the press: the button's id moved when a line appeared above it
+# (after one frame), and egui stops counting a plain click sense as pressed
+# after 0.8 s. The second picture is taken 40 frames later (about 2 s) to show
+# the hold survives both.
+click_text "Open example"
+wait 20
+key shift+l
+wait 20
+try click_text "Go to page 2 Control circuit"
+wait 20
+move 75 397
+wait 3
+mouse_down 75 397
+wait 2
+shot held-early
+expect "push button · pressed"
+expect "pulled in"
+wait 40
+shot held-later
+expect "push button · pressed"
+mouse_up 75 397
+wait 5
+expect_not "push button · pressed"
+shot released
