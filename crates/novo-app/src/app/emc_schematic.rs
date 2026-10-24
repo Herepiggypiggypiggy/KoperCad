@@ -94,6 +94,12 @@ pub(crate) struct EmcSchematic {
 }
 
 impl EmcSchematic {
+    /// A new project: nothing cached or focused from the old one.
+    pub(super) fn forget(&mut self) {
+        self.cache = None;
+        self.focus = None;
+    }
+
     pub(super) fn data(&mut self, project: &Project) -> Arc<Data> {
         let key = project.revision();
         if self.cache.as_ref().map(|c| c.0) != Some(key) {
@@ -412,13 +418,13 @@ impl NovoApp {
                     set = Some((*wire, None));
                 }
                 ui.label(
-                    egui::RichText::new("One undo step. The EMC check uses this class.")
+                    egui::RichText::new("One undo step. Check > EMC check uses this class.")
                         .small()
                         .color(pal.text_secondary),
                 );
             } else if total > 0 {
                 ui.label(
-                    egui::RichText::new("Pick a wire to see why it has its class.")
+                    egui::RichText::new("Pick a wire to see why it has its class. Check > EMC check uses these classes.")
                         .small()
                         .color(pal.text_secondary),
                 );
@@ -499,6 +505,27 @@ mod tests {
             .unwrap();
         assert_eq!(all[&mains.id], motor[&mains.id]);
         assert!(motor[&other.id].width < all[&other.id].width);
+    }
+
+    #[test]
+    fn a_new_project_does_not_get_the_old_projects_classes_or_focus() {
+        let (_dir, mut d) = example();
+        let ctx = d.ctx.clone();
+        d.app.run_command(&ctx, "view.emc_nets", None);
+        d.frame();
+        d.app.wb.emc_sch.focus = Some(Class::Mains);
+        let old = {
+            let project = d.app.backend.document().unwrap().project();
+            d.app.wb.emc_sch.data(project).wires.len()
+        };
+        assert!(old > 0);
+        d.app.run(&ctx, crate::actions::Action::NewProject);
+        d.frame();
+        assert!(d.app.wb.emc_sch.on, "the overlay stays on");
+        assert_eq!(d.app.wb.emc_sch.focus, None);
+        let project = d.app.backend.document().unwrap().project();
+        let cached = d.app.wb.emc_sch.data(project);
+        assert_eq!(*cached, Data::of(project));
     }
 
     #[test]

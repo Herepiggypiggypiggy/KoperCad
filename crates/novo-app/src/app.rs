@@ -1249,6 +1249,9 @@ impl NovoApp {
         // The live view, an open drawer and a preview belong to the project
         // they were opened on; a lesson (or any project) starts clean.
         self.wb.live = Default::default();
+        // Classes cached for the old project (keyed by a revision two projects
+        // can share) and a focused class do not carry over; the overlay's on/off does.
+        self.wb.emc_sch.forget();
         // A new project is not a fix: the issue count starts over.
         self.wb.last_issue_total = None;
         self.wb.problems = None;
