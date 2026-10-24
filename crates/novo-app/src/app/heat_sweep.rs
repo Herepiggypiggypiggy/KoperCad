@@ -20,6 +20,7 @@ use std::time::Instant;
 use eframe::egui::{self, Pos2};
 use novo_core::{Project, StructureId};
 use novo_thermal::bridge::{BridgeOptions, scenario_from_project};
+use novo_thermal::cooling::{Kind as FanKind, Product};
 use novo_thermal::model::{Enclosure, Placement};
 use novo_thermal::sweep::{
     Candidate, Control, Delivered, Outcome, Pairing, Piece, SIGNIFICANT_K, Settings, Sweep,
@@ -47,6 +48,9 @@ pub(super) struct Found {
     /// Openings the cabinet already had when the sweep started.
     existing: usize,
     key: u64,
+    /// Fans the ladder was taken from (the parts and the person's list); empty
+    /// when the ladder is the generic planning sizes.
+    fans: Vec<Product>,
 }
 
 struct Running {
@@ -57,6 +61,7 @@ struct Running {
     enclosure: Enclosure,
     existing: usize,
     key: u64,
+    fans: Vec<Product>,
 }
 
 /// State of the sweep and its window.
@@ -82,6 +87,45 @@ pub(super) enum Ask {
     Again,
     /// Put this pair in the list of vents and fans.
     Add(Candidate),
+}
+
+/// The fans of the project's parts and of the person's list that the sweep can
+/// size from: real articles only, never the generic planning sizes.
+pub(super) fn real_fans(products: Vec<Product>) -> Vec<Product> {
+    products
+        .into_iter()
+        .filter(|p| p.source.is_real() && matches!(p.kind, FanKind::Fan | FanKind::FilterFan))
+        .filter(|p| p.airflow_m3h > 0.0)
+        .collect()
+}
+
+/// Most fan sizes the ladder takes from real products, to bound the cost.
+const MAX_REAL_SIZES: usize = 8;
+
+/// The sweep's ladder: the free-air flows of the real fans when there are any
+/// (what the person can fit), else the generic sizes.
+pub(super) fn settings_for(fans: &[Product]) -> Settings {
+    let mut flows: Vec<f64> = fans.iter().map(|p| p.airflow_m3h).collect();
+    flows.sort_by(|a, b| a.total_cmp(b));
+    flows.dedup_by(|a, b| (*a - *b).abs() < 0.5);
+    let mut settings = Settings::default();
+    if !flows.is_empty() {
+        if flows.len() > MAX_REAL_SIZES {
+            let n = flows.len();
+            flows = (0..MAX_REAL_SIZES)
+                .map(|i| flows[i * (n - 1) / (MAX_REAL_SIZES - 1)])
+                .collect();
+            flows.dedup();
+        }
+        settings.fan_flows_m3h = flows;
+    }
+    settings
+}
+
+/// The article behind a fan of the sweep, when the ladder came from real ones.
+fn product_for<'a>(fans: &'a [Product], piece: &Piece) -> Option<&'a Product> {
+    let flow = piece.fan_flow_m3h?;
+    fans.iter().find(|p| (p.airflow_m3h - flow).abs() < 0.5)
 }
 
 /// Identity of the cabinet the sweep is for: changes with the project and
@@ -120,7 +164,14 @@ impl Found {
             },
             existing: 0,
             key,
+            fans: Vec::new(),
         }
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_fans_for_test(mut self, fans: Vec<Product>) -> Found {
+        self.fans = fans;
+        self
     }
 }
 
@@ -173,6 +224,7 @@ impl CoolingAdvice {
         structure: StructureId,
         ambient: f64,
         settings: &HeatSettings,
+        fans: Vec<Product>,
         tag_of: &dyn Fn(u64) -> String,
     ) {
         if self.run.is_some() {
@@ -213,8 +265,9 @@ impl CoolingAdvice {
         let control = Arc::new(Control::default());
         let (tx, rx) = mpsc::channel();
         let c = control.clone();
+        let sweep_settings = settings_for(&fans);
         std::thread::spawn(move || {
-            let result = sweep_with(&scenario, &Settings::default(), &c).map_err(|e| e.to_string());
+            let result = sweep_with(&scenario, &sweep_settings, &c).map_err(|e| e.to_string());
             let _ = tx.send(result);
         });
         self.run = Some(Running {
@@ -225,6 +278,7 @@ impl CoolingAdvice {
             enclosure,
             existing,
             key,
+            fans,
         });
     }
 
@@ -244,6 +298,7 @@ impl CoolingAdvice {
                             enclosure: run.enclosure,
                             existing: run.existing,
                             key: run.key,
+                            fans: run.fans,
                         });
                     }
                     Err(e) => self.notice = Some(format!("The sweep failed: {e}")),
@@ -400,6 +455,16 @@ fn body(ui: &mut egui::Ui, found: &Found, stale: bool, ask: &mut Option<Ask>) {
         option(ui, found, o, stale, ask);
     }
     // The window's footer already says the numbers are a model estimate.
+    if !found.fans.is_empty() {
+        ui.label(
+            egui::RichText::new(format!(
+                "Fan sizes come from {} fan(s) in your parts and cooling list, not the generic ladder.",
+                found.fans.len()
+            ))
+            .small()
+            .color(pal.text_secondary),
+        );
+    }
     for n in s.notes.iter().filter(|n| !n.starts_with("Model estimate")) {
         ui.add_space(4.0);
         ui.label(egui::RichText::new(n).small().color(pal.text_secondary));
@@ -448,6 +513,18 @@ fn option(ui: &mut egui::Ui, found: &Found, o: &Outcome, stale: bool, ask: &mut 
         before.max_air_c,
         o.reading.max_air_c
     ));
+    for piece in [&o.candidate.inlet, &o.candidate.outlet] {
+        if let Some(product) = product_for(&found.fans, piece) {
+            ui.label(
+                egui::RichText::new(format!(
+                    "Fan: {} ({:.0} m³/h free air)",
+                    product.name, product.airflow_m3h
+                ))
+                .small()
+                .color(pal.text_secondary),
+            );
+        }
+    }
     if let (Some(i), Some(out)) = (&o.inlet, &o.outlet) {
         ui.label(
             egui::RichText::new(format!(

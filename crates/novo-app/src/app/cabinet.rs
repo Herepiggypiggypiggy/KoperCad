@@ -1757,8 +1757,11 @@ impl NovoApp {
                         Some(s) => {
                             let ambient = self.sizing.request().ambient_max;
                             let h = &mut self.cabinet.heat;
+                            h.cooling.parts =
+                                novo_thermal::cooling::products_from_project(heat_project);
+                            let fans = super::heat_sweep::real_fans(h.cooling.products());
                             h.advice
-                                .start(heat_project, s, ambient, &h.settings, &tag_of);
+                                .start(heat_project, s, ambient, &h.settings, fans, &tag_of);
                         }
                         None => self.cabinet.heat.fail(
                             "Open an enclosure with a mounting plate to ask for cooling advice"

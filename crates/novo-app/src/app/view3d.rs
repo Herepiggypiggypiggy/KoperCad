@@ -975,8 +975,10 @@ impl NovoApp {
             let heat = &mut self.cabinet.heat;
             heat.advice.poll(ui.ctx());
             if heat.advice.take_request() {
+                heat.cooling.parts = novo_thermal::cooling::products_from_project(project);
+                let fans = super::heat_sweep::real_fans(heat.cooling.products());
                 heat.advice
-                    .start(project, id, ambient, &heat.settings, &tag_of);
+                    .start(project, id, ambient, &heat.settings, fans, &tag_of);
             }
             if heat.advice.is_open() {
                 let now_key = super::heat_sweep::key_of(project, id, ambient, &heat.settings);
