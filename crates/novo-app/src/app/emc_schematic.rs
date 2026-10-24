@@ -71,6 +71,32 @@ fn fix_cable(fix: &Fix) -> Option<u64> {
     }
 }
 
+/// What a finding's level means, in a few words beside it.
+pub(super) fn level_short(level: novo_emc::Level) -> &'static str {
+    match level {
+        novo_emc::Level::Fact => "holds or it does not",
+        novo_emc::Level::Index => "from geometry, for ordering",
+        novo_emc::Level::Estimate => "an estimate, not a measurement",
+        novo_emc::Level::Field => "a field model, not a measurement",
+    }
+}
+
+/// The same in a sentence, for the hover.
+pub(super) fn level_about(level: novo_emc::Level) -> &'static str {
+    match level {
+        novo_emc::Level::Fact => "Rule: a rule on what is drawn. It holds or it does not.",
+        novo_emc::Level::Index => {
+            "Index: a number from the geometry alone. Good for ordering, not a measurement."
+        }
+        novo_emc::Level::Estimate => {
+            "Estimate: a closed-form estimate with the assumptions listed. Not a measurement."
+        }
+        novo_emc::Level::Field => {
+            "Field: a modelled low-frequency field with its band and inputs. Not a measurement, and not valid outside its band."
+        }
+    }
+}
+
 /// An end of a shield in words.
 pub(super) fn termination_word(t: Termination) -> String {
     match t {
@@ -502,10 +528,16 @@ impl NovoApp {
                     for f in &cable.findings {
                         ui.add_space(2.0);
                         ui.label(
-                            egui::RichText::new(format!("{}  {}", f.rule, f.level.label()))
-                                .small()
-                                .strong(),
-                        );
+                            egui::RichText::new(format!(
+                                "{}  {}: {}",
+                                f.rule,
+                                f.level.label(),
+                                level_short(f.level)
+                            ))
+                            .small()
+                            .strong(),
+                        )
+                        .on_hover_text(level_about(f.level));
                         ui.label(egui::RichText::new(&f.message).small());
                         for fix in &f.fixes {
                             if fix_cable(fix).is_none() {
@@ -725,5 +757,18 @@ mod tests {
                 .all(|f| !f.fixes.iter().any(|x| matches!(x, Fix::AddShield { .. }))),
             "the shield finding stays after the fix"
         );
+    }
+
+    #[test]
+    fn every_level_has_a_short_meaning_and_a_hover_that_starts_with_its_label() {
+        for level in [
+            novo_emc::Level::Fact,
+            novo_emc::Level::Index,
+            novo_emc::Level::Estimate,
+            novo_emc::Level::Field,
+        ] {
+            assert!(!level_short(level).is_empty());
+            assert!(level_about(level).starts_with(level.label()));
+        }
     }
 }
