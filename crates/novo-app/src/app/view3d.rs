@@ -131,6 +131,8 @@ pub(crate) struct View3dMode {
     built_layers: Layers,
     /// The build order position the scene was built with, and its steps.
     built_assembly: Option<usize>,
+    /// The camera was fitted for the Build order strip being on.
+    strip_fitted: bool,
     pub(super) assembly_steps: Vec<novo_view3d::assembly::Step>,
     /// The hidden items the scene was built with.
     built_hidden: BTreeSet<ItemId>,
@@ -217,6 +219,7 @@ impl Default for View3dMode {
             heat_scene: None,
             built_layers: Layers::default(),
             built_assembly: None,
+            strip_fitted: false,
             assembly_steps: Vec::new(),
             built_hidden: BTreeSet::new(),
             built_duct_fill: false,
@@ -442,7 +445,9 @@ impl NovoApp {
                 } else {
                     Vec::new()
                 };
-                if let Some(at) = mode.controls.assembly {
+                if let Some(at) = mode.controls.assembly
+                    && !mode.assembly_steps.is_empty()
+                {
                     let at = at.min(mode.assembly_steps.len());
                     shown = novo_view3d::assembly::at(&mode.assembly_steps, at, shown);
                 }
@@ -951,6 +956,14 @@ impl NovoApp {
             &|| mode.built.as_ref().map(|(_, _, scene)| scene.bounds()),
         );
         self.settings.trackpad_pans = mode.controls.trackpad_pans;
+        // The fit frames the cabinet above the strip; turning Build order on
+        // or off refits once so the plate is not under it.
+        mode.view.bottom_inset =
+            super::view3d_build_order::inset(ui.ctx(), view_rect, mode.controls.assembly.is_some());
+        if mode.controls.assembly.is_some() != mode.strip_fitted {
+            mode.strip_fitted = mode.controls.assembly.is_some();
+            mode.pending = Some(Pending::Fit);
+        }
         super::view3d_build_order::strip(
             ui.ctx(),
             view_rect,

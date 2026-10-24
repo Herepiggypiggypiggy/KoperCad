@@ -16,6 +16,23 @@ const MARGIN: f32 = 12.0;
 /// Widest the step text gets before it wraps, in points.
 const TEXT_WIDTH: f32 = 520.0;
 
+fn id() -> egui::Id {
+    egui::Id::new("view3d_build_order")
+}
+
+/// How much of the view's height the strip covers at the bottom, as a
+/// fraction, for the fit to leave clear. Before it has been drawn once, a
+/// typical height.
+pub(super) fn inset(ctx: &egui::Context, view: egui::Rect, on: bool) -> f32 {
+    if !on {
+        return 0.0;
+    }
+    let covered = ctx
+        .memory(|m| m.area_rect(id()))
+        .map_or(96.0, |r| view.bottom() - r.top());
+    (covered / view.height().max(1.0)).clamp(0.0, 0.35)
+}
+
 /// The steps of one cabinet: rails, ducts and devices in the workshop order,
 /// then a closing step for the wires. Labels are left out (nothing to see).
 pub(super) fn sequence(project: &Project, enclosure: StructureId) -> Vec<Step> {
@@ -64,12 +81,37 @@ pub(super) fn strip(
         return;
     };
     if steps.is_empty() {
+        // No layout to read an order from: the whole cabinet stays in view,
+        // and the strip says why there is nothing to step through.
+        let p = crate::theme::ui_palette();
+        let mut leave = false;
+        egui::Area::new(id())
+            .order(egui::Order::Foreground)
+            .pivot(egui::Align2::CENTER_BOTTOM)
+            .fixed_pos(egui::pos2(view.center().x, view.bottom() - MARGIN))
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new(
+                                "Build order: this cabinet has no layout to read an order from. \
+                                 Place devices on its plate first.",
+                            )
+                            .color(p.text_secondary),
+                        );
+                        leave = ui.button("Show all").clicked();
+                    });
+                });
+            });
+        if leave {
+            *position = None;
+        }
         return;
     }
     at = at.min(steps.len());
     let p = crate::theme::ui_palette();
     let mut leave = false;
-    egui::Area::new(egui::Id::new("view3d_build_order"))
+    egui::Area::new(id())
         .order(egui::Order::Foreground)
         .pivot(egui::Align2::CENTER_BOTTOM)
         .fixed_pos(egui::pos2(view.center().x, view.bottom() - MARGIN))

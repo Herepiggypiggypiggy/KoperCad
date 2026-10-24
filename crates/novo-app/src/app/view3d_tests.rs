@@ -588,6 +588,10 @@ fn the_build_order_steps_through_the_cabinet_and_highlights_what_a_step_adds() {
     assert!(kinds(&d).len() < full, "the start shows less than all");
     assert!(!kinds(&d).contains(&ItemKind::Device), "no devices yet");
     assert!(d.app.view3d.view.state.related.is_empty());
+    assert!(
+        d.app.view3d.view.bottom_inset > 0.0,
+        "the fit leaves room for the strip"
+    );
 
     d.app.run_command(&ctx, "view.3d_assembly_next", None);
     d.frame();
@@ -616,6 +620,14 @@ fn the_build_order_steps_through_the_cabinet_and_highlights_what_a_step_adds() {
     assert_eq!(d.app.view3d.controls.assembly, None);
     assert!(d.app.view3d.view.state.related.is_empty());
     assert_eq!(kinds(&d).len(), full);
+    assert_eq!(d.app.view3d.view.bottom_inset, 0.0, "the room is given back");
+
+    // A new or opened project does not inherit the build order.
+    d.app.run_command(&ctx, "view.3d_assembly", None);
+    d.frame();
+    assert_eq!(d.app.view3d.controls.assembly, Some(0));
+    d.app.document_replaced();
+    assert_eq!(d.app.view3d.controls.assembly, None);
 }
 
 #[test]

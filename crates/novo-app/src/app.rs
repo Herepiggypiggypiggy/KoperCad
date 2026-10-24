@@ -1249,6 +1249,8 @@ impl NovoApp {
         // The live view, an open drawer and a preview belong to the project
         // they were opened on; a lesson (or any project) starts clean.
         self.wb.live = Default::default();
+        // The build order belongs to the cabinet it was opened on.
+        self.view3d.controls.assembly = None;
         // A new project is not a fix: the issue count starts over.
         self.wb.last_issue_total = None;
         self.wb.problems = None;
