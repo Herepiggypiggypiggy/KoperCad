@@ -7,7 +7,7 @@ Done
 
 Next, one PR each
 1. DONE (PR 2D plate): EMC on the Cabinet plate (`emc_plate.rs`, Cabinet toolbar EMC, Ctrl+K `cabinet.emc`, QA 97).
-2. Schematic overlay of net classes.
+2. DONE (PR schematic net classes): View > EMC net classes, `emc_schematic.rs`, QA 154.
 3. Loops, bonding and shields from real data; per-cable EMC card.
 4. Adapter from `novo-emc` (engine PR #1387) replacing the stub; stub findings carry no rule id until then; fix buttons wired to commands.
 
