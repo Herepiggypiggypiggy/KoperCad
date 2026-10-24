@@ -675,7 +675,8 @@ fn step_list(
         });
 }
 
-/// " · bob" on an open step somebody has taken; " · you" when it is yours.
+/// " · bob" on an open step somebody has taken; " · you" when it is yours;
+/// " · taken" when the claim has no name.
 fn claimed_by(
     mode: &super::commissioning::CommissioningMode,
     step: &BuildStep,
@@ -689,11 +690,14 @@ fn claimed_by(
     }
 }
 
-/// Who a claim reads as in a list row: "you" for the one who took it (also
-/// when no name is set and the claim is kept as "someone"), else the name.
+/// Who a claim reads as in a list row: "you" only when a name is set and it
+/// is the claim's name. A claim kept as "someone" (nobody set a name) may be
+/// yours or a colleague's, so it reads "taken".
 pub(super) fn claim_tag(by: &str, who: &str) -> String {
-    if by == or_unknown(who) {
+    if !who.trim().is_empty() && by == who {
         "you".to_owned()
+    } else if by == or_unknown("") {
+        "taken".to_owned()
     } else {
         by.to_owned()
     }
@@ -925,7 +929,7 @@ fn status_and_buttons(
     // Who has this step: two people on one cabinet do not reach for the same
     // device. A claim is a signal, not a lock. Without a name (set under
     // Commissioning) the claim is kept as "someone", which cannot tell two people
-    // apart; the one who took it still reads "You have this step".
+    // apart, so the screen says it may be yours or a colleague's.
     if state.problem.is_none() && matches!(status, StepStatus::Open | StepStatus::Changed) {
         let me = or_unknown(who);
         let held = mode.store.build_claim(step.key).cloned();
@@ -956,7 +960,7 @@ fn status_and_buttons(
             Some(_) => {
                 ui.horizontal(|ui| {
                     ui.label(if who.trim().is_empty() {
-                        "You have this step. Set your name in Commissioning so the others see who."
+                        "Taken by you or by someone who has not set a name. Set your name in Commissioning to tell who."
                     } else {
                         "You have this step."
                     });

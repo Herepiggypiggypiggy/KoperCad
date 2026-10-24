@@ -342,9 +342,11 @@ fn a_claim_by_someone_else_is_kept_in_the_project_and_the_screen_draws_with_it()
 }
 
 #[test]
-fn a_step_you_took_reads_as_yours_with_or_without_a_name() {
+fn a_claim_reads_as_yours_only_when_a_name_says_so() {
     use super::build_mode::claim_tag;
-    assert_eq!(claim_tag("someone", ""), "you");
+    // Nobody set a name: it may be a colleague's claim, so it is not "you".
+    assert_eq!(claim_tag("someone", ""), "taken");
+    assert_eq!(claim_tag("someone", "ann"), "taken");
     assert_eq!(claim_tag("ann", "ann"), "you");
     assert_eq!(claim_tag("bob", "ann"), "bob");
     assert_eq!(claim_tag("bob", ""), "bob");
