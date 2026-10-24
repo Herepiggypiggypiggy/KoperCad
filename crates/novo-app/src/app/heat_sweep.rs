@@ -34,8 +34,10 @@ use super::heat_settings::{HeatSettings, Kind, VentSpec, Wall};
 /// carries must be said here.
 pub(super) const FOOTER: &str = "Model estimate: the 2D heat model with planning values, the losses you entered and the wire heat in the ducts. Not validated against measurements, and the 2D slice does not see the depth of the cabinet. Check the winner with Simulate in 3D after adding it.";
 
-/// Width of the window, points.
+/// Width of the window's content, points.
 const WIDTH: f32 = 400.0;
+/// Width of the window with its frame, points: the most it takes.
+pub(super) const WINDOW_WIDTH: f32 = WIDTH + 24.0;
 /// Tallest the list of options gets before it scrolls, points: the window
 /// stays small enough to leave the drawing visible.
 const MAX_BODY: f32 = 440.0;
@@ -426,17 +428,25 @@ impl CoolingAdvice {
         let pal = crate::theme::ui_palette();
         // Start high enough that the list has its full height: in a short
         // window the list used to get a sliver and cut a sentence off.
-        let at = Pos2::new(
-            at.x,
-            at.y.min(ctx.content_rect().bottom() - MAX_BODY - 140.0)
-                .max(60.0),
-        );
+        // In 3D the window is pinned beside the view cube: a short view gets a
+        // shorter list instead of a window that slides up over the cube.
+        let pinned = view == 2;
+        let at = if pinned {
+            at
+        } else {
+            Pos2::new(
+                at.x,
+                at.y.min(ctx.content_rect().bottom() - MAX_BODY - 140.0)
+                    .max(60.0),
+            )
+        };
         egui::Window::new("Cooling advice")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
             .default_pos(at)
             .default_width(WIDTH)
+            .max_width(WINDOW_WIDTH)
             .show(ctx, |ui| {
                 ui.set_max_width(WIDTH);
                 ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
@@ -488,7 +498,10 @@ impl CoolingAdvice {
                         ask = Some(Ask::Again);
                     }
                 }
-                let room = (ctx.content_rect().bottom() - at.y - 130.0).clamp(160.0, MAX_BODY);
+                // Pinned: leave room for the lines that appear above the list
+                // after Add, so the window does not grow past the screen.
+                let spare = if pinned { 290.0 } else { 130.0 };
+                let room = (ctx.content_rect().bottom() - at.y - spare).clamp(120.0, MAX_BODY);
                 egui::ScrollArea::vertical()
                     .max_height(room)
                     .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
@@ -583,7 +596,16 @@ fn body(ui: &mut egui::Ui, found: &Found, stale: bool, ask: &mut Option<Ask>) {
 fn option(ui: &mut egui::Ui, found: &Found, o: &Outcome, stale: bool, ask: &mut Option<Ask>) {
     let pal = crate::theme::ui_palette();
     let before = &found.sweep.before;
+    // An option with a fan gets the small slow fan, as in the Cooling selection.
+    let fan = [&o.candidate.inlet, &o.candidate.outlet]
+        .iter()
+        .any(|p| p.fan_flow_m3h.is_some());
     ui.horizontal_wrapped(|ui| {
+        if fan {
+            super::motion::fan_icon(ui, 16.0, pal.info).on_hover_text(
+                "This option has a fan. The turning is only a picture; its pace is not the flow.",
+            );
+        }
         ui.label(
             egui::RichText::new(format!("{}. {}", o.rank, o.candidate.pairing.label())).strong(),
         );

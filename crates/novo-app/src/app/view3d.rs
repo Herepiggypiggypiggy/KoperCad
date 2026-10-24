@@ -1039,7 +1039,9 @@ impl NovoApp {
                     .observe(rows, &heat.settings.vents, project.revision());
                 let now_key =
                     super::heat_sweep::key_of(project, id, ambient, &heat.settings, &fans);
-                let at = view_rect.center_top() + egui::vec2(-200.0, 170.0);
+                // At the right edge: the cabinet in the middle stays visible,
+                // so a fan that was just added can be seen without closing it.
+                let at = super::view3d_heat::advice_pos(view_rect);
                 match heat.advice.show(ui.ctx(), 2, now_key, at) {
                     Some(super::heat_sweep::Ask::Again) => heat.advice.request(),
                     Some(super::heat_sweep::Ask::Add(c)) => {

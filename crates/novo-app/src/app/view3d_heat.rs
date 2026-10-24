@@ -25,6 +25,16 @@ fn anchor(view: egui::Rect) -> egui::Pos2 {
     view.right_top() + egui::vec2(-MARGIN, CUBE_MARGIN + CUBE_SIZE + GAP)
 }
 
+/// Top left corner of the Cooling advice window in the 3D view: at the right
+/// edge, left of the view cube and level with its top, so the cabinet in the
+/// middle stays visible, the cube stays usable and the list gets the height.
+pub(super) fn advice_pos(view: egui::Rect) -> egui::Pos2 {
+    egui::pos2(
+        view.max.x - super::heat_sweep::WINDOW_WIDTH - CUBE_SIZE - 2.0 * CUBE_MARGIN,
+        view.min.y + CUBE_MARGIN,
+    )
+}
+
 /// The cube's rectangle, as `novo-view3d` draws it.
 #[cfg(test)]
 fn cube_rect(view: egui::Rect) -> egui::Rect {
@@ -360,6 +370,20 @@ mod tests {
             );
             assert!(!panel.intersects(cube_rect(view)), "{w} x {h}");
             assert!(panel.min.y > cube_rect(view).max.y);
+        }
+    }
+
+    #[test]
+    fn the_advice_window_clears_the_view_cube() {
+        for (w, h) in [(1366.0, 768.0), (900.0, 600.0), (1920.0, 1080.0)] {
+            let view = egui::Rect::from_min_size(egui::pos2(0.0, 150.0), egui::vec2(w, h));
+            let at = advice_pos(view);
+            let window = egui::Rect::from_min_size(
+                at,
+                egui::vec2(super::super::heat_sweep::WINDOW_WIDTH, h - 40.0),
+            );
+            assert!(!window.intersects(cube_rect(view)), "{w} x {h}");
+            assert!(window.max.x <= view.max.x);
         }
     }
 
