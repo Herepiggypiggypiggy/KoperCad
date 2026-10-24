@@ -114,6 +114,164 @@ pub(super) fn feed_open_points(
     Ok(placed)
 }
 
+/// The open pin `name` on a symbol of `key`, as (symbol, pin index, position).
+fn open_pin(
+    project: &Project,
+    symbol: &novo_core::SymbolInstance,
+    name: &str,
+    dir: Direction,
+) -> Option<(Endpoint, Point)> {
+    let index = symbol.pins.iter().position(|p| p.name == name)?;
+    if symbol.pins[index].direction != Some(dir) {
+        return None;
+    }
+    let end = Endpoint::pin(symbol.id, index as u16);
+    let busy = project.wires().any(|w| w.from == end || w.to == end);
+    let at = project.endpoint_position(end)?;
+    (!busy).then_some((end, at))
+}
+
+/// Draws a wire from each open output of the Three-phase supply on `page` to
+/// the open entry of the circuit placed with it: the three line phases of a
+/// starter's main breaker, its control breaker and its PE terminal. `placed`
+/// is the macro just placed: when it is the supply, the entries are looked
+/// for anywhere on the page; otherwise only among its own symbols, so an
+/// unrelated macro never joins the supply to a starter that was already
+/// there. Each entry is joined only when exactly one candidate is open, so a
+/// drawing with two starters is left for the user to decide. Returns how
+/// many wires it drew.
+pub(super) fn join_starter(
+    tx: &mut Tx<'_>,
+    page: PageId,
+    placed: BlockInstanceId,
+) -> Result<usize> {
+    let (placed_members, placed_is_supply): (Vec<_>, bool) =
+        match tx.project().block_instance(placed) {
+            Some(i) => (
+                i.members.iter().map(|m| m.actual).collect(),
+                tx.project()
+                    .block_definition(i.definition)
+                    .is_some_and(|d| d.name == SUPPLY_MACRO),
+            ),
+            None => return Ok(0),
+        };
+    let instances: Vec<_> = tx
+        .project()
+        .block_instances()
+        .filter(|i| i.page == page)
+        .filter(|i| {
+            tx.project()
+                .block_definition(i.definition)
+                .is_some_and(|d| d.name == SUPPLY_MACRO)
+        })
+        .map(|i| i.members.iter().map(|m| m.actual).collect::<Vec<_>>())
+        .collect();
+    let [members] = instances.as_slice() else {
+        return Ok(0);
+    };
+    let project = tx.project();
+    let mine = |s: &novo_core::SymbolInstance| members.iter().any(|m| *m == s.id.into());
+    let on_page = || project.symbols().filter(|s| s.page == page);
+    let key = |s: &novo_core::SymbolInstance, tail: &str| s.symbol.0.ends_with(tail);
+    // The entries come from the page, or only from the macro just placed.
+    let entry = |s: &novo_core::SymbolInstance| {
+        !mine(s) && (placed_is_supply || placed_members.iter().any(|m| *m == s.id.into()))
+    };
+    // The supply's outputs.
+    let out = |tail: &str, name: &str| -> Option<(Endpoint, Point)> {
+        on_page()
+            .filter(|s| mine(s) && key(s, tail))
+            .find_map(|s| open_pin(project, s, name, Direction::Down))
+    };
+    // The entries outside the supply: one candidate or none.
+    let only = |found: Vec<Vec<(Endpoint, Point)>>| match found.as_slice() {
+        [one] => Some(one.clone()),
+        _ => None,
+    };
+    let phases = only(
+        on_page()
+            .filter(|s| entry(s))
+            .filter_map(|s| {
+                let pins: Vec<_> = ["1", "3", "5"]
+                    .iter()
+                    .filter_map(|n| open_pin(project, s, n, Direction::Up))
+                    .collect();
+                (pins.len() == 3).then_some(pins)
+            })
+            .collect(),
+    );
+    let control = only(
+        on_page()
+            .filter(|s| entry(s) && key(s, "mcb_1p"))
+            .filter_map(|s| open_pin(project, s, "1", Direction::Up).map(|p| vec![p]))
+            .collect(),
+    );
+    let earth = only(
+        on_page()
+            .filter(|s| entry(s) && key(s, "terminal_pe"))
+            .filter_map(|s| open_pin(project, s, "1", Direction::Up).map(|p| vec![p]))
+            .collect(),
+    );
+    let mut pairs: Vec<((Endpoint, Point), (Endpoint, Point))> = Vec::new();
+    if let Some(entries) = phases {
+        let outs: Vec<_> = ["2", "4", "6"]
+            .iter()
+            .filter_map(|n| out("mcb_3p", n))
+            .collect();
+        if outs.len() == 3 {
+            pairs.extend(outs.into_iter().zip(entries));
+        }
+    }
+    if let (Some(entry), Some(from)) = (control, out("mcb_1p", "2")) {
+        pairs.push((from, entry[0]));
+    }
+    if let (Some(entry), Some(from)) = (earth, out("terminal_pe", "2")) {
+        pairs.push((from, entry[0]));
+    }
+    // The channel: down under the supply, left through the gap between the
+    // two circuits, up to above the entries, then over to each entry. Every
+    // wire has its own rows and column, so none lies along another.
+    let gap = on_page()
+        .filter(|s| !mine(s) && !matches!(s.role, SymbolRole::PotentialFeed { .. }))
+        .flat_map(|s| {
+            (0..s.pins.len())
+                .filter_map(|i| project.endpoint_position(Endpoint::pin(s.id, i as u16)))
+        })
+        .map(|p| p.x)
+        .fold(f64::MIN, f64::max)
+        + 8.0;
+    let mut joined = 0;
+    for (k, ((from, a), (to, b))) in pairs.into_iter().enumerate() {
+        let k = k as f64;
+        let down = a.y + 8.0 + 4.0 * k;
+        let column = gap + 4.0 * (4.0 - k);
+        let up = b.y - 8.0 - 4.0 * k;
+        let corners = if column < a.x - 4.0 {
+            vec![
+                Point::new(a.x, down),
+                Point::new(column, down),
+                Point::new(column, up),
+                Point::new(b.x, up),
+            ]
+        } else {
+            Vec::new()
+        };
+        // A route the page refuses is left for the user; the placement stays.
+        if draw_wire(
+            tx,
+            page,
+            Target::Endpoint(from, a),
+            &corners,
+            Target::Endpoint(to, b),
+        )
+        .is_ok()
+        {
+            joined += 1;
+        }
+    }
+    Ok(joined)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,5 +354,132 @@ mod tests {
         doc.undo().expect("undo the first placement");
         assert_eq!(feeds(&doc), 0);
         assert!(!has_supply(doc.project()));
+    }
+
+    fn macro_named(name: &str) -> novo_parts::MacroFile {
+        starter_macros()
+            .into_iter()
+            .map(|(_, f)| f)
+            .find(|f| f.name == name)
+            .expect("a starter macro")
+    }
+
+    /// The star-delta starter, then the supply, as a new project gets them;
+    /// returns the document and the supply's instance.
+    fn starter_then_supply() -> (Document, BlockInstanceId) {
+        let mut doc = Document::new(Project::new(""));
+        let mut instance = None;
+        doc.transact("p", |tx| {
+            let page = tx.add_page("1")?;
+            place_macro(
+                tx,
+                macro_named("Star-delta starter").definition,
+                page,
+                Point::new(20.0, 20.0),
+                &PlaceOptions::default(),
+            )?;
+            let origin = novo_workflow::macro_place::free_origin(tx.project(), page, 20.0);
+            let placed = place_macro(
+                tx,
+                supply().definition,
+                page,
+                origin,
+                &PlaceOptions::default(),
+            )?;
+            feed_open_points(tx, page, placed.instance)?;
+            instance = Some(placed.instance);
+            Ok(())
+        })
+        .expect("place");
+        (doc, instance.expect("supply instance"))
+    }
+
+    /// The potential on pin `name` of the first symbol of device `tag`.
+    fn on_pin(project: &Project, tag: &str, name: &str) -> Option<String> {
+        let device = project.devices().find(|d| d.tag.to_string() == tag)?.id;
+        let s = project
+            .symbols()
+            .find(|s| matches!(s.role, SymbolRole::Device { device: d, .. } if d == device))?;
+        let pin = s.pins.iter().position(|p| p.name == name)?;
+        let net = Netlist::build(project);
+        let id = net.potential_of(Endpoint::pin(s.id, pin as u16))?;
+        project.potential(id).map(|p| p.name.clone())
+    }
+
+    #[test]
+    fn the_supply_is_joined_to_the_starter_next_to_it() {
+        let (mut doc, supply) = starter_then_supply();
+        let page = doc.project().pages().next().expect("page").id;
+        let mut joined = 0;
+        doc.transact("join", |tx| {
+            joined = join_starter(tx, page, supply)?;
+            Ok(())
+        })
+        .expect("join");
+        assert_eq!(joined, 5, "three phases, the control breaker and PE");
+        let p = doc.project();
+        // The starter's main breaker entries carry L1, L2 and L3 ...
+        for (pin, line) in [("1", "L1"), ("3", "L2"), ("5", "L3")] {
+            assert_eq!(
+                on_pin(p, "-F1", pin).as_deref(),
+                Some(line),
+                "-F1 pin {pin}"
+            );
+        }
+        // ... its control breaker is fed from the supply's control breaker ...
+        assert_eq!(on_pin(p, "-F3", "1").as_deref(), Some("L1"));
+        // ... and its PE terminal is on PE.
+        let pe = p
+            .symbols()
+            .filter(|s| s.symbol.0.ends_with("terminal_pe"))
+            .filter_map(|s| {
+                let i = s.pins.iter().position(|x| x.name == "1")?;
+                Netlist::build(p).potential_of(Endpoint::pin(s.id, i as u16))
+            })
+            .filter_map(|id| p.potential(id).map(|x| x.name.clone()))
+            .collect::<Vec<_>>();
+        assert!(!pe.is_empty() && pe.iter().all(|n| n == "PE"), "{pe:?}");
+        // Nothing is left open at the starter's entries: a second call adds nothing.
+        let mut again = 0;
+        doc.transact("again", |tx| {
+            again = join_starter(tx, page, supply)?;
+            Ok(())
+        })
+        .expect("again");
+        assert_eq!(again, 0);
+    }
+
+    #[test]
+    fn an_unrelated_macro_does_not_join_the_supply_to_a_starter() {
+        let (mut doc, _) = starter_then_supply();
+        let page = doc.project().pages().next().expect("page").id;
+        let wires = doc.project().wires().count();
+        let mut joined = 0;
+        doc.transact("place", |tx| {
+            let origin = novo_workflow::macro_place::free_origin(tx.project(), page, 20.0);
+            let placed = place_macro(
+                tx,
+                macro_named("E-stop chain").definition,
+                page,
+                origin,
+                &PlaceOptions::default(),
+            )?;
+            joined = join_starter(tx, page, placed.instance)?;
+            Ok(())
+        })
+        .expect("place");
+        assert_eq!(joined, 0);
+        // The only new wires are the macro's own, none from the supply.
+        let supply_outputs_open = doc
+            .project()
+            .symbols()
+            .filter(|s| s.symbol.0.ends_with("mcb_3p"))
+            .all(|s| {
+                let i = s.pins.iter().position(|p| p.name == "2").expect("pin");
+                let end = Endpoint::pin(s.id, i as u16);
+                !doc.project().wires().any(|w| w.from == end || w.to == end)
+            });
+        assert!(supply_outputs_open);
+        assert!(doc.project().wires().count() >= wires);
     }
 }
