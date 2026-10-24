@@ -29,7 +29,7 @@ fn anchor(view: egui::Rect) -> egui::Pos2 {
 /// edge, under the cube, so the cabinet in the middle stays visible.
 pub(super) fn advice_pos(view: egui::Rect) -> egui::Pos2 {
     egui::pos2(
-        view.max.x - super::heat_sweep::WINDOW_WIDTH - MARGIN,
+        view.max.x - super::heat_sweep::WINDOW_WIDTH - CUBE_MARGIN,
         view.min.y + CUBE_MARGIN + CUBE_SIZE + GAP,
     )
 }
