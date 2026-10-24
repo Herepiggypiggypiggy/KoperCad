@@ -29,6 +29,10 @@ Provenance says where the picture came from: `Synthetic` (demonstration), `Stub`
 
 The panel counts the classes (a click keeps one class in colour and steps the rest back). Picking a wire shows its class, where the class came from and why, and buttons to set the class by hand or go back to automatic: one undo step each, through the same fix the EMC check applies (`Fix::DeclareClass`). The live view colours wires by potential and wins while it is on; the panel says so.
 
+## Cable card and fixes
+
+Picking a wire that belongs to a cable adds the cable's card to the panel: tag, cores, wires drawn, twisted or not stated, the shield and how each end is made (all round, pigtail, not connected, not stated), and the EMC check's findings about that cable with their rule id and level. A finding the program can act on has an **Apply** button (add a shield core, set both ends all round): one undo step, through the same fix as Check > EMC check (`Fix::AddShield`, `Fix::Terminate360`); the others say "By hand". "No finding about this cable" is not a statement that it is fine. The EMC example now carries an unshielded four-core motor cable (-W2) so the card has something to show.
+
 ## Not in this change
 
-Per-cable cards, and the other one-click fixes on the schematic.
+Fixes that move a wire or a device (by hand today), a cable card in the 3D and plate views.

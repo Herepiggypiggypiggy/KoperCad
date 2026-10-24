@@ -1,0 +1,48 @@
+@title Schematic: EMC cable card and the shield fix (1920x1080)
+@area Schematic
+@sizes 1920x1080
+# Pick a wire of the motor cable with EMC net classes on: the panel shows the cable (cores, shield ends, twist), the EMC check's findings about it and the fixes; Apply is one undo step.
+key ctrl+k
+wait 6
+text open emc example
+wait 8
+key Enter
+wait 30
+key PageDown
+wait 8
+key PageDown
+wait 12
+key ctrl+k
+wait 6
+text emc net classes
+wait 8
+key Enter
+wait 20
+click 513 540
+wait 12
+expect "Cable =A1+CAB-W2"
+expect "Indicative: a design aid, not a test result."
+shot cable-card
+check_layout
+scroll 1180 400 -2000
+wait 8
+click_text "Apply: Use a shielded cable." #1
+wait 15
+expect "Shield: end A"
+shot cable-card-after-shield
+check_layout
+# The second fix sets both shield ends all round: the finding goes.
+scroll 1180 400 2000
+wait 8
+click_text "Apply: Bond both shield ends" #1
+wait 15
+scroll 1180 400 -2000
+wait 8
+expect "end A bonded all round"
+shot cable-card-after-ends
+check_layout
+scroll 1180 400 2000
+wait 8
+expect "No finding about this cable"
+shot cable-card-no-finding
+check_layout
