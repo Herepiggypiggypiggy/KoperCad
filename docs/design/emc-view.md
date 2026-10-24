@@ -33,6 +33,10 @@ The panel counts the classes (a click keeps one class in colour and steps the re
 
 Picking a wire that belongs to a cable adds the cable's card to the panel: tag, cores, wires drawn, twisted or not stated, the shield and how each end is made (all round, pigtail, not connected, not stated), and the EMC check's findings about that cable with their rule id and level. A finding the program can act on has an **Apply** button (add a shield core, set both ends all round): one undo step, through the same fix as Check > EMC check (`Fix::AddShield`, `Fix::Terminate360`); the others say "By hand". "No finding about this cable" is not a statement that it is fine. The EMC example now carries an unshielded four-core motor cable (-W2) so the card has something to show.
 
+## Bonding and shield ends on the plate
+
+With the Bonding chip on, each device's bond to the plate is drawn as a dashed outline: a bonded device in the earth colours, a weak or missing bond with a glowing spot and a hover that says why (the Plate bonding hot spot names it). With the Shields chip on, each shield end is a ring on the device: all round in the good colour, pigtail in a risk colour with a tail, not connected in a risk colour with a cross. The legend says what the rings mean (plain ring all round, tail pigtail, cross not connected) and hovering a ring names the cable end. The picture is tested on `qa/fixtures/emc-cabinet-shields.novo` (a galvanised plate, so the drive's bond is a good one, and two shielded cables carrying all three end states; QA 165 and 166). The legend starts rolled up when the canvas is shorter than 700 points, so it does not cover the devices it explains. A weak bond is a rule on the stated plate finish and bonding, not a measurement. Where to find it: View > EMC on the Cabinet plate (Ctrl+K "EMC view on the plate").
+
 ## Not in this change
 
 Fixes that move a wire or a device (by hand today), a cable card in the 3D and plate views.
