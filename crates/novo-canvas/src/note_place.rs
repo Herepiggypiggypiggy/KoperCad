@@ -78,6 +78,9 @@ pub struct Obstacles<'a> {
     /// notes before it, so the result does not depend on where the others
     /// happen to be drawn at the moment.
     pub later: &'a dyn Fn(ItemId) -> Option<(usize, usize)>,
+    /// For an item whose first label is a device tag placed after this
+    /// one: its tag does not count (same reason as `later`).
+    pub no_tag: &'a dyn Fn(ItemId) -> bool,
 }
 
 impl Obstacles<'_> {
@@ -108,6 +111,9 @@ impl Obstacles<'_> {
     }
 
     fn item_blocks(&self, id: ItemId, item: &Item, rect: &Aabb) -> bool {
+        if (self.no_tag)(id) {
+            return parts_touch(&item.primitives, item.labels.get(1..).unwrap_or(&[]), rect);
+        }
         match (self.later)(id) {
             Some((p, l)) => parts_touch(
                 &item.primitives[..p.min(item.primitives.len())],
@@ -206,6 +212,7 @@ mod tests {
             own_id: ItemId(99),
             keep: (1, 0),
             later: &|_| None,
+            no_tag: &|_| false,
         };
         let ink = Aabb::from_corners(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
         let base = note_at(Vec2::new(11.0, 5.0), Anchor::CenterLeft);
@@ -223,6 +230,7 @@ mod tests {
             own_id: ItemId(99),
             keep: (1, 0),
             later: &|_| None,
+            no_tag: &|_| false,
         };
         let ink = Aabb::from_corners(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
         let base = note_at(Vec2::new(11.0, 5.0), Anchor::CenterLeft);
@@ -264,6 +272,7 @@ mod tests {
             own_id: ItemId(99),
             keep: (1, 0),
             later: &|_| None,
+            no_tag: &|_| false,
         };
         let base = note_at(Vec2::new(11.0, 5.0), Anchor::CenterLeft);
         assert!(!ob.blocks(&[], std::slice::from_ref(&base)));
@@ -283,6 +292,7 @@ mod tests {
             own_id: ItemId(99),
             keep: (1, 0),
             later: &|_| None,
+            no_tag: &|_| false,
         };
         let on_ink = note_at(Vec2::new(2.0, 5.0), Anchor::CenterLeft);
         assert!(
@@ -312,6 +322,7 @@ mod tests {
             own_id: ItemId(99),
             keep: (1, 0),
             later: &|_| None,
+            no_tag: &|_| false,
         };
         let ink = Aabb::from_corners(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
         let base = note_at(Vec2::new(11.0, 5.0), Anchor::CenterLeft);
