@@ -1,6 +1,6 @@
 @title Cabinet plate: EMC Bonding layer on a painted plate (weak bond outline, legend)
 @area Cabinet
-@sizes 1366x768 1920x1080
+@sizes 1366x768
 # Ctrl+K "EMC view on the plate" with the Bonding layer on: the drive sits on a painted plate, so its mounting area is outlined as a weak bond (rule on stated facts, not a measurement).
 open qa/fixtures/emc-cabinet-bonding.novo
 wait 20
@@ -18,4 +18,23 @@ wait 15
 expect "Earth and bonding"
 expect "weak or missing bond"
 shot plate-bonding-on
+check_layout
+# The legend rolls up to show the plate under it: the bond outline and its marker.
+click 234 407
+wait 10
+shot plate-bonding-legend-folded
+check_layout
+# The light look.
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 10
+expect "Indicative model"
+shot plate-bonding-light
 check_layout
