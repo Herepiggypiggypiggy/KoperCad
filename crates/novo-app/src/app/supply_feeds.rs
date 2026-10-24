@@ -6,12 +6,19 @@
 //! button on the Live card; the status line then names the next step.
 
 use novo_core::{
-    BlockInstanceId, Direction, Endpoint, Netlist, PageId, Pin, Placement, Point, PotentialId,
-    PotentialKind, Project, Result, SymbolRole, Tx,
+    BlockInstanceId, Direction, Endpoint, NetId, Netlist, PageId, Pin, Placement, Point,
+    PotentialId, PotentialKind, Project, Result, SymbolRole, Tx,
 };
 use novo_editor::edit::draw_wire;
 use novo_editor::geometry::Target;
 use novo_editor::potential::FEED_PE_SYMBOL;
+
+/// A pin or junction and where it is.
+type Spot = (Endpoint, Point);
+
+/// One wire to draw: from a supply output to an entry, which the wire
+/// reaches from below when the flag is set.
+type Join = (Spot, Spot, bool);
 
 /// The macro these feeds belong to.
 pub(super) const SUPPLY_MACRO: &str = "Three-phase supply";
@@ -212,21 +219,61 @@ pub(super) fn join_starter(
             .filter_map(|s| open_pin(project, s, "1", Direction::Up).map(|p| vec![p]))
             .collect(),
     );
-    let mut pairs: Vec<((Endpoint, Point), (Endpoint, Point))> = Vec::new();
+    // The coil return: the A2 pins of the placed circuit's coils, when they
+    // all lie on one net that has no potential of its own. The wire lands on
+    // the right end of that net's bus when it has one, else on a free A2 pin.
+    let neutral = {
+        let netlist = Netlist::build(project);
+        let coils: Vec<(Endpoint, Point, NetId)> = on_page()
+            .filter(|s| entry(s) && s.symbol.0.contains("/coils/"))
+            .filter_map(|s| {
+                let i = s
+                    .pins
+                    .iter()
+                    .position(|p| p.name == "A2" && p.direction == Some(Direction::Down))?;
+                let end = Endpoint::pin(s.id, i as u16);
+                Some((end, project.endpoint_position(end)?, netlist.net_of(end)?))
+            })
+            .collect();
+        let net = coils.first().map(|c| c.2);
+        let one_net = coils.iter().all(|c| Some(c.2) == net);
+        net.filter(|n| one_net && netlist.net(*n).defined.is_empty())
+            .and_then(|n| {
+                let bus = project
+                    .junctions()
+                    .filter(|j| {
+                        j.page == page && netlist.net_of(Endpoint::junction(j.id)) == Some(n)
+                    })
+                    .max_by(|a, b| a.position.x.total_cmp(&b.position.x))
+                    .map(|j| (Endpoint::junction(j.id), j.position));
+                bus.or_else(|| {
+                    coils
+                        .iter()
+                        .filter(|c| !project.wires().any(|w| w.from == c.0 || w.to == c.0))
+                        .max_by(|a, b| a.1.x.total_cmp(&b.1.x))
+                        .map(|c| (c.0, c.1))
+                })
+            })
+    };
+    let mut pairs: Vec<Join> = Vec::new();
     if let Some(entries) = phases {
         let outs: Vec<_> = ["2", "4", "6"]
             .iter()
             .filter_map(|n| out("mcb_3p", n))
             .collect();
         if outs.len() == 3 {
-            pairs.extend(outs.into_iter().zip(entries));
+            pairs.extend(outs.into_iter().zip(entries).map(|(o, e)| (o, e, false)));
         }
     }
     if let (Some(entry), Some(from)) = (control, out("mcb_1p", "2")) {
-        pairs.push((from, entry[0]));
+        pairs.push((from, entry[0], false));
     }
     if let (Some(entry), Some(from)) = (earth, out("terminal_pe", "2")) {
-        pairs.push((from, entry[0]));
+        pairs.push((from, entry[0], false));
+    }
+    // The coil return enters from below: the wire runs up to the bus.
+    if let (Some(entry), Some(from)) = (neutral, out("terminal_n", "2")) {
+        pairs.push((from, entry, true));
     }
     // The channel: down under the supply, left through the gap between the
     // two circuits, up to above the entries, then over to each entry. Every
@@ -241,11 +288,15 @@ pub(super) fn join_starter(
         .fold(f64::MIN, f64::max)
         + 8.0;
     let mut joined = 0;
-    for (k, ((from, a), (to, b))) in pairs.into_iter().enumerate() {
+    for (k, ((from, a), (to, b), below)) in pairs.into_iter().enumerate() {
         let k = k as f64;
         let down = a.y + 8.0 + 4.0 * k;
-        let column = gap + 4.0 * (4.0 - k);
-        let up = b.y - 8.0 - 4.0 * k;
+        let column = gap + 4.0 * (5.0 - k);
+        let up = if below {
+            b.y + 8.0 + 4.0 * k
+        } else {
+            b.y - 8.0 - 4.0 * k
+        };
         let corners = if column < a.x - 4.0 {
             vec![
                 Point::new(a.x, down),
@@ -416,7 +467,7 @@ mod tests {
             Ok(())
         })
         .expect("join");
-        assert_eq!(joined, 5, "three phases, the control breaker and PE");
+        assert_eq!(joined, 6, "three phases, the control breaker, PE and N");
         let p = doc.project();
         // The starter's main breaker entries carry L1, L2 and L3 ...
         for (pin, line) in [("1", "L1"), ("3", "L2"), ("5", "L3")] {
@@ -439,6 +490,21 @@ mod tests {
             .filter_map(|id| p.potential(id).map(|x| x.name.clone()))
             .collect::<Vec<_>>();
         assert!(!pe.is_empty() && pe.iter().all(|n| n == "PE"), "{pe:?}");
+        // ... and every coil's return pin A2 is on N.
+        let netlist = Netlist::build(p);
+        let returns: Vec<_> = p
+            .symbols()
+            .filter(|s| s.symbol.0.contains("/coils/"))
+            .filter_map(|s| {
+                let i = s.pins.iter().position(|x| x.name == "A2")?;
+                netlist.potential_of(Endpoint::pin(s.id, i as u16))
+            })
+            .filter_map(|id| p.potential(id).map(|x| x.name.clone()))
+            .collect();
+        assert!(
+            !returns.is_empty() && returns.iter().all(|n| n == "N"),
+            "{returns:?}"
+        );
         // Nothing is left open at the starter's entries: a second call adds nothing.
         let mut again = 0;
         doc.transact("again", |tx| {
