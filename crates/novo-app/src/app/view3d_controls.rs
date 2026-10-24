@@ -287,8 +287,10 @@ pub(super) fn toolbar(
                         ui,
                         &mut controls.finish,
                         "Metal finish",
-                        "A faint brushed grain on the plate and streaks along the rails. Off: \
-                         plain flat colours (View > 3D > Metal finish).",
+                        "A faint brushed grain and soft patches on the plate and streaks \
+                         along the rails. It is subtle by design: broad patches show in the \
+                         overview, the fine grain only when you zoom in. Off: plain flat \
+                         colours (View > 3D > Metal finish).",
                     );
                     if controls.ssao_available {
                         toggle(

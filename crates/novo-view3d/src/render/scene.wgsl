@@ -189,8 +189,11 @@ fn vnoise(p: vec2<f32>) -> f32 {
 fn finish_factor(kind: i32, f: FaceOut, n: vec3<f32>) -> f32 {
     // Derivatives are taken before any branch (uniform control flow).
     let p = f.world.xy;
-    let brush_p = vec2<f32>(p.x * 0.15, p.y * 1.6);
+    let brush_p = vec2<f32>(p.x * 0.15, p.y * 0.6);
     let patch_p = p * 0.3;
+    // Broad galvanising patches, about 35 mm across: the part of the finish
+    // that is still there at a whole-cabinet view.
+    let broad_p = p * 0.03;
     let e = f.extent;
     var across = f.local.y + f.local.z;
     if (e.y >= e.x && e.y >= e.z) {
@@ -198,17 +201,19 @@ fn finish_factor(kind: i32, f: FaceOut, n: vec3<f32>) -> f32 {
     } else if (e.z >= e.x && e.z >= e.y) {
         across = f.local.x + f.local.y;
     }
-    let streak_p = vec2<f32>(across * 2.0, 0.5);
-    let brush_fade = 1.0 - smoothstep(0.25, 0.6, fwidth(brush_p.y));
-    let patch_fade = 1.0 - smoothstep(0.25, 0.6, max(fwidth(patch_p.x), fwidth(patch_p.y)));
-    let streak_fade = 1.0 - smoothstep(0.25, 0.6, fwidth(streak_p.x));
+    let streak_p = vec2<f32>(across * 0.7, 0.5);
+    let brush_fade = 1.0 - smoothstep(0.2, 0.45, fwidth(brush_p.y));
+    let patch_fade = 1.0 - smoothstep(0.2, 0.45, max(fwidth(patch_p.x), fwidth(patch_p.y)));
+    let broad_fade = 1.0 - smoothstep(0.2, 0.45, max(fwidth(broad_p.x), fwidth(broad_p.y)));
+    let streak_fade = 1.0 - smoothstep(0.2, 0.45, fwidth(streak_p.x));
     if (kind == 1 && n.z > 0.9) {
-        let brush = (vnoise(brush_p) - 0.5) * 0.05 * brush_fade;
-        let blotch = (vnoise(patch_p) - 0.5) * 0.06 * patch_fade;
-        return 1.0 + brush + blotch;
+        let brush = (vnoise(brush_p) - 0.5) * 0.12 * brush_fade;
+        let blotch = (vnoise(patch_p) - 0.5) * 0.08 * patch_fade;
+        let broad = (vnoise(broad_p) - 0.5) * 0.18 * broad_fade;
+        return 1.0 + brush + blotch + broad;
     }
     if (kind == 2) {
-        return 1.0 + (vnoise(streak_p) - 0.5) * 0.07 * streak_fade;
+        return 1.0 + (vnoise(streak_p) - 0.5) * 0.20 * streak_fade;
     }
     return 1.0;
 }
