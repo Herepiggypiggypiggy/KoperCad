@@ -35,7 +35,8 @@ use super::heat_settings::{HeatSettings, Kind, VentSpec, Wall};
 pub(super) const FOOTER: &str = "Model estimate: the 2D heat model with planning values, the losses you entered and the wire heat in the ducts. Not validated against measurements, and the 2D slice does not see the depth of the cabinet. Check the winner with Simulate in 3D after adding it.";
 
 /// Width of the window, points.
-const WIDTH: f32 = 400.0;
+pub(super) const WINDOW_WIDTH: f32 = 400.0;
+const WIDTH: f32 = WINDOW_WIDTH;
 /// Tallest the list of options gets before it scrolls, points: the window
 /// stays small enough to leave the drawing visible.
 const MAX_BODY: f32 = 440.0;
@@ -502,7 +503,16 @@ fn body(ui: &mut egui::Ui, found: &Found, stale: bool, ask: &mut Option<Ask>) {
 fn option(ui: &mut egui::Ui, found: &Found, o: &Outcome, stale: bool, ask: &mut Option<Ask>) {
     let pal = crate::theme::ui_palette();
     let before = &found.sweep.before;
+    // An option with a fan gets the small slow fan, as in the Cooling selection.
+    let fan = [&o.candidate.inlet, &o.candidate.outlet]
+        .iter()
+        .any(|p| p.fan_flow_m3h.is_some());
     ui.horizontal_wrapped(|ui| {
+        if fan {
+            super::motion::fan_icon(ui, 16.0, pal.info).on_hover_text(
+                "This option has a fan. The turning is only a picture; its pace is not the flow.",
+            );
+        }
         ui.label(
             egui::RichText::new(format!("{}. {}", o.rank, o.candidate.pairing.label())).strong(),
         );
