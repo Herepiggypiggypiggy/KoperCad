@@ -1,0 +1,55 @@
+@title 3D view: metal finish on the plate and rails, and the switch back to flat colours (1920x1080)
+@area 3D
+@sizes 1920x1080
+# Layers > Metal finish (also View > 3D > Metal finish). On: a faint brushed grain, broad galvanising patches and streaks along the rails. Off: the flat colours as before. The same view on and off at the whole-cabinet distance (only the broad patches survive; the fine grain is below a pixel there and fades out by design) and close up (grain and rail streaks show). The pointer rests at the same spot for every picture.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 40
+key ctrl+k
+wait 6
+text front view
+wait 8
+key Enter
+wait 40
+move 1750 600
+wait 15
+shot overview-on
+click_text "Layers"
+wait 8
+shot layers-menu-ticked
+expect "Metal finish"
+click_text "Metal finish"
+wait 8
+key Escape
+move 1750 600
+wait 30
+shot overview-off
+click_text "Layers"
+wait 8
+click_text "Metal finish"
+wait 8
+key Escape
+wait 10
+mouse_down 732 545
+mouse_up 732 545
+wait 10
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 40
+key Escape
+move 1750 600
+wait 30
+shot close-on
+click_text "Layers"
+wait 8
+click_text "Metal finish"
+wait 8
+key Escape
+move 1750 600
+wait 30
+shot close-off
+check_layout

@@ -16,6 +16,9 @@ pub struct Display {
     /// Screen-space ambient occlusion on the High tier (the frame governor
     /// can step the tier down; turning this on again asks for it back).
     pub ssao: bool,
+    /// Fine surface finish: a faint brushed grain on the plate and lengthwise
+    /// streaks on rails, so metal reads as metal. Off: flat colours, as before.
+    pub finish: bool,
     /// Draw measuring lines: the enclosure's size and, for one selected part,
     /// its size and its distances to neighbours and the plate edge.
     pub dimensions: bool,
@@ -34,6 +37,7 @@ impl Default for Display {
             labels: true,
             shadows: true,
             ssao: true,
+            finish: true,
             dimensions: false,
             missing_marks: false,
             trackpad_pans: false,

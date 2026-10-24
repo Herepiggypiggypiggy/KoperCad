@@ -1391,6 +1391,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_finish",
+        "Show or hide the metal surface finish in 3D",
+        "View",
+        &["finish", "materials", "brushed", "grain", "metal"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_measure",
         "Measure distances in 3D",
         "View",

@@ -3,7 +3,7 @@
 //!   cargo run --release -p novo-view3d --features gpu --example orbit -- \
 //!       [--items 1000] [--wires 300] [--frames 300] [--size 1920x1080] [--msaa] [--scale 0.75] \
 //!       [--png out.png] [--tier discrete|integrated|software] [--shadows] [--no-edges] \
-//!       [--heat N] [--slotted]
+//!       [--heat N] [--slotted] [--no-finish]
 //!
 //! Renders a scripted 360 degree orbit of the demo cabinet into an offscreen
 //! target and prints CPU time per frame (cull, instances, encode) and wall time
@@ -125,6 +125,7 @@ fn main() {
     let mut view: Option<String> = None;
     let mut forced_tier: Option<Tier> = None;
     let mut shadows = false;
+    let mut finish = true;
     let mut edges = true;
     let mut heat = 0usize;
     let mut slotted = false;
@@ -153,6 +154,7 @@ fn main() {
             }
             "--shadows" => shadows = true,
             "--no-edges" => edges = false,
+            "--no-finish" => finish = false,
             "--slotted" => slotted = true,
             "--heat" => heat = args.next().unwrap().parse().unwrap(),
             other => panic!("unknown argument {other}"),
@@ -201,6 +203,7 @@ fn main() {
     let mut state = ViewState::default();
     state.display.edges = edges;
     state.display.shadows = shadows;
+    state.display.finish = finish;
     let overlays = if heat > 0 {
         heat_overlays(&scene.bounds(), heat)
     } else {

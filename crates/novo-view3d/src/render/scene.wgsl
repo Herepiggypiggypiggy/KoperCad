@@ -83,6 +83,10 @@ struct FaceOut {
     @location(1) normal: vec3<f32>,
     @location(2) color: vec4<f32>,
     @location(3) spec: f32,
+    // Position in the part's own axes (mm) and the surface finish id.
+    @location(4) local: vec3<f32>,
+    @location(5) finish: f32,
+    @location(6) extent: vec3<f32>,
 }
 
 struct DepthOut {
@@ -145,6 +149,9 @@ fn vs_face(v: Vertex, i: Instance) -> FaceOut {
     o.clip = g.view_proj * vec4<f32>(w, 1.0);
     o.color = i.color;
     o.spec = i.spec.x;
+    o.local = v.pos * i.scale;
+    o.finish = i.spec.y;
+    o.extent = i.scale;
     return o;
 }
 
@@ -154,6 +161,61 @@ fn to_linear(c: vec3<f32>) -> vec3<f32> {
 
 fn to_srgb(c: vec3<f32>) -> vec3<f32> {
     return pow(max(c, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2));
+}
+
+// Surface finish: faint, low-contrast variation that makes sheet metal and
+// rail read as metal. Smooth value noise, faded out where its detail drops
+// below a pixel so nothing shimmers while the camera moves.
+fn hash21(p: vec2<f32>) -> f32 {
+    var q = fract(p * vec2<f32>(0.1031, 0.1030));
+    q = q + dot(q, q.yx + 33.33);
+    return fract((q.x + q.y) * q.x);
+}
+
+fn vnoise(p: vec2<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+    let a = hash21(i);
+    let b = hash21(i + vec2<f32>(1.0, 0.0));
+    let c = hash21(i + vec2<f32>(0.0, 1.0));
+    let d = hash21(i + vec2<f32>(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+// Brightness factor around 1. `kind` 1: galvanised plate (fine brushing along
+// the plate's width and broad faint patches); 2: rail (streaks along its
+// length).
+fn finish_factor(kind: i32, f: FaceOut, n: vec3<f32>) -> f32 {
+    // Derivatives are taken before any branch (uniform control flow).
+    let p = f.world.xy;
+    let brush_p = vec2<f32>(p.x * 0.15, p.y * 0.6);
+    let patch_p = p * 0.3;
+    // Broad galvanising patches, about 35 mm across: the part of the finish
+    // that is still there at a whole-cabinet view.
+    let broad_p = p * 0.03;
+    let e = f.extent;
+    var across = f.local.y + f.local.z;
+    if (e.y >= e.x && e.y >= e.z) {
+        across = f.local.x + f.local.z;
+    } else if (e.z >= e.x && e.z >= e.y) {
+        across = f.local.x + f.local.y;
+    }
+    let streak_p = vec2<f32>(across * 0.7, 0.5);
+    let brush_fade = 1.0 - smoothstep(0.2, 0.45, fwidth(brush_p.y));
+    let patch_fade = 1.0 - smoothstep(0.2, 0.45, max(fwidth(patch_p.x), fwidth(patch_p.y)));
+    let broad_fade = 1.0 - smoothstep(0.2, 0.45, max(fwidth(broad_p.x), fwidth(broad_p.y)));
+    let streak_fade = 1.0 - smoothstep(0.2, 0.45, fwidth(streak_p.x));
+    if (kind == 1 && n.z > 0.9) {
+        let brush = (vnoise(brush_p) - 0.5) * 0.12 * brush_fade;
+        let blotch = (vnoise(patch_p) - 0.5) * 0.08 * patch_fade;
+        let broad = (vnoise(broad_p) - 0.5) * 0.18 * broad_fade;
+        return 1.0 + brush + blotch + broad;
+    }
+    if (kind == 2) {
+        return 1.0 + (vnoise(streak_p) - 0.5) * 0.20 * streak_fade;
+    }
+    return 1.0;
 }
 
 @fragment
@@ -192,6 +254,7 @@ fn fs_face(f: FaceOut, @builtin(front_facing) front: bool) -> @location(0) vec4<
         let o = textureSampleLevel(ao_map, ao_sampler, f.world.xy * g.ao.yz, 0.0).r;
         shade = shade * (1.0 - o);
     }
+    shade = shade * finish_factor(i32(round(f.finish * 255.0)), f, n);
     // Weak Blinn highlight (power 24) from the key light only.
     let half_vec = normalize(l + to_eye);
     let highlight = f.spec * pow(max(dot(n, half_vec), 0.0), 24.0) * (1.0 - ambient * 0.5) * vis;
