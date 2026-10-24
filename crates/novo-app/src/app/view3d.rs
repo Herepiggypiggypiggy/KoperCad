@@ -129,6 +129,9 @@ pub(crate) struct View3dMode {
     heat_scene: Option<(HeatSceneKey, Arc<novo_view3d::Scene>)>,
     /// The layers the scene was built with.
     built_layers: Layers,
+    /// The build order position the scene was built with, and its steps.
+    built_assembly: Option<usize>,
+    pub(super) assembly_steps: Vec<novo_view3d::assembly::Step>,
     /// The hidden items the scene was built with.
     built_hidden: BTreeSet<ItemId>,
     /// Whether the scene was built with the duct fill tints, and the fill of
@@ -213,6 +216,8 @@ impl Default for View3dMode {
             heat_carry: super::heat_carry::Carry::default(),
             heat_scene: None,
             built_layers: Layers::default(),
+            built_assembly: None,
+            assembly_steps: Vec::new(),
             built_hidden: BTreeSet::new(),
             built_duct_fill: false,
             duct_fill: None,
@@ -361,6 +366,7 @@ impl NovoApp {
         let stale = mode.built_models != mode.models.revision
             || !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
             || mode.built_layers != layers
+            || mode.built_assembly != mode.controls.assembly
             || mode.built_hidden != mode.controls.hidden
             || mode.built_duct_fill != mode.controls.duct_fill;
         if stale {
@@ -430,6 +436,16 @@ impl NovoApp {
                 // selection or camera would otherwise stay unseen).
                 let mut shown =
                     novo_view3d::hide::without(layers.apply(built), &mode.controls.hidden);
+                // Build order: the cabinet as it stands after the chosen step.
+                mode.assembly_steps = if mode.controls.assembly.is_some() {
+                    super::view3d_build_order::sequence(project, id)
+                } else {
+                    Vec::new()
+                };
+                if let Some(at) = mode.controls.assembly {
+                    let at = at.min(mode.assembly_steps.len());
+                    shown = novo_view3d::assembly::at(&mode.assembly_steps, at, shown);
+                }
                 if let Some((_, _, old)) = &mode.built {
                     let mut current = Scene::clone(old);
                     novo_view3d::build::refresh(&mut current, shown);
@@ -439,6 +455,7 @@ impl NovoApp {
                 mode.models.prune(&mut mode.library, &shown);
                 mode.built = Some((id, revision, Arc::new(shown)));
                 mode.built_layers = layers;
+                mode.built_assembly = mode.controls.assembly;
                 mode.built_hidden = mode.controls.hidden.clone();
                 mode.built_duct_fill = want_fill;
                 let total = started.elapsed().as_secs_f32() * 1000.0;
@@ -897,6 +914,13 @@ impl NovoApp {
         mode.view.drag_items =
             mode.controls.move_items && !mode.measure.on && mode.place.armed.is_none();
         mode.view.state.display.shadows = mode.controls.shadows;
+        // What the build order step adds is drawn in the soft "related" blue.
+        mode.view.state.related = match (mode.controls.assembly, &mode.built) {
+            (Some(at), Some((_, _, scene))) => {
+                novo_view3d::assembly::added(&mode.assembly_steps, at, scene)
+            }
+            _ => BTreeSet::new(),
+        };
         // Switching occlusion off and on asks for full quality back, the same
         // as "Restore quality" (one governor, one restore path).
         if mode.controls.ssao && !mode.view.state.display.ssao {
@@ -927,6 +951,12 @@ impl NovoApp {
             &|| mode.built.as_ref().map(|(_, _, scene)| scene.bounds()),
         );
         self.settings.trackpad_pans = mode.controls.trackpad_pans;
+        super::view3d_build_order::strip(
+            ui.ctx(),
+            view_rect,
+            &mut mode.controls.assembly,
+            &mode.assembly_steps,
+        );
         mode.view.top_inset = view3d_controls::toolbar_inset(ui.ctx(), view_rect);
         if let Some(command) = asked {
             self.wb.queued.push(command);

@@ -564,6 +564,61 @@ fn the_shadows_command_toggles_the_views_shadows() {
 }
 
 #[test]
+fn the_build_order_steps_through_the_cabinet_and_highlights_what_a_step_adds() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.frame();
+    assert_eq!(d.app.view3d.controls.assembly, None, "off by default");
+    let kinds = |d: &Drive| {
+        d.app
+            .view3d
+            .built
+            .as_ref()
+            .map(|(_, _, s)| s.items.iter().map(|i| i.id.kind).collect::<Vec<_>>())
+            .unwrap_or_default()
+    };
+    let full = kinds(&d).len();
+    d.app.run_command(&ctx, "view.3d_assembly", None);
+    d.frame();
+    d.frame();
+    assert_eq!(d.app.view3d.controls.assembly, Some(0));
+    let steps = d.app.view3d.assembly_steps.len();
+    assert!(steps >= 2, "the cabinet has a build order: {steps}");
+    assert!(kinds(&d).len() < full, "the start shows less than all");
+    assert!(!kinds(&d).contains(&ItemKind::Device), "no devices yet");
+    assert!(d.app.view3d.view.state.related.is_empty());
+
+    d.app.run_command(&ctx, "view.3d_assembly_next", None);
+    d.frame();
+    d.frame();
+    assert_eq!(d.app.view3d.controls.assembly, Some(1));
+    assert_eq!(d.app.view3d.view.state.related.len(), 1, "one part added");
+
+    for _ in 0..steps {
+        d.app.run_command(&ctx, "view.3d_assembly_next", None);
+    }
+    d.frame();
+    d.frame();
+    assert_eq!(
+        d.app.view3d.controls.assembly,
+        Some(steps),
+        "stops at the end"
+    );
+    assert_eq!(kinds(&d).len(), full, "the last step is the whole cabinet");
+
+    d.app.run_command(&ctx, "view.3d_assembly_previous", None);
+    d.frame();
+    assert_eq!(d.app.view3d.controls.assembly, Some(steps - 1));
+    d.app.run_command(&ctx, "view.3d_assembly", None);
+    d.frame();
+    d.frame();
+    assert_eq!(d.app.view3d.controls.assembly, None);
+    assert!(d.app.view3d.view.state.related.is_empty());
+    assert_eq!(kinds(&d).len(), full);
+}
+
+#[test]
 fn simulate_runs_from_the_3d_view_without_leaving_it() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());

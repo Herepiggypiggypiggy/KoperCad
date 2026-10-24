@@ -7,6 +7,7 @@
 
 pub mod ao;
 pub mod appearance;
+pub mod assembly;
 #[cfg(feature = "model")]
 pub mod build;
 pub mod camera;

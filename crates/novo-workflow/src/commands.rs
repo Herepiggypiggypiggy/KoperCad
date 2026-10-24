@@ -1391,6 +1391,33 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_assembly",
+        "Build order in 3D: step through rails, ducts, devices, wires",
+        "View",
+        &[
+            "build order",
+            "assembly",
+            "steps",
+            "mounting order",
+            "sequence",
+        ],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_assembly_next",
+        "Build order in 3D: next step",
+        "View",
+        &["build order next", "assembly next", "next step"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_assembly_previous",
+        "Build order in 3D: previous step",
+        "View",
+        &["build order back", "assembly previous", "previous step"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_measure",
         "Measure distances in 3D",
         "View",

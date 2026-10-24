@@ -1,0 +1,66 @@
+@title 3D view: Build order steps from the plate to the wires
+@area 3D
+# Toolbar > Build order (also View > 3D > Build order). A strip at the bottom shows the step; Next and Previous add or take away one kind of part, and what a step adds is shown in blue.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 40
+key ctrl+k
+wait 6
+text front view
+wait 8
+key Enter
+wait 30
+click_text "Build order"
+wait 30
+shot step-0-start
+expect "Start (0 of 17)"
+check_layout
+click_text "Next"
+wait 12
+shot step-1-first-rail
+expect "Step 1 of 17"
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+shot step-3
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+shot step-8
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+shot step-16
+check_layout
+click_text "Next"
+wait 12
+wait 20
+shot step-17-wires
+expect "Step 17 of 17"
+check_layout
+click_text "Show all"
+wait 30
+shot shown-all
+expect_not "Step 17 of 17"

@@ -919,6 +919,21 @@ pub const DUTCH: &[Aliases] = &[
         &["schaduw", "schaduwen"],
     ),
     nl(
+        "view.3d_assembly",
+        &["bouwvolgorde in 3d"],
+        &["bouwvolgorde", "montagevolgorde", "stappen"],
+    ),
+    nl(
+        "view.3d_assembly_next",
+        &["bouwvolgorde volgende stap"],
+        &["volgende stap"],
+    ),
+    nl(
+        "view.3d_assembly_previous",
+        &["bouwvolgorde vorige stap"],
+        &["vorige stap"],
+    ),
+    nl(
         "view.3d_measure",
         &["afstand meten in 3d"],
         &["meten", "afstand", "liniaal"],

@@ -181,6 +181,7 @@ names go through the command palette and keymap (`novo-workflow`); the UI integr
 | Focus mode (dim the unselected) | 3D toolbar toggle, palette | `view.focus` |
 | Saved views | View menu list, palette ("View: name") | `view.save`, `view.recall`, `view.delete_saved` |
 | Labels on or off | 3D toolbar toggle | `view.labels` |
+| Build order (step through the workshop's order: rails, ducts, devices, wires; the added part in blue) | 3D toolbar Build order, View > 3D > Build order | `view.3d_assembly`, `view.3d_assembly_next`, `view.3d_assembly_previous` |
 | Quality tier | Settings, 3D view: Auto, Low, Standard, High (Auto is the default) | per user setting |
 | Theme | follows the app; Settings, 3D view: Follow app, Dark, Light | per user setting |
 | Reduce motion | follows the system; Settings, 3D view: Follow system, On, Off | per user setting |

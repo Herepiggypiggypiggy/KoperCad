@@ -235,6 +235,7 @@ mod userkeymap;
 mod variants;
 mod view3d;
 mod view3d_align;
+mod view3d_build_order;
 mod view3d_controls;
 mod view3d_drag_gaps;
 mod view3d_duct_fill;
