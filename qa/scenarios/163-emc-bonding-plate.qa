@@ -15,15 +15,18 @@ shot plate-bonding-default
 check_layout
 click_text "Bonding" #1
 wait 15
+# A short canvas starts the legend rolled up, so the plate under it shows the bond outline and its marker.
+shot plate-bonding-legend-folded
+check_layout
+# Opening it names the marker.
+click 234 651
+wait 10
 expect "Earth and bonding"
 expect "weak or missing bond"
 shot plate-bonding-on
 check_layout
-# The legend rolls up to show the plate under it: the bond outline and its marker.
 click 234 407
 wait 10
-shot plate-bonding-legend-folded
-check_layout
 # The light look.
 key ctrl+k
 wait 6

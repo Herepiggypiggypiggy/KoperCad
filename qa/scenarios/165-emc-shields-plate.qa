@@ -15,21 +15,22 @@ shot plate-shields-default
 check_layout
 click_text "Bonding" #1
 wait 15
-expect "Earth and bonding"
 shot plate-good-bond
 check_layout
 click_text "Shields" #1
 wait 15
-expect "Cable screen ends"
-expect "Ring with a cross"
 shot plate-shields-on
 check_layout
-# Ctrl+K "EMC view on the plate" with Shields and Bonding on a galvanised plate: three screen ends told apart and a good bond in the earth colours.
+# A short canvas starts the legend rolled up; opening it names the rings.
+click 234 651
+wait 10
+expect "Cable screen ends"
+expect "Ring with a cross"
+expect "Earth and bonding"
+shot plate-shields-legend-open
+check_layout
 click 234 351
 wait 10
-wait 10
-shot plate-shields-legend-folded
-check_layout
 # Hot spots off and the panel folded: the ring on every device end is free to see.
 click_text "Hot spots" #1
 wait 10
@@ -39,7 +40,7 @@ shot plate-shields-rings
 check_layout
 click 1273 253
 wait 10
-# Ctrl+K "EMC view on the plate" with Shields and Bonding on a galvanised plate: three screen ends told apart and a good bond in the earth colours.
+# The light look.
 key ctrl+k
 wait 6
 text preferences

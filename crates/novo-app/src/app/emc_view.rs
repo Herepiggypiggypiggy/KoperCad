@@ -396,6 +396,9 @@ fn risk_word(risk: f32) -> &'static str {
     }
 }
 
+/// A canvas shorter than this (points) starts the legend rolled up.
+const SHORT_CANVAS: f32 = 700.0;
+
 /// The legend: what each colour on screen means, for the layers that are on.
 /// A panel of its own at the bottom left, fitted to its content, so it is
 /// never scrolled out of reach.
@@ -405,6 +408,19 @@ pub(super) fn legend(ctx: &egui::Context, view: egui::Rect, state: &EmcState, da
     };
     let st = style(dark);
     let pal = crate::theme::ui_palette();
+    // On a short canvas the open legend covers the devices it explains, so it
+    // starts rolled up (once; the person's own fold is kept after that).
+    let seen = egui::Id::new("emc_legend_first_look");
+    if view.height() < SHORT_CANVAS && !ctx.data(|d| d.get_temp::<bool>(seen).unwrap_or(false)) {
+        ctx.data_mut(|d| d.insert_temp(seen, true));
+        let mut fold = egui::collapsing_header::CollapsingState::load_with_default_open(
+            ctx,
+            super::panel::id("view3d_emc_legend").with("collapsing"),
+            false,
+        );
+        fold.set_open(false);
+        fold.store(ctx);
+    }
     super::panel::Panel::new(
         "view3d_emc_legend",
         "Legend",
