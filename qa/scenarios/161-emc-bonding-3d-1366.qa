@@ -1,0 +1,22 @@
+@title 3D view: EMC Bonding layer on a painted plate, close-up of the drive at 1366x768 (weak bond outline, drive height)
+@area 3D
+@sizes 1366x768
+# 3D > EMC > Bonding layer: the drive sits on a painted plate, so its mounting area is outlined as a weak bond (rule on stated facts, not a measurement). The drive stands 170 mm off the plate. Close-up with the hot spots hidden, the same view with Bonding on and off.
+open qa/fixtures/emc-cabinet-bonding.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text EMC #2
+wait 30
+click 1068 279
+wait 10
+shot emc-overview-bonding-off
+click 548 372
+wait 10
+key f
+wait 20
+shot emc-drive-bonding-off
+click_text Bonding #1
+wait 15
+shot emc-drive-bonding-on
+check_layout

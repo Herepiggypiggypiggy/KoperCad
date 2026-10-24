@@ -4,17 +4,21 @@
 //! arranges.
 //!
 //! Frame: the engine's route points are plate millimetres, the same frame as
-//! `PlateFrame::plate`, so nothing is converted. The engine knows no heights
-//! above the plate, so every point sits at z = 0.
+//! `PlateFrame::plate`, so nothing is converted. Route points sit at z = 0;
+//! device bodies take the engine's stated depth, else a default height.
 
 use std::collections::HashSet;
 
 use novo_emc::report::{Fix as EngineFix, Subject};
 use novo_emc::{EmcClass, FieldSetup, Input, NOT_CHECKED, Role, Termination};
 use novo_view3d::emc::{
-    Assumed, Class, Fix, Hotspot, Kind, Level, LoopSheet, Node, Picture, Provenance,
+    Assumed, Bond, Class, Fix, Hotspot, Kind, Level, LoopSheet, Node, Picture, Provenance, Quality,
     Role as NodeRole, Run, Shield, ShieldEnd,
 };
+
+/// How far the bond outline is drawn outside the mounting area, mm, so the
+/// line is not hidden by the device's own body.
+const BOND_MARGIN_MM: f64 = 8.0;
 
 /// Height of a device body above the plate when the model has none, mm.
 const BODY_HEIGHT_MM: f32 = 60.0;
@@ -74,6 +78,23 @@ fn kind_of(rule: &str) -> Kind {
 
 fn pt(p: (f64, f64)) -> [f32; 3] {
     [p.0 as f32, p.1 as f32, 0.0]
+}
+
+/// A closed rectangle outline pushed outwards by `margin` on every side.
+fn grown(outline: &[(f64, f64)], margin: f64) -> Vec<[f32; 3]> {
+    let (cx, cy) = outline
+        .iter()
+        .fold((0.0, 0.0), |a, p| (a.0 + p.0, a.1 + p.1));
+    let n = outline.len().max(1) as f64;
+    let (cx, cy) = (cx / n, cy / n);
+    outline
+        .iter()
+        .map(|p| {
+            let dx = if p.0 >= cx { margin } else { -margin };
+            let dy = if p.1 >= cy { margin } else { -margin };
+            pt((p.0 + dx, p.1 + dy))
+        })
+        .collect()
 }
 
 fn end_of(t: Termination) -> ShieldEnd {
@@ -247,7 +268,7 @@ pub(crate) fn build_with(
                     z.rect.2 as f32,
                     z.rect.3 as f32,
                 ],
-                height: BODY_HEIGHT_MM,
+                height: z.height_mm.map_or(BODY_HEIGHT_MM, |h| h as f32),
                 level,
                 what: what.to_owned(),
             }
@@ -371,7 +392,20 @@ pub(crate) fn build_with(
         nodes,
         hotspots,
         loops,
-        bonds: Vec::new(),
+        bonds: pic
+            .bonds
+            .iter()
+            .filter(|b| b.plate == plate)
+            .map(|b| Bond {
+                label: format!("{}: {}", b.tag, b.reason),
+                path: grown(&b.outline, BOND_MARGIN_MM),
+                quality: match b.quality {
+                    novo_emc::BondQuality::Good => Quality::Good,
+                    novo_emc::BondQuality::Weak => Quality::Weak,
+                    novo_emc::BondQuality::Bad => Quality::Bad,
+                },
+            })
+            .collect(),
         shields,
         field: field.and_then(|f| field_of(input, f, plate, plate_mm)),
         provenance: Provenance::Engine,
@@ -445,7 +479,7 @@ fn field_of(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use novo_emc::{Device, FilterState, Origin, Params, Plate};
+    use novo_emc::{Device, FilterState, Finish, Origin, Params, Plate};
 
     fn run(id: u64, class: EmcClass, y: f64) -> novo_emc::Run {
         novo_emc::Run {
@@ -489,6 +523,7 @@ mod tests {
                 filter: FilterState::Unknown,
                 filter_for: None,
                 bonded: None,
+                height_mm: None,
             }],
             plates: vec![Plate {
                 id: 1,
@@ -543,6 +578,7 @@ mod tests {
             filter: FilterState::Unknown,
             filter_for: None,
             bonded: None,
+            height_mm: None,
         });
         let setup = FieldSetup {
             currents: vec![Current {
@@ -607,6 +643,7 @@ mod tests {
             filter: FilterState::Unknown,
             filter_for: None,
             bonded: None,
+            height_mm: None,
         });
         let pic = build(&i, 1, [800.0, 400.0], &all());
         for (n, a) in pic.hotspots.iter().enumerate() {
@@ -656,5 +693,34 @@ mod tests {
         assert_eq!(pic.shields[1].at, [600.0, 50.0, 0.0]);
         // A shield halves the keep-clear distance the run asks for.
         assert!(pic.runs[0].shielded);
+    }
+
+    #[test]
+    fn heights_and_bonds_come_from_the_engine() {
+        let mut i = input();
+        i.devices[0].height_mm = Some(210.0);
+        // Nothing stated: default body height, no bond drawn.
+        let mut plain = i.clone();
+        plain.devices[0].height_mm = None;
+        let pic = build(&plain, 1, [800.0, 400.0], &all());
+        assert_eq!(pic.nodes[0].height, BODY_HEIGHT_MM);
+        assert!(pic.bonds.is_empty());
+
+        let pic = build(&i, 1, [800.0, 400.0], &all());
+        assert_eq!(pic.nodes[0].height, 210.0);
+
+        // Painted plate: a weak bond around the mounting area; the bad one
+        // when the drive is stated as not bonded.
+        i.plates[0].finish = Some(Finish::Painted);
+        let pic = build(&i, 1, [800.0, 400.0], &all());
+        assert_eq!(pic.bonds.len(), 1);
+        assert_eq!(pic.bonds[0].quality, Quality::Weak);
+        assert_eq!(pic.bonds[0].path.len(), 5);
+        assert!(pic.bonds[0].label.contains("-T1"));
+        i.devices[0].bonded = Some(false);
+        let pic = build(&i, 1, [800.0, 400.0], &all());
+        assert_eq!(pic.bonds[0].quality, Quality::Bad);
+        // Another plate shows none.
+        assert!(build(&i, 2, [800.0, 400.0], &all()).bonds.is_empty());
     }
 }

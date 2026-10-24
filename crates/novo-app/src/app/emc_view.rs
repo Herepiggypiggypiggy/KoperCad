@@ -696,7 +696,7 @@ fn layer_chips(ui: &mut egui::Ui, l: &mut EmcLayers, pic: &Picture) {
         };
         chip(ui, &mut l.risk, "Exposure map", exposure_tip, true, nothing);
         chip(ui, &mut l.loops, "Loops", "The area each pair of go and return wires encloses", !pic.loops.is_empty(), nothing);
-        chip(ui, &mut l.bonding, "Bonding", "The earth and bonding conductors", !pic.bonds.is_empty(), if pic.provenance == Provenance::Engine { "Not drawn yet: the rule engine does not give bonding links" } else { nothing });
+        chip(ui, &mut l.bonding, "Bonding", "Case-to-plate bonding of drives and filters, from the stated plate finish or bonding", !pic.bonds.is_empty(), if pic.provenance == Provenance::Engine { "No bonding drawn: no drive or filter on this plate has a stated plate finish or bonding" } else { nothing });
         chip(ui, &mut l.shields, "Shields", "Where each cable screen ends", !pic.shields.is_empty(), nothing);
     });
 }

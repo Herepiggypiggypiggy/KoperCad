@@ -104,6 +104,9 @@ pub struct Device {
     pub filter_for: Option<String>,
     /// Mounted on bare metal that bonds to the plate (`emc.bonded`), when stated.
     pub bonded: Option<bool>,
+    /// How far the device stands off the plate, mm, from its depth property
+    /// (own or its part's), when stated.
+    pub height_mm: Option<f64>,
 }
 
 /// How a plate's surface was left.
