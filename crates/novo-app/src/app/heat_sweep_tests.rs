@@ -339,3 +339,64 @@ fn a_changed_fan_list_changes_the_key() {
     assert_ne!(k(&one), k(&two));
     assert_ne!(k(&one), k(&[]));
 }
+
+/// The window after the pair was added: the 2D prediction is kept for the
+/// list the pair made.
+fn added_window() -> (CoolingAdvice, Vec<super::heat_settings::VentSpec>) {
+    let mut a = open(16.6);
+    let mut s = HeatSettings::default();
+    add_pair(&mut s, &candidate());
+    a.record_added(&candidate(), &s.vents);
+    (a, s.vents)
+}
+
+#[test]
+fn the_3d_result_is_put_next_to_the_2d_prediction_as_two_models() {
+    let (mut a, vents) = added_window();
+    // The 2D model said 52 °C (from 75); the 3D run gives 58.
+    a.observe(Some(vec![(1, 58.0)]), &vents);
+    let text = render(&mut a, 7);
+    for want in [
+        "Model comparison",
+        "not a measurement",
+        "predicted 52 °C (from 75)",
+        "gives 58 °C",
+        "6 K hotter than predicted",
+        "Largest gap 6 K",
+        "depth of the cabinet",
+    ] {
+        assert!(text.contains(want), "missing {want:?} in:\n{text}");
+    }
+}
+
+#[test]
+fn the_comparison_waits_for_a_current_3d_result_of_the_same_list() {
+    let (mut a, vents) = added_window();
+    // A run that goes, or a result out of date, gives no rows.
+    a.observe(None, &vents);
+    assert!(!render(&mut a, 7).contains("Model comparison"));
+    // Another list than the one the pair made: no comparison either.
+    let mut other = vents.clone();
+    other.pop();
+    a.observe(Some(vec![(1, 58.0)]), &other);
+    assert!(!render(&mut a, 7).contains("Model comparison"));
+    // A pair that was not from the sweep leaves nothing to compare.
+    let mut b = open(16.6);
+    b.record_added(&candidate(), &vents);
+    let mut c = candidate();
+    c.outlet = vent(Placement::Top { x_mm: 999.0 });
+    b.record_added(&c, &vents);
+    b.observe(Some(vec![(1, 58.0)]), &vents);
+    assert!(!render(&mut b, 7).contains("Model comparison"));
+}
+
+#[test]
+fn a_3d_result_equal_to_the_prediction_says_the_same() {
+    let (mut a, vents) = added_window();
+    a.observe(Some(vec![(1, 52.2)]), &vents);
+    let text = render(&mut a, 7);
+    assert!(text.contains("the same"), "{text}");
+    a.observe(Some(vec![(1, 45.0)]), &vents);
+    let text = render(&mut a, 7);
+    assert!(text.contains("7 K cooler than predicted"), "{text}");
+}
