@@ -1,0 +1,16 @@
+@title 3D view: a part picked in the Cabinet is framed when the 3D view opens
+@area 3D
+@sizes 1366x768
+# Pick a device in the Cabinet, then open 3D: the camera glides to frame it (220 ms, an instant move with Reduce motion). The harness shows still pictures, so the pictures are the end state: the first is the Cabinet with the device picked, the second the 3D view framing it. Compare with 3D opened without a pick, which shows the whole cabinet.
+click_text "Open example"
+wait 20
+click_text Cabinet #1
+wait 30
+mouse_down 628 397
+mouse_up 628 397
+wait 15
+shot cabinet-picked
+click_text 3D #1
+wait 40
+shot three-d-framed
+check_layout

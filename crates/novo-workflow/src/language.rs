@@ -969,6 +969,11 @@ pub const DUTCH: &[Aliases] = &[
         &["verdelen", "gelijk"],
     ),
     nl(
+        "view.emc_nets",
+        &["emc netklassen tonen op het schema"],
+        &["emc", "netklasse", "kabelklasse", "storing"],
+    ),
+    nl(
         "view.emc",
         &["emc weergave tonen"],
         &["emc", "storing", "kabelklassen", "afscherming"],

@@ -452,6 +452,9 @@ thread_local! {
     static LAID_OUT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// How much further back a fly-to stands than a fit of the same part.
+const FLY_TO_CONTEXT: f32 = 2.6;
+
 /// One 3D view: camera, user state and input handling.
 pub struct View3d {
     id: u64,
@@ -719,6 +722,19 @@ impl View3d {
         let b = self.framing_bounds(scene);
         let mut to = self.camera;
         to.fit_below(&b, self.last_aspect, self.top_inset);
+        self.animate_to(to, now, reduced);
+    }
+
+    /// Frames the selection with its surroundings: a fit, then backed off so
+    /// the neighbouring parts stay in view (a part picked elsewhere is flown
+    /// to, not zoomed onto). With nothing selected it is a plain fit.
+    pub fn fly_to(&mut self, scene: &Scene, now: f64, reduced: bool) {
+        let b = self.framing_bounds(scene);
+        let mut to = self.camera;
+        to.fit_below(&b, self.last_aspect, self.top_inset);
+        if !self.state.selection.is_empty() {
+            to.distance *= FLY_TO_CONTEXT;
+        }
         self.animate_to(to, now, reduced);
     }
 

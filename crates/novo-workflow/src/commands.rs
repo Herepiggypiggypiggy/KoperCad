@@ -1461,6 +1461,22 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.emc_nets",
+        "EMC net classes on the schematic: each wire in the colour of its cable class (indicative)",
+        "View",
+        &[
+            "emc",
+            "net class",
+            "cable class",
+            "wire class",
+            "segregation",
+            "interference",
+            "noise",
+            "schematic",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "view.emc",
         "EMC view: cable classes, keep-clear zones and hot spots (indicative model)",
         "View",

@@ -14,9 +14,12 @@ cooling advice card and a vent and fan position sweep that ranks tries by predic
   and vent sweep", plate right-click. Best few with before/after, flow the openings really pass, housing
   temperatures of the worst-off devices. "Add these two to Vents and fans" is one undo step in the list.
 
+## Done (PR 2)
+- Fan ladder from real fans (project parts and the person's cooling.csv); each option names the article
+  whose free-air flow it uses; generic ladder only when no real fan exists.
+
 ## Next
-1. Hook the Cooling selection engine (#1342): real fan parts and the person's cooling.csv as the
-   ladder (`Settings::fan_flows_m3h`), and propose a cooling unit when no pair works.
+1. Propose a cooling unit (Cooling selection) when no pair works.
 2. Draw the winning pair on the plate/door before adding (preview ghost).
 3. 3D check of the winner in one click (Simulate with the pair), when the large-cabinet CFD lane lands.
 4. Sweep device positions together with openings (with the Cooler layout, #1365).

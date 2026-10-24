@@ -12,7 +12,8 @@ shot before
 check_layout
 click_text "I take this step" Button
 wait 10
-expect "has this step"
+expect "Taken by you or by someone"
+expect_not "Someone has this step"
 shot taken
 check_layout
 click_text "Let go" Button
