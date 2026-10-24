@@ -11,6 +11,14 @@ use super::emc_view::style;
 /// Length of one dash of a bonding outline, screen points.
 const DASH_PX: f32 = 9.0;
 
+fn shield_word(end: emc::ShieldEnd) -> String {
+    match end {
+        emc::ShieldEnd::Full => "screen connected all round".to_owned(),
+        emc::ShieldEnd::Pigtail(mm) => format!("screen on a pigtail of {mm:.0} mm"),
+        emc::ShieldEnd::Open => "screen not connected".to_owned(),
+    }
+}
+
 fn bond_word(q: emc::Quality) -> &'static str {
     match q {
         emc::Quality::Good => "bonded",
@@ -174,28 +182,36 @@ pub(super) fn draw(
         for sh in &pic.shields {
             let at = to_screen(sh.at[0], sh.at[1]);
             let r = (12.0 * px_per_mm).clamp(5.0, 14.0);
+            ui.interact(
+                egui::Rect::from_center_size(at, egui::Vec2::splat(2.0 * r)),
+                egui::Id::new(("emc_plate_shield", &sh.label)),
+                egui::Sense::hover(),
+            )
+            .on_hover_text(format!("{}: {}", sh.label, shield_word(sh.end)));
+            // A dark backing stroke keeps the pale end of the risk ramp readable on both looks.
+            let halo = egui::Color32::from_black_alpha(170);
+            let ring = |c: [u8; 3]| {
+                painter.circle_stroke(at, r, egui::Stroke::new(4.5, halo));
+                painter.circle_stroke(at, r, egui::Stroke::new(2.0, color(c, 255)));
+            };
             match sh.end {
-                emc::ShieldEnd::Full => {
-                    painter.circle_stroke(at, r, egui::Stroke::new(2.0, color(st.good, 255)));
-                }
+                emc::ShieldEnd::Full => ring(st.good),
                 emc::ShieldEnd::Pigtail(mm) => {
                     let c = st.risk((0.55 + mm / 150.0).min(1.0));
-                    painter.circle_stroke(at, r, egui::Stroke::new(2.0, color(c, 255)));
-                    painter.line_segment(
-                        [
-                            at + egui::vec2(0.0, r),
-                            at + egui::vec2(0.0, r + (mm * px_per_mm).clamp(4.0, 30.0)),
-                        ],
-                        egui::Stroke::new(1.5, color(c, 255)),
-                    );
+                    ring(c);
+                    let tail = [
+                        at + egui::vec2(0.0, r),
+                        at + egui::vec2(0.0, r + (mm * px_per_mm).clamp(4.0, 30.0)),
+                    ];
+                    painter.line_segment(tail, egui::Stroke::new(4.0, halo));
+                    painter.line_segment(tail, egui::Stroke::new(1.5, color(c, 255)));
                 }
                 emc::ShieldEnd::Open => {
                     let c = st.risk(0.95);
-                    painter.circle_stroke(at, r, egui::Stroke::new(2.0, color(c, 255)));
-                    painter.line_segment(
-                        [at - egui::vec2(r, r) * 0.7, at + egui::vec2(r, r) * 0.7],
-                        egui::Stroke::new(2.0, color(c, 255)),
-                    );
+                    ring(c);
+                    let bar = [at - egui::vec2(r, r) * 0.7, at + egui::vec2(r, r) * 0.7];
+                    painter.line_segment(bar, egui::Stroke::new(4.5, halo));
+                    painter.line_segment(bar, egui::Stroke::new(2.0, color(c, 255)));
                 }
             }
         }
@@ -338,5 +354,45 @@ mod tests {
         d.frame();
         let pic = d.app.cabinet.emc.picture().expect("a picture of the plate");
         assert!(!pic.bonds.is_empty(), "the fixture has a weak bond");
+    }
+
+    #[test]
+    fn the_plate_picture_carries_all_three_shield_ends() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../qa/fixtures/emc-cabinet-shields.novo");
+        d.app.open_path_as(&path, false);
+        d.frame();
+        d.app
+            .switch_workspace(crate::app::workspace::Workspace::Cabinet);
+        d.frame();
+        d.app.cabinet.emc.on = true;
+        d.app.cabinet.emc.layers.shields = true;
+        d.frame();
+        d.frame();
+        let pic = d.app.cabinet.emc.picture().expect("a picture of the plate");
+        let ends: Vec<_> = pic.shields.iter().map(|s| s.end).collect();
+        assert!(
+            ends.contains(&novo_view3d::emc::ShieldEnd::Full),
+            "{ends:?}"
+        );
+        assert!(
+            ends.contains(&novo_view3d::emc::ShieldEnd::Pigtail(60.0)),
+            "{ends:?}"
+        );
+        assert!(
+            ends.contains(&novo_view3d::emc::ShieldEnd::Open),
+            "{ends:?}"
+        );
+        d.app.cabinet.emc.layers.bonding = true;
+        d.frame();
+        let pic = d.app.cabinet.emc.picture().expect("a picture of the plate");
+        assert!(
+            pic.bonds
+                .iter()
+                .all(|b| b.quality == novo_view3d::emc::Quality::Good)
+        );
+        assert!(!pic.bonds.is_empty());
     }
 }

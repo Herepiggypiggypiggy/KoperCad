@@ -499,6 +499,20 @@ pub(super) fn legend(ctx: &egui::Context, view: egui::Rect, state: &EmcState, da
                 );
             }
         }
+        if layers.shields && !pic.shields.is_empty() {
+            heading(ui, "Cable screen ends");
+            for line in [
+                "Plain ring: connected all round",
+                "Ring with a tail: pigtail, the longer, the worse",
+                "Ring with a cross: not connected",
+            ] {
+                ui.label(
+                    egui::RichText::new(line)
+                        .small()
+                        .color(pal.text_secondary),
+                );
+            }
+        }
         if layers.loops {
             ui.label(
                 egui::RichText::new("Shaded sheet: area a circuit encloses")

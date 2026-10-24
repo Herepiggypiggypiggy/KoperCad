@@ -35,7 +35,7 @@ Picking a wire that belongs to a cable adds the cable's card to the panel: tag, 
 
 ## Bonding and shield ends on the plate
 
-With the Bonding chip on, each device's bond to the plate is drawn as a dashed outline: a bonded device in the earth colours, a weak or missing bond with a glowing spot and a hover that says why (the Plate bonding hot spot names it). With the Shields chip on, each shield end is a ring on the device: all round in the good colour, pigtail in a risk colour with a tail, not connected in a risk colour with a cross. A weak bond is a rule on the stated plate finish and bonding, not a measurement. Where to find it: View > EMC on the Cabinet plate (Ctrl+K "EMC view on the plate").
+With the Bonding chip on, each device's bond to the plate is drawn as a dashed outline: a bonded device in the earth colours, a weak or missing bond with a glowing spot and a hover that says why (the Plate bonding hot spot names it). With the Shields chip on, each shield end is a ring on the device: all round in the good colour, pigtail in a risk colour with a tail, not connected in a risk colour with a cross. The legend says what the rings mean (plain ring all round, tail pigtail, cross not connected) and hovering a ring names the cable end. The picture is tested on `qa/fixtures/emc-cabinet-shields.novo` (a galvanised plate, so the drive's bond is a good one, and two shielded cables carrying all three end states; QA 165 and 166). A weak bond is a rule on the stated plate finish and bonding, not a measurement. Where to find it: View > EMC on the Cabinet plate (Ctrl+K "EMC view on the plate").
 
 ## Not in this change
 
