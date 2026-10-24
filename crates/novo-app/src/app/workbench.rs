@@ -217,6 +217,7 @@ pub(crate) struct Workbench {
     pub(super) sheet_exports: std::collections::BTreeMap<PathBuf, u64>,
     /// The live potentials view (Shift+L).
     pub(super) live: super::live::LiveView,
+    pub(super) emc_sch: super::emc_schematic::EmcSchematic,
     /// Electrical values for the live view and the motor start window.
     pub(super) sim: super::simulate::SimState,
     /// Changes mode, while it is on.
@@ -376,6 +377,7 @@ impl Default for Workbench {
             last_export: None,
             sheet_exports: Default::default(),
             live: Default::default(),
+            emc_sch: Default::default(),
             sim: super::simulate::SimState::new(),
             changes: None,
             changes_closed: false,
@@ -564,6 +566,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_save_view",
     "view.3d_wire_runs",
     "view.emc",
+    "view.emc_nets",
     "view.3d_hints",
     "view.3d_select_devices",
     "view.3d_select_rails",
@@ -1242,6 +1245,7 @@ impl NovoApp {
                     self.view3d.controls.layers.wires = true;
                 }
             }
+            "view.emc_nets" => self.toggle_emc_nets(),
             "view.emc" => {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.controls.emc ^= true;
