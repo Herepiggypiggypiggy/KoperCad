@@ -34,9 +34,10 @@ use super::heat_settings::{HeatSettings, Kind, VentSpec, Wall};
 /// carries must be said here.
 pub(super) const FOOTER: &str = "Model estimate: the 2D heat model with planning values, the losses you entered and the wire heat in the ducts. Not validated against measurements, and the 2D slice does not see the depth of the cabinet. Check the winner with Simulate in 3D after adding it.";
 
-/// Width of the window, points.
-pub(super) const WINDOW_WIDTH: f32 = 400.0;
-const WIDTH: f32 = WINDOW_WIDTH;
+/// Width of the window's content, points.
+const WIDTH: f32 = 400.0;
+/// Width of the window with its frame, points: the most it takes.
+pub(super) const WINDOW_WIDTH: f32 = WIDTH + 24.0;
 /// Tallest the list of options gets before it scrolls, points: the window
 /// stays small enough to leave the drawing visible.
 const MAX_BODY: f32 = 440.0;
@@ -376,6 +377,7 @@ impl CoolingAdvice {
             .resizable(false)
             .default_pos(at)
             .default_width(WIDTH)
+            .max_width(WINDOW_WIDTH)
             .show(ctx, |ui| {
                 ui.set_max_width(WIDTH);
                 ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
