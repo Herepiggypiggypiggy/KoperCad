@@ -25,7 +25,7 @@ expect "Indicative: a design aid, not a test result."
 expect "holds or it does not"
 shot cable-card
 check_layout
-scroll 1180 400 -2000
+scroll 1180 400 2000
 wait 8
 click_text "Apply: Use a shielded cable." #1
 wait 15
