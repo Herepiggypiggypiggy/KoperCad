@@ -491,6 +491,13 @@ pub(super) fn legend(ctx: &egui::Context, view: egui::Rect, state: &EmcState, da
                     .rect_filled(r.with_min_x(r.center().x), 3.0, color(st.earth.1));
                 ui.label("Earth and bonding");
             });
+            if pic.bonds.iter().any(|b| b.quality != emc::Quality::Good) {
+                ui.label(
+                    egui::RichText::new("Glowing spot on an outline: a weak or missing bond")
+                        .small()
+                        .color(pal.text_secondary),
+                );
+            }
         }
         if layers.loops {
             ui.label(
