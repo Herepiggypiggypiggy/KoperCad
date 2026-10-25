@@ -230,7 +230,9 @@ pub fn build(
              raises the device surface coefficient with the fan flow; against the 3D solver it brings the \
              housing gain of a fan fix to between 22 % below and 45 % above it in 18 cases, 12 of them \
              boxes it was not fitted on, for one device and a 60 to 250 m3/h fan; beyond that it is an \
-             extrapolation (model against model, not a measurement)."
+             extrapolation. It gives every device the same jet speed: for a device beside the line \
+             between fan and vent the 3D solver gave a third to three quarters of that gain, in one wide box \
+             none (model against model, not a measurement)."
                 .into(),
         );
     }

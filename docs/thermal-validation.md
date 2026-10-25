@@ -160,3 +160,22 @@ It was fitted by hand on one box (600x800x300 mm, six cases: 60 and 120 W, 60 / 
 So on the held-out boxes the 2D gain is between 22% below and 45% above the 3D gain, the flat-with-flow error is gone (the 2D surface coefficient now rises with the flow, 10.3, 11.5 and 14.0 W/m2K at 60, 120 and 250 m3/h for 60 W in the first box), and the two boxes miss in opposite directions, so the cross-section is not what separates them. One coefficient cannot make all three boxes agree; the test holds each case to the band 0.65 to 1.35 and the fitted box to 10%. This is a fit to a 3D solver that is itself a reduced model, at 3000 cells where its gain rises 9 to 11% with the mesh: the 2D fan gain is now about what that solver says, which is not a measurement. `ENCLOSURE_VALIDATED` stays false. The what-if says so next to a fix with fans.
 
 Limits of the term: it was checked only for one device in a box with a 60 to 250 m3/h fan. The jet speed is linear in the flow and not capped (about 1.2 m/s at 250 m3/h and 3.7 m/s at 800 m3/h in the 600x800x300 box), so a bigger fan, which the what-if ladder offers, is an extrapolation; and in the deeper 600x600x400 box the gain is overstated by up to 45 %, consistently on the optimistic side. Also: the jet speed is the same for every device, whatever its distance from the fan, and with several fans it uses the larger of the intake total and the exhaust total; the fitting and checking cases are one device in a box with one fan. A cabinet with two fans, or a device far from the jet, may be off by more than the band above. Distance from the fan is the next step (`handoff/cooling-whatif/ROADMAP.md`).
+
+## Fan gain: where the device sits
+
+The jet speed term gives every device the same speed. The 3D solver does not: the jet runs from the fan to the vent, and a device beside that line sees much less of it. `crates/novo-cfd/tests/validation_fan_position.rs` (ignored sweep, 3000 cells, 120 W, 35 C outside, fan low in the middle with the vent on top in the middle) moves the device along that line and sideways in four boxes, the fourth (1000x600x250 mm) one that no fit looked at. 3D housing gain over 2D housing gain (1 is agreement, below 1 means the 2D model gains too much), fan 250 m3/h:
+
+| device position | 600x800x300 | 800x1200x300 | 600x600x400 | 1000x600x250 |
+| --- | --- | --- | --- | --- |
+| on the line, near the vent | 0.99 | 1.13 | 0.64 | 1.32 |
+| on the line, middle | 0.88 | 0.29 | 0.51 | 0.82 |
+| on the line, near the fan | 1.15 | 1.16 | 0.89 | 0.83 |
+| beside the line (0.3 of the width off), left / right | 0.65 / 0.57 | 0.33 / 0.33 | 0.58 / 0.52 | -0.11 / -0.10 |
+
+What this says:
+- The fit of the previous section put its device within 25 mm of the line, and on the line the 2D gain is between 0.3 and 1.3 times the 3D one (median about 0.9).
+- Beside the line the 2D gain is one and a half to three times the 3D one in three boxes, and in the wide 1000 mm box the 3D solver shows the device getting slightly hotter with the fan on (about 4 K). The 2D model cannot show that.
+- In the tall box the middle of the line is also low (0.2 to 0.3): the jet does not reach that far in the 3D solver at 3000 cells.
+- At 120 m3/h the rows look the same (`tests/fan_position.rs` freezes the 250 m3/h rows).
+
+A position weight was tried: the jet speed times a lateral Gaussian around the fan-to-vent line and an axial fall-off from either opening, with a depth exponent (five parameters, fitted on 48 cases of this sweep and the previous one, `rms ln` of the 3D/2D ratio 0.47 before, 0.29 after). It was not kept: the fit ran the depth exponent to its upper bound, made the cases of the previous section worse (the tall box rose to 1.4 to 1.7), and on the held-out box it helped near the vent (1.01 against 1.32) but made the middle and the fan end worse (0.70 and 0.62 where the merged term gives 0.82 and 0.83) while the beside-the-line cases still read far too high. A fit like that would be tuned to this sweep. What is kept is the finding and the wording: the what-if says a device beside the stream between fan and vent may gain much less than shown. `tests/fan_position.rs` pins this (on the line the median 3D/2D within 0.8 to 1.2; beside it below 0.85) so a change that moves it is noticed. The 3D solver is itself a reduced model, so which side is closer to a real cabinet is not known.
