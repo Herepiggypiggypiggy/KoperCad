@@ -56,7 +56,7 @@ printable on an ordinary office printer, ticked with a pencil.
 - The tool list is derived from the hole diameters and cut-outs and is a suggestion, not a standard.
 - Door and wall features are on a card through the device that carries them, and the Heat panel's grilles
   and fans have a "CUT-OUT" card each at the end of the cabinet's cards (not build order steps: a wall
-  is cut before the plate goes in). Their centre is measured from the interior's edge, not the outer
+  is cut before the plate goes in). They show the opening as the Heat panel and solver cut it (moved and trimmed to lie inside its wall), not as typed. Their centre is measured from the interior's edge, not the outer
   door edge, and a top, bottom or side wall has no stored position across its depth, which the card
   says. Wiring openings (`opening.*`) and plain door cut-outs without a device are still only on the
   cut-out cards and the tiled template.

@@ -241,17 +241,13 @@ fn cut_list_wires_without_a_cabinet_end_are_named_on_the_cover() {
     assert!(named[0].contains("(feed)"), "{}", named[0]);
 }
 
-#[test]
-fn the_heat_panels_vents_and_fans_become_cut_out_cards_outside_the_build_order() {
-    use super::heat_openings_store;
-    use super::heat_settings::{Kind, VentSpec, Wall};
-
-    let dir = tempfile::tempdir().unwrap();
-    let mut d = Drive::new(&dir.path().join("untitled"));
+/// A saved project with a plated cabinet `+CAB1` whose interior is 600 x 800 x 250 mm.
+fn vent_cabinet(dir: &std::path::Path) -> (Drive, novo_core::StructureId) {
+    let mut d = Drive::new(&dir.join("untitled"));
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::NewProject);
     d.frame();
-    assert!(d.app.save_to(&dir.path().join("Plant 3.novo")));
+    assert!(d.app.save_to(&dir.join("Plant 3.novo")));
     cabinet_with_devices(&mut d);
     d.app.run(&ctx, Action::ShowCabinet);
     d.frame();
@@ -273,6 +269,81 @@ fn the_heat_panels_vents_and_fans_become_cut_out_cards_outside_the_build_order()
         .cabinet_ask(Ask::PlaceAll, Some(cab), layout, &candidates);
     d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
 
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Interior", |tx| {
+            for (k, v) in [
+                ("interior_width_mm", 600.0),
+                ("interior_height_mm", 800.0),
+                ("interior_depth_mm", 250.0),
+            ] {
+                tx.set_property(cab, k, Some(Value::Float(v)))?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    (d, cab)
+}
+
+fn store_vents(
+    d: &mut Drive,
+    cab: novo_core::StructureId,
+    vents: &[super::heat_settings::VentSpec],
+) {
+    let held = super::heat_openings_store::text(vents);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Vents", |tx| {
+            tx.set_property(
+                cab,
+                super::heat_openings_store::KEY,
+                Some(Value::Text(held)),
+            )
+        })
+        .unwrap();
+}
+
+#[test]
+fn an_opening_over_a_wall_edge_is_printed_where_the_heat_panel_and_solver_cut_it() {
+    use super::heat_settings::{VentSpec, Wall};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut d, cab) = vent_cabinet(dir.path());
+    // 150 wide, centre 5 mm from the top of the left wall: the panel pulls it to 0..150.
+    let mut over = VentSpec::new(Wall::Left);
+    over.u_mm = 5.0;
+    over.width_mm = 150.0;
+    over.height_mm = 100.0;
+    // Wider than the wall is long: cut down to the wall.
+    let mut huge = VentSpec::new(Wall::Top);
+    huge.width_mm = 5000.0;
+    store_vents(&mut d, cab, &[over, huge]);
+    let packs = work_packs(&d.app.machine().unwrap());
+    let cards: Vec<_> = packs[0]
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Opening)
+        .collect();
+    assert_eq!(cards.len(), 2);
+    assert!(cards[0].dims[0].contains("75 mm"), "{:?}", cards[0].dims);
+    assert!(
+        cards[0].dims[1].contains("Top edge 0 mm, bottom edge 150 mm"),
+        "{:?}",
+        cards[0].dims
+    );
+    let t = cards[1].template.as_ref().unwrap();
+    assert!(t.width <= 600.0 + 20.0 + 1e-6, "{}", t.width);
+}
+
+#[test]
+fn the_heat_panels_vents_and_fans_become_cut_out_cards_outside_the_build_order() {
+    use super::heat_settings::{Kind, VentSpec, Wall};
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut d, cab) = vent_cabinet(dir.path());
     // No vents: no opening cards.
     let none = work_packs(&d.app.machine().unwrap());
     assert!(none[0].cards.iter().all(|c| c.kind != CardKind::Opening));
@@ -284,22 +355,7 @@ fn the_heat_panels_vents_and_fans_become_cut_out_cards_outside_the_build_order()
     fan.width_mm = 120.0;
     fan.height_mm = 120.0;
     let grille = VentSpec::new(Wall::Top);
-    let held = heat_openings_store::text(&[fan, grille]);
-    d.app
-        .backend
-        .document_mut()
-        .unwrap()
-        .transact("Vents", |tx| {
-            for (k, v) in [
-                ("interior_width_mm", 600.0),
-                ("interior_height_mm", 800.0),
-                ("interior_depth_mm", 250.0),
-            ] {
-                tx.set_property(cab, k, Some(Value::Float(v)))?;
-            }
-            tx.set_property(cab, heat_openings_store::KEY, Some(Value::Text(held)))
-        })
-        .unwrap();
+    store_vents(&mut d, cab, &[fan, grille]);
     let packs = work_packs(&d.app.machine().unwrap());
     let cards: Vec<_> = packs[0]
         .cards

@@ -16,6 +16,8 @@ use novo_layout::workpack::{
 };
 use novo_reports::{AssemblyChecklist, Cell, CutList, Report, Section, is_estimate};
 
+use novo_thermal::bridge::{BridgeOptions, scenario_from_project};
+
 use super::assembly::Circuit;
 use super::heat_openings_store;
 use super::heat_settings::{Kind, Wall};
@@ -140,35 +142,48 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
             .collect();
         let mut pack = build(&tag, &layout, &features, &name, &groups);
         pack.problems.extend(missing);
-        if let Some(e) = layout.enclosure {
-            let stored = heat_openings_store::stored_text(project, enclosure.id);
-            let jobs: Vec<OpeningJob> = heat_openings_store::parse(&stored)
-                .iter()
-                .enumerate()
-                .map(|(i, v)| OpeningJob {
-                    name: format!("Opening {}", i + 1),
-                    what: match v.kind {
-                        Kind::Grille => "grille",
-                        Kind::Fan => "fan",
-                        Kind::FilterFan => "filter fan",
-                    }
-                    .to_owned(),
-                    wall: match v.wall {
-                        Wall::Door => OpeningWall::Door,
-                        Wall::Top => OpeningWall::Top,
-                        Wall::Bottom => OpeningWall::Bottom,
-                        Wall::Left => OpeningWall::Left,
-                        Wall::Right => OpeningWall::Right,
-                    },
-                    along: v.u_mm,
-                    down: (v.wall == Wall::Door).then_some(v.v_mm),
-                    width: v.width_mm,
-                    height: v.height_mm,
-                    size: (e.width, e.height),
-                    depth: e.depth,
-                })
-                .collect();
-            add_opening_cards(&mut pack, &jobs);
+        let stored = heat_openings_store::stored_text(project, enclosure.id);
+        let vents = heat_openings_store::parse(&stored);
+        if !vents.is_empty() {
+            // The openings as the Heat panel and the solver cut them: moved and
+            // trimmed to lie inside their wall, in the interior's millimetres.
+            match scenario_from_project(project, enclosure.id, &BridgeOptions::default()) {
+                Ok(built) => {
+                    let e = built.scenario.enclosure;
+                    let jobs: Vec<OpeningJob> = vents
+                        .iter()
+                        .map(|v| v.fitted(&e))
+                        .enumerate()
+                        .map(|(i, v)| OpeningJob {
+                            name: format!("Opening {}", i + 1),
+                            what: match v.kind {
+                                Kind::Grille => "grille",
+                                Kind::Fan => "fan",
+                                Kind::FilterFan => "filter fan",
+                            }
+                            .to_owned(),
+                            wall: match v.wall {
+                                Wall::Door => OpeningWall::Door,
+                                Wall::Top => OpeningWall::Top,
+                                Wall::Bottom => OpeningWall::Bottom,
+                                Wall::Left => OpeningWall::Left,
+                                Wall::Right => OpeningWall::Right,
+                            },
+                            along: v.u_mm,
+                            down: (v.wall == Wall::Door).then_some(v.v_mm),
+                            width: v.width_mm,
+                            height: v.height_mm,
+                            size: (e.interior_width_mm(), e.interior_height_mm()),
+                            depth: e.interior_depth_mm(),
+                        })
+                        .collect();
+                    add_opening_cards(&mut pack, &jobs);
+                }
+                Err(_) => pack.problems.push(format!(
+                    "{} grille or fan openings of the Heat panel are not on cards: the Heat view cannot build this cabinet (interior size or plate missing)",
+                    vents.len()
+                )),
+            }
         }
         out.push(pack);
     }
