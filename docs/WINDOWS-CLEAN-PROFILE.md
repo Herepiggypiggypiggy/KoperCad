@@ -31,7 +31,7 @@ rights. If one asks for it, stop and say so. Download `KoperCAD-<version>-setup.
    present: any `novoelectric` entry.
 5. Help, About: maker KoperVonk, licence, the graphics adapter line names your real GPU (not a
    software renderer); "Copy version info" puts text on the clipboard; "Open log folder" opens
-   `%LOCALAPPDATA%\KoperCAD` or a folder under it.
+   a folder in Explorer (note its path).
 6. Note the window at your display scale (100%, and 150% or 200% if you can change it): text and
    icons sharp, nothing cut off, no console window flashing at start.
 
