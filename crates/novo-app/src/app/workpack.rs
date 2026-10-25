@@ -75,13 +75,17 @@ fn cut_lengths(project: &Project) -> BTreeMap<(String, String, String), VecDeque
 /// and `(2, 2)`; a number used once is `None`.
 pub(super) fn parts_of(numbers: &[String]) -> Vec<Option<(usize, usize)>> {
     let mut uses: BTreeMap<&str, usize> = BTreeMap::new();
-    for n in numbers {
+    for n in numbers.iter().filter(|n| !n.trim().is_empty()) {
         *uses.entry(n).or_default() += 1;
     }
     let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
     numbers
         .iter()
         .map(|n| {
+            // An unnumbered wire is not "1 of N" of the other unnumbered ones.
+            if n.trim().is_empty() {
+                return None;
+            }
             let nth = seen.entry(n).or_default();
             *nth += 1;
             (uses[n.as_str()] > 1).then_some((*nth, uses[n.as_str()]))
@@ -152,9 +156,14 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                 .flatten()
                 .collect::<Vec<_>>()
                 .join(" ");
-                if kind.is_empty() {
-                    // A blank cell reads as a printing error at the bench.
-                    kind = "size not set".to_owned();
+                if size.is_empty() {
+                    // A blank cell reads as a printing error at the bench; a
+                    // colour alone hides that the size is missing.
+                    kind = if kind.is_empty() {
+                        "size not set".to_owned()
+                    } else {
+                        format!("size not set, {kind}")
+                    };
                 }
                 by_circuit
                     .entry(Circuit::of(&colour, &size))

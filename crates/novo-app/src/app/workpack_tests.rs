@@ -588,4 +588,10 @@ fn parts_of_counts_each_number_in_row_order() {
         [Some((1, 3)), None, Some((2, 3)), None, Some((3, 3))]
     );
     assert!(parts_of(&n(&[])).is_empty());
+    // Unnumbered wires are not parts of one another.
+    assert_eq!(parts_of(&n(&["", " ", "", "7"])), [None, None, None, None]);
+    assert_eq!(
+        parts_of(&n(&["", "7", "", "7"])),
+        [None, Some((1, 2)), None, Some((2, 2))]
+    );
 }
