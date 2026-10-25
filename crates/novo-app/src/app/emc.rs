@@ -280,7 +280,19 @@ pub(super) fn preview_card(
                 for (rule, msg) in &v.added {
                     ui.colored_label(p.warning, format!("Brings {rule}: {msg}"));
                 }
-                if v.cleared.is_empty() && v.added.is_empty() {
+                for e in &v.eased {
+                    ui.colored_label(
+                        p.success,
+                        format!(
+                            "Eases {} from {} to {}: {}",
+                            e.rule,
+                            e.from.word(),
+                            e.to.word(),
+                            e.after
+                        ),
+                    );
+                }
+                if v.cleared.is_empty() && v.added.is_empty() && v.eased.is_empty() {
                     ui.weak("No finding is cleared or added by this fix.");
                 }
                 for (_, name, before, after) in &v.scores {
@@ -588,7 +600,10 @@ impl NovoApp {
                 p.findings_after,
                 match p.cleared.first() {
                     Some((rule, _)) => format!("; clears {rule}"),
-                    None => String::new(),
+                    None => match p.eased.first() {
+                        Some(e) => format!("; eases {}", e.rule),
+                        None => String::new(),
+                    },
                 }
             ),
             after: true,
