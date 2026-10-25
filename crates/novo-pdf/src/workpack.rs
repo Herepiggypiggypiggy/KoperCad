@@ -371,9 +371,15 @@ fn is_block(card: &Card) -> bool {
         .is_some_and(|t| t.width <= t.height * 3.0)
 }
 
+const HONESTY_OPENING: &str = "Positions come from the Heat panel's settings, not from your cabinet: check the first cut-out against the real wall or door.";
 const HONESTY: &str = "Positions come from the cabinet layout, not from your plate: check the first part against the real plate.";
 
 fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
+    let honesty = if card.kind == CardKind::Opening {
+        HONESTY_OPENING
+    } else {
+        HONESTY
+    };
     let mut tools: Vec<String> = card.tools.iter().map(|t| format!("- {t}")).collect();
     tools.extend(card.notes.iter().map(|n| format!("Note: {n}")));
     let dims: Vec<String> = card.dims.iter().map(|d| format!("- {d}")).collect();
@@ -448,7 +454,7 @@ fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
     let (tx, tw, ttop) = tools_at;
     // Block cards keep the honesty note at the foot of the left column.
     if is_block(card) {
-        let lines = wrap(HONESTY, LEFT_W - 4.0, 2.5);
+        let lines = wrap(honesty, LEFT_W - 4.0, 2.5);
         let h = lines.len() as f64 * 3.5;
         for (i, l) in lines.into_iter().enumerate() {
             text(
@@ -468,7 +474,7 @@ fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
             2.5,
             HAlign::Left,
             false,
-            HONESTY,
+            honesty,
         );
         bottom -= 5.0;
     }
