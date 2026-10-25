@@ -228,7 +228,7 @@ pub struct Reading {
 }
 
 impl Reading {
-    fn of(r: &ThermalResult) -> Reading {
+    pub(crate) fn of(r: &ThermalResult) -> Reading {
         let margins_k: Vec<Option<f64>> = r.devices.iter().map(|d| d.margin_k).collect();
         Reading {
             worst_margin_k: margins_k
@@ -380,7 +380,7 @@ pub fn sweep(scn: &Scenario) -> Result<Sweep, Error> {
 }
 
 /// A run on `cell_mm` of the scenario, warm-started from `init`.
-fn run(
+pub(crate) fn run(
     scn: &Scenario,
     cell_mm: f64,
     init: Option<&State>,

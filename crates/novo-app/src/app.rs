@@ -122,6 +122,9 @@ mod heat_time;
 #[cfg(test)]
 mod heat_time_tests;
 mod heat_verdict;
+mod heat_whatif;
+#[cfg(test)]
+mod heat_whatif_tests;
 mod heat_wires;
 #[cfg(test)]
 mod heat_wires_tests;
@@ -1251,6 +1254,9 @@ impl NovoApp {
         // The openings of the Heat panel belong to the project's enclosure.
         self.cabinet.heat.settings.load(Vec::new());
         self.cabinet.heat.settings.stored = None;
+        // A what-if answer is for the cabinet it was run on: its Apply would move
+        // the devices of another file, and a run in flight would land there.
+        self.cabinet.heat.whatif.close();
         // The live view, an open drawer and a preview belong to the project
         // they were opened on; a lesson (or any project) starts clean.
         self.wb.live = Default::default();

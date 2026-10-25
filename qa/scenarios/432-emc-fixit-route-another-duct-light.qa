@@ -1,0 +1,35 @@
+@title EMC fix-it: the route-another-duct preview in the Light theme
+@area Cabinet
+@sizes 1366x768 1920x1080
+# Same as 430 in the Light theme. The fixture has a second duct below the devices. Check > EMC check lists EMC-01 (motor and analog wires in one duct) with "Preview: Route the wire in another duct if one reaches both ends". The preview re-routes a copy: EMC-01 goes. Apply is one undo step. The pictures are the evidence.
+open qa/fixtures/emc-cabinet-two-ducts.novo
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+expect "Preview: Route the wire in another duct"
+click_text "Preview: Route the wire in another duct" #1
+wait 10
+expect "Preview on a copy of the project"
+expect "Clears EMC-01"
+shot 01-preview
+check_layout
+click_text "Apply (one undo step)" #1
+wait 15
+expect "Wire asked to stay out of the duct"
+expect_not "Preview on a copy of the project"
+shot 02-applied
+check_layout

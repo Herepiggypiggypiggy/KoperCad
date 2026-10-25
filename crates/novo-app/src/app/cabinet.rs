@@ -1767,6 +1767,11 @@ impl NovoApp {
                         ),
                     }
                 }
+                if self.cabinet.heat.whatif.pending() {
+                    // The wizard previews its fixes in the 3D view.
+                    self.switch_workspace(super::workspace::Workspace::View3d);
+                    return;
+                }
                 self.cabinet.heat.layout.poll(ui.ctx());
                 if self.cabinet.heat.layout.take_request() {
                     match structure {

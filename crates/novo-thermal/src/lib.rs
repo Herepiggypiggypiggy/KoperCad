@@ -25,6 +25,7 @@ pub mod result;
 mod setup;
 pub mod sweep;
 mod thermal;
+pub mod whatif;
 pub mod wires;
 
 pub use model::*;

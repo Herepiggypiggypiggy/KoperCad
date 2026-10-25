@@ -56,6 +56,7 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("heat.legend", "Heat legend"),
     ("heat.simulate", "Simulate button"),
     ("heat.cooling_advice", "Cooling advice button"),
+    ("heat.cooling_whatif", "Cooling what-if button"),
     ("heat.cooler_layout", "Cooler layout button"),
     ("cabinet.canvas", "Cabinet canvas"),
     ("workspace.view3d", "3D canvas"),
@@ -213,6 +214,7 @@ pub(crate) fn anchor_fallback(id: &str) -> Option<String> {
         | "heat.legend"
         | "heat.simulate"
         | "heat.cooling_advice"
+        | "heat.cooling_whatif"
         | "heat.cooler_layout" => Some("cabinet.heat".to_owned()),
         _ => None,
     }
