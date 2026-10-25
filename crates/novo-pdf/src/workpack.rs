@@ -230,9 +230,9 @@ fn draw_template(m: &mut Marks, t: &Template, ox: f64, oy: f64, s: f64) {
             }
         }
     }
-    let cross = |m: &mut Marks, p: (f64, f64), arm: f64| {
-        line(m, Layer::Holes, (p.0 - arm, p.1), (p.0 + arm, p.1));
-        line(m, Layer::Holes, (p.0, p.1 - arm), (p.0, p.1 + arm));
+    let cross = |m: &mut Marks, p: (f64, f64), (ax, ay): (f64, f64)| {
+        line(m, Layer::Holes, (p.0 - ax, p.1), (p.0 + ax, p.1));
+        line(m, Layer::Holes, (p.0, p.1 - ay), (p.0, p.1 + ay));
     };
     for hole in &t.holes {
         let p = map(hole.x, hole.y);
@@ -244,7 +244,7 @@ fn draw_template(m: &mut Marks, t: &Template, ox: f64, oy: f64, s: f64) {
                 radius: r,
             },
         ));
-        cross(m, p, r + 3.0);
+        cross(m, p, (r + 3.0, r + 3.0));
         if hole.no > 0 {
             text(
                 m,
@@ -273,10 +273,12 @@ fn draw_template(m: &mut Marks, t: &Template, ox: f64, oy: f64, s: f64) {
                 },
             )),
         }
+        // Each arm reaches 3 mm past the outline on its own axis, so a wide
+        // slot does not throw a vertical line far out of its frame.
         let arm = match c.shape {
-            CutoutShape::Rect { w, h } => w.max(h) * s / 2.0,
-            CutoutShape::Round { dia } => dia * s / 2.0,
-        } + 3.0;
+            CutoutShape::Rect { w, h } => (w * s / 2.0 + 3.0, h * s / 2.0 + 3.0),
+            CutoutShape::Round { dia } => (dia * s / 2.0 + 3.0, dia * s / 2.0 + 3.0),
+        };
         cross(m, p, arm);
     }
     text(
@@ -392,7 +394,7 @@ fn is_block(card: &Card) -> bool {
         .is_some_and(|t| t.width <= t.height * 3.0)
 }
 
-const HONESTY_OPENING: &str = "Positions come from the Heat panel's settings, not from your cabinet: check the first cut-out against the real wall or door.";
+const HONESTY_OPENING: &str = "Positions come from the cabinet model (Heat panel or opening settings), not from your cabinet: check the first cut-out against the real wall, door or plate.";
 const HONESTY: &str = "Positions come from the cabinet layout, not from your plate: check the first part against the real plate.";
 
 fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
@@ -425,10 +427,12 @@ fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
         Some(t) if is_block(card) => {
             // Template on the right, true size where it fits; the lists in
             // the left column under the instruction.
-            let s = template_scale(t.width, t.height, BLOCK_W - 8.0, BLOCK_H);
+            let s = template_scale(t.width, t.height, BLOCK_W - 8.0, BLOCK_H - 3.0);
             let ox = x0 + BLOCK_X + 8.0;
             let top = y0 + HEAD_H + 2.5;
-            draw_template(m, t, ox, top + 8.0, s);
+            // A scaled template carries a second heading line: start it lower so
+            // the dimension labels above the frame stay clear of the hint.
+            draw_template(m, t, ox, top + if s < 0.9999 { 11.0 } else { 8.0 }, s);
             text(
                 m,
                 (x0 + BLOCK_X, top),
@@ -670,7 +674,7 @@ fn label_table(m: &mut Marks, card: &Card, x0: f64, y: f64, _bottom: f64) {
 /// after the step cards but are done before the plate goes in.
 fn cut_out_note(n: usize) -> String {
     format!(
-        "{n} cut-out card{} at the end of the cards ({} for the grilles and fans in the walls and door): do {} FIRST, before the plate goes in. They are not numbered steps.",
+        "{n} cut-out card{} at the end of the cards ({} for grilles, fans and wiring openings): do {} FIRST, before the plate goes in. They are not numbered steps.",
         if n == 1 { "" } else { "s" },
         "CUT-OUT",
         if n == 1 { "it" } else { "them" }
@@ -1225,6 +1229,92 @@ mod tests {
         let m = card_marks(&p.cards[0], &p.cabinet, CARD_Y[0]);
         assert!(!m.texts.iter().any(|t| t.text == "K1"));
         assert!(m.shapes.iter().any(|(l, _)| *l == Layer::Devices));
+    }
+
+    #[test]
+    fn a_scaled_templates_hint_stays_clear_of_its_dimension_labels() {
+        use novo_layout::workpack::{OpeningJob, OpeningWall, add_opening_cards};
+        let mut p = pack(0, false);
+        add_opening_cards(
+            &mut p,
+            &[OpeningJob {
+                name: "x".into(),
+                what: "grille".into(),
+                wall: OpeningWall::Door,
+                along: 300.0,
+                down: Some(200.0),
+                width: 60.0,
+                height: 60.0,
+                size: (600.0, 800.0),
+                depth: 250.0,
+            }],
+        );
+        let card = p.cards.last().unwrap();
+        let m = card_marks(card, &p.cabinet, CARD_Y[0]);
+        let hint = m
+            .texts
+            .iter()
+            .find(|t| t.text.contains("Measure from the list"))
+            .expect("hint");
+        // Labels above the frame: the numeric ones in the block column.
+        let labels: Vec<_> = m
+            .texts
+            .iter()
+            .filter(|t| {
+                t.pos.0 > CARD_X + BLOCK_X
+                    && t.text.parse::<f64>().is_ok()
+                    && t.pos.1 < hint.pos.1 + 10.0
+            })
+            .collect();
+        assert!(!labels.is_empty());
+        for l in labels {
+            assert!(
+                l.pos.1 >= hint.pos.1 + 2.4,
+                "{} at {} hint at {}",
+                l.text,
+                l.pos.1,
+                hint.pos.1
+            );
+        }
+    }
+
+    #[test]
+    fn wiring_opening_cards_stay_inside_their_half_page() {
+        use novo_layout::openings::{Opening, OpeningShape};
+        use novo_layout::workpack::add_wiring_opening_cards;
+        let mut l = CabinetLayout::new(Plate {
+            width: 800.0,
+            height: 600.0,
+            margin: 10.0,
+        });
+        l.surface_sizes.insert("door".into(), (600.0, 800.0));
+        let mk = |shape, surface: &str| Opening {
+            name: "cable entry".into(),
+            surface: surface.into(),
+            shape,
+            x: 300.0,
+            y: 200.0,
+            keep: 5.0,
+            exit: None,
+        };
+        l.openings = vec![
+            mk(OpeningShape::Round { dia: 25.0 }, "plate"),
+            mk(OpeningShape::Rect { w: 300.0, h: 40.0 }, "door"),
+        ];
+        let mut p = pack(0, false);
+        add_wiring_opening_cards(&mut p, &l);
+        for card in p.cards.iter().filter(|c| c.kind == CardKind::Opening) {
+            for y0 in CARD_Y {
+                let m = card_marks(card, &p.cabinet, y0);
+                let bad = inside(&m, y0);
+                assert!(bad.is_empty(), "{}: {bad:?}", card.mark);
+                assert!(
+                    !m.texts.iter().any(|t| t.text.ends_with("...")),
+                    "{}",
+                    card.mark
+                );
+            }
+        }
     }
 
     #[test]

@@ -422,3 +422,48 @@ fn a_rail_cards_clips_are_the_devices_the_build_order_clips_on_it_at_the_same_di
     }
     assert!(seen > 0);
 }
+
+#[test]
+fn wiring_openings_of_the_cabinet_become_cut_out_cards() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut d, cab) = vent_cabinet(dir.path());
+    let none = work_packs(&d.app.machine().unwrap());
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Openings", |tx| {
+            tx.set_property(
+                cab,
+                "opening.grommet",
+                Some(Value::Text("plate round 30 200 150".into())),
+            )?;
+            tx.set_property(
+                cab,
+                "opening.entry",
+                Some(Value::Text("door rect 80 40 300 100".into())),
+            )
+        })
+        .unwrap();
+    let packs = work_packs(&d.app.machine().unwrap());
+    let cards: Vec<_> = packs[0]
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Opening)
+        .collect();
+    assert_eq!(cards.len(), 2, "{:?}", packs[0].problems);
+    assert!(cards.iter().any(|c| c.mark.contains("grommet")));
+    let door = cards.iter().find(|c| c.mark.contains("entry")).unwrap();
+    assert!(door.dims[0].contains("300"), "{:?}", door.dims);
+    assert_eq!(packs[0].overview.len(), none[0].overview.len());
+    // Both in the PDF the user prints.
+    let pdf = d.app.export_workpack().expect("exported");
+    let doc = lopdf::Document::load_mem(&std::fs::read(&pdf).unwrap()).unwrap();
+    let all: String = (1..=doc.get_pages().len() as u32)
+        .map(|p| doc.extract_text(&[p]).unwrap_or_default())
+        .collect();
+    assert!(
+        all.contains("grommet") && all.contains("2 cut-out cards"),
+        "{all}"
+    );
+}

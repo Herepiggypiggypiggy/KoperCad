@@ -542,7 +542,7 @@ pub fn build(
                                 format!("Hole saw or step drill, dia {} mm", mm(dia))
                             }
                             CutoutShape::Rect { w, h } => {
-                                format!("Punch or jigsaw for {} x {} mm", mm(w), mm(h))
+                                format!("Punch, nibbler or jigsaw for {} x {} mm", mm(w), mm(h))
                             }
                         });
                         cutout = Some(TemplateCutout {
@@ -722,7 +722,7 @@ fn tool_list(cards: &[Card], table: &DrillTable, groups: &[WireGroup]) -> Vec<To
             tool: match c.shape {
                 CutoutShape::Round { dia } => format!("Hole saw or step drill, dia {} mm", mm(dia)),
                 CutoutShape::Rect { w, h } => {
-                    format!("Punch or jigsaw, {} x {} mm", mm(w), mm(h))
+                    format!("Punch, nibbler or jigsaw, {} x {} mm", mm(w), mm(h))
                 }
             },
             for_what: format!(
@@ -837,7 +837,7 @@ pub fn add_opening_cards(pack: &mut Pack, openings: &[OpeningJob]) {
                     mm(v + h / 2.0)
                 ));
                 notes.push(format!(
-                    "Measured on the door from the corner of the interior opening ({} x {} mm), not from the outer door edge: add the door's flange.",
+                    "Seen from outside with the door closed. Measured on the door from the corner of the interior opening ({} x {} mm), not from the outer door edge: add the door's flange.",
                     mm(o.size.0),
                     mm(o.size.1)
                 ));
@@ -971,6 +971,213 @@ pub fn add_opening_cards(pack: &mut Pack, openings: &[OpeningJob]) {
                 },
             },
         );
+    }
+}
+
+/// How a surface's own coordinates run, in the model's frames (`surfaces.rs`):
+/// where x and y are measured from and which way the surface is seen. A wall
+/// or the roof does not start at "the left edge" the way a door does.
+struct Frame {
+    x_from: &'static str,
+    y_from: &'static str,
+    /// Plate and door are told by the nearest edge; the others by their origin.
+    nearest_edges: bool,
+    view: &'static str,
+}
+
+fn frame_of(name: &str) -> Frame {
+    use crate::surfaces::SurfaceKind::*;
+    match crate::surfaces::SurfaceKind::from_name(name) {
+        Some(Plate) => Frame {
+            x_from: "the left edge",
+            y_from: "the top edge",
+            nearest_edges: true,
+            view: "Seen from the front of the cabinet with the door open",
+        },
+        Some(Door) => Frame {
+            x_from: "the left edge",
+            y_from: "the top edge",
+            nearest_edges: true,
+            view: "Seen from outside with the door closed (lying on the bench: outside face up, hinge side as on the cabinet)",
+        },
+        Some(LeftWall) => Frame {
+            x_from: "the back wall",
+            y_from: "the top edge",
+            nearest_edges: false,
+            view: "Seen from outside the cabinet: the back wall is on the left (from inside it is on the right)",
+        },
+        Some(RightWall) => Frame {
+            x_from: "the back wall",
+            y_from: "the top edge",
+            nearest_edges: false,
+            view: "Seen from inside the cabinet: the back wall is on the left (from outside it is on the right)",
+        },
+        Some(Roof) => Frame {
+            x_from: "the left edge, seen from the front",
+            y_from: "the back wall",
+            nearest_edges: false,
+            view: "Seen from above, outside: the back wall is at the top",
+        },
+        Some(Floor) => Frame {
+            x_from: "the left edge, seen from the front",
+            y_from: "the back wall",
+            nearest_edges: false,
+            view: "Seen from above, inside the cabinet: the back wall is at the top",
+        },
+        _ => Frame {
+            x_from: "its left edge",
+            y_from: "its top edge",
+            nearest_edges: false,
+            view: "Seen as the model draws it (extra plates and profiles have no fixed viewing side: check against the drawing)",
+        },
+    }
+}
+
+/// `x mm from <frame x>, y mm from <frame y>` for a point of a surface.
+fn point_words(name: &str, x: f64, y: f64, size: Option<(f64, f64)>) -> String {
+    let f = frame_of(name);
+    match size {
+        Some(size) if f.nearest_edges => from_edges(x, y, size),
+        _ => format!(
+            "{} mm from {}, {} mm from {}",
+            mm(x),
+            f.x_from,
+            mm(y),
+            f.y_from
+        ),
+    }
+}
+
+/// Adds a cut-out card for every wiring opening of the layout (grommet
+/// holes, slots, cable entries on the plate, the door or a wall), the ones
+/// that no device carries. Like [`add_opening_cards`] they sit after the
+/// step cards, outside the build order; their tool lines are already in the
+/// pack's list, which counts every cut-out of the drill table. An opening on
+/// a surface whose size is unknown is named in the pack's problems.
+pub fn add_wiring_opening_cards(pack: &mut Pack, layout: &CabinetLayout) {
+    use crate::openings::OpeningShape;
+    for o in &layout.openings {
+        // The door is a surface of the drill table even where the enclosure
+        // has no door data: its size is then the interior's, or unknown.
+        let size = if o.surface == crate::surfaces::MAIN_PLATE {
+            Some((layout.plate.width, layout.plate.height))
+        } else {
+            layout.surface_sizes.get(&o.surface).copied().or_else(|| {
+                (o.surface == "door")
+                    .then(|| layout.enclosure.map(|e| (e.width, e.height)))
+                    .flatten()
+            })
+        };
+        if size.is_none() && o.surface != "door" {
+            pack.problems.push(format!(
+                "Opening '{}' is on '{}', which this enclosure does not have: no card for it.",
+                o.name, o.surface
+            ));
+            continue;
+        }
+        let shape = match o.shape {
+            OpeningShape::Round { dia } => CutoutShape::Round { dia },
+            OpeningShape::Rect { w, h } => CutoutShape::Rect { w, h },
+        };
+        let (w, h) = match shape {
+            CutoutShape::Round { dia } => (dia, dia),
+            CutoutShape::Rect { w, h } => (w, h),
+        };
+        let surface = if o.surface == crate::surfaces::MAIN_PLATE {
+            "mounting plate".to_owned()
+        } else {
+            crate::surfaces::SurfaceKind::from_name(&o.surface)
+                .map_or_else(|| o.surface.clone(), |k| k.label().to_owned())
+        };
+        let frame = frame_of(&o.surface);
+        let mut dims = vec![format!(
+            "Centre: {}",
+            point_words(&o.surface, o.x, o.y, size)
+        )];
+        let edges = |w: f64, h: f64| {
+            format!(
+                "Outline from {} to {} mm from {}, and from {} to {} mm from {}",
+                mm(o.x - w / 2.0),
+                mm(o.x + w / 2.0),
+                frame.x_from,
+                mm(o.y - h / 2.0),
+                mm(o.y + h / 2.0),
+                frame.y_from
+            )
+        };
+        let tool = match shape {
+            CutoutShape::Round { dia } => {
+                dims.push(edges(dia, dia));
+                format!("Hole saw or step drill, dia {} mm", mm(dia))
+            }
+            CutoutShape::Rect { w, h } => {
+                dims.push(edges(w, h));
+                format!("Punch, nibbler or jigsaw for {} x {} mm", mm(w), mm(h))
+            }
+        };
+        let mut notes = vec![
+            format!("{}.", frame.view),
+            match size {
+                Some(size) => format!(
+                    "Measured on the {surface} ({} x {} mm).",
+                    mm(size.0),
+                    mm(size.1)
+                ),
+                None => format!("Measured on the {surface}; its size is not in the model."),
+            },
+        ];
+        if let Some(e) = &o.exit {
+            let far = layout.surface_sizes.get(&e.surface).copied();
+            notes.push(format!(
+                "Passes through to the {} at {} ({}): cut both ends.",
+                crate::surfaces::SurfaceKind::from_name(&e.surface)
+                    .map_or_else(|| e.surface.clone(), |k| k.label().to_owned()),
+                point_words(&e.surface, e.x, e.y, far),
+                frame_of(&e.surface).view.to_lowercase()
+            ));
+        }
+        notes.push(format!("Keep devices {} mm clear of the edge.", mm(o.keep)));
+        let (cw, ch) = (w + 2.0 * OPENING_FRAME_MM, h + 2.0 * OPENING_FRAME_MM);
+        pack.cards.push(Card {
+            kind: CardKind::Opening,
+            steps: (0, 0),
+            total: 0,
+            phase: Phase::Devices,
+            mark: format!("Opening {} ({surface})", o.name),
+            text: format!(
+                "Wiring opening '{}' in the {surface}: {} mm. It is not a step of the build order: cut it with the {surface} off the cabinet, before parts go on.",
+                o.name,
+                shape.describe()
+            ),
+            tools: vec![
+                tool,
+                "Drill for starter holes, file and deburring tool for the edges".to_owned(),
+                "Tape measure, pencil, centre punch".to_owned(),
+            ],
+            template: Some(Template {
+                width: cw,
+                height: ch,
+                caption: format!("opening cut-out {} mm", shape.describe()),
+                origin: format!(
+                    "Frame is {} mm larger than the cut-out on every side; the cross hair is the centre",
+                    mm(OPENING_FRAME_MM)
+                ),
+                rail: false,
+                holes: Vec::new(),
+                clips: Vec::new(),
+                cutout: Some(TemplateCutout {
+                    shape,
+                    x: cw / 2.0,
+                    y: ch / 2.0,
+                }),
+            }),
+            dims,
+            wires: Vec::new(),
+            wires_more: 0,
+            labels: Vec::new(),
+            notes,
+            ticks: ticks(&["Marked", "Cut", "Edges filed", "Edge protected"]),
+        });
     }
 }
 
