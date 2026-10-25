@@ -12,8 +12,8 @@ use std::path::{Path, PathBuf};
 
 use novo_core::{Device, DeviceId, Project};
 use novo_layout::workpack::{
-    OpeningJob, OpeningWall, Pack, WireCut, WireGroup, add_opening_cards, add_outside_wire_cards,
-    add_wiring_opening_cards, build,
+    CardKind, OpeningJob, OpeningWall, Pack, WireCut, WireGroup, add_opening_cards,
+    add_outside_wire_cards, add_wiring_opening_cards, build,
 };
 use novo_reports::{AssemblyChecklist, Cell, CutList, Report, Section, is_estimate};
 
@@ -47,7 +47,7 @@ fn text_at(section: &Section, row: &novo_reports::Row, key: &str) -> String {
 /// The cut lengths of the cut list by (number, from, to), each key's lengths
 /// in list order so a number used twice gets its own length each time.
 /// Each entry: cut length, each end's allowance, and the cut list group's title (`1.5 mm2 black`).
-type CutLengths = BTreeMap<(String, String, String), VecDeque<(f64, f64, String)>>;
+type CutLengths = BTreeMap<(String, String, String), VecDeque<(f64, f64, String, String)>>;
 
 fn cut_lengths(project: &Project) -> CutLengths {
     let mut out = CutLengths::new();
@@ -66,9 +66,12 @@ fn cut_lengths(project: &Project) -> CutLengths {
             if let Some(cut) = number(at(s, row, "cut_mm").as_ref()) {
                 // The cut list's "Ends mm" is both ends together.
                 let ends = number(at(s, row, "allowance_mm").as_ref()).unwrap_or(0.0) / 2.0;
-                out.entry(key)
-                    .or_default()
-                    .push_back((cut, ends, s.title.clone()));
+                out.entry(key).or_default().push_back((
+                    cut,
+                    ends,
+                    s.title.clone(),
+                    text_at(s, row, "cable"),
+                ));
             }
         }
     }
@@ -163,6 +166,9 @@ pub(super) fn unplaced_notes(
         return out;
     }
     for (&at, numbers) in unplaced {
+        let mut numbers = numbers.clone();
+        numbers.sort();
+        numbers.dedup();
         let list = numbers.join(", ");
         out.entry(at).or_default().push(format!(
             "Wires {list} name no cabinet in their ends, so they are listed on this pack only because it is the first. They belong to no one cabinet: whoever builds the other cabinets cuts them from this list."
@@ -177,11 +183,40 @@ pub(super) fn unplaced_notes(
     out
 }
 
+/// A core of a cable is cut from the cable, which is bought and run once: say
+/// so beside its size, so the bench does not look for hookup wire to cut.
+const CORE_MARK: &str = " core ";
+
+fn core_of(kind: String, cable: &str) -> String {
+    if cable.is_empty() {
+        kind
+    } else {
+        format!(
+            "{kind}{CORE_MARK}{}",
+            cable.split_whitespace().next().unwrap_or(cable)
+        )
+    }
+}
+
+/// The cover line for wires that are cores of a cable (one entry per core).
+fn cores_note(mut cables: Vec<String>) -> Option<String> {
+    let count = cables.len();
+    cables.sort();
+    cables.dedup();
+    (count > 0).then(|| {
+        format!(
+            "{count} wires are cores of {}: the cable is bought and run once, not cut from hookup wire. Strip the sheath and fit the core ends; the length on these rows is the cable's length plus the ends.",
+            cables.join(", ")
+        )
+    })
+}
+
 /// The work packs of every cabinet that has a mounting plate.
 pub fn work_packs(project: &Project) -> Vec<Pack> {
     let checklist = AssemblyChecklist.generate(project);
     let mut cuts = cut_lengths(project);
     let mut jobs = strip_lengths(project);
+    let label_stock = novo_reports::LabelSettings::of(project).stock.name();
     let rules = novo_routing::project_rules::WireRules::of(project);
     let total_cut: usize = cuts.values().map(VecDeque::len).sum();
     let mut out = Vec::new();
@@ -203,6 +238,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
             .map(|d| novo_layout::model::features(project, d))
             .collect();
         let mut missing: Vec<String> = Vec::new();
+        let mut cores: Vec<String> = Vec::new();
         let mut by_circuit: BTreeMap<Circuit, Vec<WireCut>> = BTreeMap::new();
         if let Some(wire) = checklist
             .sections
@@ -230,7 +266,8 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                     ));
                 }
                 let cut = found.as_ref().map_or(length, |(cut, ..)| *cut);
-                let end_mm = found.as_ref().map(|(_, end, _)| *end);
+                let end_mm = found.as_ref().map(|(_, end, ..)| *end);
+                let cable = found.as_ref().map_or("", |f| f.3.as_str()).to_owned();
                 let (colour, size) = (t("colour"), t("cross_section_mm2"));
                 let fitting = fitting_of(end_mm, rules.ferrule_mm, rules.lug_mm);
                 let strips = strip_of(&mut jobs, &number_text, &from, &to);
@@ -251,6 +288,8 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                         format!("size not set, {kind}")
                     };
                 }
+                kind = core_of(kind, &cable);
+                cores.extend(cable.split_whitespace().next().map(str::to_owned));
                 by_circuit
                     .entry(Circuit::of(&colour, &size))
                     .or_default()
@@ -279,6 +318,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
             .collect();
         let mut pack = build(&tag, &layout, &features, &name, &groups);
         pack.problems.extend(missing);
+        pack.problems.extend(cores_note(cores));
         add_wiring_opening_cards(&mut pack, &layout);
         let stored = heat_openings_store::stored_text(project, enclosure.id);
         let vents = heat_openings_store::parse(&stored);
@@ -323,6 +363,16 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                 )),
             }
         }
+        // The label card names the stock the labels are printed on, which is a
+        // setting of the project (the default is a common A4 sheet).
+        for card in pack.cards.iter_mut().filter(|c| c.kind == CardKind::Labels) {
+            card.tools = vec![format!(
+                "Labels printed on {label_stock} (Bench output > Labels tab sets the stock)"
+            )];
+            card.notes.push(
+                "The label text is the device tag. Print at 100 %, no page scaling.".to_owned(),
+            );
+        }
         out.push(pack);
     }
     // Cut-list wires with no end in any plated cabinet (supply feed leads,
@@ -332,7 +382,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
     // Wires no cabinet tag names: filed under the first cabinet, and told so.
     let mut unplaced: BTreeMap<usize, Vec<String>> = BTreeMap::new();
     for ((number, from, to), lengths) in &cuts {
-        for (cut, end, group) in lengths {
+        for (cut, end, group, cable) in lengths {
             let own = out.iter().position(|p| {
                 from.contains(&format!("{}-", p.cabinet)) || to.contains(&format!("{}-", p.cabinet))
             });
@@ -349,11 +399,14 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                     from: from.clone(),
                     to: to.clone(),
                     // The cut list's own words for no size, as the cabinet cards say it.
-                    kind: if group == "Size unknown" {
-                        "size not set".to_owned()
-                    } else {
-                        group.clone()
-                    },
+                    kind: core_of(
+                        if group == "Size unknown" {
+                            "size not set".to_owned()
+                        } else {
+                            group.clone()
+                        },
+                        cable,
+                    ),
                     cut_mm: *cut,
                     // Outside the plate the duct model does not reach: cut long.
                     estimated: true,
@@ -395,6 +448,11 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
             for (w, part) in wires.iter_mut().zip(parts_of(&numbers)) {
                 w.part = part;
             }
+            let cables: Vec<String> = wires
+                .iter()
+                .filter_map(|w| w.kind.split(CORE_MARK).nth(1).map(str::to_owned))
+                .collect();
+            pack.problems.extend(cores_note(cables));
             add_outside_wire_cards(pack, wires);
         }
     }

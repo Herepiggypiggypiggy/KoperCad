@@ -700,7 +700,7 @@ fn wire_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
     }
 }
 
-fn label_table(m: &mut Marks, card: &Card, x0: f64, y: f64, _bottom: f64) {
+fn label_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
     for (i, l) in card.labels.iter().enumerate() {
         let (col, row) = (i / 6, i % 6);
         let x = x0 + 4.0 + col as f64 * 92.0;
@@ -714,6 +714,19 @@ fn label_table(m: &mut Marks, card: &Card, x0: f64, y: f64, _bottom: f64) {
             true,
             clip(l, 70.0, 4.2),
         );
+    }
+    // The label stock and what the label says, under the rows.
+    let mut ty = (y + 6.0 * 11.0 + 1.0).min(bottom - 10.0);
+    for line in card.tools.iter().chain(&card.notes) {
+        text(
+            m,
+            (x0 + 4.0, ty),
+            2.6,
+            HAlign::Left,
+            false,
+            clip(line, CARD_W - 8.0, 2.6),
+        );
+        ty += 3.6;
     }
 }
 
@@ -1368,6 +1381,30 @@ mod tests {
                 .collect::<Vec<_>>()
         );
         assert!(inside(&m, CARD_Y[0]).is_empty());
+    }
+
+    #[test]
+    fn a_label_card_prints_its_stock_and_note_inside_the_card() {
+        let mut p = pack(0, false);
+        let mut card = p.cards[0].clone();
+        card.kind = CardKind::Labels;
+        card.labels = (0..12).map(|i| format!("=A1+CAB-K{i}")).collect();
+        card.tools = vec![
+            "Labels printed on A4 3x8, 70 x 37 mm (Bench output > Labels tab sets the stock)"
+                .into(),
+        ];
+        card.notes =
+            vec!["The label text is the device tag. Print at 100 %, no page scaling.".into()];
+        p.cards = vec![card];
+        let m = card_marks(&p.cards[0], &p.cabinet, CARD_Y[0]);
+        for want in ["Labels printed on A4 3x8", "Print at 100 %"] {
+            assert!(m.texts.iter().any(|t| t.text.contains(want)), "{want}");
+        }
+        assert!(
+            inside(&m, CARD_Y[0]).is_empty(),
+            "{:?}",
+            inside(&m, CARD_Y[0])
+        );
     }
 
     #[test]
