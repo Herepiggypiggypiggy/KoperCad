@@ -13,7 +13,7 @@ wait 20
 click_text "Try the fixes"
 wait_s 120
 expect "Devices over limit"
-scroll 1100 450 -150
+scroll 250 560 -150
 wait 10
 expect "under- or over-stated"
 shot fan-note

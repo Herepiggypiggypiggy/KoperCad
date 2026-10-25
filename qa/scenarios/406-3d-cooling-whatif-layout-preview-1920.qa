@@ -15,7 +15,7 @@ wait_s 120
 expect "Devices over limit"
 expect "Model estimate"
 shot ranked
-scroll 1640 600 -900
+scroll 250 750 -900
 wait 10
 shot ranked-scrolled
 click_text "to cooler places"

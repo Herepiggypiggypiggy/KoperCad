@@ -1130,14 +1130,10 @@ impl NovoApp {
                     .whatif
                     .ambient_used()
                     .map(|a| super::heat_sweep::key_of(project, id, a, &heat.settings, &fans));
-                let at = super::view3d_heat::advice_pos(view_rect);
-                let at = egui::pos2(
-                    at.x - (super::heat_whatif::WINDOW_WIDTH - super::heat_sweep::WINDOW_WIDTH)
-                        .max(0.0),
-                    at.y,
-                );
+                let at = super::view3d_heat::whatif_pos(view_rect);
+                let room = super::view3d_heat::whatif_room(view_rect);
                 heat.whatif.left_out = any_left_out;
-                heat.whatif.show(ui.ctx(), 2, now_key, ambient, at);
+                heat.whatif.show(ui.ctx(), 2, now_key, ambient, at, room);
             }
         }
         if self.cabinet.heat.layout.pending() {

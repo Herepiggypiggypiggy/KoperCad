@@ -14,7 +14,7 @@ click_text "Try the fixes"
 wait_s 120
 expect "Devices over limit"
 shot open
-click 848 139
+click 34 327
 wait 20
 shot folded
 check_layout

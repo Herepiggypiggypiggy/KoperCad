@@ -19,3 +19,7 @@ Scope (from audit/creative/round34.md idea 2): one wizard that asks for the cond
 
 ## Open questions
 - Whether the "bigger enclosure" step should use the next catalogue size instead of x1.25 rounded to 100 mm.
+
+## After the position sweep
+- The honest 2D answer to "beside the jet" needs the 2D model to know the jet line (fan to vent) and a lateral decay; one fit on 48 cases did not generalise. A better reference than the 3D reduced model (a measured cabinet) would settle which side is right before fitting again.
+- A per-device warning in the what-if ("device T1 is beside the fan-to-vent line") is cheap and needs no new physics: the line and the device positions are known.

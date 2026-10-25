@@ -125,6 +125,29 @@ fn strip_of(
     (f.strip_mm, t.strip_mm, basis)
 }
 
+/// Which of several wires a row is, by wire number: a number runs on through
+/// a terminal, so the same number on several rows is several wires, `(1, 2)`
+/// and `(2, 2)`; a number used once is `None`.
+pub(super) fn parts_of(numbers: &[String]) -> Vec<Option<(usize, usize)>> {
+    let mut uses: BTreeMap<&str, usize> = BTreeMap::new();
+    for n in numbers.iter().filter(|n| !n.trim().is_empty()) {
+        *uses.entry(n).or_default() += 1;
+    }
+    let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
+    numbers
+        .iter()
+        .map(|n| {
+            // An unnumbered wire is not "1 of N" of the other unnumbered ones.
+            if n.trim().is_empty() {
+                return None;
+            }
+            let nth = seen.entry(n).or_default();
+            *nth += 1;
+            (uses[n.as_str()] > 1).then_some((*nth, uses[n.as_str()]))
+        })
+        .collect()
+}
+
 /// The work packs of every cabinet that has a mounting plate.
 pub fn work_packs(project: &Project) -> Vec<Pack> {
     let checklist = AssemblyChecklist.generate(project);
@@ -157,9 +180,16 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
             .iter()
             .find(|s| s.key == format!("{tag}:wire"))
         {
+            let numbers: Vec<String> = wire
+                .rows
+                .iter()
+                .map(|r| text_at(wire, r, "number"))
+                .collect();
+            let mut parts = parts_of(&numbers).into_iter();
             for row in &wire.rows {
                 let t = |key: &str| text_at(wire, row, key);
                 let (number_text, from, to) = (t("number"), t("from"), t("to"));
+                let part = parts.next().flatten();
                 let length = number(at(wire, row, "length_mm").as_ref()).unwrap_or(0.0);
                 let found = cuts
                     .get_mut(&(number_text.clone(), from.clone(), to.clone()))
@@ -175,7 +205,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                 let (colour, size) = (t("colour"), t("cross_section_mm2"));
                 let fitting = fitting_of(end_mm, rules.ferrule_mm, rules.lug_mm);
                 let strips = strip_of(&mut jobs, &number_text, &from, &to);
-                let kind = [
+                let mut kind = [
                     (!size.is_empty()).then(|| format!("{size} mm2")),
                     (!colour.is_empty()).then(|| colour.clone()),
                 ]
@@ -183,6 +213,15 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                 .flatten()
                 .collect::<Vec<_>>()
                 .join(" ");
+                if size.is_empty() {
+                    // A blank cell reads as a printing error at the bench; a
+                    // colour alone hides that the size is missing.
+                    kind = if kind.is_empty() {
+                        "size not set".to_owned()
+                    } else {
+                        format!("size not set, {kind}")
+                    };
+                }
                 by_circuit
                     .entry(Circuit::of(&colour, &size))
                     .or_default()
@@ -195,6 +234,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                         estimated: found.is_none() || is_estimate(&t("basis")),
                         end_mm,
                         fitting,
+                        part,
                         strip_from_mm: strips.0,
                         strip_to_mm: strips.1,
                         strip_basis: strips.2,
@@ -288,6 +328,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                     estimated: true,
                     end_mm: Some(*end),
                     fitting,
+                    part: None,
                     strip_from_mm: strips.0,
                     strip_to_mm: strips.1,
                     strip_basis: strips.2,
@@ -311,7 +352,12 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                     .collect::<Vec<_>>()
                     .join("; ")
             ));
-            add_outside_wire_cards(pack, list.into_iter().map(|(_, w)| w).collect());
+            let mut wires: Vec<WireCut> = list.into_iter().map(|(_, w)| w).collect();
+            let numbers: Vec<String> = wires.iter().map(|w| w.number.clone()).collect();
+            for (w, part) in wires.iter_mut().zip(parts_of(&numbers)) {
+                w.part = part;
+            }
+            add_outside_wire_cards(pack, wires);
         }
     }
     out

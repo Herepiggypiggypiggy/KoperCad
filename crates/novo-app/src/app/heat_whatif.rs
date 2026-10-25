@@ -34,7 +34,10 @@ const WIDTH: f32 = 400.0;
 /// Width of the window with its frame, points.
 pub(super) const WINDOW_WIDTH: f32 = WIDTH + 24.0;
 /// Tallest the results get before they scroll, points.
-const MAX_BODY: f32 = 470.0;
+pub(super) const MAX_BODY: f32 = 470.0;
+/// What the window takes besides the list: title, badge, conditions, the
+/// headline above the list and the footnote below it.
+pub(super) const CHROME: f32 = 250.0;
 /// Lowest duty the slider offers, percent.
 const MIN_DUTY_PCT: f64 = 10.0;
 
@@ -384,6 +387,7 @@ impl Wizard {
         now_key: Option<u64>,
         default_ambient: f64,
         at: Pos2,
+        room: f32,
     ) {
         if !self.open {
             return;
@@ -405,6 +409,8 @@ impl Wizard {
             // at on a small screen.
             .collapsible(true)
             .resizable(false)
+            // Hangs from its bottom left corner, so it grows upwards.
+            .pivot(egui::Align2::LEFT_BOTTOM)
             .default_pos(at)
             .default_width(WIDTH)
             .max_width(WINDOW_WIDTH)
@@ -445,7 +451,6 @@ impl Wizard {
                         "The cabinet changed after this run, so the list is out of date. Try again before applying.",
                     );
                 }
-                let room = (ctx.content_rect().bottom() - at.y - 200.0).clamp(120.0, MAX_BODY);
                 let mut picked = self.picked;
                 let mut copy = false;
                 egui::ScrollArea::vertical()

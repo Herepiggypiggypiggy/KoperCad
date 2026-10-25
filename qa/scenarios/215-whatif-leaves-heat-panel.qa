@@ -1,0 +1,24 @@
+@title Cooling what-if: the window leaves the Heat panel and the 3D picture usable
+@area 3D
+@sizes 1366x768 1920x1080
+# The what-if window opens at the left, under the toolbar, instead of over the Heat panel on the right: with the ranked list showing, the Heat panel's buttons are still clickable (Simulate starts a run) and the cabinet in the middle is not covered.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Cooling what-if"
+wait 20
+expect "Cooling what-if"
+click_text "Try the fixes"
+wait_s 120
+expect "Devices over limit"
+shot list-beside-the-heat-panel
+check_layout
+check_blank list-beside-the-heat-panel
+click_text "Simulate" Button #2
+wait 20
+expect "Simulating"
+shot simulate-clicked
+check_layout

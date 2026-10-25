@@ -72,6 +72,7 @@ mod emc;
 mod emc_adapter;
 mod emc_demo;
 mod emc_plate;
+mod emc_record;
 mod emc_schematic;
 mod emc_stub;
 #[cfg(test)]

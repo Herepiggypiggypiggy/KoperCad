@@ -629,6 +629,14 @@ fn wire_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
         );
         text(
             m,
+            (x0 + cols[0], ty + 3.4),
+            2.4,
+            HAlign::Left,
+            false,
+            clip(&w.part_text(), 11.0, 2.4),
+        );
+        text(
+            m,
             (x0 + cols[1], ty),
             3.0,
             HAlign::Left,
@@ -1117,6 +1125,7 @@ mod tests {
                     estimated: false,
                     end_mm: Some(10.0),
                     fitting: "ferrule",
+                    part: None,
                     strip_from_mm: Some(10.0),
                     strip_to_mm: Some(10.0),
                     strip_basis: "typical",
@@ -1307,6 +1316,35 @@ mod tests {
         let m = card_marks(&p.cards[0], &p.cabinet, CARD_Y[0]);
         assert!(!m.texts.iter().any(|t| t.text == "K1"));
         assert!(m.shapes.iter().any(|(l, _)| *l == Layer::Devices));
+    }
+
+    #[test]
+    fn a_wire_sharing_its_number_shows_which_of_them_it_is_under_the_number() {
+        let mut p = pack(9, true);
+        let card = p
+            .cards
+            .iter_mut()
+            .find(|c| c.kind == CardKind::Wires)
+            .unwrap();
+        card.wires[0].part = Some((1, 2));
+        card.wires[1].part = Some((2, 2));
+        let card = p.cards.iter().find(|c| c.kind == CardKind::Wires).unwrap();
+        let m = card_marks(card, &p.cabinet, CARD_Y[0]);
+        let parts: Vec<_> = m
+            .texts
+            .iter()
+            .filter(|t| t.text.ends_with(" of 2"))
+            .collect();
+        assert_eq!(parts.len(), 2);
+        let number = m
+            .texts
+            .iter()
+            .find(|t| t.text == card.wires[0].number)
+            .unwrap();
+        // Under its own wire number, at the same left edge.
+        assert_eq!(parts[0].pos.0, number.pos.0);
+        assert!(parts[0].pos.1 > number.pos.1);
+        assert!(inside(&m, CARD_Y[0]).is_empty());
     }
 
     #[test]

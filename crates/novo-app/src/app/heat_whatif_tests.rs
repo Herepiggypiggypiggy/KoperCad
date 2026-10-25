@@ -162,7 +162,14 @@ fn render(w: &mut Wizard, view: u8, now_key: Option<u64>) -> String {
     let mut text = String::new();
     for _ in 0..12 {
         let mut out = ctx.run_ui(screen(), |ui| {
-            w.show(ui.ctx(), view, now_key, 35.0, egui::pos2(10.0, 10.0));
+            w.show(
+                ui.ctx(),
+                view,
+                now_key,
+                35.0,
+                egui::pos2(10.0, 700.0),
+                300.0,
+            );
         });
         out.textures_delta.clear();
         text = out
@@ -401,7 +408,7 @@ fn the_window_closes_when_the_view_changes() {
     let ctx = egui::Context::default();
     for view in [2, 2, 1] {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-            w.show(ui.ctx(), view, None, 35.0, egui::pos2(10.0, 10.0));
+            w.show(ui.ctx(), view, None, 35.0, egui::pos2(10.0, 700.0), 300.0);
         });
         out.textures_delta.clear();
     }
