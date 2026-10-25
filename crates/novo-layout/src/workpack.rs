@@ -827,6 +827,9 @@ pub fn add_opening_cards(pack: &mut Pack, openings: &[OpeningJob]) {
                 }
             }
         };
+        if o.what.contains("fan") {
+            notes.push("The Heat panel stores a rectangle: a round fan cut-out and the fan's screw holes come from the fan's datasheet.".to_owned());
+        }
         let side = matches!(o.wall, OpeningWall::Left | OpeningWall::Right);
         // On a side wall the model's width runs along y: draw it that way.
         let (tw, th) = if side { (h, w) } else { (w, h) };
@@ -872,16 +875,36 @@ pub fn add_opening_cards(pack: &mut Pack, openings: &[OpeningJob]) {
             notes,
             ticks: ticks(&["Marked", "Cut", "Edges filed", "Fitted"]),
         });
-        let at = pack
-            .tools
-            .iter()
-            .position(|t| t.for_what == "every step")
-            .unwrap_or(pack.tools.len());
+    }
+    // One tool line per size and wall, counted, as the holes are listed.
+    let mut groups: Vec<(String, String, usize)> = Vec::new();
+    for o in openings {
+        let tool = format!(
+            "Punch, nibbler or jigsaw for {} x {} mm",
+            mm(o.width),
+            mm(o.height)
+        );
+        let for_what = format!("{} cut-out in the {}", o.what, o.wall.name());
+        match groups.iter_mut().find(|g| g.0 == tool && g.1 == for_what) {
+            Some(g) => g.2 += 1,
+            None => groups.push((tool, for_what, 1)),
+        }
+    }
+    let at = pack
+        .tools
+        .iter()
+        .position(|t| t.for_what == "every step")
+        .unwrap_or(pack.tools.len());
+    for (k, (tool, for_what, n)) in groups.into_iter().enumerate() {
         pack.tools.insert(
-            at,
+            at + k,
             ToolLine {
-                tool: format!("Punch, nibbler or jigsaw for {} x {} mm", mm(w), mm(h)),
-                for_what: format!("{} cut-out in {}", o.what, face),
+                tool,
+                for_what: if n > 1 {
+                    format!("{n} x {for_what}")
+                } else {
+                    for_what
+                },
             },
         );
     }

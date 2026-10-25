@@ -418,3 +418,35 @@ fn no_openings_change_nothing_and_the_pack_stays_deterministic() {
     add_opening_cards(&mut y, &jobs);
     assert_eq!(x, y);
 }
+
+#[test]
+fn identical_openings_share_one_counted_tool_line_and_fans_point_to_the_datasheet() {
+    let mut p = pack(2);
+    let before = p.tools.len();
+    let mut fan = grille(OpeningWall::Door, 100.0, Some(100.0));
+    fan.what = "fan".into();
+    add_opening_cards(
+        &mut p,
+        &[
+            grille(OpeningWall::Right, 100.0, None),
+            grille(OpeningWall::Right, 300.0, None),
+            grille(OpeningWall::Right, 500.0, None),
+            fan,
+        ],
+    );
+    // Three equal grilles are one line, the fan another.
+    assert_eq!(p.tools.len(), before + 2);
+    assert!(
+        p.tools.iter().any(|t| t.for_what.starts_with("3 x grille")),
+        "{:?}",
+        p.tools
+    );
+    let cards: Vec<_> = p
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Opening)
+        .collect();
+    assert_eq!(cards.len(), 4);
+    assert!(cards[3].notes.iter().any(|n| n.contains("datasheet")));
+    assert!(!cards[0].notes.iter().any(|n| n.contains("datasheet")));
+}
