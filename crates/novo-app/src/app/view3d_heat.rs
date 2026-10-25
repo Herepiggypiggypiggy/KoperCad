@@ -10,7 +10,6 @@ use super::heat::{self, HeatState};
 use super::heat_settings::{LEVELS, MODELS};
 
 /// Margin from the view's corner, in points.
-#[cfg(test)]
 const MARGIN: f32 = 12.0;
 const WIDTH: f32 = 330.0;
 /// The view cube's size and margin (`novo-view3d::widget`); the panel starts
@@ -18,6 +17,8 @@ const WIDTH: f32 = 330.0;
 pub(super) const CUBE_SIZE: f32 = 88.0;
 const CUBE_MARGIN: f32 = 12.0;
 const GAP: f32 = 8.0;
+/// What the toolbar covers from the view's top, with the strip above it.
+const TOOLBAR_CLEAR: f32 = 150.0;
 
 /// Top right corner of the panel: under the cube, inside the view.
 #[cfg(test)]
@@ -33,6 +34,24 @@ pub(super) fn advice_pos(view: egui::Rect) -> egui::Pos2 {
         view.max.x - super::heat_sweep::WINDOW_WIDTH - CUBE_SIZE - 2.0 * CUBE_MARGIN,
         view.min.y + CUBE_MARGIN,
     )
+}
+
+/// Bottom left corner of the Cooling what-if window: the left edge of the
+/// view, above the bottom. The Heat panel (Simulate and the other buttons)
+/// sits on the right under the cube and the cabinet in the middle, so a window
+/// there covered the panel it is opened from; here it only covers the Vents
+/// and fans panel, which the window itself updates. The window hangs from this
+/// corner, so it grows upwards and never past [`whatif_room`].
+pub(super) fn whatif_pos(view: egui::Rect) -> egui::Pos2 {
+    egui::pos2(view.min.x + MARGIN, view.max.y - MARGIN)
+}
+
+/// The height the what-if list may take so the whole window stays under the
+/// toolbar (a strip above the view, the toolbar's two rows, a gap) and above
+/// the bottom edge.
+pub(super) fn whatif_room(view: egui::Rect) -> f32 {
+    let free = view.height() - MARGIN - TOOLBAR_CLEAR;
+    (free - super::heat_whatif::CHROME).clamp(120.0, super::heat_whatif::MAX_BODY)
 }
 
 /// The cube's rectangle, as `novo-view3d` draws it.
@@ -384,6 +403,32 @@ mod tests {
             );
             assert!(!window.intersects(cube_rect(view)), "{w} x {h}");
             assert!(window.max.x <= view.max.x);
+        }
+    }
+
+    #[test]
+    fn the_whatif_window_leaves_the_heat_panel_the_cube_and_the_toolbar_free() {
+        // The Heat panel is about 330 wide at the right edge under the cube.
+        const HEAT_PANEL: f32 = 340.0;
+        // Strip, toolbar and gap above the free part of the view.
+        const TOOLBAR_BOTTOM: f32 = 140.0;
+        for (w, h) in [(1366.0, 650.0), (900.0, 500.0), (1920.0, 1040.0)] {
+            let view = egui::Rect::from_min_size(egui::pos2(0.0, 117.0), egui::vec2(w, h));
+            let corner = whatif_pos(view);
+            let height = whatif_room(view) + super::super::heat_whatif::CHROME;
+            let window = egui::Rect::from_min_max(
+                egui::pos2(corner.x, corner.y - height),
+                egui::pos2(corner.x + super::super::heat_whatif::WINDOW_WIDTH, corner.y),
+            );
+            assert!(!window.intersects(cube_rect(view)), "{w} x {h}");
+            if w > 1000.0 {
+                assert!(window.max.x <= view.max.x - HEAT_PANEL, "{w} x {h}");
+            }
+            assert!(
+                window.min.y >= view.min.y + TOOLBAR_BOTTOM - 1.0 || height <= 120.0 + 250.0,
+                "{w} x {h}: {window:?}"
+            );
+            assert!(window.min.x >= view.min.x && window.max.y <= view.max.y);
         }
     }
 
