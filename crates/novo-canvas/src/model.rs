@@ -1974,48 +1974,33 @@ impl PageScene {
                 no_tag: &later_tag,
             };
             let mut at = slot.preferred;
-            // When every place is taken, the first one inside the frame still
-            // beats the preferred place if that crosses the border.
-            let mut inside_frame = None;
-            let mut preferred_on_frame = false;
-            let mut found = false;
-            for (n, cand) in crate::note_place::candidates(slot.preferred, &slot.ink, height)
-                .into_iter()
-                .enumerate()
-            {
-                let mut label = base.clone();
-                label.pos = cand.0;
-                label.anchor = cand.1;
-                // A tag that merely touches the frame line reads as crossing
-                // it, so it keeps a little clear of the border.
-                let b = label
-                    .bounds()
-                    .expand(TAG_FRAME_CLEAR + TAG_FRAME_CLEAR_PER_WIDTH * label.size().x);
-                let on_frame = self.scene.sheet().is_some_and(|sheet| {
-                    !(sheet.rect.contains_point(b.min) && sheet.rect.contains_point(b.max))
-                        || sheet
-                            .lines
-                            .iter()
-                            .any(|(p, q)| crate::geom::segment_intersects_aabb(*p, *q, &b))
-                });
-                if n == 0 {
-                    preferred_on_frame = on_frame;
+            // Two passes over the same places: first with room round the tag
+            // to the frame (see `TAG_FRAME_CLEAR`), then with the bare
+            // minimum. A place that is only tight against the frame is used
+            // when no roomier place is free, never traded for a wire.
+            'passes: for roomy in [true, false] {
+                for cand in crate::note_place::candidates(slot.preferred, &slot.ink, height) {
+                    let mut label = base.clone();
+                    label.pos = cand.0;
+                    label.anchor = cand.1;
+                    let room = if roomy {
+                        TAG_FRAME_CLEAR + TAG_FRAME_CLEAR_PER_WIDTH * label.size().x
+                    } else {
+                        crate::note_place::PAD
+                    };
+                    let b = label.bounds().expand(room);
+                    let on_frame = self.scene.sheet().is_some_and(|sheet| {
+                        !(sheet.rect.contains_point(b.min) && sheet.rect.contains_point(b.max))
+                            || sheet
+                                .lines
+                                .iter()
+                                .any(|(p, q)| crate::geom::segment_intersects_aabb(*p, *q, &b))
+                    });
+                    if !on_frame && !obstacles.blocks(&[], std::slice::from_ref(&label)) {
+                        at = cand;
+                        break 'passes;
+                    }
                 }
-                if on_frame {
-                    continue;
-                }
-                inside_frame.get_or_insert(cand);
-                if !obstacles.blocks(&[], std::slice::from_ref(&label)) {
-                    at = cand;
-                    found = true;
-                    break;
-                }
-            }
-            if !found
-                && preferred_on_frame
-                && let Some(cand) = inside_frame
-            {
-                at = cand;
             }
             if at == slot.at && at == (base.pos, base.anchor) {
                 continue;

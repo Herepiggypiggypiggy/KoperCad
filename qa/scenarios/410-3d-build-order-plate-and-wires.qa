@@ -14,6 +14,10 @@ wait 30
 expect "the plate is blue"
 shot step-0-plate-blue
 check_layout
+# Close up on the plate: the lit plate against the back wall.
+scroll 690 400 100
+wait 20
+shot step-0-plate-blue-close
 click_text "Next"
 wait 12
 click_text "Next"
@@ -52,5 +56,15 @@ wait 20
 expect "Step 17 of 17"
 shot step-17-wires
 check_layout
+# Close up on the wires, which are drawn in blue.
+key ctrl+k
+wait 6
+text front view
+wait 8
+key Enter
+wait 30
+scroll 640 330 250
+wait 25
+shot step-17-wires-close
 click_text "Show all"
 wait 20
