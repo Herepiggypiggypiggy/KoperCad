@@ -286,3 +286,25 @@ fn moving_devices_along_rails_is_offered_first_and_cheapest() {
     assert!(layout.gain_k > 0.0);
     assert_eq!(layout.fix.effort(), 1);
 }
+
+#[test]
+fn a_real_run_names_the_devices_beside_the_stream_of_each_fan_fix_and_none_for_a_fix_without_fans()
+{
+    let sc = hot_cabinet();
+    let w = run(&sc, &Conditions::as_entered(&sc));
+    let mut fan_fixes = 0;
+    for c in &w.choices {
+        match c.fix.candidate() {
+            Some(k) if k.pairing.fans() > 0 && matches!(c.fix, Fix::Openings { .. }) => {
+                fan_fixes += 1;
+                // The list is the rule applied by hand to the cabinet as it is.
+                assert_eq!(c.beside_stream, whatif::beside_stream(&sc, k));
+                assert!(c.beside_stream.iter().all(|id| w.device_ids.contains(id)));
+            }
+            Some(k) if k.pairing.fans() == 0 => assert!(c.beside_stream.is_empty()),
+            None => assert!(c.beside_stream.is_empty()),
+            _ => {}
+        }
+    }
+    assert!(fan_fixes > 0, "no fan fix offered");
+}
