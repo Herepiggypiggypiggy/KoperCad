@@ -55,11 +55,11 @@ id = "read-picture"
 title = "A model, said plainly"
 title_nl = "Een model, eerlijk gezegd"
 text = """
-The panel starts with a line that does not go away: **indicative model, not a field solver, never shows compliance**. Each hot spot has a card with its rule, its level (rule, index, estimate or field model) and the numbers behind it.
+The panel starts with a line that does not go away: **Indicative model, not a field solver. It never shows compliance.** Each hot spot has a card with its rule, its level (rule, index, estimate or field model) and the numbers behind it.
 No finding means no rule fired. It does not mean the cabinet is fine.
 """
 text_nl = """
-Het paneel begint met een regel die niet verdwijnt: **indicatief model, geen veldsolver, toont nooit conformiteit**. Elk aandachtspunt heeft een kaart met zijn regel, zijn niveau (regel, index, schatting of veldmodel) en de cijfers erachter.
+Het paneel begint met een regel die niet verdwijnt (in het Engels): **Indicative model, not a field solver. It never shows compliance.** Dat betekent: indicatief model, geen veldsolver, toont nooit conformiteit. Elk aandachtspunt heeft een kaart met zijn regel, zijn niveau (regel, index, schatting of veldmodel) en de cijfers erachter.
 Geen bevinding betekent dat er geen regel afging. Het betekent niet dat de kast goed is.
 """
 
@@ -90,11 +90,11 @@ id = "bond-truth"
 title = "Where the bond comes from"
 title_nl = "Waar de aarding vandaan komt"
 text = """
-The program does not measure a bond. It reads the plate finish and the bonding you stated for the part: a galvanised plate gives a good bond, a painted one does not unless you stated the paint is removed under the foot.
+The program does not measure a bond. It reads the plate finish and the bonding you stated for the part: a galvanised or bare plate gives a good bond, a painted one gives a weak bond even when you state the part is bonded. Only changing the plate finish fixes it (scrape the mounting area bare in the real cabinet, then set the finish).
 So a **weak bond** is a rule on what you entered. Change the finish and the bond follows.
 """
 text_nl = """
-Het programma meet een aarding niet. Het leest de plaatafwerking en de aarding die je voor het onderdeel opgaf: een verzinkte plaat geeft een goede aarding, een geverfde niet tenzij je opgaf dat de verf onder de voet is verwijderd.
+Het programma meet een aarding niet. Het leest de plaatafwerking en de aarding die je voor het onderdeel opgaf: een verzinkte of blanke plaat geeft een goede aarding, een geverfde plaat geeft een zwakke aarding, ook als je opgeeft dat het onderdeel geaard is. Alleen de plaatafwerking aanpassen helpt (schraap in de echte kast de montageplek blank en zet dan de afwerking).
 Een **zwakke aarding** is dus een regel op wat je invulde. Verander de afwerking en de aarding volgt.
 """
 

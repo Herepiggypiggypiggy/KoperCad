@@ -1,6 +1,6 @@
 @title Lesson walk: emc-on-the-plate (every step, Do it for me or Next)
 @area Learn
-# Starts the lesson from the palette and plays each step as a learner would: an action step with Do it for me, a reading step with Next. A picture and a layout check after each step.
+# Starts the lesson from the palette and plays each step as a learner would: a reading step with Next, the chip steps by really clicking the chip (Do it for me only skips a click that is a control press, so it would leave the layer off). A picture and a layout check after each step.
 key ctrl+k
 wait 4
 text interference on the plate
@@ -21,18 +21,25 @@ try click_text "Next"
 wait 20
 shot 04-bonding
 check_layout
-try click_text "Do it for me"
+click_text "Bonding"
 wait 30
-shot 05-bond-truth
+shot 04b-bonding-on
 check_layout
 try click_text "Next"
 wait 20
 shot 06-shields
 check_layout
-try click_text "Do it for me"
+click_text "Shields"
 wait 30
-shot 07-fix-it
+shot 06b-shields-on-fix-it-step
 check_layout
+# Hot-spot markers off for one picture, so every ring and its kind is clear; the legend and the rings at full size are in scenarios 165 and 166.
+click_text "Hot spots" Button
+wait 20
+shot 06c-shield-rings-clear
+check_layout
+click_text "Hot spots" Button
+wait 10
 try click_text "Next"
 wait 20
 shot 08-leave
