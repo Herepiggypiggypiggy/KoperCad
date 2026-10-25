@@ -986,13 +986,22 @@ impl NovoApp {
             mode.strip_fitted = mode.controls.assembly.is_some();
             mode.pending = Some(Pending::Fit);
         }
-        if super::view3d_build_order::strip(
+        match super::view3d_build_order::strip(
             ui.ctx(),
             view_rect,
             &mut mode.controls.assembly,
             &mode.assembly_steps,
         ) {
-            self.wb.queued.push("export.workpack");
+            Some(super::view3d_build_order::Print::All) => {
+                self.wb.queued.push("export.workpack");
+            }
+            Some(super::view3d_build_order::Print::Step(mark)) => {
+                if let Some((id, _, _)) = &mode.built {
+                    self.wb.workpack_step = Some((*id, mark));
+                    self.wb.queued.push("export.workpack_step");
+                }
+            }
+            None => {}
         }
         mode.view.top_inset = view3d_controls::toolbar_inset(ui.ctx(), view_rect);
         if let Some(command) = asked {

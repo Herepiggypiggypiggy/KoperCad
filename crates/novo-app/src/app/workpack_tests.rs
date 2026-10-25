@@ -138,6 +138,33 @@ fn the_cards_need_a_plate_then_land_next_to_the_project() {
         d.app.messages().last().unwrap().text
     );
 
+    // One step as one card next to the project; an unknown mark warns.
+    let first = d.app.machine().map(|m| {
+        work_packs(&m)[0]
+            .cards
+            .iter()
+            .find(|c| c.kind != CardKind::Wires && c.kind != CardKind::Labels)
+            .map(|c| c.mark.clone())
+            .unwrap()
+    });
+    let mark = first.unwrap();
+    let one = d.app.export_workpack_step(cab, &mark).expect("one card");
+    assert!(
+        one.file_name()
+            .unwrap()
+            .to_string_lossy()
+            .contains("work card")
+    );
+    assert_eq!(
+        lopdf::Document::load_mem(&std::fs::read(&one).unwrap())
+            .unwrap()
+            .get_pages()
+            .len(),
+        1
+    );
+    assert_eq!(d.app.export_workpack_step(cab, "-NOPE"), None);
+    assert_eq!(d.app.messages().last().unwrap().level, Level::Warning);
+
     // The workshop folder carries the cards too.
     d.app.export_workshop().expect("folder");
     assert!(
@@ -202,7 +229,7 @@ fn cut_list_wires_without_a_cabinet_end_are_named_on_the_cover() {
     let named: Vec<&String> = packs
         .iter()
         .flat_map(|p| &p.problems)
-        .filter(|p| p.contains("not on these cards"))
+        .filter(|p| p.contains("not on this cabinet's cards"))
         .collect();
     assert_eq!(named.len(), 1, "{named:?}");
     // 25 wires in the cut list: 19 on cards, the 6 feed leads named.

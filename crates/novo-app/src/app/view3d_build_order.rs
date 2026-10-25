@@ -92,11 +92,9 @@ pub(super) fn strip(
     view: egui::Rect,
     position: &mut Option<usize>,
     steps: &[Step],
-) -> bool {
-    let mut print = false;
-    let Some(mut at) = *position else {
-        return false;
-    };
+) -> Option<Print> {
+    let mut print = None;
+    let mut at = (*position)?;
     if steps.is_empty() {
         // No layout to read an order from: the whole cabinet stays in view,
         // and the strip says why there is nothing to step through.
@@ -123,7 +121,7 @@ pub(super) fn strip(
         if leave {
             *position = None;
         }
-        return false;
+        return None;
     }
     at = at.min(steps.len());
     let p = crate::theme::ui_palette();
@@ -178,7 +176,17 @@ pub(super) fn strip(
                         .on_hover_text(super::WORKPACK_HINT)
                         .clicked()
                     {
-                        print = true;
+                        print = Some(Print::All);
+                    }
+                    // The step on screen as one card: a part step has one.
+                    if let Some(step) = at.checked_sub(1).and_then(|i| steps.get(i))
+                        && step.part.is_some()
+                        && ui
+                            .button("Print this step")
+                            .on_hover_text("This step's work card as one PDF page: tools, hole positions, template")
+                            .clicked()
+                    {
+                        print = Some(Print::Step(step.mark.clone()));
                     }
                 });
                 ui.label(egui::RichText::new(text).color(p.text_secondary));
@@ -202,6 +210,14 @@ pub(super) fn strip(
         });
     *position = if leave { None } else { Some(at) };
     print
+}
+
+/// What the strip asked to print.
+pub(super) enum Print {
+    /// The whole work card pack.
+    All,
+    /// The card of the step on screen, by its mark.
+    Step(String),
 }
 
 /// The next position for a command: steps from the start when it is off.
