@@ -102,6 +102,12 @@ pub enum Fix {
     KeepClear { wire: u64, other: u64, to_mm: f64 },
     /// Keep two runs this far apart (mm). By hand.
     SeparateRuns { a: u64, b: u64, to_mm: f64 },
+    /// Move a filter (or other device) to the nearest free spot on the plate
+    /// within this distance (mm) of another device (EMC-07).
+    MoveCloser { device: u64, to: u64, max_mm: f64 },
+    /// Move a device to the nearest free spot on the plate at least this far
+    /// (mm) from another device (EMC-17).
+    MoveAway { device: u64, from: u64, min_mm: f64 },
     /// Move a device this far (mm) from another. By hand.
     MoveDevice { device: u64, from: u64, to_mm: f64 },
     /// Bond the mounting area to bare metal: the plate's finish is stated
@@ -144,6 +150,14 @@ impl Fix {
             Fix::SeparateRuns { .. } => {
                 "Run go and return together, or in one twisted cable.".to_owned()
             }
+            Fix::MoveCloser { max_mm, .. } => format!(
+                "Move it to the nearest free spot within {} mm of the drive (only if the plate has one).",
+                max_mm.round() as i64
+            ),
+            Fix::MoveAway { min_mm, .. } => format!(
+                "Move it to the nearest free spot at least {} mm from the noisy device (only if the plate has one).",
+                min_mm.round() as i64
+            ),
             Fix::MoveDevice { to_mm, .. } => {
                 format!("Move the device to keep {} mm clear.", to_mm.round() as i64)
             }
@@ -172,6 +186,8 @@ impl Fix {
                 | Fix::ShortenPigtail { .. }
                 | Fix::AvoidDuct { .. }
                 | Fix::KeepClear { .. }
+                | Fix::MoveCloser { .. }
+                | Fix::MoveAway { .. }
         )
     }
 }

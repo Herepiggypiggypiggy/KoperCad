@@ -877,6 +877,14 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
             )?;
             Ok("Wire asked to stay out of the duct: it takes another duct only if one reaches both of its ends (the router never leaves a wire unrouted for it). Its route and cut length can change: print the wire list and cut list again".to_owned())
         }
+        Fix::MoveCloser { device, to, max_mm } => {
+            move_device(tx, *device, *to, crate::mover::Goal::Within(*max_mm))
+        }
+        Fix::MoveAway {
+            device,
+            from,
+            min_mm,
+        } => move_device(tx, *device, *from, crate::mover::Goal::Away(*min_mm)),
         Fix::KeepClear { wire, other, to_mm } => {
             let id = novo_core::WireId::from(*wire);
             let w = tx
@@ -957,6 +965,26 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
         }
         other => Err(ModelError::Format(format!("{other:?} is done by hand"))),
     }
+}
+
+fn move_device(
+    tx: &mut Tx<'_>,
+    device: u64,
+    other: u64,
+    goal: crate::mover::Goal,
+) -> Result<String> {
+    let spot = crate::mover::find_spot(tx.project(), device, other, goal)?;
+    let rotated = tx
+        .project()
+        .all::<CabinetPlacement>()
+        .find(|p| p.device.raw() == device)
+        .is_some_and(|p| p.rotated);
+    novo_layout::model::place_device(tx, spot.structure, device, spot.x, spot.y, rotated)?;
+    Ok(format!(
+        "Device moved {} mm to the nearest free spot that meets the rule (gap {} mm). Only the plate layout rules and the EMC rules were checked: not heat, airflow, the door swing or the length of the wires to the new spot. Wires are routed again, so cut lengths change, and the mounting holes are drilled anew: print the cut list and drilling plan again",
+        spot.moved_mm.round() as i64,
+        spot.gap_mm.round() as i64
+    ))
 }
 
 /// What a fix would change, worked out on a copy of the project: the

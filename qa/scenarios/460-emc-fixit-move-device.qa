@@ -1,0 +1,34 @@
+@title EMC fix-it: move a sensitive device away from a drive, preview and apply
+@area Cabinet
+@sizes 1366x768 1920x1080
+# The analog module stands against the drive on the plate (EMC-17). Check > EMC check offers "Preview: Move it to the nearest free spot". The preview moves a copy: EMC-17 goes and says what was not checked (heat, airflow, door swing, wire lengths). Apply is one undo step. The pictures are the evidence.
+open qa/fixtures/emc-cabinet.novo
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+expect "Preview: Move it to the nearest free spot"
+click_text "Preview: Move it to the nearest free spot" #1
+wait 10
+expect "Preview on a copy of the project"
+expect "Clears EMC-17"
+expect "not heat, airflow"
+shot 01-preview
+check_layout
+click_text "Apply (one undo step)" #1
+wait 15
+expect "nearest free spot"
+expect_not "Preview on a copy of the project"
+shot 02-applied
+check_layout
+key Escape
+wait 12
+click_text Cabinet #1
+wait 30
+key Home
+wait 15
+shot 03-plate-after
+check_layout

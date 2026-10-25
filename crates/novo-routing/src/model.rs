@@ -587,6 +587,7 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
         .filter_map(|w| {
             let list: Vec<Clearance> = keep_clear(&w.properties)
                 .into_iter()
+                .filter(|(other, _)| *other != w.id.raw())
                 .map(|(other, mm)| Clearance { other, mm })
                 .collect();
             (!list.is_empty()).then_some((w.id.raw(), list))
