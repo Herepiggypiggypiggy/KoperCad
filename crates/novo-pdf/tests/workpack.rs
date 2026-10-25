@@ -64,6 +64,8 @@ fn pack(cabinet: &str) -> Pack {
                 cut_mm: 300.0 - i as f64,
                 kind: "1.5 mm2 black".into(),
                 estimated: false,
+                end_mm: Some(10.0),
+                fitting: "ferrule",
             })
             .collect(),
     }];

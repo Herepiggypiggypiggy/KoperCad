@@ -393,34 +393,85 @@ fn the_one_card_file_name_carries_the_cabinet_only_when_there_are_several() {
 }
 
 #[test]
-fn a_rail_cards_clips_are_the_devices_the_build_order_clips_on_it_at_the_same_distance() {
+fn every_wire_card_row_carries_the_cut_lists_end_allowance() {
     let project = lesson("wire-routing/project.json");
+    // The cut list's (cut, each end) pairs.
+    let mut pairs: Vec<(f64, f64)> = novo_reports::CutList::default()
+        .generate(&project)
+        .sections
+        .iter()
+        .filter(|s| s.key.starts_with("group-"))
+        .flat_map(|s| {
+            let (c, a) = (
+                s.column("cut_mm").unwrap(),
+                s.column("allowance_mm").unwrap(),
+            );
+            s.rows.iter().map(move |r| {
+                let num = |i: usize| match &r.cells[i] {
+                    novo_reports::Cell::Number(v) => *v,
+                    other => panic!("{other:?}"),
+                };
+                (num(c), num(a) / 2.0)
+            })
+        })
+        .collect();
     let mut seen = 0;
     for pack in work_packs(&project) {
-        for card in pack.cards.iter().filter(|c| c.kind == CardKind::Rail) {
-            let clips = &card.template.as_ref().unwrap().clips;
-            // "Clip =A1+CAB1-Q1 on R1, 10 mm from its start" for every clipped device.
-            let rows: Vec<&str> = pack
-                .overview
-                .iter()
-                .filter(|r| r.phase == novo_layout::assembly::Phase::Devices)
-                .map(|r| r.text.as_str())
-                .filter(|t| t.contains(&format!(" on {},", card.mark)))
-                .collect();
-            assert_eq!(rows.len(), clips.len(), "{}", card.mark);
-            for clip in clips {
-                let line = format!(
-                    "Clip {} on {}, {} mm from its start",
-                    clip.tag,
-                    card.mark,
-                    novo_layout::drill::mm(clip.at)
-                );
-                assert!(rows.iter().any(|r| *r == line), "{line} not in {rows:?}");
+        for c in pack.cards.iter().filter(|c| c.kind == CardKind::Wires) {
+            for w in &c.wires {
+                let end = w.end_mm.expect("an end allowance");
+                let i = pairs
+                    .iter()
+                    .position(|p| *p == (w.cut_mm, end))
+                    .unwrap_or_else(|| {
+                        panic!("{} mm / {end} per end is not in the cut list", w.cut_mm)
+                    });
+                pairs.remove(i);
+                assert!(!w.end_text().is_empty());
                 seen += 1;
             }
         }
     }
     assert!(seen > 0);
+}
+
+#[test]
+fn the_fitting_word_follows_the_cut_lists_allowance_not_a_second_reading_of_the_size() {
+    use super::workpack::fitting_of;
+    // Rules: ferrule 10 mm, lug 20 mm. A chain of 10 and 35 mm2 wires is cut
+    // with the lug allowance (the largest size) and must read "lug".
+    assert_eq!(fitting_of(Some(20.0), 10.0, 20.0), "lug");
+    assert_eq!(fitting_of(Some(10.0), 10.0, 20.0), "ferrule");
+    // Neither, none, or both fittings taking the same allowance: no word.
+    assert_eq!(fitting_of(Some(15.0), 10.0, 20.0), "");
+    assert_eq!(fitting_of(None, 10.0, 20.0), "");
+    assert_eq!(fitting_of(Some(12.0), 12.0, 12.0), "");
+}
+
+#[test]
+fn a_wire_with_a_mixed_size_chain_gets_the_lug_allowance_of_its_largest_size() {
+    // The wire-routing example has sized wires; every card row's word agrees
+    // with its allowance under the project's rules.
+    let project = lesson("wire-routing/project.json");
+    let rules = novo_routing::project_rules::WireRules::of(&project);
+    for pack in work_packs(&project) {
+        for w in pack
+            .cards
+            .iter()
+            .filter(|c| c.kind == CardKind::Wires)
+            .flat_map(|c| &c.wires)
+        {
+            let end = w.end_mm.unwrap();
+            let expected = if (rules.lug_mm - rules.ferrule_mm).abs() < 1e-6 {
+                ""
+            } else if (end - rules.lug_mm).abs() < 1e-6 {
+                "lug"
+            } else {
+                "ferrule"
+            };
+            assert_eq!(w.fitting, expected, "{} {end}", w.number);
+        }
+    }
 }
 
 #[test]
@@ -466,4 +517,35 @@ fn wiring_openings_of_the_cabinet_become_cut_out_cards() {
         all.contains("grommet") && all.contains("2 cut-out cards"),
         "{all}"
     );
+}
+
+#[test]
+fn a_rail_cards_clips_are_the_devices_the_build_order_clips_on_it_at_the_same_distance() {
+    let project = lesson("wire-routing/project.json");
+    let mut seen = 0;
+    for pack in work_packs(&project) {
+        for card in pack.cards.iter().filter(|c| c.kind == CardKind::Rail) {
+            let clips = &card.template.as_ref().unwrap().clips;
+            // "Clip =A1+CAB1-Q1 on R1, 10 mm from its start" for every clipped device.
+            let rows: Vec<&str> = pack
+                .overview
+                .iter()
+                .filter(|r| r.phase == novo_layout::assembly::Phase::Devices)
+                .map(|r| r.text.as_str())
+                .filter(|t| t.contains(&format!(" on {},", card.mark)))
+                .collect();
+            assert_eq!(rows.len(), clips.len(), "{}", card.mark);
+            for clip in clips {
+                let line = format!(
+                    "Clip {} on {}, {} mm from its start",
+                    clip.tag,
+                    card.mark,
+                    novo_layout::drill::mm(clip.at)
+                );
+                assert!(rows.iter().any(|r| *r == line), "{line} not in {rows:?}");
+                seen += 1;
+            }
+        }
+    }
+    assert!(seen > 0);
 }

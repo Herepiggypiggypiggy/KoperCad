@@ -109,6 +109,8 @@ fn wire(n: &str, from: &str, to: &str, cut: f64) -> WireCut {
         kind: "1.5 mm2 black".into(),
         cut_mm: cut,
         estimated: false,
+        end_mm: Some(10.0),
+        fitting: "ferrule",
     }
 }
 
@@ -452,75 +454,20 @@ fn identical_openings_share_one_counted_tool_line_and_fans_point_to_the_datashee
 }
 
 #[test]
-fn a_rail_card_draws_the_clipped_devices_along_the_strip() {
-    let p = pack(0);
-    let rail = |mark_has: &str| {
-        p.cards
-            .iter()
-            .find(|c| c.kind == CardKind::Rail && c.mark.contains(mark_has))
-            .unwrap()
-    };
-    // R1 starts at x 50 and holds -Q10 (x 100) and -Q11 (x 200), 45 wide.
-    let t = rail("R1").template.as_ref().unwrap();
-    let clips: Vec<(&str, f64, f64)> = t
-        .clips
-        .iter()
-        .map(|c| (c.tag.as_str(), c.at, c.len))
-        .collect();
-    assert_eq!(clips, vec![("-Q10", 50.0, 45.0), ("-Q11", 150.0, 45.0)]);
-    assert_eq!(t.clips[0].short(), "Q10");
-    // Written once for the person without the drawing, nearest first.
-    assert!(
-        rail("R1")
-            .notes
-            .iter()
-            .any(|n| n.contains("-Q10 at 50, -Q11 at 150"))
-    );
-    // R2 holds no device: nothing drawn, no note.
-    assert!(rail("R2").template.as_ref().unwrap().clips.is_empty());
-    assert!(!rail("R2").notes.iter().any(|n| n.contains("Clipped")));
-    // Screwed devices are never on a strip.
-    assert!(!t.clips.iter().any(|c| c.tag == "-Q12"));
-}
-
-#[test]
-fn a_vertical_rail_measures_its_devices_down_the_rail() {
-    let mut l = layout();
-    l.rails = vec![Rail {
-        id: 1,
-        x: 60.0,
-        y: 100.0,
-        length: 400.0,
-        vertical: true,
-    }];
-    l.placements = vec![place(10, 40.0, 150.0, false, Some(1))];
-    let p = build("+CAB1", &l, &[], &|id| format!("-Q{id}"), &[]);
-    let t = p.cards[0].template.as_ref().unwrap();
-    // Footprint 45 x 90: 90 along the rail, 50 from its start (y 150 - 100).
-    assert_eq!((t.clips[0].at, t.clips[0].len), (50.0, 90.0));
-}
-
-#[test]
-fn many_clipped_devices_are_all_drawn_and_a_few_named() {
-    let mut l = layout();
-    l.rails = vec![Rail {
-        id: 1,
-        x: 0.0,
-        y: 100.0,
-        length: 700.0,
-        vertical: false,
-    }];
-    l.placements = (0..9)
-        .map(|i| place(i + 1, 10.0 + 70.0 * i as f64, 100.0, false, Some(1)))
-        .collect();
-    let p = build("+CAB1", &l, &[], &|id| format!("-Q{id}"), &[]);
-    let c = &p.cards[0];
-    assert_eq!(c.template.as_ref().unwrap().clips.len(), 9);
-    assert!(
-        c.notes.iter().any(|n| n.contains("and 3 more")),
-        "{:?}",
-        c.notes
-    );
+fn the_end_text_names_the_allowance_with_unit_and_the_fitting() {
+    let mut w = wire("W1", "-Q1:1", "-Q2:2", 200.0);
+    assert_eq!(w.end_text(), "10 mm ferrule");
+    w.end_mm = Some(20.0);
+    w.fitting = "lug";
+    assert_eq!(w.end_text(), "20 mm lug");
+    // Both fittings take the same allowance: the word would be a guess.
+    w.fitting = "";
+    assert_eq!(w.end_text(), "20 mm");
+    // No allowance in the cut list, or none at all: nothing, never "0 ferrule".
+    w.end_mm = None;
+    assert_eq!(w.end_text(), "");
+    w.end_mm = Some(0.0);
+    assert_eq!(w.end_text(), "");
 }
 
 fn with_openings(list: Vec<novo_layout::openings::Opening>) -> CabinetLayout {
@@ -679,4 +626,76 @@ fn a_wall_opening_is_measured_from_the_back_wall_and_says_which_side_is_seen() {
     // The door keeps nearest edges and says it is seen from outside.
     assert!(card("door hole").dims[0].contains("from the left edge"));
     assert!(card("door hole").notes[0].contains("from outside"));
+}
+
+#[test]
+fn a_rail_card_draws_the_clipped_devices_along_the_strip() {
+    let p = pack(0);
+    let rail = |mark_has: &str| {
+        p.cards
+            .iter()
+            .find(|c| c.kind == CardKind::Rail && c.mark.contains(mark_has))
+            .unwrap()
+    };
+    // R1 starts at x 50 and holds -Q10 (x 100) and -Q11 (x 200), 45 wide.
+    let t = rail("R1").template.as_ref().unwrap();
+    let clips: Vec<(&str, f64, f64)> = t
+        .clips
+        .iter()
+        .map(|c| (c.tag.as_str(), c.at, c.len))
+        .collect();
+    assert_eq!(clips, vec![("-Q10", 50.0, 45.0), ("-Q11", 150.0, 45.0)]);
+    assert_eq!(t.clips[0].short(), "Q10");
+    // Written once for the person without the drawing, nearest first.
+    assert!(
+        rail("R1")
+            .notes
+            .iter()
+            .any(|n| n.contains("-Q10 at 50, -Q11 at 150"))
+    );
+    // R2 holds no device: nothing drawn, no note.
+    assert!(rail("R2").template.as_ref().unwrap().clips.is_empty());
+    assert!(!rail("R2").notes.iter().any(|n| n.contains("Clipped")));
+    // Screwed devices are never on a strip.
+    assert!(!t.clips.iter().any(|c| c.tag == "-Q12"));
+}
+
+#[test]
+fn many_clipped_devices_are_all_drawn_and_a_few_named() {
+    let mut l = layout();
+    l.rails = vec![Rail {
+        id: 1,
+        x: 0.0,
+        y: 100.0,
+        length: 700.0,
+        vertical: false,
+    }];
+    l.placements = (0..9)
+        .map(|i| place(i + 1, 10.0 + 70.0 * i as f64, 100.0, false, Some(1)))
+        .collect();
+    let p = build("+CAB1", &l, &[], &|id| format!("-Q{id}"), &[]);
+    let c = &p.cards[0];
+    assert_eq!(c.template.as_ref().unwrap().clips.len(), 9);
+    assert!(
+        c.notes.iter().any(|n| n.contains("and 3 more")),
+        "{:?}",
+        c.notes
+    );
+}
+
+#[test]
+fn a_vertical_rail_measures_its_devices_down_the_rail() {
+    let mut l = layout();
+    l.rails = vec![Rail {
+        id: 1,
+        x: 60.0,
+        y: 100.0,
+        length: 400.0,
+        vertical: true,
+    }];
+    l.placements = vec![place(10, 40.0, 150.0, false, Some(1))];
+    let p = build("+CAB1", &l, &[], &|id| format!("-Q{id}"), &[]);
+    let t = p.cards[0].template.as_ref().unwrap();
+    // Footprint 45 x 90: 90 along the rail, 50 from its start (y 150 - 100).
+    assert_eq!((t.clips[0].at, t.clips[0].len), (50.0, 90.0));
 }

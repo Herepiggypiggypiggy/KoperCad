@@ -576,6 +576,8 @@ fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
 
 fn wire_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
     let cols = [4.0, 16.0, 44.0, 92.0, 146.0, 166.0];
+    // Each end's allowance sits in the Size column's right part.
+    const ENDS_X: f64 = 126.0;
     for (c, h) in ["Wire", "From", "To", "Size, colour", "Cut mm", "Cut"]
         .iter()
         .enumerate()
@@ -594,6 +596,14 @@ fn wire_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
         HAlign::Left,
         true,
         "Run",
+    );
+    text(
+        m,
+        (x0 + ENDS_X, y),
+        SMALL_TEXT_MM,
+        HAlign::Left,
+        true,
+        "Per end",
     );
     line(m, Layer::Table, (x0, y + 4.2), (x0 + CARD_W, y + 4.2));
     let row_h = ((bottom - y - 6.0) / 9.0).clamp(6.0, 9.0);
@@ -630,7 +640,15 @@ fn wire_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
             3.0,
             HAlign::Left,
             false,
-            clip(&w.kind, 52.0, 3.0),
+            clip(&w.kind, ENDS_X - cols[3] - 1.0, 3.0),
+        );
+        text(
+            m,
+            (x0 + ENDS_X, ty),
+            3.0,
+            HAlign::Left,
+            false,
+            clip(&w.end_text(), 20.0, 3.0),
         );
         text(
             m,
@@ -710,7 +728,7 @@ fn cover_marks(pack: &Pack, project: &str) -> Marks {
     let mut y = 36.0;
     let how = [
         "How to use: print at 100 % (actual size), no fit-to-page. Check the 100 mm ruler on any card with a tape measure before you trust a template. Cut the sheets in half or fold them at the dashed line: each half is one step. Work in the order of the step numbers; tick the boxes as you go.",
-        "How exact: the sizes and positions come from the cabinet layout and the part data. The template is as exact as your printer scale and your taping, about 0.5 mm if the ruler reads 100 mm (an estimate, not measured here). Wire lengths come from the cut list: routed lengths follow the duct model, estimates are marked as such. Check the first part against your real plate before drilling the rest.",
+        "How exact: the sizes and positions come from the cabinet layout and the part data. The template is as exact as your printer scale and your taping, about 0.5 mm if the ruler reads 100 mm (an estimate, not measured here). Wire lengths come from the cut list: routed lengths follow the duct model, estimates are marked as such. \"Per end\" is what each end adds to the routed length (strip plus ferrule collar or lug barrel, the project's wire rules), already in the cut length; the model has the same allowance at both ends. Check the first part against your real plate before drilling the rest.",
     ];
     let cut_outs = pack
         .cards
@@ -1042,6 +1060,8 @@ mod tests {
                     cut_mm: 250.0 + i as f64,
                     kind: "1.5 mm2 black".into(),
                     estimated: false,
+                    end_mm: Some(10.0),
+                    fitting: "ferrule",
                 })
                 .collect(),
         }];
@@ -1229,6 +1249,50 @@ mod tests {
         let m = card_marks(&p.cards[0], &p.cabinet, CARD_Y[0]);
         assert!(!m.texts.iter().any(|t| t.text == "K1"));
         assert!(m.shapes.iter().any(|(l, _)| *l == Layer::Devices));
+    }
+
+    #[test]
+    fn a_wire_card_shows_each_wires_end_allowance_inside_its_columns() {
+        let p = pack(9, true);
+        let card = p.cards.iter().find(|c| c.kind == CardKind::Wires).unwrap();
+        let m = card_marks(card, &p.cabinet, CARD_Y[0]);
+        assert!(m.texts.iter().any(|t| t.text == "Per end"));
+        let ends: Vec<_> = m
+            .texts
+            .iter()
+            .filter(|t| t.text == "10 mm ferrule")
+            .collect();
+        assert_eq!(ends.len(), card.wires.len());
+        // The size column ends before the allowance column starts.
+        let kinds: Vec<_> = m
+            .texts
+            .iter()
+            .filter(|t| t.text.starts_with("1.5 mm2"))
+            .collect();
+        assert_eq!(kinds.len(), card.wires.len());
+        assert!(kinds[0].pos.0 < ends[0].pos.0);
+        assert!(inside(&m, CARD_Y[0]).is_empty());
+    }
+
+    #[test]
+    fn a_long_wire_size_and_colour_is_not_cut_off_by_the_end_column() {
+        let mut p = pack(3, false);
+        let card = p
+            .cards
+            .iter_mut()
+            .find(|c| c.kind == CardKind::Wires)
+            .unwrap();
+        card.wires[0].kind = "2.5 mm2 green/yellow".into();
+        card.wires[1].end_mm = None;
+        let m = card_marks(card, "+CAB1", CARD_Y[0]);
+        assert!(m.texts.iter().any(|t| t.text == "2.5 mm2 green/yellow"));
+        // No allowance in the cut list: an empty cell, never "0".
+        let ends = m
+            .texts
+            .iter()
+            .filter(|t| t.text.ends_with("ferrule") || t.text == "0 mm")
+            .count();
+        assert_eq!(ends, card.wires.len() - 1);
     }
 
     #[test]
