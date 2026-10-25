@@ -1553,7 +1553,7 @@ impl NovoApp {
                 } else if self.is_open() && self.workspace() == workspace::Workspace::View3d {
                     self.view3d_show(ui);
                     for a in cabinet_bar::take_noted(ui.ctx()) {
-                        self.anchor(a.id, a.rect, a.label);
+                        self.anchor_clicked(a.id, a.rect, a.label, a.clicked);
                     }
                 } else if reports {
                     self.reports_central(ui);

@@ -371,6 +371,9 @@ mod tests {
         d.app.cabinet.emc.layers.shields = true;
         d.frame();
         d.frame();
+        for id in ["emc.plate.bonding", "emc.plate.shields"] {
+            assert!(d.app.learn_drawn(id).is_some(), "{id} is not drawn");
+        }
         let pic = d.app.cabinet.emc.picture().expect("a picture of the plate");
         let ends: Vec<_> = pic.shields.iter().map(|s| s.end).collect();
         assert!(

@@ -130,21 +130,30 @@ pub(super) fn strip(
                 };
                 ui.horizontal(|ui| {
                     ui.add_enabled_ui(at > 0, |ui| {
-                        if ui.button("Previous").clicked() {
+                        let back = ui.button("Previous");
+                        super::cabinet_bar::note_ctx(
+                            ctx,
+                            "build_order.previous",
+                            "Previous",
+                            &back,
+                        );
+                        if back.clicked() {
                             at -= 1;
                         }
                     });
                     ui.label(egui::RichText::new(title).strong().color(p.text_strong));
                     ui.add_enabled_ui(at < steps.len(), |ui| {
-                        if ui.button("Next").clicked() {
+                        let next = ui.button("Next");
+                        super::cabinet_bar::note_ctx(ctx, "build_order.next", "Next", &next);
+                        if next.clicked() {
                             at += 1;
                         }
                     });
-                    if ui
+                    let all = ui
                         .button("Show all")
-                        .on_hover_text("Leave the build order and show the whole cabinet")
-                        .clicked()
-                    {
+                        .on_hover_text("Leave the build order and show the whole cabinet");
+                    super::cabinet_bar::note_ctx(ctx, "build_order.show_all", "Show all", &all);
+                    if all.clicked() {
                         leave = true;
                     }
                 });

@@ -9,7 +9,7 @@ summary_nl = "Zet de live-weergave aan, druk op de startknop en lees wat oplicht
 track = "circuits"
 order = 30
 level = "intermediate"
-minutes = 6
+minutes = 7
 topics = ["simulation", "live"]
 needs = ["cross-references"]
 project = "../cross-references/finished.json"
@@ -170,10 +170,10 @@ id = "seal-in"
 title = "Let go of start"
 title_nl = "Laat start los"
 text = """
-A real start button springs back when you let go, and so does this one: a click presses it for a moment. The coil stays on because the holding contact, in parallel with the start button, now feeds it. That is the {tip:self-hold}.
+A real start button springs back when you let go, and so does this one: a click presses it for a moment, and holding the mouse button on **Start** in the **Operate** list of the card keeps it pressed for as long as you hold. The coil stays on because the holding contact, in parallel with the start button, now feeds it. That is the {tip:self-hold}.
 """
 text_nl = """
-Een echte startknop veert terug als je loslaat, en deze ook: een klik houdt hem even ingedrukt. De spoel blijft aan omdat het houdcontact, parallel aan de startknop, hem nu voedt. Dat is de {tip:self-hold}.
+Een echte startknop veert terug als je loslaat, en deze ook: een klik houdt hem even ingedrukt, en de muisknop ingedrukt houden op **Start** in de lijst **Operate** van de kaart houdt hem ingedrukt zolang je vasthoudt. De spoel blijft aan omdat het houdcontact, parallel aan de startknop, hem nu voedt. Dat is de {tip:self-hold}.
 """
 how = [
   "Look at the badge on the start button **-S2**. It is empty (open) again: it sprang back.",
@@ -187,6 +187,28 @@ demo = [
   { say = "The coil, the motor and the lamp stay on.", say_nl = "De spoel, de motor en de lamp blijven aan." },
 ]
 point = { at = { device = "-K1", pin = "13" } }
+
+[[step]]
+id = "current-paths"
+title = "See where the current flows"
+title_nl = "Zie waar de stroom loopt"
+text = """
+Thin dashes now run along the wires that lie on a route to a device that is drawing current: the supply, the closed contacts and the coil or the motor. They show **where**, not how much and not which way. Switch them off and on again to see the difference.
+"""
+text_nl = """
+Dunne streepjes lopen nu langs de draden die op een route liggen naar een apparaat dat stroom trekt: de voeding, de gesloten contacten en de spoel of de motor. Ze tonen **waar**, niet hoeveel en niet in welke richting. Zet ze uit en weer aan om het verschil te zien.
+"""
+how = [
+  "Untick {ui:live.current_paths} on the card. The dashes go.",
+  "Tick it again. They come back on the same wires.",
+]
+how_nl = [
+  "Haal het vinkje bij {ui:live.current_paths} op de kaart weg. De streepjes verdwijnen.",
+  "Zet het vinkje terug. Ze komen terug op dezelfde draden.",
+]
+point = { ui = "live.current_paths" }
+expect = { clicked = "live.current_paths" }
+solve = [ { ui_click = "live.current_paths" }, { ui_click = "live.current_paths" } ]
 
 [[step]]
 id = "stop"

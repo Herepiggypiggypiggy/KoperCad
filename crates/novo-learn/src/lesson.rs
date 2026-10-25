@@ -599,6 +599,11 @@ pub struct SelectOp {
     /// Add to the selection instead of replacing it (Shift+click).
     #[serde(default)]
     pub add: bool,
+    /// With `a~b` (a wire by its two pins): pick the wire as a single click on
+    /// it does, which opens the panels that read a picked wire, instead of
+    /// selecting it, which opens the Inspector.
+    #[serde(default)]
+    pub pick: bool,
 }
 
 /// A cable over the wires that join these pairs of pins.

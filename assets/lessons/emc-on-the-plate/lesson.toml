@@ -1,0 +1,148 @@
+# The sample project is qa/fixtures/emc-cabinet-shields.novo as JSON: a cabinet "EMC" with a galvanised
+# plate, a drive, and two shielded cables that carry all three shield-end states. `project.json` is checked
+# by crates/novo-tests/tests/lessons/emc.rs (UPDATE_LESSONS=1 rewrites it).
+format = 1
+id = "emc-on-the-plate"
+version = 1
+status = "early"
+title = "Interference on the plate: bonding and shield ends"
+title_nl = "Storing op de plaat: aarding en schermeinden"
+summary = "See the EMC picture over the mounting plate, switch on the bonding of each drive to the plate and the way each cable shield ends, and read what each mark means."
+summary_nl = "Zie het EMC-beeld over de montageplaat, zet de aarding van elke aandrijving naar de plaat aan en hoe elk kabelscherm eindigt, en lees wat elk teken betekent."
+track = "cabinet"
+order = 94
+level = "intermediate"
+minutes = 7
+topics = ["emc", "bonding", "shield", "plate"]
+needs = ["cabinet-layout", "emc-net-classes"]
+next = ["commissioning"]
+project = "project.json"
+
+[[step]]
+id = "open-cabinet"
+title = "Open the Cabinet"
+title_nl = "Open de kast"
+text = "The EMC picture sits on the mounting plate, where the parts really are. This cabinet has a drive, a plate and two shielded cables."
+text_nl = "Het EMC-beeld ligt op de montageplaat, waar de onderdelen echt zitten. Deze kast heeft een aandrijving, een plaat en twee afgeschermde kabels."
+how = [
+  "Press {key:view.cabinet}, or choose the {ui:switcher.cabinet}.",
+]
+how_nl = [
+  "Druk op {key:view.cabinet}, of kies de {ui:switcher.cabinet}.",
+]
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "emc-on"
+title = "Switch the EMC view on"
+title_nl = "Zet de EMC-weergave aan"
+text = "The EMC view draws over the plate: wires in their class colours, keep-clear bands round noisy runs and numbered hot spots where something is likely to go wrong."
+text_nl = "De EMC-weergave tekent over de plaat: draden in hun klassekleuren, vrijhoudzones om storende draden en genummerde aandachtspunten waar iets waarschijnlijk misgaat."
+how = [
+  "Click {ui:cabinet.emc} in the Cabinet toolbar (under More in a narrow window), or press {key:view.command_palette}, type **EMC** and choose **EMC view on the plate**.",
+]
+how_nl = [
+  "Klik op {ui:cabinet.emc} in de werkbalk van de kast (onder More in een smal venster), of druk op {key:view.command_palette}, typ **EMC** en kies **EMC view on the plate**.",
+]
+point = { ui = "cabinet.emc" }
+expect = { any = [ { clicked = "cabinet.emc" }, { command = "cabinet.emc" } ] }
+solve = [ { command = "cabinet.emc" } ]
+
+[[step]]
+id = "read-picture"
+title = "A model, said plainly"
+title_nl = "Een model, eerlijk gezegd"
+text = """
+The panel starts with a line that does not go away: **indicative model, not a field solver, never shows compliance**. Each hot spot has a card with its rule, its level (rule, index, estimate or field model) and the numbers behind it.
+No finding means no rule fired. It does not mean the cabinet is fine.
+"""
+text_nl = """
+Het paneel begint met een regel die niet verdwijnt: **indicatief model, geen veldsolver, toont nooit conformiteit**. Elk aandachtspunt heeft een kaart met zijn regel, zijn niveau (regel, index, schatting of veldmodel) en de cijfers erachter.
+Geen bevinding betekent dat er geen regel afging. Het betekent niet dat de kast goed is.
+"""
+
+[[step]]
+id = "bonding"
+title = "How each drive is bonded to the plate"
+title_nl = "Hoe elke aandrijving aan de plaat is geaard"
+text = """
+A drive's case must make a good, large contact with the plate or its filter does not work. Switch on **Bonding**: each bond is a dashed outline, in the earth colours when good. A weak or missing bond has a glowing spot and says why when you hover it.
+"""
+text_nl = """
+De behuizing van een aandrijving moet een goed, groot contact met de plaat maken, anders werkt zijn filter niet. Zet **Bonding** aan: elke aarding is een gestippelde omtrek, in de aardkleuren als ze goed is. Een zwakke of ontbrekende aarding heeft een gloeiende vlek en zegt waarom als je erop wijst.
+"""
+how = [
+  "Click the {ui:emc.plate.bonding} chip in the panel.",
+  "Hover the dashed outline round the drive.",
+]
+how_nl = [
+  "Klik op de chip {ui:emc.plate.bonding} in het paneel.",
+  "Wijs de gestippelde omtrek om de aandrijving aan.",
+]
+point = { ui = "emc.plate.bonding" }
+expect = { clicked = "emc.plate.bonding" }
+solve = [ { ui_click = "emc.plate.bonding" } ]
+
+[[step]]
+id = "bond-truth"
+title = "Where the bond comes from"
+title_nl = "Waar de aarding vandaan komt"
+text = """
+The program does not measure a bond. It reads the plate finish and the bonding you stated for the part: a galvanised plate gives a good bond, a painted one does not unless you stated the paint is removed under the foot.
+So a **weak bond** is a rule on what you entered. Change the finish and the bond follows.
+"""
+text_nl = """
+Het programma meet een aarding niet. Het leest de plaatafwerking en de aarding die je voor het onderdeel opgaf: een verzinkte plaat geeft een goede aarding, een geverfde niet tenzij je opgaf dat de verf onder de voet is verwijderd.
+Een **zwakke aarding** is dus een regel op wat je invulde. Verander de afwerking en de aarding volgt.
+"""
+
+[[step]]
+id = "shields"
+title = "How each cable screen ends"
+title_nl = "Hoe elk kabelscherm eindigt"
+text = """
+A screen only works if it is connected, and best all round. Switch on **Shields**: each screen end is a ring on the device. A plain ring is **all round** (good), a ring with a tail is a **pigtail** (a risk) and a ring with a cross is **not connected** (a risk).
+"""
+text_nl = """
+Een scherm werkt alleen als het is aangesloten, en het best rondom. Zet **Shields** aan: elk schermeinde is een ring op het apparaat. Een gewone ring is **rondom** (goed), een ring met een staart is een **pigtail** (een risico) en een ring met een kruis is **niet aangesloten** (een risico).
+"""
+how = [
+  "Click the {ui:emc.plate.shields} chip in the panel.",
+  "Find one ring of each kind. The legend explains them, and hovering a ring names the cable end.",
+]
+how_nl = [
+  "Klik op de chip {ui:emc.plate.shields} in het paneel.",
+  "Zoek van elke soort een ring. De legenda legt ze uit en een ring aanwijzen noemt het kabeleinde.",
+]
+point = { ui = "emc.plate.shields" }
+expect = { clicked = "emc.plate.shields" }
+solve = [ { ui_click = "emc.plate.shields" } ]
+
+[[step]]
+id = "fix-it"
+title = "Fixes are made where the drawing is"
+title_nl = "Herstel doe je waar de tekening is"
+text = """
+The plate view only shows. To change a shield end, go to the schematic: pick the cable's wire under **View > EMC net classes** and use the **Apply** button on its card, as in the net classes lesson. The plate redraws when the drawing changes.
+"""
+text_nl = """
+De plaatweergave toont alleen. Om een schermeinde te veranderen ga je naar het schema: kies de draad van de kabel onder **View > EMC net classes** en gebruik de knop **Apply** op zijn kaart, zoals in de les over netklassen. De plaat tekent opnieuw als de tekening verandert.
+"""
+
+[[step]]
+id = "leave"
+title = "Switch the EMC view off"
+title_nl = "Zet de EMC-weergave uit"
+text = "Like the class colours, the EMC view is a view and not part of the drawing. Switch it off again."
+text_nl = "Net als de klassekleuren is de EMC-weergave een weergave en geen deel van de tekening. Zet hem weer uit."
+how = [
+  "Click {ui:cabinet.emc} again.",
+]
+how_nl = [
+  "Klik nogmaals op {ui:cabinet.emc}.",
+]
+point = { ui = "cabinet.emc" }
+expect = { any = [ { clicked = "cabinet.emc" }, { command = "cabinet.emc" } ] }
+solve = [ { command = "cabinet.emc" } ]

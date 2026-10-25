@@ -1242,7 +1242,15 @@ impl NovoApp {
                         .and_then(|d| d.tag.device_code().map(|c| format!("-{c}")))
                         .unwrap_or_else(|| format!("device {raw}"))
                 };
-                super::emc_view::panel(ui.ctx(), view_rect, &mut mode.emc, &tag_of);
+                super::emc_view::panel(
+                    ui.ctx(),
+                    view_rect,
+                    super::view3d_heat::CUBE_SIZE + 20.0,
+                    &mut mode.emc,
+                    &tag_of,
+                );
+                // The lesson anchors are the plate's; the 3D panel has none.
+                mode.emc.marks.clear();
                 super::emc_view::legend(ui.ctx(), view_rect, &mode.emc, dark);
             }
             mode.controls.emc = mode.emc.on;
