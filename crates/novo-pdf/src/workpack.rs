@@ -707,7 +707,7 @@ fn cover_marks(pack: &Pack, project: &str) -> Marks {
             3.6,
             HAlign::Left,
             true,
-            "Not read, so not in this pack:",
+            "Left out or not read:",
         );
         y += 5.0;
         let items: Vec<String> = pack.problems.iter().map(|p| format!("- {p}")).collect();

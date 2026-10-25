@@ -188,3 +188,28 @@ fn every_card_length_is_a_cut_list_length_and_nothing_falls_back() {
     }
     assert!(!on_cards.is_empty());
 }
+
+#[test]
+fn cut_list_wires_without_a_cabinet_end_are_named_on_the_cover() {
+    let project = lesson("wire-routing/project.json");
+    let packs = work_packs(&project);
+    let on_cards: usize = packs
+        .iter()
+        .flat_map(|p| &p.cards)
+        .filter(|c| c.kind == CardKind::Wires)
+        .map(|c| c.wires.len())
+        .sum();
+    let named: Vec<&String> = packs
+        .iter()
+        .flat_map(|p| &p.problems)
+        .filter(|p| p.contains("not on these cards"))
+        .collect();
+    assert_eq!(named.len(), 1, "{named:?}");
+    // 25 wires in the cut list: 19 on cards, the 6 feed leads named.
+    assert!(
+        named[0].starts_with(&format!("{} of 25 cut-list wires", 25 - on_cards)),
+        "{}",
+        named[0]
+    );
+    assert!(named[0].contains("(feed)"), "{}", named[0]);
+}

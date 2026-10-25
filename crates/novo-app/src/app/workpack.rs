@@ -65,6 +65,7 @@ fn cut_lengths(project: &Project) -> BTreeMap<(String, String, String), VecDeque
 pub fn work_packs(project: &Project) -> Vec<Pack> {
     let checklist = AssemblyChecklist.generate(project);
     let mut cuts = cut_lengths(project);
+    let total_cut: usize = cuts.values().map(VecDeque::len).sum();
     let mut out = Vec::new();
     for enclosure in project.structures().filter(|s| s.enclosure) {
         let Some(layout) = novo_layout::model::load(project, enclosure.id) else {
@@ -136,6 +137,35 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
         let mut pack = build(&tag, &layout, &features, &name, &groups);
         pack.problems.extend(missing);
         out.push(pack);
+    }
+    // Cut-list wires with no end in any plated cabinet (supply feed leads,
+    // field wires) are on no card: say which, on the cover of the cabinet
+    // their device is in, else of the first.
+    let mut left: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+    let mut left_count = 0;
+    for ((number, from, to), lengths) in &cuts {
+        for cut in lengths {
+            let at = out
+                .iter()
+                .position(|p| {
+                    from.starts_with(&format!("{}-", p.cabinet))
+                        || to.starts_with(&format!("{}-", p.cabinet))
+                })
+                .unwrap_or(0);
+            left.entry(at).or_default().push(format!(
+                "{number} ({from} to {to}) cut {} mm",
+                novo_layout::drill::mm(*cut)
+            ));
+            left_count += 1;
+        }
+    }
+    for (at, list) in left {
+        if let Some(pack) = out.get_mut(at) {
+            pack.problems.push(format!(
+                "{left_count} of {total_cut} cut-list wires are not on these cards: they have no end inside a plated cabinet (supply and field wires). They are on the cut list: {}",
+                list.join("; ")
+            ));
+        }
     }
     out
 }
