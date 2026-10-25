@@ -226,7 +226,10 @@ pub fn build(
             "Fan case: this 2D model has no jet momentum. A mixing term stands in for the fan \
              jet, but 3D CFD of a single test box (120 m3/h) still gave a mean air rise about 1.4 to 1.8 \
              times higher (air next to the device about 3 times); treat the mean air temperature as a low \
-             estimate. Heat balance closes in both; exhaust flows agree within about 20 %."
+             estimate. Heat balance closes in both; exhaust flows agree within about 20 %. A jet speed term \
+             raises the device surface coefficient with the fan flow; against the 3D solver it brings the \
+             housing gain of a fan fix to between 22 % below and 45 % above it in 18 cases, 12 of them \
+             boxes it was not fitted on (model against model, not a measurement)."
                 .into(),
         );
     }
