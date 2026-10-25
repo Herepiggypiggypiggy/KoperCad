@@ -249,3 +249,72 @@ fn a_preview_changes_nothing_and_apply_is_then_one_undo_step() {
         .cloned();
     assert_eq!(finish, Some(Value::Text("painted".into())));
 }
+
+#[test]
+fn a_previewed_fix_reaches_both_views_and_the_banner_cancels_or_applies_it() {
+    use crate::app::emc_view::WhatIfAction;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    cabinet(&mut d);
+    d.frame();
+    let cab = d
+        .app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .structures()
+        .next()
+        .unwrap()
+        .id;
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("painted", |tx| {
+            tx.set_property(cab, "emc.finish", Some(Value::Text("painted".into())))
+        })
+        .unwrap();
+    let fix = Fix::BarePlate { plate: cab.raw() };
+    let ctx = d.ctx.clone();
+    d.app.emc_preview(&fix);
+    d.app.emc_whatif_sync(&ctx);
+    for view in [&d.app.view3d.emc, &d.app.cabinet.emc] {
+        let w = view.whatif.as_ref().expect("both views get the preview");
+        assert!(
+            w.after && w.summary.ends_with("clears EMC-11"),
+            "{}",
+            w.summary
+        );
+    }
+    // The picture of the copy has a better bond than the real project's.
+    let bond = |p: &Project| {
+        crate::app::emc_adapter::from_project(p, cab, [800.0, 400.0], &Default::default())
+            .map(|pic| pic.bonds.iter().map(|b| b.quality).collect::<Vec<_>>())
+    };
+    let w = d.app.view3d.emc.whatif.as_ref().unwrap().project.clone();
+    let real = d.app.backend.document().unwrap().project().clone();
+    assert_ne!(bond(&real), bond(&w), "before and after differ");
+    // Before / After switch.
+    d.app.view3d.emc.whatif_action = Some(WhatIfAction::Show { after: false });
+    d.app.emc_whatif_sync(&ctx);
+    assert!(!d.app.cabinet.emc.whatif.as_ref().unwrap().after);
+    // A change to the project drops the preview.
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("edit", |tx| tx.set_property(cab, "x", Some(Value::Int(1))))
+        .unwrap();
+    d.app.emc_whatif_sync(&ctx);
+    assert!(d.app.view3d.emc.whatif.is_none() && d.app.emc.previewed().is_none());
+    // Apply from the banner is one undo step.
+    d.app.emc_preview(&fix);
+    d.app.emc_whatif_sync(&ctx);
+    let depth = d.app.backend.document().unwrap().undo_depth();
+    d.app.cabinet.emc.whatif_action = Some(WhatIfAction::Apply);
+    d.app.emc_whatif_sync(&ctx);
+    assert_eq!(d.app.backend.document().unwrap().undo_depth(), depth + 1);
+    d.app.emc_whatif_sync(&ctx);
+    assert!(d.app.view3d.emc.whatif.is_none());
+}

@@ -428,6 +428,7 @@ impl NovoApp {
         let mut apply: Option<Fix> = None;
         let mut want_preview: Option<Fix> = None;
         let mut cancel_preview = false;
+        let mut show_view: Option<super::workspace::Workspace> = None;
         let revision = self
             .backend
             .document()
@@ -603,6 +604,7 @@ impl NovoApp {
                                         ui,
                                         pv,
                                         &mut cancel_preview,
+                                        &mut show_view,
                                         preview_fresh,
                                         &mut apply_at,
                                     );
@@ -694,7 +696,7 @@ impl NovoApp {
         if let Some((wire, class)) = set {
             self.emc_set_class(wire, class);
         }
-        self.emc_preview_actions(want_preview, cancel_preview, apply);
+        self.emc_preview_actions(want_preview, cancel_preview, show_view, apply);
         if off {
             self.toggle_emc_nets();
         }
@@ -857,7 +859,8 @@ mod tests {
         let doc = |d: &Drive| d.app.backend.document().unwrap().project().revision();
         let (revision, depth) = (doc(&d), d.app.backend.document().unwrap().undo_depth());
         // The card asks for the preview; nothing changes.
-        d.app.emc_preview_actions(Some(fix.clone()), false, None);
+        d.app
+            .emc_preview_actions(Some(fix.clone()), false, None, None);
         d.frame();
         assert_eq!(
             (doc(&d), d.app.backend.document().unwrap().undo_depth()),
@@ -868,10 +871,11 @@ mod tests {
         // The finding stays as an info (ends not stated), so the preview says what it does.
         assert!(result.unwrap().said.contains("Shield core added"));
         // Cancel drops it; the card can ask again and apply it as one step.
-        d.app.emc_preview_actions(None, true, None);
+        d.app.emc_preview_actions(None, true, None, None);
         assert!(d.app.emc.shown_preview(revision).is_none());
-        d.app.emc_preview_actions(Some(fix.clone()), false, None);
-        d.app.emc_preview_actions(None, false, Some(fix));
+        d.app
+            .emc_preview_actions(Some(fix.clone()), false, None, None);
+        d.app.emc_preview_actions(None, false, None, Some(fix));
         d.frame();
         assert_eq!(d.app.backend.document().unwrap().undo_depth(), depth + 1);
         assert!(d.app.emc.shown_preview(doc(&d)).is_none());

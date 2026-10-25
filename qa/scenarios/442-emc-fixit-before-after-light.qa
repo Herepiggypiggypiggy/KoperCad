@@ -1,0 +1,35 @@
+@title EMC fix-it: before/after banner in the 3D EMC view, Light theme
+@area 3D
+@sizes 1366x768 1920x1080
+# Same as 410 in the Light theme: the banner and the overlays follow the theme palette. The pictures are the evidence.
+open qa/fixtures/emc-cabinet-bonding.novo
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+scroll 360 400 -300
+wait 10
+click_text "Preview: Scrape the mounting area bare" #1
+wait 10
+click_text "In 3D"
+wait 40
+expect "Previewing a fix"
+shot 01-after-light
+check_layout
+click_text Before #1
+wait 20
+shot 02-before-light
+check_layout
