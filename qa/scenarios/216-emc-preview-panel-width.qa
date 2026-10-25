@@ -1,0 +1,32 @@
+@title Schematic: the EMC fix preview keeps the net-class panel narrow (1366)
+@area Schematic
+@sizes 1366x768
+# Pick a motor-cable wire with EMC net classes on and open "Preview: Use a shielded cable.": the panel stays its own width (wrapping the preview text) and does not grow over the right half of the drawing; Apply and Cancel stay in reach.
+key ctrl+k
+wait 6
+text open emc example
+wait 8
+key Enter
+wait 30
+key PageDown
+wait 8
+key PageDown
+wait 12
+key ctrl+k
+wait 6
+text emc net classes
+wait 8
+key Enter
+wait 20
+click 152 420
+wait 12
+expect "Cable =A1+CAB-W2"
+shot before-preview
+scroll 1180 400 2000
+wait 8
+click_text "Preview: Use a shielded cable." #1
+wait 10
+expect "Preview on a copy of the project"
+expect "Apply (one undo step)"
+shot preview-open
+check_layout

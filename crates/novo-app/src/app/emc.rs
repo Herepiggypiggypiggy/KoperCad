@@ -255,7 +255,7 @@ pub(super) fn preview_card(
     let p = crate::theme::ui_palette();
     let mut apply = false;
     let card = egui::Frame::group(ui.style()).show(ui, |ui| {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label(egui::RichText::new("Preview on a copy of the project").strong());
             if preview.is_ok() {
                 let button = ui
@@ -317,7 +317,9 @@ pub(super) fn preview_card(
         }
     });
     if scroll {
-        card.response.scroll_to_me(Some(egui::Align::Center));
+        // Its top, where Apply and Cancel are: a tall card centred would push
+        // them out of a short panel.
+        card.response.scroll_to_me(Some(egui::Align::TOP));
     }
     apply
 }
