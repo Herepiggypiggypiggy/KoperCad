@@ -354,6 +354,7 @@ pub const NOT_CHECKED: &[&str] = &[
     "Enclosure shielding: seams, slots, gaskets and cavity resonances.",
     "The magnetic field estimate covers the differential-mode field of the currents it lists: no common-mode current, no capacitive coupling, no eddy currents in a steel plate at mains frequency, no riser wires between plate and device.",
     "Rules not built yet, so they say nothing either way: EMC-03 crossing angles, EMC-06 shield carried through terminals, EMC-08 motor cable length against the filter, EMC-10 return through the plate, EMC-13 coil suppression, EMC-15 24 V supply and return, EMC-16 surge protection, EMC-18 ferrite advice.",
+    "Devices on the door in the plate field estimate (EMC-19): they stand in another plane than the plate, so the field model does not cover them and they get no EMC-19 result.",
     "ESD current paths through the door, the strap and the frame: the door strap, the devices on the door and the wires across the hinge are checked, the discharge itself is not modelled.",
     "Anything above about 30 MHz: cable lengths approach a wavelength fraction there.",
     "Compliance with any standard. Compliance is shown by measurement on the finished machine.",

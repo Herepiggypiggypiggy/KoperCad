@@ -1142,11 +1142,13 @@ fn door(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
             .input
             .runs
             .iter()
-            .filter(|r| {
-                [r.from, r.to]
-                    .into_iter()
-                    .flatten()
-                    .any(|d| door_ids.contains(&d))
+            .filter(|r| match (r.from, r.to) {
+                // Exactly one end on the door: the wire goes over the hinge.
+                // Door to door stays on the door. An end with no device (None)
+                // is unknown, so the run is not counted: no finding is made
+                // for a wire whose path is not known.
+                (Some(a), Some(b)) => door_ids.contains(&a) != door_ids.contains(&b),
+                _ => false,
             })
             .collect();
         let classes: BTreeSet<EmcClass> = crossing.iter().map(|r| r.class).collect();
@@ -1155,7 +1157,7 @@ fn door(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
             .flat_map(|a| classes.iter().map(move |b| (*a, *b)))
             .filter(|(a, b)| a < b && cx.input.params.distance_mm(*a, *b) > 0.0)
             .collect();
-        if let Some((a, b)) = clash.first() {
+        for (a, b) in &clash {
             let need = cx.input.params.distance_mm(*a, *b);
             let mut subjects: Vec<Subject> = crossing
                 .iter()
@@ -1166,7 +1168,7 @@ fn door(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
             out.push(find(
                 Severity::Warning,
                 format!(
-                    "{} and {} wires both cross the hinge of {}: they have to bundle through the same hinge loop, where the planning distance of {} mm cannot be kept. Run each class in its own loop on opposite sides of the hinge, or bring the signal wires to the door through a separate terminal block.",
+                    "{} and {} wires both cross the hinge of {}: they have to bundle through the same hinge loop, where the planning distance of {} mm may not be kept. Run each class in its own loop on opposite sides of the hinge, or bring the signal wires to the door through a separate terminal block.",
                     a.label(),
                     b.label(),
                     cx.plate(plate.id),

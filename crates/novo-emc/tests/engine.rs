@@ -657,3 +657,42 @@ fn door_devices_and_hinge_crossings_are_flagged_with_guidance() {
     let r = analyse(&i);
     assert_eq!(r.of_rule("EMC-12").count(), 0);
 }
+
+#[test]
+fn wires_that_stay_on_the_door_or_have_no_device_end_do_not_cross_the_hinge() {
+    let mut i = input(vec![], vec![]);
+    let door = |id, tag: &str, role| {
+        let mut d = dev(id, tag, role, (0.0, 0.0, 0.0, 0.0));
+        d.rect = None;
+        d.on_door = true;
+        d
+    };
+    i.devices = vec![
+        door(1, "-S1", Role::Other),
+        door(2, "-H1", Role::Other),
+        dev(3, "-A1", Role::Sensitive, (400.0, 0.0, 60.0, 80.0)),
+    ];
+    i.plates[0].door_bonded = Some(true);
+    // Door to door: a motor-class and an unshielded analog wire.
+    let mut m = run(10, EmcClass::Motor, &[], &[]);
+    (m.from, m.to) = (Some(1), Some(2));
+    let mut a = run(11, EmcClass::Analog, &[], &[]);
+    (a.from, a.to) = (Some(2), Some(1));
+    // One end without a device: not counted either.
+    let mut n = run(12, EmcClass::Analog, &[], &[]);
+    (n.from, n.to) = (Some(1), None);
+    i.runs = vec![m, a, n];
+    let r = analyse(&i);
+    assert!(
+        !r.of_rule("EMC-12").any(|f| f.message.contains("hinge")),
+        "{:#?}",
+        r.of_rule("EMC-12").map(|f| &f.message).collect::<Vec<_>>()
+    );
+    // The same wires from the plate device do cross it.
+    i.runs[1].from = Some(3);
+    assert!(
+        analyse(&i)
+            .of_rule("EMC-12")
+            .any(|f| f.message.contains("without a shield"))
+    );
+}
