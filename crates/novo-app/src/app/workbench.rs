@@ -1434,11 +1434,11 @@ impl NovoApp {
                 self.export_assembly();
             }
             "export.workpack" => {
-                self.export_workpack();
+                self.ask_workpack();
             }
             "export.workpack_step" => {
                 if let Some((id, mark)) = self.wb.workpack_step.take() {
-                    self.export_workpack_step(id, &mark);
+                    self.ask_workpack_step(id, &mark);
                 }
             }
             "export.safety_sheets" => {

@@ -666,26 +666,10 @@ pub fn evaluate(input: &Input, setup: &FieldSetup) -> Outcome {
     // EMC-19: the field where a sensitive device sits.
     for d in &sensitive {
         let (plate, (x, y, w, h)) = (d.plate.expect("filtered"), d.rect.expect("filtered"));
-        let srcs = sources(input, &live_as_owned(&live), height, fp.image(), |r| {
-            r.plate == Some(plate)
-        });
-        if srcs.is_empty() {
+        let Some(probe) = FieldProbe::new(input, setup, plate) else {
             continue;
-        }
-        let (mut best, mut at) = (0.0f64, (x + w / 2.0, y + h / 2.0));
-        for i in 0..=4 {
-            for j in 0..=4 {
-                let p = (x + w * f64::from(i) / 4.0, y + h * f64::from(j) / 4.0);
-                let v = b_rms(
-                    [mm_to_m(p.0), mm_to_m(p.1), mm_to_m(fp.slice_mm)],
-                    &srcs,
-                    r_min,
-                ) * 1.0e6;
-                if v > best {
-                    (best, at) = (v, p);
-                }
-            }
-        }
+        };
+        let (best, at) = probe.at_rect((x, y, w, h));
         summary.devices.push(DeviceField {
             device: d.id,
             tag: d.tag.clone(),
@@ -735,6 +719,13 @@ pub fn evaluate(input: &Input, setup: &FieldSetup) -> Outcome {
                     });
                 }
             }
+        }
+        // After the hand fix, which names the distance to aim for.
+        if over {
+            fixes.push(Fix::MoveOutOfField {
+                device: d.id,
+                below_ut: fp.limit_ut,
+            });
         }
         findings.push(Finding {
             rule: "EMC-19",
@@ -969,6 +960,61 @@ fn limit_text(limit: f64) -> String {
 
 fn live_as_owned(live: &[&Current]) -> Vec<Current> {
     live.iter().map(|c| (*c).clone()).collect()
+}
+
+/// The field of the stated currents on one plate, ready to be read at any
+/// rectangle: the same numbers EMC-19 reports, for a search that moves a
+/// device and asks where the field is low enough.
+pub struct FieldProbe {
+    srcs: Vec<Source>,
+    slice_mm: f64,
+}
+
+impl FieldProbe {
+    /// `None` when no routed wire on the plate carries a current.
+    pub fn new(input: &Input, setup: &FieldSetup, plate: u64) -> Option<FieldProbe> {
+        let fp = &setup.params;
+        let by_run: HashMap<u64, &Run> = input.runs.iter().map(|r| (r.id, r)).collect();
+        let live: Vec<Current> = setup
+            .currents
+            .iter()
+            .filter(|c| {
+                c.amps > 0.0
+                    && by_run
+                        .get(&c.run)
+                        .is_some_and(|r| r.path.len() >= 2 && r.plate.is_some())
+            })
+            .cloned()
+            .collect();
+        let srcs = sources(input, &live, input.params.wire_height_mm, fp.image(), |r| {
+            r.plate == Some(plate)
+        });
+        (!srcs.is_empty()).then_some(FieldProbe {
+            srcs,
+            slice_mm: fp.slice_mm,
+        })
+    }
+
+    /// The largest field (µT) over a 5 x 5 sample of `rect` (x, y, w, h) and
+    /// where it is.
+    pub fn at_rect(&self, rect: (f64, f64, f64, f64)) -> (f64, (f64, f64)) {
+        let (x, y, w, h) = rect;
+        let (mut best, mut at) = (0.0f64, (x + w / 2.0, y + h / 2.0));
+        for i in 0..=4 {
+            for j in 0..=4 {
+                let p = (x + w * f64::from(i) / 4.0, y + h * f64::from(j) / 4.0);
+                let v = b_rms(
+                    [mm_to_m(p.0), mm_to_m(p.1), mm_to_m(self.slice_mm)],
+                    &self.srcs,
+                    0.001,
+                ) * 1.0e6;
+                if v > best {
+                    (best, at) = (v, p);
+                }
+            }
+        }
+        (best, at)
+    }
 }
 
 /// The settings of the estimate, each marked default or set in the project.

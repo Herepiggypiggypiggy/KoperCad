@@ -116,6 +116,11 @@ fn the_cards_need_a_plate_then_land_next_to_the_project() {
     d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
     d.frame();
 
+    // The commands ask where to save; a cancelled dialog (the only answer in
+    // a unit test) writes nothing.
+    assert_eq!(d.app.ask_workpack(), None);
+    assert!(!dir.path().join("Plant 2 work cards.pdf").exists());
+
     let pdf = d.app.export_workpack().expect("exported");
     assert_eq!(pdf, dir.path().join("Plant 2 work cards.pdf"));
     let bytes = std::fs::read(&pdf).unwrap();
@@ -148,6 +153,15 @@ fn the_cards_need_a_plate_then_land_next_to_the_project() {
             .unwrap()
     });
     let mark = first.unwrap();
+    assert_eq!(d.app.ask_workpack_step(cab, &mark), None);
+    assert!(
+        std::fs::read_dir(dir.path()).unwrap().all(|f| !f
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .contains("work card ")),
+        "a cancelled dialog writes no card"
+    );
     let one = d.app.export_workpack_step(cab, &mark).expect("one card");
     assert!(
         one.file_name()

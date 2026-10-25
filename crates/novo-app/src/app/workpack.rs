@@ -22,7 +22,7 @@ use novo_thermal::bridge::{BridgeOptions, scenario_from_project};
 use super::assembly::Circuit;
 use super::heat_openings_store;
 use super::heat_settings::{Kind, Wall};
-use super::pdf::{replaceable_path, write_replacing};
+use super::pdf::write_replacing;
 use super::{Level, NovoApp};
 
 fn number(cell: Option<&Cell>) -> Option<f64> {
@@ -317,21 +317,82 @@ impl NovoApp {
 
     /// Exports the work cards next to the project, or to the Documents folder
     /// for an untitled one.
+    #[cfg(test)]
     pub(super) fn export_workpack(&mut self) -> Option<PathBuf> {
         let (dir, stem) = self.export_base()?;
-        let path = replaceable_path(&dir.join(format!("{stem} work cards.pdf")));
+        let path = super::pdf::replaceable_path(&dir.join(format!("{stem} work cards.pdf")));
         self.export_workpack_to(&path)
+    }
+
+    /// The Work cards commands (menu, Bench panel, Build order strip): the
+    /// person picks where the PDF goes. The dialog starts next to the project
+    /// (Documents for an untitled one) with the usual file name. Cancelling
+    /// writes nothing.
+    pub(super) fn ask_workpack(&mut self) -> Option<PathBuf> {
+        if self.work_cards_pdf().is_none() {
+            // Says what is missing, without a dialog for nothing.
+            return self.export_workpack_to(Path::new(""));
+        }
+        let (dir, stem) = self.export_base()?;
+        let path = Self::pick_pdf(
+            "Save the work cards",
+            &dir,
+            &format!("{stem} work cards.pdf"),
+        )?;
+        self.export_workpack_to(&path)
+    }
+
+    /// The same for one Build order step's card.
+    pub(super) fn ask_workpack_step(
+        &mut self,
+        id: novo_core::StructureId,
+        mark: &str,
+    ) -> Option<PathBuf> {
+        let (dir, stem) = self.export_base()?;
+        let (bytes, tag, several) = self.workpack_step_card(id, mark)?;
+        let file = step_file_name(&stem, &tag, mark, several);
+        let path = Self::pick_pdf("Save the work card", &dir, &file)?;
+        self.write_step_card(&path, &bytes)
+    }
+
+    /// A PDF save dialog starting in `dir`; the name always ends in `.pdf`.
+    fn pick_pdf(title: &str, dir: &Path, file: &str) -> Option<PathBuf> {
+        let path = crate::dialogs::FileDialog::new()
+            .set_title(title)
+            .set_directory(dir)
+            .set_file_name(file)
+            .add_filter("PDF", &["pdf"])
+            .save_file()?;
+        Some(if path.extension().is_some() {
+            path
+        } else {
+            path.with_extension("pdf")
+        })
     }
 
     /// The card of the Build order step `mark` of enclosure `id` as a one-page
     /// PDF next to the project, `<project> work card <mark>.pdf`.
+    #[cfg(test)]
     pub(super) fn export_workpack_step(
         &mut self,
         id: novo_core::StructureId,
         mark: &str,
     ) -> Option<PathBuf> {
-        let name = self.machine_title().unwrap_or_default();
         let (dir, stem) = self.export_base()?;
+        let (bytes, tag, several) = self.workpack_step_card(id, mark)?;
+        let file = step_file_name(&stem, &tag, mark, several);
+        let path = super::pdf::replaceable_path(&dir.join(file));
+        self.write_step_card(&path, &bytes)
+    }
+
+    /// The one-page PDF of step `mark`, the enclosure's tag and whether the
+    /// project has several enclosures; says so when there is no such card.
+    fn workpack_step_card(
+        &mut self,
+        id: novo_core::StructureId,
+        mark: &str,
+    ) -> Option<(Vec<u8>, String, bool)> {
+        let name = self.machine_title().unwrap_or_default();
         let (bytes, several) = {
             let project = self.machine()?;
             let tag = project.structures().find(|s| s.id == id)?.tag.to_string();
@@ -353,16 +414,18 @@ impl NovoApp {
             );
             return None;
         };
-        let file = step_file_name(&stem, &tag, mark, several);
-        let path = replaceable_path(&dir.join(file));
-        match write_replacing(&path, &bytes) {
+        Some((bytes, tag, several))
+    }
+
+    fn write_step_card(&mut self, path: &Path, bytes: &[u8]) -> Option<PathBuf> {
+        match write_replacing(path, bytes) {
             Ok(()) => {
                 self.message_file(
                     format!("Exported {}. Print at 100 % (actual size)", path.display()),
-                    &path,
+                    path,
                 );
-                self.wb.last_export = Some(path.clone());
-                Some(path)
+                self.wb.last_export = Some(path.to_owned());
+                Some(path.to_owned())
             }
             Err(e) => {
                 self.message(Level::Error, format!("Could not export the work card: {e}"));

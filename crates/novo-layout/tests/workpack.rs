@@ -704,6 +704,50 @@ fn a_vertical_rail_measures_its_devices_down_the_rail() {
 }
 
 #[test]
+fn a_clip_card_says_which_end_of_its_rail_is_the_start() {
+    let mut l = layout();
+    l.rails = vec![
+        Rail {
+            id: 1,
+            x: 50.0,
+            y: 100.0,
+            length: 400.0,
+            vertical: false,
+        },
+        Rail {
+            id: 2,
+            x: 600.0,
+            y: 100.0,
+            length: 300.0,
+            vertical: true,
+        },
+    ];
+    l.placements = vec![
+        place(10, 80.0, 100.0, false, Some(1)),
+        place(11, 600.0, 150.0, false, Some(2)),
+    ];
+    let p = build("+CAB1", &l, &[], &|id| format!("-Q{id}"), &[]);
+    let note = |tag: &str| {
+        p.cards
+            .iter()
+            .find(|c| c.kind == CardKind::Clip && c.mark.contains(tag))
+            .unwrap()
+            .notes
+            .join(" | ")
+    };
+    assert!(
+        note("Q10").contains("R1 starts at its left end, seen from the front"),
+        "{}",
+        note("Q10")
+    );
+    assert!(
+        note("Q11").contains("R2 starts at its top end"),
+        "{}",
+        note("Q11")
+    );
+}
+
+#[test]
 fn a_ducts_step_text_and_card_give_the_same_corner() {
     let p = pack(0);
     let card = p.cards.iter().find(|c| c.kind == CardKind::Duct).unwrap();
