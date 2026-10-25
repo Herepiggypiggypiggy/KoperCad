@@ -215,21 +215,26 @@ fn field_section(
 /// What a previewed fix would change, with Apply and Cancel at the top so
 /// they stay in reach in a short window. Returns true for Apply; `cancel`
 /// is set for Cancel. `scroll` brings the card into view (just opened).
-fn preview_card(
+pub(super) fn preview_card(
     ui: &mut egui::Ui,
     preview: &Result<emc::Preview, String>,
     cancel: &mut bool,
     scroll: bool,
+    apply_at: &mut Option<egui::Rect>,
 ) -> bool {
     let p = crate::theme::ui_palette();
     let mut apply = false;
     let card = egui::Frame::group(ui.style()).show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("Preview on a copy of the project").strong());
-            if preview.is_ok()
-                && ui.button("Apply (one undo step)").on_hover_text("Do this on the project; Edit > Undo takes it back").clicked()
-            {
-                apply = true;
+            if preview.is_ok() {
+                let button = ui
+                    .button("Apply (one undo step)")
+                    .on_hover_text("Do this on the project; Edit > Undo takes it back");
+                *apply_at = Some(button.rect);
+                if button.clicked() {
+                    apply = true;
+                }
             }
             if ui.button("Cancel").clicked() {
                 *cancel = true;
@@ -264,7 +269,45 @@ fn preview_card(
     apply
 }
 
+impl EmcState {
+    /// The fix being previewed and what it would change, when it was worked
+    /// out on the project as it is now.
+    pub(super) fn shown_preview(
+        &self,
+        revision: u64,
+    ) -> Option<(Fix, Result<emc::Preview, String>)> {
+        self.preview
+            .as_ref()
+            .filter(|(r, _, _)| *r == revision)
+            .map(|(_, f, p)| (f.clone(), p.clone()))
+    }
+
+    /// Takes the preview card's fresh flag (scroll it into view once).
+    pub(super) fn take_fresh(&mut self) -> bool {
+        std::mem::take(&mut self.preview_fresh)
+    }
+}
+
 impl NovoApp {
+    /// What a preview card asked for: preview a fix, cancel it, or apply it.
+    pub(super) fn emc_preview_actions(
+        &mut self,
+        want: Option<Fix>,
+        cancel: bool,
+        apply: Option<Fix>,
+    ) {
+        if cancel {
+            self.emc.preview = None;
+        }
+        if let Some(fix) = want {
+            self.emc_preview(&fix);
+        }
+        if let Some(fix) = apply {
+            self.emc.preview = None;
+            self.emc_apply(&fix);
+        }
+    }
+
     pub(super) fn emc_window(&mut self, ctx: &egui::Context) {
         if !self.emc.open {
             return;
@@ -385,7 +428,7 @@ impl NovoApp {
                         });
                         if let Some((_, pf, pv)) = &shown
                             && f.fixes.contains(pf)
-                            && preview_card(ui, pv, &mut cancel_preview, fresh)
+                            && preview_card(ui, pv, &mut cancel_preview, fresh, &mut None)
                         {
                             apply = Some(pf.clone());
                         }
@@ -446,16 +489,7 @@ impl NovoApp {
         if let Some(on) = turn {
             self.emc_turn(on);
         }
-        if cancel_preview {
-            self.emc.preview = None;
-        }
-        if let Some(fix) = want_preview {
-            self.emc_preview(&fix);
-        }
-        if let Some(fix) = apply {
-            self.emc.preview = None;
-            self.emc_apply(&fix);
-        }
+        self.emc_preview_actions(want_preview, cancel_preview, apply);
         if let Some((wire, amps)) = set_current {
             self.emc_set_current(wire, amps);
         }

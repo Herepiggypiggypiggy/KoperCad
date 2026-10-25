@@ -60,6 +60,7 @@ Fix a step, then regenerate to shrink the list.
 - dxf-and-backgrounds/remove: `File > Import > Remove the DXF background`
 - emc-net-classes/honest: `Check > EMC check`
 - emc-net-classes/shield-core: `Apply` (write {ui:emc.nets.apply})
+- emc-net-classes/shield-core: `Preview` (write {ui:emc.nets.preview})
 - emc-on-the-plate/bonding: `Bonding` (write {ui:emc.plate.bonding})
 - emc-on-the-plate/emc-on: `EMC view on the plate`
 - emc-on-the-plate/emc-on: `EMC` (write {ui:cabinet.emc})
