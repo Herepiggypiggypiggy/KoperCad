@@ -146,3 +146,45 @@ fn the_cards_need_a_plate_then_land_next_to_the_project() {
             .exists()
     );
 }
+
+#[test]
+fn every_card_length_is_a_cut_list_length_and_nothing_falls_back() {
+    use novo_reports::{CutList, Report};
+    let project = lesson("wire-routing/project.json");
+    let mut cut_list: Vec<f64> = CutList::default()
+        .generate(&project)
+        .sections
+        .iter()
+        .filter(|s| s.key.starts_with("group-"))
+        .flat_map(|s| {
+            let i = s.column("cut_mm").unwrap();
+            s.rows.iter().map(move |r| match &r.cells[i] {
+                novo_reports::Cell::Number(v) => *v,
+                other => panic!("{other:?}"),
+            })
+        })
+        .collect();
+    let mut on_cards: Vec<f64> = Vec::new();
+    for pack in work_packs(&project) {
+        assert!(
+            pack.problems
+                .iter()
+                .all(|p| !p.contains("not in the cut list")),
+            "{:?}",
+            pack.problems
+        );
+        for c in pack.cards.iter().filter(|c| c.kind == CardKind::Wires) {
+            on_cards.extend(c.wires.iter().map(|w| w.cut_mm));
+        }
+    }
+    // The cabinet's cards carry the wires with an end in it: every length
+    // is one of the cut list's, each used at most as often as it appears.
+    for w in &on_cards {
+        let i = cut_list
+            .iter()
+            .position(|c| c == w)
+            .unwrap_or_else(|| panic!("{w} mm is not a cut list length"));
+        cut_list.remove(i);
+    }
+    assert!(!on_cards.is_empty());
+}

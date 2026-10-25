@@ -83,6 +83,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
             .filter_map(|p| project.get::<Device>(DeviceId::from(p.id)))
             .map(|d| novo_layout::model::features(project, d))
             .collect();
+        let mut missing: Vec<String> = Vec::new();
         let mut by_circuit: BTreeMap<Circuit, Vec<WireCut>> = BTreeMap::new();
         if let Some(wire) = checklist
             .sections
@@ -93,10 +94,16 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                 let t = |key: &str| text_at(wire, row, key);
                 let (number_text, from, to) = (t("number"), t("from"), t("to"));
                 let length = number(at(wire, row, "length_mm").as_ref()).unwrap_or(0.0);
-                let cut = cuts
+                let found = cuts
                     .get_mut(&(number_text.clone(), from.clone(), to.clone()))
-                    .and_then(VecDeque::pop_front)
-                    .unwrap_or(length);
+                    .and_then(VecDeque::pop_front);
+                if found.is_none() {
+                    missing.push(format!(
+                        "Wire {number_text} ({from} to {to}) is not in the cut list: its length {} mm has no end allowances, cut it longer",
+                        novo_layout::drill::mm(length)
+                    ));
+                }
+                let cut = found.unwrap_or(length);
                 let (colour, size) = (t("colour"), t("cross_section_mm2"));
                 let kind = [
                     (!size.is_empty()).then(|| format!("{size} mm2")),
@@ -115,7 +122,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                         to,
                         kind,
                         cut_mm: cut,
-                        estimated: is_estimate(&t("basis")),
+                        estimated: found.is_none() || is_estimate(&t("basis")),
                     });
             }
         }
@@ -126,7 +133,9 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                 wires,
             })
             .collect();
-        out.push(build(&tag, &layout, &features, &name, &groups));
+        let mut pack = build(&tag, &layout, &features, &name, &groups);
+        pack.problems.extend(missing);
+        out.push(pack);
     }
     out
 }

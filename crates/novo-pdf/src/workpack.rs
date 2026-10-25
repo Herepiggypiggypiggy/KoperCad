@@ -640,7 +640,7 @@ fn cover_marks(pack: &Pack, project: &str) -> Marks {
         HAlign::Left,
         false,
         format!(
-            "{project}   plate {} x {} mm   {} steps, {} cards",
+            "{project}   plate {} x {} mm   {} steps on {} cards",
             mm(pack.plate.0),
             mm(pack.plate.1),
             pack.overview.len(),
@@ -740,9 +740,9 @@ fn overview_marks(pack: &Pack, rows: std::ops::Range<usize>, number: (usize, usi
     let top = 24.0;
     for (x, h) in [
         (0.0, "Step"),
-        (14.0, "Phase"),
-        (34.0, "Mark"),
-        (66.0, "What to do"),
+        (11.0, "Phase"),
+        (30.0, "Mark"),
+        (56.0, "What to do"),
         (w - 10.0, "Done"),
     ] {
         text(&mut m, (x0 + x, top), 3.0, HAlign::Left, true, h);
@@ -753,28 +753,44 @@ fn overview_marks(pack: &Pack, rows: std::ops::Range<usize>, number: (usize, usi
         text(&mut m, (x0, y), 3.2, HAlign::Left, true, r.step.to_string());
         text(
             &mut m,
-            (x0 + 14.0, y),
-            3.2,
+            (x0 + 11.0, y),
+            3.0,
             HAlign::Left,
             false,
             r.phase.name(),
         );
         text(
             &mut m,
-            (x0 + 34.0, y),
-            3.2,
-            HAlign::Left,
-            false,
-            clip(&r.mark, 30.0, 3.2),
-        );
-        text(
-            &mut m,
-            (x0 + 66.0, y),
+            (x0 + 30.0, y),
             3.0,
             HAlign::Left,
             false,
-            clip(&r.text, w - 66.0 - 14.0, 3.0),
+            clip(&r.mark, 26.0, 3.0),
         );
+        // The position is the point of the row: wrap to two lines, never cut it.
+        let lines = wrap(&r.text, w - 56.0 - 12.0, 3.0);
+        if lines.len() <= 1 {
+            text(
+                &mut m,
+                (x0 + 56.0, y),
+                3.0,
+                HAlign::Left,
+                false,
+                r.text.clone(),
+            );
+        } else {
+            let lines = wrap(&r.text, w - 56.0 - 12.0, 2.7);
+            for (k, l) in lines.iter().take(2).enumerate() {
+                text(
+                    &mut m,
+                    (x0 + 56.0, y - 1.0 + k as f64 * 3.1),
+                    2.7,
+                    HAlign::Left,
+                    false,
+                    l.clone(),
+                );
+            }
+        }
         rect(
             &mut m,
             Layer::Table,
@@ -863,6 +879,10 @@ mod tests {
     use novo_layout::state::CabinetLayout;
     use novo_layout::workpack::{WireCut, WireGroup, build};
     use novo_layout::{Margins, Placement, Plate, Rail, Size};
+
+    pub(super) fn sample_pack() -> Pack {
+        pack(3, false)
+    }
 
     fn pack(wires: usize, long_text: bool) -> Pack {
         let mut l = CabinetLayout::new(Plate {
@@ -1001,5 +1021,30 @@ mod tests {
         assert!(scale_text(1.0).contains("true size"));
         assert!(scale_text(1.0 / 2.5).contains("1:2.5"));
         assert!(scale_text(0.4).contains("NOT true size"));
+    }
+}
+
+#[cfg(test)]
+mod overview_tests {
+    use super::*;
+
+    #[test]
+    fn a_long_step_text_is_wrapped_and_keeps_its_position() {
+        let mut p = tests_pack();
+        p.overview[0].text = "Cut a 50 mm wide wiring duct to 530 mm and fit it level at x 55, y 250 on the mounting plate of the cabinet".to_owned();
+        let m = overview_marks(&p, 0..1, (1, 1));
+        let joined: String = m
+            .texts
+            .iter()
+            .filter(|t| t.pos.0 >= 15.0 + 56.0 - 0.01 && t.pos.1 > 28.0)
+            .map(|t| t.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(joined.contains("x 55, y 250"), "{joined}");
+        assert!(!joined.contains("..."), "{joined}");
+    }
+
+    fn tests_pack() -> Pack {
+        tests::sample_pack()
     }
 }

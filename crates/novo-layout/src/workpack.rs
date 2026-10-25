@@ -300,7 +300,11 @@ pub fn build(
         layout.placements.iter().map(|p| (p.id, p)).collect();
 
     let mut rails: Vec<&crate::Rail> = layout.rails.iter().collect();
-    rails.sort_by(|a, b| (a.y, a.x, a.id).partial_cmp(&(b.y, b.x, b.id)).unwrap());
+    rails.sort_by(|a, b| {
+        a.y.total_cmp(&b.y)
+            .then(a.x.total_cmp(&b.x))
+            .then(a.id.cmp(&b.id))
+    });
     let rail_index: BTreeMap<u64, usize> = rails
         .iter()
         .enumerate()
