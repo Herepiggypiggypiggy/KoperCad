@@ -69,6 +69,22 @@ pub(super) fn sequence(project: &Project, enclosure: StructureId) -> Vec<Step> {
     out
 }
 
+/// Words for the closing step once the picture knows how many wires it can
+/// draw (those with both ends on the plate and a path).
+pub(super) fn closing_text(drawn: usize) -> String {
+    if drawn == 0 {
+        "Run the wires. None is drawn here: no wire has both ends on this plate yet. \
+         Place the devices and use Route all to see them."
+            .to_owned()
+    } else {
+        format!(
+            "Run the wires: the {drawn} wire{} drawn in blue. Parts the order does not name \
+             appear here too.",
+            if drawn == 1 { " is" } else { "s are" }
+        )
+    }
+}
+
 /// The strip: where we are, what the step does, and the way forward and back.
 /// `position` is 0 (shell and plate) to `steps.len()`.
 pub(super) fn strip(
@@ -125,7 +141,7 @@ pub(super) fn strip(
                     ),
                     None => (
                         format!("Start (0 of {})", steps.len()),
-                        "The enclosure and the mounting plate. Next puts on the first part.",
+                        "The enclosure and the mounting plate (the plate is blue). Next puts on the first part.",
                     ),
                 };
                 ui.horizontal(|ui| {
@@ -182,6 +198,14 @@ pub(super) fn step_by(position: Option<usize>, last: usize, forward: bool) -> Op
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_closing_step_says_how_many_wires_are_drawn_or_why_none_is() {
+        assert!(closing_text(0).contains("None is drawn"));
+        assert!(closing_text(0).contains("Route all"));
+        assert!(closing_text(1).contains("the 1 wire is drawn in blue"));
+        assert!(closing_text(12).contains("the 12 wires are drawn in blue"));
+    }
 
     #[test]
     fn commands_step_from_the_start_and_stop_at_both_ends() {

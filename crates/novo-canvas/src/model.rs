@@ -333,6 +333,14 @@ fn quarter_of(d: Vec2) -> u8 {
     }
 }
 
+/// How far a device tag keeps from the page frame lines, in mm, plus this
+/// fraction of its own width. Text is drawn no smaller than a readable pixel
+/// size, so at the fit zoom of a small window it is wider than its box in mm
+/// (about 1.7 times at A3 in 1366 px): the extra room keeps it off the border
+/// there too.
+const TAG_FRAME_CLEAR: f32 = 1.5;
+const TAG_FRAME_CLEAR_PER_WIDTH: f32 = 0.8;
+
 /// Width of the page frame margin, in mm.
 pub const FRAME_MARGIN: f32 = 10.0;
 const TITLE_BLOCK_WIDTH: f32 = 140.0;
@@ -1966,11 +1974,23 @@ impl PageScene {
                 no_tag: &later_tag,
             };
             let mut at = slot.preferred;
-            for cand in crate::note_place::candidates(slot.preferred, &slot.ink, height) {
+            // When every place is taken, the first one inside the frame still
+            // beats the preferred place if that crosses the border.
+            let mut inside_frame = None;
+            let mut preferred_on_frame = false;
+            let mut found = false;
+            for (n, cand) in crate::note_place::candidates(slot.preferred, &slot.ink, height)
+                .into_iter()
+                .enumerate()
+            {
                 let mut label = base.clone();
                 label.pos = cand.0;
                 label.anchor = cand.1;
-                let b = label.bounds().expand(crate::note_place::PAD);
+                // A tag that merely touches the frame line reads as crossing
+                // it, so it keeps a little clear of the border.
+                let b = label
+                    .bounds()
+                    .expand(TAG_FRAME_CLEAR + TAG_FRAME_CLEAR_PER_WIDTH * label.size().x);
                 let on_frame = self.scene.sheet().is_some_and(|sheet| {
                     !(sheet.rect.contains_point(b.min) && sheet.rect.contains_point(b.max))
                         || sheet
@@ -1978,10 +1998,24 @@ impl PageScene {
                             .iter()
                             .any(|(p, q)| crate::geom::segment_intersects_aabb(*p, *q, &b))
                 });
-                if !on_frame && !obstacles.blocks(&[], std::slice::from_ref(&label)) {
+                if n == 0 {
+                    preferred_on_frame = on_frame;
+                }
+                if on_frame {
+                    continue;
+                }
+                inside_frame.get_or_insert(cand);
+                if !obstacles.blocks(&[], std::slice::from_ref(&label)) {
                     at = cand;
+                    found = true;
                     break;
                 }
+            }
+            if !found
+                && preferred_on_frame
+                && let Some(cand) = inside_frame
+            {
+                at = cand;
             }
             if at == slot.at && at == (base.pos, base.anchor) {
                 continue;
