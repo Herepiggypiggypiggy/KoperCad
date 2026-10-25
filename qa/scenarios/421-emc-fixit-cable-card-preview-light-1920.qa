@@ -37,11 +37,15 @@ click_text "Preview: Use a shielded cable." #1
 wait 10
 expect "Preview on a copy of the project"
 expect "Shield core added"
+key Home
+wait 12
 shot 01-cable-preview-light
 check_layout
 click_text Cancel #1
 wait 10
 expect_not "Preview on a copy of the project"
 expect "No shield core"
+key Home
+wait 12
 shot 02-cancelled-light
 check_layout
