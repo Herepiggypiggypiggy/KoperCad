@@ -877,6 +877,55 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
             )?;
             Ok("Wire asked to stay out of the duct: it takes another duct only if one reaches both of its ends (the router never leaves a wire unrouted for it). Its route and cut length can change: print the wire list and cut list again".to_owned())
         }
+        Fix::KeepClear { wire, other, to_mm } => {
+            let id = novo_core::WireId::from(*wire);
+            let w = tx
+                .project()
+                .get::<novo_core::Wire>(id)
+                .ok_or(ModelError::NotFound(id.into()))?
+                .clone();
+            let mut list = novo_routing::model::keep_clear(&w.properties);
+            list.retain(|(o, _)| o != other);
+            list.push((*other, to_mm.max(1.0)));
+            let text: Vec<String> = list.iter().map(|(o, mm)| format!("{o}:{mm}")).collect();
+            tx.set_property(
+                id,
+                novo_routing::model::KEEP_CLEAR,
+                Some(Value::Text(text.join(","))),
+            )?;
+            // The router keeps the clearance only when ducts allow it: say so
+            // instead of storing a request that changes nothing.
+            let routed = novo_routing::model::route_project(tx.project());
+            let unmet = routed.plans.iter().flat_map(|(_, p)| &p.problems).any(|p| {
+                matches!(
+                    p,
+                    novo_routing::Problem::ClearanceUnmet { job, other: o, .. }
+                        if (*job == *wire && o == other) || (*job == *other && o == wire)
+                )
+            });
+            if unmet {
+                // The most the plate's ducts can be apart, so the designer sees what is possible.
+                let mut best = 0.0_f64;
+                for (structure, _) in &routed.plans {
+                    let ducts = novo_routing::model::ducts(tx.project(), *structure);
+                    let net = novo_routing::model::network(tx.project(), *structure);
+                    for x in &ducts {
+                        for y in &ducts {
+                            best = best.max(net.duct_gap(x.id, y.id).unwrap_or(0.0));
+                        }
+                    }
+                }
+                return Err(ModelError::Format(format!(
+                    "No ducts keep the two wires {} mm apart: the ducts of the plate are at most {} mm apart edge to edge, and the stubs to the terminals are not counted. Move a duct or the devices by hand",
+                    to_mm.round() as i64,
+                    best.round() as i64
+                )));
+            }
+            Ok(format!(
+                "Wires asked to run in ducts at least {} mm apart, measured edge to edge between ducts (the stubs to the terminals are not counted). Their routes and cut lengths can change: print the wire list and cut list again",
+                to_mm.round() as i64
+            ))
+        }
         Fix::ShortenPigtail { cable, to_mm } => {
             let id = novo_core::CableId::from(*cable);
             let c = tx

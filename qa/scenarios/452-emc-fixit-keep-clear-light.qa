@@ -1,0 +1,36 @@
+@title EMC fix-it: the hard distance preview in the Light theme
+@area Cabinet
+@sizes 1366x768 1920x1080
+# Same as 450 in the Light theme. The pictures are the evidence.
+open qa/fixtures/emc-cabinet-keep-clear.novo
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+expect "Preview: Route the two wires in ducts at least"
+click_text "Preview: Route the two wires in ducts at least" #1
+wait 10
+expect "Preview on a copy of the project"
+expect "Clears EMC-01"
+expect "edge to edge"
+shot 01-preview
+check_layout
+click_text "Apply (one undo step)" #1
+wait 15
+expect "cut length"
+expect_not "Preview on a copy of the project"
+shot 02-applied
+check_layout

@@ -1,0 +1,40 @@
+@title EMC fix-it: ask for a hard distance between two wires' ducts, preview and apply
+@area Cabinet
+@sizes 1366x768 1920x1080
+# The fixture states 100 mm for a motor wire beside an analog wire and has two ducts 140 mm apart. EMC-01 offers "Preview: Route the two wires in ducts at least 100 mm apart". The preview re-routes a copy: EMC-01 goes. Apply is one undo step and says the cut length can change. The pictures are the evidence.
+open qa/fixtures/emc-cabinet-keep-clear.novo
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+expect "Preview: Route the two wires in ducts at least"
+click_text "Preview: Route the two wires in ducts at least" #1
+wait 10
+expect "Preview on a copy of the project"
+expect "Clears EMC-01"
+expect "edge to edge"
+shot 01-preview
+check_layout
+click_text "Apply (one undo step)" #1
+wait 15
+expect "cut length"
+expect_not "Preview on a copy of the project"
+shot 02-applied
+check_layout
+key Escape
+wait 12
+click_text Cabinet #1
+wait 30
+key Home
+wait 15
+key ctrl+k
+wait 6
+text emc view on the plate
+wait 8
+key Enter
+wait 30
+shot 03-plate-after
+check_layout
