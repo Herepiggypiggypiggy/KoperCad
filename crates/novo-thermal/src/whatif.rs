@@ -170,7 +170,7 @@ impl Control {
 }
 
 /// Shown with the devices that stand beside the stream of a fan fix.
-pub const BESIDE_NOTE: &str = "Beside the stream between the fan and the vent the 3D solver gave a device a third to three quarters of the gain shown (in one wide box the device ran about 4 K hotter with the fan on). Check them with Simulate in 3D.";
+pub const BESIDE_NOTE: &str = "The rule is a straight strip between the fan and the vent, as wide as the fan opening. The 3D solver was run only for a fan low in the middle and a vent on top in the middle, with devices on the line and about 0.3 of the width off it; nearer is a guess. Beside the line it gave a device a third to three quarters of the gain shown (in one wide box about 4 K hotter with the fan on); devices on the line can also differ. Check them with Simulate in 3D.";
 
 /// The outside size of an enclosure, mm.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -344,13 +344,13 @@ fn order(a: &Choice, b: &Choice) -> std::cmp::Ordering {
         .then(a.reading.max_air_c.total_cmp(&b.reading.max_air_c))
 }
 
-/// Where an opening sits in the plane of the cabinet, mm (y counted from the top).
+/// Where an opening sits in the plane of the cabinet, mm, in the interior frame (y counted from the top).
 fn opening_point(o: &Opening, e: &Enclosure) -> (f64, f64) {
     match o.placement {
         Placement::Top { x_mm } => (x_mm, 0.0),
-        Placement::Bottom { x_mm } => (x_mm, e.height_mm),
+        Placement::Bottom { x_mm } => (x_mm, e.interior_height_mm()),
         Placement::Left { y_mm } => (0.0, y_mm),
-        Placement::Right { y_mm } => (e.width_mm, y_mm),
+        Placement::Right { y_mm } => (e.interior_width_mm(), y_mm),
         Placement::Front { x_mm, y_mm } => (x_mm, y_mm),
     }
 }

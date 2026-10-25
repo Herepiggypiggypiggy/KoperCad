@@ -348,7 +348,9 @@ fn a_fan_fix_says_how_many_devices_stand_beside_its_stream_and_whether_the_hot_o
     let found = set(&mut w, fan, vec![over, other]);
     let text = super::heat_whatif::table_text(&w, &found);
     assert!(
-        text.contains(&format!("Beside the fan stream: 2 of {total} devices.")),
+        text.contains(&format!(
+            "Beside the assumed fan stream: 2 of {total} devices."
+        )),
         "{text}"
     );
     assert!(
@@ -359,7 +361,7 @@ fn a_fan_fix_says_how_many_devices_stand_beside_its_stream_and_whether_the_hot_o
         "{text}"
     );
     assert!(text.contains(novo_thermal::whatif::BESIDE_NOTE));
-    assert!(render(&mut w, 2, None).contains("Beside the fan stream"));
+    assert!(render(&mut w, 2, None).contains("Beside the assumed fan stream"));
     // Only a device that is not over its limit: say so.
     let index = w
         .found
@@ -374,13 +376,13 @@ fn a_fan_fix_says_how_many_devices_stand_beside_its_stream_and_whether_the_hot_o
     let found = set(&mut w, fan, vec![other]);
     let text = super::heat_whatif::table_text(&w, &found);
     assert!(
-        text.contains("None of the devices over their limit now is beside it."),
+        text.contains("None of the devices over their limit now is beside it by this rule"),
         "{text}"
     );
     // Nobody beside: no line.
     let found = set(&mut w, fan, Vec::new());
-    assert!(!super::heat_whatif::table_text(&w, &found).contains("Beside the fan stream"));
-    assert!(!render(&mut w, 2, None).contains("Beside the fan stream"));
+    assert!(!super::heat_whatif::table_text(&w, &found).contains("Beside the assumed fan stream"));
+    assert!(!render(&mut w, 2, None).contains("Beside the assumed fan stream"));
 }
 
 #[test]

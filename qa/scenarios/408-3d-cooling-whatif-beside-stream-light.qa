@@ -25,6 +25,6 @@ wait_s 120
 expect "Devices over limit"
 scroll 1100 450 -150
 wait 10
-expect "Beside the fan stream"
+expect "Beside the assumed fan stream"
 shot beside-stream-light
 check_layout

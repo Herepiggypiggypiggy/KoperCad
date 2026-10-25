@@ -713,7 +713,7 @@ fn beside_text(w: &Wizard, wi: &WhatIf, c: &Choice) -> Option<String> {
     }
     let beside = |id: u64| c.beside_stream.contains(&id);
     let mut out = format!(
-        "Beside the fan stream: {} of {} devices.",
+        "Beside the assumed fan stream: {} of {} devices.",
         c.beside_stream.len(),
         wi.device_ids.len()
     );
@@ -743,7 +743,7 @@ fn beside_text(w: &Wizard, wi: &WhatIf, c: &Choice) -> Option<String> {
             .map(|id| w.tag(id))
             .collect();
         if names.is_empty() {
-            out.push_str(" None of the devices over their limit now is beside it.");
+            out.push_str(" None of the devices over their limit now is beside it by this rule; devices on the line can also differ.");
         } else {
             out.push_str(&format!(
                 " Over their limit now and beside it: {} (the gain shown for them may be too high).",
