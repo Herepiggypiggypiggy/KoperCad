@@ -26,5 +26,15 @@ shot 02-applied
 check_layout
 key Escape
 wait 12
+click_text Cabinet #1
+wait 30
+key Home
+wait 15
+key ctrl+k
+wait 6
+text emc view on the plate
+wait 8
+key Enter
+wait 30
 shot 03-plate-after
 check_layout
