@@ -176,19 +176,31 @@ fn a_fan_wins_in_both_models_and_a_bigger_fan_wins_more() {
 
 /// The whole table. Slow in debug builds.
 #[test]
-#[ignore = "slow: about 40 3D solves"]
+#[ignore = "slow: 72 3D solves, about 18 minutes in a debug build"]
 fn the_fan_gain_sweep() {
-    let mut ratios = Vec::new();
+    struct Case {
+        shape: &'static str,
+        loss: f64,
+        flow: f64,
+        ratio: f64,
+    }
+    let mut cases = Vec::new();
     for shape in SHAPES {
         for loss in [60.0, 120.0] {
             for flow in [60.0, 120.0, 250.0] {
                 for layout in [true, false] {
                     let (g2, g3, _) = gains(shape, loss, flow, layout);
-                    ratios.push(g3 / g2);
+                    cases.push(Case {
+                        shape: shape.name,
+                        loss,
+                        flow,
+                        ratio: g3 / g2,
+                    });
                 }
             }
         }
     }
+    let ratios: Vec<f64> = cases.iter().map(|c| c.ratio).collect();
     let n = ratios.len();
     let mean = ratios.iter().sum::<f64>() / n as f64;
     let mut sorted = ratios.clone();
@@ -197,5 +209,32 @@ fn the_fan_gain_sweep() {
     let low_in_2d = ratios.iter().filter(|r| **r > 1.0).count();
     println!(
         "VALIDATION | fan gain sweep | 3D gain / 2D gain over {n} cases | mean {mean:.2}, median {median:.2}, min {lo:.2}, max {hi:.2}; 2D reads low in {low_in_2d} of {n} | 1 | -"
+    );
+    // The means of the groups the documentation quotes.
+    let group = |name: &str, pick: &dyn Fn(&Case) -> bool| {
+        let r: Vec<f64> = cases.iter().filter(|c| pick(c)).map(|c| c.ratio).collect();
+        let m = r.iter().sum::<f64>() / r.len() as f64;
+        let lo = r.iter().copied().fold(f64::MAX, f64::min);
+        let hi = r.iter().copied().fold(f64::MIN, f64::max);
+        println!(
+            "VALIDATION | fan gain sweep | {name} | mean {m:.2}, range {lo:.2} to {hi:.2} over {} | - | -",
+            r.len()
+        );
+    };
+    for flow in [60.0, 120.0, 250.0] {
+        group(&format!("fan {flow:.0} m3/h"), &|c| c.flow == flow);
+    }
+    for shape in SHAPES {
+        group(&format!("box {}", shape.name), &|c| c.shape == shape.name);
+    }
+    for loss in [60.0, 120.0] {
+        group(&format!("{loss:.0} W"), &|c| c.loss == loss);
+    }
+    let worst_pair = cases
+        .chunks(2)
+        .map(|p| (p[0].ratio - p[1].ratio).abs())
+        .fold(0.0, f64::max);
+    println!(
+        "VALIDATION | fan gain sweep | the two fan positions differ by at most | {worst_pair:.2} | - | -"
     );
 }
