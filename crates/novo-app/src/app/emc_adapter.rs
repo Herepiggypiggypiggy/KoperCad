@@ -524,11 +524,13 @@ mod tests {
                 filter_for: None,
                 bonded: None,
                 height_mm: None,
+                on_door: false,
             }],
             plates: vec![Plate {
                 id: 1,
                 tag: "+CAB".into(),
                 finish: None,
+                door_bonded: None,
             }],
             params: Params::default(),
         }
@@ -579,6 +581,7 @@ mod tests {
             filter_for: None,
             bonded: None,
             height_mm: None,
+            on_door: false,
         });
         let setup = FieldSetup {
             currents: vec![Current {
@@ -644,6 +647,7 @@ mod tests {
             filter_for: None,
             bonded: None,
             height_mm: None,
+            on_door: false,
         });
         let pic = build(&i, 1, [800.0, 400.0], &all());
         for (n, a) in pic.hotspots.iter().enumerate() {
