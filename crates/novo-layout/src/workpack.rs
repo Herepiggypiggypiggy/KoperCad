@@ -1015,7 +1015,7 @@ pub fn add_wiring_opening_cards(pack: &mut Pack, layout: &CabinetLayout) {
             phase: Phase::Devices,
             mark: format!("Opening {} ({surface})", o.name),
             text: format!(
-                "Wiring opening '{}' in the {surface}: {}. It is not a step of the build order: cut it with the {surface} off the cabinet, before parts go on.",
+                "Wiring opening '{}' in the {surface}: {} mm. It is not a step of the build order: cut it with the {surface} off the cabinet, before parts go on.",
                 o.name,
                 shape.describe()
             ),
@@ -1027,7 +1027,7 @@ pub fn add_wiring_opening_cards(pack: &mut Pack, layout: &CabinetLayout) {
             template: Some(Template {
                 width: cw,
                 height: ch,
-                caption: format!("opening cut-out {}", shape.describe()),
+                caption: format!("opening cut-out {} mm", shape.describe()),
                 origin: format!(
                     "Frame is {} mm larger than the cut-out on every side; the cross hair is the centre",
                     mm(OPENING_FRAME_MM)

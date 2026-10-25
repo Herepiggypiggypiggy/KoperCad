@@ -373,7 +373,7 @@ fn is_block(card: &Card) -> bool {
         .is_some_and(|t| t.width <= t.height * 3.0)
 }
 
-const HONESTY_OPENING: &str = "Positions come from the Heat panel's settings, not from your cabinet: check the first cut-out against the real wall or door.";
+const HONESTY_OPENING: &str = "Positions come from the cabinet model (Heat panel or opening settings), not from your cabinet: check the first cut-out against the real wall, door or plate.";
 const HONESTY: &str = "Positions come from the cabinet layout, not from your plate: check the first part against the real plate.";
 
 fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
