@@ -1,0 +1,21 @@
+@title Work cards: wiring openings and a filter fan become cut-out cards
+@area 3D
+# A grommet hole in the plate, a cable entry in the door and a Heat panel fan: three cut-out cards in the work cards PDF.
+open qa/fixtures/cabinet-wiring-openings.novo
+wait 30
+click_text 3D #1
+wait 40
+click_text "Layers"
+wait 8
+click_text "Build order"
+wait 8
+key Escape
+wait 30
+shot start
+expect "Work cards (PDF)"
+check_layout
+click_text "Work cards (PDF)"
+wait 40
+shot written
+expect_file "/tmp/kopercad-qa-open-*/cabinet-wiring-openings work cards.pdf" 3000
+keep_file "/tmp/kopercad-qa-open-*/cabinet-wiring-openings work cards.pdf"
