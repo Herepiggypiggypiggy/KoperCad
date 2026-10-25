@@ -175,6 +175,27 @@ fn draw_template(m: &mut Marks, t: &Template, ox: f64, oy: f64, s: f64) {
     );
     if t.rail {
         line(m, Layer::Rails, (ox, oy + h / 2.0), (ox + w, oy + h / 2.0));
+        // Each clipped device as a box on the strip with its designation,
+        // as wide as the device is along the rail.
+        for c in &t.clips {
+            let (x0, x1) = (ox + c.at.max(0.0) * s, ox + (c.at + c.len).min(t.width) * s);
+            if x1 <= x0 {
+                continue;
+            }
+            rect(m, Layer::Devices, (x0, oy + h * 0.15), (x1, oy + h * 0.85));
+            let label = c.short();
+            // Text the box can hold; a narrow box keeps its outline only.
+            if x1 - x0 >= label.chars().count() as f64 * 1.3 + 1.0 {
+                text(
+                    m,
+                    ((x0 + x1) / 2.0, oy + h / 2.0 - 3.3),
+                    2.4,
+                    HAlign::Center,
+                    false,
+                    label.to_owned(),
+                );
+            }
+        }
     }
     let tick = |m: &mut Marks, a: (f64, f64), b: (f64, f64)| line(m, Layer::Dimensions, a, b);
     let mut xs: Vec<f64> = t.holes.iter().map(|h| h.x).collect();

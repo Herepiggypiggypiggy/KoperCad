@@ -26,6 +26,8 @@ pub const WIRES_PER_CARD: usize = 9;
 pub const LABELS_PER_CARD: usize = 12;
 /// Wires listed on a device card before "and n more".
 pub const WIRES_ON_DEVICE_CARD: usize = 6;
+/// Clipped devices the rail card names in words; all of them are drawn.
+pub const CLIPS_LISTED: usize = 6;
 
 /// One wire to cut, as the cut list gives it.
 #[derive(Debug, Clone, PartialEq)]
@@ -68,6 +70,24 @@ pub struct TemplateCutout {
     pub y: f64,
 }
 
+/// A device clipped on a rail strip: where it sits along the rail.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TemplateClip {
+    /// Distance of the device's start from the rail's start, mm.
+    pub at: f64,
+    /// Its extent along the rail, mm.
+    pub len: f64,
+    /// The device tag as shown on the drawing.
+    pub tag: String,
+}
+
+impl TemplateClip {
+    /// The short designation drawn on the strip: `K1` of `=A1+CAB1-K1`.
+    pub fn short(&self) -> &str {
+        self.tag.rsplit('-').next().unwrap_or(&self.tag)
+    }
+}
+
 /// What a hand template shows: a frame of `width` x `height` mm with holes.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Template {
@@ -81,6 +101,8 @@ pub struct Template {
     pub rail: bool,
     pub holes: Vec<TemplateHole>,
     pub cutout: Option<TemplateCutout>,
+    /// Devices clipped on this rail strip, left to right.
+    pub clips: Vec<TemplateClip>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -345,6 +367,49 @@ pub fn build(
                     .zip(&tmpl_holes)
                     .map(|(&(x, y), h)| hole_line(h.no, h.dia, x, y, plate))
                     .collect();
+                // The devices clipped on this rail, along it from its start.
+                let mut clips: Vec<TemplateClip> = layout
+                    .placements
+                    .iter()
+                    .filter(|p| p.rail == Some(rail.id))
+                    .map(|p| {
+                        let fp = p.footprint();
+                        let (at, len) = if rail.vertical {
+                            (fp.y - rail.y, fp.h)
+                        } else {
+                            (fp.x - rail.x, fp.w)
+                        };
+                        TemplateClip {
+                            at,
+                            len,
+                            tag: name(p.id),
+                        }
+                    })
+                    .collect();
+                clips.sort_by(|a, b| a.at.total_cmp(&b.at).then_with(|| a.tag.cmp(&b.tag)));
+                let mut notes = vec![format!(
+                    "Rail starts at x {}, y {} on the plate ({}).",
+                    mm(rail.x),
+                    mm(rail.y),
+                    from_edges(rail.x, rail.y, plate)
+                )];
+                if !clips.is_empty() {
+                    let shown: Vec<String> = clips
+                        .iter()
+                        .take(CLIPS_LISTED)
+                        .map(|c| format!("{} at {}", c.tag, mm(c.at)))
+                        .collect();
+                    let more = clips.len().saturating_sub(CLIPS_LISTED);
+                    notes.push(format!(
+                        "Clipped on this rail, mm from its start: {}{}.",
+                        shown.join(", "),
+                        if more > 0 {
+                            format!(" and {more} more (drawn on the strip)")
+                        } else {
+                            String::new()
+                        }
+                    ));
+                }
                 cards.push(Card {
                     kind: CardKind::Rail,
                     steps: (step.number, step.number),
@@ -373,17 +438,13 @@ pub fn build(
                         rail: true,
                         holes: tmpl_holes,
                         cutout: None,
+                        clips,
                     }),
                     dims,
                     wires: Vec::new(),
                     wires_more: 0,
                     labels: Vec::new(),
-                    notes: vec![format!(
-                        "Rail starts at x {}, y {} on the plate ({}).",
-                        mm(rail.x),
-                        mm(rail.y),
-                        from_edges(rail.x, rail.y, plate)
-                    )],
+                    notes,
                     ticks: ticks(&["Cut", "Holes drilled", "Rail fitted"]),
                 });
             }
@@ -419,6 +480,7 @@ pub fn build(
                         rail: false,
                         holes: Vec::new(),
                         cutout: None,
+                        clips: Vec::new(),
                     }),
                     dims: vec![format!(
                         "Top left corner: {}",
@@ -543,6 +605,7 @@ pub fn build(
                     rail: false,
                     holes: tmpl_holes,
                     cutout,
+                    clips: Vec::new(),
                 });
                 let mut tick = vec!["Fitted"];
                 if template.is_some() {
@@ -867,6 +930,7 @@ pub fn add_opening_cards(pack: &mut Pack, openings: &[OpeningJob]) {
                     x: cw / 2.0,
                     y: ch / 2.0,
                 }),
+                clips: Vec::new(),
             }),
             dims,
             wires: Vec::new(),
