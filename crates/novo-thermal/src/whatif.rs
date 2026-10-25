@@ -33,6 +33,10 @@ use crate::sweep::{self, Candidate, FINE_CELL_MM, Reading, SIGNIFICANT_K};
 /// The one statement of what the numbers are.
 pub const MODEL_NOTE: &str = "Model estimate: the 2D heat model with planning values and the losses you entered, on a grid that is the same for before and after. Not validated against measurements (the enclosure model is not validated), and the 2D slice does not see the depth of the cabinet. Check the fix you pick with Simulate in 3D.";
 
+/// Said next to a fix with fans: the one 3D comparison made so far
+/// (`crates/novo-cfd/tests/validation_whatif.rs`, `docs/thermal-validation.md`).
+pub const FAN_NOTE: &str = "Fans: in the one case compared with the 3D solver, the 2D model read a fan fix's gain about a third low, so a fan may do better than shown. Simulate in 3D to see.";
+
 /// Fewest kelvin of margin that makes a device "fine"; tries that reach it tie
 /// and the easier fix wins.
 const COMFORT_K: f64 = 2.0;
