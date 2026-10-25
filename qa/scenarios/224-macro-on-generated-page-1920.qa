@@ -1,0 +1,23 @@
+@title Place macro from a generated page, wide window: it lands on the first drawing page
+@area Schematic
+@sizes 1920x1080
+# The Pages panel is already open in a wide window. Same check as scenario 223: the macro goes to page 1, not onto the contents table. The pictures are the evidence.
+click_text "Open example"
+wait 40
+click 136 300
+wait 30
+shot 01-contents-page-open
+key ctrl+k
+wait 6
+text place macro
+wait 8
+key Enter
+wait 20
+click_text "Heater with thermostat"
+wait 15
+shot 02-macro-picked
+click_text Place #2
+wait 30
+expect "Placed Heater with thermostat"
+shot 03-placed-on-page-1
+check_layout

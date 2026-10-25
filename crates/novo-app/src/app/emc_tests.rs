@@ -186,3 +186,66 @@ fn stating_a_current_is_one_undo_step_and_brings_the_field_estimate() {
     d.frame();
     assert_eq!(st(&report(&d)), novo_emc::Status::NotEvaluated);
 }
+
+#[test]
+fn a_preview_changes_nothing_and_apply_is_then_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    cabinet(&mut d);
+    d.frame();
+    let cab = d
+        .app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .structures()
+        .next()
+        .unwrap()
+        .id;
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("painted", |tx| {
+            tx.set_property(cab, "emc.finish", Some(Value::Text("painted".into())))
+        })
+        .unwrap();
+    let fix = Fix::BarePlate { plate: cab.raw() };
+    let revision = d.app.backend.document().unwrap().project().revision();
+    let depth = d.app.backend.document().unwrap().undo_depth();
+    d.app.emc_preview(&fix);
+    d.frame();
+    let preview = d.app.emc.previewed().expect("a preview").as_ref().unwrap();
+    assert!(
+        preview.cleared.iter().any(|(r, _)| *r == "EMC-11"),
+        "{preview:#?}"
+    );
+    assert_eq!(
+        d.app.backend.document().unwrap().project().revision(),
+        revision
+    );
+    assert_eq!(d.app.backend.document().unwrap().undo_depth(), depth);
+    // The window draws the preview card.
+    d.app.run_command(&d.ctx.clone(), "check.emc", None);
+    d.frame();
+    d.frame();
+    d.app.emc_apply(&fix);
+    d.frame();
+    assert_eq!(d.app.backend.document().unwrap().undo_depth(), depth + 1);
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    let finish = d
+        .app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .get::<Structure>(cab)
+        .unwrap()
+        .properties
+        .get("emc.finish")
+        .cloned();
+    assert_eq!(finish, Some(Value::Text("painted".into())));
+}

@@ -350,9 +350,9 @@ impl Provenance {
                 "Made-up data to show what the view can say. It says nothing about your project."
             }
             Provenance::Stub => {
-                "Stand-in until the EMC rule engine is connected: classes are guessed from symbol \
-                 types, pin names and wire colours. Distances and lengths are measured from your \
-                 routed wires."
+                "Fallback picture: the EMC rule engine has no wire or EMC device on this plate to \
+                 work from, so classes are guessed from symbol types, pin names and wire colours. \
+                 Distances and lengths are measured from your routed wires."
             }
             Provenance::Engine => "Classes and findings from the EMC rule engine.",
         }

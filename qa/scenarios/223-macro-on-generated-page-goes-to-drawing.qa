@@ -1,0 +1,27 @@
+@title Place macro from a generated page: it lands on the first drawing page, not on the contents table
+@area Schematic
+@sizes 1366x768
+# Open the generated Table of contents (page 0a) and place a macro from Ctrl+K "Place macro". The macro used to be drawn on top of the table; now the canvas goes to page 1 and the macro is placed there. The pictures are the evidence.
+click_text "Open example"
+wait 40
+click_text Pages
+wait 20
+# The page rows are painted, not labelled: the row "0a Table of contents" of the Pages panel.
+click 142 313
+wait 30
+shot 01-contents-page-open
+key ctrl+k
+wait 6
+text place macro
+wait 8
+key Enter
+wait 20
+shot 02-place-macro-window
+click_text "Heater with thermostat"
+wait 15
+shot 03-macro-picked
+click 66 417
+wait 30
+expect "Placed Heater with thermostat"
+shot 04-placed-on-page-1
+check_layout

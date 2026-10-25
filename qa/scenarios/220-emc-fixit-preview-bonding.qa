@@ -1,0 +1,32 @@
+@title EMC fix-it: preview a painted-plate fix, see what it clears, apply it
+@area Cabinet
+@sizes 1366x768 1920x1080
+# Check > EMC check lists each finding with "Preview: <fix>" for the fixes the program can do. The preview works on a copy: it names the findings it clears, any it brings and the risk change, with Apply (one undo step) and Cancel. The fixture has a drive on a painted plate (EMC-11). The pictures are the evidence for the card layout (drawn text).
+open qa/fixtures/emc-cabinet-bonding.novo
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+expect "EMC check"
+scroll 360 400 -300
+wait 10
+expect "Preview: Scrape the mounting area bare"
+shot 01-findings-with-preview-buttons
+check_layout
+click_text "Preview: Scrape the mounting area bare" #1
+wait 10
+expect "Preview on a copy of the project"
+expect "Clears EMC-11"
+expect "Apply (one undo step)"
+expect "Never compliance"
+shot 02-preview-card
+check_layout
+click_text "Apply (one undo step)"
+wait 15
+expect "Plate finish stated as bare"
+expect_not "Preview on a copy of the project"
+shot 03-applied
+check_layout
