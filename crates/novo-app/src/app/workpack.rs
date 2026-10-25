@@ -261,7 +261,12 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                     number: number.clone(),
                     from: from.clone(),
                     to: to.clone(),
-                    kind: group.clone(),
+                    // The cut list's own "Size unknown" reads "size not set" on every card.
+                    kind: if group.starts_with("Size unknown") {
+                        group.replacen("Size unknown", "size not set", 1)
+                    } else {
+                        group.clone()
+                    },
                     cut_mm: *cut,
                     // Outside the plate the duct model does not reach: cut long.
                     estimated: true,

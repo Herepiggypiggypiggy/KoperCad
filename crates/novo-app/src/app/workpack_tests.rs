@@ -267,6 +267,8 @@ fn cut_list_wires_without_a_cabinet_end_are_named_on_the_cover() {
         assert_eq!(c.steps, (0, 0));
         assert_eq!(c.ticks, ["Cut", "Run"]);
         assert!(c.wires.iter().all(|w| w.estimated && w.end_mm.is_some()));
+        // A missing size reads the same as on the cabinet cards.
+        assert!(c.wires.iter().all(|w| !w.kind.contains("Size unknown")));
     }
     // Every wire the cover names is on a card: same number, ends and cut.
     for w in outside.iter().flat_map(|c| &c.wires) {
