@@ -1,0 +1,25 @@
+@title EMC design record: PDF and Excel written and kept for inspection
+@area Reports
+@sizes 1366x768 1920x1080
+# Check > EMC check has Save EMC record (PDF) and (Excel). The files are written next to the project (the fixture copy in /tmp) and kept so a person can read the real content: findings with what to do at the bench, rules that ran, assumptions, not checked.
+open qa/fixtures/emc-cabinet-door.novo
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+expect "Save EMC record (PDF)"
+shot 00-buttons
+check_layout
+click_text "Save EMC record (PDF)" #1
+wait 20
+expect_file "/tmp/kopercad-qa-open-*/*EMC record.pdf" 1500
+keep_file "/tmp/kopercad-qa-open-*/*EMC record.pdf"
+click_text "Save EMC record (Excel)" #1
+wait 20
+expect_file "/tmp/kopercad-qa-open-*/*EMC record.xlsx" 1500
+keep_file "/tmp/kopercad-qa-open-*/*EMC record.xlsx"
+shot 01-written
+check_layout

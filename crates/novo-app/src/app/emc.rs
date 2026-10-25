@@ -386,6 +386,7 @@ impl NovoApp {
         let mut apply: Option<Fix> = None;
         let mut want_preview: Option<Fix> = None;
         let mut cancel_preview = false;
+        let mut save_record: Option<super::emc_record::EmcRecordFormat> = None;
         let mut show_view: Option<Workspace> = None;
         let shown = self
             .emc
@@ -418,6 +419,18 @@ impl NovoApp {
                 if let Some(done) = &self.emc.done {
                     ui.colored_label(p.success, done);
                 }
+                ui.horizontal(|ui| {
+                    if ui
+                        .button("Save EMC record (PDF)")
+                        .on_hover_text("The findings with what to do at the bench, the rules that ran, the assumptions and what is not checked, next to the project file")
+                        .clicked()
+                    {
+                        save_record = Some(super::emc_record::EmcRecordFormat::Pdf);
+                    }
+                    if ui.button("Save EMC record (Excel)").clicked() {
+                        save_record = Some(super::emc_record::EmcRecordFormat::Excel);
+                    }
+                });
                 ui.add_space(6.0);
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     novo_theme::widgets::section_label(ui, "Wire classes");
@@ -539,6 +552,9 @@ impl NovoApp {
                 });
             });
         self.emc.open = open;
+        if let Some(format) = save_record {
+            self.export_emc_record(format);
+        }
         if let Some(on) = turn {
             self.emc_turn(on);
         }
