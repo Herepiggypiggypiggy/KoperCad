@@ -450,3 +450,103 @@ fn identical_openings_share_one_counted_tool_line_and_fans_point_to_the_datashee
     assert!(cards[3].notes.iter().any(|n| n.contains("datasheet")));
     assert!(!cards[0].notes.iter().any(|n| n.contains("datasheet")));
 }
+
+fn with_openings(list: Vec<novo_layout::openings::Opening>) -> CabinetLayout {
+    let mut l = layout();
+    l.openings = list;
+    l.surface_sizes.insert("door".into(), (600.0, 800.0));
+    l.surface_sizes.insert("left".into(), (250.0, 800.0));
+    l
+}
+
+fn opening(
+    name: &str,
+    surface: &str,
+    shape: novo_layout::openings::OpeningShape,
+    x: f64,
+    y: f64,
+) -> novo_layout::openings::Opening {
+    novo_layout::openings::Opening {
+        name: name.into(),
+        surface: surface.into(),
+        shape,
+        x,
+        y,
+        keep: 5.0,
+        exit: None,
+    }
+}
+
+#[test]
+fn wiring_openings_get_a_card_each_with_edge_distances_outside_the_build_order() {
+    use novo_layout::openings::{Exit, OpeningShape};
+    use novo_layout::workpack::add_wiring_opening_cards;
+    let mut pass = opening(
+        "entry",
+        "door",
+        OpeningShape::Rect { w: 80.0, h: 40.0 },
+        300.0,
+        100.0,
+    );
+    pass.exit = Some(Exit {
+        surface: "left".into(),
+        x: 125.0,
+        y: 100.0,
+    });
+    let l = with_openings(vec![
+        opening(
+            "grommet",
+            "plate",
+            OpeningShape::Round { dia: 30.0 },
+            400.0,
+            300.0,
+        ),
+        pass,
+        opening(
+            "lost",
+            "roof",
+            OpeningShape::Round { dia: 20.0 },
+            10.0,
+            10.0,
+        ),
+    ]);
+    let mut p = pack(2);
+    let before = p.cards.len();
+    let overview = p.overview.len();
+    add_wiring_opening_cards(&mut p, &l);
+    // The roof is not an enclosure surface here: named, not carded.
+    assert_eq!(p.cards.len(), before + 2);
+    assert_eq!(p.overview.len(), overview);
+    assert!(
+        p.problems
+            .iter()
+            .any(|m| m.contains("'lost'") && m.contains("roof"))
+    );
+    let cards: Vec<_> = p
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Opening)
+        .collect();
+    assert_eq!(cards[0].steps, (0, 0));
+    assert!(cards[0].mark.contains("grommet") && cards[0].mark.contains("mounting plate"));
+    assert!(cards[0].dims[0].contains(&from_edges(400.0, 300.0, (800.0, 600.0))));
+    assert!(cards[0].dims[1].contains("385") && cards[0].dims[1].contains("415"));
+    assert!(cards[0].tools[0].contains("dia 30"));
+    assert!(cards[1].tools[0].contains("80 x 40"));
+    assert!(
+        cards[1]
+            .notes
+            .iter()
+            .any(|n| n.contains("left") && n.contains("cut both ends"))
+    );
+    let t = cards[0].template.as_ref().unwrap();
+    assert_eq!((t.width, t.height), (50.0, 50.0));
+}
+
+#[test]
+fn no_wiring_openings_change_nothing() {
+    use novo_layout::workpack::add_wiring_opening_cards;
+    let mut a = pack(3);
+    add_wiring_opening_cards(&mut a, &with_openings(Vec::new()));
+    assert_eq!(a, pack(3));
+}

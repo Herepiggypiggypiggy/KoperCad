@@ -58,8 +58,9 @@ printable on an ordinary office printer, ticked with a pencil.
   and fans have a "CUT-OUT" card each at the end of the cabinet's cards (not build order steps: a wall
   is cut before the plate goes in). They show the opening as the Heat panel and solver cut it (moved and trimmed to lie inside its wall), not as typed. Their centre is measured from the interior's edge, not the outer
   door edge, and a top, bottom or side wall has no stored position across its depth, which the card
-  says. Wiring openings (`opening.*`) and plain door cut-outs without a device are still only on the
-  cut-out cards and the tiled template.
+  says. Wiring openings (`opening.*`: grommet holes, slots and cable entries on the plate, door or a wall)
+  have a CUT-OUT card each too, with the shape, centre and edge distances on their own surface (the
+  door's size falls back to the interior's, or is said to be unknown).
 - Duct fixing points are the duct maker's; the model has none.
 - Not built: a drill-size
   choice per part (the tool is the part data's hole diameter), a wire "strip length" per end.

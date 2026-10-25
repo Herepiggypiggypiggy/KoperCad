@@ -910,6 +910,146 @@ pub fn add_opening_cards(pack: &mut Pack, openings: &[OpeningJob]) {
     }
 }
 
+/// Adds a cut-out card for every wiring opening of the layout (grommet
+/// holes, slots, cable entries on the plate, the door or a wall), the ones
+/// that no device carries. Like [`add_opening_cards`] they sit after the
+/// step cards, outside the build order; their tool lines are already in the
+/// pack's list, which counts every cut-out of the drill table. An opening on
+/// a surface whose size is unknown is named in the pack's problems.
+pub fn add_wiring_opening_cards(pack: &mut Pack, layout: &CabinetLayout) {
+    use crate::openings::OpeningShape;
+    for o in &layout.openings {
+        // The door is a surface of the drill table even where the enclosure
+        // has no door data: its size is then the interior's, or unknown.
+        let size = if o.surface == crate::surfaces::MAIN_PLATE {
+            Some((layout.plate.width, layout.plate.height))
+        } else {
+            layout.surface_sizes.get(&o.surface).copied().or_else(|| {
+                (o.surface == "door")
+                    .then(|| layout.enclosure.map(|e| (e.width, e.height)))
+                    .flatten()
+            })
+        };
+        if size.is_none() && o.surface != "door" {
+            pack.problems.push(format!(
+                "Opening '{}' is on '{}', which this enclosure does not have: no card for it.",
+                o.name, o.surface
+            ));
+            continue;
+        }
+        let shape = match o.shape {
+            OpeningShape::Round { dia } => CutoutShape::Round { dia },
+            OpeningShape::Rect { w, h } => CutoutShape::Rect { w, h },
+        };
+        let (w, h) = match shape {
+            CutoutShape::Round { dia } => (dia, dia),
+            CutoutShape::Rect { w, h } => (w, h),
+        };
+        let surface = Surface::Named(o.surface.clone()).name().to_lowercase();
+        let surface = if o.surface == crate::surfaces::MAIN_PLATE {
+            "mounting plate".to_owned()
+        } else {
+            surface
+        };
+        let centre = match size {
+            Some(size) => from_edges(o.x, o.y, size),
+            None => format!(
+                "{} mm from the left edge, {} mm from the top edge",
+                mm(o.x),
+                mm(o.y)
+            ),
+        };
+        let mut dims = vec![format!("Centre: {centre}")];
+        let tool = match shape {
+            CutoutShape::Round { dia } => {
+                dims.push(format!(
+                    "Left edge {} mm, right edge {} mm from the left; top edge {} mm, bottom edge {} mm from the top",
+                    mm(o.x - dia / 2.0),
+                    mm(o.x + dia / 2.0),
+                    mm(o.y - dia / 2.0),
+                    mm(o.y + dia / 2.0)
+                ));
+                format!("Hole saw or step drill, dia {} mm", mm(dia))
+            }
+            CutoutShape::Rect { w, h } => {
+                dims.push(format!(
+                    "Left edge {} mm, right edge {} mm from the left; top edge {} mm, bottom edge {} mm from the top",
+                    mm(o.x - w / 2.0),
+                    mm(o.x + w / 2.0),
+                    mm(o.y - h / 2.0),
+                    mm(o.y + h / 2.0)
+                ));
+                format!("Punch, nibbler or jigsaw for {} x {} mm", mm(w), mm(h))
+            }
+        };
+        let mut notes = vec![match size {
+            Some(size) => format!(
+                "Measured on the {surface} ({} x {} mm) from its own top left corner.",
+                mm(size.0),
+                mm(size.1)
+            ),
+            None => format!(
+                "Measured on the {surface} from its own top left corner; its size is not in the model."
+            ),
+        }];
+        if let Some(e) = &o.exit {
+            let at = match layout.surface_sizes.get(&e.surface) {
+                Some(&far) => from_edges(e.x, e.y, far),
+                None => format!(
+                    "{} mm from the left edge, {} mm from the top edge",
+                    mm(e.x),
+                    mm(e.y)
+                ),
+            };
+            notes.push(format!(
+                "Passes through to the {} at {at}: cut both ends.",
+                e.surface
+            ));
+        }
+        notes.push(format!("Keep devices {} mm clear of the edge.", mm(o.keep)));
+        let (cw, ch) = (w + 2.0 * OPENING_FRAME_MM, h + 2.0 * OPENING_FRAME_MM);
+        pack.cards.push(Card {
+            kind: CardKind::Opening,
+            steps: (0, 0),
+            total: 0,
+            phase: Phase::Devices,
+            mark: format!("Opening {} ({surface})", o.name),
+            text: format!(
+                "Wiring opening '{}' in the {surface}: {}. It is not a step of the build order: cut it with the {surface} off the cabinet, before parts go on.",
+                o.name,
+                shape.describe()
+            ),
+            tools: vec![
+                tool,
+                "Drill for starter holes, file and deburring tool for the edges".to_owned(),
+                "Tape measure, pencil, centre punch".to_owned(),
+            ],
+            template: Some(Template {
+                width: cw,
+                height: ch,
+                caption: format!("opening cut-out {}", shape.describe()),
+                origin: format!(
+                    "Frame is {} mm larger than the cut-out on every side; the cross hair is the centre",
+                    mm(OPENING_FRAME_MM)
+                ),
+                rail: false,
+                holes: Vec::new(),
+                cutout: Some(TemplateCutout {
+                    shape,
+                    x: cw / 2.0,
+                    y: ch / 2.0,
+                }),
+            }),
+            dims,
+            wires: Vec::new(),
+            wires_more: 0,
+            labels: Vec::new(),
+            notes,
+            ticks: ticks(&["Marked", "Cut", "Edges filed", "Edge protected"]),
+        });
+    }
+}
+
 fn capitalised(s: &str) -> String {
     let mut c = s.chars();
     c.next()
