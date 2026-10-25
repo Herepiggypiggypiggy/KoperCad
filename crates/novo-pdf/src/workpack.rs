@@ -1384,6 +1384,30 @@ mod tests {
     }
 
     #[test]
+    fn the_note_of_a_two_metre_duct_stays_inside_its_card() {
+        let mut p = pack(0, false);
+        let mut card = p.cards[0].clone();
+        card.kind = CardKind::Duct;
+        card.template = None;
+        card.notes = vec![
+            "The duct is placed from the layout.".into(),
+            novo_layout::workpack::duct_fixing_note(2000.0),
+        ];
+        p.cards = vec![card];
+        let m = card_marks(&p.cards[0], &p.cabinet, CARD_Y[0]);
+        assert!(
+            m.texts
+                .iter()
+                .any(|t| t.text.contains("Fixing (a planning rule"))
+        );
+        assert!(
+            inside(&m, CARD_Y[0]).is_empty(),
+            "{:?}",
+            inside(&m, CARD_Y[0])
+        );
+    }
+
+    #[test]
     fn a_label_card_prints_its_stock_and_note_inside_the_card() {
         let mut p = pack(0, false);
         let mut card = p.cards[0].clone();
