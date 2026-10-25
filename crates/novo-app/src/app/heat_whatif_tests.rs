@@ -158,18 +158,17 @@ fn screen() -> egui::RawInput {
 
 /// The text the window draws after it has settled.
 fn render(w: &mut Wizard, view: u8, now_key: Option<u64>) -> String {
+    render_room(w, view, now_key, 300.0)
+}
+
+/// `room` is the height the list gets before it scrolls; what is below the
+/// fold of a scroll area is not drawn.
+fn render_room(w: &mut Wizard, view: u8, now_key: Option<u64>, room: f32) -> String {
     let ctx = egui::Context::default();
     let mut text = String::new();
     for _ in 0..12 {
         let mut out = ctx.run_ui(screen(), |ui| {
-            w.show(
-                ui.ctx(),
-                view,
-                now_key,
-                35.0,
-                egui::pos2(10.0, 700.0),
-                300.0,
-            );
+            w.show(ui.ctx(), view, now_key, 35.0, egui::pos2(10.0, 700.0), room);
         });
         out.textures_delta.clear();
         text = out
@@ -368,7 +367,7 @@ fn a_fan_fix_says_how_many_devices_stand_beside_its_stream_and_whether_the_hot_o
         "{text}"
     );
     assert!(text.contains(novo_thermal::whatif::BESIDE_NOTE));
-    assert!(render(&mut w, 2, None).contains("Beside the assumed fan stream"));
+    assert!(render_room(&mut w, 2, None, 600.0).contains("Beside the assumed fan stream"));
     // Only a device that is not over its limit: say so.
     let index = w
         .found
@@ -389,7 +388,7 @@ fn a_fan_fix_says_how_many_devices_stand_beside_its_stream_and_whether_the_hot_o
     // Nobody beside: no line.
     let found = set(&mut w, fan, Vec::new());
     assert!(!super::heat_whatif::table_text(&w, &found).contains("Beside the assumed fan stream"));
-    assert!(!render(&mut w, 2, None).contains("Beside the assumed fan stream"));
+    assert!(!render_room(&mut w, 2, None, 600.0).contains("Beside the assumed fan stream"));
 }
 
 #[test]
