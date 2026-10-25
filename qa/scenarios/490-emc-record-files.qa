@@ -13,6 +13,12 @@ wait 30
 expect "Save EMC record (PDF)"
 shot 00-buttons
 check_layout
+scroll 360 400 -450
+wait 6
+expect "Rules in the check"
+shot 00b-rules-header
+scroll 360 400 450
+wait 6
 click_text "Save EMC record (PDF)" #1
 wait 20
 expect_file "/tmp/kopercad-qa-open-*/*EMC record.pdf" 1500
