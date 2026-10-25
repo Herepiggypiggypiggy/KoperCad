@@ -18,7 +18,7 @@ wait 12
 shot strip-with-work-cards-button
 expect "Work cards (PDF)"
 check_layout
-answer_dialog ~/Documents/KoperCAD/qa 183 work cards.pdf
+answer_dialog "~/Documents/KoperCAD/qa 183 work cards.pdf"
 click_text "Work cards (PDF)"
 wait 40
 shot after-print
