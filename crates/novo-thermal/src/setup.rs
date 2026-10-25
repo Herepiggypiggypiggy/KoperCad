@@ -114,6 +114,15 @@ pub const JET_MIXING_COEFFICIENT: f64 = 0.25;
 /// Upper end of the jet term, m2/s; more mixing no longer raises the mean.
 pub const JET_MIXING_MAX: f64 = 0.06;
 
+/// Speed at the device surfaces from the fan flow, as a share of the flow
+/// divided by the cross section of the box (depth times the smaller inner
+/// side). The depth-averaged 2D flow has no jet, so a fan changed the air
+/// temperature around a device but not its surface coefficient, while the 3D
+/// solver's coefficient rises with the flow. Fitted on one box (600x800x300 mm),
+/// held out on two others (`tests/fan_gain.rs`); a planning value, not
+/// measured.
+pub const JET_SPEED_COEFFICIENT: f64 = 3.0;
+
 pub struct Setup {
     pub air: Air,
     pub ambient: f64,
@@ -144,6 +153,8 @@ pub struct Setup {
     pub params: Params,
     /// Extra eddy diffusivity from the fan jets, m2/s (see [`JET_MIXING_COEFFICIENT`]).
     pub jet_mixing_m2s: f64,
+    /// Air speed the fan jets stir up around the devices, m/s (see [`JET_SPEED_COEFFICIENT`]).
+    pub jet_speed_ms: f64,
     /// k times effective surface, W/K (IEC 60890 whole enclosure).
     pub k_ae: f64,
     pub on_plate: Vec<bool>,
@@ -506,6 +517,13 @@ impl Setup {
         let fan_flow_m3s = fan_flow(FanMode::Intake).max(fan_flow(FanMode::Exhaust));
         let jet_mixing_m2s = (JET_MIXING_COEFFICIENT * fan_flow_m3s / depth).min(JET_MIXING_MAX);
 
+        let cross_m2 = depth * (e.width_mm.min(e.height_mm) / 1000.0);
+        let jet_speed_ms = if cross_m2 > 0.0 {
+            JET_SPEED_COEFFICIENT * fan_flow_m3s / cross_m2
+        } else {
+            0.0
+        };
+
         Ok(Setup {
             air,
             ambient: s.ambient_c,
@@ -527,6 +545,7 @@ impl Setup {
             ports,
             params: p.clone(),
             jet_mixing_m2s,
+            jet_speed_ms,
             k_ae,
             on_plate,
             c_air,

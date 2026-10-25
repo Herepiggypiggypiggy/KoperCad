@@ -10,7 +10,8 @@ Scope (from audit/creative/round34.md idea 2): one wizard that asks for the cond
 
 ## Next
 - Done: 3D vs 2D comparison of the ranking (#1483) and of fan gains (fan sweep PR): ranking holds, fan gain is read low, no single calibration factor.
-- Engine task: find why the 2D housing gain saturates with fan flow (coupling of the housing to the air the fan moves) and fix it with its own validation; then re-run `validation_fan_gain.rs --ignored` and refresh the note in the wizard (`FAN_NOTE`).
+- Done: fan jet speed term in the 2D engine (setup.rs `JET_SPEED_COEFFICIENT`), frozen-reference test `novo-thermal/tests/fan_gain.rs`, `FAN_NOTE` reworded.
+- Next: the 600x600x400 box over-predicts (3D/2D 0.69 to 0.92) and the tall box under-predicts (up to 1.28): find what separates them (device distance from the fan, depth) before touching the coefficient; re-run `validation_fan_gain.rs --ignored` after, and add a fourth box to hold out. A measured cabinet would replace the 3D solver as the reference.
 - Cooling unit / filter fan product pick from Cooling selection as a fix kind (needs the wall balance, not the 2D model: different number, label it).
 - Duty by device (per-device load factor) instead of one global duty.
 - Print the before/after table into the bench packet.

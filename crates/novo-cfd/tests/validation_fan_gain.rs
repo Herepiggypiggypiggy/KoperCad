@@ -4,6 +4,9 @@
 //! the fan and vent sit, and prints the 3D gain over the 2D gain for each.
 //! Whether to calibrate the 2D model is decided from this table
 //! (`docs/thermal-validation.md`). Model against model, not a measurement.
+//! The table in the documentation was measured before the 2D engine got its
+//! fan jet speed term; with it, the ratios are those of `novo-thermal`'s
+//! `tests/fan_gain.rs` (3D gains frozen from this sweep).
 //!
 //! Run with `--release -- --ignored --nocapture` for the table; the default
 //! test is one small slice of it that must keep the sign and the order.

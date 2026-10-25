@@ -87,7 +87,9 @@ pub fn update_device_h(s: &Setup, st: &mut State) {
     let (vx, vy) = flow::cell_velocity(s, &st.flow);
     for (k, d) in s.devices.iter().enumerate() {
         let t_air: f64 = d.air.iter().map(|&(i, w)| w * st.t_air[i]).sum();
-        let speed: f64 = d.air.iter().map(|&(i, w)| w * vx[i].hypot(vy[i])).sum();
+        let local: f64 = d.air.iter().map(|&(i, w)| w * vx[i].hypot(vy[i])).sum();
+        // The depth-averaged flow has no jet: the fans' stirring adds to it.
+        let speed = local.hypot(s.jet_speed_ms);
         let h = device_h(
             d.length_m,
             st.t_dev[k],

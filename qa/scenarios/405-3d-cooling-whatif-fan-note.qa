@@ -1,7 +1,7 @@
-@title Cooling what-if: a fix with fans says the 2D model reads fan gains low
+@title Cooling what-if: a fix with fans carries the fan note
 @area 3D
 @sizes 1366x768 1920x1080
-# The first fix of the hot cabinet adds an exhaust fan; its card carries the line about the 3D comparison. The line is small secondary text under the table and does not push the Apply button out of reach.
+# The first fix of the hot cabinet adds an exhaust fan; its card carries the line about how the fan term was fitted. The line is small secondary text under the table and does not push the Apply button out of reach.
 open qa/fixtures/cabinet-cooling-advice.novo
 wait 20
 click_text 3D #1
@@ -15,6 +15,6 @@ wait_s 120
 expect "Devices over limit"
 scroll 1100 450 -150
 wait 10
-expect "about a third low"
+expect "under- or over-stated"
 shot fan-note
 check_layout

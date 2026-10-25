@@ -33,9 +33,10 @@ use crate::sweep::{self, Candidate, FINE_CELL_MM, Reading, SIGNIFICANT_K};
 /// The one statement of what the numbers are.
 pub const MODEL_NOTE: &str = "Model estimate: the 2D heat model with planning values and the losses you entered, on a grid that is the same for before and after. Not validated against measurements (the enclosure model is not validated), and the 2D slice does not see the depth of the cabinet. Check the fix you pick with Simulate in 3D.";
 
-/// Said next to a fix with fans: the one 3D comparison made so far
-/// (`crates/novo-cfd/tests/validation_whatif.rs`, `docs/thermal-validation.md`).
-pub const FAN_NOTE: &str = "Fans: in the one case compared with the 3D solver, the 2D model read a fan fix's gain about a third low, so a fan may do better than shown. Simulate in 3D to see.";
+/// Said next to a fix with fans: the fan term of the 2D model was fitted to
+/// the 3D cabinet solver on one box and checked on two others
+/// (`crates/novo-thermal/tests/fan_gain.rs`, `docs/thermal-validation.md`).
+pub const FAN_NOTE: &str = "Fans: the 2D fan term was fitted to the 3D solver on one box; on two others it gave between 22 % less and 45 % more fan gain than the 3D solver. Checked only for one device in a box with a 60 to 250 m3/h fan; beyond that the term is an extrapolation, and the gain can be overstated by up to 45 % in a deeper box. A fan fix may be under- or over-stated: check it with Simulate in 3D.";
 
 /// Fewest kelvin of margin that makes a device "fine"; tries that reach it tie
 /// and the easier fix wins.
