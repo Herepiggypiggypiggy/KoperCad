@@ -170,7 +170,7 @@ impl Control {
 }
 
 /// Shown with the devices that stand beside the stream of a fan fix.
-pub const BESIDE_NOTE: &str = "The rule is a straight strip between the fan and the vent, as wide as the fan opening. The 3D solver was run only for a fan low in the middle and a vent on top in the middle, with devices on the line and about 0.3 of the width off it; nearer is a guess. Beside the line it gave a device a third to three quarters of the gain shown (in one wide box about 4 K hotter with the fan on); devices on the line can also differ. Check them with Simulate in 3D.";
+pub const BESIDE_NOTE: &str = "The rule is a straight strip between the fan and the vent, as wide as the fan opening. The 3D solver was run only for a fan low in the middle and a vent on top in the middle, with devices on the line and about 0.3 of the width off it; nearer is a guess. Beside the line it gave a device a third to three quarters of the gain shown (in one wide box the device ran about 4 K hotter with the fan on); devices on the line can also differ. Check them with Simulate in 3D.";
 
 /// The outside size of an enclosure, mm.
 #[derive(Debug, Clone, Copy, PartialEq)]
