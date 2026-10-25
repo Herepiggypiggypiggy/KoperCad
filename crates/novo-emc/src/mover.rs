@@ -48,6 +48,8 @@ pub struct Spot {
 const STEP_MM: f64 = 10.0;
 /// Spots that get the full layout report before the search gives up.
 const MAX_REPORTS: usize = 400;
+/// A field spot has to be under this share of the planning value.
+const FIELD_MARGIN: f64 = 0.8;
 /// Free spots tried with the real EMC rules.
 const TRIED: usize = 12;
 
@@ -156,6 +158,12 @@ pub fn find_spot(project: &Project, device: u64, other: Option<u64>, goal: Goal)
     let (x0, y0) = (layout.placements[at].x, layout.placements[at].y);
     let usable = layout.plate.usable();
 
+    let others: Vec<_> = layout
+        .on_plate()
+        .into_iter()
+        .filter(|p| p.id != device)
+        .collect();
+
     // Every grid spot that meets the goal, nearest first.
     let mut spots: Vec<(f64, f64, f64, f64)> = Vec::new();
     let mut y = usable.y;
@@ -163,12 +171,19 @@ pub fn find_spot(project: &Project, device: u64, other: Option<u64>, goal: Goal)
         let mut x = usable.x;
         while x + w <= usable.x + usable.w + 1e-9 {
             let gap = them.map_or(0.0, |t| gap_mm((x, y, w, h), rect(t)));
+            // Occupied cells first: sampling the field costs more.
+            let here = novo_layout::Rect { x, y, w, h };
+            if others.iter().any(|q| here.overlaps(&q.footprint())) {
+                x += STEP_MM;
+                continue;
+            }
             let meets = match goal {
                 Goal::Within(mm) => gap <= mm,
                 Goal::Away(mm) => gap >= mm,
+                // Some room under the value: the model is an estimate.
                 Goal::Field(limit) => probe
                     .as_ref()
-                    .is_none_or(|p| p.at_rect((x, y, w, h)).0 < limit),
+                    .is_none_or(|p| p.at_rect((x, y, w, h)).0 < limit * FIELD_MARGIN),
             };
             if meets && (x, y) != (x0, y0) {
                 spots.push((((x - x0).powi(2) + (y - y0).powi(2)).sqrt(), x, y, gap));
@@ -183,11 +198,6 @@ pub fn find_spot(project: &Project, device: u64, other: Option<u64>, goal: Goal)
     let mut best: Option<(usize, Spot)> = None;
     let mut tried = 0;
     layout.placements[at].rail = None;
-    let others: Vec<_> = layout
-        .on_plate()
-        .into_iter()
-        .filter(|p| p.id != device)
-        .collect();
     let mut reports = 0;
     let mut capped = false;
     for (moved, x, y, gap) in spots {

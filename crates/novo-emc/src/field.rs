@@ -700,12 +700,6 @@ pub fn evaluate(input: &Input, setup: &FieldSetup) -> Outcome {
             .chain(top.map(|t| Subject::Run(t.0)))
             .collect();
         let mut fixes = Vec::new();
-        if over {
-            fixes.push(Fix::MoveOutOfField {
-                device: d.id,
-                below_ut: fp.limit_ut,
-            });
-        }
         if over && let Some(run) = top.and_then(|t| by_run.get(&t.0)) {
             // Straight wire: the field falls as 1/distance; ask for the
             // distance at which the planning value is reached.
@@ -725,6 +719,13 @@ pub fn evaluate(input: &Input, setup: &FieldSetup) -> Outcome {
                     });
                 }
             }
+        }
+        // After the hand fix, which names the distance to aim for.
+        if over {
+            fixes.push(Fix::MoveOutOfField {
+                device: d.id,
+                below_ut: fp.limit_ut,
+            });
         }
         findings.push(Finding {
             rule: "EMC-19",

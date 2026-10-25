@@ -629,7 +629,7 @@ fn a_device_moves_out_of_the_field_of_a_wire() {
     let pv = preview(&c.project, &fix).unwrap();
     assert!(pv.said.contains("field"), "{}", pv.said);
     // The warning stays as a note: the preview says it is eased.
-    assert!(pv.eased.iter().any(|(r, _)| *r == "EMC-19"), "{pv:?}");
+    assert!(pv.eased.iter().any(|e| e.rule == "EMC-19"), "{pv:?}");
     let before = c
         .project
         .all::<CabinetPlacement>()

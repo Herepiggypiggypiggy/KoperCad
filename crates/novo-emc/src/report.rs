@@ -36,6 +36,17 @@ pub enum Severity {
     Info,
 }
 
+impl Severity {
+    /// The word the preview uses: an error, a warning or a note.
+    pub fn word(self) -> &'static str {
+        match self {
+            Severity::Error => "an error",
+            Severity::Warning => "a warning",
+            Severity::Info => "a note",
+        }
+    }
+}
+
 /// What a finding or a score is about. Ids are raw model ids.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Subject {
