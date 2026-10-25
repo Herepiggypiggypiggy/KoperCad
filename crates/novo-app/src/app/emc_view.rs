@@ -28,6 +28,25 @@ const LIST_ROWS: usize = 6;
 
 type Key = (StructureId, u64, u64);
 
+/// A fix being previewed, as the views see it: the project as it would be
+/// after the fix, drawn in place of the real one while `after` is on.
+pub(crate) struct WhatIfView {
+    pub(super) id: u64,
+    pub(super) project: Arc<Project>,
+    pub(super) hint: String,
+    /// One line: findings before and after, what it clears.
+    pub(super) summary: String,
+    pub(super) after: bool,
+}
+
+/// What the person asked for on the what-if banner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WhatIfAction {
+    Show { after: bool },
+    Apply,
+    Cancel,
+}
+
 /// What the 3D view keeps of the EMC view between frames.
 #[derive(Default)]
 pub(crate) struct EmcState {
@@ -42,6 +61,21 @@ pub(crate) struct EmcState {
     pub(super) left_out: usize,
     /// The exposure map of the picture, made once per picture.
     field: Option<(Key, Arc<emc::Field>)>,
+    /// The fix being previewed (set by the app each frame).
+    pub(super) whatif: Option<WhatIfView>,
+    /// What the banner asked for; the app takes it.
+    pub(super) whatif_action: Option<WhatIfAction>,
+}
+
+impl EmcState {
+    /// The project the picture is made from and a salt for its cache key:
+    /// the previewed copy while the banner shows "After".
+    fn shown<'a>(&self, project: &'a Project) -> (Option<Arc<Project>>, u64, &'a Project) {
+        match self.whatif.as_ref().filter(|w| w.after) {
+            Some(w) => (Some(w.project.clone()), w.id, project),
+            None => (None, 0, project),
+        }
+    }
 }
 
 /// The theme's colours as the overlays take them.
@@ -162,7 +196,9 @@ impl EmcState {
         id: StructureId,
         routes: impl FnOnce() -> Vec<super::cabinet_routes::RouteLine>,
     ) {
-        let key: Key = (id, project.revision(), 0);
+        let (copy, salt, project) = self.shown(project);
+        let project = copy.as_deref().unwrap_or(project);
+        let key: Key = (id, project.revision(), salt);
         if self.picture.as_ref().map(|p| p.0) == Some(key) {
             return;
         }
@@ -228,7 +264,9 @@ impl EmcState {
             self.overlay_key = None;
             return had;
         }
-        let key: Key = (id, revision, scene.revision);
+        let (copy, salt, project) = self.shown(project);
+        let project = copy.as_deref().unwrap_or(project);
+        let key: Key = (id, revision ^ (salt << 44), scene.revision);
         if self.picture.as_ref().map(|p| p.0) != Some(key) {
             let (devices, wires) = inputs(project, scene);
             let size = [scene.frame.width, scene.frame.height];
@@ -639,6 +677,7 @@ pub(super) fn panel(
                     .color(pal.text_secondary),
                 );
             }
+            whatif_banner(ui, state);
             ui.add_space(4.0);
             layer_chips(ui, &mut state.layers, &pic);
             ui.separator();
@@ -701,6 +740,57 @@ pub(super) fn panel(
         });
     if close {
         state.on = false;
+    }
+}
+
+/// The before/after switch of a previewed fix, with Apply and Cancel.
+fn whatif_banner(ui: &mut egui::Ui, state: &mut EmcState) {
+    let Some(w) = state.whatif.as_ref() else {
+        return;
+    };
+    let pal = crate::theme::ui_palette();
+    let (hint, summary, after) = (w.hint.clone(), w.summary.clone(), w.after);
+    let mut action = None;
+    egui::Frame::group(ui.style()).show(ui, |ui| {
+        ui.label(
+            egui::RichText::new("Previewing a fix")
+                .strong()
+                .color(pal.warning),
+        );
+        ui.label(egui::RichText::new(hint).small());
+        ui.horizontal(|ui| {
+            if novo_theme::widgets::filter_toggle(ui, "Before", !after).clicked() {
+                action = Some(WhatIfAction::Show { after: false });
+            }
+            if novo_theme::widgets::filter_toggle(ui, "After", after).clicked() {
+                action = Some(WhatIfAction::Show { after: true });
+            }
+        });
+        ui.label(
+            egui::RichText::new(summary)
+                .small()
+                .color(pal.text_secondary),
+        );
+        ui.label(
+            egui::RichText::new(if after {
+                "Showing the cabinet as it would be. Nothing is changed yet."
+            } else {
+                "Showing the cabinet as it is."
+            })
+            .small()
+            .color(pal.text_secondary),
+        );
+        ui.horizontal(|ui| {
+            if ui.button("Apply (one undo step)").clicked() {
+                action = Some(WhatIfAction::Apply);
+            }
+            if ui.button("Cancel").clicked() {
+                action = Some(WhatIfAction::Cancel);
+            }
+        });
+    });
+    if action.is_some() {
+        state.whatif_action = action;
     }
 }
 

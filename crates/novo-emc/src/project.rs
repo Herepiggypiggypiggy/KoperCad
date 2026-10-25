@@ -914,6 +914,12 @@ fn finding_key(f: &crate::report::Finding) -> String {
 
 /// Previews `fix` on `project`. Errors when the fix is done by hand.
 pub fn preview(project: &Project, fix: &Fix) -> Result<Preview> {
+    preview_on(project, fix).map(|(p, _)| p)
+}
+
+/// Like [`preview`], also returning the copy with the fix applied, so a
+/// view can draw the project as it would be.
+pub fn preview_on(project: &Project, fix: &Fix) -> Result<(Preview, Project)> {
     let before = analyse_project(project);
     let mut copy = project.clone();
     let mut said = String::new();
@@ -968,12 +974,13 @@ pub fn preview(project: &Project, fix: &Fix) -> Result<Preview> {
             scores.push((b.subject, name, b.points, a));
         }
     }
-    Ok(Preview {
+    let preview = Preview {
         said,
         findings_before: before.findings.len(),
         findings_after: after.findings.len(),
         cleared,
         added,
         scores,
-    })
+    };
+    Ok((preview, copy))
 }

@@ -1,0 +1,32 @@
+@title EMC fix-it: the previewed fix drawn before and after in the 3D EMC view
+@area 3D
+@sizes 1366x768 1920x1080
+# Check > EMC check, Preview on the painted-plate finding, "In 3D" opens the 3D view with the EMC layer and a banner with Before / After, Apply and Cancel. After draws the cabinet with the fix (good bond), Before as it is; nothing changes until Apply. The pictures are the evidence (drawn overlays).
+open qa/fixtures/emc-cabinet-bonding.novo
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+scroll 360 400 -300
+wait 10
+click_text "Preview: Scrape the mounting area bare" #1
+wait 10
+click_text "In 3D"
+wait 40
+expect "Previewing a fix"
+expect "Showing the cabinet as it would be"
+shot 01-after
+check_layout
+click_text Before #1
+wait 20
+expect "Showing the cabinet as it is"
+shot 02-before
+check_layout
+click_text "Apply (one undo step)" #1
+wait 20
+expect_not "Previewing a fix"
+shot 03-applied
+check_layout

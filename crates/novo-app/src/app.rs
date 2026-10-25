@@ -1608,6 +1608,7 @@ impl NovoApp {
         self.about_dialog(&ctx);
         self.standards_window(&ctx);
         self.emc_window(&ctx);
+        self.emc_whatif_sync(&ctx);
         self.learn_window(&ctx);
         self.motor_start_window(&ctx);
         self.renumber_dialog(&ctx);
