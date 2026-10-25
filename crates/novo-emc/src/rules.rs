@@ -668,6 +668,12 @@ fn segregation(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                         b: vic.id,
                         to_mm: need.ceil(),
                     }];
+                    if let (Some(d), "EMC-01") = (in_duct, rule_id) {
+                        fixes.push(Fix::AvoidDuct {
+                            wire: vic.id,
+                            duct: d,
+                        });
+                    }
                     if let (Some(c), None) = (vic.cable, vic.shield) {
                         fixes.push(Fix::AddShield { cable: c });
                     }

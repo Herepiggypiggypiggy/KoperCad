@@ -858,6 +858,25 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
             tx.set_property(id, "emc.bonded", Some(Value::Bool(true)))?;
             Ok("Device stated as bonded to the plate: fit the strap or make metal contact (a requirement for the build)".to_owned())
         }
+        Fix::AvoidDuct { wire, duct } => {
+            let id = novo_core::WireId::from(*wire);
+            let w = tx
+                .project()
+                .get::<novo_core::Wire>(id)
+                .ok_or(ModelError::NotFound(id.into()))?
+                .clone();
+            let mut ducts = novo_routing::model::avoided_ducts(&w.properties);
+            if !ducts.contains(duct) {
+                ducts.push(*duct);
+            }
+            let list: Vec<String> = ducts.iter().map(u64::to_string).collect();
+            tx.set_property(
+                id,
+                novo_routing::model::AVOID_DUCTS,
+                Some(Value::Text(list.join(","))),
+            )?;
+            Ok("Wire asked to stay out of the duct: it takes another duct only if one reaches both of its ends (the router never leaves a wire unrouted for it)".to_owned())
+        }
         Fix::ShortenPigtail { cable, to_mm } => {
             let id = novo_core::CableId::from(*cable);
             let c = tx

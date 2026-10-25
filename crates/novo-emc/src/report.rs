@@ -92,6 +92,9 @@ pub enum Fix {
         to_duct: u64,
         points_after: u32,
     },
+    /// Ask the router to keep a wire out of a duct (`route.avoid_ducts`).
+    /// The router takes another duct only when one reaches both ends.
+    AvoidDuct { wire: u64, duct: u64 },
     /// Keep two runs this far apart (mm). By hand.
     SeparateRuns { a: u64, b: u64, to_mm: f64 },
     /// Move a device this far (mm) from another. By hand.
@@ -121,6 +124,9 @@ impl Fix {
             Fix::AddFilter { .. } => "Add a mains filter".to_owned(),
             Fix::MoveRun { points_after, .. } => {
                 format!("Run the wire in another duct (score about {points_after} after).")
+            }
+            Fix::AvoidDuct { .. } => {
+                "Route the wire in another duct if one reaches both ends.".to_owned()
             }
             Fix::SeparateRuns { to_mm, .. } if *to_mm > 0.0 => format!(
                 "Keep the two runs {} mm apart, or in separate ducts.",
@@ -155,6 +161,7 @@ impl Fix {
                 | Fix::BarePlate { .. }
                 | Fix::BondDevice { .. }
                 | Fix::ShortenPigtail { .. }
+                | Fix::AvoidDuct { .. }
         )
     }
 }

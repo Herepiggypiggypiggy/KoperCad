@@ -1,0 +1,18 @@
+@title EMC fix-it: with only one duct the avoid-duct preview says it clears nothing
+@area Cabinet
+@sizes 1366x768 1920x1080
+# On the one-duct cabinet the router has no other duct to use: the preview says no finding is cleared, instead of promising a fix. The pictures are the evidence.
+open qa/fixtures/emc-cabinet.novo
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+expect "Preview: Route the wire in another duct"
+click_text "Preview: Route the wire in another duct" #1
+wait 10
+expect "No finding is cleared or added by this fix."
+shot 01-preview-nothing-cleared
+check_layout

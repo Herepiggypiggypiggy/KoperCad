@@ -9,7 +9,8 @@ use novo_core::{
 };
 
 use crate::{
-    Anchor, Duct, Facing, Job, Kind, Network, Plan, Point, Point3, Route, Rules, WireRules, plan,
+    Anchor, Duct, Facing, Job, Kind, Network, Plan, Point, Point3, Route, Rules, WireRules,
+    plan_avoiding,
 };
 
 /// The ducts on the plate of an enclosure, in model id order. DIN rails are
@@ -86,6 +87,21 @@ pub fn wire_connections(project: &Project) -> Vec<Connection> {
             })
         })
         .collect()
+}
+
+/// Property on a wire: the ducts (ids, comma separated) it should stay out of
+/// when another way exists. The router treats them as expensive, never as
+/// forbidden, so a plate with one duct still routes the wire through it.
+pub const AVOID_DUCTS: &str = "route.avoid_ducts";
+
+/// The duct ids a wire's `route.avoid_ducts` names.
+pub fn avoided_ducts(properties: &novo_core::Properties) -> Vec<u64> {
+    match properties.get(AVOID_DUCTS) {
+        Some(novo_core::Value::Text(t)) => {
+            t.split(',').filter_map(|n| n.trim().parse().ok()).collect()
+        }
+        _ => Vec::new(),
+    }
 }
 
 /// Routes every wire of the project with the project's wire rules
@@ -536,8 +552,16 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
             }
         }
     }
+    // Wires asked to stay out of some ducts (`route.avoid_ducts`).
+    let avoid: BTreeMap<u64, Vec<u64>> = project
+        .wires()
+        .filter_map(|w| {
+            let ducts = avoided_ducts(&w.properties);
+            (!ducts.is_empty()).then_some((w.id.raw(), ducts))
+        })
+        .collect();
     for (structure, jobs) in jobs {
-        let p = plan(&network(project, structure), &jobs, rules);
+        let p = plan_avoiding(&network(project, structure), &jobs, rules, &avoid);
         for r in &p.routes {
             if out.cross_legs.contains_key(&r.job) {
                 out.cross_routes.insert((r.job, structure), r.clone());
