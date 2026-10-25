@@ -21,7 +21,7 @@ wait 8
 key Enter
 wait 30
 expect "Preview: Move it to the nearest free spot"
-scroll 360 400 -700
+scroll 360 400 -260
 wait 6
 click_text "Preview: Move it to the nearest free spot" #1
 wait 10
