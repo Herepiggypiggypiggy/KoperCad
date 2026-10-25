@@ -618,7 +618,7 @@ pub fn build(
                     on_rail,
                 ) {
                     notes.push(format!(
-                        "R{i} starts at its {}: measure the distance from that end.",
+                        "R{i} starts at its {}, seen from the front: measure the distance from that end.",
                         if r.vertical {
                             "top end (the rail stands upright)"
                         } else {

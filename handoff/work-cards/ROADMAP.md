@@ -28,4 +28,6 @@ PR 4 (wiring openings): `opening.*` openings as CUT-OUT cards (add_wiring_openin
 PR 5 (wire ends): wire cards carry a 'Per end' column (allowance per end from the cut list, ferrule or lug by size). Still open: strip length separate from the ferrule collar, different allowances per end (the wire rules have one value), clip positions on the rail strip.
 PR 6 (rail clips): the rail card draws the clipped devices on the strip (TemplateClip, boxes with the designation, note with the distances). Built and tested locally, pushed after #1485 merged. All roadmap items of the coordinator's list are then done; still open: separate strip length and ferrule collar, different allowances per end.
 
+PR 8 (duct corner): the duct step text names the outline's top left corner, the same numbers as the card. The full bench walk is in `audit/workpack/bench-walk.md`; next PRs: device card names the rail's start end, wires outside the plate as a tick-off card, wire numbers used twice and missing sizes.
+
 PR 9 (rail start end): a clip card says which end of its rail the distance is measured from ("R1 starts at its left end", "top end" when upright). Next: wires outside the plate as a tick-off card, wire numbers used twice and missing sizes.
