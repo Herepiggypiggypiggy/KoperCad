@@ -111,6 +111,9 @@ fn wire(n: &str, from: &str, to: &str, cut: f64) -> WireCut {
         estimated: false,
         end_mm: Some(10.0),
         fitting: "ferrule",
+        strip_from_mm: Some(10.0),
+        strip_to_mm: Some(10.0),
+        strip_basis: "typical",
     }
 }
 
@@ -761,4 +764,31 @@ fn a_ducts_step_text_and_card_give_the_same_corner() {
     );
     let row = p.overview.iter().find(|r| r.mark == card.mark).unwrap();
     assert_eq!(row.text.split(" on the").next(), Some(card.text.as_str()));
+}
+
+#[test]
+fn the_strip_text_names_the_length_its_source_and_both_ends_when_they_differ() {
+    let mut w = wire("W1", "-Q1:1", "-Q2:2", 200.0);
+    assert_eq!(w.strip_text(), "strip 10 mm typ.");
+    w.strip_basis = "part";
+    assert_eq!(w.strip_text(), "strip 10 mm part");
+    w.strip_basis = "stated";
+    w.strip_from_mm = Some(8.0);
+    w.strip_to_mm = Some(12.5);
+    assert_eq!(w.strip_text(), "strip 8/12.5 mm stated");
+    w.strip_basis = "typical";
+    assert_eq!(w.strip_text(), "strip 8/12.5 mm typ.");
+    // One end unknown reads as unknown, not as the same at both.
+    w.strip_to_mm = None;
+    assert_eq!(w.strip_text(), "strip 8/? mm typ.");
+    w.strip_to_mm = Some(12.5);
+    w.strip_basis = "stated";
+    // A lug counts by its barrel, no strip text beside it.
+    w.fitting = "lug";
+    assert_eq!(w.strip_text(), "");
+    w.fitting = "ferrule";
+    w.strip_from_mm = None;
+    w.strip_to_mm = None;
+    w.strip_basis = "";
+    assert_eq!(w.strip_text(), "");
 }
