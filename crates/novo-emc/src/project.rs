@@ -875,7 +875,7 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
                 novo_routing::model::AVOID_DUCTS,
                 Some(Value::Text(list.join(","))),
             )?;
-            Ok("Wire asked to stay out of the duct: it takes another duct only if one reaches both of its ends (the router never leaves a wire unrouted for it)".to_owned())
+            Ok("Wire asked to stay out of the duct: it takes another duct only if one reaches both of its ends (the router never leaves a wire unrouted for it). Its route and cut length can change: print the wire list and cut list again".to_owned())
         }
         Fix::ShortenPigtail { cable, to_mm } => {
             let id = novo_core::CableId::from(*cable);
