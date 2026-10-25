@@ -422,6 +422,14 @@ impl NovoApp {
         let mut focus_to = focus;
         let mut set: Option<(WireId, Option<EmcClass>)> = None;
         let mut apply: Option<Fix> = None;
+        let mut want_preview: Option<Fix> = None;
+        let mut cancel_preview = false;
+        let revision = self
+            .backend
+            .document()
+            .map_or(0, |d| d.project().revision());
+        let shown = self.emc.shown_preview(revision);
+        let fresh = self.emc.take_fresh();
         let mut off = false;
         let card = picked
             .first()
@@ -544,12 +552,23 @@ impl NovoApp {
                                 continue;
                             }
                             if fix.applicable() {
+                                let open = shown.as_ref().is_some_and(|(f, _)| f == fix);
                                 if ui
-                                    .small_button(format!("Apply: {}", fix.hint()))
-                                    .on_hover_text("One undo step; the EMC check re-reads the cable")
+                                    .selectable_label(open, format!("Preview: {}", fix.hint()))
+                                    .on_hover_text("See what it clears before anything changes; Apply is one undo step")
                                     .clicked()
                                 {
-                                    apply = Some(fix.clone());
+                                    if open {
+                                        cancel_preview = true;
+                                    } else {
+                                        want_preview = Some(fix.clone());
+                                    }
+                                }
+                                if let Some((pf, pv)) = &shown
+                                    && pf == fix
+                                    && super::emc::preview_card(ui, pv, &mut cancel_preview, fresh)
+                                {
+                                    apply = Some(pf.clone());
                                 }
                             } else {
                                 ui.label(
@@ -612,9 +631,7 @@ impl NovoApp {
         if let Some((wire, class)) = set {
             self.emc_set_class(wire, class);
         }
-        if let Some(fix) = apply {
-            self.emc_apply(&fix);
-        }
+        self.emc_preview_actions(want_preview, cancel_preview, apply);
         if off {
             self.toggle_emc_nets();
         }
@@ -757,6 +774,44 @@ mod tests {
                 .all(|f| !f.fixes.iter().any(|x| matches!(x, Fix::AddShield { .. }))),
             "the shield finding stays after the fix"
         );
+    }
+
+    #[test]
+    fn the_cable_card_previews_a_fix_before_it_is_applied() {
+        let (_dir, mut d) = example();
+        let data = data(&d);
+        let cable = data
+            .cables
+            .iter()
+            .find(|(_, c)| {
+                c.findings
+                    .iter()
+                    .any(|f| f.fixes.iter().any(|x| matches!(x, Fix::AddShield { .. })))
+            })
+            .map(|(c, _)| *c)
+            .expect("a cable with a shield finding");
+        let fix = Fix::AddShield { cable };
+        let doc = |d: &Drive| d.app.backend.document().unwrap().project().revision();
+        let (revision, depth) = (doc(&d), d.app.backend.document().unwrap().undo_depth());
+        // The card asks for the preview; nothing changes.
+        d.app.emc_preview_actions(Some(fix.clone()), false, None);
+        d.frame();
+        assert_eq!(
+            (doc(&d), d.app.backend.document().unwrap().undo_depth()),
+            (revision, depth)
+        );
+        let (shown, result) = d.app.emc.shown_preview(revision).expect("a preview");
+        assert_eq!(shown, fix);
+        // The finding stays as an info (ends not stated), so the preview says what it does.
+        assert!(result.unwrap().said.contains("Shield core added"));
+        // Cancel drops it; the card can ask again and apply it as one step.
+        d.app.emc_preview_actions(None, true, None);
+        assert!(d.app.emc.shown_preview(revision).is_none());
+        d.app.emc_preview_actions(Some(fix.clone()), false, None);
+        d.app.emc_preview_actions(None, false, Some(fix));
+        d.frame();
+        assert_eq!(d.app.backend.document().unwrap().undo_depth(), depth + 1);
+        assert!(d.app.emc.shown_preview(doc(&d)).is_none());
     }
 
     #[test]
