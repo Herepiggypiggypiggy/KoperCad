@@ -15,7 +15,6 @@ wait 10
 key Escape
 wait 6
 click_text 3D #1
-click_text 3D #1
 wait 30
 click_text Heat #1
 wait 20
