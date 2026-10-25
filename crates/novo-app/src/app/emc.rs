@@ -241,7 +241,7 @@ pub(super) fn preview_card(
     let p = crate::theme::ui_palette();
     let mut apply = false;
     let card = egui::Frame::group(ui.style()).show(ui, |ui| {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label(egui::RichText::new("Preview on a copy of the project").strong());
             if preview.is_ok() {
                 let button = ui

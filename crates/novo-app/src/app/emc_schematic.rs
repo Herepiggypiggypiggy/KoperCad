@@ -465,6 +465,9 @@ impl NovoApp {
         .fit()
         .scrolls()
         .show(ctx, |ui| {
+            // The panel stays this wide when a fix preview opens (its long
+            // lines wrap) instead of growing over the drawing.
+            ui.set_max_width(WIDTH - 24.0);
             ui.label(
                 egui::RichText::new(
                     "Indicative: classes are read from the drawing. A design aid, not a test result.",
