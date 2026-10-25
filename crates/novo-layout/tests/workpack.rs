@@ -307,7 +307,7 @@ fn the_tool_list_counts_drills_and_cuts() {
     assert!(
         p.tools
             .iter()
-            .any(|t| t.tool.starts_with("Punch or jigsaw"))
+            .any(|t| t.tool.starts_with("Punch, nibbler or jigsaw"))
     );
     assert!(
         p.tools
@@ -549,4 +549,62 @@ fn no_wiring_openings_change_nothing() {
     let mut a = pack(3);
     add_wiring_opening_cards(&mut a, &with_openings(Vec::new()));
     assert_eq!(a, pack(3));
+}
+
+#[test]
+fn a_wall_opening_is_measured_from_the_back_wall_and_says_which_side_is_seen() {
+    use novo_layout::openings::{Exit, OpeningShape};
+    use novo_layout::workpack::add_wiring_opening_cards;
+    let rect = OpeningShape::Rect { w: 40.0, h: 20.0 };
+    let mut l = with_openings(vec![
+        opening("left hole", "left", rect, 100.0, 300.0),
+        opening("right hole", "right", rect, 100.0, 300.0),
+        opening("roof hole", "roof", rect, 400.0, 120.0),
+        opening("door hole", "door", rect, 100.0, 300.0),
+    ]);
+    l.surface_sizes.insert("right".into(), (250.0, 800.0));
+    l.surface_sizes.insert("roof".into(), (600.0, 250.0));
+    l.openings[0].exit = Some(Exit {
+        surface: "right".into(),
+        x: 60.0,
+        y: 300.0,
+    });
+    let mut p = pack(0);
+    add_wiring_opening_cards(&mut p, &l);
+    let card = |name: &str| {
+        p.cards
+            .iter()
+            .find(|c| c.kind == CardKind::Opening && c.mark.contains(name))
+            .unwrap()
+    };
+    let left = card("left hole");
+    assert_eq!(
+        left.dims[0],
+        "Centre: 100 mm from the back wall, 300 mm from the top edge"
+    );
+    assert!(
+        left.dims[1].contains("80 to 120 mm from the back wall"),
+        "{:?}",
+        left.dims
+    );
+    assert!(
+        left.notes
+            .iter()
+            .any(|n| n.contains("Seen from inside") && n.contains("back wall is on the left"))
+    );
+    // The pass-through end is on the right wall, measured from its back wall too.
+    assert!(
+        left.notes
+            .iter()
+            .any(|n| n.contains("60 mm from the back wall") && n.contains("seen from outside")),
+        "{:?}",
+        left.notes
+    );
+    assert!(card("right hole").notes[0].contains("Seen from outside"));
+    // The roof runs front to back in y.
+    assert!(card("roof hole").dims[0].contains("120 mm from the back wall"));
+    assert!(card("roof hole").notes[0].contains("from above"));
+    // The door keeps nearest edges and says it is seen from outside.
+    assert!(card("door hole").dims[0].contains("from the left edge"));
+    assert!(card("door hole").notes[0].contains("from outside"));
 }

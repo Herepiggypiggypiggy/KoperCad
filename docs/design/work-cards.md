@@ -60,7 +60,11 @@ printable on an ordinary office printer, ticked with a pencil.
   door edge, and a top, bottom or side wall has no stored position across its depth, which the card
   says. Wiring openings (`opening.*`: grommet holes, slots and cable entries on the plate, door or a wall)
   have a CUT-OUT card each too, with the shape, centre and edge distances on their own surface (the
-  door's size falls back to the interior's, or is said to be unknown).
+  door's size falls back to the interior's, or is said to be unknown). Each card says which way the
+  surface is seen and where x and y start, following the model's frames: plate and door by the nearest
+  edge (plate seen from the front, door from outside); a side wall by the back wall and the top edge
+  (left wall seen from inside, right wall from outside); roof and floor by the left edge and the back
+  wall (seen from above).
 - Duct fixing points are the duct maker's; the model has none.
 - Not built: a drill-size
   choice per part (the tool is the part data's hole diameter), a wire "strip length" per end.
