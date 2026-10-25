@@ -587,6 +587,7 @@ fn when_no_ducts_are_far_enough_apart_the_fix_is_refused_and_says_how_far_they_a
         .unwrap_err()
         .to_string();
     assert!(err.contains("No ducts keep the two wires"), "{err}");
+    assert!(err.contains("at most 140 mm apart"), "{err}");
     assert!(err.contains("by hand"), "{err}");
     // Nothing was written to the project.
     let w = c.project.get::<novo_core::Wire>(c.analog_wire).unwrap();

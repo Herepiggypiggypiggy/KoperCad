@@ -896,26 +896,29 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
             // The router keeps the clearance only when ducts allow it: say so
             // instead of storing a request that changes nothing.
             let routed = novo_routing::model::route_project(tx.project());
-            let unmet = routed
-                .plans
-                .iter()
-                .flat_map(|(_, p)| &p.problems)
-                .find_map(|p| match p {
-                    novo_routing::Problem::ClearanceUnmet {
-                        job,
-                        other: o,
-                        gap_mm,
-                        ..
-                    } if (*job == *wire && o == other) || (*job == *other && o == wire) => {
-                        Some(*gap_mm)
+            let unmet = routed.plans.iter().flat_map(|(_, p)| &p.problems).any(|p| {
+                matches!(
+                    p,
+                    novo_routing::Problem::ClearanceUnmet { job, other: o, .. }
+                        if (*job == *wire && o == other) || (*job == *other && o == wire)
+                )
+            });
+            if unmet {
+                // The most the plate's ducts can be apart, so the designer sees what is possible.
+                let mut best = 0.0_f64;
+                for (structure, _) in &routed.plans {
+                    let ducts = novo_routing::model::ducts(tx.project(), *structure);
+                    let net = novo_routing::model::network(tx.project(), *structure);
+                    for x in &ducts {
+                        for y in &ducts {
+                            best = best.max(net.duct_gap(x.id, y.id).unwrap_or(0.0));
+                        }
                     }
-                    _ => None,
-                });
-            if let Some(gap) = unmet {
+                }
                 return Err(ModelError::Format(format!(
-                    "No ducts keep the two wires {} mm apart: the closest they can be routed is {} mm between duct edges (the stubs to the terminals are not counted). Move a duct or the devices by hand",
+                    "No ducts keep the two wires {} mm apart: the ducts of the plate are at most {} mm apart edge to edge, and the stubs to the terminals are not counted. Move a duct or the devices by hand",
                     to_mm.round() as i64,
-                    gap.round() as i64
+                    best.round() as i64
                 )));
             }
             Ok(format!(

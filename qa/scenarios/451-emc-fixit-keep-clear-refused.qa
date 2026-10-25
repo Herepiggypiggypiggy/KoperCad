@@ -15,5 +15,6 @@ click_text "Preview: Route the two wires in ducts at least" #1
 wait 10
 expect "Cannot preview"
 expect "No ducts keep the two wires"
+expect "at most 140 mm apart"
 shot 01-refused
 check_layout
