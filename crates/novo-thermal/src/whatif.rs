@@ -169,6 +169,9 @@ impl Control {
     }
 }
 
+/// Shown with the devices that stand beside the stream of a fan fix.
+pub const BESIDE_NOTE: &str = "The rule is a straight strip between the fan and the vent, as wide as the fan opening. The 3D solver was run only for a fan low in the middle and a vent on top in the middle, with devices on the line and about 0.3 of the width off it; nearer is a guess. Beside the line it gave a device a third to three quarters of the gain shown (in one wide box the device ran about 4 K hotter with the fan on); devices on the line can also differ. Check them with Simulate in 3D.";
+
 /// The outside size of an enclosure, mm.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Size {
@@ -287,6 +290,10 @@ pub struct Choice {
     pub solves: bool,
     /// 1 is the best.
     pub rank: usize,
+    /// Devices (scenario ids) that stand beside the stream between the fan
+    /// and the vent of this fix, where the 2D fan term gives them more than
+    /// the 3D solver does. Empty without a fan ([`beside_stream`]).
+    pub beside_stream: Vec<u64>,
 }
 
 /// The finished what-if.
@@ -335,6 +342,57 @@ fn order(a: &Choice, b: &Choice) -> std::cmp::Ordering {
         .then(a.fix.effort().cmp(&b.fix.effort()))
         .then(b.gain_k.total_cmp(&a.gain_k))
         .then(a.reading.max_air_c.total_cmp(&b.reading.max_air_c))
+}
+
+/// Where an opening sits in the plane of the cabinet, mm, in the interior frame (y counted from the top).
+fn opening_point(o: &Opening, e: &Enclosure) -> (f64, f64) {
+    match o.placement {
+        Placement::Top { x_mm } => (x_mm, 0.0),
+        Placement::Bottom { x_mm } => (x_mm, e.interior_height_mm()),
+        Placement::Left { y_mm } => (0.0, y_mm),
+        Placement::Right { y_mm } => (e.interior_width_mm(), y_mm),
+        Placement::Front { x_mm, y_mm } => (x_mm, y_mm),
+    }
+}
+
+/// The devices of `scn` that stand beside the stream of the fans in `c`: the
+/// strip between the inlet and the outlet, as wide as the widest fan opening.
+/// The 2D model gives every device the same fan jet speed; against the 3D
+/// solver that holds on the line between fan and vent and overstates the
+/// gain beside it (`docs/thermal-validation.md`, "Fan gain: where the device
+/// sits"). Measured only on the line and about 0.3 of the width off it, so the
+/// strip is a simple rule, not a fit. Empty for a pair without a fan.
+pub fn beside_stream(scn: &Scenario, c: &Candidate) -> Vec<u64> {
+    let half = [&c.inlet, &c.outlet]
+        .iter()
+        .filter(|p| p.fan_flow_m3h.is_some())
+        .map(|p| p.opening.width_mm / 2.0)
+        .fold(0.0, f64::max);
+    if half <= 0.0 {
+        return Vec::new();
+    }
+    let a = opening_point(&c.inlet.opening, &scn.enclosure);
+    let b = opening_point(&c.outlet.opening, &scn.enclosure);
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let len = dx.hypot(dy).max(1e-9);
+    let (ux, uy) = (dx / len, dy / len);
+    let (nx, ny) = (-uy, ux);
+    scn.devices
+        .iter()
+        .filter(|d| {
+            let (cx, cy) = (
+                d.footprint.x + d.footprint.w / 2.0,
+                d.footprint.y + d.footprint.h / 2.0,
+            );
+            // Distance of the centre from the segment, then less the part of the
+            // device that reaches towards the line.
+            let t = (((cx - a.0) * ux + (cy - a.1) * uy) / len).clamp(0.0, 1.0);
+            let q = (cx - (a.0 + t * dx)).hypot(cy - (a.1 + t * dy));
+            let reach = (nx.abs() * d.footprint.w + ny.abs() * d.footprint.h) / 2.0;
+            q - reach > half
+        })
+        .map(|d| d.id)
+        .collect()
 }
 
 fn rounded_up(v: f64) -> f64 {
@@ -389,9 +447,14 @@ pub fn run(
     }
 
     let mut choices: Vec<Choice> = Vec::new();
-    let add = |fix: Fix, reading: Reading, choices: &mut Vec<Choice>| {
+    let add = |fix: Fix, reading: Reading, at: &Scenario, choices: &mut Vec<Choice>| {
         let gain_k = reading.gain_over(&baseline);
+        let beside_stream = fix
+            .candidate()
+            .map(|c| beside_stream(at, c))
+            .unwrap_or_default();
         choices.push(Choice {
+            beside_stream,
             solves: reading.over == 0 && baseline.over > 0,
             clear: gain_k >= SIGNIFICANT_K,
             gain_k,
@@ -418,6 +481,7 @@ pub fn run(
                     moves: s.moves.clone(),
                 },
                 reading,
+                &s.scenario,
                 &mut choices,
             );
             moved = Some((s.moves, s.scenario));
@@ -457,6 +521,7 @@ pub fn run(
                     candidate: o.candidate.clone(),
                 },
                 o.reading.clone(),
+                &base,
                 &mut choices,
             );
         }
@@ -480,6 +545,7 @@ pub fn run(
                     candidate: o.candidate.clone(),
                 },
                 o.reading.clone(),
+                &layout,
                 &mut choices,
             );
         }
@@ -504,7 +570,12 @@ pub fn run(
         bigger.enclosure.height_mm = to.height_mm;
         let (reading, _, _) = sweep::run(&bigger, FINE_CELL_MM, Some(&base_state))?;
         out.tried += 1;
-        add(Fix::BiggerEnclosure { from, to }, reading, &mut choices);
+        add(
+            Fix::BiggerEnclosure { from, to },
+            reading,
+            &bigger,
+            &mut choices,
+        );
     }
 
     out.partial |= control.cancelled();
@@ -545,6 +616,7 @@ mod tests {
                 surface_c: vec![50.0],
                 unsettled: false,
             },
+            beside_stream: Vec::new(),
             gain_k: gain,
             clear: true,
             solves: over == 0,
@@ -644,5 +716,99 @@ mod tests {
         v.sort_by(order);
         let overs: Vec<usize> = v.iter().map(|c| c.reading.over).collect();
         assert_eq!(overs, vec![0, 1, 2]);
+    }
+
+    fn box_with(devices: &[(f64, f64)]) -> Scenario {
+        use novo_layout::sizing::{Installation, Material};
+        Scenario {
+            enclosure: Enclosure {
+                width_mm: 600.0,
+                height_mm: 800.0,
+                depth_mm: 300.0,
+                wall_mm: 2.0,
+                material: Material::Steel,
+                installation: Installation::Wall,
+                plate: novo_layout::Rect {
+                    x: 40.0,
+                    y: 40.0,
+                    w: 510.0,
+                    h: 700.0,
+                },
+            },
+            ambient_c: 35.0,
+            devices: devices
+                .iter()
+                .enumerate()
+                .map(|(i, &(x, y))| Device {
+                    id: i as u64 + 1,
+                    footprint: novo_layout::Rect {
+                        x: x - 75.0,
+                        y: y - 75.0,
+                        w: 150.0,
+                        h: 150.0,
+                    },
+                    height_mm: Some(100.0),
+                    loss_w: 50.0,
+                    rated_max_ambient_c: Some(40.0),
+                    rated_max_surface_c: None,
+                    heat_capacity_j_per_k: None,
+                })
+                .collect(),
+            obstacles: vec![],
+            vents: vec![],
+            fans: vec![],
+            params: Params::default(),
+        }
+    }
+
+    /// A pair with the fan low in the middle and the vent on top in the middle.
+    fn vertical_pair(fans: bool) -> Candidate {
+        use crate::sweep::{Pairing, Piece};
+        let piece = |placement, flow| Piece {
+            opening: Opening {
+                placement,
+                width_mm: 150.0,
+                height_mm: 150.0,
+            },
+            fan_flow_m3h: flow,
+        };
+        Candidate {
+            pairing: if fans {
+                Pairing::FanInVentOut
+            } else {
+                Pairing::VentPair
+            },
+            inlet: piece(Placement::Bottom { x_mm: 300.0 }, fans.then_some(250.0)),
+            outlet: piece(Placement::Top { x_mm: 300.0 }, None),
+        }
+    }
+
+    #[test]
+    fn a_device_beside_the_line_from_fan_to_vent_is_named_one_on_it_is_not() {
+        // Centres: on the line, 25 mm off it (the fitted case), 0.3 of the width off, beyond the box side.
+        let scn = box_with(&[
+            (300.0, 440.0),
+            (275.0, 440.0),
+            (120.0, 440.0),
+            (520.0, 200.0),
+        ]);
+        assert_eq!(beside_stream(&scn, &vertical_pair(true)), vec![3, 4]);
+    }
+
+    #[test]
+    fn nothing_is_named_without_a_fan() {
+        let scn = box_with(&[(120.0, 440.0)]);
+        assert!(beside_stream(&scn, &vertical_pair(false)).is_empty());
+    }
+
+    #[test]
+    fn the_line_follows_the_openings_not_the_vertical() {
+        // Fan on the left wall at 600 mm, vent in the top at the left: the
+        // line runs up the left half; a device at the right side is beside it.
+        let mut c = vertical_pair(true);
+        c.inlet.opening.placement = Placement::Left { y_mm: 600.0 };
+        c.outlet.opening.placement = Placement::Top { x_mm: 100.0 };
+        let scn = box_with(&[(60.0 + 100.0, 400.0), (500.0, 400.0)]);
+        assert_eq!(beside_stream(&scn, &c), vec![2]);
     }
 }

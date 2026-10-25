@@ -9,3 +9,6 @@ How it works: the window asks ambient and duty; "Try the fixes" starts `whatif::
 Traps: the window grows over several frames in tests (render 12 frames). `Wizard::start` uses `key_of` from heat_sweep for staleness. The wizard only lives in the 3D view; opening from the Cabinet switches workspace. Quick settings for tests: `whatif::Settings::quick()`. QA scenarios 400-402 (block 400+; 190-193 and up to 396 are taken).
 
 Honesty: 2D model with planning values, ENCLOSURE_VALIDATED stays false; the window carries "MODEL, NOT MEASURED" and the model note; the first-ranked fix is the easiest one that clears every limit, not necessarily the best possible.
+
+## Beside the fan stream
+Where the user sees it: Cabinet menu "Cooling what-if…" (or Heat panel, palette), a fix with fans, selected card: the warning-coloured line under the fan note, and the same text in "Copy the table". The rule lives in `novo-thermal/src/whatif.rs` (`beside_stream`, `BESIDE_NOTE`); the wording in `novo-app/src/app/heat_whatif.rs` (`beside_text`). Not shown for a fix without fans. For a layout-and-openings fix the device positions are those after the moves.
