@@ -768,3 +768,70 @@ fn a_part_that_states_a_strip_length_is_on_the_card_not_the_typical_one() {
     }
     assert!(found > 0, "no wire starts at {tag}");
 }
+
+#[test]
+fn a_wire_number_repeated_among_the_unplaced_is_named_once() {
+    use super::workpack::unplaced_notes;
+    let unplaced = std::collections::BTreeMap::from([(
+        0,
+        vec!["W7".to_owned(), "W7".to_owned(), "W3".to_owned()],
+    )]);
+    let cabs = ["+CAB1".to_owned(), "+CAB2".to_owned()];
+    let notes = unplaced_notes(&unplaced, &cabs);
+    assert!(
+        notes[&0][0].starts_with("Wires W3, W7 name no cabinet"),
+        "{notes:?}"
+    );
+    assert!(
+        notes[&1][0].starts_with("Wires W3, W7 name no cabinet"),
+        "{notes:?}"
+    );
+}
+
+#[test]
+fn cable_cores_say_they_come_from_the_cable_and_the_cover_explains_it() {
+    // The example's motor cable -W1 (12 m) carries the field wires.
+    let mut doc = novo_core::Document::default();
+    super::example::build_example(&mut doc).unwrap();
+    let project = doc.project().clone();
+    let cores = novo_reports::wire_cut_jobs(&project)
+        .iter()
+        .filter(|j| j.cable.is_some())
+        .count();
+    assert!(cores > 0, "the lesson has no cable cores");
+    let packs = work_packs(&project);
+    let on_cards: Vec<_> = packs
+        .iter()
+        .flat_map(|p| &p.cards)
+        .filter(|c| matches!(c.kind, CardKind::Wires | CardKind::Outside))
+        .flat_map(|c| &c.wires)
+        .filter(|w| w.kind.contains(" core ="))
+        .collect();
+    assert_eq!(on_cards.len(), cores);
+    assert!(
+        packs
+            .iter()
+            .flat_map(|p| &p.problems)
+            .any(|t| t.contains("are cores of") && t.contains("not cut from hookup wire")),
+        "{:?}",
+        packs.iter().map(|p| &p.problems).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn the_label_card_names_the_stock_from_the_projects_label_settings() {
+    let mut doc = novo_core::Document::default();
+    super::example::build_example(&mut doc).unwrap();
+    let stock = novo_reports::LabelSettings::of(doc.project()).stock.name();
+    let packs = work_packs(doc.project());
+    let labels: Vec<_> = packs
+        .iter()
+        .flat_map(|p| &p.cards)
+        .filter(|c| c.kind == CardKind::Labels)
+        .collect();
+    assert!(!labels.is_empty());
+    for c in labels {
+        assert!(c.tools[0].contains(&stock), "{:?}", c.tools);
+        assert!(c.notes.iter().any(|n| n.contains("Print at 100 %")));
+    }
+}
