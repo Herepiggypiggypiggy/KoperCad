@@ -593,3 +593,76 @@ fn when_no_ducts_are_far_enough_apart_the_fix_is_refused_and_says_how_far_they_a
     let w = c.project.get::<novo_core::Wire>(c.analog_wire).unwrap();
     assert!(novo_routing::model::keep_clear(&w.properties).is_empty());
 }
+
+#[test]
+fn a_device_moves_out_of_the_field_of_a_wire() {
+    use novo_emc::project::preview;
+    let mut c = cabinet();
+    let wire = c.motor_wire;
+    c.project
+        .transact("state", |tx| {
+            tx.set_property(wire, "emc.current_a", Some(Value::Text("3,3".into())))
+        })
+        .unwrap();
+    let plc = c.plc;
+    let warns = |p: &Project| {
+        analyse_project(p).findings.iter().any(|f| {
+            f.rule == "EMC-19"
+                && f.severity == novo_emc::Severity::Warning
+                && f.subjects.contains(&Subject::Device(plc.raw()))
+        })
+    };
+    assert!(warns(&c.project), "the PLC is not over the planning value");
+    let report = analyse_project(&c.project);
+    let f = report
+        .findings
+        .iter()
+        .find(|f| f.rule == "EMC-19" && f.subjects.contains(&Subject::Device(plc.raw())))
+        .unwrap();
+    let fix = f
+        .fixes
+        .iter()
+        .find(|x| matches!(x, Fix::MoveOutOfField { .. }))
+        .expect("a move-out-of-field fix")
+        .clone();
+    assert!(fix.applicable());
+    let pv = preview(&c.project, &fix).unwrap();
+    assert!(pv.said.contains("field"), "{}", pv.said);
+    // The warning stays as a note: the preview says it is eased.
+    assert!(pv.eased.iter().any(|e| e.rule == "EMC-19"), "{pv:?}");
+    let before = c
+        .project
+        .all::<CabinetPlacement>()
+        .find(|p| p.device == c.plc)
+        .map(|p| (p.x, p.y))
+        .unwrap();
+    c.project
+        .transact("fix", |tx| apply(tx, &fix).map(|_| ()))
+        .unwrap();
+    let after = c
+        .project
+        .all::<CabinetPlacement>()
+        .find(|p| p.device == c.plc)
+        .map(|p| (p.x, p.y))
+        .unwrap();
+    assert_ne!(before, after);
+    assert!(!warns(&c.project));
+}
+
+#[test]
+fn no_spot_under_the_planning_value_is_refused() {
+    use novo_emc::project::preview;
+    let mut c = cabinet();
+    let wire = c.motor_wire;
+    c.project
+        .transact("state", |tx| {
+            tx.set_property(wire, "emc.current_a", Some(Value::Text("400,400".into())))
+        })
+        .unwrap();
+    let fix = Fix::MoveOutOfField {
+        device: c.plc.raw(),
+        below_ut: 12.6,
+    };
+    let err = preview(&c.project, &fix).unwrap_err().to_string();
+    assert!(err.contains("modelled field"), "{err}");
+}
