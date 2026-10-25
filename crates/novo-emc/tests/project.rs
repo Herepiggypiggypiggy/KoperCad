@@ -478,9 +478,8 @@ fn a_victim_can_be_asked_to_leave_a_shared_duct_when_another_duct_reaches_both_e
     assert_eq!(duct, c.duct.raw());
     let p = novo_emc::project::preview(&c.project, &fix).unwrap();
     assert!(p.cleared.iter().any(|(r, _)| *r == "EMC-01"), "{p:#?}");
-    c.project
-        .transact("apply", |tx| apply(tx, &fix).map(|_| ()))
-        .unwrap();
+    let (said, _) = c.project.transact("apply", |tx| apply(tx, &fix)).unwrap();
+    assert!(said.contains("cut length can change"), "{said}");
     let input = input_of(&c.project, &c.project.netlist());
     let analog = input.runs.iter().find(|r| r.id == wire).unwrap();
     let motor = input

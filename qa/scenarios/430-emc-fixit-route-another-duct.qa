@@ -20,6 +20,11 @@ check_layout
 click_text "Apply (one undo step)" #1
 wait 15
 expect "Wire asked to stay out of the duct"
+expect "cut length can change"
 expect_not "Preview on a copy of the project"
 shot 02-applied
+check_layout
+key Escape
+wait 12
+shot 03-plate-after
 check_layout
