@@ -155,7 +155,7 @@ impl Fix {
                 max_mm.round() as i64
             ),
             Fix::MoveAway { min_mm, .. } => format!(
-                "Move it to the nearest free spot at least {} mm from the noisy device (only if the plate has one).",
+                "Move it to the nearest free spot at least {} mm from the other device (only if the plate has one).",
                 min_mm.round() as i64
             ),
             Fix::MoveDevice { to_mm, .. } => {
