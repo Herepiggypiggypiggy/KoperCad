@@ -906,9 +906,11 @@ pub(super) fn headline(wi: &WhatIf) -> String {
     }
     let best = &wi.choices[0];
     if best.solves {
+        let thin = best.reading.worst_margin_k.is_some_and(|m| m < 2.0);
         format!(
-            "{} clears every limit in the model, the easiest fix that does.",
-            best.fix.title()
+            "{} ranks first: it clears every limit in the model and is the easiest fix that does{}.",
+            best.fix.title(),
+            if thin { ", with a thin margin" } else { "" }
         )
     } else if wi.baseline.over == 0 {
         format!(

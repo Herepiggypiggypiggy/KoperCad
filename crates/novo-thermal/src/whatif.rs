@@ -16,8 +16,10 @@
 //!    that is made by hand).
 //!
 //! The fixes are ranked by what the person cares about: devices still over
-//! their limit, then the tightest margin (in half-kelvin steps so that the
-//! wobble of the solver does not decide), then the effort it takes. Everything
+//! their limit first; among fixes that leave none over, the easiest one first
+//! (effort), then the larger margin; among fixes that leave some over, the
+//! tightest margin (in half-kelvin steps so that the wobble of the solver
+//! does not decide), then the effort it takes. Everything
 //! here is the 2D model with planning values; nothing is a measurement, and the
 //! result says so ([`MODEL_NOTE`]).
 
@@ -306,16 +308,25 @@ impl WhatIf {
     }
 }
 
-/// Better first.
+/// Better first. Fixes that clear every limit rank by effort first (the
+/// easiest one that clears them), then by margin; the rest rank by devices
+/// over, the tightest margin (half-kelvin steps) and then effort.
 fn order(a: &Choice, b: &Choice) -> std::cmp::Ordering {
     let step = |r: &Reading| match r.worst_margin_k {
         Some(m) => -((m.min(COMFORT_K) * 2.0).round() as i64),
         None => (r.max_air_c * 2.0).round() as i64,
     };
-    a.reading
-        .over
-        .cmp(&b.reading.over)
-        .then(step(&a.reading).cmp(&step(&b.reading)))
+    let over = a.reading.over.cmp(&b.reading.over);
+    if over.is_eq() && a.reading.over == 0 {
+        return a
+            .fix
+            .effort()
+            .cmp(&b.fix.effort())
+            .then(step(&a.reading).cmp(&step(&b.reading)))
+            .then(b.gain_k.total_cmp(&a.gain_k))
+            .then(a.reading.max_air_c.total_cmp(&b.reading.max_air_c));
+    }
+    over.then(step(&a.reading).cmp(&step(&b.reading)))
         .then(a.fix.effort().cmp(&b.fix.effort()))
         .then(b.gain_k.total_cmp(&a.gain_k))
         .then(a.reading.max_air_c.total_cmp(&b.reading.max_air_c))
@@ -511,4 +522,122 @@ pub fn run(
     }
     out.choices = choices;
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn choice(fix: Fix, over: usize, margin: f64, gain: f64) -> Choice {
+        Choice {
+            fix,
+            reading: Reading {
+                worst_margin_k: Some(margin),
+                over,
+                max_air_c: 40.0,
+                mean_air_c: 35.0,
+                margins_k: vec![Some(margin)],
+                surface_c: vec![50.0],
+                unsettled: false,
+            },
+            gain_k: gain,
+            clear: true,
+            solves: over == 0,
+            rank: 0,
+        }
+    }
+
+    fn pair(fans: bool) -> Candidate {
+        use crate::sweep::{Pairing, Piece};
+        let piece = |placement, flow| Piece {
+            opening: Opening {
+                placement,
+                width_mm: 150.0,
+                height_mm: 150.0,
+            },
+            fan_flow_m3h: flow,
+        };
+        Candidate {
+            pairing: if fans {
+                Pairing::FanPair
+            } else {
+                Pairing::VentPair
+            },
+            inlet: piece(Placement::Left { y_mm: 400.0 }, fans.then_some(250.0)),
+            outlet: piece(Placement::Top { x_mm: 300.0 }, fans.then_some(250.0)),
+        }
+    }
+
+    #[test]
+    fn among_fixes_that_clear_every_limit_the_easier_one_ranks_first() {
+        let layout = choice(Fix::Layout { moves: Vec::new() }, 0, 1.2, 9.0);
+        let fans = choice(
+            Fix::Openings {
+                candidate: pair(true),
+            },
+            0,
+            3.0,
+            12.0,
+        );
+        let mut v = vec![fans.clone(), layout.clone()];
+        v.sort_by(order);
+        assert!(
+            matches!(v[0].fix, Fix::Layout { .. }),
+            "a layout at +1.2 K beats fans at +3 K"
+        );
+        // Same effort: the larger margin first.
+        let vents_a = choice(
+            Fix::Openings {
+                candidate: pair(false),
+            },
+            0,
+            0.5,
+            5.0,
+        );
+        let vents_b = choice(
+            Fix::Openings {
+                candidate: pair(false),
+            },
+            0,
+            4.0,
+            8.0,
+        );
+        let mut v = vec![vents_a, vents_b];
+        v.sort_by(order);
+        assert_eq!(v[0].reading.worst_margin_k, Some(4.0));
+    }
+
+    #[test]
+    fn a_fix_that_leaves_fewer_devices_over_always_ranks_ahead() {
+        let easy = choice(Fix::Layout { moves: Vec::new() }, 2, -5.0, 3.0);
+        let hard = choice(
+            Fix::Openings {
+                candidate: pair(true),
+            },
+            1,
+            -9.0,
+            7.0,
+        );
+        let clears = choice(
+            Fix::BiggerEnclosure {
+                from: Size {
+                    width_mm: 1.0,
+                    height_mm: 1.0,
+                    depth_mm: 1.0,
+                },
+                to: Size {
+                    width_mm: 2.0,
+                    height_mm: 2.0,
+                    depth_mm: 1.0,
+                },
+            },
+            0,
+            0.1,
+            9.0,
+        );
+        let mut v = vec![easy, hard, clears];
+        v.sort_by(order);
+        let overs: Vec<usize> = v.iter().map(|c| c.reading.over).collect();
+        assert_eq!(overs, vec![0, 1, 2]);
+    }
 }
