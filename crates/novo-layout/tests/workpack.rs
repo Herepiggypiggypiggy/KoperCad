@@ -111,6 +111,7 @@ fn wire(n: &str, from: &str, to: &str, cut: f64) -> WireCut {
         estimated: false,
         end_mm: Some(10.0),
         fitting: "ferrule",
+        part: None,
     }
 }
 
@@ -717,4 +718,12 @@ fn a_ducts_step_text_and_card_give_the_same_corner() {
     );
     let row = p.overview.iter().find(|r| r.mark == card.mark).unwrap();
     assert_eq!(row.text.split(" on the").next(), Some(card.text.as_str()));
+}
+
+#[test]
+fn the_part_text_tells_wires_sharing_a_number_apart() {
+    let mut w = wire("4", "-F2:2", "-X1:1", 796.0);
+    assert_eq!(w.part_text(), "");
+    w.part = Some((2, 3));
+    assert_eq!(w.part_text(), "2 of 3");
 }

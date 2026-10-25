@@ -29,3 +29,5 @@ PR 5 (wire ends): wire cards carry a 'Per end' column (allowance per end from th
 PR 6 (rail clips): the rail card draws the clipped devices on the strip (TemplateClip, boxes with the designation, note with the distances). Built and tested locally, pushed after #1485 merged. All roadmap items of the coordinator's list are then done; still open: separate strip length and ferrule collar, different allowances per end.
 
 PR 8 (duct corner): the duct step text names the outline's top left corner, the same numbers as the card. The full bench walk is in `audit/workpack/bench-walk.md`; next PRs: device card names the rail's start end, wires outside the plate as a tick-off card, wire numbers used twice and missing sizes.
+
+PR 11 (wire parts): a wire number used on several rows shows "1 of 2" under the number on the wire cards (WireCut.part), and a wire with no size and no colour reads "size not set" instead of a blank cell. Bench walk findings 3 and 4. Findings 6 to 8 (duct fixing rule, label stock, 12 m motor wires in the example) wait for a decision.

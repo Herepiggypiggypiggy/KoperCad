@@ -549,3 +549,43 @@ fn a_rail_cards_clips_are_the_devices_the_build_order_clips_on_it_at_the_same_di
     }
     assert!(seen > 0);
 }
+
+#[test]
+fn wires_sharing_a_number_are_told_apart_and_no_size_reads_as_not_set() {
+    let project = lesson("wire-routing/project.json");
+    let mut by_number: std::collections::BTreeMap<String, Vec<Option<(usize, usize)>>> =
+        Default::default();
+    for pack in work_packs(&project) {
+        for c in pack.cards.iter().filter(|c| c.kind == CardKind::Wires) {
+            for w in &c.wires {
+                by_number.entry(w.number.clone()).or_default().push(w.part);
+                assert!(!w.kind.is_empty(), "wire {} has a blank kind", w.number);
+            }
+        }
+    }
+    let mut shared = 0;
+    for (number, parts) in &by_number {
+        if parts.len() == 1 {
+            assert_eq!(parts[0], None, "wire {number} is used once");
+        } else {
+            shared += 1;
+            let mut want: Vec<_> = (1..=parts.len()).map(|i| Some((i, parts.len()))).collect();
+            let mut got = parts.clone();
+            got.sort();
+            want.sort();
+            assert_eq!(got, want, "wire {number}");
+        }
+    }
+    assert!(shared >= 1, "{by_number:?}");
+}
+
+#[test]
+fn parts_of_counts_each_number_in_row_order() {
+    use super::workpack::parts_of;
+    let n = |v: &[&str]| v.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+    assert_eq!(
+        parts_of(&n(&["4", "5", "4", "8", "4"])),
+        [Some((1, 3)), None, Some((2, 3)), None, Some((3, 3))]
+    );
+    assert!(parts_of(&n(&[])).is_empty());
+}

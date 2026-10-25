@@ -48,9 +48,20 @@ pub struct WireCut {
     /// `ferrule` or `lug` when the allowance says which (the wire rules give
     /// the two different values), else empty.
     pub fitting: &'static str,
+    /// Which of several wires carrying this number this is, `(1, 2)`: a
+    /// number runs on through a terminal, so two rows can share it. `None`
+    /// when the number is used once.
+    pub part: Option<(usize, usize)>,
 }
 
 impl WireCut {
+    /// `1 of 2` for a number used on several wires, empty otherwise.
+    pub fn part_text(&self) -> String {
+        self.part
+            .map(|(i, n)| format!("{i} of {n}"))
+            .unwrap_or_default()
+    }
+
     /// `10 mm ferrule`, `20 mm lug`, `10 mm` when the fitting is not known,
     /// empty without an allowance.
     pub fn end_text(&self) -> String {
