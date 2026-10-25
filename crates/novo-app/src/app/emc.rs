@@ -303,7 +303,9 @@ pub(super) fn preview_card(
         }
     });
     if scroll {
-        card.response.scroll_to_me(Some(egui::Align::Center));
+        // Its top, where Apply and Cancel are: a tall card centred would push
+        // them out of a short panel.
+        card.response.scroll_to_me(Some(egui::Align::TOP));
     }
     apply
 }
