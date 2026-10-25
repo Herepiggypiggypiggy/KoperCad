@@ -632,7 +632,7 @@ pub(super) fn panel(
             if pic.provenance == Provenance::Stub {
                 ui.label(
                     egui::RichText::new(
-                        "If this view and Check > EMC check differ, the check governs; this view is an interim picture.",
+                        "If this view and Check > EMC check differ, the check governs; this plate has nothing for the rule engine yet.",
                     )
                     .small()
                     .strong()
