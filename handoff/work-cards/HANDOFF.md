@@ -20,3 +20,12 @@ that cabinet). Cut-list wires with no end there (supply and PE leads of another 
 cabinets) are on no card of this cabinet; the count check compares with the checklist, not the project. A
 checklist wire that is missing from the cut list is printed with ~ and named on the cover (test
 `every_card_length_is_a_cut_list_length_and_nothing_falls_back`).
+
+State at 2026-10-25 15:00 UTC (all merged): the strip length per wire (#1494), wires outside the plate as tick-off cards (#1499), "1 of 2" parts and "size not set" (#1500), the unplaced-wire cover note with pointers on the other packs (#1507), the duct fixing rule (#1509, #1512), cable cores and the label stock line (#1508).
+
+Decisions taken by the thread while the owner was away, to review on return (all reversible, all labelled on the cards):
+- Duct fixing: 25 mm from each end, at most 200 mm apart (`DUCT_FIXING_END_MM`, `DUCT_FIXING_PITCH_MM`); the holes are not in the drilling list.
+- Label stock: the card names the project's label setting (Bench output > Labels tab); no new setting.
+- Cable cores: a core row reads "<size> core =A1-W1" and the cover says the cable is bought and run once. The example's 12 m wires are the cores of cable =A1-W1, so the example and the estimate were right.
+
+Known gaps: no fixture with two plated cabinets and an unplaced wire (the model refuses removing a plate that has devices), so `unplaced_notes` is unit-tested only; `WireCut` has no `core` field (the outside cards read the cable from the kind text, `CORE_MARK`); the 11-fixing duct note is proven by a unit test, not a picture.
