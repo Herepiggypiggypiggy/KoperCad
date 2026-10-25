@@ -53,6 +53,7 @@ fn input(runs: Vec<Run>, ducts: Vec<Duct>) -> Input {
             id: 1,
             tag: "+CAB".into(),
             finish: None,
+            door_bonded: None,
         }],
         params: Params::default(),
     }
@@ -350,6 +351,7 @@ fn dev(id: u64, tag: &str, role: Role, rect: (f64, f64, f64, f64)) -> Device {
         filter_for: None,
         bonded: None,
         height_mm: None,
+        on_door: false,
     }
 }
 
@@ -593,4 +595,104 @@ fn zones_carry_the_stated_height() {
 
 fn report_picture(i: &Input) -> novo_emc::Picture {
     novo_emc::picture(i, &novo_emc::analyse(i))
+}
+
+#[test]
+fn door_devices_and_hinge_crossings_are_flagged_with_guidance() {
+    // A pushbutton (-S1) and a drive keypad module (-T9) on the door. Runs 1
+    // (motor) and 2 (analog, unshielded) both go from the plate (device 3) to a
+    // door device, so they share the hinge.
+    let mut i = input(vec![], vec![]);
+    let door = |id, tag: &str, role| {
+        let mut d = dev(id, tag, role, (0.0, 0.0, 0.0, 0.0));
+        d.rect = None;
+        d.on_door = true;
+        d
+    };
+    i.devices = vec![
+        door(1, "-S1", Role::Other),
+        door(2, "-T9", Role::Drive),
+        dev(3, "-A1", Role::Sensitive, (400.0, 0.0, 60.0, 80.0)),
+    ];
+    let mut m = run(10, EmcClass::Motor, &[], &[]);
+    (m.from, m.to) = (Some(3), Some(1));
+    let mut a = run(11, EmcClass::Analog, &[], &[]);
+    (a.from, a.to) = (Some(3), Some(1));
+    i.runs = vec![m, a];
+    let r = analyse(&i);
+    let f: Vec<_> = r.of_rule("EMC-12").collect();
+    // The strap is not stated: an info with the fix; the drive on the door; the
+    // two classes in one hinge loop; the unshielded analog wire.
+    assert_eq!(
+        f.len(),
+        4,
+        "{:#?}",
+        f.iter().map(|f| &f.message).collect::<Vec<_>>()
+    );
+    assert!(
+        f.iter()
+            .any(|f| f.fixes == vec![Fix::BondDoor { plate: 1 }] && f.severity == Severity::Info)
+    );
+    assert!(
+        f.iter()
+            .any(|f| f.message.contains("-T9") && f.severity == Severity::Warning)
+    );
+    assert!(f.iter().any(|f| f.message.contains("hinge loop")));
+    assert!(f.iter().any(|f| f.message.contains("without a shield")));
+    // A door device has no spot on the plate: EMC-17 does not compare it.
+    assert_eq!(r.of_rule("EMC-17").count(), 0);
+    // Stated as not bonded, the strap finding is a warning.
+    i.plates[0].door_bonded = Some(false);
+    assert!(analyse(&i).of_rule("EMC-12").any(|f| f.severity == Severity::Warning
+        && f.fixes == vec![Fix::BondDoor { plate: 1 }]));
+    // Bonded: no strap finding.
+    i.plates[0].door_bonded = Some(true);
+    assert!(
+        !analyse(&i)
+            .of_rule("EMC-12")
+            .any(|f| f.fixes.contains(&Fix::BondDoor { plate: 1 }))
+    );
+    // Nothing on the door: the rule is not applicable.
+    i.devices.retain(|d| !d.on_door);
+    let r = analyse(&i);
+    assert_eq!(r.of_rule("EMC-12").count(), 0);
+}
+
+#[test]
+fn wires_that_stay_on_the_door_or_have_no_device_end_do_not_cross_the_hinge() {
+    let mut i = input(vec![], vec![]);
+    let door = |id, tag: &str, role| {
+        let mut d = dev(id, tag, role, (0.0, 0.0, 0.0, 0.0));
+        d.rect = None;
+        d.on_door = true;
+        d
+    };
+    i.devices = vec![
+        door(1, "-S1", Role::Other),
+        door(2, "-H1", Role::Other),
+        dev(3, "-A1", Role::Sensitive, (400.0, 0.0, 60.0, 80.0)),
+    ];
+    i.plates[0].door_bonded = Some(true);
+    // Door to door: a motor-class and an unshielded analog wire.
+    let mut m = run(10, EmcClass::Motor, &[], &[]);
+    (m.from, m.to) = (Some(1), Some(2));
+    let mut a = run(11, EmcClass::Analog, &[], &[]);
+    (a.from, a.to) = (Some(2), Some(1));
+    // One end without a device: not counted either.
+    let mut n = run(12, EmcClass::Analog, &[], &[]);
+    (n.from, n.to) = (Some(1), None);
+    i.runs = vec![m, a, n];
+    let r = analyse(&i);
+    assert!(
+        !r.of_rule("EMC-12").any(|f| f.message.contains("hinge")),
+        "{:#?}",
+        r.of_rule("EMC-12").map(|f| &f.message).collect::<Vec<_>>()
+    );
+    // The same wires from the plate device do cross it.
+    i.runs[1].from = Some(3);
+    assert!(
+        analyse(&i)
+            .of_rule("EMC-12")
+            .any(|f| f.message.contains("without a shield"))
+    );
 }
