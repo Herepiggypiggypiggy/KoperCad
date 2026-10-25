@@ -22,7 +22,7 @@ use novo_thermal::placement::Move;
 use novo_thermal::placement_project::{plate_origin, rows};
 use novo_thermal::sweep::{Candidate, Reading};
 use novo_thermal::whatif::{
-    self, Choice, Conditions, Control, FAN_NOTE, Fix, MODEL_NOTE, Rails, WhatIf,
+    self, BESIDE_NOTE, Choice, Conditions, Control, FAN_NOTE, Fix, MODEL_NOTE, Rails, WhatIf,
 };
 
 use super::heat_settings::HeatSettings;
@@ -369,7 +369,7 @@ impl Wizard {
         self.applied = Some(text);
     }
 
-    fn tag(&self, id: u64) -> String {
+    pub(super) fn tag(&self, id: u64) -> String {
         self.found
             .as_ref()
             .and_then(|f| f.tags.get(&id))
@@ -663,6 +663,9 @@ fn card(
     }
     if has_fans(&c.fix) {
         ui.label(RichText::new(FAN_NOTE).small().color(pal.text_secondary));
+        if let Some(t) = beside_text(w, wi, c) {
+            ui.label(RichText::new(t).small().color(pal.warning));
+        }
     }
     ui.label(
         RichText::new("Shown in the 3D view: green boxes are where devices would stand, new openings are drawn on their walls.")
@@ -705,6 +708,57 @@ fn card(
                 .color(pal.text_secondary),
         );
     }
+}
+
+/// How many devices stand beside the stream between the fan and the vent of a
+/// fan fix, and whether the ones the fix is meant for do; `None` when none do.
+fn beside_text(w: &Wizard, wi: &WhatIf, c: &Choice) -> Option<String> {
+    if c.beside_stream.is_empty() {
+        return None;
+    }
+    let beside = |id: u64| c.beside_stream.contains(&id);
+    let mut out = format!(
+        "Beside the assumed fan stream: {} of {} devices.",
+        c.beside_stream.len(),
+        wi.device_ids.len()
+    );
+    let over: Vec<u64> = wi
+        .device_ids
+        .iter()
+        .zip(&wi.baseline.margins_k)
+        .filter(|(_, m)| m.is_some_and(|m| m < 0.0))
+        .map(|(id, _)| *id)
+        .collect();
+    if over.is_empty() {
+        if let Some(id) = hottest(&wi.baseline)
+            .map(|i| wi.device_ids[i])
+            .filter(|&id| beside(id))
+        {
+            out.push_str(&format!(
+                " The hottest device, {}, is beside it.",
+                w.tag(id)
+            ));
+        }
+    } else {
+        let names: Vec<String> = over
+            .iter()
+            .copied()
+            .filter(|&id| beside(id))
+            .take(6)
+            .map(|id| w.tag(id))
+            .collect();
+        if names.is_empty() {
+            out.push_str(" None of the devices over their limit now is beside it by this rule; devices on the line can also differ.");
+        } else {
+            out.push_str(&format!(
+                " Over their limit now and beside it: {} (the gain shown for them may be too high).",
+                names.join(", ")
+            ));
+        }
+    }
+    out.push(' ');
+    out.push_str(BESIDE_NOTE);
+    Some(out)
 }
 
 /// Whether the fix adds a fan.
@@ -909,6 +963,10 @@ pub(super) fn table_text(w: &Wizard, found: &Found) -> String {
     if has_fans(&c.fix) {
         out.push('\n');
         out.push_str(FAN_NOTE);
+        if let Some(t) = beside_text(w, wi, c) {
+            out.push('\n');
+            out.push_str(&t);
+        }
     }
     out.push('\n');
     out

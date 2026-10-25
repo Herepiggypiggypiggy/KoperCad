@@ -11,7 +11,7 @@ use novo_layout::model::set_enclosure;
 use novo_thermal::whatif::{self, Fix};
 
 use super::heat::HeatState;
-use super::heat_whatif::{Ask, Wizard};
+use super::heat_whatif::{Ask, Found, Wizard};
 
 /// A 150 W drive with a 40 °C limit on the lowest of three rails, a cool
 /// device above it, and the right of the rails free.
@@ -158,18 +158,17 @@ fn screen() -> egui::RawInput {
 
 /// The text the window draws after it has settled.
 fn render(w: &mut Wizard, view: u8, now_key: Option<u64>) -> String {
+    render_room(w, view, now_key, 300.0)
+}
+
+/// `room` is the height the list gets before it scrolls; what is below the
+/// fold of a scroll area is not drawn.
+fn render_room(w: &mut Wizard, view: u8, now_key: Option<u64>, room: f32) -> String {
     let ctx = egui::Context::default();
     let mut text = String::new();
     for _ in 0..12 {
         let mut out = ctx.run_ui(screen(), |ui| {
-            w.show(
-                ui.ctx(),
-                view,
-                now_key,
-                35.0,
-                egui::pos2(10.0, 700.0),
-                300.0,
-            );
+            w.show(ui.ctx(), view, now_key, 35.0, egui::pos2(10.0, 700.0), room);
         });
         out.textures_delta.clear();
         text = out
@@ -318,6 +317,78 @@ fn a_fix_with_fans_carries_the_fan_note_and_one_without_does_not() {
         assert!(!super::heat_whatif::table_text(&w, &found).contains("under- or over-stated"));
         assert!(!render(&mut w, 2, None).contains("under- or over-stated"));
     }
+}
+
+#[test]
+fn a_fan_fix_says_how_many_devices_stand_beside_its_stream_and_whether_the_hot_ones_do() {
+    let (mut w, _, _) = answered();
+    let fan = {
+        let wi = &w.found.as_ref().unwrap().what_if;
+        (0..wi.choices.len())
+            .find(|&i| {
+                wi.choices[i]
+                    .fix
+                    .candidate()
+                    .is_some_and(|c| c.pairing.fans() > 0)
+            })
+            .expect("a fix with fans")
+    };
+    w.pick(fan);
+    // Whatever the real run found, say which devices are beside the stream.
+    let (over, other, total) = {
+        let wi = &w.found.as_ref().unwrap().what_if;
+        let over = wi
+            .device_ids
+            .iter()
+            .zip(&wi.baseline.margins_k)
+            .find(|(_, m)| m.is_some_and(|m| m < 0.0))
+            .map(|(id, _)| *id)
+            .expect("a device over its limit");
+        let other = *wi.device_ids.iter().find(|&&id| id != over).unwrap();
+        (over, other, wi.device_ids.len())
+    };
+    fn set(w: &mut Wizard, fan: usize, ids: Vec<u64>) -> Found {
+        w.found.as_mut().unwrap().what_if.choices[fan].beside_stream = ids;
+        w.found.clone().unwrap()
+    }
+    let found = set(&mut w, fan, vec![over, other]);
+    let text = super::heat_whatif::table_text(&w, &found);
+    assert!(
+        text.contains(&format!(
+            "Beside the assumed fan stream: 2 of {total} devices."
+        )),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!(
+            "Over their limit now and beside it: {}",
+            w.tag(over)
+        )),
+        "{text}"
+    );
+    assert!(text.contains(novo_thermal::whatif::BESIDE_NOTE));
+    assert!(render_room(&mut w, 2, None, 600.0).contains("Beside the assumed fan stream"));
+    // Only a device that is not over its limit: say so.
+    let index = w
+        .found
+        .as_ref()
+        .unwrap()
+        .what_if
+        .device_ids
+        .iter()
+        .position(|&id| id == other)
+        .unwrap();
+    w.found.as_mut().unwrap().what_if.baseline.margins_k[index] = Some(5.0);
+    let found = set(&mut w, fan, vec![other]);
+    let text = super::heat_whatif::table_text(&w, &found);
+    assert!(
+        text.contains("None of the devices over their limit now is beside it by this rule"),
+        "{text}"
+    );
+    // Nobody beside: no line.
+    let found = set(&mut w, fan, Vec::new());
+    assert!(!super::heat_whatif::table_text(&w, &found).contains("Beside the assumed fan stream"));
+    assert!(!render_room(&mut w, 2, None, 600.0).contains("Beside the assumed fan stream"));
 }
 
 #[test]
