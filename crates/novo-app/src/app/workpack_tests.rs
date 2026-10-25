@@ -285,7 +285,7 @@ fn cut_list_wires_without_a_cabinet_end_are_named_on_the_cover() {
     // Every wire the cover names is on a card: same number, ends and cut.
     for w in outside.iter().flat_map(|c| &c.wires) {
         let line = format!(
-            "{} ({} to {}) cut {} mm",
+            "{} ({} to {}) cut ~{} mm",
             w.number,
             w.from,
             w.to,
@@ -293,6 +293,56 @@ fn cut_list_wires_without_a_cabinet_end_are_named_on_the_cover() {
         );
         assert!(named[0].contains(&line), "{line} not in {}", named[0]);
     }
+    // Their strip text is the cut jobs' own, as on the cabinet cards.
+    let jobs = novo_reports::wire_cut_jobs(&project);
+    for w in outside.iter().flat_map(|c| &c.wires) {
+        let job = jobs
+            .iter()
+            .find(|j| {
+                j.number == w.number
+                    && [&j.end_a.designation, &j.end_b.designation].contains(&&w.from)
+                    && [&j.end_a.designation, &j.end_b.designation].contains(&&w.to)
+            })
+            .unwrap_or_else(|| panic!("no job for wire {}", w.number));
+        let strips = [job.end_a.strip_mm, job.end_b.strip_mm];
+        assert!(
+            strips.contains(&w.strip_from_mm) && strips.contains(&w.strip_to_mm),
+            "wire {}",
+            w.number
+        );
+    }
+    // One cabinet: the fallback to "the first" is trivial and not announced.
+    assert!(
+        packs
+            .iter()
+            .flat_map(|p| &p.problems)
+            .all(|p| !p.contains("name no cabinet"))
+    );
+}
+
+#[test]
+fn wires_filed_under_the_first_cabinet_by_default_say_so_and_the_other_packs_point_to_it() {
+    use super::workpack::unplaced_notes;
+    let unplaced = std::collections::BTreeMap::from([(0, vec!["W7".to_owned(), "W9".to_owned()])]);
+    let cabs = ["+CAB1".to_owned(), "+CAB2".to_owned(), "+CAB3".to_owned()];
+    let notes = unplaced_notes(&unplaced, &cabs);
+    assert!(notes[&0][0].starts_with("Wires W7, W9 name no cabinet"));
+    assert!(
+        notes[&0][0].contains("listed on this pack only"),
+        "{notes:?}"
+    );
+    // Every other pack says where they are; none claims to list them.
+    for at in [1, 2] {
+        assert_eq!(notes[&at].len(), 1, "{notes:?}");
+        assert!(
+            notes[&at][0].contains("pack of +CAB1, not here"),
+            "{notes:?}"
+        );
+    }
+    // One cabinet: the fallback is trivial, nothing is said.
+    assert!(unplaced_notes(&unplaced, &cabs[..1]).is_empty());
+    // No unplaced wires: nothing is said.
+    assert!(unplaced_notes(&Default::default(), &cabs).is_empty());
 }
 
 /// A saved project with a plated cabinet `+CAB1` whose interior is 600 x 800 x 250 mm.

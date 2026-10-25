@@ -148,6 +148,35 @@ pub(super) fn parts_of(numbers: &[String]) -> Vec<Option<(usize, usize)>> {
         .collect()
 }
 
+/// Cover lines for outside wires whose ends name no cabinet. With several
+/// cabinets they are filed under the first one's pack, which would otherwise
+/// look like its own wiring, and the other packs never list them: so the first
+/// says what they are and every other pack points to it. `unplaced` maps the
+/// pack index they were filed under to their numbers; the result maps a pack
+/// index to its lines. One cabinet gets none.
+pub(super) fn unplaced_notes(
+    unplaced: &BTreeMap<usize, Vec<String>>,
+    cabinets: &[String],
+) -> BTreeMap<usize, Vec<String>> {
+    let mut out: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+    if cabinets.len() < 2 {
+        return out;
+    }
+    for (&at, numbers) in unplaced {
+        let list = numbers.join(", ");
+        out.entry(at).or_default().push(format!(
+            "Wires {list} name no cabinet in their ends, so they are listed on this pack only because it is the first. They belong to no one cabinet: whoever builds the other cabinets cuts them from this list."
+        ));
+        for i in (0..cabinets.len()).filter(|i| *i != at) {
+            out.entry(i).or_default().push(format!(
+                "Wires {list} name no cabinet in their ends: they are listed on the pack of {}, not here.",
+                cabinets[at]
+            ));
+        }
+    }
+    out
+}
+
 /// The work packs of every cabinet that has a mounting plate.
 pub fn work_packs(project: &Project) -> Vec<Pack> {
     let checklist = AssemblyChecklist.generate(project);
@@ -300,15 +329,17 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
     // field wires) are on no card: say which, on the cover of the cabinet
     // their device is in, else of the first.
     let mut left: BTreeMap<usize, Vec<(String, WireCut)>> = BTreeMap::new();
+    // Wires no cabinet tag names: filed under the first cabinet, and told so.
+    let mut unplaced: BTreeMap<usize, Vec<String>> = BTreeMap::new();
     for ((number, from, to), lengths) in &cuts {
         for (cut, end, group) in lengths {
-            let at = out
-                .iter()
-                .position(|p| {
-                    from.contains(&format!("{}-", p.cabinet))
-                        || to.contains(&format!("{}-", p.cabinet))
-                })
-                .unwrap_or(0);
+            let own = out.iter().position(|p| {
+                from.contains(&format!("{}-", p.cabinet)) || to.contains(&format!("{}-", p.cabinet))
+            });
+            let at = own.unwrap_or(0);
+            if own.is_none() {
+                unplaced.entry(at).or_default().push(number.clone());
+            }
             let fitting = fitting_of(Some(*end), rules.ferrule_mm, rules.lug_mm);
             let strips = strip_of(&mut jobs, number, from, to);
             left.entry(at).or_default().push((
@@ -336,6 +367,13 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
             ));
         }
     }
+    let cabinets: Vec<String> = out.iter().map(|p| p.cabinet.clone()).collect();
+    let notes = unplaced_notes(&unplaced, &cabinets);
+    for (at, lines) in notes {
+        if let Some(pack) = out.get_mut(at) {
+            pack.problems.extend(lines);
+        }
+    }
     for (at, list) in left {
         if let Some(pack) = out.get_mut(at) {
             pack.problems.push(format!(
@@ -343,7 +381,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                 list.len(),
                 list.iter()
                     .map(|(_, w)| format!(
-                        "{} ({} to {}) cut {} mm",
+                        "{} ({} to {}) cut ~{} mm",
                         w.number,
                         w.from,
                         w.to,

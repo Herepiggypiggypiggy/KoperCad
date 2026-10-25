@@ -37,3 +37,5 @@ PR 8 (duct corner): the duct step text names the outline's top left corner, the 
 PR 11 (wire parts): a wire number used on several rows shows "1 of 2" under the number on the wire cards (WireCut.part), and a wire with no size and no colour reads "size not set" instead of a blank cell. Bench walk findings 3 and 4. Findings 6 to 8 (duct fixing rule, label stock, 12 m motor wires in the example) wait for a decision.
 
 PR 9 (rail start end): a clip card says which end of its rail the distance is measured from ("R1 starts at its left end", "top end" when upright). Next: wires outside the plate as a tick-off card, wire numbers used twice and missing sizes.
+
+PR 12 (outside fallback note): outside wires whose ends name no cabinet are listed on the first cabinet's pack when there are several; that cover says "listed on this pack only" and every other cabinet's cover points to it. The cover's outside wire lengths read "cut ~220 mm" like the card. Tested through `unplaced_notes` (three cabinets, one, none); no fixture has two plated cabinets with an unplaced wire, so the glue around it is not covered end to end.
