@@ -222,6 +222,9 @@ pub(super) fn draw(
         let mut spots: Vec<_> = pic.hotspots.iter().collect();
         spots.sort_by(|a, b| a.risk.total_cmp(&b.risk));
         let mut placed: Vec<egui::Rect> = Vec::new();
+        // Where every marker points: a badge keeps off the other markers'
+        // points as well as off their badges.
+        let anchors: Vec<egui::Pos2> = spots.iter().map(|h| to_screen(h.at[0], h.at[1])).collect();
         for h in spots {
             let p = to_screen(h.at[0], h.at[1]);
             if !rect.contains(p) {
@@ -236,7 +239,11 @@ pub(super) fn draw(
             // back to its point.
             let mut chip = egui::Rect::from_center_size(p, size);
             for _ in 0..12 {
-                if !placed.iter().any(|o| o.expand(2.0).intersects(chip)) {
+                let on_badge = placed.iter().any(|o| o.expand(2.0).intersects(chip));
+                let on_point = anchors
+                    .iter()
+                    .any(|a| *a != p && chip.expand(2.0).contains(*a));
+                if !on_badge && !on_point {
                     break;
                 }
                 chip = chip.translate(egui::vec2(0.0, size.y + 3.0));
@@ -250,7 +257,9 @@ pub(super) fn draw(
             }
             painter.circle_stroke(
                 p,
-                (18.0 + 22.0 * h.risk) * px_per_mm.max(0.2),
+                // A ring marks the point; the badge carries the number. A
+                // ring sized by risk would overlap its neighbours' rings.
+                6.0 + 5.0 * h.risk,
                 egui::Stroke::new(1.5, color(fill, 220)),
             );
             painter.rect(

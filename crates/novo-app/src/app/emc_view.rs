@@ -710,7 +710,9 @@ fn layer_chips(ui: &mut egui::Ui, l: &mut EmcLayers, pic: &Picture) {
         |ui: &mut egui::Ui, on: &mut bool, text: &str, tip: &str, enabled: bool, off: &str| {
             // Not `add_enabled_ui`: a scope per chip cannot wrap onto the next row.
             if !enabled {
-                ui.add_enabled(false, egui::Button::new(text))
+                // "n/a" in the label: an unavailable chip must not look like
+                // one that is merely switched off.
+                ui.add_enabled(false, egui::Button::new(format!("{text} n/a")))
                     .on_disabled_hover_text(off);
                 return;
             }
