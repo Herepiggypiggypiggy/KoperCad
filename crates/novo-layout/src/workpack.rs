@@ -142,6 +142,9 @@ pub enum CardKind {
     /// A cut-out in a wall or the door (a grille or a fan); outside the
     /// build order, so its step numbers are 0.
     Opening,
+    /// Wires with no end inside the plated cabinet (supply and field wires):
+    /// not a build order step, so its step numbers are 0.
+    Outside,
 }
 
 /// One half page of the pack.
@@ -838,6 +841,34 @@ pub struct OpeningJob {
     pub height: f64,
     pub size: (f64, f64),
     pub depth: f64,
+}
+
+/// Wire cards for the cut-list wires that have no end inside this cabinet's
+/// plate (supply feeds, field wires): outside the build order, after the
+/// step cards, steps 0.
+pub fn add_outside_wire_cards(pack: &mut Pack, wires: Vec<WireCut>) {
+    for chunk in wires.chunks(WIRES_PER_CARD) {
+        pack.cards.push(Card {
+            kind: CardKind::Outside,
+            steps: (0, 0),
+            total: 0,
+            phase: Phase::Wires,
+            mark: "Outside the plate".to_owned(),
+            text: "Supply and field wires: they have no end on this plate, so they are not steps of the build order. Cut them with the cabinet wires and run them last. Lengths are from the cut list; the ducts and the field are not measured, so cut long and trim (~).".to_owned(),
+            tools: vec![
+                "Wire cutter and stripper".to_owned(),
+                "Ferrule or lug crimp tool".to_owned(),
+                "Tape measure".to_owned(),
+            ],
+            template: None,
+            dims: Vec::new(),
+            wires: chunk.to_vec(),
+            wires_more: 0,
+            labels: Vec::new(),
+            notes: Vec::new(),
+            ticks: ticks(&["Cut", "Run"]),
+        });
+    }
 }
 
 /// Adds one card per opening after the cards of the build order, plus the
