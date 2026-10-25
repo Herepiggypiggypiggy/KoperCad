@@ -5,3 +5,5 @@
 2026-10-25 UTC follow-up 3 (PR C): novo-routing `plan_avoiding` + wire property `route.avoid_ducts` (soft, 12x cost, never forbidden); EMC `Fix::AvoidDuct` on the victim of EMC-01; fixture emc-cabinet-two-ducts.novo (qa/fixtures/make_emc_two_ducts.py); QA 430/431. SeparateRuns/MoveDevice stay by hand: they need a geometry move (placement or a duct clearance model) that routing cannot offer.
 
 2026-10-25 UTC follow-up (after #1479): the avoid-duct Apply notice says the wire route and cut length can change; scenario 430 pictures the plate after Apply; docs/EMC.md says route.avoid_ducts holds duct ids and goes stale harmlessly.
+
+2026-10-25 UTC: all follow-ups merged: #1476 before/after overlay in 3D and plate views (QA 440-443), #1477 Preview on the schematic cable card (lesson net-classes step now Preview then Apply, anchor emc.nets.preview), #1479 route a wire in another duct (router soft duct avoidance, route.avoid_ducts), #1481 notes. Still by hand: SeparateRuns and MoveDevice (need geometry to move or a hard clearance the router cannot express).
