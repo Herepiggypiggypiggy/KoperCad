@@ -229,8 +229,12 @@ pub fn build(
              estimate. Heat balance closes in both; exhaust flows agree within about 20 %. A jet speed term \
              raises the device surface coefficient with the fan flow; against the 3D solver it brings the \
              housing gain of a fan fix to between 22 % below and 45 % above it in 18 cases, 12 of them \
-             boxes it was not fitted on, for one device and a 60 to 250 m3/h fan; beyond that it is an \
-             extrapolation (model against model, not a measurement)."
+             boxes it was not fitted on, for one device near the fan end of the stream between fan and \
+             vent and a 60 to 250 m³/h fan; beyond that it is an extrapolation. It gives every device \
+             the same jet speed: further along that stream the 2D gain was 0.8 to 5 times the 3D one, \
+             and for a device beside it the 3D solver gave a third to three quarters of that gain (in \
+             one wide box the device ran about 4 K hotter with the fan on; model against model, not a \
+             measurement)."
                 .into(),
         );
     }
