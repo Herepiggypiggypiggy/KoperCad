@@ -16,8 +16,9 @@ wait 4
 text Export work cards
 wait 6
 shot palette
+answer_dialog ~/Documents/KoperCAD/qa 184 work cards.pdf
 key Enter
 wait 40
-expect_file "~/Documents/KoperCAD/*work cards.pdf" 3000
-keep_file "~/Documents/KoperCAD/*work cards.pdf"
+expect_file "~/Documents/KoperCAD/qa 184 work cards.pdf" 3000
+keep_file "~/Documents/KoperCAD/qa 184 work cards.pdf"
 check_layout

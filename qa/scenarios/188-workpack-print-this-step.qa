@@ -19,8 +19,9 @@ wait 12
 shot step-2-print-this-step
 expect "Print this step"
 check_layout
+answer_dialog ~/Documents/KoperCAD/qa 188 work card R2.pdf
 click_text "Print this step"
 wait 40
 shot after-print
-expect_file "~/Documents/KoperCAD/*work card R2.pdf" 2000
-keep_file "~/Documents/KoperCAD/*work card R2.pdf"
+expect_file "~/Documents/KoperCAD/qa 188 work card R2.pdf" 2000
+keep_file "~/Documents/KoperCAD/qa 188 work card R2.pdf"

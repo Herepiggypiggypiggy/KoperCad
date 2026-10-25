@@ -1,0 +1,29 @@
+@title Work cards: the PDF asks where to save, then says the folder
+@area 3D
+# 3D > Layers > Build order > "Work cards (PDF)" opens a save dialog (title "Save the work cards", file name "<project> work cards.pdf", starting next to the project) instead of writing silently. After the answer the status line names the file and its folder and keeps the "Open folder" button.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 40
+click_text "Layers"
+wait 8
+click_text "Build order"
+wait 8
+key Escape
+wait 30
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+shot strip-with-work-cards-button
+expect "Work cards (PDF)"
+answer_dialog ~/Documents/KoperCAD/qa 213 chosen name.pdf
+click_text "Work cards (PDF)"
+wait 40
+expect_dialog "Save the work cards"
+expect_dialog "work cards.pdf"
+shot after-save
+expect "qa 213 chosen name.pdf"
+expect "Open folder"
+expect_file "~/Documents/KoperCAD/qa 213 chosen name.pdf" 3000
+check_layout

@@ -14,8 +14,9 @@ wait 30
 shot start
 expect "Work cards (PDF)"
 check_layout
+answer_dialog ~/Documents/KoperCAD/qa 187 work cards.pdf
 click_text "Work cards (PDF)"
 wait 40
 shot written
-expect_file "/tmp/kopercad-qa-open-*/cabinet-cooling-advice work cards.pdf" 3000
-keep_file "/tmp/kopercad-qa-open-*/cabinet-cooling-advice work cards.pdf"
+expect_file "~/Documents/KoperCAD/qa 187 work cards.pdf" 3000
+keep_file "~/Documents/KoperCAD/qa 187 work cards.pdf"
