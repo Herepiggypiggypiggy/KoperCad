@@ -587,20 +587,20 @@ fn a_wall_opening_is_measured_from_the_back_wall_and_says_which_side_is_seen() {
         "{:?}",
         left.dims
     );
-    assert!(
-        left.notes
-            .iter()
-            .any(|n| n.contains("Seen from inside") && n.contains("back wall is on the left"))
-    );
+    assert!(left.notes.iter().any(|n| n.contains("Seen from outside")
+        && n.contains("back wall is on the left (from inside it is on the right)")));
     // The pass-through end is on the right wall, measured from its back wall too.
     assert!(
         left.notes
             .iter()
-            .any(|n| n.contains("60 mm from the back wall") && n.contains("seen from outside")),
+            .any(|n| n.contains("60 mm from the back wall") && n.contains("seen from inside")),
         "{:?}",
         left.notes
     );
-    assert!(card("right hole").notes[0].contains("Seen from outside"));
+    assert!(
+        card("right hole").notes[0]
+            .contains("Seen from inside the cabinet: the back wall is on the left (from outside it is on the right)")
+    );
     // The roof runs front to back in y.
     assert!(card("roof hole").dims[0].contains("120 mm from the back wall"));
     assert!(card("roof hole").notes[0].contains("from above"));

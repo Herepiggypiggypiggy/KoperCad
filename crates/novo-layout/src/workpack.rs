@@ -940,13 +940,13 @@ fn frame_of(name: &str) -> Frame {
             x_from: "the back wall",
             y_from: "the top edge",
             nearest_edges: false,
-            view: "Seen from inside the cabinet: the back wall is on the left",
+            view: "Seen from outside the cabinet: the back wall is on the left (from inside it is on the right)",
         },
         Some(RightWall) => Frame {
             x_from: "the back wall",
             y_from: "the top edge",
             nearest_edges: false,
-            view: "Seen from outside the cabinet: the back wall is on the left (from inside it is on the right)",
+            view: "Seen from inside the cabinet: the back wall is on the left (from outside it is on the right)",
         },
         Some(Roof) => Frame {
             x_from: "the left edge, seen from the front",
@@ -1019,11 +1019,11 @@ pub fn add_wiring_opening_cards(pack: &mut Pack, layout: &CabinetLayout) {
             CutoutShape::Round { dia } => (dia, dia),
             CutoutShape::Rect { w, h } => (w, h),
         };
-        let surface = Surface::Named(o.surface.clone()).name().to_lowercase();
         let surface = if o.surface == crate::surfaces::MAIN_PLATE {
             "mounting plate".to_owned()
         } else {
-            surface
+            crate::surfaces::SurfaceKind::from_name(&o.surface)
+                .map_or_else(|| o.surface.clone(), |k| k.label().to_owned())
         };
         let frame = frame_of(&o.surface);
         let mut dims = vec![format!(
@@ -1066,7 +1066,8 @@ pub fn add_wiring_opening_cards(pack: &mut Pack, layout: &CabinetLayout) {
             let far = layout.surface_sizes.get(&e.surface).copied();
             notes.push(format!(
                 "Passes through to the {} at {} ({}): cut both ends.",
-                e.surface,
+                crate::surfaces::SurfaceKind::from_name(&e.surface)
+                    .map_or_else(|| e.surface.clone(), |k| k.label().to_owned()),
                 point_words(&e.surface, e.x, e.y, far),
                 frame_of(&e.surface).view.to_lowercase()
             ));

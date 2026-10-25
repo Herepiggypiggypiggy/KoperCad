@@ -63,7 +63,7 @@ printable on an ordinary office printer, ticked with a pencil.
   door's size falls back to the interior's, or is said to be unknown). Each card says which way the
   surface is seen and where x and y start, following the model's frames: plate and door by the nearest
   edge (plate seen from the front, door from outside); a side wall by the back wall and the top edge
-  (left wall seen from inside, right wall from outside); roof and floor by the left edge and the back
+  (drawn with the back wall on the left: the left wall seen from outside, the right wall from inside; the card also says where the back wall is from the other side); roof and floor by the left edge and the back
   wall (seen from above).
 - Duct fixing points are the duct maker's; the model has none.
 - Not built: a drill-size
