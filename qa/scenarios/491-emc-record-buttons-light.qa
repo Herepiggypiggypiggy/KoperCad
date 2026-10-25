@@ -1,0 +1,26 @@
+@title EMC design record: the Save buttons in the Light theme
+@area Reports
+@sizes 1366x768 1920x1080
+# Check > EMC check with the Light theme: the two Save EMC record buttons sit under the design-aid sentence.
+open qa/fixtures/emc-cabinet-door.novo
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+expect "Save EMC record (PDF)"
+expect "Save EMC record (Excel)"
+shot 00-buttons
+check_layout
