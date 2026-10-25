@@ -231,7 +231,7 @@ pub fn build(
              housing gain of a fan fix to between 22 % below and 45 % above it in 18 cases, 12 of them \
              boxes it was not fitted on, for one device near the fan end of the stream between fan and \
              vent and a 60 to 250 m³/h fan; beyond that it is an extrapolation. It gives every device \
-             the same jet speed: further along that stream the 2D gain was 0.8 to 3.4 times the 3D one, \
+             the same jet speed: further along that stream the 2D gain was 0.8 to 5 times the 3D one, \
              and for a device beside it the 3D solver gave a third to three quarters of that gain (in \
              one wide box the device ran about 4 K hotter with the fan on; model against model, not a \
              measurement)."
