@@ -486,3 +486,103 @@ fn heat_state_command_requests_the_wizard() {
     assert!(s.whatif.pending());
     assert!(s.whatif.is_open());
 }
+
+/// An answer is for the file it was run on: opening another file closes the
+/// window and drops the answer, so Apply cannot move the devices of file B
+/// with file A's moves, and a run in flight does not land in file B.
+#[test]
+fn opening_another_project_closes_the_window_and_drops_the_answer() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = super::view3d_tests::drive_with_cabinet(dir.path());
+    let (answer, _, _) = answered();
+    d.app
+        .cabinet
+        .heat
+        .whatif
+        .set_found_for_test(answer.found.unwrap());
+    assert!(d.app.cabinet.heat.whatif.is_open());
+    assert!(d.app.cabinet.heat.whatif.preview().is_some());
+    d.app.document_replaced();
+    assert!(!d.app.cabinet.heat.whatif.is_open());
+    assert!(d.app.cabinet.heat.whatif.found.is_none());
+    assert!(d.app.cabinet.heat.whatif.preview().is_none());
+}
+
+#[test]
+fn a_run_in_flight_is_dropped_when_another_project_opens() {
+    let (p, cab) = cabinet();
+    let mut w = Wizard::default();
+    w.settings = Some(quick());
+    w.start(
+        &p,
+        cab,
+        35.0,
+        &super::heat_settings::HeatSettings::default(),
+        Vec::new(),
+        &tags(&p),
+    );
+    assert!(w.running());
+    w.close();
+    assert!(!w.running() && w.found.is_none());
+}
+
+/// The moves of an Apply are one project undo step; the openings of a
+/// combined fix are in the Vents and fans list, which has its own undo.
+#[test]
+fn undoing_applied_moves_puts_the_devices_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = super::view3d_tests::drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let (cab, rail, placement) = {
+        let project = d.app.backend.document().unwrap().project();
+        let cab = project
+            .structures()
+            .find(|s| s.enclosure && s.plate.is_some())
+            .map(|s| s.id)
+            .unwrap();
+        let rail = project
+            .all::<novo_core::Rail>()
+            .find(|r| r.structure == cab)
+            .map(|r| r.id.raw())
+            .expect("a rail");
+        let p = novo_layout::model::load(project, cab).unwrap().placements[0].clone();
+        (cab, rail, p)
+    };
+    let (ox, oy) = novo_thermal::placement_project::plate_origin(
+        d.app.backend.document().unwrap().project(),
+        cab,
+    )
+    .unwrap();
+    let to = novo_layout::Rect {
+        x: ox + placement.x + 120.0,
+        y: oy + placement.y,
+        w: placement.size.width,
+        h: placement.size.height,
+    };
+    let m = novo_thermal::placement::Move {
+        id: placement.id,
+        from_row: rail,
+        to_row: rail,
+        from: to,
+        to,
+        cost_before: 1.0,
+        cost_after: 0.5,
+        swapped_with: None,
+    };
+    d.app
+        .cabinet
+        .heat
+        .whatif
+        .set_apply_for_test(Ask::Move(cab, vec![m]));
+    d.app.whatif_apply();
+    let at = |d: &super::gate1_tests::Drive| {
+        let project = d.app.backend.document().unwrap().project();
+        let l = novo_layout::model::load(project, cab).unwrap();
+        let p = l.placements.iter().find(|p| p.id == placement.id).unwrap();
+        (p.x, p.y)
+    };
+    assert_ne!(at(&d), (placement.x, placement.y), "the device moved");
+    d.app.run_command(&ctx, "edit.undo", None);
+    d.frame();
+    assert_eq!(at(&d), (placement.x, placement.y), "one undo puts it back");
+}

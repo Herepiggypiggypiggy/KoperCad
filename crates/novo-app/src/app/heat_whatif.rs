@@ -994,6 +994,7 @@ impl super::NovoApp {
             return;
         };
         let mut said = Vec::new();
+        let mut moved = false;
         let (moves, openings) = match ask {
             Ask::Move(s, m) => (Some((s, m)), None),
             Ask::Openings(c) => (None, Some(c)),
@@ -1006,6 +1007,7 @@ impl super::NovoApp {
                 skipped = novo_thermal::placement_project::apply_moves(tx, structure, &moves)?;
                 Ok(())
             }) {
+                moved = skipped.is_empty();
                 said.push(if skipped.is_empty() {
                     format!(
                         "Moved {count} {}. Undo puts {} back.",
@@ -1028,6 +1030,12 @@ impl super::NovoApp {
             self.sync_openings_now();
             self.view3d.controls.heat_panel = true;
             said.push(super::heat_sweep::added_text(&c));
+            if moved {
+                said.push(
+                    "The moves undo with Edit > Undo; the openings undo in the Vents and fans list."
+                        .into(),
+                );
+            }
         }
         if !said.is_empty() {
             // The result no longer matches the cabinet, and the preview would
