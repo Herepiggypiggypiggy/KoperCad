@@ -1257,6 +1257,8 @@ impl NovoApp {
         // A what-if answer is for the cabinet it was run on: its Apply would move
         // the devices of another file, and a run in flight would land there.
         self.cabinet.heat.whatif.close();
+        // The same for the vent and fan sweep: its answer is for the old cabinet.
+        self.cabinet.heat.advice.close();
         // The live view, an open drawer and a preview belong to the project
         // they were opened on; a lesson (or any project) starts clean.
         self.wb.live = Default::default();

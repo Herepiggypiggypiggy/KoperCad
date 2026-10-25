@@ -9,6 +9,7 @@ Scope (from audit/creative/round34.md idea 2): one wizard that asks for the cond
 - QA scenarios 400-402.
 
 ## Next
+- Validate the 2D model against a known case (analytic or published enclosure result) and say what it shows; ENCLOSURE_VALIDATED stays false until measured.
 - Cooling unit / filter fan product pick from Cooling selection as a fix kind (needs the wall balance, not the 2D model: different number, label it).
 - Duty by device (per-device load factor) instead of one global duty.
 - Print the before/after table into the bench packet.
