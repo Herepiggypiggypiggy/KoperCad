@@ -75,19 +75,17 @@ impl WireCut {
     }
 
     fn strip_with(&self, word: &str) -> String {
-        let (a, b) = match (self.strip_from_mm, self.strip_to_mm) {
-            (Some(a), Some(b)) => (a, b),
-            (Some(a), None) | (None, Some(a)) => (a, a),
-            (None, None) => return String::new(),
-        };
-        if (a - b).abs() < 0.05 {
-            if word.is_empty() {
-                format!("strip {} mm", mm(a))
-            } else {
-                format!("strip {} mm {word}", mm(a))
-            }
+        let say = |v: Option<f64>| v.map_or("?".to_owned(), mm);
+        let word = if word.is_empty() {
+            String::new()
         } else {
-            format!("strip {} / {} mm", mm(a), mm(b))
+            format!(" {word}")
+        };
+        match (self.strip_from_mm, self.strip_to_mm) {
+            (None, None) => String::new(),
+            (Some(a), Some(b)) if (a - b).abs() < 0.05 => format!("strip {} mm{word}", mm(a)),
+            // The ends differ, or one is not known: both, with the source.
+            (a, b) => format!("strip {} / {} mm{word}", say(a), say(b)),
         }
     }
 

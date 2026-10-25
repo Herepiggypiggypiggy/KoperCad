@@ -658,7 +658,7 @@ fn wire_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
             2.6,
             HAlign::Left,
             false,
-            clip(&w.strip_text(), 24.0, 2.6),
+            clip(&w.strip_text(), 25.0, 2.6),
         );
         text(
             m,
