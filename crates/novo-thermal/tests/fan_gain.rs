@@ -4,7 +4,8 @@
 //! (sweep, ignored test, 3000 cells; model against model, not a measurement)
 //! and are frozen here so the 2D model can be checked in milliseconds. The
 //! boxes of the middle group were the ones the fan-jet speed was fitted on;
-//! the other two boxes and the loss of 60 W were held out.
+//! the other two boxes were held out (the fitted box used both losses, 60 and
+//! 120 W, so the loss is not held out).
 
 use novo_layout::Rect;
 use novo_layout::sizing::{Installation, Material};
