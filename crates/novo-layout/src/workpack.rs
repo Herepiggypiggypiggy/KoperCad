@@ -611,6 +611,21 @@ pub fn build(
                 if tmpl_holes.is_empty() && cutout.is_none() && on_rail.is_some() {
                     notes.push("Nothing to drill: the rail holds it.".to_owned());
                 }
+                // The distance on the step is from the rail's start: say which
+                // end that is here, the rail card may be out of reach.
+                if let (Some(r), Some(i)) = (
+                    p.rail.and_then(|id| rails.iter().find(|r| r.id == id)),
+                    on_rail,
+                ) {
+                    notes.push(format!(
+                        "R{i} starts at its {}, seen from the front: measure the distance from that end.",
+                        if r.vertical {
+                            "top end (the rail stands upright)"
+                        } else {
+                            "left end"
+                        }
+                    ));
+                }
                 let mut wires = device_wires.get(&tag).cloned().unwrap_or_default();
                 let wires_more = wires.len().saturating_sub(WIRES_ON_DEVICE_CARD);
                 wires.truncate(WIRES_ON_DEVICE_CARD);
