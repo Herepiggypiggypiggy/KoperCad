@@ -547,7 +547,12 @@ pub fn build(
                     template: Some(Template {
                         width: duct.length,
                         height: duct.width,
-                        caption: format!("{} duct, {} x {} mm", step.mark, mm(duct.length), mm(duct.width)),
+                        caption: format!(
+                            "{} duct, {} x {} mm",
+                            step.mark,
+                            mm(duct.length),
+                            mm(duct.width)
+                        ),
                         origin: if duct.vertical {
                             "Strip top = duct start (top end); the duct stands upright".to_owned()
                         } else {
@@ -558,16 +563,13 @@ pub fn build(
                         cutout: None,
                         clips: Vec::new(),
                     }),
-                    dims: vec![format!(
-                        "Top left corner: {}",
-                        from_edges(f.x, f.y, plate)
-                    )],
+                    dims: vec![format!("Top left corner: {}", from_edges(f.x, f.y, plate))],
                     wires: Vec::new(),
                     wires_more: 0,
                     labels: Vec::new(),
                     notes: vec![
-                        "The duct is placed from the layout; the fixing points are the duct maker's."
-                            .to_owned(),
+                        "The duct is placed from the layout.".to_owned(),
+                        duct_fixing_note(duct.length),
                     ],
                     ticks: ticks(&["Cut", "Duct fitted"]),
                 });
@@ -1305,4 +1307,31 @@ fn capitalised(s: &str) -> String {
     c.next()
         .map(|f| f.to_uppercase().chain(c).collect())
         .unwrap_or_default()
+}
+
+/// Planning rule for fixing a wiring duct to the plate when the layout does
+/// not say how: a fixing 25 mm from each end and none further apart than
+/// 200 mm. An assumption (common practice), not a datasheet value.
+pub const DUCT_FIXING_END_MM: f64 = 25.0;
+pub const DUCT_FIXING_PITCH_MM: f64 = 200.0;
+
+/// The fixing positions along a duct of `length` mm, from its start, mm.
+pub fn duct_fixings(length: f64) -> Vec<f64> {
+    if length <= 2.0 * DUCT_FIXING_END_MM {
+        return vec![length / 2.0];
+    }
+    let span = length - 2.0 * DUCT_FIXING_END_MM;
+    let gaps = (span / DUCT_FIXING_PITCH_MM).ceil().max(1.0) as usize;
+    (0..=gaps)
+        .map(|i| DUCT_FIXING_END_MM + span * i as f64 / gaps as f64)
+        .collect()
+}
+
+fn duct_fixing_note(length: f64) -> String {
+    let at = duct_fixings(length);
+    let list = at.iter().map(|x| mm(*x)).collect::<Vec<_>>().join(", ");
+    format!(
+        "Fixing (a planning rule, not a datasheet value): {} rivets or screws at {list} mm from the start; the duct maker's instructions win. These holes are not in the drilling list.",
+        at.len()
+    )
 }
