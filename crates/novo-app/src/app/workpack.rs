@@ -148,14 +148,33 @@ pub(super) fn parts_of(numbers: &[String]) -> Vec<Option<(usize, usize)>> {
         .collect()
 }
 
-/// The cover line for outside wires whose ends name no cabinet: with several
-/// cabinets they land on the first one's pack, which would otherwise look like
-/// that cabinet's own wiring.
-pub(super) fn unplaced_note(numbers: &[String]) -> String {
-    format!(
-        "Wires {} name no cabinet in their ends, so they are filed under this cabinet's pack only because it is the first: cut them once, whichever pack you work from.",
-        numbers.join(", ")
-    )
+/// Cover lines for outside wires whose ends name no cabinet. With several
+/// cabinets they are filed under the first one's pack, which would otherwise
+/// look like its own wiring, and the other packs never list them: so the first
+/// says what they are and every other pack points to it. `unplaced` maps the
+/// pack index they were filed under to their numbers; the result maps a pack
+/// index to its lines. One cabinet gets none.
+pub(super) fn unplaced_notes(
+    unplaced: &BTreeMap<usize, Vec<String>>,
+    cabinets: &[String],
+) -> BTreeMap<usize, Vec<String>> {
+    let mut out: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+    if cabinets.len() < 2 {
+        return out;
+    }
+    for (&at, numbers) in unplaced {
+        let list = numbers.join(", ");
+        out.entry(at).or_default().push(format!(
+            "Wires {list} name no cabinet in their ends, so they are listed on this pack only because it is the first. They belong to no one cabinet: whoever builds the other cabinets cuts them from this list."
+        ));
+        for i in (0..cabinets.len()).filter(|i| *i != at) {
+            out.entry(i).or_default().push(format!(
+                "Wires {list} name no cabinet in their ends: they are listed on the pack of {}, not here.",
+                cabinets[at]
+            ));
+        }
+    }
+    out
 }
 
 /// The work packs of every cabinet that has a mounting plate.
@@ -348,7 +367,13 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
             ));
         }
     }
-    let multi = out.len() > 1;
+    let cabinets: Vec<String> = out.iter().map(|p| p.cabinet.clone()).collect();
+    let notes = unplaced_notes(&unplaced, &cabinets);
+    for (at, lines) in notes {
+        if let Some(pack) = out.get_mut(at) {
+            pack.problems.extend(lines);
+        }
+    }
     for (at, list) in left {
         if let Some(pack) = out.get_mut(at) {
             pack.problems.push(format!(
@@ -356,7 +381,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                 list.len(),
                 list.iter()
                     .map(|(_, w)| format!(
-                        "{} ({} to {}) cut {} mm",
+                        "{} ({} to {}) cut ~{} mm",
                         w.number,
                         w.from,
                         w.to,
@@ -369,9 +394,6 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
             let numbers: Vec<String> = wires.iter().map(|w| w.number.clone()).collect();
             for (w, part) in wires.iter_mut().zip(parts_of(&numbers)) {
                 w.part = part;
-            }
-            if let Some(numbers) = unplaced.get(&at).filter(|_| multi) {
-                pack.problems.push(unplaced_note(numbers));
             }
             add_outside_wire_cards(pack, wires);
         }

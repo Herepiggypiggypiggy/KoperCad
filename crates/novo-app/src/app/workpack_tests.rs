@@ -273,7 +273,7 @@ fn cut_list_wires_without_a_cabinet_end_are_named_on_the_cover() {
     // Every wire the cover names is on a card: same number, ends and cut.
     for w in outside.iter().flat_map(|c| &c.wires) {
         let line = format!(
-            "{} ({} to {}) cut {} mm",
+            "{} ({} to {}) cut ~{} mm",
             w.number,
             w.from,
             w.to,
@@ -309,10 +309,28 @@ fn cut_list_wires_without_a_cabinet_end_are_named_on_the_cover() {
 }
 
 #[test]
-fn wires_filed_under_the_first_cabinet_by_default_say_so() {
-    let note = super::workpack::unplaced_note(&["W7".to_owned(), "W9".to_owned()]);
-    assert!(note.starts_with("Wires W7, W9 name no cabinet"), "{note}");
-    assert!(note.contains("only because it is the first"), "{note}");
+fn wires_filed_under_the_first_cabinet_by_default_say_so_and_the_other_packs_point_to_it() {
+    use super::workpack::unplaced_notes;
+    let unplaced = std::collections::BTreeMap::from([(0, vec!["W7".to_owned(), "W9".to_owned()])]);
+    let cabs = ["+CAB1".to_owned(), "+CAB2".to_owned(), "+CAB3".to_owned()];
+    let notes = unplaced_notes(&unplaced, &cabs);
+    assert!(notes[&0][0].starts_with("Wires W7, W9 name no cabinet"));
+    assert!(
+        notes[&0][0].contains("listed on this pack only"),
+        "{notes:?}"
+    );
+    // Every other pack says where they are; none claims to list them.
+    for at in [1, 2] {
+        assert_eq!(notes[&at].len(), 1, "{notes:?}");
+        assert!(
+            notes[&at][0].contains("pack of +CAB1, not here"),
+            "{notes:?}"
+        );
+    }
+    // One cabinet: the fallback is trivial, nothing is said.
+    assert!(unplaced_notes(&unplaced, &cabs[..1]).is_empty());
+    // No unplaced wires: nothing is said.
+    assert!(unplaced_notes(&Default::default(), &cabs).is_empty());
 }
 
 /// A saved project with a plated cabinet `+CAB1` whose interior is 600 x 800 x 250 mm.

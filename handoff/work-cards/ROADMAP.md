@@ -38,4 +38,4 @@ PR 11 (wire parts): a wire number used on several rows shows "1 of 2" under the 
 
 PR 9 (rail start end): a clip card says which end of its rail the distance is measured from ("R1 starts at its left end", "top end" when upright). Next: wires outside the plate as a tick-off card, wire numbers used twice and missing sizes.
 
-PR 12 (outside fallback note): outside wires whose ends name no cabinet go on the first cabinet's pack when there are several; that pack's cover now says so. Test that outside strip text equals the cut jobs. Known limit: the several-cabinet path is tested by its note text only, no fixture has two plated cabinets with an unplaced wire.
+PR 12 (outside fallback note): outside wires whose ends name no cabinet are listed on the first cabinet's pack when there are several; that cover says "listed on this pack only" and every other cabinet's cover points to it. The cover's outside wire lengths read "cut ~220 mm" like the card. Tested through `unplaced_notes` (three cabinets, one, none); no fixture has two plated cabinets with an unplaced wire, so the glue around it is not covered end to end.
