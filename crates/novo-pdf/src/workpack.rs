@@ -184,11 +184,11 @@ fn draw_template(m: &mut Marks, t: &Template, ox: f64, oy: f64, s: f64) {
             }
             rect(m, Layer::Devices, (x0, oy + h * 0.15), (x1, oy + h * 0.85));
             let label = c.short();
-            // Text the box can hold; a narrow box keeps its outline only.
+            // Text in the lower half of the box, clear of the hole numbers above the holes. Text the box can hold; a narrow box keeps its outline only.
             if x1 - x0 >= label.chars().count() as f64 * 1.3 + 1.0 {
                 text(
                     m,
-                    ((x0 + x1) / 2.0, oy + h / 2.0 - 3.3),
+                    ((x0 + x1) / 2.0, oy + h * 0.85 - 3.0),
                     2.4,
                     HAlign::Center,
                     false,
