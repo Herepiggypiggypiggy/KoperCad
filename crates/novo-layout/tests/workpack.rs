@@ -801,3 +801,22 @@ fn the_strip_text_names_the_length_its_source_and_both_ends_when_they_differ() {
     w.strip_basis = "";
     assert_eq!(w.strip_text(), "");
 }
+
+#[test]
+fn duct_fixings_follow_the_planning_rule_and_the_card_labels_it_as_one() {
+    use novo_layout::workpack::{DUCT_FIXING_END_MM, DUCT_FIXING_PITCH_MM, duct_fixings};
+    for len in [30.0, 100.0, 250.0, 400.0, 1000.0, 1999.0] {
+        let at = duct_fixings(len);
+        assert!(!at.is_empty());
+        if len > 2.0 * DUCT_FIXING_END_MM {
+            assert_eq!(at[0], DUCT_FIXING_END_MM);
+            assert!((at[at.len() - 1] - (len - DUCT_FIXING_END_MM)).abs() < 1e-9);
+        }
+        assert!(
+            at.windows(2)
+                .all(|w| w[1] - w[0] <= DUCT_FIXING_PITCH_MM + 1e-9),
+            "{len}: {at:?}"
+        );
+    }
+    assert_eq!(duct_fixings(400.0), [25.0, 200.0, 375.0]);
+}
