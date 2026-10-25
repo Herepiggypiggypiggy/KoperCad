@@ -1,15 +1,16 @@
 //! Where the device sits against the fan, 2D model against the 3D cabinet solver.
 //!
 //! The 3D gains were measured by `crates/novo-cfd/tests/validation_fan_position.rs`
-//! (ignored sweep, 3000 cells, 120 W, 35 C outside; the 250 m3/h rows, the 120 m3/h rows
-//! give the same picture; model against model, not a
-//! measurement) and are frozen here. Columns: box, device centre as a fraction
+//! (ignored sweep, 3000 cells, 120 W, 35 C outside; model against model, not a
+//! measurement) and are frozen here for the 250 m3/h fan; the 120 m3/h rows were seen
+//! once and are listed in the documentation, not pinned. Columns: box, device centre as a fraction
 //! of the width and of the height from the top, fan m3/h, 3D housing gain in K.
 //! A fan low in the middle blows towards a vent on top in the middle.
 //!
 //! This pins a known limit rather than a goal: the 2D model gives every device
-//! the same fan jet speed, so it follows the 3D solver for a device on the line
-//! between fan and vent and overstates the gain for one beside it. If a change
+//! the same fan jet speed, so it is within a factor of about three of the 3D solver for a device on the
+//! line between fan and vent (the fitted band holds only near the fan end) and
+//! overstates the gain for one beside it. If a change
 //! moves these numbers, `docs/thermal-validation.md` ("Fan gain: where the
 //! device sits") and the what-if fan note need the same change.
 
