@@ -65,7 +65,7 @@ fn pack(cabinet: &str) -> Pack {
                 kind: "1.5 mm2 black".into(),
                 estimated: false,
                 end_mm: Some(10.0),
-                lug: false,
+                fitting: "ferrule",
             })
             .collect(),
     }];

@@ -116,8 +116,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                 let cut = found.map_or(length, |(cut, _)| cut);
                 let end_mm = found.map(|(_, end)| end);
                 let (colour, size) = (t("colour"), t("cross_section_mm2"));
-                // A lug from the project's size limit on, a ferrule below it.
-                let lug = gets_lug(&size, rules.lug_from_mm2);
+                let fitting = fitting_of(end_mm, rules.ferrule_mm, rules.lug_mm);
                 let kind = [
                     (!size.is_empty()).then(|| format!("{size} mm2")),
                     (!colour.is_empty()).then(|| colour.clone()),
@@ -137,7 +136,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                         cut_mm: cut,
                         estimated: found.is_none() || is_estimate(&t("basis")),
                         end_mm,
-                        lug,
+                        fitting,
                     });
             }
         }
@@ -237,13 +236,17 @@ pub(super) fn step_file_name(stem: &str, tag: &str, mark: &str, several: bool) -
     }
 }
 
-/// A cable lug from `lug_from_mm2` on, a ferrule below it (and when the
-/// size is not a number: the wire rules' own default end).
-pub(super) fn gets_lug(size_text: &str, lug_from_mm2: f64) -> bool {
-    size_text
-        .trim()
-        .parse::<f64>()
-        .is_ok_and(|s| s >= lug_from_mm2)
+/// Which fitting an end allowance is, from the cut list's own number: the
+/// wire rules' lug allowance or their ferrule allowance. The cut list picks
+/// by the largest size of a mixed chain, so the word follows what it used
+/// instead of parsing the size again; equal allowances name neither.
+pub(super) fn fitting_of(end_mm: Option<f64>, ferrule_mm: f64, lug_mm: f64) -> &'static str {
+    const EPS: f64 = 1e-6;
+    match end_mm {
+        Some(e) if (lug_mm - ferrule_mm).abs() > EPS && (e - lug_mm).abs() < EPS => "lug",
+        Some(e) if (lug_mm - ferrule_mm).abs() > EPS && (e - ferrule_mm).abs() < EPS => "ferrule",
+        _ => "",
+    }
 }
 
 impl NovoApp {

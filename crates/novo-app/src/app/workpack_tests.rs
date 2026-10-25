@@ -436,11 +436,40 @@ fn every_wire_card_row_carries_the_cut_lists_end_allowance() {
 }
 
 #[test]
-fn a_lug_starts_at_the_rule_size_and_a_ferrule_is_below_it() {
-    use super::workpack::gets_lug;
-    assert!(!gets_lug("1.5", 25.0));
-    assert!(gets_lug("25", 25.0));
-    assert!(gets_lug("35", 25.0));
-    assert!(!gets_lug("", 25.0));
-    assert!(!gets_lug("n/a", 25.0));
+fn the_fitting_word_follows_the_cut_lists_allowance_not_a_second_reading_of_the_size() {
+    use super::workpack::fitting_of;
+    // Rules: ferrule 10 mm, lug 20 mm. A chain of 10 and 35 mm2 wires is cut
+    // with the lug allowance (the largest size) and must read "lug".
+    assert_eq!(fitting_of(Some(20.0), 10.0, 20.0), "lug");
+    assert_eq!(fitting_of(Some(10.0), 10.0, 20.0), "ferrule");
+    // Neither, none, or both fittings taking the same allowance: no word.
+    assert_eq!(fitting_of(Some(15.0), 10.0, 20.0), "");
+    assert_eq!(fitting_of(None, 10.0, 20.0), "");
+    assert_eq!(fitting_of(Some(12.0), 12.0, 12.0), "");
+}
+
+#[test]
+fn a_wire_with_a_mixed_size_chain_gets_the_lug_allowance_of_its_largest_size() {
+    // The wire-routing example has sized wires; every card row's word agrees
+    // with its allowance under the project's rules.
+    let project = lesson("wire-routing/project.json");
+    let rules = novo_routing::project_rules::WireRules::of(&project);
+    for pack in work_packs(&project) {
+        for w in pack
+            .cards
+            .iter()
+            .filter(|c| c.kind == CardKind::Wires)
+            .flat_map(|c| &c.wires)
+        {
+            let end = w.end_mm.unwrap();
+            let expected = if (rules.lug_mm - rules.ferrule_mm).abs() < 1e-6 {
+                ""
+            } else if (end - rules.lug_mm).abs() < 1e-6 {
+                "lug"
+            } else {
+                "ferrule"
+            };
+            assert_eq!(w.fitting, expected, "{} {end}", w.number);
+        }
+    }
 }

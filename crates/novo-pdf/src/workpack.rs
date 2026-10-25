@@ -552,7 +552,7 @@ fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
 fn wire_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
     let cols = [4.0, 16.0, 44.0, 92.0, 146.0, 166.0];
     // Each end's allowance sits in the Size column's right part.
-    const ENDS_X: f64 = 124.0;
+    const ENDS_X: f64 = 126.0;
     for (c, h) in ["Wire", "From", "To", "Size, colour", "Cut mm", "Cut"]
         .iter()
         .enumerate()
@@ -1036,7 +1036,7 @@ mod tests {
                     kind: "1.5 mm2 black".into(),
                     estimated: false,
                     end_mm: Some(10.0),
-                    lug: false,
+                    fitting: "ferrule",
                 })
                 .collect(),
         }];
@@ -1157,7 +1157,11 @@ mod tests {
         let card = p.cards.iter().find(|c| c.kind == CardKind::Wires).unwrap();
         let m = card_marks(card, &p.cabinet, CARD_Y[0]);
         assert!(m.texts.iter().any(|t| t.text == "Per end"));
-        let ends: Vec<_> = m.texts.iter().filter(|t| t.text == "10 ferrule").collect();
+        let ends: Vec<_> = m
+            .texts
+            .iter()
+            .filter(|t| t.text == "10 mm ferrule")
+            .collect();
         assert_eq!(ends.len(), card.wires.len());
         // The size column ends before the allowance column starts.
         let kinds: Vec<_> = m
@@ -1168,6 +1172,27 @@ mod tests {
         assert_eq!(kinds.len(), card.wires.len());
         assert!(kinds[0].pos.0 < ends[0].pos.0);
         assert!(inside(&m, CARD_Y[0]).is_empty());
+    }
+
+    #[test]
+    fn a_long_wire_size_and_colour_is_not_cut_off_by_the_end_column() {
+        let mut p = pack(3, false);
+        let card = p
+            .cards
+            .iter_mut()
+            .find(|c| c.kind == CardKind::Wires)
+            .unwrap();
+        card.wires[0].kind = "2.5 mm2 green/yellow".into();
+        card.wires[1].end_mm = None;
+        let m = card_marks(card, "+CAB1", CARD_Y[0]);
+        assert!(m.texts.iter().any(|t| t.text == "2.5 mm2 green/yellow"));
+        // No allowance in the cut list: an empty cell, never "0".
+        let ends = m
+            .texts
+            .iter()
+            .filter(|t| t.text.ends_with("ferrule") || t.text == "0 mm")
+            .count();
+        assert_eq!(ends, card.wires.len() - 1);
     }
 
     #[test]

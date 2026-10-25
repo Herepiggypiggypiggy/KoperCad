@@ -110,7 +110,7 @@ fn wire(n: &str, from: &str, to: &str, cut: f64) -> WireCut {
         cut_mm: cut,
         estimated: false,
         end_mm: Some(10.0),
-        lug: false,
+        fitting: "ferrule",
     }
 }
 
@@ -454,12 +454,18 @@ fn identical_openings_share_one_counted_tool_line_and_fans_point_to_the_datashee
 }
 
 #[test]
-fn the_end_text_names_the_allowance_and_the_fitting() {
+fn the_end_text_names_the_allowance_with_unit_and_the_fitting() {
     let mut w = wire("W1", "-Q1:1", "-Q2:2", 200.0);
-    assert_eq!(w.end_text(), "10 ferrule");
+    assert_eq!(w.end_text(), "10 mm ferrule");
     w.end_mm = Some(20.0);
-    w.lug = true;
-    assert_eq!(w.end_text(), "20 lug");
+    w.fitting = "lug";
+    assert_eq!(w.end_text(), "20 mm lug");
+    // Both fittings take the same allowance: the word would be a guess.
+    w.fitting = "";
+    assert_eq!(w.end_text(), "20 mm");
+    // No allowance in the cut list, or none at all: nothing, never "0 ferrule".
     w.end_mm = None;
+    assert_eq!(w.end_text(), "");
+    w.end_mm = Some(0.0);
     assert_eq!(w.end_text(), "");
 }

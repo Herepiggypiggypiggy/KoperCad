@@ -65,5 +65,6 @@ printable on an ordinary office printer, ticked with a pencil.
   choice per part (the tool is the part data's hole diameter), a separate strip length and ferrule length
   (the project's wire rules give one allowance per end for strip plus ferrule collar or lug barrel), a
   different allowance at the two ends of one wire.
-- Wire cards have a **Per end** column: what each end adds to the routed length (`10 ferrule`, `20 lug`),
-  already in the cut length; a lug from the project's `wire.lug_from_mm2` size on.
+- Wire cards have a **Per end** column: what each end adds to the routed length (`10 mm ferrule`, `20 mm lug`),
+  already in the cut length. The word follows the cut list's own allowance (it takes the largest size of
+  a mixed chain), so it is left out when the two fittings take the same allowance; no allowance, no text.
