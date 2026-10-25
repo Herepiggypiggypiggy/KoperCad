@@ -111,6 +111,7 @@ fn wire(n: &str, from: &str, to: &str, cut: f64) -> WireCut {
         estimated: false,
         end_mm: Some(10.0),
         fitting: "ferrule",
+        strip_mm: Some(10.0),
     }
 }
 
@@ -698,4 +699,14 @@ fn a_vertical_rail_measures_its_devices_down_the_rail() {
     let t = p.cards[0].template.as_ref().unwrap();
     // Footprint 45 x 90: 90 along the rail, 50 from its start (y 150 - 100).
     assert_eq!((t.clips[0].at, t.clips[0].len), (50.0, 90.0));
+}
+
+#[test]
+fn the_strip_text_names_the_length_and_is_empty_without_a_size() {
+    let mut w = wire("W1", "-Q1:1", "-Q2:2", 200.0);
+    assert_eq!(w.strip_text(), "strip 10 mm");
+    w.strip_mm = Some(12.5);
+    assert_eq!(w.strip_text(), "strip 12.5 mm");
+    w.strip_mm = None;
+    assert_eq!(w.strip_text(), "");
 }

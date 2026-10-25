@@ -138,6 +138,12 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                         estimated: found.is_none() || is_estimate(&t("basis")),
                         end_mm,
                         fitting,
+                        strip_mm: size
+                            .trim()
+                            .parse::<f64>()
+                            .ok()
+                            .filter(|s| *s > 0.0)
+                            .map(novo_reports::typical_strip_mm),
                     });
             }
         }

@@ -48,9 +48,20 @@ pub struct WireCut {
     /// `ferrule` or `lug` when the allowance says which (the wire rules give
     /// the two different values), else empty.
     pub fitting: &'static str,
+    /// The length of insulation to strip at each end, mm: the typical
+    /// length for the wire's size (a planning value; the clamp's datasheet
+    /// wins). `None` when the size is not set.
+    pub strip_mm: Option<f64>,
 }
 
 impl WireCut {
+    /// `strip 10 mm`, empty when the size is not set.
+    pub fn strip_text(&self) -> String {
+        self.strip_mm
+            .map(|s| format!("strip {} mm", mm(s)))
+            .unwrap_or_default()
+    }
+
     /// `10 mm ferrule`, `20 mm lug`, `10 mm` when the fitting is not known,
     /// empty without an allowance.
     pub fn end_text(&self) -> String {

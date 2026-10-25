@@ -178,6 +178,8 @@ fn draw_template(m: &mut Marks, t: &Template, ox: f64, oy: f64, s: f64) {
         // Each clipped device as a box on the strip with its designation,
         // as wide as the device is along the rail.
         for c in &t.clips {
+            // A device that starts before the rail or runs past its end is cut
+            // at the strip's ends here; the note lists the raw distances.
             let (x0, x1) = (ox + c.at.max(0.0) * s, ox + (c.at + c.len).min(t.width) * s);
             if x1 <= x0 {
                 continue;
@@ -652,6 +654,14 @@ fn wire_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
         );
         text(
             m,
+            (x0 + ENDS_X, ty + 3.1),
+            2.6,
+            HAlign::Left,
+            false,
+            clip(&w.strip_text(), 20.0, 2.6),
+        );
+        text(
+            m,
             (x0 + cols[4] + 12.0, ty),
             3.4,
             HAlign::Right,
@@ -728,7 +738,7 @@ fn cover_marks(pack: &Pack, project: &str) -> Marks {
     let mut y = 36.0;
     let how = [
         "How to use: print at 100 % (actual size), no fit-to-page. Check the 100 mm ruler on any card with a tape measure before you trust a template. Cut the sheets in half or fold them at the dashed line: each half is one step. Work in the order of the step numbers; tick the boxes as you go.",
-        "How exact: the sizes and positions come from the cabinet layout and the part data. The template is as exact as your printer scale and your taping, about 0.5 mm if the ruler reads 100 mm (an estimate, not measured here). Wire lengths come from the cut list: routed lengths follow the duct model, estimates are marked as such. \"Per end\" is what each end adds to the routed length (strip plus ferrule collar or lug barrel, the project's wire rules), already in the cut length; the model has the same allowance at both ends. Check the first part against your real plate before drilling the rest.",
+        "How exact: the sizes and positions come from the cabinet layout and the part data. The template is as exact as your printer scale and your taping, about 0.5 mm if the ruler reads 100 mm (an estimate, not measured here). Wire lengths come from the cut list: routed lengths follow the duct model, estimates are marked as such. \"Per end\" is what each end adds to the routed length (strip plus ferrule collar or lug barrel, the project's wire rules), already in the cut length; the model has the same allowance at both ends. \"strip\" is the usual insulation length to strip for the wire size, a planning value: the clamp's or ferrule's own datasheet wins. Check the first part against your real plate before drilling the rest.",
     ];
     let cut_outs = pack
         .cards
@@ -1062,6 +1072,7 @@ mod tests {
                     estimated: false,
                     end_mm: Some(10.0),
                     fitting: "ferrule",
+                    strip_mm: Some(10.0),
                 })
                 .collect(),
         }];
@@ -1272,6 +1283,11 @@ mod tests {
         assert_eq!(kinds.len(), card.wires.len());
         assert!(kinds[0].pos.0 < ends[0].pos.0);
         assert!(inside(&m, CARD_Y[0]).is_empty());
+        // The strip length sits under the allowance, one per wire, inside the card.
+        let strips: Vec<_> = m.texts.iter().filter(|t| t.text == "strip 10 mm").collect();
+        assert_eq!(strips.len(), card.wires.len());
+        assert!(strips[0].pos.1 > ends[0].pos.1);
+        assert_eq!(strips[0].pos.0, ends[0].pos.0);
     }
 
     #[test]

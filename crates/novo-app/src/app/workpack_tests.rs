@@ -549,3 +549,25 @@ fn a_rail_cards_clips_are_the_devices_the_build_order_clips_on_it_at_the_same_di
     }
     assert!(seen > 0);
 }
+
+#[test]
+fn every_wire_card_row_carries_the_strip_length_of_its_size() {
+    let project = lesson("wire-routing/project.json");
+    let mut seen = 0;
+    for pack in work_packs(&project) {
+        for c in pack.cards.iter().filter(|c| c.kind == CardKind::Wires) {
+            for w in &c.wires {
+                // "1.5 mm2 black": the size is the first word.
+                let size: Option<f64> = w
+                    .kind
+                    .split_whitespace()
+                    .next()
+                    .and_then(|s| s.parse().ok());
+                let expected = size.map(novo_reports::typical_strip_mm);
+                assert_eq!(w.strip_mm, expected, "{} {}", w.number, w.kind);
+                seen += 1;
+            }
+        }
+    }
+    assert!(seen > 0);
+}
