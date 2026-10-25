@@ -617,28 +617,25 @@ impl NovoApp {
             None => {}
         }
         let hint = self.emc.preview.as_ref().map(|(_, f, _)| f.hint());
-        let view = |w: &WhatIf, hint: &str| WhatIfView {
-            id: w.id,
-            project: w.project.clone(),
-            hint: hint.to_owned(),
-            summary: w.summary.clone(),
-            after: w.after,
+        let wanted = self.emc.whatif.as_ref().zip(hint.as_deref());
+        // Rebuild the two views only when what they show changed.
+        let same = |v: &Option<WhatIfView>| match (v, wanted) {
+            (Some(v), Some((w, h))) => v.id == w.id && v.after == w.after && v.hint == h,
+            (None, None) => true,
+            _ => false,
         };
-        let now = self
-            .emc
-            .whatif
-            .as_ref()
-            .zip(hint.as_deref())
-            .map(|(w, h)| view(w, h));
-        let changed = now.as_ref().map(|w| (w.id, w.after))
-            != self.view3d.emc.whatif.as_ref().map(|w| (w.id, w.after));
-        self.view3d.emc.whatif = now;
-        self.cabinet.emc.whatif = self
-            .emc
-            .whatif
-            .as_ref()
-            .zip(hint.as_deref())
-            .map(|(w, h)| view(w, h));
+        let changed = !same(&self.view3d.emc.whatif) || !same(&self.cabinet.emc.whatif);
+        if changed {
+            let view = |(w, h): (&WhatIf, &str)| WhatIfView {
+                id: w.id,
+                project: w.project.clone(),
+                hint: h.to_owned(),
+                summary: w.summary.clone(),
+                after: w.after,
+            };
+            self.view3d.emc.whatif = wanted.map(view);
+            self.cabinet.emc.whatif = wanted.map(view);
+        }
         if changed || action.is_some() {
             ctx.request_repaint();
         }
