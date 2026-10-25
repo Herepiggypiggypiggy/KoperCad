@@ -54,9 +54,12 @@ printable on an ordinary office printer, ticked with a pencil.
 - True size depends on the print dialog; the ruler on every card is the check, and the print-scale check
   page repairs a stretched print.
 - The tool list is derived from the hole diameters and cut-outs and is a suggestion, not a standard.
-- Door and wall features are on a card only through the device that carries them; wiring openings
-  (vents, fans) and plain door cut-outs are on the cut-out cards and the tiled template, not yet on
-  work cards (next piece: door and plate layout from the build order).
+- Door and wall features are on a card through the device that carries them, and the Heat panel's grilles
+  and fans have a "CUT-OUT" card each at the end of the cabinet's cards (not build order steps: a wall
+  is cut before the plate goes in). They show the opening as the Heat panel and solver cut it (moved and trimmed to lie inside its wall), not as typed. Their centre is measured from the interior's edge, not the outer
+  door edge, and a top, bottom or side wall has no stored position across its depth, which the card
+  says. Wiring openings (`opening.*`) and plain door cut-outs without a device are still only on the
+  cut-out cards and the tiled template.
 - Duct fixing points are the duct maker's; the model has none.
 - Not built: a drill-size
   choice per part (the tool is the part data's hole diameter), a wire "strip length" per end.

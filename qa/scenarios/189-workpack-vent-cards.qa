@@ -1,0 +1,21 @@
+@title Work cards: the Heat panel's grilles become cut-out cards
+@area 3D
+# Four grilles from the Heat panel are saved in the project: the work cards PDF gets a cut-out card for each, outside the build order.
+open qa/fixtures/cabinet-vents-four-grilles.novo
+wait 30
+click_text 3D #1
+wait 40
+click_text "Layers"
+wait 8
+click_text "Build order"
+wait 8
+key Escape
+wait 30
+shot start
+expect "Work cards (PDF)"
+check_layout
+click_text "Work cards (PDF)"
+wait 40
+shot written
+expect_file "/tmp/kopercad-qa-open-*/cabinet-vents-four-grilles work cards.pdf" 3000
+keep_file "/tmp/kopercad-qa-open-*/cabinet-vents-four-grilles work cards.pdf"
