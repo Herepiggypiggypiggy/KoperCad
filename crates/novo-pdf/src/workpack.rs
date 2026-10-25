@@ -1,0 +1,1005 @@
+//! The workshop pack as a PDF: a cover with the tool list, a tick-off
+//! overview of the build order, then the work cards, two per A4 page (one
+//! step per half page, cut or fold at the line between them).
+//!
+//! A card carries a hand template drawn at true size where it fits its area
+//! and at a stated smaller scale where it does not (then it says so in
+//! words and the distance list is the thing to measure from). True size
+//! depends on the print dialog: every card carries a 100 mm ruler. The cards
+//! come from `novo_layout::workpack`. Output is deterministic.
+
+use novo_canvas::Vec2;
+use novo_layout::assembly::Phase;
+use novo_layout::drill::{CutoutShape, mm};
+use novo_layout::plate_drawing::{HAlign, Layer, Marks, Shape as MarkShape};
+use novo_layout::workpack::{Card, CardKind, Pack, Template};
+
+use crate::draw::PageWriter;
+use crate::plate::render;
+use crate::template::{Page, line, ruler, text, write_pages};
+
+const A4: (f64, f64) = (210.0, 297.0);
+const CARD_X: f64 = 10.0;
+const CARD_W: f64 = 190.0;
+const CARD_H: f64 = 138.0;
+/// Top of the two cards on a page.
+const CARD_Y: [f64; 2] = [6.0, 153.0];
+/// Where the bottom zone (ticks, note, ruler) of a card starts.
+const FOOT_Y: f64 = CARD_H - 17.0;
+/// Left text column of a card with a block template beside it.
+const LEFT_W: f64 = 104.0;
+/// Room for a block template: its left edge, width and height.
+const BLOCK_X: f64 = 118.0;
+const BLOCK_W: f64 = CARD_W - BLOCK_X - 4.0;
+const BLOCK_H: f64 = 94.0;
+const HEAD_H: f64 = 11.0;
+const BODY_TEXT_MM: f64 = 3.4;
+const SMALL_TEXT_MM: f64 = 2.9;
+const LINE_MM: f64 = 4.1;
+const BOX_MM: f64 = 6.0;
+/// Rows of the overview on one page.
+const OVERVIEW_ROWS: usize = 38;
+const OVERVIEW_ROW_MM: f64 = 6.2;
+/// Scales a template is drawn at when it does not fit at 1:1.
+const SCALES: [f64; 6] = [2.0, 2.5, 5.0, 10.0, 20.0, 50.0];
+
+/// The scale a `width` x `height` template is drawn at inside an area: `1.0`
+/// when it fits, else the next 1:n of [`SCALES`] that does (the last one if
+/// none does).
+pub fn template_scale(width: f64, height: f64, area_w: f64, area_h: f64) -> f64 {
+    if width <= area_w && height <= area_h {
+        return 1.0;
+    }
+    SCALES
+        .iter()
+        .map(|n| 1.0 / n)
+        .find(|s| width * s <= area_w && height * s <= area_h)
+        .unwrap_or(1.0 / SCALES[SCALES.len() - 1])
+}
+
+fn scale_text(s: f64) -> String {
+    if s >= 0.9999 {
+        "1:1 true size, if printed at 100 %".to_owned()
+    } else {
+        format!(
+            "scale 1:{}. NOT true size: measure from the list, not the drawing",
+            mm(1.0 / s)
+        )
+    }
+}
+
+/// Wraps `s` to `width` mm at text `height` (Helvetica averages about half
+/// its height per character).
+fn wrap(s: &str, width: f64, height: f64) -> Vec<String> {
+    let per_line = (width / (height * 0.5)).floor().max(10.0) as usize;
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    for word in s.split_whitespace() {
+        if !cur.is_empty() && cur.chars().count() + 1 + word.chars().count() > per_line {
+            out.push(std::mem::take(&mut cur));
+        }
+        if !cur.is_empty() {
+            cur.push(' ');
+        }
+        cur.push_str(word);
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+fn clip(s: &str, width: f64, height: f64) -> String {
+    let per_line = (width / (height * 0.5)).floor().max(4.0) as usize;
+    if s.chars().count() <= per_line {
+        s.to_owned()
+    } else {
+        let mut t: String = s.chars().take(per_line - 3).collect();
+        t.push_str("...");
+        t
+    }
+}
+
+fn rect(m: &mut Marks, layer: Layer, min: (f64, f64), max: (f64, f64)) {
+    m.shapes.push((layer, MarkShape::Rect { min, max }));
+}
+
+fn dashed(m: &mut Marks, layer: Layer, a: (f64, f64), b: (f64, f64)) {
+    let len = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
+    let n = (len / 4.0).floor().max(1.0) as usize;
+    for i in 0..n {
+        let (t0, t1) = (i as f64 / n as f64, (i as f64 + 0.55) / n as f64);
+        let p = |t: f64| (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t);
+        line(m, layer, p(t0), p(t1));
+    }
+}
+
+/// Wrapped lines from `y` down to `bottom`; returns the next y and how many
+/// lines did not fit.
+fn lines_down(
+    m: &mut Marks,
+    x: f64,
+    mut y: f64,
+    width: f64,
+    bottom: f64,
+    h: f64,
+    items: &[String],
+) -> (f64, usize) {
+    let mut left = 0;
+    for item in items {
+        for l in wrap(item, width, h) {
+            if y + h > bottom {
+                left += 1;
+            } else {
+                text(m, (x, y), h, HAlign::Left, false, l);
+                y += h * 1.4;
+            }
+        }
+    }
+    (y, left)
+}
+
+fn tick_row(m: &mut Marks, x: f64, y: f64, labels: &[String]) {
+    let mut x = x;
+    for l in labels {
+        rect(m, Layer::Table, (x, y), (x + BOX_MM, y + BOX_MM));
+        text(
+            m,
+            (x + BOX_MM + 2.0, y + 1.2),
+            3.6,
+            HAlign::Left,
+            false,
+            l.clone(),
+        );
+        x += BOX_MM + 2.0 + l.chars().count() as f64 * 1.9 + 8.0;
+    }
+    text(
+        m,
+        (CARD_X + CARD_W - 4.0, y + 1.2),
+        3.0,
+        HAlign::Right,
+        false,
+        "Checked by ________  Date ________",
+    );
+}
+
+/// Draws `t` with its top left at `(ox, oy)` on the page at scale `s`.
+fn draw_template(m: &mut Marks, t: &Template, ox: f64, oy: f64, s: f64) {
+    let map = |x: f64, y: f64| (ox + x * s, oy + y * s);
+    let (w, h) = (t.width * s, t.height * s);
+    rect(
+        m,
+        if t.rail { Layer::Rails } else { Layer::Devices },
+        (ox, oy),
+        (ox + w, oy + h),
+    );
+    if t.rail {
+        line(m, Layer::Rails, (ox, oy + h / 2.0), (ox + w, oy + h / 2.0));
+    }
+    let tick = |m: &mut Marks, a: (f64, f64), b: (f64, f64)| line(m, Layer::Dimensions, a, b);
+    let mut xs: Vec<f64> = t.holes.iter().map(|h| h.x).collect();
+    if let Some(c) = &t.cutout {
+        xs.push(c.x);
+    }
+    xs.sort_by(f64::total_cmp);
+    xs.dedup_by(|a, b| (*a - *b).abs() < 0.01);
+    let mut last_x = f64::NEG_INFINITY;
+    for x in xs {
+        let (px, _) = map(x, 0.0);
+        tick(m, (px, oy - 1.5), (px, oy));
+        if px - last_x >= 9.0 {
+            text(m, (px, oy - 5.0), 2.4, HAlign::Center, false, mm(x));
+            last_x = px;
+        }
+    }
+    if !t.rail {
+        let mut ys: Vec<f64> = t.holes.iter().map(|h| h.y).collect();
+        if let Some(c) = &t.cutout {
+            ys.push(c.y);
+        }
+        ys.sort_by(f64::total_cmp);
+        ys.dedup_by(|a, b| (*a - *b).abs() < 0.01);
+        let mut last_y = f64::NEG_INFINITY;
+        for y in ys {
+            let (_, py) = map(0.0, y);
+            tick(m, (ox - 1.5, py), (ox, py));
+            if py - last_y >= 4.0 {
+                text(m, (ox - 2.2, py - 1.0), 2.4, HAlign::Right, false, mm(y));
+                last_y = py;
+            }
+        }
+    }
+    let cross = |m: &mut Marks, p: (f64, f64), arm: f64| {
+        line(m, Layer::Holes, (p.0 - arm, p.1), (p.0 + arm, p.1));
+        line(m, Layer::Holes, (p.0, p.1 - arm), (p.0, p.1 + arm));
+    };
+    for hole in &t.holes {
+        let p = map(hole.x, hole.y);
+        let r = hole.dia / 2.0 * s;
+        m.shapes.push((
+            Layer::Holes,
+            MarkShape::Circle {
+                centre: p,
+                radius: r,
+            },
+        ));
+        cross(m, p, r + 3.0);
+        if hole.no > 0 {
+            text(
+                m,
+                (p.0 + r + 1.5, p.1 - r - 3.6),
+                2.6,
+                HAlign::Left,
+                true,
+                format!("{}", hole.no),
+            );
+        }
+    }
+    if let Some(c) = &t.cutout {
+        let p = map(c.x, c.y);
+        match c.shape {
+            CutoutShape::Rect { w, h } => rect(
+                m,
+                Layer::Cutouts,
+                (p.0 - w * s / 2.0, p.1 - h * s / 2.0),
+                (p.0 + w * s / 2.0, p.1 + h * s / 2.0),
+            ),
+            CutoutShape::Round { dia } => m.shapes.push((
+                Layer::Cutouts,
+                MarkShape::Circle {
+                    centre: p,
+                    radius: dia * s / 2.0,
+                },
+            )),
+        }
+        let arm = match c.shape {
+            CutoutShape::Rect { w, h } => w.max(h) * s / 2.0,
+            CutoutShape::Round { dia } => dia * s / 2.0,
+        } + 3.0;
+        cross(m, p, arm);
+    }
+    text(
+        m,
+        (ox, oy + h + 1.5),
+        2.6,
+        HAlign::Left,
+        false,
+        t.caption.clone(),
+    );
+}
+
+/// The marks of one card with its top left at `(CARD_X, y0)`.
+fn card_marks(card: &Card, cabinet: &str, y0: f64) -> Marks {
+    let mut m = Marks::default();
+    let x0 = CARD_X;
+    let w = CARD_W;
+    rect(&mut m, Layer::Plate, (x0, y0), (x0 + w, y0 + CARD_H));
+    line(
+        &mut m,
+        Layer::Table,
+        (x0, y0 + HEAD_H),
+        (x0 + w, y0 + HEAD_H),
+    );
+    text(
+        &mut m,
+        (x0 + 3.0, y0 + 2.2),
+        5.6,
+        HAlign::Left,
+        true,
+        format!(
+            "STEP{} {} of {}",
+            if card.steps.0 == card.steps.1 {
+                ""
+            } else {
+                "S"
+            },
+            card.steps_text(),
+            card.total
+        ),
+    );
+    text(
+        &mut m,
+        (x0 + 60.0, y0 + 3.0),
+        4.4,
+        HAlign::Left,
+        true,
+        clip(
+            &if card.mark == card.phase.name() {
+                card.mark.clone()
+            } else {
+                format!("{}  {}", card.phase.name(), card.mark)
+            },
+            85.0,
+            4.4,
+        ),
+    );
+    text(
+        &mut m,
+        (x0 + w - 3.0, y0 + 3.4),
+        3.4,
+        HAlign::Right,
+        false,
+        cabinet.to_owned(),
+    );
+
+    // What to do.
+    let mut y = y0 + HEAD_H + 2.5;
+    let block = is_block(card);
+    let text_lines: Vec<String> = wrap(
+        &card.text,
+        if block { LEFT_W - 4.0 } else { w - 8.0 },
+        BODY_TEXT_MM,
+    )
+    .into_iter()
+    .take(if block { 6 } else { 3 })
+    .collect();
+    for l in &text_lines {
+        text(
+            &mut m,
+            (x0 + 4.0, y),
+            BODY_TEXT_MM,
+            HAlign::Left,
+            false,
+            l.clone(),
+        );
+        y += BODY_TEXT_MM * 1.45;
+    }
+    y += 1.5;
+    let bottom = y0 + FOOT_Y - 1.0;
+
+    match card.kind {
+        CardKind::Wires => wire_table(&mut m, card, x0, y, bottom),
+        CardKind::Labels => label_table(&mut m, card, x0, y, bottom),
+        _ => body(&mut m, card, (x0, y0), y, bottom),
+    }
+
+    // Foot: ticks, honesty note, ruler.
+    let fy = y0 + FOOT_Y;
+    line(&mut m, Layer::Table, (x0, fy), (x0 + w, fy));
+    tick_row(&mut m, x0 + 4.0, fy + 2.5, &card.ticks);
+    ruler(&mut m, x0 + 4.0, y0 + CARD_H - 5.5);
+    m
+}
+
+fn is_block(card: &Card) -> bool {
+    card.template
+        .as_ref()
+        .is_some_and(|t| t.width <= t.height * 3.0)
+}
+
+const HONESTY: &str = "Positions come from the cabinet layout, not from your plate: check the first part against the real plate.";
+
+fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
+    let mut tools: Vec<String> = card.tools.iter().map(|t| format!("- {t}")).collect();
+    tools.extend(card.notes.iter().map(|n| format!("Note: {n}")));
+    let dims: Vec<String> = card.dims.iter().map(|d| format!("- {d}")).collect();
+    let wires: Vec<String> = card
+        .wires
+        .iter()
+        .map(|w| {
+            format!(
+                "- {}  {} to {}  cut {} mm",
+                w.number,
+                w.from,
+                w.to,
+                mm(w.cut_mm)
+            )
+        })
+        .collect();
+
+    // Two columns of lists: (x, width, top) of the tools and of the dims.
+    let (tools_at, dims_at);
+    let mut bottom = bottom;
+    match &card.template {
+        Some(t) if is_block(card) => {
+            // Template on the right, true size where it fits; the lists in
+            // the left column under the instruction.
+            let s = template_scale(t.width, t.height, BLOCK_W - 8.0, BLOCK_H);
+            let ox = x0 + BLOCK_X + 8.0;
+            let top = y0 + HEAD_H + 2.5;
+            draw_template(m, t, ox, top + 8.0, s);
+            text(
+                m,
+                (x0 + BLOCK_X, top),
+                2.6,
+                HAlign::Left,
+                true,
+                clip(&format!("Template, {}", scale_text(s)), BLOCK_W, 2.6),
+            );
+            tools.push(format!("- {}", t.origin));
+            tools_at = (x0 + 4.0, LEFT_W - 4.0, y);
+            dims_at = None;
+        }
+        Some(t) => {
+            // A rail or duct strip across the card, lists below it.
+            let aw = CARD_W - 24.0;
+            let s = template_scale(t.width, t.height, aw, t.height);
+            let oy = y + 11.0;
+            text(
+                m,
+                (x0 + 4.0, y),
+                2.8,
+                HAlign::Left,
+                true,
+                format!("Template, {}", scale_text(s)),
+            );
+            draw_template(m, t, x0 + 12.0, oy, s);
+            let below = oy + t.height * s + 6.0;
+            text(
+                m,
+                (x0 + 4.0, below),
+                2.6,
+                HAlign::Left,
+                false,
+                t.origin.clone(),
+            );
+            tools_at = (x0 + 4.0, 78.0, below + 5.0);
+            dims_at = Some((x0 + 86.0, CARD_W - 90.0, below + 5.0));
+        }
+        None => {
+            tools_at = (x0 + 4.0, 82.0, y);
+            dims_at = Some((x0 + 94.0, CARD_W - 98.0, y));
+        }
+    }
+    let (tx, tw, ttop) = tools_at;
+    // Block cards keep the honesty note at the foot of the left column.
+    if is_block(card) {
+        let lines = wrap(HONESTY, LEFT_W - 4.0, 2.5);
+        let h = lines.len() as f64 * 3.5;
+        for (i, l) in lines.into_iter().enumerate() {
+            text(
+                m,
+                (tx, bottom - h + i as f64 * 3.5),
+                2.5,
+                HAlign::Left,
+                false,
+                l,
+            );
+        }
+        bottom -= h + 1.5;
+    } else {
+        text(
+            m,
+            (x0 + 4.0, bottom - 2.6),
+            2.5,
+            HAlign::Left,
+            false,
+            HONESTY,
+        );
+        bottom -= 5.0;
+    }
+
+    text(m, (tx, ttop), SMALL_TEXT_MM, HAlign::Left, true, "Tools");
+    let (mut ty, _) = lines_down(m, tx, ttop + LINE_MM, tw, bottom, SMALL_TEXT_MM, &tools);
+    let (dx, dw, mut dy) = dims_at.unwrap_or((tx, tw, ty + 1.5));
+    if !dims.is_empty() {
+        text(
+            m,
+            (dx, dy),
+            SMALL_TEXT_MM,
+            HAlign::Left,
+            true,
+            "Mark and drill (nearest edges)",
+        );
+        let (ny, left) = lines_down(m, dx, dy + LINE_MM, dw, bottom, SMALL_TEXT_MM, &dims);
+        dy = ny;
+        if left > 0 {
+            text(
+                m,
+                (dx, dy),
+                SMALL_TEXT_MM,
+                HAlign::Left,
+                false,
+                format!("... and {left} more lines: see the drilling template"),
+            );
+            dy += LINE_MM;
+        }
+    }
+    if !wires.is_empty() {
+        let same_column = dims_at.is_none();
+        let (wx, ww, wy) = if same_column {
+            (dx, dw, dy + 1.5)
+        } else {
+            ty += 1.5;
+            (tx, tw, ty)
+        };
+        text(
+            m,
+            (wx, wy),
+            SMALL_TEXT_MM,
+            HAlign::Left,
+            true,
+            "Wires that end here (cut later)",
+        );
+        let (ny, left) = lines_down(m, wx, wy + LINE_MM, ww, bottom, SMALL_TEXT_MM, &wires);
+        if card.wires_more + left > 0 {
+            text(
+                m,
+                (wx, ny),
+                SMALL_TEXT_MM,
+                HAlign::Left,
+                false,
+                format!("... and {} more on the wire cards", card.wires_more + left),
+            );
+        }
+    }
+}
+
+fn wire_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
+    let cols = [4.0, 16.0, 44.0, 92.0, 146.0, 166.0];
+    for (c, h) in ["Wire", "From", "To", "Size, colour", "Cut mm", "Cut"]
+        .iter()
+        .enumerate()
+    {
+        let (x, align) = if c == 4 {
+            (x0 + cols[c] + 12.0, HAlign::Right)
+        } else {
+            (x0 + cols[c], HAlign::Left)
+        };
+        text(m, (x, y), SMALL_TEXT_MM, align, true, *h);
+    }
+    text(
+        m,
+        (x0 + cols[5] + 10.0, y),
+        SMALL_TEXT_MM,
+        HAlign::Left,
+        true,
+        "Run",
+    );
+    line(m, Layer::Table, (x0, y + 4.2), (x0 + CARD_W, y + 4.2));
+    let row_h = ((bottom - y - 6.0) / 9.0).clamp(6.0, 9.0);
+    for (i, w) in card.wires.iter().enumerate() {
+        let ry = y + 6.0 + i as f64 * row_h;
+        let ty = ry + (row_h - 3.4) / 2.0 - 0.6;
+        text(
+            m,
+            (x0 + cols[0], ty),
+            3.2,
+            HAlign::Left,
+            true,
+            clip(&w.number, 11.0, 3.2),
+        );
+        text(
+            m,
+            (x0 + cols[1], ty),
+            3.0,
+            HAlign::Left,
+            false,
+            clip(&w.from, 27.0, 3.0),
+        );
+        text(
+            m,
+            (x0 + cols[2], ty),
+            3.0,
+            HAlign::Left,
+            false,
+            clip(&w.to, 46.0, 3.0),
+        );
+        text(
+            m,
+            (x0 + cols[3], ty),
+            3.0,
+            HAlign::Left,
+            false,
+            clip(&w.kind, 52.0, 3.0),
+        );
+        text(
+            m,
+            (x0 + cols[4] + 12.0, ty),
+            3.4,
+            HAlign::Right,
+            true,
+            format!("{}{}", if w.estimated { "~" } else { "" }, mm(w.cut_mm)),
+        );
+        for k in 0..2 {
+            let bx = x0 + cols[5] + k as f64 * 10.0;
+            rect(m, Layer::Table, (bx, ry + 0.6), (bx + 6.0, ry + 6.6));
+        }
+        line(
+            m,
+            Layer::Margin,
+            (x0 + 3.0, ry + row_h),
+            (x0 + CARD_W - 3.0, ry + row_h),
+        );
+    }
+}
+
+fn label_table(m: &mut Marks, card: &Card, x0: f64, y: f64, _bottom: f64) {
+    for (i, l) in card.labels.iter().enumerate() {
+        let (col, row) = (i / 6, i % 6);
+        let x = x0 + 4.0 + col as f64 * 92.0;
+        let ry = y + row as f64 * 11.0;
+        rect(m, Layer::Table, (x, ry), (x + BOX_MM, ry + BOX_MM));
+        text(
+            m,
+            (x + BOX_MM + 3.0, ry + 0.8),
+            4.2,
+            HAlign::Left,
+            true,
+            clip(l, 70.0, 4.2),
+        );
+    }
+}
+
+fn cover_marks(pack: &Pack, project: &str) -> Marks {
+    let mut m = Marks::default();
+    let x0 = 15.0;
+    let w = A4.0 - 30.0;
+    text(
+        &mut m,
+        (x0, 15.0),
+        8.0,
+        HAlign::Left,
+        true,
+        format!("Workshop pack {}", pack.cabinet),
+    );
+    text(
+        &mut m,
+        (x0, 26.0),
+        3.4,
+        HAlign::Left,
+        false,
+        format!(
+            "{project}   plate {} x {} mm   {} steps, {} cards",
+            mm(pack.plate.0),
+            mm(pack.plate.1),
+            pack.overview.len(),
+            pack.cards.len()
+        ),
+    );
+    let mut y = 36.0;
+    let how = [
+        "How to use: print at 100 % (actual size), no fit-to-page. Check the 100 mm ruler on any card with a tape measure before you trust a template. Cut the sheets in half or fold them at the dashed line: each half is one step. Work in the order of the step numbers; tick the boxes as you go.",
+        "How exact: the sizes and positions come from the cabinet layout and the part data. The template is as exact as your printer scale and your taping, about 0.5 mm if the ruler reads 100 mm (an estimate, not measured here). Wire lengths come from the cut list: routed lengths follow the duct model, estimates are marked as such. Check the first part against your real plate before drilling the rest.",
+    ];
+    for p in how {
+        let (ny, _) = lines_down(&mut m, x0, y, w, 120.0, 3.4, &[p.to_owned()]);
+        y = ny + 3.0;
+    }
+    text(
+        &mut m,
+        (x0, y),
+        5.0,
+        HAlign::Left,
+        true,
+        "Tools and materials",
+    );
+    y += 8.0;
+    text(&mut m, (x0, y), 3.0, HAlign::Left, true, "Tool");
+    text(&mut m, (x0 + 80.0, y), 3.0, HAlign::Left, true, "For");
+    line(&mut m, Layer::Table, (x0, y + 4.2), (x0 + w, y + 4.2));
+    y += 6.0;
+    for t in &pack.tools {
+        if y > A4.1 - 30.0 {
+            text(
+                &mut m,
+                (x0, y),
+                3.0,
+                HAlign::Left,
+                false,
+                "... more tools on the cards",
+            );
+            break;
+        }
+        text(
+            &mut m,
+            (x0, y),
+            3.2,
+            HAlign::Left,
+            false,
+            clip(&t.tool, 78.0, 3.2),
+        );
+        text(
+            &mut m,
+            (x0 + 80.0, y),
+            3.2,
+            HAlign::Left,
+            false,
+            clip(&t.for_what, w - 80.0, 3.2),
+        );
+        y += 5.2;
+    }
+    if !pack.problems.is_empty() {
+        y += 3.0;
+        text(
+            &mut m,
+            (x0, y),
+            3.6,
+            HAlign::Left,
+            true,
+            "Not read, so not in this pack:",
+        );
+        y += 5.0;
+        let items: Vec<String> = pack.problems.iter().map(|p| format!("- {p}")).collect();
+        lines_down(&mut m, x0, y, w, A4.1 - 15.0, 3.0, &items);
+    }
+    ruler(&mut m, x0, A4.1 - 12.0);
+    m
+}
+
+fn overview_marks(pack: &Pack, rows: std::ops::Range<usize>, number: (usize, usize)) -> Marks {
+    let mut m = Marks::default();
+    let x0 = 15.0;
+    let w = A4.0 - 30.0;
+    text(
+        &mut m,
+        (x0, 12.0),
+        5.5,
+        HAlign::Left,
+        true,
+        format!("Tick-off sheet {}", pack.cabinet),
+    );
+    text(
+        &mut m,
+        (x0 + w, 14.0),
+        3.2,
+        HAlign::Right,
+        false,
+        format!("Page {} of {}", number.0, number.1),
+    );
+    let top = 24.0;
+    for (x, h) in [
+        (0.0, "Step"),
+        (14.0, "Phase"),
+        (34.0, "Mark"),
+        (66.0, "What to do"),
+        (w - 10.0, "Done"),
+    ] {
+        text(&mut m, (x0 + x, top), 3.0, HAlign::Left, true, h);
+    }
+    line(&mut m, Layer::Table, (x0, top + 4.4), (x0 + w, top + 4.4));
+    for (i, r) in pack.overview[rows].iter().enumerate() {
+        let y = top + 6.5 + i as f64 * OVERVIEW_ROW_MM;
+        text(&mut m, (x0, y), 3.2, HAlign::Left, true, r.step.to_string());
+        text(
+            &mut m,
+            (x0 + 14.0, y),
+            3.2,
+            HAlign::Left,
+            false,
+            r.phase.name(),
+        );
+        text(
+            &mut m,
+            (x0 + 34.0, y),
+            3.2,
+            HAlign::Left,
+            false,
+            clip(&r.mark, 30.0, 3.2),
+        );
+        text(
+            &mut m,
+            (x0 + 66.0, y),
+            3.0,
+            HAlign::Left,
+            false,
+            clip(&r.text, w - 66.0 - 14.0, 3.0),
+        );
+        rect(
+            &mut m,
+            Layer::Table,
+            (x0 + w - 8.0, y - 0.6),
+            (x0 + w - 2.0, y + 5.0),
+        );
+        line(&mut m, Layer::Margin, (x0, y + 5.4), (x0 + w, y + 5.4));
+    }
+    m
+}
+
+fn identity(p: (f64, f64)) -> Vec2 {
+    Vec2::new(p.0 as f32, p.1 as f32)
+}
+
+fn page(marks: Marks) -> Page<'static> {
+    Page {
+        size: A4,
+        draw: Box::new(move |w: &mut PageWriter<'_>| render(w, &marks, &identity, 1.0)),
+    }
+}
+
+fn pages(pack: &Pack, project: &str) -> Vec<Page<'static>> {
+    let mut out = vec![page(cover_marks(pack, project))];
+    let sheets = pack.overview.len().div_ceil(OVERVIEW_ROWS);
+    for i in 0..sheets {
+        let a = i * OVERVIEW_ROWS;
+        let b = (a + OVERVIEW_ROWS).min(pack.overview.len());
+        out.push(page(overview_marks(pack, a..b, (i + 1, sheets))));
+    }
+    for pair in pack.cards.chunks(2) {
+        let mut m = Marks::default();
+        for (card, y0) in pair.iter().zip(CARD_Y) {
+            let c = card_marks(card, &pack.cabinet, y0);
+            m.shapes.extend(c.shapes);
+            m.texts.extend(c.texts);
+        }
+        dashed(&mut m, Layer::Margin, (3.0, 148.5), (A4.0 - 3.0, 148.5));
+        text(
+            &mut m,
+            (A4.0 - 4.0, 146.0),
+            2.2,
+            HAlign::Right,
+            false,
+            "cut or fold here",
+        );
+        out.push(page(m));
+    }
+    out
+}
+
+/// Number of A4 pages the packs make.
+pub fn page_count(packs: &[Pack]) -> usize {
+    packs
+        .iter()
+        .map(|p| 1 + p.overview.len().div_ceil(OVERVIEW_ROWS) + p.cards.len().div_ceil(2))
+        .sum()
+}
+
+/// The workshop pack of every cabinet as one PDF. `None` when no cabinet has
+/// a step to build.
+pub fn export_workpack_pdf(packs: &[Pack], project_name: &str) -> Option<Vec<u8>> {
+    let all: Vec<Page<'static>> = packs
+        .iter()
+        .filter(|p| !p.cards.is_empty())
+        .flat_map(|p| pages(p, project_name))
+        .collect();
+    if all.is_empty() {
+        return None;
+    }
+    Some(write_pages(
+        &all,
+        &format!("{project_name} - workshop pack"),
+    ))
+}
+
+/// Phases that have a hand template, for callers that want to say so.
+pub fn has_template(phase: Phase) -> bool {
+    matches!(phase, Phase::Rails | Phase::Ducts | Phase::Devices)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use novo_layout::drill::{DeviceFeatures, Hole, Surface};
+    use novo_layout::state::CabinetLayout;
+    use novo_layout::workpack::{WireCut, WireGroup, build};
+    use novo_layout::{Margins, Placement, Plate, Rail, Size};
+
+    fn pack(wires: usize, long_text: bool) -> Pack {
+        let mut l = CabinetLayout::new(Plate {
+            width: 800.0,
+            height: 600.0,
+            margin: 10.0,
+        });
+        l.rails = vec![Rail {
+            id: 1,
+            x: 50.0,
+            y: 100.0,
+            length: 1900.0,
+            vertical: false,
+        }];
+        let mk = |id: u64, x: f64, rail: Option<u64>| Placement {
+            id,
+            x,
+            y: 100.0,
+            rotated: false,
+            size: Size {
+                width: 45.0,
+                height: 90.0,
+                guessed: false,
+            },
+            clearance: None,
+            margins: Margins::default(),
+            rail,
+        };
+        l.placements = vec![mk(1, 100.0, Some(1)), mk(2, 300.0, None)];
+        let holes = (0..12)
+            .map(|i| Hole {
+                dx: 3.0 + i as f64,
+                dy: 5.0,
+                dia: 4.5,
+            })
+            .collect();
+        let f = vec![DeviceFeatures {
+            id: 2,
+            label: "-Q2".into(),
+            surface: Surface::Plate,
+            holes,
+            cutout: None,
+            problems: Vec::new(),
+        }];
+        let from = if long_text {
+            "=A1+CAB1-X1:1234567890123456789012345678901234567890"
+        } else {
+            "-Q1:1"
+        };
+        let g = vec![WireGroup {
+            title: "Power".into(),
+            wires: (0..wires)
+                .map(|i| WireCut {
+                    number: format!("W{i}"),
+                    from: from.into(),
+                    to: "-Q2:2".into(),
+                    cut_mm: 250.0 + i as f64,
+                    kind: "1.5 mm2 black".into(),
+                    estimated: false,
+                })
+                .collect(),
+        }];
+        build("+CAB1", &l, &f, &|id| format!("-Q{id}"), &g)
+    }
+
+    fn inside(m: &Marks, y0: f64) -> Vec<String> {
+        let (x1, y1) = (CARD_X + CARD_W, y0 + CARD_H);
+        let mut bad = Vec::new();
+        for t in &m.texts {
+            let (x, y) = t.pos;
+            if x < CARD_X || x > x1 || y < y0 || y > y1 {
+                bad.push(format!("text {:?} at {x:.1},{y:.1}", t.text));
+            }
+        }
+        for (_, s) in &m.shapes {
+            let pts = match *s {
+                MarkShape::Line { a, b } => vec![a, b],
+                MarkShape::Rect { min, max } => vec![min, max],
+                MarkShape::Circle { centre, .. } => vec![centre],
+            };
+            for (x, y) in pts {
+                if x < CARD_X - 0.01 || x > x1 + 0.01 || y < y0 - 0.01 || y > y1 + 0.01 {
+                    bad.push(format!("shape at {x:.1},{y:.1}"));
+                }
+            }
+        }
+        bad
+    }
+
+    #[test]
+    fn every_card_stays_inside_its_half_page() {
+        for (wires, long) in [(3, false), (20, true)] {
+            let p = pack(wires, long);
+            assert!(!p.cards.is_empty());
+            for card in &p.cards {
+                for y0 in CARD_Y {
+                    let m = card_marks(card, &p.cabinet, y0);
+                    let bad = inside(&m, y0);
+                    assert!(
+                        bad.is_empty(),
+                        "{} {}: {bad:?}",
+                        card.mark,
+                        card.steps_text()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn card_text_does_not_run_past_the_right_edge() {
+        let p = pack(20, true);
+        let right = CARD_X + CARD_W;
+        for card in &p.cards {
+            let m = card_marks(card, &p.cabinet, CARD_Y[0]);
+            for t in m.texts.iter().filter(|t| t.h == HAlign::Left) {
+                let w = t.text.chars().count() as f64 * t.height * 0.5;
+                assert!(
+                    t.pos.0 + w <= right + 0.5,
+                    "{} {:?} ends at {:.1}",
+                    card.mark,
+                    t.text,
+                    t.pos.0 + w
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn scale_is_one_when_it_fits_and_a_stated_fraction_when_not() {
+        assert_eq!(template_scale(45.0, 90.0, 94.0, 100.0), 1.0);
+        assert_eq!(template_scale(400.0, 35.0, 166.0, 35.0), 1.0 / 2.5);
+        assert_eq!(template_scale(1900.0, 35.0, 166.0, 35.0), 1.0 / 20.0);
+        // Nothing fits: the smallest stated scale, never an unstated one.
+        assert_eq!(template_scale(1.0e6, 35.0, 166.0, 35.0), 1.0 / 50.0);
+        assert!(scale_text(1.0).contains("true size"));
+        assert!(scale_text(1.0 / 2.5).contains("1:2.5"));
+        assert!(scale_text(0.4).contains("NOT true size"));
+    }
+}

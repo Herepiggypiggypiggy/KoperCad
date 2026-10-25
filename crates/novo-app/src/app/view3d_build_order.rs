@@ -76,9 +76,10 @@ pub(super) fn strip(
     view: egui::Rect,
     position: &mut Option<usize>,
     steps: &[Step],
-) {
+) -> bool {
+    let mut print = false;
     let Some(mut at) = *position else {
-        return;
+        return false;
     };
     if steps.is_empty() {
         // No layout to read an order from: the whole cabinet stays in view,
@@ -106,7 +107,7 @@ pub(super) fn strip(
         if leave {
             *position = None;
         }
-        return;
+        return false;
     }
     at = at.min(steps.len());
     let p = crate::theme::ui_palette();
@@ -147,6 +148,13 @@ pub(super) fn strip(
                     {
                         leave = true;
                     }
+                    if ui
+                        .button("Work cards (PDF)")
+                        .on_hover_text(super::WORKPACK_HINT)
+                        .clicked()
+                    {
+                        print = true;
+                    }
                 });
                 ui.label(egui::RichText::new(text).color(p.text_secondary));
                 ui.horizontal(|ui| {
@@ -168,6 +176,7 @@ pub(super) fn strip(
             });
         });
     *position = if leave { None } else { Some(at) };
+    print
 }
 
 /// The next position for a command: steps from the start when it is off.

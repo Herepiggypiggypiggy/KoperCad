@@ -1,0 +1,25 @@
+@title Work cards: the Build order strip prints the workshop pack
+@area 3D
+# 3D > Layers > Build order shows a strip with "Work cards (PDF)". It writes the half-page work cards (cover with tool list, tick-off sheet, one card per rail, duct, device and wire group) next to the project; keep_file copies the real PDF so it can be opened.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 40
+click_text "Layers"
+wait 8
+click_text "Build order"
+wait 8
+key Escape
+wait 30
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+shot strip-with-work-cards-button
+expect "Work cards (PDF)"
+check_layout
+click_text "Work cards (PDF)"
+wait 40
+shot after-print
+expect_file "~/Documents/KoperCAD/*work cards.pdf" 3000
+keep_file "~/Documents/KoperCAD/*work cards.pdf"
