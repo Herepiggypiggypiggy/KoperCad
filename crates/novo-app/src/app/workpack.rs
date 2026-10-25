@@ -46,8 +46,8 @@ fn text_at(section: &Section, row: &novo_reports::Row, key: &str) -> String {
 
 /// The cut lengths of the cut list by (number, from, to), each key's lengths
 /// in list order so a number used twice gets its own length each time.
-fn cut_lengths(project: &Project) -> BTreeMap<(String, String, String), VecDeque<f64>> {
-    let mut out: BTreeMap<(String, String, String), VecDeque<f64>> = BTreeMap::new();
+fn cut_lengths(project: &Project) -> BTreeMap<(String, String, String), VecDeque<(f64, f64)>> {
+    let mut out: BTreeMap<(String, String, String), VecDeque<(f64, f64)>> = BTreeMap::new();
     for s in CutList::default()
         .generate(project)
         .sections
@@ -61,7 +61,9 @@ fn cut_lengths(project: &Project) -> BTreeMap<(String, String, String), VecDeque
                 text_at(s, row, "to"),
             );
             if let Some(cut) = number(at(s, row, "cut_mm").as_ref()) {
-                out.entry(key).or_default().push_back(cut);
+                // The cut list's "Ends mm" is both ends together.
+                let ends = number(at(s, row, "allowance_mm").as_ref()).unwrap_or(0.0) / 2.0;
+                out.entry(key).or_default().push_back((cut, ends));
             }
         }
     }
@@ -72,6 +74,7 @@ fn cut_lengths(project: &Project) -> BTreeMap<(String, String, String), VecDeque
 pub fn work_packs(project: &Project) -> Vec<Pack> {
     let checklist = AssemblyChecklist.generate(project);
     let mut cuts = cut_lengths(project);
+    let rules = novo_routing::project_rules::WireRules::of(project);
     let total_cut: usize = cuts.values().map(VecDeque::len).sum();
     let mut out = Vec::new();
     for enclosure in project.structures().filter(|s| s.enclosure) {
@@ -111,8 +114,10 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                         novo_layout::drill::mm(length)
                     ));
                 }
-                let cut = found.unwrap_or(length);
+                let cut = found.map_or(length, |(cut, _)| cut);
+                let end_mm = found.map(|(_, end)| end);
                 let (colour, size) = (t("colour"), t("cross_section_mm2"));
+                let fitting = fitting_of(end_mm, rules.ferrule_mm, rules.lug_mm);
                 let kind = [
                     (!size.is_empty()).then(|| format!("{size} mm2")),
                     (!colour.is_empty()).then(|| colour.clone()),
@@ -131,6 +136,8 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                         kind,
                         cut_mm: cut,
                         estimated: found.is_none() || is_estimate(&t("basis")),
+                        end_mm,
+                        fitting,
                     });
             }
         }
@@ -204,7 +211,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                 .unwrap_or(0);
             left.entry(at).or_default().push(format!(
                 "{number} ({from} to {to}) cut {} mm",
-                novo_layout::drill::mm(*cut)
+                novo_layout::drill::mm(cut.0)
             ));
         }
     }
@@ -228,6 +235,19 @@ pub(super) fn step_file_name(stem: &str, tag: &str, mark: &str, several: bool) -
         format!("{stem} work card {} {}.pdf", clean(tag), clean(mark))
     } else {
         format!("{stem} work card {}.pdf", clean(mark))
+    }
+}
+
+/// Which fitting an end allowance is, from the cut list's own number: the
+/// wire rules' lug allowance or their ferrule allowance. The cut list picks
+/// by the largest size of a mixed chain, so the word follows what it used
+/// instead of parsing the size again; equal allowances name neither.
+pub(super) fn fitting_of(end_mm: Option<f64>, ferrule_mm: f64, lug_mm: f64) -> &'static str {
+    const EPS: f64 = 1e-6;
+    match end_mm {
+        Some(e) if (lug_mm - ferrule_mm).abs() > EPS && (e - lug_mm).abs() < EPS => "lug",
+        Some(e) if (lug_mm - ferrule_mm).abs() > EPS && (e - ferrule_mm).abs() < EPS => "ferrule",
+        _ => "",
     }
 }
 

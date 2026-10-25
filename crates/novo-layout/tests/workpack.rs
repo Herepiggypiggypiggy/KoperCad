@@ -109,6 +109,8 @@ fn wire(n: &str, from: &str, to: &str, cut: f64) -> WireCut {
         kind: "1.5 mm2 black".into(),
         cut_mm: cut,
         estimated: false,
+        end_mm: Some(10.0),
+        fitting: "ferrule",
     }
 }
 
@@ -449,6 +451,23 @@ fn identical_openings_share_one_counted_tool_line_and_fans_point_to_the_datashee
     assert_eq!(cards.len(), 4);
     assert!(cards[3].notes.iter().any(|n| n.contains("datasheet")));
     assert!(!cards[0].notes.iter().any(|n| n.contains("datasheet")));
+}
+
+#[test]
+fn the_end_text_names_the_allowance_with_unit_and_the_fitting() {
+    let mut w = wire("W1", "-Q1:1", "-Q2:2", 200.0);
+    assert_eq!(w.end_text(), "10 mm ferrule");
+    w.end_mm = Some(20.0);
+    w.fitting = "lug";
+    assert_eq!(w.end_text(), "20 mm lug");
+    // Both fittings take the same allowance: the word would be a guess.
+    w.fitting = "";
+    assert_eq!(w.end_text(), "20 mm");
+    // No allowance in the cut list, or none at all: nothing, never "0 ferrule".
+    w.end_mm = None;
+    assert_eq!(w.end_text(), "");
+    w.end_mm = Some(0.0);
+    assert_eq!(w.end_text(), "");
 }
 
 fn with_openings(list: Vec<novo_layout::openings::Opening>) -> CabinetLayout {

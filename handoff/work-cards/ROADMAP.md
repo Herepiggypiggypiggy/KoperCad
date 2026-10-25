@@ -25,3 +25,4 @@ PR 2 (this branch after #1471 merged): per-step print from the strip ("Print thi
 PR 3: Heat panel grilles and fans as CUT-OUT cards (scenario 189), the one-card file name carries the cabinet tag when there are several cabinets. Still next: wiring openings and device-less door cut-outs as cards, strip length per end, clip positions on the rail strip.
 
 PR 4 (wiring openings): `opening.*` openings as CUT-OUT cards (add_wiring_opening_cards, scenario 196, fixture cabinet-wiring-openings), scale-hint label overlap fixed, cross hair arms per axis (a wide slot no longer throws a vertical line out of its frame). Next: strip length per end (PR B), clip positions on the rail strip (PR C).
+PR 5 (wire ends): wire cards carry a 'Per end' column (allowance per end from the cut list, ferrule or lug by size). Still open: strip length separate from the ferrule collar, different allowances per end (the wire rules have one value), clip positions on the rail strip.
