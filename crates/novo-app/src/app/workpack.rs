@@ -364,17 +364,16 @@ impl NovoApp {
     /// (Documents for an untitled one) with the usual file name. Cancelling
     /// writes nothing.
     pub(super) fn ask_workpack(&mut self) -> Option<PathBuf> {
-        if self.work_cards_pdf().is_none() {
-            // Says what is missing, without a dialog for nothing.
-            return self.export_workpack_to(Path::new(""));
-        }
+        // Built once, before the dialog; without a plate it says what is
+        // missing and opens no dialog for nothing.
+        let bytes = self.work_cards_or_warn()?;
         let (dir, stem) = self.export_base()?;
         let path = Self::pick_pdf(
             "Save the work cards",
             &dir,
             &format!("{stem} work cards.pdf"),
         )?;
-        self.export_workpack_to(&path)
+        self.write_workpack(&path, &bytes)
     }
 
     /// The same for one Build order step's card.
@@ -452,11 +451,16 @@ impl NovoApp {
         Some((bytes, tag, several))
     }
 
-    fn write_step_card(&mut self, path: &Path, bytes: &[u8]) -> Option<PathBuf> {
+    pub(super) fn write_step_card(&mut self, path: &Path, bytes: &[u8]) -> Option<PathBuf> {
+        let verb = if path.exists() {
+            "Replaced"
+        } else {
+            "Exported"
+        };
         match write_replacing(path, bytes) {
             Ok(()) => {
                 self.message_file(
-                    format!("Exported {}. Print at 100 % (actual size)", path.display()),
+                    format!("{verb} {}. Print at 100 % (actual size)", path.display()),
                     path,
                 );
                 self.wb.last_export = Some(path.to_owned());
@@ -472,15 +476,25 @@ impl NovoApp {
     /// Exports to `path`. Without a plated cabinet with something to build it
     /// says so and writes nothing.
     pub fn export_workpack_to(&mut self, path: &Path) -> Option<PathBuf> {
-        let Some(bytes) = self.work_cards_pdf() else {
+        let bytes = self.work_cards_or_warn()?;
+        self.write_workpack(path, &bytes)
+    }
+
+    /// The work cards PDF, or the warning that there is nothing to build yet.
+    fn work_cards_or_warn(&mut self) -> Option<Vec<u8>> {
+        let bytes = self.work_cards_pdf();
+        if bytes.is_none() {
             self.message(
                 Level::Warning,
                 "No cabinet has a mounting plate with something to build yet. Create a cabinet, set its plate and place devices on the Cabinet canvas.",
             );
-            return None;
-        };
+        }
+        bytes
+    }
+
+    fn write_workpack(&mut self, path: &Path, bytes: &[u8]) -> Option<PathBuf> {
         let replaced = path.exists();
-        match write_replacing(path, &bytes) {
+        match write_replacing(path, bytes) {
             Ok(()) => {
                 let verb = if replaced { "Replaced" } else { "Exported" };
                 self.message_file(
