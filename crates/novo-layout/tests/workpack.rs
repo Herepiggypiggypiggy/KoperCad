@@ -309,7 +309,7 @@ fn the_tool_list_counts_drills_and_cuts() {
     assert!(
         p.tools
             .iter()
-            .any(|t| t.tool.starts_with("Punch or jigsaw"))
+            .any(|t| t.tool.starts_with("Punch, nibbler or jigsaw"))
     );
     assert!(
         p.tools
@@ -468,4 +468,162 @@ fn the_end_text_names_the_allowance_with_unit_and_the_fitting() {
     assert_eq!(w.end_text(), "");
     w.end_mm = Some(0.0);
     assert_eq!(w.end_text(), "");
+}
+
+fn with_openings(list: Vec<novo_layout::openings::Opening>) -> CabinetLayout {
+    let mut l = layout();
+    l.openings = list;
+    l.surface_sizes.insert("door".into(), (600.0, 800.0));
+    l.surface_sizes.insert("left".into(), (250.0, 800.0));
+    l
+}
+
+fn opening(
+    name: &str,
+    surface: &str,
+    shape: novo_layout::openings::OpeningShape,
+    x: f64,
+    y: f64,
+) -> novo_layout::openings::Opening {
+    novo_layout::openings::Opening {
+        name: name.into(),
+        surface: surface.into(),
+        shape,
+        x,
+        y,
+        keep: 5.0,
+        exit: None,
+    }
+}
+
+#[test]
+fn wiring_openings_get_a_card_each_with_edge_distances_outside_the_build_order() {
+    use novo_layout::openings::{Exit, OpeningShape};
+    use novo_layout::workpack::add_wiring_opening_cards;
+    let mut pass = opening(
+        "entry",
+        "door",
+        OpeningShape::Rect { w: 80.0, h: 40.0 },
+        300.0,
+        100.0,
+    );
+    pass.exit = Some(Exit {
+        surface: "left".into(),
+        x: 125.0,
+        y: 100.0,
+    });
+    let l = with_openings(vec![
+        opening(
+            "grommet",
+            "plate",
+            OpeningShape::Round { dia: 30.0 },
+            400.0,
+            300.0,
+        ),
+        pass,
+        opening(
+            "lost",
+            "roof",
+            OpeningShape::Round { dia: 20.0 },
+            10.0,
+            10.0,
+        ),
+    ]);
+    let mut p = pack(2);
+    let before = p.cards.len();
+    let overview = p.overview.len();
+    add_wiring_opening_cards(&mut p, &l);
+    // The roof is not an enclosure surface here: named, not carded.
+    assert_eq!(p.cards.len(), before + 2);
+    assert_eq!(p.overview.len(), overview);
+    assert!(
+        p.problems
+            .iter()
+            .any(|m| m.contains("'lost'") && m.contains("roof"))
+    );
+    let cards: Vec<_> = p
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Opening)
+        .collect();
+    assert_eq!(cards[0].steps, (0, 0));
+    assert!(cards[0].mark.contains("grommet") && cards[0].mark.contains("mounting plate"));
+    assert!(cards[0].dims[0].contains(&from_edges(400.0, 300.0, (800.0, 600.0))));
+    assert!(cards[0].dims[1].contains("385") && cards[0].dims[1].contains("415"));
+    assert!(cards[0].tools[0].contains("dia 30"));
+    assert!(cards[1].tools[0].contains("80 x 40"));
+    assert!(
+        cards[1]
+            .notes
+            .iter()
+            .any(|n| n.contains("left") && n.contains("cut both ends"))
+    );
+    let t = cards[0].template.as_ref().unwrap();
+    assert_eq!((t.width, t.height), (50.0, 50.0));
+}
+
+#[test]
+fn no_wiring_openings_change_nothing() {
+    use novo_layout::workpack::add_wiring_opening_cards;
+    let mut a = pack(3);
+    add_wiring_opening_cards(&mut a, &with_openings(Vec::new()));
+    assert_eq!(a, pack(3));
+}
+
+#[test]
+fn a_wall_opening_is_measured_from_the_back_wall_and_says_which_side_is_seen() {
+    use novo_layout::openings::{Exit, OpeningShape};
+    use novo_layout::workpack::add_wiring_opening_cards;
+    let rect = OpeningShape::Rect { w: 40.0, h: 20.0 };
+    let mut l = with_openings(vec![
+        opening("left hole", "left", rect, 100.0, 300.0),
+        opening("right hole", "right", rect, 100.0, 300.0),
+        opening("roof hole", "roof", rect, 400.0, 120.0),
+        opening("door hole", "door", rect, 100.0, 300.0),
+    ]);
+    l.surface_sizes.insert("right".into(), (250.0, 800.0));
+    l.surface_sizes.insert("roof".into(), (600.0, 250.0));
+    l.openings[0].exit = Some(Exit {
+        surface: "right".into(),
+        x: 60.0,
+        y: 300.0,
+    });
+    let mut p = pack(0);
+    add_wiring_opening_cards(&mut p, &l);
+    let card = |name: &str| {
+        p.cards
+            .iter()
+            .find(|c| c.kind == CardKind::Opening && c.mark.contains(name))
+            .unwrap()
+    };
+    let left = card("left hole");
+    assert_eq!(
+        left.dims[0],
+        "Centre: 100 mm from the back wall, 300 mm from the top edge"
+    );
+    assert!(
+        left.dims[1].contains("80 to 120 mm from the back wall"),
+        "{:?}",
+        left.dims
+    );
+    assert!(left.notes.iter().any(|n| n.contains("Seen from outside")
+        && n.contains("back wall is on the left (from inside it is on the right)")));
+    // The pass-through end is on the right wall, measured from its back wall too.
+    assert!(
+        left.notes
+            .iter()
+            .any(|n| n.contains("60 mm from the back wall") && n.contains("seen from inside")),
+        "{:?}",
+        left.notes
+    );
+    assert!(
+        card("right hole").notes[0]
+            .contains("Seen from inside the cabinet: the back wall is on the left (from outside it is on the right)")
+    );
+    // The roof runs front to back in y.
+    assert!(card("roof hole").dims[0].contains("120 mm from the back wall"));
+    assert!(card("roof hole").notes[0].contains("from above"));
+    // The door keeps nearest edges and says it is seen from outside.
+    assert!(card("door hole").dims[0].contains("from the left edge"));
+    assert!(card("door hole").notes[0].contains("from outside"));
 }

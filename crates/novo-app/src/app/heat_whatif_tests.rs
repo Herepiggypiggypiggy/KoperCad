@@ -278,6 +278,41 @@ fn the_table_text_carries_the_label_and_the_conditions() {
     }
 }
 
+/// The one 3D comparison says the 2D model reads a fan's gain low: the card
+/// and the copied table of a fix with fans say so, those without do not.
+#[test]
+fn a_fix_with_fans_carries_the_fan_note_and_one_without_does_not() {
+    let (mut w, _, _) = answered();
+    let (fan, plain) = {
+        let wi = &w.found.as_ref().unwrap().what_if;
+        let has = |i: usize| {
+            wi.choices[i]
+                .fix
+                .candidate()
+                .is_some_and(|c| c.pairing.fans() > 0)
+        };
+        let all = 0..wi.choices.len();
+        (
+            all.clone().find(|i| has(*i)).expect("a fix with fans"),
+            all.clone()
+                .find(|i| wi.choices[*i].fix.candidate().is_some() && !has(*i))
+                .or_else(|| {
+                    all.clone()
+                        .find(|i| wi.choices[*i].fix.candidate().is_none())
+                }),
+        )
+    };
+    w.pick(fan);
+    let found = w.found.clone().unwrap();
+    assert!(super::heat_whatif::table_text(&w, &found).contains("about a third low"));
+    assert!(render(&mut w, 2, None).contains("about a third low"));
+    if let Some(plain) = plain {
+        w.pick(plain);
+        assert!(!super::heat_whatif::table_text(&w, &found).contains("about a third low"));
+        assert!(!render(&mut w, 2, None).contains("about a third low"));
+    }
+}
+
 #[test]
 fn closing_drops_the_answer_and_stops_a_run() {
     let (mut w, _, _) = answered();
@@ -512,6 +547,71 @@ fn opening_another_project_closes_the_window_and_drops_the_answer() {
     assert!(d.app.cabinet.heat.whatif.preview().is_none());
 }
 
+/// The vent and fan sweep is for one cabinet too: its window closes and its
+/// answer goes when another project opens.
+#[test]
+fn opening_another_project_closes_the_cooling_advice_too() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = super::view3d_tests::drive_with_cabinet(dir.path());
+    d.app.cabinet.heat.advice.request();
+    assert!(d.app.cabinet.heat.advice.is_open());
+    d.app.document_replaced();
+    assert!(!d.app.cabinet.heat.advice.is_open());
+    assert!(d.app.cabinet.heat.advice.found.is_none());
+}
+
+/// A combined fix whose target rail is gone adds the openings and says so,
+/// instead of reporting that nothing happened.
+#[test]
+fn a_combined_apply_with_a_missing_rail_says_only_the_openings_were_added() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = super::view3d_tests::drive_with_cabinet(dir.path());
+    let (answer, _, _) = answered();
+    let found = answer.found.unwrap();
+    let candidate = found
+        .what_if
+        .choices
+        .iter()
+        .find_map(|c| c.fix.candidate().cloned())
+        .expect("a fix with openings");
+    let (cab, placement) = {
+        let project = d.app.backend.document().unwrap().project();
+        let cab = project
+            .structures()
+            .find(|s| s.enclosure && s.plate.is_some())
+            .map(|s| s.id)
+            .unwrap();
+        let p = novo_layout::model::load(project, cab).unwrap().placements[0].clone();
+        (cab, p)
+    };
+    let to = novo_layout::Rect {
+        x: placement.x,
+        y: placement.y,
+        w: placement.size.width,
+        h: placement.size.height,
+    };
+    let m = novo_thermal::placement::Move {
+        id: placement.id,
+        from_row: 0,
+        to_row: u64::MAX >> 8,
+        from: to,
+        to,
+        cost_before: 1.0,
+        cost_after: 0.5,
+        swapped_with: None,
+    };
+    d.app
+        .cabinet
+        .heat
+        .whatif
+        .set_apply_for_test(Ask::Both(cab, vec![m], candidate));
+    d.app.whatif_apply();
+    let said = d.app.cabinet.heat.whatif.applied_text().unwrap_or_default();
+    assert!(said.contains("No device moved"), "{said}");
+    assert!(said.contains("only the openings were added"), "{said}");
+    assert!(said.contains("Added "), "{said}");
+}
+
 #[test]
 fn a_run_in_flight_is_dropped_when_another_project_opens() {
     let (p, cab) = cabinet();
@@ -589,4 +689,18 @@ fn undoing_applied_moves_puts_the_devices_back() {
     d.app.run_command(&ctx, "edit.undo", None);
     d.frame();
     assert_eq!(at(&d), (placement.x, placement.y), "one undo puts it back");
+}
+
+/// Writes `qa/fixtures/cabinet-whatif-layout.novo`, the cabinet of these
+/// tests: a 150 W transformer on the top rail that moving it cools, so the
+/// wizard offers a layout fix for the QA picture (scenario 403).
+/// `cargo test -p novo-app --lib write_the_layout_fixture -- --ignored`
+#[test]
+#[ignore = "writes a fixture file"]
+fn write_the_layout_fixture() {
+    let (p, _) = cabinet();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../qa/fixtures/cabinet-whatif-layout.novo");
+    let _ = std::fs::remove_file(&path);
+    novo_storage::ProjectFile::create(&path, &p).unwrap();
 }

@@ -12,7 +12,8 @@ use std::path::{Path, PathBuf};
 
 use novo_core::{Device, DeviceId, Project};
 use novo_layout::workpack::{
-    OpeningJob, OpeningWall, Pack, WireCut, WireGroup, add_opening_cards, build,
+    OpeningJob, OpeningWall, Pack, WireCut, WireGroup, add_opening_cards, add_wiring_opening_cards,
+    build,
 };
 use novo_reports::{AssemblyChecklist, Cell, CutList, Report, Section, is_estimate};
 
@@ -149,6 +150,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
             .collect();
         let mut pack = build(&tag, &layout, &features, &name, &groups);
         pack.problems.extend(missing);
+        add_wiring_opening_cards(&mut pack, &layout);
         let stored = heat_openings_store::stored_text(project, enclosure.id);
         let vents = heat_openings_store::parse(&stored);
         if !vents.is_empty() {

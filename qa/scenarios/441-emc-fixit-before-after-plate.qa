@@ -1,0 +1,30 @@
+@title EMC fix-it: the previewed fix drawn before and after on the Cabinet plate
+@area Cabinet
+@sizes 1366x768 1920x1080
+# "On the plate" in the preview card opens the Cabinet with the EMC layer and the same Before / After banner; Cancel drops the preview. The pictures are the evidence.
+open qa/fixtures/emc-cabinet-bonding.novo
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+scroll 360 400 -300
+wait 10
+click_text "Preview: Scrape the mounting area bare" #1
+wait 10
+click_text "On the plate"
+wait 40
+expect "Previewing a fix"
+shot 01-after
+check_layout
+click_text Before #1
+wait 20
+shot 02-before
+check_layout
+click_text Cancel #1
+wait 20
+expect_not "Previewing a fix"
+shot 03-cancelled
+check_layout

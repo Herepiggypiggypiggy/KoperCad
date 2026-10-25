@@ -1,0 +1,20 @@
+@title Cooling what-if folds to its title bar so the 3D preview is visible
+@area 3D
+@sizes 1366x768
+# On a small screen the window covers half of the cabinet. The arrow in its title folds it away; the preview behind it stays drawn.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Cooling what-if"
+wait 20
+click_text "Try the fixes"
+wait_s 120
+expect "Devices over limit"
+shot open
+click 848 139
+wait 20
+shot folded
+check_layout

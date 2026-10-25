@@ -5,3 +5,4 @@
 2026-10-25 02:50 UTC #1471 merged. PR 2: Print this step, leftover-wire note matches by contains and counts per cabinet.
 2026-10-25 03:40 UTC #1478 merged. PR 3: vents and fans as CUT-OUT cards (add_opening_cards, app glue from heat.openings), one-card file name per cabinet, scenario 189.
 2026-10-25 05:50 UTC PR B: Per end column on the wire cards.
+2026-10-25 05:10 UTC PR A: wiring openings as cut-out cards, label overlap fix.
