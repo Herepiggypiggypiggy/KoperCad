@@ -699,3 +699,47 @@ fn a_vertical_rail_measures_its_devices_down_the_rail() {
     // Footprint 45 x 90: 90 along the rail, 50 from its start (y 150 - 100).
     assert_eq!((t.clips[0].at, t.clips[0].len), (50.0, 90.0));
 }
+
+#[test]
+fn a_clip_card_says_which_end_of_its_rail_is_the_start() {
+    let mut l = layout();
+    l.rails = vec![
+        Rail {
+            id: 1,
+            x: 50.0,
+            y: 100.0,
+            length: 400.0,
+            vertical: false,
+        },
+        Rail {
+            id: 2,
+            x: 600.0,
+            y: 100.0,
+            length: 300.0,
+            vertical: true,
+        },
+    ];
+    l.placements = vec![
+        place(10, 80.0, 100.0, false, Some(1)),
+        place(11, 600.0, 150.0, false, Some(2)),
+    ];
+    let p = build("+CAB1", &l, &[], &|id| format!("-Q{id}"), &[]);
+    let note = |tag: &str| {
+        p.cards
+            .iter()
+            .find(|c| c.kind == CardKind::Clip && c.mark.contains(tag))
+            .unwrap()
+            .notes
+            .join(" | ")
+    };
+    assert!(
+        note("Q10").contains("R1 starts at its left end"),
+        "{}",
+        note("Q10")
+    );
+    assert!(
+        note("Q11").contains("R2 starts at its top end"),
+        "{}",
+        note("Q11")
+    );
+}
