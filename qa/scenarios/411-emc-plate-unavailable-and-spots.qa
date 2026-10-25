@@ -1,0 +1,19 @@
+@title Cabinet plate: unavailable EMC chips say n/a, hot-spot badges stay apart
+@area Cabinet
+# EMC view on the plate: a chip with nothing to show reads "n/a" instead of looking switched off, and the numbered hot-spot badges neither overlap nor sit on another spot's point.
+key ctrl+k
+wait 6
+text open emc example
+wait 8
+key Enter
+wait 30
+key ctrl+k
+wait 6
+text emc view on the plate
+wait 8
+key Enter
+wait 30
+expect "Indicative model"
+expect "n/a"
+shot plate-emc-spots
+check_layout

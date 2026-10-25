@@ -638,6 +638,11 @@ impl SchematicView {
             .collect()
     }
 
+    /// Picks a wire part as a click on it does (a lesson's "Do it for me").
+    pub fn pick_wire_part(&mut self, part: Option<novo_canvas::model::WirePart>) {
+        self.wire_part = part;
+    }
+
     /// The wire a click picked a corner or a run of, when one is picked.
     pub fn picked_wire_part(&self) -> Option<WireId> {
         self.wire_part.map(|p| p.wire)

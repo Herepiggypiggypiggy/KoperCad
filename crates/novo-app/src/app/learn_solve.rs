@@ -4,7 +4,7 @@
 //! "Skip step" applies them live so the steps after it still find their parts.
 
 use eframe::egui;
-use novo_core::{AnyId, Document, PageId, Point, SymbolId};
+use novo_core::{AnyId, Document, PageId, Point, SymbolId, WireId};
 use novo_editor::tool::{EditorKey, WiringMode};
 use novo_learn::lesson::{CabinetStep, SolveOp, WireOp};
 
@@ -41,6 +41,7 @@ impl NovoApp {
             }
             SolveOp::Place(p) => self.solve_place(&p.place),
             SolveOp::Wire(w) => self.solve_wire(ctx, w),
+            SolveOp::Select(s) if s.pick => self.solve_pick_wire(&s.select),
             SolveOp::Select(s) => self.solve_select(&s.select, s.add),
             SolveOp::Choose(c) => self.learn_predict(c.choose),
             SolveOp::Tee(t) => self.solve_tee(&t.tee.from, t.tee.at),
@@ -397,7 +398,7 @@ impl NovoApp {
             return Ok(());
         }
         if let Some((a, b)) = text.split_once('~') {
-            return self.solve_select_wire(a.trim(), b.trim(), add);
+            return self.solve_select_wire(a.trim(), b.trim(), add).map(|_| ());
         }
         let project = self.solve_doc()?.project();
         let mut found: Vec<SymbolId> = Vec::new();
@@ -449,7 +450,25 @@ impl NovoApp {
 
     /// Selects the wire drawn between two pins (`select = "-S1:11~-S1:12"`),
     /// as a click on it does.
-    fn solve_select_wire(&mut self, a: &str, b: &str, add: bool) -> Result<(), String> {
+    /// Picks the wire between two pins as a click on it does: it is not
+    /// selected, so the Inspector stays closed and the panels that read a
+    /// picked wire (EMC net classes) show it.
+    pub(super) fn solve_pick_wire(&mut self, text: &str) -> Result<(), String> {
+        let (a, b) = text
+            .split_once('~')
+            .ok_or("`pick` needs a wire written `pin~pin`")?;
+        let wire = self.solve_select_wire(a.trim(), b.trim(), false)?;
+        let view = self.canvas.schematic().ok_or("no editor canvas")?;
+        view.canvas.selection.clear();
+        view.pick_wire_part(Some(novo_canvas::model::WirePart {
+            wire,
+            kind: novo_canvas::model::WirePartKind::Segment(0),
+        }));
+        self.settle();
+        Ok(())
+    }
+
+    fn solve_select_wire(&mut self, a: &str, b: &str, add: bool) -> Result<WireId, String> {
         let project = self.solve_doc()?.project();
         let from = novo_learn::check::pins_named(project, a);
         let to = novo_learn::check::pins_named(project, b);
@@ -481,7 +500,7 @@ impl NovoApp {
             novo_canvas::SelectOp::Add,
         );
         self.settle();
-        Ok(())
+        Ok(id)
     }
 
     /// Selects a device that has no symbol but a place on the plate, as a

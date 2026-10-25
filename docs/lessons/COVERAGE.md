@@ -75,6 +75,14 @@ text is never shown), LC-19 (Excel steps cannot tick), LC-29 (gesture-only steps
 | 45 | Ask Claude (assistant) | none | none | no | `ask-claude` (needs an API key to run; the lesson reads, the replay checks the window opens) |
 | 46 | Help: learn, what's new, About the numbers, report a problem | placing-parts mentions Learn | partial | no | folded into `find-your-way` |
 | 47 | Language (Dutch) | none | none | no | Blocked on LC-15 (lesson language setting) |
+| 48 | Live view in detail: the Operate list, holding a pushbutton, the dashes on a current path | `live-view` | full | yes | Holding a button is in the step text only: a held press cannot be scripted, so no step ticks on it |
+| 49 | EMC net classes on the schematic: class colours, why a wire has its class, the cable card and its fixes, setting a class by hand | `emc-net-classes` | full (early) | no (it runs on the EMC example, `Open EMC example`) | The EMC check window (Check > EMC check), the 3D EMC view and the exposure map: none |
+| 50 | EMC on the plate: bonding and shield ends, hot spot cards, what the model does not say | `emc-on-the-plate` | full (early) | no (its own sample project, the shields fixture) | Hot spot cards are read, not clicked: no step ticks on a card |
+| 51 | Build order in 3D: step through rails, ducts, devices, wires | `build-order-3d` | full (early) | yes | The printed assembly pack: `workshop-pack` |
+
+Added 2026-10-25 (rows 48 to 51, 57 lessons in all, 4 more concepts that are full): the learning backlog for
+the Live view, EMC net classes, EMC on the plate and Build order. Lessons, QA walks 200 to 203, the anchors and the
+Replay gate are in that pull request.
 
 Count before the new lessons: 47 concepts, 26 full, 7 partial, 14 none. Count now: 37 full (11 of them early), 4 partial, 6 none (13 to 15 and others still in batches C to E below). (After the plan below every concept has a lesson except
 47, which waits on the language setting.)

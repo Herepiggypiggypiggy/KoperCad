@@ -1,0 +1,23 @@
+@title Work cards: Reports > Export menu and command field
+@area Reports
+# Reports > Export > "Export work cards (PDF)", also the command field ("export work cards"). Same file as the Build order strip button.
+click_text "Open example"
+wait 20
+click_text Reports
+wait 8
+click_text "Export" Button #1
+wait 8
+shot export-submenu
+expect "Export work cards (PDF)"
+key Escape
+wait 6
+key ctrl+k
+wait 4
+text Export work cards
+wait 6
+shot palette
+key Enter
+wait 40
+expect_file "~/Documents/KoperCAD/*work cards.pdf" 3000
+keep_file "~/Documents/KoperCAD/*work cards.pdf"
+check_layout

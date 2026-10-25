@@ -25,6 +25,7 @@ pub mod surface_rules;
 pub mod surfaces;
 pub mod swing;
 pub mod template;
+pub mod workpack;
 
 /// Footprint used for a device whose part has no dimensions (marked guessed).
 pub const DEFAULT_FOOTPRINT_MM: (f64, f64) = (45.0, 90.0);

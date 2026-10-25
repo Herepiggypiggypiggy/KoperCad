@@ -281,6 +281,7 @@ mod wire_panel;
 mod wire_panel_tests;
 mod wire_production;
 mod workbench;
+mod workpack;
 mod workshop;
 mod workspace;
 mod xref;
@@ -396,6 +397,8 @@ mod whats_new_tests;
 #[cfg(test)]
 mod wire_set_tests;
 #[cfg(test)]
+mod workpack_tests;
+#[cfg(test)]
 mod workshop_tests;
 
 use std::path::{Path, PathBuf};
@@ -408,6 +411,7 @@ use crate::actions::Action;
 /// Hover text of the bulk-edit exports (the data to edit, not the reports).
 const HANDOVER_HINT: &str = "One folder for the customer: the drawing set, revisions, parts, wire, terminal and cable lists, the commissioning record, safety functions, an Excel workbook, and a contents page that says what is exact and what is an estimate.";
 const WORKSHOP_HINT: &str = "One folder for the hand workshop: a bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal strip plans), a 1:1 drilling template of each mounting plate (tiled on A4 or A3, with cross hairs, hole sizes and a 100 mm check ruler), one card per door cut-out shape with the distances from the edges, a print-scale check page and the labels.";
+const WORKPACK_HINT: &str = "The build order as half-page work cards for the hand workshop: a tool list, a tick-off sheet, then one card per rail, duct and device (tools, hole positions from the nearest edges, a template at true size where it fits, the wires that end there) and the wires to cut in groups with tick boxes. Positions come from the cabinet layout. Needs a cabinet with a mounting plate.";
 const SCALE_CHECK_HINT: &str = "One A4 page with a 100 mm square, a 250 mm ruler and a table from what you measure to the print scale that repairs it. Print it first on the printer you will use for the 1:1 templates. Printed accuracy depends on the printer.";
 const BENCH_PACKET_HINT: &str = "One PDF to work from at the bench: a cover with page numbers and what is exact or estimated, the cabinet build order, cut list, ferrules, one tick sheet per schematic page (devices, wires, tests) and the terminal strip plans.";
 const ASSEMBLY_HINT: &str = "The shop-floor print pack of every cabinet: build order (rails, ducts, devices, wires, labels), then prepare with the cut list, drill table, mount, wire, label and check, then the wire cutting list. Needs a cabinet with a mounting plate.";
@@ -1553,7 +1557,7 @@ impl NovoApp {
                 } else if self.is_open() && self.workspace() == workspace::Workspace::View3d {
                     self.view3d_show(ui);
                     for a in cabinet_bar::take_noted(ui.ctx()) {
-                        self.anchor(a.id, a.rect, a.label);
+                        self.anchor_clicked(a.id, a.rect, a.label, a.clicked);
                     }
                 } else if reports {
                     self.reports_central(ui);

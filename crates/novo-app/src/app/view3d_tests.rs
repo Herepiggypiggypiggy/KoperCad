@@ -587,7 +587,17 @@ fn the_build_order_steps_through_the_cabinet_and_highlights_what_a_step_adds() {
     assert!(steps >= 2, "the cabinet has a build order: {steps}");
     assert!(kinds(&d).len() < full, "the start shows less than all");
     assert!(!kinds(&d).contains(&ItemKind::Device), "no devices yet");
-    assert!(d.app.view3d.view.state.related.is_empty());
+    assert!(
+        !d.app.view3d.view.state.related.is_empty()
+            && d.app
+                .view3d
+                .view
+                .state
+                .related
+                .iter()
+                .all(|i| i.kind == ItemKind::Plate),
+        "the start lights the plate"
+    );
     assert!(
         d.app.view3d.view.bottom_inset > 0.0,
         "the fit leaves room for the strip"
@@ -631,6 +641,42 @@ fn the_build_order_steps_through_the_cabinet_and_highlights_what_a_step_adds() {
     assert_eq!(d.app.view3d.controls.assembly, Some(0));
     d.app.document_replaced();
     assert_eq!(d.app.view3d.controls.assembly, None);
+}
+
+#[test]
+fn the_last_build_order_step_draws_the_wires_even_with_the_layer_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.frame();
+    let all = |d: &Drive| {
+        d.app
+            .view3d
+            .built
+            .as_ref()
+            .map_or(0, |(_, _, s)| s.wires.len())
+    };
+    assert!(all(&d) > 0, "the cabinet has drawn wires with the layer on");
+    d.app.view3d.controls.layers.wires = false;
+    d.frame();
+    assert_eq!(all(&d), 0, "off means off outside the build order");
+    d.app.run_command(&ctx, "view.3d_assembly", None);
+    d.frame();
+    d.frame();
+    let steps = d.app.view3d.assembly_steps.len();
+    for _ in 0..steps {
+        d.app.run_command(&ctx, "view.3d_assembly_next", None);
+    }
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert!(all(&d) > 0, "the closing step draws the wires");
+    assert!(
+        !d.app.view3d.view.state.related.is_empty(),
+        "and lights them"
+    );
+    let last = d.app.view3d.assembly_steps.last().unwrap();
+    assert!(last.text.contains("drawn in blue"), "{}", last.text);
 }
 
 #[test]
