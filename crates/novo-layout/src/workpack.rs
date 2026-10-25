@@ -39,6 +39,22 @@ pub struct WireCut {
     pub cut_mm: f64,
     /// The length is an estimate, not routed through the ducts.
     pub estimated: bool,
+    /// What each end adds to the routed length (strip plus ferrule collar
+    /// or lug barrel, the project's wire rules), mm; already in `cut_mm`.
+    /// `None` when the cut list gave none.
+    pub end_mm: Option<f64>,
+    /// The end gets a cable lug, not a ferrule.
+    pub lug: bool,
+}
+
+impl WireCut {
+    /// `10 ferrule`, `20 lug`, or empty without the allowance.
+    pub fn end_text(&self) -> String {
+        match self.end_mm {
+            Some(e) => format!("{} {}", mm(e), if self.lug { "lug" } else { "ferrule" }),
+            None => String::new(),
+        }
+    }
 }
 
 /// The wires of one group of the build order (a circuit), in the order they

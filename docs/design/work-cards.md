@@ -62,4 +62,8 @@ printable on an ordinary office printer, ticked with a pencil.
   cut-out cards and the tiled template.
 - Duct fixing points are the duct maker's; the model has none.
 - Not built: a drill-size
-  choice per part (the tool is the part data's hole diameter), a wire "strip length" per end.
+  choice per part (the tool is the part data's hole diameter), a separate strip length and ferrule length
+  (the project's wire rules give one allowance per end for strip plus ferrule collar or lug barrel), a
+  different allowance at the two ends of one wire.
+- Wire cards have a **Per end** column: what each end adds to the routed length (`10 ferrule`, `20 lug`),
+  already in the cut length; a lug from the project's `wire.lug_from_mm2` size on.

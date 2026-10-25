@@ -391,3 +391,56 @@ fn the_one_card_file_name_carries_the_cabinet_only_when_there_are_several() {
     assert_ne!(a, b);
     assert!(a.contains("CAB1") && a.ends_with("R1.pdf"), "{a}");
 }
+
+#[test]
+fn every_wire_card_row_carries_the_cut_lists_end_allowance() {
+    let project = lesson("wire-routing/project.json");
+    // The cut list's (cut, each end) pairs.
+    let mut pairs: Vec<(f64, f64)> = novo_reports::CutList::default()
+        .generate(&project)
+        .sections
+        .iter()
+        .filter(|s| s.key.starts_with("group-"))
+        .flat_map(|s| {
+            let (c, a) = (
+                s.column("cut_mm").unwrap(),
+                s.column("allowance_mm").unwrap(),
+            );
+            s.rows.iter().map(move |r| {
+                let num = |i: usize| match &r.cells[i] {
+                    novo_reports::Cell::Number(v) => *v,
+                    other => panic!("{other:?}"),
+                };
+                (num(c), num(a) / 2.0)
+            })
+        })
+        .collect();
+    let mut seen = 0;
+    for pack in work_packs(&project) {
+        for c in pack.cards.iter().filter(|c| c.kind == CardKind::Wires) {
+            for w in &c.wires {
+                let end = w.end_mm.expect("an end allowance");
+                let i = pairs
+                    .iter()
+                    .position(|p| *p == (w.cut_mm, end))
+                    .unwrap_or_else(|| {
+                        panic!("{} mm / {end} per end is not in the cut list", w.cut_mm)
+                    });
+                pairs.remove(i);
+                assert!(!w.end_text().is_empty());
+                seen += 1;
+            }
+        }
+    }
+    assert!(seen > 0);
+}
+
+#[test]
+fn a_lug_starts_at_the_rule_size_and_a_ferrule_is_below_it() {
+    use super::workpack::gets_lug;
+    assert!(!gets_lug("1.5", 25.0));
+    assert!(gets_lug("25", 25.0));
+    assert!(gets_lug("35", 25.0));
+    assert!(!gets_lug("", 25.0));
+    assert!(!gets_lug("n/a", 25.0));
+}
