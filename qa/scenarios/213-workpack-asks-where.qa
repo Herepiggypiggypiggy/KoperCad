@@ -20,8 +20,7 @@ expect "Work cards (PDF)"
 answer_dialog "~/Documents/KoperCAD/qa 213 chosen name.pdf"
 click_text "Work cards (PDF)"
 wait 40
-expect_dialog "Save the work cards"
-expect_dialog "work cards.pdf"
+expect_dialog "suggested name Motor starter (example) work cards.pdf"
 shot after-save
 expect "qa 213 chosen name.pdf"
 expect "Open folder"
