@@ -9,8 +9,8 @@ use novo_core::{
 };
 
 use crate::{
-    Anchor, Duct, Facing, Job, Kind, Network, Plan, Point, Point3, Route, Rules, WireRules,
-    plan_avoiding,
+    Anchor, Clearance, Duct, Facing, Job, Kind, Network, Plan, Point, Point3, Route, Rules,
+    WireRules, plan_constrained,
 };
 
 /// The ducts on the plate of an enclosure, in model id order. DIN rails are
@@ -100,6 +100,27 @@ pub fn avoided_ducts(properties: &novo_core::Properties) -> Vec<u64> {
         Some(novo_core::Value::Text(t)) => {
             t.split(',').filter_map(|n| n.trim().parse().ok()).collect()
         }
+        _ => Vec::new(),
+    }
+}
+
+/// Property on a wire: other wires it must keep clear of, `id:mm` pairs comma
+/// separated. A hard clearance between the ducts the two wires use (edge to
+/// edge); when no way satisfies it the wire is routed without it and the plan
+/// says so ([`novo_routing::Problem::ClearanceUnmet`]).
+pub const KEEP_CLEAR: &str = "route.keep_clear";
+
+/// The `(other wire id, mm)` pairs a wire's `route.keep_clear` names.
+pub fn keep_clear(properties: &novo_core::Properties) -> Vec<(u64, f64)> {
+    match properties.get(KEEP_CLEAR) {
+        Some(novo_core::Value::Text(t)) => t
+            .split(',')
+            .filter_map(|e| {
+                let (id, mm) = e.split_once(':')?;
+                let mm: f64 = mm.trim().parse().ok()?;
+                (mm.is_finite() && mm > 0.0).then_some((id.trim().parse().ok()?, mm))
+            })
+            .collect(),
         _ => Vec::new(),
     }
 }
@@ -560,8 +581,19 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
             (!ducts.is_empty()).then_some((w.id.raw(), ducts))
         })
         .collect();
+    // Hard clearances (`route.keep_clear`).
+    let keep: BTreeMap<u64, Vec<Clearance>> = project
+        .wires()
+        .filter_map(|w| {
+            let list: Vec<Clearance> = keep_clear(&w.properties)
+                .into_iter()
+                .map(|(other, mm)| Clearance { other, mm })
+                .collect();
+            (!list.is_empty()).then_some((w.id.raw(), list))
+        })
+        .collect();
     for (structure, jobs) in jobs {
-        let p = plan_avoiding(&network(project, structure), &jobs, rules, &avoid);
+        let p = plan_constrained(&network(project, structure), &jobs, rules, &avoid, &keep);
         for r in &p.routes {
             if out.cross_legs.contains_key(&r.job) {
                 out.cross_routes.insert((r.job, structure), r.clone());

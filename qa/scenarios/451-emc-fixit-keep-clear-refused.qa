@@ -1,0 +1,20 @@
+@title EMC fix-it: the hard distance is refused when no ducts are far enough apart
+@area Cabinet
+@sizes 1366x768 1920x1080
+# The two-duct fixture's ducts are 140 mm apart edge to edge, the planning distance is 300 mm. The preview says no ducts can keep it and how far apart they can be, and nothing is changed. The pictures are the evidence.
+open qa/fixtures/emc-cabinet-two-ducts.novo
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+expect "Preview: Route the two wires in ducts at least"
+click_text "Preview: Route the two wires in ducts at least" #1
+wait 10
+expect "Cannot preview"
+expect "No ducts keep the two wires"
+expect "at most 140 mm apart"
+shot 01-refused
+check_layout

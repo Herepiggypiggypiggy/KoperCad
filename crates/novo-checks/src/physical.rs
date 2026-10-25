@@ -113,6 +113,10 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
                 RoutingProblem::GuessedWire { job } => {
                     guessed.extend(wire(*job).map(AnyId::Wire));
                 }
+                // The wire was routed as if it had not asked for the clearance
+                // (`route.keep_clear`), so the EMC finding it was meant to clear
+                // is still there: that is where the designer sees it.
+                RoutingProblem::ClearanceUnmet { .. } => {}
             }
         }
     }
