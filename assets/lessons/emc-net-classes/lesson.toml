@@ -1,0 +1,188 @@
+# The sample project is the EMC example (Ctrl+K "Open EMC example"): the motor starter plus a page
+# "Drive and signals" with a frequency converter, an unshielded motor cable, a 24 V supply and a PLC
+# analog input. `project.json` is written by the test `the_emc_net_classes_lesson_project_is_the_emc_example`
+# in crates/novo-app/src/app/emc_demo.rs (UPDATE_LESSONS=1 rewrites it).
+format = 1
+id = "emc-net-classes"
+version = 1
+status = "early"
+title = "Interference: give every wire its class"
+title_nl = "Storing: geef elke draad zijn klasse"
+summary = "Colour the wires of a drive page by cable class, read why a wire has its class, fix an unshielded motor cable and set a class by hand."
+summary_nl = "Kleur de draden van een aandrijfpagina naar kabelklasse, lees waarom een draad zijn klasse heeft, herstel een niet-afgeschermde motorkabel en zet een klasse met de hand."
+track = "outputs"
+order = 15
+level = "intermediate"
+minutes = 8
+topics = ["emc", "net class", "shield", "check"]
+needs = ["design-checks"]
+next = ["emc-on-the-plate"]
+project = "project.json"
+page = "Drive and signals"
+
+[[step]]
+id = "why"
+title = "Wires are not equal"
+title_nl = "Draden zijn niet gelijk"
+text = """
+A drive's motor wires carry fast switching edges. An analog sensor wire carries millivolts. Run them side by side and the sensor reading jumps.
+Before any check can say that, every wire needs a **class**: mains, motor and drive output, 24 V control, analog and sensor, fieldbus, safety or earth.
+"""
+text_nl = """
+De motordraden van een aandrijving voeren snelle schakelflanken. Een analoge sensordraad voert millivolts. Leg ze naast elkaar en de sensorwaarde springt.
+Voordat een controle dat kan zeggen, heeft elke draad een **klasse** nodig: net, motor en aandrijfuitgang, 24 V sturing, analoog en sensor, veldbus, veiligheid of aarde.
+"""
+
+[[step]]
+id = "switch-on"
+title = "Colour the wires by class"
+title_nl = "Kleur de draden naar klasse"
+text = "This page is a drive with its motor cable, a 24 V supply and a PLC analog input, laid out the way a first draft often is. Switch the class colours on."
+text_nl = "Deze pagina is een aandrijving met motorkabel, een 24 V voeding en een PLC-analoge ingang, ingedeeld zoals een eerste ontwerp vaak is. Zet de klassekleuren aan."
+how = [
+  "Press {key:view.command_palette}, type **EMC net classes** and choose {ui:cmd.view.emc_nets}.",
+  "A panel opens on the right and every wire takes the colour of its class, with a small word on it.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **EMC net classes** en kies {ui:cmd.view.emc_nets}.",
+  "Rechts opent een paneel en elke draad krijgt de kleur van zijn klasse, met een klein woord erop.",
+]
+point = { ui = "cmd.view.emc_nets" }
+expect = { command = "view.emc_nets" }
+solve = [ { command = "view.emc_nets" } ]
+
+[[step]]
+id = "read-colours"
+title = "Colour is never the only sign"
+title_nl = "Kleur is nooit het enige teken"
+text = """
+Each wire carries its class as a word as well, so the picture still reads in print and for anyone who cannot tell the colours apart. A word with a **?** means the program guessed: nothing in the drawing says what that wire carries.
+The panel counts the wires of each class.
+"""
+text_nl = """
+Elke draad draagt zijn klasse ook als woord, zodat het beeld ook op papier leesbaar blijft en voor wie kleuren niet kan onderscheiden. Een woord met een **?** betekent dat het programma raadde: niets in de tekening zegt wat die draad voert.
+Het paneel telt de draden per klasse.
+"""
+point = { ui = "emc.nets.motor" }
+
+[[step]]
+id = "keep-one"
+title = "Look at one class at a time"
+title_nl = "Bekijk één klasse tegelijk"
+text = "A busy page hides what you are looking for. Keep only the motor wires in colour."
+text_nl = "Een drukke pagina verbergt wat je zoekt. Houd alleen de motordraden in kleur."
+how = [
+  "Click {ui:emc.nets.motor} in the panel. The other classes step back.",
+  "Click it again to bring them all back.",
+]
+how_nl = [
+  "Klik op {ui:emc.nets.motor} in het paneel. De andere klassen gaan naar de achtergrond.",
+  "Klik nogmaals om ze allemaal terug te halen.",
+]
+point = { ui = "emc.nets.motor" }
+expect = { clicked = "emc.nets.motor" }
+solve = [ { ui_click = "emc.nets.motor" } ]
+
+[[step]]
+id = "pick-motor-wire"
+title = "Ask why a wire has its class"
+title_nl = "Vraag waarom een draad zijn klasse heeft"
+text = "Pick the wire from the drive output **U** to the terminal. The panel names its class and where the class came from: set by hand, read from the drawing, or guessed."
+text_nl = "Kies de draad van de aandrijfuitgang **U** naar de klem. Het paneel noemt zijn klasse en waar die vandaan komt: met de hand gezet, uit de tekening gelezen of geraden."
+how = [
+  "Click the wire that leaves the drive pin **U** and ends on terminal **X2:1**.",
+  "Read the card below the class list: the class, the reason and the cable the wire belongs to.",
+]
+how_nl = [
+  "Klik op de draad die de aandrijfpen **U** verlaat en eindigt op klem **X2:1**.",
+  "Lees de kaart onder de klassenlijst: de klasse, de reden en de kabel waar de draad bij hoort.",
+]
+point = { at = { device = "-U1", pin = "U" } }
+expect = { opened = "emc.nets.set_control" }
+solve = [ { select = "-U1:U~-X2:1", pick = true } ]
+
+[[step]]
+id = "shield-core"
+title = "The cable has no shield"
+title_nl = "De kabel heeft geen scherm"
+text = """
+The wire belongs to the motor cable **-W2**: four cores and no shield. The EMC check wants a shield on a drive's output cable, and the card says so.
+Where the program can make the repair itself the card has a **Preview** button: it shows what the repair would clear on a copy of the project, and then **Apply** does it. Apply is one undo step.
+"""
+text_nl = """
+De draad hoort bij de motorkabel **-W2**: vier aders en geen scherm. De EMC-controle wil een scherm op de uitgangskabel van een aandrijving, en de kaart zegt dat.
+Waar het programma de reparatie zelf kan doen, heeft de kaart een knop **Preview**: die toont op een kopie van het project wat de reparatie oplost, en daarna doet **Apply** het. Apply is één undo-stap.
+"""
+how = [
+  "Click {ui:emc.nets.preview} on the card to see what the repair does. Nothing changes yet.",
+  "Then click {ui:emc.nets.apply} in the preview. The cable gets a shield core.",
+]
+how_nl = [
+  "Klik op {ui:emc.nets.preview} op de kaart om te zien wat de reparatie doet. Er verandert nog niets.",
+  "Klik dan op {ui:emc.nets.apply} in het voorbeeld. De kabel krijgt een schermader.",
+]
+point = { ui = "emc.nets.preview" }
+expect = { cable = { name = "-W2", cores_at_least = 5 } }
+solve = [ { select = "-U1:U~-X2:1", pick = true }, { ui_click = "emc.nets.preview" }, { ui_click = "emc.nets.apply" } ]
+
+[[step]]
+id = "set-class"
+title = "Set a class by hand"
+title_nl = "Zet een klasse met de hand"
+text = "The program reads classes from symbols, pin names and wire colours. When it guesses wrong, or cannot tell, you decide. Pick the wire that feeds the PLC from the 24 V supply and say it is control."
+text_nl = "Het programma leest klassen uit symbolen, pinnamen en draadkleuren. Als het fout raadt, of het niet kan zien, beslis jij. Kies de draad die de PLC vanuit de 24 V voeding voedt en zeg dat het sturing is."
+how = [
+  "Click the wire from the supply **G1** pin **L+** to the PLC **A1** pin **L+**.",
+  "Under **Set the class** click {ui:emc.nets.set_control}.",
+]
+how_nl = [
+  "Klik op de draad van voeding **G1** pen **L+** naar PLC **A1** pen **L+**.",
+  "Klik onder **Set the class** op {ui:emc.nets.set_control}.",
+]
+point = { at = { device = "-G1", pin = "L+" } }
+expect = { clicked = "emc.nets.set_control" }
+solve = [ { select = "-G1:L+~-A1:L+", pick = true }, { ui_click = "emc.nets.set_control" } ]
+
+[[step]]
+id = "undo"
+title = "It is one undo step"
+title_nl = "Het is één undo-stap"
+text = "Setting a class is an edit like any other. Undo takes it back, and the wire goes back to the class the program read."
+text_nl = "Een klasse zetten is een bewerking als elke andere. Undo draait haar terug en de draad gaat terug naar de klasse die het programma las."
+how = [
+  "Press {key:edit.undo}.",
+]
+how_nl = [
+  "Druk op {key:edit.undo}.",
+]
+expect = { command = "edit.undo" }
+solve = [ { command = "edit.undo" } ]
+
+[[step]]
+id = "honest"
+title = "What this is, and is not"
+title_nl = "Wat dit is, en wat niet"
+text = """
+The classes feed **Check > EMC check**, which compares the wires and parts of the drawing with a set of rules. It is a design aid built on a model, never a test result: it does not say a machine passes or complies.
+A class you set by hand is used by the check, so setting it right matters more than the colour.
+"""
+text_nl = """
+De klassen voeden **Check > EMC check**, die de draden en onderdelen van de tekening vergelijkt met een reeks regels. Het is een ontwerphulp op basis van een model, nooit een testresultaat: het zegt niet dat een machine slaagt of voldoet.
+Een klasse die je met de hand zet wordt door de controle gebruikt, dus goed zetten telt zwaarder dan de kleur.
+"""
+
+[[step]]
+id = "close"
+title = "Close the panel"
+title_nl = "Sluit het paneel"
+text = "The class colours are a view, not part of the drawing. Close the panel when you are done."
+text_nl = "De klassekleuren zijn een weergave, geen deel van de tekening. Sluit het paneel als je klaar bent."
+how = [
+  "Click {ui:emc.nets.close}.",
+]
+how_nl = [
+  "Klik op {ui:emc.nets.close}.",
+]
+point = { ui = "emc.nets.close" }
+expect = { clicked = "emc.nets.close" }
+solve = [ { ui_click = "emc.nets.close" } ]

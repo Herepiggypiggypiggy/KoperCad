@@ -180,6 +180,29 @@ fn draw(tx: &mut Tx<'_>, catalog: &Catalog) -> ModelResult<()> {
 mod tests {
     use super::*;
 
+    /// The net classes lesson starts from the EMC example; `UPDATE_LESSONS=1`
+    /// rewrites its `project.json`.
+    #[test]
+    fn the_emc_net_classes_lesson_project_is_the_emc_example() {
+        let mut doc = Document::default();
+        build_emc_example(&mut doc).unwrap();
+        let json = format!("{}\n", doc.project().to_json());
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/lessons/emc-net-classes/project.json");
+        if std::env::var_os("UPDATE_LESSONS").is_some() {
+            std::fs::write(&path, &json).unwrap();
+            return;
+        }
+        let on_disk = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("{}: {e}. Run with UPDATE_LESSONS=1", path.display()));
+        assert!(
+            on_disk == json,
+            "{} is out of date. Run: UPDATE_LESSONS=1 cargo test -p novo-app --lib emc_demo",
+            path.display()
+        );
+        assert!(json.len() < 400 * 1024, "{} bytes", json.len());
+    }
+
     #[test]
     fn the_emc_example_builds_and_has_a_drive_a_plc_and_wires() {
         let mut doc = Document::default();

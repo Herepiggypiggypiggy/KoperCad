@@ -1,0 +1,51 @@
+@title Lesson walk: live-view (every step, Do it for me or Next)
+@area Learn
+# Starts the lesson from the palette and plays each step as a learner would: an action step with Do it for me, a reading step with Next. A picture and a layout check after each step.
+key ctrl+k
+wait 4
+text live view
+wait 6
+click_text "The live view"
+wait 40
+shot 01-enter
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 02-card
+check_layout
+try click_text "Next"
+wait 20
+shot 03-close-breaker
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 04-page-down
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 05-close-control
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 06-start
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 07-seal-in
+check_layout
+try click_text "Next"
+wait 20
+shot 08-current-paths
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 09-stop
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 10-leave
+check_layout
+try click_text "Next"
+wait 20
+shot end
+check_layout

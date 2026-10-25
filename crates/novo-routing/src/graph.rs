@@ -54,6 +54,10 @@ pub struct Network {
 /// How full the ducts already are while a wire is being routed.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Load<'a> {
+    /// Ducts this job should stay out of if it can (ids): they cost
+    /// [`AVOID_COST`] times as much, so it still gets through when they are
+    /// the only way.
+    pub avoid: &'a [u64],
     /// Used cross-section per run, mm squared.
     pub used: &'a [f64],
     /// Cross-section of the wire being routed.
@@ -65,6 +69,8 @@ pub(crate) struct Load<'a> {
 const PENALTY_FROM: f64 = 0.8;
 /// Longest a duct's cost can be stretched, so a full duct stays routable.
 const PENALTY_CAP: f64 = 20.0;
+/// Cost multiplier of a duct the wire is asked to keep out of.
+const AVOID_COST: f64 = 12.0;
 
 /// Points along the ducts, each with the run it lies on.
 type Path = Vec<(Point, usize)>;
@@ -247,6 +253,7 @@ impl Network {
             Load {
                 used: &used,
                 wire_area: 0.0,
+                avoid: &[],
             },
         )
     }
@@ -307,6 +314,15 @@ impl Network {
     /// Cost multiplier of a run: 1 until it would pass 80% of its allowed
     /// fill with this wire added, then rising steeply.
     fn penalty(&self, run: usize, rules: &Rules, load: Load) -> f64 {
+        let avoid = if load.avoid.contains(&self.runs[run].id) {
+            AVOID_COST
+        } else {
+            1.0
+        };
+        avoid * self.fill_penalty(run, rules, load)
+    }
+
+    fn fill_penalty(&self, run: usize, rules: &Rules, load: Load) -> f64 {
         if !self.sized(run) {
             return 1.0;
         }

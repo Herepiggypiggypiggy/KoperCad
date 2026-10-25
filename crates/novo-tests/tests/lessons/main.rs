@@ -9,6 +9,7 @@
 mod cables;
 mod common;
 mod documents;
+mod emc;
 mod plc;
 mod progression;
 mod standard;

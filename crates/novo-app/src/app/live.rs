@@ -1282,6 +1282,7 @@ impl NovoApp {
         let mut open_motor: Option<SymbolId> = None;
         let mut toggle_why = false;
         let mut toggle_flow = false;
+        let mut flow_rect: Option<egui::Rect> = None;
         let hide_flow = self.wb.live.hide_flow;
         let mut clear_why = false;
         let mut follow: Option<SymbolId> = None;
@@ -1462,13 +1463,11 @@ impl NovoApp {
             }
             if !flow.is_empty() || hide_flow {
                 let mut shown = !hide_flow;
-                if ui
-                    .checkbox(&mut shown, "Current paths")
-                    .on_hover_text(
-                        "Thin dashes on the wires that lie on a route to a device drawing current, as the model works it out from the closed contacts. They show where, not how much or which way",
-                    )
-                    .changed()
-                {
+                let check = ui.checkbox(&mut shown, "Current paths").on_hover_text(
+                    "Thin dashes on the wires that lie on a route to a device drawing current, as the model works it out from the closed contacts. They show where, not how much or which way",
+                );
+                flow_rect = Some(check.rect);
+                if check.changed() {
                     toggle_flow = true;
                 }
             }
@@ -1535,6 +1534,7 @@ impl NovoApp {
             ("live.pole", pole_rect, "Pole badge"),
             ("live.coil", coil_rect, "Coil badge"),
             ("live.output", output_rect, "Output badge"),
+            ("live.current_paths", flow_rect, "Current paths"),
         ] {
             if let Some(rect) = rect {
                 self.anchor(id, rect, label);

@@ -1904,7 +1904,18 @@ impl NovoApp {
                                 .and_then(|d| d.tag.device_code().map(|c| format!("-{c}")))
                                 .unwrap_or_else(|| format!("device {raw}"))
                         };
-                        super::emc_view::panel(ui.ctx(), rect, &mut self.cabinet.emc, &tag_of);
+                        // The plate has no view cube, so the panel starts at the top.
+                        super::emc_view::panel(ui.ctx(), rect, 8.0, &mut self.cabinet.emc, &tag_of);
+                        for (id, rect, label, clicked) in
+                            std::mem::take(&mut self.cabinet.emc.marks)
+                        {
+                            anchors.push(cabinet_bar::Anchor {
+                                id,
+                                label,
+                                rect,
+                                clicked,
+                            });
+                        }
                         super::emc_view::legend(ui.ctx(), rect, &self.cabinet.emc, dark);
                     }
                 }

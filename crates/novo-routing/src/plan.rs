@@ -1,5 +1,7 @@
 //! Routing a whole set of jobs with duct fill: order, penalty, problems.
 
+use std::collections::BTreeMap;
+
 use crate::graph::Load;
 use crate::{DEFAULT_WIRE_DIAMETER_MM, Job, Kind, Network, Route, Rules};
 
@@ -61,6 +63,18 @@ fn wire_area(job: &Job) -> (f64, bool) {
 /// does not depend on the order the jobs are given in, except that routes
 /// come back in that order.
 pub fn plan(network: &Network, jobs: &[Job], rules: &Rules) -> Plan {
+    plan_avoiding(network, jobs, rules, &BTreeMap::new())
+}
+
+/// Like [`plan`], with some jobs asked to keep out of some ducts (job id to
+/// duct ids). A duct to avoid costs a lot more but is still used when it is
+/// the only way, so the wire is never left unrouted for it.
+pub fn plan_avoiding(
+    network: &Network,
+    jobs: &[Job],
+    rules: &Rules,
+    avoid: &BTreeMap<u64, Vec<u64>>,
+) -> Plan {
     let mut order: Vec<usize> = (0..jobs.len()).collect();
     order.sort_by(|&a, &b| {
         let (da, db) = (direct(&jobs[a]), direct(&jobs[b]));
@@ -85,6 +99,7 @@ pub fn plan(network: &Network, jobs: &[Job], rules: &Rules) -> Plan {
             Load {
                 used: &used,
                 wire_area: area,
+                avoid: avoid.get(&job.id).map_or(&[], Vec::as_slice),
             },
         );
         let mut seen = Vec::new();

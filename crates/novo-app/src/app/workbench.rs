@@ -66,6 +66,8 @@ pub(crate) struct Workbench {
     pub(super) place_latch: Option<(Vec<egui::Key>, Option<f64>)>,
     /// Commands the canvas asked for, run next frame by id.
     pub(super) queued: Vec<&'static str>,
+    /// The enclosure and mark of the Build order step to print as one card.
+    pub(super) workpack_step: Option<(novo_core::StructureId, String)>,
     /// The `renumber io` preview waiting for Enter or Esc, per station.
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
     /// The PLC tag import preview (file name and plan), waiting for Enter or Esc.
@@ -305,6 +307,7 @@ impl Default for Workbench {
             place_hold: None,
             place_latch: None,
             queued: Vec::new(),
+            workpack_step: None,
             renumber: None,
             recovered: None,
             plc_import: None,
@@ -517,6 +520,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.assembly",
     "export.handover",
     "export.workshop",
+    "export.workpack",
     "export.scale_check",
     "export.bench_packet",
     "export.safety_sheets",
@@ -1422,6 +1426,14 @@ impl NovoApp {
             "report.add_page" => self.add_report_page_command(argument),
             "export.assembly" => {
                 self.export_assembly();
+            }
+            "export.workpack" => {
+                self.export_workpack();
+            }
+            "export.workpack_step" => {
+                if let Some((id, mark)) = self.wb.workpack_step.take() {
+                    self.export_workpack_step(id, &mark);
+                }
             }
             "export.safety_sheets" => {
                 self.export_safety_sheets();

@@ -13,7 +13,7 @@ mod plan;
 pub mod project_rules;
 
 pub use graph::Network;
-pub use plan::{DuctFill, Plan, Problem, plan};
+pub use plan::{DuctFill, Plan, Problem, plan, plan_avoiding};
 pub use project_rules::WireRules;
 
 /// Point on the plate.

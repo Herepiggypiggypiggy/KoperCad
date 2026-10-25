@@ -58,10 +58,19 @@ Fix a step, then regenerate to shrink the list.
 - dxf-and-backgrounds/export-all: `File > Export drawings > Export all pages as DXF`
 - dxf-and-backgrounds/export-page: `File`
 - dxf-and-backgrounds/remove: `File > Import > Remove the DXF background`
-- enclosure-door-and-depth/apply-defaults: `Apply` (write {ui:cabinet.door.apply})
+- emc-net-classes/honest: `Check > EMC check`
+- emc-net-classes/shield-core: `Apply` (write {ui:emc.nets.apply})
+- emc-net-classes/shield-core: `Preview` (write {ui:emc.nets.preview})
+- emc-on-the-plate/bonding: `Bonding` (write {ui:emc.plate.bonding})
+- emc-on-the-plate/emc-on: `EMC view on the plate`
+- emc-on-the-plate/emc-on: `EMC` (write {ui:cabinet.emc})
+- emc-on-the-plate/fix-it: `Apply` (write {ui:emc.nets.apply})
+- emc-on-the-plate/fix-it: `View > EMC net classes`
+- emc-on-the-plate/shields: `Shields` (write {ui:emc.plate.shields})
+- enclosure-door-and-depth/apply-defaults: `Apply` (write {ui:emc.nets.apply})
 - enclosure-door-and-depth/open-panel: `Plate setup` (write {ui:cabinet.plate})
-- enclosure-door-and-depth/shallow: `Apply` (write {ui:cabinet.door.apply})
-- enclosure-door-and-depth/swing: `Apply` (write {ui:cabinet.door.apply})
+- enclosure-door-and-depth/shallow: `Apply` (write {ui:emc.nets.apply})
+- enclosure-door-and-depth/swing: `Apply` (write {ui:emc.nets.apply})
 - generated-pages/back-to-drawing: `Pages`
 - generated-pages/open-contents: `Pages`
 - generated-pages/open-device-list: `Device list`
@@ -74,6 +83,7 @@ Fix a step, then regenerate to shrink the list.
 - heat-and-sizing/heat-on: `More` (write {ui:cabinet.more})
 - heat-and-sizing/simulate: `Simulate`
 - live-view/enter: `Live potentials` (write {ui:live.card})
+- live-view/seal-in: `Operate`
 - panel-labels/see-labels: `Labels`
 - panel-labels/see-labels: `Reports`
 - parts-library/confirm: `Import it`

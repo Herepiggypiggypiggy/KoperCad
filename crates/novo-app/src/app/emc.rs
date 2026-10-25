@@ -220,16 +220,21 @@ pub(super) fn preview_card(
     preview: &Result<emc::Preview, String>,
     cancel: &mut bool,
     scroll: bool,
+    apply_at: &mut Option<egui::Rect>,
 ) -> bool {
     let p = crate::theme::ui_palette();
     let mut apply = false;
     let card = egui::Frame::group(ui.style()).show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("Preview on a copy of the project").strong());
-            if preview.is_ok()
-                && ui.button("Apply (one undo step)").on_hover_text("Do this on the project; Edit > Undo takes it back").clicked()
-            {
-                apply = true;
+            if preview.is_ok() {
+                let button = ui
+                    .button("Apply (one undo step)")
+                    .on_hover_text("Do this on the project; Edit > Undo takes it back");
+                *apply_at = Some(button.rect);
+                if button.clicked() {
+                    apply = true;
+                }
             }
             if ui.button("Cancel").clicked() {
                 *cancel = true;
@@ -423,7 +428,7 @@ impl NovoApp {
                         });
                         if let Some((_, pf, pv)) = &shown
                             && f.fixes.contains(pf)
-                            && preview_card(ui, pv, &mut cancel_preview, fresh)
+                            && preview_card(ui, pv, &mut cancel_preview, fresh, &mut None)
                         {
                             apply = Some(pf.clone());
                         }

@@ -1,0 +1,39 @@
+@title Lesson walk: build-order-3d (every step, Do it for me or Next)
+@area Learn
+# Starts the lesson from the palette and plays each step as a learner would: an action step with Do it for me, a reading step with Next. A picture and a layout check after each step.
+key ctrl+k
+wait 4
+text build order
+wait 6
+click_text "Build order: watch the cabinet go together"
+wait 40
+shot 01-open-3d
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 02-start
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 03-next
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 04-more
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 05-back
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 06-last
+check_layout
+try click_text "Next"
+wait 20
+shot 07-show-all
+check_layout
+try click_text "Do it for me"
+wait 30
+shot end
+check_layout

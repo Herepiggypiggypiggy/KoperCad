@@ -42,6 +42,11 @@ pub(crate) struct EmcState {
     pub(super) left_out: usize,
     /// The exposure map of the picture, made once per picture.
     field: Option<(Key, Arc<emc::Field>)>,
+    /// Controls the lessons point at, set by the panel and read by the
+    /// workspace that drew it: (anchor, where, label, clicked this frame).
+    pub(super) marks: Vec<(&'static str, egui::Rect, &'static str, bool)>,
+    /// The chip a lesson step points at, scrolled into view once when set.
+    pub(super) reveal: Option<&'static str>,
 }
 
 /// The theme's colours as the overlays take them.
@@ -598,6 +603,7 @@ fn ramp_bar(ui: &mut egui::Ui, st: &Style, from: &str, mid: Option<&str>, to: &s
 pub(super) fn panel(
     ctx: &egui::Context,
     view: egui::Rect,
+    top: f32,
     state: &mut EmcState,
     tag_of: &dyn Fn(u64) -> String,
 ) {
@@ -607,12 +613,18 @@ pub(super) fn panel(
     let pal = crate::theme::ui_palette();
     let mut close = false;
     super::panel::Panel::new("view3d_emc_panel", "EMC", view, super::panel::Side::Right, WIDTH)
-        .top(super::view3d_heat::CUBE_SIZE + 20.0)
+        .top(top)
         .height(720.0)
+        .above_card()
         .fit()
         .show(ctx, |ui| {
+            // Stays clear of the lesson card in the corner, so its chips and
+            // cards are never under it.
+            let corner = super::panel::reserved_bottom_right(ctx);
             egui::ScrollArea::vertical()
-                .max_height((view.height() - super::view3d_heat::CUBE_SIZE - 90.0).max(200.0))
+                .max_height(
+                    (view.height() - top - 70.0 - corner).max(120.0),
+                )
                 .auto_shrink([true, true])
                 .show(ui, |ui| {
                     ui.set_width(WIDTH - 24.0);
@@ -640,7 +652,7 @@ pub(super) fn panel(
                 );
             }
             ui.add_space(4.0);
-            layer_chips(ui, &mut state.layers, &pic);
+            layer_chips(ui, &mut state.layers, &pic, &mut state.marks, state.reveal);
             ui.separator();
             egui::CollapsingHeader::new("How far to trust this")
                 .id_salt("emc_trust")
@@ -704,20 +716,29 @@ pub(super) fn panel(
     }
 }
 
-fn layer_chips(ui: &mut egui::Ui, l: &mut EmcLayers, pic: &Picture) {
+fn layer_chips(
+    ui: &mut egui::Ui,
+    l: &mut EmcLayers,
+    pic: &Picture,
+    marks: &mut Vec<(&'static str, egui::Rect, &'static str, bool)>,
+    reveal: Option<&'static str>,
+) {
     let nothing = "Nothing of this kind in this cabinet";
     let chip =
         |ui: &mut egui::Ui, on: &mut bool, text: &str, tip: &str, enabled: bool, off: &str| {
             // Not `add_enabled_ui`: a scope per chip cannot wrap onto the next row.
             if !enabled {
-                ui.add_enabled(false, egui::Button::new(text))
+                // "n/a" in the label: an unavailable chip must not look like
+                // one that is merely switched off.
+                return ui
+                    .add_enabled(false, egui::Button::new(format!("{text} n/a")))
                     .on_disabled_hover_text(off);
-                return;
             }
             let r = novo_theme::widgets::filter_toggle(ui, text, *on).on_hover_text(tip);
             if r.clicked() {
                 *on = !*on;
             }
+            r
         };
     ui.horizontal_wrapped(|ui| {
         // A chip moves to the next row instead of wrapping its own text.
@@ -733,8 +754,20 @@ fn layer_chips(ui: &mut egui::Ui, l: &mut EmcLayers, pic: &Picture) {
         };
         chip(ui, &mut l.risk, "Exposure map", exposure_tip, true, nothing);
         chip(ui, &mut l.loops, "Loops", "The area each pair of go and return wires encloses", !pic.loops.is_empty(), nothing);
-        chip(ui, &mut l.bonding, "Bonding", "Case-to-plate bonding of drives and filters, from the stated plate finish or bonding", !pic.bonds.is_empty(), if pic.provenance == Provenance::Engine { "No bonding drawn: no drive or filter on this plate has a stated plate finish or bonding" } else { nothing });
-        chip(ui, &mut l.shields, "Shields", "Where each cable screen ends", !pic.shields.is_empty(), nothing);
+        let bonding = chip(ui, &mut l.bonding, "Bonding", "Case-to-plate bonding of drives and filters, from the stated plate finish or bonding", !pic.bonds.is_empty(), if pic.provenance == Provenance::Engine { "No bonding drawn: no drive or filter on this plate has a stated plate finish or bonding" } else { nothing });
+        let shields = chip(ui, &mut l.shields, "Shields", "Where each cable screen ends", !pic.shields.is_empty(), nothing);
+        // A short panel (beside the lesson card) scrolls to the chip the step names.
+        let seen = egui::Id::new("emc_plate_revealed");
+        if reveal.is_some() && ui.ctx().data(|d| d.get_temp::<Option<&'static str>>(seen)) != Some(reveal) {
+            match reveal {
+                Some("emc.plate.bonding") => bonding.scroll_to_me(Some(egui::Align::Center)),
+                Some("emc.plate.shields") => shields.scroll_to_me(Some(egui::Align::Center)),
+                _ => {}
+            }
+        }
+        ui.ctx().data_mut(|d| d.insert_temp(seen, reveal));
+        marks.push(("emc.plate.bonding", bonding.rect, "Bonding", bonding.clicked()));
+        marks.push(("emc.plate.shields", shields.rect, "Shields", shields.clicked()));
     });
 }
 

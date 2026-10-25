@@ -284,6 +284,7 @@ impl NovoApp {
             "export.sheets" | "export.sheets_csv" => response.on_hover_text(super::SHEETS_HINT),
             "export.assembly" => response.on_hover_text(super::ASSEMBLY_HINT),
             "export.handover" => response.on_hover_text(super::HANDOVER_HINT),
+            "export.workpack" => response.on_hover_text(super::WORKPACK_HINT),
             "export.workshop" => response.on_hover_text(super::WORKSHOP_HINT),
             "export.scale_check" => response.on_hover_text(super::SCALE_CHECK_HINT),
             "export.bench_packet" => response.on_hover_text(super::BENCH_PACKET_HINT),

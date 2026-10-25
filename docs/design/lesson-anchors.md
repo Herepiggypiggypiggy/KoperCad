@@ -38,12 +38,23 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `live.pole`: {ui:live.pole} shows **Pole badge**
 - `live.coil`: {ui:live.coil} shows **Coil badge**
 - `live.output`: {ui:live.output} shows **Output badge**
+- `live.current_paths`: {ui:live.current_paths} shows **Current paths**
 - `cabinet.place_all`: {ui:cabinet.place_all} shows **Place all**
 - `cabinet.accept`: {ui:cabinet.accept} shows **Accept**
 - `cabinet.rules`: {ui:cabinet.rules} shows **Rules**
 - `cabinet.plate`: {ui:cabinet.plate} shows **Plate setup**
 - `cabinet.routes`: {ui:cabinet.routes} shows **Route all**
 - `cabinet.emc`: {ui:cabinet.emc} shows **EMC**
+- `build_order.previous`: {ui:build_order.previous} shows **Previous**
+- `build_order.next`: {ui:build_order.next} shows **Next**
+- `build_order.show_all`: {ui:build_order.show_all} shows **Show all**
+- `emc.plate.bonding`: {ui:emc.plate.bonding} shows **Bonding**
+- `emc.plate.shields`: {ui:emc.plate.shields} shows **Shields**
+- `emc.nets.motor`: {ui:emc.nets.motor} shows **Motor and drive output**
+- `emc.nets.preview`: {ui:emc.nets.preview} shows **Preview**
+- `emc.nets.apply`: {ui:emc.nets.apply} shows **Apply**
+- `emc.nets.set_control`: {ui:emc.nets.set_control} shows **control**
+- `emc.nets.close`: {ui:emc.nets.close} shows **Close**
 - `cabinet.cutlist`: {ui:cabinet.cutlist} shows **Cut list**
 - `cabinet.table`: {ui:cabinet.table} shows **Table**
 - `cabinet.heat`: {ui:cabinet.heat} shows **Heat**

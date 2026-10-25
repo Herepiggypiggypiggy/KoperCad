@@ -1,0 +1,11 @@
+@title Schematic: the motor tag in the EMC example stays inside the sheet frame
+@area Schematic
+# Open EMC example, page 1: every device tag, the motor's included, is drawn inside the sheet frame.
+key ctrl+k
+wait 6
+text open emc example
+wait 8
+key Enter
+wait 30
+shot motor-page
+check_layout

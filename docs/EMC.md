@@ -16,7 +16,7 @@ shares, where the rails, plate, entry and door are). So the program can do two t
 1. **See it.** Show coupling, loop area, shield paths and bonding on the real cabinet, in 2D and 3D, so the
    designer sees the problem the way a measurement engineer would reason about it.
 2. **Be driven by it.** Run EMC rules while the cabinet is drawn and laid out, put the findings where the
-   designer is working, and offer fixes that go through the normal command path (undo, redo, scripts). Check > EMC check previews each fix on a copy (findings cleared or added, risk change) before Apply; the preview is a model run, not compliance.
+   designer is working, and offer fixes that go through the normal command path (undo, redo, scripts). Check > EMC check previews each fix on a copy (findings cleared or added, risk change) before Apply; the preview is a model run, not compliance. "Route the wire in another duct" sets `route.avoid_ducts` on the victim wire: the router treats those ducts as 12 times as costly (never forbidden), so it takes another duct only when one reaches both ends; the preview says when nothing is cleared.
 
 It never certifies compliance. Compliance is shown by measurement on the finished machine. What the program
 gives is a design that is much less likely to fail, a documented set of reasons, and a list of what it could not judge.

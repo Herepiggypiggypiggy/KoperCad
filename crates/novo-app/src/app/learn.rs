@@ -91,12 +91,23 @@ pub(crate) const ANCHORS: &[&str] = &[
     "live.pole",
     "live.coil",
     "live.output",
+    "live.current_paths",
     "cabinet.place_all",
     "cabinet.accept",
     "cabinet.rules",
     "cabinet.plate",
     "cabinet.routes",
     "cabinet.emc",
+    "build_order.previous",
+    "build_order.next",
+    "build_order.show_all",
+    "emc.plate.bonding",
+    "emc.plate.shields",
+    "emc.nets.motor",
+    "emc.nets.preview",
+    "emc.nets.apply",
+    "emc.nets.set_control",
+    "emc.nets.close",
     "cabinet.cutlist",
     "cabinet.table",
     "cabinet.heat",
@@ -910,6 +921,8 @@ impl NovoApp {
             return;
         }
         self.learn.revealed = Some(key);
+        self.wb.emc_sch.reveal = None;
+        self.cabinet.emc.reveal = None;
         self.learn.flash_until = Some(Instant::now() + Duration::from_millis(1500));
         let Some(target) = step.point.clone() else {
             return;
@@ -927,6 +940,25 @@ impl NovoApp {
                 self.cabinet.door.reveal = Some("cabinet.door");
             }
         }
+        // The EMC panel is short beside the lesson card: its Apply button and
+        // class chips scroll into view.
+        self.cabinet.emc.reveal = target.ui.as_ref().and_then(|ui| {
+            let ids = ui.ids();
+            ["emc.plate.bonding", "emc.plate.shields"]
+                .into_iter()
+                .find(|id| ids.contains(id))
+        });
+        self.wb.emc_sch.reveal = target.ui.as_ref().and_then(|ui| {
+            let ids = ui.ids();
+            [
+                "emc.nets.preview",
+                "emc.nets.apply",
+                "emc.nets.set_control",
+                "emc.nets.close",
+            ]
+            .into_iter()
+            .find(|id| ids.contains(id))
+        });
         if target.view == novo_learn::lesson::View::Keep {
             return;
         }
