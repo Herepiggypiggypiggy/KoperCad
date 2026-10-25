@@ -9,7 +9,8 @@ Scope (from audit/creative/round34.md idea 2): one wizard that asks for the cond
 - QA scenarios 400-402.
 
 ## Next
-- Validate the 2D model against a known case (analytic or published enclosure result) and say what it shows; ENCLOSURE_VALIDATED stays false until measured.
+- Done: 3D vs 2D comparison of the ranking (#1483) and of fan gains (fan sweep PR): ranking holds, fan gain is read low, no single calibration factor.
+- Engine task: find why the 2D housing gain saturates with fan flow (coupling of the housing to the air the fan moves) and fix it with its own validation; then re-run `validation_fan_gain.rs --ignored` and refresh the note in the wizard (`FAN_NOTE`).
 - Cooling unit / filter fan product pick from Cooling selection as a fix kind (needs the wall balance, not the 2D model: different number, label it).
 - Duty by device (per-device load factor) instead of one global duty.
 - Print the before/after table into the bench packet.
