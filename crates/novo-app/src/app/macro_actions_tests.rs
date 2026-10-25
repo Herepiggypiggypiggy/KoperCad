@@ -204,3 +204,61 @@ fn only_a_macro_with_plc_channels_points_to_add_plc_card() {
     assert!(draws("PLC input card"));
     assert!(!draws("Frequency converter drive"));
 }
+
+#[test]
+fn a_macro_never_lands_on_a_generated_page() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.wb.macro_place =
+        PlaceWindow::new(Some(MacroLibrary::new(dir.path().join("Macros"), "user")));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::NewProject);
+    d.frame();
+    let breaker = d.place("mcb3", 80.0, 48.0);
+    d.frame();
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .select_ids(&[AnyId::Symbol(breaker)]);
+    d.app.run_command(&ctx, "macro.save", Some("Breaker"));
+    let draft = d.app.wb.macro_save.take().unwrap();
+    d.app.submit_macro_save(draft);
+    let drawing = d.app.current_page.unwrap();
+
+    // The contents page is generated; open it and place from there.
+    d.app.add_report_page(novo_reports::TableOfContents::ID);
+    d.frame();
+    let contents = d
+        .doc()
+        .project()
+        .pages()
+        .find(|p| matches!(p.kind, novo_core::PageKind::Generated { .. }))
+        .expect("a contents page")
+        .id;
+    d.app.show_page(contents);
+    d.frame();
+    d.app.run_command(&ctx, "macro.place", Some("Breaker"));
+    d.app.wb.macro_place.select("Breaker.kcmacro");
+    d.frame();
+    assert_eq!(d.app.macro_target_page(), Some(drawing));
+    d.app.place_picked_macro();
+    assert_eq!(
+        d.app.current_page,
+        Some(drawing),
+        "the canvas goes to the drawing page"
+    );
+    let on = |page| {
+        d.doc()
+            .project()
+            .symbols()
+            .filter(|s| s.page == page)
+            .count()
+    };
+    assert_eq!(on(contents), 0, "nothing was drawn on the contents page");
+    assert_eq!(
+        on(drawing),
+        2,
+        "the macro joined the breaker on the drawing page"
+    );
+}

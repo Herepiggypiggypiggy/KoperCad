@@ -1,0 +1,30 @@
+@title EMC fix-it: preview shortening shield pigtails
+@area Cabinet
+@sizes 1366x768 1920x1080
+# The shields fixture has a cable whose shield ends in a pigtail. If the pigtail is longer than the limit the finding offers "Preview: Shorten the pigtail", which names the shield ends it would set. The pictures are the evidence.
+open qa/fixtures/emc-cabinet-shields.novo
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+expect "EMC check"
+shot 01-findings
+check_layout
+scroll 360 400 -450
+wait 10
+expect "Preview: Shorten the pigtail"
+shot 02-pigtail-fixes
+click_text "Preview: Shorten the pigtail" #1
+wait 10
+expect "Clears EMC-05"
+expect "set to a pigtail of"
+shot 03-pigtail-preview
+check_layout
+click_text "Apply (one undo step)"
+wait 15
+expect_not "Clears EMC-05"
+shot 04-pigtail-applied
+check_layout

@@ -333,6 +333,14 @@ fn quarter_of(d: Vec2) -> u8 {
     }
 }
 
+/// How far a device tag keeps from the page frame lines, in mm, plus this
+/// fraction of its own width. Text is drawn no smaller than a readable pixel
+/// size, so at the fit zoom of a small window it is wider than its box in mm
+/// (about 1.7 times at A3 in 1366 px): the extra room keeps it off the border
+/// there too.
+const TAG_FRAME_CLEAR: f32 = 1.5;
+const TAG_FRAME_CLEAR_PER_WIDTH: f32 = 0.8;
+
 /// Width of the page frame margin, in mm.
 pub const FRAME_MARGIN: f32 = 10.0;
 const TITLE_BLOCK_WIDTH: f32 = 140.0;
@@ -1966,21 +1974,32 @@ impl PageScene {
                 no_tag: &later_tag,
             };
             let mut at = slot.preferred;
-            for cand in crate::note_place::candidates(slot.preferred, &slot.ink, height) {
-                let mut label = base.clone();
-                label.pos = cand.0;
-                label.anchor = cand.1;
-                let b = label.bounds().expand(crate::note_place::PAD);
-                let on_frame = self.scene.sheet().is_some_and(|sheet| {
-                    !(sheet.rect.contains_point(b.min) && sheet.rect.contains_point(b.max))
-                        || sheet
-                            .lines
-                            .iter()
-                            .any(|(p, q)| crate::geom::segment_intersects_aabb(*p, *q, &b))
-                });
-                if !on_frame && !obstacles.blocks(&[], std::slice::from_ref(&label)) {
-                    at = cand;
-                    break;
+            // Two passes over the same places: first with room round the tag
+            // to the frame (see `TAG_FRAME_CLEAR`), then with the bare
+            // minimum. A place that is only tight against the frame is used
+            // when no roomier place is free, never traded for a wire.
+            'passes: for roomy in [true, false] {
+                for cand in crate::note_place::candidates(slot.preferred, &slot.ink, height) {
+                    let mut label = base.clone();
+                    label.pos = cand.0;
+                    label.anchor = cand.1;
+                    let room = if roomy {
+                        TAG_FRAME_CLEAR + TAG_FRAME_CLEAR_PER_WIDTH * label.size().x
+                    } else {
+                        crate::note_place::PAD
+                    };
+                    let b = label.bounds().expand(room);
+                    let on_frame = self.scene.sheet().is_some_and(|sheet| {
+                        !(sheet.rect.contains_point(b.min) && sheet.rect.contains_point(b.max))
+                            || sheet
+                                .lines
+                                .iter()
+                                .any(|(p, q)| crate::geom::segment_intersects_aabb(*p, *q, &b))
+                    });
+                    if !on_frame && !obstacles.blocks(&[], std::slice::from_ref(&label)) {
+                        at = cand;
+                        break 'passes;
+                    }
                 }
             }
             if at == slot.at && at == (base.pos, base.anchor) {

@@ -446,7 +446,7 @@ impl NovoApp {
             }
             self.wb.macro_place.query.clear();
         }
-        let page = self.current_page;
+        let page = self.macro_target_page();
         // Recompute the preview when the pick, the options or the drawing
         // changed; the clone behind it is not paid for on every frame.
         if let (Some(project), Some(page)) = (self.backend.document().map(|d| d.project()), page) {
@@ -621,11 +621,35 @@ impl NovoApp {
         }
     }
 
+    /// The page a macro goes on: the open page, or the first drawing page
+    /// when the open page is generated from the model.
+    pub(super) fn macro_target_page(&self) -> Option<novo_core::PageId> {
+        let current = self.current_page?;
+        let project = self.backend.document()?.project();
+        let generated =
+            |p: &novo_core::Page| matches!(p.kind, novo_core::PageKind::Generated { .. });
+        match project.page(current) {
+            Some(p) if !generated(p) => Some(current),
+            _ => project
+                .pages_in_order()
+                .into_iter()
+                .find(|p| !generated(p))
+                .map(|p| p.id),
+        }
+    }
+
     /// Places what the window previewed, as one undo step, and selects it.
     pub(super) fn place_picked_macro(&mut self) {
-        let Some(page) = self.current_page else {
+        let Some(page) = self.macro_target_page() else {
+            self.message(
+                Level::Error,
+                "Could not place: the project has no drawing page, only generated pages. Add a page first.",
+            );
             return;
         };
+        // A macro never lands on a generated page (contents, lists): the
+        // first drawing page takes it, and the canvas goes there.
+        let moved = self.current_page != Some(page);
         let Some(shown) = self.wb.macro_place.shown.take() else {
             return;
         };
@@ -658,6 +682,9 @@ impl NovoApp {
                     .map(|i| i.members.iter().map(|m| m.actual).collect())
                     .unwrap_or_default();
                 self.changed_outside_canvas(&changes);
+                if moved {
+                    self.show_page(page);
+                }
                 if let Some(view) = self.canvas.schematic() {
                     view.select_ids(&ids);
                 }

@@ -221,7 +221,11 @@ fn fixes_apply_as_commands_and_clear_their_findings() {
     );
 
     // Fixes done by hand are refused rather than faked.
-    let hand = Fix::BarePlate { plate: c.cab.raw() };
+    let hand = Fix::MoveDevice {
+        device: c.drive.raw(),
+        from: c.plc.raw(),
+        to_mm: 100.0,
+    };
     assert!(
         c.project
             .transact("hand", |tx| apply(tx, &hand).map(|_| ()))
@@ -336,4 +340,110 @@ fn currents_come_from_a_rating_or_the_user_and_phases_from_the_pin() {
     assert!(p.user_set.contains(&"field_hz"));
     let report = analyse_project(&c.project);
     assert_eq!(report.field.as_ref().unwrap().currents.len(), 1);
+}
+
+fn set(c: &mut Cab, id: impl Into<AnyId> + Copy, key: &str, v: &str) {
+    c.project
+        .transact("set", |tx| {
+            tx.set_property(id, key, Some(Value::Text(v.into())))
+        })
+        .unwrap();
+}
+
+#[test]
+fn a_painted_plate_preview_clears_the_bonding_finding_without_touching_the_project() {
+    let mut c = cabinet();
+    let cab = c.cab;
+    set(&mut c, cab, "emc.finish", "painted");
+    let report = analyse_project(&c.project);
+    let f = report.of_rule("EMC-11").next().expect("painted plate");
+    let fix = f.fixes[0].clone();
+    assert!(matches!(fix, Fix::BarePlate { .. }) && fix.applicable());
+    let revision = c.project.revision();
+    let p = novo_emc::project::preview(&c.project, &fix).unwrap();
+    assert_eq!(c.project.revision(), revision, "a preview changes nothing");
+    assert!(p.cleared.iter().any(|(r, _)| *r == "EMC-11"), "{p:#?}");
+    assert!(p.added.is_empty(), "{p:#?}");
+    assert!(p.findings_after < p.findings_before);
+    assert!(
+        p.scores
+            .iter()
+            .any(|(s, _, b, a)| matches!(s, Subject::Device(_)) && a < b),
+        "{p:#?}"
+    );
+    c.project
+        .transact("apply", |tx| apply(tx, &fix).map(|_| ()))
+        .unwrap();
+    assert_eq!(analyse_project(&c.project).of_rule("EMC-11").count(), 0);
+}
+
+#[test]
+fn a_device_stated_as_not_bonded_gets_the_strap_fix_not_the_plate_fix() {
+    let mut c = cabinet();
+    c.project
+        .transact("not bonded", |tx| {
+            tx.set_property(c.drive, "emc.bonded", Some(Value::Bool(false)))
+        })
+        .unwrap();
+    let f = analyse_project(&c.project);
+    let f = f.of_rule("EMC-11").next().expect("not bonded");
+    assert_eq!(
+        f.fixes,
+        vec![Fix::BondDevice {
+            device: c.drive.raw()
+        }]
+    );
+    let p = novo_emc::project::preview(&c.project, &f.fixes[0]).unwrap();
+    assert!(p.cleared.iter().any(|(r, _)| *r == "EMC-11"), "{p:#?}");
+    c.project
+        .transact("apply", |tx| apply(tx, &f.fixes[0]).map(|_| ()))
+        .unwrap();
+    assert_eq!(analyse_project(&c.project).of_rule("EMC-11").count(), 0);
+}
+
+#[test]
+fn a_long_pigtail_is_shortened_on_the_ends_that_are_too_long_only() {
+    let mut c = cabinet();
+    let (cable, _) = c
+        .project
+        .transact("cable", |tx| {
+            let cable = tx.add_cable(tag("-W1"), vec![CableCore::new("BK")])?;
+            tx.assign_core(cable, 0, Some(c.motor_wire))?;
+            let mut core = CableCore::new("SH");
+            core.shield = true;
+            tx.update::<Cable>(cable, |k| k.cores.push(core))?;
+            Ok(cable)
+        })
+        .unwrap();
+    set(&mut c, cable, "emc.shield_a", "pigtail:200");
+    set(&mut c, cable, "emc.shield_b", "pigtail:20");
+    let report = analyse_project(&c.project);
+    let f = report.of_rule("EMC-05").next().expect("a long pigtail");
+    let fix = f
+        .fixes
+        .iter()
+        .find(|x| matches!(x, Fix::ShortenPigtail { .. }))
+        .unwrap()
+        .clone();
+    assert!(fix.applicable());
+    let p = novo_emc::project::preview(&c.project, &fix).unwrap();
+    assert!(p.said.contains("1 shield end"), "{}", p.said);
+    assert!(p.cleared.iter().any(|(r, _)| *r == "EMC-05"), "{p:#?}");
+    c.project
+        .transact("apply", |tx| apply(tx, &fix).map(|_| ()))
+        .unwrap();
+    assert_eq!(analyse_project(&c.project).of_rule("EMC-05").count(), 0);
+    // A second time there is nothing to shorten, and it says so.
+    assert!(novo_emc::project::preview(&c.project, &fix).is_err());
+}
+
+#[test]
+fn fixes_done_by_hand_cannot_be_previewed() {
+    let c = cabinet();
+    let hand = Fix::SeparateRuns {
+        a: 1,
+        b: 2,
+        to_mm: 50.0,
+    };
+    assert!(novo_emc::project::preview(&c.project, &hand).is_err());
 }
