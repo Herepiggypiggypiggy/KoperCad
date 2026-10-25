@@ -95,6 +95,11 @@ pub enum Fix {
     /// Ask the router to keep a wire out of a duct (`route.avoid_ducts`).
     /// The router takes another duct only when one reaches both ends.
     AvoidDuct { wire: u64, duct: u64 },
+    /// Ask the router to keep two wires' ducts at least this far apart
+    /// (mm, edge to edge): `route.keep_clear` on the victim wire. A hard
+    /// limit for the router; when no ducts allow it the fix is refused and
+    /// nothing changes.
+    KeepClear { wire: u64, other: u64, to_mm: f64 },
     /// Keep two runs this far apart (mm). By hand.
     SeparateRuns { a: u64, b: u64, to_mm: f64 },
     /// Move a device this far (mm) from another. By hand.
@@ -128,6 +133,10 @@ impl Fix {
             Fix::AvoidDuct { .. } => {
                 "Route the wire in another duct if one reaches both ends.".to_owned()
             }
+            Fix::KeepClear { to_mm, .. } => format!(
+                "Route the two wires in ducts at least {} mm apart (only if the ducts allow it).",
+                to_mm.round() as i64
+            ),
             Fix::SeparateRuns { to_mm, .. } if *to_mm > 0.0 => format!(
                 "Keep the two runs {} mm apart, or in separate ducts.",
                 to_mm.round() as i64
@@ -162,6 +171,7 @@ impl Fix {
                 | Fix::BondDevice { .. }
                 | Fix::ShortenPigtail { .. }
                 | Fix::AvoidDuct { .. }
+                | Fix::KeepClear { .. }
         )
     }
 }

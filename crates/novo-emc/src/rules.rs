@@ -674,6 +674,11 @@ fn segregation(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                             duct: d,
                         });
                     }
+                    fixes.push(Fix::KeepClear {
+                        wire: vic.id,
+                        other: agg.id,
+                        to_mm: need.ceil(),
+                    });
                     if let (Some(c), None) = (vic.cable, vic.shield) {
                         fixes.push(Fix::AddShield { cable: c });
                     }

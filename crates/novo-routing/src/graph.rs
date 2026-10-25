@@ -26,12 +26,33 @@ struct Run {
     hi: f64,
     /// Cross-section, mm squared.
     area: f64,
+    /// Width across the run, mm (0 when unknown): the clearance is measured
+    /// between duct edges.
+    width: f64,
     /// Height above the plate the wires lie at: half the duct height, 0
     /// while the duct has no cross-section.
     mid_z: f64,
 }
 
 impl Run {
+    /// The duct as a rectangle `(x0, y0, x1, y1)`: its centre line widened by
+    /// half the width on each side.
+    fn rect(&self) -> (f64, f64, f64, f64) {
+        let h = self.width / 2.0;
+        match self.orient {
+            Orient::H => (self.lo, self.fixed - h, self.hi, self.fixed + h),
+            Orient::V => (self.fixed - h, self.lo, self.fixed + h, self.hi),
+        }
+    }
+
+    /// Distance between the edges of two ducts, 0 when they overlap.
+    fn gap_to(&self, other: &Run) -> f64 {
+        let (a, b) = (self.rect(), other.rect());
+        let dx = (a.0 - b.2).max(b.0 - a.2).max(0.0);
+        let dy = (a.1 - b.3).max(b.1 - a.3).max(0.0);
+        dx.hypot(dy)
+    }
+
     fn at(&self, t: f64) -> Point {
         match self.orient {
             Orient::H => Point::new(t, self.fixed),
@@ -58,6 +79,8 @@ pub(crate) struct Load<'a> {
     /// [`AVOID_COST`] times as much, so it still gets through when they are
     /// the only way.
     pub avoid: &'a [u64],
+    /// Ducts this job must not use at all (ids), for a hard clearance.
+    pub forbid: &'a [u64],
     /// Used cross-section per run, mm squared.
     pub used: &'a [f64],
     /// Cross-section of the wire being routed.
@@ -102,6 +125,11 @@ impl Network {
                     lo: d.a.x.min(d.b.x),
                     hi: d.a.x.max(d.b.x),
                     area: d.width * d.height,
+                    width: if d.width.is_finite() {
+                        d.width.max(0.0)
+                    } else {
+                        0.0
+                    },
                     mid_z: mid_z(d),
                 });
             } else if dx < EPS {
@@ -112,6 +140,11 @@ impl Network {
                     lo: d.a.y.min(d.b.y),
                     hi: d.a.y.max(d.b.y),
                     area: d.width * d.height,
+                    width: if d.width.is_finite() {
+                        d.width.max(0.0)
+                    } else {
+                        0.0
+                    },
                     mid_z: mid_z(d),
                 });
             } else {
@@ -254,6 +287,7 @@ impl Network {
                 used: &used,
                 wire_area: 0.0,
                 avoid: &[],
+                forbid: &[],
             },
         )
     }
@@ -341,6 +375,25 @@ impl Network {
         a.is_finite() && a > 0.0
     }
 
+    /// Gap between the edges of two ducts, mm: 0 where they touch, cross or
+    /// are the same duct. `None` when either id is not a duct of the network.
+    pub fn duct_gap(&self, a: u64, b: u64) -> Option<f64> {
+        let ra = self.runs.iter().find(|r| r.id == a)?;
+        let rb = self.runs.iter().find(|r| r.id == b)?;
+        Some(ra.gap_to(rb))
+    }
+
+    /// Ids of the ducts closer than `mm` (edge to edge) to any of `ducts`,
+    /// those ducts included.
+    pub fn ducts_within(&self, ducts: &[u64], mm: f64) -> Vec<u64> {
+        let near: Vec<&Run> = self.runs.iter().filter(|r| ducts.contains(&r.id)).collect();
+        self.runs
+            .iter()
+            .filter(|r| near.iter().any(|n| r.gap_to(n) < mm - EPS))
+            .map(|r| r.id)
+            .collect()
+    }
+
     /// Number of ducts in the network (ignored ones are not counted).
     pub fn duct_count(&self) -> usize {
         self.runs.len()
@@ -372,6 +425,9 @@ impl Network {
         };
 
         for (i, r) in self.runs.iter().enumerate() {
+            if load.forbid.contains(&r.id) {
+                continue;
+            }
             let mut ts = self.splits[i].clone();
             for e in [a, b] {
                 if e.run == i {

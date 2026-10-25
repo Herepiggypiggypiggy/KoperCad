@@ -506,3 +506,89 @@ fn with_one_duct_only_the_avoid_fix_changes_nothing_and_says_so() {
     assert!(p.cleared.is_empty(), "{p:#?}");
     assert!(p.said.contains("only if one reaches both"), "{}", p.said);
 }
+
+fn with_second_duct(c: &mut Cab, y: f64) {
+    c.project
+        .transact("second duct", |tx| {
+            let d2 = tx.add_rail(c.cab, 20.0, y, 760.0, RailKind::Duct)?;
+            tx.set_rail_size(d2, 760.0, 60.0, 60.0)
+        })
+        .unwrap();
+}
+
+fn keep_clear_fix(c: &Cab) -> Fix {
+    let report = analyse_project(&c.project);
+    report
+        .of_rule("EMC-01")
+        .next()
+        .expect("one shared duct")
+        .fixes
+        .iter()
+        .find(|f| matches!(f, Fix::KeepClear { .. }))
+        .expect("a keep-clear fix")
+        .clone()
+}
+
+#[test]
+fn two_wires_can_be_asked_to_run_in_ducts_a_hard_distance_apart() {
+    let mut c = cabinet();
+    // 140 mm of gap between the two ducts; ask for 100.
+    with_second_duct(&mut c, 100.0);
+    let (wire, other) = (c.analog_wire.raw(), c.motor_wire.raw());
+    let fix = Fix::KeepClear {
+        wire,
+        other,
+        to_mm: 100.0,
+    };
+    assert!(fix.applicable());
+    let p = novo_emc::project::preview(&c.project, &fix).unwrap();
+    assert!(p.cleared.iter().any(|(r, _)| *r == "EMC-01"), "{p:#?}");
+    assert!(p.said.contains("edge to edge"), "{}", p.said);
+    c.project
+        .transact("apply", |tx| apply(tx, &fix).map(|_| ()))
+        .unwrap();
+    let routed = novo_routing::model::route_project(&c.project);
+    assert!(
+        routed
+            .plans
+            .iter()
+            .flat_map(|(_, p)| &p.problems)
+            .all(|p| !matches!(p, novo_routing::Problem::ClearanceUnmet { .. })),
+        "{:?}",
+        routed.plans
+    );
+    let a = &routed.routes[&wire];
+    let m = &routed.routes[&other];
+    assert!(a.ducts.iter().all(|d| !m.ducts.contains(d)), "{a:?} {m:?}");
+}
+
+#[test]
+fn the_finding_offers_the_fix_with_the_planning_distance() {
+    let mut c = cabinet();
+    with_second_duct(&mut c, 100.0);
+    let Fix::KeepClear { wire, other, to_mm } = keep_clear_fix(&c) else {
+        unreachable!()
+    };
+    assert_eq!(wire, c.analog_wire.raw(), "the victim is asked");
+    assert_eq!(other, c.motor_wire.raw());
+    assert!(
+        to_mm >= 100.0,
+        "the class pair's planning distance, {to_mm}"
+    );
+}
+
+#[test]
+fn when_no_ducts_are_far_enough_apart_the_fix_is_refused_and_says_how_far_they_are() {
+    let mut c = cabinet();
+    // Only 140 mm of gap between the two ducts: less than the planning distance.
+    with_second_duct(&mut c, 100.0);
+    let fix = keep_clear_fix(&c);
+    let err = novo_emc::project::preview(&c.project, &fix)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("No ducts keep the two wires"), "{err}");
+    assert!(err.contains("by hand"), "{err}");
+    // Nothing was written to the project.
+    let w = c.project.get::<novo_core::Wire>(c.analog_wire).unwrap();
+    assert!(novo_routing::model::keep_clear(&w.properties).is_empty());
+}
