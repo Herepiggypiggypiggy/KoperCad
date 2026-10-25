@@ -107,21 +107,23 @@ title = "The cable has no shield"
 title_nl = "De kabel heeft geen scherm"
 text = """
 The wire belongs to the motor cable **-W2**: four cores and no shield. The EMC check wants a shield on a drive's output cable, and the card says so.
-Where the program can make the repair itself the card has an **Apply** button. It is one undo step.
+Where the program can make the repair itself the card has a **Preview** button: it shows what the repair would clear on a copy of the project, and then **Apply** does it. Apply is one undo step.
 """
 text_nl = """
 De draad hoort bij de motorkabel **-W2**: vier aders en geen scherm. De EMC-controle wil een scherm op de uitgangskabel van een aandrijving, en de kaart zegt dat.
-Waar het programma de reparatie zelf kan doen, heeft de kaart een knop **Apply**. Het is één undo-stap.
+Waar het programma de reparatie zelf kan doen, heeft de kaart een knop **Preview**: die toont op een kopie van het project wat de reparatie oplost, en daarna doet **Apply** het. Apply is één undo-stap.
 """
 how = [
-  "Click {ui:emc.nets.apply} on the card. The cable gets a shield core.",
+  "Click {ui:emc.nets.preview} on the card to see what the repair does. Nothing changes yet.",
+  "Then click {ui:emc.nets.apply} in the preview. The cable gets a shield core.",
 ]
 how_nl = [
-  "Klik op {ui:emc.nets.apply} op de kaart. De kabel krijgt een schermader.",
+  "Klik op {ui:emc.nets.preview} op de kaart om te zien wat de reparatie doet. Er verandert nog niets.",
+  "Klik dan op {ui:emc.nets.apply} in het voorbeeld. De kabel krijgt een schermader.",
 ]
-point = { ui = "emc.nets.apply" }
+point = { ui = "emc.nets.preview" }
 expect = { cable = { name = "-W2", cores_at_least = 5 } }
-solve = [ { select = "-U1:U~-X2:1", pick = true }, { ui_click = "emc.nets.apply" } ]
+solve = [ { select = "-U1:U~-X2:1", pick = true }, { ui_click = "emc.nets.preview" }, { ui_click = "emc.nets.apply" } ]
 
 [[step]]
 id = "set-class"

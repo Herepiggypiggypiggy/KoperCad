@@ -93,6 +93,9 @@ pub enum CardKind {
     Screw,
     Wires,
     Labels,
+    /// A cut-out in a wall or the door (a grille or a fan); outside the
+    /// build order, so its step numbers are 0.
+    Opening,
 }
 
 /// One half page of the pack.
@@ -704,4 +707,212 @@ fn tool_list(cards: &[Card], table: &DrillTable, groups: &[WireGroup]) -> Vec<To
         });
     }
     out
+}
+
+/// Margin of an opening's template frame around the cut-out outline, mm.
+pub const OPENING_FRAME_MM: f64 = 10.0;
+
+/// The wall of the enclosure an opening is cut into.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpeningWall {
+    Door,
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
+
+impl OpeningWall {
+    pub fn name(self) -> &'static str {
+        match self {
+            OpeningWall::Door => "door",
+            OpeningWall::Top => "top wall",
+            OpeningWall::Bottom => "bottom wall",
+            OpeningWall::Left => "left wall",
+            OpeningWall::Right => "right wall",
+        }
+    }
+}
+
+/// A grille or fan cut-out as the Heat panel stores it. `along` is the
+/// centre along the wall (x from the left edge for the door, top and bottom;
+/// y from the top edge for a side wall), `down` the centre from the top edge
+/// on the door only. `size` is the interior's width and height as seen
+/// from the front, `depth` its depth.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OpeningJob {
+    pub name: String,
+    /// `grille`, `fan` or `filter fan`.
+    pub what: String,
+    pub wall: OpeningWall,
+    pub along: f64,
+    pub down: Option<f64>,
+    pub width: f64,
+    pub height: f64,
+    pub size: (f64, f64),
+    pub depth: f64,
+}
+
+/// Adds one card per opening after the cards of the build order, plus the
+/// tool lines they need. The cards sit outside the build order (steps 0): a
+/// wall is cut before the parts go in, so the text says so.
+pub fn add_opening_cards(pack: &mut Pack, openings: &[OpeningJob]) {
+    for (i, o) in openings.iter().enumerate() {
+        let mark = format!("{} {} ({})", capitalised(&o.what), i + 1, o.wall.name());
+        let (w, h) = (o.width, o.height);
+        let mut dims = Vec::new();
+        let mut notes = Vec::new();
+        let face = match o.wall {
+            OpeningWall::Door => {
+                let v = o.down.unwrap_or(o.size.1 / 2.0);
+                dims.push(format!("Centre: {}", from_edges(o.along, v, o.size)));
+                dims.push(format!(
+                    "Left edge {} mm and right edge {} mm from the left; top edge {} mm and bottom edge {} mm from the top",
+                    mm(o.along - w / 2.0),
+                    mm(o.along + w / 2.0),
+                    mm(v - h / 2.0),
+                    mm(v + h / 2.0)
+                ));
+                notes.push(format!(
+                    "Measured on the door from the corner of the interior opening ({} x {} mm), not from the outer door edge: add the door's flange.",
+                    mm(o.size.0),
+                    mm(o.size.1)
+                ));
+                "the door"
+            }
+            OpeningWall::Top | OpeningWall::Bottom => {
+                dims.push(format!(
+                    "Centre: {} mm from the left edge of the interior, seen from the front ({} mm wide)",
+                    mm(o.along),
+                    mm(o.size.0)
+                ));
+                dims.push(format!(
+                    "Left edge {} mm, right edge {} mm from the left",
+                    mm(o.along - w / 2.0),
+                    mm(o.along + w / 2.0)
+                ));
+                dims.push(format!(
+                    "Across the wall the cut-out is {} mm deep (wall {} mm deep)",
+                    mm(h),
+                    mm(o.depth)
+                ));
+                notes.push("The cabinet model gives no position across the wall's depth: centre it by eye or put it where the wall is free.".to_owned());
+                if o.wall == OpeningWall::Top {
+                    "the roof"
+                } else {
+                    "the floor"
+                }
+            }
+            OpeningWall::Left | OpeningWall::Right => {
+                dims.push(format!(
+                    "Centre: {} mm from the top edge of the interior ({} mm high)",
+                    mm(o.along),
+                    mm(o.size.1)
+                ));
+                dims.push(format!(
+                    "Top edge {} mm, bottom edge {} mm from the top",
+                    mm(o.along - w / 2.0),
+                    mm(o.along + w / 2.0)
+                ));
+                dims.push(format!(
+                    "Across the wall the cut-out is {} mm deep (wall {} mm deep)",
+                    mm(h),
+                    mm(o.depth)
+                ));
+                notes.push("The cabinet model gives no position across the wall's depth: centre it by eye or put it where the wall is free.".to_owned());
+                if o.wall == OpeningWall::Left {
+                    "the left wall"
+                } else {
+                    "the right wall"
+                }
+            }
+        };
+        if o.what.contains("fan") {
+            notes.push("The Heat panel stores a rectangle: a round fan cut-out and the fan's screw holes come from the fan's datasheet.".to_owned());
+        }
+        let side = matches!(o.wall, OpeningWall::Left | OpeningWall::Right);
+        // On a side wall the model's width runs along y: draw it that way.
+        let (tw, th) = if side { (h, w) } else { (w, h) };
+        let (cw, ch) = (tw + 2.0 * OPENING_FRAME_MM, th + 2.0 * OPENING_FRAME_MM);
+        pack.cards.push(Card {
+            kind: CardKind::Opening,
+            steps: (0, 0),
+            total: 0,
+            phase: Phase::Devices,
+            mark,
+            text: format!(
+                "Cut-out for a {} in {}: {} x {} mm. It is not a step of the build order: cut it before the plate goes in, with the door or wall off the cabinet.",
+                o.what,
+                face,
+                mm(w),
+                mm(h)
+            ),
+            tools: vec![
+                format!("Punch, nibbler or jigsaw for {} x {} mm", mm(w), mm(h)),
+                "Drill for the corner starter holes, file for the edges".to_owned(),
+                "Tape measure, pencil, centre punch".to_owned(),
+            ],
+            template: Some(Template {
+                width: cw,
+                height: ch,
+                caption: format!("{} cut-out {} x {} mm", o.what, mm(w), mm(h)),
+                origin: format!(
+                    "Frame is {} mm larger than the cut-out on every side; the cross hair is the centre",
+                    mm(OPENING_FRAME_MM)
+                ),
+                rail: false,
+                holes: Vec::new(),
+                cutout: Some(TemplateCutout {
+                    shape: CutoutShape::Rect { w: tw, h: th },
+                    x: cw / 2.0,
+                    y: ch / 2.0,
+                }),
+            }),
+            dims,
+            wires: Vec::new(),
+            wires_more: 0,
+            labels: Vec::new(),
+            notes,
+            ticks: ticks(&["Marked", "Cut", "Edges filed", "Fitted"]),
+        });
+    }
+    // One tool line per size and wall, counted, as the holes are listed.
+    let mut groups: Vec<(String, String, usize)> = Vec::new();
+    for o in openings {
+        let tool = format!(
+            "Punch, nibbler or jigsaw for {} x {} mm",
+            mm(o.width),
+            mm(o.height)
+        );
+        let for_what = format!("{} cut-out in the {}", o.what, o.wall.name());
+        match groups.iter_mut().find(|g| g.0 == tool && g.1 == for_what) {
+            Some(g) => g.2 += 1,
+            None => groups.push((tool, for_what, 1)),
+        }
+    }
+    let at = pack
+        .tools
+        .iter()
+        .position(|t| t.for_what == "every step")
+        .unwrap_or(pack.tools.len());
+    for (k, (tool, for_what, n)) in groups.into_iter().enumerate() {
+        pack.tools.insert(
+            at + k,
+            ToolLine {
+                tool,
+                for_what: if n > 1 {
+                    format!("{n} x {for_what}")
+                } else {
+                    for_what
+                },
+            },
+        );
+    }
+}
+
+fn capitalised(s: &str) -> String {
+    let mut c = s.chars();
+    c.next()
+        .map(|f| f.to_uppercase().chain(c).collect())
+        .unwrap_or_default()
 }

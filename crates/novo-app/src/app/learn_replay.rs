@@ -165,7 +165,16 @@ impl Drive {
                             format!("the control `{}` is not on screen", u.ui_click)
                         })?;
                     }
-                    let rect = self.app.learn_drawn(&id).expect("drawn");
+                    let mut rect = self.app.learn_drawn(&id).expect("drawn");
+                    // A card that scrolls into view moves for several frames: click where it settles.
+                    for _ in 0..30 {
+                        self.frame();
+                        let now = self.app.learn_drawn(&id).unwrap_or(rect);
+                        if now == rect {
+                            break;
+                        }
+                        rect = now;
+                    }
                     self.pointer_click(rect.center(), false);
                     if id == u.ui_click {
                         return Ok(());

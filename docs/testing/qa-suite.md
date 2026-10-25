@@ -117,7 +117,7 @@ anyway" button), so the folder is of a project that still has an open problem.
 | `50-variant-bulk-edit-files` | variant PDF, bulk edit workbook |
 | `51-pdf-options-eplan-files` | PDF with options (in colour), EPLAN project file |
 | `52-wire-production-page-file` | all-pages PDF with the wire production page added |
-| `183-workpack-from-build-order`, `184-workpack-command-and-menu`, `185-workpack-bench-output-light`, `187-workpack-hot-cabinet` | work cards PDF (the example project and the hot cabinet fixture); 185 runs in the light look |
+| `183-workpack-from-build-order`, `184-workpack-command-and-menu`, `185-workpack-bench-output-light`, `187-workpack-hot-cabinet`, `189-workpack-vent-cards` | work cards PDF (the example project, the hot cabinet fixture, four grilles as cut-out cards); 185 runs in the light look |
 
 Not covered yet, and no export has a content check by a program: the plate DXF of a cabinet other than
 the lesson fixture, the wire production Excel for a project with sized wires.

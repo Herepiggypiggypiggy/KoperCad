@@ -1,0 +1,51 @@
+@title Schematic: EMC cable card previews its fix, Light theme, and Cancel changes nothing (1366x768)
+@area Schematic
+@sizes 1366x768
+# Pick a wire of the motor cable with EMC net classes on, in the Light theme: the cable card offers "Preview: <fix>" instead of applying at once; the card says what it would do, Cancel drops it and the cable is unchanged. The pictures are the evidence.
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 20
+key ctrl+k
+wait 6
+text open emc example
+wait 8
+key Enter
+wait 30
+key PageDown
+wait 8
+key PageDown
+wait 12
+key ctrl+k
+wait 6
+text emc net classes
+wait 8
+key Enter
+wait 20
+click 152 420
+wait 12
+expect "Cable =A1+CAB-W2"
+scroll 1180 400 2000
+wait 8
+click_text "Preview: Use a shielded cable." #1
+wait 10
+expect "Preview on a copy of the project"
+expect "Shield core added"
+key Home
+wait 12
+shot 01-cable-preview-light
+check_layout
+click_text Cancel #1
+wait 10
+expect_not "Preview on a copy of the project"
+expect "No shield core"
+key Home
+wait 12
+shot 02-cancelled-light
+check_layout
