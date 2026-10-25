@@ -699,3 +699,22 @@ fn a_vertical_rail_measures_its_devices_down_the_rail() {
     // Footprint 45 x 90: 90 along the rail, 50 from its start (y 150 - 100).
     assert_eq!((t.clips[0].at, t.clips[0].len), (50.0, 90.0));
 }
+
+#[test]
+fn a_ducts_step_text_and_card_give_the_same_corner() {
+    let p = pack(0);
+    let card = p.cards.iter().find(|c| c.kind == CardKind::Duct).unwrap();
+    // The duct's centre line is at y 250, 50 wide: its outline starts at y 225.
+    assert!(
+        card.text.contains("top left corner at x 50, y 225"),
+        "{}",
+        card.text
+    );
+    assert!(
+        card.dims[0].contains("225 mm from the top edge"),
+        "{:?}",
+        card.dims
+    );
+    let row = p.overview.iter().find(|r| r.mark == card.mark).unwrap();
+    assert_eq!(row.text.split(" on the").next(), Some(card.text.as_str()));
+}
