@@ -23,3 +23,5 @@ and colour instead of by circuit.
 PR 2 (this branch after #1471 merged): per-step print from the strip ("Print this step", scenario 188), R5's two nits (contains match, per-cabinet N of M). Still next: door cut-outs and vents as cards (idea 5), strip length per end, clip positions drawn on the rail strip.
 
 PR 3: Heat panel grilles and fans as CUT-OUT cards (scenario 189), the one-card file name carries the cabinet tag when there are several cabinets. Still next: wiring openings and device-less door cut-outs as cards, strip length per end, clip positions on the rail strip.
+
+PR 6 (rail clips): the rail card draws the clipped devices on the strip (TemplateClip, boxes with the designation, note with the distances). Built and tested locally, pushed after #1485 merged. All roadmap items of the coordinator's list are then done; still open: separate strip length and ferrule collar, different allowances per end.

@@ -1152,6 +1152,81 @@ mod tests {
         }
     }
 
+    fn rail_pack(rail_len: f64, xs: &[f64]) -> Pack {
+        let mut l = CabinetLayout::new(Plate {
+            width: 800.0,
+            height: 600.0,
+            margin: 10.0,
+        });
+        l.rails = vec![Rail {
+            id: 1,
+            x: 50.0,
+            y: 100.0,
+            length: rail_len,
+            vertical: false,
+        }];
+        l.placements = xs
+            .iter()
+            .enumerate()
+            .map(|(i, x)| Placement {
+                id: i as u64 + 1,
+                x: *x,
+                y: 100.0,
+                rotated: false,
+                size: Size {
+                    width: 45.0,
+                    height: 90.0,
+                    guessed: false,
+                },
+                clearance: None,
+                margins: Margins::default(),
+                rail: Some(1),
+            })
+            .collect();
+        build("+CAB1", &l, &[], &|id| format!("=A1+CAB1-K{id}"), &[])
+    }
+
+    #[test]
+    fn clipped_devices_are_boxes_on_the_rail_strip_as_wide_as_the_device() {
+        // 300 mm rail at 1:2 (150 x 17.5 on paper): a 45 mm device is 22.5 mm wide.
+        let p = rail_pack(300.0, &[60.0, 200.0]);
+        let card = &p.cards[0];
+        let t = card.template.as_ref().unwrap();
+        let s = template_scale(t.width, t.height, CARD_W - 24.0, t.height);
+        let m = card_marks(card, &p.cabinet, CARD_Y[0]);
+        let boxes: Vec<f64> = m
+            .shapes
+            .iter()
+            .filter_map(|(layer, sh)| match (layer, sh) {
+                (Layer::Devices, MarkShape::Rect { min, max })
+                    if (max.1 - min.1) < t.height * s && (max.1 - min.1) > 1.0 =>
+                {
+                    Some(max.0 - min.0)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(boxes.len(), 2, "{boxes:?}");
+        assert!(
+            boxes.iter().all(|w| (w - 45.0 * s).abs() < 1e-6),
+            "{boxes:?}"
+        );
+        // The designation is on the box, K1 and K2 of =A1+CAB1-Kn.
+        for k in ["K1", "K2"] {
+            assert!(m.texts.iter().any(|t| t.text == k), "{k}");
+        }
+        assert!(inside(&m, CARD_Y[0]).is_empty());
+    }
+
+    #[test]
+    fn a_box_too_narrow_for_its_label_keeps_only_its_outline() {
+        // 1900 mm rail at 1:20: a 45 mm device is 2.25 mm wide.
+        let p = rail_pack(1900.0, &[60.0]);
+        let m = card_marks(&p.cards[0], &p.cabinet, CARD_Y[0]);
+        assert!(!m.texts.iter().any(|t| t.text == "K1"));
+        assert!(m.shapes.iter().any(|(l, _)| *l == Layer::Devices));
+    }
+
     #[test]
     fn card_text_does_not_run_past_the_right_edge() {
         let p = pack(20, true);
