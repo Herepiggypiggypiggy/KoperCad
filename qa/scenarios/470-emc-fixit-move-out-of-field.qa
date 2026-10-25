@@ -21,6 +21,7 @@ wait 10
 expect "Preview on a copy of the project"
 expect "modelled field there"
 expect "Eases EMC-19"
+expect "(one eased)"
 shot 01-preview
 check_layout
 click_text "Apply (one undo step)" #1
