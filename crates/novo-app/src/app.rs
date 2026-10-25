@@ -122,6 +122,9 @@ mod heat_time;
 #[cfg(test)]
 mod heat_time_tests;
 mod heat_verdict;
+mod heat_whatif;
+#[cfg(test)]
+mod heat_whatif_tests;
 mod heat_wires;
 #[cfg(test)]
 mod heat_wires_tests;

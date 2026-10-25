@@ -122,6 +122,7 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
             None,
             Some(("Simulate heat", "heat.simulate")),
             Some(("Cooling advice…", "heat.cooling_advice")),
+            Some(("Cooling what-if…", "heat.cooling_whatif")),
             Some(("Suggest a cooler layout", "heat.cooler_layout")),
             Some(("Table   Ctrl+T", "view.cabinet_table")),
             Some(("Show in 3D", "view.3d")),

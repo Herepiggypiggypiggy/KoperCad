@@ -694,6 +694,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "heat.contours",
     "heat.simulate",
     "heat.cooling_advice",
+    "heat.cooling_whatif",
     "heat.cooler_layout",
     "heat.vents",
     "heat.add_filter_fan",
@@ -1019,6 +1020,11 @@ impl NovoApp {
                     // The run's progress and stop button live in the panel.
                     self.view3d.controls.heat_panel = true;
                 }
+                self.cabinet.heat.command(id);
+            }
+            "heat.cooling_whatif" if self.is_open() => {
+                // The preview is drawn in the 3D view, so the wizard lives there.
+                self.switch_workspace(Workspace::View3d);
                 self.cabinet.heat.command(id);
             }
             "heat.cooling_advice" if self.is_open() => {

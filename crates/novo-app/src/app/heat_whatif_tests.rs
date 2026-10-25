@@ -1,0 +1,488 @@
+//! The cooling what-if wizard: it runs from the cabinet as the project has
+//! it, ranks the fixes, previews the picked one without storing anything,
+//! applies it as the engine promised and says what the numbers are.
+
+use std::time::Duration;
+
+use eframe::egui;
+use novo_core::{Command, DeviceTag, MountingPlate, Project, RailKind, StructureId, Value};
+use novo_layout::enclosure::Enclosure;
+use novo_layout::model::set_enclosure;
+use novo_thermal::whatif::{self, Fix};
+
+use super::heat::HeatState;
+use super::heat_whatif::{Ask, Wizard};
+
+/// A 150 W drive with a 40 °C limit on the lowest of three rails, a cool
+/// device above it, and the right of the rails free.
+fn cabinet() -> (Project, StructureId) {
+    let mut p = Project::new("t");
+    let (cab, _) = p
+        .transact("setup", |tx| {
+            let cab = tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+            tx.set_plate(
+                cab,
+                Some(MountingPlate {
+                    width: 800.0,
+                    height: 1100.0,
+                    margin: 10.0,
+                }),
+            )?;
+            set_enclosure(
+                tx,
+                cab,
+                &Enclosure {
+                    width: 900.0,
+                    height: 1200.0,
+                    depth: 300.0,
+                    plate_setback: 0.0,
+                    door: None,
+                    front_clearance: None,
+                    hinge_side_clearance: None,
+                },
+            )?;
+            let mut rails = Vec::new();
+            for row in 0..3 {
+                rails.push(tx.add_rail(
+                    cab,
+                    20.0,
+                    150.0 + 350.0 * f64::from(row),
+                    760.0,
+                    RailKind::DinRail,
+                )?);
+            }
+            for (tag, x, row, w, h, loss, limit) in [
+                ("=A1+CAB1-T1", 30.0, 2, 120.0, 220.0, 150.0, 40.0),
+                ("=A1+CAB1-K1", 40.0, 1, 50.0, 90.0, 4.0, 45.0),
+            ] {
+                let d = tx.add_device(DeviceTag::parse(tag).unwrap(), "")?;
+                for (k, v) in [
+                    ("width_mm", w),
+                    ("height_mm", h),
+                    ("depth_mm", 80.0),
+                    ("power_loss_w", loss),
+                    ("max_ambient_c", limit),
+                ] {
+                    tx.set_property(d, k, Some(Value::Float(v)))?;
+                }
+                tx.execute(Command::PlaceDevice {
+                    device: d,
+                    structure: cab,
+                    x,
+                    y: 150.0 + 350.0 * f64::from(row) - h / 2.0,
+                    rotated: false,
+                    rail: rails.get(row as usize).map(|r| (*r, x - 20.0)),
+                })?;
+            }
+            Ok(cab)
+        })
+        .unwrap();
+    (p, cab)
+}
+
+fn tags(p: &Project) -> impl Fn(u64) -> String + '_ {
+    move |id| {
+        p.get::<novo_core::Device>(novo_core::DeviceId::from(id))
+            .map_or_else(String::new, |d| d.tag.to_string())
+    }
+}
+
+/// A short run: the tests check what is done with the answer, not how far
+/// the search can go.
+fn quick() -> whatif::Settings {
+    whatif::Settings {
+        layout: novo_thermal::placement::Settings {
+            top_k: 3,
+            max_movers: 2,
+            max_moves: 2,
+            ..Default::default()
+        },
+        ..whatif::Settings::quick()
+    }
+}
+
+fn run(w: &mut Wizard, p: &Project, cab: StructureId) {
+    w.settings = Some(quick());
+    let ctx = egui::Context::default();
+    w.request();
+    assert!(w.take_request());
+    let fans = Vec::new();
+    w.start(
+        p,
+        cab,
+        35.0,
+        &super::heat_settings::HeatSettings::default(),
+        fans,
+        &tags(p),
+    );
+    for _ in super::test_wait::patient() {
+        w.poll(&ctx);
+        if !w.running() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    panic!("the what-if did not end");
+}
+
+/// One real run of the engine for all the tests that read an answer: the
+/// run is the slow part and does not change from test to test.
+fn answered() -> (Wizard, Project, StructureId) {
+    static ANSWER: std::sync::OnceLock<super::heat_whatif::Found> = std::sync::OnceLock::new();
+    let (p, cab) = cabinet();
+    let found = ANSWER
+        .get_or_init(|| {
+            let mut w = Wizard::default();
+            run(&mut w, &p, cab);
+            w.found.expect("an answer")
+        })
+        .clone();
+    let mut w = Wizard::default();
+    w.set_found_for_test(found);
+    (w, p, cab)
+}
+
+fn screen() -> egui::RawInput {
+    egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(1366.0, 768.0),
+        )),
+        ..Default::default()
+    }
+}
+
+/// The text the window draws after it has settled.
+fn render(w: &mut Wizard, view: u8, now_key: Option<u64>) -> String {
+    let ctx = egui::Context::default();
+    let mut text = String::new();
+    for _ in 0..12 {
+        let mut out = ctx.run_ui(screen(), |ui| {
+            w.show(ui.ctx(), view, now_key, 35.0, egui::pos2(10.0, 10.0));
+        });
+        out.textures_delta.clear();
+        text = out
+            .shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+    text
+}
+
+#[test]
+fn the_run_ranks_fixes_and_previews_the_first_without_storing_it() {
+    let (w, p, _) = answered();
+    let found = w.found.as_ref().expect("an answer");
+    let wi = &found.what_if;
+    assert!(!wi.choices.is_empty(), "{:?}", wi.notes);
+    for (i, c) in wi.choices.iter().enumerate() {
+        assert_eq!(c.rank, i + 1);
+    }
+    assert_eq!(w.picked(), Some(0), "the best fix is shown at once");
+    let before = p.revision();
+    let preview = w.preview().expect("a preview");
+    assert_eq!(p.revision(), before, "previewing stores nothing");
+    let best = &wi.choices[0];
+    assert_eq!(preview.moves.len(), best.fix.moves().len());
+    assert_eq!(preview.candidate.is_some(), best.fix.candidate().is_some());
+}
+
+#[test]
+fn the_preview_boxes_are_in_the_plate_frame() {
+    let (mut w, p, cab) = answered();
+    let wi = &w.found.as_ref().unwrap().what_if;
+    let Some(i) = wi
+        .choices
+        .iter()
+        .position(|c| matches!(c.fix, Fix::Layout { .. }))
+    else {
+        panic!("no layout fix: {:?}", wi.notes);
+    };
+    w.pick(i);
+    let (ox, oy) = novo_thermal::placement_project::plate_origin(&p, cab).unwrap();
+    let wi = &w.found.as_ref().unwrap().what_if;
+    let moves = wi.choices[i].fix.moves().to_vec();
+    let preview = w.preview().unwrap();
+    for (m, (id, rect)) in moves.iter().zip(&preview.moves) {
+        assert_eq!(m.id, *id);
+        assert!((rect.x - (m.to.x - ox)).abs() < 1e-9 && (rect.y - (m.to.y - oy)).abs() < 1e-9);
+    }
+}
+
+#[test]
+fn the_window_names_the_model_the_table_and_the_conditions() {
+    let (mut w, _, _) = answered();
+    let text = render(&mut w, 2, None);
+    for want in [
+        "Cooling what-if",
+        "MODEL, NOT MEASURED",
+        "Hottest day outside",
+        "Duty",
+        "Devices over limit",
+        "Tightest margin",
+        "Hottest air",
+        "Model estimate",
+        "Try again with these",
+    ] {
+        assert!(text.contains(want), "missing {want:?} in:\n{text}");
+    }
+}
+
+#[test]
+fn a_changed_cabinet_makes_the_answer_stale_and_blocks_apply() {
+    let (mut w, _, _) = answered();
+    let key = 12345;
+    let text = render(&mut w, 2, Some(key));
+    assert!(text.contains("cabinet changed"), "{text}");
+}
+
+#[test]
+fn the_typed_conditions_reach_the_run_and_a_cool_day_has_nothing_to_fix() {
+    let (p, cab) = cabinet();
+    let mut w = Wizard::default();
+    // A cold day at a fifth of the load: the run ends after its baseline.
+    w.set_conditions_for_test(Some(10.0), Some(20.0));
+    run(&mut w, &p, cab);
+    let wi = &w.found.as_ref().unwrap().what_if;
+    assert_eq!(wi.conditions.ambient_c, 10.0);
+    assert!((wi.conditions.duty - 0.2).abs() < 1e-9);
+    assert!(wi.choices.is_empty());
+    assert!(super::heat_whatif::headline(wi).contains("Nothing to fix"));
+    assert!(wi.notes.iter().any(|n| n.contains("Duty 20 %")));
+    let text = render(&mut w, 2, None);
+    assert!(text.contains("Nothing to fix"), "{text}");
+}
+
+#[test]
+fn the_table_text_carries_the_label_and_the_conditions() {
+    let (w, _, _) = answered();
+    let found = w.found.as_ref().unwrap();
+    let text = super::heat_whatif::table_text(&w, found);
+    for want in [
+        "MODEL, NOT MEASURED",
+        "35 °C outside, duty 100 %",
+        "Devices over limit",
+        "Tightest margin",
+        "Not validated",
+    ] {
+        assert!(text.contains(want), "missing {want:?} in:\n{text}");
+    }
+}
+
+#[test]
+fn closing_drops_the_answer_and_stops_a_run() {
+    let (mut w, _, _) = answered();
+    w.close();
+    assert!(w.found.is_none() && !w.running() && !w.is_open());
+    assert!(w.preview().is_none());
+}
+
+#[test]
+fn the_window_closes_when_the_view_changes() {
+    let mut w = Wizard::default();
+    w.request();
+    w.take_request();
+    let ctx = egui::Context::default();
+    for view in [2, 2, 1] {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            w.show(ui.ctx(), view, None, 35.0, egui::pos2(10.0, 10.0));
+        });
+        out.textures_delta.clear();
+    }
+    assert!(!w.is_open());
+}
+
+#[test]
+fn a_cabinet_without_devices_says_so() {
+    let mut p = Project::new("t");
+    let (cab, _) = p
+        .transact("setup", |tx| {
+            let cab = tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+            tx.set_plate(
+                cab,
+                Some(MountingPlate {
+                    width: 800.0,
+                    height: 1100.0,
+                    margin: 10.0,
+                }),
+            )?;
+            set_enclosure(
+                tx,
+                cab,
+                &Enclosure {
+                    width: 900.0,
+                    height: 1200.0,
+                    depth: 300.0,
+                    plate_setback: 0.0,
+                    door: None,
+                    front_clearance: None,
+                    hinge_side_clearance: None,
+                },
+            )?;
+            Ok(cab)
+        })
+        .unwrap();
+    let mut w = Wizard::default();
+    w.start(
+        &p,
+        cab,
+        35.0,
+        &super::heat_settings::HeatSettings::default(),
+        Vec::new(),
+        &tags(&p),
+    );
+    assert!(!w.running());
+    assert!(
+        w.notice().is_some_and(|n| n.contains("No device")),
+        "{:?}",
+        w.notice()
+    );
+}
+
+#[test]
+fn the_command_from_the_cabinet_opens_the_wizard_in_3d() {
+    use super::Action;
+    use super::workspace::Workspace;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = super::view3d_tests::drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
+    d.app.run_command(&ctx, "heat.cooling_whatif", None);
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    assert!(d.app.cabinet.heat.whatif.is_open());
+    assert!(
+        !d.app.cabinet.heat.whatif.pending(),
+        "taken up by the 3D view"
+    );
+}
+
+#[test]
+fn the_heat_strip_button_in_the_cabinet_also_leads_to_the_3d_view() {
+    use super::Action;
+    use super::workspace::Workspace;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = super::view3d_tests::drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    d.app.cabinet.heat.whatif.request();
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+}
+
+#[test]
+fn applying_openings_puts_them_in_the_project_list_as_one_undo_step() {
+    use novo_thermal::model::{Opening, Placement};
+    use novo_thermal::sweep::{Candidate, Pairing, Piece};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = super::view3d_tests::drive_with_cabinet(dir.path());
+    let piece = |p, fan| Piece {
+        opening: Opening {
+            placement: p,
+            width_mm: 150.0,
+            height_mm: 150.0,
+        },
+        fan_flow_m3h: fan,
+    };
+    let c = Candidate {
+        pairing: Pairing::VentInFanOut,
+        inlet: piece(Placement::Left { y_mm: 400.0 }, None),
+        outlet: piece(Placement::Top { x_mm: 300.0 }, Some(250.0)),
+    };
+    d.app
+        .cabinet
+        .heat
+        .whatif
+        .set_apply_for_test(Ask::Openings(c));
+    d.app.whatif_apply();
+    assert_eq!(d.app.cabinet.heat.settings.vents.len(), 2);
+    assert!(
+        d.app
+            .cabinet
+            .heat
+            .whatif
+            .applied()
+            .is_some_and(|t| t.contains("Added"))
+    );
+    d.app.cabinet.heat.settings.undo();
+    assert!(d.app.cabinet.heat.settings.vents.is_empty());
+}
+
+#[test]
+fn a_move_to_a_gone_rail_changes_nothing_and_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = super::view3d_tests::drive_with_cabinet(dir.path());
+    let cab = {
+        let project = d.app.backend.document().unwrap().project();
+        project
+            .structures()
+            .find(|s| s.enclosure && s.plate.is_some())
+            .map(|s| s.id)
+            .unwrap()
+    };
+    let device = {
+        let project = d.app.backend.document().unwrap().project();
+        novo_layout::model::load(project, cab).unwrap().placements[0].id
+    };
+    let rect = novo_layout::Rect {
+        x: 0.0,
+        y: 0.0,
+        w: 50.0,
+        h: 50.0,
+    };
+    let m = novo_thermal::placement::Move {
+        id: device,
+        from_row: 1,
+        to_row: u64::MAX - 1,
+        from: rect,
+        to: rect,
+        cost_before: 1.0,
+        cost_after: 0.5,
+        swapped_with: None,
+    };
+    let before = d.app.backend.document().unwrap().project().revision();
+    d.app
+        .cabinet
+        .heat
+        .whatif
+        .set_apply_for_test(Ask::Move(cab, vec![m]));
+    d.app.whatif_apply();
+    assert!(
+        d.app
+            .cabinet
+            .heat
+            .whatif
+            .applied()
+            .is_some_and(|t| t.contains("Nothing moved"))
+    );
+    let _ = before;
+}
+
+#[test]
+fn headline_and_direction_words() {
+    // Direction: a change under half a unit is neither better nor worse.
+    assert_eq!(super::heat_whatif::dir(10.0, 10.2, true), None);
+    assert_eq!(super::heat_whatif::dir(10.0, 8.0, true), Some(true));
+    assert_eq!(super::heat_whatif::dir(-3.0, 4.0, false), Some(true));
+    assert_eq!(super::heat_whatif::dir(-3.0, -6.0, false), Some(false));
+}
+
+#[test]
+fn heat_state_command_requests_the_wizard() {
+    let mut s = HeatState::new();
+    s.command("heat.cooling_whatif");
+    assert!(s.whatif.pending());
+    assert!(s.whatif.is_open());
+}

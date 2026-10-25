@@ -104,6 +104,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "heat.legend",
     "heat.simulate",
     "heat.cooling_advice",
+    "heat.cooling_whatif",
     "heat.cooler_layout",
     "cabinet.canvas",
     "workspace.view3d",

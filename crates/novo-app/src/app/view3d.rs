@@ -333,6 +333,7 @@ impl NovoApp {
     /// The 3D view in the central area.
     pub(super) fn view3d_show(&mut self, ui: &mut egui::Ui) {
         self.sync_openings(ui.ctx());
+        self.whatif_apply();
         if let Some(text) = self.view3d.notice.take() {
             self.message(super::Level::Info, text);
         }
@@ -571,6 +572,11 @@ impl NovoApp {
             heat_cloud::CloudView::default()
         };
         let wanted = solution.as_ref().map(|s| (s.id, mode.heat));
+        // The fix picked in the Cooling what-if, drawn but not stored.
+        let (whatif_moves, preview_candidate) = match self.cabinet.heat.whatif.preview() {
+            Some(p) => (p.moves, p.candidate.cloned()),
+            None => (Vec::new(), None),
+        };
         // The landing box of a dragged device, rail or duct.
         let mut landings = mode.mv.landings();
         let stored_layout = load(project, id);
@@ -587,6 +593,12 @@ impl NovoApp {
                     l.clash,
                 )
             })
+            .chain(whatif_moves.iter().map(|(_, r)| {
+                (
+                    [r.x, r.y, r.w, r.h].map(|v| (v * 10.0).round() as i64),
+                    false,
+                )
+            }))
             .chain(mode.surface_drag.iter().map(|d| {
                 let r = d.rect;
                 (
@@ -638,10 +650,16 @@ impl NovoApp {
             mode.vent_enclosure = Some(((id, revision), built));
         }
         let vent_enclosure = mode.vent_enclosure.as_ref().and_then(|(_, e)| e.clone());
-        let vent_specs = self.cabinet.heat.settings.vents.clone();
+        let mut vent_specs = self.cabinet.heat.settings.vents.clone();
+        // The openings of the fix picked in the Cooling what-if are drawn as
+        // if they were in the list; nothing is stored.
+        let previewing = preview_candidate.is_some();
+        if let Some(c) = &preview_candidate {
+            vent_specs.extend(super::heat_sweep::specs_of(c));
+        }
         let vent_flows: Vec<Option<f64>> = match (&solution, &vent_enclosure) {
             (Some(sol), Some(e))
-                if !self.cabinet.heat.live.is_stale() && !vent_specs.is_empty() =>
+                if !self.cabinet.heat.live.is_stale() && !vent_specs.is_empty() && !previewing =>
             {
                 let up_to_date = mode
                     .vent_flows
@@ -661,8 +679,8 @@ impl NovoApp {
             }
             _ => Vec::new(),
         };
-        let show_openings =
-            !vent_specs.is_empty() && (mode.controls.heat_panel || solution.is_some());
+        let show_openings = !vent_specs.is_empty()
+            && (mode.controls.heat_panel || solution.is_some() || previewing);
         let markers = match (&vent_enclosure, show_openings) {
             (Some(e), true) => heat_openings::markers(
                 &vent_specs,
@@ -775,6 +793,18 @@ impl NovoApp {
             }))
             .collect();
         ghost.extend(mode.measure.overlays());
+        if let Some(lay) = &stored {
+            for (id, rect) in &whatif_moves {
+                let top = lay.depths.get(id).copied().unwrap_or(10.0);
+                ghost.extend(super::heat_whatif::move_overlays(
+                    *id,
+                    *rect,
+                    lay.placements.iter().find(|p| p.id == *id),
+                    &scene.frame,
+                    top,
+                ));
+            }
+        }
         let dark = ui.visuals().dark_mode;
         mode.emc.on = mode.controls.emc;
         ghost_changed |= mode.emc.sync(project, id, revision, scene, dark);
@@ -1052,6 +1082,39 @@ impl NovoApp {
                     }
                     None => {}
                 }
+            }
+        }
+        {
+            // The Cooling what-if follows its Heat strip button and the
+            // command; it lives here because the preview is drawn here.
+            let tag_of = |raw: u64| {
+                project
+                    .get::<Device>(DeviceId::from(raw))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_else(|| format!("device {raw}"))
+            };
+            let heat = &mut self.cabinet.heat;
+            heat.whatif.poll(ui.ctx());
+            heat.whatif.take_request();
+            if heat.whatif.take_go() {
+                let fans = super::heat_sweep::fans_of(&mut heat.cooling, project);
+                heat.whatif
+                    .start(project, id, ambient, &heat.settings, fans, &tag_of);
+            }
+            if heat.whatif.is_open() {
+                let fans = super::heat_sweep::fans_of(&mut heat.cooling, project);
+                let now_key = heat
+                    .whatif
+                    .ambient_used()
+                    .map(|a| super::heat_sweep::key_of(project, id, a, &heat.settings, &fans));
+                let at = super::view3d_heat::advice_pos(view_rect);
+                let at = egui::pos2(
+                    at.x - (super::heat_whatif::WINDOW_WIDTH - super::heat_sweep::WINDOW_WIDTH)
+                        .max(0.0),
+                    at.y,
+                );
+                heat.whatif.left_out = any_left_out;
+                heat.whatif.show(ui.ctx(), 2, now_key, ambient, at);
             }
         }
         if self.cabinet.heat.layout.pending() {

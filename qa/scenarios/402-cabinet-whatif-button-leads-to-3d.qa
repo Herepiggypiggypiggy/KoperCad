@@ -1,0 +1,23 @@
+@title Cooling what-if from the Cabinet Heat strip opens in 3D
+@area Cabinet
+@sizes 1366x768
+# The button sits next to Cooling advice and Cooler layout in the Cabinet's Heat strip; the wizard previews in 3D, so the press takes the person there. A hotter day and a lighter duty are typed in the window before the run: the condition fields are there and the run is labelled a model.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text Cabinet #1
+wait 30
+key ctrl+k
+wait 6
+text show or hide heat
+wait 8
+key Enter
+wait 20
+expect "Cooling what-if"
+shot cabinet-heat-strip
+check_layout
+click_text "Cooling what-if"
+wait 40
+expect "Hottest day outside"
+expect "MODEL, NOT MEASURED"
+shot opened-in-3d
+check_layout

@@ -147,6 +147,8 @@ pub(super) struct HeatState {
     pub(super) advice: super::heat_sweep::CoolingAdvice,
     /// The search for a cooler layout of the rails (`heat.cooler_layout`).
     pub(super) layout: super::heat_layout::LayoutSearch,
+    /// The cooling what-if wizard (`heat.cooling_whatif`).
+    pub(super) whatif: super::heat_whatif::Wizard,
 }
 
 /// Where a cached picture came from.
@@ -214,6 +216,7 @@ impl HeatState {
             transient_wanted: false,
             advice: Default::default(),
             layout: Default::default(),
+            whatif: Default::default(),
         }
     }
 
@@ -487,6 +490,10 @@ impl HeatState {
             "heat.toggle" => self.on = !self.on,
             "heat.simulate" => self.request_run(),
             "heat.cooling_advice" => self.advice.request(),
+            "heat.cooling_whatif" => {
+                self.advice.close();
+                self.whatif.request();
+            }
             "heat.cooler_layout" => {
                 self.on = true;
                 self.layout.request();
@@ -965,6 +972,21 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
         );
         if cooler.clicked() {
             state.layout.request();
+        }
+        let whatif = ui
+            .add_enabled(!state.whatif.running(), egui::Button::new("Cooling what-if"))
+            .on_hover_text(
+                "Name the hottest day and the duty, and see the fixes ranked: moving devices, vents, fans, a bigger enclosure, with a before and after table and a 3D preview",
+            );
+        super::cabinet_bar::note_ctx(
+            ui.ctx(),
+            "heat.cooling_whatif",
+            "Cooling what-if button",
+            &whatif,
+        );
+        if whatif.clicked() {
+            state.advice.close();
+            state.whatif.request();
         }
         heat_up_controls(ui, state);
         compare_controls(ui, state);

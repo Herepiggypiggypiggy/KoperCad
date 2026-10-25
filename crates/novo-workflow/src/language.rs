@@ -578,6 +578,11 @@ pub const DUTCH: &[Aliases] = &[
         &["koeladvies", "ventilator plaatsen", "ventilatieroosters"],
     ),
     nl(
+        "heat.cooling_whatif",
+        &[],
+        &["koeling wat als", "koelingswizard", "warmste dag"],
+    ),
+    nl(
         "heat.cooler_layout",
         &[],
         &[
