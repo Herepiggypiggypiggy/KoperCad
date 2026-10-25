@@ -598,6 +598,13 @@ fn workshop_strip(
         {
             *act = Some(Act::ExportPacket);
         }
+        if ui
+            .button("Work cards (PDF)")
+            .on_hover_text(super::WORKPACK_HINT)
+            .clicked()
+        {
+            *act = Some(Act::Run("export.workpack"));
+        }
     });
     print_check(ui, check, act);
     ui.weak("The Workshop pack puts a bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans), the 1:1 drilling templates and the labels in one folder next to the project.");

@@ -986,12 +986,14 @@ impl NovoApp {
             mode.strip_fitted = mode.controls.assembly.is_some();
             mode.pending = Some(Pending::Fit);
         }
-        super::view3d_build_order::strip(
+        if super::view3d_build_order::strip(
             ui.ctx(),
             view_rect,
             &mut mode.controls.assembly,
             &mode.assembly_steps,
-        );
+        ) {
+            self.wb.queued.push("export.workpack");
+        }
         mode.view.top_inset = view3d_controls::toolbar_inset(ui.ctx(), view_rect);
         if let Some(command) = asked {
             self.wb.queued.push(command);

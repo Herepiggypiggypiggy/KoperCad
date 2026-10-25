@@ -30,6 +30,9 @@ use super::{Level, NovoApp};
 /// slip (metres typed as millimetres); printing it would not be.
 const MAX_TEMPLATE_PAGES: usize = 300;
 
+/// The work cards in the pack.
+const WORK_CARDS_FILE: &str = "1 Work cards.pdf";
+
 /// The print-scale check page in the pack.
 const SCALE_CHECK_FILE: &str = "0 Print scale check.pdf";
 
@@ -203,6 +206,21 @@ impl NovoApp {
                 ));
             }
             None => skipped.push("labels".to_owned()),
+        }
+        if let Some(bytes) = self.work_cards_pdf() {
+            if self.workshop_write(&folder.join(WORK_CARDS_FILE), &bytes) {
+                done.push("work cards".to_owned());
+                separate.push(CoverLine::new(
+                    "Work cards",
+                    WORK_CARDS_FILE,
+                    "Print at 100 % (actual size), then check the 100 mm ruler",
+                    "Positions from the cabinet layout, not measured; long rails are drawn at a stated smaller scale",
+                ));
+            }
+        } else {
+            skipped.push(
+                "work cards (no cabinet has a mounting plate with something to build)".to_owned(),
+            );
         }
         match self.export_bench_packet_to(&folder.join(PACKET_FILE), &separate) {
             Some(_) => done.push("bench packet".to_owned()),

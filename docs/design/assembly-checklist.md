@@ -70,6 +70,8 @@ printed page can be ticked and the CSV opens as a work list.
   Tests: `crates/novo-layout/tests/assembly.rs` (hand-built layouts and the
   `cabinet-layout` and `rails-and-ducts` lesson projects) and
   `crates/novo-app/src/app/assembly_pack_tests.rs`.
+- **Work cards.** The build order as half-page cards for the hand workshop, see
+  `docs/design/work-cards.md` (Reports > Export > Export work cards, the Build order strip).
 - **Machine files.** Skipped until a machine is named.
 
 ## 4. Tests

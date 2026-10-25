@@ -1,0 +1,341 @@
+//! The workshop pack on a hand-built cabinet: every step gets a card, the
+//! hole positions agree with the drill table, wires are chunked and every
+//! wire is on exactly one wire card.
+
+use novo_layout::assembly::Phase;
+use novo_layout::drill::{Cutout, CutoutShape, DeviceFeatures, Hole, Surface, drill_table};
+use novo_layout::state::CabinetLayout;
+use novo_layout::workpack::{CardKind, WIRES_PER_CARD, WireCut, WireGroup, build, from_edges};
+use novo_layout::{Duct, Margins, Placement, Plate, Rail, Size};
+
+fn place(id: u64, x: f64, y: f64, rotated: bool, rail: Option<u64>) -> Placement {
+    Placement {
+        id,
+        x,
+        y,
+        rotated,
+        size: Size {
+            width: 45.0,
+            height: 90.0,
+            guessed: false,
+        },
+        clearance: None,
+        margins: Margins::default(),
+        rail,
+    }
+}
+
+fn layout() -> CabinetLayout {
+    let mut l = CabinetLayout::new(Plate {
+        width: 800.0,
+        height: 600.0,
+        margin: 10.0,
+    });
+    l.rails = vec![
+        Rail {
+            id: 2,
+            x: 50.0,
+            y: 300.0,
+            length: 400.0,
+            vertical: false,
+        },
+        Rail {
+            id: 1,
+            x: 50.0,
+            y: 100.0,
+            length: 400.0,
+            vertical: false,
+        },
+    ];
+    l.ducts = vec![Duct {
+        id: 3,
+        x: 50.0,
+        y: 250.0,
+        length: 700.0,
+        width: 50.0,
+        vertical: false,
+    }];
+    l.placements = vec![
+        place(12, 80.0, 400.0, false, None),
+        place(14, 300.0, 400.0, true, None),
+        place(11, 200.0, 100.0, false, Some(1)),
+        place(10, 100.0, 100.0, false, Some(1)),
+    ];
+    l
+}
+
+fn features() -> Vec<DeviceFeatures> {
+    let holes = vec![
+        Hole {
+            dx: 5.0,
+            dy: 5.0,
+            dia: 4.5,
+        },
+        Hole {
+            dx: 40.0,
+            dy: 85.0,
+            dia: 4.5,
+        },
+    ];
+    let f = |id: u64, label: &str, cutout: Option<Cutout>| DeviceFeatures {
+        id,
+        label: label.into(),
+        surface: Surface::Plate,
+        holes: holes.clone(),
+        cutout,
+        problems: Vec::new(),
+    };
+    vec![
+        f(12, "-Q12", None),
+        f(
+            14,
+            "-Q14",
+            Some(Cutout {
+                shape: CutoutShape::Rect { w: 20.0, h: 10.0 },
+                centre: Some((10.0, 20.0)),
+            }),
+        ),
+    ]
+}
+
+fn wire(n: &str, from: &str, to: &str, cut: f64) -> WireCut {
+    WireCut {
+        number: n.into(),
+        from: from.into(),
+        to: to.into(),
+        kind: "1.5 mm2 black".into(),
+        cut_mm: cut,
+        estimated: false,
+    }
+}
+
+fn groups(count: usize) -> Vec<WireGroup> {
+    vec![
+        WireGroup {
+            title: "Power".into(),
+            wires: (0..count)
+                .map(|i| wire(&format!("W{i}"), "-Q10:1", "-Q11:2", 300.0 - i as f64))
+                .collect(),
+        },
+        WireGroup {
+            title: "Control".into(),
+            wires: vec![wire("C1", "-Q12:A1", "-Q10:3", 150.0)],
+        },
+    ]
+}
+
+fn pack(count: usize) -> novo_layout::workpack::Pack {
+    build(
+        "+CAB1",
+        &layout(),
+        &features(),
+        &|id| format!("-Q{id}"),
+        &groups(count),
+    )
+}
+
+#[test]
+fn every_rail_duct_and_device_step_has_its_own_card() {
+    let p = pack(3);
+    let kinds: Vec<(CardKind, String)> = p.cards.iter().map(|c| (c.kind, c.mark.clone())).collect();
+    assert_eq!(
+        kinds[..9],
+        [
+            (CardKind::Rail, "R1".into()),
+            (CardKind::Rail, "R2".into()),
+            (CardKind::Duct, "D1".into()),
+            (CardKind::Clip, "-Q10".into()),
+            (CardKind::Clip, "-Q11".into()),
+            (CardKind::Screw, "-Q12".into()),
+            (CardKind::Screw, "-Q14".into()),
+            (CardKind::Wires, "Power".into()),
+            (CardKind::Wires, "Control".into()),
+        ]
+    );
+    assert_eq!(p.cards.last().unwrap().kind, CardKind::Labels);
+    // The overview is the build order, step for step.
+    assert_eq!(p.overview.len(), 3 + 4 + 4 + 4);
+    assert!(p.overview.iter().enumerate().all(|(i, r)| r.step == i + 1));
+}
+
+#[test]
+fn card_hole_numbers_and_positions_agree_with_the_drill_table() {
+    let l = layout();
+    let table = drill_table(&l, &features());
+    let p = pack(1);
+    for tag in ["-Q12", "-Q14"] {
+        let card = p.cards.iter().find(|c| c.mark == tag).unwrap();
+        let t = card.template.as_ref().unwrap();
+        let rows: Vec<_> = table.holes.iter().filter(|h| h.source == tag).collect();
+        assert_eq!(t.holes.len(), rows.len(), "{tag}");
+        let placement = l
+            .placements
+            .iter()
+            .find(|q| format!("-Q{}", q.id) == tag)
+            .unwrap();
+        let fp = placement.footprint();
+        for h in &t.holes {
+            let row = rows
+                .iter()
+                .find(|r| r.no == h.no)
+                .unwrap_or_else(|| panic!("{tag}: no. {} is not in the table", h.no));
+            assert!((fp.x + h.x - row.x).abs() < 0.011, "{tag} x");
+            assert!((fp.y + h.y - row.y).abs() < 0.011, "{tag} y");
+        }
+    }
+    // Rail holes carry the table's numbers too.
+    let rail = p.cards.iter().find(|c| c.mark == "R1").unwrap();
+    let nos: Vec<usize> = rail
+        .template
+        .as_ref()
+        .unwrap()
+        .holes
+        .iter()
+        .map(|h| h.no)
+        .collect();
+    assert!(nos.iter().all(|n| *n > 0), "{nos:?}");
+}
+
+#[test]
+fn a_turned_device_turns_its_template_with_it() {
+    let p = pack(1);
+    let t = p
+        .cards
+        .iter()
+        .find(|c| c.mark == "-Q14")
+        .unwrap()
+        .template
+        .as_ref()
+        .unwrap();
+    assert_eq!((t.width, t.height), (90.0, 45.0), "footprint is swapped");
+    // Hole (5,5) of the 45 x 90 part: turned 90 degrees clockwise it lands
+    // at (90 - 5, 5) in the 90 x 45 footprint.
+    assert!(
+        t.holes.iter().any(|h| h.x == 85.0 && h.y == 5.0),
+        "{:?}",
+        t.holes
+    );
+    let cut = t.cutout.as_ref().unwrap();
+    assert_eq!(cut.shape, CutoutShape::Rect { w: 10.0, h: 20.0 });
+    assert_eq!((cut.x, cut.y), (70.0, 10.0));
+}
+
+#[test]
+fn the_rail_strip_has_the_rail_holes_from_its_start() {
+    let p = pack(1);
+    let c = p.cards.iter().find(|c| c.mark == "R1").unwrap();
+    let t = c.template.as_ref().unwrap();
+    assert!(t.rail);
+    assert_eq!((t.width, t.height), (400.0, 35.0));
+    let xs: Vec<f64> = t.holes.iter().map(|h| h.x).collect();
+    assert_eq!(xs.first(), Some(&10.0));
+    assert_eq!(xs.last(), Some(&390.0));
+    assert!(c.tools[0].contains("400"), "{:?}", c.tools);
+    assert_eq!(c.dims.len(), t.holes.len());
+    assert!(c.dims[0].contains("from the left edge"), "{}", c.dims[0]);
+}
+
+#[test]
+fn a_clipped_device_without_holes_says_nothing_is_drilled() {
+    let p = pack(1);
+    let c = p.cards.iter().find(|c| c.mark == "-Q10").unwrap();
+    assert!(c.template.is_none());
+    assert!(c.notes.iter().any(|n| n.contains("Nothing to drill")));
+    assert_eq!(c.ticks, ["Fitted", "Checked"]);
+    // Its wires are listed from the cut list, two ends counted.
+    assert!(c.wires.iter().any(|w| w.number == "C1"));
+}
+
+#[test]
+fn wires_are_chunked_and_every_wire_is_on_exactly_one_wire_card() {
+    let count = WIRES_PER_CARD * 2 + 3;
+    let p = pack(count);
+    let wire_cards: Vec<_> = p
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Wires)
+        .collect();
+    assert_eq!(wire_cards.len(), 3 + 1);
+    let listed: usize = wire_cards.iter().map(|c| c.wires.len()).sum();
+    assert_eq!(listed, count + 1);
+    assert!(wire_cards.iter().all(|c| c.wires.len() <= WIRES_PER_CARD));
+    // Step ranges follow the build order and cover every wire step once.
+    let mut covered = Vec::new();
+    for c in &wire_cards {
+        covered.extend(c.steps.0..=c.steps.1);
+    }
+    let want: Vec<usize> = p
+        .overview
+        .iter()
+        .filter(|r| r.phase == Phase::Wires)
+        .map(|r| r.step)
+        .collect();
+    assert_eq!(covered, want);
+}
+
+#[test]
+fn distances_are_given_from_the_nearest_edge() {
+    assert_eq!(
+        from_edges(100.0, 50.0, (800.0, 600.0)),
+        "100 mm from the left edge, 50 mm from the top edge"
+    );
+    assert_eq!(
+        from_edges(790.0, 590.5, (800.0, 600.0)),
+        "10 mm from the right edge, 9.5 mm from the bottom edge"
+    );
+}
+
+#[test]
+fn the_tool_list_counts_drills_and_cuts() {
+    let p = pack(2);
+    let drill: Vec<_> = p
+        .tools
+        .iter()
+        .filter(|t| t.tool.starts_with("Drill"))
+        .collect();
+    assert!(
+        drill
+            .iter()
+            .any(|t| t.tool == "Drill dia 4.5 mm" && t.for_what.starts_with("4 holes")),
+        "{:?}",
+        p.tools
+    );
+    assert!(p.tools.iter().any(|t| t.tool == "Drill dia 5.5 mm"));
+    assert!(
+        p.tools
+            .iter()
+            .any(|t| t.tool.starts_with("Punch or jigsaw"))
+    );
+    assert!(
+        p.tools
+            .iter()
+            .any(|t| t.for_what.contains("DIN rail 400 mm: R1, R2"))
+    );
+    assert!(
+        p.tools
+            .iter()
+            .any(|t| t.for_what.contains("wiring duct 700 mm: D1"))
+    );
+    assert!(
+        p.tools
+            .iter()
+            .any(|t| t.for_what.starts_with("3 wires in 2 groups"))
+    );
+}
+
+#[test]
+fn the_pack_is_deterministic() {
+    assert_eq!(pack(5), pack(5));
+}
+
+#[test]
+fn an_empty_cabinet_gives_an_empty_pack() {
+    let l = CabinetLayout::new(Plate {
+        width: 400.0,
+        height: 300.0,
+        margin: 10.0,
+    });
+    let p = build("+CAB2", &l, &[], &|id| format!("-Q{id}"), &[]);
+    assert!(p.cards.is_empty());
+    assert!(p.overview.is_empty());
+}
