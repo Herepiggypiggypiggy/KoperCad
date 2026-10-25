@@ -12,8 +12,8 @@ use std::path::{Path, PathBuf};
 
 use novo_core::{Device, DeviceId, Project};
 use novo_layout::workpack::{
-    OpeningJob, OpeningWall, Pack, WireCut, WireGroup, add_opening_cards, add_wiring_opening_cards,
-    build,
+    OpeningJob, OpeningWall, Pack, WireCut, WireGroup, add_opening_cards, add_outside_wire_cards,
+    add_wiring_opening_cards, build,
 };
 use novo_reports::{AssemblyChecklist, Cell, CutList, Report, Section, is_estimate};
 
@@ -22,7 +22,7 @@ use novo_thermal::bridge::{BridgeOptions, scenario_from_project};
 use super::assembly::Circuit;
 use super::heat_openings_store;
 use super::heat_settings::{Kind, Wall};
-use super::pdf::{replaceable_path, write_replacing};
+use super::pdf::write_replacing;
 use super::{Level, NovoApp};
 
 fn number(cell: Option<&Cell>) -> Option<f64> {
@@ -46,8 +46,11 @@ fn text_at(section: &Section, row: &novo_reports::Row, key: &str) -> String {
 
 /// The cut lengths of the cut list by (number, from, to), each key's lengths
 /// in list order so a number used twice gets its own length each time.
-fn cut_lengths(project: &Project) -> BTreeMap<(String, String, String), VecDeque<(f64, f64)>> {
-    let mut out: BTreeMap<(String, String, String), VecDeque<(f64, f64)>> = BTreeMap::new();
+/// Each entry: cut length, each end's allowance, and the cut list group's title (`1.5 mm2 black`).
+type CutLengths = BTreeMap<(String, String, String), VecDeque<(f64, f64, String)>>;
+
+fn cut_lengths(project: &Project) -> CutLengths {
+    let mut out = CutLengths::new();
     for s in CutList::default()
         .generate(project)
         .sections
@@ -63,7 +66,9 @@ fn cut_lengths(project: &Project) -> BTreeMap<(String, String, String), VecDeque
             if let Some(cut) = number(at(s, row, "cut_mm").as_ref()) {
                 // The cut list's "Ends mm" is both ends together.
                 let ends = number(at(s, row, "allowance_mm").as_ref()).unwrap_or(0.0) / 2.0;
-                out.entry(key).or_default().push_back((cut, ends));
+                out.entry(key)
+                    .or_default()
+                    .push_back((cut, ends, s.title.clone()));
             }
         }
     }
@@ -144,8 +149,8 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                         novo_layout::drill::mm(length)
                     ));
                 }
-                let cut = found.map_or(length, |(cut, _)| cut);
-                let end_mm = found.map(|(_, end)| end);
+                let cut = found.as_ref().map_or(length, |(cut, ..)| *cut);
+                let end_mm = found.as_ref().map(|(_, end, _)| *end);
                 let (colour, size) = (t("colour"), t("cross_section_mm2"));
                 let fitting = fitting_of(end_mm, rules.ferrule_mm, rules.lug_mm);
                 let mut kind = [
@@ -239,9 +244,9 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
     // Cut-list wires with no end in any plated cabinet (supply feed leads,
     // field wires) are on no card: say which, on the cover of the cabinet
     // their device is in, else of the first.
-    let mut left: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+    let mut left: BTreeMap<usize, Vec<(String, WireCut)>> = BTreeMap::new();
     for ((number, from, to), lengths) in &cuts {
-        for cut in lengths {
+        for (cut, end, group) in lengths {
             let at = out
                 .iter()
                 .position(|p| {
@@ -249,19 +254,46 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                         || to.contains(&format!("{}-", p.cabinet))
                 })
                 .unwrap_or(0);
-            left.entry(at).or_default().push(format!(
-                "{number} ({from} to {to}) cut {} mm",
-                novo_layout::drill::mm(cut.0)
+            let fitting = fitting_of(Some(*end), rules.ferrule_mm, rules.lug_mm);
+            left.entry(at).or_default().push((
+                group.clone(),
+                WireCut {
+                    number: number.clone(),
+                    from: from.clone(),
+                    to: to.clone(),
+                    kind: group.clone(),
+                    cut_mm: *cut,
+                    // Outside the plate the duct model does not reach: cut long.
+                    estimated: true,
+                    end_mm: Some(*end),
+                    fitting,
+                    part: None,
+                },
             ));
         }
     }
     for (at, list) in left {
         if let Some(pack) = out.get_mut(at) {
             pack.problems.push(format!(
-                "{} of {total_cut} cut-list wires are not on this cabinet's cards: they have no end inside a plated cabinet (supply and field wires). They are on the cut list: {}",
+                "{} of {total_cut} cut-list wires have no end inside a plated cabinet (supply and field wires): they are on the \"Wires outside the plate\" cards at the end, not numbered steps. {}",
                 list.len(),
-                list.join("; ")
+                list.iter()
+                    .map(|(_, w)| format!(
+                        "{} ({} to {}) cut {} mm",
+                        w.number,
+                        w.from,
+                        w.to,
+                        novo_layout::drill::mm(w.cut_mm)
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("; ")
             ));
+            let mut wires: Vec<WireCut> = list.into_iter().map(|(_, w)| w).collect();
+            let numbers: Vec<String> = wires.iter().map(|w| w.number.clone()).collect();
+            for (w, part) in wires.iter_mut().zip(parts_of(&numbers)) {
+                w.part = part;
+            }
+            add_outside_wire_cards(pack, wires);
         }
     }
     out
@@ -302,21 +334,82 @@ impl NovoApp {
 
     /// Exports the work cards next to the project, or to the Documents folder
     /// for an untitled one.
+    #[cfg(test)]
     pub(super) fn export_workpack(&mut self) -> Option<PathBuf> {
         let (dir, stem) = self.export_base()?;
-        let path = replaceable_path(&dir.join(format!("{stem} work cards.pdf")));
+        let path = super::pdf::replaceable_path(&dir.join(format!("{stem} work cards.pdf")));
         self.export_workpack_to(&path)
+    }
+
+    /// The Work cards commands (menu, Bench panel, Build order strip): the
+    /// person picks where the PDF goes. The dialog starts next to the project
+    /// (Documents for an untitled one) with the usual file name. Cancelling
+    /// writes nothing.
+    pub(super) fn ask_workpack(&mut self) -> Option<PathBuf> {
+        if self.work_cards_pdf().is_none() {
+            // Says what is missing, without a dialog for nothing.
+            return self.export_workpack_to(Path::new(""));
+        }
+        let (dir, stem) = self.export_base()?;
+        let path = Self::pick_pdf(
+            "Save the work cards",
+            &dir,
+            &format!("{stem} work cards.pdf"),
+        )?;
+        self.export_workpack_to(&path)
+    }
+
+    /// The same for one Build order step's card.
+    pub(super) fn ask_workpack_step(
+        &mut self,
+        id: novo_core::StructureId,
+        mark: &str,
+    ) -> Option<PathBuf> {
+        let (dir, stem) = self.export_base()?;
+        let (bytes, tag, several) = self.workpack_step_card(id, mark)?;
+        let file = step_file_name(&stem, &tag, mark, several);
+        let path = Self::pick_pdf("Save the work card", &dir, &file)?;
+        self.write_step_card(&path, &bytes)
+    }
+
+    /// A PDF save dialog starting in `dir`; the name always ends in `.pdf`.
+    fn pick_pdf(title: &str, dir: &Path, file: &str) -> Option<PathBuf> {
+        let path = crate::dialogs::FileDialog::new()
+            .set_title(title)
+            .set_directory(dir)
+            .set_file_name(file)
+            .add_filter("PDF", &["pdf"])
+            .save_file()?;
+        Some(if path.extension().is_some() {
+            path
+        } else {
+            path.with_extension("pdf")
+        })
     }
 
     /// The card of the Build order step `mark` of enclosure `id` as a one-page
     /// PDF next to the project, `<project> work card <mark>.pdf`.
+    #[cfg(test)]
     pub(super) fn export_workpack_step(
         &mut self,
         id: novo_core::StructureId,
         mark: &str,
     ) -> Option<PathBuf> {
-        let name = self.machine_title().unwrap_or_default();
         let (dir, stem) = self.export_base()?;
+        let (bytes, tag, several) = self.workpack_step_card(id, mark)?;
+        let file = step_file_name(&stem, &tag, mark, several);
+        let path = super::pdf::replaceable_path(&dir.join(file));
+        self.write_step_card(&path, &bytes)
+    }
+
+    /// The one-page PDF of step `mark`, the enclosure's tag and whether the
+    /// project has several enclosures; says so when there is no such card.
+    fn workpack_step_card(
+        &mut self,
+        id: novo_core::StructureId,
+        mark: &str,
+    ) -> Option<(Vec<u8>, String, bool)> {
+        let name = self.machine_title().unwrap_or_default();
         let (bytes, several) = {
             let project = self.machine()?;
             let tag = project.structures().find(|s| s.id == id)?.tag.to_string();
@@ -338,16 +431,18 @@ impl NovoApp {
             );
             return None;
         };
-        let file = step_file_name(&stem, &tag, mark, several);
-        let path = replaceable_path(&dir.join(file));
-        match write_replacing(&path, &bytes) {
+        Some((bytes, tag, several))
+    }
+
+    fn write_step_card(&mut self, path: &Path, bytes: &[u8]) -> Option<PathBuf> {
+        match write_replacing(path, bytes) {
             Ok(()) => {
                 self.message_file(
                     format!("Exported {}. Print at 100 % (actual size)", path.display()),
-                    &path,
+                    path,
                 );
-                self.wb.last_export = Some(path.clone());
-                Some(path)
+                self.wb.last_export = Some(path.to_owned());
+                Some(path.to_owned())
             }
             Err(e) => {
                 self.message(Level::Error, format!("Could not export the work card: {e}"));

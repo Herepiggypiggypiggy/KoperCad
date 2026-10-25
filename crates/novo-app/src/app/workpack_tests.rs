@@ -116,6 +116,11 @@ fn the_cards_need_a_plate_then_land_next_to_the_project() {
     d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
     d.frame();
 
+    // The commands ask where to save; a cancelled dialog (the only answer in
+    // a unit test) writes nothing.
+    assert_eq!(d.app.ask_workpack(), None);
+    assert!(!dir.path().join("Plant 2 work cards.pdf").exists());
+
     let pdf = d.app.export_workpack().expect("exported");
     assert_eq!(pdf, dir.path().join("Plant 2 work cards.pdf"));
     let bytes = std::fs::read(&pdf).unwrap();
@@ -148,6 +153,15 @@ fn the_cards_need_a_plate_then_land_next_to_the_project() {
             .unwrap()
     });
     let mark = first.unwrap();
+    assert_eq!(d.app.ask_workpack_step(cab, &mark), None);
+    assert!(
+        std::fs::read_dir(dir.path()).unwrap().all(|f| !f
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .contains("work card ")),
+        "a cancelled dialog writes no card"
+    );
     let one = d.app.export_workpack_step(cab, &mark).expect("one card");
     assert!(
         one.file_name()
@@ -229,7 +243,7 @@ fn cut_list_wires_without_a_cabinet_end_are_named_on_the_cover() {
     let named: Vec<&String> = packs
         .iter()
         .flat_map(|p| &p.problems)
-        .filter(|p| p.contains("not on this cabinet's cards"))
+        .filter(|p| p.contains("have no end inside a plated cabinet"))
         .collect();
     assert_eq!(named.len(), 1, "{named:?}");
     // 25 wires in the cut list: 19 on cards, the 6 feed leads named.
@@ -239,6 +253,32 @@ fn cut_list_wires_without_a_cabinet_end_are_named_on_the_cover() {
         named[0]
     );
     assert!(named[0].contains("(feed)"), "{}", named[0]);
+    // The same wires are on "Outside the plate" cards with tick boxes, not numbered.
+    let outside: Vec<_> = packs
+        .iter()
+        .flat_map(|p| &p.cards)
+        .filter(|c| c.kind == CardKind::Outside)
+        .collect();
+    assert_eq!(
+        outside.iter().map(|c| c.wires.len()).sum::<usize>(),
+        25 - on_cards
+    );
+    for c in &outside {
+        assert_eq!(c.steps, (0, 0));
+        assert_eq!(c.ticks, ["Cut", "Run"]);
+        assert!(c.wires.iter().all(|w| w.estimated && w.end_mm.is_some()));
+    }
+    // Every wire the cover names is on a card: same number, ends and cut.
+    for w in outside.iter().flat_map(|c| &c.wires) {
+        let line = format!(
+            "{} ({} to {}) cut {} mm",
+            w.number,
+            w.from,
+            w.to,
+            novo_layout::drill::mm(w.cut_mm)
+        );
+        assert!(named[0].contains(&line), "{line} not in {}", named[0]);
+    }
 }
 
 /// A saved project with a plated cabinet `+CAB1` whose interior is 600 x 800 x 250 mm.

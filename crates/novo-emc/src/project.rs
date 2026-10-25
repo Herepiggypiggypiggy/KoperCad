@@ -577,6 +577,7 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
             id: s.id.raw(),
             tag: s.tag.to_string(),
             finish: finish_of(s),
+            door_bonded: s.properties.get("emc.door_bonded").and_then(as_bool),
         });
     }
     if started {
@@ -608,23 +609,38 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
     }
     let routed = started.then(|| novo_routing::model::route_project(project));
 
+    // Devices on the door, and on other surfaces: their positions are in
+    // that surface's millimetres, not the plate's.
+    let mut on_door: std::collections::HashSet<u64> = std::collections::HashSet::new();
+    let mut off_plate: std::collections::HashSet<u64> = std::collections::HashSet::new();
+    for p in &plates {
+        if let Some(layout) = novo_layout::model::load(project, novo_core::StructureId::from(p.id))
+        {
+            on_door.extend(layout.door_devices.iter().map(|d| d.id));
+            off_plate.extend(layout.off_plate.keys().copied());
+        }
+    }
+
     // Devices that matter for EMC.
     let mut devices = Vec::new();
     for d in project.devices() {
         let role = role_of(project, d);
-        if role == Role::Other {
+        let door = on_door.contains(&d.id.raw());
+        if role == Role::Other && !door {
             continue;
         }
         let place = placements.get(&d.id);
-        let rect = place.map(|pl| {
-            let size = novo_layout::model::device_size(project, d);
-            let (w, h) = if pl.rotated {
-                (size.height, size.width)
-            } else {
-                (size.width, size.height)
-            };
-            (pl.x, pl.y, w, h)
-        });
+        let rect = place
+            .filter(|_| !off_plate.contains(&d.id.raw()))
+            .map(|pl| {
+                let size = novo_layout::model::device_size(project, d);
+                let (w, h) = if pl.rotated {
+                    (size.height, size.width)
+                } else {
+                    (size.width, size.height)
+                };
+                (pl.x, pl.y, w, h)
+            });
         let filter = match device_prop(project, d, "emc.filter") {
             Some(Value::Text(t)) => {
                 let t = t.trim().to_ascii_lowercase();
@@ -652,6 +668,7 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
             filter_for: text(&d.properties, "emc.filter_for").map(str::to_owned),
             bonded: d.properties.get("emc.bonded").and_then(as_bool),
             height_mm: novo_layout::model::device_depth(project, d).filter(|h| *h > 0.0),
+            on_door: door,
         });
     }
 
@@ -852,6 +869,11 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
             let id = novo_core::StructureId::from(*plate);
             tx.set_property(id, "emc.finish", Some(Value::Text("bare".to_owned())))?;
             Ok("Plate finish stated as bare: scrape the mounting area bare or use a galvanised plate (a requirement for the build)".to_owned())
+        }
+        Fix::BondDoor { plate } => {
+            let id = novo_core::StructureId::from(*plate);
+            tx.set_property(id, "emc.door_bonded", Some(Value::Bool(true)))?;
+            Ok("Door stated as bonded to the frame: fit a short strap (flat braid, as short as the hinge allows) between door and frame, a requirement for the build".to_owned())
         }
         Fix::BondDevice { device } => {
             let id = novo_core::DeviceId::from(*device);

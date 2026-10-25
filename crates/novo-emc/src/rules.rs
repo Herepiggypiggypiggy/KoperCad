@@ -90,6 +90,15 @@ pub static RULES: &[Rule] = &[
         inputs: "`emc.finish` on the enclosure (`galvanised`, `bare`, `painted`), `emc.bonded` on the device",
     },
     Rule {
+        id: "EMC-12",
+        title: "Door and hinge crossings",
+        level: Level::Fact,
+        requirement: "A door that carries devices is bonded to the frame with a short strap; no drive or noisy device sits on the door; wires of classes that need separation do not cross the hinge in one bundle, and signal wires cross it shielded.",
+        source: "Cabling practice; not verified (IEC 60204-1 and IEC 61000-4-2 context)",
+        verify: true,
+        inputs: "Devices on the door (the Surface of a device), `emc.door_bonded` on the enclosure, the wires between door devices and the plate",
+    },
+    Rule {
         id: "EMC-14",
         title: "Signal cables leaving the cabinet",
         level: Level::Fact,
@@ -323,6 +332,17 @@ pub fn analyse_with_field(input: &Input, field: Option<&crate::field::FieldSetup
             "Plate finish under drives and filters"
         },
         plate_unknown && findings.len() == n,
+    );
+
+    let n = findings.len();
+    door(&cx, &mut findings);
+    note(
+        &mut status,
+        "EMC-12",
+        findings.len() - n,
+        input.devices.iter().any(|d| d.on_door),
+        "Devices on the door and the wires across the hinge",
+        false,
     );
 
     let n = findings.len();
@@ -1041,6 +1061,155 @@ fn bonding(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                 loop_polygon: Vec::new(),
                 band_hz: None,
             });
+        }
+    }
+}
+
+// ---- EMC-12 ----------------------------------------------------------------
+
+fn door(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
+    for plate in cx.input.plates.iter() {
+        let on_door: Vec<&crate::input::Device> = cx
+            .input
+            .devices
+            .iter()
+            .filter(|d| d.on_door && d.plate == Some(plate.id))
+            .collect();
+        if on_door.is_empty() {
+            continue;
+        }
+        let tags = on_door
+            .iter()
+            .map(|d| d.tag.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let find = |severity, message: String, subjects: Vec<Subject>, points, fixes| Finding {
+            rule: "EMC-12",
+            level: Level::Fact,
+            severity,
+            subjects,
+            points,
+            message,
+            metrics: Vec::new(),
+            fixes,
+            at: None,
+            ribbons: Vec::new(),
+            loop_polygon: Vec::new(),
+            band_hz: None,
+        };
+
+        // The strap between door and frame.
+        if plate.door_bonded != Some(true) {
+            let stated_not = plate.door_bonded == Some(false);
+            out.push(find(
+                if stated_not { Severity::Warning } else { Severity::Info },
+                format!(
+                    "The door of {} carries {} ({}) and {}: a short strap (flat braid) from door to frame gives shield and ESD currents a path that does not run through the hinge or the devices.",
+                    cx.plate(plate.id),
+                    if on_door.len() == 1 { "a device".to_owned() } else { format!("{} devices", on_door.len()) },
+                    tags,
+                    if stated_not { "is stated as not bonded" } else { "its bonding to the frame is not stated (emc.door_bonded)" },
+                ),
+                std::iter::once(Subject::Plate(plate.id))
+                    .chain(on_door.iter().map(|d| Subject::Device(d.id)))
+                    .collect(),
+                vec![(Subject::Plate(plate.id), if stated_not { 25 } else { 5 })],
+                vec![Fix::BondDoor { plate: plate.id }],
+            ));
+        }
+
+        // Drives and noisy devices have fast edges: not on the door.
+        for d in on_door
+            .iter()
+            .filter(|d| matches!(d.role, Role::Drive | Role::Noisy))
+        {
+            out.push(find(
+                Severity::Warning,
+                format!(
+                    "{} ({}) sits on the door: its fast edges ride on the door and the hinge wires. Mount it on the plate and bring only the display or keypad to the door on a shielded cable.",
+                    cx.dev(d.id),
+                    if d.role == Role::Drive { "drive" } else { "noisy device" },
+                ),
+                vec![Subject::Device(d.id), Subject::Plate(plate.id)],
+                vec![(Subject::Device(d.id), 30)],
+                Vec::new(),
+            ));
+        }
+
+        // The wires that cross the hinge.
+        let door_ids: Vec<u64> = on_door.iter().map(|d| d.id).collect();
+        let crossing: Vec<&crate::input::Run> = cx
+            .input
+            .runs
+            .iter()
+            .filter(|r| match (r.from, r.to) {
+                // Exactly one end on the door: the wire goes over the hinge.
+                // Door to door stays on the door. An end with no device (None)
+                // is unknown, so the run is not counted: no finding is made
+                // for a wire whose path is not known.
+                (Some(a), Some(b)) => door_ids.contains(&a) != door_ids.contains(&b),
+                _ => false,
+            })
+            .collect();
+        let classes: BTreeSet<EmcClass> = crossing.iter().map(|r| r.class).collect();
+        let clash: Vec<(EmcClass, EmcClass)> = classes
+            .iter()
+            .flat_map(|a| classes.iter().map(move |b| (*a, *b)))
+            .filter(|(a, b)| a < b && cx.input.params.distance_mm(*a, *b) > 0.0)
+            .collect();
+        for (a, b) in &clash {
+            let need = cx.input.params.distance_mm(*a, *b);
+            let mut subjects: Vec<Subject> = crossing
+                .iter()
+                .filter(|r| r.class == *a || r.class == *b)
+                .map(|r| Subject::Run(r.id))
+                .collect();
+            subjects.push(Subject::Plate(plate.id));
+            out.push(find(
+                Severity::Warning,
+                format!(
+                    "{} and {} wires both cross the hinge of {}: they have to bundle through the same hinge loop, where the planning distance of {} mm may not be kept. Run each class in its own loop on opposite sides of the hinge, or bring the signal wires to the door through a separate terminal block.",
+                    a.label(),
+                    b.label(),
+                    cx.plate(plate.id),
+                    need.round() as i64
+                ),
+                subjects,
+                crossing
+                    .iter()
+                    .filter(|r| r.class == *a || r.class == *b)
+                    .map(|r| (Subject::Run(r.id), 15))
+                    .collect(),
+                Vec::new(),
+            ));
+        }
+        let mut done: BTreeSet<(u8, u64)> = BTreeSet::new();
+        for r in crossing
+            .iter()
+            .filter(|r| {
+                matches!(
+                    r.class,
+                    EmcClass::Analog | EmcClass::Fieldbus | EmcClass::Safety
+                )
+            })
+            .filter(|r| r.shield.is_none())
+        {
+            let key = r.cable.map_or((1, r.id), |c| (0, c));
+            if !done.insert(key) {
+                continue;
+            }
+            out.push(find(
+                Severity::Info,
+                format!(
+                    "{} ({}) crosses the hinge of {} without a shield: use a shielded cable, bond the shield all round on the plate side, and leave a loop long enough that the door can open without pulling on the wire.",
+                    cx.run(r.id),
+                    r.class.label(),
+                    cx.plate(plate.id)
+                ),
+                vec![r.cable.map_or(Subject::Run(r.id), Subject::Cable), Subject::Run(r.id)],
+                vec![(Subject::Run(r.id), 10)],
+                r.cable.map(|c| Fix::AddShield { cable: c }).into_iter().collect(),
+            ));
         }
     }
 }

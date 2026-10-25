@@ -1,0 +1,42 @@
+@title EMC door: the strap preview in the Light theme
+@area Cabinet
+@sizes 1366x768 1920x1080
+# The analog transmitter -B1 stands on the inside of the door and the door is stated as not bonded. Check > EMC check lists EMC-12: the door carries a device and is not bonded (Preview: Bond the door to the frame with a short strap, Apply is one undo step) and the unshielded analog wire crosses the hinge (guidance and the shield fix). The pictures are the evidence.
+open qa/fixtures/emc-cabinet-door.novo
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+scroll 360 400 -250
+wait 6
+shot 00-scrolled
+expect "EMC-12"
+expect "hinge"
+shot 01-findings
+check_layout
+expect "Preview: Bond the door to the frame with a short strap"
+click_text "Preview: Bond the door to the frame with a short strap" #1
+wait 10
+expect "Preview on a copy of the project"
+expect "Clears EMC-12"
+shot 02-preview
+check_layout
+click_text "Apply (one undo step)" #1
+wait 15
+expect "Door stated as bonded"
+expect_not "Preview on a copy of the project"
+shot 03-applied
+check_layout
