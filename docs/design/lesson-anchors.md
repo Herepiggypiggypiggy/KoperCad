@@ -51,6 +51,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `emc.plate.bonding`: {ui:emc.plate.bonding} shows **Bonding**
 - `emc.plate.shields`: {ui:emc.plate.shields} shows **Shields**
 - `emc.nets.motor`: {ui:emc.nets.motor} shows **Motor and drive output**
+- `emc.nets.preview`: {ui:emc.nets.preview} shows **Preview**
 - `emc.nets.apply`: {ui:emc.nets.apply} shows **Apply**
 - `emc.nets.set_control`: {ui:emc.nets.set_control} shows **control**
 - `emc.nets.close`: {ui:emc.nets.close} shows **Close**

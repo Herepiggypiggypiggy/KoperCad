@@ -12,7 +12,7 @@ Done (PR 1, branch claude/project-thread-uevsfv):
 
 Next, one PR each:
 1. Per-step print from the 3D strip (the current step's card only) and a "Print this step" on the card list.
-2. Door and plate layout from the build order (idea 5): door cut-outs, vents and fans as cards with
+2. (Vents and fans done as CUT-OUT cards, PR 3; still open: wiring openings and device-less door cut-outs as cards.) Door and plate layout from the build order (idea 5): door cut-outs, vents and fans as cards with
    dimensioned templates, as steps in the order.
 3. Strip length and ferrule per end on the wire cards (needs a wire-rule field per wire).
 4. Template of a whole rail run with the devices on it (clip positions drawn on the strip).
@@ -21,3 +21,5 @@ Open questions for Tadjiro: which printer and paper (A4 assumed), whether wire c
 and colour instead of by circuit.
 
 PR 2 (this branch after #1471 merged): per-step print from the strip ("Print this step", scenario 188), R5's two nits (contains match, per-cabinet N of M). Still next: door cut-outs and vents as cards (idea 5), strip length per end, clip positions drawn on the rail strip.
+
+PR 3: Heat panel grilles and fans as CUT-OUT cards (scenario 189), the one-card file name carries the cabinet tag when there are several cabinets. Still next: wiring openings and device-less door cut-outs as cards, strip length per end, clip positions on the rail strip.

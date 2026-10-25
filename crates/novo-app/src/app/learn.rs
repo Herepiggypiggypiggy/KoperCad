@@ -104,6 +104,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "emc.plate.bonding",
     "emc.plate.shields",
     "emc.nets.motor",
+    "emc.nets.preview",
     "emc.nets.apply",
     "emc.nets.set_control",
     "emc.nets.close",
@@ -950,9 +951,14 @@ impl NovoApp {
         });
         self.wb.emc_sch.reveal = target.ui.as_ref().and_then(|ui| {
             let ids = ui.ids();
-            ["emc.nets.apply", "emc.nets.set_control", "emc.nets.close"]
-                .into_iter()
-                .find(|id| ids.contains(id))
+            [
+                "emc.nets.preview",
+                "emc.nets.apply",
+                "emc.nets.set_control",
+                "emc.nets.close",
+            ]
+            .into_iter()
+            .find(|id| ids.contains(id))
         });
         if target.view == novo_learn::lesson::View::Keep {
             return;

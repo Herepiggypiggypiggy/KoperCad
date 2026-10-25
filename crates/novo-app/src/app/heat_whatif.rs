@@ -327,6 +327,11 @@ impl Wizard {
     }
 
     #[cfg(test)]
+    pub(super) fn applied_text(&self) -> Option<String> {
+        self.applied.clone()
+    }
+
+    #[cfg(test)]
     pub(super) fn picked(&self) -> Option<usize> {
         self.picked
     }
@@ -396,7 +401,9 @@ impl Wizard {
         let pal = crate::theme::ui_palette();
         egui::Window::new("Cooling what-if")
             .open(&mut open)
-            .collapsible(false)
+            // Folds to its title bar, so the preview behind it can be looked
+            // at on a small screen.
+            .collapsible(true)
             .resizable(false)
             .default_pos(at)
             .default_width(WIDTH)
@@ -1011,6 +1018,7 @@ impl super::NovoApp {
         };
         let mut said = Vec::new();
         let mut moved = false;
+        let with_openings = matches!(ask, Ask::Both(..));
         let (moves, openings) = match ask {
             Ask::Move(s, m) => (Some((s, m)), None),
             Ask::Openings(c) => (None, Some(c)),
@@ -1029,6 +1037,11 @@ impl super::NovoApp {
                         "Moved {count} {}. Undo puts {} back.",
                         if count == 1 { "device" } else { "devices" },
                         if count == 1 { "it" } else { "them" }
+                    )
+                } else if with_openings {
+                    format!(
+                        "No device moved, because {} target rail(s) are gone; only the openings were added. Run it again for the layout.",
+                        skipped.len()
                     )
                 } else {
                     format!(

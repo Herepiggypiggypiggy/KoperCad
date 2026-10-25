@@ -13,6 +13,8 @@ use novo_emc::project as emc;
 use novo_emc::{Band, Fix, Level, Report, Severity, Status, Subject};
 
 use super::NovoApp;
+use super::emc_view::{WhatIfAction, WhatIfView};
+use super::workspace::Workspace;
 
 /// The report for one revision of the project, so the window does not route
 /// every wire on every frame.
@@ -25,6 +27,9 @@ pub(super) struct EmcState {
     /// The fix being previewed and what it would change, for the revision
     /// of the project it was worked out on.
     preview: Option<(u64, Fix, Result<emc::Preview, String>)>,
+    /// The previewed copy of the project for the 3D and plate views, set
+    /// with the preview and dropped with it.
+    whatif: Option<WhatIf>,
     /// The preview card has just opened: scroll it into view once.
     preview_fresh: bool,
 }
@@ -40,6 +45,16 @@ impl EmcState {
         self.done.as_deref()
     }
 }
+
+struct WhatIf {
+    id: u64,
+    revision: u64,
+    project: std::sync::Arc<novo_core::Project>,
+    summary: String,
+    after: bool,
+}
+
+static WHATIF_IDS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 struct Cached {
     report: Report,
@@ -215,26 +230,43 @@ fn field_section(
 /// What a previewed fix would change, with Apply and Cancel at the top so
 /// they stay in reach in a short window. Returns true for Apply; `cancel`
 /// is set for Cancel. `scroll` brings the card into view (just opened).
-fn preview_card(
+pub(super) fn preview_card(
     ui: &mut egui::Ui,
     preview: &Result<emc::Preview, String>,
     cancel: &mut bool,
+    show: &mut Option<Workspace>,
     scroll: bool,
+    apply_at: &mut Option<egui::Rect>,
 ) -> bool {
     let p = crate::theme::ui_palette();
     let mut apply = false;
     let card = egui::Frame::group(ui.style()).show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("Preview on a copy of the project").strong());
-            if preview.is_ok()
-                && ui.button("Apply (one undo step)").on_hover_text("Do this on the project; Edit > Undo takes it back").clicked()
-            {
-                apply = true;
+            if preview.is_ok() {
+                let button = ui
+                    .button("Apply (one undo step)")
+                    .on_hover_text("Do this on the project; Edit > Undo takes it back");
+                *apply_at = Some(button.rect);
+                if button.clicked() {
+                    apply = true;
+                }
             }
             if ui.button("Cancel").clicked() {
                 *cancel = true;
             }
         });
+        if preview.is_ok() {
+            ui.horizontal_wrapped(|ui| {
+                ui.weak("Before and after, drawn in the EMC view:");
+                if ui.small_button("In 3D").on_hover_text("Open the 3D view with the EMC layer and its before/after switch").clicked() {
+                    *show = Some(Workspace::View3d);
+                }
+                if ui.small_button("On the plate").on_hover_text("Open the Cabinet plate with the EMC layer and its before/after switch").clicked() {
+                    *show = Some(Workspace::Cabinet);
+                }
+            });
+        }
         match preview {
             Err(e) => {
                 ui.colored_label(p.error, format!("Cannot preview: {e}"));
@@ -264,7 +296,51 @@ fn preview_card(
     apply
 }
 
+impl EmcState {
+    /// The fix being previewed and what it would change, when it was worked
+    /// out on the project as it is now.
+    pub(super) fn shown_preview(
+        &self,
+        revision: u64,
+    ) -> Option<(Fix, Result<emc::Preview, String>)> {
+        self.preview
+            .as_ref()
+            .filter(|(r, _, _)| *r == revision)
+            .map(|(_, f, p)| (f.clone(), p.clone()))
+    }
+
+    /// Takes the preview card's fresh flag (scroll it into view once).
+    pub(super) fn take_fresh(&mut self) -> bool {
+        std::mem::take(&mut self.preview_fresh)
+    }
+}
+
 impl NovoApp {
+    /// What a preview card asked for: preview a fix, cancel it, or apply it.
+    pub(super) fn emc_preview_actions(
+        &mut self,
+        want: Option<Fix>,
+        cancel: bool,
+        show: Option<Workspace>,
+        apply: Option<Fix>,
+    ) {
+        if cancel {
+            self.emc.preview = None;
+            self.emc.whatif = None;
+        }
+        if let Some(ws) = show {
+            self.emc_show_whatif(ws);
+        }
+        if let Some(fix) = want {
+            self.emc_preview(&fix);
+        }
+        if let Some(fix) = apply {
+            self.emc.preview = None;
+            self.emc.whatif = None;
+            self.emc_apply(&fix);
+        }
+    }
+
     pub(super) fn emc_window(&mut self, ctx: &egui::Context) {
         if !self.emc.open {
             return;
@@ -298,6 +374,7 @@ impl NovoApp {
         let mut apply: Option<Fix> = None;
         let mut want_preview: Option<Fix> = None;
         let mut cancel_preview = false;
+        let mut show_view: Option<Workspace> = None;
         let shown = self
             .emc
             .preview
@@ -385,7 +462,14 @@ impl NovoApp {
                         });
                         if let Some((_, pf, pv)) = &shown
                             && f.fixes.contains(pf)
-                            && preview_card(ui, pv, &mut cancel_preview, fresh)
+                            && preview_card(
+                                ui,
+                                pv,
+                                &mut cancel_preview,
+                                &mut show_view,
+                                fresh,
+                                &mut None,
+                            )
                         {
                             apply = Some(pf.clone());
                         }
@@ -446,16 +530,7 @@ impl NovoApp {
         if let Some(on) = turn {
             self.emc_turn(on);
         }
-        if cancel_preview {
-            self.emc.preview = None;
-        }
-        if let Some(fix) = want_preview {
-            self.emc_preview(&fix);
-        }
-        if let Some(fix) = apply {
-            self.emc.preview = None;
-            self.emc_apply(&fix);
-        }
+        self.emc_preview_actions(want_preview, cancel_preview, show_view, apply);
         if let Some((wire, amps)) = set_current {
             self.emc_set_current(wire, amps);
         }
@@ -496,10 +571,116 @@ impl NovoApp {
         let Some(project) = self.backend.document().map(|d| d.project()) else {
             return;
         };
-        let result = emc::preview(project, fix).map_err(|e| e.to_string());
-        self.emc.preview = Some((project.revision(), fix.clone(), result));
+        let result = emc::preview_on(project, fix).map_err(|e| e.to_string());
+        let revision = project.revision();
+        self.emc.whatif = result.as_ref().ok().map(|(p, copy)| WhatIf {
+            id: WHATIF_IDS.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            revision,
+            project: std::sync::Arc::new(copy.clone()),
+            summary: format!(
+                "Findings {} before, {} after{}",
+                p.findings_before,
+                p.findings_after,
+                match p.cleared.first() {
+                    Some((rule, _)) => format!("; clears {rule}"),
+                    None => String::new(),
+                }
+            ),
+            after: true,
+        });
+        let result = result.map(|(p, _)| p);
+        self.emc.preview = Some((revision, fix.clone(), result));
         self.emc.done = None;
         self.emc.preview_fresh = true;
+    }
+
+    /// Opens a view that can draw the previewed fix, EMC layer on.
+    fn emc_show_whatif(&mut self, ws: Workspace) {
+        // The layer that shows what the fix changes goes on with the view.
+        let fix = self.emc.preview.as_ref().map(|(_, f, _)| f.clone());
+        let bonding = matches!(fix, Some(Fix::BarePlate { .. } | Fix::BondDevice { .. }));
+        let shields = matches!(
+            fix,
+            Some(Fix::AddShield { .. } | Fix::Terminate360 { .. } | Fix::ShortenPigtail { .. })
+        );
+        let layers = match ws {
+            Workspace::View3d => {
+                self.view3d.controls.emc = true;
+                &mut self.view3d.emc.layers
+            }
+            _ => {
+                self.cabinet.emc.on = true;
+                &mut self.cabinet.emc.layers
+            }
+        };
+        layers.bonding |= bonding;
+        layers.shields |= shields;
+        // The window would cover the view it points to; Check > EMC check brings it back.
+        self.emc.open = false;
+        self.switch_workspace(ws);
+    }
+
+    /// Per frame: hands the previewed copy to the two views, and does what
+    /// their before/after banner asked for. A preview whose project has
+    /// since changed is dropped.
+    pub(super) fn emc_whatif_sync(&mut self, ctx: &egui::Context) {
+        let revision = self.backend.document().map(|d| d.project().revision());
+        if self
+            .emc
+            .whatif
+            .as_ref()
+            .is_some_and(|w| Some(w.revision) != revision)
+        {
+            self.emc.whatif = None;
+            self.emc.preview = None;
+        }
+        let action = self
+            .view3d
+            .emc
+            .whatif_action
+            .take()
+            .or_else(|| self.cabinet.emc.whatif_action.take());
+        match action {
+            Some(WhatIfAction::Show { after }) => {
+                if let Some(w) = &mut self.emc.whatif {
+                    w.after = after;
+                }
+            }
+            Some(WhatIfAction::Cancel) => {
+                self.emc.whatif = None;
+                self.emc.preview = None;
+            }
+            Some(WhatIfAction::Apply) => {
+                if let Some((_, fix, _)) = self.emc.preview.take() {
+                    self.emc.whatif = None;
+                    self.emc_apply(&fix);
+                }
+            }
+            None => {}
+        }
+        let hint = self.emc.preview.as_ref().map(|(_, f, _)| f.hint());
+        let wanted = self.emc.whatif.as_ref().zip(hint.as_deref());
+        // Rebuild the two views only when what they show changed.
+        let same = |v: &Option<WhatIfView>| match (v, wanted) {
+            (Some(v), Some((w, h))) => v.id == w.id && v.after == w.after && v.hint == h,
+            (None, None) => true,
+            _ => false,
+        };
+        let changed = !same(&self.view3d.emc.whatif) || !same(&self.cabinet.emc.whatif);
+        if changed {
+            let view = |(w, h): (&WhatIf, &str)| WhatIfView {
+                id: w.id,
+                project: w.project.clone(),
+                hint: h.to_owned(),
+                summary: w.summary.clone(),
+                after: w.after,
+            };
+            self.view3d.emc.whatif = wanted.map(view);
+            self.cabinet.emc.whatif = wanted.map(view);
+        }
+        if changed || action.is_some() {
+            ctx.request_repaint();
+        }
     }
 
     /// Applies one suggestion as one undo step and says what it did.

@@ -426,6 +426,15 @@ impl NovoApp {
         let mut focus_to = focus;
         let mut set: Option<(WireId, Option<EmcClass>)> = None;
         let mut apply: Option<Fix> = None;
+        let mut want_preview: Option<Fix> = None;
+        let mut cancel_preview = false;
+        let mut show_view: Option<super::workspace::Workspace> = None;
+        let revision = self
+            .backend
+            .document()
+            .map_or(0, |d| d.project().revision());
+        let shown = self.emc.shown_preview(revision);
+        let preview_fresh = self.emc.take_fresh();
         let mut off = false;
         // Controls the lessons point at: (anchor, where, label, clicked this frame).
         let mut marks: Vec<(&'static str, egui::Rect, &'static str, bool)> = Vec::new();
@@ -570,17 +579,46 @@ impl NovoApp {
                                 continue;
                             }
                             if fix.applicable() {
+                                let open = shown.as_ref().is_some_and(|(f, _)| f == fix);
                                 let button = ui
-                                    .small_button(format!("Apply: {}", fix.hint()))
-                                    .on_hover_text("One undo step; the EMC check re-reads the cable");
-                                if marks.iter().all(|m| m.0 != "emc.nets.apply") {
-                                    marks.push(("emc.nets.apply", button.rect, "Apply", button.clicked()));
-                                    if scroll_reveal && reveal == Some("emc.nets.apply") {
+                                    .selectable_label(open, format!("Preview: {}", fix.hint()))
+                                    .on_hover_text("See what it clears before anything changes; Apply is one undo step");
+                                if marks.iter().all(|m| m.0 != "emc.nets.preview") {
+                                    marks.push(("emc.nets.preview", button.rect, "Preview", button.clicked()));
+                                    if scroll_reveal && reveal == Some("emc.nets.preview") {
                                         button.scroll_to_me(Some(egui::Align::Center));
                                     }
                                 }
                                 if button.clicked() {
-                                    apply = Some(fix.clone());
+                                    if open {
+                                        cancel_preview = true;
+                                    } else {
+                                        want_preview = Some(fix.clone());
+                                    }
+                                }
+                                if let Some((pf, pv)) = &shown
+                                    && pf == fix
+                                {
+                                    let mut apply_at = None;
+                                    let applied = super::emc::preview_card(
+                                        ui,
+                                        pv,
+                                        &mut cancel_preview,
+                                        &mut show_view,
+                                        preview_fresh,
+                                        &mut apply_at,
+                                    );
+                                    if let Some(rect) = apply_at
+                                        && marks.iter().all(|m| m.0 != "emc.nets.apply")
+                                    {
+                                        marks.push(("emc.nets.apply", rect, "Apply", applied));
+                                        if scroll_reveal && reveal == Some("emc.nets.apply") {
+                                            ui.scroll_to_rect(rect, Some(egui::Align::Center));
+                                        }
+                                    }
+                                    if applied {
+                                        apply = Some(pf.clone());
+                                    }
                                 }
                             } else {
                                 ui.label(
@@ -658,9 +696,7 @@ impl NovoApp {
         if let Some((wire, class)) = set {
             self.emc_set_class(wire, class);
         }
-        if let Some(fix) = apply {
-            self.emc_apply(&fix);
-        }
+        self.emc_preview_actions(want_preview, cancel_preview, show_view, apply);
         if off {
             self.toggle_emc_nets();
         }
@@ -806,6 +842,46 @@ mod tests {
     }
 
     #[test]
+    fn the_cable_card_previews_a_fix_before_it_is_applied() {
+        let (_dir, mut d) = example();
+        let data = data(&d);
+        let cable = data
+            .cables
+            .iter()
+            .find(|(_, c)| {
+                c.findings
+                    .iter()
+                    .any(|f| f.fixes.iter().any(|x| matches!(x, Fix::AddShield { .. })))
+            })
+            .map(|(c, _)| *c)
+            .expect("a cable with a shield finding");
+        let fix = Fix::AddShield { cable };
+        let doc = |d: &Drive| d.app.backend.document().unwrap().project().revision();
+        let (revision, depth) = (doc(&d), d.app.backend.document().unwrap().undo_depth());
+        // The card asks for the preview; nothing changes.
+        d.app
+            .emc_preview_actions(Some(fix.clone()), false, None, None);
+        d.frame();
+        assert_eq!(
+            (doc(&d), d.app.backend.document().unwrap().undo_depth()),
+            (revision, depth)
+        );
+        let (shown, result) = d.app.emc.shown_preview(revision).expect("a preview");
+        assert_eq!(shown, fix);
+        // The finding stays as an info (ends not stated), so the preview says what it does.
+        assert!(result.unwrap().said.contains("Shield core added"));
+        // Cancel drops it; the card can ask again and apply it as one step.
+        d.app.emc_preview_actions(None, true, None, None);
+        assert!(d.app.emc.shown_preview(revision).is_none());
+        d.app
+            .emc_preview_actions(Some(fix.clone()), false, None, None);
+        d.app.emc_preview_actions(None, false, None, Some(fix));
+        d.frame();
+        assert_eq!(d.app.backend.document().unwrap().undo_depth(), depth + 1);
+        assert!(d.app.emc.shown_preview(doc(&d)).is_none());
+    }
+
+    #[test]
     fn a_picked_wire_shows_its_card_and_the_lesson_controls_without_a_selection() {
         let (_dir, mut d) = example();
         let ctx = d.ctx.clone();
@@ -821,7 +897,7 @@ mod tests {
         );
         for id in [
             "emc.nets.motor",
-            "emc.nets.apply",
+            "emc.nets.preview",
             "emc.nets.set_control",
             "emc.nets.close",
         ] {

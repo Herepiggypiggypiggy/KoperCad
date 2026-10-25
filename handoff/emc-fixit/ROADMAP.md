@@ -8,7 +8,8 @@ Done
 - Check > EMC check: "Preview: <fix>" per finding, card with Apply (one undo step) and Cancel.
 - Nits: the 3D/plate EMC panel no longer says "stand-in until the rule engine is connected"; a macro never lands on a generated page (goes to the first drawing page).
 
+- Follow-up 1: the previewed fix is drawn before/after in the 3D and plate EMC views (banner with Before/After, Apply, Cancel).
+
 Next
-- Preview the picture in the 3D and plate EMC views (before/after overlay), not only in the window.
 - Fixes that move things (separate runs, move device, other duct) stay by hand until routing takes a duct preference.
 - Cable card in the schematic panel could offer Preview as well (it applies directly today).

@@ -27,7 +27,10 @@ shot cable-card
 check_layout
 scroll 1180 400 2000
 wait 8
-click_text "Apply: Use a shielded cable." #1
+click_text "Preview: Use a shielded cable." #1
+wait 10
+expect "Preview on a copy of the project"
+click_text "Apply (one undo step)" #1
 wait 15
 expect "Shield: end A"
 shot cable-card-after-shield
@@ -35,7 +38,10 @@ check_layout
 # The second fix sets both shield ends all round: the finding goes.
 scroll 1180 400 2000
 wait 8
-click_text "Apply: Bond both shield ends" #1
+click_text "Preview: Bond both shield ends" #1
+wait 10
+expect "Preview on a copy of the project"
+click_text "Apply (one undo step)" #1
 wait 15
 scroll 1180 400 -2000
 wait 8

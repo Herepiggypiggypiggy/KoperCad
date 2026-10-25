@@ -46,6 +46,7 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("emc.plate.bonding", "Bonding"),
     ("emc.plate.shields", "Shields"),
     ("emc.nets.motor", "Motor and drive output"),
+    ("emc.nets.preview", "Preview"),
     ("emc.nets.apply", "Apply"),
     ("emc.nets.set_control", "control"),
     ("emc.nets.close", "Close"),

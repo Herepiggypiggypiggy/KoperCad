@@ -1,0 +1,25 @@
+@title Cooling what-if: a layout move previewed in 3D (1920 layout)
+@area 3D
+@sizes 1920x1080
+# The cabinet with a hot device on a crowded rail. The wizard ranks the fixes; the ones that move devices draw green boxes where the devices would stand, and the table says "Cooler layout" moves. Nothing is stored until Apply.
+open qa/fixtures/cabinet-whatif-layout.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Cooling what-if"
+wait 20
+click_text "Try the fixes"
+wait_s 120
+expect "Devices over limit"
+expect "Model estimate"
+shot ranked
+scroll 1640 600 -900
+wait 10
+shot ranked-scrolled
+click_text "to cooler places"
+wait 20
+expect "Move: T1"
+shot layout-move-previewed
+check_layout

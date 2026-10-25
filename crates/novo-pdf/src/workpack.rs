@@ -61,12 +61,12 @@ fn scale_text(s: f64) -> String {
     if s >= 0.9999 {
         "1:1 true size, if printed at 100 %".to_owned()
     } else {
-        format!(
-            "scale 1:{}. NOT true size: measure from the list, not the drawing",
-            mm(1.0 / s)
-        )
+        format!("scale 1:{}, NOT true size", mm(1.0 / s))
     }
 }
+
+/// The second line under a scaled template's heading.
+const SCALE_HINT: &str = "Measure from the list; the ruler below is true size";
 
 /// Wraps `s` to `width` mm at text `height` (Helvetica averages about half
 /// its height per character).
@@ -286,16 +286,20 @@ fn card_marks(card: &Card, cabinet: &str, y0: f64) -> Marks {
         5.6,
         HAlign::Left,
         true,
-        format!(
-            "STEP{} {} of {}",
-            if card.steps.0 == card.steps.1 {
-                ""
-            } else {
-                "S"
-            },
-            card.steps_text(),
-            card.total
-        ),
+        if card.kind == CardKind::Opening {
+            "CUT-OUT".to_owned()
+        } else {
+            format!(
+                "STEP{} {} of {}",
+                if card.steps.0 == card.steps.1 {
+                    ""
+                } else {
+                    "S"
+                },
+                card.steps_text(),
+                card.total
+            )
+        },
     );
     text(
         &mut m,
@@ -304,7 +308,7 @@ fn card_marks(card: &Card, cabinet: &str, y0: f64) -> Marks {
         HAlign::Left,
         true,
         clip(
-            &if card.mark == card.phase.name() {
+            &if card.mark == card.phase.name() || card.kind == CardKind::Opening {
                 card.mark.clone()
             } else {
                 format!("{}  {}", card.phase.name(), card.mark)
@@ -367,9 +371,15 @@ fn is_block(card: &Card) -> bool {
         .is_some_and(|t| t.width <= t.height * 3.0)
 }
 
+const HONESTY_OPENING: &str = "Positions come from the Heat panel's settings, not from your cabinet: check the first cut-out against the real wall or door.";
 const HONESTY: &str = "Positions come from the cabinet layout, not from your plate: check the first part against the real plate.";
 
 fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
+    let honesty = if card.kind == CardKind::Opening {
+        HONESTY_OPENING
+    } else {
+        HONESTY
+    };
     let mut tools: Vec<String> = card.tools.iter().map(|t| format!("- {t}")).collect();
     tools.extend(card.notes.iter().map(|n| format!("Note: {n}")));
     let dims: Vec<String> = card.dims.iter().map(|d| format!("- {d}")).collect();
@@ -406,6 +416,16 @@ fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
                 true,
                 clip(&format!("Template, {}", scale_text(s)), BLOCK_W, 2.6),
             );
+            if s < 0.9999 {
+                text(
+                    m,
+                    (x0 + BLOCK_X, top + 3.4),
+                    2.4,
+                    HAlign::Left,
+                    false,
+                    clip(SCALE_HINT, BLOCK_W, 2.4),
+                );
+            }
             tools.push(format!("- {}", t.origin));
             tools_at = (x0 + 4.0, LEFT_W - 4.0, y);
             dims_at = None;
@@ -421,7 +441,11 @@ fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
                 2.8,
                 HAlign::Left,
                 true,
-                format!("Template, {}", scale_text(s)),
+                if s < 0.9999 {
+                    format!("Template, {}. {SCALE_HINT}", scale_text(s))
+                } else {
+                    format!("Template, {}", scale_text(s))
+                },
             );
             draw_template(m, t, x0 + 12.0, oy, s);
             let below = oy + t.height * s + 6.0;
@@ -444,7 +468,7 @@ fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
     let (tx, tw, ttop) = tools_at;
     // Block cards keep the honesty note at the foot of the left column.
     if is_block(card) {
-        let lines = wrap(HONESTY, LEFT_W - 4.0, 2.5);
+        let lines = wrap(honesty, LEFT_W - 4.0, 2.5);
         let h = lines.len() as f64 * 3.5;
         for (i, l) in lines.into_iter().enumerate() {
             text(
@@ -464,7 +488,7 @@ fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
             2.5,
             HAlign::Left,
             false,
-            HONESTY,
+            honesty,
         );
         bottom -= 5.0;
     }
@@ -621,6 +645,17 @@ fn label_table(m: &mut Marks, card: &Card, x0: f64, y: f64, _bottom: f64) {
     }
 }
 
+/// The cover and tick-off sheet line about the cut-out cards, which sit
+/// after the step cards but are done before the plate goes in.
+fn cut_out_note(n: usize) -> String {
+    format!(
+        "{n} cut-out card{} at the end of the cards ({} for the grilles and fans in the walls and door): do {} FIRST, before the plate goes in. They are not numbered steps.",
+        if n == 1 { "" } else { "s" },
+        "CUT-OUT",
+        if n == 1 { "it" } else { "them" }
+    )
+}
+
 fn cover_marks(pack: &Pack, project: &str) -> Marks {
     let mut m = Marks::default();
     let x0 = 15.0;
@@ -652,8 +687,17 @@ fn cover_marks(pack: &Pack, project: &str) -> Marks {
         "How to use: print at 100 % (actual size), no fit-to-page. Check the 100 mm ruler on any card with a tape measure before you trust a template. Cut the sheets in half or fold them at the dashed line: each half is one step. Work in the order of the step numbers; tick the boxes as you go.",
         "How exact: the sizes and positions come from the cabinet layout and the part data. The template is as exact as your printer scale and your taping, about 0.5 mm if the ruler reads 100 mm (an estimate, not measured here). Wire lengths come from the cut list: routed lengths follow the duct model, estimates are marked as such. Check the first part against your real plate before drilling the rest.",
     ];
+    let cut_outs = pack
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Opening)
+        .count();
+    let mut how: Vec<String> = how.iter().map(|p| (*p).to_owned()).collect();
+    if cut_outs > 0 {
+        how.insert(1, cut_out_note(cut_outs));
+    }
     for p in how {
-        let (ny, _) = lines_down(&mut m, x0, y, w, 120.0, 3.4, &[p.to_owned()]);
+        let (ny, _) = lines_down(&mut m, x0, y, w, 120.0, 3.4, &[p]);
         y = ny + 3.0;
     }
     text(
@@ -737,6 +781,25 @@ fn overview_marks(pack: &Pack, rows: std::ops::Range<usize>, number: (usize, usi
         false,
         format!("Page {} of {}", number.0, number.1),
     );
+    let cut_outs = pack
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Opening)
+        .count();
+    if cut_outs > 0 {
+        text(
+            &mut m,
+            (x0, 19.0),
+            2.8,
+            HAlign::Left,
+            true,
+            format!(
+                "{cut_outs} CUT-OUT card{} at the end, not numbered: do {} FIRST, before the plate goes in.",
+                if cut_outs == 1 { "" } else { "s" },
+                if cut_outs == 1 { "it" } else { "them" }
+            ),
+        );
+    }
     let top = 24.0;
     for (x, h) in [
         (0.0, "Step"),
@@ -1000,6 +1063,70 @@ mod tests {
                         card.steps_text()
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn opening_cards_stay_inside_their_half_page() {
+        use novo_layout::workpack::{OpeningJob, OpeningWall, add_opening_cards};
+        let job = |wall, w: f64, h: f64| OpeningJob {
+            name: "x".into(),
+            what: "filter fan".into(),
+            wall,
+            along: 300.0,
+            down: Some(200.0),
+            width: w,
+            height: h,
+            size: (600.0, 800.0),
+            depth: 250.0,
+        };
+        let mut p = pack(0, false);
+        add_opening_cards(
+            &mut p,
+            &[
+                job(OpeningWall::Door, 120.0, 120.0),
+                job(OpeningWall::Door, 400.0, 60.0),
+                job(OpeningWall::Left, 500.0, 200.0),
+                job(OpeningWall::Top, 250.0, 120.0),
+            ],
+        );
+        let cards: Vec<&Card> = p
+            .cards
+            .iter()
+            .filter(|c| c.kind == CardKind::Opening)
+            .collect();
+        assert_eq!(cards.len(), 4);
+        // The cover and every tick-off page say the cut-outs come first.
+        let cover = cover_marks(&p, "Crane");
+        let words: String = cover.texts.iter().map(|t| format!("{} ", t.text)).collect();
+        assert!(words.contains("4 cut-out cards"), "{words}");
+        assert!(words.contains("FIRST"), "{words}");
+        let sheet = overview_marks(&p, 0..p.overview.len().min(5), (1, 1));
+        assert!(
+            sheet
+                .texts
+                .iter()
+                .any(|t| t.text.contains("4 CUT-OUT cards"))
+        );
+        for card in cards {
+            for y0 in CARD_Y {
+                let m = card_marks(card, &p.cabinet, y0);
+                let bad = inside(&m, y0);
+                assert!(bad.is_empty(), "{}: {bad:?}", card.mark);
+                assert!(m.texts.iter().any(|t| t.text == "CUT-OUT"));
+                // Nothing of the card is cut off with dots.
+                assert!(
+                    !m.texts.iter().any(|t| t.text.ends_with("...")),
+                    "{}: {:?}",
+                    card.mark,
+                    m.texts
+                        .iter()
+                        .filter(|t| t.text.ends_with("..."))
+                        .map(|t| &t.text)
+                        .collect::<Vec<_>>()
+                );
+                assert!(!m.texts.iter().any(|t| t.text.starts_with("STEP")));
             }
         }
     }
