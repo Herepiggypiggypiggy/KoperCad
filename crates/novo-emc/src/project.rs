@@ -981,7 +981,7 @@ fn move_device(
         .is_some_and(|p| p.rotated);
     novo_layout::model::place_device(tx, spot.structure, device, spot.x, spot.y, rotated)?;
     Ok(format!(
-        "Device moved {} mm to the nearest free spot that meets the rule (gap {} mm). Only the plate layout rules and the EMC rules were checked: not heat, airflow, the door swing or the length of the wires to the new spot. Wires are routed again, so cut lengths change, and the mounting holes are drilled anew: print the cut list and drilling plan again",
+        "Moves the device {} mm to the nearest free spot that meets the rule (gap {} mm there). Only the plate layout rules and the EMC rules were checked: not heat, airflow, the door swing or the length of the wires to the new spot. Wires are routed again, so cut lengths change, and the mounting holes are drilled anew: print the cut list and drilling plan again",
         spot.moved_mm.round() as i64,
         spot.gap_mm.round() as i64
     ))

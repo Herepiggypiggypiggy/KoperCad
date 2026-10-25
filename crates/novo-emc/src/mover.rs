@@ -50,6 +50,8 @@ pub struct Spot {
 
 /// Spots are tried on this grid (mm), from the plate's usable corner.
 const STEP_MM: f64 = 10.0;
+/// Spots that get the full layout report before the search gives up.
+const MAX_REPORTS: usize = 400;
 /// Free spots tried with the real EMC rules.
 const TRIED: usize = 12;
 
@@ -144,9 +146,28 @@ pub fn find_spot(project: &Project, device: u64, other: u64, goal: Goal) -> Resu
     let mut best: Option<(usize, Spot)> = None;
     let mut tried = 0;
     layout.placements[at].rail = None;
+    let others: Vec<_> = layout
+        .on_plate()
+        .into_iter()
+        .filter(|p| p.id != device)
+        .collect();
+    let mut reports = 0;
     for (moved, x, y, gap) in spots {
         layout.placements[at].x = x;
         layout.placements[at].y = y;
+        // A cheap test first: the full layout report costs as much as the
+        // plate has devices, and a crowded plate has few free cells.
+        let me = layout.placements[at].clone();
+        let at_rect = me.footprint();
+        if !novo_layout::outside(&layout.plate, std::slice::from_ref(&me)).is_empty()
+            || others.iter().any(|q| at_rect.overlaps(&q.footprint()))
+        {
+            continue;
+        }
+        if reports >= MAX_REPORTS {
+            break;
+        }
+        reports += 1;
         if involves(&layout, device) {
             continue;
         }
@@ -163,7 +184,11 @@ pub fn find_spot(project: &Project, device: u64, other: u64, goal: Goal) -> Resu
             )
         });
         tried += 1;
-        if done.is_ok() {
+        // The device may have been mounted on a rail by `place_device`: the
+        // layout rules apply again where it stands now.
+        let mounted_ok = done.is_ok()
+            && novo_layout::model::load(&copy, structure).is_some_and(|l| !involves(&l, device));
+        if mounted_ok {
             let after = finding_keys(&copy);
             let added = after.difference(&before).count();
             let spot = Spot {

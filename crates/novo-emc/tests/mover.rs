@@ -154,3 +154,63 @@ fn no_free_spot_refuses_and_writes_nothing() {
     assert_eq!(spot(&c.project, c.a), (80.0, 20.0));
     assert!(preview(&c.project, &fix).is_err());
 }
+
+#[test]
+fn a_crowded_plate_is_refused_quickly() {
+    // 8 x 5 devices fill the plate and the sensitive one is boxed in: every
+    // cell meets the goal, none is free, and the search must not run a full
+    // layout report for every cell.
+    let mut project = Project::new("Crowded");
+    let (a, b) = project
+        .transact("build", |tx| {
+            let cab = tx.add_structure(tag("+CAB"), "", true)?;
+            tx.set_plate(
+                cab,
+                Some(MountingPlate {
+                    width: 1000.0,
+                    height: 800.0,
+                    margin: 10.0,
+                }),
+            )?;
+            let mut first = None;
+            let mut second = None;
+            for i in 0..8 {
+                for j in 0..5 {
+                    let t = format!("-K{}", i * 5 + j + 1);
+                    let d = tx.add_device(tag(&t), "")?;
+                    tx.set_property(d, "width_mm", Some(Value::Float(120.0)))?;
+                    tx.set_property(d, "height_mm", Some(Value::Float(150.0)))?;
+                    let role = match (i, j) {
+                        (0, 0) => "drive",
+                        (3, 2) => "sensitive",
+                        _ => "other",
+                    };
+                    tx.set_property(d, "emc.role", Some(Value::Text(role.to_owned())))?;
+                    tx.place_device(
+                        d,
+                        cab,
+                        Point::new(10.0 + 120.0 * f64::from(i), 10.0 + 150.0 * f64::from(j)),
+                        false,
+                        None,
+                    )?;
+                    if (i, j) == (0, 0) {
+                        first = Some(d);
+                    }
+                    if (i, j) == (3, 2) {
+                        second = Some(d);
+                    }
+                }
+            }
+            Ok((second.unwrap(), first.unwrap()))
+        })
+        .unwrap()
+        .0;
+    let fix_closer = Fix::MoveCloser {
+        device: a.raw(),
+        to: b.raw(),
+        max_mm: 5000.0,
+    };
+    let started = std::time::Instant::now();
+    assert!(preview(&project, &fix_closer).is_err());
+    assert!(started.elapsed().as_secs() < 20, "{:?}", started.elapsed());
+}
