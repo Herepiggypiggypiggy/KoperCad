@@ -1,0 +1,12 @@
+Head: ec816d42d88287e7a6deb995248848f0d68f0c61 (PR #1475, branch claude/project-thread-qk7tim, includes main 8f899dfd)
+Binary: built from this exact committed tree (clean working tree, git status empty) with cargo build -p novo-app -p novo-cli; report.md source line says ec816d42d8.
+Command: scripts/qa.sh run qa/scenarios/40[0-2]-*.qa --out <clean folder>
+Result: 400 pass at 1366x768 and 1920x1080, 401 (light) pass, 402 (Cabinet strip button -> 3D) pass. 0 findings. 17 pictures, all listed in report.md.
+
+Fixture qa/fixtures/cabinet-cooling-advice.novo, ambient 35 C, duty 100 %. Numbers in the pictures (2D model, not measured):
+Baseline: tightest margin -12.1 K, 1 device over, hottest air 58 C, T1 housing 116 C.
+Fix 1 "Add: Vent in, exhaust fan out" (vent 300 cm2 left wall 190 mm above floor; fan 250 m3/h left wall 1300 mm): devices over 1 -> 0, tightest margin -12.1 -> +2.6 K (+14.7), T1 116 -> 104 C (-12 K), hottest air 58 -> 38 C (-20 K), mean air 44 -> 36 C (-8 K). Clears every limit; margin is thin-ish (+2.6 K).
+Fix 2 "Vent in, vent out (no power)": margin -12.1 -> -6.3 K, 1 device over (gains 5.7 K).
+Fix 3 "Bigger enclosure 1300 x 1800 mm": margin -12.1 -> -10.1 K, 1 device over (gains 1.9 K). Not applicable by the program.
+No cooler layout is listed for this fixture ("No device has a cooler place on its rails that is worth the move"). 137 model runs.
+The applied picture (400-...-06-applied) shows the badge MODEL, NOT MEASURED and the model note.

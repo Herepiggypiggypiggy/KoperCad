@@ -1,0 +1,39 @@
+@title Cooling what-if: conditions, ranked fixes with a before and after table, 3D preview, apply
+@area 3D
+@sizes 1366x768 1920x1080
+# The hot cabinet fixture opened in 3D. The Heat panel's "Cooling what-if" button opens the wizard beside the cabinet with the MODEL badge and two questions (hottest day, duty). "Try the fixes" runs the model and lists the fixes ranked; the first is picked and previewed in 3D with its before and after table. Applying puts the fix in the project (moves as one undo step, openings in Vents and fans).
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+shot heat-panel
+click_text "Cooling what-if"
+wait 20
+expect "Cooling what-if"
+expect "MODEL, NOT MEASURED"
+expect "Hottest day outside"
+expect "Duty"
+shot conditions
+check_layout
+click_text "Try the fixes"
+wait_s 120
+expect "Devices over limit"
+expect "Tightest margin"
+expect "Hottest air"
+expect "Model estimate"
+shot ranked-and-previewed
+check_blank ranked-and-previewed
+check_layout
+scroll 1100 400 -300
+wait 10
+shot ranked-scrolled
+click_text "Copy the table"
+wait 6
+expect "The table is on the clipboard."
+try click_text "Apply the moves"
+try click_text "Add the openings to Vents and fans"
+wait 20
+shot applied
+check_layout
