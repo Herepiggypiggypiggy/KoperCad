@@ -170,7 +170,7 @@ impl Control {
 }
 
 /// Shown with the devices that stand beside the stream of a fan fix.
-pub const BESIDE_NOTE: &str = "Beside the stream between the fan and the vent the 3D solver gave a device a third to three quarters of the gain shown, in one wide box none. Check them with Simulate in 3D.";
+pub const BESIDE_NOTE: &str = "Beside the stream between the fan and the vent the 3D solver gave a device a third to three quarters of the gain shown (in one wide box the device ran about 4 K hotter with the fan on). Check them with Simulate in 3D.";
 
 /// The outside size of an enclosure, mm.
 #[derive(Debug, Clone, Copy, PartialEq)]
