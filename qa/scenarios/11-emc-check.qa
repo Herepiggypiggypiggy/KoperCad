@@ -23,7 +23,7 @@ shot emc-off
 check_layout
 click_text "Run the EMC rules with the design checks"
 wait 10
-expect "Rules that ran"
+expect "Rules in the check"
 expect "Not checked"
 expect "EMC-"
 shot emc-findings

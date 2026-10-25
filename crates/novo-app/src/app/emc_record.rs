@@ -42,6 +42,16 @@ fn status_word(s: Status) -> &'static str {
     }
 }
 
+/// `text` broken into lines for a printed page, or kept whole for a
+/// spreadsheet cell (one row per finding, so it can be filtered and sorted).
+fn lines(text: &str, width: usize, wrapped: bool) -> Vec<String> {
+    if wrapped {
+        wrap(text, width)
+    } else {
+        vec![text.to_owned()]
+    }
+}
+
 /// `rows` of wrapped columns as table rows: a row per line of the tallest.
 fn push_wrapped(section: &mut Section, columns: &[Vec<String>]) {
     let rows = columns.iter().map(Vec::len).max().unwrap_or(0).max(1);
@@ -57,12 +67,22 @@ fn push_wrapped(section: &mut Section, columns: &[Vec<String>]) {
 /// What the bench does about a finding: the fixes the program offers, worded
 /// as requirements for the build, or the plain statement that none is
 /// automatic.
-fn to_do(f: &novo_emc::Finding) -> Vec<String> {
+fn to_do(f: &novo_emc::Finding, wrapped: bool) -> Vec<String> {
     if f.fixes.is_empty() {
-        return wrap(
+        return lines(
             "By hand: the program offers no automatic fix. Read the reason and decide on the drawing or in the cabinet.",
             W_TODO,
+            wrapped,
         );
+    }
+    if !wrapped {
+        return vec![
+            f.fixes
+                .iter()
+                .map(|fix| fix.hint())
+                .collect::<Vec<_>>()
+                .join("; "),
+        ];
     }
     f.fixes
         .iter()
@@ -70,11 +90,17 @@ fn to_do(f: &novo_emc::Finding) -> Vec<String> {
         .collect()
 }
 
-/// The record as a report. `name_of` gives a wire or device its tag.
+/// The record as a report. `name_of` gives a wire or device its tag. With
+/// `wrapped` the long texts are broken into lines for a printed page; without
+/// it each finding is one row for a spreadsheet. `date` and `version` say
+/// when and by which program the record was made.
 pub(super) fn record_output(
     project_name: &str,
     report: &Report,
     name_of: &dyn Fn(Subject) -> String,
+    date: &str,
+    version: &str,
+    wrapped: bool,
 ) -> ReportOutput {
     let mut sections = Vec::new();
 
@@ -83,18 +109,35 @@ pub(super) fn record_output(
         "EMC design record",
         vec![
             Column::new("what", "What", 30.0),
-            Column::new("count", "Count", 8.0).right(),
+            Column::new("count", "Value", 20.0).right(),
         ],
     );
+    let evaluated = report
+        .rules
+        .iter()
+        .filter(|r| matches!(r.status, Status::NoFinding | Status::Finding))
+        .count();
     let count = |s: Severity| report.findings.iter().filter(|f| f.severity == s).count();
     for (label, n) in [
         ("Errors", count(Severity::Error)),
         ("Warnings", count(Severity::Warning)),
         ("Notes", count(Severity::Info)),
-        ("Rules that ran", report.rules.len()),
+        ("Rules in the check", report.rules.len()),
+        (
+            "Rules that were evaluated (the rest: not applicable or no data)",
+            evaluated,
+        ),
     ] {
         summary.push(vec![Cell::text(label), Cell::Int(n as i64)], Vec::new());
     }
+    summary.push(vec![Cell::text("Made on"), Cell::text(date)], Vec::new());
+    summary.push(
+        vec![
+            Cell::text("Program"),
+            Cell::text(format!("KoperCAD {version}")),
+        ],
+        Vec::new(),
+    );
     sections.push(summary);
 
     let mut notice = Section::new(
@@ -103,11 +146,12 @@ pub(super) fn record_output(
         vec![Column::new("text", "Read this first", 120.0)],
     )
     .flowing();
-    for line in wrap(novo_emc::DESIGN_AID, 110)
+    for line in lines(novo_emc::DESIGN_AID, 110, wrapped)
         .into_iter()
-        .chain(wrap(
+        .chain(lines(
             "The findings are rules on what is drawn, geometric indices and closed-form estimates with planning distances from common practice. Clause numbers are unverified. A list with no finding is not a statement that the design is fine: see Not checked below. Compliance is shown by measurement on the finished machine.",
             110,
+            wrapped,
         ))
     {
         notice.push(vec![Cell::text(line)], Vec::new());
@@ -135,8 +179,8 @@ pub(super) fn record_output(
                 vec![f.rule.to_owned()],
                 vec![severity_word(f.severity).to_owned()],
                 vec![f.level.label().to_owned()],
-                wrap(&f.message, W_TEXT),
-                to_do(f),
+                lines(&f.message, W_TEXT, wrapped),
+                to_do(f, wrapped),
             ],
         );
     }
@@ -167,11 +211,20 @@ pub(super) fn record_output(
     let mut all: Vec<_> = report.runs.iter().chain(&report.devices).collect();
     all.sort_by_key(|s| std::cmp::Reverse(s.points));
     for s in all.into_iter().filter(|s| s.points > 0).take(TOP_SCORES) {
-        let reasons: Vec<String> = s
-            .reasons
-            .iter()
-            .flat_map(|r| wrap(&format!("+{} {} {}", r.points, r.rule, r.text), 100))
-            .collect();
+        let reasons: Vec<String> = if wrapped {
+            s.reasons
+                .iter()
+                .flat_map(|r| wrap(&format!("+{} {} {}", r.points, r.rule, r.text), 100))
+                .collect()
+        } else {
+            vec![
+                s.reasons
+                    .iter()
+                    .map(|r| format!("+{} {} {}", r.points, r.rule, r.text))
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            ]
+        };
         push_wrapped(
             &mut scores,
             &[
@@ -193,7 +246,7 @@ pub(super) fn record_output(
 
     let mut rules = Section::new(
         "rules",
-        "Rules that ran",
+        "Rules in the check",
         vec![
             Column::new("rule", "Rule", 8.0),
             Column::new("title", "Title", 36.0),
@@ -208,13 +261,13 @@ pub(super) fn record_output(
             &mut rules,
             &[
                 vec![r.rule.to_owned()],
-                wrap(rule.title, W_SHORT),
+                lines(rule.title, W_SHORT, wrapped),
                 vec![format!(
                     "{} ({})",
                     status_word(r.status),
                     rule.level.label().to_lowercase()
                 )],
-                wrap(rule.source, 70),
+                lines(rule.source, 70, wrapped),
             ],
         );
     }
@@ -253,7 +306,7 @@ pub(super) fn record_output(
     )
     .flowing();
     for t in novo_emc::NOT_CHECKED {
-        for (i, line) in wrap(t, 110).into_iter().enumerate() {
+        for (i, line) in lines(t, 110, wrapped).into_iter().enumerate() {
             limits.push(
                 vec![Cell::text(if i == 0 {
                     format!("- {line}")
@@ -324,8 +377,32 @@ fn record_path(file: Option<&Path>, dir: Option<&Path>, name: &str, ext: &str) -
     Some(if ext == "pdf" {
         replaceable_path(&base)
     } else {
-        base
+        // A workbook may have been filled in (the review block): never replace one.
+        first_unused(&base)
     })
+}
+
+/// `path` itself when nothing is there, else the first free `<stem> 2.<ext>`,
+/// `<stem> 3.<ext>`...
+fn first_unused(path: &Path) -> PathBuf {
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    (1..)
+        .map(|n| {
+            if n == 1 {
+                path.to_owned()
+            } else {
+                path.with_file_name(format!("{stem} {n}.{ext}"))
+            }
+        })
+        .find(|p| !p.exists())
+        .unwrap_or_else(|| path.to_owned())
 }
 
 impl NovoApp {
@@ -345,7 +422,7 @@ impl NovoApp {
     }
 
     /// The record of the open project as a report.
-    pub(super) fn emc_record_output(&self, name: &str) -> Option<ReportOutput> {
+    pub(super) fn emc_record_output(&self, name: &str, wrapped: bool) -> Option<ReportOutput> {
         let project = self.backend.document()?.project();
         let netlist = project.netlist();
         let input = novo_emc::project::input_of(project, &netlist);
@@ -367,7 +444,14 @@ impl NovoApp {
             }
             .unwrap_or_else(|| "(unnamed)".to_owned())
         };
-        Some(record_output(name, &report, &tag))
+        Some(record_output(
+            name,
+            &report,
+            &tag,
+            &super::revisions::today(),
+            env!("CARGO_PKG_VERSION"),
+            wrapped,
+        ))
     }
 
     /// Writes the record to `path`.
@@ -377,7 +461,7 @@ impl NovoApp {
         path: &Path,
     ) -> Option<PathBuf> {
         let name = self.project_name()?;
-        let output = self.emc_record_output(&name)?;
+        let output = self.emc_record_output(&name, format == EmcRecordFormat::Pdf)?;
         let bytes = match format {
             EmcRecordFormat::Pdf => {
                 let options = novo_pdf::ReportPdfOptions {
@@ -420,6 +504,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn an_excel_record_is_never_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("Press EMC record.xlsx");
+        assert_eq!(first_unused(&base), base);
+        std::fs::write(&base, b"signed").unwrap();
+        let second = dir.path().join("Press EMC record 2.xlsx");
+        assert_eq!(first_unused(&base), second);
+        std::fs::write(&second, b"x").unwrap();
+        assert_eq!(
+            first_unused(&base),
+            dir.path().join("Press EMC record 3.xlsx")
+        );
+    }
+
+    #[test]
     fn paths_sit_beside_the_project() {
         let p = record_path(Some(Path::new("/x/Press.novo")), None, "Press", "pdf").unwrap();
         assert!(p.to_string_lossy().contains("Press EMC record"));
@@ -427,7 +526,14 @@ mod tests {
 
     #[test]
     fn an_empty_report_says_no_finding_and_still_lists_what_is_not_checked() {
-        let out = record_output("Press", &Report::default(), &|_| String::new());
+        let out = record_output(
+            "Press",
+            &Report::default(),
+            &|_| String::new(),
+            "2026-10-25",
+            "0.1.0",
+            true,
+        );
         let ids: Vec<_> = out.sections.iter().map(|s| s.key.as_str()).collect();
         assert!(
             ids.contains(&"findings") && ids.contains(&"not_checked") && ids.contains(&"signoff")

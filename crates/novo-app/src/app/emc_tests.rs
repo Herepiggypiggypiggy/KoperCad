@@ -326,7 +326,10 @@ fn the_emc_record_lists_findings_with_what_to_do_and_writes_both_files() {
     let mut d = Drive::new(&dir.path().join("untitled"));
     cabinet(&mut d);
     d.frame();
-    let out = d.app.emc_record_output("Press").expect("a project is open");
+    let out = d
+        .app
+        .emc_record_output("Press", true)
+        .expect("a project is open");
     let section = |key: &str| out.sections.iter().find(|s| s.key == key).unwrap();
     let text = |key: &str| -> String {
         section(key)
@@ -344,6 +347,40 @@ fn the_emc_record_lists_findings_with_what_to_do_and_writes_both_files() {
     );
     assert!(text("not_checked").contains("Compliance with any standard"));
     assert!(text("rules").contains("EMC-12"));
+    let summary = text("summary");
+    assert!(
+        summary.contains("Rules in the check") && summary.contains("KoperCAD"),
+        "{summary}"
+    );
+    // A spreadsheet gets one row per finding, the rule in every row.
+    let sheet = d.app.emc_record_output("Press", false).unwrap();
+    let rows = |o: &novo_reports::ReportOutput| {
+        o.sections
+            .iter()
+            .find(|s| s.key == "findings")
+            .unwrap()
+            .rows
+            .len()
+    };
+    let first_cells: Vec<String> = sheet
+        .sections
+        .iter()
+        .find(|s| s.key == "findings")
+        .unwrap()
+        .rows
+        .iter()
+        .map(|r| format!("{:?}", r.cells[0]))
+        .collect();
+    assert!(
+        first_cells.iter().all(|c| c.contains("EMC-")),
+        "the rule is in every row: {first_cells:?}"
+    );
+    assert!(
+        rows(&out) > rows(&sheet),
+        "the printed page wraps: {} against {}",
+        rows(&out),
+        rows(&sheet)
+    );
     for (format, name, magic) in [
         (EmcRecordFormat::Pdf, "a.pdf", &b"%PDF"[..]),
         (EmcRecordFormat::Excel, "a.xlsx", &b"PK"[..]),
