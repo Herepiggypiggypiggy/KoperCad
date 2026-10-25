@@ -214,3 +214,38 @@ fn a_crowded_plate_is_refused_quickly() {
     assert!(preview(&project, &fix_closer).is_err());
     assert!(started.elapsed().as_secs() < 20, "{:?}", started.elapsed());
 }
+
+#[test]
+fn a_search_that_gives_up_says_so() {
+    // A blocker asks for 300 mm on every side: the cells around the device
+    // next to it do not overlap anything but break the clearance, more than
+    // the search is willing to check.
+    let mut c = plate(
+        1000.0,
+        800.0,
+        ("sensitive", 100.0, 100.0),
+        ("drive", 600.0, 400.0),
+    );
+    let cab = c.project.structures().next().unwrap().id;
+    c.project
+        .transact("margins", |tx| {
+            for key in [
+                "clearance_above_mm",
+                "clearance_below_mm",
+                "clearance_left_mm",
+                "clearance_right_mm",
+            ] {
+                tx.set_property(c.b, key, Some(Value::Float(300.0)))?;
+            }
+            // Next to the blocker, inside its margins.
+            tx.place_device(c.a, cab, Point::new(670.0, 400.0), false, None)
+        })
+        .unwrap();
+    let fix = Fix::MoveCloser {
+        device: c.a.raw(),
+        to: c.b.raw(),
+        max_mm: 5000.0,
+    };
+    let err = preview(&c.project, &fix).unwrap_err().to_string();
+    assert!(err.contains("stopped after checking"), "{err}");
+}

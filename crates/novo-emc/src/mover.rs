@@ -152,6 +152,7 @@ pub fn find_spot(project: &Project, device: u64, other: u64, goal: Goal) -> Resu
         .filter(|p| p.id != device)
         .collect();
     let mut reports = 0;
+    let mut capped = false;
     for (moved, x, y, gap) in spots {
         layout.placements[at].x = x;
         layout.placements[at].y = y;
@@ -165,6 +166,7 @@ pub fn find_spot(project: &Project, device: u64, other: u64, goal: Goal) -> Resu
             continue;
         }
         if reports >= MAX_REPORTS {
+            capped = true;
             break;
         }
         reports += 1;
@@ -210,6 +212,11 @@ pub fn find_spot(project: &Project, device: u64, other: u64, goal: Goal) -> Resu
         }
     }
     best.map(|(_, s)| s).ok_or_else(|| {
+        if capped {
+            return ModelError::Format(format!(
+                "The search stopped after checking {MAX_REPORTS} spots nearest first, without finding a free one: make room or move the device by hand"
+            ));
+        }
         ModelError::Format(match goal {
             Goal::Within(mm) => format!(
                 "No free spot on the plate puts the device within {} mm of the other: free room next to it, or move devices by hand",
