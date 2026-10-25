@@ -803,7 +803,7 @@ fn the_strip_text_names_the_length_its_source_and_both_ends_when_they_differ() {
 }
 
 #[test]
-fn duct_fixings_follow_the_planning_rule_and_the_card_labels_it_as_one() {
+fn duct_fixings_follow_the_planning_rule() {
     use novo_layout::workpack::{DUCT_FIXING_END_MM, DUCT_FIXING_PITCH_MM, duct_fixings};
     for len in [30.0, 100.0, 250.0, 400.0, 1000.0, 1999.0] {
         let at = duct_fixings(len);
@@ -819,4 +819,21 @@ fn duct_fixings_follow_the_planning_rule_and_the_card_labels_it_as_one() {
         );
     }
     assert_eq!(duct_fixings(400.0), [25.0, 200.0, 375.0]);
+}
+
+#[test]
+fn the_duct_note_says_it_is_a_planning_rule_and_where_the_fixing_goes() {
+    use novo_layout::workpack::duct_fixing_note;
+    for len in [100.0, 530.0, 2000.0] {
+        let n = duct_fixing_note(len);
+        for want in [
+            "planning rule, not a datasheet value",
+            "centre line of the duct base",
+            "not in the drilling list",
+        ] {
+            assert!(n.contains(want), "{len}: {n}");
+        }
+    }
+    // A 2 m duct: 11 fixings, each named.
+    assert!(duct_fixing_note(2000.0).contains("11 rivets"));
 }

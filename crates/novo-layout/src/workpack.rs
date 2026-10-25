@@ -1327,11 +1327,11 @@ pub fn duct_fixings(length: f64) -> Vec<f64> {
         .collect()
 }
 
-fn duct_fixing_note(length: f64) -> String {
+pub fn duct_fixing_note(length: f64) -> String {
     let at = duct_fixings(length);
     let list = at.iter().map(|x| mm(*x)).collect::<Vec<_>>().join(", ");
     format!(
-        "Fixing (a planning rule, not a datasheet value): {} rivets or screws at {list} mm from the start; the duct maker's instructions win. These holes are not in the drilling list.",
+        "Fixing (a planning rule, not a datasheet value): {} rivets or screws on the centre line of the duct base at {list} mm from the start; the duct maker's instructions win. These holes are not in the drilling list.",
         at.len()
     )
 }
