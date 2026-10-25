@@ -36,6 +36,7 @@ fn plc(y: f64) -> Device {
         filter_for: None,
         bonded: None,
         height_mm: None,
+        on_door: false,
     }
 }
 
@@ -48,6 +49,7 @@ fn input(runs: Vec<Run>, devices: Vec<Device>) -> Input {
             id: 1,
             tag: "+CAB".into(),
             finish: None,
+            door_bonded: None,
         }],
         params: Params::default(),
     }

@@ -107,6 +107,9 @@ pub struct Device {
     /// How far the device stands off the plate, mm, from its depth property
     /// (own or its part's), when stated.
     pub height_mm: Option<f64>,
+    /// Mounted on the inside of the door. Its position is in door
+    /// millimetres, so `rect` is none; its wires cross the hinge.
+    pub on_door: bool,
 }
 
 /// How a plate's surface was left.
@@ -123,6 +126,9 @@ pub struct Plate {
     pub id: u64,
     pub tag: String,
     pub finish: Option<Finish>,
+    /// The door is bonded to the frame with a strap (`emc.door_bonded`), when
+    /// stated.
+    pub door_bonded: Option<bool>,
 }
 
 /// Thresholds and assumptions. Every field is shown next to the results it
