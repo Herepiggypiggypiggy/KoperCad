@@ -157,3 +157,15 @@ fn output_is_deterministic_and_empty_cabinets_give_nothing() {
     );
     assert!(export_workpack_pdf(&[empty], "Crane").is_none());
 }
+
+#[test]
+fn one_card_is_one_a4_page_with_that_steps_template() {
+    use novo_pdf::workpack::export_card_pdf;
+    let p = pack("+CAB1");
+    let index = p.cards.iter().position(|c| c.mark == "-Q2").unwrap();
+    let pdf = export_card_pdf(&p, index, "Crane").unwrap();
+    let doc = Document::load_mem(&pdf).unwrap();
+    assert_eq!(doc.get_pages().len(), 1);
+    assert!(has_rect(&contents(&pdf), 45.0, 90.0), "true size footprint");
+    assert!(export_card_pdf(&p, 999, "Crane").is_none());
+}

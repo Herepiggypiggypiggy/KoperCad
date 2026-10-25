@@ -42,6 +42,8 @@ printable on an ordinary office printer, ticked with a pencil.
 
 - Reports > Export > **Export work cards (PDF)**, and the command field (`export work cards`).
 - 3D > Layers > Build order: the strip has a **Work cards (PDF)** button.
+- 3D Build order strip, on a part step: **Print this step** writes `<project> work card <mark>.pdf`, that
+  step's card alone on one A4 page.
 - Reports > Bench output: **Work cards (PDF)** beside Bench packet.
 - Reports > Bench output > Workshop pack (folder) adds `1 Work cards.pdf` and lists it on the bench
   packet cover.
@@ -56,5 +58,5 @@ printable on an ordinary office printer, ticked with a pencil.
   (vents, fans) and plain door cut-outs are on the cut-out cards and the tiled template, not yet on
   work cards (next piece: door and plate layout from the build order).
 - Duct fixing points are the duct maker's; the model has none.
-- Not built: per-step print from the 3D strip (the button prints the whole pack), a drill-size
+- Not built: a drill-size
   choice per part (the tool is the part data's hole diameter), a wire "strip length" per end.

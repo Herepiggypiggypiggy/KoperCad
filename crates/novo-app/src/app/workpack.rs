@@ -142,27 +142,26 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
     // field wires) are on no card: say which, on the cover of the cabinet
     // their device is in, else of the first.
     let mut left: BTreeMap<usize, Vec<String>> = BTreeMap::new();
-    let mut left_count = 0;
     for ((number, from, to), lengths) in &cuts {
         for cut in lengths {
             let at = out
                 .iter()
                 .position(|p| {
-                    from.starts_with(&format!("{}-", p.cabinet))
-                        || to.starts_with(&format!("{}-", p.cabinet))
+                    from.contains(&format!("{}-", p.cabinet))
+                        || to.contains(&format!("{}-", p.cabinet))
                 })
                 .unwrap_or(0);
             left.entry(at).or_default().push(format!(
                 "{number} ({from} to {to}) cut {} mm",
                 novo_layout::drill::mm(*cut)
             ));
-            left_count += 1;
         }
     }
     for (at, list) in left {
         if let Some(pack) = out.get_mut(at) {
             pack.problems.push(format!(
-                "{left_count} of {total_cut} cut-list wires are not on these cards: they have no end inside a plated cabinet (supply and field wires). They are on the cut list: {}",
+                "{} of {total_cut} cut-list wires are not on this cabinet's cards: they have no end inside a plated cabinet (supply and field wires). They are on the cut list: {}",
+                list.len(),
                 list.join("; ")
             ));
         }
@@ -185,6 +184,51 @@ impl NovoApp {
         let (dir, stem) = self.export_base()?;
         let path = replaceable_path(&dir.join(format!("{stem} work cards.pdf")));
         self.export_workpack_to(&path)
+    }
+
+    /// The card of the Build order step `mark` of enclosure `id` as a one-page
+    /// PDF next to the project, `<project> work card <mark>.pdf`.
+    pub(super) fn export_workpack_step(
+        &mut self,
+        id: novo_core::StructureId,
+        mark: &str,
+    ) -> Option<PathBuf> {
+        let name = self.machine_title().unwrap_or_default();
+        let (dir, stem) = self.export_base()?;
+        let bytes = {
+            let project = self.machine()?;
+            let tag = project.structures().find(|s| s.id == id)?.tag.to_string();
+            work_packs(&project)
+                .into_iter()
+                .find(|p| p.cabinet == tag)
+                .and_then(|pack| {
+                    let index = pack.cards.iter().position(|c| c.mark == mark)?;
+                    novo_pdf::workpack::export_card_pdf(&pack, index, &name)
+                })
+        };
+        let Some(bytes) = bytes else {
+            self.message(
+                Level::Warning,
+                format!("No work card for {mark}: print the whole pack instead"),
+            );
+            return None;
+        };
+        let file = format!("{stem} work card {}.pdf", super::workshop::clean(mark));
+        let path = replaceable_path(&dir.join(file));
+        match write_replacing(&path, &bytes) {
+            Ok(()) => {
+                self.message_file(
+                    format!("Exported {}. Print at 100 % (actual size)", path.display()),
+                    &path,
+                );
+                self.wb.last_export = Some(path.clone());
+                Some(path)
+            }
+            Err(e) => {
+                self.message(Level::Error, format!("Could not export the work card: {e}"));
+                None
+            }
+        }
     }
 
     /// Exports to `path`. Without a plated cabinet with something to build it

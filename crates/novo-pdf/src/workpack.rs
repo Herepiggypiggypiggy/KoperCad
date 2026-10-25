@@ -867,6 +867,18 @@ pub fn export_workpack_pdf(packs: &[Pack], project_name: &str) -> Option<Vec<u8>
     ))
 }
 
+/// One card of a pack as a one-page PDF (the card on the top half of A4).
+/// `None` when the pack has no card `index`.
+pub fn export_card_pdf(pack: &Pack, index: usize, project_name: &str) -> Option<Vec<u8>> {
+    let card = pack.cards.get(index)?;
+    let mut m = card_marks(card, &pack.cabinet, CARD_Y[0]);
+    dashed(&mut m, Layer::Margin, (3.0, 148.5), (A4.0 - 3.0, 148.5));
+    Some(write_pages(
+        &[page(m)],
+        &format!("{project_name} - work card {}", card.mark),
+    ))
+}
+
 /// Phases that have a hand template, for callers that want to say so.
 pub fn has_template(phase: Phase) -> bool {
     matches!(phase, Phase::Rails | Phase::Ducts | Phase::Devices)
