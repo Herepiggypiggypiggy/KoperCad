@@ -1,0 +1,20 @@
+@title Cooling what-if: a fan fix names the devices beside its stream
+@area 3D
+@sizes 1366x768 1920x1080
+# The first fix of the hot cabinet adds an exhaust fan; devices that stand beside the line between the fan and the vent are named under the fan note, and the Apply button stays in reach.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Cooling what-if"
+wait 20
+click_text "Try the fixes"
+wait_s 120
+expect "Devices over limit"
+scroll 1100 450 -150
+wait 10
+expect "Beside the fan stream"
+shot beside-stream
+check_layout

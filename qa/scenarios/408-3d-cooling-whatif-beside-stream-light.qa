@@ -1,0 +1,31 @@
+@title Cooling what-if: the beside-the-stream line in the Light look
+@area 3D
+@sizes 1366x768
+# Same route as 407 in the Light look: the warning-coloured line stays readable on a light window.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 6
+click_text 3D #1
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Cooling what-if"
+wait 20
+click_text "Try the fixes"
+wait_s 120
+expect "Devices over limit"
+scroll 1100 450 -150
+wait 10
+expect "Beside the fan stream"
+shot beside-stream-light
+check_layout
