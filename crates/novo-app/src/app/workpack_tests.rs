@@ -637,3 +637,72 @@ fn parts_of_counts_each_number_in_row_order() {
         [None, Some((1, 2)), None, Some((2, 2))]
     );
 }
+
+#[test]
+fn every_wire_card_row_carries_the_strip_length_of_the_cut_jobs() {
+    let project = lesson("wire-routing/project.json");
+    let jobs = novo_reports::wire_cut_jobs(&project);
+    let mut seen = 0;
+    for pack in work_packs(&project) {
+        for c in pack.cards.iter().filter(|c| c.kind == CardKind::Wires) {
+            for w in &c.wires {
+                // The job of this number whose ends are the row's two ends.
+                let job = jobs
+                    .iter()
+                    .find(|j| {
+                        j.number == w.number
+                            && [&j.end_a.designation, &j.end_b.designation].contains(&&w.from)
+                            && [&j.end_a.designation, &j.end_b.designation].contains(&&w.to)
+                    })
+                    .unwrap_or_else(|| panic!("no job for wire {}", w.number));
+                let (f, t) = if job.end_a.designation == w.from {
+                    (&job.end_a, &job.end_b)
+                } else {
+                    (&job.end_b, &job.end_a)
+                };
+                assert_eq!(w.strip_from_mm, f.strip_mm, "{} {}", w.number, w.from);
+                assert_eq!(w.strip_to_mm, t.strip_mm, "{} {}", w.number, w.to);
+                assert_eq!(
+                    w.strip_basis.is_empty(),
+                    f.strip_mm.is_none() && t.strip_mm.is_none()
+                );
+                seen += 1;
+            }
+        }
+    }
+    assert!(seen > 0);
+}
+
+#[test]
+fn a_part_that_states_a_strip_length_is_on_the_card_not_the_typical_one() {
+    use novo_core::Document;
+    let mut doc = Document::new(lesson("wire-routing/project.json"));
+    // A device with a part on a wire of the cards: give its part 7.5 mm.
+    let (device, part) = doc
+        .project()
+        .devices()
+        .find_map(|d| d.parts.first().map(|p| (d.id, *p)))
+        .expect("a device with a part");
+    doc.transact("Part", |tx| {
+        tx.set_property(
+            part,
+            novo_reports::STRIP_LENGTH_KEY,
+            Some(Value::Float(7.5)),
+        )
+    })
+    .unwrap();
+    let tag = doc.project().device(device).unwrap().tag.to_string();
+    let mut found = 0;
+    for pack in work_packs(doc.project()) {
+        for c in pack.cards.iter().filter(|c| c.kind == CardKind::Wires) {
+            for w in &c.wires {
+                if w.from.starts_with(&format!("{tag}:")) || w.from.contains(&format!("-{tag}:")) {
+                    assert_eq!(w.strip_from_mm, Some(7.5), "{} {}", w.number, w.from);
+                    assert_eq!(w.strip_basis, "part");
+                    found += 1;
+                }
+            }
+        }
+    }
+    assert!(found > 0, "no wire starts at {tag}");
+}

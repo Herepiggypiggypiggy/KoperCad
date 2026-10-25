@@ -75,6 +75,56 @@ fn cut_lengths(project: &Project) -> CutLengths {
     out
 }
 
+/// The strip lengths of the wire-cut jobs by wire number, the same jobs and
+/// ferrule standard as the bench output and the cut list (the part's or the
+/// wire's stated length first, else the typical one for the size).
+fn strip_lengths(project: &Project) -> BTreeMap<String, VecDeque<novo_reports::WireCutJob>> {
+    let mut out: BTreeMap<String, VecDeque<novo_reports::WireCutJob>> = BTreeMap::new();
+    let standard = novo_reports::FerruleStandard::of(project);
+    for job in novo_reports::wire_cut_jobs_with(project, &standard) {
+        out.entry(job.number.clone()).or_default().push_back(job);
+    }
+    out
+}
+
+/// The strip length at the `from` and `to` end of a card row and where it
+/// came from, taken from the job with that number whose ends are those
+/// two (in either order); consumed, so a number used twice gets its own.
+fn strip_of(
+    jobs: &mut BTreeMap<String, VecDeque<novo_reports::WireCutJob>>,
+    number: &str,
+    from: &str,
+    to: &str,
+) -> (Option<f64>, Option<f64>, &'static str) {
+    use novo_reports::StripBasis;
+    let Some(list) = jobs.get_mut(number) else {
+        return (None, None, "");
+    };
+    let at = list.iter().position(|j| {
+        (j.end_a.designation == from && j.end_b.designation == to)
+            || (j.end_a.designation == to && j.end_b.designation == from)
+    });
+    let Some(job) = at.and_then(|i| list.remove(i)) else {
+        return (None, None, "");
+    };
+    let (f, t) = if job.end_a.designation == from {
+        (&job.end_a, &job.end_b)
+    } else {
+        (&job.end_b, &job.end_a)
+    };
+    // The ends can differ in basis (one end a part's length): say the less certain.
+    let basis = if f.strip_mm.is_none() && t.strip_mm.is_none() {
+        ""
+    } else if [f.strip_basis, t.strip_basis].contains(&StripBasis::Typical) {
+        "typical"
+    } else if [f.strip_basis, t.strip_basis].contains(&StripBasis::Part) {
+        "part"
+    } else {
+        "stated"
+    };
+    (f.strip_mm, t.strip_mm, basis)
+}
+
 /// Which of several wires a row is, by wire number: a number runs on through
 /// a terminal, so the same number on several rows is several wires, `(1, 2)`
 /// and `(2, 2)`; a number used once is `None`.
@@ -102,6 +152,7 @@ pub(super) fn parts_of(numbers: &[String]) -> Vec<Option<(usize, usize)>> {
 pub fn work_packs(project: &Project) -> Vec<Pack> {
     let checklist = AssemblyChecklist.generate(project);
     let mut cuts = cut_lengths(project);
+    let mut jobs = strip_lengths(project);
     let rules = novo_routing::project_rules::WireRules::of(project);
     let total_cut: usize = cuts.values().map(VecDeque::len).sum();
     let mut out = Vec::new();
@@ -153,6 +204,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                 let end_mm = found.as_ref().map(|(_, end, _)| *end);
                 let (colour, size) = (t("colour"), t("cross_section_mm2"));
                 let fitting = fitting_of(end_mm, rules.ferrule_mm, rules.lug_mm);
+                let strips = strip_of(&mut jobs, &number_text, &from, &to);
                 let mut kind = [
                     (!size.is_empty()).then(|| format!("{size} mm2")),
                     (!colour.is_empty()).then(|| colour.clone()),
@@ -183,6 +235,9 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                         end_mm,
                         fitting,
                         part,
+                        strip_from_mm: strips.0,
+                        strip_to_mm: strips.1,
+                        strip_basis: strips.2,
                     });
             }
         }
@@ -255,15 +310,16 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                 })
                 .unwrap_or(0);
             let fitting = fitting_of(Some(*end), rules.ferrule_mm, rules.lug_mm);
+            let strips = strip_of(&mut jobs, number, from, to);
             left.entry(at).or_default().push((
                 group.clone(),
                 WireCut {
                     number: number.clone(),
                     from: from.clone(),
                     to: to.clone(),
-                    // The cut list's own "Size unknown" reads "size not set" on every card.
-                    kind: if group.starts_with("Size unknown") {
-                        group.replacen("Size unknown", "size not set", 1)
+                    // The cut list's own words for no size, as the cabinet cards say it.
+                    kind: if group == "Size unknown" {
+                        "size not set".to_owned()
                     } else {
                         group.clone()
                     },
@@ -273,6 +329,9 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                     end_mm: Some(*end),
                     fitting,
                     part: None,
+                    strip_from_mm: strips.0,
+                    strip_to_mm: strips.1,
+                    strip_basis: strips.2,
                 },
             ));
         }
