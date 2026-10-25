@@ -115,7 +115,11 @@ fn run(w: &mut Wizard, p: &Project, cab: StructureId) {
         fans,
         &tags(p),
     );
-    for _ in super::test_wait::patient() {
+    // The real run takes ~16 s alone in a debug build, and every test that
+    // reads an answer runs it in its own process at the same time under
+    // nextest, so the usual 30 s deadline is too short on a two-core runner.
+    let start = std::time::Instant::now();
+    while start.elapsed() < Duration::from_secs(600) {
         w.poll(&ctx);
         if !w.running() {
             return;
