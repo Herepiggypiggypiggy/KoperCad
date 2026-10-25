@@ -16,7 +16,7 @@ printable on an ordinary office printer, ticked with a pencil.
 3. **Cards**, two per A4 page (cut or fold at the dashed line). Each card says
    `STEP n of N`, the phase and mark, what to do, the tools, and carries tick boxes ("Cut", "Holes
    drilled", "Fitted", "Checked") and a 100 mm ruler.
-   - **Rail card**: the rail strip with its holes (numbers match the tiled drilling template), the holes
+   - **Rail card**: the rail strip with its holes (numbers match the tiled drilling template) and the devices clipped on it (a box as wide as the device along the rail at its distance from the rail start, with its designation when the box is wide enough, and the distances in a note), the holes
      as distances from the *nearest* plate edges ("65 mm from the left edge, 225 mm from the bottom
      edge"), where the rail starts.
    - **Duct card**: cut length and width, top left corner from the nearest edges.

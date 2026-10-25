@@ -518,3 +518,34 @@ fn wiring_openings_of_the_cabinet_become_cut_out_cards() {
         "{all}"
     );
 }
+
+#[test]
+fn a_rail_cards_clips_are_the_devices_the_build_order_clips_on_it_at_the_same_distance() {
+    let project = lesson("wire-routing/project.json");
+    let mut seen = 0;
+    for pack in work_packs(&project) {
+        for card in pack.cards.iter().filter(|c| c.kind == CardKind::Rail) {
+            let clips = &card.template.as_ref().unwrap().clips;
+            // "Clip =A1+CAB1-Q1 on R1, 10 mm from its start" for every clipped device.
+            let rows: Vec<&str> = pack
+                .overview
+                .iter()
+                .filter(|r| r.phase == novo_layout::assembly::Phase::Devices)
+                .map(|r| r.text.as_str())
+                .filter(|t| t.contains(&format!(" on {},", card.mark)))
+                .collect();
+            assert_eq!(rows.len(), clips.len(), "{}", card.mark);
+            for clip in clips {
+                let line = format!(
+                    "Clip {} on {}, {} mm from its start",
+                    clip.tag,
+                    card.mark,
+                    novo_layout::drill::mm(clip.at)
+                );
+                assert!(rows.iter().any(|r| *r == line), "{line} not in {rows:?}");
+                seen += 1;
+            }
+        }
+    }
+    assert!(seen > 0);
+}

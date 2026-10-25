@@ -175,6 +175,27 @@ fn draw_template(m: &mut Marks, t: &Template, ox: f64, oy: f64, s: f64) {
     );
     if t.rail {
         line(m, Layer::Rails, (ox, oy + h / 2.0), (ox + w, oy + h / 2.0));
+        // Each clipped device as a box on the strip with its designation,
+        // as wide as the device is along the rail.
+        for c in &t.clips {
+            let (x0, x1) = (ox + c.at.max(0.0) * s, ox + (c.at + c.len).min(t.width) * s);
+            if x1 <= x0 {
+                continue;
+            }
+            rect(m, Layer::Devices, (x0, oy + h * 0.15), (x1, oy + h * 0.85));
+            let label = c.short();
+            // Text in the lower half of the box, clear of the hole numbers above the holes. Text the box can hold; a narrow box keeps its outline only.
+            if x1 - x0 >= label.chars().count() as f64 * 1.3 + 1.0 {
+                text(
+                    m,
+                    ((x0 + x1) / 2.0, oy + h * 0.85 - 3.0),
+                    2.4,
+                    HAlign::Center,
+                    false,
+                    label.to_owned(),
+                );
+            }
+        }
     }
     let tick = |m: &mut Marks, a: (f64, f64), b: (f64, f64)| line(m, Layer::Dimensions, a, b);
     let mut xs: Vec<f64> = t.holes.iter().map(|h| h.x).collect();
@@ -1153,6 +1174,81 @@ mod tests {
                 assert!(!m.texts.iter().any(|t| t.text.starts_with("STEP")));
             }
         }
+    }
+
+    fn rail_pack(rail_len: f64, xs: &[f64]) -> Pack {
+        let mut l = CabinetLayout::new(Plate {
+            width: 800.0,
+            height: 600.0,
+            margin: 10.0,
+        });
+        l.rails = vec![Rail {
+            id: 1,
+            x: 50.0,
+            y: 100.0,
+            length: rail_len,
+            vertical: false,
+        }];
+        l.placements = xs
+            .iter()
+            .enumerate()
+            .map(|(i, x)| Placement {
+                id: i as u64 + 1,
+                x: *x,
+                y: 100.0,
+                rotated: false,
+                size: Size {
+                    width: 45.0,
+                    height: 90.0,
+                    guessed: false,
+                },
+                clearance: None,
+                margins: Margins::default(),
+                rail: Some(1),
+            })
+            .collect();
+        build("+CAB1", &l, &[], &|id| format!("=A1+CAB1-K{id}"), &[])
+    }
+
+    #[test]
+    fn clipped_devices_are_boxes_on_the_rail_strip_as_wide_as_the_device() {
+        // 300 mm rail at 1:2 (150 x 17.5 on paper): a 45 mm device is 22.5 mm wide.
+        let p = rail_pack(300.0, &[60.0, 200.0]);
+        let card = &p.cards[0];
+        let t = card.template.as_ref().unwrap();
+        let s = template_scale(t.width, t.height, CARD_W - 24.0, t.height);
+        let m = card_marks(card, &p.cabinet, CARD_Y[0]);
+        let boxes: Vec<f64> = m
+            .shapes
+            .iter()
+            .filter_map(|(layer, sh)| match (layer, sh) {
+                (Layer::Devices, MarkShape::Rect { min, max })
+                    if (max.1 - min.1) < t.height * s && (max.1 - min.1) > 1.0 =>
+                {
+                    Some(max.0 - min.0)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(boxes.len(), 2, "{boxes:?}");
+        assert!(
+            boxes.iter().all(|w| (w - 45.0 * s).abs() < 1e-6),
+            "{boxes:?}"
+        );
+        // The designation is on the box, K1 and K2 of =A1+CAB1-Kn.
+        for k in ["K1", "K2"] {
+            assert!(m.texts.iter().any(|t| t.text == k), "{k}");
+        }
+        assert!(inside(&m, CARD_Y[0]).is_empty());
+    }
+
+    #[test]
+    fn a_box_too_narrow_for_its_label_keeps_only_its_outline() {
+        // 1900 mm rail at 1:20: a 45 mm device is 2.25 mm wide.
+        let p = rail_pack(1900.0, &[60.0]);
+        let m = card_marks(&p.cards[0], &p.cabinet, CARD_Y[0]);
+        assert!(!m.texts.iter().any(|t| t.text == "K1"));
+        assert!(m.shapes.iter().any(|(l, _)| *l == Layer::Devices));
     }
 
     #[test]
