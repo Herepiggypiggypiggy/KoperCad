@@ -14,3 +14,9 @@ libvulkan1 libxkbcommon-x11-0`; `scripts/qa.sh run --only workpack --out /mnt/pr
 Traps: the packet cover cuts long CoverLine text with "..." and a test forbids that; QA scenarios that open a
 fixture write next to the copy in /tmp/kopercad-qa-open-N; the Wires cards group by Circuit (power, control,
 PE) to match the print pack's build order numbers. Scenario numbers 183-187 are this thread's block.
+
+Wires not on a card: the wire cards carry the wires of the plated cabinet's checklist wire section (an end in
+that cabinet). Cut-list wires with no end there (supply and PE leads of another cabinet, wires between other
+cabinets) are on no card of this cabinet; the count check compares with the checklist, not the project. A
+checklist wire that is missing from the cut list is printed with ~ and named on the cover (test
+`every_card_length_is_a_cut_list_length_and_nothing_falls_back`).
