@@ -878,13 +878,16 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
             Ok("Wire asked to stay out of the duct: it takes another duct only if one reaches both of its ends (the router never leaves a wire unrouted for it). Its route and cut length can change: print the wire list and cut list again".to_owned())
         }
         Fix::MoveCloser { device, to, max_mm } => {
-            move_device(tx, *device, *to, crate::mover::Goal::Within(*max_mm))
+            move_device(tx, *device, Some(*to), crate::mover::Goal::Within(*max_mm))
         }
         Fix::MoveAway {
             device,
             from,
             min_mm,
-        } => move_device(tx, *device, *from, crate::mover::Goal::Away(*min_mm)),
+        } => move_device(tx, *device, Some(*from), crate::mover::Goal::Away(*min_mm)),
+        Fix::MoveOutOfField { device, below_ut } => {
+            move_device(tx, *device, None, crate::mover::Goal::Field(*below_ut))
+        }
         Fix::KeepClear { wire, other, to_mm } => {
             let id = novo_core::WireId::from(*wire);
             let w = tx
@@ -970,7 +973,7 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
 fn move_device(
     tx: &mut Tx<'_>,
     device: u64,
-    other: u64,
+    other: Option<u64>,
     goal: crate::mover::Goal,
 ) -> Result<String> {
     let spot = crate::mover::find_spot(tx.project(), device, other, goal)?;
@@ -979,12 +982,40 @@ fn move_device(
         .all::<CabinetPlacement>()
         .find(|p| p.device.raw() == device)
         .is_some_and(|p| p.rotated);
+    let rail_of = |project: &Project| {
+        novo_layout::model::load(project, spot.structure).and_then(|l| {
+            l.placements
+                .iter()
+                .find(|p| p.id == device)
+                .and_then(|p| p.rail)
+        })
+    };
+    let was_on_rail = rail_of(tx.project());
     novo_layout::model::place_device(tx, spot.structure, device, spot.x, spot.y, rotated)?;
+    let rail_note = match (was_on_rail, rail_of(tx.project())) {
+        (Some(_), None) => ". The device no longer stands on its DIN rail: check how it is fixed",
+        _ => "",
+    };
+    let there = match (goal, spot.field_ut) {
+        (crate::mover::Goal::Field(limit), Some(f)) => format!(
+            "the modelled field there is about {f:.1} \u{b5}T, the planning value {limit:.1} \u{b5}T"
+        ),
+        _ => format!("gap {} mm there", spot.gap_mm.round() as i64),
+    };
     Ok(format!(
-        "New position: the nearest free spot that meets the rule, {} mm from where the device stands (gap {} mm there). Only the plate layout rules and the EMC rules were checked: not heat, airflow, the door swing or the length of the wires to the new spot. Wires are routed again, so cut lengths change, and the mounting holes are drilled anew: print the cut list and drilling plan again",
-        spot.moved_mm.round() as i64,
-        spot.gap_mm.round() as i64
+        "New position: the nearest free spot that meets the rule, {} mm from where the device stands ({there}). Only the plate layout rules and the EMC rules were checked: not heat, airflow, the door swing or the length of the wires to the new spot. Wires are routed again, so cut lengths change, and the mounting holes are drilled anew: print the cut list and drilling plan again{rail_note}",
+        spot.moved_mm.round() as i64
     ))
+}
+
+/// A finding that stays after the fix but is less severe.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Eased {
+    pub rule: &'static str,
+    pub from: crate::report::Severity,
+    pub to: crate::report::Severity,
+    /// The finding's message after the fix.
+    pub after: String,
 }
 
 /// What a fix would change, worked out on a copy of the project: the
@@ -1000,6 +1031,9 @@ pub struct Preview {
     pub cleared: Vec<(&'static str, String)>,
     /// Rule and message of each finding that is new after it.
     pub added: Vec<(&'static str, String)>,
+    /// Each finding that stays but is less severe after the fix, such as a
+    /// warning that becomes a note.
+    pub eased: Vec<Eased>,
     /// Wires and devices whose score changes: subject, name, before, after.
     pub scores: Vec<(Subject, String, u32, u32)>,
 }
@@ -1031,6 +1065,27 @@ pub fn preview_on(project: &Project, fix: &Fix) -> Result<(Preview, Project)> {
             .collect()
     };
     let (kb, ka) = (keys(&before), keys(&after));
+    let severity = |r: &Report| -> BTreeMap<String, crate::report::Severity> {
+        r.findings
+            .iter()
+            .map(|f| (finding_key(f), f.severity))
+            .collect()
+    };
+    let (sb, sa) = (severity(&before), severity(&after));
+    let eased: Vec<Eased> = sb
+        .iter()
+        .filter_map(|(k, v)| {
+            let a = *sa.get(k).filter(|a| *a > v)?;
+            let (rule, _) = kb.get(k)?;
+            let (_, after) = ka.get(k)?;
+            Some(Eased {
+                rule,
+                from: *v,
+                to: a,
+                after: after.clone(),
+            })
+        })
+        .collect();
     let cleared = kb
         .iter()
         .filter(|(k, _)| !ka.contains_key(*k))
@@ -1076,6 +1131,7 @@ pub fn preview_on(project: &Project, fix: &Fix) -> Result<(Preview, Project)> {
         findings_after: after.findings.len(),
         cleared,
         added,
+        eased,
         scores,
     };
     Ok((preview, copy))

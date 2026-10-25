@@ -36,6 +36,17 @@ pub enum Severity {
     Info,
 }
 
+impl Severity {
+    /// The word the preview uses: an error, a warning or a note.
+    pub fn word(self) -> &'static str {
+        match self {
+            Severity::Error => "an error",
+            Severity::Warning => "a warning",
+            Severity::Info => "a note",
+        }
+    }
+}
+
 /// What a finding or a score is about. Ids are raw model ids.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Subject {
@@ -108,6 +119,9 @@ pub enum Fix {
     /// Move a device to the nearest free spot on the plate at least this far
     /// (mm) from another device (EMC-17).
     MoveAway { device: u64, from: u64, min_mm: f64 },
+    /// Move a sensitive device to the nearest free spot on the plate where
+    /// the modelled field is under this value (µT) (EMC-19).
+    MoveOutOfField { device: u64, below_ut: f64 },
     /// Move a device this far (mm) from another. By hand.
     MoveDevice { device: u64, from: u64, to_mm: f64 },
     /// Bond the mounting area to bare metal: the plate's finish is stated
@@ -158,6 +172,9 @@ impl Fix {
                 "Move it to the nearest free spot at least {} mm from the other device (only if the plate has one).",
                 min_mm.round() as i64
             ),
+            Fix::MoveOutOfField { .. } => {
+                "Move it to the nearest free spot where the modelled field is under the planning value (only if the plate has one).".to_owned()
+            }
             Fix::MoveDevice { to_mm, .. } => {
                 format!("Move the device to keep {} mm clear.", to_mm.round() as i64)
             }
@@ -188,6 +205,7 @@ impl Fix {
                 | Fix::KeepClear { .. }
                 | Fix::MoveCloser { .. }
                 | Fix::MoveAway { .. }
+                | Fix::MoveOutOfField { .. }
         )
     }
 }
