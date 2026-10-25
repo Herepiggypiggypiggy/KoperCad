@@ -5,7 +5,10 @@
 use novo_layout::assembly::Phase;
 use novo_layout::drill::{Cutout, CutoutShape, DeviceFeatures, Hole, Surface, drill_table};
 use novo_layout::state::CabinetLayout;
-use novo_layout::workpack::{CardKind, WIRES_PER_CARD, WireCut, WireGroup, build, from_edges};
+use novo_layout::workpack::{
+    CardKind, OpeningJob, OpeningWall, WIRES_PER_CARD, WireCut, WireGroup, add_opening_cards,
+    build, from_edges,
+};
 use novo_layout::{Duct, Margins, Placement, Plate, Rail, Size};
 
 fn place(id: u64, x: f64, y: f64, rotated: bool, rail: Option<u64>) -> Placement {
@@ -338,4 +341,80 @@ fn an_empty_cabinet_gives_an_empty_pack() {
     let p = build("+CAB2", &l, &[], &|id| format!("-Q{id}"), &[]);
     assert!(p.cards.is_empty());
     assert!(p.overview.is_empty());
+}
+
+fn grille(wall: OpeningWall, along: f64, down: Option<f64>) -> OpeningJob {
+    OpeningJob {
+        name: "Grille".into(),
+        what: "grille".into(),
+        wall,
+        along,
+        down,
+        width: 200.0,
+        height: 100.0,
+        size: (600.0, 800.0),
+        depth: 250.0,
+    }
+}
+
+#[test]
+fn a_door_grille_is_a_card_outside_the_build_order_with_edge_distances() {
+    let mut p = pack(3);
+    let before = (p.cards.len(), p.tools.len());
+    add_opening_cards(&mut p, &[grille(OpeningWall::Door, 300.0, Some(150.0))]);
+    assert_eq!(p.cards.len(), before.0 + 1);
+    let c = p.cards.last().unwrap();
+    assert_eq!(c.kind, CardKind::Opening);
+    assert_eq!(c.steps, (0, 0));
+    assert!(c.mark.contains("door"), "{}", c.mark);
+    // Centre at x 300 of 600, y 150 of 800: the nearest edges are named.
+    assert!(
+        c.dims[0].contains(&from_edges(300.0, 150.0, (600.0, 800.0))),
+        "{:?}",
+        c.dims
+    );
+    // Edges: 300 +- 100 from the left, 150 +- 50 from the top.
+    assert!(c.dims[1].contains("200") && c.dims[1].contains("400"));
+    assert!(c.dims[1].contains("100") && c.dims[1].contains("200"));
+    assert!(c.notes.iter().any(|n| n.contains("flange")));
+    // The template is the cut-out plus a frame, centre cross hair.
+    let t = c.template.as_ref().unwrap();
+    assert_eq!((t.width, t.height), (220.0, 120.0));
+    let cut = t.cutout.as_ref().unwrap();
+    assert_eq!((cut.x, cut.y), (110.0, 60.0));
+    assert_eq!(p.tools.len(), before.1 + 1);
+    let punch = p
+        .tools
+        .iter()
+        .position(|t| t.for_what.contains("grille cut-out"));
+    let every = p.tools.iter().position(|t| t.for_what == "every step");
+    assert!(punch.is_some() && punch < every, "{:?}", p.tools);
+}
+
+#[test]
+fn a_side_wall_opening_is_drawn_with_its_width_along_the_wall() {
+    let mut p = pack(0);
+    add_opening_cards(&mut p, &[grille(OpeningWall::Left, 400.0, None)]);
+    let c = p.cards.last().unwrap();
+    let t = c.template.as_ref().unwrap();
+    // 200 mm along y (drawn vertical), 100 mm deep (drawn horizontal).
+    assert_eq!((t.width, t.height), (120.0, 220.0));
+    assert!(c.dims[0].contains("400"));
+    assert!(c.notes.iter().any(|n| n.contains("depth")));
+    let top = grille(OpeningWall::Top, 100.0, None);
+    add_opening_cards(&mut p, &[top]);
+    assert!(p.cards.last().unwrap().dims[0].contains("100"));
+}
+
+#[test]
+fn no_openings_change_nothing_and_the_pack_stays_deterministic() {
+    let mut a = pack(5);
+    let b = pack(5);
+    add_opening_cards(&mut a, &[]);
+    assert_eq!(a, b);
+    let jobs = [grille(OpeningWall::Door, 300.0, Some(150.0))];
+    let (mut x, mut y) = (pack(5), pack(5));
+    add_opening_cards(&mut x, &jobs);
+    add_opening_cards(&mut y, &jobs);
+    assert_eq!(x, y);
 }

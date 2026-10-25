@@ -11,10 +11,14 @@ use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 
 use novo_core::{Device, DeviceId, Project};
-use novo_layout::workpack::{Pack, WireCut, WireGroup, build};
+use novo_layout::workpack::{
+    OpeningJob, OpeningWall, Pack, WireCut, WireGroup, add_opening_cards, build,
+};
 use novo_reports::{AssemblyChecklist, Cell, CutList, Report, Section, is_estimate};
 
 use super::assembly::Circuit;
+use super::heat_openings_store;
+use super::heat_settings::{Kind, Wall};
 use super::pdf::{replaceable_path, write_replacing};
 use super::{Level, NovoApp};
 
@@ -136,6 +140,36 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
             .collect();
         let mut pack = build(&tag, &layout, &features, &name, &groups);
         pack.problems.extend(missing);
+        if let Some(e) = layout.enclosure {
+            let stored = heat_openings_store::stored_text(project, enclosure.id);
+            let jobs: Vec<OpeningJob> = heat_openings_store::parse(&stored)
+                .iter()
+                .enumerate()
+                .map(|(i, v)| OpeningJob {
+                    name: format!("Opening {}", i + 1),
+                    what: match v.kind {
+                        Kind::Grille => "grille",
+                        Kind::Fan => "fan",
+                        Kind::FilterFan => "filter fan",
+                    }
+                    .to_owned(),
+                    wall: match v.wall {
+                        Wall::Door => OpeningWall::Door,
+                        Wall::Top => OpeningWall::Top,
+                        Wall::Bottom => OpeningWall::Bottom,
+                        Wall::Left => OpeningWall::Left,
+                        Wall::Right => OpeningWall::Right,
+                    },
+                    along: v.u_mm,
+                    down: (v.wall == Wall::Door).then_some(v.v_mm),
+                    width: v.width_mm,
+                    height: v.height_mm,
+                    size: (e.width, e.height),
+                    depth: e.depth,
+                })
+                .collect();
+            add_opening_cards(&mut pack, &jobs);
+        }
         out.push(pack);
     }
     // Cut-list wires with no end in any plated cabinet (supply feed leads,
@@ -169,6 +203,17 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
     out
 }
 
+/// `<project> work card <mark>.pdf`; with several cabinets the tag too, as two
+/// cabinets can both have a rail R1.
+pub(super) fn step_file_name(stem: &str, tag: &str, mark: &str, several: bool) -> String {
+    use super::workshop::clean;
+    if several {
+        format!("{stem} work card {} {}.pdf", clean(tag), clean(mark))
+    } else {
+        format!("{stem} work card {}.pdf", clean(mark))
+    }
+}
+
 impl NovoApp {
     /// The work cards PDF of the open project; `None` without a cabinet that
     /// has something to build.
@@ -195,25 +240,28 @@ impl NovoApp {
     ) -> Option<PathBuf> {
         let name = self.machine_title().unwrap_or_default();
         let (dir, stem) = self.export_base()?;
-        let bytes = {
+        let (bytes, several) = {
             let project = self.machine()?;
             let tag = project.structures().find(|s| s.id == id)?.tag.to_string();
-            work_packs(&project)
+            let packs = work_packs(&project);
+            let several = packs.len() > 1;
+            let bytes = packs
                 .into_iter()
                 .find(|p| p.cabinet == tag)
                 .and_then(|pack| {
                     let index = pack.cards.iter().position(|c| c.mark == mark)?;
                     novo_pdf::workpack::export_card_pdf(&pack, index, &name)
-                })
+                });
+            (bytes.map(|b| (b, tag)), several)
         };
-        let Some(bytes) = bytes else {
+        let Some((bytes, tag)) = bytes else {
             self.message(
                 Level::Warning,
                 format!("No work card for {mark}: print the whole pack instead"),
             );
             return None;
         };
-        let file = format!("{stem} work card {}.pdf", super::workshop::clean(mark));
+        let file = step_file_name(&stem, &tag, mark, several);
         let path = replaceable_path(&dir.join(file));
         match write_replacing(&path, &bytes) {
             Ok(()) => {

@@ -240,3 +240,98 @@ fn cut_list_wires_without_a_cabinet_end_are_named_on_the_cover() {
     );
     assert!(named[0].contains("(feed)"), "{}", named[0]);
 }
+
+#[test]
+fn the_heat_panels_vents_and_fans_become_cut_out_cards_outside_the_build_order() {
+    use super::heat_openings_store;
+    use super::heat_settings::{Kind, VentSpec, Wall};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.save_to(&dir.path().join("Plant 3.novo")));
+    cabinet_with_devices(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = d
+        .app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .structures()
+        .find(|s| s.enclosure)
+        .unwrap()
+        .id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let project = d.app.backend.document().unwrap().project();
+    let layout = novo_layout::model::load(project, cab);
+    let candidates = novo_layout::model::candidates(project, cab);
+    d.app
+        .cabinet_ask(Ask::PlaceAll, Some(cab), layout, &candidates);
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+
+    // No vents: no opening cards.
+    let none = work_packs(&d.app.machine().unwrap());
+    assert!(none[0].cards.iter().all(|c| c.kind != CardKind::Opening));
+
+    let mut fan = VentSpec::new(Wall::Door);
+    fan.kind = Kind::FilterFan;
+    fan.u_mm = 300.0;
+    fan.v_mm = 700.0;
+    fan.width_mm = 120.0;
+    fan.height_mm = 120.0;
+    let grille = VentSpec::new(Wall::Top);
+    let held = heat_openings_store::text(&[fan, grille]);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Vents", |tx| {
+            for (k, v) in [
+                ("interior_width_mm", 600.0),
+                ("interior_height_mm", 800.0),
+                ("interior_depth_mm", 250.0),
+            ] {
+                tx.set_property(cab, k, Some(Value::Float(v)))?;
+            }
+            tx.set_property(cab, heat_openings_store::KEY, Some(Value::Text(held)))
+        })
+        .unwrap();
+    let packs = work_packs(&d.app.machine().unwrap());
+    let cards: Vec<_> = packs[0]
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Opening)
+        .collect();
+    assert_eq!(cards.len(), 2, "{:?}", packs[0].cards.len());
+    assert!(cards[0].mark.to_lowercase().contains("filter fan") && cards[0].mark.contains("door"));
+    assert!(cards[0].dims[0].contains("300"), "{:?}", cards[0].dims);
+    assert!(cards[1].mark.contains("top wall"));
+    // They are not build-order steps: the overview does not grow.
+    assert_eq!(packs[0].overview.len(), none[0].overview.len());
+
+    // And they are in the PDF (cover + tick-off + cards).
+    let pdf = d.app.export_workpack().expect("exported");
+    let doc = lopdf::Document::load_mem(&std::fs::read(&pdf).unwrap()).unwrap();
+    let last = doc.get_pages().len() as u32;
+    let text = (1..=last)
+        .map(|p| doc.extract_text(&[p]).unwrap_or_default())
+        .collect::<String>();
+    assert!(text.contains("CUT-OUT"), "{text}");
+}
+
+#[test]
+fn the_one_card_file_name_carries_the_cabinet_only_when_there_are_several() {
+    use super::workpack::step_file_name;
+    assert_eq!(
+        step_file_name("Plant", "+CAB1", "R1", false),
+        "Plant work card R1.pdf"
+    );
+    let a = step_file_name("Plant", "+CAB1", "R1", true);
+    let b = step_file_name("Plant", "+CAB2", "R1", true);
+    assert_ne!(a, b);
+    assert!(a.contains("CAB1") && a.ends_with("R1.pdf"), "{a}");
+}

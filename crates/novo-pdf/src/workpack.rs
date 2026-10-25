@@ -286,16 +286,20 @@ fn card_marks(card: &Card, cabinet: &str, y0: f64) -> Marks {
         5.6,
         HAlign::Left,
         true,
-        format!(
-            "STEP{} {} of {}",
-            if card.steps.0 == card.steps.1 {
-                ""
-            } else {
-                "S"
-            },
-            card.steps_text(),
-            card.total
-        ),
+        if card.kind == CardKind::Opening {
+            "CUT-OUT".to_owned()
+        } else {
+            format!(
+                "STEP{} {} of {}",
+                if card.steps.0 == card.steps.1 {
+                    ""
+                } else {
+                    "S"
+                },
+                card.steps_text(),
+                card.total
+            )
+        },
     );
     text(
         &mut m,
@@ -304,7 +308,7 @@ fn card_marks(card: &Card, cabinet: &str, y0: f64) -> Marks {
         HAlign::Left,
         true,
         clip(
-            &if card.mark == card.phase.name() {
+            &if card.mark == card.phase.name() || card.kind == CardKind::Opening {
                 card.mark.clone()
             } else {
                 format!("{}  {}", card.phase.name(), card.mark)
@@ -1000,6 +1004,47 @@ mod tests {
                         card.steps_text()
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn opening_cards_stay_inside_their_half_page() {
+        use novo_layout::workpack::{OpeningJob, OpeningWall, add_opening_cards};
+        let job = |wall, w: f64, h: f64| OpeningJob {
+            name: "x".into(),
+            what: "filter fan".into(),
+            wall,
+            along: 300.0,
+            down: Some(200.0),
+            width: w,
+            height: h,
+            size: (600.0, 800.0),
+            depth: 250.0,
+        };
+        let mut p = pack(0, false);
+        add_opening_cards(
+            &mut p,
+            &[
+                job(OpeningWall::Door, 120.0, 120.0),
+                job(OpeningWall::Door, 400.0, 60.0),
+                job(OpeningWall::Left, 500.0, 200.0),
+                job(OpeningWall::Top, 250.0, 120.0),
+            ],
+        );
+        let cards: Vec<&Card> = p
+            .cards
+            .iter()
+            .filter(|c| c.kind == CardKind::Opening)
+            .collect();
+        assert_eq!(cards.len(), 4);
+        for card in cards {
+            for y0 in CARD_Y {
+                let m = card_marks(card, &p.cabinet, y0);
+                let bad = inside(&m, y0);
+                assert!(bad.is_empty(), "{}: {bad:?}", card.mark);
+                assert!(m.texts.iter().any(|t| t.text == "CUT-OUT"));
+                assert!(!m.texts.iter().any(|t| t.text.starts_with("STEP")));
             }
         }
     }
