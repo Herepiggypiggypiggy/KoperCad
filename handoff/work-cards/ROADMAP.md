@@ -30,6 +30,8 @@ PR 6 (rail clips): the rail card draws the clipped devices on the strip (Templat
 
 PR 7 (strip length): wire cards print "strip N mm" under the per-end allowance (typical length for the wire size, a planning value), and the clip drawing says why it clamps overhanging devices. Still open: nothing from the coordinator list; next is a bench-user walk of the whole pack.
 
+PR 10 (outside the plate): the cut-list wires with no end on the plate (supply feeds, field wires) get "Wires outside the plate" wire cards (header NOT A STEP) after the step cards (CardKind::Outside, steps 0, tick boxes Cut and Run, lengths marked estimated), named on the cover and the tick-off sheet. Next: wire numbers used twice and missing sizes.
+
 PR 8 (duct corner): the duct step text names the outline's top left corner, the same numbers as the card. The full bench walk is in `audit/workpack/bench-walk.md`; next PRs: device card names the rail's start end, wires outside the plate as a tick-off card, wire numbers used twice and missing sizes.
 
 PR 9 (rail start end): a clip card says which end of its rail the distance is measured from ("R1 starts at its left end", "top end" when upright). Next: wires outside the plate as a tick-off card, wire numbers used twice and missing sizes.

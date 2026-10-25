@@ -313,6 +313,8 @@ fn card_marks(card: &Card, cabinet: &str, y0: f64) -> Marks {
         true,
         if card.kind == CardKind::Opening {
             "CUT-OUT".to_owned()
+        } else if card.kind == CardKind::Outside {
+            "NOT A STEP".to_owned()
         } else {
             format!(
                 "STEP{} {} of {}",
@@ -333,7 +335,9 @@ fn card_marks(card: &Card, cabinet: &str, y0: f64) -> Marks {
         HAlign::Left,
         true,
         clip(
-            &if card.mark == card.phase.name() || card.kind == CardKind::Opening {
+            &if card.mark == card.phase.name()
+                || matches!(card.kind, CardKind::Opening | CardKind::Outside)
+            {
                 card.mark.clone()
             } else {
                 format!("{}  {}", card.phase.name(), card.mark)
@@ -377,7 +381,7 @@ fn card_marks(card: &Card, cabinet: &str, y0: f64) -> Marks {
     let bottom = y0 + FOOT_Y - 1.0;
 
     match card.kind {
-        CardKind::Wires => wire_table(&mut m, card, x0, y, bottom),
+        CardKind::Wires | CardKind::Outside => wire_table(&mut m, card, x0, y, bottom),
         CardKind::Labels => label_table(&mut m, card, x0, y, bottom),
         _ => body(&mut m, card, (x0, y0), y, bottom),
     }
@@ -716,6 +720,14 @@ fn cut_out_note(n: usize) -> String {
     )
 }
 
+/// The cover line about the wire cards for wires with no end on the plate.
+fn outside_note(n: usize) -> String {
+    format!(
+        "{n} wire card{} \"Wires outside the plate\" at the end, not numbered (NOT A STEP): supply and field wires that have no end on this plate. Cut them with the cabinet wires and run them last.",
+        if n == 1 { "" } else { "s" }
+    )
+}
+
 fn cover_marks(pack: &Pack, project: &str) -> Marks {
     let mut m = Marks::default();
     let x0 = 15.0;
@@ -755,6 +767,14 @@ fn cover_marks(pack: &Pack, project: &str) -> Marks {
     let mut how: Vec<String> = how.iter().map(|p| (*p).to_owned()).collect();
     if cut_outs > 0 {
         how.insert(1, cut_out_note(cut_outs));
+    }
+    let outside = pack
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Outside)
+        .count();
+    if outside > 0 {
+        how.insert(1, outside_note(outside));
     }
     for p in how {
         let (ny, _) = lines_down(&mut m, x0, y, w, 120.0, 3.4, &[p]);
@@ -857,6 +877,24 @@ fn overview_marks(pack: &Pack, rows: std::ops::Range<usize>, number: (usize, usi
                 "{cut_outs} CUT-OUT card{} at the end, not numbered: do {} FIRST, before the plate goes in.",
                 if cut_outs == 1 { "" } else { "s" },
                 if cut_outs == 1 { "it" } else { "them" }
+            ),
+        );
+    }
+    let outside = pack
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Outside)
+        .count();
+    if outside > 0 {
+        text(
+            &mut m,
+            (x0, 21.4),
+            2.6,
+            HAlign::Left,
+            true,
+            format!(
+                "{outside} wire card{} \"Wires outside the plate\" at the end, not numbered: supply and field wires.",
+                if outside == 1 { "" } else { "s" }
             ),
         );
     }
@@ -1292,6 +1330,50 @@ mod tests {
                 .collect::<Vec<_>>()
         );
         assert!(inside(&m, CARD_Y[0]).is_empty());
+    }
+
+    #[test]
+    fn outside_the_plate_wires_get_cards_named_on_the_cover_and_the_tick_off_sheet() {
+        use novo_layout::workpack::add_outside_wire_cards;
+        let mut p = pack(0, false);
+        let wires = pack(9, true)
+            .cards
+            .iter()
+            .find(|c| c.kind == CardKind::Wires)
+            .unwrap()
+            .wires
+            .clone();
+        add_outside_wire_cards(&mut p, wires.clone());
+        let cards: Vec<&Card> = p
+            .cards
+            .iter()
+            .filter(|c| c.kind == CardKind::Outside)
+            .collect();
+        assert_eq!(
+            cards.iter().map(|c| c.wires.len()).sum::<usize>(),
+            wires.len()
+        );
+        let cover = cover_marks(&p, "Crane");
+        let words: String = cover.texts.iter().map(|t| format!("{} ", t.text)).collect();
+        assert!(words.contains("Wires outside the plate"), "{words}");
+        let sheet = overview_marks(&p, 0..p.overview.len().min(5), (1, 1));
+        assert!(
+            sheet
+                .texts
+                .iter()
+                .any(|t| t.text.contains("Wires outside the plate"))
+        );
+        for card in cards {
+            for y0 in CARD_Y {
+                let m = card_marks(card, &p.cabinet, y0);
+                assert!(inside(&m, y0).is_empty(), "{:?}", inside(&m, y0));
+                assert!(m.texts.iter().any(|t| t.text == "NOT A STEP"));
+                assert!(m.texts.iter().any(|t| t.text == "Wires outside the plate"));
+                assert!(!m.texts.iter().any(|t| t.text.starts_with("STEP")));
+                // The same table as a wire card: a row per wire.
+                assert!(m.texts.iter().any(|t| t.text == "Per end"));
+            }
+        }
     }
 
     #[test]
