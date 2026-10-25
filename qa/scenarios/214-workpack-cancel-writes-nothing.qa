@@ -1,0 +1,25 @@
+@title Work cards: cancelling the save dialog writes nothing
+@area 3D
+# Cancelling the "Save the work cards" dialog leaves no file and no "Exported" message.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 40
+click_text "Layers"
+wait 8
+click_text "Build order"
+wait 8
+key Escape
+wait 30
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+shot strip-with-work-cards-button
+expect "Work cards (PDF)"
+click_text "Work cards (PDF)"
+wait 30
+expect_dialog "Save the work cards"
+expect_not "Exported"
+shot cancelled
+check_layout
