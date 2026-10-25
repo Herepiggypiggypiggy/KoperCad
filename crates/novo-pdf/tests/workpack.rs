@@ -66,7 +66,9 @@ fn pack(cabinet: &str) -> Pack {
                 estimated: false,
                 end_mm: Some(10.0),
                 fitting: "ferrule",
-                strip_mm: Some(10.0),
+                strip_from_mm: Some(10.0),
+                strip_to_mm: Some(10.0),
+                strip_basis: "typical",
             })
             .collect(),
     }];

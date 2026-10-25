@@ -120,17 +120,20 @@ pub fn steps(layout: &CabinetLayout, name: &dyn Fn(u64) -> String, wires: &[Wire
     let mut ducts: Vec<&crate::Duct> = layout.ducts.iter().collect();
     ducts.sort_by(|a, b| (a.y, a.x, a.id).partial_cmp(&(b.y, b.x, b.id)).unwrap());
     for (i, d) in ducts.iter().enumerate() {
+        // The corner of the duct's outline, as the work card measures it,
+        // not the model's centre line (which differs by half the width).
+        let corner = d.footprint();
         push(
             Phase::Ducts,
             Some(d.id),
             format!("D{}", i + 1),
             format!(
-                "Cut a {} mm wide wiring duct to {} mm and fit it {} at x {}, y {}",
+                "Cut a {} mm wide wiring duct to {} mm and fit it {} with its top left corner at x {}, y {}",
                 mm(d.width),
                 mm(d.length),
                 if d.vertical { "upright" } else { "level" },
-                mm(d.x),
-                mm(d.y)
+                mm(corner.x),
+                mm(corner.y)
             ),
             vec![],
         );

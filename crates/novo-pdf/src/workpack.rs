@@ -658,7 +658,7 @@ fn wire_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
             2.6,
             HAlign::Left,
             false,
-            clip(&w.strip_text(), 20.0, 2.6),
+            clip(&w.strip_text(), 24.0, 2.6),
         );
         text(
             m,
@@ -738,7 +738,7 @@ fn cover_marks(pack: &Pack, project: &str) -> Marks {
     let mut y = 36.0;
     let how = [
         "How to use: print at 100 % (actual size), no fit-to-page. Check the 100 mm ruler on any card with a tape measure before you trust a template. Cut the sheets in half or fold them at the dashed line: each half is one step. Work in the order of the step numbers; tick the boxes as you go.",
-        "How exact: the sizes and positions come from the cabinet layout and the part data. The template is as exact as your printer scale and your taping, about 0.5 mm if the ruler reads 100 mm (an estimate, not measured here). Wire lengths come from the cut list: routed lengths follow the duct model, estimates are marked as such. \"Per end\" is what each end adds to the routed length (strip plus ferrule collar or lug barrel, the project's wire rules), already in the cut length; the model has the same allowance at both ends. \"strip\" is the usual insulation length to strip for the wire size, a planning value: the clamp's or ferrule's own datasheet wins. Check the first part against your real plate before drilling the rest.",
+        "How exact: the sizes and positions come from the cabinet layout and the part data. The template is as exact as your printer scale and your taping, about 0.5 mm if the ruler reads 100 mm (an estimate, not measured here). Wire lengths come from the cut list: routed lengths follow the duct model, estimates are marked as such. \"Per end\" is what each end adds to the routed length (strip plus ferrule collar or lug barrel, the project's wire rules), already in the cut length; the model has the same allowance at both ends. \"strip\" is the length to strip, the same as the cut list and the bench output use: a part's or the wire's stated length, else the typical length for the size (typ., a planning value, the datasheet of the clamp or ferrule wins). Two numbers are the from end and the to end. Beside a lug there is none: its barrel length counts. Check the first part against your real plate before drilling the rest.",
     ];
     let cut_outs = pack
         .cards
@@ -1072,7 +1072,9 @@ mod tests {
                     estimated: false,
                     end_mm: Some(10.0),
                     fitting: "ferrule",
-                    strip_mm: Some(10.0),
+                    strip_from_mm: Some(10.0),
+                    strip_to_mm: Some(10.0),
+                    strip_basis: "typical",
                 })
                 .collect(),
         }];
@@ -1284,7 +1286,11 @@ mod tests {
         assert!(kinds[0].pos.0 < ends[0].pos.0);
         assert!(inside(&m, CARD_Y[0]).is_empty());
         // The strip length sits under the allowance, one per wire, inside the card.
-        let strips: Vec<_> = m.texts.iter().filter(|t| t.text == "strip 10 mm").collect();
+        let strips: Vec<_> = m
+            .texts
+            .iter()
+            .filter(|t| t.text == "strip 10 mm typ.")
+            .collect();
         assert_eq!(strips.len(), card.wires.len());
         assert!(strips[0].pos.1 > ends[0].pos.1);
         assert_eq!(strips[0].pos.0, ends[0].pos.0);

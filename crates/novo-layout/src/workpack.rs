@@ -48,18 +48,47 @@ pub struct WireCut {
     /// `ferrule` or `lug` when the allowance says which (the wire rules give
     /// the two different values), else empty.
     pub fitting: &'static str,
-    /// The length of insulation to strip at each end, mm: the typical
-    /// length for the wire's size (a planning value; the clamp's datasheet
-    /// wins). `None` when the size is not set.
-    pub strip_mm: Option<f64>,
+    /// The insulation to strip at the `from` end and at the `to` end, mm,
+    /// as the cut list's own wire-cut jobs decide it (the part's or the
+    /// wire's stated length first, else the typical one for the size).
+    /// `None` when the size is not known.
+    pub strip_from_mm: Option<f64>,
+    pub strip_to_mm: Option<f64>,
+    /// Where the strip length came from: `typical`, `part` or `stated`;
+    /// empty when there is none.
+    pub strip_basis: &'static str,
 }
 
 impl WireCut {
-    /// `strip 10 mm`, empty when the size is not set.
+    /// `strip 10 mm typ.` (`part`, `stated` for the others), `strip 8 / 10 mm`
+    /// from end / to end when the ends differ; empty without a strip length
+    /// and for a lug, whose barrel length counts, not a strip length.
     pub fn strip_text(&self) -> String {
-        self.strip_mm
-            .map(|s| format!("strip {} mm", mm(s)))
-            .unwrap_or_default()
+        if self.fitting == "lug" {
+            return String::new();
+        }
+        let word = match self.strip_basis {
+            "typical" => "typ.",
+            other => other,
+        };
+        self.strip_with(word)
+    }
+
+    fn strip_with(&self, word: &str) -> String {
+        let (a, b) = match (self.strip_from_mm, self.strip_to_mm) {
+            (Some(a), Some(b)) => (a, b),
+            (Some(a), None) | (None, Some(a)) => (a, a),
+            (None, None) => return String::new(),
+        };
+        if (a - b).abs() < 0.05 {
+            if word.is_empty() {
+                format!("strip {} mm", mm(a))
+            } else {
+                format!("strip {} mm {word}", mm(a))
+            }
+        } else {
+            format!("strip {} / {} mm", mm(a), mm(b))
+        }
     }
 
     /// `10 mm ferrule`, `20 mm lug`, `10 mm` when the fitting is not known,

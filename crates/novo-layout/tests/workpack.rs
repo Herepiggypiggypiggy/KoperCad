@@ -111,7 +111,9 @@ fn wire(n: &str, from: &str, to: &str, cut: f64) -> WireCut {
         estimated: false,
         end_mm: Some(10.0),
         fitting: "ferrule",
-        strip_mm: Some(10.0),
+        strip_from_mm: Some(10.0),
+        strip_to_mm: Some(10.0),
+        strip_basis: "typical",
     }
 }
 
@@ -702,11 +704,40 @@ fn a_vertical_rail_measures_its_devices_down_the_rail() {
 }
 
 #[test]
-fn the_strip_text_names_the_length_and_is_empty_without_a_size() {
+fn a_ducts_step_text_and_card_give_the_same_corner() {
+    let p = pack(0);
+    let card = p.cards.iter().find(|c| c.kind == CardKind::Duct).unwrap();
+    // The duct's centre line is at y 250, 50 wide: its outline starts at y 225.
+    assert!(
+        card.text.contains("top left corner at x 50, y 225"),
+        "{}",
+        card.text
+    );
+    assert!(
+        card.dims[0].contains("225 mm from the top edge"),
+        "{:?}",
+        card.dims
+    );
+    let row = p.overview.iter().find(|r| r.mark == card.mark).unwrap();
+    assert_eq!(row.text.split(" on the").next(), Some(card.text.as_str()));
+}
+
+#[test]
+fn the_strip_text_names_the_length_its_source_and_both_ends_when_they_differ() {
     let mut w = wire("W1", "-Q1:1", "-Q2:2", 200.0);
-    assert_eq!(w.strip_text(), "strip 10 mm");
-    w.strip_mm = Some(12.5);
-    assert_eq!(w.strip_text(), "strip 12.5 mm");
-    w.strip_mm = None;
+    assert_eq!(w.strip_text(), "strip 10 mm typ.");
+    w.strip_basis = "part";
+    assert_eq!(w.strip_text(), "strip 10 mm part");
+    w.strip_basis = "stated";
+    w.strip_from_mm = Some(8.0);
+    w.strip_to_mm = Some(12.5);
+    assert_eq!(w.strip_text(), "strip 8 / 12.5 mm");
+    // A lug counts by its barrel, no strip text beside it.
+    w.fitting = "lug";
+    assert_eq!(w.strip_text(), "");
+    w.fitting = "ferrule";
+    w.strip_from_mm = None;
+    w.strip_to_mm = None;
+    w.strip_basis = "";
     assert_eq!(w.strip_text(), "");
 }

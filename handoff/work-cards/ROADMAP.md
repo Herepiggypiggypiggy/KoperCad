@@ -29,3 +29,5 @@ PR 5 (wire ends): wire cards carry a 'Per end' column (allowance per end from th
 PR 6 (rail clips): the rail card draws the clipped devices on the strip (TemplateClip, boxes with the designation, note with the distances). Built and tested locally, pushed after #1485 merged. All roadmap items of the coordinator's list are then done; still open: separate strip length and ferrule collar, different allowances per end.
 
 PR 7 (strip length): wire cards print "strip N mm" under the per-end allowance (typical length for the wire size, a planning value), and the clip drawing says why it clamps overhanging devices. Still open: nothing from the coordinator list; next is a bench-user walk of the whole pack.
+
+PR 8 (duct corner): the duct step text names the outline's top left corner, the same numbers as the card. The full bench walk is in `audit/workpack/bench-walk.md`; next PRs: device card names the rail's start end, wires outside the plate as a tick-off card, wire numbers used twice and missing sizes.
