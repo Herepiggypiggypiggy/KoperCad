@@ -234,7 +234,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
     for (at, list) in left {
         if let Some(pack) = out.get_mut(at) {
             pack.problems.push(format!(
-                "{} of {total_cut} cut-list wires have no end inside a plated cabinet (supply and field wires): they are on the \"Outside the plate\" cards at the end, not numbered steps. {}",
+                "{} of {total_cut} cut-list wires have no end inside a plated cabinet (supply and field wires): they are on the \"Wires outside the plate\" cards at the end, not numbered steps. {}",
                 list.len(),
                 list.iter()
                     .map(|(_, w)| format!(

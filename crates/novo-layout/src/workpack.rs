@@ -853,7 +853,7 @@ pub fn add_outside_wire_cards(pack: &mut Pack, wires: Vec<WireCut>) {
             steps: (0, 0),
             total: 0,
             phase: Phase::Wires,
-            mark: "Outside the plate".to_owned(),
+            mark: "Wires outside the plate".to_owned(),
             text: "Supply and field wires: they have no end on this plate, so they are not steps of the build order. Cut them with the cabinet wires and run them last. Lengths are from the cut list; the ducts and the field are not measured, so cut long and trim (~).".to_owned(),
             tools: vec![
                 "Wire cutter and stripper".to_owned(),

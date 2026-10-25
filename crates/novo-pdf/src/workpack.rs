@@ -312,7 +312,7 @@ fn card_marks(card: &Card, cabinet: &str, y0: f64) -> Marks {
         if card.kind == CardKind::Opening {
             "CUT-OUT".to_owned()
         } else if card.kind == CardKind::Outside {
-            "OUTSIDE THE PLATE".to_owned()
+            "NOT A STEP".to_owned()
         } else {
             format!(
                 "STEP{} {} of {}",
@@ -706,7 +706,7 @@ fn cut_out_note(n: usize) -> String {
 /// The cover line about the wire cards for wires with no end on the plate.
 fn outside_note(n: usize) -> String {
     format!(
-        "{n} wire card{} \"OUTSIDE THE PLATE\" at the end, not numbered: supply and field wires that have no end on this plate. Cut them with the cabinet wires and run them last.",
+        "{n} wire card{} \"Wires outside the plate\" at the end, not numbered (NOT A STEP): supply and field wires that have no end on this plate. Cut them with the cabinet wires and run them last.",
         if n == 1 { "" } else { "s" }
     )
 }
@@ -876,7 +876,7 @@ fn overview_marks(pack: &Pack, rows: std::ops::Range<usize>, number: (usize, usi
             HAlign::Left,
             true,
             format!(
-                "{outside} OUTSIDE THE PLATE wire card{} at the end, not numbered: supply and field wires.",
+                "{outside} wire card{} \"Wires outside the plate\" at the end, not numbered: supply and field wires.",
                 if outside == 1 { "" } else { "s" }
             ),
         );
@@ -1312,19 +1312,20 @@ mod tests {
         );
         let cover = cover_marks(&p, "Crane");
         let words: String = cover.texts.iter().map(|t| format!("{} ", t.text)).collect();
-        assert!(words.contains("OUTSIDE THE PLATE"), "{words}");
+        assert!(words.contains("Wires outside the plate"), "{words}");
         let sheet = overview_marks(&p, 0..p.overview.len().min(5), (1, 1));
         assert!(
             sheet
                 .texts
                 .iter()
-                .any(|t| t.text.contains("OUTSIDE THE PLATE"))
+                .any(|t| t.text.contains("Wires outside the plate"))
         );
         for card in cards {
             for y0 in CARD_Y {
                 let m = card_marks(card, &p.cabinet, y0);
                 assert!(inside(&m, y0).is_empty(), "{:?}", inside(&m, y0));
-                assert!(m.texts.iter().any(|t| t.text == "OUTSIDE THE PLATE"));
+                assert!(m.texts.iter().any(|t| t.text == "NOT A STEP"));
+                assert!(m.texts.iter().any(|t| t.text == "Wires outside the plate"));
                 assert!(!m.texts.iter().any(|t| t.text.starts_with("STEP")));
                 // The same table as a wire card: a row per wire.
                 assert!(m.texts.iter().any(|t| t.text == "Per end"));
