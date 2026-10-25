@@ -1,0 +1,133 @@
+format = 1
+id = "build-order-3d"
+version = 1
+status = "early"
+title = "Build order: watch the cabinet go together"
+title_nl = "Bouwvolgorde: kijk hoe de kast in elkaar gaat"
+summary = "Step through the cabinet in 3D in the order a workshop builds it: rails, ducts, devices, then wires."
+summary_nl = "Loop de kast in 3D door in de volgorde waarin een werkplaats hem bouwt: rails, kanalen, apparaten, dan draden."
+track = "cabinet"
+order = 93
+level = "beginner"
+minutes = 5
+topics = ["3d", "build order", "workshop"]
+needs = ["view-3d"]
+next = ["editing-in-3d"]
+project = "@example"
+
+[[step]]
+id = "open-3d"
+title = "Open the 3D view"
+title_nl = "Open de 3D-weergave"
+text = "The build order is drawn on the 3D cabinet, from the same layout as the plate."
+text_nl = "De bouwvolgorde wordt op de 3D-kast getekend, uit dezelfde indeling als de plaat."
+how = [
+  "Press {key:view.3d}, or choose the {ui:switcher.view3d}.",
+]
+how_nl = [
+  "Druk op {key:view.3d}, of kies de {ui:switcher.view3d}.",
+]
+point = { ui = "switcher.view3d" }
+expect = { command = "view.3d" }
+solve = [ { command = "view.3d" } ]
+
+[[step]]
+id = "start"
+title = "Start the build order"
+title_nl = "Start de bouwvolgorde"
+text = """
+The cabinet empties to the shell and the plate. A strip at the bottom shows **Start (0 of N)** and the way forward and back.
+The order is the one the printed assembly pack lists, so the screen and the paper agree.
+"""
+text_nl = """
+De kast wordt leeg tot de behuizing en de plaat. Een strook onderaan toont **Start (0 of N)** en de weg vooruit en terug.
+De volgorde is die van het afgedrukte montagepakket, dus scherm en papier komen overeen.
+"""
+how = [
+  "Press {key:view.command_palette}, type **build order** and choose {ui:cmd.view.3d_assembly}.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **build order** en kies {ui:cmd.view.3d_assembly}.",
+]
+point = { ui = "cmd.view.3d_assembly" }
+expect = { command = "view.3d_assembly" }
+solve = [ { command = "view.3d_assembly" } ]
+
+[[step]]
+id = "next"
+title = "Put on the first part"
+title_nl = "Plaats het eerste onderdeel"
+text = "Each step adds one part. What the step adds is shown in blue and named on the strip: **Step 1 of N** and what to do with it."
+text_nl = "Elke stap voegt één onderdeel toe. Wat de stap toevoegt is blauw en genoemd op de strook: **Step 1 of N** en wat je ermee doet."
+how = [
+  "Click {ui:build_order.next} on the strip.",
+]
+how_nl = [
+  "Klik op {ui:build_order.next} op de strook.",
+]
+point = { ui = "build_order.next" }
+expect = { clicked = "build_order.next" }
+solve = [ { ui_click = "build_order.next" } ]
+
+[[step]]
+id = "more"
+title = "Rails first, then ducts, then devices"
+title_nl = "Eerst rails, dan kanalen, dan apparaten"
+text = """
+The workshop mounts rails and ducts first because devices clip onto them, and wires run last through the ducts. Step on and watch the order.
+"""
+text_nl = """
+De werkplaats monteert eerst rails en kanalen omdat apparaten erop klikken, en draden komen als laatste door de kanalen. Ga verder en let op de volgorde.
+"""
+how = [
+  "Click {ui:build_order.next} a few more times, or drag the slider on the strip to any step.",
+]
+how_nl = [
+  "Klik nog een paar keer op {ui:build_order.next}, of sleep de schuif op de strook naar een stap.",
+]
+point = { ui = "build_order.next" }
+expect = { clicked = "build_order.next" }
+solve = [ { ui_click = "build_order.next" } ]
+
+[[step]]
+id = "back"
+title = "Go back one step"
+title_nl = "Ga een stap terug"
+text = "Back takes the last part away again. It is a view: nothing in the project changes, so there is nothing to undo."
+text_nl = "Terug haalt het laatste onderdeel weer weg. Het is een weergave: er verandert niets in het project, dus er is niets om ongedaan te maken."
+how = [
+  "Click {ui:build_order.previous}.",
+]
+how_nl = [
+  "Klik op {ui:build_order.previous}.",
+]
+point = { ui = "build_order.previous" }
+expect = { clicked = "build_order.previous" }
+solve = [ { ui_click = "build_order.previous" } ]
+
+[[step]]
+id = "last"
+title = "The last step is the wires"
+title_nl = "De laatste stap zijn de draden"
+text = """
+The final step runs the wires, and any part the order does not name appears with it. Use the slider to jump straight to the end and look at the finished cabinet.
+"""
+text_nl = """
+De laatste stap trekt de draden, en elk onderdeel dat de volgorde niet noemt verschijnt erbij. Gebruik de schuif om direct naar het einde te springen en bekijk de afgebouwde kast.
+"""
+
+[[step]]
+id = "show-all"
+title = "Show the whole cabinet"
+title_nl = "Toon de hele kast"
+text = "Leave the build order when you are done. The cabinet is back as it was."
+text_nl = "Verlaat de bouwvolgorde als je klaar bent. De kast is terug zoals hij was."
+how = [
+  "Click {ui:build_order.show_all} on the strip.",
+]
+how_nl = [
+  "Klik op {ui:build_order.show_all} op de strook.",
+]
+point = { ui = "build_order.show_all" }
+expect = { clicked = "build_order.show_all" }
+solve = [ { ui_click = "build_order.show_all" } ]

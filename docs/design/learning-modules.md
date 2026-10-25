@@ -394,7 +394,7 @@ CI (all run in the normal `cargo test --workspace`, Linux, no window)
   (`parent` places it as another function of an existing device, such as a contact image of `-K1`),
   `{ wire = ["tag:pin", "tag:pin"], via = [[x, y]], mode = "lines" }`,
   `{ tee = { from, onto, at = [x, y] } }` (a wire that starts with a T on another wire),
-  `{ feed_row = { names = ["L1", "L2"], page, x, y } }`, `{ select = "-K1" }`, `{ page = "name" }`,
+  `{ feed_row = { names = ["L1", "L2"], page, x, y } }`, `{ select = "-K1" }` (`{ select = "-U1:U~-X2:1", pick = true }` picks a wire by its two pins as a click on it does, so the Inspector stays closed and the panels that read a picked wire show it), `{ page = "name" }`,
   `{ rename = { target = "-K1", to = "-K9" } }`, `{ cable = { ... } }`, `{ issue_revision = "description" }`,
   `{ assign_part = { device, part } }`, `{ key = "x", hold = 0.5 }` (a held key; a pushbutton is momentary,
   so a pressed-and-released click needs the hold), `{ live_pole }`, `{ live_coil }`, `{ set_potential }`.

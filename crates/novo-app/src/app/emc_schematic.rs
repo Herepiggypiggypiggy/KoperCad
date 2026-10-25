@@ -191,6 +191,9 @@ pub(crate) struct EmcSchematic {
     pub(super) on: bool,
     /// Only this class stays in colour; the others step back.
     pub(super) focus: Option<Class>,
+    /// The control a lesson step points at inside the panel, which scrolls
+    /// into view when it is drawn and whenever another wire is picked.
+    pub(super) reveal: Option<&'static str>,
     cache: Option<(u64, Arc<Data>)>,
 }
 
@@ -199,6 +202,7 @@ impl EmcSchematic {
     pub(super) fn forget(&mut self) {
         self.cache = None;
         self.focus = None;
+        self.reveal = None;
     }
 
     pub(super) fn data(&mut self, project: &Project) -> Arc<Data> {
@@ -423,9 +427,24 @@ impl NovoApp {
         let mut set: Option<(WireId, Option<EmcClass>)> = None;
         let mut apply: Option<Fix> = None;
         let mut off = false;
+        // Controls the lessons point at: (anchor, where, label, clicked this frame).
+        let mut marks: Vec<(&'static str, egui::Rect, &'static str, bool)> = Vec::new();
         let card = picked
             .first()
             .and_then(|w| data.wires.get(&w.raw()).map(|info| (*w, info.clone())));
+        // A newly picked wire scrolls its card into view: with a lesson card
+        // or a small window the panel is short, and the card is the point of
+        // picking a wire.
+        let reveal = self.wb.emc_sch.reveal;
+        let revealed = egui::Id::new("emc_nets_revealed");
+        let scroll_reveal = reveal.is_some()
+            && (ctx.data(|d| d.get_temp::<Option<&'static str>>(revealed)) != Some(reveal));
+        ctx.data_mut(|d| d.insert_temp(revealed, reveal));
+        let seen = egui::Id::new("emc_nets_card_seen");
+        let now = card.as_ref().map(|c| c.0);
+        let fresh = now.is_some() && ctx.data(|d| d.get_temp::<Option<WireId>>(seen)) != Some(now);
+        let scroll_reveal = scroll_reveal || (fresh && reveal.is_some());
+        ctx.data_mut(|d| d.insert_temp(seen, now));
         super::panel::Panel::new(
             "schematic_emc_nets",
             "EMC net classes",
@@ -470,11 +489,15 @@ impl NovoApp {
                         ui.selectable_label(on, format!("{}  ({n})", class.name()))
                     })
                     .inner;
-                if row
-                    .on_hover_text("Keep this class in colour and step the others back; click again for all")
-                    .clicked()
-                {
+                let row = row.on_hover_text(
+                    "Keep this class in colour and step the others back; click again for all",
+                );
+                let hit = row.clicked();
+                if hit {
                     focus_to = if on { None } else { Some(class) };
+                }
+                if class == Class::Motor {
+                    marks.push(("emc.nets.motor", row.rect, "Motor and drive output", hit));
                 }
             }
             if guessed > 0 {
@@ -491,7 +514,10 @@ impl NovoApp {
             }
             if let Some((wire, info)) = &card {
                 ui.separator();
-                ui.label(egui::RichText::new(format!("Wire {}", info.name)).strong());
+                let title = ui.label(egui::RichText::new(format!("Wire {}", info.name)).strong());
+                if fresh && reveal.is_none() {
+                    title.scroll_to_me(Some(egui::Align::TOP));
+                }
                 ui.label(format!(
                     "{}{}",
                     info.class.name(),
@@ -544,11 +570,16 @@ impl NovoApp {
                                 continue;
                             }
                             if fix.applicable() {
-                                if ui
+                                let button = ui
                                     .small_button(format!("Apply: {}", fix.hint()))
-                                    .on_hover_text("One undo step; the EMC check re-reads the cable")
-                                    .clicked()
-                                {
+                                    .on_hover_text("One undo step; the EMC check re-reads the cable");
+                                if marks.iter().all(|m| m.0 != "emc.nets.apply") {
+                                    marks.push(("emc.nets.apply", button.rect, "Apply", button.clicked()));
+                                    if scroll_reveal && reveal == Some("emc.nets.apply") {
+                                        button.scroll_to_me(Some(egui::Align::Center));
+                                    }
+                                }
+                                if button.clicked() {
                                     apply = Some(fix.clone());
                                 }
                             } else {
@@ -578,8 +609,15 @@ impl NovoApp {
                 ui.horizontal_wrapped(|ui| {
                     for c in EmcClass::ALL {
                         let mine = class_of(c) == info.class && info.origin == Origin::Declared;
-                        if ui.selectable_label(mine, class_of(c).short()).clicked() {
+                        let chip = ui.selectable_label(mine, class_of(c).short());
+                        if chip.clicked() {
                             set = Some((*wire, Some(c)));
+                        }
+                        if class_of(c) == Class::Control {
+                            marks.push(("emc.nets.set_control", chip.rect, "control", chip.clicked()));
+                            if scroll_reveal && reveal == Some("emc.nets.set_control") {
+                                chip.scroll_to_me(Some(egui::Align::Center));
+                            }
                         }
                     }
                 });
@@ -604,10 +642,18 @@ impl NovoApp {
                 );
             }
             ui.add_space(2.0);
-            if ui.small_button("Close").clicked() {
+            let close = ui.small_button("Close");
+            marks.push(("emc.nets.close", close.rect, "Close", close.clicked()));
+            if scroll_reveal && reveal == Some("emc.nets.close") {
+                close.scroll_to_me(Some(egui::Align::Center));
+            }
+            if close.clicked() {
                 off = true;
             }
         });
+        for (id, rect, label, clicked) in marks {
+            self.anchor_clicked(id, rect, label, clicked);
+        }
         self.wb.emc_sch.focus = focus_to;
         if let Some((wire, class)) = set {
             self.emc_set_class(wire, class);
@@ -757,6 +803,30 @@ mod tests {
                 .all(|f| !f.fixes.iter().any(|x| matches!(x, Fix::AddShield { .. }))),
             "the shield finding stays after the fix"
         );
+    }
+
+    #[test]
+    fn a_picked_wire_shows_its_card_and_the_lesson_controls_without_a_selection() {
+        let (_dir, mut d) = example();
+        let ctx = d.ctx.clone();
+        d.app.run_command(&ctx, "view.emc_nets", None);
+        d.frame();
+        d.frame();
+        d.app.solve_pick_wire("-U1:U~-X2:1").unwrap();
+        d.frame();
+        d.frame();
+        assert!(
+            d.app.selection().is_empty(),
+            "a pick is a click on the wire, not a selection that opens the Inspector"
+        );
+        for id in [
+            "emc.nets.motor",
+            "emc.nets.apply",
+            "emc.nets.set_control",
+            "emc.nets.close",
+        ] {
+            assert!(d.app.learn_drawn(id).is_some(), "{id} is not drawn");
+        }
     }
 
     #[test]
