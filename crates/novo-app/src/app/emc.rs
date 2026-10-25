@@ -571,7 +571,12 @@ impl NovoApp {
         let Some(project) = self.backend.document().map(|d| d.project()) else {
             return;
         };
-        let result = emc::preview_on(project, fix).map_err(|e| e.to_string());
+        let result = emc::preview_on(project, fix).map_err(|e| {
+            // A refusal is not corrupt data: drop the error type's prefix.
+            let text = e.to_string();
+            text.strip_prefix("invalid project data: ")
+                .map_or(text.clone(), str::to_owned)
+        });
         let revision = project.revision();
         self.emc.whatif = result.as_ref().ok().map(|(p, copy)| WhatIf {
             id: WHATIF_IDS.fetch_add(1, std::sync::atomic::Ordering::Relaxed),

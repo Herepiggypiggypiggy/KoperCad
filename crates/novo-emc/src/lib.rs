@@ -18,6 +18,7 @@ pub mod class;
 pub mod field;
 pub mod geometry;
 pub mod input;
+pub mod mover;
 pub mod picture;
 pub mod project;
 pub mod report;

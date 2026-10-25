@@ -911,7 +911,7 @@ fn drive_filters(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                     mm(p.filter_max_mm)
                 ),
                 metrics: vec![Metric { label: "Filter to drive", value: mm(gap), level: Level::Index }],
-                fixes: vec![Fix::MoveDevice { device: f.id, from: d.id, to_mm: p.filter_max_mm }],
+                fixes: vec![Fix::MoveCloser { device: f.id, to: d.id, max_mm: p.filter_max_mm }],
                 at: d.plate.zip(f.rect).map(|(pl, r)| (pl, (r.0, r.1))),
                 ribbons: Vec::new(),
                 loop_polygon: Vec::new(),
@@ -1127,10 +1127,10 @@ fn sensitive(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                     value: mm(gap),
                     level: Level::Index,
                 }],
-                fixes: vec![Fix::MoveDevice {
+                fixes: vec![Fix::MoveAway {
                     device: s.id,
                     from: n.id,
-                    to_mm: p.sensitive_min_mm,
+                    min_mm: p.sensitive_min_mm,
                 }],
                 at: s.plate.map(|pl| (pl, (a.0, a.1))),
                 ribbons: Vec::new(),
