@@ -148,6 +148,16 @@ pub(super) fn parts_of(numbers: &[String]) -> Vec<Option<(usize, usize)>> {
         .collect()
 }
 
+/// The cover line for outside wires whose ends name no cabinet: with several
+/// cabinets they land on the first one's pack, which would otherwise look like
+/// that cabinet's own wiring.
+pub(super) fn unplaced_note(numbers: &[String]) -> String {
+    format!(
+        "Wires {} name no cabinet in their ends, so they are filed under this cabinet's pack only because it is the first: cut them once, whichever pack you work from.",
+        numbers.join(", ")
+    )
+}
+
 /// The work packs of every cabinet that has a mounting plate.
 pub fn work_packs(project: &Project) -> Vec<Pack> {
     let checklist = AssemblyChecklist.generate(project);
@@ -300,15 +310,17 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
     // field wires) are on no card: say which, on the cover of the cabinet
     // their device is in, else of the first.
     let mut left: BTreeMap<usize, Vec<(String, WireCut)>> = BTreeMap::new();
+    // Wires no cabinet tag names: filed under the first cabinet, and told so.
+    let mut unplaced: BTreeMap<usize, Vec<String>> = BTreeMap::new();
     for ((number, from, to), lengths) in &cuts {
         for (cut, end, group) in lengths {
-            let at = out
-                .iter()
-                .position(|p| {
-                    from.contains(&format!("{}-", p.cabinet))
-                        || to.contains(&format!("{}-", p.cabinet))
-                })
-                .unwrap_or(0);
+            let own = out.iter().position(|p| {
+                from.contains(&format!("{}-", p.cabinet)) || to.contains(&format!("{}-", p.cabinet))
+            });
+            let at = own.unwrap_or(0);
+            if own.is_none() {
+                unplaced.entry(at).or_default().push(number.clone());
+            }
             let fitting = fitting_of(Some(*end), rules.ferrule_mm, rules.lug_mm);
             let strips = strip_of(&mut jobs, number, from, to);
             left.entry(at).or_default().push((
@@ -336,6 +348,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
             ));
         }
     }
+    let multi = out.len() > 1;
     for (at, list) in left {
         if let Some(pack) = out.get_mut(at) {
             pack.problems.push(format!(
@@ -356,6 +369,9 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
             let numbers: Vec<String> = wires.iter().map(|w| w.number.clone()).collect();
             for (w, part) in wires.iter_mut().zip(parts_of(&numbers)) {
                 w.part = part;
+            }
+            if let Some(numbers) = unplaced.get(&at).filter(|_| multi) {
+                pack.problems.push(unplaced_note(numbers));
             }
             add_outside_wire_cards(pack, wires);
         }
