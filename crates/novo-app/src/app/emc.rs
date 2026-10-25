@@ -227,6 +227,20 @@ fn field_section(
         });
 }
 
+/// "Findings: 5 before, 5 after (one eased)": a finding that goes from a
+/// warning to a note leaves the count alone, so say that it improved.
+fn findings_line(v: &emc::Preview) -> String {
+    let eased = match v.eased.len() {
+        0 => String::new(),
+        1 => " (one eased)".to_owned(),
+        n => format!(" ({n} eased)"),
+    };
+    format!(
+        "Findings: {} before, {} after{eased}.",
+        v.findings_before, v.findings_after
+    )
+}
+
 /// What a previewed fix would change, with Apply and Cancel at the top so
 /// they stay in reach in a short window. Returns true for Apply; `cancel`
 /// is set for Cancel. `scroll` brings the card into view (just opened).
@@ -273,7 +287,7 @@ pub(super) fn preview_card(
             }
             Ok(v) => {
                 ui.label(&v.said);
-                ui.label(format!("Findings: {} before, {} after.", v.findings_before, v.findings_after));
+                ui.label(findings_line(v));
                 for (rule, msg) in &v.cleared {
                     ui.colored_label(p.success, format!("Clears {rule}: {msg}"));
                 }
@@ -732,5 +746,43 @@ impl NovoApp {
             Ok(())
         });
         self.emc.done = ok.then_some(said);
+    }
+}
+
+#[cfg(test)]
+mod findings_line_tests {
+    use super::*;
+    use novo_emc::Severity;
+
+    fn preview(eased: usize) -> emc::Preview {
+        emc::Preview {
+            said: String::new(),
+            findings_before: 5,
+            findings_after: 5,
+            cleared: Vec::new(),
+            added: Vec::new(),
+            eased: (0..eased)
+                .map(|_| emc::Eased {
+                    rule: "EMC-04",
+                    from: Severity::Warning,
+                    to: Severity::Info,
+                    after: String::new(),
+                })
+                .collect(),
+            scores: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn an_eased_finding_is_named_in_the_count_line() {
+        assert_eq!(findings_line(&preview(0)), "Findings: 5 before, 5 after.");
+        assert_eq!(
+            findings_line(&preview(1)),
+            "Findings: 5 before, 5 after (one eased)."
+        );
+        assert_eq!(
+            findings_line(&preview(2)),
+            "Findings: 5 before, 5 after (2 eased)."
+        );
     }
 }
