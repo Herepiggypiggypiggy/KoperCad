@@ -278,6 +278,41 @@ fn the_table_text_carries_the_label_and_the_conditions() {
     }
 }
 
+/// The one 3D comparison says the 2D model reads a fan's gain low: the card
+/// and the copied table of a fix with fans say so, those without do not.
+#[test]
+fn a_fix_with_fans_carries_the_fan_note_and_one_without_does_not() {
+    let (mut w, _, _) = answered();
+    let (fan, plain) = {
+        let wi = &w.found.as_ref().unwrap().what_if;
+        let has = |i: usize| {
+            wi.choices[i]
+                .fix
+                .candidate()
+                .is_some_and(|c| c.pairing.fans() > 0)
+        };
+        let all = 0..wi.choices.len();
+        (
+            all.clone().find(|i| has(*i)).expect("a fix with fans"),
+            all.clone()
+                .find(|i| wi.choices[*i].fix.candidate().is_some() && !has(*i))
+                .or_else(|| {
+                    all.clone()
+                        .find(|i| wi.choices[*i].fix.candidate().is_none())
+                }),
+        )
+    };
+    w.pick(fan);
+    let found = w.found.clone().unwrap();
+    assert!(super::heat_whatif::table_text(&w, &found).contains("about a third low"));
+    assert!(render(&mut w, 2, None).contains("about a third low"));
+    if let Some(plain) = plain {
+        w.pick(plain);
+        assert!(!super::heat_whatif::table_text(&w, &found).contains("about a third low"));
+        assert!(!render(&mut w, 2, None).contains("about a third low"));
+    }
+}
+
 #[test]
 fn closing_drops_the_answer_and_stops_a_run() {
     let (mut w, _, _) = answered();

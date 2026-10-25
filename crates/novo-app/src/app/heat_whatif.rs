@@ -21,7 +21,9 @@ use novo_thermal::cooling::Product;
 use novo_thermal::placement::Move;
 use novo_thermal::placement_project::{plate_origin, rows};
 use novo_thermal::sweep::{Candidate, Reading};
-use novo_thermal::whatif::{self, Choice, Conditions, Control, Fix, MODEL_NOTE, Rails, WhatIf};
+use novo_thermal::whatif::{
+    self, Choice, Conditions, Control, FAN_NOTE, Fix, MODEL_NOTE, Rails, WhatIf,
+};
 
 use super::heat_settings::HeatSettings;
 use super::heat_sweep::{key_of, settings_for};
@@ -654,6 +656,9 @@ fn card(
                 .color(pal.warning),
         );
     }
+    if has_fans(&c.fix) {
+        ui.label(RichText::new(FAN_NOTE).small().color(pal.text_secondary));
+    }
     ui.label(
         RichText::new("Shown in the 3D view: green boxes are where devices would stand, new openings are drawn on their walls.")
             .small()
@@ -695,6 +700,11 @@ fn card(
                 .color(pal.text_secondary),
         );
     }
+}
+
+/// Whether the fix adds a fan.
+fn has_fans(fix: &Fix) -> bool {
+    fix.candidate().is_some_and(|c| c.pairing.fans() > 0)
 }
 
 /// The words for what the fix does, with tags.
@@ -891,6 +901,10 @@ pub(super) fn table_text(w: &Wizard, found: &Found) -> String {
     }
     out.push('\n');
     out.push_str(MODEL_NOTE);
+    if has_fans(&c.fix) {
+        out.push('\n');
+        out.push_str(FAN_NOTE);
+    }
     out.push('\n');
     out
 }
