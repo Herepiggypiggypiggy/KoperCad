@@ -576,6 +576,9 @@ fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
     }
 }
 
+/// Room for the strip text between the size column and the cut length.
+const STRIP_MAX_MM: f64 = 21.0;
+
 fn wire_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
     let cols = [4.0, 16.0, 44.0, 92.0, 146.0, 166.0];
     // Each end's allowance sits in the Size column's right part.
@@ -652,13 +655,17 @@ fn wire_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
             false,
             clip(&w.end_text(), 20.0, 3.0),
         );
+        // A longer text (two strip lengths) gets a smaller font, so the source
+        // word stays inside the room between the size and the cut length.
+        let strip = w.strip_text();
+        let size = if strip.chars().count() > 16 { 2.1 } else { 2.6 };
         text(
             m,
             (x0 + ENDS_X, ty + 3.1),
-            2.6,
+            size,
             HAlign::Left,
             false,
-            clip(&w.strip_text(), 25.0, 2.6),
+            clip(&strip, STRIP_MAX_MM, size),
         );
         text(
             m,
@@ -1262,6 +1269,29 @@ mod tests {
         let m = card_marks(&p.cards[0], &p.cabinet, CARD_Y[0]);
         assert!(!m.texts.iter().any(|t| t.text == "K1"));
         assert!(m.shapes.iter().any(|(l, _)| *l == Layer::Devices));
+    }
+
+    #[test]
+    fn a_strip_text_for_two_different_ends_keeps_its_source_word() {
+        let mut p = pack(9, true);
+        let card = p
+            .cards
+            .iter_mut()
+            .find(|c| c.kind == CardKind::Wires)
+            .unwrap();
+        card.wires[0].strip_from_mm = Some(8.0);
+        card.wires[0].strip_to_mm = Some(12.5);
+        let card = p.cards.iter().find(|c| c.kind == CardKind::Wires).unwrap();
+        let m = card_marks(card, &p.cabinet, CARD_Y[0]);
+        assert!(
+            m.texts.iter().any(|t| t.text == "strip 8/12.5 mm typ."),
+            "{:?}",
+            m.texts
+                .iter()
+                .filter(|t| t.text.starts_with("strip"))
+                .collect::<Vec<_>>()
+        );
+        assert!(inside(&m, CARD_Y[0]).is_empty());
     }
 
     #[test]

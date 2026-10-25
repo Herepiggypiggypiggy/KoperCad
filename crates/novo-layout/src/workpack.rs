@@ -85,7 +85,7 @@ impl WireCut {
             (None, None) => String::new(),
             (Some(a), Some(b)) if (a - b).abs() < 0.05 => format!("strip {} mm{word}", mm(a)),
             // The ends differ, or one is not known: both, with the source.
-            (a, b) => format!("strip {} / {} mm{word}", say(a), say(b)),
+            (a, b) => format!("strip {}/{} mm{word}", say(a), say(b)),
         }
     }
 
