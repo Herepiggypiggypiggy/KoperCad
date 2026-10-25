@@ -579,7 +579,7 @@ mod tests {
             3.0,
             12.0,
         );
-        let mut v = vec![fans.clone(), layout.clone()];
+        let mut v = [fans.clone(), layout.clone()];
         v.sort_by(order);
         assert!(
             matches!(v[0].fix, Fix::Layout { .. }),
@@ -602,7 +602,7 @@ mod tests {
             4.0,
             8.0,
         );
-        let mut v = vec![vents_a, vents_b];
+        let mut v = [vents_a, vents_b];
         v.sort_by(order);
         assert_eq!(v[0].reading.worst_margin_k, Some(4.0));
     }
@@ -635,7 +635,7 @@ mod tests {
             0.1,
             9.0,
         );
-        let mut v = vec![easy, hard, clears];
+        let mut v = [easy, hard, clears];
         v.sort_by(order);
         let overs: Vec<usize> = v.iter().map(|c| c.reading.over).collect();
         assert_eq!(overs, vec![0, 1, 2]);
