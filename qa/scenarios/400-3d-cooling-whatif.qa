@@ -26,7 +26,7 @@ expect "Model estimate"
 shot ranked-and-previewed
 check_blank ranked-and-previewed
 check_layout
-scroll 1100 400 -300
+scroll 250 560 -600
 wait 10
 shot ranked-scrolled
 click_text "Copy the table"
