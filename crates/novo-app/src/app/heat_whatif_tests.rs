@@ -304,12 +304,12 @@ fn a_fix_with_fans_carries_the_fan_note_and_one_without_does_not() {
     };
     w.pick(fan);
     let found = w.found.clone().unwrap();
-    assert!(super::heat_whatif::table_text(&w, &found).contains("about a third low"));
-    assert!(render(&mut w, 2, None).contains("about a third low"));
+    assert!(super::heat_whatif::table_text(&w, &found).contains("under- or over-stated"));
+    assert!(render(&mut w, 2, None).contains("under- or over-stated"));
     if let Some(plain) = plain {
         w.pick(plain);
-        assert!(!super::heat_whatif::table_text(&w, &found).contains("about a third low"));
-        assert!(!render(&mut w, 2, None).contains("about a third low"));
+        assert!(!super::heat_whatif::table_text(&w, &found).contains("under- or over-stated"));
+        assert!(!render(&mut w, 2, None).contains("under- or over-stated"));
     }
 }
 
