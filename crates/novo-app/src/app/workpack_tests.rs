@@ -176,6 +176,18 @@ fn the_cards_need_a_plate_then_land_next_to_the_project() {
             .len(),
         1
     );
+    // Saving over a file the person chose says "Replaced".
+    d.app.write_step_card(&one, b"%PDF-");
+    assert!(
+        d.app
+            .messages()
+            .last()
+            .unwrap()
+            .text
+            .starts_with("Replaced "),
+        "{}",
+        d.app.messages().last().unwrap().text
+    );
     assert_eq!(d.app.export_workpack_step(cab, "-NOPE"), None);
     assert_eq!(d.app.messages().last().unwrap().level, Level::Warning);
 
