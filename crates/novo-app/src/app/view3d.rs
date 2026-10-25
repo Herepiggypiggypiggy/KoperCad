@@ -366,7 +366,15 @@ impl NovoApp {
         let ambient = self.sizing.request().ambient_max;
         let empty_hint = super::tips::empty_3d_hint(&self.settings, &self.wb.keymap, project, id);
         let mode = &mut self.view3d;
-        let layers = mode.controls.layers;
+        let mut layers = mode.controls.layers;
+        // The closing build-order step is the wires: they show there even
+        // when the layer is off.
+        if let Some(at) = mode.controls.assembly
+            && !mode.assembly_steps.is_empty()
+            && at >= mode.assembly_steps.len()
+        {
+            layers.wires = true;
+        }
         mode.models.collect(&mut mode.library);
         let stale = mode.built_models != mode.models.revision
             || !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
@@ -443,7 +451,11 @@ impl NovoApp {
                     novo_view3d::hide::without(layers.apply(built), &mode.controls.hidden);
                 // Build order: the cabinet as it stands after the chosen step.
                 mode.assembly_steps = if mode.controls.assembly.is_some() {
-                    super::view3d_build_order::sequence(project, id)
+                    let mut steps = super::view3d_build_order::sequence(project, id);
+                    if let Some(last) = steps.last_mut() {
+                        last.text = super::view3d_build_order::closing_text(shown.wires.len());
+                    }
+                    steps
                 } else {
                     Vec::new()
                 };
@@ -974,12 +986,14 @@ impl NovoApp {
             mode.strip_fitted = mode.controls.assembly.is_some();
             mode.pending = Some(Pending::Fit);
         }
-        super::view3d_build_order::strip(
+        if super::view3d_build_order::strip(
             ui.ctx(),
             view_rect,
             &mut mode.controls.assembly,
             &mode.assembly_steps,
-        );
+        ) {
+            self.wb.queued.push("export.workpack");
+        }
         mode.view.top_inset = view3d_controls::toolbar_inset(ui.ctx(), view_rect);
         if let Some(command) = asked {
             self.wb.queued.push(command);

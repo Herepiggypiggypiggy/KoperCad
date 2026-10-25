@@ -22,9 +22,19 @@ pub(super) struct EmcState {
     cache: Option<(u64, Cached)>,
     /// What the last Apply did, in a sentence.
     done: Option<String>,
+    /// The fix being previewed and what it would change, for the revision
+    /// of the project it was worked out on.
+    preview: Option<(u64, Fix, Result<emc::Preview, String>)>,
+    /// The preview card has just opened: scroll it into view once.
+    preview_fresh: bool,
 }
 
 impl EmcState {
+    #[cfg(test)]
+    pub(super) fn previewed(&self) -> Option<&Result<emc::Preview, String>> {
+        self.preview.as_ref().map(|(_, _, p)| p)
+    }
+
     #[cfg(test)]
     pub(super) fn done_text(&self) -> Option<&str> {
         self.done.as_deref()
@@ -202,6 +212,58 @@ fn field_section(
         });
 }
 
+/// What a previewed fix would change, with Apply and Cancel at the top so
+/// they stay in reach in a short window. Returns true for Apply; `cancel`
+/// is set for Cancel. `scroll` brings the card into view (just opened).
+fn preview_card(
+    ui: &mut egui::Ui,
+    preview: &Result<emc::Preview, String>,
+    cancel: &mut bool,
+    scroll: bool,
+) -> bool {
+    let p = crate::theme::ui_palette();
+    let mut apply = false;
+    let card = egui::Frame::group(ui.style()).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("Preview on a copy of the project").strong());
+            if preview.is_ok()
+                && ui.button("Apply (one undo step)").on_hover_text("Do this on the project; Edit > Undo takes it back").clicked()
+            {
+                apply = true;
+            }
+            if ui.button("Cancel").clicked() {
+                *cancel = true;
+            }
+        });
+        match preview {
+            Err(e) => {
+                ui.colored_label(p.error, format!("Cannot preview: {e}"));
+            }
+            Ok(v) => {
+                ui.label(&v.said);
+                ui.label(format!("Findings: {} before, {} after.", v.findings_before, v.findings_after));
+                for (rule, msg) in &v.cleared {
+                    ui.colored_label(p.success, format!("Clears {rule}: {msg}"));
+                }
+                for (rule, msg) in &v.added {
+                    ui.colored_label(p.warning, format!("Brings {rule}: {msg}"));
+                }
+                if v.cleared.is_empty() && v.added.is_empty() {
+                    ui.weak("No finding is cleared or added by this fix.");
+                }
+                for (_, name, before, after) in &v.scores {
+                    ui.weak(format!("Risk of {name}: {before} of 100 to {after} of 100"));
+                }
+                ui.weak("A model run on the rules and estimates above. It records what the build must do; the cabinet has to be built that way. Never compliance.");
+            }
+        }
+    });
+    if scroll {
+        card.response.scroll_to_me(Some(egui::Align::Center));
+    }
+    apply
+}
+
 impl NovoApp {
     pub(super) fn emc_window(&mut self, ctx: &egui::Context) {
         if !self.emc.open {
@@ -234,6 +296,15 @@ impl NovoApp {
         let p = crate::theme::ui_palette();
         let mut turn: Option<bool> = None;
         let mut apply: Option<Fix> = None;
+        let mut want_preview: Option<Fix> = None;
+        let mut cancel_preview = false;
+        let shown = self
+            .emc
+            .preview
+            .as_ref()
+            .filter(|(r, _, _)| *r == revision)
+            .cloned();
+        let fresh = std::mem::take(&mut self.emc.preview_fresh);
         let mut set_current: Option<(u64, Option<f64>)> = None;
         let mut set_setting: Option<(&'static str, Option<novo_core::Value>)> = None;
         let mut open = true;
@@ -295,14 +366,29 @@ impl NovoApp {
                         ui.horizontal_wrapped(|ui| {
                             for fix in &f.fixes {
                                 if fix.applicable() {
-                                    if ui.button(fix.hint()).on_hover_text("One undo step").clicked() {
-                                        apply = Some(fix.clone());
+                                    let open = shown.as_ref().is_some_and(|(_, f, _)| f == fix);
+                                    if ui
+                                        .selectable_label(open, format!("Preview: {}", fix.hint()))
+                                        .on_hover_text("See what it clears before anything changes")
+                                        .clicked()
+                                    {
+                                        if open {
+                                            cancel_preview = true;
+                                        } else {
+                                            want_preview = Some(fix.clone());
+                                        }
                                     }
                                 } else {
                                     ui.weak(format!("By hand: {}", fix.hint()));
                                 }
                             }
                         });
+                        if let Some((_, pf, pv)) = &shown
+                            && f.fixes.contains(pf)
+                            && preview_card(ui, pv, &mut cancel_preview, fresh)
+                        {
+                            apply = Some(pf.clone());
+                        }
                         ui.add_space(4.0);
                     }
                     ui.add_space(6.0);
@@ -360,7 +446,14 @@ impl NovoApp {
         if let Some(on) = turn {
             self.emc_turn(on);
         }
+        if cancel_preview {
+            self.emc.preview = None;
+        }
+        if let Some(fix) = want_preview {
+            self.emc_preview(&fix);
+        }
         if let Some(fix) = apply {
+            self.emc.preview = None;
             self.emc_apply(&fix);
         }
         if let Some((wire, amps)) = set_current {
@@ -396,6 +489,17 @@ impl NovoApp {
     /// Turns the EMC rules on or off for the project (one undo step).
     pub(super) fn emc_turn(&mut self, on: bool) {
         self.edit_project("EMC check", |tx| emc::set_enabled(tx, on));
+    }
+
+    /// Works out what a suggestion would change, on a copy, for the window.
+    pub(super) fn emc_preview(&mut self, fix: &Fix) {
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return;
+        };
+        let result = emc::preview(project, fix).map_err(|e| e.to_string());
+        self.emc.preview = Some((project.revision(), fix.clone(), result));
+        self.emc.done = None;
+        self.emc.preview_fresh = true;
     }
 
     /// Applies one suggestion as one undo step and says what it did.

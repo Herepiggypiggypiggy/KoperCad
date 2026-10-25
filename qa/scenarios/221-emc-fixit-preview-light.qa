@@ -1,0 +1,36 @@
+@title EMC fix-it: the preview card in the Light theme, and Cancel leaves the project alone
+@area Cabinet
+@sizes 1366x768 1920x1080
+# The same preview card in the Light theme (colours come from the theme palette). Cancel closes the card and nothing is applied. The pictures are the evidence (drawn text).
+open qa/fixtures/emc-cabinet-bonding.novo
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+scroll 360 400 -300
+wait 10
+click_text "Preview: Scrape the mounting area bare" #1
+wait 10
+expect "Clears EMC-11"
+shot 01-preview-light
+check_layout
+check_blank 01-preview-light
+click_text Cancel
+wait 10
+expect_not "Preview on a copy of the project"
+expect_not "Plate finish stated as bare"
+shot 02-cancelled-light
+check_layout

@@ -34,7 +34,7 @@ use crate::field::{Current, FieldParams, FieldSetup};
 use crate::input::{
     Device as EmcDevice, Duct, FilterState, Finish, Input, Origin, Params, Plate, Role, Run,
 };
-use crate::report::{Fix, Report};
+use crate::report::{Fix, Report, Subject};
 
 /// Project property that turns the EMC rules on.
 pub const CHECK_KEY: &str = "emc.check";
@@ -848,6 +848,132 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
                 d.tag
             ))
         }
+        Fix::BarePlate { plate } => {
+            let id = novo_core::StructureId::from(*plate);
+            tx.set_property(id, "emc.finish", Some(Value::Text("bare".to_owned())))?;
+            Ok("Plate finish stated as bare: scrape the mounting area bare or use a galvanised plate (a requirement for the build)".to_owned())
+        }
+        Fix::BondDevice { device } => {
+            let id = novo_core::DeviceId::from(*device);
+            tx.set_property(id, "emc.bonded", Some(Value::Bool(true)))?;
+            Ok("Device stated as bonded to the plate: fit the strap or make metal contact (a requirement for the build)".to_owned())
+        }
+        Fix::ShortenPigtail { cable, to_mm } => {
+            let id = novo_core::CableId::from(*cable);
+            let c = tx
+                .project()
+                .get::<Cable>(id)
+                .ok_or(ModelError::NotFound(id.into()))?
+                .clone();
+            let mut done = 0;
+            for key in ["emc.shield_a", "emc.shield_b"] {
+                if matches!(shield_end(&c, key), Termination::Pigtail(len) if len > *to_mm) {
+                    tx.set_property(
+                        id,
+                        key,
+                        Some(Value::Text(format!("pigtail:{}", to_mm.round() as i64))),
+                    )?;
+                    done += 1;
+                }
+            }
+            if done == 0 {
+                return Err(ModelError::Format(
+                    "no shield end is a long pigtail".to_owned(),
+                ));
+            }
+            Ok(format!(
+                "{done} shield end{} set to a pigtail of {} mm at most (a requirement for the build)",
+                if done == 1 { "" } else { "s" },
+                to_mm.round() as i64
+            ))
+        }
         other => Err(ModelError::Format(format!("{other:?} is done by hand"))),
     }
+}
+
+/// What a fix would change, worked out on a copy of the project: the
+/// findings it clears, any it brings, and the risk score of each wire it
+/// moves. The project itself is not touched.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Preview {
+    /// What applying it does, in a sentence (as `apply` returns it).
+    pub said: String,
+    pub findings_before: usize,
+    pub findings_after: usize,
+    /// Rule and message of each finding the fix clears.
+    pub cleared: Vec<(&'static str, String)>,
+    /// Rule and message of each finding that is new after it.
+    pub added: Vec<(&'static str, String)>,
+    /// Wires and devices whose score changes: subject, name, before, after.
+    pub scores: Vec<(Subject, String, u32, u32)>,
+}
+
+fn finding_key(f: &crate::report::Finding) -> String {
+    format!("{}{:?}", f.rule, f.subjects)
+}
+
+/// Previews `fix` on `project`. Errors when the fix is done by hand.
+pub fn preview(project: &Project, fix: &Fix) -> Result<Preview> {
+    let before = analyse_project(project);
+    let mut copy = project.clone();
+    let mut said = String::new();
+    copy.transact("EMC preview", |tx| {
+        said = apply(tx, fix)?;
+        Ok(())
+    })?;
+    let after = analyse_project(&copy);
+    let keys = |r: &Report| -> BTreeMap<String, (&'static str, String)> {
+        r.findings
+            .iter()
+            .map(|f| (finding_key(f), (f.rule, f.message.clone())))
+            .collect()
+    };
+    let (kb, ka) = (keys(&before), keys(&after));
+    let cleared = kb
+        .iter()
+        .filter(|(k, _)| !ka.contains_key(*k))
+        .map(|(_, v)| v.clone())
+        .collect();
+    let added = ka
+        .iter()
+        .filter(|(k, _)| !kb.contains_key(*k))
+        .map(|(_, v)| v.clone())
+        .collect();
+    let name_of = |input: &Input, s: Subject| match s {
+        Subject::Run(id) => input
+            .runs
+            .iter()
+            .find(|r| r.id == id)
+            .map(|r| r.name.clone()),
+        Subject::Device(id) => input
+            .devices
+            .iter()
+            .find(|d| d.id == id)
+            .map(|d| d.tag.clone()),
+        _ => None,
+    };
+    let input = input_of(&copy, &copy.netlist());
+    let mut scores = Vec::new();
+    let all = before.runs.iter().chain(before.devices.iter());
+    for b in all {
+        let a = after
+            .runs
+            .iter()
+            .chain(after.devices.iter())
+            .find(|s| s.subject == b.subject)
+            .map_or(0, |s| s.points);
+        if a != b.points
+            && let Some(name) = name_of(&input, b.subject)
+        {
+            scores.push((b.subject, name, b.points, a));
+        }
+    }
+    Ok(Preview {
+        said,
+        findings_before: before.findings.len(),
+        findings_after: after.findings.len(),
+        cleared,
+        added,
+        scores,
+    })
 }

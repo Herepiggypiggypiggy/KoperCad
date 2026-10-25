@@ -1,0 +1,27 @@
+@title Work cards: Bench output button, light theme
+@area Reports
+# Reports > Bench output > "Work cards (PDF)" in the light look: the button row must stay readable and inside the window.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 6
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+shot bench-output-light
+expect "Work cards (PDF)"
+check_layout
+click_text "Work cards (PDF)"
+wait 40
+shot written-light
+expect_file "~/Documents/KoperCAD/*work cards.pdf" 3000
+keep_file "~/Documents/KoperCAD/*work cards.pdf"

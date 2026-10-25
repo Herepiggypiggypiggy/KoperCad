@@ -96,9 +96,14 @@ pub enum Fix {
     SeparateRuns { a: u64, b: u64, to_mm: f64 },
     /// Move a device this far (mm) from another. By hand.
     MoveDevice { device: u64, from: u64, to_mm: f64 },
-    /// Bond the mounting area to bare metal. By hand.
+    /// Bond the mounting area to bare metal: the plate's finish is stated
+    /// as bare, a requirement for the build.
     BarePlate { plate: u64 },
-    /// Move a shield out of a pigtail. By hand.
+    /// State that a drive or filter case is bonded to the plate with a
+    /// strap or metal-to-metal contact (`emc.bonded`).
+    BondDevice { device: u64 },
+    /// Shorten the pigtails of a cable's shield ends to this length (mm), a
+    /// requirement for the build.
     ShortenPigtail { cable: u64, to_mm: f64 },
 }
 
@@ -130,6 +135,9 @@ impl Fix {
             Fix::BarePlate { .. } => {
                 "Scrape the mounting area bare or use a galvanised plate.".to_owned()
             }
+            Fix::BondDevice { .. } => {
+                "Bond the case to the plate with a strap or metal-to-metal contact.".to_owned()
+            }
             Fix::ShortenPigtail { to_mm, .. } => {
                 format!("Shorten the pigtail to under {} mm.", to_mm.round() as i64)
             }
@@ -144,6 +152,9 @@ impl Fix {
                 | Fix::AddShield { .. }
                 | Fix::Terminate360 { .. }
                 | Fix::AddFilter { .. }
+                | Fix::BarePlate { .. }
+                | Fix::BondDevice { .. }
+                | Fix::ShortenPigtail { .. }
         )
     }
 }

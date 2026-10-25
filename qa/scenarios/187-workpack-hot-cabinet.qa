@@ -1,0 +1,21 @@
+@title Work cards: the hot cabinet fixture, build order strip and the cards
+@area 3D
+# A fuller cabinet (many devices, ducts, rails): the Build order strip counts the steps and the export keeps the real PDF.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 30
+click_text 3D #1
+wait 40
+click_text "Layers"
+wait 8
+click_text "Build order"
+wait 8
+key Escape
+wait 30
+shot start
+expect "Work cards (PDF)"
+check_layout
+click_text "Work cards (PDF)"
+wait 40
+shot written
+expect_file "/tmp/kopercad-qa-open-*/cabinet-cooling-advice work cards.pdf" 3000
+keep_file "/tmp/kopercad-qa-open-*/cabinet-cooling-advice work cards.pdf"

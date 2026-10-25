@@ -1015,7 +1015,16 @@ fn bonding(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                     format!("{} is stated as not bonded to the plate: a filter or drive case must make metal contact over its area.", cx.dev(d.id))
                 },
                 metrics: Vec::new(),
-                fixes: vec![Fix::BarePlate { plate }],
+                fixes: {
+                    let mut fixes = Vec::new();
+                    if painted {
+                        fixes.push(Fix::BarePlate { plate });
+                    }
+                    if d.bonded == Some(false) {
+                        fixes.push(Fix::BondDevice { device: d.id });
+                    }
+                    fixes
+                },
                 at: d.rect.map(|r| (plate, (r.0, r.1))),
                 ribbons: Vec::new(),
                 loop_polygon: Vec::new(),

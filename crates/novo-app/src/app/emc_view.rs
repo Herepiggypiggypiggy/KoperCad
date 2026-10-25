@@ -644,7 +644,7 @@ pub(super) fn panel(
             if pic.provenance == Provenance::Stub {
                 ui.label(
                     egui::RichText::new(
-                        "If this view and Check > EMC check differ, the check governs; this view is an interim picture.",
+                        "If this view and Check > EMC check differ, the check governs; this plate has nothing for the rule engine yet.",
                     )
                     .small()
                     .strong()
@@ -728,8 +728,10 @@ fn layer_chips(
         |ui: &mut egui::Ui, on: &mut bool, text: &str, tip: &str, enabled: bool, off: &str| {
             // Not `add_enabled_ui`: a scope per chip cannot wrap onto the next row.
             if !enabled {
+                // "n/a" in the label: an unavailable chip must not look like
+                // one that is merely switched off.
                 return ui
-                    .add_enabled(false, egui::Button::new(text))
+                    .add_enabled(false, egui::Button::new(format!("{text} n/a")))
                     .on_disabled_hover_text(off);
             }
             let r = novo_theme::widgets::filter_toggle(ui, text, *on).on_hover_text(tip);

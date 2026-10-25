@@ -3078,6 +3078,24 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.workpack",
+            "Export work cards (PDF)",
+            "Export",
+            &[
+                "work cards",
+                "work instruction",
+                "build order",
+                "tick off",
+                "drill",
+                "cut list",
+                "workshop",
+            ],
+            Needs::Project,
+        ),
+        &["export work cards", "export workpack", "work cards"],
+    ),
+    verb(
+        cmd(
             "export.workshop",
             "Export workshop pack (folder)",
             "Export",

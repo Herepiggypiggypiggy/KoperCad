@@ -1,0 +1,15 @@
+@title Work cards: a project without a cabinet plate says so and writes nothing
+@area Reports
+# No cabinet has a mounting plate: the export warns and leaves no file.
+fresh
+wait 10
+click_text "New project"
+wait 20
+key ctrl+k
+wait 4
+text Export work cards
+wait 6
+key Enter
+wait 20
+shot warning
+expect "mounting plate"

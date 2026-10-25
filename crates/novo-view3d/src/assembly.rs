@@ -52,10 +52,16 @@ pub fn at(steps: &[Step], position: usize, mut scene: Scene) -> Scene {
 }
 
 /// What the step just taken adds, for the soft highlight: its part, or for
-/// the closing step the wires. Nothing at position 0.
+/// the closing step the wires. At position 0 the mounting plate, so it can be
+/// told from the back wall it sits on.
 pub fn added(steps: &[Step], position: usize, scene: &Scene) -> BTreeSet<ItemId> {
     let Some(step) = position.checked_sub(1).and_then(|i| steps.get(i)) else {
-        return BTreeSet::new();
+        return scene
+            .items
+            .iter()
+            .map(|i| i.id)
+            .filter(|id| id.kind == ItemKind::Plate)
+            .collect();
     };
     match step.part {
         Some(part) => BTreeSet::from([part]),
@@ -165,7 +171,11 @@ mod tests {
     fn a_step_highlights_only_what_it_adds() {
         let steps = steps();
         let s = scene();
-        assert!(added(&steps, 0, &s).is_empty());
+        assert_eq!(
+            added(&steps, 0, &s),
+            BTreeSet::from([id(ItemKind::Plate, 0)]),
+            "the start lights the plate"
+        );
         assert_eq!(
             added(&steps, 3, &s),
             BTreeSet::from([id(ItemKind::Device, 4)])
