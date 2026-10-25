@@ -447,3 +447,63 @@ fn fixes_done_by_hand_cannot_be_previewed() {
     };
     assert!(novo_emc::project::preview(&c.project, &hand).is_err());
 }
+
+#[test]
+fn a_victim_can_be_asked_to_leave_a_shared_duct_when_another_duct_reaches_both_ends() {
+    let mut c = cabinet();
+    // A second duct below the devices: both wires can reach it.
+    c.project
+        .transact("second duct", |tx| {
+            let d2 = tx.add_rail(c.cab, 20.0, 100.0, 760.0, RailKind::Duct)?;
+            tx.set_rail_size(d2, 760.0, 60.0, 60.0)
+        })
+        .unwrap();
+    let report = analyse_project(&c.project);
+    let finding = report.of_rule("EMC-01").next().expect("one shared duct");
+    let fix = finding
+        .fixes
+        .iter()
+        .find(|f| matches!(f, Fix::AvoidDuct { .. }))
+        .expect("an avoid-duct fix on the victim")
+        .clone();
+    assert!(fix.applicable());
+    let Fix::AvoidDuct { wire, duct } = fix else {
+        unreachable!()
+    };
+    assert_eq!(
+        wire,
+        c.analog_wire.raw(),
+        "the victim is the one asked to move"
+    );
+    assert_eq!(duct, c.duct.raw());
+    let p = novo_emc::project::preview(&c.project, &fix).unwrap();
+    assert!(p.cleared.iter().any(|(r, _)| *r == "EMC-01"), "{p:#?}");
+    c.project
+        .transact("apply", |tx| apply(tx, &fix).map(|_| ()))
+        .unwrap();
+    let input = input_of(&c.project, &c.project.netlist());
+    let analog = input.runs.iter().find(|r| r.id == wire).unwrap();
+    let motor = input
+        .runs
+        .iter()
+        .find(|r| r.id == c.motor_wire.raw())
+        .unwrap();
+    assert!(
+        analog.ducts.iter().all(|d| !motor.ducts.contains(d)),
+        "{:?} {:?}",
+        analog.ducts,
+        motor.ducts
+    );
+}
+
+#[test]
+fn with_one_duct_only_the_avoid_fix_changes_nothing_and_says_so() {
+    let c = cabinet();
+    let fix = Fix::AvoidDuct {
+        wire: c.analog_wire.raw(),
+        duct: c.duct.raw(),
+    };
+    let p = novo_emc::project::preview(&c.project, &fix).unwrap();
+    assert!(p.cleared.is_empty(), "{p:#?}");
+    assert!(p.said.contains("only if one reaches both"), "{}", p.said);
+}
