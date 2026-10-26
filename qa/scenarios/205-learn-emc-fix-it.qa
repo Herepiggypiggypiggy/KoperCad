@@ -1,0 +1,51 @@
+@title Lesson walk: emc-fix-it (preview, see it on the plate, apply, undo)
+@area Learn
+# The lesson from the palette. The shield fix is listed under two findings (EMC-04 and EMC-05), so its card is drawn twice and the second "On the plate" button is the one on screen (the lesson card also has a label with that text, hence the Button role). Do it for me only carries out commands, so the preview, plate, Before, After and Apply controls are really clicked.
+key ctrl+k
+wait 4
+text interference preview
+wait 6
+click_text "Interference: preview a fix before you apply it"
+wait 40
+shot 01-why
+check_layout
+try click_text "Next"
+wait 20
+shot 02-open-check
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 03-preview
+check_layout
+click_text "Preview: Bond both shield ends"
+wait 30
+shot 04-read-card
+check_layout
+try click_text "Next"
+wait 20
+shot 05-on-the-plate
+check_layout
+click_text "On the plate" Button #2
+wait 40
+shot 06-before
+check_layout
+click_text "Before"
+wait 30
+shot 07-after
+check_layout
+click_text "After"
+wait 30
+shot 08-apply
+check_layout
+click_text "Apply (one undo step)"
+wait 40
+shot 09-undo
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 10-by-hand
+check_layout
+try click_text "Next"
+wait 20
+shot end
+check_layout

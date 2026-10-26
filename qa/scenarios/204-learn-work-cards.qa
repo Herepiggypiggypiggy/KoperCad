@@ -1,0 +1,63 @@
+@title Lesson walk: work-cards (print one step, all cards, what is exact)
+@area Learn
+# The lesson from the palette. Do it for me only carries out commands, so the strip buttons are really clicked. On an action step the lesson card has no Next, so "Next" is the strip's.
+key ctrl+k
+wait 4
+text work cards
+wait 6
+click_text "Work cards: drill, cut and tick off at the bench"
+wait 40
+shot 01-why
+check_layout
+try click_text "Next"
+wait 20
+shot 02-open-3d
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 03-start
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 04-first-part
+check_layout
+click_text "Next"
+wait 30
+shot 05-print-step
+check_layout
+answer_dialog "~/Documents/KoperCAD/lesson work card R1.pdf"
+click_text "Print this step"
+wait 40
+shot 06-printed-one
+check_layout
+expect_file "~/Documents/KoperCAD/lesson work card R1.pdf" 1500
+keep_file "~/Documents/KoperCAD/lesson work card R1.pdf"
+shot 07-whole-pack
+check_layout
+answer_dialog "~/Documents/KoperCAD/lesson work cards.pdf"
+try click_text "Do it for me"
+wait 40
+shot 08-exported-all-drilling
+check_layout
+expect_file "~/Documents/KoperCAD/lesson work cards.pdf" 3000
+keep_file "~/Documents/KoperCAD/lesson work cards.pdf"
+try click_text "Next"
+wait 20
+shot 09-ruler
+check_layout
+try click_text "Next"
+wait 20
+shot 10-wire-cards
+check_layout
+try click_text "Next"
+wait 20
+shot 11-honest
+check_layout
+try click_text "Next"
+wait 20
+shot 12-leave
+check_layout
+click_text "Show all"
+wait 30
+shot end
+check_layout

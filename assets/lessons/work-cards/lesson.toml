@@ -1,0 +1,189 @@
+format = 1
+id = "work-cards"
+version = 1
+status = "early"
+title = "Work cards: drill, cut and tick off at the bench"
+title_nl = "Werkkaarten: boren, afkorten en afvinken aan de werkbank"
+summary = "Print the build order as half-page cards for a workshop that cuts wires and drills holes by hand: one card per step, a 1:1 drilling template, wire cut cards, and what is exact and what is a guess."
+summary_nl = "Print de bouwvolgorde als halve-paginakaarten voor een werkplaats die met de hand draden afkort en gaten boort: één kaart per stap, een 1:1 boorsjabloon, afkortkaarten voor draden, en wat exact is en wat een schatting."
+track = "cabinet"
+order = 95
+level = "intermediate"
+minutes = 8
+topics = ["workshop", "work cards", "drill", "template", "cut list", "build order"]
+needs = ["build-order-3d", "workshop-pack"]
+next = ["build-mode"]
+project = "@example"
+
+[[step]]
+id = "why"
+title = "One card per step, ticked with a pencil"
+title_nl = "Eén kaart per stap, afgevinkt met een potlood"
+text = """
+The workshop cuts wires and drills holes **by hand**. The work cards turn the build order into paper for that: one half page per step, on an ordinary office printer.
+Every card says what to do, with which tools, and has boxes to tick (Cut, Holes drilled, Fitted, Checked) and a 100 mm ruler.
+"""
+text_nl = """
+De werkplaats kort draden af en boort gaten **met de hand**. De werkkaarten maken van de bouwvolgorde papier daarvoor: een halve pagina per stap, op een gewone kantoorprinter.
+Elke kaart zegt wat te doen, met welk gereedschap, en heeft vakjes om af te vinken (Cut, Holes drilled, Fitted, Checked) en een liniaal van 100 mm.
+"""
+
+[[step]]
+id = "open-3d"
+title = "Open the 3D view"
+title_nl = "Open de 3D-weergave"
+text = "The cards follow the build order, which is drawn on the 3D cabinet."
+text_nl = "De kaarten volgen de bouwvolgorde, die op de 3D-kast wordt getekend."
+how = [
+  "Press {key:view.3d}, or choose the {ui:switcher.view3d}.",
+]
+how_nl = [
+  "Druk op {key:view.3d}, of kies de {ui:switcher.view3d}.",
+]
+point = { ui = "switcher.view3d" }
+expect = { command = "view.3d" }
+solve = [ { command = "view.3d" } ]
+
+[[step]]
+id = "start"
+title = "Start the build order"
+title_nl = "Start de bouwvolgorde"
+text = "The strip at the bottom steps through the cabinet. The step numbers on the cards are the strip's step numbers, one for one."
+text_nl = "De strook onderaan loopt de kast door. De stapnummers op de kaarten zijn de stapnummers van de strook, één op één."
+how = [
+  "Press {key:view.command_palette}, type **build order** and choose {ui:cmd.view.3d_assembly}.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **build order** en kies {ui:cmd.view.3d_assembly}.",
+]
+point = { ui = "cmd.view.3d_assembly" }
+expect = { command = "view.3d_assembly" }
+solve = [ { command = "view.3d_assembly" } ]
+
+[[step]]
+id = "first-part"
+title = "Put on the first part"
+title_nl = "Plaats het eerste onderdeel"
+text = "A step that adds a part has its own card. Step onto one."
+text_nl = "Een stap die een onderdeel toevoegt heeft een eigen kaart. Ga naar zo'n stap."
+how = [
+  "Click {ui:build_order.next} on the strip.",
+]
+how_nl = [
+  "Klik op {ui:build_order.next} op de strook.",
+]
+point = { ui = "build_order.next" }
+expect = { clicked = "build_order.next" }
+solve = [ { ui_click = "build_order.next" } ]
+
+[[step]]
+id = "print-step"
+title = "Print this step alone"
+title_nl = "Print alleen deze stap"
+text = """
+**Print this step** writes that step's card alone on one A4 page, named `<project> work card <mark>.pdf`. Use it when one part is going on and you do not want the whole pack.
+The button appears only on a step that adds a part.
+"""
+text_nl = """
+**Print this step** schrijft de kaart van die stap alleen op één A4-pagina, genaamd `<project> work card <mark>.pdf`. Gebruik het als één onderdeel erop gaat en je niet het hele pakket wilt.
+De knop verschijnt alleen op een stap die een onderdeel toevoegt.
+"""
+how = [
+  "Click {ui:build_order.print_step} on the strip.",
+]
+how_nl = [
+  "Klik op {ui:build_order.print_step} op de strook.",
+]
+point = { ui = "build_order.print_step" }
+expect = { clicked = "build_order.print_step" }
+solve = [ { ui_click = "build_order.print_step" } ]
+
+[[step]]
+id = "whole-pack"
+title = "Export all the cards"
+title_nl = "Exporteer alle kaarten"
+text = """
+**Work cards (PDF)** on the strip, or the command field, writes the whole pack: `<project> work cards.pdf`. It is also under Reports > Export and in Reports > Bench output.
+The pack opens with a cover (how to print and the **tool list** of the cabinet), then a tick-off sheet with every step, then the cards, two to an A4 page: cut or fold at the dashed line.
+"""
+text_nl = """
+**Work cards (PDF)** op de strook, of het opdrachtveld, schrijft het hele pakket: `<project> work cards.pdf`. Het staat ook onder Reports > Export en in Reports > Bench output.
+Het pakket begint met een omslag (hoe te printen en de **gereedschapslijst** van de kast), dan een afvinkblad met elke stap, dan de kaarten, twee per A4-pagina: knip of vouw bij de stippellijn.
+"""
+how = [
+  "Press {key:view.command_palette}, type **export work cards** and choose {ui:cmd.export.workpack}.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **export work cards** en kies {ui:cmd.export.workpack}.",
+]
+point = { ui = "cmd.export.workpack" }
+expect = { command = "export.workpack" }
+solve = [ { command = "export.workpack" } ]
+
+[[step]]
+id = "drilling"
+title = "Read a drilling template"
+title_nl = "Lees een boorsjabloon"
+text = """
+A **rail card** shows the rail with its holes, and a **device card** shows the footprint with its screw holes and any cut-out. Each hole is also given as distances from the nearest plate edges, such as "65 mm from the left edge, 225 mm from the bottom edge", and its number is the one in the tiled drilling template.
+A template is drawn 1:1 where it fits its area. Otherwise the card says **NOT true size: measure from the list, not the drawing**.
+"""
+text_nl = """
+Een **raikaart** toont de rail met zijn gaten en een **apparaatkaart** toont de voetafdruk met zijn schroefgaten en eventuele uitsnijding. Elk gat staat ook als afstanden tot de dichtstbijzijnde plaatranden, zoals "65 mm from the left edge, 225 mm from the bottom edge", en zijn nummer is dat uit het getegelde boorsjabloon.
+Een sjabloon wordt 1:1 getekend waar het in zijn gebied past. Anders zegt de kaart **NOT true size: measure from the list, not the drawing**.
+"""
+
+[[step]]
+id = "ruler"
+title = "Check the print with the ruler"
+title_nl = "Controleer de print met de liniaal"
+text = """
+Printing at 100 % (no fit-to-page) is up to the print dialog. The 100 mm ruler on every card is the check: lay a real ruler on it.
+If the print is stretched, the print-scale check page tells you how to repair it. A hole measured off a stretched print is in the wrong place.
+"""
+text_nl = """
+Printen op 100 % (niet aanpassen aan pagina) hangt van het printvenster af. De liniaal van 100 mm op elke kaart is de controle: leg er een echte liniaal op.
+Is de print uitgerekt, dan vertelt de pagina voor de printschaal-controle hoe je dat herstelt. Een gat dat van een uitgerekte print is gemeten zit op de verkeerde plek.
+"""
+
+[[step]]
+id = "wire-cards"
+title = "Read a wire cut card"
+title_nl = "Lees een draadafkortkaart"
+text = """
+Wire cards come per circuit group (Power, Control, PE), nine wires to a card: from, to, size and colour, the cut length, and a Cut and a Run box.
+A length with **~** is an estimate, not a routed length. The **Per end** column shows what each end adds for a ferrule or a lug, already inside the cut length. The group of a wire is the model of the usual practice, not a reading of your schematic.
+"""
+text_nl = """
+Draadkaarten komen per stroomkringgroep (Power, Control, PE), negen draden per kaart: van, naar, maat en kleur, de afkortlengte en een vakje Cut en Run.
+Een lengte met **~** is een schatting, geen gerouteerde lengte. De kolom **Per end** toont wat elk einde toevoegt voor een adereindhuls of een kabelschoen, al binnen de afkortlengte. De groep van een draad is het model van de gebruikelijke praktijk, geen lezing van je schema.
+"""
+
+[[step]]
+id = "honest"
+title = "What is exact and what is a guess"
+title_nl = "Wat exact is en wat een schatting"
+text = """
+Positions come from the cabinet layout, **not from a measured plate**, and every card says so. Measure the real plate before you trust a hole.
+The tool list is derived from hole diameters and cut-outs and is a suggestion, not a standard. Duct fixing points are the duct maker's: the model has none.
+"""
+text_nl = """
+Posities komen uit de kastindeling, **niet van een opgemeten plaat**, en elke kaart zegt dat. Meet de echte plaat op voordat je een gat vertrouwt.
+De gereedschapslijst is afgeleid van gatdiameters en uitsnijdingen en is een suggestie, geen norm. Bevestigingspunten van kanalen zijn die van de kanaalmaker: het model heeft ze niet.
+"""
+
+[[step]]
+id = "show-all"
+title = "Leave the build order"
+title_nl = "Verlaat de bouwvolgorde"
+text = "The strip was only a view. Leave it and the cabinet is back as it was."
+text_nl = "De strook was alleen een weergave. Verlaat hem en de kast is terug zoals hij was."
+how = [
+  "Click {ui:build_order.show_all} on the strip.",
+]
+how_nl = [
+  "Klik op {ui:build_order.show_all} op de strook.",
+]
+point = { ui = "build_order.show_all" }
+expect = { clicked = "build_order.show_all" }
+solve = [ { ui_click = "build_order.show_all" } ]

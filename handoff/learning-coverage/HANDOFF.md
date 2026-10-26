@@ -19,3 +19,11 @@ Generated docs: `UPDATE_ANCHORS_DOC=1 UPDATE_UI_NAMES=1 cargo test -p novo-app -
 - A step that points into a side panel needs the panel to be tall enough beside the lesson card, or a `reveal` that scrolls the target into view; the replay gate fails with "the check did not tick" when the control is under the card.
 - A wire selected by a solve opens the Inspector over the EMC panel; use `pick = true`.
 - QA numbers: 200 to 209 are this thread's. Check open pull requests before adding.
+
+
+## 2026-10-26 additions
+- Lessons `work-cards` and `emc-fix-it`; QA 204 and 205 (block 200 to 209 is this lane's). Anchors: `build_order.work_cards`, `build_order.print_step`, `emc.check.preview` (first repair the plate can draw), `emc.check.apply`, `emc.check.show_plate`, `emc.whatif.before`, `emc.whatif.after`, `emc.whatif.apply`.
+- "Do it for me" in the live app only runs commands and selects, not `ui_click`: QA walks must click chips and buttons for real.
+- The shield repair card is drawn under two findings (EMC-04 and EMC-05); in QA use `click_text "On the plate" Button #2`.
+- A lesson step over 500 characters makes the catalog reject the whole lesson without failing the replay gates: run `cargo test -p novo-learn`.
+- Open: the full 57 lesson walk for existing-lesson drift was cut short (a container restart after 32 runs). Not redone.

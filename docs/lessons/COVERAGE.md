@@ -79,10 +79,16 @@ text is never shown), LC-19 (Excel steps cannot tick), LC-29 (gesture-only steps
 | 49 | EMC net classes on the schematic: class colours, why a wire has its class, the cable card and its fixes, setting a class by hand | `emc-net-classes` | full (early) | no (it runs on the EMC example, `Open EMC example`) | The EMC check window (Check > EMC check), the 3D EMC view and the exposure map: none |
 | 50 | EMC on the plate: bonding and shield ends, hot spot cards, what the model does not say | `emc-on-the-plate` | full (early) | no (its own sample project, the shields fixture) | Hot spot cards are read, not clicked: no step ticks on a card |
 | 51 | Build order in 3D: step through rails, ducts, devices, wires | `build-order-3d` | full (early) | yes | The printed assembly pack: `workshop-pack` |
+| 52 | Work cards: print one build-order step or the whole pack, drilling templates, wire cut cards, the ruler check, what is exact | `work-cards` | full (early) | yes | The bench packet and workshop pack: `workshop-pack` |
+| 53 | EMC fix-it: preview a repair on a copy, see it before and after on the plate, apply as one undo step, what stays by hand | `emc-fix-it` | full (early) | no (its own sample project, the shields fixture) | Moving a device, keep-clear routing and the door strap are in the text only |
 
 Added 2026-10-25 (rows 48 to 51, 57 lessons in all, 4 more concepts that are full): the learning backlog for
 the Live view, EMC net classes, EMC on the plate and Build order. Lessons, QA walks 200 to 203, the anchors and the
 Replay gate are in that pull request.
+
+Added 2026-10-26 (rows 52 and 53, 59 lessons in all): work cards and EMC fix-it. QA walks 204 and 205, six new anchors
+for the EMC check window and the before/after banner, two for the Build order strip. The plate lesson's fix-it step
+was stale (no Preview step, "the plate view only shows") and is corrected.
 
 Count before the new lessons: 47 concepts, 26 full, 7 partial, 14 none. Count now: 37 full (11 of them early), 4 partial, 6 none (13 to 15 and others still in batches C to E below). (After the plan below every concept has a lesson except
 47, which waits on the language setting.)

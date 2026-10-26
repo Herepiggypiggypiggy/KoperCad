@@ -1,0 +1,198 @@
+# The sample project is the same as the plate lesson's (qa/fixtures/emc-cabinet-shields.novo as JSON): a
+# galvanised plate, a drive and two shielded cables with different screen ends. crates/novo-tests/tests/lessons/emc.rs
+# checks both project.json files (UPDATE_LESSONS=1 rewrites them).
+format = 1
+id = "emc-fix-it"
+version = 1
+status = "early"
+title = "Interference: preview a fix before you apply it"
+title_nl = "Storing: bekijk een herstel voordat je het toepast"
+summary = "Open the EMC check, preview a repair on a copy, see it before and after on the plate, apply it as one undo step, and know which repairs are left to you by hand."
+summary_nl = "Open de EMC-controle, bekijk een reparatie op een kopie, zie hem voor en na op de plaat, pas hem toe als één undo-stap en weet welke reparaties aan jou zijn."
+track = "cabinet"
+order = 96
+level = "intermediate"
+minutes = 8
+topics = ["emc", "fix", "preview", "shield", "plate"]
+needs = ["emc-on-the-plate"]
+next = ["commissioning"]
+project = "project.json"
+
+[[step]]
+id = "why"
+title = "Look before you change"
+title_nl = "Kijk voordat je verandert"
+text = """
+An EMC finding is a rule that fired on what is drawn. Where the program can repair it, the repair is offered as a **preview**: it is worked out on a copy of the project, so you see what it would clear before anything changes.
+This is a design aid built on a model. A repair records what the build must be; it is never a compliance result.
+"""
+text_nl = """
+Een EMC-bevinding is een regel die afging op wat getekend is. Waar het programma hem kan repareren, wordt de reparatie aangeboden als **voorbeeld**: het wordt uitgerekend op een kopie van het project, dus je ziet wat het oplost voordat er iets verandert.
+Dit is een ontwerphulpmiddel op basis van een model. Een reparatie legt vast wat de bouw moet zijn; het is nooit een conformiteitsresultaat.
+"""
+
+[[step]]
+id = "open-check"
+title = "Open the EMC check"
+title_nl = "Open de EMC-controle"
+text = "The window lists the findings of the EMC rules, each with its rule, the level of the rule (rule, index, estimate or field model) and the numbers behind it."
+text_nl = "Het venster toont de bevindingen van de EMC-regels, elk met zijn regel, het niveau van de regel (regel, index, schatting of veldmodel) en de cijfers erachter."
+how = [
+  "Open {ui:menu.Check} and choose {ui:cmd.check.emc}.",
+  "Or press {key:view.command_palette}, type emc check and press Enter.",
+]
+how_nl = [
+  "Open {ui:menu.Check} en kies {ui:cmd.check.emc}.",
+  "Of druk op {key:view.command_palette}, typ emc check en druk op Enter.",
+]
+point = { ui = "cmd.check.emc" }
+expect = { command = "check.emc" }
+solve = [ { command = "check.emc" } ]
+
+[[step]]
+id = "preview"
+title = "Preview a repair"
+title_nl = "Bekijk een reparatie"
+text = """
+Under a finding, each repair the program can make is a **Preview** button. A repair it cannot make is marked **By hand**: it needs a decision of yours.
+The preview card opens under the finding. Nothing in the project has changed.
+"""
+text_nl = """
+Onder een bevinding is elke reparatie die het programma kan doen een knop **Preview**. Een reparatie die het niet kan doen is gemarkeerd als **By hand**: daar is een besluit van jou voor nodig.
+De voorbeeldkaart opent onder de bevinding. Er is niets in het project veranderd.
+"""
+how = [
+  "Click the {ui:emc.check.preview} button that bonds both shield ends all round, under EMC-04.",
+]
+how_nl = [
+  "Klik op de knop {ui:emc.check.preview} die beide schermeinden rondom aardt, onder EMC-04.",
+]
+point = { ui = "emc.check.preview" }
+expect = { clicked = "emc.check.preview" }
+solve = [ { ui_click = "emc.check.preview" } ]
+
+[[step]]
+id = "read-card"
+title = "Read what the preview says"
+title_nl = "Lees wat het voorbeeld zegt"
+text = """
+The card says what the repair does, how many findings there are before and after, and which it **clears** (green), **eases** to a lower severity, or **brings** new (amber). A repair that clears one finding and brings another is not a win: read the amber lines.
+It also gives the risk of each wire before and after. These are model numbers, not measurements.
+"""
+text_nl = """
+De kaart zegt wat de reparatie doet, hoeveel bevindingen er zijn voor en na, en welke hij **oplost** (groen), **verzacht** tot een lagere ernst, of **nieuw brengt** (oranje). Een reparatie die één bevinding oplost en een andere brengt is geen winst: lees de oranje regels.
+Hij geeft ook het risico van elke draad voor en na. Dit zijn modelgetallen, geen metingen.
+"""
+
+[[step]]
+id = "on-the-plate"
+title = "See it on the plate"
+title_nl = "Zie het op de plaat"
+text = """
+**On the plate** (and **In 3D**) opens the view with the EMC layer on and a **Previewing a fix** banner. The window closes so it does not cover the picture; Check > EMC check brings it back.
+"""
+text_nl = """
+**On the plate** (en **In 3D**) opent de weergave met de EMC-laag aan en een banner **Previewing a fix**. Het venster sluit zodat het het beeld niet bedekt; Check > EMC check haalt het terug.
+"""
+how = [
+  "Click {ui:emc.check.show_plate} on the preview card.",
+]
+how_nl = [
+  "Klik op {ui:emc.check.show_plate} op de voorbeeldkaart.",
+]
+point = { ui = "emc.check.show_plate" }
+expect = { clicked = "emc.check.show_plate" }
+solve = [ { ui_click = "emc.check.show_plate" } ]
+
+[[step]]
+id = "before"
+title = "Switch to Before"
+title_nl = "Schakel naar Before"
+text = "The banner has **Before** and **After**. After draws the cabinet as it would be, from the copy. Before draws it as it is. Nothing is changed in either."
+text_nl = "De banner heeft **Before** en **After**. After tekent de kast zoals hij zou worden, uit de kopie. Before tekent hem zoals hij is. In geen van beide verandert iets."
+how = [
+  "Click {ui:emc.whatif.before} in the banner.",
+]
+how_nl = [
+  "Klik op {ui:emc.whatif.before} in de banner.",
+]
+point = { ui = "emc.whatif.before" }
+expect = { clicked = "emc.whatif.before" }
+solve = [ { ui_click = "emc.whatif.before" } ]
+
+[[step]]
+id = "after"
+title = "And back to After"
+title_nl = "En terug naar After"
+text = "Flip between the two and watch the screen ends or the bond change. The line under the buttons says which one you see."
+text_nl = "Wissel tussen de twee en kijk hoe de schermeinden of de aarding veranderen. De regel onder de knoppen zegt welke je ziet."
+how = [
+  "Click {ui:emc.whatif.after}.",
+]
+how_nl = [
+  "Klik op {ui:emc.whatif.after}.",
+]
+point = { ui = "emc.whatif.after" }
+expect = { clicked = "emc.whatif.after" }
+solve = [ { ui_click = "emc.whatif.after" } ]
+
+[[step]]
+id = "apply"
+title = "Apply it"
+title_nl = "Pas het toe"
+text = """
+**Apply (one undo step)** does the repair on the project. What it writes is usually a property such as the plate finish or a screen end: it states what the build must be and does not move geometry, so the cabinet has to be built that way.
+"""
+text_nl = """
+**Apply (one undo step)** voert de reparatie uit op het project. Wat het schrijft is meestal een eigenschap zoals de plaatafwerking of een schermeinde: het zegt wat de bouw moet zijn en verplaatst geen geometrie, dus de kast moet zo gebouwd worden.
+"""
+how = [
+  "Click {ui:emc.whatif.apply} in the banner.",
+]
+how_nl = [
+  "Klik op {ui:emc.whatif.apply} in de banner.",
+]
+point = { ui = "emc.whatif.apply" }
+expect = { clicked = "emc.whatif.apply" }
+solve = [ { ui_click = "emc.whatif.apply" } ]
+
+[[step]]
+id = "undo"
+title = "Take it back"
+title_nl = "Haal het terug"
+text = "Apply is one undo step, so one Undo restores the project. Do it: a repair you doubt costs nothing to take back."
+text_nl = "Apply is één undo-stap, dus één Undo herstelt het project. Doe het: een reparatie waaraan je twijfelt kost niets om terug te halen."
+how = [
+  "Press {key:edit.undo}.",
+]
+how_nl = [
+  "Druk op {key:edit.undo}.",
+]
+expect = { command = "edit.undo" }
+solve = [ { command = "edit.undo" } ]
+
+[[step]]
+id = "by-hand"
+title = "What is left to you"
+title_nl = "Wat aan jou is"
+text = """
+The program can add a shield, bond a device, terminate a screen all round, shorten a pigtail, route a wire in another duct, keep a run clear of another, and move a filter next to its drive or a sensitive device away.
+What it cannot do, the finding marks **By hand**: it needs a decision of yours.
+"""
+text_nl = """
+Het programma kan een scherm toevoegen, een apparaat aarden, een scherm rondom afwerken, een pigtail inkorten, een draad door een ander kanaal leggen, een run vrij houden van een andere, en een filter naast zijn aandrijving zetten of een gevoelig apparaat weg verplaatsen.
+Wat het niet kan, markeert de bevinding als **By hand**: daar is een besluit van jou voor nodig.
+"""
+
+[[step]]
+id = "limits"
+title = "Check a move against what you know"
+title_nl = "Controleer een verplaatsing met wat jij weet"
+text = """
+A move looks for the nearest free spot on the plate. It does not know about heat, airflow, door swing or wire lengths, so check the result against your own knowledge of the cabinet.
+Check > EMC check can save the findings and bench steps as an **EMC record** (PDF or Excel). Never compliance: a model that helps you design.
+"""
+text_nl = """
+Een verplaatsing zoekt de dichtstbijzijnde vrije plek op de plaat. Ze kent geen warmte, luchtstroom, deurzwaai of draadlengtes, dus controleer het resultaat met je eigen kennis van de kast.
+Check > EMC check kan de bevindingen en werkbankstappen opslaan als **EMC-dossier** (PDF of Excel). Nooit conformiteit: een model dat helpt bij het ontwerpen.
+"""

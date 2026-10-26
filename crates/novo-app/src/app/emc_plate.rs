@@ -346,6 +346,54 @@ mod tests {
         assert!(pic.runs.is_empty(), "no run is drawn for it");
     }
 
+    /// The lesson on previewing a fix points at the window's first repair that
+    /// the plate can draw, its card's "On the plate" button, and the banner.
+    #[test]
+    fn the_emc_check_window_and_the_banner_register_their_lesson_anchors() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../qa/fixtures/emc-cabinet-shields.novo");
+        d.app.open_path_as(&path, false);
+        d.frame();
+        d.app.emc.open = true;
+        // As a lesson step does: scroll the repair into view.
+        d.app.emc.reveal = Some("emc.check.preview");
+        d.frame();
+        d.frame();
+        d.frame();
+        // The scroll to the repair takes a few frames.
+        for _ in 0..40 {
+            d.frame();
+        }
+        let rect = d
+            .app
+            .learn_drawn("emc.check.preview")
+            .expect("a repair the plate can draw is offered");
+        assert!(d.app.learn_drawn("emc.check.show_plate").is_none());
+        d.pointer_click(rect.center(), false);
+        d.frame();
+        d.frame();
+        assert!(
+            d.app.emc.previewed().is_some(),
+            "the click opened no preview"
+        );
+        for _ in 0..40 {
+            d.frame();
+        }
+        for id in ["emc.check.apply", "emc.check.show_plate"] {
+            assert!(d.app.learn_drawn(id).is_some(), "{id} is not drawn");
+        }
+        let rect = d.app.learn_drawn("emc.check.show_plate").unwrap();
+        d.pointer_click(rect.center(), false);
+        d.frame();
+        d.frame();
+        assert_eq!(d.app.workspace(), crate::app::workspace::Workspace::Cabinet);
+        for id in ["emc.whatif.before", "emc.whatif.after", "emc.whatif.apply"] {
+            assert!(d.app.learn_drawn(id).is_some(), "{id} is not drawn");
+        }
+    }
+
     #[test]
     fn the_plate_picture_of_a_painted_plate_has_a_bond_to_draw() {
         let dir = tempfile::tempdir().unwrap();

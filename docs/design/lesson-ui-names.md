@@ -58,19 +58,26 @@ Fix a step, then regenerate to shrink the list.
 - dxf-and-backgrounds/export-all: `File > Export drawings > Export all pages as DXF`
 - dxf-and-backgrounds/export-page: `File`
 - dxf-and-backgrounds/remove: `File > Import > Remove the DXF background`
+- emc-fix-it/before: `After` (write {ui:emc.whatif.after})
+- emc-fix-it/before: `Before` (write {ui:emc.whatif.before})
+- emc-fix-it/on-the-plate: `On the plate` (write {ui:emc.check.show_plate})
+- emc-fix-it/preview: `Preview` (write {ui:emc.check.preview})
+- emc-fix-it/why: `preview` (write {ui:emc.check.preview})
 - emc-net-classes/honest: `Check > EMC check`
-- emc-net-classes/shield-core: `Apply` (write {ui:emc.nets.apply})
-- emc-net-classes/shield-core: `Preview` (write {ui:emc.nets.preview})
+- emc-net-classes/shield-core: `Apply` (write {ui:emc.check.apply})
+- emc-net-classes/shield-core: `Preview` (write {ui:emc.check.preview})
 - emc-on-the-plate/bonding: `Bonding` (write {ui:emc.plate.bonding})
 - emc-on-the-plate/emc-on: `EMC view on the plate`
 - emc-on-the-plate/emc-on: `EMC` (write {ui:cabinet.emc})
-- emc-on-the-plate/fix-it: `Apply` (write {ui:emc.nets.apply})
+- emc-on-the-plate/fix-it: `Apply` (write {ui:emc.check.apply})
+- emc-on-the-plate/fix-it: `Check > EMC check`
+- emc-on-the-plate/fix-it: `Preview` (write {ui:emc.check.preview})
 - emc-on-the-plate/fix-it: `View > EMC net classes`
 - emc-on-the-plate/shields: `Shields` (write {ui:emc.plate.shields})
-- enclosure-door-and-depth/apply-defaults: `Apply` (write {ui:emc.nets.apply})
+- enclosure-door-and-depth/apply-defaults: `Apply` (write {ui:emc.check.apply})
 - enclosure-door-and-depth/open-panel: `Plate setup` (write {ui:cabinet.plate})
-- enclosure-door-and-depth/shallow: `Apply` (write {ui:emc.nets.apply})
-- enclosure-door-and-depth/swing: `Apply` (write {ui:emc.nets.apply})
+- enclosure-door-and-depth/shallow: `Apply` (write {ui:emc.check.apply})
+- enclosure-door-and-depth/swing: `Apply` (write {ui:emc.check.apply})
 - generated-pages/back-to-drawing: `Pages`
 - generated-pages/open-contents: `Pages`
 - generated-pages/open-device-list: `Device list`
@@ -153,3 +160,5 @@ Fix a step, then regenerate to shrink the list.
 - wiring-modes/corners-tool: `Lines` (write {ui:dock.lines})
 - wiring-modes/switch-mode: `Corners` (write {ui:dock.corners})
 - wiring-modes/switch-mode: `Lines` (write {ui:dock.lines})
+- work-cards/print-step: `Print this step` (write {ui:build_order.print_step})
+- work-cards/whole-pack: `Work cards (PDF)` (write {ui:build_order.work_cards})

@@ -465,7 +465,7 @@ impl Drive {
     }
 
     /// A pointer click at `at`, with the right button when `secondary`.
-    fn pointer_click(&mut self, at: egui::Pos2, secondary: bool) {
+    pub(super) fn pointer_click(&mut self, at: egui::Pos2, secondary: bool) {
         let button = |pressed| egui::Event::PointerButton {
             pos: at,
             button: if secondary {
