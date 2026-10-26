@@ -61,6 +61,28 @@ const GAINS_3D: [(&str, f64, f64, f64); 18] = [
     ("600x600x400", 120.0, 250.0, 22.24),
 ];
 
+/// The same cases with the fan on top and the vent low (exhaust), from the same sweep.
+const GAINS_3D_TOP: [(&str, f64, f64, f64); 18] = [
+    ("600x800x300", 60.0, 60.0, 9.80),
+    ("600x800x300", 60.0, 120.0, 15.32),
+    ("600x800x300", 60.0, 250.0, 21.44),
+    ("600x800x300", 120.0, 60.0, 14.76),
+    ("600x800x300", 120.0, 120.0, 23.11),
+    ("600x800x300", 120.0, 250.0, 32.42),
+    ("800x1200x300", 60.0, 60.0, 7.75),
+    ("800x1200x300", 60.0, 120.0, 12.26),
+    ("800x1200x300", 60.0, 250.0, 17.95),
+    ("800x1200x300", 120.0, 60.0, 10.98),
+    ("800x1200x300", 120.0, 120.0, 16.22),
+    ("800x1200x300", 120.0, 250.0, 25.74),
+    ("600x600x400", 60.0, 60.0, 5.60),
+    ("600x600x400", 60.0, 120.0, 9.58),
+    ("600x600x400", 60.0, 250.0, 15.67),
+    ("600x600x400", 120.0, 60.0, 9.40),
+    ("600x600x400", 120.0, 120.0, 15.94),
+    ("600x600x400", 120.0, 250.0, 22.51),
+];
+
 fn sealed(shape: &Shape, loss_w: f64) -> Scenario {
     Scenario {
         enclosure: Enclosure {
@@ -202,4 +224,38 @@ fn without_a_fan_nothing_changes_and_the_two_fan_positions_agree() {
         (a - b).abs() < 1.0,
         "fan low {a:.1} against fan on top {b:.1}"
     );
+}
+
+/// All 36 cases of the sweep (both fan positions): the 2D fan gain is neither
+/// systematically low nor high against the 3D solver. Before the jet speed term
+/// it read low in 33 to 34 of 36 cases (median 3D/2D 1.89); `validation_fan_gain.rs`
+/// (ignored sweep) measured, with the term in, 0.69 to 1.28, mean 0.97, median 1.01,
+/// 2D low in 19 of 36 (18 with the gains frozen to two decimals). Model against model, not a measurement.
+#[test]
+fn over_all_36_sweep_cases_the_2d_gain_is_not_biased_against_the_3d_one() {
+    let mut ratios = Vec::new();
+    for (table, intake_low) in [(&GAINS_3D, true), (&GAINS_3D_TOP, false)] {
+        for &(name, loss, flow, g3) in table {
+            let shape = SHAPES.iter().find(|s| s.name == name).unwrap();
+            let base = sealed(shape, loss);
+            let (b, _, _) = housing(&base);
+            let (f, _, _) = housing(&with_fan(base, flow, intake_low));
+            ratios.push(g3 / (b - f));
+        }
+    }
+    assert_eq!(ratios.len(), 36);
+    let mean = ratios.iter().sum::<f64>() / 36.0;
+    let mut sorted = ratios.clone();
+    sorted.sort_by(f64::total_cmp);
+    let median = (sorted[17] + sorted[18]) / 2.0;
+    let low = ratios.iter().filter(|r| **r > 1.0).count();
+    println!(
+        "FANGAIN36 mean {mean:.2} median {median:.2} min {:.2} max {:.2} 2D low in {low}",
+        sorted[0], sorted[35]
+    );
+    assert!((0.85..=1.1).contains(&mean), "mean {mean:.2}");
+    assert!((0.9..=1.1).contains(&median), "median {median:.2}");
+    assert!(sorted[0] > 0.65 && sorted[35] < 1.35, "{sorted:?}");
+    // Neither side wins: 2D reads low in a minority-to-half of the cases, not nearly all.
+    assert!((10..=26).contains(&low), "2D low in {low} of 36");
 }
