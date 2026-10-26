@@ -152,6 +152,8 @@ The diagnosis above (the 2D device surface coefficient stays at 9.5 to 9.7 W/m2K
 
 It was fitted by hand on one box (600x800x300 mm, six cases: 60 and 120 W, 60 / 120 / 250 m3/h) and checked on the other two boxes without refitting (`crates/novo-thermal/tests/fan_gain.rs`, the 3D gains frozen from the sweep, the fan low in with the vent on top; the other fan position agrees within 0.25 in 3D):
 
+The table is from the first sweep (the frozen fan-low gains differed from the 2026-10-26 rerun by up to 0.8 K in 12 of 18 cases and were re-frozen from it; the current row of the sweep table above is authoritative).
+
 | 3D gain / 2D gain | before | after |
 | --- | --- | --- |
 | all 18 cases | 0.94 to 3.09, median 1.89 | 0.69 to 1.28, median 1.00, mean 0.96 |
