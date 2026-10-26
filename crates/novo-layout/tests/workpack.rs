@@ -905,7 +905,7 @@ fn openings_with_the_same_name_and_wall_get_their_own_marks() {
 fn an_opening_whose_mark_is_taken_gets_a_numbered_one() {
     let mut p = pack(2);
     let job = grille(OpeningWall::Right, 100.0, None);
-    add_opening_cards(&mut p, &[job.clone()]);
+    add_opening_cards(&mut p, std::slice::from_ref(&job));
     let taken = p
         .cards
         .iter()
