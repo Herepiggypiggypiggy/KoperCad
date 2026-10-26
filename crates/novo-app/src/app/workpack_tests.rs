@@ -890,3 +890,119 @@ fn the_ferrule_text_follows_the_standard_and_says_lug_for_a_lug() {
     assert_eq!(ferrule_text(&standard, "1.5 mm2 black", "lug"), "lug");
     assert_eq!(ferrule_text(&standard, "size not set", ""), "");
 }
+
+fn all_text(path: &std::path::Path) -> String {
+    let doc = lopdf::Document::load_mem(&std::fs::read(path).unwrap()).unwrap();
+    let pages: Vec<u32> = doc.get_pages().keys().copied().collect();
+    pages
+        .iter()
+        .map(|p| doc.extract_text(&[*p]).unwrap_or_default())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn a_changed_layout_marks_the_pack_out_of_date_and_the_changed_cards_on_the_next_print() {
+    use super::heat_settings::{VentSpec, Wall};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut d, cab) = vent_cabinet(dir.path());
+    // Nothing printed yet: nothing to be out of date.
+    assert_eq!(d.app.workpack_stale_note(), None);
+
+    let first = d.app.export_workpack().expect("first print");
+    let text = all_text(&first);
+    assert!(text.contains("Revision "), "{text}");
+    assert!(text.contains("printed 20"), "{text}");
+    assert!(
+        !text.contains("CHANGED since"),
+        "a first print has no earlier one"
+    );
+    assert_eq!(d.app.workpack_stale_note(), None);
+
+    // The cooling fix adds a grille cut-out: the pack no longer matches.
+    let mut grille = VentSpec::new(Wall::Top);
+    grille.width_mm = 146.99;
+    grille.height_mm = 146.99;
+    store_vents(&mut d, cab, &[grille]);
+    let note = d.app.workpack_stale_note().expect("out of date");
+    assert!(note.contains("out of date"), "{note}");
+    assert!(note.contains("1 card changed"), "{note}");
+
+    let second = d.app.export_workpack().expect("second print");
+    let text = all_text(&second);
+    assert!(
+        text.contains("1 card CHANGED since the print of"),
+        "cover: {text}"
+    );
+    assert!(
+        text.contains("CHANGED since the print of 20") && text.contains("check this card"),
+        "card banner: {text}"
+    );
+    // Round saw size: float noise from the part data does not reach the bench.
+    assert!(text.contains("147 x 147"), "{text}");
+    assert!(!text.contains("146.99"), "{text}");
+    assert_eq!(d.app.workpack_stale_note(), None, "printed again");
+
+    // A third print without a change marks nothing and says unchanged.
+    let third = d.app.export_workpack().expect("third print");
+    let text = all_text(&third);
+    assert!(text.contains("unchanged since the print of"), "{text}");
+    assert!(!text.contains("check this card"), "{text}");
+}
+
+#[test]
+fn a_card_printed_on_its_own_clears_its_part_of_the_warning() {
+    use super::heat_settings::{VentSpec, Wall};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut d, cab) = vent_cabinet(dir.path());
+    d.app.export_workpack().expect("print");
+    store_vents(&mut d, cab, &[VentSpec::new(Wall::Top)]);
+    assert!(d.app.workpack_stale_note().is_some());
+    let mark = work_packs(&d.app.machine().unwrap())[0]
+        .cards
+        .iter()
+        .find(|c| c.kind == CardKind::Opening)
+        .unwrap()
+        .mark
+        .clone();
+    let card = d.app.export_workpack_step(cab, &mark).expect("the card");
+    assert!(all_text(&card).contains("CHANGED since the print of"));
+    assert_eq!(d.app.workpack_stale_note(), None);
+}
+
+#[test]
+fn the_cards_never_replace_the_open_project_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut d, cab) = vent_cabinet(dir.path());
+    let project = dir.path().join("Plant 3.novo");
+    let before = std::fs::read(&project).unwrap();
+    assert!(before.starts_with(b"SQLite format 3"));
+
+    assert_eq!(d.app.export_workpack_to(&project), None);
+    let last = d.app.messages().last().unwrap();
+    assert_eq!(last.level, Level::Error);
+    assert!(last.text.contains("open project file"), "{}", last.text);
+    assert_eq!(d.app.write_step_card(&project, b"%PDF-"), None);
+    assert_eq!(d.app.messages().last().unwrap().level, Level::Error);
+    assert_eq!(std::fs::read(&project).unwrap(), before);
+    let _ = cab;
+}
+
+#[test]
+fn a_workshop_pack_print_counts_as_the_work_cards_print() {
+    use super::heat_settings::{VentSpec, Wall};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut d, cab) = vent_cabinet(dir.path());
+    d.app.export_workshop().expect("folder");
+    assert_eq!(d.app.workpack_stale_note(), None);
+    store_vents(&mut d, cab, &[VentSpec::new(Wall::Top)]);
+    assert!(d.app.workpack_stale_note().is_some());
+    d.app.export_workshop().expect("folder again");
+    assert_eq!(
+        d.app.workpack_stale_note(),
+        None,
+        "the folder holds the new cards"
+    );
+    let cards = dir.path().join("Plant 3 workshop/1 Work cards.pdf");
+    assert!(all_text(&cards).contains("CHANGED since the print of"));
+}

@@ -66,8 +66,8 @@ Name: "{userdesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 Name: "{userprograms}\{#AppName} (safe graphics)"; Filename: "{app}\{#AppExe}"; Parameters: "--safe-graphics"; Comment: "Start with the software renderer if the normal start fails"
 
 [Registry]
-Root: HKCU; Subkey: "Software\Classes\.kopercad"; ValueType: string; ValueName: ""; ValueData: "KoperCAD.Project"; Flags: uninsdeletevalue; Tasks: associate
-Root: HKCU; Subkey: "Software\Classes\.novo"; ValueType: string; ValueName: ""; ValueData: "KoperCAD.Project"; Flags: uninsdeletevalue; Tasks: associate
+Root: HKCU; Subkey: "Software\Classes\.kopercad"; ValueType: string; ValueName: ""; ValueData: "KoperCAD.Project"; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: associate
+Root: HKCU; Subkey: "Software\Classes\.novo"; ValueType: string; ValueName: ""; ValueData: "KoperCAD.Project"; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: associate
 ; Older projects keep the .novo extension and still open from Explorer.
 Root: HKCU; Subkey: "Software\Classes\KoperCAD.Project"; ValueType: string; ValueName: ""; ValueData: "KoperCAD project"; Flags: uninsdeletekey; Tasks: associate
 Root: HKCU; Subkey: "Software\Classes\KoperCAD.Project\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExe},0"; Tasks: associate
@@ -94,13 +94,16 @@ Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags
   reinstall finds the same preferences. }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  Local, Roaming: String;
+  Local, Roaming, OldLocal, OldRoaming: String;
 begin
   if CurUninstallStep = usPostUninstall then
   begin
     Local := ExpandConstant('{localappdata}\KoperCAD');
     Roaming := ExpandConstant('{userappdata}\KoperCAD');
-    if (DirExists(Local) or DirExists(Roaming)) and (not UninstallSilent) then
+    { Folders of the earlier name stay behind when the move to the new name had to fall back to a copy. }
+    OldLocal := ExpandConstant('{localappdata}\{#OldAppName}');
+    OldRoaming := ExpandConstant('{userappdata}\{#OldAppName}');
+    if (DirExists(Local) or DirExists(Roaming) or DirExists(OldLocal) or DirExists(OldRoaming)) and (not UninstallSilent) then
       if MsgBox('Also remove KoperCAD data from this PC?' + #13#10 + #13#10 +
                 'This deletes your settings, parts catalog, macros, templates, report designs, ' +
                 'logs, and the recovery copies of unsaved work.' + #13#10 +
@@ -109,6 +112,8 @@ begin
       begin
         DelTree(Local, True, True, True);
         DelTree(Roaming, True, True, True);
+        DelTree(OldLocal, True, True, True);
+        DelTree(OldRoaming, True, True, True);
       end;
   end;
 end;

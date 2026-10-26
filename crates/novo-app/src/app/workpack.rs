@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use novo_core::{Device, DeviceId, Project};
 use novo_layout::workpack::{
-    CardKind, OpeningJob, OpeningWall, Pack, WireCut, WireGroup, add_opening_cards,
+    CardKind, OpeningJob, OpeningWall, Pack, PrintRecord, WireCut, WireGroup, add_opening_cards,
     add_outside_wire_cards, add_strip_cards, add_wiring_opening_cards, build,
 };
 use novo_reports::{AssemblyChecklist, Cell, CutList, Report, Section, is_estimate};
@@ -526,13 +526,120 @@ pub(super) fn fitting_of(end_mm: Option<f64>, ferrule_mm: f64, lug_mm: f64) -> &
     }
 }
 
+/// The last work cards print of this session: what it was made from, the
+/// project revision and file it was made for.
+#[derive(Debug, Clone)]
+pub(super) struct PrintState {
+    pub(super) record: PrintRecord,
+    pub(super) revision: u64,
+    pub(super) file: Option<PathBuf>,
+}
+
+/// A card's (cabinet, mark) and its fingerprint.
+type CardEntry = ((String, String), u64);
+
+/// The stamp for a print of `packs` today, measured against `previous`.
+fn stamp_for(packs: &[Pack], previous: Option<&PrintRecord>) -> novo_pdf::workpack::Stamp {
+    novo_pdf::workpack::Stamp {
+        printed: super::revisions::today(),
+        since: previous.map(|r| r.date.clone()),
+        changes: previous.map(|r| r.changes(packs)).unwrap_or_default(),
+    }
+}
+
 impl NovoApp {
-    /// The work cards PDF of the open project; `None` without a cabinet that
-    /// has something to build.
-    pub(super) fn work_cards_pdf(&self) -> Option<Vec<u8>> {
+    /// The PDF with the revision, print date and CHANGED marks of the cards
+    /// that differ from the last print of this session, and the record of
+    /// this print for `remember_print`.
+    pub(super) fn work_cards_stamped(&self) -> Option<(Vec<u8>, PrintRecord)> {
         let name = self.machine_title().unwrap_or_default();
         let project = self.machine()?;
-        novo_pdf::workpack::export_workpack_pdf(&work_packs(&project), &name)
+        let packs = work_packs(&project);
+        let stamp = stamp_for(&packs, self.print_record_for_project());
+        let bytes = novo_pdf::workpack::export_workpack_pdf_stamped(&packs, &name, Some(&stamp))?;
+        Some((bytes, PrintRecord::of(&packs, &stamp.printed)))
+    }
+
+    /// The last print's record, when it was made for the open project file.
+    fn print_record_for_project(&self) -> Option<&PrintRecord> {
+        let st = self.wb.workpack_print.as_ref()?;
+        (st.file == self.project_path).then_some(&st.record)
+    }
+
+    pub(super) fn remember_print(&mut self, record: PrintRecord) {
+        let revision = self
+            .backend
+            .document()
+            .map_or(0, |doc| doc.project().revision());
+        self.wb.workpack_print = Some(PrintState {
+            record,
+            revision,
+            file: self.project_path.clone(),
+        });
+        self.wb.workpack_stale = None;
+    }
+
+    /// A sentence when the cards printed earlier no longer match the layout:
+    /// how many cards changed. `None` before any print, while nothing
+    /// differs, and when the cards cannot be built. Compared once per project
+    /// revision, and only called while a panel that shows it is open.
+    pub(super) fn workpack_stale_note(&mut self) -> Option<String> {
+        let st = self.wb.workpack_print.as_ref()?;
+        if st.file != self.project_path {
+            return None;
+        }
+        let revision = self.backend.document()?.project().revision();
+        if revision == st.revision {
+            return None;
+        }
+        if let Some((r, note)) = &self.wb.workpack_stale
+            && *r == revision
+        {
+            return note.clone();
+        }
+        let record = st.record.clone();
+        let changes = {
+            let project = self.machine()?;
+            record.changes(&work_packs(&project))
+        };
+        let note = (!changes.is_empty()).then(|| {
+            let n = changes.changed.len();
+            format!(
+                "Work cards out of date: {n} card{} changed since the print of {}{}. Print them again; the changed cards are marked CHANGED.",
+                if n == 1 { "" } else { "s" },
+                record.date,
+                if changes.removed > 0 {
+                    format!(", {} removed", changes.removed)
+                } else {
+                    String::new()
+                }
+            )
+        });
+        self.wb.workpack_stale = Some((revision, note.clone()));
+        note
+    }
+
+    /// Whether `path` is the open project file: a card must never replace it.
+    fn is_project_file(&self, path: &Path) -> bool {
+        self.project_path
+            .as_deref()
+            .is_some_and(|p| crate::backend::same_file(p, path))
+    }
+
+    /// Says why a card file cannot go to `path`, when it would replace the
+    /// open project.
+    fn refuse_project_file(&mut self, path: &Path) -> bool {
+        if !self.is_project_file(path) {
+            return false;
+        }
+        self.message(
+            Level::Error,
+            format!(
+                "{} is the open project file, so the work cards were not written. Choose another name for the PDF.",
+                path.display()
+            ),
+        );
+        true
     }
 
     /// Exports the work cards next to the project, or to the Documents folder
@@ -551,14 +658,14 @@ impl NovoApp {
     pub(super) fn ask_workpack(&mut self) -> Option<PathBuf> {
         // Built once, before the dialog; without a plate it says what is
         // missing and opens no dialog for nothing.
-        let bytes = self.work_cards_or_warn()?;
+        let (bytes, record) = self.work_cards_or_warn()?;
         let (dir, stem) = self.export_base()?;
         let path = Self::pick_pdf(
             "Save the work cards",
             &dir,
             &format!("{stem} work cards.pdf"),
         )?;
-        self.write_workpack(&path, &bytes)
+        self.write_workpack(&path, &bytes, record)
     }
 
     /// The same for one Build order step's card.
@@ -568,10 +675,14 @@ impl NovoApp {
         mark: &str,
     ) -> Option<PathBuf> {
         let (dir, stem) = self.export_base()?;
-        let (bytes, tag, several) = self.workpack_step_card(id, mark)?;
+        let (bytes, tag, several, entry) = self.workpack_step_card(id, mark)?;
         let file = step_file_name(&stem, &tag, mark, several);
         let path = Self::pick_pdf("Save the work card", &dir, &file)?;
-        self.write_step_card(&path, &bytes)
+        let written = self.write_step_card(&path, &bytes);
+        if written.is_some() {
+            self.remember_card(entry);
+        }
+        written
     }
 
     /// A PDF save dialog starting in `dir`; the name always ends in `.pdf`.
@@ -598,10 +709,14 @@ impl NovoApp {
         mark: &str,
     ) -> Option<PathBuf> {
         let (dir, stem) = self.export_base()?;
-        let (bytes, tag, several) = self.workpack_step_card(id, mark)?;
+        let (bytes, tag, several, entry) = self.workpack_step_card(id, mark)?;
         let file = step_file_name(&stem, &tag, mark, several);
         let path = super::pdf::replaceable_path(&dir.join(file));
-        self.write_step_card(&path, &bytes)
+        let written = self.write_step_card(&path, &bytes);
+        if written.is_some() {
+            self.remember_card(entry);
+        }
+        written
     }
 
     /// The one-page PDF of step `mark`, the enclosure's tag and whether the
@@ -610,33 +725,54 @@ impl NovoApp {
         &mut self,
         id: novo_core::StructureId,
         mark: &str,
-    ) -> Option<(Vec<u8>, String, bool)> {
+    ) -> Option<(Vec<u8>, String, bool, CardEntry)> {
         let name = self.machine_title().unwrap_or_default();
         let (bytes, several) = {
             let project = self.machine()?;
             let tag = project.structures().find(|s| s.id == id)?.tag.to_string();
             let packs = work_packs(&project);
             let several = packs.len() > 1;
+            let stamp = stamp_for(&packs, self.print_record_for_project());
             let bytes = packs
                 .into_iter()
                 .find(|p| p.cabinet == tag)
                 .and_then(|pack| {
                     let index = pack.cards.iter().position(|c| c.mark == mark)?;
-                    novo_pdf::workpack::export_card_pdf(&pack, index, &name)
+                    let entry = (
+                        (tag.clone(), mark.to_owned()),
+                        pack.cards[index].fingerprint(),
+                    );
+                    novo_pdf::workpack::export_card_pdf_stamped(&pack, index, &name, Some(&stamp))
+                        .map(|b| (b, entry))
                 });
-            (bytes.map(|b| (b, tag)), several)
+            (bytes.map(|(b, entry)| (b, tag, entry)), several)
         };
-        let Some((bytes, tag)) = bytes else {
+        let Some((bytes, tag, entry)) = bytes else {
             self.message(
                 Level::Warning,
                 format!("No work card for {mark}: print the whole pack instead"),
             );
             return None;
         };
-        Some((bytes, tag, several))
+        Some((bytes, tag, several, entry))
+    }
+
+    /// A card printed on its own counts as printed: the pack is out of date
+    /// only for the cards not yet printed again.
+    fn remember_card(&mut self, ((cabinet, mark), fingerprint): CardEntry) {
+        let file = self.project_path.clone();
+        if let Some(st) = self.wb.workpack_print.as_mut()
+            && st.file == file
+        {
+            st.record.cards.insert((cabinet, mark), fingerprint);
+            self.wb.workpack_stale = None;
+        }
     }
 
     pub(super) fn write_step_card(&mut self, path: &Path, bytes: &[u8]) -> Option<PathBuf> {
+        if self.refuse_project_file(path) {
+            return None;
+        }
         let verb = if path.exists() {
             "Replaced"
         } else {
@@ -661,13 +797,14 @@ impl NovoApp {
     /// Exports to `path`. Without a plated cabinet with something to build it
     /// says so and writes nothing.
     pub fn export_workpack_to(&mut self, path: &Path) -> Option<PathBuf> {
-        let bytes = self.work_cards_or_warn()?;
-        self.write_workpack(path, &bytes)
+        let (bytes, record) = self.work_cards_or_warn()?;
+        self.write_workpack(path, &bytes, record)
     }
 
-    /// The work cards PDF, or the warning that there is nothing to build yet.
-    fn work_cards_or_warn(&mut self) -> Option<Vec<u8>> {
-        let bytes = self.work_cards_pdf();
+    /// The work cards PDF and the record of the print, or the warning that
+    /// there is nothing to build yet.
+    fn work_cards_or_warn(&mut self) -> Option<(Vec<u8>, PrintRecord)> {
+        let bytes = self.work_cards_stamped();
         if bytes.is_none() {
             self.message(
                 Level::Warning,
@@ -677,10 +814,19 @@ impl NovoApp {
         bytes
     }
 
-    fn write_workpack(&mut self, path: &Path, bytes: &[u8]) -> Option<PathBuf> {
+    fn write_workpack(
+        &mut self,
+        path: &Path,
+        bytes: &[u8],
+        record: PrintRecord,
+    ) -> Option<PathBuf> {
+        if self.refuse_project_file(path) {
+            return None;
+        }
         let replaced = path.exists();
         match write_replacing(path, bytes) {
             Ok(()) => {
+                self.remember_print(record);
                 let verb = if replaced { "Replaced" } else { "Exported" };
                 self.message_file(
                     format!(

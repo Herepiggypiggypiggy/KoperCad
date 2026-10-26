@@ -451,6 +451,7 @@ impl NovoApp {
         let mut open = true;
         let mut action: Option<Act> = None;
         let mut paper = self.wb.workshop_paper;
+        let stale = self.workpack_stale_note();
         let tab_before = state.tab;
         let mut tab_rects: Vec<egui::Rect> = Vec::new();
         let shown = super::panel::dialog(ctx, "Bench output", [560.0, 640.0])
@@ -460,7 +461,13 @@ impl NovoApp {
                     super::autopilot::meter(ui, ready);
                     ui.add_space(6.0);
                 }
-                workshop_strip(ui, &mut paper, &mut state.check, &mut action);
+                workshop_strip(
+                    ui,
+                    &mut paper,
+                    &mut state.check,
+                    &mut action,
+                    stale.as_deref(),
+                );
                 ui.add_space(6.0);
                 readiness_strip(ui, &ready, &mut action);
                 let mut tab = match state.tab {
@@ -571,6 +578,7 @@ fn workshop_strip(
     paper: &mut novo_layout::template::Paper,
     check: &mut [String; 3],
     act: &mut Option<Act>,
+    stale: Option<&str>,
 ) {
     use novo_layout::template::Paper;
     ui.horizontal(|ui| {
@@ -606,6 +614,13 @@ fn workshop_strip(
             *act = Some(Act::Run("export.workpack"));
         }
     });
+    if let Some(note) = stale {
+        ui.label(
+            egui::RichText::new(note)
+                .strong()
+                .color(crate::theme::ui_palette().warning),
+        );
+    }
     print_check(ui, check, act);
     ui.weak("The Workshop pack puts a bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans), the 1:1 drilling templates and the labels in one folder next to the project.");
 }
