@@ -7,7 +7,7 @@ use novo_layout::drill::{Cutout, CutoutShape, DeviceFeatures, Hole, Surface, dri
 use novo_layout::state::CabinetLayout;
 use novo_layout::workpack::{
     CardKind, OpeningJob, OpeningWall, WIRES_PER_CARD, WireCut, WireGroup, add_opening_cards,
-    build, from_edges,
+    add_strip_cards, build, from_edges,
 };
 use novo_layout::{Duct, Margins, Placement, Plate, Rail, Size};
 
@@ -115,6 +115,7 @@ fn wire(n: &str, from: &str, to: &str, cut: f64) -> WireCut {
         strip_from_mm: Some(10.0),
         strip_to_mm: Some(10.0),
         strip_basis: "typical",
+        ferrule: String::new(),
     }
 }
 
@@ -843,4 +844,80 @@ fn the_duct_note_says_it_is_a_planning_rule_and_where_the_fixing_goes() {
     }
     // A 2 m duct: 11 fixings, each named.
     assert!(duct_fixing_note(2000.0).contains("11 rivets"));
+}
+
+#[test]
+fn strip_cards_list_each_group_longest_first_and_every_wire_once() {
+    let mut p = pack(11);
+    let before = p.cards.len();
+    let g = groups(11);
+    add_strip_cards(&mut p, &g);
+    let strips: Vec<_> = p.cards[before..].to_vec();
+    // 11 power wires are two cards, the one control wire one.
+    assert_eq!(strips.len(), 3);
+    assert!(strips.iter().all(|c| c.kind == CardKind::Strips));
+    assert!(strips.iter().all(|c| c.steps == (0, 0) && c.total == 0));
+    assert_eq!(strips[0].mark, "Power cut strip 1 of 2");
+    assert_eq!(strips[1].mark, "Power cut strip 2 of 2");
+    assert_eq!(strips[2].mark, "Control cut strip");
+    let power: Vec<f64> = strips[..2]
+        .iter()
+        .flat_map(|c| c.wires.iter().map(|w| w.cut_mm))
+        .collect();
+    assert_eq!(power.len(), 11);
+    assert!(power.windows(2).all(|w| w[0] >= w[1]), "{power:?}");
+    assert!(strips[0].text.contains("11 wires"));
+    assert!(strips[0].text.contains("3245 mm"), "{}", strips[0].text);
+}
+
+#[test]
+fn strip_cards_break_ties_by_wire_number_and_skip_empty_groups() {
+    let mut p = pack(0);
+    let before = p.cards.len();
+    let g = vec![
+        WireGroup {
+            title: "Power".into(),
+            wires: vec![
+                wire("B", "-Q10:1", "-Q11:2", 200.0),
+                wire("A", "-Q10:2", "-Q11:3", 200.0),
+                wire("C", "-Q10:3", "-Q11:4", 450.0),
+            ],
+        },
+        WireGroup {
+            title: "Empty".into(),
+            wires: Vec::new(),
+        },
+    ];
+    add_strip_cards(&mut p, &g);
+    assert_eq!(p.cards.len(), before + 1);
+    let order: Vec<&str> = p.cards[before]
+        .wires
+        .iter()
+        .map(|w| w.number.as_str())
+        .collect();
+    assert_eq!(order, ["C", "A", "B"]);
+    // The input group is not reordered.
+    assert_eq!(g[0].wires[0].number, "B");
+}
+
+#[test]
+fn cable_cores_are_on_their_own_cards_and_out_of_the_cut_total() {
+    let mut p = pack(0);
+    let before = p.cards.len();
+    let mut core = wire("12", "-X1:3", "-M1:W1", 12020.0);
+    core.kind = "1.5 mm2 black core =A1-W1".into();
+    let g = vec![WireGroup {
+        title: "Control".into(),
+        wires: vec![wire("A", "-Q10:1", "-Q11:2", 300.0), core],
+    }];
+    add_strip_cards(&mut p, &g);
+    let new = &p.cards[before..];
+    assert_eq!(new.len(), 2);
+    assert_eq!(new[0].mark, "Control cut strip");
+    assert!(new[0].text.contains("1 wire "), "{}", new[0].text);
+    assert!(new[0].text.contains("300 mm"), "{}", new[0].text);
+    assert_eq!(new[0].wires.len(), 1);
+    assert_eq!(new[1].mark, "Control cores of =A1-W1");
+    assert!(new[1].text.contains("do not cut a core to length"));
+    assert_eq!(new[1].ticks[0], "Cable run");
 }
