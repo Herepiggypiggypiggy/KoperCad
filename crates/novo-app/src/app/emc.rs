@@ -32,6 +32,9 @@ pub(super) struct EmcState {
     whatif: Option<WhatIf>,
     /// The preview card has just opened: scroll it into view once.
     preview_fresh: bool,
+    /// The control a lesson step points at in this window: scrolled into view
+    /// once when the step opens.
+    pub(super) reveal: Option<&'static str>,
 }
 
 impl EmcState {
@@ -241,6 +244,19 @@ fn findings_line(v: &emc::Preview) -> String {
     )
 }
 
+/// Whether the plate and 3D views draw the change of this fix: the bonding
+/// and shield layers, which `emc_show_whatif` switches on for it.
+fn drawn_on_plate(fix: &Fix) -> bool {
+    matches!(
+        fix,
+        Fix::BarePlate { .. }
+            | Fix::BondDevice { .. }
+            | Fix::AddShield { .. }
+            | Fix::Terminate360 { .. }
+            | Fix::ShortenPigtail { .. }
+    )
+}
+
 /// What a previewed fix would change, with Apply and Cancel at the top so
 /// they stay in reach in a short window. Returns true for Apply; `cancel`
 /// is set for Cancel. `scroll` brings the card into view (just opened).
@@ -251,6 +267,7 @@ pub(super) fn preview_card(
     show: &mut Option<Workspace>,
     scroll: bool,
     apply_at: &mut Option<egui::Rect>,
+    plate_at: &mut Option<(egui::Rect, bool)>,
 ) -> bool {
     let p = crate::theme::ui_palette();
     let mut apply = false;
@@ -276,7 +293,9 @@ pub(super) fn preview_card(
                 if ui.small_button("In 3D").on_hover_text("Open the 3D view with the EMC layer and its before/after switch").clicked() {
                     *show = Some(Workspace::View3d);
                 }
-                if ui.small_button("On the plate").on_hover_text("Open the Cabinet plate with the EMC layer and its before/after switch").clicked() {
+                let plate = ui.small_button("On the plate").on_hover_text("Open the Cabinet plate with the EMC layer and its before/after switch");
+                *plate_at = Some((plate.rect, plate.clicked()));
+                if plate.clicked() {
                     *show = Some(Workspace::Cabinet);
                 }
             });
@@ -404,6 +423,10 @@ impl NovoApp {
         let mut cancel_preview = false;
         let mut save_record: Option<super::emc_record::EmcRecordFormat> = None;
         let mut show_view: Option<Workspace> = None;
+        // Lesson anchors of the window: the first Preview, Apply and "On the plate".
+        let mut first_preview: Option<(egui::Rect, bool)> = None;
+        let mut apply_rect: Option<egui::Rect> = None;
+        let mut plate_mark: Option<(egui::Rect, bool)> = None;
         let shown = self
             .emc
             .preview
@@ -411,6 +434,10 @@ impl NovoApp {
             .filter(|(r, _, _)| *r == revision)
             .cloned();
         let fresh = std::mem::take(&mut self.emc.preview_fresh);
+        let reveal = self.emc.reveal;
+        let revealed = egui::Id::new("emc_check_revealed");
+        let scroll_preview = reveal == Some("emc.check.preview")
+            && ctx.data(|d| d.get_temp::<Option<&'static str>>(revealed)) != Some(reveal);
         let mut set_current: Option<(u64, Option<f64>)> = None;
         let mut set_setting: Option<(&'static str, Option<novo_core::Value>)> = None;
         let mut open = true;
@@ -489,11 +516,17 @@ impl NovoApp {
                             for fix in &f.fixes {
                                 if fix.applicable() {
                                     let open = shown.as_ref().is_some_and(|(_, f, _)| f == fix);
-                                    if ui
+                                    let row = ui
                                         .selectable_label(open, format!("Preview: {}", fix.hint()))
-                                        .on_hover_text("See what it clears before anything changes")
-                                        .clicked()
-                                    {
+                                        .on_hover_text("See what it clears before anything changes");
+                                    // The lesson points at a repair the plate can show.
+                                    if first_preview.is_none() && drawn_on_plate(fix) {
+                                        first_preview = Some((row.rect, row.clicked()));
+                                        if scroll_preview {
+                                            row.scroll_to_me(Some(egui::Align::Center));
+                                        }
+                                    }
+                                    if row.clicked() {
                                         if open {
                                             cancel_preview = true;
                                         } else {
@@ -513,7 +546,8 @@ impl NovoApp {
                                 &mut cancel_preview,
                                 &mut show_view,
                                 fresh,
-                                &mut None,
+                                &mut apply_rect,
+                                &mut plate_mark,
                             )
                         {
                             apply = Some(pf.clone());
@@ -572,6 +606,18 @@ impl NovoApp {
                 });
             });
         self.emc.open = open;
+        if first_preview.is_some() {
+            ctx.data_mut(|d| d.insert_temp(revealed, reveal));
+        }
+        if let Some((rect, clicked)) = first_preview {
+            self.anchor_clicked("emc.check.preview", rect, "Preview", clicked);
+        }
+        if let Some(rect) = apply_rect {
+            self.anchor_clicked("emc.check.apply", rect, "Apply", apply.is_some());
+        }
+        if let Some((rect, clicked)) = plate_mark {
+            self.anchor_clicked("emc.check.show_plate", rect, "On the plate", clicked);
+        }
         if let Some(format) = save_record {
             self.export_emc_record(format);
         }

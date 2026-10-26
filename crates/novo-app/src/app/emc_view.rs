@@ -763,6 +763,7 @@ fn whatif_banner(ui: &mut egui::Ui, state: &mut EmcState) {
     let pal = crate::theme::ui_palette();
     let (hint, summary, after) = (w.hint.clone(), w.summary.clone(), w.after);
     let mut action = None;
+    let mut marks: Vec<(&'static str, egui::Rect, &'static str, bool)> = Vec::new();
     egui::Frame::group(ui.style()).show(ui, |ui| {
         ui.label(
             egui::RichText::new("Previewing a fix")
@@ -771,10 +772,24 @@ fn whatif_banner(ui: &mut egui::Ui, state: &mut EmcState) {
         );
         ui.label(egui::RichText::new(hint).small());
         ui.horizontal(|ui| {
-            if novo_theme::widgets::filter_toggle(ui, "Before", !after).clicked() {
+            let before_chip = novo_theme::widgets::filter_toggle(ui, "Before", !after);
+            marks.push((
+                "emc.whatif.before",
+                before_chip.rect,
+                "Before",
+                before_chip.clicked(),
+            ));
+            if before_chip.clicked() {
                 action = Some(WhatIfAction::Show { after: false });
             }
-            if novo_theme::widgets::filter_toggle(ui, "After", after).clicked() {
+            let after_chip = novo_theme::widgets::filter_toggle(ui, "After", after);
+            marks.push((
+                "emc.whatif.after",
+                after_chip.rect,
+                "After",
+                after_chip.clicked(),
+            ));
+            if after_chip.clicked() {
                 action = Some(WhatIfAction::Show { after: true });
             }
         });
@@ -793,7 +808,9 @@ fn whatif_banner(ui: &mut egui::Ui, state: &mut EmcState) {
             .color(pal.text_secondary),
         );
         ui.horizontal(|ui| {
-            if ui.button("Apply (one undo step)").clicked() {
+            let apply = ui.button("Apply (one undo step)");
+            marks.push(("emc.whatif.apply", apply.rect, "Apply", apply.clicked()));
+            if apply.clicked() {
                 action = Some(WhatIfAction::Apply);
             }
             if ui.button("Cancel").clicked() {
@@ -801,6 +818,7 @@ fn whatif_banner(ui: &mut egui::Ui, state: &mut EmcState) {
             }
         });
     });
+    state.marks.extend(marks);
     if action.is_some() {
         state.whatif_action = action;
     }

@@ -12,5 +12,6 @@ fn emc_on_the_plate_files_are_current() {
         .and_then(|f| f.load())
         .expect("the shields fixture opens");
     check_file("emc-on-the-plate", "project.json", &project);
-    assert_lint(&[("emc-on-the-plate", &project)]);
+    check_file("emc-fix-it", "project.json", &project);
+    assert_lint(&[("emc-on-the-plate", &project), ("emc-fix-it", &project)]);
 }

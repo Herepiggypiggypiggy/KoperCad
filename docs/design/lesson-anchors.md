@@ -48,6 +48,8 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `build_order.previous`: {ui:build_order.previous} shows **Previous**
 - `build_order.next`: {ui:build_order.next} shows **Next**
 - `build_order.show_all`: {ui:build_order.show_all} shows **Show all**
+- `build_order.work_cards`: {ui:build_order.work_cards} shows **Work cards (PDF)**
+- `build_order.print_step`: {ui:build_order.print_step} shows **Print this step**
 - `emc.plate.bonding`: {ui:emc.plate.bonding} shows **Bonding**
 - `emc.plate.shields`: {ui:emc.plate.shields} shows **Shields**
 - `emc.nets.motor`: {ui:emc.nets.motor} shows **Motor and drive output**
@@ -55,6 +57,12 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `emc.nets.apply`: {ui:emc.nets.apply} shows **Apply**
 - `emc.nets.set_control`: {ui:emc.nets.set_control} shows **control**
 - `emc.nets.close`: {ui:emc.nets.close} shows **Close**
+- `emc.check.preview`: {ui:emc.check.preview} shows **Preview**
+- `emc.check.apply`: {ui:emc.check.apply} shows **Apply**
+- `emc.check.show_plate`: {ui:emc.check.show_plate} shows **On the plate**
+- `emc.whatif.before`: {ui:emc.whatif.before} shows **Before**
+- `emc.whatif.after`: {ui:emc.whatif.after} shows **After**
+- `emc.whatif.apply`: {ui:emc.whatif.apply} shows **Apply**
 - `cabinet.cutlist`: {ui:cabinet.cutlist} shows **Cut list**
 - `cabinet.table`: {ui:cabinet.table} shows **Table**
 - `cabinet.heat`: {ui:cabinet.heat} shows **Heat**

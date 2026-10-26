@@ -125,10 +125,10 @@ id = "fix-it"
 title = "Fixes are made where the drawing is"
 title_nl = "Herstel doe je waar de tekening is"
 text = """
-The plate view only shows. To change a shield end, go to the schematic: pick the cable's wire under **View > EMC net classes** and use the **Apply** button on its card, as in the net classes lesson. The plate redraws when the drawing changes.
+The plate view draws what is there. To change a shield end, use **Check > EMC check** or the cable's card under **View > EMC net classes**: **Preview** the repair, then **Apply** it. A preview can be drawn on the plate as Before and After, as in the lesson on previewing a fix. The plate redraws when the drawing changes.
 """
 text_nl = """
-De plaatweergave toont alleen. Om een schermeinde te veranderen ga je naar het schema: kies de draad van de kabel onder **View > EMC net classes** en gebruik de knop **Apply** op zijn kaart, zoals in de les over netklassen. De plaat tekent opnieuw als de tekening verandert.
+De plaatweergave tekent wat er is. Om een schermeinde te veranderen gebruik je **Check > EMC check** of de kaart van de kabel onder **View > EMC net classes**: bekijk de reparatie met **Preview** en pas hem dan toe met **Apply**. Een voorbeeld kan op de plaat getekend worden als Before en After, zoals in de les over het bekijken van een herstel. De plaat tekent opnieuw als de tekening verandert.
 """
 
 [[step]]
