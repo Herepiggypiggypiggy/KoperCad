@@ -1826,7 +1826,7 @@ mod overview_tests {
         assert!(origin.contains("Frame 170 x 120 mm"), "{origin}");
         // Cut-outs are the first cards and the cover says so.
         assert_eq!(p.cards[0].kind, CardKind::Opening);
-        let cover = cover_marks(&p, "Crane");
+        let cover = cover_marks(&p, "Crane", None);
         let words: String = cover.texts.iter().map(|t| format!("{} ", t.text)).collect();
         assert!(words.contains("at the front"), "{words}");
     }
