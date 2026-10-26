@@ -37,10 +37,14 @@ check_layout
 answer_dialog "~/Documents/KoperCAD/lesson work cards.pdf"
 try click_text "Do it for me"
 wait 40
-shot 08-exported-all-drilling
+shot 08-exported-all-rail-card
 check_layout
 expect_file "~/Documents/KoperCAD/lesson work cards.pdf" 3000
 keep_file "~/Documents/KoperCAD/lesson work cards.pdf"
+try click_text "Next" Button #2
+wait 20
+shot 08b-device-card
+check_layout
 try click_text "Next" Button #2
 wait 20
 shot 09-ruler
