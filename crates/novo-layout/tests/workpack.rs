@@ -240,8 +240,15 @@ fn the_rail_strip_has_the_rail_holes_from_its_start() {
     assert_eq!(xs.first(), Some(&10.0));
     assert_eq!(xs.last(), Some(&390.0));
     assert!(c.tools[0].contains("400"), "{:?}", c.tools);
-    assert_eq!(c.dims.len(), t.holes.len());
-    assert!(c.dims[0].contains("from the left edge"), "{}", c.dims[0]);
+    // One rule walked along the rail: positions, folded pitch, last hole to end.
+    assert_eq!(
+        c.dims,
+        [
+            "Holes, mm from the rail start: 10, 200, 390 (all on the centre line)",
+            "Pitch between holes, mm: 190 x 2",
+            "Last hole to the rail end: 10 mm",
+        ]
+    );
 }
 
 #[test]

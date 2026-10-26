@@ -293,6 +293,183 @@ fn draw_template(m: &mut Marks, t: &Template, ox: f64, oy: f64, s: f64) {
     );
 }
 
+/// Tallest the rail strip may be on a card, all windows together.
+const RAIL_STRIP_MAX_MM: f64 = 62.0;
+/// Scales a rail strip may be drawn at, largest first.
+const RAIL_SCALES: [f64; 6] = [1.0, 0.5, 0.4, 0.2, 0.1, 0.05];
+/// Room above a window for the hole positions and below it for the pitch.
+const RAIL_LABEL_ABOVE_MM: f64 = 8.0;
+const RAIL_LABEL_BELOW_MM: f64 = 9.0;
+const RAIL_WINDOW_GAP_MM: f64 = 4.0;
+
+/// How a rail strip is laid out on a card: the scale, the window length in
+/// rail millimetres, and how many windows.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RailStripPlan {
+    pub scale: f64,
+    pub window_mm: f64,
+    pub windows: usize,
+    /// Height of all windows with their labels.
+    pub height_mm: f64,
+}
+
+/// The largest scale at which a `length` x `band` mm rail fits `width` x
+/// `max_h` mm of card, cut into windows of whole 10 mm when it is longer
+/// than one line.
+pub fn rail_strip_plan(length: f64, band: f64, width: f64, max_h: f64) -> RailStripPlan {
+    let each = |s: f64| band * s + RAIL_LABEL_ABOVE_MM + RAIL_LABEL_BELOW_MM;
+    let make = |s: f64| {
+        let window = ((width / s / 10.0).floor() * 10.0).max(10.0);
+        let windows = ((length / window).ceil() as usize).max(1);
+        RailStripPlan {
+            scale: s,
+            window_mm: window,
+            windows,
+            height_mm: windows as f64 * each(s) + (windows - 1) as f64 * RAIL_WINDOW_GAP_MM,
+        }
+    };
+    RAIL_SCALES
+        .iter()
+        .map(|&s| make(s))
+        .find(|p| p.height_mm <= max_h)
+        .unwrap_or_else(|| make(RAIL_SCALES[RAIL_SCALES.len() - 1]))
+}
+
+struct RailStrip {
+    /// Bottom of the last window with its labels.
+    bottom: f64,
+}
+
+/// Draws the rail of `t` with its left at `x` and its top at `y`: windows of
+/// the rail at one scale, each with the hole positions from the rail start
+/// above it, the devices clipped on it, and the pitch between holes under it.
+fn rail_strip(m: &mut Marks, t: &Template, x: f64, y: f64, aw: f64) -> RailStrip {
+    let plan = rail_strip_plan(t.width, t.height, aw, RAIL_STRIP_MAX_MM);
+    let s = plan.scale;
+    let h = t.height * s;
+    text(
+        m,
+        (x - 8.0, y),
+        2.8,
+        HAlign::Left,
+        true,
+        if s >= 0.9999 {
+            format!("Rail strip, {}", scale_text(s))
+        } else {
+            format!("Rail strip, {}. {SCALE_HINT}", scale_text(s))
+        },
+    );
+    let mut top = y + 4.0;
+    let mut holes: Vec<&novo_layout::workpack::TemplateHole> = t.holes.iter().collect();
+    holes.sort_by(|a, b| a.x.total_cmp(&b.x));
+    for k in 0..plan.windows {
+        let a = k as f64 * plan.window_mm;
+        let b = (a + plan.window_mm).min(t.width);
+        let oy = top + RAIL_LABEL_ABOVE_MM;
+        let px = |along: f64| x + (along - a) * s;
+        rect(m, Layer::Rails, (px(a), oy), (px(b), oy + h));
+        line(
+            m,
+            Layer::Rails,
+            (px(a), oy + h / 2.0),
+            (px(b), oy + h / 2.0),
+        );
+        if plan.windows > 1 {
+            text(
+                m,
+                (px(a), oy + h + 0.8),
+                2.2,
+                HAlign::Left,
+                false,
+                format!("rail {} to {} mm", mm(a), mm(b)),
+            );
+        }
+        // Devices clipped here, cut at the window edges.
+        for c in &t.clips {
+            let (c0, c1) = (c.at.max(a), (c.at + c.len).min(b));
+            if c1 <= c0 {
+                continue;
+            }
+            rect(
+                m,
+                Layer::Devices,
+                (px(c0), oy + h * 0.15),
+                (px(c1), oy + h * 0.85),
+            );
+            let label = c.short();
+            if (c1 - c0) * s >= label.chars().count() as f64 * 1.3 + 1.0 {
+                text(
+                    m,
+                    (px((c0 + c1) / 2.0), oy + h * 0.85 - 3.0),
+                    2.4,
+                    HAlign::Center,
+                    false,
+                    label.to_owned(),
+                );
+            }
+        }
+        // Holes of this window: cross, circle, number, position above.
+        let mut last_label = f64::NEG_INFINITY;
+        let mut prev: Option<f64> = None;
+        for hole in &holes {
+            if hole.x < a - 1e-9 || hole.x > b + 1e-9 || (hole.x >= b - 1e-9 && b < t.width) {
+                continue;
+            }
+            let (cx, cy) = (px(hole.x), oy + hole.y * s);
+            let r = hole.dia / 2.0 * s;
+            m.shapes.push((
+                Layer::Holes,
+                MarkShape::Circle {
+                    centre: (cx, cy),
+                    radius: r,
+                },
+            ));
+            line(m, Layer::Holes, (cx - r - 3.0, cy), (cx + r + 3.0, cy));
+            line(m, Layer::Holes, (cx, cy - r - 3.0), (cx, cy + r + 3.0));
+            line(m, Layer::Dimensions, (cx, oy - 1.5), (cx, oy));
+            if cx - last_label >= 9.0 {
+                text(m, (cx, oy - 5.0), 2.4, HAlign::Center, false, mm(hole.x));
+                last_label = cx;
+            }
+            if hole.no > 0 && s >= 0.3 {
+                text(
+                    m,
+                    (cx + r + 1.5, cy - r - 3.6),
+                    2.6,
+                    HAlign::Left,
+                    true,
+                    format!("{}", hole.no),
+                );
+            }
+            // Pitch chain under the strip: a dimension line from the hole
+            // before it, its value between them when it fits.
+            let dim_y = oy + h + 5.0;
+            if let Some(p) = prev {
+                let (xa, xb) = (px(p), cx);
+                line(m, Layer::Dimensions, (xa, dim_y), (xb, dim_y));
+                line(m, Layer::Dimensions, (xa, dim_y - 1.2), (xa, dim_y + 1.2));
+                line(m, Layer::Dimensions, (xb, dim_y - 1.2), (xb, dim_y + 1.2));
+                let value = mm(hole.x - p);
+                if xb - xa >= value.chars().count() as f64 * 1.3 + 2.0 {
+                    text(
+                        m,
+                        ((xa + xb) / 2.0, dim_y + 1.4),
+                        2.4,
+                        HAlign::Center,
+                        false,
+                        value,
+                    );
+                }
+            }
+            prev = Some(hole.x);
+        }
+        top = oy + h + RAIL_LABEL_BELOW_MM + RAIL_WINDOW_GAP_MM;
+    }
+    RailStrip {
+        bottom: top - RAIL_WINDOW_GAP_MM,
+    }
+}
+
 /// The marks of one card with its top left at `(CARD_X, y0)`.
 fn card_marks(card: &Card, cabinet: &str, y0: f64) -> Marks {
     let mut m = Marks::default();
@@ -461,8 +638,25 @@ fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
             tools_at = (x0 + 4.0, LEFT_W - 4.0, y);
             dims_at = None;
         }
+        Some(t) if t.rail => {
+            // A rail strip across the card, as large as the card holds: a
+            // long rail is drawn in windows, one under the other.
+            let aw = CARD_W - 24.0;
+            let strip = rail_strip(m, t, x0 + 12.0, y, aw);
+            let below = strip.bottom + 2.0;
+            text(
+                m,
+                (x0 + 4.0, below),
+                2.6,
+                HAlign::Left,
+                false,
+                t.origin.clone(),
+            );
+            tools_at = (x0 + 4.0, 78.0, below + 5.0);
+            dims_at = Some((x0 + 86.0, CARD_W - 90.0, below + 5.0));
+        }
         Some(t) => {
-            // A rail or duct strip across the card, lists below it.
+            // A duct strip across the card, lists below it.
             let aw = CARD_W - 24.0;
             let s = template_scale(t.width, t.height, aw, t.height);
             let oy = y + 11.0;
@@ -1067,6 +1261,79 @@ pub fn has_template(phase: Phase) -> bool {
 }
 
 #[cfg(test)]
+mod rail_strip_tests {
+    use super::*;
+
+    #[test]
+    fn rail_strips_use_the_card_width_and_stay_true_to_their_stated_scale() {
+        let (aw, band, max) = (166.0, 35.0, RAIL_STRIP_MAX_MM);
+        // Short: true size. 400 mm keeps 1:2.5 on one line.
+        assert_eq!(rail_strip_plan(150.0, band, aw, max).scale, 1.0);
+        let p = rail_strip_plan(400.0, band, aw, max);
+        assert_eq!((p.scale, p.windows), (0.4, 1));
+        // A 1 000 mm rail was 1:10; in two windows it is 1:5.
+        let p = rail_strip_plan(1000.0, band, aw, max);
+        assert_eq!((p.scale, p.windows), (0.2, 2));
+        assert!(p.window_mm * p.scale <= aw && p.height_mm <= max);
+        // Windows cover the whole rail and every plan fits the card or is
+        // the smallest scale.
+        for len in [120.0, 333.0, 800.0, 1250.0, 2000.0, 3000.0, 6000.0] {
+            let p = rail_strip_plan(len, band, aw, max);
+            assert!(p.window_mm * p.windows as f64 >= len, "{len}");
+            assert!(p.window_mm * p.scale <= aw + 1e-9, "{len}");
+            assert!(p.height_mm <= max || p.scale == RAIL_SCALES[RAIL_SCALES.len() - 1]);
+        }
+    }
+
+    fn rail_template(length: f64, xs: &[f64]) -> Template {
+        Template {
+            width: length,
+            height: 35.0,
+            caption: String::new(),
+            origin: String::new(),
+            rail: true,
+            holes: xs
+                .iter()
+                .enumerate()
+                .map(|(i, x)| novo_layout::workpack::TemplateHole {
+                    x: *x,
+                    y: 17.5,
+                    dia: 5.5,
+                    no: i + 1,
+                })
+                .collect(),
+            cutout: None,
+            clips: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_long_rail_strip_labels_hole_positions_and_the_pitch_in_every_window() {
+        let t = rail_template(1000.0, &[40.0, 204.0, 368.0, 532.0, 696.0, 860.0]);
+        let mut m = Marks::default();
+        let strip = rail_strip(&mut m, &t, 22.0, 30.0, 166.0);
+        let texts: Vec<&str> = m.texts.iter().map(|t| t.text.as_str()).collect();
+        for want in ["40", "204", "368", "532", "696", "860", "164"] {
+            assert!(texts.contains(&want), "{want} missing in {texts:?}");
+        }
+        assert!(texts.iter().any(|t| t.starts_with("rail 0 to ")));
+        assert!(texts.iter().any(|t| t.starts_with("rail 830 to ")));
+        // The strip stays inside its band of the card.
+        assert!(
+            strip.bottom <= 30.0 + 4.0 + RAIL_STRIP_MAX_MM + 1.0,
+            "{}",
+            strip.bottom
+        );
+        // No window is wider than the card's strip area.
+        for (_, shape) in &m.shapes {
+            if let MarkShape::Rect { min, max } = shape {
+                assert!(max.0 - min.0 <= 166.0 + 1e-6);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use novo_layout::drill::{DeviceFeatures, Hole, Surface};
@@ -1322,10 +1589,20 @@ mod tests {
         assert!(inside(&m, CARD_Y[0]).is_empty());
     }
 
+    /// `RAIL_DUMP=/tmp/rail.pdf cargo test -p novo-pdf --lib rail_dump` writes a
+    /// 1 000 mm rail card to look at.
+    #[test]
+    fn rail_dump() {
+        if let Ok(path) = std::env::var("RAIL_DUMP") {
+            let p = rail_pack(1000.0, &[40.0, 204.0, 368.0, 532.0, 696.0, 860.0]);
+            std::fs::write(path, export_card_pdf(&p, 0, "Demo").unwrap()).unwrap();
+        }
+    }
+
     #[test]
     fn a_box_too_narrow_for_its_label_keeps_only_its_outline() {
-        // 1900 mm rail at 1:20: a 45 mm device is 2.25 mm wide.
-        let p = rail_pack(1900.0, &[60.0]);
+        // 6000 mm rail at 1:20: a 45 mm device is 2.25 mm wide.
+        let p = rail_pack(6000.0, &[60.0]);
         let m = card_marks(&p.cards[0], &p.cabinet, CARD_Y[0]);
         assert!(!m.texts.iter().any(|t| t.text == "K1"));
         assert!(m.shapes.iter().any(|(l, _)| *l == Layer::Devices));

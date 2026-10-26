@@ -7,8 +7,10 @@
 //! True size depends on the print dialog: every sheet says so and carries a
 //! 100 mm ruler to check it. Output is deterministic.
 
+use std::ops::Range;
+
 use novo_canvas::Vec2;
-use novo_layout::drill::mm;
+use novo_layout::drill::{CutoutRow, HoleRow, mm};
 use novo_layout::plate_drawing::{HAlign, Layer, Marks, Shape as MarkShape, Text, VAlign};
 use novo_layout::template::{
     FOOTER_MM, OVERLAP_MM, PAGE_MARGIN_MM, Paper, RULER_MM, TemplateSheet, TilePlan, plan_tiles,
@@ -25,9 +27,256 @@ pub fn tile_plan(sheet: &TemplateSheet, paper: Paper) -> TilePlan {
     plan_tiles(sheet.width, sheet.height, paper)
 }
 
-/// Number of PDF pages one sheet takes: the overview and its tiles.
+/// Number of PDF pages one sheet takes: the overview, its tiles and the
+/// pages of the drill table.
 pub fn page_count(sheet: &TemplateSheet, paper: Paper) -> usize {
-    tile_plan(sheet, paper).count().saturating_add(1)
+    tile_plan(sheet, paper)
+        .count()
+        .saturating_add(1)
+        .saturating_add(table_page_count(sheet, paper))
+}
+
+/// Height of one row of the drill table.
+const TABLE_ROW_MM: f64 = 4.8;
+/// Room above the first row: title, explanation and the column heads.
+const TABLE_HEAD_MM: f64 = 28.0;
+
+/// A row of the drill table: a section heading, a hole or a cut-out.
+enum TableRow<'a> {
+    Section(&'static str),
+    /// A hole and its distance in x from the hole before it.
+    Hole(&'a HoleRow, Option<f64>),
+    Cutout(&'a CutoutRow),
+}
+
+/// Every hole, then every cut-out, each sorted left to right (x) and then top
+/// to bottom (y): one table to walk along with a rule.
+fn table_rows(sheet: &TemplateSheet) -> Vec<TableRow<'_>> {
+    let mut holes: Vec<&HoleRow> = sheet.holes.iter().collect();
+    holes.sort_by(|a, b| {
+        a.x.total_cmp(&b.x)
+            .then(a.y.total_cmp(&b.y))
+            .then(a.no.cmp(&b.no))
+    });
+    let mut cutouts: Vec<&CutoutRow> = sheet.cutouts.iter().collect();
+    cutouts.sort_by(|a, b| {
+        a.x.total_cmp(&b.x)
+            .then(a.y.total_cmp(&b.y))
+            .then(a.no.cmp(&b.no))
+    });
+    let mut rows = Vec::new();
+    if !holes.is_empty() {
+        rows.push(TableRow::Section("Holes"));
+        let mut prev: Option<f64> = None;
+        for h in holes {
+            rows.push(TableRow::Hole(h, prev.map(|p| h.x - p)));
+            prev = Some(h.x);
+        }
+    }
+    if !cutouts.is_empty() {
+        rows.push(TableRow::Section("Cut-outs"));
+        rows.extend(cutouts.into_iter().map(TableRow::Cutout));
+    }
+    rows
+}
+
+/// Table pages are portrait, whatever orientation the tiles use.
+fn rows_per_page(paper: Paper) -> usize {
+    let (_, ph) = paper.portrait_mm();
+    ((ph - 2.0 * PAGE_MARGIN_MM - FOOTER_MM / 2.0 - TABLE_HEAD_MM) / TABLE_ROW_MM).floor() as usize
+}
+
+/// Splits the rows into pages. A section heading never ends a page alone.
+fn table_pages(rows: &[TableRow<'_>], per_page: usize) -> Vec<Range<usize>> {
+    let per_page = per_page.max(2);
+    let mut out = Vec::new();
+    let mut start = 0;
+    while start < rows.len() {
+        let mut end = (start + per_page).min(rows.len());
+        if end < rows.len() && matches!(rows[end - 1], TableRow::Section(_)) {
+            end -= 1;
+        }
+        out.push(start..end);
+        start = end;
+    }
+    out
+}
+
+/// Pages the drill table of a sheet takes; none for a sheet with no hole and
+/// no cut-out.
+pub fn table_page_count(sheet: &TemplateSheet, paper: Paper) -> usize {
+    table_pages(&table_rows(sheet), rows_per_page(paper)).len()
+}
+
+/// Cuts `s` to what fits `width` mm at text height `height` mm.
+fn fit(s: &str, width: f64, height: f64) -> String {
+    let n = (width / (height * 0.5)).floor().max(1.0) as usize;
+    if s.chars().count() <= n {
+        s.to_owned()
+    } else {
+        let mut t: String = s.chars().take(n.saturating_sub(1)).collect();
+        t.push('\u{2026}');
+        t
+    }
+}
+
+/// One page of the drill table: `range` of the sorted rows.
+fn table_page<'a>(
+    sheet: &'a TemplateSheet,
+    paper: Paper,
+    range: Range<usize>,
+    (number, total): (usize, usize),
+    project: &'a str,
+) -> Page<'a> {
+    let (pw, ph) = paper.portrait_mm();
+    let draw = move |w: &mut PageWriter<'_>| {
+        let rows = table_rows(sheet);
+        let mut m = Marks::default();
+        let x0 = PAGE_MARGIN_MM;
+        let right = pw - PAGE_MARGIN_MM;
+        let mut y = PAGE_MARGIN_MM;
+        text(
+            &mut m,
+            (x0, y),
+            5.0,
+            HAlign::Left,
+            true,
+            format!("Drill table - {} - {}", sheet.title, sheet.surface.name()),
+        );
+        y += 7.5;
+        text(
+            &mut m,
+            (x0, y),
+            2.8,
+            HAlign::Left,
+            false,
+            fit(
+                &format!(
+                    "{project}   {} holes, {} cut-outs, left to right then top to bottom",
+                    sheet.holes.len(),
+                    sheet.cutouts.len()
+                ),
+                right - x0,
+                2.8,
+            ),
+        );
+        y += 4.5;
+        for line_text in [
+            "x and y are measured from the top left corner of the template (x 0, y 0).",
+            "+x is the step from the hole above it. Numbers match the cross hairs on the tiles.",
+        ] {
+            text(&mut m, (x0, y), 2.8, HAlign::Left, false, line_text);
+            y += 3.8;
+        }
+        y += 0.5;
+
+        // Columns: left edges for text, right edges for numbers.
+        let (c_no, c_dia) = (x0, x0 + 13.0);
+        let (c_x, c_y, c_step) = (x0 + 47.0, x0 + 65.0, x0 + 83.0);
+        let (c_src, c_punch, c_drill) = (x0 + 89.0, right - 24.0, right - 12.0);
+        let head = |m: &mut Marks, at: f64, h: HAlign, s: &str| {
+            text(m, (at, y), 2.8, h, true, s);
+        };
+        head(&mut m, c_no, HAlign::Left, "No");
+        head(&mut m, c_dia, HAlign::Left, "Dia mm");
+        head(&mut m, c_x, HAlign::Right, "x mm");
+        head(&mut m, c_y, HAlign::Right, "y mm");
+        head(&mut m, c_step, HAlign::Right, "+x mm");
+        head(&mut m, c_src, HAlign::Left, "Part");
+        head(&mut m, c_punch, HAlign::Left, "Punch");
+        head(&mut m, c_drill, HAlign::Left, "Drill");
+        y += 4.2;
+        line(&mut m, Layer::Table, (x0, y), (right, y));
+        y += 0.8;
+
+        for row in &rows[range.clone()] {
+            let ty = y + 0.9;
+            match row {
+                TableRow::Section(name) => {
+                    text(&mut m, (c_no, ty), 3.2, HAlign::Left, true, *name);
+                }
+                TableRow::Hole(h, step) => {
+                    text(
+                        &mut m,
+                        (c_no, ty),
+                        3.0,
+                        HAlign::Left,
+                        true,
+                        format!("{}", h.no),
+                    );
+                    text(&mut m, (c_dia, ty), 3.0, HAlign::Left, false, mm(h.dia));
+                    text(&mut m, (c_x, ty), 3.0, HAlign::Right, false, mm(h.x));
+                    text(&mut m, (c_y, ty), 3.0, HAlign::Right, false, mm(h.y));
+                    if let Some(step) = step {
+                        text(&mut m, (c_step, ty), 3.0, HAlign::Right, false, mm(*step));
+                    }
+                    text(
+                        &mut m,
+                        (c_src, ty),
+                        2.8,
+                        HAlign::Left,
+                        false,
+                        fit(&h.source, c_punch - c_src - 2.0, 2.8),
+                    );
+                    tick_boxes(&mut m, y, [c_punch, c_drill]);
+                }
+                TableRow::Cutout(c) => {
+                    text(
+                        &mut m,
+                        (c_no, ty),
+                        3.0,
+                        HAlign::Left,
+                        true,
+                        format!("C{}", c.no),
+                    );
+                    text(&mut m, (c_x, ty), 3.0, HAlign::Right, false, mm(c.x));
+                    text(&mut m, (c_y, ty), 3.0, HAlign::Right, false, mm(c.y));
+                    text(
+                        &mut m,
+                        (c_src, ty),
+                        2.8,
+                        HAlign::Left,
+                        false,
+                        fit(
+                            &format!("{}  {}", c.shape.describe(), c.source),
+                            c_punch - c_src - 2.0,
+                            2.8,
+                        ),
+                    );
+                    tick_boxes(&mut m, y, [c_punch, c_drill]);
+                }
+            }
+            y += TABLE_ROW_MM;
+            line(&mut m, Layer::Margin, (x0, y - 0.2), (right, y - 0.2));
+        }
+        text(
+            &mut m,
+            (x0, ph - PAGE_MARGIN_MM - 3.0),
+            2.8,
+            HAlign::Left,
+            false,
+            format!("Drill table {number}/{total}"),
+        );
+        ruler(&mut m, x0 + 60.0, ph - PAGE_MARGIN_MM - 1.0);
+        render(w, &m, &|p| Vec2::new(p.0 as f32, p.1 as f32), 1.0);
+    };
+    Page {
+        size: (pw, ph),
+        draw: Box::new(draw),
+    }
+}
+
+/// Small empty squares to tick off a punched and a drilled hole.
+fn tick_boxes(m: &mut Marks, row_top: f64, at: [f64; 2]) {
+    for x in at {
+        m.shapes.push((
+            Layer::Table,
+            MarkShape::Rect {
+                min: (x, row_top + 0.5),
+                max: (x + 3.4, row_top + 3.9),
+            },
+        ));
+    }
 }
 
 pub(crate) type Draw<'a> = Box<dyn Fn(&mut PageWriter<'_>) + 'a>;
@@ -431,6 +680,25 @@ fn overview_page<'a>(sheet: &'a TemplateSheet, plan: &'a TilePlan, project: &'a 
             );
             y = paragraph(&mut m, x0 + 6.0, y, width - 6.0, 3.0, s) + 0.8;
         }
+        let table_pages = table_page_count(sheet, plan.paper);
+        if table_pages > 0 {
+            y = paragraph(
+                &mut m,
+                x0,
+                y,
+                width,
+                3.0,
+                &format!(
+                    "The last {} of this sheet {} the drill table: every hole and cut-out sorted left to right, with the step from the hole before and boxes to tick off.",
+                    if table_pages == 1 {
+                        "page".to_owned()
+                    } else {
+                        format!("{table_pages} pages")
+                    },
+                    if table_pages == 1 { "is" } else { "are" },
+                ),
+            ) + 1.0;
+        }
         y += 1.0;
         y = paragraph(
             &mut m,
@@ -565,6 +833,17 @@ pub fn export_template_pdf(sheets: &[TemplateSheet], project_name: &str, paper: 
                 pages.push(tile_page(sheet, plan, (col, row), number, total));
             }
         }
+        let ranges = table_pages(&table_rows(sheet), rows_per_page(paper));
+        let table_total = ranges.len();
+        for (i, range) in ranges.into_iter().enumerate() {
+            pages.push(table_page(
+                sheet,
+                paper,
+                range,
+                (i + 1, table_total),
+                project_name,
+            ));
+        }
     }
     write_pages(&pages, &format!("{project_name} - drilling template 1:1"))
 }
@@ -682,4 +961,120 @@ pub(crate) fn write_pages(pages: &[Page<'_>], title: &str) -> Vec<u8> {
             .encoding_predefined(Name(b"WinAnsiEncoding"));
     }
     pdf.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use novo_layout::drill::{CutoutShape, Surface};
+
+    fn hole(no: usize, x: f64, y: f64) -> HoleRow {
+        HoleRow {
+            no,
+            surface: Surface::Plate,
+            dia: 5.5,
+            x,
+            y,
+            source: format!("-K{no}"),
+        }
+    }
+
+    fn sheet(holes: Vec<HoleRow>, cutouts: Vec<CutoutRow>) -> TemplateSheet {
+        TemplateSheet {
+            title: "+CAB1".into(),
+            surface: Surface::Plate,
+            width: 600.0,
+            height: 800.0,
+            marks: Marks::default(),
+            holes,
+            cutouts,
+            without_mounting_data: Vec::new(),
+            clip_on: Vec::new(),
+            problems: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn the_drill_table_is_one_list_sorted_left_to_right_then_top_to_bottom() {
+        // Numbered in drawing order, not in x order.
+        let s = sheet(
+            vec![
+                hole(1, 300.0, 40.0),
+                hole(2, 40.0, 200.0),
+                hole(3, 40.0, 40.0),
+                hole(4, 150.5, 40.0),
+            ],
+            Vec::new(),
+        );
+        let rows = table_rows(&s);
+        let holes: Vec<(usize, Option<f64>)> = rows
+            .iter()
+            .filter_map(|r| match r {
+                TableRow::Hole(h, step) => Some((h.no, *step)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            holes.iter().map(|h| h.0).collect::<Vec<_>>(),
+            [3, 2, 4, 1],
+            "x first, then y"
+        );
+        assert_eq!(holes[0].1, None);
+        assert_eq!(holes[1].1, Some(0.0));
+        assert_eq!(holes[2].1, Some(110.5));
+        assert_eq!(holes[3].1, Some(149.5));
+        assert!(matches!(rows[0], TableRow::Section("Holes")));
+    }
+
+    #[test]
+    fn cut_outs_follow_the_holes_and_an_empty_sheet_has_no_table() {
+        let c = |no, x| CutoutRow {
+            no,
+            surface: Surface::Plate,
+            shape: CutoutShape::Round { dia: 22.5 },
+            x,
+            y: 50.0,
+            source: "-S1".into(),
+        };
+        let s = sheet(vec![hole(1, 10.0, 10.0)], vec![c(2, 90.0), c(1, 30.0)]);
+        let rows = table_rows(&s);
+        assert_eq!(rows.len(), 5);
+        assert!(matches!(rows[2], TableRow::Section("Cut-outs")));
+        assert!(matches!(rows[3], TableRow::Cutout(c) if c.no == 1));
+        assert_eq!(
+            table_page_count(&sheet(Vec::new(), Vec::new()), Paper::A4),
+            0
+        );
+        assert_eq!(table_page_count(&s, Paper::A4), 1);
+    }
+
+    #[test]
+    fn every_row_is_on_exactly_one_page_and_a_heading_never_ends_a_page() {
+        for n in [1usize, 49, 50, 51, 100, 230] {
+            let holes: Vec<HoleRow> = (1..=n).map(|i| hole(i, i as f64 * 3.0, 10.0)).collect();
+            let cut = vec![CutoutRow {
+                no: 1,
+                surface: Surface::Plate,
+                shape: CutoutShape::Round { dia: 30.0 },
+                x: 5.0,
+                y: 5.0,
+                source: "-S1".into(),
+            }];
+            let s = sheet(holes, cut);
+            let rows = table_rows(&s);
+            for per in [rows_per_page(Paper::A4), rows_per_page(Paper::A3)] {
+                let pages = table_pages(&rows, per);
+                let mut next = 0;
+                for p in &pages {
+                    assert_eq!(p.start, next);
+                    assert!(p.len() <= per && !p.is_empty());
+                    if p.end < rows.len() {
+                        assert!(!matches!(rows[p.end - 1], TableRow::Section(_)), "n {n}");
+                    }
+                    next = p.end;
+                }
+                assert_eq!(next, rows.len());
+            }
+        }
+    }
 }
