@@ -610,6 +610,7 @@ impl NovoApp {
                                         &mut show_view,
                                         preview_fresh,
                                         &mut apply_at,
+                                        &mut None,
                                     );
                                     if let Some(rect) = apply_at
                                         && marks.iter().all(|m| m.0 != "emc.nets.apply")

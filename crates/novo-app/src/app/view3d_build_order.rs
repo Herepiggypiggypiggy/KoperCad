@@ -172,22 +172,34 @@ pub(super) fn strip(
                     if all.clicked() {
                         leave = true;
                     }
-                    if ui
+                    let cards = ui
                         .button("Work cards (PDF)")
-                        .on_hover_text(super::WORKPACK_HINT)
-                        .clicked()
-                    {
+                        .on_hover_text(super::WORKPACK_HINT);
+                    super::cabinet_bar::note_ctx(
+                        ctx,
+                        "build_order.work_cards",
+                        "Work cards (PDF)",
+                        &cards,
+                    );
+                    if cards.clicked() {
                         print = Some(Print::All);
                     }
                     // The step on screen as one card: a part step has one.
                     if let Some(step) = at.checked_sub(1).and_then(|i| steps.get(i))
                         && step.part.is_some()
-                        && ui
-                            .button("Print this step")
-                            .on_hover_text("This step's work card as one PDF page: tools, hole positions, template")
-                            .clicked()
                     {
-                        print = Some(Print::Step(step.mark.clone()));
+                        let one = ui
+                            .button("Print this step")
+                            .on_hover_text("This step's work card as one PDF page: tools, hole positions, template");
+                        super::cabinet_bar::note_ctx(
+                            ctx,
+                            "build_order.print_step",
+                            "Print this step",
+                            &one,
+                        );
+                        if one.clicked() {
+                            print = Some(Print::Step(step.mark.clone()));
+                        }
                     }
                 });
                 ui.label(egui::RichText::new(text).color(p.text_secondary));

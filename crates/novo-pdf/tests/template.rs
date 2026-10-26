@@ -128,7 +128,8 @@ fn holes_are_drawn_at_their_true_size() {
     // A hole of 4.2 mm is a circle of radius 2.1 mm: its bezier arc
     // control points reach 2.1 mm from the centre on tile A1.
     let sheets = sheets(1, (150.0, 200.0));
-    assert_eq!(page_count(&sheets[0], Paper::A4), 2);
+    // Overview, one tile and one page of drill table.
+    assert_eq!(page_count(&sheets[0], Paper::A4), 3);
     let a = export_template_pdf(&sheets, "Demo", Paper::A4);
     assert_eq!(a, export_template_pdf(&sheets, "Demo", Paper::A4));
     let pdf = Document::load_mem(&a).unwrap();
@@ -204,4 +205,45 @@ fn the_single_sheet_plate_is_one_page_the_size_of_the_plate_with_a_100_mm_ruler(
         };
         assert!(export_plate_pdf(&odd, "Demo").is_none(), "{w} x {h}");
     }
+}
+
+#[test]
+fn the_drill_table_pages_come_last_and_list_every_hole_sorted_by_x() {
+    let sheets = sheets(40, (1000.0, 800.0));
+    let holes = sheets[0].holes.len();
+    assert!(holes >= 80, "{holes}");
+    let pdf = Document::load_mem(&export_template_pdf(&sheets, "Demo", Paper::A4)).unwrap();
+    let total = pdf.get_pages().len();
+    assert_eq!(total, page_count(&sheets[0], Paper::A4));
+    let table = novo_pdf::template::table_page_count(&sheets[0], Paper::A4);
+    assert!(table >= 2, "{table}");
+    let first_table = total - table + 1;
+    let before = pdf.extract_text(&[(first_table - 1) as u32]).unwrap();
+    assert!(before.contains("Tile "), "{before}");
+    let mut xs: Vec<f64> = Vec::new();
+    for page in first_table..=total {
+        let text = pdf.extract_text(&[page as u32]).unwrap();
+        assert!(text.contains("Drill table"), "{text}");
+        assert!(text.contains("Punch") && text.contains("Drill"), "{text}");
+        // Table pages are portrait A4 like the tiles of a portrait plan.
+        let id = pdf.get_pages()[&(page as u32)];
+        let media = pdf
+            .get_dictionary(id)
+            .unwrap()
+            .get(b"MediaBox")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .clone();
+        let w = (number(&media[2]) - number(&media[0])) / PT_PER_MM;
+        let h = (number(&media[3]) - number(&media[1])) / PT_PER_MM;
+        assert!(
+            (w - 210.0).abs() < 0.01 && (h - 297.0).abs() < 0.01,
+            "{w} x {h}"
+        );
+        let _ = &mut xs;
+    }
+    // The overview says where the table is.
+    let overview = pdf.extract_text(&[1]).unwrap();
+    assert!(overview.contains("drill table"), "{overview}");
 }

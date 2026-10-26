@@ -446,6 +446,49 @@ fn hole_no(table: &DrillTable, surface: &Surface, source: &str, x: f64, y: f64) 
         .map_or(0, |h| h.no)
 }
 
+/// The rail card's drill lines: where each hole sits along the rail from its
+/// start, and the pitch between neighbours with equal steps folded
+/// (`164 x 2`), so one rule is walked along the rail once.
+fn rail_pitch_lines(xs: &[f64], length: f64) -> Vec<String> {
+    let mut xs = xs.to_vec();
+    xs.sort_by(f64::total_cmp);
+    if xs.is_empty() {
+        return Vec::new();
+    }
+    let at: Vec<String> = xs.iter().map(|x| mm(*x)).collect();
+    let mut lines = vec![format!(
+        "Holes, mm from the rail start: {} (all on the centre line)",
+        at.join(", ")
+    )];
+    let mut steps: Vec<(f64, usize)> = Vec::new();
+    for w in xs.windows(2) {
+        let d = w[1] - w[0];
+        match steps.last_mut() {
+            Some((p, n)) if (*p - d).abs() < 0.005 => *n += 1,
+            _ => steps.push((d, 1)),
+        }
+    }
+    if !steps.is_empty() {
+        let parts: Vec<String> = steps
+            .iter()
+            .map(|(d, n)| {
+                if *n > 1 {
+                    format!("{} x {n}", mm(*d))
+                } else {
+                    mm(*d)
+                }
+            })
+            .collect();
+        lines.push(format!("Pitch between holes, mm: {}", parts.join(", ")));
+    }
+    let last = xs[xs.len() - 1];
+    lines.push(format!(
+        "Last hole to the rail end: {} mm",
+        mm((length - last).max(0.0))
+    ));
+    lines
+}
+
 fn hole_line(no: usize, dia: f64, x: f64, y: f64, size: (f64, f64)) -> String {
     let tag = if no > 0 {
         format!("No. {no}  ")
@@ -557,11 +600,10 @@ pub fn build(
                         no: hole_no(&table, &Surface::Plate, &source, x, y),
                     })
                     .collect();
-                let dims: Vec<String> = holes
-                    .iter()
-                    .zip(&tmpl_holes)
-                    .map(|(&(x, y), h)| hole_line(h.no, h.dia, x, y, plate))
-                    .collect();
+                let dims = rail_pitch_lines(
+                    &tmpl_holes.iter().map(|h| h.x).collect::<Vec<_>>(),
+                    rail.length,
+                );
                 // The devices clipped on this rail, along it from its start.
                 let mut clips: Vec<TemplateClip> = layout
                     .placements
@@ -592,7 +634,7 @@ pub fn build(
                     let shown: Vec<String> = clips
                         .iter()
                         .take(CLIPS_LISTED)
-                        .map(|c| format!("{} at {}", c.tag, mm(c.at)))
+                        .map(|c| format!("{} at {}", c.short(), mm(c.at)))
                         .collect();
                     let more = clips.len().saturating_sub(CLIPS_LISTED);
                     notes.push(format!(

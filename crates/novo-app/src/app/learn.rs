@@ -101,6 +101,8 @@ pub(crate) const ANCHORS: &[&str] = &[
     "build_order.previous",
     "build_order.next",
     "build_order.show_all",
+    "build_order.work_cards",
+    "build_order.print_step",
     "emc.plate.bonding",
     "emc.plate.shields",
     "emc.nets.motor",
@@ -108,6 +110,12 @@ pub(crate) const ANCHORS: &[&str] = &[
     "emc.nets.apply",
     "emc.nets.set_control",
     "emc.nets.close",
+    "emc.check.preview",
+    "emc.check.apply",
+    "emc.check.show_plate",
+    "emc.whatif.before",
+    "emc.whatif.after",
+    "emc.whatif.apply",
     "cabinet.cutlist",
     "cabinet.table",
     "cabinet.heat",
@@ -924,6 +932,7 @@ impl NovoApp {
         self.learn.revealed = Some(key);
         self.wb.emc_sch.reveal = None;
         self.cabinet.emc.reveal = None;
+        self.emc.reveal = None;
         self.learn.flash_until = Some(Instant::now() + Duration::from_millis(1500));
         let Some(target) = step.point.clone() else {
             return;
@@ -959,6 +968,11 @@ impl NovoApp {
             ]
             .into_iter()
             .find(|id| ids.contains(id))
+        });
+        self.emc.reveal = target.ui.as_ref().and_then(|ui| {
+            let ids = ui.ids();
+            ids.contains(&"emc.check.preview")
+                .then_some("emc.check.preview")
         });
         if target.view == novo_learn::lesson::View::Keep {
             return;
