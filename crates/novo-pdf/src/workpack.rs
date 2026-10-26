@@ -206,12 +206,26 @@ fn draw_template(m: &mut Marks, t: &Template, ox: f64, oy: f64, s: f64) {
     }
     xs.sort_by(f64::total_cmp);
     xs.dedup_by(|a, b| (*a - *b).abs() < 0.01);
+    // A cut-out template has no holes: its two axis numbers are the cross
+    // hair's distances from the frame's corner, so they carry the unit.
+    let unit = if t.holes.is_empty() && t.cutout.is_some() && !t.rail {
+        " mm"
+    } else {
+        ""
+    };
     let mut last_x = f64::NEG_INFINITY;
     for x in xs {
         let (px, _) = map(x, 0.0);
         tick(m, (px, oy - 1.5), (px, oy));
         if px - last_x >= 9.0 {
-            text(m, (px, oy - 5.0), 2.4, HAlign::Center, false, mm(x));
+            text(
+                m,
+                (px, oy - 5.0),
+                2.4,
+                HAlign::Center,
+                false,
+                format!("{}{unit}", mm(x)),
+            );
             last_x = px;
         }
     }
@@ -227,7 +241,14 @@ fn draw_template(m: &mut Marks, t: &Template, ox: f64, oy: f64, s: f64) {
             let (_, py) = map(0.0, y);
             tick(m, (ox - 1.5, py), (ox, py));
             if py - last_y >= 4.0 {
-                text(m, (ox - 2.2, py - 1.0), 2.4, HAlign::Right, false, mm(y));
+                text(
+                    m,
+                    (ox - 2.2, py - 1.0),
+                    2.4,
+                    HAlign::Right,
+                    false,
+                    format!("{}{unit}", mm(y)),
+                );
                 last_y = py;
             }
         }
@@ -731,10 +752,10 @@ fn label_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
 }
 
 /// The cover and tick-off sheet line about the cut-out cards, which sit
-/// after the step cards but are done before the plate goes in.
+/// before the step cards but are done before the plate goes in.
 fn cut_out_note(n: usize) -> String {
     format!(
-        "{n} cut-out card{} at the end of the cards ({} for grilles, fans and wiring openings): do {} FIRST, before the plate goes in. They are not numbered steps.",
+        "{n} cut-out card{} at the front of the cards ({} for grilles, fans and wiring openings): do {} FIRST, before the plate goes in. They are not numbered steps.",
         if n == 1 { "" } else { "s" },
         "CUT-OUT",
         if n == 1 { "it" } else { "them" }
@@ -895,7 +916,7 @@ fn overview_marks(pack: &Pack, rows: std::ops::Range<usize>, number: (usize, usi
             HAlign::Left,
             true,
             format!(
-                "{cut_outs} CUT-OUT card{} at the end, not numbered: do {} FIRST, before the plate goes in.",
+                "{cut_outs} CUT-OUT card{} at the front, not numbered: do {} FIRST, before the plate goes in.",
                 if cut_outs == 1 { "" } else { "s" },
                 if cut_outs == 1 { "it" } else { "them" }
             ),
@@ -1546,7 +1567,8 @@ mod tests {
                 depth: 250.0,
             }],
         );
-        let card = p.cards.last().unwrap();
+        let card = p.cards.first().unwrap();
+        assert_eq!(card.kind, CardKind::Opening);
         let m = card_marks(card, &p.cabinet, CARD_Y[0]);
         let hint = m
             .texts
@@ -1559,7 +1581,7 @@ mod tests {
             .iter()
             .filter(|t| {
                 t.pos.0 > CARD_X + BLOCK_X
-                    && t.text.parse::<f64>().is_ok()
+                    && t.text.trim_end_matches(" mm").parse::<f64>().is_ok()
                     && t.pos.1 < hint.pos.1 + 10.0
             })
             .collect();
@@ -1668,5 +1690,38 @@ mod overview_tests {
 
     fn tests_pack() -> Pack {
         tests::sample_pack()
+    }
+
+    #[test]
+    fn cut_out_template_axes_carry_a_unit() {
+        use novo_layout::workpack::{OpeningJob, OpeningWall, add_opening_cards};
+        let mut p = tests_pack();
+        add_opening_cards(
+            &mut p,
+            &[OpeningJob {
+                name: "x".into(),
+                what: "grille".into(),
+                wall: OpeningWall::Door,
+                along: 300.0,
+                down: Some(200.0),
+                width: 150.0,
+                height: 100.0,
+                size: (600.0, 800.0),
+                depth: 250.0,
+            }],
+        );
+        let card = &p.cards[0];
+        let m = card_marks(card, &p.cabinet, CARD_Y[0]);
+        for want in ["85 mm", "60 mm"] {
+            assert!(m.texts.iter().any(|t| t.text == want), "{want}");
+        }
+        assert!(!m.texts.iter().any(|t| t.text == "85" || t.text == "60"));
+        let origin = &card.template.as_ref().unwrap().origin;
+        assert!(origin.contains("Frame 170 x 120 mm"), "{origin}");
+        // Cut-outs are the first cards and the cover says so.
+        assert_eq!(p.cards[0].kind, CardKind::Opening);
+        let cover = cover_marks(&p, "Crane");
+        let words: String = cover.texts.iter().map(|t| format!("{} ", t.text)).collect();
+        assert!(words.contains("at the front"), "{words}");
     }
 }
