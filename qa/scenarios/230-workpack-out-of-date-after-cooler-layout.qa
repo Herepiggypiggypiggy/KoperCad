@@ -12,10 +12,10 @@ wait 8
 key Escape
 wait 30
 shot before-print
-answer_dialog "~/Documents/KoperCAD/qa 191 work cards.pdf"
+answer_dialog "~/Documents/KoperCAD/qa 230 work cards.pdf"
 click_text "Work cards (PDF)"
 wait 40
-expect_file "~/Documents/KoperCAD/qa 191 work cards.pdf" 3000
+expect_file "~/Documents/KoperCAD/qa 230 work cards.pdf" 3000
 shot printed
 click_text Heat #1
 wait 20
@@ -30,10 +30,10 @@ wait 30
 shot stale
 expect "Work cards out of date"
 check_layout
-answer_dialog "~/Documents/KoperCAD/qa 191 work cards again.pdf"
+answer_dialog "~/Documents/KoperCAD/qa 230 work cards again.pdf"
 click_text "Work cards (PDF)"
 wait 40
-expect_file "~/Documents/KoperCAD/qa 191 work cards again.pdf" 3000
-keep_file "~/Documents/KoperCAD/qa 191 work cards again.pdf"
-keep_file "~/Documents/KoperCAD/qa 191 work cards.pdf"
+expect_file "~/Documents/KoperCAD/qa 230 work cards again.pdf" 3000
+keep_file "~/Documents/KoperCAD/qa 230 work cards again.pdf"
+keep_file "~/Documents/KoperCAD/qa 230 work cards.pdf"
 shot reprinted

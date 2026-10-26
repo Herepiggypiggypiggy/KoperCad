@@ -932,3 +932,22 @@ fn the_cards_never_replace_the_open_project_file() {
     assert_eq!(std::fs::read(&project).unwrap(), before);
     let _ = cab;
 }
+
+#[test]
+fn a_workshop_pack_print_counts_as_the_work_cards_print() {
+    use super::heat_settings::{VentSpec, Wall};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut d, cab) = vent_cabinet(dir.path());
+    d.app.export_workshop().expect("folder");
+    assert_eq!(d.app.workpack_stale_note(), None);
+    store_vents(&mut d, cab, &[VentSpec::new(Wall::Top)]);
+    assert!(d.app.workpack_stale_note().is_some());
+    d.app.export_workshop().expect("folder again");
+    assert_eq!(
+        d.app.workpack_stale_note(),
+        None,
+        "the folder holds the new cards"
+    );
+    let cards = dir.path().join("Plant 3 workshop/1 Work cards.pdf");
+    assert!(all_text(&cards).contains("CHANGED since the print of"));
+}

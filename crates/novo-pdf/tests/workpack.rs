@@ -236,10 +236,12 @@ fn the_revision_follows_the_content_and_a_changed_card_is_marked() {
 }
 
 #[test]
-fn saw_sizes_round_to_half_a_millimetre() {
+fn saw_sizes_round_up_to_half_a_millimetre() {
     use novo_layout::workpack::half_mm;
     assert_eq!(half_mm(146.99), 147.0);
     assert_eq!(half_mm(22.26), 22.5);
-    assert_eq!(half_mm(22.2), 22.0);
+    assert_eq!(half_mm(22.2), 22.5, "never smaller than the part");
+    assert_eq!(half_mm(22.5), 22.5);
+    assert_eq!(half_mm(147.000_000_1), 147.0, "float noise above a half mm");
     assert_eq!(half_mm(0.0), 0.0);
 }

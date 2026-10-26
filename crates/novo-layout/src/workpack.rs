@@ -370,10 +370,12 @@ pub fn from_edges(x: f64, y: f64, (width, height): (f64, f64)) -> String {
     )
 }
 
-/// A saw or punch size at the bench: the nearest 0.5 mm. A model value like
-/// 146.99 is float noise from the part data, and no one cuts to 0.01 mm by hand.
+/// A saw or punch size at the bench: up to the next 0.5 mm, so the cut-out
+/// is never smaller than the part it must clear. A model value like 146.99
+/// is float noise from the part data and prints as 147; a size already on a
+/// half millimetre (within 0.0005 mm) stays.
 pub fn half_mm(v: f64) -> f64 {
-    (v * 2.0).round() / 2.0
+    ((v * 2.0 - 1e-3).ceil() / 2.0).max(0.0)
 }
 
 fn half_shape(s: CutoutShape) -> CutoutShape {

@@ -8,3 +8,4 @@
 2026-10-25 05:10 UTC PR A: wiring openings as cut-out cards, label overlap fix.
 2026-10-25 15:00 UTC #1494, #1499, #1500, #1507, #1508, #1509, #1512 merged: bench-walk findings 1 to 8 are done or decided (6 to 8 decided by the thread, see HANDOFF).
 2026-10-26 05:30 UTC PR (creative round 36): revision and print date on every card and the cover; CHANGED banner on cards that differ from the last print of the session; "Work cards out of date" line in the Bench output dialog and the 3D Build order strip; cut-out sizes round to 0.5 mm; a card file can never replace the open project file. Scenario 191, reports in /mnt/project-files/qa/workpack-stamp.
+2026-10-26 05:45 UTC review delta: Workshop pack print is recorded (test), saw sizes round UP to 0.5 mm, scenario renumbered 191 -> 230. QA rerun waits for #1516 and a main merge.

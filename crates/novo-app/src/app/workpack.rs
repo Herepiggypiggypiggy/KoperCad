@@ -505,16 +505,10 @@ fn stamp_for(packs: &[Pack], previous: Option<&PrintRecord>) -> novo_pdf::workpa
 }
 
 impl NovoApp {
-    /// The work cards PDF of the open project; `None` without a cabinet that
-    /// has something to build.
-    pub(super) fn work_cards_pdf(&self) -> Option<Vec<u8>> {
-        self.work_cards_stamped().map(|(bytes, _)| bytes)
-    }
-
     /// The PDF with the revision, print date and CHANGED marks of the cards
     /// that differ from the last print of this session, and the record of
     /// this print for `remember_print`.
-    fn work_cards_stamped(&self) -> Option<(Vec<u8>, PrintRecord)> {
+    pub(super) fn work_cards_stamped(&self) -> Option<(Vec<u8>, PrintRecord)> {
         let name = self.machine_title().unwrap_or_default();
         let project = self.machine()?;
         let packs = work_packs(&project);
@@ -529,7 +523,7 @@ impl NovoApp {
         (st.file == self.project_path).then_some(&st.record)
     }
 
-    fn remember_print(&mut self, record: PrintRecord) {
+    pub(super) fn remember_print(&mut self, record: PrintRecord) {
         let revision = self
             .backend
             .document()
