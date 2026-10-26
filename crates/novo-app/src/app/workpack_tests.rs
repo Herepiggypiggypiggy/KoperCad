@@ -9,7 +9,7 @@ use super::Level;
 use super::assembly::order_sections;
 use super::cabinet::Ask;
 use super::gate1_tests::Drive;
-use super::workpack::work_packs;
+use super::workpack::{ferrule_text, work_packs};
 use crate::actions::Action;
 
 fn lesson(path: &str) -> Project {
@@ -834,4 +834,59 @@ fn the_label_card_names_the_stock_from_the_projects_label_settings() {
         assert!(c.tools[0].contains(&stock), "{:?}", c.tools);
         assert!(c.notes.iter().any(|n| n.contains("Print at 100 %")));
     }
+}
+
+#[test]
+fn every_cabinet_wire_is_on_a_cut_strip_longest_first_with_its_ferrule() {
+    let project = lesson("wire-routing/project.json");
+    for pack in work_packs(&project) {
+        let on_wires: usize = pack
+            .cards
+            .iter()
+            .filter(|c| c.kind == CardKind::Wires)
+            .map(|c| c.wires.len())
+            .sum();
+        let strips: Vec<_> = pack
+            .cards
+            .iter()
+            .filter(|c| c.kind == CardKind::Strips)
+            .collect();
+        let on_strips: usize = strips.iter().map(|c| c.wires.len()).sum();
+        let outside: usize = pack
+            .cards
+            .iter()
+            .filter(|c| c.kind == CardKind::Outside)
+            .map(|c| c.wires.len())
+            .sum();
+        // The strips carry the wires of the wire cards and the outside ones.
+        assert_eq!(on_strips, on_wires + outside, "{}", pack.cabinet);
+        assert!(on_strips > 0, "{}", pack.cabinet);
+        assert!(strips.iter().all(|c| c.steps == (0, 0)));
+        // Within a card the lengths never grow.
+        for c in &strips {
+            assert!(c.wires.windows(2).all(|w| w[0].cut_mm >= w[1].cut_mm));
+        }
+        // A wire with a numeric size names its ferrule from the standard.
+        for w in strips.iter().flat_map(|c| &c.wires) {
+            if w.kind
+                .split_whitespace()
+                .next()
+                .is_some_and(|t| t.parse::<f64>().is_ok())
+                && w.fitting != "lug"
+            {
+                assert!(w.ferrule.contains(" mm2 "), "{}: {:?}", w.number, w.ferrule);
+            }
+        }
+    }
+}
+
+#[test]
+fn the_ferrule_text_follows_the_standard_and_says_lug_for_a_lug() {
+    let standard = novo_reports::FerruleStandard::default();
+    assert_eq!(
+        ferrule_text(&standard, "1.5 mm2 black", "ferrule"),
+        "1.5 mm2 black, 10 mm"
+    );
+    assert_eq!(ferrule_text(&standard, "1.5 mm2 black", "lug"), "lug");
+    assert_eq!(ferrule_text(&standard, "size not set", ""), "");
 }

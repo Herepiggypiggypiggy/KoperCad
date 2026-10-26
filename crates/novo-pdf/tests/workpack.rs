@@ -70,6 +70,7 @@ fn pack(cabinet: &str) -> Pack {
                 strip_from_mm: Some(10.0),
                 strip_to_mm: Some(10.0),
                 strip_basis: "typical",
+                ferrule: String::new(),
             })
             .collect(),
     }];

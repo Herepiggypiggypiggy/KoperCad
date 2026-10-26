@@ -313,7 +313,7 @@ fn card_marks(card: &Card, cabinet: &str, y0: f64) -> Marks {
         true,
         if card.kind == CardKind::Opening {
             "CUT-OUT".to_owned()
-        } else if card.kind == CardKind::Outside {
+        } else if matches!(card.kind, CardKind::Outside | CardKind::Strips) {
             "NOT A STEP".to_owned()
         } else {
             format!(
@@ -336,7 +336,10 @@ fn card_marks(card: &Card, cabinet: &str, y0: f64) -> Marks {
         true,
         clip(
             &if card.mark == card.phase.name()
-                || matches!(card.kind, CardKind::Opening | CardKind::Outside)
+                || matches!(
+                    card.kind,
+                    CardKind::Opening | CardKind::Outside | CardKind::Strips
+                )
             {
                 card.mark.clone()
             } else {
@@ -382,6 +385,7 @@ fn card_marks(card: &Card, cabinet: &str, y0: f64) -> Marks {
 
     match card.kind {
         CardKind::Wires | CardKind::Outside => wire_table(&mut m, card, x0, y, bottom),
+        CardKind::Strips => strip_table(&mut m, card, x0, y, bottom),
         CardKind::Labels => label_table(&mut m, card, x0, y, bottom),
         _ => body(&mut m, card, (x0, y0), y, bottom),
     }
@@ -700,6 +704,128 @@ fn wire_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
     }
 }
 
+/// The cut-and-label strip: per row the length to cut (large, the thing the
+/// hand needs), the wire, its ends, the ferrule to pick, and a marker flag to
+/// cut out and wrap (the number twice either side of a fold line, so it reads
+/// from both sides of a wrapped wire). Three tick boxes close the row.
+fn strip_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
+    for (x, align, h) in [
+        (4.0 + 20.0, HAlign::Right, "Cut mm"),
+        (28.0, HAlign::Left, "Wire"),
+        (46.0, HAlign::Left, "From / to"),
+        (88.0, HAlign::Left, "Size, ferrule"),
+        (128.0, HAlign::Left, "Marker (cut out, wrap)"),
+        (170.0, HAlign::Left, "Cut Fer. Mark"),
+    ] {
+        text(m, (x0 + x, y), SMALL_TEXT_MM, align, true, h);
+    }
+    line(m, Layer::Table, (x0, y + 4.2), (x0 + CARD_W, y + 4.2));
+    let row_h = ((bottom - y - 6.0) / 9.0).clamp(6.0, 9.0);
+    for (i, w) in card.wires.iter().enumerate() {
+        let ry = y + 6.0 + i as f64 * row_h;
+        let ty = ry + (row_h - 3.4) / 2.0 - 0.6;
+        text(
+            m,
+            (x0 + 24.0, ty),
+            4.6,
+            HAlign::Right,
+            true,
+            format!("{}{}", if w.estimated { "~" } else { "" }, mm(w.cut_mm)),
+        );
+        text(
+            m,
+            (x0 + 28.0, ty),
+            3.2,
+            HAlign::Left,
+            true,
+            clip(&w.number, 16.0, 3.2),
+        );
+        text(
+            m,
+            (x0 + 28.0, ty + 3.4),
+            2.4,
+            HAlign::Left,
+            false,
+            clip(&w.part_text(), 16.0, 2.4),
+        );
+        text(
+            m,
+            (x0 + 46.0, ty),
+            3.0,
+            HAlign::Left,
+            false,
+            clip(&w.from, 40.0, 3.0),
+        );
+        text(
+            m,
+            (x0 + 46.0, ty + 3.2),
+            3.0,
+            HAlign::Left,
+            false,
+            clip(&format!("to {}", w.to), 40.0, 3.0),
+        );
+        text(
+            m,
+            (x0 + 88.0, ty),
+            3.0,
+            HAlign::Left,
+            false,
+            clip(&w.kind, 38.0, 3.0),
+        );
+        let ferrule = if w.ferrule.is_empty() {
+            "ferrule: check size".to_owned()
+        } else {
+            w.ferrule.clone()
+        };
+        text(
+            m,
+            (x0 + 88.0, ty + 3.2),
+            2.8,
+            HAlign::Left,
+            true,
+            clip(&ferrule, 38.0, 2.8),
+        );
+        // The marker flag: two halves either side of a fold line.
+        let (fx0, fx1) = (x0 + 128.0, x0 + 166.0);
+        let (fy0, fy1) = (ry + 0.8, ry + row_h - 0.8);
+        let marker = if w.number.is_empty() {
+            "-".to_owned()
+        } else {
+            w.number.clone()
+        };
+        dashed(m, Layer::Table, (fx0, fy0), (fx1, fy0));
+        dashed(m, Layer::Table, (fx0, fy1), (fx1, fy1));
+        dashed(m, Layer::Table, (fx0, fy0), (fx0, fy1));
+        dashed(m, Layer::Table, (fx1, fy0), (fx1, fy1));
+        line(
+            m,
+            Layer::Margin,
+            ((fx0 + fx1) / 2.0, fy0),
+            ((fx0 + fx1) / 2.0, fy1),
+        );
+        for cx in [fx0 + 9.5, fx1 - 9.5] {
+            text(
+                m,
+                (cx, (fy0 + fy1) / 2.0 - 1.6),
+                3.4,
+                HAlign::Center,
+                true,
+                clip(&marker, 17.0, 3.4),
+            );
+        }
+        for k in 0..3 {
+            let bx = x0 + 170.0 + k as f64 * 6.0;
+            rect(m, Layer::Table, (bx, ry + 0.8), (bx + 4.6, ry + 5.4));
+        }
+        line(
+            m,
+            Layer::Margin,
+            (x0 + 3.0, ry + row_h),
+            (x0 + CARD_W - 3.0, ry + row_h),
+        );
+    }
+}
+
 fn label_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
     for (i, l) in card.labels.iter().enumerate() {
         let (col, row) = (i / 6, i % 6);
@@ -746,6 +872,15 @@ fn outside_note(n: usize) -> String {
     format!(
         "{n} wire card{} \"Wires outside the plate\" at the end, not numbered (NOT A STEP): supply and field wires that have no end on this plate. Cut them with the cabinet wires and run them last.",
         if n == 1 { "" } else { "s" }
+    )
+}
+
+/// The cover line about the cut-and-label strip cards.
+fn strip_note(n: usize) -> String {
+    format!(
+        "{n} cut strip card{} at the end (NOT A STEP): the wires of each group longest first, with the ferrule to pick and a marker to cut out and wrap. Use {} to cut and mark the wires before the wire steps.",
+        if n == 1 { "" } else { "s" },
+        if n == 1 { "it" } else { "them" }
     )
 }
 
@@ -796,6 +931,14 @@ fn cover_marks(pack: &Pack, project: &str) -> Marks {
         .count();
     if outside > 0 {
         how.insert(1, outside_note(outside));
+    }
+    let strips = pack
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Strips)
+        .count();
+    if strips > 0 {
+        how.insert(1, strip_note(strips));
     }
     for p in how {
         let (ny, _) = lines_down(&mut m, x0, y, w, 120.0, 3.4, &[p]);
@@ -1078,7 +1221,7 @@ mod tests {
         pack(3, false)
     }
 
-    fn pack(wires: usize, long_text: bool) -> Pack {
+    pub(super) fn pack(wires: usize, long_text: bool) -> Pack {
         let mut l = CabinetLayout::new(Plate {
             width: 800.0,
             height: 600.0,
@@ -1142,6 +1285,7 @@ mod tests {
                     strip_from_mm: Some(10.0),
                     strip_to_mm: Some(10.0),
                     strip_basis: "typical",
+                    ferrule: String::new(),
                 })
                 .collect(),
         }];
@@ -1668,5 +1812,56 @@ mod overview_tests {
 
     fn tests_pack() -> Pack {
         tests::sample_pack()
+    }
+
+    #[test]
+    fn strip_card_prints_length_ferrule_and_a_marker_twice_per_wire() {
+        let mut p = tests::pack(3, true);
+        let mut g = vec![novo_layout::workpack::WireGroup {
+            title: "Power".to_owned(),
+            wires: p
+                .cards
+                .iter()
+                .find(|c| c.kind == CardKind::Wires)
+                .unwrap()
+                .wires
+                .clone(),
+        }];
+        for w in &mut g[0].wires {
+            w.ferrule = "1.5 mm2 black, 8 mm".to_owned();
+        }
+        novo_layout::workpack::add_strip_cards(&mut p, &g);
+        let card = p.cards.iter().find(|c| c.kind == CardKind::Strips).unwrap();
+        let m = card_marks(card, &p.cabinet, CARD_Y[0]);
+        let words: Vec<&str> = m.texts.iter().map(|t| t.text.as_str()).collect();
+        assert!(words.contains(&"NOT A STEP"), "{words:?}");
+        let n = card.wires.len();
+        assert_eq!(
+            words
+                .iter()
+                .filter(|w| **w == "1.5 mm2 black, 8 mm")
+                .count(),
+            n
+        );
+        let first = &card.wires[0];
+        assert!(words.contains(&mm(first.cut_mm).as_str()));
+        // The marker text is printed on both sides of the fold line.
+        assert_eq!(
+            words.iter().filter(|w| **w == first.number).count(),
+            // marker twice, plus the number column
+            3
+        );
+        // Three tick boxes per row, plus the footer's.
+        let boxes = m
+            .shapes
+            .iter()
+            .filter(|(l, s)| {
+                *l == Layer::Table
+                    && matches!(s, MarkShape::Rect { min, max }
+                        if (max.0 - min.0 - 4.6).abs() < 1e-6)
+            })
+            .count();
+        assert_eq!(boxes, 3 * n);
+        assert!(strip_note(1).contains("NOT A STEP"));
     }
 }

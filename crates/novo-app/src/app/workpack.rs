@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use novo_core::{Device, DeviceId, Project};
 use novo_layout::workpack::{
     CardKind, OpeningJob, OpeningWall, Pack, WireCut, WireGroup, add_opening_cards,
-    add_outside_wire_cards, add_wiring_opening_cards, build,
+    add_outside_wire_cards, add_strip_cards, add_wiring_opening_cards, build,
 };
 use novo_reports::{AssemblyChecklist, Cell, CutList, Report, Section, is_estimate};
 
@@ -218,6 +218,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
     let mut jobs = strip_lengths(project);
     let label_stock = novo_reports::LabelSettings::of(project).stock.name();
     let rules = novo_routing::project_rules::WireRules::of(project);
+    let standard = novo_reports::FerruleStandard::of(project);
     let total_cut: usize = cuts.values().map(VecDeque::len).sum();
     let mut out = Vec::new();
     for enclosure in project.structures().filter(|s| s.enclosure) {
@@ -289,6 +290,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                     };
                 }
                 kind = core_of(kind, &cable);
+                let kind_text = kind.clone();
                 cores.extend(cable.split_whitespace().next().map(str::to_owned));
                 by_circuit
                     .entry(Circuit::of(&colour, &size))
@@ -306,6 +308,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                         strip_from_mm: strips.0,
                         strip_to_mm: strips.1,
                         strip_basis: strips.2,
+                        ferrule: ferrule_text(&standard, &kind_text, fitting),
                     });
             }
         }
@@ -319,6 +322,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
         let mut pack = build(&tag, &layout, &features, &name, &groups);
         pack.problems.extend(missing);
         pack.problems.extend(cores_note(cores));
+        add_strip_cards(&mut pack, &groups);
         add_wiring_opening_cards(&mut pack, &layout);
         let stored = heat_openings_store::stored_text(project, enclosure.id);
         let vents = heat_openings_store::parse(&stored);
@@ -416,6 +420,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                     strip_from_mm: strips.0,
                     strip_to_mm: strips.1,
                     strip_basis: strips.2,
+                    ferrule: String::new(),
                 },
             ));
         }
@@ -453,6 +458,16 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
                 .filter_map(|w| w.kind.split(CORE_MARK).nth(1).map(str::to_owned))
                 .collect();
             pack.problems.extend(cores_note(cables));
+            for w in &mut wires {
+                w.ferrule = ferrule_text(&standard, &w.kind, w.fitting);
+            }
+            add_strip_cards(
+                pack,
+                &[novo_layout::workpack::WireGroup {
+                    title: "Outside the plate".to_owned(),
+                    wires: wires.clone(),
+                }],
+            );
             add_outside_wire_cards(pack, wires);
         }
     }
@@ -468,6 +483,34 @@ pub(super) fn step_file_name(stem: &str, tag: &str, mark: &str, several: bool) -
     } else {
         format!("{stem} work card {}.pdf", clean(mark))
     }
+}
+
+/// The ferrule to pick for a wire of `kind` (`1.5 mm2 black ...`, the size
+/// first) under the project's ferrule standard: `1.5 mm2 black, 8 mm`; `lug`
+/// for a lug end; empty when the size is not a number.
+pub(super) fn ferrule_text(
+    standard: &novo_reports::FerruleStandard,
+    kind: &str,
+    fitting: &str,
+) -> String {
+    if fitting == "lug" {
+        return "lug".to_owned();
+    }
+    let Some(mm2) = kind
+        .split_whitespace()
+        .next()
+        .and_then(|t| t.parse::<f64>().ok())
+    else {
+        return String::new();
+    };
+    standard.lookup(mm2).map_or_else(String::new, |f| {
+        format!(
+            "{} mm2 {}, {} mm",
+            novo_layout::drill::mm(f.mm2),
+            f.colour,
+            novo_layout::drill::mm(f.length_mm)
+        )
+    })
 }
 
 /// Which fitting an end allowance is, from the cut list's own number: the

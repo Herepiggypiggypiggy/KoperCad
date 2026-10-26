@@ -61,6 +61,10 @@ pub struct WireCut {
     /// Where the strip length came from: `typical`, `part` or `stated`;
     /// empty when there is none.
     pub strip_basis: &'static str,
+    /// The ferrule to pick from the box, as the project's ferrule standard
+    /// gives it for this size: `1.5 mm2 black, 8 mm`, `lug` for a lug end;
+    /// empty when the size is not known.
+    pub ferrule: String,
 }
 
 impl WireCut {
@@ -194,6 +198,10 @@ pub enum CardKind {
     /// Wires with no end inside the plated cabinet (supply and field wires):
     /// not a build order step, so its step numbers are 0.
     Outside,
+    /// The cut-and-label strip of a wire group: its wires longest first with
+    /// ferrule, and the marker to cut and wrap on each. Outside the build
+    /// order (steps 0): the wires are cut before they are run.
+    Strips,
 }
 
 /// One half page of the pack.
@@ -934,6 +942,58 @@ pub fn add_outside_wire_cards(pack: &mut Pack, wires: Vec<WireCut>) {
             notes: Vec::new(),
             ticks: ticks(&["Cut", "Run"]),
         });
+    }
+}
+
+/// Cut-and-label strip cards: one set per wire group, wires longest first
+/// (ties by wire number), [`WIRES_PER_CARD`] to a card. Each row carries the
+/// length to cut, the ferrule to pick and the marker text to wrap on the
+/// wire, so a wire is cut, crimped and marked from one row without a
+/// calculator. They sit after the other cards and are not build order steps.
+pub fn add_strip_cards(pack: &mut Pack, groups: &[WireGroup]) {
+    for g in groups.iter().filter(|g| !g.wires.is_empty()) {
+        let mut wires = g.wires.clone();
+        wires.sort_by(|a, b| {
+            b.cut_mm
+                .total_cmp(&a.cut_mm)
+                .then_with(|| a.number.cmp(&b.number))
+        });
+        let total: f64 = wires.iter().map(|w| w.cut_mm).sum();
+        let n = wires.len();
+        let cards = n.div_ceil(WIRES_PER_CARD);
+        for (i, chunk) in wires.chunks(WIRES_PER_CARD).enumerate() {
+            pack.cards.push(Card {
+                kind: CardKind::Strips,
+                steps: (0, 0),
+                total: 0,
+                phase: Phase::Wires,
+                mark: if cards == 1 {
+                    format!("{} cut strip", g.title)
+                } else {
+                    format!("{} cut strip {} of {cards}", g.title, i + 1)
+                },
+                text: format!(
+                    "{} wire{} of group {}, {} mm of wire in all, longest first. Cut each wire, crimp the ferrule named on its row, cut out its marker, wrap it round the wire near each end and tick the row. ~ marks an estimated length: cut it long and trim.",
+                    n,
+                    if n == 1 { "" } else { "s" },
+                    g.title,
+                    mm(total.round())
+                ),
+                tools: vec![
+                    "Wire cutter and stripper".to_owned(),
+                    "Ferrule crimp tool".to_owned(),
+                    "Tape measure".to_owned(),
+                    "Scissors for the markers".to_owned(),
+                ],
+                template: None,
+                dims: Vec::new(),
+                wires: chunk.to_vec(),
+                wires_more: 0,
+                labels: Vec::new(),
+                notes: Vec::new(),
+                ticks: ticks(&["Cut", "Ferrule", "Marked"]),
+            });
+        }
     }
 }
 
