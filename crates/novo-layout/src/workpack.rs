@@ -880,7 +880,8 @@ pub fn build(
     // order `steps` listed the wires.
     let mut next = 0;
     for g in groups {
-        for chunk in g.wires.chunks(WIRES_PER_CARD) {
+        let parts = g.wires.chunks(WIRES_PER_CARD).count();
+        for (part, chunk) in g.wires.chunks(WIRES_PER_CARD).enumerate() {
             let first = wire_steps.get(next).copied().unwrap_or(total);
             let last = wire_steps
                 .get(next + chunk.len() - 1)
@@ -892,7 +893,7 @@ pub fn build(
                 steps: (first, last),
                 total,
                 phase: Phase::Wires,
-                mark: g.title.clone(),
+                mark: part_mark(&g.title, part, parts),
                 text: format!(
                     "Wire group {}: cut and run the wires below. Cut lengths include the end allowances of the project's wire rules; ~ marks an estimated length, cut it long and trim.",
                     g.title
@@ -1058,17 +1059,43 @@ pub struct OpeningJob {
     pub depth: f64,
 }
 
+/// The mark of card `part` (from 0) of `parts` that share a title: a title
+/// alone for one card, else "Control (2 of 3)". A mark names one card of a
+/// pack (print records, CHANGED marks and "print this step" look cards up by
+/// it), so cards of one group must not share it.
+fn part_mark(title: &str, part: usize, parts: usize) -> String {
+    if parts <= 1 {
+        title.to_owned()
+    } else {
+        format!("{title} ({} of {parts})", part + 1)
+    }
+}
+
+/// `mark`, or `mark (2)`, `mark (3)` ... when the pack already has a card
+/// with it.
+fn unique_mark(pack: &Pack, mark: String) -> String {
+    let taken = |m: &str| pack.cards.iter().any(|c| c.mark == m);
+    if !taken(&mark) {
+        return mark;
+    }
+    (2..)
+        .map(|n| format!("{mark} ({n})"))
+        .find(|m| !taken(m))
+        .expect("an unused number")
+}
+
 /// Wire cards for the cut-list wires that have no end inside this cabinet's
 /// plate (supply feeds, field wires): outside the build order, after the
 /// step cards, steps 0.
 pub fn add_outside_wire_cards(pack: &mut Pack, wires: Vec<WireCut>) {
-    for chunk in wires.chunks(WIRES_PER_CARD) {
+    let parts = wires.chunks(WIRES_PER_CARD).count();
+    for (part, chunk) in wires.chunks(WIRES_PER_CARD).enumerate() {
         pack.cards.push(Card {
             kind: CardKind::Outside,
             steps: (0, 0),
             total: 0,
             phase: Phase::Wires,
-            mark: "Wires outside the plate".to_owned(),
+            mark: part_mark("Wires outside the plate", part, parts),
             text: "Supply and field wires: they have no end on this plate, so they are not steps of the build order. Cut them with the cabinet wires and run them last. Lengths are from the cut list; the ducts and the field are not measured, so cut long and trim (~).".to_owned(),
             tools: vec![
                 "Wire cutter and stripper".to_owned(),
@@ -1099,7 +1126,10 @@ fn cut_outs_first(pack: &mut Pack) {
 /// are printed first.
 pub fn add_opening_cards(pack: &mut Pack, openings: &[OpeningJob]) {
     for (i, o) in openings.iter().enumerate() {
-        let mark = format!("{} {} ({})", capitalised(&o.what), i + 1, o.wall.name());
+        let mark = unique_mark(
+            pack,
+            format!("{} {} ({})", capitalised(&o.what), i + 1, o.wall.name()),
+        );
         let (w, h) = (half_mm(o.width), half_mm(o.height));
         let mut dims = Vec::new();
         let mut notes = Vec::new();
@@ -1422,7 +1452,7 @@ pub fn add_wiring_opening_cards(pack: &mut Pack, layout: &CabinetLayout) {
             steps: (0, 0),
             total: 0,
             phase: Phase::Devices,
-            mark: format!("Opening {} ({surface})", o.name),
+            mark: unique_mark(pack, format!("Opening {} ({surface})", o.name)),
             text: format!(
                 "Wiring opening '{}' in the {surface}: {} mm. It is not a step of the build order: cut it with the {surface} off the cabinet, before parts go on.",
                 o.name,

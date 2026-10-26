@@ -1268,6 +1268,10 @@ impl NovoApp {
         // Classes cached for the old project (keyed by a revision two projects
         // can share) and a focused class do not carry over; the overlay's on/off does.
         self.wb.emc_sch.forget();
+        // The last work cards print is of the old project (an unsaved one has no
+        // file to tell it apart): a new project starts with none.
+        self.wb.workpack_print = None;
+        self.wb.workpack_stale = None;
         // A new project is not a fix: the issue count starts over.
         self.wb.last_issue_total = None;
         self.wb.problems = None;

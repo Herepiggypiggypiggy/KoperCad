@@ -46,3 +46,5 @@ PR 14 (cable cores, label stock, dedupe): decisions for bench-walk findings 7 an
 PR 15 (duct note nits): the duct note says the fixing goes on the centre line of the duct base, the test names match what they test, and a 2 m duct (11 fixings) is shown to stay inside its card.
 
 PR 7 (stamps, round 36): `Pack::revision` (six hex digits over plate and cards), `Card::fingerprint`, `PrintRecord` (`changes`), PDF `Stamp` and `export_*_stamped`; app keeps the last print in `wb.workpack_print`. Still open: the print record is kept for the session only, not in the project file (a changed pack after reopening says nothing); the cards' "step N of M" changes every card when the build order grows, so those all read CHANGED.
+
+PR 16 (card marks): a mark names one card of a pack, so cards of one wire group are "Control (1 of 2)", "Control (2 of 2)", outside wire cards likewise, and an opening whose mark is taken is numbered. The print record and CHANGED marks key cards by mark; with shared marks a change to an earlier card of a split group was missed. A new project also forgets the last print of this session (workpack_print, workpack_stale).
