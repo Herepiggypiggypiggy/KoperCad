@@ -125,11 +125,11 @@ id = "drilling"
 title = "Read a drilling template"
 title_nl = "Lees een boorsjabloon"
 text = """
-A **rail card** shows the rail strip and lists its holes in mm from the rail start, with the repeated pitch between holes and the last hole to the rail end. A **device card** shows the footprint with its screw holes and any cut-out, each hole as distances from the nearest plate edges, such as "65 mm from the left edge, 225 mm from the bottom edge".
+A **rail card** shows the rail with its holes, and a **device card** shows the footprint with its screw holes and any cut-out. Each hole is also given as distances from the nearest plate edges, such as "65 mm from the left edge, 225 mm from the bottom edge", and its number is the one in the tiled drilling template.
 A template is drawn 1:1 where it fits its area. Otherwise the card says **NOT true size: measure from the list, not the drawing**.
 """
 text_nl = """
-Een **raikaart** toont de railstrook en noemt zijn gaten in mm vanaf het railbegin, met de herhaalde steek tussen de gaten en het laatste gat tot het railende. Een **apparaatkaart** toont de voetafdruk met zijn schroefgaten en eventuele uitsnijding, elk gat als afstanden tot de dichtstbijzijnde plaatranden, zoals "65 mm from the left edge, 225 mm from the bottom edge".
+Een **raikaart** toont de rail met zijn gaten en een **apparaatkaart** toont de voetafdruk met zijn schroefgaten en eventuele uitsnijding. Elk gat staat ook als afstanden tot de dichtstbijzijnde plaatranden, zoals "65 mm from the left edge, 225 mm from the bottom edge", en zijn nummer is dat uit het getegelde boorsjabloon.
 Een sjabloon wordt 1:1 getekend waar het in zijn gebied past. Anders zegt de kaart **NOT true size: measure from the list, not the drawing**.
 """
 
