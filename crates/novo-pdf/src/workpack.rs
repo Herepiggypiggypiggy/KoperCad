@@ -1581,7 +1581,7 @@ mod tests {
             .iter()
             .filter(|t| {
                 t.pos.0 > CARD_X + BLOCK_X
-                    && t.text.parse::<f64>().is_ok()
+                    && t.text.trim_end_matches(" mm").parse::<f64>().is_ok()
                     && t.pos.1 < hint.pos.1 + 10.0
             })
             .collect();
