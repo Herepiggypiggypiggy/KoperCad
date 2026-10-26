@@ -68,6 +68,11 @@ pub(crate) struct Workbench {
     pub(super) queued: Vec<&'static str>,
     /// The enclosure and mark of the Build order step to print as one card.
     pub(super) workpack_step: Option<(novo_core::StructureId, String)>,
+    /// What the last work cards print was made from, and the project revision
+    /// it was made at. `workpack_stale` caches the comparison with the
+    /// current cards, by project revision.
+    pub(super) workpack_print: Option<super::workpack::PrintState>,
+    pub(super) workpack_stale: Option<(u64, Option<String>)>,
     /// The `renumber io` preview waiting for Enter or Esc, per station.
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
     /// The PLC tag import preview (file name and plan), waiting for Enter or Esc.
@@ -308,6 +313,8 @@ impl Default for Workbench {
             place_latch: None,
             queued: Vec::new(),
             workpack_step: None,
+            workpack_print: None,
+            workpack_stale: None,
             renumber: None,
             recovered: None,
             plc_import: None,

@@ -12,7 +12,7 @@ use novo_canvas::Vec2;
 use novo_layout::assembly::Phase;
 use novo_layout::drill::{CutoutShape, mm};
 use novo_layout::plate_drawing::{HAlign, Layer, Marks, Shape as MarkShape};
-use novo_layout::workpack::{Card, CardKind, Pack, Template};
+use novo_layout::workpack::{Card, CardKind, Changes, Pack, Template};
 
 use crate::draw::PageWriter;
 use crate::plate::render;
@@ -964,8 +964,88 @@ fn outside_note(n: usize) -> String {
     )
 }
 
-fn cover_marks(pack: &Pack, project: &str) -> Marks {
+/// What a print says about itself: the date, and, when the pack was printed
+/// before, which cards differ from that print.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Stamp {
+    /// `YYYY-MM-DD` of this print.
+    pub printed: String,
+    /// Date of the earlier print the changes are measured against.
+    pub since: Option<String>,
+    pub changes: Changes,
+}
+
+impl Stamp {
+    fn is_changed(&self, cabinet: &str, mark: &str) -> bool {
+        self.since.is_some()
+            && self
+                .changes
+                .changed
+                .iter()
+                .any(|(c, m)| c == cabinet && m == mark)
+    }
+
+    fn changed_in(&self, cabinet: &str) -> usize {
+        self.changes
+            .changed
+            .iter()
+            .filter(|(c, _)| c == cabinet)
+            .count()
+    }
+}
+
+/// The revision and print date in the card header, and a CHANGED banner when
+/// the card differs from the earlier print.
+fn stamp_card(m: &mut Marks, card: &Card, pack: &Pack, y0: f64, stamp: &Stamp) {
+    let x1 = CARD_X + CARD_W - 3.0;
+    text(
+        m,
+        (x1, y0 + 7.6),
+        2.4,
+        HAlign::Right,
+        false,
+        format!("Rev {}  printed {}", pack.revision(), stamp.printed),
+    );
+    if let (true, Some(since)) = (stamp.is_changed(&pack.cabinet, &card.mark), &stamp.since) {
+        rect(
+            m,
+            Layer::Plate,
+            (CARD_X + 60.0, y0 + 7.0),
+            (CARD_X + 60.0 + 76.0, y0 + 10.4),
+        );
+        text(
+            m,
+            (CARD_X + 62.0, y0 + 7.5),
+            2.6,
+            HAlign::Left,
+            true,
+            format!("CHANGED since the print of {since}: check this card"),
+        );
+    }
+}
+
+fn cover_marks(pack: &Pack, project: &str, stamp: Option<&Stamp>) -> Marks {
     let mut m = Marks::default();
+    if let Some(st) = stamp {
+        let mut line = format!("Revision {}   printed {}", pack.revision(), st.printed);
+        if let Some(since) = &st.since {
+            let n = st.changed_in(&pack.cabinet);
+            if n == 0 && st.changes.removed == 0 {
+                line.push_str(&format!("   unchanged since the print of {since}"));
+            } else {
+                line.push_str(&format!(
+                    "   {n} card{} CHANGED since the print of {since}{}",
+                    if n == 1 { "" } else { "s" },
+                    if st.changes.removed > 0 {
+                        format!(", {} removed", st.changes.removed)
+                    } else {
+                        String::new()
+                    }
+                ));
+            }
+        }
+        text(&mut m, (15.0, 31.2), 3.0, HAlign::Left, true, line);
+    }
     let x0 = 15.0;
     let w = A4.0 - 30.0;
     text(
@@ -1210,8 +1290,8 @@ fn page(marks: Marks) -> Page<'static> {
     }
 }
 
-fn pages(pack: &Pack, project: &str) -> Vec<Page<'static>> {
-    let mut out = vec![page(cover_marks(pack, project))];
+fn pages(pack: &Pack, project: &str, stamp: Option<&Stamp>) -> Vec<Page<'static>> {
+    let mut out = vec![page(cover_marks(pack, project, stamp))];
     let sheets = pack.overview.len().div_ceil(OVERVIEW_ROWS);
     for i in 0..sheets {
         let a = i * OVERVIEW_ROWS;
@@ -1221,7 +1301,10 @@ fn pages(pack: &Pack, project: &str) -> Vec<Page<'static>> {
     for pair in pack.cards.chunks(2) {
         let mut m = Marks::default();
         for (card, y0) in pair.iter().zip(CARD_Y) {
-            let c = card_marks(card, &pack.cabinet, y0);
+            let mut c = card_marks(card, &pack.cabinet, y0);
+            if let Some(st) = stamp {
+                stamp_card(&mut c, card, pack, y0, st);
+            }
             m.shapes.extend(c.shapes);
             m.texts.extend(c.texts);
         }
@@ -1250,10 +1333,20 @@ pub fn page_count(packs: &[Pack]) -> usize {
 /// The workshop pack of every cabinet as one PDF. `None` when no cabinet has
 /// a step to build.
 pub fn export_workpack_pdf(packs: &[Pack], project_name: &str) -> Option<Vec<u8>> {
+    export_workpack_pdf_stamped(packs, project_name, None)
+}
+
+/// The same with the revision and print date on the cover and every card,
+/// and the cards that changed since an earlier print marked CHANGED.
+pub fn export_workpack_pdf_stamped(
+    packs: &[Pack],
+    project_name: &str,
+    stamp: Option<&Stamp>,
+) -> Option<Vec<u8>> {
     let all: Vec<Page<'static>> = packs
         .iter()
         .filter(|p| !p.cards.is_empty())
-        .flat_map(|p| pages(p, project_name))
+        .flat_map(|p| pages(p, project_name, stamp))
         .collect();
     if all.is_empty() {
         return None;
@@ -1267,8 +1360,21 @@ pub fn export_workpack_pdf(packs: &[Pack], project_name: &str) -> Option<Vec<u8>
 /// One card of a pack as a one-page PDF (the card on the top half of A4).
 /// `None` when the pack has no card `index`.
 pub fn export_card_pdf(pack: &Pack, index: usize, project_name: &str) -> Option<Vec<u8>> {
+    export_card_pdf_stamped(pack, index, project_name, None)
+}
+
+/// One card with the revision, print date and CHANGED banner.
+pub fn export_card_pdf_stamped(
+    pack: &Pack,
+    index: usize,
+    project_name: &str,
+    stamp: Option<&Stamp>,
+) -> Option<Vec<u8>> {
     let card = pack.cards.get(index)?;
     let mut m = card_marks(card, &pack.cabinet, CARD_Y[0]);
+    if let Some(st) = stamp {
+        stamp_card(&mut m, card, pack, CARD_Y[0], st);
+    }
     dashed(&mut m, Layer::Margin, (3.0, 148.5), (A4.0 - 3.0, 148.5));
     Some(write_pages(
         &[page(m)],
@@ -1511,7 +1617,7 @@ mod tests {
             .collect();
         assert_eq!(cards.len(), 4);
         // The cover and every tick-off page say the cut-outs come first.
-        let cover = cover_marks(&p, "Crane");
+        let cover = cover_marks(&p, "Crane", None);
         let words: String = cover.texts.iter().map(|t| format!("{} ", t.text)).collect();
         assert!(words.contains("4 cut-out cards"), "{words}");
         assert!(words.contains("FIRST"), "{words}");
@@ -1750,7 +1856,7 @@ mod tests {
             cards.iter().map(|c| c.wires.len()).sum::<usize>(),
             wires.len()
         );
-        let cover = cover_marks(&p, "Crane");
+        let cover = cover_marks(&p, "Crane", None);
         let words: String = cover.texts.iter().map(|t| format!("{} ", t.text)).collect();
         assert!(words.contains("Wires outside the plate"), "{words}");
         let sheet = overview_marks(&p, 0..p.overview.len().min(5), (1, 1));
@@ -1997,7 +2103,7 @@ mod overview_tests {
         assert!(origin.contains("Frame 170 x 120 mm"), "{origin}");
         // Cut-outs are the first cards and the cover says so.
         assert_eq!(p.cards[0].kind, CardKind::Opening);
-        let cover = cover_marks(&p, "Crane");
+        let cover = cover_marks(&p, "Crane", None);
         let words: String = cover.texts.iter().map(|t| format!("{} ", t.text)).collect();
         assert!(words.contains("at the front"), "{words}");
     }
