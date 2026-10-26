@@ -92,6 +92,7 @@ pub(super) fn strip(
     view: egui::Rect,
     position: &mut Option<usize>,
     steps: &[Step],
+    stale: Option<&str>,
 ) -> Option<Print> {
     let mut print = None;
     let mut at = (*position)?;
@@ -202,6 +203,9 @@ pub(super) fn strip(
                     }
                 });
                 ui.label(egui::RichText::new(text).color(p.text_secondary));
+                if let Some(note) = stale {
+                    ui.label(egui::RichText::new(note).strong().color(p.warning));
+                }
                 ui.horizontal(|ui| {
                     let mut pos = at;
                     ui.spacing_mut().slider_width = 220.0;

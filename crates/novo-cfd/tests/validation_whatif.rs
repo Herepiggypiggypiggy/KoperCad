@@ -114,7 +114,8 @@ fn the_3d_solver_orders_the_what_if_fixes_like_the_2d_model() {
         );
     }
     // What each fix wins, 3D against 2D: the number a person acts on. The two
-    // models do not agree on its size (the 2D model reads the fan fix low),
+    // models do not agree exactly on its size (the 2D fan jet speed term brought it
+    // within about a third of the 3D gain; `validation_fan_gain.rs` has the sweep),
     // so this is reported, and only its sign is asserted.
     let (base_2d, base_3d) = (cases[0].1, cases[0].2);
     for (name, two_d, three_d) in &cases[1..] {

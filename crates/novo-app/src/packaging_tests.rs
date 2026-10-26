@@ -81,3 +81,17 @@ fn an_update_over_a_running_copy_closes_it_and_the_user_data_survives_uninstall(
     assert!(s.contains("MB_DEFBUTTON2"));
     assert!(!s.contains("Documents"));
 }
+
+#[test]
+fn uninstall_leaves_no_empty_file_type_keys_and_clears_the_old_name_folders() {
+    let s = script();
+    for ext in [".kopercad", ".novo"] {
+        let line = s
+            .lines()
+            .find(|l| l.contains(&format!(r#"Classes\{ext}""#)))
+            .expect(ext);
+        assert!(line.contains("uninsdeletekeyifempty"), "{line}");
+    }
+    assert!(s.contains("DelTree(OldLocal"));
+    assert!(s.contains("DelTree(OldRoaming"));
+}

@@ -440,7 +440,7 @@ impl StorageBackend {
 /// Whether two paths name the same file: equal after canonicalising, which
 /// settles spelling and case on Windows. Falls back to a literal compare
 /// when either cannot be resolved.
-fn same_file(a: &Path, b: &Path) -> bool {
+pub(crate) fn same_file(a: &Path, b: &Path) -> bool {
     match (a.canonicalize(), b.canonicalize()) {
         (Ok(a), Ok(b)) => a == b,
         _ => a == b,
