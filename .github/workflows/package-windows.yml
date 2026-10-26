@@ -108,21 +108,130 @@ jobs:
           if (Test-Path "HKLM:\Software\Classes\KoperCAD.Project") { throw "file association was written machine-wide" }
           if (Test-Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{AEB465B9-04F0-475B-AD7F-091D638587B5}_is1") { throw "uninstall entry was written machine-wide" }
 
-      - name: Launch the installed app
+      - name: First start on a clean profile
         shell: pwsh
         run: |
           # A GUI started with -Credential from the runner's service session
           # has no desktop to attach to, so this step runs the installed exe
           # as the runner; its asInvoker manifest (checked above) means it
-          # runs with whatever rights its user has.
-          $exe = "C:\Users\novotest\AppData\Local\Programs\KoperCAD\kopercad.exe"
+          # runs with whatever rights its user has. The profile variables
+          # point at the test user's untouched profile, so the app sees a PC
+          # that never ran KoperCAD.
+          $profileDir = "C:\Users\novotest"
+          foreach ($d in "AppData\Local\KoperCAD", "AppData\Roaming\KoperCAD", "AppData\Roaming\NovoElectric", "AppData\Local\NovoElectric") {
+            if (Test-Path "$profileDir\$d") { throw "$d existed before the first start" }
+          }
+          $env:USERPROFILE = $profileDir
+          $env:APPDATA = "$profileDir\AppData\Roaming"
+          $env:LOCALAPPDATA = "$profileDir\AppData\Local"
+          $exe = "$profileDir\AppData\Local\Programs\KoperCAD\kopercad.exe"
           $app = Start-Process $exe -WorkingDirectory C:\novotest -PassThru
           Start-Sleep -Seconds 10
           if ($app.HasExited) { throw "kopercad.exe exited at startup with code $($app.ExitCode)" }
           Stop-Process -Id $app.Id
+          $log = Get-ChildItem "$profileDir\AppData\Local\KoperCAD\logs" -Filter *.log -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $log) { throw "first start wrote no log under %LOCALAPPDATA%\KoperCAD\logs" }
+          Get-Content $log.FullName | Select-Object -First 20
+          if ((Get-Content $log.FullName -Raw) -match '(?i)panic') { throw "first start logged a panic" }
+          if (Test-Path "$profileDir\Documents\KoperCAD\*") { throw "first start wrote into Documents before anything was saved" }
           $setup = (Get-ChildItem dist\KoperCAD-*-setup.exe)[0]
           $size = [math]::Round($setup.Length / 1MB, 1)
-          "Installer: $($setup.Name), $size MB, installed as a standard user, app launched" >> $env:GITHUB_STEP_SUMMARY
+          "Installer: $($setup.Name), $size MB, installed as a standard user, first start on a clean profile ok" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Registry, shortcuts, update over an old install, uninstall
+        shell: pwsh
+        run: |
+          $user = "novotest"
+          $work = "C:\novotest"
+          $profileDir = "C:\Users\$user"
+          $appDir = "$profileDir\AppData\Local\Programs\KoperCAD"
+          $programs = "$profileDir\AppData\Roaming\Microsoft\Windows\Start Menu\Programs"
+          $guid = "{AEB465B9-04F0-475B-AD7F-091D638587B5}"
+          $summary = @()
+
+          # The test user's registry hive is only loaded while one of its
+          # processes runs, so load the file by hand for each look.
+          function Get-UserHive([scriptblock]$look) {
+            $loaded = $false
+            for ($i = 0; $i -lt 15 -and -not $loaded; $i++) {
+              reg load HKU\novotest "$profileDir\NTUSER.DAT" 2>$null | Out-Null
+              if ($LASTEXITCODE -eq 0) { $loaded = $true } else { Start-Sleep -Seconds 2 }
+            }
+            if (-not $loaded) { throw "could not load the test user's registry hive" }
+            try { & $look } finally {
+              [GC]::Collect(); [GC]::WaitForPendingFinalizers()
+              reg unload HKU\novotest 2>$null | Out-Null
+            }
+          }
+          function Run-AsUser([string]$file, [string[]]$arguments) {
+            Start-Process $file -Credential $cred -LoadUserProfile -WorkingDirectory $work -ArgumentList $arguments -Wait -PassThru
+          }
+
+          # The password was random in the step above; reset it for this one.
+          $newpw = ConvertTo-SecureString ("Nv2!" + [guid]::NewGuid().ToString("N")) -AsPlainText -Force
+          Set-LocalUser -Name $user -Password $newpw
+          $cred = New-Object PSCredential("$env:COMPUTERNAME\$user", $newpw)
+          $env:TEMP = "$work\temp"; $env:TMP = "$work\temp"
+          $env:USERPROFILE = $profileDir; $env:HOMEDRIVE = "C:"; $env:HOMEPATH = "\Users\$user"; $env:USERNAME = $user
+          $env:APPDATA = "$profileDir\AppData\Roaming"; $env:LOCALAPPDATA = "$profileDir\AppData\Local"
+
+          # 1. After the first install: file types, uninstall entry, shortcuts.
+          Get-UserHive {
+            foreach ($ext in ".kopercad", ".novo") {
+              $v = (Get-ItemProperty "Registry::HKU\novotest\Software\Classes\$ext" -ErrorAction Stop).'(default)'
+              if ($v -ne "KoperCAD.Project") { throw "$ext opens with '$v', not KoperCAD.Project" }
+            }
+            $cmd = (Get-ItemProperty "Registry::HKU\novotest\Software\Classes\KoperCAD.Project\shell\open\command").'(default)'
+            if ($cmd -ne "`"$appDir\kopercad.exe`" `"%1`"") { throw "open command is: $cmd" }
+            $u = Get-ItemProperty "Registry::HKU\novotest\Software\Microsoft\Windows\CurrentVersion\Uninstall\${guid}_is1" -ErrorAction Stop
+            if ($u.DisplayName -notlike "KoperCAD*") { throw "uninstall entry is named '$($u.DisplayName)'" }
+            if ($u.UninstallString -notlike "*$appDir*") { throw "uninstall string is outside the user's program folder: $($u.UninstallString)" }
+          }
+          foreach ($lnk in "KoperCAD.lnk", "KoperCAD (safe graphics).lnk") {
+            if (-not (Test-Path "$programs\$lnk")) { throw "Start menu entry '$lnk' is missing" }
+          }
+          if (Test-Path "$profileDir\Desktop\KoperCAD.lnk") { throw "desktop icon was created although it is unticked by default" }
+          $summary += "- file types .kopercad and .novo, open command, uninstall entry and both Start menu entries are per user"
+
+          # 2. Update over an install that still has the old name's leftovers.
+          New-Item -ItemType File "$programs\NovoElectric.lnk", "$profileDir\Desktop\NovoElectric.lnk", "$appDir\novoelectric.exe" -Force | Out-Null
+          $p = Run-AsUser "$work\novo-setup.exe" @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=$work\update.log")
+          Get-Content "$work\update.log" -ErrorAction SilentlyContinue | Select-Object -Last 8
+          if ($p.ExitCode -ne 0) { throw "the update exited with $($p.ExitCode)" }
+          foreach ($gone in "$programs\NovoElectric.lnk", "$profileDir\Desktop\NovoElectric.lnk", "$appDir\novoelectric.exe") {
+            if (Test-Path $gone) { throw "update left $gone behind" }
+          }
+          if (-not (Test-Path "$appDir\kopercad.exe")) { throw "update removed kopercad.exe" }
+          if (@(Get-ChildItem $programs -Filter "KoperCAD*.lnk").Count -ne 2) { throw "update left a different number of Start menu entries than two" }
+          if (-not (Test-Path "$profileDir\AppData\Local\KoperCAD\logs")) { throw "update removed the user's log folder" }
+          $summary += "- update over an old install removes the NovoElectric shortcuts and exe, keeps one set of entries and the user's data"
+
+          # 3. Silent uninstall: program, shortcuts and registry go; data and projects stay.
+          New-Item -ItemType Directory -Force "$profileDir\Documents\KoperCAD" | Out-Null
+          Set-Content "$profileDir\Documents\KoperCAD\keep.kopercad" "project"
+          $unins = "$appDir\unins000.exe"
+          if (-not (Test-Path $unins)) { throw "no uninstaller in the program folder" }
+          # The uninstaller copies itself to a temp folder and the first process
+          # returns at once, so wait for the files to go.
+          Run-AsUser $unins @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=$work\uninstall.log") | Out-Null
+          for ($i = 0; $i -lt 60 -and (Test-Path "$appDir\kopercad.exe"); $i++) { Start-Sleep -Seconds 2 }
+          Start-Sleep -Seconds 5
+          Get-Content "$work\uninstall.log" -ErrorAction SilentlyContinue | Select-Object -Last 8
+          if (Test-Path "$appDir\kopercad.exe") { throw "uninstall left kopercad.exe" }
+          if (Test-Path "$programs\KoperCAD.lnk") { throw "uninstall left the Start menu entry" }
+          if (Test-Path "$programs\KoperCAD (safe graphics).lnk") { throw "uninstall left the safe graphics entry" }
+          Get-UserHive {
+            foreach ($k in "Software\Classes\.kopercad", "Software\Classes\.novo", "Software\Classes\KoperCAD.Project", "Software\Microsoft\Windows\CurrentVersion\Uninstall\${guid}_is1") {
+              if (Test-Path "Registry::HKU\novotest\$k") { throw "uninstall left HKCU\$k" }
+            }
+          }
+          if (-not (Test-Path "$profileDir\AppData\Local\KoperCAD\logs")) { throw "a silent uninstall removed the user's data" }
+          if (-not (Test-Path "$profileDir\Documents\KoperCAD\keep.kopercad")) { throw "uninstall removed a project file" }
+          $summary += "- silent uninstall removes program, shortcuts and registry keys; settings, logs and project files stay"
+          $summary += "- not covered here (needs a person at a real desktop): the wizard pages, the data question at uninstall, SmartScreen, HiDPI, double-click in Explorer, the GPU adapter"
+          $summary | Add-Content $env:GITHUB_STEP_SUMMARY
+          $summary
+
       - name: Portable zip, build info and checksums
         shell: pwsh
         run: |
