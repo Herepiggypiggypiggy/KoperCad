@@ -29,3 +29,6 @@ Decisions taken by the thread while the owner was away, to review on return (all
 - Cable cores: a core row reads "<size> core =A1-W1" and the cover says the cable is bought and run once. The example's 12 m wires are the cores of cable =A1-W1, so the example and the estimate were right.
 
 Known gaps: no fixture with two plated cabinets and an unplaced wire (the model refuses removing a plate that has devices), so `unplaced_notes` is unit-tested only; `WireCut` has no `core` field (the outside cards read the cable from the kind text, `CORE_MARK`); the 11-fixing duct note is proven by a unit test, not a picture.
+
+## Cut-out cards come first (2026-10-26)
+add_opening_cards and add_wiring_opening_cards stable-sort Opening cards to the front of pack.cards; code that took `cards.last()` for an opening must use `first()`. Cut-out templates label their axis numbers with mm.
