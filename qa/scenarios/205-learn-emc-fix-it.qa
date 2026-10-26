@@ -3,9 +3,9 @@
 # The lesson from the palette. The shield fix is listed under two findings (EMC-04 and EMC-05), so its card is drawn twice and the second "On the plate" button is the one on screen (the lesson card also has a label with that text, hence the Button role). Do it for me only carries out commands, so the preview, plate, Before, After and Apply controls are really clicked.
 key ctrl+k
 wait 4
-text interference preview
+text preview emc fix
 wait 6
-click_text "Interference: preview a fix before you apply it"
+click_text "Preview an EMC fix"
 wait 40
 shot 01-why
 check_layout

@@ -1,6 +1,6 @@
 @title Lesson walk: work-cards (print one step, all cards, what is exact)
 @area Learn
-# The lesson from the palette. Do it for me only carries out commands, so the strip buttons are really clicked. On an action step the lesson card has no Next, so "Next" is the strip's.
+# The lesson from the palette. Do it for me only carries out commands, so the strip buttons are really clicked. On an action step the lesson card has no Next, so "Next" is the strip's. On a reading step both the strip and the card have a Next button: the card's is the second.
 key ctrl+k
 wait 4
 text work cards
@@ -41,19 +41,19 @@ shot 08-exported-all-drilling
 check_layout
 expect_file "~/Documents/KoperCAD/lesson work cards.pdf" 3000
 keep_file "~/Documents/KoperCAD/lesson work cards.pdf"
-try click_text "Next"
+try click_text "Next" Button #2
 wait 20
 shot 09-ruler
 check_layout
-try click_text "Next"
+try click_text "Next" Button #2
 wait 20
 shot 10-wire-cards
 check_layout
-try click_text "Next"
+try click_text "Next" Button #2
 wait 20
 shot 11-honest
 check_layout
-try click_text "Next"
+try click_text "Next" Button #2
 wait 20
 shot 12-leave
 check_layout

@@ -21,11 +21,11 @@ title = "One card per step, ticked with a pencil"
 title_nl = "Eén kaart per stap, afgevinkt met een potlood"
 text = """
 The workshop cuts wires and drills holes **by hand**. The work cards turn the build order into paper for that: one half page per step, on an ordinary office printer.
-Every card says what to do, with which tools, and has boxes to tick (Cut, Holes drilled, Fitted, Checked) and a 100 mm ruler.
+Every card says what to do, with which tools, and has tick boxes such as Cut, Drilled, Fitted and Checked (they differ a little per card) and a 100 mm ruler.
 """
 text_nl = """
 De werkplaats kort draden af en boort gaten **met de hand**. De werkkaarten maken van de bouwvolgorde papier daarvoor: een halve pagina per stap, op een gewone kantoorprinter.
-Elke kaart zegt wat te doen, met welk gereedschap, en heeft vakjes om af te vinken (Cut, Holes drilled, Fitted, Checked) en een liniaal van 100 mm.
+Elke kaart zegt wat te doen, met welk gereedschap, en heeft vakjes om af te vinken zoals Cut, Drilled, Fitted en Checked (ze verschillen per kaart een beetje) en een liniaal van 100 mm.
 """
 
 [[step]]
@@ -48,8 +48,8 @@ solve = [ { command = "view.3d" } ]
 id = "start"
 title = "Start the build order"
 title_nl = "Start de bouwvolgorde"
-text = "The strip at the bottom steps through the cabinet. The step numbers on the cards are the strip's step numbers, one for one."
-text_nl = "De strook onderaan loopt de kast door. De stapnummers op de kaarten zijn de stapnummers van de strook, één op één."
+text = "The strip at the bottom steps through the cabinet. The cards follow the same order, but they count differently: a card reads **STEP 2 of 42** while the strip may say **Step 2 of 17**, because the cards also count wires and labels and the strip counts parts. Go by the mark (R1, D2, -F1) on both."
+text_nl = "De strook onderaan loopt de kast door. De kaarten volgen dezelfde volgorde maar tellen anders: een kaart zegt **STEP 2 of 42** terwijl de strook **Step 2 of 17** kan zeggen, omdat de kaarten ook draden en labels tellen en de strook onderdelen. Ga uit van de markering (R1, D2, -F1) op beide."
 how = [
   "Press {key:view.command_palette}, type **build order** and choose {ui:cmd.view.3d_assembly}.",
 ]
@@ -81,11 +81,11 @@ id = "print-step"
 title = "Print this step alone"
 title_nl = "Print alleen deze stap"
 text = """
-**Print this step** writes that step's card alone on one A4 page, named `<project> work card <mark>.pdf`. Use it when one part is going on and you do not want the whole pack.
+**Print this step** writes that step's card alone on one A4 page, named `<project> work card <mark>.pdf`. A save dialog asks where it goes; it starts next to the project (in Documents for an untitled one), and cancelling writes nothing. Use it when one part is going on and you do not want the whole pack.
 The button appears only on a step that adds a part.
 """
 text_nl = """
-**Print this step** schrijft de kaart van die stap alleen op één A4-pagina, genaamd `<project> work card <mark>.pdf`. Gebruik het als één onderdeel erop gaat en je niet het hele pakket wilt.
+**Print this step** schrijft de kaart van die stap alleen op één A4-pagina, genaamd `<project> work card <mark>.pdf`. Een opslagvenster vraagt waar hij heen gaat; het begint naast het project (in Documenten voor een naamloos project) en annuleren schrijft niets. Gebruik het als één onderdeel erop gaat en je niet het hele pakket wilt.
 De knop verschijnt alleen op een stap die een onderdeel toevoegt.
 """
 how = [
@@ -125,11 +125,11 @@ id = "drilling"
 title = "Read a drilling template"
 title_nl = "Lees een boorsjabloon"
 text = """
-A **rail card** shows the rail with its holes, and a **device card** shows the footprint with its screw holes and any cut-out. Each hole is also given as distances from the nearest plate edges, such as "65 mm from the left edge, 225 mm from the bottom edge", and its number is the one in the tiled drilling template.
+A **rail card** shows the rail strip and lists its holes in mm from the rail start, with the repeated pitch between holes and the last hole to the rail end. A **device card** shows the footprint with its screw holes and any cut-out, each hole as distances from the nearest plate edges, such as "65 mm from the left edge, 225 mm from the bottom edge".
 A template is drawn 1:1 where it fits its area. Otherwise the card says **NOT true size: measure from the list, not the drawing**.
 """
 text_nl = """
-Een **raikaart** toont de rail met zijn gaten en een **apparaatkaart** toont de voetafdruk met zijn schroefgaten en eventuele uitsnijding. Elk gat staat ook als afstanden tot de dichtstbijzijnde plaatranden, zoals "65 mm from the left edge, 225 mm from the bottom edge", en zijn nummer is dat uit het getegelde boorsjabloon.
+Een **raikaart** toont de railstrook en noemt zijn gaten in mm vanaf het railbegin, met de herhaalde steek tussen de gaten en het laatste gat tot het railende. Een **apparaatkaart** toont de voetafdruk met zijn schroefgaten en eventuele uitsnijding, elk gat als afstanden tot de dichtstbijzijnde plaatranden, zoals "65 mm from the left edge, 225 mm from the bottom edge".
 Een sjabloon wordt 1:1 getekend waar het in zijn gebied past. Anders zegt de kaart **NOT true size: measure from the list, not the drawing**.
 """
 
@@ -165,11 +165,11 @@ title = "What is exact and what is a guess"
 title_nl = "Wat exact is en wat een schatting"
 text = """
 Positions come from the cabinet layout, **not from a measured plate**, and every card says so. Measure the real plate before you trust a hole.
-The tool list is derived from hole diameters and cut-outs and is a suggestion, not a standard. Duct fixing points are the duct maker's: the model has none.
+The tool list is derived from hole diameters and cut-outs and is a suggestion, not a standard. Duct fixing positions on the cards (25 mm from each end, at most 200 mm apart) are a labelled planning rule, not the duct maker's data: the maker's instructions win, and those holes are not in the drilling list.
 """
 text_nl = """
 Posities komen uit de kastindeling, **niet van een opgemeten plaat**, en elke kaart zegt dat. Meet de echte plaat op voordat je een gat vertrouwt.
-De gereedschapslijst is afgeleid van gatdiameters en uitsnijdingen en is een suggestie, geen norm. Bevestigingspunten van kanalen zijn die van de kanaalmaker: het model heeft ze niet.
+De gereedschapslijst is afgeleid van gatdiameters en uitsnijdingen en is een suggestie, geen norm. Bevestigingsposities van kanalen op de kaarten (25 mm van elk einde, hoogstens 200 mm uit elkaar) zijn een benoemde planningsregel, geen gegevens van de kanaalmaker: diens instructies gaan voor en die gaten staan niet in de boorlijst.
 """
 
 [[step]]
