@@ -846,6 +846,87 @@ fn the_duct_note_says_it_is_a_planning_rule_and_where_the_fixing_goes() {
     assert!(duct_fixing_note(2000.0).contains("11 rivets"));
 }
 
+fn marks(p: &novo_layout::workpack::Pack) -> Vec<&str> {
+    p.cards.iter().map(|c| c.mark.as_str()).collect()
+}
+
+#[test]
+fn cards_of_one_wire_group_have_their_own_marks() {
+    // 11 wires are two cards: a mark names one card, so they differ.
+    let p = pack(11);
+    let power: Vec<&str> = p
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Wires && c.mark.starts_with("Power"))
+        .map(|c| c.mark.as_str())
+        .collect();
+    assert_eq!(power, ["Power (1 of 2)", "Power (2 of 2)"]);
+    // A group on one card keeps its plain title.
+    assert!(marks(&p).contains(&"Control"));
+    let all = marks(&p);
+    let mut unique = all.clone();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(all.len(), unique.len(), "{all:?}");
+}
+
+#[test]
+fn a_change_to_the_first_card_of_a_split_group_is_seen_by_the_print_record() {
+    use novo_layout::workpack::PrintRecord;
+    let printed = PrintRecord::of(&[pack(11)], "2026-10-26");
+    assert!(printed.changes(&[pack(11)]).is_empty());
+    // Re-route only the first wire (it is on the first Power card).
+    let mut g = groups(11);
+    g[0].wires[0].cut_mm += 25.0;
+    let p = build("+CAB1", &layout(), &features(), &|id| format!("-Q{id}"), &g);
+    let changes = printed.changes(&[p]);
+    let named = |m: &str| changes.changed.iter().any(|(_, k)| k == m);
+    assert!(named("Power (1 of 2)"), "{:?}", changes.changed);
+    assert!(!named("Power (2 of 2)"), "{:?}", changes.changed);
+}
+
+#[test]
+fn openings_with_the_same_name_and_wall_get_their_own_marks() {
+    let mut p = pack(2);
+    add_opening_cards(
+        &mut p,
+        &[
+            grille(OpeningWall::Right, 100.0, None),
+            grille(OpeningWall::Right, 300.0, None),
+        ],
+    );
+    let all = marks(&p);
+    let mut unique = all.clone();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(all.len(), unique.len(), "{all:?}");
+}
+
+#[test]
+fn an_opening_whose_mark_is_taken_gets_a_numbered_one() {
+    let mut p = pack(2);
+    let job = grille(OpeningWall::Right, 100.0, None);
+    add_opening_cards(&mut p, std::slice::from_ref(&job));
+    let taken = p
+        .cards
+        .iter()
+        .find(|c| c.kind == CardKind::Opening)
+        .unwrap()
+        .mark
+        .clone();
+    // The same job added again, e.g. a second call for the same wall.
+    add_opening_cards(&mut p, &[job]);
+    let opening: Vec<&str> = p
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Opening)
+        .map(|c| c.mark.as_str())
+        .collect();
+    assert_eq!(opening.len(), 2);
+    assert_ne!(opening[0], opening[1], "{opening:?}");
+    assert!(opening[1].starts_with(&taken), "{opening:?}");
+}
+
 #[test]
 fn strip_cards_list_each_group_longest_first_and_every_wire_once() {
     let mut p = pack(11);

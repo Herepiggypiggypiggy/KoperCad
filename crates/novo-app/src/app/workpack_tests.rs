@@ -1014,3 +1014,16 @@ fn a_workshop_pack_print_counts_as_the_work_cards_print() {
     let cards = dir.path().join("Plant 3 workshop/1 Work cards.pdf");
     assert!(all_text(&cards).contains("CHANGED since the print of"));
 }
+
+#[test]
+fn a_new_project_forgets_the_last_print_of_the_old_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut d, _cab) = vent_cabinet(dir.path());
+    d.app.export_workpack().expect("print");
+    assert!(d.app.wb.workpack_print.is_some());
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.wb.workpack_print.is_none(), "the old print is kept");
+    assert!(d.app.wb.workpack_stale.is_none());
+}
