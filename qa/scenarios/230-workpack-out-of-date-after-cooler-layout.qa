@@ -30,6 +30,15 @@ wait 30
 shot stale
 expect "Work cards out of date"
 check_layout
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+shot bench-stale
+expect "Work cards out of date"
+check_layout
+key Escape
+wait 10
 answer_dialog "~/Documents/KoperCAD/qa 230 work cards again.pdf"
 click_text "Work cards (PDF)"
 wait 40
