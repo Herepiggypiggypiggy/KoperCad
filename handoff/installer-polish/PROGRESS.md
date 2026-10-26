@@ -11,3 +11,5 @@
 6. HiDPI 150% and 200% laptop screens; no console flash on start (windows subsystem).
 6b. Updating over a running copy with unsaved work: CloseApplications asks the app to close; confirm the unsaved-project prompt or recovery offer still appears.
 - 2026-10-23: PR 2 (update check, installer script tests, scenarios 210/211). 12 unit tests pass, clippy clean, QA 4 runs 0 failed. Windows-only list above still stands, plus: Check for updates against real GitHub from a Windows PC behind a proxy.
+
+- 2026-10-26: clean-profile pass, PR #1515 (installer CI extended, two uninstall fixes). Installer job green on 9c01d91.
