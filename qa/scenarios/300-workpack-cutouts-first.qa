@@ -1,0 +1,22 @@
+@title Work cards: cut-out cards come first and the template axes carry mm (C-74, C-75)
+@area 3D
+# Four grilles from the Heat panel: the work cards PDF is kept so its first pages can be read (cut-out cards at the front, axes in mm).
+open qa/fixtures/cabinet-vents-four-grilles.novo
+wait 30
+click_text 3D #1
+wait 40
+click_text "Layers"
+wait 8
+click_text "Build order"
+wait 8
+key Escape
+wait 30
+shot start
+expect "Work cards (PDF)"
+check_layout
+answer_dialog "~/Documents/KoperCAD/qa 300 work cards.pdf"
+click_text "Work cards (PDF)"
+wait 40
+shot written
+expect_file "~/Documents/KoperCAD/qa 300 work cards.pdf" 3000
+keep_file "~/Documents/KoperCAD/qa 300 work cards.pdf"

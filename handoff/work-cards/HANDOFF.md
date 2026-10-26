@@ -31,3 +31,5 @@ Decisions taken by the thread while the owner was away, to review on return (all
 Known gaps: no fixture with two plated cabinets and an unplaced wire (the model refuses removing a plate that has devices), so `unplaced_notes` is unit-tested only; `WireCut` has no `core` field (the outside cards read the cable from the kind text, `CORE_MARK`); the 11-fixing duct note is proven by a unit test, not a picture.
 
 Plate template and rail strip (2026-10-26): the drill table pages sit after the tiles of each sheet in `1 Drilling template <tag> A4.pdf` (Workshop pack / Print preview > Workshop tab); `novo_pdf::template::table_page_count` counts them and `page_count` includes them. Rail cards use `rail_strip_plan` (scales 1:1 to 1:20, windows of whole 10 mm, strip at most 62 mm tall). Not done: the cover "read me once" page split (round 36 S4) and the project-file overwrite guard.
+## Cut-out cards come first (2026-10-26)
+add_opening_cards and add_wiring_opening_cards stable-sort Opening cards to the front of pack.cards; code that took `cards.last()` for an opening must use `first()`. Cut-out templates label their axis numbers with mm.
