@@ -175,3 +175,71 @@ fn one_card_is_one_a4_page_with_that_steps_template() {
     assert!(has_rect(&contents(&pdf), 45.0, 90.0), "true size footprint");
     assert!(export_card_pdf(&p, 999, "Crane").is_none());
 }
+
+fn text_of(bytes: &[u8]) -> String {
+    let doc = Document::load_mem(bytes).unwrap();
+    let pages: Vec<u32> = doc.get_pages().keys().copied().collect();
+    pages
+        .iter()
+        .map(|p| doc.extract_text(&[*p]).unwrap_or_default())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn the_revision_follows_the_content_and_a_changed_card_is_marked() {
+    use novo_layout::workpack::PrintRecord;
+    use novo_pdf::workpack::{Stamp, export_card_pdf_stamped, export_workpack_pdf_stamped};
+
+    let a = pack("+CAB1");
+    assert_eq!(a.revision(), pack("+CAB1").revision(), "stable");
+    assert_eq!(a.revision().len(), 6);
+    let record = PrintRecord::of(std::slice::from_ref(&a), "2026-10-01");
+    assert!(record.changes(std::slice::from_ref(&a)).is_empty());
+
+    let mut b = a.clone();
+    b.cards[0].text.push_str(" Moved 5 mm.");
+    assert_ne!(a.revision(), b.revision());
+    let changes = record.changes(std::slice::from_ref(&b));
+    assert_eq!(
+        changes.changed,
+        vec![("+CAB1".to_owned(), b.cards[0].mark.clone())]
+    );
+    assert_eq!(changes.removed, 0);
+
+    let stamp = Stamp {
+        printed: "2026-10-26".into(),
+        since: Some("2026-10-01".into()),
+        changes,
+    };
+    let pdf = export_workpack_pdf_stamped(std::slice::from_ref(&b), "Crane", Some(&stamp)).unwrap();
+    let text = text_of(&pdf);
+    assert!(text.contains(&format!("Rev {}", b.revision())), "{text}");
+    assert!(text.contains("printed 2026-10-26"), "{text}");
+    assert!(
+        text.contains("1 card CHANGED since the print of 2026-10-01"),
+        "{text}"
+    );
+    assert_eq!(
+        text.matches("check this card").count(),
+        1,
+        "only the changed card"
+    );
+
+    // The unstamped export is the old output.
+    assert!(!text_of(&export_workpack_pdf(&[b.clone()], "Crane").unwrap()).contains("Rev "));
+
+    let one = export_card_pdf_stamped(&b, 0, "Crane", Some(&stamp)).unwrap();
+    assert!(text_of(&one).contains("CHANGED since the print of 2026-10-01"));
+    let other = export_card_pdf_stamped(&b, 1, "Crane", Some(&stamp)).unwrap();
+    assert!(!text_of(&other).contains("CHANGED"));
+}
+
+#[test]
+fn saw_sizes_round_to_half_a_millimetre() {
+    use novo_layout::workpack::half_mm;
+    assert_eq!(half_mm(146.99), 147.0);
+    assert_eq!(half_mm(22.26), 22.5);
+    assert_eq!(half_mm(22.2), 22.0);
+    assert_eq!(half_mm(0.0), 0.0);
+}

@@ -1,0 +1,39 @@
+@title Work cards: printed, then a cooler layout is applied, the strip says the cards are out of date
+@area 3D
+# Print the cards, apply a cooling move, and the Build order strip names how many cards changed. The next print marks them CHANGED.
+open qa/fixtures/cabinet-cooler-layout.novo
+wait 30
+click_text 3D #1
+wait 40
+click_text "Layers"
+wait 8
+click_text "Build order"
+wait 8
+key Escape
+wait 30
+shot before-print
+answer_dialog "~/Documents/KoperCAD/qa 191 work cards.pdf"
+click_text "Work cards (PDF)"
+wait 40
+expect_file "~/Documents/KoperCAD/qa 191 work cards.pdf" 3000
+shot printed
+click_text Heat #1
+wait 20
+click_text "Cooler layout"
+wait_s 120
+expect "Apply the moves"
+click_text "Apply the moves"
+wait 30
+shot applied
+click_text 3D #1
+wait 30
+shot stale
+expect "Work cards out of date"
+check_layout
+answer_dialog "~/Documents/KoperCAD/qa 191 work cards again.pdf"
+click_text "Work cards (PDF)"
+wait 40
+expect_file "~/Documents/KoperCAD/qa 191 work cards again.pdf" 3000
+keep_file "~/Documents/KoperCAD/qa 191 work cards again.pdf"
+keep_file "~/Documents/KoperCAD/qa 191 work cards.pdf"
+shot reprinted
