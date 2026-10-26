@@ -730,13 +730,27 @@ fn wire_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
 /// cut out and wrap (the number twice either side of a fold line, so it reads
 /// from both sides of a wrapped wire). Three tick boxes close the row.
 fn strip_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
+    // Cores of a cable are run, not cut.
+    let cores = card.ticks.first().is_some_and(|t| t == "Cable run");
     for (x, align, h) in [
-        (4.0 + 20.0, HAlign::Right, "Cut mm"),
+        (
+            4.0 + 20.0,
+            HAlign::Right,
+            if cores { "Cable mm" } else { "Cut mm" },
+        ),
         (28.0, HAlign::Left, "Wire"),
         (46.0, HAlign::Left, "From / to"),
         (88.0, HAlign::Left, "Size, ferrule"),
         (128.0, HAlign::Left, "Marker (cut out, wrap)"),
-        (170.0, HAlign::Left, "Cut Fer. Mark"),
+        (
+            170.0,
+            HAlign::Left,
+            if cores {
+                "Run Fer. Mark"
+            } else {
+                "Cut Fer. Mark"
+            },
+        ),
     ] {
         text(m, (x0 + x, y), SMALL_TEXT_MM, align, true, h);
     }

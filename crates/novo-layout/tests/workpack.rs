@@ -892,3 +892,25 @@ fn strip_cards_break_ties_by_wire_number_and_skip_empty_groups() {
     // The input group is not reordered.
     assert_eq!(g[0].wires[0].number, "B");
 }
+
+#[test]
+fn cable_cores_are_on_their_own_cards_and_out_of_the_cut_total() {
+    let mut p = pack(0);
+    let before = p.cards.len();
+    let mut core = wire("12", "-X1:3", "-M1:W1", 12020.0);
+    core.kind = "1.5 mm2 black core =A1-W1".into();
+    let g = vec![WireGroup {
+        title: "Control".into(),
+        wires: vec![wire("A", "-Q10:1", "-Q11:2", 300.0), core],
+    }];
+    add_strip_cards(&mut p, &g);
+    let new = &p.cards[before..];
+    assert_eq!(new.len(), 2);
+    assert_eq!(new[0].mark, "Control cut strip");
+    assert!(new[0].text.contains("1 wire "), "{}", new[0].text);
+    assert!(new[0].text.contains("300 mm"), "{}", new[0].text);
+    assert_eq!(new[0].wires.len(), 1);
+    assert_eq!(new[1].mark, "Control cores of =A1-W1");
+    assert!(new[1].text.contains("do not cut a core to length"));
+    assert_eq!(new[1].ticks[0], "Cable run");
+}

@@ -11,6 +11,7 @@ use super::cabinet::Ask;
 use super::gate1_tests::Drive;
 use super::workpack::{ferrule_text, work_packs};
 use crate::actions::Action;
+use novo_layout::workpack::CORE_MARK;
 
 fn lesson(path: &str) -> Project {
     let file = format!("{}/../../assets/lessons/{path}", env!("CARGO_MANIFEST_DIR"));
@@ -863,8 +864,15 @@ fn every_cabinet_wire_is_on_a_cut_strip_longest_first_with_its_ferrule() {
         assert!(on_strips > 0, "{}", pack.cabinet);
         assert!(strips.iter().all(|c| c.steps == (0, 0)));
         // Within a card the lengths never grow.
-        for c in &strips {
+        for c in strips.iter().filter(|c| !c.mark.contains(" cores of ")) {
             assert!(c.wires.windows(2).all(|w| w[0].cut_mm >= w[1].cut_mm));
+            assert!(c.wires.iter().all(|w| !w.kind.contains(CORE_MARK)));
+        }
+        // Cores are only on their own cards, which say they are not cut.
+        for c in strips.iter().filter(|c| c.mark.contains(" cores of ")) {
+            assert!(c.wires.iter().all(|w| w.kind.contains(CORE_MARK)));
+            assert!(c.text.contains("do not cut a core"), "{}", c.text);
+            assert_eq!(c.ticks[0], "Cable run");
         }
         // A wire with a numeric size names its ferrule from the standard.
         for w in strips.iter().flat_map(|c| &c.wires) {

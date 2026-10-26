@@ -20,6 +20,10 @@ use crate::drill::{CutoutShape, DeviceFeatures, DrillTable, Surface, drill_table
 use crate::state::CabinetLayout;
 use crate::{Placement, RAIL_BAND_MM};
 
+/// What the cut list's size column carries between a wire's size and the cable
+/// it is a core of: `1.5 mm2 black core =A1-W1`.
+pub const CORE_MARK: &str = " core ";
+
 /// Wire rows on one card; more wires continue on the next card.
 pub const WIRES_PER_CARD: usize = 9;
 /// Label rows on one card.
@@ -1059,7 +1063,13 @@ pub fn add_outside_wire_cards(pack: &mut Pack, wires: Vec<WireCut>) {
 /// calculator. They sit after the other cards and are not build order steps.
 pub fn add_strip_cards(pack: &mut Pack, groups: &[WireGroup]) {
     for g in groups.iter().filter(|g| !g.wires.is_empty()) {
-        let mut wires = g.wires.clone();
+        // A core of a cable is not cut to length: the cable is bought and run
+        // once. Cores get their own cards, and stay out of the total.
+        let (mut wires, cores): (Vec<WireCut>, Vec<WireCut>) = g
+            .wires
+            .iter()
+            .cloned()
+            .partition(|w| !w.kind.contains(CORE_MARK));
         wires.sort_by(|a, b| {
             b.cut_mm
                 .total_cmp(&a.cut_mm)
@@ -1100,6 +1110,44 @@ pub fn add_strip_cards(pack: &mut Pack, groups: &[WireGroup]) {
                 notes: Vec::new(),
                 ticks: ticks(&["Cut", "Ferrule", "Marked"]),
             });
+        }
+        let mut by_cable: BTreeMap<String, Vec<WireCut>> = BTreeMap::new();
+        for w in cores {
+            let cable = w.kind.split(CORE_MARK).nth(1).unwrap_or("").to_owned();
+            by_cable.entry(cable).or_default().push(w);
+        }
+        for (cable, mut cores) in by_cable {
+            cores.sort_by(|a, b| a.number.cmp(&b.number));
+            let n = cores.len();
+            let cards = n.div_ceil(WIRES_PER_CARD);
+            for (i, chunk) in cores.chunks(WIRES_PER_CARD).enumerate() {
+                pack.cards.push(Card {
+                    kind: CardKind::Strips,
+                    steps: (0, 0),
+                    total: 0,
+                    phase: Phase::Wires,
+                    mark: if cards == 1 {
+                        format!("{} cores of {cable}", g.title)
+                    } else {
+                        format!("{} cores of {cable} {} of {cards}", g.title, i + 1)
+                    },
+                    text: format!(
+                        "Cores of cable {cable}: strip the sheath and fit the ferrules, do not cut a core to length. The cable is bought and run once; the length on a row is the cable's length plus the ends and is not part of the wire total. Cut out the markers and wrap one round each core near each end."
+                    ),
+                    tools: vec![
+                        "Cable stripper".to_owned(),
+                        "Ferrule crimp tool".to_owned(),
+                        "Scissors for the markers".to_owned(),
+                    ],
+                    template: None,
+                    dims: Vec::new(),
+                    wires: chunk.to_vec(),
+                    wires_more: 0,
+                    labels: Vec::new(),
+                    notes: Vec::new(),
+                    ticks: ticks(&["Cable run", "Ferrule", "Marked"]),
+                });
+            }
         }
     }
 }

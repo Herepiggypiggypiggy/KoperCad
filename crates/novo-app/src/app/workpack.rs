@@ -12,8 +12,8 @@ use std::path::{Path, PathBuf};
 
 use novo_core::{Device, DeviceId, Project};
 use novo_layout::workpack::{
-    CardKind, OpeningJob, OpeningWall, Pack, PrintRecord, WireCut, WireGroup, add_opening_cards,
-    add_outside_wire_cards, add_strip_cards, add_wiring_opening_cards, build,
+    CORE_MARK, CardKind, OpeningJob, OpeningWall, Pack, PrintRecord, WireCut, WireGroup,
+    add_opening_cards, add_outside_wire_cards, add_strip_cards, add_wiring_opening_cards, build,
 };
 use novo_reports::{AssemblyChecklist, Cell, CutList, Report, Section, is_estimate};
 
@@ -185,8 +185,6 @@ pub(super) fn unplaced_notes(
 
 /// A core of a cable is cut from the cable, which is bought and run once: say
 /// so beside its size, so the bench does not look for hookup wire to cut.
-const CORE_MARK: &str = " core ";
-
 fn core_of(kind: String, cable: &str) -> String {
     if cable.is_empty() {
         kind
