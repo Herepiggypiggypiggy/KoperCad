@@ -997,9 +997,17 @@ pub fn add_strip_cards(pack: &mut Pack, groups: &[WireGroup]) {
     }
 }
 
-/// Adds one card per opening after the cards of the build order, plus the
-/// tool lines they need. The cards sit outside the build order (steps 0): a
-/// wall is cut before the parts go in, so the text says so.
+/// Moves the cut-out cards to the front of the pack (stable), so a bench
+/// user working card by card cuts the walls first. They stay outside the
+/// build order (steps 0).
+fn cut_outs_first(pack: &mut Pack) {
+    pack.cards.sort_by_key(|c| c.kind != CardKind::Opening);
+}
+
+/// Adds one card per opening in front of the cards of the build order, plus
+/// the tool lines they need. The cards sit outside the build order (steps
+/// 0): a wall is cut before the parts go in, so the text says so and they
+/// are printed first.
 pub fn add_opening_cards(pack: &mut Pack, openings: &[OpeningJob]) {
     for (i, o) in openings.iter().enumerate() {
         let mark = format!("{} {} ({})", capitalised(&o.what), i + 1, o.wall.name());
@@ -1100,10 +1108,7 @@ pub fn add_opening_cards(pack: &mut Pack, openings: &[OpeningJob]) {
                 width: cw,
                 height: ch,
                 caption: format!("{} cut-out {} x {} mm", o.what, mm(w), mm(h)),
-                origin: format!(
-                    "Frame is {} mm larger than the cut-out on every side; the cross hair is the centre",
-                    mm(OPENING_FRAME_MM)
-                ),
+                origin: frame_note(cw, ch),
                 rail: false,
                 holes: Vec::new(),
                 cutout: Some(TemplateCutout {
@@ -1121,6 +1126,7 @@ pub fn add_opening_cards(pack: &mut Pack, openings: &[OpeningJob]) {
             ticks: ticks(&["Marked", "Cut", "Edges filed", "Fitted"]),
         });
     }
+    cut_outs_first(pack);
     // One tool line per size and wall, counted, as the holes are listed.
     let mut groups: Vec<(String, String, usize)> = Vec::new();
     for o in openings {
@@ -1231,7 +1237,7 @@ fn point_words(name: &str, x: f64, y: f64, size: Option<(f64, f64)>) -> String {
 
 /// Adds a cut-out card for every wiring opening of the layout (grommet
 /// holes, slots, cable entries on the plate, the door or a wall), the ones
-/// that no device carries. Like [`add_opening_cards`] they sit after the
+/// that no device carries. Like [`add_opening_cards`] they sit in front of the
 /// step cards, outside the build order; their tool lines are already in the
 /// pack's list, which counts every cut-out of the drill table. An opening on
 /// a surface whose size is unknown is named in the pack's problems.
@@ -1339,10 +1345,7 @@ pub fn add_wiring_opening_cards(pack: &mut Pack, layout: &CabinetLayout) {
                 width: cw,
                 height: ch,
                 caption: format!("opening cut-out {} mm", shape.describe()),
-                origin: format!(
-                    "Frame is {} mm larger than the cut-out on every side; the cross hair is the centre",
-                    mm(OPENING_FRAME_MM)
-                ),
+                origin: frame_note(cw, ch),
                 rail: false,
                 holes: Vec::new(),
                 clips: Vec::new(),
@@ -1360,6 +1363,20 @@ pub fn add_wiring_opening_cards(pack: &mut Pack, layout: &CabinetLayout) {
             ticks: ticks(&["Marked", "Cut", "Edges filed", "Edge protected"]),
         });
     }
+    cut_outs_first(pack);
+}
+
+/// What the numbers on a cut-out template's axes mean: the distance of the
+/// cross hair (the cut-out's centre) from the frame's top left corner.
+fn frame_note(cw: f64, ch: f64) -> String {
+    format!(
+        "Frame {} x {} mm, {} mm larger than the cut-out on every side. The cross hair is the centre, {} mm from the left edge and {} mm from the top edge of the frame (the numbers on the template's axes)",
+        mm(cw),
+        mm(ch),
+        mm(OPENING_FRAME_MM),
+        mm(cw / 2.0),
+        mm(ch / 2.0)
+    )
 }
 
 fn capitalised(s: &str) -> String {

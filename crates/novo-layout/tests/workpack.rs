@@ -370,7 +370,7 @@ fn a_door_grille_is_a_card_outside_the_build_order_with_edge_distances() {
     let before = (p.cards.len(), p.tools.len());
     add_opening_cards(&mut p, &[grille(OpeningWall::Door, 300.0, Some(150.0))]);
     assert_eq!(p.cards.len(), before.0 + 1);
-    let c = p.cards.last().unwrap();
+    let c = p.cards.first().unwrap();
     assert_eq!(c.kind, CardKind::Opening);
     assert_eq!(c.steps, (0, 0));
     assert!(c.mark.contains("door"), "{}", c.mark);
@@ -402,7 +402,7 @@ fn a_door_grille_is_a_card_outside_the_build_order_with_edge_distances() {
 fn a_side_wall_opening_is_drawn_with_its_width_along_the_wall() {
     let mut p = pack(0);
     add_opening_cards(&mut p, &[grille(OpeningWall::Left, 400.0, None)]);
-    let c = p.cards.last().unwrap();
+    let c = p.cards.first().unwrap();
     let t = c.template.as_ref().unwrap();
     // 200 mm along y (drawn vertical), 100 mm deep (drawn horizontal).
     assert_eq!((t.width, t.height), (120.0, 220.0));
@@ -410,7 +410,7 @@ fn a_side_wall_opening_is_drawn_with_its_width_along_the_wall() {
     assert!(c.notes.iter().any(|n| n.contains("depth")));
     let top = grille(OpeningWall::Top, 100.0, None);
     add_opening_cards(&mut p, &[top]);
-    assert!(p.cards.last().unwrap().dims[0].contains("100"));
+    assert!(p.cards[1].dims[0].contains("100"));
 }
 
 #[test]

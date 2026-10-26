@@ -284,7 +284,8 @@ fn the_table_text_carries_the_label_and_the_conditions() {
     }
 }
 
-/// The one 3D comparison says the 2D model reads a fan's gain low: the card
+/// The 3D comparisons say the size of a fan's gain is uncertain (neither side
+/// reads systematically low any more, but position matters): the card
 /// and the copied table of a fix with fans say so, those without do not.
 #[test]
 fn a_fix_with_fans_carries_the_fan_note_and_one_without_does_not() {
