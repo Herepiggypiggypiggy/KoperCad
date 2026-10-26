@@ -125,11 +125,11 @@ id = "drilling"
 title = "Read a rail card"
 title_nl = "Lees een raikaart"
 text = """
-A **rail card** shows the rail strip with its holes numbered and lists them in mm from the rail start: "Holes, mm from the rail start", the repeated pitch ("Pitch between holes, mm: 196 x 5") and "Last hole to the rail end".
+A **rail card** shows the rail strip with its holes (numbered where the scale allows) and lists them in mm from the rail start: "Holes, mm from the rail start", the repeated pitch ("Pitch between holes, mm: 196 x 5") and "Last hole to the rail end".
 A note names the devices clipped on the rail, in mm from its start (the first six; all are drawn on the strip).
 """
 text_nl = """
-Een **raikaart** toont de railstrook met genummerde gaten en noemt ze in mm vanaf het railbegin: "Holes, mm from the rail start", de herhaalde steek ("Pitch between holes, mm: 196 x 5") en "Last hole to the rail end".
+Een **raikaart** toont de railstrook met zijn gaten (genummerd waar de schaal het toelaat) en noemt ze in mm vanaf het railbegin: "Holes, mm from the rail start", de herhaalde steek ("Pitch between holes, mm: 196 x 5") en "Last hole to the rail end".
 Een notitie noemt de apparaten op de rail, in mm vanaf het railbegin (de eerste zes; alle staan getekend op de strook).
 """
 
