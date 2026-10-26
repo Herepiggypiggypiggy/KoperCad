@@ -622,7 +622,7 @@ pub fn build(
                     let shown: Vec<String> = clips
                         .iter()
                         .take(CLIPS_LISTED)
-                        .map(|c| format!("{} at {}", c.tag, mm(c.at)))
+                        .map(|c| format!("{} at {}", c.short(), mm(c.at)))
                         .collect();
                     let more = clips.len().saturating_sub(CLIPS_LISTED);
                     notes.push(format!(

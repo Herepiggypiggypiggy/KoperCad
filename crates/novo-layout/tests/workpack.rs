@@ -662,7 +662,7 @@ fn a_rail_card_draws_the_clipped_devices_along_the_strip() {
         rail("R1")
             .notes
             .iter()
-            .any(|n| n.contains("-Q10 at 50, -Q11 at 150"))
+            .any(|n| n.contains("Q10 at 50, Q11 at 150"))
     );
     // R2 holds no device: nothing drawn, no note.
     assert!(rail("R2").template.as_ref().unwrap().clips.is_empty());

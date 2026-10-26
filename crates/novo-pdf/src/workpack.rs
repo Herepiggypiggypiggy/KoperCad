@@ -673,8 +673,10 @@ fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
                 false,
                 t.origin.clone(),
             );
-            tools_at = (x0 + 4.0, 78.0, below + 5.0);
-            dims_at = Some((x0 + 86.0, CARD_W - 90.0, below + 5.0));
+            // The tools and notes list the clipped devices: give them the wider
+            // column so no position is cut off.
+            tools_at = (x0 + 4.0, 96.0, below + 5.0);
+            dims_at = Some((x0 + 104.0, CARD_W - 108.0, below + 5.0));
         }
         Some(t) => {
             // A duct strip across the card, lists below it.
@@ -1721,9 +1723,31 @@ mod tests {
     #[test]
     fn rail_dump() {
         if let Ok(path) = std::env::var("RAIL_DUMP") {
-            let p = rail_pack(1000.0, &[40.0, 204.0, 368.0, 532.0, 696.0, 860.0]);
+            let p = rail_pack(1000.0, &[60.0, 200.0, 340.0, 480.0, 620.0, 760.0]);
             std::fs::write(path, export_card_pdf(&p, 0, "Demo").unwrap()).unwrap();
         }
+    }
+
+    #[test]
+    fn a_rail_card_with_six_clipped_devices_prints_all_six_positions() {
+        let xs = [60.0, 200.0, 340.0, 480.0, 620.0, 760.0];
+        let p = rail_pack(1000.0, &xs);
+        let m = card_marks(&p.cards[0], &p.cabinet, CARD_Y[0]);
+        let all: String = m
+            .texts
+            .iter()
+            .map(|t| t.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        // Rail starts at x 50: the devices sit 10, 150, 290, 430, 570 and 710 mm along it.
+        for (k, at) in (1..=6).zip([10, 150, 290, 430, 570, 710]) {
+            assert!(
+                all.contains(&format!("K{k} at {at}")),
+                "K{k} at {at} missing in {all}"
+            );
+        }
+        assert!(!all.contains("more lines"), "{all}");
+        assert!(inside(&m, CARD_Y[0]).is_empty());
     }
 
     #[test]
