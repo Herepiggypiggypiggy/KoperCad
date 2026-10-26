@@ -232,6 +232,95 @@ impl Card {
     }
 }
 
+/// FNV-1a over a card's printed content. Stable across runs and platforms
+/// (no random hasher), so it can be compared with the value of an earlier print.
+fn fnv(text: &str) -> u64 {
+    text.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
+impl Card {
+    /// Identifies what the card prints: it changes when the card's text,
+    /// holes, template, wires or ticks change, and not otherwise.
+    pub fn fingerprint(&self) -> u64 {
+        fnv(&format!("{self:?}"))
+    }
+}
+
+impl Pack {
+    /// The pack's revision: six hex digits over the plate and every card in
+    /// order. It is the layout state a print was made from, not a counter.
+    pub fn revision(&self) -> String {
+        let all = format!("{:?}|{:?}", self.plate, self.cards);
+        format!("{:06x}", fnv(&all) & 0xff_ffff)
+    }
+}
+
+/// What a print was made from: the date, each pack's revision and each
+/// card's fingerprint. Kept by the app after an export and compared with the
+/// current packs to say which cards changed since, and whether the printed
+/// pack is out of date.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PrintRecord {
+    /// `YYYY-MM-DD` of the print.
+    pub date: String,
+    /// Revision per cabinet tag.
+    pub revisions: BTreeMap<String, String>,
+    /// Fingerprint per (cabinet tag, card mark).
+    pub cards: BTreeMap<(String, String), u64>,
+}
+
+/// The cards that differ from a print.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Changes {
+    /// (cabinet, mark) of cards that are new or whose content differs.
+    pub changed: Vec<(String, String)>,
+    /// Cards of the print that the pack no longer has.
+    pub removed: usize,
+}
+
+impl Changes {
+    pub fn is_empty(&self) -> bool {
+        self.changed.is_empty() && self.removed == 0
+    }
+}
+
+impl PrintRecord {
+    /// The record of printing `packs` on `date`.
+    pub fn of(packs: &[Pack], date: &str) -> Self {
+        let mut r = PrintRecord {
+            date: date.to_owned(),
+            ..Self::default()
+        };
+        for p in packs.iter().filter(|p| !p.cards.is_empty()) {
+            r.revisions.insert(p.cabinet.clone(), p.revision());
+            for c in &p.cards {
+                r.cards
+                    .insert((p.cabinet.clone(), c.mark.clone()), c.fingerprint());
+            }
+        }
+        r
+    }
+
+    /// How the current `packs` differ from this print.
+    pub fn changes(&self, packs: &[Pack]) -> Changes {
+        let now = Self::of(packs, &self.date);
+        let changed = now
+            .cards
+            .iter()
+            .filter(|(k, v)| self.cards.get(*k) != Some(*v))
+            .map(|(k, _)| k.clone())
+            .collect();
+        let removed = self
+            .cards
+            .keys()
+            .filter(|k| !now.cards.contains_key(*k))
+            .count();
+        Changes { changed, removed }
+    }
+}
+
 /// One line of the pack's tool list.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToolLine {
@@ -279,6 +368,24 @@ pub fn from_edges(x: f64, y: f64, (width, height): (f64, f64)) -> String {
         mm(h),
         mm(v)
     )
+}
+
+/// A saw or punch size at the bench: up to the next 0.5 mm, so the cut-out
+/// is never smaller than the part it must clear. A model value like 146.99
+/// is float noise from the part data and prints as 147; a size already on a
+/// half millimetre (within 0.0005 mm) stays.
+pub fn half_mm(v: f64) -> f64 {
+    ((v * 2.0 - 1e-3).ceil() / 2.0).max(0.0)
+}
+
+fn half_shape(s: CutoutShape) -> CutoutShape {
+    match s {
+        CutoutShape::Round { dia } => CutoutShape::Round { dia: half_mm(dia) },
+        CutoutShape::Rect { w, h } => CutoutShape::Rect {
+            w: half_mm(w),
+            h: half_mm(h),
+        },
+    }
 }
 
 fn round2(v: f64) -> f64 {
@@ -606,7 +713,7 @@ pub fn build(
                             .centre
                             .unwrap_or((p.size.width / 2.0, p.size.height / 2.0));
                         let (lx, ly) = local(cx, cy, p);
-                        let shape = match (c.shape, p.rotated) {
+                        let shape = match (half_shape(c.shape), p.rotated) {
                             (CutoutShape::Rect { w, h }, true) => CutoutShape::Rect { w: h, h: w },
                             (s, _) => s,
                         };
@@ -812,7 +919,7 @@ fn tool_list(cards: &[Card], table: &DrillTable, groups: &[WireGroup]) -> Vec<To
     }
     for c in &table.cutouts {
         out.push(ToolLine {
-            tool: match c.shape {
+            tool: match half_shape(c.shape) {
                 CutoutShape::Round { dia } => format!("Hole saw or step drill, dia {} mm", mm(dia)),
                 CutoutShape::Rect { w, h } => {
                     format!("Punch, nibbler or jigsaw, {} x {} mm", mm(w), mm(h))
@@ -951,7 +1058,7 @@ fn cut_outs_first(pack: &mut Pack) {
 pub fn add_opening_cards(pack: &mut Pack, openings: &[OpeningJob]) {
     for (i, o) in openings.iter().enumerate() {
         let mark = format!("{} {} ({})", capitalised(&o.what), i + 1, o.wall.name());
-        let (w, h) = (o.width, o.height);
+        let (w, h) = (half_mm(o.width), half_mm(o.height));
         let mut dims = Vec::new();
         let mut notes = Vec::new();
         let face = match o.wall {
@@ -1072,8 +1179,8 @@ pub fn add_opening_cards(pack: &mut Pack, openings: &[OpeningJob]) {
     for o in openings {
         let tool = format!(
             "Punch, nibbler or jigsaw for {} x {} mm",
-            mm(o.width),
-            mm(o.height)
+            mm(half_mm(o.width)),
+            mm(half_mm(o.height))
         );
         let for_what = format!("{} cut-out in the {}", o.what, o.wall.name());
         match groups.iter_mut().find(|g| g.0 == tool && g.1 == for_what) {
@@ -1203,8 +1310,11 @@ pub fn add_wiring_opening_cards(pack: &mut Pack, layout: &CabinetLayout) {
             continue;
         }
         let shape = match o.shape {
-            OpeningShape::Round { dia } => CutoutShape::Round { dia },
-            OpeningShape::Rect { w, h } => CutoutShape::Rect { w, h },
+            OpeningShape::Round { dia } => CutoutShape::Round { dia: half_mm(dia) },
+            OpeningShape::Rect { w, h } => CutoutShape::Rect {
+                w: half_mm(w),
+                h: half_mm(h),
+            },
         };
         let (w, h) = match shape {
             CutoutShape::Round { dia } => (dia, dia),

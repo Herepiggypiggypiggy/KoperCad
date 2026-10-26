@@ -334,6 +334,12 @@ impl NovoApp {
     pub(super) fn view3d_show(&mut self, ui: &mut egui::Ui) {
         self.sync_openings(ui.ctx());
         self.whatif_apply();
+        // Compared once per project revision, and only with the strip showing.
+        let build_stale = if self.view3d.controls.assembly.is_some() {
+            self.workpack_stale_note()
+        } else {
+            None
+        };
         if let Some(text) = self.view3d.notice.take() {
             self.message(super::Level::Info, text);
         }
@@ -1021,6 +1027,7 @@ impl NovoApp {
             view_rect,
             &mut mode.controls.assembly,
             &mode.assembly_steps,
+            build_stale.as_deref(),
         ) {
             Some(super::view3d_build_order::Print::All) => {
                 self.wb.queued.push("export.workpack");

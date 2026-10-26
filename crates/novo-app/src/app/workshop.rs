@@ -207,8 +207,10 @@ impl NovoApp {
             }
             None => skipped.push("labels".to_owned()),
         }
-        if let Some(bytes) = self.work_cards_pdf() {
+        if let Some((bytes, record)) = self.work_cards_stamped() {
             if self.workshop_write(&folder.join(WORK_CARDS_FILE), &bytes) {
+                // A pack printed from the folder counts as printed.
+                self.remember_print(record);
                 done.push("work cards".to_owned());
                 separate.push(CoverLine::new(
                     "Work cards",
