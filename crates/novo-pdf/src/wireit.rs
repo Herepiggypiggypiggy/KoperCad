@@ -122,15 +122,18 @@ fn head(m: &mut Marks, project: &str, plan: &WireItPlan, done: &[bool], page_no:
             left_m
         ),
     );
-    text(
-        m,
-        (X0, 21.0),
-        3.0,
-        HAlign::Left,
-        false,
-        "Cut includes the end allowance; a cable core is run with its cable, not cut, and is left out of the total. Duct fill is the routing's model (wire area against the \
-         duct's allowed fill), not a measurement: check the first wire against the real cabinet.",
-    );
+    for (y, line_text) in [
+        (
+            21.0,
+            "Cut includes the end allowance; a cable core is run with its cable, not cut, and is left out of the total.",
+        ),
+        (
+            24.2,
+            "Duct fill is the routing's model (wire area against the duct's allowed fill), not a measurement: check the first wire against the real cabinet.",
+        ),
+    ] {
+        text(m, (X0, y), 3.0, HAlign::Left, false, line_text);
+    }
     // Column headings.
     let y = TOP - 1.0;
     for (x, align, h) in [
