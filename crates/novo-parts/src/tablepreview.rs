@@ -1139,7 +1139,12 @@ fn price(raw: &str, warn: &mut impl FnMut(Severity, String)) -> Option<f64> {
         .unwrap_or(trail)
         .trim_start_matches(['.', ',']);
     let decoration = format!("{} {}", lead.trim(), trail.trim());
-    if !decoration.trim().is_empty() && currency_of(&decoration).is_none() {
+    // Only currency: signs and three-letter codes, nothing else.
+    let only_currency = decoration
+        .split(|c: char| c.is_whitespace() || matches!(c, '€' | '£' | '$'))
+        .filter(|w| !w.is_empty())
+        .all(|w| w.len() == 3 && currency_of(w).is_some());
+    if !only_currency || (!decoration.trim().is_empty() && currency_of(&decoration).is_none()) {
         return not_a_price(warn);
     }
     // The amount: digits with `.`, `,`, `'` or a space as separators. A space
@@ -1150,7 +1155,7 @@ fn price(raw: &str, warn: &mut impl FnMut(Severity, String)) -> Option<f64> {
         && body
             .split(' ')
             .skip(1)
-            .all(|g| g.len() >= 3 && g.chars().take(3).all(|c| c.is_ascii_digit()));
+            .all(|g| g.chars().take_while(char::is_ascii_digit).count() == 3);
     if !well_formed {
         return not_a_price(warn);
     }

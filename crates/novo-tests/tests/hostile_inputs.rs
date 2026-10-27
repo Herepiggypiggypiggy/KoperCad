@@ -286,6 +286,7 @@ fn every_output_runs_over_every_fixture_project() {
             }
         };
         seen += 1;
+        let started = Instant::now();
         let r = catch_unwind(AssertUnwindSafe(|| {
             let reports = novo_reports::generate_all(&project);
             let refs: Vec<&novo_reports::ReportOutput> = reports.iter().collect();
@@ -302,6 +303,11 @@ fn every_output_runs_over_every_fixture_project() {
             );
         }));
         assert!(r.is_ok(), "output panicked on fixture {name}");
+        assert!(
+            started.elapsed() < SLOW,
+            "outputs on fixture {name} took {:?}",
+            started.elapsed()
+        );
         let _ = dir.path();
     }
     assert!(seen > 10, "fixtures were not found ({seen})");

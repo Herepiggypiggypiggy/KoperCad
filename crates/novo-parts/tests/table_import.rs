@@ -781,7 +781,7 @@ fn lifecycle_words_are_whole_words_and_a_negation_is_never_active() {
 /// unknown with a warning, never read as a different number.
 #[test]
 fn prices_in_every_spelling_are_read_exactly_or_refused() {
-    let cases: [(&str, Option<(f64, &str)>); 14] = [
+    let cases: [(&str, Option<(f64, &str)>); 17] = [
         ("12,50 €", Some((12.5, "EUR"))),
         ("€ 12.50", Some((12.5, "EUR"))),
         ("$1,234.56", Some((1234.56, "USD"))),
@@ -797,6 +797,9 @@ fn prices_in_every_spelling_are_read_exactly_or_refused() {
         ("ab12cd", None),
         ("12.5%", None),
         ("kr 100", None),
+        ("12.5% EUR", None),
+        ("ca. 5 EUR per piece", None),
+        ("1 2345", None),
     ];
     let mut text = String::from("Manufacturer;Order number;Price\n");
     for (i, (raw, _)) in cases.iter().enumerate() {
