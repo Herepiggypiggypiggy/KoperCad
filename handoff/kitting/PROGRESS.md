@@ -5,3 +5,4 @@
 2026-10-27 02:20 UTC  QA scenarios 320, 321, 322 pass at both sizes (one S4 dock overlap under the dialog at 1920x1080, not from this change).
 2026-10-27 02:40 UTC  Reviewer: QA evidence was not from the PR head. Scenarios renumbered 310-312 (300/301 clash with #1527); evidence rerun on the pushed head.
 2026-10-27 03:10 UTC  Review R5: warnings now also printed with the shopping list; scenarios moved to 320-322 (310 taken on main). QA rerun on the new head.
+2026-10-27 03:30 UTC  R5 nit: saw plan column renamed to 'Bar left before cut mm'. Lists in a cell are capped at 6 names plus 'and N more' (short_list), so long cabinets do not overflow.

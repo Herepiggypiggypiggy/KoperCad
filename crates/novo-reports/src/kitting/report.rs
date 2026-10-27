@@ -67,7 +67,7 @@ impl Kitting {
                     Column::new("from", "Cut from", 26.0),
                     Column::new("piece", "Piece", 22.0),
                     Column::new("length_mm", "Cut mm", 10.0).right(),
-                    Column::new("before_mm", "Bar piece mm", 12.0).right(),
+                    Column::new("before_mm", "Bar left before cut mm", 14.0).right(),
                     Column::new("left_mm", "Left mm", 10.0).right(),
                     Column::new("keep", "Leftover", 10.0),
                     Column::new("done", "Done", 7.0),
