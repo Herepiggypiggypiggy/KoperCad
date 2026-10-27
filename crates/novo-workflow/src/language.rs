@@ -1193,6 +1193,11 @@ pub const DUTCH: &[Aliases] = &[
         &["werkbank", "snijlijst", "aderhulzen"],
     ),
     nl(
+        "export.kitting",
+        &["exporteer inkooplijst", "inkooplijst", "pluklijst"],
+        &["inkoop", "voorraad", "reststukken", "haspel", "zaagsnede"],
+    ),
+    nl(
         "export.safety_sheets",
         &["exporteer veiligheidsfuncties", "veiligheidsfunctiebladen"],
         &["veiligheidsfunctie", "technisch dossier"],

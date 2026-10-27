@@ -91,6 +91,7 @@ pub mod handover;
 pub mod i18n;
 mod io;
 pub mod issues;
+pub mod kitting;
 mod label_sheet;
 mod labels;
 mod lengths;
@@ -128,6 +129,7 @@ pub use devices::DeviceList;
 pub use diagrams::{CableDiagram, TerminalDiagram};
 pub use export::{CsvOptions, ExportError, save_xlsx, to_csv, xlsx_bytes};
 pub use io::IoList;
+pub use kitting::{KitPlan, KitSettings, Kitting};
 pub use label_sheet::{
     LabelItem, LabelRun, LabelSettings, LabelStock, MIN_TEXT_MM,
     SETTINGS_KEY as LABEL_SETTINGS_KEY, SheetGrid, TapeStock, label_items, layout_labels,

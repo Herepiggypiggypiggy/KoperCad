@@ -12,6 +12,18 @@ The Reports menu holds the pages that are generated from the drawing:
 - Reports > **Bench output...** gathers the cut list, ferrule table, label sheets, assembly checklist and the workshop pack (a folder)
 - **Plate drawing** and drilling template at 1:1 (File > Export > Export plate drawing)
 
+## Kitting and the shopping list
+
+Before the first cut, Reports > **Bench output... > Kitting** (or Reports > Export > **Export kitting list (PDF)**, or Ctrl+K "kitting") works out what to take from the shelf and what to buy:
+
+- **Rails and ducts** of every cabinet are packed into the bar lengths you buy (default 2000 mm, a list such as `2000, 1000` is allowed) with the saw cut taken off every cut. The search is exact for a normal cabinet; it says when it stopped early. A bar bought for a few short pieces is bought in the shortest length that holds them. Offcuts you keep (100 mm or longer by default) are named: "cut R3 from the offcut left by R1".
+- **Stock on hand** is typed one item per line (`rail 1200 x2`, `duct 50x60 1500`, `wire 1.5 BK 37.5 m`, `have A1.5-10 x40`). Offcuts and part reels on hand are used before anything is bought.
+- **Wire** is packed per cross-section and colour onto reels (default 100 m, a percentage of every reel is held back for re-cuts). Cable cores come from their cable and are listed by the metre.
+- **Ferrules, lugs, screws and label sheets** are counted with spares and bought in packs.
+- A **pick list per build phase** (Prepare, Mount, Wire, Label) with tick boxes, and **one shopping list** that merges these with the parts list. Give a stock item an order number (`Item = order number` in the Kitting settings) and it merges into the parts-list line with that number.
+
+The printed list says which numbers come from the drawing (counts of rails, devices, wires, holes) and which are planning values you set (bar and reel lengths, saw cut, packs, allowances). It is also in the workshop pack as `3 Kitting list.pdf`.
+
 Lengths marked **~** are estimates until the cabinet is laid out and the wires routed. Wires to the door are marked **~ door**: the distance between plate and door and the hinge loop are not included, so add them when you cut the wire.
 
 Reports export to PDF and Excel. Report text can be switched to Dutch.

@@ -3184,6 +3184,32 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.kitting",
+            "Export kitting list (PDF)",
+            "Export",
+            &[
+                "kitting",
+                "pick list",
+                "shopping list",
+                "stock",
+                "bars",
+                "offcut",
+                "reel",
+                "kerf",
+                "order",
+                "bom",
+            ],
+            Needs::Project,
+        ),
+        &[
+            "export kitting list",
+            "kitting",
+            "shopping list",
+            "pick list",
+        ],
+    ),
+    verb(
+        cmd(
             "export.safety_sheets",
             "Export safety function sheets (PDF)",
             "Export",

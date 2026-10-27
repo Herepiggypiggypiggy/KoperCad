@@ -288,6 +288,7 @@ impl NovoApp {
             "export.workshop" => response.on_hover_text(super::WORKSHOP_HINT),
             "export.scale_check" => response.on_hover_text(super::SCALE_CHECK_HINT),
             "export.bench_packet" => response.on_hover_text(super::BENCH_PACKET_HINT),
+            "export.kitting" => response.on_hover_text(super::KITTING_HINT),
             _ => response,
         };
         if let Some(reason) = reason {

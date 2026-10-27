@@ -30,6 +30,9 @@ use super::{Level, NovoApp};
 /// slip (metres typed as millimetres); printing it would not be.
 const MAX_TEMPLATE_PAGES: usize = 300;
 
+/// The kitting and shopping list the pack carries.
+const KITTING_FILE: &str = "3 Kitting list.pdf";
+
 /// The work cards in the pack.
 const WORK_CARDS_FILE: &str = "1 Work cards.pdf";
 
@@ -206,6 +209,20 @@ impl NovoApp {
                 ));
             }
             None => skipped.push("labels".to_owned()),
+        }
+        match self.kitting_pdf(true) {
+            Some((bytes, _)) => {
+                if self.workshop_write(&folder.join(KITTING_FILE), &bytes) {
+                    done.push("kitting list".to_owned());
+                    separate.push(CoverLine::new(
+                        "Kitting and shopping list",
+                        KITTING_FILE,
+                        "A4, any printer",
+                        "Counts from the drawing; stock lengths, reels and packs are planning values you set",
+                    ));
+                }
+            }
+            None => skipped.push("kitting list (nothing to kit)".to_owned()),
         }
         if let Some((bytes, record)) = self.work_cards_stamped() {
             if self.workshop_write(&folder.join(WORK_CARDS_FILE), &bytes) {

@@ -179,6 +179,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "bench.tab.cut",
     "bench.tab.ferrules",
     "bench.tab.labels",
+    "bench.tab.kitting",
     "build.screen",
     "build.done",
     "build.problem",
