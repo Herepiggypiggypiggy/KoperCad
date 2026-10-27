@@ -21,6 +21,9 @@ use crate::template::{Page, line, ruler, text, write_pages};
 const A4: (f64, f64) = (210.0, 297.0);
 const CARD_X: f64 = 10.0;
 const CARD_W: f64 = 190.0;
+/// The strip card's three tick boxes: first box x and step from card left.
+const STRIP_BOX_X: f64 = 168.5;
+const STRIP_BOX_STEP: f64 = 6.5;
 const CARD_H: f64 = 138.0;
 /// Top of the two cards on a page.
 const CARD_Y: [f64; 2] = [6.0, 153.0];
@@ -619,11 +622,11 @@ fn body(m: &mut Marks, card: &Card, (x0, y0): (f64, f64), y: f64, bottom: f64) {
         .iter()
         .map(|w| {
             format!(
-                "- {}  {} to {}  cut {} mm",
+                "- {}  {} to {}  {}",
                 w.number,
                 w.from,
                 w.to,
-                mm(w.cut_mm)
+                novo_layout::workpack::run_or_cut(w)
             )
         })
         .collect();
@@ -938,17 +941,16 @@ fn strip_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
         (46.0, HAlign::Left, "From / to"),
         (88.0, HAlign::Left, "Size, ferrule"),
         (128.0, HAlign::Left, "Marker (cut out, wrap)"),
-        (
-            170.0,
-            HAlign::Left,
-            if cores {
-                "Run Fer. Mark"
-            } else {
-                "Cut Fer. Mark"
-            },
-        ),
     ] {
         text(m, (x0 + x, y), SMALL_TEXT_MM, align, true, h);
+    }
+    // One short header over each of the three tick boxes, inside the card.
+    for (k, h) in [if cores { "Run" } else { "Cut" }, "Fer", "Mrk"]
+        .iter()
+        .enumerate()
+    {
+        let bx = x0 + STRIP_BOX_X + k as f64 * STRIP_BOX_STEP;
+        text(m, (bx - 0.4, y), SMALL_TEXT_MM, HAlign::Left, true, *h);
     }
     line(m, Layer::Table, (x0, y + 4.2), (x0 + CARD_W, y + 4.2));
     let row_h = ((bottom - y - 6.0) / 9.0).clamp(6.0, 9.0);
@@ -1045,7 +1047,7 @@ fn strip_table(m: &mut Marks, card: &Card, x0: f64, y: f64, bottom: f64) {
             );
         }
         for k in 0..3 {
-            let bx = x0 + 170.0 + k as f64 * 6.0;
+            let bx = x0 + STRIP_BOX_X + k as f64 * STRIP_BOX_STEP;
             rect(m, Layer::Table, (bx, ry + 0.8), (bx + 4.6, ry + 5.4));
         }
         line(

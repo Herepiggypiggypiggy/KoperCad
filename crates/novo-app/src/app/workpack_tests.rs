@@ -820,6 +820,57 @@ fn cable_cores_say_they_come_from_the_cable_and_the_cover_explains_it() {
 }
 
 #[test]
+fn core_rows_say_run_cable_and_the_tools_row_counts_only_cut_wires() {
+    let mut doc = novo_core::Document::default();
+    super::example::build_example(&mut doc).unwrap();
+    let packs = work_packs(&doc.project().clone());
+    let mut cores_seen = 0;
+    for pack in &packs {
+        for w in pack.cards.iter().flat_map(|c| &c.wires) {
+            if let Some(cable) = w.cable() {
+                cores_seen += 1;
+                let line = novo_layout::workpack::run_or_cut(w);
+                assert!(
+                    line.starts_with("run cable ") && line.contains(cable),
+                    "{line}"
+                );
+                assert!(!line.contains("cut"), "{line}");
+            }
+        }
+        // No tick-off row tells the bench to cut a core.
+        for row in &pack.overview {
+            assert!(
+                !(row.text.contains("core") && row.text.contains("cut")),
+                "{}",
+                row.text
+            );
+        }
+        // The tools row counts the wires the strips cut, cores left out.
+        let strip_cut: usize = pack
+            .cards
+            .iter()
+            .filter(|c| c.kind == CardKind::Strips && !c.mark.contains(" cores of "))
+            .map(|c| c.wires.len())
+            .sum();
+        if let Some(t) = pack
+            .tools
+            .iter()
+            .find(|t| t.tool.starts_with("Wire cutter"))
+        {
+            let n: usize = t
+                .for_what
+                .split_whitespace()
+                .next()
+                .unwrap()
+                .parse()
+                .unwrap();
+            assert_eq!(n, strip_cut, "{}: {}", pack.cabinet, t.for_what);
+        }
+    }
+    assert!(cores_seen > 0);
+}
+
+#[test]
 fn the_label_card_names_the_stock_from_the_projects_label_settings() {
     let mut doc = novo_core::Document::default();
     super::example::build_example(&mut doc).unwrap();

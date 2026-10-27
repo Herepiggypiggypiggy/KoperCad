@@ -1,0 +1,26 @@
+@title Work cards: cable cores read "run cable", tools row counts cut wires, outside strip size and header
+@area 3D
+# C-76..C-78. The fixture has cable =A1-W1 with cores and outside wires. The kept PDF is checked for "run cable" rows, 21 wire count, mm2 and the strip header inside the card.
+open qa/fixtures/cabinet-wire-heat.novo
+wait 20
+click_text 3D #1
+wait 40
+click_text "Layers"
+wait 8
+click_text "Build order"
+wait 8
+key Escape
+wait 30
+click_text "Next"
+wait 12
+click_text "Next"
+wait 12
+shot strip-with-work-cards-button
+expect "Work cards (PDF)"
+check_layout
+answer_dialog "~/Documents/KoperCAD/qa 218 work cards.pdf"
+click_text "Work cards (PDF)"
+wait 40
+shot after-print
+expect_file "~/Documents/KoperCAD/qa 218 work cards.pdf" 3000
+keep_file "~/Documents/KoperCAD/qa 218 work cards.pdf"
