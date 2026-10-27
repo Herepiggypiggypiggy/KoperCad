@@ -293,6 +293,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "kopercad-cli.exe --help exited with $LASTEXITCODE" }
 
           function Start-Check([string]$label, [string]$cmdFile) {
+            # A copy left running by an earlier step must not be mistaken for this one.
+            Get-Process kopercad -ErrorAction SilentlyContinue | Stop-Process -Force
+            Start-Sleep -Seconds 2
             Get-ChildItem "$dest\data" -Recurse -Filter *.log -ErrorAction SilentlyContinue | Remove-Item -Force
             $cmd = Start-Process cmd.exe -ArgumentList "/c", "`"$dest\$cmdFile`"" -WorkingDirectory $dest -PassThru
             $app = $null
@@ -304,12 +307,15 @@ jobs:
             Start-Sleep -Seconds 2
             # A killed program makes run.cmd report the exit code and wait for a key.
             Stop-Process -Id $cmd.Id -Force -ErrorAction SilentlyContinue
-            $log = Get-ChildItem "$dest\data" -Recurse -Filter *.log -ErrorAction SilentlyContinue | Select-Object -First 1
-            if (-not $log) { throw "$label wrote no log under the portable data folder" }
+            $logs = @(Get-ChildItem "$dest\data" -Recurse -Filter *.log -ErrorAction SilentlyContinue)
+            if ($logs.Count -eq 0) { throw "$label wrote no log under the portable data folder" }
+            # Newest first; show what is there so a failure can be read from the job log.
+            $log = $logs | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            Write-Host "[$label] log files: $(($logs | ForEach-Object FullName) -join '; ')"
+            Get-Content $log.FullName | Select-Object -First 25 | ForEach-Object { Write-Host "[$label] | $_" }
             $text = Get-Content $log.FullName -Raw
             if ($text -match '(?i)panic') { throw "$label logged a panic" }
-            $text -split "`n" | Where-Object { $_ -match 'graphics adapter' } | ForEach-Object { "[$label] $_" }
-            return $text
+            return [string]$text
           }
 
           $normal = Start-Check "run.cmd" "run.cmd"
