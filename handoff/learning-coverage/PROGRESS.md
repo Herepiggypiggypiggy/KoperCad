@@ -7,6 +7,7 @@
 
 2026-10-27 UTC Coordinator ask: lessons for the newest features. Work cards and EMC fix-it were already done (#1522, #1523). New lesson `cooling-what-if` (Cabinet track, order 97, 10 steps, sample project = the hot cabinet fixture) with anchors `heat.whatif.go` and `heat.whatif.apply`, a unit test that the wizard registers its Try button, QA 206 (real clicks, waits for the model run), COVERAGE row 54. The "Try the fixes" and "Apply" steps are `manual` because the run takes about a minute on a worker thread. Test helper STEP_KEYS in novo-tests now accepts `manual`.
 
+2026-10-27 UTC Cooler layout lesson `cooler-layout` (branch claude/learning-cooler-layout, from main 7e13d26): anchor `heat.layout.apply`, QA 208, COVERAGE row 56. On its fixture the model finds moves that cool the neighbours but the hottest device stays over its limit; the lesson says what the window says. Next: 3D Simulate run, Test tab (#1526), Kitting (#1531), Wire-it (#1530).
 2026-10-27 UTC Coordinator backlog: Cooling advice, Cooler layout, 3D Simulate run, Test tab (#1526), Kitting (not on main yet), one PR per lesson from main. Cooling advice lesson `cooling-advice` first (branch claude/learning-cooling-advice): anchor `heat.advice.add`, QA 207, COVERAGE row 55; the cooling what-if lesson moves to order 98.
 
 2026-10-27 UTC 3D Simulate run lesson `simulate-3d` written (branch claude/learning-simulate-3d): anchor `view3d.heat`, Heat panel kept clear of the lesson card, QA 209, COVERAGE row 57. Next: Test tab, Kitting, Wire-it lessons.
