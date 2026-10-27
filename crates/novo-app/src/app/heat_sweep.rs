@@ -710,13 +710,20 @@ fn option(ui: &mut egui::Ui, found: &Found, o: &Outcome, stale: bool, ask: &mut 
             .color(pal.warning),
         );
     }
-    if ui
+    let add = ui
         .add_enabled(!stale, egui::Button::new("Add these two to Vents and fans"))
         .on_hover_text(
             "Puts the pair in the list of the 3D Heat panel as one undo step there. Simulate in 3D then checks it",
-        )
-        .clicked()
-    {
+        );
+    if o.rank == 1 {
+        super::cabinet_bar::note_ctx(
+            ui.ctx(),
+            "heat.advice.add",
+            "Add button of the best option",
+            &add,
+        );
+    }
+    if add.clicked() {
         *ask = Some(Ask::Add(o.candidate.clone()));
     }
 }
