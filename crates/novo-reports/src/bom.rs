@@ -84,20 +84,36 @@ impl Report for BillOfMaterials {
 
         // Group by article, not by record: two part records for one article
         // are one line.
-        type Article<'a> = (&'a str, &'a str);
-        let mut articles: BTreeMap<Article<'_>, (Vec<PartId>, Vec<Use>)> = BTreeMap::new();
+        // "Siemens" and "SIEMENS " are one maker, "3RT2015-1BB41" and
+        // "3rt2015-1bb41 " one article: orders go to a supplier by the
+        // article, not by how it was typed.
+        let mut articles: BTreeMap<(String, String), (Vec<PartId>, Vec<Use>)> = BTreeMap::new();
         for (id, list) in uses {
             let Some(part) = project.part(id) else {
                 continue;
             };
-            let entry = articles
-                .entry((part.manufacturer.as_str(), part.order_number.as_str()))
-                .or_default();
+            let entry = articles.entry(article_key(part)).or_default();
             entry.0.push(id);
             entry.1.extend(list);
         }
-        let mut articles: Vec<_> = articles.into_iter().collect();
-        articles.sort_by(|((ma, oa), _), ((mb, ob), _)| article_cmp(ma, oa, mb, ob));
+        let mut articles: Vec<_> = articles
+            .into_values()
+            .map(|(ids, mut list)| {
+                // Two records of one article: keep the uses in tag order.
+                if ids.len() > 1 {
+                    list.sort_by(|a, b| natural_cmp(&a.designation, &b.designation));
+                }
+                (ids, list)
+            })
+            .collect();
+        let shown = |ids: &[PartId]| {
+            let p = project.part(ids[0]).expect("checked above");
+            (p.manufacturer.clone(), p.order_number.clone())
+        };
+        articles.sort_by(|(ia, _), (ib, _)| {
+            let ((ma, oa), (mb, ob)) = (shown(ia), shown(ib));
+            article_cmp(&ma, &oa, &mb, &ob)
+        });
 
         let mut parts = Section::new(
             "parts",
@@ -113,7 +129,7 @@ impl Report for BillOfMaterials {
                 Column::new("used_by", "Used by", 50.0),
             ],
         );
-        for (position, (_, (ids, list))) in articles.into_iter().enumerate() {
+        for (position, (ids, list)) in articles.into_iter().enumerate() {
             let part = project.part(ids[0]).expect("checked above");
             let lengths: Vec<f64> = list.iter().filter_map(|u| u.length_m).collect();
             let length = (!lengths.is_empty()).then(|| lengths.iter().sum::<f64>());
@@ -183,6 +199,18 @@ impl Report for BillOfMaterials {
             sections,
         }
     }
+}
+
+/// What makes two part records one article: maker and order number without
+/// case, surrounding space or doubled inner space.
+pub(crate) fn article_key(part: &novo_core::Part) -> (String, String) {
+    let fold = |s: &str| {
+        s.split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase()
+    };
+    (fold(&part.manufacturer), fold(&part.order_number))
 }
 
 fn article_cmp(ma: &str, oa: &str, mb: &str, ob: &str) -> Ordering {

@@ -821,6 +821,8 @@ pub(crate) fn plc(cx: &Context<'_>, out: &mut Vec<Problem>) {
 pub(crate) fn wire_overlaps(cx: &Context<'_>, out: &mut Vec<Problem>) {
     /// Bucket size in mm.
     const CELL: f64 = 50.0;
+    /// Farthest bucket from the origin (500 m); a line beyond it shares the last.
+    const MAX_CELL: i64 = 10_000;
     let project = cx.project;
     // (wire, page, from, to) per segment, bucketed per page and cell.
     let mut segments: Vec<(novo_core::WireId, Point, Point)> = Vec::new();
@@ -838,7 +840,15 @@ pub(crate) fn wire_overlaps(cx: &Context<'_>, out: &mut Vec<Problem>) {
         for seg in pts.windows(2) {
             let i = segments.len();
             segments.push((wire.id, seg[0], seg[1]));
-            let cell = |v: f64| (v / CELL).floor() as i64;
+            // Only a horizontal or vertical segment can share a stretch
+            // (`shared_stretch`); a slanted one needs no bucket, and a
+            // damaged coordinate must not ask for billions of them.
+            let orthogonal =
+                (seg[0].x - seg[1].x).abs() <= EPS || (seg[0].y - seg[1].y).abs() <= EPS;
+            if !orthogonal {
+                continue;
+            }
+            let cell = |v: f64| ((v / CELL).floor() as i64).clamp(-MAX_CELL, MAX_CELL);
             for cx_ in cell(seg[0].x.min(seg[1].x))..=cell(seg[0].x.max(seg[1].x)) {
                 for cy in cell(seg[0].y.min(seg[1].y))..=cell(seg[0].y.max(seg[1].y)) {
                     buckets.entry((wire.page, cx_, cy)).or_default().push(i);

@@ -610,7 +610,7 @@ pub fn kit_plan(project: &Project, settings: &KitSettings) -> KitPlan {
                 .filter_map(|id| project.get::<Part>(*id))
             {
                 let entry = parts
-                    .entry((part.manufacturer.clone(), part.order_number.clone()))
+                    .entry(crate::bom::article_key(part))
                     .or_insert_with(|| {
                         let what = if part.type_number.is_empty() {
                             part.order_number.clone()

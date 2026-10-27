@@ -1110,23 +1110,63 @@ fn plausible(
 }
 
 fn price(raw: &str, warn: &mut impl FnMut(Severity, String)) -> Option<f64> {
-    let cleaned: String = raw
+    let not_a_price = |warn: &mut dyn FnMut(Severity, String)| {
+        warn(
+            Severity::Warning,
+            format!("\"{raw}\" is not a price; the price is left unknown"),
+        );
+        None
+    };
+    let t = raw.replace(['\u{a0}', '\u{202f}'], " ");
+    let (Some(first), Some(last)) = (
+        t.find(|c: char| c.is_ascii_digit()),
+        t.rfind(|c: char| c.is_ascii_digit()),
+    ) else {
+        return not_a_price(warn);
+    };
+    // What stands around the amount is a currency (`€ 12,50`, `12,50 EUR`,
+    // Swiss `1'250.-`) or nothing. Any other word or sign (`12.5%`, `ab12`,
+    // `kr 100`, `12,50/100`) would be a guess at the price or its currency.
+    let (lead, body, trail) = (&t[..first], &t[first..=last], &t[last + 1..]);
+    let (sign, lead) = match lead.trim_end().strip_suffix('-') {
+        Some(rest) => ("-", rest),
+        None => ("", lead),
+    };
+    let trail = trail.trim_start();
+    let trail = trail
+        .strip_prefix(".-")
+        .or_else(|| trail.strip_prefix(",-"))
+        .unwrap_or(trail)
+        .trim_start_matches(['.', ',']);
+    let decoration = format!("{} {}", lead.trim(), trail.trim());
+    // Only currency: signs and three-letter codes, nothing else.
+    let only_currency = decoration
+        .split(|c: char| c.is_whitespace() || matches!(c, '€' | '£' | '$'))
+        .filter(|w| !w.is_empty())
+        .all(|w| w.len() == 3 && currency_of(w).is_some());
+    if !only_currency || (!decoration.trim().is_empty() && currency_of(&decoration).is_none()) {
+        return not_a_price(warn);
+    }
+    // The amount: digits with `.`, `,`, `'` or a space as separators. A space
+    // separates thousands only (`1 234,50`); `1 2 3` or `1.5E3` are not read.
+    let well_formed = body
         .chars()
-        .filter(|c| c.is_ascii_digit() || matches!(c, '.' | ',' | '-' | ' ' | '\u{a0}'))
-        .collect();
-    let (text, ambiguous) = normalise_number_text(cleaned.trim());
+        .all(|c| c.is_ascii_digit() || matches!(c, '.' | ',' | '\'' | ' '))
+        && body
+            .split(' ')
+            .skip(1)
+            .all(|g| g.chars().take_while(char::is_ascii_digit).count() == 3);
+    if !well_formed {
+        return not_a_price(warn);
+    }
+    let joined: String = body.chars().filter(|c| !matches!(c, ' ' | '\'')).collect();
+    let (text, ambiguous) = normalise_number_text(&format!("{sign}{joined}"));
     if let Some(note) = ambiguous {
         warn(Severity::Warning, note);
     }
     match parse_quantity(&text) {
         Some(q) if q.low.is_finite() && q.low > 0.0 && !q.range => Some(q.low),
-        _ => {
-            warn(
-                Severity::Warning,
-                format!("\"{raw}\" is not a price; the price is left unknown"),
-            );
-            None
-        }
+        _ => not_a_price(warn),
     }
 }
 
