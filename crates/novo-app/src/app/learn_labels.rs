@@ -133,6 +133,7 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("bench.tab.ferrules", "Ferrules tab"),
     ("bench.tab.labels", "Labels tab"),
     ("bench.tab.kitting", "Kitting tab"),
+    ("kitting.export", "Export kitting list button"),
     ("build.screen", "Build mode"),
     ("build.done", "Done button"),
     ("build.problem", "Problem button"),

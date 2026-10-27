@@ -528,7 +528,8 @@ impl NovoApp {
             match state.tab {
                 Tab::Ferrules => self.learn_signal("bench_ferrules"),
                 Tab::Labels => self.learn_signal("bench_labels"),
-                Tab::CutList | Tab::Kitting => {}
+                Tab::Kitting => self.learn_signal("bench_kitting"),
+                Tab::CutList => {}
             }
         }
         self.wb.workshop_paper = paper;

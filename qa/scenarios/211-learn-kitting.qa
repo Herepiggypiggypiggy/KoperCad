@@ -1,0 +1,55 @@
+@title Lesson walk: kitting (Bench output, Kitting tab, pick list, saw plan, shopping list, stock, PDF)
+@area Learn
+# The lesson from the palette, in the hot cabinet sample. Do it for me only carries out commands, so the Kitting tab, the folds and the Export button are really clicked.
+key ctrl+k
+wait 4
+text kitting
+wait 6
+click_text "Kitting: what to take from the shelf and what to buy"
+wait 40
+shot 01-why
+check_layout
+try click_text "Next"
+wait 20
+shot 02-open-step
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 03-tab-step
+check_layout
+click_text Kitting Button
+wait 20
+shot 04-headline-step
+check_layout
+try click_text "Next"
+wait 20
+click_text "Pick list 3"
+wait 10
+shot 05-pick-step
+check_layout
+try click_text "Next"
+wait 20
+click_text "Saw plan"
+wait 10
+shot 06-saw-step
+check_layout
+try click_text "Next"
+wait 20
+click_text "Shopping list"
+wait 10
+shot 07-shopping-step
+check_layout
+try click_text "Next"
+wait 20
+click_text "Stock the shop buys and holds"
+wait 10
+shot 08-stock-step
+check_layout
+try click_text "Next"
+wait 20
+shot 09-export-step
+check_layout
+click_text "Export kitting list (PDF)"
+wait 30
+shot 10-written
+check_layout
