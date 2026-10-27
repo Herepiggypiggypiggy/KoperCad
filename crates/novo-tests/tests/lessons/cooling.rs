@@ -1,4 +1,4 @@
-//! The cooling what-if lesson's sample project is the hot cabinet fixture of
+//! The cooling lessons' sample project is the hot cabinet fixture of
 //! the cooling lane (`qa/fixtures/cabinet-cooling-advice.novo`): a sealed
 //! enclosure with a device that runs over its limit on a warm day.
 
@@ -12,7 +12,8 @@ fn cooling_what_if_files_are_current() {
         .and_then(|f| f.load())
         .expect("the cooling fixture opens");
     check_file("cooling-what-if", "project.json", &project);
-    assert_lint(&[("cooling-what-if", &project)]);
+    check_file("cooling-advice", "project.json", &project);
+    assert_lint(&[("cooling-what-if", &project), ("cooling-advice", &project)]);
 }
 
 #[test]

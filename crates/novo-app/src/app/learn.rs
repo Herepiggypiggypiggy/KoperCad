@@ -126,6 +126,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "heat.cooling_whatif",
     "heat.layout.apply",
     "heat.cooler_layout",
+    "heat.advice.add",
     "heat.whatif.go",
     "heat.whatif.apply",
     "cabinet.canvas",

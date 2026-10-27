@@ -1,0 +1,45 @@
+@title Lesson walk: cooling-advice (sweep, headline, options, add, check)
+@area Learn
+# The lesson from the palette, in the hot cabinet sample. Do it for me only carries out commands, so the Cooling advice button and the Add button are really clicked. The sweep takes about a minute on a worker thread. The window opens in the Cabinet, over the plate.
+key ctrl+k
+wait 4
+text cooling advice
+wait 6
+click_text "Where a vent and fan should go: cooling advice"
+wait 40
+shot 01-why
+check_layout
+try click_text "Next"
+wait 20
+shot 02-open-cabinet
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 03-heat-on
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 04-press
+check_layout
+click_text "Cooling advice" Button
+wait_s 120
+expect "Tightest margin"
+expect "Model estimate"
+shot 05-sweep-done
+check_layout
+try click_text "Next"
+wait 20
+shot 06-headline
+check_layout
+try click_text "Next"
+wait 20
+shot 07-options
+check_layout
+try click_text "Next"
+wait 20
+shot 08-add
+check_layout
+click_text "Add these two to Vents and fans"
+wait 20
+shot 09-added
+check_layout

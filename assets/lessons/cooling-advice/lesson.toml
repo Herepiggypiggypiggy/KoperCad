@@ -1,0 +1,130 @@
+# Sample project: the hot cabinet fixture of the cooling lane (qa/fixtures/cabinet-cooling-advice.novo as JSON), the
+# same one as cooling-what-if. crates/novo-tests/tests/lessons/cooling.rs checks the file (UPDATE_LESSONS=1 rewrites it).
+# The sweep takes about a minute on a worker thread, so the replay gate does not press "Cooling advice" or "Add";
+# QA 207 walks the real sweep. Only the window's words are quoted, never its numbers.
+format = 1
+id = "cooling-advice"
+version = 1
+status = "early"
+title = "Where a vent and fan should go: cooling advice"
+title_nl = "Waar een rooster en ventilator moeten komen: koelingsadvies"
+summary = "Let the model try where a pair of vents or fans goes and how big, read the best few with their before and after numbers, add one to the Vents and fans list, and know what to check next."
+summary_nl = "Laat het model proberen waar een paar roosters of ventilatoren komt en hoe groot, lees de beste paar met hun cijfers voor en na, voeg er een toe aan de lijst Vents and fans en weet wat je daarna controleert."
+track = "cabinet"
+order = 97
+level = "intermediate"
+minutes = 8
+topics = ["cooling", "heat", "fan", "vent", "advice", "sweep"]
+needs = ["heat-and-sizing"]
+next = ["cooling-what-if"]
+project = "project.json"
+
+[[step]]
+id = "why"
+title = "A sealed box, one hot device"
+title_nl = "Een dichte kast, één heet component"
+text = """
+In this cabinet one device runs hotter than it allows. A pair of openings, one where air comes in and one where it goes out, often fixes that, with or without a fan.
+**Cooling advice** tries many places and sizes for that pair in a quick 2D heat model and shows the best few. It is a model: it ranks options, it does not measure your cabinet.
+"""
+text_nl = """
+In deze kast wordt één component warmer dan hij mag. Een paar openingen, één waar lucht naar binnen komt en één waar hij eruit gaat, lost dat vaak op, met of zonder ventilator.
+**Cooling advice** probeert veel plaatsen en maten voor dat paar in een snel 2D-warmtemodel en toont de beste paar. Het is een model: het rangschikt opties, het meet je kast niet.
+"""
+
+[[step]]
+id = "open-cabinet"
+title = "Open the cabinet"
+title_nl = "Open de kast"
+text = "Press {key:view.cabinet}. The plate shows the rails and the devices; the heat tools are in the Heat strip."
+text_nl = "Druk op {key:view.cabinet}. De plaat toont de rails en de componenten; de warmtegereedschappen staan in de Heat-strook."
+how = ["Press {key:view.cabinet}."]
+how_nl = ["Druk op {key:view.cabinet}."]
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "heat-on"
+title = "Turn on Heat"
+title_nl = "Zet Heat aan"
+text = "Click {ui:cabinet.heat} (or press {key:heat.toggle}; in a narrow window the bar folds it into {ui:cabinet.more}). The Heat strip appears with Simulate, Cooling advice, Cooler layout and Cooling what-if."
+text_nl = "Klik op {ui:cabinet.heat} (of druk op {key:heat.toggle}; in een smal venster zit het onder {ui:cabinet.more}). De Heat-strook verschijnt met Simulate, Cooling advice, Cooler layout en Cooling what-if."
+how = ["Click Heat in the View group of the Cabinet bar, or press {key:heat.toggle}."]
+how_nl = ["Klik op Heat in de groep View van de Cabinet-balk of druk op {key:heat.toggle}."]
+point = { ui = "cabinet.heat" }
+expect = { command = "heat.toggle" }
+solve = [ { command = "heat.toggle" } ]
+
+[[step]]
+id = "press"
+title = "Ask for advice"
+title_nl = "Vraag om advies"
+text = """
+Click {ui:heat.cooling_advice}. There is nothing to fill in: the window opens and the sweep starts, with a count of runs so far. It takes about a minute.
+**Stop and keep the best so far** ends it early with what is ready. Wait for the list.
+"""
+text_nl = """
+Klik op {ui:heat.cooling_advice}. Er valt niets in te vullen: het venster opent en de zoektocht begint, met een telling van de runs tot nu toe. Het duurt ongeveer een minuut.
+**Stop and keep the best so far** stopt eerder met wat klaar is. Wacht op de lijst.
+"""
+how = ["Click Cooling advice in the Heat strip."]
+how_nl = ["Klik op Cooling advice in de Heat-strook."]
+point = { ui = "heat.cooling_advice" }
+expect = { clicked = "heat.cooling_advice" }
+manual = "starts a sweep of about a minute on a worker thread; QA 207 clicks it and waits"
+
+[[step]]
+id = "headline"
+title = "Read the headline"
+title_nl = "Lees de kop"
+text = """
+The window opens with the best of the tries, "Best of N tries", and what it gains in margin. **Now** says where the cabinet stands: the margin to the limit, the devices over it and the hottest air. "A try is one run of the 2D model with a pair of openings added."
+A line says how much fan flow the sizing rule asks to carry all the loss.
+"""
+text_nl = """
+Het venster opent met de beste van de pogingen, "Best of N tries", en wat die wint aan marge. **Now** zegt waar de kast staat: de marge tot de grens, de componenten erboven en de heetste lucht. "A try is one run of the 2D model with a pair of openings added."
+Een regel zegt hoeveel ventilatorstroom de vuistregel vraagt om alle verlies af te voeren.
+"""
+
+[[step]]
+id = "options"
+title = "Read an option"
+title_nl = "Lees een optie"
+text = """
+Each option names the pair ("Vent in, exhaust fan out", "Filter fan in, vent out") and its gain, then where and how big: wall, height above the floor, opening area or fan flow. **Tightest margin** goes from before to after, and the line under it counts the devices over their limit.
+"within the model's noise" means a gain too small to rely on.
+"""
+text_nl = """
+Elke optie noemt het paar ("Vent in, exhaust fan out", "Filter fan in, vent out") en zijn winst, dan waar en hoe groot: wand, hoogte boven de vloer, openingsoppervlak of ventilatorstroom. **Tightest margin** gaat van voor naar na, en de regel eronder telt de componenten boven hun grens.
+"within the model's noise" betekent een winst te klein om op te vertrouwen.
+"""
+
+[[step]]
+id = "add"
+title = "Add the one you choose"
+title_nl = "Voeg de gekozen optie toe"
+text = """
+Click {ui:heat.advice.add}. The pair goes into the **Vents and fans** list of the 3D Heat panel as one undo step there; the window closes when you change view. Nothing else in the project changes.
+Fan sizes come from generic planning sizes, or from your parts and cooling list when you have fan parts, and the window says so then.
+"""
+text_nl = """
+Klik op {ui:heat.advice.add}. Het paar komt in de lijst **Vents and fans** van het 3D Heat-paneel als één undo-stap daar; het venster sluit als je van weergave wisselt. Verder verandert er niets in het project.
+Ventilatormaten komen uit generieke planningsmaten, of uit je artikelen en koellijst als je ventilatoren hebt, en het venster zegt dat dan.
+"""
+point = { ui = "heat.advice.add" }
+expect = { clicked = "heat.advice.add" }
+manual = "needs the finished sweep of the previous step; QA 207 clicks it"
+
+[[step]]
+id = "check"
+title = "Check it in 3D"
+title_nl = "Controleer het in 3D"
+text = """
+The footer says it: a model estimate, not validated against measurements, and the 2D slice does not see the depth of the cabinet. Open the 3D view, where the openings are drawn on the walls, and press **Simulate** in the Heat panel to check the pair.
+Take it out again with the Undo of the Vents and fans list.
+"""
+text_nl = """
+De voettekst zegt het: een modelschatting, niet gevalideerd met metingen, en de 2D-doorsnede ziet de diepte van de kast niet. Open de 3D-weergave, waar de openingen op de wanden getekend staan, en druk op **Simulate** in het Heat-paneel om het paar te controleren.
+Haal het weer weg met de Undo van de lijst Vents and fans.
+"""
