@@ -1,6 +1,6 @@
 @title Lesson walk: cooling-what-if (conditions, run, ranked list, apply, check)
 @area Learn
-# The lesson from the palette, in the hot cabinet sample. Do it for me only carries out commands, so the Cooling what-if button, "Try the fixes" and the Apply button are really clicked. The run takes about a minute (the model runs on a worker thread), so the wait after "Try the fixes" is long. Apply is scrolled into view at 1366x768; at 1920x1080 the list fits.
+# The lesson from the palette, in the hot cabinet sample. Do it for me only carries out commands, so the Cooling what-if button, "Try the fixes" and the Apply button are really clicked. The run takes about a minute (the model runs on a worker thread), so the wait after "Try the fixes" is long. Apply is scrolled into view at 1366x768; at 1920x1080 the list fits. The fan editor that Apply opens is folded again before the last picture, because it hid half the window.
 key ctrl+k
 wait 4
 text cooling what-if
@@ -52,5 +52,7 @@ wait 30
 expect "Added a vent"
 shot 10-applied
 check_layout
+click_text "Fan, in the left wall"
+wait 10
 shot 11-check
 check_layout
