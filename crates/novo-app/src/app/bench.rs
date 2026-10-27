@@ -526,10 +526,7 @@ impl NovoApp {
         }
         // Controls inside the window that were noted as they were drawn.
         for noted in super::cabinet_bar::take_noted(ctx) {
-            self.anchor(noted.id, noted.rect, noted.label);
-            if noted.clicked {
-                self.learn_event(novo_learn::Event::Clicked(noted.id.to_owned()));
-            }
+            self.anchor_clicked(noted.id, noted.rect, noted.label, noted.clicked);
         }
         if state.tab != tab_before {
             match state.tab {
