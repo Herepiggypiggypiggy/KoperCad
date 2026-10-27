@@ -63,12 +63,12 @@ id = "sheet"
 title = "Read the count and the settings"
 title_nl = "Lees de telling en de instellingen"
 text = """
-The top lines count the wires: how many are in the drawing, how many are tested and how many missed. Wires nobody has measured are listed in red as "not tested yet (dead wire check)".
-**Expected values** holds what the sheet expects: whether to also read insulation, the test voltage, the least insulation and the contact allowance. Wire resistance is copper at 20 °C from the drawn length, times a 1.25 margin.
+The top lines count the drawn wires: tested, missed, and "not tested yet (dead wire check)" in red. The grey note says the bench cut list and Wire-it count connections, so their numbers can differ.
+**Expected values** holds the test voltage, the least insulation and the contact allowance. Wire resistance is copper at 20 °C from the drawn length, times 1.25.
 """
 text_nl = """
-De bovenste regels tellen de draden: hoeveel er in de tekening staan, hoeveel getest zijn en hoeveel afweken. Draden die niemand mat staan in het rood als "not tested yet (dead wire check)".
-**Expected values** bevat wat het blad verwacht: of ook de isolatie wordt gemeten, de testspanning, de laagste isolatie en de contacttoeslag. De draadweerstand is koper bij 20 °C uit de getekende lengte, maal een marge van 1,25.
+De bovenste regels tellen de getekende draden: getest, afwijkend, en in het rood "not tested yet (dead wire check)". De grijze noot zegt dat de werkbank-zaaglijst en Wire-it verbindingen tellen, dus hun aantallen kunnen verschillen.
+**Expected values** bevat de testspanning, de laagste isolatie en de contacttoeslag. De draadweerstand is koper bij 20 °C uit de getekende lengte, maal 1,25.
 """
 point = { ui = "commissioning.test" }
 manual = "reading step: the count lines and the Expected values fold are not anchored; QA 210 shows them"
