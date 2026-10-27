@@ -776,3 +776,42 @@ fn lifecycle_words_are_whole_words_and_a_negation_is_never_active() {
         assert_eq!(part.lifecycle, *want, "status \"{status}\"");
     }
 }
+
+/// Prices as real lists write them. Whatever is not clearly an amount is left
+/// unknown with a warning, never read as a different number.
+#[test]
+fn prices_in_every_spelling_are_read_exactly_or_refused() {
+    let cases: [(&str, Option<(f64, &str)>); 14] = [
+        ("12,50 €", Some((12.5, "EUR"))),
+        ("€ 12.50", Some((12.5, "EUR"))),
+        ("$1,234.56", Some((1234.56, "USD"))),
+        ("1.234,56 EUR", Some((1234.56, "EUR"))),
+        ("1 234,50", Some((1234.5, "EUR"))),
+        ("1'234.50", Some((1234.5, "EUR"))),
+        ("CHF 1'250.-", Some((1250.0, "CHF"))),
+        ("1.234.567,89", Some((1234567.89, "EUR"))),
+        // Not amounts: used to be read as 1.53, 1.0, 12.501, 12.0 and 12.5.
+        ("1.5E3", None),
+        ("1 2 3", None),
+        ("12,50/100", None),
+        ("ab12cd", None),
+        ("12.5%", None),
+        ("kr 100", None),
+    ];
+    let mut text = String::from("Manufacturer;Order number;Price\n");
+    for (i, (raw, _)) in cases.iter().enumerate() {
+        text.push_str(&format!("M;P{i};\"{raw}\"\n"));
+    }
+    let sheet = csv_sheet(&text);
+    let mapping = Mapping::suggest(&sheet, 0);
+    let p = preview(&sheet, &mapping);
+    for (i, (raw, want)) in cases.iter().enumerate() {
+        let part = p
+            .parts
+            .iter()
+            .find(|x| x.order_number == format!("P{i}"))
+            .unwrap_or_else(|| panic!("row {raw} missing"));
+        let got = part.price.as_ref().map(|p| (p.amount, p.currency.as_str()));
+        assert_eq!(got, *want, "price `{raw}`");
+    }
+}
