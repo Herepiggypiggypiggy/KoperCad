@@ -45,6 +45,8 @@ Fix a step, then regenerate to shrink the list.
 - connection-screens/open-cables: `Cables`
 - connection-screens/open-diagram: `Pages`
 - connection-screens/open-terminals: `Terminals`
+- cooling-advice/add: `Vents and fans`
+- cooling-advice/check: `Simulate`
 - cooling-what-if/apply: `Vents and fans`
 - cooling-what-if/check: `Simulate`
 - cooling-what-if/conditions: `MODEL, NOT MEASURED`
