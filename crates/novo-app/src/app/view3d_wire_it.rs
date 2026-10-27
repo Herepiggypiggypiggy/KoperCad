@@ -441,6 +441,7 @@ pub(super) fn strip(
                 ui.horizontal(|ui| {
                     ui.add_enabled_ui(*at > 0, |ui| {
                         let back = ui.button("Previous");
+                        super::cabinet_bar::note_ctx(ctx, "wire_it.previous", "Previous", &back);
                         if back.clicked() {
                             *at -= 1;
                         }
@@ -457,6 +458,7 @@ pub(super) fn strip(
                     );
                     ui.add_enabled_ui(*at < last, |ui| {
                         let next = ui.button("Next");
+                        super::cabinet_bar::note_ctx(ctx, "wire_it.next", "Next", &next);
                         if next.clicked() {
                             *at += 1;
                         }
@@ -464,6 +466,7 @@ pub(super) fn strip(
                     let all = ui
                         .button("Show all")
                         .on_hover_text("Leave Wire-it and show the whole cabinet");
+                    super::cabinet_bar::note_ctx(ctx, "wire_it.show_all", "Show all", &all);
                     if all.clicked() {
                         asked.leave = true;
                     }
@@ -471,6 +474,7 @@ pub(super) fn strip(
                         "Every wire in this order on landscape A4, with a box to tick, the \
                              cut, strip, ferrule, labels and the duct fill after each wire",
                     );
+                    super::cabinet_bar::note_ctx(ctx, "wire_it.print", "Print list (PDF)", &print);
                     if print.clicked() {
                         asked.print = true;
                     }
@@ -583,6 +587,7 @@ pub(super) fn strip(
                         let go = ui
                             .button(egui::RichText::new("Run, next wire").strong())
                             .on_hover_text("Mark this wire run and go to the next one");
+                        super::cabinet_bar::note_ctx(ctx, "wire_it.run", "Run, next wire", &go);
                         if go.clicked() {
                             asked.ticks.push(Tick {
                                 step: step.clone(),
@@ -626,6 +631,12 @@ pub(super) fn strip(
                         let jump = ui
                             .button("Next not run")
                             .on_hover_text("Jump to the first wire not run yet");
+                        super::cabinet_bar::note_ctx(
+                            ctx,
+                            "wire_it.next_open",
+                            "Next not run",
+                            &jump,
+                        );
                         if jump.clicked() {
                             *at = next;
                         }

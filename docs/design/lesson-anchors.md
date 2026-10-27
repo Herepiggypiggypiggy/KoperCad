@@ -50,6 +50,12 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `build_order.show_all`: {ui:build_order.show_all} shows **Show all**
 - `build_order.work_cards`: {ui:build_order.work_cards} shows **Work cards (PDF)**
 - `build_order.print_step`: {ui:build_order.print_step} shows **Print this step**
+- `wire_it.previous`: {ui:wire_it.previous} shows **Previous**
+- `wire_it.next`: {ui:wire_it.next} shows **Next**
+- `wire_it.run`: {ui:wire_it.run} shows **Run, next wire**
+- `wire_it.next_open`: {ui:wire_it.next_open} shows **Next not run**
+- `wire_it.print`: {ui:wire_it.print} shows **Print list (PDF)**
+- `wire_it.show_all`: {ui:wire_it.show_all} shows **Show all**
 - `emc.plate.bonding`: {ui:emc.plate.bonding} shows **Bonding**
 - `emc.plate.shields`: {ui:emc.plate.shields} shows **Shields**
 - `emc.nets.motor`: {ui:emc.nets.motor} shows **Motor and drive output**
