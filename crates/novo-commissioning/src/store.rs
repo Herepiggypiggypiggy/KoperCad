@@ -6,6 +6,8 @@ use crate::build::{BuildClaim, BuildTick, StepKey};
 use crate::check::{CheckKind, CheckRecord, CheckState, Target};
 use crate::punch::{Photo, PunchItem, PunchState, Severity, Signature};
 use crate::redline::{Redline, RedlineState};
+use crate::test_sheet::TestSettings;
+use novo_core::WireId;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CommissioningError {
@@ -23,8 +25,18 @@ pub enum CommissioningError {
     RedlineDoesNotFit,
 }
 
+/// An insulation reading taken at the bench (test sheet).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InsulationReading {
+    pub wire: WireId,
+    pub mohm: f64,
+    pub ok: bool,
+    pub by: String,
+    pub at: String,
+}
+
 /// All commissioning state of one project.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(from = "StoreData", into = "StoreData")]
 pub struct CommissioningStore {
     checks: BTreeMap<(Target, CheckKind), CheckRecord>,
@@ -33,6 +45,8 @@ pub struct CommissioningStore {
     redlines: BTreeMap<u64, Redline>,
     build: BTreeMap<StepKey, BuildTick>,
     claims: BTreeMap<StepKey, BuildClaim>,
+    insulation: BTreeMap<WireId, InsulationReading>,
+    test_settings: Option<TestSettings>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -47,7 +61,14 @@ struct StoreData {
     build: Vec<BuildTick>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     claims: Vec<BuildClaim>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    insulation: Vec<InsulationReading>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    test_settings: Option<TestSettings>,
 }
+
+/// Readings are finite (entry refuses NaN), so equality is total.
+impl Eq for CommissioningStore {}
 
 impl From<StoreData> for CommissioningStore {
     fn from(data: StoreData) -> Self {
@@ -63,6 +84,8 @@ impl From<StoreData> for CommissioningStore {
             redlines: data.redlines.into_iter().map(|r| (r.id, r)).collect(),
             build: data.build.into_iter().map(|t| (t.key, t)).collect(),
             claims: data.claims.into_iter().map(|c| (c.key, c)).collect(),
+            insulation: data.insulation.into_iter().map(|r| (r.wire, r)).collect(),
+            test_settings: data.test_settings,
         }
     }
 }
@@ -75,6 +98,8 @@ impl From<CommissioningStore> for StoreData {
             redlines: store.redlines.into_values().collect(),
             build: store.build.into_values().collect(),
             claims: store.claims.into_values().collect(),
+            insulation: store.insulation.into_values().collect(),
+            test_settings: store.test_settings,
         }
     }
 }
@@ -103,6 +128,8 @@ impl CommissioningStore {
             && self.redlines.is_empty()
             && self.build.is_empty()
             && self.claims.is_empty()
+            && self.insulation.is_empty()
+            && self.test_settings.is_none()
     }
 
     /// The state of one check; `Pending` when nothing was decided.
@@ -158,6 +185,7 @@ impl CommissioningStore {
             Target::Terminal(id) => project.terminal(*id).is_some(),
             Target::Device(id) => project.device(*id).is_some(),
         });
+        self.insulation.retain(|w, _| project.wire(*w).is_some());
     }
 
     /// Stores a record as it is, with no punch item opened (merging field results).
@@ -352,6 +380,51 @@ impl CommissioningStore {
             self.checks.remove(&(target, check));
         }
         Ok(())
+    }
+
+    /// The insulation reading of a wire, if one was taken.
+    pub fn insulation(&self, wire: WireId) -> Option<&InsulationReading> {
+        self.insulation.get(&wire)
+    }
+
+    pub(crate) fn put_insulation(&mut self, wire: WireId, mohm: f64, ok: bool, by: &str, at: &str) {
+        self.insulation.insert(
+            wire,
+            InsulationReading {
+                wire,
+                mohm,
+                ok,
+                by: by.to_owned(),
+                at: at.to_owned(),
+            },
+        );
+    }
+
+    /// Forgets the insulation reading of a wire (a re-test starts clean).
+    pub fn clear_insulation(&mut self, wire: WireId) {
+        self.insulation.remove(&wire);
+    }
+
+    /// An unfinished insulation punch item for this wire.
+    pub(crate) fn open_insulation_punch(&self, wire: WireId) -> Option<u64> {
+        self.punch
+            .values()
+            .find(|p| {
+                p.target == Some(Target::Wire(wire))
+                    && p.check.is_none()
+                    && p.title == "Insulation low"
+                    && !p.state.is_closed()
+            })
+            .map(|p| p.id)
+    }
+
+    /// The test sheet settings; the planning defaults until changed.
+    pub fn test_settings(&self) -> TestSettings {
+        self.test_settings.unwrap_or_default()
+    }
+
+    pub fn set_test_settings(&mut self, settings: TestSettings) {
+        self.test_settings = Some(settings);
     }
 
     fn linked_open(&self, target: Target, check: CheckKind) -> Option<u64> {
