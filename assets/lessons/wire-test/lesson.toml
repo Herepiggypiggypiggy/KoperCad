@@ -1,0 +1,143 @@
+# Uses the commissioning lesson's sample project (a drawing with routed wires). The Test tab is
+# crates/novo-app/src/app/commissioning_test.rs (#1526); its anchors commissioning.test and
+# commissioning.test_* are registered. Typing a reading and writing the PDF are `manual` in the replay gate;
+# QA 210 types real readings. Only the tab's own words are quoted, never its numbers. The expected values are
+# planning values from the drawing, not a compliance test record, and the lesson says so.
+format = 1
+id = "wire-test"
+version = 1
+status = "early"
+title = "Test every wire: continuity and insulation"
+title_nl = "Test elke draad: doorgang en isolatie"
+summary = "Work the wire test sheet in wiring order: type the continuity and insulation readings, see a miss raise a punch item itself, find the wires nobody has measured, and write the test sheet PDF."
+summary_nl = "Werk het draadtestblad af in bedradingsvolgorde: typ de doorgangs- en isolatiemetingen, zie een afwijking zelf een punt aanmaken, vind de draden die niemand mat en schrijf het testblad als PDF."
+track = "cabinet"
+order = 101
+level = "intermediate"
+minutes = 8
+topics = ["commissioning", "test", "continuity", "insulation", "wires"]
+needs = ["commissioning"]
+next = []
+project = "../commissioning/project.json"
+page = "Main circuit"
+
+[[step]]
+id = "why"
+title = "A sheet of every wire"
+title_nl = "Een blad met elke draad"
+text = """
+Before a panel is powered, each wire is checked with a meter: is it connected end to end (continuity), and is it insulated from its neighbours (insulation)?
+The {ui:commissioning.test} lists every wire of the drawing in wiring order, with the value to expect. It is a design aid: the expected values are planning values from the drawing, not a compliance test record.
+"""
+text_nl = """
+Voordat een kast onder spanning komt, wordt elke draad met een meter gecontroleerd: is hij van begin tot eind verbonden (doorgang) en is hij geïsoleerd van zijn buren (isolatie)?
+Het {ui:commissioning.test} toont elke draad van de tekening in bedradingsvolgorde, met de verwachte waarde. Het is een ontwerphulp: de verwachte waarden zijn planwaarden uit de tekening, geen keuringsrapport.
+"""
+
+[[step]]
+id = "open"
+title = "Open Commissioning"
+title_nl = "Open Commissioning"
+text = "Click {ui:switcher.commissioning} at the top, or press {key:view.commissioning}. The schematic stays on screen, read only, with the checklist beside it."
+text_nl = "Klik bovenin op {ui:switcher.commissioning}, of druk op {key:view.commissioning}. Het schema blijft zichtbaar, alleen-lezen, met de afvinklijst ernaast."
+how = ["Click Commissioning in the switcher at the top."]
+how_nl = ["Klik bovenin op Commissioning in de schakelaar."]
+point = { ui = "switcher.commissioning" }
+expect = { command = "view.commissioning" }
+solve = [ { command = "view.commissioning" } ]
+
+[[step]]
+id = "tab"
+title = "Open the Test tab"
+title_nl = "Open het tabblad Test"
+text = "Click {ui:commissioning.test}, the last of the four tabs (Checks, Punch, Redlines, Test)."
+text_nl = "Klik op {ui:commissioning.test}, het laatste van de vier tabbladen (Checks, Punch, Redlines, Test)."
+how = ["Click Test in the tab row of the Commissioning panel."]
+how_nl = ["Klik op Test in de tabbladenrij van het Commissioning-paneel."]
+point = { ui = "commissioning.test" }
+expect = { clicked = "commissioning.test" }
+manual = "the fourth tab is cut off in the replay gate's narrow window, so its anchor is not on screen there; QA 210 clicks it"
+
+[[step]]
+id = "sheet"
+title = "Read the count and the settings"
+title_nl = "Lees de telling en de instellingen"
+text = """
+The top lines count the wires: how many are in the drawing, how many are tested and how many missed. Wires nobody has measured are listed in red as "not tested yet (dead wire check)".
+**Expected values** holds what the sheet expects: whether to also read insulation, the test voltage, the least insulation and the contact allowance. Wire resistance is copper at 20 °C from the drawn length, times a 1.25 margin.
+"""
+text_nl = """
+De bovenste regels tellen de draden: hoeveel er in de tekening staan, hoeveel getest zijn en hoeveel afweken. Draden die niemand mat staan in het rood als "not tested yet (dead wire check)".
+**Expected values** bevat wat het blad verwacht: of ook de isolatie wordt gemeten, de testspanning, de laagste isolatie en de contacttoeslag. De draadweerstand is koper bij 20 °C uit de getekende lengte, maal een marge van 1,25.
+"""
+point = { ui = "commissioning.test" }
+manual = "reading step: the count lines and the Expected values fold are not anchored; QA 210 shows them"
+
+[[step]]
+id = "reading"
+title = "Type the reading"
+title_nl = "Typ de meting"
+text = """
+One wire is selected, with its number, its two ends and the continuity to expect. Zero the test leads, measure it and type the ohms in the first box (a comma or a point both work). Insulation, when asked for, goes in the Mohm box below it.
+If the meter shows OL, press {ui:commissioning.test_open} instead. "(assumed)" after the expected ohms means no length is drawn for that wire, so a fallback value stands in.
+"""
+text_nl = """
+Eén draad is geselecteerd, met zijn nummer, zijn twee uiteinden en de verwachte doorgang. Nul de meetsnoeren, meet hem en typ de ohm in het eerste vak (komma of punt werkt allebei). Isolatie, als daarom gevraagd wordt, gaat in het vak Mohm eronder.
+Toont de meter OL, druk dan op {ui:commissioning.test_open}. "(assumed)" na de verwachte ohm betekent dat er geen lengte getekend is, dus een vervangwaarde geldt.
+"""
+point = { ui = "commissioning.test_ohm" }
+manual = "typing a reading is not a scripted action; QA 210 types it for real"
+
+[[step]]
+id = "record"
+title = "Record it"
+title_nl = "Leg het vast"
+text = """
+Press {ui:commissioning.test_record} (or Enter in a box). The line under the form says "Recorded" and the next wire nobody has measured is selected for you, so a whole panel goes in one pass.
+"""
+text_nl = """
+Druk op {ui:commissioning.test_record} (of Enter in een vak). De regel onder het formulier zegt "Recorded" en de volgende draad die niemand mat wordt voor je geselecteerd, zodat een hele kast in één ronde gaat.
+"""
+point = { ui = "commissioning.test_record" }
+expect = { clicked = "commissioning.test_record" }
+manual = "needs a typed reading from the previous step; QA 210 clicks Record"
+
+[[step]]
+id = "miss"
+title = "When a wire misses"
+title_nl = "Als een draad afwijkt"
+text = """
+A reading outside what is expected, or {ui:commissioning.test_open}, is a miss: the line says "MISS: a punch item is open on the Punch tab". The wire's Continuity check fails on the Checks tab as well, so you type it once and both follow.
+"""
+text_nl = """
+Een meting buiten wat verwacht wordt, of {ui:commissioning.test_open}, is een afwijking: de regel zegt "MISS: a punch item is open on the Punch tab". De controle Continuity van de draad faalt ook op het tabblad Checks, dus je typt het één keer en beide volgen.
+"""
+point = { ui = "commissioning.test_open" }
+manual = "a miss opens a punch item in the lesson project; QA 210 presses Open circuit"
+
+[[step]]
+id = "list"
+title = "The wiring-order list"
+title_nl = "De lijst in bedradingsvolgorde"
+text = """
+**Wiring order** lists every wire with its mark: red circle not tested, amber one reading missing, green done, a red octagon a miss. Each row shows the reading. Click a row to measure that wire again.
+"""
+text_nl = """
+**Wiring order** toont elke draad met zijn teken: rode cirkel niet getest, oranje één meting ontbreekt, groen klaar, een rode achthoek een afwijking. Elke rij toont de meting. Klik op een rij om die draad opnieuw te meten.
+"""
+point = { ui = "commissioning.test" }
+manual = "reading step: the list rows are not anchored; QA 210 shows them"
+
+[[step]]
+id = "pdf"
+title = "Print the sheet for the bench"
+title_nl = "Print het blad voor de werkbank"
+text = """
+{ui:commissioning.test_pdf} writes "<project> test sheet.pdf" next to the project file, with the wires in wiring order and the expected values, for a meter and a pen. Same rule: planning values, not a test record.
+"""
+text_nl = """
+{ui:commissioning.test_pdf} schrijft "<project> test sheet.pdf" naast het projectbestand, met de draden in bedradingsvolgorde en de verwachte waarden, voor een meter en een pen. Zelfde regel: planwaarden, geen keuringsrapport.
+"""
+point = { ui = "commissioning.test_pdf" }
+expect = { clicked = "commissioning.test_pdf" }
+manual = "writes a PDF file; QA 210 clicks it"
