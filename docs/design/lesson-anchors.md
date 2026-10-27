@@ -144,6 +144,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `bench.tab.ferrules`: {ui:bench.tab.ferrules} shows **Ferrules tab**
 - `bench.tab.labels`: {ui:bench.tab.labels} shows **Labels tab**
 - `bench.tab.kitting`: {ui:bench.tab.kitting} shows **Kitting tab**
+- `kitting.export`: {ui:kitting.export} shows **Export kitting list button**
 - `build.screen`: {ui:build.screen} shows **Build mode**
 - `build.done`: {ui:build.done} shows **Done button**
 - `build.problem`: {ui:build.problem} shows **Problem button**
@@ -188,6 +189,7 @@ For `expect = { signal = "name" }`; raised where a key does not pass through a c
 - `standards_chosen`
 - `bench_ferrules`
 - `bench_labels`
+- `bench_kitting`
 - `build_step_done`
 - `supply_current_set`
 - `autopilot_applied`

@@ -32,5 +32,6 @@ Generated docs: `UPDATE_ANCHORS_DOC=1 UPDATE_UI_NAMES=1 cargo test -p novo-app -
 - Lesson `cooling-advice` (Cabinet track, order 97): Cabinet > Heat strip > Cooling advice opens the window over the plate and starts the sweep. Anchor `heat.advice.add`. QA 207. "Cooling advice" and "Add" steps are `manual` in the replay gate. Still to do from the coordinator: Cooler layout, 3D Simulate run, Test tab (#1526 merged), Kitting (not merged).
 
 - Lesson `simulate-3d` (Cabinet track, order 95, branch claude/learning-simulate-3d): 3D > Heat > Simulate. Anchor `view3d.heat`; the 3D Heat panel got `above_card`. QA 209. The Simulate and settings steps are `manual` in the replay gate. Still to do: Test tab (#1526), Kitting (#1531), Wire-it (#1530).
-- Lesson `wire-test` (Cabinet track, order 101): Commissioning > Test tab (#1526). QA 210. Typing, Record, Open circuit and the PDF are `manual` in the replay gate. Still to do: Kitting (#1531), Wire-it (#1530).
+- Lesson `wire-test` (Cabinet track, order 101): Commissioning > Test tab (#1526). QA 210. Typing, Record, Open circuit and the PDF are `manual` in the replay gate.
+- Lesson `kitting` (Cabinet track, order 102): Reports > Bench output > Kitting (#1531). Signal `bench_kitting`, anchor `kitting.export`. QA 211.
 - Lesson `wire-it` (Cabinet track, order 103, branch claude/learning-wire-it): 3D > Wire-it (palette: wire-it, #1530). Six `wire_it.*` anchors on the strip, QA 212. The Print step is `manual` in the replay gate (save dialog).
