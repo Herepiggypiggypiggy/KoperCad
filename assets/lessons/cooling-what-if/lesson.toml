@@ -1,0 +1,159 @@
+# Sample project: the hot cabinet fixture of the cooling lane (qa/fixtures/cabinet-cooling-advice.novo as JSON):
+# devices that run hot in a sealed box. crates/novo-tests/tests/lessons/cooling.rs checks the file (UPDATE_LESSONS=1
+# rewrites it). The run takes about a minute on a worker thread, so the replay gate does not press "Try the fixes"
+# or "Apply"; QA 206 walks the real run. The numbers the model gives are not quoted, only what the window says.
+format = 1
+id = "cooling-what-if"
+version = 1
+status = "early"
+title = "Fix a hot cabinet: the cooling what-if"
+title_nl = "Een te warme kast verhelpen: de koel-wat-als"
+summary = "Name the hottest day, let the model try the fixes against each other, read the ranked list with its before and after table, preview one in 3D, apply it, and check it with Simulate."
+summary_nl = "Noem de warmste dag, laat het model de oplossingen tegen elkaar proberen, lees de ranglijst met voor-en-na-tabel, bekijk er een in 3D, pas hem toe en controleer hem met Simulate."
+track = "cabinet"
+order = 97
+level = "intermediate"
+minutes = 10
+topics = ["cooling", "heat", "fan", "vent", "what-if", "layout"]
+needs = ["heat-and-sizing"]
+next = ["commissioning"]
+project = "project.json"
+
+[[step]]
+id = "why"
+title = "Hot, and what to do about it"
+title_nl = "Te warm, en wat eraan te doen"
+text = """
+This cabinet is sealed, and one device runs hotter than it allows on a warm day. You can fix that by moving devices, by adding a vent and a fan, by both, or by a bigger enclosure.
+The **cooling what-if** tries those against each other and ranks them. It is a model: it ranks fixes, it does not measure your cabinet.
+"""
+text_nl = """
+Deze kast is dicht en één component wordt warmer dan hij mag op een warme dag. Je kunt dat verhelpen door componenten te verplaatsen, een rooster en ventilator toe te voegen, allebei, of een grotere kast.
+De **koel-wat-als** probeert die tegen elkaar en zet ze op volgorde. Het is een model: het rangschikt oplossingen, het meet je kast niet.
+"""
+
+[[step]]
+id = "open-cabinet"
+title = "Open the cabinet"
+title_nl = "Open de kast"
+text = "Press {key:view.cabinet}. The plate shows the rails and the devices with their losses; the heat tools are in the Heat strip."
+text_nl = "Druk op {key:view.cabinet}. De plaat toont de rails en de componenten met hun verliezen; de warmtegereedschappen staan in de Heat-strook."
+how = ["Press {key:view.cabinet}."]
+how_nl = ["Druk op {key:view.cabinet}."]
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "heat-on"
+title = "Turn on Heat"
+title_nl = "Zet Heat aan"
+text = "Click {ui:cabinet.heat} (or press {key:heat.toggle}; in a narrow window the bar folds it into {ui:cabinet.more}). The Heat strip appears with the buttons Simulate, Cooling advice, Cooler layout and Cooling what-if."
+text_nl = "Klik op {ui:cabinet.heat} (of druk op {key:heat.toggle}; in een smal venster zit het onder {ui:cabinet.more}). De Heat-strook verschijnt met de knoppen Simulate, Cooling advice, Cooler layout en Cooling what-if."
+how = ["Click Heat in the View group of the Cabinet bar, or press {key:heat.toggle}."]
+how_nl = ["Klik op Heat in de groep View van de Cabinet-balk of druk op {key:heat.toggle}."]
+point = { ui = "cabinet.heat" }
+expect = { command = "heat.toggle" }
+solve = [ { command = "heat.toggle" } ]
+
+[[step]]
+id = "press"
+title = "Open the cooling what-if"
+title_nl = "Open de koel-wat-als"
+text = """
+**Cooling advice** tries only a pair of vents or fans. **Cooler layout** tries only moving devices. {ui:heat.cooling_whatif} tries all of it, together and one by one, and asks first for the conditions.
+The fixes are previewed in 3D, so the press takes you there and opens the window beside the cabinet.
+"""
+text_nl = """
+**Cooling advice** probeert alleen een paar roosters of ventilatoren. **Cooler layout** probeert alleen componenten verplaatsen. {ui:heat.cooling_whatif} probeert alles, samen en afzonderlijk, en vraagt eerst naar de omstandigheden.
+De oplossingen worden in 3D getoond, dus de druk brengt je daarheen en opent het venster naast de kast.
+"""
+how = ["Click Cooling what-if in the Heat strip."]
+how_nl = ["Klik op Cooling what-if in de Heat-strook."]
+point = { ui = "heat.cooling_whatif" }
+expect = { clicked = "heat.cooling_whatif" }
+solve = [ { ui_click = "heat.cooling_whatif" } ]
+
+[[step]]
+id = "conditions"
+title = "Name the conditions"
+title_nl = "Noem de omstandigheden"
+text = """
+The window carries a **MODEL, NOT MEASURED** badge. It asks two things: **Hottest day outside**, the air temperature the cabinet has to survive (it starts at the maximum ambient of the project), and **Duty**, the share of the loss that is on. 100 % is every device at the loss you entered.
+Set the day you must survive, not the average one.
+"""
+text_nl = """
+Het venster draagt een badge **MODEL, NOT MEASURED**. Het vraagt twee dingen: **Hottest day outside**, de luchttemperatuur die de kast moet overleven (hij begint bij de maximale omgeving van het project), en **Duty**, het deel van het verlies dat aan staat. 100 % is elk component op het verlies dat je invulde.
+Vul de dag in die je moet overleven, niet de gemiddelde.
+"""
+
+[[step]]
+id = "go"
+title = "Try the fixes"
+title_nl = "Probeer de oplossingen"
+text = """
+Click {ui:heat.whatif.go}. The window says "About a minute": the model runs the cabinet as it is, then each fix, then the fixes together. A spinner shows the stage and the runs so far.
+**Stop and keep what was found** ends it early with what is ready. Wait for the list.
+"""
+text_nl = """
+Klik op {ui:heat.whatif.go}. Het venster zegt "About a minute": het model laat de kast zoals hij is draaien, dan elke oplossing, dan de oplossingen samen. Een spinner toont de fase en de runs tot nu toe.
+**Stop and keep what was found** stopt eerder met wat klaar is. Wacht op de lijst.
+"""
+point = { ui = "heat.whatif.go" }
+expect = { clicked = "heat.whatif.go" }
+manual = "the run takes about a minute on a worker thread; QA 206 clicks it and waits"
+
+[[step]]
+id = "ranked"
+title = "Read the ranked list"
+title_nl = "Lees de ranglijst"
+text = """
+The headline says what wins, then **Now** gives the margin to the limit, the devices over it and the hottest air. Each fix is a card, best first: **clears every limit**, **gains N K**, or "within the model's noise", a gain too small to rely on.
+Under each name stands the effort: cut-outs and fans to wire, devices to move, or a different enclosure.
+"""
+text_nl = """
+De kop zegt wat wint, daarna geeft **Now** de marge tot de grens, de componenten erboven en de heetste lucht. Elke oplossing is een kaart, beste eerst: **clears every limit**, **gains N K**, of "within the model's noise", een winst te klein om op te vertrouwen.
+Onder elke naam staat de inspanning: gaten en ventilatoren om aan te sluiten, componenten om te verplaatsen, of een andere kast.
+"""
+
+[[step]]
+id = "table"
+title = "Preview and compare"
+title_nl = "Bekijk en vergelijk"
+text = """
+Click a card's name to pick it. The cabinet in 3D shows it: green boxes where moved devices would stand, new openings drawn on their walls. Nothing is stored.
+The card holds a before and after table, with rows such as **Devices over limit**, **Tightest margin** and **Hottest air**, in the columns **Now**, **With fix** and **Change**. **Copy the table** puts it on the clipboard for a report.
+"""
+text_nl = """
+Klik op de naam van een kaart om hem te kiezen. De kast in 3D toont hem: groene blokken waar verplaatste componenten zouden staan, nieuwe openingen op hun wanden getekend. Er wordt niets opgeslagen.
+De kaart heeft een voor-en-na-tabel, met rijen zoals **Devices over limit**, **Tightest margin** en **Hottest air**, in de kolommen **Now**, **With fix** en **Change**. **Copy the table** zet hem op het klembord voor een rapport.
+"""
+
+[[step]]
+id = "apply"
+title = "Apply the fix you chose"
+title_nl = "Pas de gekozen oplossing toe"
+text = """
+Click {ui:heat.whatif.apply}. Moves are applied as one undo step. Openings and fans go into the **Vents and fans** list of the 3D Heat panel, where they are undone with that list's Undo.
+A bigger enclosure is not applied for you: it is a decision for {ui:cabinet.sizing} in the Cabinet.
+"""
+text_nl = """
+Klik op {ui:heat.whatif.apply}. Verplaatsingen worden toegepast als één undo-stap. Openingen en ventilatoren komen in de lijst **Vents and fans** van het 3D Heat-paneel, waar je ze met de Undo van die lijst terugdraait.
+Een grotere kast wordt niet voor je toegepast: dat is een besluit voor {ui:cabinet.sizing} in het Cabinet.
+"""
+point = { ui = "heat.whatif.apply" }
+expect = { clicked = "heat.whatif.apply" }
+manual = "needs the finished run of the previous step; QA 206 clicks it"
+
+[[step]]
+id = "check"
+title = "Check it with Simulate"
+title_nl = "Controleer het met Simulate"
+text = """
+The ranking comes from a quick 2D model. For a fan fix its gain can be too high or too low, and the window says so. For a fix with a fan it also counts the devices beside the assumed fan stream ("Beside the assumed fan stream: N of M devices"): in the checks such a device gained a third to three quarters of what is shown.
+Press **Simulate** in the 3D Heat panel: that run sees the depth of the cabinet and the applied vents and fans. It is still a model; the only proof is a measurement.
+"""
+text_nl = """
+De rangschikking komt uit een snel 2D-model. Bij een ventilatoroplossing kan de winst te hoog of te laag staan, en het venster zegt dat. Bij een oplossing met ventilator telt het ook de componenten naast de veronderstelde luchtstroom ("Beside the assumed fan stream: N of M devices"): zo'n component won in de controles een derde tot driekwart van wat getoond wordt.
+Druk op **Simulate** in het 3D Heat-paneel: die run ziet de diepte van de kast en de toegepaste roosters en ventilatoren. Het blijft een model; het enige bewijs is een meting.
+"""

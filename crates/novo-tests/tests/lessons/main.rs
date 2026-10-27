@@ -8,6 +8,7 @@
 
 mod cables;
 mod common;
+mod cooling;
 mod documents;
 mod emc;
 mod plc;

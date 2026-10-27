@@ -45,6 +45,9 @@ Fix a step, then regenerate to shrink the list.
 - connection-screens/open-cables: `Cables`
 - connection-screens/open-diagram: `Pages`
 - connection-screens/open-terminals: `Terminals`
+- cooling-what-if/apply: `Vents and fans`
+- cooling-what-if/check: `Simulate`
+- cooling-what-if/conditions: `MODEL, NOT MEASURED`
 - cut-lengths/cut-list: `Cut list` (write {ui:cabinet.cutlist})
 - cut-lengths/cut-list: `Reports`
 - cut-lengths/export-cut: `Route all` (write {ui:cabinet.routes})

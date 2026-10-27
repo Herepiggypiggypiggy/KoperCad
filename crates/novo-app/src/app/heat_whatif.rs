@@ -515,13 +515,11 @@ impl Wizard {
             } else {
                 "Try the fixes"
             };
-            if ui
-                .button(label)
-                .on_hover_text(
-                    "Runs the cabinet under these conditions, then tries moving devices, vents and fans, both together, and a bigger enclosure",
-                )
-                .clicked()
-            {
+            let go = ui.button(label).on_hover_text(
+                "Runs the cabinet under these conditions, then tries moving devices, vents and fans, both together, and a bigger enclosure",
+            );
+            super::cabinet_bar::note_ctx(ui.ctx(), "heat.whatif.go", "Try the fixes button", &go);
+            if go.clicked() {
                 self.go = true;
             }
             if self.found.is_none() {
@@ -685,13 +683,16 @@ fn card(
             Fix::Openings { .. } => "Add the openings to Vents and fans",
             _ => "Apply the moves and add the openings",
         };
-        if ui
-            .add_enabled(!stale, egui::Button::new(text))
-            .on_hover_text(
-                "One undo step for the moves; the openings go to the Vents and fans list of the 3D Heat panel, where Simulate checks them",
-            )
-            .clicked()
-        {
+        let apply = ui.add_enabled(!stale, egui::Button::new(text)).on_hover_text(
+            "One undo step for the moves; the openings go to the Vents and fans list of the 3D Heat panel, where Simulate checks them",
+        );
+        super::cabinet_bar::note_ctx(
+            ui.ctx(),
+            "heat.whatif.apply",
+            "Apply button of the fix",
+            &apply,
+        );
+        if apply.clicked() {
             *ask = Some(match &c.fix {
                 Fix::Layout { moves } => Ask::Move(found.structure, moves.clone()),
                 Fix::Openings { candidate } => Ask::Openings(candidate.clone()),

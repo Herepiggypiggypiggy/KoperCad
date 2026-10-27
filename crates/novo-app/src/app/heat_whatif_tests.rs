@@ -485,6 +485,25 @@ fn the_command_from_the_cabinet_opens_the_wizard_in_3d() {
 }
 
 #[test]
+fn the_wizard_registers_its_try_button_for_the_lessons() {
+    use super::Action;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = super::view3d_tests::drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    d.app.run_command(&ctx, "heat.cooling_whatif", None);
+    for _ in 0..6 {
+        d.frame();
+    }
+    assert!(d.app.cabinet.heat.whatif.is_open());
+    assert!(
+        d.app.learn_anchor("heat.whatif.go").is_some(),
+        "the Try the fixes button is an anchor while the window is open"
+    );
+}
+
+#[test]
 fn the_heat_strip_button_in_the_cabinet_also_leads_to_the_3d_view() {
     use super::Action;
     use super::workspace::Workspace;

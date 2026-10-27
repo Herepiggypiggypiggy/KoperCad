@@ -81,6 +81,7 @@ text is never shown), LC-19 (Excel steps cannot tick), LC-29 (gesture-only steps
 | 51 | Build order in 3D: step through rails, ducts, devices, wires | `build-order-3d` | full (early) | yes | The printed assembly pack: `workshop-pack` |
 | 52 | Work cards: print one build-order step or the whole pack, drilling templates, wire cut cards, the ruler check, what is exact | `work-cards` | full (early) | yes | The bench packet and workshop pack: `workshop-pack` |
 | 53 | EMC fix-it: preview a repair on a copy, see it before and after on the plate, apply as one undo step, what stays by hand | `emc-fix-it` | full (early) | no (its own sample project, the shields fixture) | Moving a device, keep-clear routing and the door strap are in the text only |
+| 54 | Cooling what-if: name the hottest day, run the model, read the ranked fixes and the before and after table, preview in 3D, apply, check with Simulate | `cooling-what-if` | full (early) | no (its own sample project, the hot cabinet fixture) | Cooling advice and Cooler layout are named in one step, not walked; the 3D Simulate run is named, not walked: `heat-in-3d` |
 
 Added 2026-10-25 (rows 48 to 51, 57 lessons in all, 4 more concepts that are full): the learning backlog for
 the Live view, EMC net classes, EMC on the plate and Build order. Lessons, QA walks 200 to 203, the anchors and the
@@ -146,3 +147,5 @@ not that its words still describe the screen.
 
 A pull request that adds a user-facing feature names, in its description, the lesson it adds or changes,
 or says why none is needed. A pull request that adds or removes a lesson updates the table above.
+
+Added 2026-10-27 (row 54, 60 lessons in all): the cooling what-if lesson, QA walk 206, and the anchors `heat.whatif.go` and `heat.whatif.apply`. The model run in the lesson takes about a minute, so the replay gate does not press "Try the fixes" or "Apply" (both steps are `manual`); QA 206 clicks them for real.
