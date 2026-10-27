@@ -163,10 +163,10 @@ id = "progress"
 title = "How far you are"
 title_nl = "Hoe ver je bent"
 text = """
-Beside the button the strip counts the wires run and the metres of wire still to cut. The slider jumps to any wire, and **Next not run** goes to the first wire still open.
+Beside the button the strip counts the wires run and the metres of wire still to cut. The slider jumps to any wire, and {ui:wire_it.next_open} goes to the first wire still open.
 """
 text_nl = """
-Naast de knop telt de strook de getrokken draden en de meters draad die nog geknipt moeten worden. De schuif springt naar elke draad, en **Next not run** gaat naar de eerste draad die nog open is.
+Naast de knop telt de strook de getrokken draden en de meters draad die nog geknipt moeten worden. De schuif springt naar elke draad, en {ui:wire_it.next_open} gaat naar de eerste draad die nog open is.
 """
 
 [[step]]
