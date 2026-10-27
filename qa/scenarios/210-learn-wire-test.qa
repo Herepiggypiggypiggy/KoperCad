@@ -1,0 +1,68 @@
+@title Lesson walk: wire-test (Test tab, reading, record, miss, list, PDF)
+@area Learn
+# The lesson from the palette, in the commissioning lesson's sample project. Do it for me only carries out commands, so the Test tab, the readings and the buttons are really clicked and typed.
+key ctrl+k
+wait 4
+text test every wire
+wait 6
+click_text "Test every wire: continuity and insulation"
+wait 40
+shot 01-why
+check_layout
+try click_text "Next"
+wait 20
+shot 02-open-commissioning
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 03-tab-step
+check_layout
+click_text Test Button
+wait 20
+shot 04-sheet-step
+check_layout
+try click_text "Next"
+wait 20
+shot 05-reading-step
+check_layout
+click 48 475
+wait 5
+text 0.12
+click 48 523
+wait 5
+text 50
+wait 5
+shot 06-typed
+check_layout
+try click_text "Next"
+wait 20
+shot 07-record-step
+check_layout
+click_text Record Button
+wait 20
+expect "Recorded"
+shot 08-recorded-miss-step
+check_layout
+click_text "Open circuit" Button
+wait 20
+expect "MISS"
+shot 09-miss
+check_layout
+click_text Punch Button
+wait 20
+shot 10-punch-tab
+check_layout
+click_text Test Button
+wait 20
+try click_text "Next"
+wait 20
+shot 11-list-step
+check_layout
+try click_text "Next"
+wait 20
+shot 12-pdf-step
+check_layout
+click_text "Write test sheet PDF"
+wait 30
+shot 13-pdf-written
+check_layout

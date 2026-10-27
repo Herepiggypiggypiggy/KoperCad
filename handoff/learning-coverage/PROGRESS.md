@@ -10,6 +10,7 @@
 2026-10-27 UTC Cooler layout lesson `cooler-layout` (branch claude/learning-cooler-layout, from main 7e13d26): anchor `heat.layout.apply`, QA 208, COVERAGE row 56. On its fixture the model finds moves that cool the neighbours but the hottest device stays over its limit; the lesson says what the window says. Next: 3D Simulate run, Test tab (#1526), Kitting (#1531), Wire-it (#1530).
 2026-10-27 UTC Coordinator backlog: Cooling advice, Cooler layout, 3D Simulate run, Test tab (#1526), Kitting (not on main yet), one PR per lesson from main. Cooling advice lesson `cooling-advice` first (branch claude/learning-cooling-advice): anchor `heat.advice.add`, QA 207, COVERAGE row 55; the cooling what-if lesson moves to order 98.
 
+2026-10-27 UTC Wire test lesson `wire-test` (branch claude/learning-test-tab): Test tab of Commissioning, QA 210, COVERAGE row 58. Next: Kitting, Wire-it lessons.
 2026-10-27 UTC 3D Simulate run lesson `simulate-3d` written (branch claude/learning-simulate-3d): anchor `view3d.heat`, Heat panel kept clear of the lesson card, QA 209, COVERAGE row 57. Next: Test tab, Kitting, Wire-it lessons.
 
 2026-10-27 UTC Kitting lesson `kitting` (branch claude/learning-kitting): signal `bench_kitting`, anchor `kitting.export`, QA 211, COVERAGE row 59. Next: Wire-it lesson.
