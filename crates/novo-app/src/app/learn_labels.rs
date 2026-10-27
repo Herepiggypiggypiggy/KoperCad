@@ -67,6 +67,8 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("heat.cooling_advice", "Cooling advice button"),
     ("heat.cooling_whatif", "Cooling what-if button"),
     ("heat.cooler_layout", "Cooler layout button"),
+    ("heat.whatif.go", "Try the fixes button"),
+    ("heat.whatif.apply", "Apply button of the fix"),
     ("cabinet.canvas", "Cabinet canvas"),
     ("workspace.view3d", "3D canvas"),
     ("switcher.schematic", "Schematic chip"),
