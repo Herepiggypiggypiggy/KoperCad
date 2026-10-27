@@ -23,6 +23,7 @@ mod punch;
 mod redline;
 mod report;
 mod store;
+mod test_sheet;
 mod walk;
 
 pub use build::{
@@ -41,7 +42,12 @@ pub use progress::{
 pub use punch::{Photo, PunchItem, PunchState, Severity, Signature};
 pub use redline::{Change, Redline, RedlineState, apply_commands, revision_description};
 pub use report::to_report_input;
-pub use store::{CommissioningError, CommissioningStore};
+pub use store::{CommissioningError, CommissioningStore, InsulationReading};
+pub use test_sheet::{
+    Basis, Circuit, ContinuityInput, Expected, PointState, ReadingInput, Recorded, TestPoint,
+    TestProgress, TestSettings, TestSheet, Verdict, Verdicts, judge, point_state, record_reading,
+    test_progress, test_sheet_report, untested, wiring_order,
+};
 pub use walk::{
     WalkOrder, WalkScope, WireKind, WirePlan, WireStep, next_open, next_open_in_order,
     next_open_with, walk_order, walk_order_in, walk_order_with,
