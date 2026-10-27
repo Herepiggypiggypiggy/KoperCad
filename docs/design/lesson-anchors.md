@@ -134,6 +134,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `bench.tab.cut`: {ui:bench.tab.cut} shows **Cut list tab**
 - `bench.tab.ferrules`: {ui:bench.tab.ferrules} shows **Ferrules tab**
 - `bench.tab.labels`: {ui:bench.tab.labels} shows **Labels tab**
+- `bench.tab.kitting`: {ui:bench.tab.kitting} shows **Kitting tab**
 - `build.screen`: {ui:build.screen} shows **Build mode**
 - `build.done`: {ui:build.done} shows **Done button**
 - `build.problem`: {ui:build.problem} shows **Problem button**

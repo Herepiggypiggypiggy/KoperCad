@@ -1,0 +1,17 @@
+@title Kitting tab on the example: wire reels, ferrules and the shopping list with the BOM
+@area Reports
+# The example has parts and wires but no cabinet: the plan still gives reels, ferrules and one shopping list that merges the bill of materials.
+click_text "Open example"
+wait 20
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+click_text Kitting
+wait 10
+click_text "Shopping list"
+wait 5
+shot kitting-example-shopping
+expect "Export kitting list (PDF)"
+expect "Shopping list"
+check_layout

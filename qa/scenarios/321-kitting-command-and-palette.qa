@@ -1,0 +1,19 @@
+@title Kitting: the Reports menu and the command search find the kitting list
+@area Reports
+# Reports > Export > Export kitting list (PDF) and Ctrl+K "kitting" reach the same command.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 30
+click_text Reports
+wait 5
+shot reports-menu
+check_layout
+key Escape
+wait 3
+key ctrl+k
+wait 6
+text kitting
+wait 8
+shot palette
+expect "Export kitting list (PDF)"
+check_layout
+key Escape

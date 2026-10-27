@@ -531,6 +531,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.wireit",
     "export.scale_check",
     "export.bench_packet",
+    "export.kitting",
     "export.safety_sheets",
     "export.sheets",
     "export.sheets_csv",
@@ -1512,6 +1513,9 @@ impl NovoApp {
             }
             "export.bench_packet" => {
                 self.export_bench_packet();
+            }
+            "export.kitting" => {
+                self.export_kitting();
             }
             "export.sheets" => {
                 self.export_spreadsheet();

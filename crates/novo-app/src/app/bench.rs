@@ -41,6 +41,7 @@ pub(super) enum Tab {
     CutList,
     Ferrules,
     Labels,
+    Kitting,
 }
 
 /// What was computed for one project revision and ferrule standard.
@@ -73,6 +74,8 @@ pub(super) struct BenchState {
     defaults: DefaultsDraft,
     /// The sides of the printed check square as typed, mm.
     check: [String; 3],
+    /// The Kitting tab's draft settings and plan.
+    pub(super) kit: super::kitting::KitDraft,
 }
 
 impl BenchState {
@@ -87,6 +90,7 @@ impl BenchState {
                 ..DefaultsDraft::default()
             },
             check: [String::new(), String::new(), "100".into()],
+            kit: super::kitting::KitDraft::default(),
         }
     }
 }
@@ -98,7 +102,7 @@ pub(super) struct Inputs {
     pub(super) labels: LabelSettings,
 }
 
-fn pdf_options(
+pub(super) fn pdf_options(
     title: String,
     keys: impl Iterator<Item = String>,
     language: novo_reports::i18n::Translator,
@@ -139,7 +143,7 @@ impl NovoApp {
         })
     }
 
-    fn bench_path(&mut self, what: &str, ext: &str) -> Option<PathBuf> {
+    pub(super) fn bench_path(&mut self, what: &str, ext: &str) -> Option<PathBuf> {
         let (dir, stem) = self.export_base()?;
         Some(ours_or_free(
             &dir,
@@ -149,7 +153,7 @@ impl NovoApp {
         ))
     }
 
-    fn bench_write(&mut self, path: &Path, bytes: &[u8], what: &str) -> Option<PathBuf> {
+    pub(super) fn bench_write(&mut self, path: &Path, bytes: &[u8], what: &str) -> Option<PathBuf> {
         let replaced = path.exists();
         match write_replacing(path, bytes) {
             Ok(()) => {
@@ -437,6 +441,10 @@ impl NovoApp {
         }
         let stored_standard = FerruleStandard::of(project);
         let stored_labels = LabelSettings::of(project);
+        let stored_kitting = novo_reports::KitSettings::of(project);
+        if matches!(state.tab, Tab::Kitting) {
+            state.kit.refresh(project, &stored_kitting);
+        }
         let rules = novo_routing::WireRules::of(project);
         let ready = state
             .cache
@@ -474,21 +482,35 @@ impl NovoApp {
                     Tab::CutList => 0,
                     Tab::Ferrules => 1,
                     Tab::Labels => 2,
+                    Tab::Kitting => 3,
                 };
                 let (changed, rects) = novo_theme::widgets::tabs_with_rects(
                     ui,
                     &mut tab,
-                    &["Cut list", "Ferrules", "Labels"],
+                    &["Cut list", "Ferrules", "Labels", "Kitting"],
                 );
                 tab_rects = rects;
                 if changed {
-                    state.tab = [Tab::CutList, Tab::Ferrules, Tab::Labels][tab];
+                    state.tab = [Tab::CutList, Tab::Ferrules, Tab::Labels, Tab::Kitting][tab];
                 }
                 ui.add_space(8.0);
                 match state.tab {
                     Tab::CutList => cut_tab(ui, &mut state, &rules, &mut action),
                     Tab::Ferrules => ferrule_tab(ui, &mut state, &stored_standard, &mut action),
                     Tab::Labels => label_tab(ui, &mut state, &stored_labels, &mut action),
+                    Tab::Kitting => {
+                        let mut kit_act = None;
+                        super::kitting::kit_tab(ui, &mut state.kit, &stored_kitting, &mut kit_act);
+                        match kit_act {
+                            Some(super::kitting::KitAct::Export) => {
+                                action = Some(Act::ExportKitting)
+                            }
+                            Some(super::kitting::KitAct::Save(s)) => {
+                                action = Some(Act::SaveKitting(s));
+                            }
+                            None => {}
+                        }
+                    }
                 }
             });
         if let Some(shown) = shown {
@@ -498,6 +520,7 @@ impl NovoApp {
             ("bench.tab.cut", "Cut list tab"),
             ("bench.tab.ferrules", "Ferrules tab"),
             ("bench.tab.labels", "Labels tab"),
+            ("bench.tab.kitting", "Kitting tab"),
         ]) {
             self.anchor(id, *rect, label);
         }
@@ -505,7 +528,7 @@ impl NovoApp {
             match state.tab {
                 Tab::Ferrules => self.learn_signal("bench_ferrules"),
                 Tab::Labels => self.learn_signal("bench_labels"),
-                Tab::CutList => {}
+                Tab::CutList | Tab::Kitting => {}
             }
         }
         self.wb.workshop_paper = paper;
@@ -539,6 +562,14 @@ impl NovoApp {
             Some(Act::ExportLabelsCsv) => {
                 self.export_labels_csv();
             }
+            Some(Act::ExportKitting) => {
+                self.export_kitting();
+            }
+            Some(Act::SaveKitting(settings)) => {
+                self.cabinet_edit("Kitting settings", move |tx| {
+                    novo_reports::KitSettings::store(tx, &settings)
+                });
+            }
             Some(Act::FillDefaults(defaults)) => self.fill_wire_defaults(&defaults),
             Some(Act::SaveStandard(standard)) => {
                 self.cabinet_edit("Ferrule standard", move |tx| {
@@ -567,6 +598,8 @@ enum Act {
     ExportFerrules,
     ExportLabels,
     ExportLabelsCsv,
+    ExportKitting,
+    SaveKitting(novo_reports::KitSettings),
     FillDefaults(WireDefaults),
     SaveStandard(FerruleStandard),
     SaveLabels(LabelSettings),

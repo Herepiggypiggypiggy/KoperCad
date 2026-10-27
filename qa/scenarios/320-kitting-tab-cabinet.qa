@@ -1,0 +1,25 @@
+@title Kitting tab: pick list, saw plan and shopping list of a full cabinet
+@area Reports
+# Reports > Bench output > Kitting: the stock the shop holds, the pick list per build phase, the saw plan with the leftovers and the shopping list merged with the BOM. The export writes the PDF next to the project.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 30
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+click_text Kitting
+wait 10
+shot kitting-tab
+expect "Stock the shop buys and holds"
+expect "Export kitting list (PDF)"
+expect "Pick list"
+check_layout
+click_text "Saw plan"
+wait 5
+shot kitting-saw-plan
+check_layout
+click_text "Export kitting list (PDF)"
+wait 30
+shot kitting-written
+expect_file "/tmp/kopercad-qa-open-*/*kitting list.pdf" 3000
+keep_file "/tmp/kopercad-qa-open-*/*kitting list.pdf"
