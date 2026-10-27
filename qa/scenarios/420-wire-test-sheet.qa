@@ -14,6 +14,7 @@ check_layout
 click_text "Open circuit"
 wait 10
 expect "MISS"
+expect "punch open"
 shot wire-test-miss
 check_layout
 click_text Punch

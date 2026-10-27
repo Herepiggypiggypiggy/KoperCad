@@ -423,8 +423,10 @@ impl CommissioningStore {
         self.test_settings.unwrap_or_default()
     }
 
+    /// Keeps the settings; a field that is not a usable number becomes its
+    /// default (see [`TestSettings::sanitised`]).
     pub fn set_test_settings(&mut self, settings: TestSettings) {
-        self.test_settings = Some(settings);
+        self.test_settings = Some(settings.sanitised());
     }
 
     fn linked_open(&self, target: Target, check: CheckKind) -> Option<u64> {

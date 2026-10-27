@@ -452,7 +452,8 @@ fn progress_bar(ui: &mut egui::Ui, title: &str, p: Progress) {
     let total = p.total.max(1) as f32;
     let mut detail = format!("{} / {}", p.done(), p.total);
     if p.failed > 0 {
-        detail.push_str(&format!(" · {} failed", p.failed));
+        // Short enough for the 250 px panel beside the title.
+        detail.push_str(&format!(" · {} fail", p.failed));
     }
     widgets::progress_bar(
         ui,
@@ -707,15 +708,21 @@ impl NovoApp {
                 self.settings.large_buttons = large;
             }
             ui.add_space(space::M);
-            progress_bar(
-                ui,
-                "Project",
-                mode.index(project).progress(&mode.store, Scope::Project),
-            );
+            // The Test tab counts its own wires in words; the bars count every
+            // check of wires, terminals and devices, a second total beside it.
+            let bars = mode.tab != Tab::Test;
+            if bars {
+                progress_bar(
+                    ui,
+                    "Project",
+                    mode.index(project).progress(&mode.store, Scope::Project),
+                );
+            }
             // On a tablet the walk card needs the height: one bar is enough.
             let walking_on_tablet = tablet && mode.selected.is_some() && mode.tab == Tab::Checks;
             if let Some(page) = current
                 && !walking_on_tablet
+                && bars
             {
                 ui.add_space(space::S);
                 progress_bar(

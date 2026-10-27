@@ -148,10 +148,25 @@ impl CommissioningMode {
     }
 }
 
+/// A stored reading as a row says it: `open (max 0.23 ohm)` becomes
+/// `open, limit 0.23 ohm`, `0.12 ohm (max 0.23)` becomes `0.12 ohm, limit 0.23 ohm`.
+pub(super) fn reading_text(value: &str) -> String {
+    let Some((head, tail)) = value.split_once(" (max ") else {
+        return value.to_owned();
+    };
+    let limit = tail.trim_end_matches(')');
+    let limit = if limit.ends_with("ohm") {
+        limit.to_owned()
+    } else {
+        format!("{limit} ohm")
+    };
+    format!("{head}, limit {limit}")
+}
+
 fn state_mark(p: &Palette, state: PointState) -> (&'static str, egui::Color32) {
     match state {
         PointState::NotTested => (icons::CIRCLE, p.error),
-        PointState::Passed => (icons::CHECK_CIRCLE, p.warning),
+        PointState::Partial => (icons::CHECK_CIRCLE, p.warning),
         PointState::Complete => (icons::CHECK_CIRCLE, p.success),
         PointState::Miss => (icons::WARNING_OCTAGON, p.error),
     }
@@ -181,9 +196,9 @@ pub(super) fn test_tab(
     ui.add_space(space::S);
     ui.label(
         egui::RichText::new(format!(
-            "{} of {} wires measured, {} missed",
-            progress.total - progress.not_tested,
+            "{} wires in the drawing: {} tested, {} missed",
             progress.total,
+            progress.total - progress.not_tested,
             progress.miss
         ))
         .strong(),
@@ -191,13 +206,13 @@ pub(super) fn test_tab(
     if progress.not_tested > 0 {
         ui.label(
             egui::RichText::new(format!(
-                "{} wire(s) of the drawing are not measured yet",
+                "{} wire(s) not tested yet (dead wire check)",
                 progress.not_tested
             ))
             .color(p.error),
         );
     } else {
-        ui.label(egui::RichText::new("Every wire of the drawing is measured").color(p.success));
+        ui.label(egui::RichText::new("Every wire of the drawing is tested").color(p.success));
     }
     ui.add_space(space::S);
 
@@ -274,6 +289,7 @@ pub(super) fn test_tab(
                     .color(p.text_tertiary),
             );
         }
+        ui.weak("Zero the test leads first. For OL or over range press Open circuit.");
         let mut record = false;
         let mut open = false;
         ui.horizontal(|ui| {
@@ -352,11 +368,21 @@ pub(super) fn test_tab(
                 let reading = mode
                     .store
                     .record(Target::Wire(point.wire), CheckKind::Continuity)
-                    .map(|r| r.value.clone())
+                    .map(|r| {
+                        if r.value.is_empty() && r.state == novo_commissioning::CheckState::Passed {
+                            "ticked on Checks".to_owned()
+                        } else {
+                            reading_text(&r.value)
+                        }
+                    })
                     .unwrap_or_default();
                 let row = ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(icon).color(colour));
-                    let text = format!("{:>3}  {name}   {reading}", point.seq);
+                    let text = if reading.is_empty() {
+                        format!("{}.  Wire {name}", point.seq)
+                    } else {
+                        format!("{}.  Wire {name}, {reading}", point.seq)
+                    };
                     ui.selectable_label(selected, text).on_hover_text(format!(
                         "{} -> {}\nContinuity {}",
                         point.from,
@@ -443,7 +469,7 @@ impl NovoApp {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_number;
+    use super::{parse_number, reading_text};
     use crate::actions::Action;
     use crate::app::commissioning::Tab;
     use crate::app::gate1_tests::Drive;
@@ -507,6 +533,16 @@ mod tests {
         let out = d.app.export_test_sheet_to(&path).expect("written");
         assert_eq!(out, path);
         assert!(std::fs::read(&path).unwrap().starts_with(b"%PDF"));
+    }
+
+    #[test]
+    fn a_reading_row_spells_out_the_limit() {
+        assert_eq!(reading_text("open (max 0.23 ohm)"), "open, limit 0.23 ohm");
+        assert_eq!(
+            reading_text("0.12 ohm (max 0.23)"),
+            "0.12 ohm, limit 0.23 ohm"
+        );
+        assert_eq!(reading_text("fine"), "fine");
     }
 
     #[test]

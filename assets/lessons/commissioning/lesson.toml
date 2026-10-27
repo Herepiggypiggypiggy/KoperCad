@@ -1,7 +1,7 @@
 format = 1
 id = "commissioning"
 version = 1
-# The Commissioning tab is on main (verified against aa5977ab: outline tab Checks and Punch list,
+# The Commissioning tab is on main (verified against aa5977ab: outline tab Checks, Punch, Redlines and Test,
 # buttons Next open, Pass, Fail, N/A, Reset, Pass all N open, Fixed, Verified, Reopen, Won't fix, report
 # PDF and CSV). Since #604 the workspace opens from the switcher at the top and keeps the schematic
 # on screen read-only; since #600 Fail raises a punch item itself. Stays early until the commissioning anchors and signals below are registered.
@@ -41,11 +41,11 @@ how_nl = ["Klik bovenin op Commissioning in de schakelaar of druk op {key:view.c
 title = "Open Commissioning"
 title_nl = "Open Inbedrijfstelling"
 text = """
-Click **Commissioning** in the switcher at the top, or press {key:view.commissioning}. The schematic stays on screen, read-only, and the outline on the left becomes the commissioning tab with two sub-tabs, **Checks** and **Punch list**,
+Click **Commissioning** in the switcher at the top, or press {key:view.commissioning}. The schematic stays on screen, read-only, and the outline on the left becomes the commissioning tab with four sub-tabs, **Checks**, **Punch**, **Redlines** and **Test**,
 two progress bars, **Project** and **This page**, and a list of the wires, terminals and devices on the page that have checks.
 """
 text_nl = """
-Klik bovenin op **Commissioning** in de schakelaar, of druk op {key:view.commissioning}. Het schema blijft zichtbaar, alleen-lezen, en het overzicht links wordt het tabblad inbedrijfstelling met twee subtabbladen, **Checks** en **Punch list**,
+Klik bovenin op **Commissioning** in de schakelaar, of druk op {key:view.commissioning}. Het schema blijft zichtbaar, alleen-lezen, en het overzicht links wordt het tabblad inbedrijfstelling met vier subtabbladen, **Checks**, **Punch**, **Redlines** en **Test**,
 twee voortgangsbalken, **Project** en **This page**, en een lijst van de draden, klemmen en componenten op de pagina die controles hebben.
 """
 point = { ui = "switcher.commissioning" }
@@ -127,11 +127,11 @@ how_nl = ["Klik op Open punch list."]
 title = "Add a punch item"
 title_nl = "Voeg een punt toe"
 text = """
-Click **Open punch list** (or the **Punch list** tab) to see the item KoperCAD raised. To add one of your own, type "Tighten terminal" in **New punch item**, choose a severity (**Minor**, **Major** or **Blocking**) and click **Add**.
+Click **Open punch list** (or the **Punch** tab) to see the item KoperCAD raised. To add one of your own, type "Tighten terminal" in **New punch item**, choose a severity (**Minor**, **Major** or **Blocking**) and click **Add**.
 An item shows as "Major · Open · Tighten terminal · (the item)". The punch list keeps everything that is not right yet; click its row to jump to the item in the drawing.
 """
 text_nl = """
-Klik op **Open punch list** (of het tabblad **Punch list**) om het punt te zien dat KoperCAD aanmaakte. Voor een eigen punt typ je "Klem vastdraaien" in **New punch item**, kies je een ernst (**Minor**, **Major** of **Blocking**) en klik je op **Add**.
+Klik op **Open punch list** (of het tabblad **Punch**) om het punt te zien dat KoperCAD aanmaakte. Voor een eigen punt typ je "Klem vastdraaien" in **New punch item**, kies je een ernst (**Minor**, **Major** of **Blocking**) en klik je op **Add**.
 Een punt staat er als "Major · Open · Klem vastdraaien · (het item)". De puntenlijst bewaart alles wat nog niet goed is; klik op een rij om naar het item in de tekening te springen.
 """
 point = { ui = "commissioning.punch" }

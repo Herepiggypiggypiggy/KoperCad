@@ -49,6 +49,44 @@ pub struct TestSettings {
     pub fallback_ohm: f64,
 }
 
+impl TestSettings {
+    /// The settings with every field that is not a usable number (NaN,
+    /// infinite, negative, a zero voltage or margin) replaced by its default,
+    /// so a bad value can never be kept and make the project file unreadable.
+    pub fn sanitised(self) -> TestSettings {
+        let d = TestSettings::default();
+        let ok = |v: f64, min: f64| v.is_finite() && v >= min;
+        TestSettings {
+            insulation: self.insulation,
+            insulation_volts: if self.insulation_volts == 0 {
+                d.insulation_volts
+            } else {
+                self.insulation_volts
+            },
+            min_insulation_mohm: if ok(self.min_insulation_mohm, 0.0) {
+                self.min_insulation_mohm
+            } else {
+                d.min_insulation_mohm
+            },
+            contact_ohm: if ok(self.contact_ohm, 0.0) {
+                self.contact_ohm
+            } else {
+                d.contact_ohm
+            },
+            margin: if ok(self.margin, 1e-9) {
+                self.margin
+            } else {
+                d.margin
+            },
+            fallback_ohm: if ok(self.fallback_ohm, 0.0) {
+                self.fallback_ohm
+            } else {
+                d.fallback_ohm
+            },
+        }
+    }
+}
+
 impl Default for TestSettings {
     fn default() -> Self {
         TestSettings {
@@ -130,7 +168,7 @@ impl Expected {
         } else {
             ""
         };
-        format!("<= {:.2} ohm{assumed}", self.max_ohm)
+        format!("<= {:.3} ohm{assumed}", self.max_ohm)
     }
 
     /// `500 V >= 1 Mohm`, empty when no insulation test is asked.
@@ -302,8 +340,16 @@ pub fn judge(expected: &Expected, input: &ReadingInput) -> Verdicts {
 /// `0.12 ohm (max 0.31)` or `open (max 0.31 ohm)`.
 fn continuity_value(input: ContinuityInput, expected: &Expected) -> String {
     match input {
-        ContinuityInput::Ohm(v) => format!("{v:.2} ohm (max {:.2})", expected.max_ohm),
-        ContinuityInput::Open => format!("open (max {:.2} ohm)", expected.max_ohm),
+        ContinuityInput::Ohm(v) => {
+            // Three decimals, more when the reading and the limit would
+            // otherwise print the same and a miss would read as equal.
+            let max = expected.max_ohm;
+            let places = (3..=6)
+                .find(|&d| format!("{v:.d$}") != format!("{max:.d$}"))
+                .unwrap_or(3);
+            format!("{v:.places$} ohm (max {max:.places$})")
+        }
+        ContinuityInput::Open => format!("open (max {:.3} ohm)", expected.max_ohm),
     }
 }
 
@@ -396,8 +442,9 @@ pub fn record_reading(
 pub enum PointState {
     /// Nothing measured: the dead wire cross-check lists these.
     NotTested,
-    /// Continuity passed, insulation not asked or not yet read.
-    Passed,
+    /// Something passed but not everything asked: continuity not read yet,
+    /// or insulation asked and not read. Not a dead wire.
+    Partial,
     /// Continuity passed and so did the insulation reading, or none asked.
     Complete,
     /// A reading missed.
@@ -414,8 +461,10 @@ pub fn point_state(store: &CommissioningStore, point: &TestPoint) -> PointState 
         (CheckState::Passed, false, _) | (CheckState::Passed, true, Some(_)) => {
             PointState::Complete
         }
-        (CheckState::Passed, true, None) => PointState::Passed,
         (CheckState::NotApplicable, ..) => PointState::Complete,
+        // Insulation read, continuity not: half measured.
+        (CheckState::Pending, _, Some(_)) => PointState::Partial,
+        (CheckState::Passed, true, None) => PointState::Partial,
         _ => PointState::NotTested,
     }
 }
@@ -448,7 +497,7 @@ pub fn test_progress(sheet: &TestSheet, store: &CommissioningStore) -> TestProgr
     for pt in &sheet.points {
         match point_state(store, pt) {
             PointState::NotTested => p.not_tested += 1,
-            PointState::Passed => p.part += 1,
+            PointState::Partial => p.part += 1,
             PointState::Complete => p.complete += 1,
             PointState::Miss => p.miss += 1,
         }
@@ -456,10 +505,24 @@ pub fn test_progress(sheet: &TestSheet, store: &CommissioningStore) -> TestProgr
     p
 }
 
-fn result_text(state: PointState) -> &'static str {
+/// What the Measured ohm cell says: the reading, `ticked` for a Continuity
+/// check passed on the Checks tab with no value typed, blank box if none.
+fn continuity_cell(check: Option<&CheckRecord>) -> String {
+    match check {
+        None => "[ ]".to_owned(),
+        Some(c) if c.value.is_empty() && c.state == CheckState::Passed => "ticked".to_owned(),
+        Some(c) if c.value.is_empty() => c.state.label().to_owned(),
+        Some(c) => c.value.clone(),
+    }
+}
+
+fn result_text(state: PointState, check: Option<&CheckRecord>) -> &'static str {
     match state {
         PointState::NotTested => "NOT TESTED",
-        PointState::Passed => "OK, insulation open",
+        PointState::Partial if check.is_none_or(|c| c.state == CheckState::Pending) => {
+            "PART: continuity not read"
+        }
+        PointState::Partial => "PART: insulation not read",
         PointState::Complete => "OK",
         PointState::Miss => "MISS",
     }
@@ -476,7 +539,7 @@ pub fn test_sheet_report(
     let columns = || {
         vec![
             Column::new("seq", "No.  ", 7.0).right(),
-            Column::new("wire", "Wire       ", 14.0),
+            Column::new("wire", "Wire                ", 28.0),
             Column::new("from", "From            ", 30.0),
             Column::new("to", "To              ", 30.0),
             Column::new("wire_type", "Type / mm2  ", 16.0),
@@ -503,7 +566,7 @@ pub fn test_sheet_report(
             .unwrap_or_else(|| "Wires outside a cabinet plan".into());
         let title = if i == 0 {
             format!(
-                "Test sheet {name}: {} of {} wires measured, {} missed. {DISCLAIMER}",
+                "Test sheet {name}: {} of {} wires tested, {} missed. {DISCLAIMER}",
                 progress.total - progress.not_tested,
                 progress.total,
                 progress.miss
@@ -541,14 +604,14 @@ pub fn test_sheet_report(
                             .unwrap_or_default()
                     )),
                     Cell::text(p.expected.continuity_text()),
-                    Cell::text(check.map_or("[ ]".to_owned(), |c| c.value.clone())),
+                    Cell::text(continuity_cell(check)),
                     Cell::text(p.expected.insulation_text()),
                     Cell::text(match (ins, p.expected.insulation) {
                         (Some(i), _) => format!("{:.2}", i.mohm),
                         (None, Some(_)) => "[ ]".to_owned(),
                         (None, None) => "-".to_owned(),
                     }),
-                    Cell::text(result_text(state).to_owned()),
+                    Cell::text(result_text(state, check).to_owned()),
                     Cell::text(who),
                 ],
                 Vec::new(),
@@ -566,7 +629,7 @@ pub fn test_sheet_report(
             ),
             vec![
                 Column::new("seq", "No.  ", 7.0).right(),
-                Column::new("wire", "Wire       ", 14.0),
+                Column::new("wire", "Wire                ", 28.0),
                 Column::new("ends", "From and to                    ", 70.0),
                 Column::new("res", "Result      ", 22.0),
             ],

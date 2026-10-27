@@ -220,6 +220,37 @@ impl NovoApp {
         if response.clicked() {
             self.show_issues(true);
         }
+        self.punch_pill(ui);
+    }
+
+    /// In the Commissioning workspace, the pill above counts design checks
+    /// only: open punch items from the machine get their own count beside it,
+    /// and a click opens the Punch tab.
+    fn punch_pill(&mut self, ui: &mut egui::Ui) {
+        if self.workspace() != super::workspace::Workspace::Commissioning {
+            return;
+        }
+        let open = self
+            .wb
+            .commissioning
+            .as_ref()
+            .map_or(0, |m| m.store.open_punch_count());
+        if open == 0 {
+            return;
+        }
+        let text = egui::RichText::new(format!("{open} punch open"))
+            .small()
+            .color(crate::theme::ui_palette().error);
+        let response = ui
+            .add(egui::Label::new(text).sense(egui::Sense::click()))
+            .on_hover_text(
+                "Open punch items found at the machine. The pill beside this counts design checks only.",
+            );
+        if response.clicked()
+            && let Some(mode) = self.wb.commissioning.as_mut()
+        {
+            mode.tab = super::commissioning::Tab::Punch;
+        }
     }
 
     /// One quiet line when a finished check finds no error or warning where

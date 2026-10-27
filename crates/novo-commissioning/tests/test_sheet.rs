@@ -102,7 +102,7 @@ fn the_limit_is_calculated_from_length_and_section_with_margin_and_contact() {
     let want = 0.0178 * 2.0 / 1.5 * 1.25 + 0.05;
     assert!((e.max_ohm - want).abs() < 1e-12);
     assert_eq!(e.basis, Basis::Calculated);
-    assert_eq!(e.continuity_text(), format!("<= {want:.2} ohm"));
+    assert_eq!(e.continuity_text(), format!("<= {want:.3} ohm"));
 }
 
 #[test]
@@ -195,7 +195,7 @@ fn a_pass_ticks_the_commissioning_continuity_check_with_the_value() {
         .record(Target::Wire(pt.wire), CheckKind::Continuity)
         .unwrap();
     assert_eq!(rec.state, CheckState::Passed);
-    assert!(rec.value.starts_with("0.01 ohm (max "));
+    assert!(rec.value.starts_with("0.010 ohm (max "));
     assert_eq!(store.open_punch_count(), 0);
 }
 
@@ -297,6 +297,60 @@ fn dead_wire_cross_check_lists_unmeasured_wires_in_order_and_shrinks() {
 }
 
 #[test]
+fn an_insulation_only_reading_is_part_tested_not_a_dead_wire() {
+    let doc = starter_in_cabinet();
+    let sheet = sheet_of(&doc, TestSettings::default());
+    let pt = sheet
+        .points
+        .iter()
+        .find(|p| p.expected.insulation.is_some())
+        .unwrap();
+    let mut store = CommissioningStore::new();
+    let i = ReadingInput {
+        continuity: None,
+        insulation_mohm: Some(50.0),
+    };
+    record_reading(&mut store, pt, i, "T", AT);
+    assert_eq!(point_state(&store, pt), PointState::Partial);
+    assert!(untested(&sheet, &store).iter().all(|p| p.wire != pt.wire));
+    let out = test_sheet_report(&sheet, &store, 1);
+    let row = out.sections[0]
+        .text_rows()
+        .into_iter()
+        .find(|r| r[0] == pt.seq.to_string())
+        .unwrap();
+    assert_eq!(row[8], "50.00");
+    assert_eq!(row[9], "PART: continuity not read");
+}
+
+#[test]
+fn a_continuity_ticked_on_the_checks_tab_says_ticked_not_a_reading() {
+    let doc = starter_in_cabinet();
+    let sheet = sheet_of(
+        &doc,
+        TestSettings {
+            insulation: false,
+            ..Default::default()
+        },
+    );
+    let pt = &sheet.points[0];
+    let mut store = CommissioningStore::new();
+    store
+        .set_check(CheckRecord {
+            target: Target::Wire(pt.wire),
+            check: CheckKind::Continuity,
+            state: CheckState::Passed,
+            by: "T".into(),
+            at: AT.into(),
+            value: String::new(),
+            note: String::new(),
+        })
+        .unwrap();
+    let out = test_sheet_report(&sheet, &store, 1);
+    assert_eq!(out.sections[0].text_rows()[0][6], "ticked");
+}
+
+#[test]
 fn a_pass_with_insulation_asked_but_not_read_is_only_part_done() {
     let doc = starter_in_cabinet();
     let sheet = sheet_of(&doc, TestSettings::default());
@@ -311,7 +365,7 @@ fn a_pass_with_insulation_asked_but_not_read_is_only_part_done() {
         insulation_mohm: None,
     };
     record_reading(&mut store, pt, c, "T", AT);
-    assert_eq!(point_state(&store, pt), PointState::Passed);
+    assert_eq!(point_state(&store, pt), PointState::Partial);
     let i = ReadingInput {
         continuity: None,
         insulation_mohm: Some(50.0),
@@ -395,7 +449,7 @@ fn the_printed_sheet_has_expected_values_blank_boxes_the_disclaimer_and_a_dead_w
     record_reading(&mut store, &sheet.points[0], ok, "Tadjiro", AT);
     let out = test_sheet_report(&sheet, &store, 7);
     let rows = out.sections[0].text_rows();
-    assert!(rows[0][6].starts_with("0.02 ohm"));
+    assert!(rows[0][6].starts_with("0.020 ohm"));
     assert_eq!(rows[0][8], "99.00");
     assert_eq!(rows[0][9], "OK");
     assert!(rows[0][10].starts_with("Tadjiro 10-27 08:00"));
@@ -405,4 +459,98 @@ fn the_printed_sheet_has_expected_values_blank_boxes_the_disclaimer_and_a_dead_w
     );
     // Same state, same sheet.
     assert_eq!(out, test_sheet_report(&sheet, &store, 7));
+}
+
+#[test]
+fn the_pdf_prints_every_cell_whole_including_the_earth_core_name() {
+    let doc = starter_in_cabinet();
+    let sheet = sheet_of(&doc, TestSettings::default());
+    let store = CommissioningStore::new();
+    let out = test_sheet_report(&sheet, &store, 1);
+    let options = novo_pdf::ReportPdfOptions {
+        row_mm: out
+            .sections
+            .iter()
+            .map(|s| (s.key.clone(), novo_commissioning::build_sheet_row_mm(s)))
+            .collect(),
+        ..novo_pdf::ReportPdfOptions::default()
+    };
+    let bytes = novo_pdf::export_report_pdf(&[&out], &options);
+    let pdf = lopdf::Document::load_mem(&bytes).expect("valid pdf");
+    let pages: Vec<u32> = pdf.get_pages().keys().copied().collect();
+    let text = pdf.extract_text(&pages).expect("text");
+    let cut: Vec<&str> = text.lines().filter(|l| l.contains("...")).collect();
+    assert!(cut.is_empty(), "cells were cut: {cut:?}");
+    assert!(
+        text.contains("GNYE"),
+        "the earth core is on the sheet: {text}"
+    );
+    assert!(!text.contains("GN..."), "{text}");
+    assert!(text.contains("compliance test record"));
+}
+
+#[test]
+fn a_bad_setting_is_replaced_by_its_default_and_the_store_stays_readable() {
+    let mut store = CommissioningStore::new();
+    store.set_test_settings(TestSettings {
+        margin: f64::NAN,
+        contact_ohm: f64::INFINITY,
+        min_insulation_mohm: -3.0,
+        insulation_volts: 0,
+        fallback_ohm: f64::NAN,
+        insulation: false,
+    });
+    let d = TestSettings::default();
+    let s = store.test_settings();
+    assert_eq!(
+        (
+            s.margin,
+            s.contact_ohm,
+            s.min_insulation_mohm,
+            s.insulation_volts,
+            s.fallback_ohm
+        ),
+        (
+            d.margin,
+            d.contact_ohm,
+            d.min_insulation_mohm,
+            d.insulation_volts,
+            d.fallback_ohm
+        )
+    );
+    assert!(!s.insulation, "a valid field is kept");
+    let back = CommissioningStore::from_json(&store.to_json()).expect("readable");
+    assert_eq!(back, store);
+}
+
+#[test]
+fn a_miss_just_over_the_limit_does_not_read_as_equal_to_it() {
+    let e = Expected {
+        max_ohm: 0.3101,
+        basis: Basis::Calculated,
+        insulation: None,
+    };
+    let doc = starter_in_cabinet();
+    let sheet = sheet_of(&doc, TestSettings::default());
+    let mut pt = sheet.points[0].clone();
+    pt.expected = e;
+    let mut store = CommissioningStore::new();
+    record_reading(
+        &mut store,
+        &pt,
+        ReadingInput {
+            continuity: Some(ContinuityInput::Ohm(0.3104)),
+            insulation_mohm: None,
+        },
+        "T",
+        AT,
+    );
+    let value = &store
+        .record(Target::Wire(pt.wire), CheckKind::Continuity)
+        .unwrap()
+        .value;
+    assert_eq!(
+        value, "0.3104 ohm (max 0.3101)",
+        "a miss never reads as equal"
+    );
 }
