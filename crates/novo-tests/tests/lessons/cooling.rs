@@ -13,5 +13,10 @@ fn cooling_what_if_files_are_current() {
         .expect("the cooling fixture opens");
     check_file("cooling-what-if", "project.json", &project);
     check_file("cooling-advice", "project.json", &project);
-    assert_lint(&[("cooling-what-if", &project), ("cooling-advice", &project)]);
+    check_file("simulate-3d", "project.json", &project);
+    assert_lint(&[
+        ("cooling-what-if", &project),
+        ("cooling-advice", &project),
+        ("simulate-3d", &project),
+    ]);
 }

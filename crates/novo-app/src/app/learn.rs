@@ -130,6 +130,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "heat.whatif.apply",
     "cabinet.canvas",
     "workspace.view3d",
+    "view3d.heat",
     "switcher.schematic",
     "switcher.cabinet",
     "switcher.view3d",

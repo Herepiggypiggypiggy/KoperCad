@@ -1,0 +1,147 @@
+# Sample project: the hot cabinet fixture of the cooling lane (qa/fixtures/cabinet-cooling-advice.novo as JSON), the
+# same one as cooling-what-if and cooling-advice. crates/novo-tests/tests/lessons/cooling.rs checks the file
+# (UPDATE_LESSONS=1 rewrites it). The solver run takes about a minute, so the replay gate does not press Simulate;
+# QA 209 walks the real run at Quick quality. Only the panel's words are quoted, never its numbers.
+format = 1
+id = "simulate-3d"
+version = 1
+status = "early"
+title = "Heat and air in 3D: the Simulate run"
+title_nl = "Warmte en lucht in 3D: de Simulate-run"
+summary = "Run the 3D heat and airflow model on a hot cabinet, choose its quality, read the verdict and the per-device labels, and know when a result is out of date and why it is an estimate."
+summary_nl = "Draai het 3D-model voor warmte en luchtstroom op een hete kast, kies de kwaliteit, lees het oordeel en de labels per component, en weet wanneer een resultaat verouderd is en waarom het een schatting is."
+track = "cabinet"
+order = 95
+level = "intermediate"
+minutes = 8
+topics = ["cooling", "heat", "3d", "simulate", "airflow"]
+needs = ["view-3d", "heat-and-sizing"]
+next = ["cooling-advice"]
+project = "project.json"
+
+[[step]]
+id = "why"
+title = "Where does the heat go?"
+title_nl = "Waar blijft de warmte?"
+text = """
+In this cabinet one device runs hotter than it allows. The 2D Heat strip gives a quick estimate from the part losses alone.
+**Simulate** in the 3D view solves how air moves and how warm each device gets, in the real shape of the cabinet. It is a model, not a measurement.
+"""
+text_nl = """
+In deze kast wordt één component warmer dan hij mag. De 2D Heat-strook geeft een snelle schatting uit alleen de verliezen van de onderdelen.
+**Simulate** in de 3D-weergave rekent uit hoe lucht beweegt en hoe warm elk component wordt, in de echte vorm van de kast. Het is een model, geen meting.
+"""
+
+[[step]]
+id = "open-3d"
+title = "Open the 3D view"
+title_nl = "Open de 3D-weergave"
+text = "Click {ui:switcher.view3d} at the top, or press {key:view.3d}. The cabinet shows with its devices, rails and ducts."
+text_nl = "Klik bovenin op {ui:switcher.view3d}, of druk op {key:view.3d}. De kast verschijnt met zijn componenten, rails en kanalen."
+how = ["Click 3D in the switcher at the top."]
+how_nl = ["Klik bovenin op 3D in de schakelaar."]
+point = { ui = "switcher.view3d" }
+expect = { command = "view.3d" }
+solve = [ { command = "view.3d" } ]
+
+[[step]]
+id = "heat-panel"
+title = "Open the Heat panel"
+title_nl = "Open het Heat-paneel"
+text = "Click {ui:view3d.heat} in the bar of the 3D view. The Heat panel opens at the right with a line that says there is no simulation yet, and a Simulate button."
+text_nl = "Klik op {ui:view3d.heat} in de balk van de 3D-weergave. Het Heat-paneel opent rechts met een regel dat er nog geen simulatie is, en een Simulate-knop."
+how = ["Click Heat in the bar of the 3D view."]
+how_nl = ["Klik op Heat in de balk van de 3D-weergave."]
+point = { ui = "view3d.heat" }
+expect = { clicked = "view3d.heat" }
+solve = [ { ui_click = "view3d.heat" } ]
+
+[[step]]
+id = "settings"
+title = "Choose the quality"
+title_nl = "Kies de kwaliteit"
+text = """
+Open **Settings for the next run**. **Quality** trades time for detail: Quick takes seconds and is good for trying a layout, Balanced about a minute, Thorough the longest, and it shows each result as it arrives. **Turbulence** is Laminar by default.
+Choose **Quick** for this lesson. The settings apply to the next run only. In a small window the Heat panel is short: scroll it.
+"""
+text_nl = """
+Open **Settings for the next run**. **Quality** ruilt tijd tegen detail: Quick duurt seconden en is goed om een indeling te proberen, Balanced ongeveer een minuut, Thorough het langst, en toont elk resultaat zodra het er is. **Turbulence** staat standaard op Laminar.
+Kies **Quick** voor deze les. De instellingen gelden alleen voor de volgende run. In een klein venster is het Heat-paneel kort: scroll erin.
+"""
+point = { ui = "heat.simulate" }
+manual = "reading step: the settings fold and its choices are not anchored; QA 209 clicks Quick"
+
+[[step]]
+id = "simulate"
+title = "Run it"
+title_nl = "Draai het"
+text = """
+Click {ui:heat.simulate}. The panel says "Simulating: the picture improves as each level finishes." and shows **Cancel** and what it is doing.
+While it runs, the Vents and fans list is locked: cancel the run to edit it. Wait for the result.
+"""
+text_nl = """
+Klik op {ui:heat.simulate}. Het paneel zegt "Simulating: the picture improves as each level finishes." en toont **Cancel** en waar het mee bezig is.
+Zolang het draait is de lijst Vents and fans vergrendeld: annuleer de run om hem te bewerken. Wacht op het resultaat.
+"""
+how = ["Click Simulate in the Heat panel."]
+how_nl = ["Klik op Simulate in het Heat-paneel."]
+point = { ui = "heat.simulate" }
+expect = { clicked = "heat.simulate" }
+manual = "starts a solver run of seconds to a minute on a worker thread; QA 209 clicks it and waits"
+
+[[step]]
+id = "verdict"
+title = "Read the verdict"
+title_nl = "Lees het oordeel"
+text = """
+The first line says whether the cabinet is fine or "Too hot", names the hottest device with its temperature and how far it is over or under its limit. The device name is a button that selects it in the view.
+Below it: "Model estimate, not a measurement." Limits come from the parts data.
+"""
+text_nl = """
+De eerste regel zegt of de kast goed is of "Too hot", noemt het heetste component met zijn temperatuur en hoever het boven of onder zijn grens zit. De naam is een knop die het component in de weergave selecteert.
+Eronder: "Model estimate, not a measurement." De grenzen komen uit de onderdelendata.
+"""
+point = { ui = "heat.simulate" }
+
+[[step]]
+id = "labels"
+title = "See the heat on each device"
+title_nl = "Zie de warmte op elk component"
+text = """
+Every device carries a label with its temperature and the margin to its limit, for example "2 K under limit". The strip under the cabinet turns layers on: Slice, Shell, Airflow, Cloud, Heat flow, Arrows, Devices, Labels, Probe, Hot spots and Scale.
+Turn on **Airflow** to follow the air, and **Hot spots** to see where it is warmest.
+"""
+text_nl = """
+Elk component draagt een label met zijn temperatuur en de marge tot zijn grens, bijvoorbeeld "2 K under limit". De strook onder de kast schakelt lagen in: Slice, Shell, Airflow, Cloud, Heat flow, Arrows, Devices, Labels, Probe, Hot spots en Scale.
+Zet **Airflow** aan om de lucht te volgen en **Hot spots** om te zien waar het het warmst is.
+"""
+point = { ui = "workspace.view3d" }
+manual = "reading step: the layer strip is not anchored; QA 209 shows the result"
+
+[[step]]
+id = "stale"
+title = "When the result is out of date"
+title_nl = "Wanneer het resultaat verouderd is"
+text = """
+Move a device, or change the vents and fans, and the panel says "Out of date: the layout or the vents and fans changed after this run. Simulate again." in the warning colour. The old picture stays until you run again, so do not trust it for the new layout.
+"""
+text_nl = """
+Verplaats een component of verander de roosters en ventilatoren, en het paneel zegt in de waarschuwingskleur "Out of date: the layout or the vents and fans changed after this run. Simulate again." Het oude beeld blijft staan tot je opnieuw draait, vertrouw het dus niet voor de nieuwe indeling.
+"""
+point = { ui = "heat.simulate" }
+manual = "reading step: changing the layout would leave the lesson project; QA 209 does not edit it"
+
+[[step]]
+id = "estimate"
+title = "What the number is worth"
+title_nl = "Wat het getal waard is"
+text = """
+The badge reads "Coarse 3D · not validated" after a Quick run: a coarse grid, and the enclosure model has not been compared with measurements. Use the run to compare layouts and to see where air does not go, not to certify a temperature.
+To find a fix, try **Cooling advice** or **Cooler layout**.
+"""
+text_nl = """
+De badge zegt "Coarse 3D · not validated" na een Quick-run: een grof raster, en het kastmodel is niet met metingen vergeleken. Gebruik de run om indelingen te vergelijken en te zien waar lucht niet komt, niet om een temperatuur te certificeren.
+Zoek je een oplossing, probeer dan **Cooling advice** of **Cooler layout**.
+"""
+point = { ui = "heat.simulate" }
+manual = "closing reading step"
