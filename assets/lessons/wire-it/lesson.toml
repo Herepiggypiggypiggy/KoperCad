@@ -1,0 +1,219 @@
+# Wire-it is the 3D wiring pass (crates/novo-app/src/app/view3d_wire_it.rs, #1530). Only the strip's own words are
+# quoted. Cut lengths, strip lengths and duct fill are the bench plan's values; the lesson says which are estimates.
+format = 1
+id = "wire-it"
+version = 1
+status = "early"
+title = "Wire-it: run the wires one at a time"
+title_nl = "Wire-it: trek de draden een voor een"
+summary = "Step through the wiring in bench order in 3D: both ends and the path lit, the cut, strip, ferrule, label and duct fill for each wire, a saved tick per wire, and a printable list."
+summary_nl = "Loop de bedrading in 3D door in werkbankvolgorde: beide uiteinden en het pad verlicht, de lengte, strip, adereindhuls, label en kanaalvulling per draad, een bewaard vinkje per draad en een afdrukbare lijst."
+track = "cabinet"
+order = 103
+level = "intermediate"
+minutes = 8
+topics = ["3d", "wiring", "workshop", "wire list"]
+needs = ["build-order-3d"]
+next = []
+project = "@example"
+
+[[step]]
+id = "why"
+title = "The wiring pass, one wire at a time"
+title_nl = "De bedradingsronde, een draad tegelijk"
+text = """
+The cabinet is built and the wires are next. **Wire-it** walks them in bench order: earth first, then power, 24 V and signals. Each wire lights both of its ends and its path in 3D.
+A strip at the bottom says what to cut, strip, crimp and label, so the hands stay on the wire.
+"""
+text_nl = """
+De kast is gebouwd en de draden zijn aan de beurt. **Wire-it** loopt ze langs in werkbankvolgorde: eerst aarde, dan voeding, 24 V en signalen. Elke draad verlicht beide uiteinden en zijn pad in 3D.
+Een strook onderaan zegt wat te knippen, strippen, krimpen en labelen, zodat de handen aan de draad blijven.
+"""
+
+[[step]]
+id = "open-3d"
+title = "Open the 3D view"
+title_nl = "Open de 3D-weergave"
+text = "The wiring pass is drawn on the 3D cabinet, with the same routes as the cut list."
+text_nl = "De bedradingsronde wordt op de 3D-kast getekend, met dezelfde routes als de zaaglijst."
+how = [
+  "Press {key:view.3d}, or choose the {ui:switcher.view3d}.",
+]
+how_nl = [
+  "Druk op {key:view.3d}, of kies de {ui:switcher.view3d}.",
+]
+point = { ui = "switcher.view3d" }
+expect = { command = "view.3d" }
+solve = [ { command = "view.3d" } ]
+
+[[step]]
+id = "start"
+title = "Start Wire-it"
+title_nl = "Start Wire-it"
+text = """
+The strip appears at the bottom and the camera frames the first wire. A project that is half wired opens at the next wire still to run.
+Wire-it and the build order switch each other off: one pass is on screen at a time.
+"""
+text_nl = """
+De strook verschijnt onderaan en de camera kadert de eerste draad. Een half bedraad project opent bij de volgende draad die nog moet.
+Wire-it en de bouwvolgorde schakelen elkaar uit: er is steeds een ronde in beeld.
+"""
+how = [
+  "Press {key:view.command_palette}, type **wire-it** and choose {ui:cmd.view.3d_wire_it}.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **wire-it** en kies {ui:cmd.view.3d_wire_it}.",
+]
+point = { ui = "cmd.view.3d_wire_it" }
+expect = { command = "view.3d_wire_it" }
+solve = [ { command = "view.3d_wire_it" } ]
+
+[[step]]
+id = "strip"
+title = "Read the strip"
+title_nl = "Lees de strook"
+text = """
+It names the wire and its class, then **from** (orange) and **to** (blue), the two ends. Below come the cut with the length routed and the allowance at each end, the strip length and ferrule, and the label.
+The Route line gives the duct the wire lies in and how full that duct is after it. The path is white in the picture.
+"""
+text_nl = """
+Hij noemt de draad en zijn klasse, dan **from** (oranje) en **to** (blauw), de twee uiteinden. Daaronder staan de lengte met de gerouteerde lengte en de toeslag per uiteinde, de striplengte en adereindhuls, en het label.
+De regel Route geeft het kanaal waarin de draad ligt en hoe vol dat kanaal erna is. Het pad is wit in het beeld.
+"""
+
+[[step]]
+id = "estimates"
+title = "Lengths with a ~ are estimates"
+title_nl = "Lengtes met een ~ zijn schattingen"
+text = """
+A cut that starts with ~ is a planning figure until the cabinet is laid out and the wires are routed. The strip says so under the line.
+The duct fill follows the planned bench order. If you run wires in another order, what is in the duct differs from the figure.
+"""
+text_nl = """
+Een lengte die met ~ begint is een planwaarde tot de kast is ingedeeld en de draden gerouteerd zijn. De strook zegt dat onder de regel.
+De kanaalvulling volgt de geplande werkbankvolgorde. Trek je de draden in een andere volgorde, dan wijkt wat in het kanaal zit af van het getal.
+"""
+
+[[step]]
+id = "run"
+title = "Run the wire and move on"
+title_nl = "Trek de draad en ga verder"
+text = """
+When the wire is in, mark it. The mark is saved in the project, so you can stop for the day and open at the next wire.
+**Mark run** ticks it and stays; the button here ticks it and goes to the next wire.
+"""
+text_nl = """
+Als de draad erin zit, markeer hem. De markering wordt in het project bewaard, dus je kunt stoppen voor vandaag en bij de volgende draad openen.
+**Mark run** vinkt af en blijft staan; de knop hier vinkt af en gaat naar de volgende draad.
+"""
+how = [
+  "Click {ui:wire_it.run} on the strip.",
+]
+how_nl = [
+  "Klik op {ui:wire_it.run} op de strook.",
+]
+point = { ui = "wire_it.run" }
+expect = { clicked = "wire_it.run" }
+solve = [ { ui_click = "wire_it.run" } ]
+
+[[step]]
+id = "step-on"
+title = "Step on to a wire in the ducts"
+title_nl = "Ga door naar een draad in de kanalen"
+text = """
+Next steps on without marking anything. The first wires here are earth and supply wires that run to the field, so they have no path on this plate. The third lies in the ducts: its path is white, with an orange marker at the from end and a blue one at the to end.
+"""
+text_nl = """
+Next gaat verder zonder iets te markeren. De eerste draden hier zijn aarde- en voedingsdraden die naar het veld lopen, dus ze hebben geen pad op deze plaat. De derde ligt in de kanalen: zijn pad is wit, met een oranje markering bij het from-uiteinde en een blauwe bij het to-uiteinde.
+"""
+how = [
+  "Click {ui:wire_it.next} on the strip.",
+]
+how_nl = [
+  "Klik op {ui:wire_it.next} op de strook.",
+]
+point = { ui = "wire_it.next" }
+expect = { clicked = "wire_it.next" }
+solve = [ { ui_click = "wire_it.next" } ]
+
+[[step]]
+id = "back"
+title = "Go back one wire"
+title_nl = "Ga een draad terug"
+text = """
+A wire that is run says **run** beside its number and offers **Not run yet** to take the mark off again.
+Going back changes nothing in the project by itself.
+"""
+text_nl = """
+Een draad die getrokken is zegt **run** naast zijn nummer en biedt **Not run yet** om de markering weer weg te halen.
+Teruggaan verandert zelf niets in het project.
+"""
+how = [
+  "Click {ui:wire_it.previous}.",
+]
+how_nl = [
+  "Klik op {ui:wire_it.previous}.",
+]
+point = { ui = "wire_it.previous" }
+expect = { clicked = "wire_it.previous" }
+solve = [ { ui_click = "wire_it.previous" } ]
+
+[[step]]
+id = "progress"
+title = "How far you are"
+title_nl = "Hoe ver je bent"
+text = """
+Beside the button the strip counts the wires run and the metres of wire still to cut. The slider jumps to any wire, and **Next not run** goes to the first wire still open.
+"""
+text_nl = """
+Naast de knop telt de strook de getrokken draden en de meters draad die nog geknipt moeten worden. De schuif springt naar elke draad, en **Next not run** gaat naar de eerste draad die nog open is.
+"""
+
+[[step]]
+id = "no-picture"
+title = "Wires with no picture"
+title_nl = "Draden zonder beeld"
+text = """
+A core of a cable is run with its cable and not cut, so it has no path of its own. A wire to another cabinet, outside or an unplaced device has a step and a row on the list but no picture; the strip says so.
+"""
+text_nl = """
+Een ader van een kabel wordt met zijn kabel getrokken en niet geknipt, dus heeft hij geen eigen pad. Een draad naar een andere kast, naar buiten of naar een niet geplaatst apparaat heeft een stap en een regel op de lijst maar geen beeld; de strook zegt dat.
+"""
+
+[[step]]
+id = "print"
+title = "Take the list to the bench"
+title_nl = "Neem de lijst mee naar de werkbank"
+text = """
+{ui:wire_it.print} on the strip writes every wire in this order on landscape A4, with a box to tick and the cut, strip, ferrule, labels and duct fill after each wire.
+A save dialog asks where it goes; it starts next to the project as "<project> wire-it list.pdf", and cancelling writes nothing.
+"""
+text_nl = """
+{ui:wire_it.print} op de strook schrijft elke draad in deze volgorde op A4 liggend, met een vakje om af te vinken en de lengte, strip, adereindhuls, labels en kanaalvulling na elke draad.
+Een opslagvenster vraagt waar het heen gaat; het begint naast het project als "<project> wire-it list.pdf" en annuleren schrijft niets.
+"""
+how = [
+  "Click {ui:wire_it.print} on the strip.",
+]
+how_nl = [
+  "Klik op {ui:wire_it.print} op de strook.",
+]
+point = { ui = "wire_it.print" }
+expect = { clicked = "wire_it.print" }
+manual = "Press Print list (PDF): it opens a window; no script clicks. QA walk 212 presses it for real."
+
+[[step]]
+id = "show-all"
+title = "Show the whole cabinet"
+title_nl = "Toon de hele kast"
+text = "Leave Wire-it when you are done. The ticks stay in the project."
+text_nl = "Verlaat Wire-it als je klaar bent. De vinkjes blijven in het project."
+how = [
+  "Click {ui:wire_it.show_all} on the strip.",
+]
+how_nl = [
+  "Klik op {ui:wire_it.show_all} op de strook.",
+]
+point = { ui = "wire_it.show_all" }
+expect = { clicked = "wire_it.show_all" }
+solve = [ { ui_click = "wire_it.show_all" } ]

@@ -94,6 +94,7 @@ Fix a step, then regenerate to shrink the list.
 - heat-and-sizing/heat-on: `Heat` (write {ui:cabinet.heat})
 - heat-and-sizing/heat-on: `More` (write {ui:cabinet.more})
 - heat-and-sizing/simulate: `Simulate`
+- kitting/stock: `Stock the shop buys and holds`
 - live-view/enter: `Live potentials` (write {ui:live.card})
 - live-view/seal-in: `Operate`
 - panel-labels/see-labels: `Labels`

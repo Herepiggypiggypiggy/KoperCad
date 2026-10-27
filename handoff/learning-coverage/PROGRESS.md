@@ -12,3 +12,4 @@
 
 2026-10-27 UTC Wire test lesson `wire-test` (branch claude/learning-test-tab): Test tab of Commissioning, QA 210, COVERAGE row 58. Next: Kitting, Wire-it lessons.
 2026-10-27 UTC 3D Simulate run lesson `simulate-3d` written (branch claude/learning-simulate-3d): anchor `view3d.heat`, Heat panel kept clear of the lesson card, QA 209, COVERAGE row 57. Next: Test tab, Kitting, Wire-it lessons.
+2026-10-27 UTC Wire-it lesson `wire-it` (branch claude/learning-wire-it from main 0214d50): six strip anchors, QA 212, COVERAGE row 60. Kitting (#1538) and Wire-it are the last two backlog lessons.

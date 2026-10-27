@@ -1,0 +1,62 @@
+@title Lesson walk: wire-it (start, read the strip, run, step on to a lit path, back, print, show all)
+@area Learn
+# The lesson from the palette. Do it for me only carries out commands, so the strip buttons are really clicked. On a reading step both the strip and the card have a Next button: the card's is the second. The print step opens a save dialog, answered by the harness.
+key ctrl+k
+wait 4
+text wire-it
+wait 6
+click_text "Wire-it: run the wires one at a time"
+wait 40
+shot 01-why
+check_layout
+try click_text "Next"
+wait 20
+shot 02-open-3d
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 03-start
+check_layout
+try click_text "Do it for me"
+wait 40
+shot 04-strip-card
+check_layout
+try click_text "Next" Button #2
+wait 20
+shot 05-estimates
+check_layout
+try click_text "Next" Button #2
+wait 20
+shot 06-run
+check_layout
+click_text "Run, next wire"
+wait 30
+shot 07-step-on
+check_layout
+click_text "Next"
+wait 30
+shot 07b-back
+check_layout
+click_text "Previous"
+wait 30
+shot 08-progress
+check_layout
+try click_text "Next" Button #2
+wait 20
+shot 09-no-picture
+check_layout
+try click_text "Next" Button #2
+wait 20
+shot 10-print
+check_layout
+answer_dialog "~/Documents/KoperCAD/lesson wire-it list.pdf"
+click_text "Print list (PDF)"
+wait 40
+shot 11-printed
+check_layout
+expect_file "~/Documents/KoperCAD/lesson wire-it list.pdf" 2000
+keep_file "~/Documents/KoperCAD/lesson wire-it list.pdf"
+click_text "Show all"
+wait 30
+shot 12-done
+check_layout
