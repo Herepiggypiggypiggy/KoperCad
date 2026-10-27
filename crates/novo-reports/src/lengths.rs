@@ -101,9 +101,24 @@ pub(crate) struct CutLength {
     pub ducts: Vec<u64>,
 }
 
+/// Where a routed connection runs on its plate, for drawing it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RunPath {
+    /// The enclosure whose plate it lies on.
+    pub plate: StructureId,
+    /// The path on the plate in mm, terminal to terminal (to the cabinet
+    /// entry for a wire that leaves the enclosure), without the slack loops.
+    pub points: Vec<(f64, f64)>,
+    /// No duct reaches both ends: a straight line.
+    pub free_air: bool,
+}
+
 /// The lengths of a set of connections and the plans they were routed in.
 pub(crate) struct Measurement {
     pub lengths: Vec<CutLength>,
+    /// The path of each connection, in the order given; `None` when it was
+    /// not routed on a plate.
+    pub paths: Vec<Option<RunPath>>,
     /// Per enclosure the duct fill after routing all of its wires.
     pub plans: Vec<(StructureId, novo_routing::Plan)>,
 }
@@ -215,8 +230,24 @@ pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurem
             }
         })
         .collect();
+    let paths = (0..connections.len())
+        .map(|i| {
+            let route = routed.routes.get(&(i as u64))?;
+            let plate = routed
+                .plans
+                .iter()
+                .find(|(_, plan)| plan.routes.iter().any(|r| r.job == i as u64))?
+                .0;
+            Some(RunPath {
+                plate,
+                points: route.points.iter().map(|p| (p.x, p.y)).collect(),
+                free_air: route.kind == Kind::FreeAir,
+            })
+        })
+        .collect();
     Measurement {
         lengths,
+        paths,
         plans: routed.plans,
     }
 }

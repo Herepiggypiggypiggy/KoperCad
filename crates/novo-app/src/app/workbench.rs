@@ -528,6 +528,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.handover",
     "export.workshop",
     "export.workpack",
+    "export.wireit",
     "export.scale_check",
     "export.bench_packet",
     "export.safety_sheets",
@@ -563,6 +564,10 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_assembly",
     "view.3d_assembly_next",
     "view.3d_assembly_previous",
+    "view.3d_wire_it",
+    "view.3d_wire_it_next",
+    "view.3d_wire_it_previous",
+    "view.3d_wire_it_done",
     "view.3d_finish",
     "view.3d_align_left",
     "view.3d_align_hcentre",
@@ -1214,6 +1219,47 @@ impl NovoApp {
                     last,
                     id == "view.3d_assembly_next",
                 );
+            }
+            "view.3d_wire_it" => {
+                self.switch_workspace(Workspace::View3d);
+                let c = &mut self.view3d.controls;
+                c.wire_it = if c.wire_it.is_some() {
+                    None
+                } else {
+                    c.assembly = None;
+                    Some(super::view3d_wire_it::RESUME)
+                };
+            }
+            "view.3d_wire_it_next" | "view.3d_wire_it_previous" => {
+                self.switch_workspace(Workspace::View3d);
+                let last = self.view3d.wire_it.len().saturating_sub(1);
+                let c = &mut self.view3d.controls;
+                c.assembly = None;
+                c.wire_it = Some(match c.wire_it {
+                    None => super::view3d_wire_it::RESUME,
+                    Some(at) => super::view3d_wire_it::step_by(
+                        at.min(last),
+                        last,
+                        id == "view.3d_wire_it_next",
+                    ),
+                });
+            }
+            "view.3d_wire_it_done" => {
+                self.switch_workspace(Workspace::View3d);
+                if let Some(at) = self.view3d.controls.wire_it
+                    && let Some(step) = self.view3d.wire_it.step(at)
+                {
+                    let last = self.view3d.wire_it.len().saturating_sub(1);
+                    self.view3d
+                        .wire_it
+                        .pending
+                        .push(super::view3d_wire_it::Tick { step, on: true });
+                    self.view3d.controls.wire_it =
+                        Some(super::view3d_wire_it::step_by(at.min(last), last, true));
+                }
+            }
+            "export.wireit" => {
+                self.ask_wire_it();
             }
             "view.3d_finish" => {
                 self.switch_workspace(Workspace::View3d);

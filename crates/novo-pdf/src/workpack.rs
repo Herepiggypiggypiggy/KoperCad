@@ -89,7 +89,7 @@ fn wrap(s: &str, width: f64, height: f64) -> Vec<String> {
     out
 }
 
-fn clip(s: &str, width: f64, height: f64) -> String {
+pub(crate) fn clip(s: &str, width: f64, height: f64) -> String {
     let per_line = (width / (height * 0.5)).floor().max(4.0) as usize;
     if s.chars().count() <= per_line {
         s.to_owned()
@@ -100,11 +100,11 @@ fn clip(s: &str, width: f64, height: f64) -> String {
     }
 }
 
-fn rect(m: &mut Marks, layer: Layer, min: (f64, f64), max: (f64, f64)) {
+pub(crate) fn rect(m: &mut Marks, layer: Layer, min: (f64, f64), max: (f64, f64)) {
     m.shapes.push((layer, MarkShape::Rect { min, max }));
 }
 
-fn dashed(m: &mut Marks, layer: Layer, a: (f64, f64), b: (f64, f64)) {
+pub(crate) fn dashed(m: &mut Marks, layer: Layer, a: (f64, f64), b: (f64, f64)) {
     let len = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
     let n = (len / 4.0).floor().max(1.0) as usize;
     for i in 0..n {
@@ -1442,7 +1442,7 @@ fn identity(p: (f64, f64)) -> Vec2 {
     Vec2::new(p.0 as f32, p.1 as f32)
 }
 
-fn page(marks: Marks) -> Page<'static> {
+pub(crate) fn page(marks: Marks) -> Page<'static> {
     Page {
         size: A4,
         draw: Box::new(move |w: &mut PageWriter<'_>| render(w, &marks, &identity, 1.0)),

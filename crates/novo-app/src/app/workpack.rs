@@ -626,7 +626,7 @@ impl NovoApp {
 
     /// Says why a card file cannot go to `path`, when it would replace the
     /// open project.
-    fn refuse_project_file(&mut self, path: &Path) -> bool {
+    pub(super) fn refuse_project_file(&mut self, path: &Path) -> bool {
         if !self.is_project_file(path) {
             return false;
         }
@@ -684,7 +684,7 @@ impl NovoApp {
     }
 
     /// A PDF save dialog starting in `dir`; the name always ends in `.pdf`.
-    fn pick_pdf(title: &str, dir: &Path, file: &str) -> Option<PathBuf> {
+    pub(super) fn pick_pdf(title: &str, dir: &Path, file: &str) -> Option<PathBuf> {
         let path = crate::dialogs::FileDialog::new()
             .set_title(title)
             .set_directory(dir)

@@ -39,6 +39,7 @@ use super::view3d_rail;
 use super::view3d_runs::{self, Undrawn};
 use super::view3d_stats::{Build, Stats};
 use super::view3d_views::{self, ViewsAction};
+use super::view3d_wire_it;
 use super::view3d_wires::{self, WireFacts};
 use super::{heat_carry, heat_cloud};
 
@@ -131,6 +132,10 @@ pub(crate) struct View3dMode {
     built_layers: Layers,
     /// The build order position the scene was built with, and its steps.
     built_assembly: Option<usize>,
+    /// The Wire-it position the scene was built with.
+    built_wire_it: Option<usize>,
+    /// Wire-it: the plan, the ticks waiting to be applied and the lit path.
+    pub(super) wire_it: super::view3d_wire_it::State,
     /// The camera was fitted for the Build order strip being on.
     strip_fitted: bool,
     pub(super) assembly_steps: Vec<novo_view3d::assembly::Step>,
@@ -221,6 +226,8 @@ impl Default for View3dMode {
             heat_scene: None,
             built_layers: Layers::default(),
             built_assembly: None,
+            built_wire_it: None,
+            wire_it: Default::default(),
             strip_fitted: false,
             assembly_steps: Vec::new(),
             built_hidden: BTreeSet::new(),
@@ -343,6 +350,20 @@ impl NovoApp {
         if let Some(text) = self.view3d.notice.take() {
             self.message(super::Level::Info, text);
         }
+        // Wire-it ticks asked last frame: one undo step each, and the plan
+        // stays the plan (a tick changes no order).
+        for tick in std::mem::take(&mut self.view3d.wire_it.pending) {
+            let before = self.backend.document().map(|d| d.project().revision());
+            let label = if tick.on { "Wire run" } else { "Wire not run" };
+            let step = tick.step;
+            let on = tick.on;
+            if self.edit_project(label, |tx| novo_reports::wire_it_set_done(tx, &step, on))
+                && let Some(before) = before
+                && let Some(after) = self.backend.document().map(|d| d.project().revision())
+            {
+                self.view3d.wire_it.ticked(before, after);
+            }
+        }
         // The 3D view shows the machine of the current choice of options;
         // the Cabinet keeps editing the full working project.
         let choice = self.machine_variant();
@@ -382,11 +403,26 @@ impl NovoApp {
         {
             layers.wires = true;
         }
+        // Wire-it draws the wires run so far, whatever the layer says.
+        if mode.controls.wire_it.is_some() {
+            layers.wires = true;
+        }
+        // The plan of the wires, and the position resolved ("open at the
+        // first wire not run" becomes a number).
+        let wire_plan = mode.controls.wire_it.map(|_| mode.wire_it.plan(project));
+        if let (Some(plan), Some(at)) = (&wire_plan, mode.controls.wire_it.as_mut()) {
+            *at = if *at == view3d_wire_it::RESUME {
+                view3d_wire_it::resume_at(project, plan)
+            } else {
+                (*at).min(plan.steps.len().saturating_sub(1))
+            };
+        }
         mode.models.collect(&mut mode.library);
         let stale = mode.built_models != mode.models.revision
             || !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
             || mode.built_layers != layers
             || mode.built_assembly != mode.controls.assembly
+            || mode.built_wire_it != mode.controls.wire_it
             || mode.built_hidden != mode.controls.hidden
             || mode.built_duct_fill != mode.controls.duct_fill;
         if stale {
@@ -421,7 +457,9 @@ impl NovoApp {
                 }
                 routing_ms = Some(started.elapsed().as_secs_f32() * 1000.0);
             }
-            let wires = if layers.wires {
+            let wires = if let (Some(plan), Some(at)) = (&wire_plan, mode.controls.wire_it) {
+                view3d_wire_it::inputs(project, plan, id, at)
+            } else if layers.wires {
                 mode.wires.as_ref().map(|w| w.2.clone()).unwrap_or_default()
             } else {
                 Vec::new()
@@ -482,6 +520,7 @@ impl NovoApp {
                 mode.built = Some((id, revision, Arc::new(shown)));
                 mode.built_layers = layers;
                 mode.built_assembly = mode.controls.assembly;
+                mode.built_wire_it = mode.controls.wire_it;
                 mode.built_hidden = mode.controls.hidden.clone();
                 mode.built_duct_fill = want_fill;
                 let total = started.elapsed().as_secs_f32() * 1000.0;
@@ -532,6 +571,10 @@ impl NovoApp {
             Some(Pending::FlyTo) => mode.view.fly_to(scene, now, options.reduced_motion),
             Some(Pending::Preset(p)) => mode.view.go_to(p, scene, now, options.reduced_motion),
             None => {}
+        }
+        // Wire-it: the camera goes to the wire when the step changes.
+        if let Some(b) = mode.wire_it.frame(mode.controls.wire_it, scene) {
+            mode.view.frame_bounds(&b, now, options.reduced_motion);
         }
 
         // A run started here advances here, not only in the Cabinet; the
@@ -777,6 +820,34 @@ impl NovoApp {
             mode.runs_shown = Some(runs_key);
             ghost_changed = true;
         }
+        // Wire-it: the path, both ends and the ducts of the wire to run.
+        let lit = mode
+            .controls
+            .wire_it
+            .zip(wire_plan.as_deref())
+            .and_then(|(at, plan)| plan.steps.get(at).map(|s| (at, s)));
+        let lit_key = (id, revision, scene.pose_revision, lit.map(|(at, _)| at));
+        if mode.wire_it.shown() != Some(&lit_key) {
+            mode.wire_it.marks = match (lit, wire_plan.as_deref()) {
+                (Some((at, step)), Some(plan)) => {
+                    let run: Vec<_> = plan
+                        .steps
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, s)| *i != at && novo_reports::wire_it_done(project, s))
+                        .map(|(_, s)| s)
+                        .collect();
+                    let mut marks: Vec<_> = view3d_wire_it::run_overlay(scene, &run)
+                        .into_iter()
+                        .collect();
+                    marks.extend(view3d_wire_it::overlays(scene, step));
+                    marks
+                }
+                _ => Vec::new(),
+            };
+            mode.wire_it.set_shown(lit_key);
+            ghost_changed = true;
+        }
         let stored = load(project, id);
         if let Some(lay) = &stored {
             let tag_of = |d: u64| {
@@ -931,6 +1002,7 @@ impl NovoApp {
             all.extend(mode.pin_marks.iter().cloned());
             all.extend(mode.vent_marks.iter().cloned());
             all.extend(mode.run_marks.iter().cloned());
+            all.extend(mode.wire_it.marks.iter().cloned());
             all.extend(mode.emc.overlays().iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker.clone());
@@ -942,6 +1014,7 @@ impl NovoApp {
             all.extend(mode.pin_marks.iter().cloned());
             all.extend(mode.vent_marks.iter().cloned());
             all.extend(mode.run_marks.iter().cloned());
+            all.extend(mode.wire_it.marks.iter().cloned());
             all.extend(mode.emc.overlays().iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker);
@@ -1016,11 +1089,31 @@ impl NovoApp {
         self.settings.trackpad_pans = mode.controls.trackpad_pans;
         // The fit frames the cabinet above the strip; turning Build order on
         // or off refits once so the plate is not under it.
+        let stripped = mode.controls.assembly.is_some() || mode.controls.wire_it.is_some();
         mode.view.bottom_inset =
-            super::view3d_build_order::inset(ui.ctx(), view_rect, mode.controls.assembly.is_some());
-        if mode.controls.assembly.is_some() != mode.strip_fitted {
-            mode.strip_fitted = mode.controls.assembly.is_some();
+            super::view3d_build_order::inset(ui.ctx(), view_rect, mode.controls.assembly.is_some())
+                .max(view3d_wire_it::inset(
+                    ui.ctx(),
+                    view_rect,
+                    mode.controls.wire_it.is_some(),
+                ));
+        if stripped != mode.strip_fitted {
+            mode.strip_fitted = stripped;
             mode.pending = Some(Pending::Fit);
+        }
+        if let (Some(plan), Some(at)) = (&wire_plan, mode.controls.wire_it.as_mut()) {
+            let drawn_here = plan
+                .steps
+                .get(*at)
+                .is_some_and(|s| s.path.as_ref().is_some_and(|p| p.plate == id));
+            let asked = view3d_wire_it::strip(ui.ctx(), view_rect, at, project, plan, drawn_here);
+            mode.wire_it.pending.extend(asked.ticks);
+            if asked.print {
+                self.wb.queued.push("export.wireit");
+            }
+            if asked.leave {
+                mode.controls.wire_it = None;
+            }
         }
         match super::view3d_build_order::strip(
             ui.ctx(),

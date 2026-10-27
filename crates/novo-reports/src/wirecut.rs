@@ -128,6 +128,8 @@ pub struct WireCutJob {
     pub end_b: WireEnd,
     /// The ducts the wire lies in, in order; empty when it is not routed.
     pub ducts: Vec<u64>,
+    /// Where the wire runs on its plate, `None` when it was not routed on one.
+    pub path: Option<crate::lengths::RunPath>,
     /// The ducts as short names (`D1 > D3`), in wire order from end A to end
     /// B; `not routed` when the wire lies in no duct.
     pub track: String,
@@ -350,14 +352,31 @@ pub fn wire_cut_jobs_with(project: &Project, standard: &FerruleStandard) -> Vec<
     if *standard != FerruleStandard::of(project) {
         return produce(project, standard).0;
     }
-    project
-        .derived(|p| CachedJobs(produce(p, standard).0))
-        .0
-        .clone()
+    project.derived(|p| produce_cached(p, standard)).0.clone()
 }
 
-/// The jobs under the project's own ferrule standard, as [`Project::derived`] keeps them.
-struct CachedJobs(Vec<WireCutJob>);
+/// How much cross-section each duct of the project allows its wires (duct
+/// area times the fill limit, mm2), as the routing of the wire list found it.
+/// A duct without a size is `0.0`. Shares the routing of [`wire_cut_jobs`],
+/// so asking for both routes the project once.
+pub fn duct_capacities_mm2(project: &Project) -> BTreeMap<u64, f64> {
+    // Primes the shared result, then reads the plans out of it.
+    project
+        .derived(|p| produce_cached(p, &FerruleStandard::of(p)))
+        .1
+        .iter()
+        .flat_map(|(_, plan)| plan.fill.iter().map(|f| (f.duct, f.capacity_mm2)))
+        .collect()
+}
+
+fn produce_cached(project: &Project, standard: &FerruleStandard) -> CachedJobs {
+    let (jobs, plans) = produce(project, standard);
+    CachedJobs(jobs, plans)
+}
+
+/// The jobs and plans under the project's own ferrule standard, as
+/// [`Project::derived`] keeps them.
+struct CachedJobs(Vec<WireCutJob>, Plans);
 
 type Plans = Vec<(StructureId, novo_routing::Plan)>;
 
@@ -372,12 +391,16 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
             cable_mm: crate::lengths::cable_mm(project, &i.wires),
         })
         .collect();
-    let lengths::Measurement { lengths, plans } = lengths::measure(project, &measured);
+    let lengths::Measurement {
+        lengths,
+        paths,
+        plans,
+    } = lengths::measure(project, &measured);
     let cut_list = crate::CutList::of(project);
     let mut jobs: Vec<WireCutJob> = items
         .iter()
-        .zip(lengths)
-        .map(|(item, length)| {
+        .zip(lengths.into_iter().zip(paths))
+        .map(|(item, (length, path))| {
             let section = sections(project, &item.wires).last().copied();
             let mut numbers: Vec<&str> = item
                 .wires
@@ -431,6 +454,7 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
                     standard,
                 ),
                 ducts: length.ducts,
+                path,
                 track: String::new(),
                 track_ducts: Vec::new(),
                 bundle: None,

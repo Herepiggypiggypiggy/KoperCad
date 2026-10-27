@@ -35,6 +35,7 @@ pub mod print;
 mod report;
 pub mod template;
 pub mod template_cards;
+pub mod wireit;
 pub mod workpack;
 
 use novo_canvas::model::{

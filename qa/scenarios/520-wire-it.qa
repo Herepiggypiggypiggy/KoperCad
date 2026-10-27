@@ -1,0 +1,38 @@
+@title Wire-it: run the wires one at a time, both ends and the path lit, ticks kept in the project
+@area 3D
+# The example project: Wire-it opens at the first wire, shows the cut, strip, ferrule, label and the duct fill after the wire, and keeps what is ticked.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 40
+click_text "Layers"
+wait 8
+click_text "Wire-it"
+wait 8
+key Escape
+wait 30
+shot wire-it-first
+expect "Run, next wire"
+expect "Print list (PDF)"
+check_layout
+click_text "Next"
+wait 40
+click_text "Next"
+wait 40
+shot wire-it-third
+click_text "Run, next wire"
+wait 20
+shot wire-it-after-run
+expect "run"
+click_text "Run, next wire"
+wait 40
+shot wire-it-two-run
+click_text "Previous"
+wait 40
+shot wire-it-run-wire-again
+expect "Not run yet"
+answer_dialog "~/Documents/KoperCAD/qa 520 wire-it list.pdf"
+click_text "Print list (PDF)"
+wait 40
+expect_file "~/Documents/KoperCAD/qa 520 wire-it list.pdf" 2000
+keep_file "~/Documents/KoperCAD/qa 520 wire-it list.pdf"

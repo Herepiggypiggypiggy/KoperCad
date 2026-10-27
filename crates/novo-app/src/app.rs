@@ -277,9 +277,13 @@ mod view3d_vents;
 #[cfg(test)]
 mod view3d_vents_tests;
 mod view3d_views;
+mod view3d_wire_it;
+#[cfg(test)]
+mod view3d_wire_it_tests;
 mod view3d_wires;
 mod whats_new;
 mod wheel;
+mod wire_it_export;
 mod wire_panel;
 #[cfg(test)]
 mod wire_panel_tests;
@@ -1265,6 +1269,8 @@ impl NovoApp {
         self.wb.live = Default::default();
         // The build order belongs to the cabinet it was opened on.
         self.view3d.controls.assembly = None;
+        self.view3d.controls.wire_it = None;
+        self.view3d.wire_it = Default::default();
         // Classes cached for the old project (keyed by a revision two projects
         // can share) and a focused class do not carry over; the overlay's on/off does.
         self.wb.emc_sch.forget();
