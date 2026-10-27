@@ -253,6 +253,22 @@ impl Kitting {
             );
         }
         if !shopping.rows.is_empty() {
+            // What stops the list from being complete goes where it is read.
+            for problem in &plan.problems {
+                shopping.push(
+                    vec![
+                        Cell::text("Note"),
+                        Cell::text(problem.clone()),
+                        Cell::Empty,
+                        Cell::Empty,
+                        Cell::Empty,
+                        Cell::Empty,
+                        Cell::Empty,
+                        Cell::Empty,
+                    ],
+                    Vec::new(),
+                );
+            }
             sections.push(shopping);
         }
         let mut notes = Section::new(

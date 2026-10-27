@@ -359,3 +359,16 @@ fn a_project_without_a_cabinet_still_lists_what_to_buy() {
     assert!(plan.picks_in(Phase::Prepare).next().is_none());
     assert!(!plan.shopping.is_empty(), "the BOM parts");
 }
+
+#[test]
+fn what_makes_the_list_incomplete_is_printed_with_the_shopping_list() {
+    let (mut doc, h) = starter();
+    cabinet(&mut doc, &h, "+CAB", &[1000.0]);
+    let out = Kitting.generate(doc.project());
+    let rows = out.section("shopping").unwrap().text_rows();
+    let notes: Vec<&Vec<String>> = rows.iter().filter(|r| r[0] == "Note").collect();
+    assert!(
+        notes.iter().any(|r| r[1].contains("no cross-section")),
+        "{notes:?}"
+    );
+}
