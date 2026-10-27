@@ -8,7 +8,7 @@ wait 20
 click_text Test
 wait 10
 expect "not a compliance test record"
-expect "not measured yet"
+expect "not tested yet"
 shot wire-test-start
 check_layout
 click_text "Open circuit"
