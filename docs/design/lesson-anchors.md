@@ -86,6 +86,12 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `settings.standard.switch`: {ui:settings.standard.switch} shows **Switch placed symbols**
 - `commissioning.punch`: {ui:commissioning.punch} shows **Punch tab**
 - `commissioning.redlines`: {ui:commissioning.redlines} shows **Redlines tab**
+- `commissioning.test`: {ui:commissioning.test} shows **Test tab**
+- `commissioning.test_ohm`: {ui:commissioning.test_ohm} shows **Continuity reading**
+- `commissioning.test_open`: {ui:commissioning.test_open} shows **Open circuit**
+- `commissioning.test_mohm`: {ui:commissioning.test_mohm} shows **Insulation reading**
+- `commissioning.test_record`: {ui:commissioning.test_record} shows **Record reading**
+- `commissioning.test_pdf`: {ui:commissioning.test_pdf} shows **Write test sheet PDF**
 - `commissioning.redline_apply`: {ui:commissioning.redline_apply} shows **Apply button**
 - `commissioning.report`: {ui:commissioning.report} shows **Write PDF report item**
 - `commissioning.photo`: {ui:commissioning.photo} shows **Add photo button**

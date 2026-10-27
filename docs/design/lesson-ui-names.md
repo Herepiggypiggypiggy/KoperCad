@@ -38,7 +38,7 @@ Fix a step, then regenerate to shrink the list.
 - commissioning/pass: `Pass`
 - commissioning/punch: `Add`
 - commissioning/punch: `Open punch list`
-- commissioning/punch: `Punch list`
+- commissioning/punch: `Punch`
 - commissioning/resolve: `Fixed`
 - commissioning/resolve: `Won't fix`
 - connection-screens/accept-cables: `Accept 2 proposed`

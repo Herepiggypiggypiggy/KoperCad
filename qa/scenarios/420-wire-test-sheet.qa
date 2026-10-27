@@ -1,0 +1,24 @@
+@title Commissioning: Wire test tab lists wires in wiring order, a bad reading becomes a punch item
+@area Commissioning
+# Test as you build: expected values per wire, a reading entered, a miss opens a punch item, unmeasured wires stay red.
+open qa/fixtures/cabinet-lesson.novo
+wait 20
+click_text Commissioning
+wait 20
+click_text Test
+wait 10
+expect "not a compliance test record"
+expect "not tested yet"
+shot wire-test-start
+check_layout
+click_text "Open circuit"
+wait 10
+expect "MISS"
+expect "punch open"
+shot wire-test-miss
+check_layout
+click_text Punch
+wait 10
+expect "Continuity failed"
+shot wire-test-punch
+check_layout

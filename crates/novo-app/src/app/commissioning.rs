@@ -34,6 +34,7 @@ use super::commissioning_viewer::{self as viewer, PhotoViewer};
 use super::changes::shown_on;
 use super::commissioning_redlines::{RedlineAction, redlines_tab};
 use super::commissioning_signature::{self as signature, SignDraft};
+use super::commissioning_test::{TestAction, test_tab};
 use super::pdf::{replaceable_path, write_replacing};
 use super::revisions::iso_date;
 use super::workspace::Workspace;
@@ -59,6 +60,8 @@ pub(super) enum Tab {
     Checks,
     Punch,
     Redlines,
+    /// The continuity and insulation test sheet.
+    Test,
 }
 
 /// What a kept walking order was built for: project revision, scope, order.
@@ -123,6 +126,8 @@ pub(crate) struct CommissioningMode {
     pub(super) finished: bool,
     /// What each big tick passed, so Back can take it back.
     walked: Vec<(Target, Vec<CheckKind>)>,
+    /// The Wire test tab.
+    pub(super) test: super::commissioning_test::TestState,
 }
 
 impl CommissioningMode {
@@ -162,6 +167,7 @@ impl CommissioningMode {
             show_3d: None,
             finished: false,
             walked: Vec::new(),
+            test: Default::default(),
         }
     }
 
@@ -170,12 +176,12 @@ impl CommissioningMode {
     /// its own, so a bare revision can match across a switch of option).
     /// The generation sits above bit 40, so this assumes revisions stay
     /// below 2^40 (a revision is one per edit; that is a trillion edits).
-    fn cache_revision(&self, project: &Project) -> u64 {
+    pub(super) fn cache_revision(&self, project: &Project) -> u64 {
         project.revision() ^ (self.generation << 40)
     }
 
     /// The walk's wire figures for the project as it is now.
-    fn plan(&mut self, project: &Project) -> Rc<WirePlan> {
+    pub(super) fn plan(&mut self, project: &Project) -> Rc<WirePlan> {
         let revision = self.cache_revision(project);
         match &self.plan {
             Some((r, plan)) if *r == revision => Rc::clone(plan),
@@ -446,7 +452,8 @@ fn progress_bar(ui: &mut egui::Ui, title: &str, p: Progress) {
     let total = p.total.max(1) as f32;
     let mut detail = format!("{} / {}", p.done(), p.total);
     if p.failed > 0 {
-        detail.push_str(&format!(" · {} failed", p.failed));
+        // Short enough for the 250 px panel beside the title.
+        detail.push_str(&format!(" · {} fail", p.failed));
     }
     widgets::progress_bar(
         ui,
@@ -626,6 +633,7 @@ impl NovoApp {
         let mut export: Option<ReportFileFormat> = None;
         let mut field: Option<FieldAction> = None;
         let mut redline_action: Option<RedlineAction> = None;
+        let mut test_action: Option<TestAction> = None;
         let tablet = self.commissioning_tablet();
         let photos_dir = self.field_photos_dir();
         let choice = self.machine_variant();
@@ -645,17 +653,19 @@ impl NovoApp {
                 Tab::Checks => 0,
                 Tab::Punch => 1,
                 Tab::Redlines => 2,
+                Tab::Test => 3,
             };
             let mut large = mode.large;
             ui.horizontal(|ui| {
-                let row = ui
-                    .scope(|ui| widgets::tabs(ui, &mut tab, &["Checks", "Punch list", "Redlines"]));
+                let row = ui.scope(|ui| {
+                    widgets::tabs(ui, &mut tab, &["Checks", "Punch", "Redlines", "Test"])
+                });
                 if row.inner {
-                    mode.tab = [Tab::Checks, Tab::Punch, Tab::Redlines][tab];
+                    mode.tab = [Tab::Checks, Tab::Punch, Tab::Redlines, Tab::Test][tab];
                 }
-                // The tabs are one widget of equal thirds.
+                // The tabs are one widget of equal quarters.
                 let r = row.response.rect;
-                let third = r.width() / 3.0;
+                let third = r.width() / 4.0;
                 let part = |i: f32| {
                     egui::Rect::from_min_max(
                         egui::pos2(r.left() + third * i, r.top()),
@@ -676,6 +686,13 @@ impl NovoApp {
                     part(2.0),
                     row.inner && tab == 2,
                 );
+                note_rect(
+                    ui.ctx(),
+                    "commissioning.test",
+                    "Test tab",
+                    part(3.0),
+                    row.inner && tab == 3,
+                );
             });
             // The menu sits on its own row: beside the tabs it took their
             // room and cut the third one off in the narrow side panel.
@@ -691,15 +708,21 @@ impl NovoApp {
                 self.settings.large_buttons = large;
             }
             ui.add_space(space::M);
-            progress_bar(
-                ui,
-                "Project",
-                mode.index(project).progress(&mode.store, Scope::Project),
-            );
+            // The Test tab counts its own wires in words; the bars count every
+            // check of wires, terminals and devices, a second total beside it.
+            let bars = mode.tab != Tab::Test;
+            if bars {
+                progress_bar(
+                    ui,
+                    "Project",
+                    mode.index(project).progress(&mode.store, Scope::Project),
+                );
+            }
             // On a tablet the walk card needs the height: one bar is enough.
             let walking_on_tablet = tablet && mode.selected.is_some() && mode.tab == Tab::Checks;
             if let Some(page) = current
                 && !walking_on_tablet
+                && bars
             {
                 ui.add_space(space::S);
                 progress_bar(
@@ -715,6 +738,7 @@ impl NovoApp {
                 Tab::Redlines => {
                     redline_action = redlines_tab(ui, mode, project, current, &mut go);
                 }
+                Tab::Test => test_action = test_tab(ui, mode, project),
             }
             if mode.dirty {
                 mode.dirty = false;
@@ -745,6 +769,9 @@ impl NovoApp {
         }
         if let Some(format) = export {
             self.export_commissioning_report(format);
+        }
+        if test_action == Some(TestAction::WritePdf) {
+            self.export_test_sheet();
         }
         match redline_action {
             Some(RedlineAction::Apply) => self.apply_redlines(false),
