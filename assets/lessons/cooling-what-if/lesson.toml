@@ -150,10 +150,10 @@ id = "check"
 title = "Check it with Simulate"
 title_nl = "Controleer het met Simulate"
 text = """
-The ranking comes from a quick 2D model. For a fan fix its gain can be too high or too low, and the window says so. It also counts the devices that stand beside the assumed fan stream ("Beside the assumed fan stream: N of M devices"): in the checks such a device gained a third to three quarters of what is shown.
+The ranking comes from a quick 2D model. For a fan fix its gain can be too high or too low, and the window says so. For a fix with a fan it also counts the devices beside the assumed fan stream ("Beside the assumed fan stream: N of M devices"): in the checks such a device gained a third to three quarters of what is shown.
 Press **Simulate** in the 3D Heat panel: that run sees the depth of the cabinet and the applied vents and fans. It is still a model; the only proof is a measurement.
 """
 text_nl = """
-De rangschikking komt uit een snel 2D-model. Bij een ventilatoroplossing kan de winst te hoog of te laag staan, en het venster zegt dat. Het telt ook de componenten die naast de veronderstelde luchtstroom van de ventilator staan ("Beside the assumed fan stream: N of M devices"): zo'n component won in de controles een derde tot driekwart van wat getoond wordt.
+De rangschikking komt uit een snel 2D-model. Bij een ventilatoroplossing kan de winst te hoog of te laag staan, en het venster zegt dat. Bij een oplossing met ventilator telt het ook de componenten naast de veronderstelde luchtstroom ("Beside the assumed fan stream: N of M devices"): zo'n component won in de controles een derde tot driekwart van wat getoond wordt.
 Druk op **Simulate** in het 3D Heat-paneel: die run ziet de diepte van de kast en de toegepaste roosters en ventilatoren. Het blijft een model; het enige bewijs is een meting.
 """
