@@ -352,8 +352,13 @@ mod tests {
     fn the_emc_check_window_and_the_banner_register_their_lesson_anchors() {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../qa/fixtures/emc-cabinet-shields.novo");
+        let path = dir.path().join("shields.novo");
+        std::fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../qa/fixtures/emc-cabinet-shields.novo"),
+            &path,
+        )
+        .unwrap();
         d.app.open_path_as(&path, false);
         d.frame();
         d.app.emc.open = true;
@@ -460,9 +465,15 @@ mod tests {
     fn marked_rules(fixture: &str) -> Vec<String> {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../qa/fixtures")
-            .join(fixture);
+        // Opened from a copy: the app saves generated pages into what it opens.
+        let path = dir.path().join(fixture);
+        std::fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../qa/fixtures")
+                .join(fixture),
+            &path,
+        )
+        .unwrap();
         d.app.open_path_as(&path, false);
         d.frame();
         d.app
