@@ -1687,7 +1687,10 @@ impl PageScene {
                 .colored(self.style.tag_color);
             tag = Some(label.clone());
             item.labels.insert(0, label);
-            if matches!(sym.role, SymbolRole::Device { .. }) {
+            if matches!(
+                sym.role,
+                SymbolRole::Device { .. } | SymbolRole::PotentialFeed { .. }
+            ) {
                 tag_slot = Some((pos, anchor));
             }
         }
@@ -3927,6 +3930,34 @@ mod tests {
                 assert_eq!((l1.pos, l1.anchor), (l2.pos, l2.anchor), "x {x}");
             }
         }
+    }
+
+    #[test]
+    fn a_potential_feed_name_moves_off_the_next_feed() {
+        let mut doc = Document::default();
+        let ((page, first, second), _) = doc
+            .transact("feeds", |tx| {
+                let page = tx.add_page("1")?;
+                let pot = tx.add_potential("L1", novo_core::PotentialKind::default())?;
+                let mut ids = Vec::new();
+                for x in [100.0, 108.0] {
+                    ids.push(tx.place_symbol(
+                        page,
+                        "iec/feed",
+                        MPlacement::at(Point::new(x, 40.0)),
+                        vec![Pin::new("1", 0.0, 5.0)],
+                        SymbolRole::PotentialFeed { potential: pot },
+                    )?);
+                }
+                Ok((page, ids[0], ids[1]))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &RightTag);
+        let name = ps.scene().get(item_id(first)).unwrap().labels[0].bounds();
+        let body = ps.scene().get(item_id(second)).unwrap().primitives[0]
+            .shape
+            .bounds();
+        assert!(!name.intersects(&body), "{name:?} on {body:?}");
     }
 
     #[test]
