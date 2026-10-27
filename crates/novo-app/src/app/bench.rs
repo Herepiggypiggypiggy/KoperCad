@@ -524,11 +524,16 @@ impl NovoApp {
         ]) {
             self.anchor(id, *rect, label);
         }
+        // Controls inside the window that were noted as they were drawn.
+        for noted in super::cabinet_bar::take_noted(ctx) {
+            self.anchor_clicked(noted.id, noted.rect, noted.label, noted.clicked);
+        }
         if state.tab != tab_before {
             match state.tab {
                 Tab::Ferrules => self.learn_signal("bench_ferrules"),
                 Tab::Labels => self.learn_signal("bench_labels"),
-                Tab::CutList | Tab::Kitting => {}
+                Tab::Kitting => self.learn_signal("bench_kitting"),
+                Tab::CutList => {}
             }
         }
         self.wb.workshop_paper = paper;

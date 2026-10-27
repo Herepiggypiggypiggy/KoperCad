@@ -158,10 +158,15 @@ pub(super) fn kit_tab(
     ui.add_space(6.0);
     let changed = current.as_ref().is_some_and(|c| c != stored);
     ui.horizontal(|ui| {
-        if novo_theme::widgets::primary_button(ui, "Export kitting list (PDF)")
-            .on_hover_text(super::KITTING_HINT)
-            .clicked()
-        {
+        let export = novo_theme::widgets::primary_button(ui, "Export kitting list (PDF)")
+            .on_hover_text(super::KITTING_HINT);
+        super::cabinet_bar::note_ctx(
+            ui.ctx(),
+            "kitting.export",
+            "Export kitting list button",
+            &export,
+        );
+        if export.clicked() {
             *act = Some(KitAct::Export);
         }
         if ui

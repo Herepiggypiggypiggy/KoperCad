@@ -1,0 +1,146 @@
+# Uses the cooling lane's hot cabinet sample (../cooling-advice/project.json): a cabinet with a plate, rails, ducts and
+# devices, most of them without parts, so the tab's "no part" line shows. Kitting is Reports > Bench output > Kitting
+# (crates/novo-app/src/app/kitting.rs, #1531). Only the tab's own words are quoted, never its numbers. Counts come from
+# the drawing; bar and reel lengths, saw cut, packs and allowances are planning values the lesson says so.
+format = 1
+id = "kitting"
+version = 1
+status = "early"
+title = "Kitting: what to take from the shelf and what to buy"
+title_nl = "Kitting: wat van de plank en wat te kopen"
+summary = "Open the Kitting tab, read the pick list per build phase, the saw plan with its offcuts and the shopping list, set the stock your shop holds, and write the kitting list as a PDF."
+summary_nl = "Open het tabblad Kitting, lees de pakbon per bouwfase, het zaagplan met zijn restanten en de boodschappenlijst, stel de voorraad van je werkplaats in en schrijf de kittinglijst als PDF."
+track = "cabinet"
+order = 102
+level = "intermediate"
+minutes = 8
+topics = ["kitting", "stock", "shopping list", "saw plan", "workshop"]
+needs = ["workshop-pack"]
+next = []
+project = "../cooling-advice/project.json"
+
+[[step]]
+id = "why"
+title = "Before the first cut"
+title_nl = "Voor de eerste zaagsnede"
+text = """
+A build starts at the shelf: which rails and ducts to saw, which reels and packs to take, what is missing and must be bought. **Kitting** works that out from the drawing and the stock you hold.
+Counts of rails, devices, wires and holes come from the drawing. Bar and reel lengths, the saw cut and the packs are planning values you set.
+"""
+text_nl = """
+Een bouw begint bij de plank: welke rails en kanalen te zagen, welke rollen en verpakkingen te pakken, wat ontbreekt en gekocht moet worden. **Kitting** rekent dat uit de tekening en de voorraad die je hebt.
+Aantallen rails, componenten, draden en gaten komen uit de tekening. Staaf- en rollengtes, de zaagsnede en de verpakkingen zijn planwaarden die jij instelt.
+"""
+
+[[step]]
+id = "open"
+title = "Open the bench output"
+title_nl = "Open de werkbankuitvoer"
+text = "Open {ui:menu.Reports} and choose {ui:cmd.view.bench}, or press {key:view.command_palette}, type bench output and press Enter."
+text_nl = "Open {ui:menu.Reports} en kies {ui:cmd.view.bench}, of druk op {key:view.command_palette}, typ bench output en druk op Enter."
+how = ["Open Reports and choose Bench output."]
+how_nl = ["Open Reports en kies Bench output."]
+point = { ui = "cmd.view.bench" }
+expect = { command = "view.bench" }
+solve = [ { command = "view.bench" } ]
+
+[[step]]
+id = "tab"
+title = "Open the Kitting tab"
+title_nl = "Open het tabblad Kitting"
+text = "Press the {ui:bench.tab.kitting}, the last of the four tabs (Cut list, Ferrules, Labels, Kitting)."
+text_nl = "Druk op het {ui:bench.tab.kitting}, het laatste van de vier tabbladen (Cut list, Ferrules, Labels, Kitting)."
+how = ["Press the Kitting tab."]
+how_nl = ["Druk op het tabblad Kitting."]
+point = { ui = "bench.tab.kitting" }
+expect = { signal = "bench_kitting" }
+solve = [ { ui_click = "bench.tab.kitting" } ]
+
+[[step]]
+id = "headline"
+title = "Read the headline"
+title_nl = "Lees de kop"
+text = """
+The first line counts what to buy: bars, reels and lines on the shopping list. An orange line under it says what makes the list incomplete, for example "devices or cables have no part: they cannot be on the shopping list until a part is assigned".
+Fix those first, or the list is short by exactly those items.
+"""
+text_nl = """
+De eerste regel telt wat te kopen: staven, rollen en regels op de boodschappenlijst. Een oranje regel eronder zegt wat de lijst onvolledig maakt, bijvoorbeeld "devices or cables have no part: they cannot be on the shopping list until a part is assigned".
+Herstel die eerst, anders mist de lijst precies die items.
+"""
+point = { ui = "bench.tab.kitting" }
+manual = "reading step: the headline lines are not anchored; QA 211 shows them"
+
+[[step]]
+id = "pick"
+title = "A pick list per build phase"
+title_nl = "Een pakbon per bouwfase"
+text = """
+The **Pick list** folds follow the assembly checklist: Prepare, Mount, Wire, Label. Each line has the quantity, the unit and what it is for, for example "New bar, to buy. For" the rails that come from it.
+The step numbers match the checklist, so step 2, Drill, has no pick list.
+"""
+text_nl = """
+De vouwen **Pick list** volgen de montagechecklist: Prepare, Mount, Wire, Label. Elke regel heeft het aantal, de eenheid en waarvoor het is, bijvoorbeeld "New bar, to buy. For" de rails die ervan komen.
+De stapnummers komen overeen met de checklist, dus stap 2, Drill, heeft geen pakbon.
+"""
+point = { ui = "bench.tab.kitting" }
+manual = "reading step: the pick list folds are not anchored; QA 211 opens one"
+
+[[step]]
+id = "saw"
+title = "The saw plan"
+title_nl = "Het zaagplan"
+text = """
+**Saw plan** packs the rails and ducts of the cabinet into bars, taking the saw cut off every cut. It names the bars to buy and the offcuts to keep; open it to see each bar: "new 2000 mm", then the cuts, then "mm left, keep" or "(scrap)".
+It says when no plan can buy less, or that the search stopped early.
+"""
+text_nl = """
+**Saw plan** verdeelt de rails en kanalen van de kast over staven, met de zaagsnede van elke snede afgetrokken. Het noemt de staven om te kopen en de restanten om te bewaren; open het voor elke staaf: "new 2000 mm", dan de sneden, dan "mm left, keep" of "(scrap)".
+Het zegt wanneer geen plan minder kan kopen, of dat de zoektocht vroeg stopte.
+"""
+point = { ui = "bench.tab.kitting" }
+manual = "reading step: the saw plan folds are not anchored; QA 211 opens one"
+
+[[step]]
+id = "shopping"
+title = "The shopping list"
+title_nl = "De boodschappenlijst"
+text = """
+**Shopping list** merges the stock lines with the parts list: From, Item, Need, Have, Buy. What you already hold is taken off before anything is bought. Give a stock item an order number and it merges into the parts-list line with that number.
+"""
+text_nl = """
+**Shopping list** voegt de voorraadregels samen met de onderdelenlijst: From, Item, Need, Have, Buy. Wat je al hebt wordt eraf gehaald voordat iets gekocht wordt. Geef een voorraaditem een bestelnummer en het voegt samen met de regel van de onderdelenlijst met dat nummer.
+"""
+point = { ui = "bench.tab.kitting" }
+manual = "reading step: the shopping list fold is not anchored; QA 211 opens it"
+
+[[step]]
+id = "stock"
+title = "Tell it what you hold"
+title_nl = "Zeg wat je hebt"
+text = """
+Open **Stock the shop buys and holds**: the bar lengths you buy, the saw cut, the offcut length you keep, the reel length, the share held back per reel, and the packs. **On hand** takes one item per line, such as "rail 1200 x2" or "wire 1.5 BK 37.5 m".
+**Save to project** keeps the settings in the project as one undo step.
+"""
+text_nl = """
+Open **Stock the shop buys and holds**: de staaflengtes die je koopt, de zaagsnede, de restlengte die je bewaart, de rollengte, het deel dat per rol achterblijft en de verpakkingen. **On hand** neemt één item per regel, zoals "rail 1200 x2" of "wire 1.5 BK 37.5 m".
+**Save to project** bewaart de instellingen in het project als één undo-stap.
+"""
+point = { ui = "bench.tab.kitting" }
+manual = "reading step: the settings fold is not anchored; QA 211 opens it"
+
+[[step]]
+id = "export"
+title = "Print the kitting list"
+title_nl = "Print de kittinglijst"
+text = """
+Press {ui:kitting.export}. It writes "<project> kitting list.pdf" next to the project, with the pick lists, the saw plan and the shopping list, and says which numbers come from the drawing and which are planning values. It is also part of the workshop pack.
+Lines marked estimate (or "some estimated" for wire reels) depend on wire lengths that are only estimates until the cabinet is laid out and the wires routed.
+"""
+text_nl = """
+Druk op {ui:kitting.export}. Het schrijft "<project> kitting list.pdf" naast het project, met de pakbonnen, het zaagplan en de boodschappenlijst, en zegt welke getallen uit de tekening komen en welke planwaarden zijn. Het zit ook in het werkplaatspakket.
+Regels met estimate (of "some estimated" bij draadrollen) hangen af van draadlengtes die alleen schattingen zijn tot de kast is ingedeeld en de draden gerouteerd zijn.
+"""
+point = { ui = "kitting.export" }
+expect = { clicked = "kitting.export" }
+manual = "writes a PDF file; QA 211 clicks it"
