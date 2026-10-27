@@ -78,12 +78,12 @@ id = "reading"
 title = "Type the reading"
 title_nl = "Typ de meting"
 text = """
-One wire is selected, with its number, its two ends and the continuity to expect. Zero the test leads, measure it and type the ohms in the first box (a comma or a point both work). Insulation, when asked for, goes in the Mohm box below it.
-If the meter shows OL, press {ui:commissioning.test_open} instead. "(assumed)" after the expected ohms means no length is drawn for that wire, so a fallback value stands in.
+One wire is selected, with its two ends and the continuity to expect. Zero the test leads, measure and type the ohms in the first box. If the meter shows OL, press {ui:commissioning.test_open}. "(assumed)" means no length is drawn, so a fallback value stands in.
+Insulation goes in the Mohm box. Before an insulation test, disconnect electronics and surge arresters: the tab says so under the box.
 """
 text_nl = """
-Eén draad is geselecteerd, met zijn nummer, zijn twee uiteinden en de verwachte doorgang. Nul de meetsnoeren, meet hem en typ de ohm in het eerste vak (komma of punt werkt allebei). Isolatie, als daarom gevraagd wordt, gaat in het vak Mohm eronder.
-Toont de meter OL, druk dan op {ui:commissioning.test_open}. "(assumed)" na de verwachte ohm betekent dat er geen lengte getekend is, dus een vervangwaarde geldt.
+Eén draad is geselecteerd, met zijn twee uiteinden en de verwachte doorgang. Nul de meetsnoeren, meet en typ de ohm in het eerste vak. Toont de meter OL, druk dan op {ui:commissioning.test_open}. "(assumed)" betekent dat er geen lengte getekend is, dus een vervangwaarde geldt.
+Isolatie gaat in het vak Mohm. Ontkoppel vóór een isolatietest elektronica en overspanningsafleiders: het tabblad zegt dat onder het vak.
 """
 point = { ui = "commissioning.test_ohm" }
 manual = "typing a reading is not a scripted action; QA 210 types it for real"
