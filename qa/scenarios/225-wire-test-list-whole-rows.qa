@@ -1,0 +1,14 @@
+@title Commissioning: Wire test list shows whole rows, a scroll bar, and says why 27 differs from the bench count
+@area Commissioning
+# Commissioning > Test: the Wiring order list holds only whole rows (no half row cut off above the Write test sheet PDF button) and keeps its scroll bar visible; the summary line explains that Wire-it and the cut list count connections, so 27 drawn wires and 25 bench wires both stand.
+open qa/fixtures/cabinet-lesson.novo
+wait 20
+click_text Commissioning
+wait 20
+click_text Test
+wait 10
+expect "wires in the drawing"
+expect "The bench cut list and Wire-it count"
+expect "Write test sheet PDF"
+shot wire-test-whole-rows
+check_layout

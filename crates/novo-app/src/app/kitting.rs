@@ -195,6 +195,7 @@ pub(super) fn kit_tab(
             ui.colored_label(crate::theme::ui_palette().warning, p);
         }
         ui.add_space(4.0);
+        ui.weak("Pick lists keep the step numbers of the assembly checklist: step 2, Drill, has no pick list.");
         for phase in Phase::ALL {
             let picks: Vec<_> = plan.picks_in(phase).collect();
             if picks.is_empty() {
@@ -221,7 +222,7 @@ pub(super) fn kit_tab(
                                 ui.label(&p.item);
                                 ui.add(
                                     egui::Label::new(
-                                        egui::RichText::new(format!("{}; {}", p.from, p.for_))
+                                        egui::RichText::new(format!("{}. For {}", p.from, p.for_))
                                             .weak(),
                                     )
                                     .wrap(),
