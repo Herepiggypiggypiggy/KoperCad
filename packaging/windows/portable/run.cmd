@@ -17,8 +17,11 @@ exit /b 1
 :failed
 echo.
 echo KoperCAD stopped with exit code %KC_EXIT%.
-echo Log files: %LOCALAPPDATA%\KoperCAD\logs
+rem A portable folder keeps its logs beside the program, not in the user profile.
+set "KC_LOGS=%LOCALAPPDATA%\KoperCAD\logs"
+if exist "%~dp0kopercad.portable" set "KC_LOGS=%~dp0data\local\KoperCAD\logs"
+echo Log files: %KC_LOGS%
 echo Please send the newest file in that folder, and this exit code.
-if exist "%LOCALAPPDATA%\KoperCAD\logs" explorer "%LOCALAPPDATA%\KoperCAD\logs"
+if exist "%KC_LOGS%" explorer "%KC_LOGS%"
 pause
 exit /b %KC_EXIT%

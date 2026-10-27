@@ -272,6 +272,89 @@ jobs:
           # Release notes for a tag: docs/release-notes/<tag>.md at the tagged commit, when it exists.
           $notes = "docs\release-notes\$($env:GITHUB_REF_NAME).md"
           if ($env:GITHUB_REF_TYPE -eq "tag" -and (Test-Path $notes)) { Copy-Item $notes dist\RELEASE-NOTES.md }
+      - name: Portable zip runs from an odd folder, keeps its data beside itself, safe graphics picks the software adapter
+        shell: pwsh
+        run: |
+          # The shipped zip, unpacked into a folder with spaces and brackets
+          # (the case run.cmd's comment worries about), on a profile that has
+          # never seen KoperCAD.
+          $zip = (Get-ChildItem dist\KoperCAD-*-portable.zip)[0]
+          $dest = Join-Path $env:RUNNER_TEMP "KC (portable) test"
+          Remove-Item -Recurse -Force $dest -ErrorAction SilentlyContinue
+          Expand-Archive $zip.FullName $dest
+          foreach ($f in "kopercad.exe", "kopercad-cli.exe", "run.cmd", "run-safe-graphics.cmd", "kopercad.portable", "README.md", "THIRD_PARTY_NOTICES.txt") {
+            if (-not (Test-Path (Join-Path $dest $f))) { throw "the portable zip is missing $f" }
+          }
+          $fresh = Join-Path $env:RUNNER_TEMP "fresh-profile"
+          $env:LOCALAPPDATA = "$fresh\Local"; $env:APPDATA = "$fresh\Roaming"; $env:USERPROFILE = $fresh
+          New-Item -ItemType Directory -Force $env:LOCALAPPDATA, $env:APPDATA | Out-Null
+
+          & "$dest\kopercad-cli.exe" --help | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "kopercad-cli.exe --help exited with $LASTEXITCODE" }
+
+          function Start-Check([string]$label, [string]$cmdFile) {
+            Get-ChildItem "$dest\data" -Recurse -Filter *.log -ErrorAction SilentlyContinue | Remove-Item -Force
+            $cmd = Start-Process cmd.exe -ArgumentList "/c", "`"$dest\$cmdFile`"" -WorkingDirectory $dest -PassThru
+            $app = $null
+            for ($i = 0; $i -lt 30 -and -not $app; $i++) { Start-Sleep -Seconds 1; $app = Get-Process kopercad -ErrorAction SilentlyContinue | Select-Object -First 1 }
+            if (-not $app) { throw "$label did not start kopercad.exe" }
+            Start-Sleep -Seconds 10
+            if ($app.HasExited) { throw "$label: kopercad.exe exited at startup with code $($app.ExitCode)" }
+            Stop-Process -Id $app.Id -Force
+            Start-Sleep -Seconds 2
+            # A killed program makes run.cmd report the exit code and wait for a key.
+            Stop-Process -Id $cmd.Id -Force -ErrorAction SilentlyContinue
+            $log = Get-ChildItem "$dest\data" -Recurse -Filter *.log -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $log) { throw "$label wrote no log under the portable data folder" }
+            $text = Get-Content $log.FullName -Raw
+            if ($text -match '(?i)panic') { throw "$label logged a panic" }
+            $text -split "`n" | Where-Object { $_ -match 'graphics adapter' } | ForEach-Object { "[$label] $_" }
+            return $text
+          }
+
+          $normal = Start-Check "run.cmd" "run.cmd"
+          if ($normal -notmatch 'Using graphics adapter') { throw "run.cmd: the log names no graphics adapter" }
+          $safe = Start-Check "run-safe-graphics.cmd" "run-safe-graphics.cmd"
+          if ($safe -notmatch 'Using graphics adapter') { throw "safe graphics: the log names no graphics adapter" }
+          if ($safe -notmatch 'asks for the software renderer') { throw "--safe-graphics was not honoured: the log never says it asked for the software renderer" }
+          # The runner has the Microsoft software adapter; safe graphics must pick it.
+          if ($safe -notmatch '(?i)Using graphics adapter [^\r\n]*(Basic Render|WARP|Cpu|llvmpipe)') { throw "safe graphics did not choose a software adapter" }
+
+          # Nothing may leak into the user's own profile or Documents.
+          foreach ($d in "$fresh\Local\KoperCAD", "$fresh\Roaming\KoperCAD", "$fresh\Local\NovoElectric", "$fresh\Documents\KoperCAD") {
+            if (Test-Path $d) { throw "portable run wrote to $d" }
+          }
+          @(
+            "- portable zip unpacked into a folder with spaces and brackets: run.cmd and run-safe-graphics.cmd start the app, kopercad-cli --help works",
+            "- portable data (log) stays in the data folder beside the program, nothing in the user profile",
+            "- run-safe-graphics.cmd really selects the software adapter on the runner (log line 'asks for the software renderer')"
+          ) | Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - name: Update over a running copy (information only)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          # Install, start the program, then install the same setup over it
+          # silently, as an update does. Inno's CloseApplications should close
+          # the running copy. Whether a window with unsaved work can refuse
+          # to close is a question for a real desktop. Recorded, not gating yet.
+          $setup = (Get-ChildItem dist\KoperCAD-*-setup.exe)[0].FullName
+          $dir = Join-Path $env:RUNNER_TEMP "KC update"
+          Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+          $p = Start-Process $setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$dir`"", "/TASKS=", "/LOG=$env:RUNNER_TEMP\upd1.log" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "first install exited with $($p.ExitCode)" }
+          $app = Start-Process "$dir\kopercad.exe" -WorkingDirectory $dir -PassThru
+          Start-Sleep -Seconds 8
+          if ($app.HasExited) { throw "the installed copy did not stay running" }
+          $p = Start-Process $setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$dir`"", "/TASKS=", "/LOG=$env:RUNNER_TEMP\upd2.log" -Wait -PassThru
+          Get-Content "$env:RUNNER_TEMP\upd2.log" -ErrorAction SilentlyContinue | Select-String -Pattern 'clos|Restart|in use|running|Replac' | Select-Object -Last 15
+          $line = "- update over a running copy: setup exit code $($p.ExitCode), old process still running afterwards: $(-not $app.HasExited)"
+          $line | Add-Content $env:GITHUB_STEP_SUMMARY
+          $line
+          Get-Process kopercad -ErrorAction SilentlyContinue | Stop-Process -Force
+          if ($p.ExitCode -ne 0) { throw "the update over a running copy exited with $($p.ExitCode)" }
+          if (-not $app.HasExited) { throw "the update left the old copy running" }
+
       - uses: actions/upload-artifact@v4
         with:
           name: KoperCAD-windows-installer
