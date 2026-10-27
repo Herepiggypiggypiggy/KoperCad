@@ -19,5 +19,5 @@ Decisions:
 
 Traps: cloud disk fills during workspace builds (`scripts/free-disk.sh`, `CARGO_PROFILE_DEV_DEBUG=0`). New anchors need `learn.rs` and `learn_labels.rs` entries and `UPDATE_ANCHORS_DOC=1 cargo test -p novo-app anchors_doc`.
 
-Resume: `cargo test -p novo-reports kitting`, `cargo test -p novo-app --lib kitting`, `scripts/qa.sh run qa/scenarios/30*.qa`.
+Resume: `cargo test -p novo-reports kitting`, `cargo test -p novo-app --lib kitting`, `scripts/qa.sh run qa/scenarios/31*.qa`.
 Reports: `/mnt/project-files/qa/kitting3`, `kitting4`.

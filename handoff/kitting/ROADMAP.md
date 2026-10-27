@@ -9,7 +9,7 @@ Done (PR on branch `claude/project-thread-oblbwd`):
 - `KitSettings` (project property `kitting.settings`), `OnHand` text grammar.
 - `kit_plan` and the `Kitting` report (id `kitting`): pick list per phase (Prepare, Mount, Wire, Label), saw plan per bar, reels, offcuts, shopping list, notes on exact versus planning values.
 - UI: Reports > Bench output > Kitting tab, Reports > Export > Export kitting list (PDF), file `3 Kitting list.pdf` in the Workshop pack, Ctrl+K "kitting".
-- QA scenarios 300, 301, 302.
+- QA scenarios 310, 311, 312.
 
 Next, in order:
 1. Per-wire reel assignment on the bench cut list ("cut from reel 2") once Wire-it lands.
