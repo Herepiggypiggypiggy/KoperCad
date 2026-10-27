@@ -1,7 +1,6 @@
 @title Lesson walk: simulate-3d (3D view, Heat panel, Quick run, verdict, labels)
 @area Learn
-@sizes 1366x768
-# 1366x768 only: the Heat panel keeps clear of the lesson card there and is short, so the settings are reached by scrolling it; the 1920x1080 walk passed without. The lesson from the palette, in the hot cabinet sample. Do it for me only carries out commands, so the Heat button, the Quick choice and the Simulate button are really clicked. The Quick run takes seconds to a minute on a worker thread.
+# The Heat panel keeps clear of the lesson card (a short panel at 1366x768). The lesson from the palette, in the hot cabinet sample. Do it for me only carries out commands, so the Heat button, the Quick choice and the Simulate button are really clicked. The Quick run takes seconds to a minute on a worker thread.
 key ctrl+k
 wait 4
 text simulate
@@ -22,9 +21,6 @@ click_text Heat #1
 wait 20
 shot 04-settings-step
 check_layout
-scroll 1180 300 -300
-wait 10
-shot 04b-heat-panel-scrolled
 click_text "Settings for the next run"
 wait 10
 click_text Quick
