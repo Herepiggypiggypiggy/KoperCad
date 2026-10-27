@@ -1418,6 +1418,42 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_wire_it",
+        "Wire-it in 3D: run the wires one at a time, in bench order",
+        "View",
+        &[
+            "wire-it",
+            "wire it",
+            "wiring order",
+            "wiring mode",
+            "run wires",
+            "wire sequence",
+            "hand wiring",
+        ],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_wire_it_next",
+        "Wire-it in 3D: next wire",
+        "View",
+        &["wire-it next", "next wire"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_wire_it_previous",
+        "Wire-it in 3D: previous wire",
+        "View",
+        &["wire-it back", "previous wire"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_wire_it_done",
+        "Wire-it in 3D: this wire is run, go to the next",
+        "View",
+        &["wire-it done", "wire run", "tick wire"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_finish",
         "Show or hide the metal surface finish in 3D",
         "View",
@@ -3116,6 +3152,22 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export work cards", "export workpack", "work cards"],
+    ),
+    verb(
+        cmd(
+            "export.wireit",
+            "Export the Wire-it list (PDF)",
+            "Export",
+            &[
+                "wire-it list",
+                "wiring list",
+                "wire order",
+                "tick off wires",
+                "wiring sheet",
+            ],
+            Needs::Project,
+        ),
+        &["export wire-it", "export wiring list"],
     ),
     verb(
         cmd(

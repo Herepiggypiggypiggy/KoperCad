@@ -24,6 +24,9 @@ pub(crate) struct Controls {
     pub(super) shadows: bool,
     /// Build order: how many steps are done, `None` for the whole cabinet.
     pub(super) assembly: Option<usize>,
+    /// Wire-it: the wire being run, `None` for off (`view3d_wire_it::RESUME`
+    /// opens at the first wire not run).
+    pub(super) wire_it: Option<usize>,
     /// Brushed grain on the plate, streaks on rails.
     pub(super) finish: bool,
     /// Devices, rails and ducts the user hid; the project is untouched.
@@ -68,6 +71,7 @@ impl Default for Controls {
             move_items: true,
             shadows: true,
             assembly: None,
+            wire_it: None,
             finish: true,
             hidden: BTreeSet::new(),
             ssao: true,
@@ -291,6 +295,23 @@ pub(super) fn toolbar(
                         .clicked()
                     {
                         controls.assembly = if building { None } else { Some(0) };
+                        controls.wire_it = None;
+                    }
+                    let wiring = controls.wire_it.is_some();
+                    let wire_it = novo_theme::widgets::filter_toggle(ui, "Wire-it", wiring)
+                        .on_hover_text(
+                            "Run the wires one at a time in bench order (earth, power, 24 V, \
+                             signals): both ends and the path are lit, with the cut, strip, \
+                             ferrule, label and how full the duct is after each wire. Ticks \
+                             are saved in the project (View > 3D > Wire-it).",
+                        );
+                    if wire_it.clicked() {
+                        controls.wire_it = if wiring {
+                            None
+                        } else {
+                            Some(super::view3d_wire_it::RESUME)
+                        };
+                        controls.assembly = None;
                     }
                     toggle(
                         ui,

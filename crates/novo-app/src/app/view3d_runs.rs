@@ -529,7 +529,12 @@ pub(super) fn overlays(
 }
 
 /// The twelve edges of an item's box as polylines.
-fn box_edges(lines: &mut OverlayLines, scene: &Scene, item: &novo_view3d::Item, colour: [u8; 4]) {
+pub(super) fn box_edges(
+    lines: &mut OverlayLines,
+    scene: &Scene,
+    item: &novo_view3d::Item,
+    colour: [u8; 4],
+) {
     let to_world = scene.world_matrix(item);
     let (hx, hy) = (item.size.x * 0.5, item.size.y * 0.5);
     let corner = |x: f32, y: f32, z: f32| to_world.transform_point3(Vec3::new(x, y, z));

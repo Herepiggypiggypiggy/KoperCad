@@ -454,6 +454,8 @@ thread_local! {
 
 /// How much further back a fly-to stands than a fit of the same part.
 const FLY_TO_CONTEXT: f32 = 2.6;
+/// How far a framed box is backed off, so its surroundings stay in view.
+const FRAME_CONTEXT: f32 = 1.5;
 
 /// One 3D view: camera, user state and input handling.
 pub struct View3d {
@@ -739,6 +741,18 @@ impl View3d {
         if !self.state.selection.is_empty() {
             to.distance *= FLY_TO_CONTEXT;
         }
+        self.animate_to(to, now, reduced);
+    }
+
+    /// Frames `bounds` (a wire's path, say) with some of what lies around it,
+    /// keeping the top and the bottom strip's room clear.
+    pub fn frame_bounds(&mut self, bounds: &crate::math::Aabb, now: f64, reduced: bool) {
+        if bounds.is_empty() {
+            return;
+        }
+        let mut to = self.camera;
+        to.fit_between(bounds, self.last_aspect, self.top_inset, self.bottom_inset);
+        to.distance *= FRAME_CONTEXT;
         self.animate_to(to, now, reduced);
     }
 

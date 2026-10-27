@@ -929,6 +929,26 @@ pub const DUTCH: &[Aliases] = &[
         &["bouwvolgorde", "montagevolgorde", "stappen"],
     ),
     nl(
+        "view.3d_wire_it",
+        &["bedrading stap voor stap in 3d"],
+        &["bedrading", "draden trekken", "draadvolgorde"],
+    ),
+    nl(
+        "view.3d_wire_it_next",
+        &["volgende draad"],
+        &["draad verder"],
+    ),
+    nl(
+        "view.3d_wire_it_previous",
+        &["vorige draad"],
+        &["draad terug"],
+    ),
+    nl(
+        "view.3d_wire_it_done",
+        &["draad klaar, volgende"],
+        &["afvinken", "draad klaar"],
+    ),
+    nl(
         "view.3d_assembly_next",
         &["bouwvolgorde volgende stap"],
         &["volgende stap"],
@@ -1176,6 +1196,11 @@ pub const DUTCH: &[Aliases] = &[
         "export.workpack",
         &["exporteer werkkaarten", "werkkaarten"],
         &["werkplaats", "boormal", "bouwvolgorde", "afvinken"],
+    ),
+    nl(
+        "export.wireit",
+        &["exporteer bedradingslijst"],
+        &["bedradingslijst", "afvinken", "draadvolgorde"],
     ),
     nl(
         "export.workshop",

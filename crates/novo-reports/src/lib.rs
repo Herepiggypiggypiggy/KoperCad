@@ -94,6 +94,7 @@ pub mod issues;
 mod label_sheet;
 mod labels;
 mod lengths;
+pub use lengths::RunPath;
 mod order;
 pub mod packet;
 mod page;
@@ -109,6 +110,7 @@ mod toc;
 mod wire_defaults;
 pub mod wire_rules;
 mod wirecut;
+mod wireit;
 mod wires;
 
 pub use assembly::{AssemblyChecklist, BOX as ASSEMBLY_BOX};
@@ -149,8 +151,13 @@ pub use toc::{PanelContents, TableOfContents};
 pub use wire_defaults::{SIZES_MM2, UnsetWires, WireDefaults, apply_wire_defaults, unset_wires};
 pub use wirecut::{
     CableRun, END_PROCESSING_KEY, FERRULE_KEY, JOB_COLUMNS, STRIP_LENGTH_KEY, StripBasis, WireCut,
-    WireCutJob, WireEnd, cable_runs, duct_names, end_basis_text, hookup_cut_mm, typical_strip_mm,
-    wire_cut_csv, wire_cut_jobs, wire_cut_jobs_with,
+    WireCutJob, WireEnd, cable_runs, duct_capacities_mm2, duct_names, end_basis_text,
+    hookup_cut_mm, typical_strip_mm, wire_cut_csv, wire_cut_jobs, wire_cut_jobs_with,
+};
+pub use wireit::{
+    DONE_KEY as WIREIT_DONE_KEY, DuctStep, Progress as WireItProgress, WireClass, WireItPlan,
+    WireItStep, is_done as wire_it_done, orphaned as wire_it_orphaned,
+    progress as wire_it_progress, set_done as wire_it_set_done, wire_it_plan,
 };
 pub use wires::WireList;
 
