@@ -299,7 +299,7 @@ jobs:
             for ($i = 0; $i -lt 30 -and -not $app; $i++) { Start-Sleep -Seconds 1; $app = Get-Process kopercad -ErrorAction SilentlyContinue | Select-Object -First 1 }
             if (-not $app) { throw "$label did not start kopercad.exe" }
             Start-Sleep -Seconds 10
-            if ($app.HasExited) { throw "$label: kopercad.exe exited at startup with code $($app.ExitCode)" }
+            if ($app.HasExited) { throw "${label}: kopercad.exe exited at startup with code $($app.ExitCode)" }
             Stop-Process -Id $app.Id -Force
             Start-Sleep -Seconds 2
             # A killed program makes run.cmd report the exit code and wait for a key.
