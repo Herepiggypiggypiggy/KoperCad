@@ -139,6 +139,8 @@ pub struct WireItStep {
     pub ducts: Vec<DuctStep>,
     /// The wire is a core of a cable.
     pub cable_core: bool,
+    /// The tag of that cable, empty for a hookup wire.
+    pub cable_tag: String,
     /// Where the connection runs on its plate; `None` when it is not routed
     /// on one (a wire to another cabinet, an unplaced device).
     pub path: Option<RunPath>,
@@ -149,6 +151,31 @@ impl WireItStep {
     /// wire.
     pub fn estimated(&self) -> bool {
         WEAK_BASES.contains(&self.basis.as_str())
+    }
+
+    /// Millimetres of hookup wire to cut for this step: none for a core,
+    /// which is run with its cable and never cut from wire stock.
+    pub fn cut_to_do_mm(&self) -> f64 {
+        if self.cable_core { 0.0 } else { self.cut_mm }
+    }
+
+    /// What the bench does: `cut 1250 mm` for a wire, `run cable =A1-W1,
+    /// 12020 mm` for a core.
+    pub fn run_or_cut_text(&self) -> String {
+        let mm = novo_layout::drill::mm(self.cut_mm);
+        if self.cable_core {
+            let cable = if self.cable_tag.is_empty() {
+                "its cable"
+            } else {
+                &self.cable_tag
+            };
+            format!("run cable {cable}, {mm} mm")
+        } else {
+            format!(
+                "cut {}{mm} mm",
+                if self.estimated() { "about " } else { "" }
+            )
+        }
     }
 
     /// `1.5 mm2 black`.
@@ -199,11 +226,17 @@ impl WireItStep {
                 _ => "not routed through a duct".to_owned(),
             };
         }
-        self.ducts
+        let text = self
+            .ducts
             .iter()
             .map(DuctStep::text)
             .collect::<Vec<_>>()
-            .join(", ")
+            .join(", ");
+        if self.cross_section_mm2.is_none() {
+            format!("{text} (size not set, default diameter)")
+        } else {
+            text
+        }
     }
 
     /// Any duct the wire lies in is over its allowed fill after this wire.
@@ -234,7 +267,7 @@ impl WireItPlan {
         self.steps
             .iter()
             .filter(|s| !is_done(project, s))
-            .map(|s| s.cut_mm)
+            .map(|s| s.cut_to_do_mm())
             .sum::<f64>()
             / 1000.0
     }
@@ -494,6 +527,11 @@ fn build(project: &Project) -> WireItPlan {
             track: j.track.clone(),
             ducts,
             cable_core: j.cable.is_some(),
+            cable_tag: j
+                .cable
+                .and_then(|c| project.cable(c))
+                .map(|c| c.tag.to_string())
+                .unwrap_or_default(),
             path: j.path.clone(),
         });
     }

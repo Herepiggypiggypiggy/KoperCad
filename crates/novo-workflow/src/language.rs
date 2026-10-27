@@ -936,12 +936,12 @@ pub const DUTCH: &[Aliases] = &[
     nl(
         "view.3d_wire_it_next",
         &["volgende draad"],
-        &["volgende", "draad verder"],
+        &["draad verder"],
     ),
     nl(
         "view.3d_wire_it_previous",
         &["vorige draad"],
-        &["vorige", "draad terug"],
+        &["draad terug"],
     ),
     nl(
         "view.3d_wire_it_done",

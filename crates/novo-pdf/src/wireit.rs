@@ -105,7 +105,7 @@ fn head(m: &mut Marks, project: &str, plan: &WireItPlan, done: &[bool], page_no:
         .iter()
         .zip(done)
         .filter(|(_, d)| !**d)
-        .map(|(s, _)| s.cut_mm)
+        .map(|(s, _)| s.cut_to_do_mm())
         .sum::<f64>()
         / 1000.0;
     text(
@@ -128,7 +128,7 @@ fn head(m: &mut Marks, project: &str, plan: &WireItPlan, done: &[bool], page_no:
         3.0,
         HAlign::Left,
         false,
-        "Cut includes the end allowance. Duct fill is the routing's model (wire area against the \
+        "Cut includes the end allowance; a cable core is run with its cable, not cut, and is left out of the total. Duct fill is the routing's model (wire area against the \
          duct's allowed fill), not a measurement: check the first wire against the real cabinet.",
     );
     // Column headings.
@@ -138,7 +138,7 @@ fn head(m: &mut Marks, project: &str, plan: &WireItPlan, done: &[bool], page_no:
         (COL_NUM, HAlign::Right, "No."),
         (COL_WIRE, HAlign::Left, "Wire, size"),
         (COL_ENDS, HAlign::Left, "From / to"),
-        (CUT_RIGHT, HAlign::Right, "Cut mm"),
+        (CUT_RIGHT, HAlign::Right, "Cut / run mm"),
         (COL_FIT, HAlign::Left, "Strip, ferrule"),
         (COL_LABEL, HAlign::Left, "Label at both ends"),
         (COL_ROUTE, HAlign::Left, "Route, duct fill after the wire"),
@@ -222,7 +222,11 @@ fn row(m: &mut Marks, s: &WireItStep, y: f64, done: bool) {
         2.4,
         HAlign::Right,
         false,
-        format!("+{} each end", novo_layout::drill::mm(s.allowance_mm)),
+        if s.cable_core {
+            clip(&format!("run cable {}", s.cable_tag), 30.0, 2.4)
+        } else {
+            format!("+{} each end", novo_layout::drill::mm(s.allowance_mm))
+        },
     );
     let strip = s.strip_text();
     text(

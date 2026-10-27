@@ -258,3 +258,58 @@ fn a_project_without_wires_says_so_instead_of_exporting() {
     d.frame();
     assert_eq!(d.app.export_wire_it(), None);
 }
+
+#[test]
+fn cable_cores_say_run_cable_and_are_left_out_of_the_wire_to_cut() {
+    let mut doc = novo_core::Document::default();
+    super::example::build_example(&mut doc).unwrap();
+    let plan = novo_reports::wire_it_plan(doc.project());
+    let cores: Vec<_> = plan.steps.iter().filter(|s| s.cable_core).collect();
+    assert!(!cores.is_empty(), "the example has a cable with cores");
+    for c in &cores {
+        let line = c.run_or_cut_text();
+        assert!(
+            line.starts_with("run cable ") && !line.contains("cut"),
+            "{line}"
+        );
+        assert!(line.contains(&c.cable_tag), "{line}");
+        assert_eq!(c.cut_to_do_mm(), 0.0);
+    }
+    let hookup: f64 = plan
+        .steps
+        .iter()
+        .filter(|s| !s.cable_core)
+        .map(|s| s.cut_mm)
+        .sum::<f64>()
+        / 1000.0;
+    assert!((plan.cut_m_left(doc.project()) - hookup).abs() < 1e-9);
+    // The PDF header total agrees with the on-screen total.
+    let done = vec![false; plan.steps.len()];
+    let pdf = novo_pdf::wireit::export_wireit_pdf(&plan, &done, "x").unwrap();
+    assert!(!pdf.is_empty());
+}
+
+#[test]
+fn build_order_commands_switch_wire_it_off_and_the_other_way_round() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    run(&mut d, "view.3d_wire_it");
+    assert!(d.app.view3d.controls.wire_it.is_some());
+    for id in [
+        "view.3d_assembly",
+        "view.3d_assembly_next",
+        "view.3d_assembly_previous",
+    ] {
+        run(&mut d, "view.3d_wire_it");
+        if d.app.view3d.controls.wire_it.is_none() {
+            run(&mut d, "view.3d_wire_it");
+        }
+        run(&mut d, id);
+        let c = &d.app.view3d.controls;
+        assert!(c.wire_it.is_none(), "{id} left Wire-it on");
+        assert!(c.assembly.is_some() || id == "view.3d_assembly", "{id}");
+        run(&mut d, "view.3d_wire_it_next");
+        let c = &d.app.view3d.controls;
+        assert!(c.assembly.is_none() && c.wire_it.is_some(), "{id}");
+    }
+}

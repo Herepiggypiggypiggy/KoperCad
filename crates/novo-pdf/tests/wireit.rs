@@ -35,6 +35,7 @@ fn step(n: usize, class: WireClass, duct_fill: f64) -> WireItStep {
             wires_after: n,
         }],
         cable_core: false,
+        cable_tag: String::new(),
         path: None,
     }
 }

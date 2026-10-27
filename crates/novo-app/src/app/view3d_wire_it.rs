@@ -500,8 +500,19 @@ pub(super) fn strip(
                 });
                 let tilde = if step.estimated() { "~" } else { "" };
                 let strip_text = step.strip_text();
-                ui.label(
-                    egui::RichText::new(format!(
+                let cut_line = if step.cable_core {
+                    format!(
+                        "{} (a core: run with its cable, not cut)   {}   {}",
+                        sentence(step.run_or_cut_text()),
+                        if strip_text.is_empty() {
+                            "strip: size not set".to_owned()
+                        } else {
+                            strip_text
+                        },
+                        step.fitting_text(),
+                    )
+                } else {
+                    format!(
                         "Cut {tilde}{} mm (routed {} + {} each end)   {}   {}",
                         novo_layout::drill::mm(step.cut_mm),
                         novo_layout::drill::mm(step.length_mm),
@@ -512,9 +523,9 @@ pub(super) fn strip(
                             strip_text
                         },
                         step.fitting_text(),
-                    ))
-                    .color(p.text_strong),
-                );
+                    )
+                };
+                ui.label(egui::RichText::new(cut_line).color(p.text_strong));
                 let labels = if step.label_from == step.label_to {
                     format!("Label both ends: {}", step.label_from)
                 } else {
@@ -529,7 +540,11 @@ pub(super) fn strip(
                     p.error
                 } else {
                     p.text_secondary
-                }));
+                }))
+                .on_hover_text(
+                    "Duct fill after this wire, in the planned bench order. It does not track \
+                     what is physically in the duct if wires are run in another order.",
+                );
                 if step.estimated() {
                     ui.label(
                         egui::RichText::new(format!(
@@ -628,4 +643,12 @@ pub(super) fn strip(
 
 fn rgb(c: [u8; 4]) -> egui::Color32 {
     egui::Color32::from_rgb(c[0], c[1], c[2])
+}
+
+/// Capitalises the first letter of a bench instruction.
+fn sentence(mut text: String) -> String {
+    if let Some(first) = text.get_mut(0..1) {
+        first.make_ascii_uppercase();
+    }
+    text
 }
