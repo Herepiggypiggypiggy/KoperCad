@@ -182,11 +182,21 @@ pub(super) fn test_tab(
     mode: &mut CommissioningMode,
     project: &Project,
 ) -> Option<TestAction> {
+    // The dock clips what is wider than it: keep the bar inside the visible part.
+    let width = (ui.clip_rect().right() - ui.max_rect().left())
+        .min(ui.available_width())
+        .max(120.0);
+    // A solid bar, so it shows on the dark panel and the list is seen to scroll.
+    ui.style_mut().spacing.scroll = egui::style::ScrollStyle::solid();
     egui::ScrollArea::vertical()
         .id_salt("test_tab")
         .auto_shrink([false, false])
+        .max_width(width)
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-        .show(ui, |ui| test_tab_body(ui, mode, project))
+        .show(ui, |ui| {
+            ui.set_max_width(width - 14.0);
+            test_tab_body(ui, mode, project)
+        })
         .inner
 }
 
@@ -226,7 +236,7 @@ fn test_tab_body(
     if bench != progress.total {
         ui.label(
             egui::RichText::new(format!(
-                "The bench cut list and Wire-it count {bench}: a connection drawn as several wires is cut once, but every drawn wire is tested."
+                "The bench cut list and Wire-it count connections ({bench}), not drawn wires, so the numbers can differ."
             ))
             .small()
             .color(p.text_tertiary),
@@ -394,6 +404,7 @@ fn test_tab_body(
     let mut first_rows: Vec<f32> = Vec::new();
     egui::ScrollArea::vertical()
         .id_salt("test_list")
+        .auto_shrink([false, true])
         .max_height(height)
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .show(ui, |ui| {
