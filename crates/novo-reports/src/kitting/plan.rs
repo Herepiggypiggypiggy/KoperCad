@@ -303,7 +303,7 @@ fn bar_pick(name: &str, length: f64, n: usize, bars: &[&SawBar]) -> PickLine {
         item: format!("{name} bar, {} mm", num(length)),
         qty: n as f64,
         unit: "bars",
-        from: "Stock".into(),
+        from: "New bar, to buy".into(),
         for_: short_list(&marks),
         basis: Basis::Model,
     }
@@ -713,7 +713,7 @@ pub fn kit_plan(project: &Project, settings: &KitSettings) -> KitPlan {
                 item: format!("Wire {}, reel of {} m", g.label, num(g.reel_m)),
                 qty: g.new_reels as f64,
                 unit: "reels",
-                from: "Stock".into(),
+                from: "New reel, to buy".into(),
                 for_: note.clone(),
                 basis,
             });

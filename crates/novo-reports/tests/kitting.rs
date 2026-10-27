@@ -98,6 +98,21 @@ fn rails_of_three_lengths_share_bars_and_the_offcut_is_named() {
     let pick = row_with(&out, "pick-prepare", "DIN rail bar");
     assert_eq!(pick[2], "2");
     assert_eq!(pick[5], "+CAB R1, +CAB R2, +CAB R3");
+    // Bars the saw plan buys are not "from stock": the pick line says to buy.
+    assert!(pick[4].contains("to buy"), "{pick:?}");
+}
+
+#[test]
+fn the_notes_explain_why_the_pick_list_numbers_skip_the_drill_step() {
+    let (mut doc, h) = starter();
+    cabinet(&mut doc, &h, "+CAB", &[1000.0]);
+    let out = Kitting.generate(doc.project());
+    let notes = out.sections.iter().find(|s| s.key == "notes").unwrap();
+    assert!(notes.rows.iter().any(|r| {
+        r.cells
+            .iter()
+            .any(|c| c.to_string().contains("step 2, Drill, has no pick list"))
+    }));
 }
 
 #[test]

@@ -289,6 +289,7 @@ impl Kitting {
                 num(s.wire_allowance_percent),
             ),
             "Bars are bought in the least length that covers every piece with the saw cuts; the plan is the cheapest found by an exact search, and a note says when the search stopped early.".to_owned(),
+            "Pick lists keep the step numbers of the assembly checklist: step 2, Drill, has no pick list, so the numbers skip it.".to_owned(),
             "Screws are counted one per drilled hole; their size and length are not chosen here.".to_owned(),
         ];
         lines.extend(plan.problems.iter().cloned());
