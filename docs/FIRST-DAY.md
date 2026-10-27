@@ -8,11 +8,17 @@ at any point; if something asks for them, stop and say so.
 - **Copy your real projects somewhere safe first** (a USB stick or the network share). Work on the copy until you trust
   the build. A newer build opens older files and writes `<file>.v<old>.bak` beside it before the first change; an older
   build refuses a newer file without touching it.
-- Do not use a draft release candidate on the only copy of a customer project.
+- A release candidate is a test build: never let it be the only place a customer project lives.
 
 ## 2. Install (two ways, pick one)
 
-**Installer (recommended).** Download `KoperCAD-<version>-setup.exe` and `SHA256SUMS` from the release page. In
+**Where the files are.** The work build is a draft release on GitHub, so it is visible only when you are signed in to the
+KoperCAD repository: open Releases and pick the version you were told (for example `v0.1.0-rc9`). Its files are
+`KoperCAD-<version>-setup.exe`, `KoperCAD-<version>-portable.zip` and `SHA256SUMS`. If you cannot see the draft, ask for
+the three files to be sent to you another way. The public `experimental` pre-release holds a different, single zip
+(`kopercad.exe` only): do not use it for work.
+
+**Installer (recommended).** Download the setup and `SHA256SUMS`. In
 PowerShell: `Get-FileHash .\KoperCAD-<version>-setup.exe -Algorithm SHA256` and compare with the line in `SHA256SUMS`.
 Run the setup. Windows may say "Windows protected your PC" because the file is not code-signed: choose **More info**,
 then **Run anyway**. No admin prompt should appear. It installs under `%LOCALAPPDATA%\Programs\KoperCAD`.
@@ -27,13 +33,13 @@ If the window stays black or the program does not start, use the Start menu entr
 ## 3. The first ten minutes
 
 1. Start KoperCAD. Help > About shows the version, maker (KoperVonk) and your graphics adapter.
-2. **Open one of your projects** (a copy): File > Open, or double-click the `.kopercad` or older `.novo` file.
+2. **Open one of your projects** (a copy): File > Open (with the installer you can also double-click the `.kopercad` or older `.novo` file).
    Look through the pages. Press **Ctrl+Z** a few times and **Ctrl+Shift+Z** to see undo works on your project.
 3. **Save as** a new name (File > Save as). Close and reopen it: it should look the same.
 4. **Print**: File > Export, the PDF of the whole set (use Print preview first). Open the PDF and check the title block and a page you know well.
 5. **Parts import** (if you have a price list or catalogue): File > Import parts > Import parts from a table (CSV or
    Excel). Read the mapping step and the import report before accepting it.
-6. Press **Ctrl+K** and type what you want to do ("wire list", "bench", "kitting", "test every wire"). Letter keys work
+6. Press **Ctrl+K** and type what you want to do ("wire list", "bench", "kitting", "commissioning"; the wire test is the fourth tab of Commissioning). Letter keys work
    on the drawing only; click it first. A grey command tells you why when you hover.
 
 ## 4. If something goes wrong
