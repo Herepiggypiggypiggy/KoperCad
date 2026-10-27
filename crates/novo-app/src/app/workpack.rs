@@ -69,7 +69,8 @@ fn cut_lengths(project: &Project) -> CutLengths {
                 out.entry(key).or_default().push_back((
                     cut,
                     ends,
-                    s.title.clone(),
+                    // The pack prints sizes as "mm2" everywhere; the cut list's titles may say "mm²".
+                    s.title.replace("mm²", "mm2"),
                     text_at(s, row, "cable"),
                 ));
             }

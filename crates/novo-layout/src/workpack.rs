@@ -72,6 +72,11 @@ pub struct WireCut {
 }
 
 impl WireCut {
+    /// The cable this wire is a core of, if it is one.
+    pub fn cable(&self) -> Option<&str> {
+        self.kind.split(CORE_MARK).nth(1)
+    }
+
     /// `1 of 2` for a number used on several wires, empty otherwise.
     pub fn part_text(&self) -> String {
         self.part
@@ -502,7 +507,23 @@ fn ticks(labels: &[&str]) -> Vec<String> {
     labels.iter().map(|s| (*s).to_owned()).collect()
 }
 
+/// What the bench does with a wire row: a core is run with its cable, never
+/// cut from hookup wire.
+pub fn run_or_cut(w: &WireCut) -> String {
+    match w.cable() {
+        Some(cable) => format!("run cable {cable}, {} mm", mm(w.cut_mm)),
+        None => format!(
+            "cut {}{} mm",
+            if w.estimated { "about " } else { "" },
+            mm(w.cut_mm)
+        ),
+    }
+}
+
 fn wire_text(w: &WireCut) -> String {
+    if w.cable().is_some() {
+        return format!("Run core {} to {}: {}", w.from, w.to, run_or_cut(w));
+    }
     format!(
         "Run {} to {}, cut {}{} mm",
         w.from,
@@ -1012,15 +1033,23 @@ fn tool_list(cards: &[Card], table: &DrillTable, groups: &[WireGroup]) -> Vec<To
         tool: "Tape measure, pencil, screwdriver".to_owned(),
         for_what: "every step".to_owned(),
     });
-    let wires: usize = groups.iter().map(|g| g.wires.len()).sum();
+    // Cores are run with their cable, not cut: they are not counted here.
+    let wires: usize = groups
+        .iter()
+        .map(|g| g.wires.iter().filter(|w| w.cable().is_none()).count())
+        .sum();
+    let cut_groups = groups
+        .iter()
+        .filter(|g| g.wires.iter().any(|w| w.cable().is_none()))
+        .count();
     if wires > 0 {
         out.push(ToolLine {
             tool: "Wire cutter, stripper and crimp tool".to_owned(),
             for_what: format!(
                 "{wires} wire{} in {} group{}",
                 if wires == 1 { "" } else { "s" },
-                groups.len(),
-                if groups.len() == 1 { "" } else { "s" }
+                cut_groups,
+                if cut_groups == 1 { "" } else { "s" }
             ),
         });
     }
@@ -1218,6 +1247,46 @@ pub fn add_strip_cards(pack: &mut Pack, groups: &[WireGroup]) {
                 });
             }
         }
+    }
+    refresh_wire_tool(pack);
+}
+
+/// Rewrites the wire tool line from the cut strips of the pack (outside
+/// wires included, cores left out: they are run with their cable).
+fn refresh_wire_tool(pack: &mut Pack) {
+    let strips: Vec<&Card> = pack
+        .cards
+        .iter()
+        .filter(|c| c.kind == CardKind::Strips && !c.mark.contains(" cores of "))
+        .collect();
+    let wires: usize = strips.iter().map(|c| c.wires.len()).sum();
+    let mut titles: Vec<&str> = strips
+        .iter()
+        .map(|c| c.mark.split(" cut strip").next().unwrap_or(&c.mark))
+        .collect();
+    titles.dedup();
+    titles.sort_unstable();
+    titles.dedup();
+    let for_what = format!(
+        "{wires} wire{} in {} group{}",
+        if wires == 1 { "" } else { "s" },
+        titles.len(),
+        if titles.len() == 1 { "" } else { "s" }
+    );
+    match pack
+        .tools
+        .iter_mut()
+        .find(|t| t.tool.starts_with("Wire cutter, stripper"))
+    {
+        Some(t) if wires > 0 => t.for_what = for_what,
+        Some(_) => pack
+            .tools
+            .retain(|t| !t.tool.starts_with("Wire cutter, stripper")),
+        None if wires > 0 => pack.tools.push(ToolLine {
+            tool: "Wire cutter, stripper and crimp tool".to_owned(),
+            for_what,
+        }),
+        None => {}
     }
 }
 
