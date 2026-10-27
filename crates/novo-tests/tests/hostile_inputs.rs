@@ -516,3 +516,28 @@ fn hostile_values_inside_a_valid_project_file_never_crash_an_output() {
     eprintln!("hostile values: {read_ok} read and used, {refused} refused");
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
+
+#[test]
+fn damaged_macro_files_are_refused_or_read_whole() {
+    for (name, m) in novo_parts::starter_macros().into_iter().take(6) {
+        let seed = m.to_json();
+        sweep(&format!("macro {name}"), seed.as_bytes(), 150, |data| {
+            let text = String::from_utf8_lossy(data);
+            let _ = novo_parts::MacroFile::from_json(&text, std::path::Path::new("m.kcmacro"));
+        });
+    }
+}
+
+#[test]
+fn damaged_eplan_part_lists_are_refused_or_read_whole() {
+    let seed = "Manufacturer;Order number;Description\nABB;1SBL;Contactor\n";
+    sweep("eplan parts", seed.as_bytes(), 300, |data| {
+        let text = String::from_utf8_lossy(data);
+        let _ = novo_interop::eplan::import_auto(&text, "ACME");
+    });
+    let xml = "<?xml version=\"1.0\"?><Parts><Part><PARTNR>A1</PARTNR><MANUFACTURER>X</MANUFACTURER><DESCR1>d</DESCR1></Part></Parts>";
+    sweep("eplan parts xml", xml.as_bytes(), 300, |data| {
+        let text = String::from_utf8_lossy(data);
+        let _ = novo_interop::eplan::import_auto(&text, "ACME");
+    });
+}
