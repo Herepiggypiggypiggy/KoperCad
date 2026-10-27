@@ -329,11 +329,16 @@ impl LayoutSearch {
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     let can = !s.moves.is_empty() && !stale;
-                    if ui
+                    let apply = ui
                         .add_enabled(can, egui::Button::new("Apply the moves"))
-                        .on_hover_text("Moves the devices on their rails as one undo step")
-                        .clicked()
-                    {
+                        .on_hover_text("Moves the devices on their rails as one undo step");
+                    super::cabinet_bar::note_ctx(
+                        ui.ctx(),
+                        "heat.layout.apply",
+                        "Apply the moves button",
+                        &apply,
+                    );
+                    if apply.clicked() {
                         ask = Some(Ask::Apply(found.structure, s.moves.clone()));
                     }
                     if ui.button("Close").clicked() {

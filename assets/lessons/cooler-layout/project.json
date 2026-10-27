@@ -1,0 +1,710 @@
+{
+  "format": 1,
+  "info": {
+    "name": "Cooler layout fixture",
+    "description": "",
+    "rules": {
+      "terminals": {
+        "same_name": "join",
+        "join_link": "connector"
+      },
+      "potentials": {
+        "from_terminal_names": true
+      }
+    },
+    "properties": {}
+  },
+  "next_id": 57,
+  "parts": [],
+  "potentials": [],
+  "pages": [],
+  "devices": [
+    {
+      "id": 13,
+      "tag": "=A1+CAB1-Q1",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 18.0
+      }
+    },
+    {
+      "id": 15,
+      "tag": "=A1+CAB1-Q2",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 18.0
+      }
+    },
+    {
+      "id": 17,
+      "tag": "=A1+CAB1-Q3",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 18.0
+      }
+    },
+    {
+      "id": 19,
+      "tag": "=A1+CAB1-Q4",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 18.0
+      }
+    },
+    {
+      "id": 21,
+      "tag": "=A1+CAB1-Q5",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 18.0
+      }
+    },
+    {
+      "id": 23,
+      "tag": "=A1+CAB1-Q6",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 18.0
+      }
+    },
+    {
+      "id": 25,
+      "tag": "=A1+CAB1-A1",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 100.0,
+        "height_mm": 120.0,
+        "max_ambient_c": 50.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 3.0,
+        "width_mm": 35.0
+      }
+    },
+    {
+      "id": 27,
+      "tag": "=A1+CAB1-A2",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 100.0,
+        "height_mm": 120.0,
+        "max_ambient_c": 50.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 3.0,
+        "width_mm": 35.0
+      }
+    },
+    {
+      "id": 29,
+      "tag": "=A1+CAB1-A3",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 100.0,
+        "height_mm": 120.0,
+        "max_ambient_c": 50.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 3.0,
+        "width_mm": 35.0
+      }
+    },
+    {
+      "id": 31,
+      "tag": "=A1+CAB1-A4",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 100.0,
+        "height_mm": 120.0,
+        "max_ambient_c": 50.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 3.0,
+        "width_mm": 35.0
+      }
+    },
+    {
+      "id": 33,
+      "tag": "=A1+CAB1-K1",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 73.0,
+        "height_mm": 57.5,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 45.0
+      }
+    },
+    {
+      "id": 35,
+      "tag": "=A1+CAB1-K2",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 73.0,
+        "height_mm": 57.5,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 45.0
+      }
+    },
+    {
+      "id": 37,
+      "tag": "=A1+CAB1-K3",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 73.0,
+        "height_mm": 57.5,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 45.0
+      }
+    },
+    {
+      "id": 39,
+      "tag": "=A1+CAB1-K4",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 73.0,
+        "height_mm": 57.5,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 45.0
+      }
+    },
+    {
+      "id": 41,
+      "tag": "=A1+CAB1-G1",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 125.0,
+        "height_mm": 130.0,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 27.0,
+        "width_mm": 60.0
+      }
+    },
+    {
+      "id": 43,
+      "tag": "=A1+CAB1-T1",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 150.0,
+        "height_mm": 220.0,
+        "max_ambient_c": 40.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 100.0,
+        "width_mm": 120.0
+      }
+    },
+    {
+      "id": 45,
+      "tag": "=A1+CAB1-F1",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 18.0
+      }
+    },
+    {
+      "id": 47,
+      "tag": "=A1+CAB1-F2",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 18.0
+      }
+    },
+    {
+      "id": 49,
+      "tag": "=A1+CAB1-F3",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 18.0
+      }
+    },
+    {
+      "id": 51,
+      "tag": "=A1+CAB1-F4",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 18.0
+      }
+    },
+    {
+      "id": 53,
+      "tag": "=A1+CAB1-F5",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "max_ambient_c": 60.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 2.5,
+        "width_mm": 18.0
+      }
+    },
+    {
+      "id": 55,
+      "tag": "=A1+CAB1-X1",
+      "description": "",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "depth_mm": 45.0,
+        "height_mm": 50.0,
+        "max_ambient_c": 90.0,
+        "power_loss_source": "estimated",
+        "power_loss_w": 4.0,
+        "width_mm": 400.0
+      }
+    }
+  ],
+  "terminals": [],
+  "symbols": [],
+  "junctions": [],
+  "wires": [],
+  "cables": [],
+  "structures": [
+    {
+      "id": 1,
+      "tag": "+CAB1",
+      "description": "Machine cabinet",
+      "enclosure": true,
+      "plate": {
+        "width": 900.0,
+        "height": 1300.0,
+        "margin": 10.0
+      },
+      "properties": {
+        "interior_depth_mm": 300.0,
+        "interior_height_mm": 1400.0,
+        "interior_width_mm": 1000.0,
+        "plate_setback_mm": 0.0
+      }
+    }
+  ],
+  "rails": [
+    {
+      "id": 2,
+      "structure": 1,
+      "x": 30.0,
+      "y": 85.0,
+      "length": 840.0,
+      "kind": "din_rail",
+      "properties": {}
+    },
+    {
+      "id": 3,
+      "structure": 1,
+      "x": 30.0,
+      "y": 280.0,
+      "length": 840.0,
+      "kind": "din_rail",
+      "properties": {}
+    },
+    {
+      "id": 4,
+      "structure": 1,
+      "x": 30.0,
+      "y": 465.0,
+      "length": 840.0,
+      "kind": "din_rail",
+      "properties": {}
+    },
+    {
+      "id": 5,
+      "structure": 1,
+      "x": 30.0,
+      "y": 810.0,
+      "length": 840.0,
+      "kind": "din_rail",
+      "properties": {}
+    },
+    {
+      "id": 6,
+      "structure": 1,
+      "x": 30.0,
+      "y": 1045.0,
+      "length": 840.0,
+      "kind": "din_rail",
+      "properties": {}
+    },
+    {
+      "id": 7,
+      "structure": 1,
+      "x": 30.0,
+      "y": 1205.0,
+      "length": 840.0,
+      "kind": "din_rail",
+      "properties": {}
+    },
+    {
+      "id": 8,
+      "structure": 1,
+      "x": 20.0,
+      "y": 180.0,
+      "length": 860.0,
+      "kind": "duct",
+      "width": 25.0,
+      "height": 40.0,
+      "properties": {}
+    },
+    {
+      "id": 9,
+      "structure": 1,
+      "x": 20.0,
+      "y": 360.0,
+      "length": 860.0,
+      "kind": "duct",
+      "width": 25.0,
+      "height": 40.0,
+      "properties": {}
+    },
+    {
+      "id": 10,
+      "structure": 1,
+      "x": 20.0,
+      "y": 640.0,
+      "length": 860.0,
+      "kind": "duct",
+      "width": 25.0,
+      "height": 40.0,
+      "properties": {}
+    },
+    {
+      "id": 11,
+      "structure": 1,
+      "x": 20.0,
+      "y": 960.0,
+      "length": 860.0,
+      "kind": "duct",
+      "width": 25.0,
+      "height": 40.0,
+      "properties": {}
+    },
+    {
+      "id": 12,
+      "structure": 1,
+      "x": 20.0,
+      "y": 1140.0,
+      "length": 860.0,
+      "kind": "duct",
+      "width": 25.0,
+      "height": 40.0,
+      "properties": {}
+    }
+  ],
+  "cabinet_placements": [
+    {
+      "id": 14,
+      "device": 13,
+      "structure": 1,
+      "x": 40.0,
+      "y": 40.0,
+      "rail": 2,
+      "rail_offset": 10.0,
+      "properties": {}
+    },
+    {
+      "id": 16,
+      "device": 15,
+      "structure": 1,
+      "x": 70.0,
+      "y": 40.0,
+      "rail": 2,
+      "rail_offset": 40.0,
+      "properties": {}
+    },
+    {
+      "id": 18,
+      "device": 17,
+      "structure": 1,
+      "x": 100.0,
+      "y": 40.0,
+      "rail": 2,
+      "rail_offset": 70.0,
+      "properties": {}
+    },
+    {
+      "id": 20,
+      "device": 19,
+      "structure": 1,
+      "x": 130.0,
+      "y": 40.0,
+      "rail": 2,
+      "rail_offset": 100.0,
+      "properties": {}
+    },
+    {
+      "id": 22,
+      "device": 21,
+      "structure": 1,
+      "x": 160.0,
+      "y": 40.0,
+      "rail": 2,
+      "rail_offset": 130.0,
+      "properties": {}
+    },
+    {
+      "id": 24,
+      "device": 23,
+      "structure": 1,
+      "x": 190.0,
+      "y": 40.0,
+      "rail": 2,
+      "rail_offset": 160.0,
+      "properties": {}
+    },
+    {
+      "id": 26,
+      "device": 25,
+      "structure": 1,
+      "x": 40.0,
+      "y": 220.0,
+      "rail": 3,
+      "rail_offset": 10.0,
+      "properties": {}
+    },
+    {
+      "id": 28,
+      "device": 27,
+      "structure": 1,
+      "x": 90.0,
+      "y": 220.0,
+      "rail": 3,
+      "rail_offset": 60.0,
+      "properties": {}
+    },
+    {
+      "id": 30,
+      "device": 29,
+      "structure": 1,
+      "x": 140.0,
+      "y": 220.0,
+      "rail": 3,
+      "rail_offset": 110.0,
+      "properties": {}
+    },
+    {
+      "id": 32,
+      "device": 31,
+      "structure": 1,
+      "x": 190.0,
+      "y": 220.0,
+      "rail": 3,
+      "rail_offset": 160.0,
+      "properties": {}
+    },
+    {
+      "id": 34,
+      "device": 33,
+      "structure": 1,
+      "x": 300.0,
+      "y": 251.25,
+      "rail": 3,
+      "rail_offset": 270.0,
+      "properties": {}
+    },
+    {
+      "id": 36,
+      "device": 35,
+      "structure": 1,
+      "x": 355.0,
+      "y": 251.25,
+      "rail": 3,
+      "rail_offset": 325.0,
+      "properties": {}
+    },
+    {
+      "id": 38,
+      "device": 37,
+      "structure": 1,
+      "x": 410.0,
+      "y": 251.25,
+      "rail": 3,
+      "rail_offset": 380.0,
+      "properties": {}
+    },
+    {
+      "id": 40,
+      "device": 39,
+      "structure": 1,
+      "x": 465.0,
+      "y": 251.25,
+      "rail": 3,
+      "rail_offset": 435.0,
+      "properties": {}
+    },
+    {
+      "id": 42,
+      "device": 41,
+      "structure": 1,
+      "x": 40.0,
+      "y": 400.0,
+      "rail": 4,
+      "rail_offset": 10.0,
+      "properties": {}
+    },
+    {
+      "id": 44,
+      "device": 43,
+      "structure": 1,
+      "x": 40.0,
+      "y": 700.0,
+      "rail": 5,
+      "rail_offset": 10.0,
+      "properties": {}
+    },
+    {
+      "id": 46,
+      "device": 45,
+      "structure": 1,
+      "x": 40.0,
+      "y": 1000.0,
+      "rail": 6,
+      "rail_offset": 10.0,
+      "properties": {}
+    },
+    {
+      "id": 48,
+      "device": 47,
+      "structure": 1,
+      "x": 70.0,
+      "y": 1000.0,
+      "rail": 6,
+      "rail_offset": 40.0,
+      "properties": {}
+    },
+    {
+      "id": 50,
+      "device": 49,
+      "structure": 1,
+      "x": 100.0,
+      "y": 1000.0,
+      "rail": 6,
+      "rail_offset": 70.0,
+      "properties": {}
+    },
+    {
+      "id": 52,
+      "device": 51,
+      "structure": 1,
+      "x": 130.0,
+      "y": 1000.0,
+      "rail": 6,
+      "rail_offset": 100.0,
+      "properties": {}
+    },
+    {
+      "id": 54,
+      "device": 53,
+      "structure": 1,
+      "x": 160.0,
+      "y": 1000.0,
+      "rail": 6,
+      "rail_offset": 130.0,
+      "properties": {}
+    },
+    {
+      "id": 56,
+      "device": 55,
+      "structure": 1,
+      "x": 40.0,
+      "y": 1180.0,
+      "rail": 7,
+      "rail_offset": 10.0,
+      "properties": {}
+    }
+  ]
+}

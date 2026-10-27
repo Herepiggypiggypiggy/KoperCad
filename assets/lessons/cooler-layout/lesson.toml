@@ -1,0 +1,142 @@
+# Sample project: the cooler-layout fixture of the cooling lane (qa/fixtures/cabinet-cooler-layout.novo as JSON): a drive under
+# PLC modules on a crowded plate. crates/novo-tests/tests/lessons/cooling.rs checks the file (UPDATE_LESSONS=1 rewrites it).
+# The search takes about a minute on a worker thread, so the replay gate does not press "Cooler layout" or "Apply the
+# moves"; QA 208 walks the real search. On this fixture the model finds moves that cool the neighbours but leaves the
+# hottest device over its limit; the lesson says what the window says and quotes no numbers.
+format = 1
+id = "cooler-layout"
+version = 1
+status = "early"
+title = "Cooler places for hot devices: cooler layout"
+title_nl = "Koelere plaatsen voor hete componenten: koelere indeling"
+summary = "Let the model try moving the hottest devices, and the ones that suffer, along their rails, read what each move wins, apply the moves as one undo step, and know when moving is not enough."
+summary_nl = "Laat het model proberen de heetste componenten, en die eronder lijden, langs hun rails te verplaatsen, lees wat elke verplaatsing wint, pas de verplaatsingen toe als één undo-stap en weet wanneer verplaatsen niet genoeg is."
+track = "cabinet"
+order = 96
+level = "intermediate"
+minutes = 8
+topics = ["cooling", "heat", "layout", "rails", "placement"]
+needs = ["heat-and-sizing"]
+next = ["cooling-what-if"]
+project = "project.json"
+
+[[step]]
+id = "why"
+title = "Where a device stands matters"
+title_nl = "Waar een component staat doet ertoe"
+text = """
+A device that makes heat warms what stands above it and beside it. Sometimes the cheapest fix is no fan at all but a different place on its rail, or another rail.
+**Cooler layout** asks a quick 2D heat model where the hottest devices, and the ones that suffer, would stand cooler. It moves devices along their rails, or to another rail; it is a model, not a measurement.
+"""
+text_nl = """
+Een component dat warmte maakt verwarmt wat erboven en ernaast staat. Soms is de goedkoopste oplossing geen ventilator maar een andere plek op zijn rail, of een andere rail.
+**Cooler layout** vraagt een snel 2D-warmtemodel waar de heetste componenten, en die eronder lijden, koeler zouden staan. Het verplaatst componenten langs hun rails, of naar een andere rail; het is een model, geen meting.
+"""
+
+[[step]]
+id = "open-cabinet"
+title = "Open the cabinet"
+title_nl = "Open de kast"
+text = "Press {key:view.cabinet}. The plate shows the rails and the devices; the heat tools are in the Heat strip."
+text_nl = "Druk op {key:view.cabinet}. De plaat toont de rails en de componenten; de warmtegereedschappen staan in de Heat-strook."
+how = ["Press {key:view.cabinet}."]
+how_nl = ["Druk op {key:view.cabinet}."]
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "heat-on"
+title = "Turn on Heat"
+title_nl = "Zet Heat aan"
+text = "Click {ui:cabinet.heat} (or press {key:heat.toggle}; in a narrow window the bar folds it into {ui:cabinet.more}). The map shows where the plate is warm and the badges mark the hot devices."
+text_nl = "Klik op {ui:cabinet.heat} (of druk op {key:heat.toggle}; in een smal venster zit het onder {ui:cabinet.more}). De kaart toont waar de plaat warm is en de badges markeren de hete componenten."
+how = ["Click Heat in the View group of the Cabinet bar, or press {key:heat.toggle}."]
+how_nl = ["Klik op Heat in de groep View van de Cabinet-balk of druk op {key:heat.toggle}."]
+point = { ui = "cabinet.heat" }
+expect = { command = "heat.toggle" }
+solve = [ { command = "heat.toggle" } ]
+
+[[step]]
+id = "press"
+title = "Ask for a cooler layout"
+title_nl = "Vraag om een koelere indeling"
+text = """
+Click {ui:heat.cooler_layout}. Nothing to fill in: the window opens and the model tries layouts, with a count so far. It takes about a minute.
+**Stop and keep the best so far** ends it early with what is ready. Wait for the result.
+"""
+text_nl = """
+Klik op {ui:heat.cooler_layout}. Niets in te vullen: het venster opent en het model probeert indelingen, met een telling tot nu toe. Het duurt ongeveer een minuut.
+**Stop and keep the best so far** stopt eerder met wat klaar is. Wacht op het resultaat.
+"""
+how = ["Click Cooler layout in the Heat strip."]
+how_nl = ["Klik op Cooler layout in de Heat-strook."]
+point = { ui = "heat.cooler_layout" }
+expect = { clicked = "heat.cooler_layout" }
+manual = "starts a search of about a minute on a worker thread; QA 208 clicks it and waits"
+
+[[step]]
+id = "headline"
+title = "Read the headline and the numbers"
+title_nl = "Lees de kop en de cijfers"
+text = """
+The headline says what moving wins: devices taken under their limit, or margins widened, or "cools the neighbours, but" a device stays over. A small table gives **Devices over their limit**, **Tightest margin** and **Hottest air**, **Now** and **After the moves**, and the **Distance the devices move**.
+Read it before you trust the layout.
+"""
+text_nl = """
+De kop zegt wat verplaatsen wint: componenten onder hun grens gebracht, of marges verruimd, of "cools the neighbours, but" een component blijft erboven. Een kleine tabel geeft **Devices over their limit**, **Tightest margin** en **Hottest air**, **Now** en **After the moves**, en de **Distance the devices move**.
+Lees het voordat je de indeling vertrouwt.
+"""
+
+[[step]]
+id = "moves"
+title = "See the moves on the plate"
+title_nl = "Zie de verplaatsingen op de plaat"
+text = """
+Under **Moves** each device is listed with how far it goes and whether it changes rail ("350 mm right", "770 mm right, 380 mm up to another rail"). On the plate a grey outline marks where it stands now, an outlined box where it would stand, and an arrow joins them.
+**Margin gain** lists the devices that gain most: the neighbours that were suffering.
+"""
+text_nl = """
+Onder **Moves** staat elk component met hoe ver het gaat en of het van rail wisselt ("350 mm right", "770 mm right, 380 mm up to another rail"). Op de plaat markeert een grijze omtrek waar het nu staat, een omlijnd vak waar het zou staan, en een pijl verbindt ze.
+**Margin gain** noemt de componenten die het meest winnen: de buren die eronder leden.
+"""
+
+[[step]]
+id = "limits"
+title = "When moving is not enough"
+title_nl = "Wanneer verplaatsen niet genoeg is"
+text = """
+When a device stays over its limit, the window says so: "placement alone does not carry the heat away". Under **Cooling that was tried on this layout** it lists vents and fans that would help, which is what **Cooling advice** and **Cooling what-if** work out.
+The window ends with the model note: planning values, not validated against measurements.
+"""
+text_nl = """
+Als een component over zijn grens blijft, zegt het venster dat: "placement alone does not carry the heat away". Onder **Cooling that was tried on this layout** staan roosters en ventilatoren die zouden helpen, en dat rekenen **Cooling advice** en **Cooling what-if** uit.
+Het venster eindigt met de modelnotitie: planningswaarden, niet gevalideerd met metingen.
+"""
+
+[[step]]
+id = "apply"
+title = "Apply the moves"
+title_nl = "Pas de verplaatsingen toe"
+text = """
+Click {ui:heat.layout.apply}. The devices move on their rails as one undo step and the window closes; the status bar says how many moved.
+Work cards you printed before are out of date, and the next print marks the changed ones.
+"""
+text_nl = """
+Klik op {ui:heat.layout.apply}. De componenten verplaatsen op hun rails als één undo-stap en het venster sluit; de statusbalk zegt hoeveel er verplaatst zijn.
+Werkkaarten die je eerder printte zijn verouderd en de volgende afdruk markeert de gewijzigde.
+"""
+point = { ui = "heat.layout.apply" }
+expect = { clicked = "heat.layout.apply" }
+manual = "needs the finished search of the previous step; QA 208 clicks it"
+
+[[step]]
+id = "undo"
+title = "Take it back"
+title_nl = "Haal het terug"
+text = "Apply is one undo step, so one Undo puts every device back. A layout you doubt costs nothing to take back."
+text_nl = "Apply is één undo-stap, dus één Undo zet elk component terug. Een indeling waaraan je twijfelt kost niets om terug te halen."
+how = ["Press {key:edit.undo}."]
+how_nl = ["Druk op {key:edit.undo}."]
+expect = { command = "edit.undo" }
+solve = [ { command = "edit.undo" } ]
