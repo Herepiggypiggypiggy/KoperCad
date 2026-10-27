@@ -524,6 +524,13 @@ impl NovoApp {
         ]) {
             self.anchor(id, *rect, label);
         }
+        // Controls inside the window that were noted as they were drawn.
+        for noted in super::cabinet_bar::take_noted(ctx) {
+            self.anchor(noted.id, noted.rect, noted.label);
+            if noted.clicked {
+                self.learn_event(novo_learn::Event::Clicked(noted.id.to_owned()));
+            }
+        }
         if state.tab != tab_before {
             match state.tab {
                 Tab::Ferrules => self.learn_signal("bench_ferrules"),

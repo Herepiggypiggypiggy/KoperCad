@@ -29,13 +29,13 @@ shot 05-pick-step
 check_layout
 try click_text "Next"
 wait 20
-click_text "Saw plan"
+click_text "Saw plan  DIN rail"
 wait 10
 shot 06-saw-step
 check_layout
 try click_text "Next"
 wait 20
-click_text "Shopping list"
+click_text "Shopping list (3)"
 wait 10
 shot 07-shopping-step
 check_layout
