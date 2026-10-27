@@ -1,0 +1,34 @@
+@title Cabinet plate (1920x1080): EMC findings the engine gives no place (motor cable shield, pigtail) are marked at their drive and pigtail end
+@area Cabinet
+@sizes 1920x1080
+# Ctrl+K "EMC view on the plate": the shielded-cable fixture has an EMC-04 and an EMC-05 finding. They are numbered hot spots in the panel and marked on the plate, at the drive and at the pigtail end.
+open qa/fixtures/emc-cabinet-shields.novo
+wait 20
+key ctrl+k
+wait 6
+text emc view on the plate
+wait 8
+key Enter
+wait 30
+expect "Indicative model"
+expect "Motor cable shield"
+expect "Shield pigtail"
+shot plate-unplaced-markers
+check_layout
+click_text "Shields" #1
+wait 15
+shot plate-unplaced-markers-with-shields
+check_layout
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 10
+expect "Indicative model"
+shot plate-unplaced-markers-light
+check_layout

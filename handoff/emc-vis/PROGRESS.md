@@ -8,3 +8,4 @@
 2026-10-24 UTC #1453 merged. Cable card and one-click shield fixes in the schematic net-class panel; EMC example gets motor cable =A1+CAB-W2; QA 156 (1366) and 157 (1920).
 2026-10-24 UTC cable cards (#1459, #1462) merged; plate now draws bond outlines and shield ends (QA 163, 164), evidence /mnt/project-files/emc/evidence-plate-bonding/
 2026-10-24 UTC R5 review on #1464: added shields fixture emc-cabinet-shields.novo (all three screen ends, good bond), tests, legend lines and ring hover for the shield rings, dark backing stroke; QA 165/166.
+2026-10-27 UTC findings without an engine position (EMC-04, EMC-05, EMC-12) get a hot spot at their device or run on the plate and in 3D (adapter place_of); QA 300/301.

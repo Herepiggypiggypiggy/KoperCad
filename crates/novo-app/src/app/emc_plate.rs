@@ -455,4 +455,34 @@ mod tests {
         );
         assert!(!pic.bonds.is_empty());
     }
+
+    /// The rules the plate's picture holds a marker for, on a fixture.
+    fn marked_rules(fixture: &str) -> Vec<String> {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../qa/fixtures")
+            .join(fixture);
+        d.app.open_path_as(&path, false);
+        d.frame();
+        d.app
+            .switch_workspace(crate::app::workspace::Workspace::Cabinet);
+        d.frame();
+        d.app.cabinet.emc.on = true;
+        d.frame();
+        d.frame();
+        let pic = d.app.cabinet.emc.picture().expect("a picture of the plate");
+        pic.hotspots.iter().map(|h| h.rule.clone()).collect()
+    }
+
+    #[test]
+    fn the_motor_cable_and_pigtail_findings_have_a_marker_on_the_plate() {
+        // The engine gives these two no place of its own: the view marks them
+        // at the drive and at the pigtail end.
+        let rules = marked_rules("emc-cabinet.novo");
+        assert!(rules.iter().any(|r| r == "EMC-04"), "{rules:?}");
+        let rules = marked_rules("emc-cabinet-shields.novo");
+        assert!(rules.iter().any(|r| r == "EMC-05"), "{rules:?}");
+        assert!(rules.iter().any(|r| r == "EMC-04"), "{rules:?}");
+    }
 }

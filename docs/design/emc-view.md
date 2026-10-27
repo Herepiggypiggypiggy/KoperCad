@@ -37,6 +37,10 @@ Picking a wire that belongs to a cable adds the cable's card to the panel: tag, 
 
 With the Bonding chip on, each device's bond to the plate is drawn as a dashed outline: a bonded device in the earth colours, a weak or missing bond with a glowing spot and a hover that says why (the Plate bonding hot spot names it). With the Shields chip on, each shield end is a ring on the device: all round in the good colour, pigtail in a risk colour with a tail, not connected in a risk colour with a cross. The legend says what the rings mean (plain ring all round, tail pigtail, cross not connected) and hovering a ring names the cable end. The picture is tested on `qa/fixtures/emc-cabinet-shields.novo` (a galvanised plate, so the drive's bond is a good one, and two shielded cables carrying all three end states; QA 165 and 166). The legend starts rolled up when the canvas is shorter than 700 points, so it does not cover the devices it explains. A weak bond is a rule on the stated plate finish and bonding, not a measurement. Where to find it: View > EMC on the Cabinet plate (Ctrl+K "EMC view on the plate").
 
+## Findings the engine gives no place
+
+Some findings (the motor cable shield EMC-04, the shield pigtail EMC-05, the door rule EMC-12) have no position of their own in the engine's report, so the plate and 3D views used to leave them out of the numbered hot spots. The adapter now marks them where their first device stands on the plate, else at the pigtail end or the middle of their first routed run. The marker says where to look, not where the fault is: the message explains. A finding about something that is not on the plate shown stays in Check > EMC check only. QA 300 and 301, test `the_motor_cable_and_pigtail_findings_have_a_marker_on_the_plate`.
+
 ## Not in this change
 
 Fixes that move a wire or a device (by hand today), a cable card in the 3D and plate views.

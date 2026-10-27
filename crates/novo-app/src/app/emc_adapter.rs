@@ -148,6 +148,40 @@ fn halo_mm(
 /// numbered badges do not sit on top of each other, mm.
 const MARKER_GAP_MM: f32 = 30.0;
 
+/// Where a finding without a place of its own is marked on `plate`: on its
+/// first device that stands there, else at the pigtail end or the middle of
+/// its first run that is routed there. None when it has nothing on the plate.
+fn place_of(
+    f: &novo_emc::Finding,
+    input: &Input,
+    pic: &novo_emc::picture::Picture,
+    plate: u64,
+) -> Option<novo_emc::input::P> {
+    let device = f.subjects.iter().find_map(|s| match s {
+        Subject::Device(d) => pic
+            .zones
+            .iter()
+            .find(|z| z.device == *d && z.plate == plate)
+            .map(|z| (z.rect.0 + z.rect.2 / 2.0, z.rect.1 + z.rect.3 / 2.0)),
+        _ => None,
+    });
+    device.or_else(|| {
+        f.subjects.iter().find_map(|s| {
+            let Subject::Run(id) = s else { return None };
+            let run = input
+                .runs
+                .iter()
+                .find(|r| r.id == *id && r.plate == Some(plate))?;
+            let (first, last) = (run.path.first()?, run.path.last()?);
+            Some(match run.shield {
+                Some(sh) if matches!(sh.a, Termination::Pigtail(_)) => *first,
+                Some(sh) if matches!(sh.b, Termination::Pigtail(_)) => *last,
+                _ => run.path[run.path.len() / 2],
+            })
+        })
+    })
+}
+
 /// Moves a marker that would sit on an earlier one sideways, a step at a
 /// time. The span of a finding still shows where it really is.
 fn spread_markers(hotspots: &mut [Hotspot]) {
@@ -283,12 +317,41 @@ pub(crate) fn build_with(
                 _ => true,
             })
     };
-    for h in pic.hotspots.iter().filter(|h| shown(h)) {
+    // A finding the engine gives no place (the motor cable, a pigtail, the
+    // door) is marked where its device or run is on this plate, so the view
+    // does not leave out the findings people look for first.
+    let placed: Vec<novo_emc::picture::Hotspot> = pic
+        .hotspots
+        .iter()
+        .cloned()
+        .chain(
+            report
+                .findings
+                .iter()
+                .filter(|f| f.at.is_none() && f.ribbons.is_empty() && f.loop_polygon.is_empty())
+                .filter_map(|f| {
+                    Some(novo_emc::picture::Hotspot {
+                        plate,
+                        at: place_of(f, input, &pic, plate)?,
+                        rule: f.rule,
+                        level: f.level,
+                        severity: f.severity,
+                        message: f.message.clone(),
+                        values: f.metrics.clone(),
+                        band_hz: f.band_hz,
+                        source: f.source(),
+                        subjects: f.subjects.clone(),
+                    })
+                }),
+        )
+        .collect();
+    for h in placed.iter().filter(|h| shown(h)) {
         let id = hotspots.len() as u32 + 1;
-        let finding = report
-            .findings
-            .iter()
-            .find(|f| f.rule == h.rule && f.at == Some((h.plate, h.at)) && f.message == h.message);
+        let finding = report.findings.iter().find(|f| {
+            f.rule == h.rule
+                && f.message == h.message
+                && (f.at.is_none() || f.at == Some((h.plate, h.at)))
+        });
         let points = finding
             .and_then(|f| f.points.first().map(|p| p.1))
             .unwrap_or(0);
