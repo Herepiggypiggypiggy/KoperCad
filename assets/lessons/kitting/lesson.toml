@@ -135,11 +135,11 @@ title = "Print the kitting list"
 title_nl = "Print de kittinglijst"
 text = """
 Press {ui:kitting.export}. It writes "<project> kitting list.pdf" next to the project, with the pick lists, the saw plan and the shopping list, and says which numbers come from the drawing and which are planning values. It is also part of the workshop pack.
-Lengths marked ~ are estimates until the cabinet is laid out and the wires routed.
+The notes count the wire lengths that are estimates (not routed through ducts): the reels are a guide until the wires are routed.
 """
 text_nl = """
 Druk op {ui:kitting.export}. Het schrijft "<project> kitting list.pdf" naast het project, met de pakbonnen, het zaagplan en de boodschappenlijst, en zegt welke getallen uit de tekening komen en welke planwaarden zijn. Het zit ook in het werkplaatspakket.
-Lengtes met ~ zijn schattingen tot de kast is ingedeeld en de draden zijn gerouteerd.
+De notities tellen de draadlengtes die schattingen zijn (niet door kanalen gerouteerd): de rollen zijn een richtlijn tot de draden gerouteerd zijn.
 """
 point = { ui = "kitting.export" }
 expect = { clicked = "kitting.export" }
