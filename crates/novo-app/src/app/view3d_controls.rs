@@ -381,12 +381,12 @@ pub(super) fn toolbar(
             {
                 controls.move_items ^= true;
             }
-            toggle(
-                ui,
-                &mut controls.heat_panel,
-                "Heat",
-                "The Heat panel: simulate how heat and air move in this cabinet",
-            );
+            let heat = novo_theme::widgets::filter_toggle(ui, "Heat", controls.heat_panel)
+                .on_hover_text("The Heat panel: simulate how heat and air move in this cabinet");
+            super::cabinet_bar::note_ctx(ui.ctx(), "view3d.heat", "Heat button", &heat);
+            if heat.clicked() {
+                controls.heat_panel ^= true;
+            }
             let emc_hint = format!(
                 "{}: electromagnetic compatibility: cable classes, keep-clear zones round noisy \
                  runs and numbered hot spots, as an indicative model (View > EMC). Click to {}.",

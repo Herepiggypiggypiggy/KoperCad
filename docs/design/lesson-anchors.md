@@ -78,6 +78,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `heat.whatif.apply`: {ui:heat.whatif.apply} shows **Apply button of the fix**
 - `cabinet.canvas`: {ui:cabinet.canvas} shows **Cabinet canvas**
 - `workspace.view3d`: {ui:workspace.view3d} shows **3D canvas**
+- `view3d.heat`: {ui:view3d.heat} shows **Heat button**
 - `switcher.schematic`: {ui:switcher.schematic} shows **Schematic chip**
 - `switcher.cabinet`: {ui:switcher.cabinet} shows **Cabinet chip**
 - `switcher.view3d`: {ui:switcher.view3d} shows **3D chip**

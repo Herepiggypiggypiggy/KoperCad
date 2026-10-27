@@ -106,8 +106,16 @@ pub(super) fn show(
         WIDTH,
     )
     // Starts under the view cube; the person can drag it anywhere in the view.
-    .top(CUBE_MARGIN + CUBE_SIZE + GAP)
+    // While a lesson card holds the bottom right corner it starts at the top of
+    // the view instead (over the cube): under the cube it is left a hand's width
+    // tall in a small window, too short to reach Simulate.
+    .top(if super::panel::reserved_bottom_right(ctx) > 0.0 {
+        CUBE_MARGIN
+    } else {
+        CUBE_MARGIN + CUBE_SIZE + GAP
+    })
     .height(420.0)
+    .above_card()
     .scroll_bar_always()
     .show(ctx, |ui| {
         let (text, warn) = phase_line(state.running(), state.solution().is_some(), stale);

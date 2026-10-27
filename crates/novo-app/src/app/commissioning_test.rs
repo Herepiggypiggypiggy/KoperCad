@@ -172,7 +172,35 @@ fn state_mark(p: &Palette, state: PointState) -> (&'static str, egui::Color32) {
     }
 }
 
+/// Rows of the wiring order list that show at once.
+const LIST_ROWS: f32 = 6.0;
+
+/// The whole tab scrolls, so the wiring order list never shares the panel's
+/// last rows with the button below it.
 pub(super) fn test_tab(
+    ui: &mut egui::Ui,
+    mode: &mut CommissioningMode,
+    project: &Project,
+) -> Option<TestAction> {
+    // The dock clips what is wider than it: keep the bar inside the visible part.
+    let width = (ui.clip_rect().right() - ui.max_rect().left())
+        .min(ui.available_width())
+        .max(120.0);
+    // A solid bar, so it shows on the dark panel and the list is seen to scroll.
+    ui.style_mut().spacing.scroll = egui::style::ScrollStyle::solid();
+    egui::ScrollArea::vertical()
+        .id_salt("test_tab")
+        .auto_shrink([false, false])
+        .max_width(width)
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+        .show(ui, |ui| {
+            ui.set_max_width(width - 14.0);
+            test_tab_body(ui, mode, project)
+        })
+        .inner
+}
+
+fn test_tab_body(
     ui: &mut egui::Ui,
     mode: &mut CommissioningMode,
     project: &Project,
@@ -203,6 +231,17 @@ pub(super) fn test_tab(
         ))
         .strong(),
     );
+    // Wire-it and the cut list count connections: one drawn through several wires is one.
+    let bench = novo_reports::wire_it_plan(project).steps.len();
+    if bench != progress.total {
+        ui.label(
+            egui::RichText::new(format!(
+                "The bench cut list and Wire-it count connections ({bench}), not drawn wires, so the numbers can differ."
+            ))
+            .small()
+            .color(p.text_tertiary),
+        );
+    }
     if progress.not_tested > 0 {
         ui.label(
             egui::RichText::new(format!(
@@ -352,9 +391,22 @@ pub(super) fn test_tab(
     ui.separator();
     widgets::section_label(ui, "Wiring order");
     let mut pick = None;
+    // Whole rows only: a half row behind the edge reads as a layout fault, and
+    // the bar stays visible so the list is known to scroll. The row pitch is
+    // the one measured on the last frame.
+    let pitch_id = egui::Id::new("test_list_pitch");
+    let pitch: f32 = ui
+        .ctx()
+        .data(|d| d.get_temp(pitch_id))
+        .unwrap_or_else(|| ui.spacing().interact_size.y + ui.spacing().item_spacing.y);
+    // Six whole rows, less the gap that trails the last one.
+    let height = LIST_ROWS * pitch - ui.spacing().item_spacing.y;
+    let mut first_rows: Vec<f32> = Vec::new();
     egui::ScrollArea::vertical()
         .id_salt("test_list")
-        .max_height(ui.available_height().max(120.0) - 40.0)
+        .auto_shrink([false, true])
+        .max_height(height)
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .show(ui, |ui| {
             for point in &sheet.points {
                 let state = point_state(&mode.store, point);
@@ -390,11 +442,17 @@ pub(super) fn test_tab(
                         point.expected.continuity_text()
                     ))
                 });
+                if first_rows.len() < 2 {
+                    first_rows.push(row.response.rect.top());
+                }
                 if row.inner.clicked() {
                     pick = Some(point.wire);
                 }
             }
         });
+    if let [a, b] = first_rows[..] {
+        ui.ctx().data_mut(|d| d.insert_temp(pitch_id, b - a));
+    }
     if let Some(w) = pick {
         mode.test.last.clear();
         mode.select_test_wire(project, w);

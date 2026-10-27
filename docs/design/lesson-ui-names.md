@@ -128,6 +128,8 @@ Fix a step, then regenerate to shrink the list.
 - revisions-and-compare/issue: `Issue B`
 - revisions-and-compare/jump-to-change: `Changes`
 - revisions-and-compare/show-changes: `Changes`
+- simulate-3d/settings: `Quick`
+- simulate-3d/settings: `Settings for the next run`
 - spreadsheets/apply: `Apply N changes`
 - spreadsheets/conflict: `Keep the project`
 - spreadsheets/conflict: `Take the sheet`

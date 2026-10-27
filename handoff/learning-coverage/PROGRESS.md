@@ -11,3 +11,4 @@
 2026-10-27 UTC Coordinator backlog: Cooling advice, Cooler layout, 3D Simulate run, Test tab (#1526), Kitting (not on main yet), one PR per lesson from main. Cooling advice lesson `cooling-advice` first (branch claude/learning-cooling-advice): anchor `heat.advice.add`, QA 207, COVERAGE row 55; the cooling what-if lesson moves to order 98.
 
 2026-10-27 UTC Wire test lesson `wire-test` (branch claude/learning-test-tab): Test tab of Commissioning, QA 210, COVERAGE row 58. Next: Kitting, Wire-it lessons.
+2026-10-27 UTC 3D Simulate run lesson `simulate-3d` written (branch claude/learning-simulate-3d): anchor `view3d.heat`, Heat panel kept clear of the lesson card, QA 209, COVERAGE row 57. Next: Test tab, Kitting, Wire-it lessons.

@@ -1,0 +1,16 @@
+@title Kitting: bought bars say to buy, rows read cleanly, and the pick list numbers are explained
+@area Reports
+# Reports > Bench output > Kitting: the bar rows of the Prepare pick list say "New bar, to buy" (not Stock) and carry no stray semicolon; a line explains that pick list numbers follow the assembly checklist, so step 2 (Drill) has none.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 30
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+click_text Kitting
+wait 10
+expect "Pick lists keep the step numbers"
+expect "New bar, to buy"
+expect_not "Stock;"
+shot kitting-pick-lists
+check_layout
