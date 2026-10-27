@@ -71,6 +71,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `heat.simulate`: {ui:heat.simulate} shows **Simulate button**
 - `heat.cooling_advice`: {ui:heat.cooling_advice} shows **Cooling advice button**
 - `heat.cooling_whatif`: {ui:heat.cooling_whatif} shows **Cooling what-if button**
+- `heat.layout.apply`: {ui:heat.layout.apply} shows **Apply the moves button**
 - `heat.cooler_layout`: {ui:heat.cooler_layout} shows **Cooler layout button**
 - `heat.whatif.go`: {ui:heat.whatif.go} shows **Try the fixes button**
 - `heat.whatif.apply`: {ui:heat.whatif.apply} shows **Apply button of the fix**

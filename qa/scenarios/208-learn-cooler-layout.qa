@@ -1,0 +1,50 @@
+@title Lesson walk: cooler-layout (search, headline, moves, apply, undo)
+@area Learn
+# The step in each picture is in its name: a ticked action step moves the card on by itself, and an action step has no Next button. The lesson from the palette, in the cooler-layout sample. Do it for me only carries out commands, so the Cooler layout button and Apply the moves are really clicked. The search takes about a minute on a worker thread. The window opens in the Cabinet, over the plate; on this sample it finds moves that cool the neighbours while the hottest device stays over its limit, which the lesson says.
+key ctrl+k
+wait 4
+text cooler layout
+wait 6
+click_text "Cooler places for hot devices: cooler layout"
+wait 40
+shot 01-why
+check_layout
+try click_text "Next"
+wait 20
+shot 02-open-cabinet
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 03-heat-on
+check_layout
+try click_text "Do it for me"
+wait 30
+shot 04-press
+check_layout
+click_text "Cooler layout" Button
+wait_s 120
+expect "Apply the moves"
+expect "Model estimate"
+shot 05-headline-step-search-done
+check_layout
+try click_text "Next"
+wait 20
+shot 06-moves-step
+check_layout
+try click_text "Next"
+wait 20
+shot 07-limits-step
+check_layout
+try click_text "Next"
+wait 20
+shot 08-apply-step
+check_layout
+click_text "Apply the moves" Button
+wait 20
+expect "Moved"
+shot 09-applied-undo-step
+check_layout
+try click_text "Do it for me"
+wait 20
+shot 10-undone
+check_layout

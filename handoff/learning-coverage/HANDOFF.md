@@ -28,3 +28,4 @@ Generated docs: `UPDATE_ANCHORS_DOC=1 UPDATE_UI_NAMES=1 cargo test -p novo-app -
 - A lesson step over 500 characters makes the catalog reject the whole lesson without failing the replay gates: run `cargo test -p novo-learn`.
 - Open: the full 57 lesson walk for existing-lesson drift was cut short (a container restart after 32 runs). Not redone.
 - Lesson `cooling-what-if` (Cabinet track): Cabinet > Heat strip > Cooling what-if opens the wizard in 3D. Anchors `heat.whatif.go`, `heat.whatif.apply`. QA 206. The two run-dependent steps are `manual` in the replay gate. Not walked: Cooling advice, Cooler layout (named in one step), the 3D Simulate run.
+- Lesson `cooler-layout` (Cabinet track, order 96): Cabinet > Heat strip > Cooler layout; anchor `heat.layout.apply`; QA 208; the search and Apply steps are `manual` in the replay gate.
