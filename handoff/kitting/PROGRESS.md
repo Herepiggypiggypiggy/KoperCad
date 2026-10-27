@@ -6,3 +6,4 @@
 2026-10-27 02:40 UTC  Reviewer: QA evidence was not from the PR head. Scenarios renumbered 310-312 (300/301 clash with #1527); evidence rerun on the pushed head.
 2026-10-27 03:10 UTC  Review R5: warnings now also printed with the shopping list; scenarios moved to 320-322 (310 taken on main). QA rerun on the new head.
 2026-10-27 03:30 UTC  R5 nit: saw plan column renamed to 'Bar left before cut mm'. Lists in a cell are capped at 6 names plus 'and N more' (short_list), so long cabinets do not overflow.
+2026-10-27 04:00 UTC  R2 guard: held bars shorter than the shortest piece, and equal bars beyond the piece count, stay out of the search (listed unused). Test with 10000 offcuts. The Note rows were already in the 5995ad5 PDF (page 6); the byte-identical PDF was because that fixture's output did not change.

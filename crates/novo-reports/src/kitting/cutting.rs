@@ -360,6 +360,30 @@ pub fn plan(material: &Material, demands: &[Demand], held: &[f64]) -> Plan {
         }
     }
 
+    // Held bars that cannot take any piece, and equal bars beyond the number
+    // of pieces, cannot change the plan; keeping them out of the search keeps
+    // a shelf of thousands of offcuts from drowning it.
+    let shortest = items.iter().map(|i| i.len).fold(f64::INFINITY, f64::min);
+    let mut skipped: Vec<f64> = Vec::new();
+    let mut kept: Vec<f64> = Vec::new();
+    let mut same = 0usize;
+    for &h in &held {
+        if h + EPS < shortest {
+            skipped.push(h);
+            continue;
+        }
+        same = match kept.last() {
+            Some(&last) if (last - h).abs() <= EPS => same + 1,
+            _ => 1,
+        };
+        if same > items.len() {
+            skipped.push(h);
+        } else {
+            kept.push(h);
+        }
+    }
+    let held = kept;
+
     let total: f64 = items.iter().map(|i| i.len).sum();
     let held_total: f64 = held.iter().sum();
     plan.lower_bound_mm =
@@ -454,6 +478,8 @@ pub fn plan(material: &Material, demands: &[Demand], held: &[f64]) -> Plan {
         };
         bins.push(Bin { source, cuts, left });
     }
+    plan.unused_held.extend(skipped);
+    plan.unused_held.sort_by(|a, b| b.total_cmp(a));
     bins.extend(spliced);
     bins.sort_by(|a, b| {
         let held = |x: &Bin| matches!(x.source, Source::New(_));

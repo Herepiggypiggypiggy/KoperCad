@@ -274,3 +274,23 @@ fn a_big_job_ends_inside_the_budget_with_a_valid_plan() {
     // Within a bar of the least that could possibly do.
     assert!(p.bought_mm <= total / 0.95 + 2000.0);
 }
+
+#[test]
+fn a_shelf_of_thousands_of_equal_offcuts_does_not_drown_the_search() {
+    let m = mat(&[2000.0], 3.0);
+    let lens = [700.0, 650.0, 600.0, 550.0, 500.0, 450.0, 400.0, 350.0];
+    let mut held = vec![300.0; 5000];
+    held.extend(vec![900.0; 5000]);
+    let started = std::time::Instant::now();
+    let p = plan(&m, &demands(&lens), &held);
+    assert!(started.elapsed().as_secs() < 5, "too slow");
+    assert_valid(&p, &lens);
+    assert!(!p.budget_hit);
+    // Every offcut is still accounted for: used or listed as unused.
+    let used = p
+        .bins
+        .iter()
+        .filter(|b| matches!(b.source, Source::Held(_)))
+        .count();
+    assert_eq!(used + p.unused_held.len(), held.len());
+}
