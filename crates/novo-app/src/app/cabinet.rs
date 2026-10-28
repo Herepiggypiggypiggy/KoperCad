@@ -1799,7 +1799,10 @@ impl NovoApp {
                     let now_key = structure.map_or(0, |s| {
                         super::heat_sweep::key_of(project, s, ambient, &h.settings, &fans)
                     });
-                    let at = ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0);
+                    let at = super::panel::right_of_left_card(
+                        ui.ctx(),
+                        ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                    );
                     match self.cabinet.heat.advice.show(ui.ctx(), 1, now_key, at) {
                         Some(super::heat_sweep::Ask::Again) => self.cabinet.heat.advice.request(),
                         Some(super::heat_sweep::Ask::Add(c)) => ask = Some(Ask::CoolingPair(c)),
@@ -1811,7 +1814,10 @@ impl NovoApp {
                     self.cabinet.heat.layout.show(
                         ui.ctx(),
                         now_key,
-                        ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                        super::panel::right_of_left_card(
+                            ui.ctx(),
+                            ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                        ),
                     )
                 {
                     ask = Some(Ask::CoolerLayout(s, moves));

@@ -123,6 +123,7 @@ impl NovoApp {
     pub(super) fn learn_overlay(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         if !self.learn.card_on() {
             super::panel::reserve_bottom_right(ctx, 0.0);
+            super::panel::reserve_bottom_left(ctx, None);
             return;
         }
         self.pointer(ctx, canvas);
@@ -174,6 +175,14 @@ impl NovoApp {
             } else {
                 0.0
             },
+        );
+        // Dialogs open right of a card parked at the left, not over it.
+        let parked_left = card_rect.is_finite()
+            && side == super::panel::Side::BottomLeft
+            && !super::panel::is_moved(ctx, super::panel::id("lesson_card"));
+        super::panel::reserve_bottom_left(
+            ctx,
+            parked_left.then_some(card_rect.max.x + super::panel::MARGIN),
         );
         match action {
             Some(CardAction::Move(Move::Skip)) => self.learn_skip(ctx),

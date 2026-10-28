@@ -374,6 +374,7 @@ pub(super) fn dialog<'a>(
     // While the outline flyout (Pages, Issues) is open the dialog is kept
     // beside it, so the flyout does not cut off the dialog's left edge.
     screen.min.x = (screen.min.x + reserved_left(ctx) + reserved_dock(ctx))
+        .max(reserved_bottom_left(ctx))
         .min(screen.max.x - DIALOG_MIN_WIDTH);
     let width = size[0].max(DIALOG_MIN_WIDTH).min(screen.width());
     let window = egui::Window::new(title)
@@ -497,6 +498,24 @@ fn reserved_dock(ctx: &egui::Context) -> f32 {
 fn reserved_left(ctx: &egui::Context) -> f32 {
     ctx.data(|d| d.get_temp::<f32>(egui::Id::new("panel_flyout_left")))
         .unwrap_or(0.0)
+}
+
+/// The bottom left corner is taken by a card (the lesson card in the Cabinet)
+/// whose right edge is at `x`: dialogs open right of it. `None` gives the
+/// corner back. Read on the next frame.
+pub(super) fn reserve_bottom_left(ctx: &egui::Context, x: Option<f32>) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("panel_corner_left"), x.unwrap_or(0.0)));
+}
+
+fn reserved_bottom_left(ctx: &egui::Context) -> f32 {
+    ctx.data(|d| d.get_temp::<f32>(egui::Id::new("panel_corner_left")))
+        .unwrap_or(0.0)
+}
+
+/// `at`, moved right of a card parked at the bottom left, for the windows
+/// that open at a place of their own instead of through [`dialog`].
+pub(super) fn right_of_left_card(ctx: &egui::Context, at: egui::Pos2) -> egui::Pos2 {
+    egui::pos2(at.x.max(reserved_bottom_left(ctx)), at.y)
 }
 
 pub(super) fn reserved_bottom_right(ctx: &egui::Context) -> f32 {
@@ -931,6 +950,30 @@ mod tests {
             right <= screen.max.x - CORNER_CARD_WIDTH,
             "the dialog ends at {right}, under the corner card"
         );
+    }
+
+    #[test]
+    fn a_dialog_opens_right_of_a_card_parked_at_the_left() {
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1366.0, 768.0));
+        reserve_bottom_left(&ctx, Some(600.0));
+        let mut left = 0.0;
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    ..Default::default()
+                },
+                |ctx| {
+                    let shown = dialog(ctx, "Left test", [380.0, 300.0]).show(ctx, |ui| {
+                        ui.label("content");
+                    });
+                    left = shown.map_or(0.0, |r| r.response.rect.min.x);
+                },
+            );
+            out.textures_delta.clear();
+        }
+        assert!(left >= 600.0, "the dialog starts at {left}, over the card");
     }
 
     #[test]
