@@ -81,7 +81,7 @@ pub(crate) struct PartsWindow {
     /// Add CAD files: matching of downloaded files to parts, while open.
     cad: Option<CadPanel>,
     /// Files dropped or picked that are still being read in the background.
-    waiting: Option<Waiting>,
+    waiting: Vec<Waiting>,
     /// Repaints the window when a background read finishes; set on the first
     /// frame.
     wake: Option<egui::Context>,
@@ -174,7 +174,7 @@ impl PartsWindow {
             new_part: None,
             guide: false,
             cad: None,
-            waiting: None,
+            waiting: Vec::new(),
             wake: None,
         }
     }
@@ -393,7 +393,13 @@ impl PartsWindow {
     /// goes on painting and handles them once they are read.
     fn wait_for(&mut self, files: Waiting) {
         super::parts_identity::prefetch(files.paths(), self.wake.clone());
-        self.waiting = Some(files);
+        // A second drop while the first is read joins it (or follows it when it
+        // is a different kind), so no file is lost.
+        match (self.waiting.last_mut(), files) {
+            (Some(Waiting::Dropped(have)), Waiting::Dropped(more))
+            | (Some(Waiting::AddCad(have)), Waiting::AddCad(more)) => have.extend(more),
+            (_, files) => self.waiting.push(files),
+        }
         if let Some(ctx) = &self.wake {
             ctx.request_repaint();
         }
@@ -401,12 +407,13 @@ impl PartsWindow {
 
     /// The files waiting to be read, once every one has been.
     fn take_read(&mut self) -> Option<Waiting> {
-        let files = self.waiting.as_ref()?;
-        super::parts_identity::prefetch(files.paths(), self.wake.clone());
-        if !super::parts_identity::ready(files.paths()) {
+        for files in &self.waiting {
+            super::parts_identity::prefetch(files.paths(), self.wake.clone());
+        }
+        if !super::parts_identity::ready(self.waiting.first()?.paths()) {
             return None;
         }
-        self.waiting.take()
+        Some(self.waiting.remove(0))
     }
 
     /// Opens Add CAD files for these files.
@@ -1348,14 +1355,14 @@ fn parts_ui(
     if win.new_part.is_some() {
         new_part_ui(ui, win);
     }
-    if let Some(text) = super::parts_identity::reading_text().filter(|_| win.waiting.is_some()) {
+    if let Some(text) = super::parts_identity::reading_text().filter(|_| !win.waiting.is_empty()) {
         ui.horizontal(|ui| {
             ui.spinner();
             ui.weak(text);
         });
     }
     if let Some(panel) = win.cad.as_mut() {
-        match cad_ui(ui, panel, &win.catalog, win.waiting.is_some()) {
+        match cad_ui(ui, panel, &win.catalog, !win.waiting.is_empty()) {
             Some(CadAction::Import) => actions.push(PartsAction::CadImport),
             Some(CadAction::Close) => actions.push(PartsAction::CadClose),
             None => {}

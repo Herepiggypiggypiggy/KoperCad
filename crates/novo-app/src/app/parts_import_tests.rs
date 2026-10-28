@@ -622,6 +622,37 @@ fn the_waiting_strip_says_whether_an_account_is_needed_and_that_no_password_is_t
 }
 
 #[test]
+fn a_second_drop_while_the_first_is_read_loses_no_file() {
+    let mut b = bench();
+    let dir = tempfile::tempdir().unwrap();
+    let make = |name: &str| {
+        write(dir.path(), name, &family_step());
+        dir.path().join(name)
+    };
+    let (a1, a2) = (make("MCADPP0003401_3D.stp"), make("MCADPP0003402_3D.stp"));
+    let (t1, t2) = (make("MCADPP0003403_3D.stp"), make("MCADPP0003404_3D.stp"));
+    b.win.wait_for(Waiting::AddCad(vec![a1.clone()]));
+    b.win.wait_for(Waiting::AddCad(vec![a2.clone()]));
+    b.win.wait_for(Waiting::Dropped(vec![t1.clone()]));
+    b.win.wait_for(Waiting::Dropped(vec![t2.clone()]));
+    let mut got = Vec::new();
+    let started = Instant::now();
+    while got.len() < 2 {
+        if let Some(r) = b.win.take_read() {
+            got.push(r);
+        }
+        assert!(started.elapsed() < Duration::from_secs(20), "never read");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let (Waiting::AddCad(first), Waiting::Dropped(second)) = (&got[0], &got[1]) else {
+        panic!("the batches come back in the order they were asked for");
+    };
+    assert_eq!(first, &vec![a1, a2]);
+    assert_eq!(second, &vec![t1, t2]);
+    assert!(b.win.waiting.is_empty());
+}
+
+#[test]
 fn files_dropped_on_the_window_are_read_in_the_background_before_they_are_handled() {
     let mut b = bench();
     let dir = tempfile::tempdir().unwrap();
@@ -633,7 +664,7 @@ fn files_dropped_on_the_window_are_read_in_the_background_before_they_are_handle
         })
         .collect();
     b.win.wait_for(Waiting::AddCad(paths.clone()));
-    assert!(b.win.waiting.is_some(), "the window keeps the files");
+    assert!(!b.win.waiting.is_empty(), "the window keeps the files");
     assert!(
         b.win.cad.is_none(),
         "nothing is matched before they are read"
@@ -646,7 +677,7 @@ fn files_dropped_on_the_window_are_read_in_the_background_before_they_are_handle
         assert!(started.elapsed() < Duration::from_secs(20), "never read");
         std::thread::sleep(Duration::from_millis(10));
     };
-    assert!(b.win.waiting.is_none());
+    assert!(b.win.waiting.is_empty());
     let Waiting::AddCad(files) = read else {
         panic!("the files come back the way they were asked for");
     };

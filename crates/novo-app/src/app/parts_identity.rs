@@ -16,7 +16,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, OnceLock};
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 
 use eframe::egui;
 use novo_parts::CadIdentity;
@@ -25,6 +25,10 @@ use super::parts_cad::read_identity;
 
 /// Entries kept; the oldest go first.
 const MAX_ENTRIES: usize = 512;
+/// A file asked for in this time is not forgotten, however many entries there
+/// are: the window asks for its waiting files every frame, so a batch larger
+/// than [`MAX_ENTRIES`] is still found whole once it has been read.
+const KEEP_ASKED: Duration = Duration::from_secs(10);
 
 #[derive(Clone, PartialEq, Eq)]
 struct Stamp {
@@ -52,6 +56,8 @@ struct State {
     /// Files asked for, and read, since the worker was last idle.
     requested: usize,
     finished: usize,
+    /// When each file was last asked for.
+    asked: HashMap<PathBuf, Instant>,
 }
 
 impl State {
@@ -60,12 +66,28 @@ impl State {
         (*stamp == stamp_of(path)).then_some(id)
     }
 
+    fn wanted(&self, path: &Path) -> bool {
+        self.asked
+            .get(path)
+            .is_some_and(|at| at.elapsed() < KEEP_ASKED)
+    }
+
     fn store(&mut self, path: &Path, stamp: Stamp, id: CadIdentity) {
         if self.done.insert(path.to_path_buf(), (stamp, id)).is_none() {
             self.order.push_back(path.to_path_buf());
         }
+        // The oldest entry that is not wanted goes; the one just stored stays.
         while self.order.len() > MAX_ENTRIES {
-            if let Some(old) = self.order.pop_front() {
+            let last = self.order.len() - 1;
+            let Some(i) = self
+                .order
+                .iter()
+                .take(last)
+                .position(|old| !self.wanted(old))
+            else {
+                break;
+            };
+            if let Some(old) = self.order.remove(i) {
                 self.done.remove(&old);
             }
         }
@@ -111,7 +133,10 @@ pub(crate) fn ready(paths: &[PathBuf]) -> bool {
 pub(crate) fn prefetch(paths: &[PathBuf], wake: Option<egui::Context>) {
     let start = {
         let mut s = lock();
+        let now = Instant::now();
+        s.asked.retain(|_, at| now.duration_since(*at) < KEEP_ASKED);
         for p in paths {
+            s.asked.insert(p.clone(), now);
             let queued = s.queue.contains(p) || s.running.as_deref() == Some(p.as_path());
             if !queued && s.fresh(p).is_none() {
                 s.queue.push_back(p.clone());
@@ -211,6 +236,13 @@ pub(crate) fn reading_text() -> Option<String> {
 mod tests {
     use super::*;
 
+    /// The cache is global, so a test that fills it must not run beside one
+    /// that expects its own entries to stay.
+    fn one_at_a_time() -> MutexGuard<'static, ()> {
+        static TESTS: Mutex<()> = Mutex::new(());
+        TESTS.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     fn step_text(a: f64, b: f64, c: f64) -> String {
         format!(
             "ISO-10303-21;\nHEADER;\nFILE_NAME('X-1','2000-01-01T00:00:00',('A'),('M'),'','','');\nENDSEC;\nDATA;\n#9=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.MILLI.,.METRE.));\n#1=CARTESIAN_POINT('',(0.,0.,0.));\n#2=CARTESIAN_POINT('',({a},{b},{c}));\n#7=PRODUCT('X-1','X-1','NOT SPECIFIED',(#8));\nENDSEC;\nEND-ISO-10303-21;\n"
@@ -230,6 +262,7 @@ mod tests {
 
     #[test]
     fn files_are_read_on_the_worker_and_then_answered_from_the_cache() {
+        let _one = one_at_a_time();
         let dir = tempfile::tempdir().unwrap();
         let paths: Vec<PathBuf> = (0..30)
             .map(|i| {
@@ -262,6 +295,7 @@ mod tests {
 
     #[test]
     fn asking_for_a_large_file_returns_at_once_and_the_file_is_read_later() {
+        let _one = one_at_a_time();
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("BIG-1.stp");
         let mut text = step_text(10.0, 20.0, 30.0);
@@ -288,6 +322,7 @@ mod tests {
 
     #[test]
     fn a_file_that_changed_is_read_again() {
+        let _one = one_at_a_time();
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("X-1.stp");
         std::fs::write(&path, step_text(10.0, 20.0, 30.0)).unwrap();
@@ -304,6 +339,7 @@ mod tests {
 
     #[test]
     fn a_missing_file_still_answers_from_its_name() {
+        let _one = one_at_a_time();
         let path = PathBuf::from("/no/such/dir/MCADPP0003371_3D.stp");
         prefetch(std::slice::from_ref(&path), None);
         wait_until_ready(std::slice::from_ref(&path));
@@ -319,5 +355,60 @@ mod tests {
         }
         assert_eq!(s.done.len(), MAX_ENTRIES);
         assert!(!s.done.contains_key(Path::new("/x/0.stp")));
+    }
+
+    #[test]
+    fn a_batch_larger_than_the_cache_is_still_read_whole() {
+        let _one = one_at_a_time();
+        let dir = tempfile::tempdir().unwrap();
+        let paths: Vec<PathBuf> = (0..MAX_ENTRIES + 100)
+            .map(|i| {
+                let p = dir.path().join(format!("BIG-{i}.stp"));
+                std::fs::write(&p, step_text(10.0 + (i % 50) as f64, 20.0, 30.0)).unwrap();
+                p
+            })
+            .collect();
+        // The window asks for its waiting files every frame until all are read.
+        let started = Instant::now();
+        loop {
+            prefetch(&paths, None);
+            if ready(&paths) {
+                break;
+            }
+            assert!(
+                started.elapsed() < Duration::from_secs(30),
+                "{} files were never all read",
+                paths.len()
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    #[test]
+    fn files_that_are_still_wanted_are_not_forgotten() {
+        let mut s = State::default();
+        let wanted: Vec<PathBuf> = (0..MAX_ENTRIES + 5)
+            .map(|i| PathBuf::from(format!("/w/{i}.stp")))
+            .collect();
+        for p in &wanted {
+            s.asked.insert(p.clone(), Instant::now());
+        }
+        for p in &wanted {
+            s.store(p, stamp_of(p), CadIdentity::from_file_name("x.stp"));
+        }
+        assert_eq!(
+            s.done.len(),
+            wanted.len(),
+            "nothing asked for just now goes"
+        );
+        // Once they have not been asked for a while, the oldest go.
+        s.asked.clear();
+        let extra = PathBuf::from("/w/extra.stp");
+        s.store(
+            &extra,
+            stamp_of(&extra),
+            CadIdentity::from_file_name("x.stp"),
+        );
+        assert_eq!(s.done.len(), MAX_ENTRIES);
     }
 }
