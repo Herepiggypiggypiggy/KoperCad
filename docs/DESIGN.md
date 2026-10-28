@@ -201,15 +201,22 @@ Revision fields come from the project's revisions, which also drive
 Changes mode and the pinned-flow freeze (§8). Owners: WS-03 draws the frame (`PageScene::frame`), WS-10 owns
 the reference format, and the frame choice is a rule like any other.
 
-**Saving.** There are no save prompts and no Save step to remember. A named
-project is written into its own `.novo` file continuously, about half a
-second after each change and on close, so reopening shows exactly what was
-left. An untitled project closed with work in it is kept in
+**Saving.** The project file changes only when you save (Ctrl+S). While
+you work, a recovery copy of the unsaved changes is written to
+`%LOCALAPPDATA%\KoperCAD\recovery` every autosave interval (30 s by
+default; Preferences), never to the project file, so an experiment can
+always be thrown away. The top bar says "Unsaved changes" while the file and
+the screen differ. Closing the project, opening another, starting a new
+one or quitting (menu, Ctrl+Q or the window's close button) with unsaved
+changes asks "Save changes?": Save, Don't save (drops the changes and their
+recovery copy) or Cancel. After a crash or a kill the recovery copy is offered
+back the next time the project is opened ("Restore unsaved work?": Restore
+or Discard). An untitled project closed with work in it (without an answer) is kept in
 `%LOCALAPPDATA%\NovoElectric\Unsaved` and offered back (under Unsaved with
 Recent, and reopened at start-up if it was the last one open); naming it
 moves it to `<Documents>\NovoElectric\<name>.novo`. The
-deliberate checkpoints are revisions (§7, §8), not Save. Ctrl+S
-names an untitled project and otherwise only confirms Saved; Ctrl+Shift+S
+deliberate checkpoints are revisions (§7, §8). Ctrl+S
+names an untitled project; Ctrl+Shift+S
 saves a copy under a new name and keeps working in the original.
 
 **Start-up.** The app opens the last project where it was left: same page
@@ -1250,7 +1257,7 @@ Principles:
 6. Every command is in the command surface and pickable without syntax.
 7. Problems and proposals are marked where they are, before they become
    problems.
-8. One gesture, one undo step; no save prompts.
+8. One gesture, one undo step; the file changes only at Save and a close with unsaved changes asks first.
 9. Plain names; no family of navigators.
 10. Live everywhere: a 50-page project opens in under 2 seconds and
     generated pages update within a second.
