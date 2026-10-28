@@ -110,12 +110,23 @@ pub fn step_soup(
     opts: &StepOptions,
     cancel: &AtomicBool,
 ) -> Result<(Soup, StepStats), BuildError> {
+    step_soup_checked(text, opts, cancel).map(|(soup, stats, _)| (soup, stats))
+}
+
+/// As [`step_soup`], also saying whether a length unit was declared but
+/// could not be read (millimetres were assumed then).
+pub fn step_soup_checked(
+    text: &str,
+    opts: &StepOptions,
+    cancel: &AtomicBool,
+) -> Result<(Soup, StepStats, bool), BuildError> {
     let file = StepFile::parse(text)?;
     let mut reader = Reader::new(&file, opts.chord_tol_mm);
     let placed = placed_solids(&file, &reader, opts);
     if placed.is_empty() {
         return Err(BuildError::NoGeometry);
     }
+    let unit_unknown = reader.unit_unknown;
     let mut stats = StepStats::default();
     let mut soups: HashMap<u32, Soup> = HashMap::new();
     let mut total = Soup::default();
@@ -138,7 +149,7 @@ pub fn step_soup(
     if total.tris.is_empty() {
         return Err(BuildError::NoGeometry);
     }
-    Ok((total, stats))
+    Ok((total, stats, unit_unknown))
 }
 
 /// Solids with the transform that places each use, in millimetres.
@@ -796,6 +807,35 @@ ENDSEC;\nEND-ISO-10303-21;"
         let inch = "#91=LENGTH_MEASURE_WITH_UNIT(LENGTH_MEASURE(25.4),#92);\n#92=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.MILLI.,.METRE.));\n#90=(CONVERSION_BASED_UNIT('INCH',#91)LENGTH_UNIT()NAMED_UNIT(*));";
         let b = super::super::measure_step(&block_step(inch)).unwrap();
         assert!((b.size_mm[1] - 508.0).abs() < 1e-3, "{:?}", b.size_mm);
+    }
+
+    #[test]
+    fn an_unreadable_unit_is_not_taken_for_millimetres() {
+        let nan = "#90=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.FURLONG.,.METRE.));";
+        let err = super::super::measure_step(&block_step(nan)).unwrap_err();
+        assert!(err.contains("unit"), "{err}");
+    }
+
+    #[test]
+    fn absurd_extents_are_refused() {
+        // A unit factor of 1e300 makes a 10 mm block 1e301 mm.
+        let big = "#91=LENGTH_MEASURE_WITH_UNIT(LENGTH_MEASURE(1.E300),#92);\n#92=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.MILLI.,.METRE.));\n#90=(CONVERSION_BASED_UNIT('BIG',#91)LENGTH_UNIT()NAMED_UNIT(*));";
+        assert!(super::super::measure_step(&block_step(big)).is_err());
+        // Coordinates near the f64 limit.
+        let t = block_step(MM).replace("(10.,20.,30.)", "(1.E308,20.,30.)");
+        assert!(super::super::measure_step(&t).is_err());
+        // Just over 100 m: too big for a part.
+        let m = "#90=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT($,.METRE.));";
+        let t = block_step(m).replace("(10.,20.,30.)", "(200.,20.,30.)");
+        assert!(super::super::measure_step(&t).is_err());
+    }
+
+    #[test]
+    fn a_file_over_the_size_limit_is_not_parsed() {
+        let mut t = block_step(MM);
+        t.push_str(&" ".repeat(super::super::MAX_STEP_BYTES));
+        let err = super::super::measure_step(&t).unwrap_err();
+        assert!(err.contains("too large"), "{err}");
     }
 
     #[test]

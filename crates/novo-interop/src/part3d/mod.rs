@@ -55,6 +55,9 @@ pub const DEFAULT_BOX_MM: [f64; 3] = [18.0, 90.0, 60.0];
 /// Larger STEP files are not read for a preview (bytes).
 pub const MAX_STEP_BYTES: usize = 96 * 1024 * 1024;
 
+/// Largest extent [`measure_step`] accepts, in millimetres (100 m).
+const MAX_PART_EXTENT_MM: f64 = 1e5;
+
 /// Size of a part from the geometry of its solids, for the catalog: the
 /// box around the tessellated solids in millimetres, with units and the
 /// placements of assemblies applied. Construction geometry (axes, sketch
@@ -62,14 +65,24 @@ pub const MAX_STEP_BYTES: usize = 96 * 1024 * 1024;
 /// `novo_parts::step_box` it does not inflate the size. The axes are the
 /// model's. `Err` is a reason in plain words.
 pub fn measure_step(text: &str) -> Result<novo_parts::StepBox, String> {
+    if text.len() > MAX_STEP_BYTES {
+        return Err("the STEP file is too large to measure".into());
+    }
     let opts = StepOptions {
         // Only the extent matters: a coarse chord is enough and fast.
         chord_tol_mm: 0.5,
         deadline: Some(Instant::now() + std::time::Duration::from_secs(20)),
         ..StepOptions::default()
     };
-    let (soup, _) =
-        build::step_soup(text, &opts, &AtomicBool::new(false)).map_err(|e| e.to_string())?;
+    // Garbage coordinates (1e308) can trip the triangulator; a bad file must
+    // end in a message, not in a crash of the import.
+    let built =
+        std::panic::catch_unwind(|| build::step_soup_checked(text, &opts, &AtomicBool::new(false)))
+            .map_err(|_| "the STEP file has geometry that cannot be measured".to_owned())?;
+    let (soup, _, unit_unknown) = built.map_err(|e| e.to_string())?;
+    if unit_unknown {
+        return Err("the STEP file uses a length unit KoperCAD does not know".into());
+    }
     let mut used = vec![false; soup.pos.len()];
     for t in &soup.tris {
         for &i in t {
@@ -89,8 +102,19 @@ pub fn measure_step(text: &str) -> Result<novo_parts::StepBox, String> {
     if n == 0 || (0..3).any(|k| !(hi[k] - lo[k]).is_finite()) {
         return Err("the solids have no measurable extent".into());
     }
+    let size_mm = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+    // A part is not 100 m long: a wrong unit or garbage coordinates.
+    if size_mm
+        .iter()
+        .any(|s| !s.is_finite() || *s > MAX_PART_EXTENT_MM)
+    {
+        return Err(format!(
+            "the measured size is not plausible for a part ({:.3e} mm)",
+            size_mm.iter().fold(0.0_f64, |a, &b| a.max(b))
+        ));
+    }
     Ok(novo_parts::StepBox {
-        size_mm: [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]],
+        size_mm,
         points: n,
         from_solid: true,
     })
