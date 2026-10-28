@@ -14,7 +14,7 @@ Plan: `docs/design/drive-crane-simulation.md`, validation cases 1-21. Tests:
   the `todo!`, removes the ignore and keeps the hand value.
 - All values are generic. No manufacturer data and no customer data are used.
 - Conventions chosen here that a lane must follow or argue against in its PR: slip speed is
-  constant in the constant-flux region (case 1); the brake holding check does not credit
+  constant in the constant-flux region (case 1, a model convention that neglects the stator drop at 5-10 Hz); the brake holding check does not credit
   gear efficiency (case 5); the brake-drop case includes the motor rotor inertia reflected
   through the gearbox (case 6); I2t is the integral of `(I/In)^2 - 1` with the entered
   150 % / 60 s point as the one exact value (case 10).
@@ -64,7 +64,7 @@ Details sit in the test comments; the main derivations:
 
 - Case 4: `T_max = 3 V_th^2 / (2 w_s (R_th + sqrt(R_th^2 + (X_th + X2)^2)))`, with
   `Z_th = jXm (R1 + jX1) / (R1 + j(X1 + Xm))` and `V_th = V jXm / (R1 + j(X1 + Xm))`. With R1 = 0
-  every term scales with f at constant V/f, so `T_max` is 241.027 N m at 5, 25 and 50 Hz.
+  every term scales with f at constant V/f, so the closed form (the unrestricted maximum) is 241.027 N m. It is reachable only where the peak slip is <= 1: 25 and 50 Hz yes (0.36, 0.18); at 5 Hz the peak slip is 1.78, so the motoring maximum is the standstill torque 205.980 N m.
 - Case 6: reflected inertia as mass `J (i/r)^2 = 0.5 * 157.5^2 = 12403 kg`, so
   `a = g m / (m + J_ref) = 2.8175 m/s^2` and the drop is `0.5 a t^2`.
 - Case 13: stage time `t = J (w2 - w1) / (T_motor - T_load)` with `J = 0.70156 kg m^2`

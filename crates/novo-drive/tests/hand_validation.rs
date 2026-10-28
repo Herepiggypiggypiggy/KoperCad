@@ -90,6 +90,7 @@ fn case01_pole_change_pair_speeds() {
 #[test]
 #[ignore = "L2b: motor at frequency must offer rated_rpm_at(frequency_hz) (constant slip speed convention)"]
 fn case01_slip_speed_constant_in_constant_flux_region() {
+    // Model convention (neglects the stator drop, so it is least exact at 5-10 Hz).
     // Nameplate 4 pole, 50 Hz, 1450 rpm: slip speed 1500 - 1450 = 50 rpm. At constant V/f and
     // constant torque the slip speed is constant (slip frequency fixed by torque / flux^2), so
     // at 25 Hz: 750 - 50 = 700 rpm. Scaling the slip FRACTION (3.33 %) would give 725 rpm and
@@ -255,9 +256,11 @@ fn breakdown_torque(f: f64, vf_factor: f64, r1: f64) -> f64 {
 #[test]
 fn oracle_case04_breakdown_scaling() {
     // Generic motor: 400 V star, 4 pole, R1 0.45, X1 0.9, Xm 25, R2' 0.35, X2' 1.1 ohm at 50 Hz.
-    // R1 = 0: breakdown torque is the same at every frequency when V/f is constant (all of V,
-    // X and w_s scale with f): 241.027 N m.
-    for f in [5.0, 25.0, 50.0] {
+    // R1 = 0: the closed form is the unrestricted maximum and every term scales with f at
+    // constant V/f, so it is 241.027 N m wherever the peak slip is <= 1 (25 and 50 Hz: peak slip
+    // 0.36 and 0.18). At 5 Hz the peak sits at slip 1.78 (> 1, not reachable when motoring), so the
+    // motoring maximum is the standstill torque T(s = 1) = 205.980 N m instead.
+    for f in [25.0, 50.0] {
         close(
             breakdown_torque(f, 1.0, 0.0),
             241.026_809,
@@ -265,6 +268,10 @@ fn oracle_case04_breakdown_scaling() {
             &format!("R1=0 at {f} Hz"),
         );
     }
+    assert!(
+        breakdown_torque(5.0, 1.0, 0.0) > 241.0,
+        "closed form is the unrestricted maximum"
+    );
     // V/f lowered to 80 %: torque goes as 0.8^2 = 0.64 exactly.
     close(
         breakdown_torque(50.0, 0.8, 0.45) / breakdown_torque(50.0, 1.0, 0.45),
