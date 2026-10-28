@@ -3513,6 +3513,85 @@ mod tests {
     }
 
     #[test]
+    fn a_file_cut_at_any_point_is_recovered_or_refused_in_words() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let mut app = storage_app();
+        app.run(&themed_ctx(), Action::NewProject);
+        {
+            let page = app.current_page.unwrap();
+            let mut open = OpenPage::new(&mut *app.backend, page).unwrap();
+            for n in 2..=60 {
+                open.transact("Add page", |tx| tx.add_page(n.to_string()))
+                    .unwrap();
+            }
+        }
+        assert!(app.save_to(&path));
+        app.run(&themed_ctx(), Action::CloseProject);
+        let bytes = std::fs::read(&path).unwrap();
+        for percent in [10, 25, 50, 75, 90] {
+            let cut = &bytes[..bytes.len() * percent / 100];
+            std::fs::write(&path, cut).unwrap();
+            let mut reopened = storage_app();
+            reopened.open_path(&path);
+            let said = reopened
+                .messages()
+                .iter()
+                .map(|m| m.text.clone())
+                .collect::<Vec<_>>()
+                .join(" | ");
+            assert!(
+                reopened.is_open() || !said.is_empty(),
+                "{percent}%: neither opened nor explained"
+            );
+            if reopened.is_open() {
+                assert!(said.contains("damaged"), "{percent}%: {said}");
+            }
+            assert_eq!(std::fs::read(&path).unwrap(), cut, "{percent}%: untouched");
+        }
+    }
+
+    #[test]
+    fn saving_into_a_missing_folder_or_over_a_directory_says_why() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = storage_app();
+        app.run(&themed_ctx(), Action::NewProject);
+        for target in [
+            dir.path().join("no-such-folder").join("plant.kopercad"),
+            dir.path().to_owned(),
+        ] {
+            let before = app.messages().len();
+            assert!(!app.save_to(&target), "{}", target.display());
+            let last = app.messages().last().expect("an error is shown");
+            assert!(app.messages().len() > before);
+            assert_eq!(last.level, Level::Error);
+            assert!(!last.text.is_empty());
+        }
+        assert!(app.is_dirty() || app.is_open());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn saving_into_a_read_only_folder_says_why() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let locked = dir.path().join("locked");
+        std::fs::create_dir(&locked).unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+        // A superuser ignores the mode: only meaningful when writing fails.
+        if std::fs::write(locked.join("probe"), b"x").is_ok() {
+            return;
+        }
+        let mut app = storage_app();
+        app.run(&themed_ctx(), Action::NewProject);
+        assert!(!app.save_to(&locked.join("plant.kopercad")));
+        let last = app.messages().last().expect("an error is shown");
+        assert_eq!(last.level, Level::Error);
+        assert!(!locked.join("plant.kopercad").exists());
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[test]
     fn a_crash_offers_the_unsaved_work_back() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("plant.novo");
