@@ -1,0 +1,15 @@
+@title F2 rename selects the old tag, so typing replaces it (1920 layout)
+@area Schematic
+@sizes 1920x1080
+# The same check at 1920x1080, where the page sits elsewhere (the -K1 contacts are at 585 312).
+click_text "Open example"
+wait 20
+click 585 312
+wait 8
+key F2
+wait 8
+text K99
+wait 6
+shot f2-typed
+expect_not "K1K99"
+expect "K99"
