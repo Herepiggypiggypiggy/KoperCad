@@ -69,7 +69,7 @@ Your work is in `Documents\KoperCAD`, settings in `%APPDATA%\KoperCAD`, recovery
 - In the New cabinet dialog, Ctrl+K and typed words go into the Name field.
 - A price written "1.500" or "1,500" is read as 1.5 with a warning.
 - rc9 had a few more small problems (Delete off the page ignored without a message, F2 rename appending to the old tag, Ctrl+N from 3D, Ctrl+K "wire numbers" opening a lesson, clipped Commissioning counters, hot-spot cards on an empty cabinet); they are fixed in rc10 and later. Edits now reach the file only at Save, and KoperCAD asks "Save changes?" before closing.
-- Two crashes found on your own PCs are fixed but unproven: moving the window between a mirrored portrait monitor and another, and the Intel laptop start-up. Use **KoperCAD (safe graphics)** if the window does not appear, and tell us.
+- The mirrored-monitor crash (moving the window between a mirrored portrait monitor and another) is fixed in rc11 but unproven until you try it. The Intel laptop start-up crash is **not** fixed in rc11: if the window does not appear, use **KoperCAD (safe graphics)** and tell us.
 
 ## 5. What to treat as a model, not a fact
 
