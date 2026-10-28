@@ -1,6 +1,6 @@
 # Learning suite: handoff
 
-Code: `crates/novo-app/src/app/learn_suite.rs` (window and cards), `learn_ui.rs` (the lesson card), state in `learn.rs` (`only_path`, `only_track`, `level`, `window_drawn`, `hidden`), words in `assets/lessons/ui.toml`. QA scenarios `qa/scenarios/21-learning-suite.qa` (dark and light) and `280` to `283` (navigation), at 1366x768 and 1920x1080.
+Code: `crates/novo-app/src/app/learn_suite.rs` (window and cards), `learn_ui.rs` (the lesson card), state in `learn.rs` (`only_path`, `only_track`, `level`, `window_drawn`, `hidden`), words in `assets/lessons/ui.toml`. QA scenarios `qa/scenarios/21-learning-suite.qa` (dark and light) and `280` to `285` (navigation), at 1366x768 and 1920x1080.
 Selecting what to show: neither `only_path` nor `only_track` is Home. Search or a level chip switches the main area to a flat result list inside the current section.
 
 Navigation model (2026-10-28, branch `claude/project-thread-qzx9qs`):
