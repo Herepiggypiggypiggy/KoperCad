@@ -12,6 +12,7 @@ repository = "https://github.com/Herepiggypiggypiggy/kopercad"
 # Every roadmap crate is registered here once, in alphabetical order, so a
 # pull request that adds a crate never edits these lines (cargo ignores a
 # path entry until some crate uses it). Add external crates below.
+novo-addons = { path = "crates/novo-addons" }
 novo-ai = { path = "crates/novo-ai" }
 novo-app = { path = "crates/novo-app" }
 novo-cables = { path = "crates/novo-cables" }
