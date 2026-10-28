@@ -148,9 +148,13 @@ impl NovoApp {
             if scrolls {
                 egui::ScrollArea::vertical()
                     .max_height(room)
-                    .show(ui, |ui| self.menu_rows(ui, &items));
+                    .show(ui, |ui| {
+                        self.menu_rows(ui, &items);
+                        self.addon_menu_rows(ui, menu);
+                    });
             } else {
                 self.menu_rows(ui, &items);
+                self.addon_menu_rows(ui, menu);
             }
         });
         self.anchor(&format!("menu.{menu}"), response.response.rect, menu);
@@ -284,6 +288,10 @@ impl NovoApp {
         let mut button = egui::Button::new(self.command_label(info));
         if let Some(keys) = self.command_shortcut_text(ui.ctx(), info.id) {
             button = button.shortcut_text(keys);
+        }
+        // A switch of the 3D view shows its one value, as its button does.
+        if let Some(option) = super::view3d_options::ViewOption::from_command(info.id) {
+            button = button.selected(self.view3d_option(option));
         }
         let response = ui.add_enabled(reason.is_none(), button);
         self.anchor(&format!("cmd.{}", info.id), response.rect, info.label);

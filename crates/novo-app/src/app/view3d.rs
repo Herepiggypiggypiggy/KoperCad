@@ -34,6 +34,7 @@ use super::view3d_hints::Hints;
 use super::view3d_measure::{self, Measure};
 use super::view3d_move::{self, MoveState};
 use super::view3d_nudge::{self, Fields, Step};
+use super::view3d_options;
 use super::view3d_place::{self, PlaceList};
 use super::view3d_rail;
 use super::view3d_runs::{self, Undrawn};
@@ -590,13 +591,17 @@ impl NovoApp {
                 heat.sync_live(project, id, ambient, moving, now, ui.ctx());
             }
         }
-        let solution = self.cabinet.heat.solution();
+        // One switch for the heat view (the Heat option, shared with the
+        // Cabinet): off hides the strip, the picture, the labels and the
+        // panels, whatever result is held.
+        let heat_on = self.cabinet.heat.on;
+        let solution = self.cabinet.heat.solution().filter(|_| heat_on);
         // Kept where the window has the room for it: the 1280 x 688 window
         // the compact toolbar is made for (see `view3d_controls`) is one of
         // them, so the cabinet is already at its final size before the first
         // result arrives.
         if solution.is_none()
-            && mode.controls.heat_panel
+            && heat_on
             && ui.ctx().content_rect().height() >= MIN_STRIP_ROOM_WINDOW
         {
             heat_strip_placeholder(ui);
@@ -740,8 +745,7 @@ impl NovoApp {
             }
             _ => Vec::new(),
         };
-        let show_openings = !vent_specs.is_empty()
-            && (mode.controls.heat_panel || solution.is_some() || previewing);
+        let show_openings = !vent_specs.is_empty() && (heat_on || previewing);
         let markers = match (&vent_enclosure, show_openings) {
             (Some(e), true) => heat_openings::markers(
                 &vent_specs,
@@ -895,7 +899,6 @@ impl NovoApp {
             }
         }
         let dark = ui.visuals().dark_mode;
-        mode.emc.on = mode.controls.emc;
         ghost_changed |= mode.emc.sync(project, id, revision, scene, dark);
         let mut heat_changed = false;
         if !mode.probe.on {
@@ -1065,8 +1068,7 @@ impl NovoApp {
         mode.view.state.display.ssao = mode.controls.ssao;
         mode.view.state.display.dimensions = mode.controls.dimensions;
         // The choice lives in the settings, so it survives a restart.
-        mode.controls.trackpad_pans = self.settings.trackpad_pans;
-        mode.view.state.display.trackpad_pans = mode.controls.trackpad_pans;
+        mode.view.state.display.trackpad_pans = self.settings.trackpad_pans;
         mode.view.state.display.missing_marks = mode.controls.missing_data;
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
@@ -1075,18 +1077,34 @@ impl NovoApp {
         mode.controls.models_text = mode.models.counts().text();
         mode.controls.reduced = mode.view.stepped_down().is_some() || mode.view.occlusion_paused();
         let was_measuring = mode.measure.on;
+        // Every switch of the toolbar edits a snapshot of the registry; what
+        // changed is written to the option's owner after it is drawn.
+        let before =
+            view3d_options::snapshot(mode, &self.cabinet.heat, self.settings.trackpad_pans);
+        let mut values = before.clone();
         let (changed, asked) = view3d_controls::toolbar(
             ui.ctx(),
             view_rect,
             &mut mode.controls,
-            &mut mode.measure.on,
+            &mut values,
             limit,
             &self.settings.camera_views,
             !mode.view.state.selection.is_empty(),
             &mut mode.view.state.section,
             &|| mode.built.as_ref().map(|(_, _, scene)| scene.bounds()),
         );
-        self.settings.trackpad_pans = mode.controls.trackpad_pans;
+        let mut owners = view3d_options::Owners {
+            controls: &mut mode.controls,
+            emc: &mut mode.emc,
+            wire_runs: &mut mode.wire_runs,
+            measure: &mut mode.measure,
+            section: &mut mode.view.state.section,
+            heat: &mut self.cabinet.heat,
+            trackpad_pans: &mut self.settings.trackpad_pans,
+        };
+        for (option, on) in before.changes(&values) {
+            owners.write(option, on);
+        }
         // The fit frames the cabinet above the strip; turning Build order on
         // or off refits once so the plate is not under it.
         let stripped = mode.controls.assembly.is_some() || mode.controls.wire_it.is_some();
@@ -1201,7 +1219,7 @@ impl NovoApp {
                         super::heat_sweep::add_pair(&mut heat.settings, &c);
                         heat.advice.set_added(super::heat_sweep::added_text(&c));
                         heat.advice.record_added(&c, &heat.settings.vents);
-                        mode.controls.heat_panel = true;
+                        heat.on = true;
                     }
                     None => {}
                 }
@@ -1249,7 +1267,7 @@ impl NovoApp {
             );
             return;
         }
-        if mode.controls.heat_panel {
+        if heat_on {
             let tag_of = |raw: u64| {
                 project
                     .get::<Device>(DeviceId::from(raw))
@@ -1353,7 +1371,7 @@ impl NovoApp {
             &Look::for_theme(theme),
             options,
         );
-        super::cabinet_bar::note_rect(ui.ctx(), "workspace.view3d", "3D canvas", out.rect, false);
+        super::cabinet_bar::note_rect_in(ui, "workspace.view3d", "3D canvas", out.rect, false);
         // A save asked for from another workspace waits for the first shown
         // (and fitted) camera.
         if mode.save_view && mode.view.is_fitted() {
@@ -1403,39 +1421,38 @@ impl NovoApp {
                 }
             }
         }
-        if mode.emc.on {
-            if let Some(pic) = mode.emc.picture().cloned() {
-                if mode.emc.layers.spots
-                    && let Some(h) = super::emc_view::paint_badges(
-                        ui,
-                        &mode.view,
-                        out.rect,
-                        scene,
-                        &pic,
-                        mode.emc.selected,
-                        dark,
-                    )
-                {
-                    mode.emc.selected = (mode.emc.selected != Some(h)).then_some(h);
-                }
-                let tag_of = |raw: u64| {
-                    project
-                        .get::<Device>(DeviceId::from(raw))
-                        .and_then(|d| d.tag.device_code().map(|c| format!("-{c}")))
-                        .unwrap_or_else(|| format!("device {raw}"))
-                };
-                super::emc_view::panel(
-                    ui.ctx(),
-                    view_rect,
-                    super::view3d_heat::CUBE_SIZE + 20.0,
-                    &mut mode.emc,
-                    &tag_of,
-                );
-                // The lesson anchors are the plate's; the 3D panel has none.
-                mode.emc.marks.clear();
-                super::emc_view::legend(ui.ctx(), view_rect, &mode.emc, dark);
+        if mode.emc.on
+            && let Some(pic) = mode.emc.picture().cloned()
+        {
+            if mode.emc.layers.spots
+                && let Some(h) = super::emc_view::paint_badges(
+                    ui,
+                    &mode.view,
+                    out.rect,
+                    scene,
+                    &pic,
+                    mode.emc.selected,
+                    dark,
+                )
+            {
+                mode.emc.selected = (mode.emc.selected != Some(h)).then_some(h);
             }
-            mode.controls.emc = mode.emc.on;
+            let tag_of = |raw: u64| {
+                project
+                    .get::<Device>(DeviceId::from(raw))
+                    .and_then(|d| d.tag.device_code().map(|c| format!("-{c}")))
+                    .unwrap_or_else(|| format!("device {raw}"))
+            };
+            super::emc_view::panel(
+                ui.ctx(),
+                view_rect,
+                super::view3d_heat::CUBE_SIZE + 20.0,
+                &mut mode.emc,
+                &tag_of,
+            );
+            // The lesson anchors are the plate's; the 3D panel has none.
+            mode.emc.marks.clear();
+            super::emc_view::legend(ui.ctx(), view_rect, &mode.emc, dark);
         }
         if mode.heat.labels
             && let Some(sol) = &solution
@@ -1564,7 +1581,7 @@ impl NovoApp {
             let asked = view3d_runs::panel(
                 ui.ctx(),
                 out.rect,
-                mode.controls.heat_panel,
+                heat_on,
                 list,
                 &chosen,
                 &in_ducts,
@@ -2117,14 +2134,15 @@ fn heat_controls(
             .arrows
             .then(|| super::heat_arrows::top_speed(&sol.snapshot, h.axis, h.slice_at));
         ui.checkbox(&mut h.cloud, "Cloud").on_hover_text(
-            "The whole cabinet volume as see-through layers coloured by air temperature; air near ambient is invisible, hotter air is more opaque. Layers are cut across the direction you look along, so turning the view across the cabinet re-cuts them",
+            "The whole cabinet volume as see-through layers coloured by air temperature; air at ambient is invisible, and opacity rises from ambient to the hot end of the air (not the devices), so a few kelvin of difference show. Strength and Contrast are the two sliders. Layers are cut across the direction you look along, so turning the view across the cabinet re-cuts them",
         );
         if h.cloud {
-            ui.add(
-                egui::Slider::new(&mut h.cloud_opacity, 0.1..=1.0)
-                    .show_value(false),
-            )
-            .on_hover_text("How solid the cloud looks");
+            ui.add(egui::Slider::new(&mut h.cloud_opacity, 0.1..=1.0).show_value(false))
+                .on_hover_text("Strength: how solid the cloud looks. The right end is the strongest it gets");
+            ui.add(egui::Slider::new(&mut h.cloud_contrast, 0.0..=1.0).show_value(false))
+                .on_hover_text(
+                    "Contrast: higher lifts slightly warm air so small differences show; lower keeps only the hottest air visible. Colours still follow the scale",
+                );
             ui.add(
                 egui::DragValue::new(&mut h.cloud_layers)
                     .range(heat_cloud::LAYERS_RANGE)
@@ -2164,7 +2182,11 @@ fn heat_controls(
             };
             ui.label(egui::RichText::new(text).small());
         }
-        heat_legend::strip(ui, h, range, top_speed, top_flux);
+        let cloud_range = novo_heatview::range::Range {
+            lo: range.lo,
+            hi: heat_cloud::air_hot_end(&sol.snapshot, range.lo),
+        };
+        heat_legend::strip(ui, h, range, cloud_range, top_speed, top_flux);
             });
         });
     jump

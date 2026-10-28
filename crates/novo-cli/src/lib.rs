@@ -23,6 +23,7 @@ use novo_revisions::{Comparison, FieldChange, Side, group_of};
 use novo_storage::ProjectFile;
 use serde_json::{Value, json};
 
+mod addons;
 mod eplan;
 mod macros;
 mod parts;
@@ -65,6 +66,10 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Cmd {
+    /// Add-ons: list, inspect, install, turn on and off, remove, roll back, and pack a folder
+    /// into a `.kcaddon`.
+    #[command(subcommand)]
+    Addons(addons::Addons),
     /// The macro library: list, export, import, install the starter set.
     #[command(subcommand)]
     Macros(macros::Macros),
@@ -535,6 +540,7 @@ fn manual(dir: &Path, images: Option<&Path>, out: &mut dyn Write) -> Result<i32,
 
 fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
     match command {
+        Cmd::Addons(cmd) => addons::run(cmd, out),
         Cmd::Macros(cmd) => macros::run(cmd, out),
         Cmd::Eplan(cmd) => eplan::run(cmd, out),
         Cmd::TestUser(opts) => testuser::run(opts, out),

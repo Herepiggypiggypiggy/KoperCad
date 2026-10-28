@@ -1,0 +1,27 @@
+[[widget]]
+kind = "heading"
+text = "Demo status"
+
+[[widget]]
+kind = "label"
+text = "This panel is described by the add-on and drawn by KoperCAD in its own look."
+weak = true
+
+[[widget]]
+kind = "separator"
+
+[[widget]]
+kind = "row"
+widgets = [
+  { kind = "lamp", id = "power", text = "Power", state = "ok", lit = true },
+  { kind = "lamp", id = "fault", text = "Fault", state = "error", lit = false },
+  { kind = "lamp", id = "warn", text = "Check", state = "warn", lit = true },
+  { kind = "lamp", id = "new", text = "New in 0.2", state = "info", lit = true },
+]
+
+[[widget]]
+kind = "row"
+widgets = [
+  { kind = "button", id = "start", text = "Start", hint = "Does nothing: this demo add-on has no engine" },
+  { kind = "button", id = "stop", text = "Stop" },
+]

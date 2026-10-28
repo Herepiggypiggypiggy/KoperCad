@@ -391,7 +391,9 @@
       "parts": [
         76
       ],
-      "properties": {}
+      "properties": {
+        "mounting_site": "plate"
+      }
     },
     {
       "id": 16,
@@ -401,7 +403,9 @@
       "parts": [
         77
       ],
-      "properties": {}
+      "properties": {
+        "mounting_site": "plate"
+      }
     },
     {
       "id": 90,

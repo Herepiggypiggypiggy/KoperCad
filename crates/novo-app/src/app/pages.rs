@@ -150,6 +150,38 @@ pub(super) fn order_after_drop(
     (order != siblings).then_some(order)
 }
 
+/// The order of `siblings` after the `dragged` pages, which keep their
+/// reading order among themselves, are dropped as a block on the upper or
+/// lower half of `target`. `None` when nothing would move: the target is one
+/// of the dragged pages, the target is not a sibling, no dragged page is a
+/// sibling, or the order stays.
+pub(super) fn order_after_group_drop(
+    siblings: &[PageId],
+    dragged: &[PageId],
+    target: PageId,
+    after: bool,
+) -> Option<Vec<PageId>> {
+    if dragged.contains(&target) || !siblings.contains(&target) {
+        return None;
+    }
+    let block: Vec<PageId> = siblings
+        .iter()
+        .copied()
+        .filter(|p| dragged.contains(p))
+        .collect();
+    if block.is_empty() {
+        return None;
+    }
+    let mut order: Vec<PageId> = siblings
+        .iter()
+        .copied()
+        .filter(|p| !dragged.contains(p))
+        .collect();
+    let at = order.iter().position(|p| *p == target)? + usize::from(after);
+    order.splice(at..at, block);
+    (order != siblings).then_some(order)
+}
+
 /// The order after moving `page` one place up or down among `siblings`;
 /// `None` at either end.
 pub(super) fn order_after_step(
@@ -491,6 +523,47 @@ mod tests {
         let order = order_after_drop(&ids, d, a, false).unwrap();
         doc.execute(Command::ReorderPages { pages: order }).unwrap();
         assert_eq!(doc.project().sibling_pages(a), [d, a, b, c]);
+        doc.undo().unwrap();
+        assert_eq!(doc.project().sibling_pages(a), ids);
+    }
+
+    #[test]
+    fn a_group_drop_moves_the_block_in_reading_order_and_nothing_else() {
+        let mut doc = Document::default();
+        let mut form = PageForm::new("20D41", "BAY1G1");
+        form.count = 5;
+        run(&mut doc, &form).unwrap();
+        let first = doc.project().pages_in_order()[0].id;
+        let ids = doc.project().sibling_pages(first);
+        let (a, b, c, d, e) = (ids[0], ids[1], ids[2], ids[3], ids[4]);
+
+        // The block keeps its own order whatever order it was picked in.
+        assert_eq!(
+            order_after_group_drop(&ids, &[d, b], a, false),
+            Some(vec![b, d, a, c, e])
+        );
+        assert_eq!(
+            order_after_group_drop(&ids, &[a, b], e, true),
+            Some(vec![c, d, e, a, b])
+        );
+        assert_eq!(
+            order_after_group_drop(&ids, &[a, e], c, false),
+            Some(vec![b, a, e, c, d])
+        );
+        // On one of its own pages, next to where it already is, or without
+        // a sibling to move: nothing.
+        assert_eq!(order_after_group_drop(&ids, &[a, b], b, true), None);
+        assert_eq!(order_after_group_drop(&ids, &[a, b], c, false), None);
+        assert_eq!(order_after_group_drop(&ids, &[], c, false), None);
+        run(&mut doc, &PageForm::new("21D21", "K9")).unwrap();
+        let other = doc.project().pages_in_order().last().unwrap().id;
+        assert_eq!(order_after_group_drop(&ids, &[a, b], other, true), None);
+        assert_eq!(order_after_group_drop(&ids, &[other], c, true), None);
+
+        // One undo step puts it back.
+        let order = order_after_group_drop(&ids, &[d, b], a, false).unwrap();
+        doc.execute(Command::ReorderPages { pages: order }).unwrap();
+        assert_eq!(doc.project().sibling_pages(a), [b, d, a, c, e]);
         doc.undo().unwrap();
         assert_eq!(doc.project().sibling_pages(a), ids);
     }

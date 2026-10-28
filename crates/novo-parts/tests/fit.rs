@@ -73,9 +73,14 @@ fn a_contactor_gets_contactors_before_contactor_relays() {
     let (doc, gate, catalog) = starter();
     let kinds = roles(&doc, &catalog, gate.k1);
     assert_eq!(kinds[0], Some(Role::Contactor));
-    // A contactor relay cannot carry a motor: it comes last.
-    let relay = kinds.iter().position(|r| *r == Some(Role::Relay)).unwrap();
-    assert_eq!(relay, kinds.len() - 1, "{kinds:?}");
+    // A contactor relay cannot carry a motor: it comes after every
+    // contactor, and before the parts of an unrelated kind (a PLC module
+    // also has the letter K).
+    let contactors = kinds
+        .iter()
+        .take_while(|r| **r == Some(Role::Contactor))
+        .count();
+    assert_eq!(kinds[contactors], Some(Role::Relay), "{kinds:?}");
 }
 
 #[test]

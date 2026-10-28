@@ -42,11 +42,13 @@ use novo_symbols::Library;
 use serde_json::{Value, json};
 use thiserror::Error;
 
+mod addons;
 mod export;
 #[cfg(feature = "python")]
 mod python;
 mod revisions;
 
+pub use addons::{addons_install, addons_json, addons_remove, addons_set_enabled};
 pub use export::{
     ReportFormat, generate, is_project_path, report_bytes, report_bytes_in, report_ids,
     report_json, report_translator, write_export,
@@ -94,6 +96,9 @@ pub enum ScriptError {
     },
     #[error("export failed: {0}")]
     Export(String),
+    /// The add-on manager refused (the text says why, in the program's words).
+    #[error("{0}")]
+    Addons(String),
     #[error("the symbol library did not load: {0}")]
     Library(String),
     #[error("no revision `{0}` (use an index from `revisions()`, or `now`)")]

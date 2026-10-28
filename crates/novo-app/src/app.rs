@@ -3,6 +3,7 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod addons;
 mod appearance;
 mod assembly;
 mod assistant;
@@ -121,6 +122,9 @@ mod heat_run;
 mod heat_run_tests;
 mod heat_settings;
 mod heat_spots;
+mod heat_status;
+#[cfg(test)]
+mod heat_status_tests;
 mod heat_sweep;
 #[cfg(test)]
 mod heat_sweep_tests;
@@ -183,6 +187,7 @@ mod part_picker;
 mod parts;
 mod parts_bulk;
 mod parts_cad;
+mod parts_identity;
 mod parts_import;
 mod parts_pins;
 #[cfg(test)]
@@ -262,6 +267,7 @@ mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
 mod view3d_nudge;
+mod view3d_options;
 mod view3d_pins;
 #[cfg(test)]
 mod view3d_pins_tests;
@@ -302,6 +308,8 @@ mod workshop;
 mod workspace;
 mod xref;
 
+#[cfg(test)]
+mod addons_tests;
 #[cfg(test)]
 mod assembly_pack_tests;
 #[cfg(test)]
@@ -363,9 +371,13 @@ mod handover_tests;
 #[cfg(test)]
 mod kitting_tests;
 #[cfg(test)]
+mod learn_nav_tests;
+#[cfg(test)]
 mod learn_replay;
 #[cfg(test)]
 mod learn_tests;
+#[cfg(test)]
+mod lesson_claims_bench_tests;
 #[cfg(test)]
 mod lesson_claims_tests;
 #[cfg(test)]
@@ -668,6 +680,7 @@ impl NovoApp {
         );
         let mut app = Self::with_settings(backend, canvas, settings);
         app.load_user_keymap();
+        app.init_addons();
         app.learn_init_paths();
         app.crash_report = crate::diag::take_pending_crash();
         if std::env::var_os("KOPERCAD_FORCE_PANIC").is_some() {
@@ -1815,6 +1828,7 @@ impl NovoApp {
         self.eplan_import_dialog(&ctx);
         self.eplan_guide_dialog(&ctx);
         self.controller_import_dialog(&ctx);
+        self.addons_windows(&ctx);
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);

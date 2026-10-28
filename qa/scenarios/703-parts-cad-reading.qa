@@ -1,0 +1,43 @@
+@title Parts: the window keeps working while large CAD files are read in the background
+@area Parts
+# A STEP file can be 64 MB and is measured under a deadline; the files are read on a worker thread.
+# KOPERCAD_QA_SLOW_READ_MS holds the worker for 6 s before each file, so the "Reading" line can be seen.
+@env KOPERCAD_QA_SLOW_READ_MS=6000
+fresh
+key ctrl+k
+text "parts"
+wait 10
+key Return
+wait 20
+answer_dialog qa/fixtures/parts/cad/MCADXX0001234_3D.stp
+click_text "Add CAD files"
+wait 10
+expect "Reading the file"
+expect_not "Import ticked"
+note the window is drawn and answers while the file is read; the panel opens when it has been read
+click_text "More"
+wait 5
+expect "Maker guide"
+shot reading
+check_layout
+click_text "More"
+wait 5
+wait_s 8
+expect "Checked"
+expect_enabled "Import ticked"
+shot panel-after-read
+answer_dialog qa/fixtures/parts/cad/MCADXX0009999_3D.stp
+click_text "Add CAD files…"
+wait 10
+expect "Reading the file"
+expect "Close"
+expect_disabled "Import ticked"
+shot reading-with-panel
+check_layout
+wait_s 8
+expect "No part in your catalog matches"
+expect_not "Reading the file"
+shot read-done
+check_layout
+click_text "Close"
+wait 10

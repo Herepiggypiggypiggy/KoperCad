@@ -3,3 +3,4 @@
 2026-10-28 17:50 UTC R3 asks: status bar message now yields to the right slots (truncated at 200%); scenarios renumbered 1901-1905 with pictures for refit, focus ring, submenu, start screen, big lists.
 2026-10-28 18:00 UTC 1903 and 1904 run at both sizes; 1904 scrolls over the column.
 2026-10-28 17:30 UTC CI clippy (newer toolchain): chunks_exact -> as_chunks in userkeymap decode.
+2026-10-28 20:40 UTC merged main (#1607 Pages multi-select) into the branch; outline.rs conflict resolved, rows cache kept.
