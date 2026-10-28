@@ -265,6 +265,14 @@ impl NovoApp {
         );
     }
 
+    /// The overhead crane example: two-speed hoist, drives and radio control.
+    pub(super) fn open_crane_example(&mut self) {
+        self.open_built_example(
+            super::example_crane::CRANE_EXAMPLE_NAME,
+            super::example_crane::build_crane_example,
+        );
+    }
+
     fn open_built_example(
         &mut self,
         name: &str,
