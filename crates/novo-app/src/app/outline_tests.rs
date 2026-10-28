@@ -825,12 +825,12 @@ fn selected_pages_are_filed_duplicated_and_deleted_together() {
     click_page(&mut d, ids[3], egui::Modifiers::COMMAND);
     // Dropped on the cabinet row: both are filed there, in one step.
     let from = row_of(&d, ids[3]);
-    let to = row_pos(&d, "c:A1");
+    let to = row_pos(&d, "c:CAB1");
     drag(&mut d, from, to);
     for id in [ids[1], ids[3]] {
         assert_eq!(
             d.doc().project().page(id).unwrap().structure.to_string(),
-            "+A1"
+            "+CAB1"
         );
     }
     let ctx = d.ctx.clone();
