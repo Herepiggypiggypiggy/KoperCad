@@ -97,9 +97,19 @@ pub const KEYS: &[SpecKey] = &[
     tag("mech_brake_feed", "Brake rectifier feed device"),
     tag("mech_main_contactor", "Main contactor device"),
     tag("mech_upper_limit", "Upper limit switch device"),
-    num("mech_upper_limit_m", "Upper limit height", "m", ""),
+    num(
+        "mech_upper_limit_m",
+        "Upper limit height (m above the hook start)",
+        "m",
+        "",
+    ),
     tag("mech_lower_limit", "Lower limit switch device"),
-    num("mech_lower_limit_m", "Lower limit height", "m", ""),
+    num(
+        "mech_lower_limit_m",
+        "Lower limit height (m above the hook start)",
+        "m",
+        "",
+    ),
 ];
 
 /// Why a set of properties does not make a hoist.
@@ -107,6 +117,8 @@ pub const KEYS: &[SpecKey] = &[
 pub enum SpecError {
     /// A number that is not a number.
     NotANumber { key: &'static str, text: String },
+    /// A count that has to be a whole number (poles) is not one.
+    NotWhole { key: &'static str, value: f64 },
     /// The engine refused a value.
     Value(InputError),
     /// A limit switch device without a height, or the other way round.
@@ -117,6 +129,9 @@ impl fmt::Display for SpecError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NotANumber { key, text } => write!(f, "{key}: \"{text}\" is not a number"),
+            Self::NotWhole { key, value } => {
+                write!(f, "{key}: {value} must be a whole number")
+            }
             Self::Value(e) => write!(f, "{e}"),
             Self::LimitIncomplete(which) => {
                 write!(f, "the {which} limit needs both a device and a height")
@@ -151,16 +166,18 @@ pub fn hoist_from_properties(
     let number = |key: &'static str| -> Result<f64, SpecError> {
         let default = KEYS.iter().find(|k| k.key == key).map_or("", |k| k.default);
         let raw = text(key).unwrap_or_else(|| default.to_owned());
+        // A comma is a decimal comma: "1,500" reads as 1.5, not 1500 (the property sheet says so).
         raw.replace(',', ".")
             .parse::<f64>()
             .map_err(|_| SpecError::NotANumber { key, text: raw })
     };
     let hz = number("mech_frequency_hz")?;
     let winding = |poles: &'static str, kw: &'static str, rpm: &'static str, breakdown: f64| {
-        let poles = number(poles)?;
+        let key = poles;
+        let poles = number(key)?;
         // A pole count is a whole number; reject 12.5 rather than rounding it silently.
         if poles.fract() != 0.0 || poles < 0.0 || poles > f64::from(u32::MAX) {
-            return Err(SpecError::Value(InputError::NotFinite { field: "poles" }));
+            return Err(SpecError::NotWhole { key, value: poles });
         }
         Winding::new(
             poles as u32,
@@ -329,6 +346,9 @@ mod tests {
         assert!(bad(&[("mech_gear_ratio", "x")]).contains("mech_gear_ratio"));
         assert!(bad(&[("mech_falls", "2.5")]).contains("mech_falls"));
         assert!(bad(&[("mech_fine_poles", "2"), ("mech_coarse_poles", "2")]).contains("poles"));
+        assert!(bad(&[("mech_fine_poles", "12.5")]).contains("whole number"));
+        // A comma is a decimal comma: 1,500 falls reads as 1.5, a non-whole count.
+        assert!(bad(&[("mech_falls", "1,500")]).contains("mech_falls"));
         assert!(bad(&[("mech_upper_limit", "=S1")]).contains("upper limit"));
         assert!(bad(&[("mech_lower_limit_m", "0.2")]).contains("lower limit"));
         assert!(bad(&[("mech_brake_switching", "both")]).contains("mech_brake_switching"));
