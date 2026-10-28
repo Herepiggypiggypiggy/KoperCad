@@ -660,7 +660,7 @@ fn workshop_strip(
         );
     }
     print_check(ui, check, act);
-    ui.weak("The Workshop pack puts a bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans), the 1:1 drilling templates and the labels in one folder next to the project.");
+    ui.weak("The Workshop pack puts a bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans), the print scale check, the 1:1 drilling templates, the labels, the kitting list and the work cards in one folder next to the project.");
 }
 
 /// One thing the printed bench output cannot be trusted on yet.

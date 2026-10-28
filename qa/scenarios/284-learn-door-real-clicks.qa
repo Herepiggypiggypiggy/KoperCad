@@ -1,0 +1,40 @@
+@title Lesson walk by real clicks: Will the door close? (Apply, already applied, ring inside the Inspector)
+@area Learn
+# Every step is done as a learner does it, with clicks. The ring around Inside and door must stay inside the Inspector, and Apply must never leave the learner stuck: going Back to the Apply step after applying ticks it from the state.
+key ctrl+k
+wait 4
+text door close
+wait 6
+click_text "Will the door close?"
+wait 40
+shot 01-start
+check_layout
+click_text "Cabinet" #1
+wait 30
+shot 02-cabinet
+check_layout
+click_text "Plate setup"
+wait 20
+shot 03-inside-and-door-ring
+check_layout
+expect "Inside width"
+click_text "Next"
+wait 10
+shot 04-read-form-ring
+check_layout
+click_text "Next"
+wait 10
+shot 05-apply-step-ring
+check_layout
+click_text "Apply" Button
+wait 20
+shot 07-applied
+check_layout
+expect "Every placed device fits behind the door"
+wait 30
+shot 07b-next-step-after-apply
+click_text "Back"
+wait 20
+shot 08-back-on-apply-step-already-applied
+check_layout
+expect "Try a shallow cabinet"

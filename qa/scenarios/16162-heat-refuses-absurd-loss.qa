@@ -1,0 +1,16 @@
+@title A device loss of 1e12 W is refused with the device named
+@area Heat
+# CH-01 / CH-10: the run used to start and print absurd numbers. Fixture: qa/fixtures/make_heat_refusal_fixtures.py.
+open qa/fixtures/cabinet-heat-absurd-loss.novo
+wait 20
+click_text Cabinet #1
+wait 20
+key ctrl+k
+wait 3
+text Simulate heat of the cabinet
+wait 4
+key Enter
+wait 30
+shot refusal
+expect "Cannot simulate"
+check_layout
