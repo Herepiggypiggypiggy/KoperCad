@@ -702,6 +702,11 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl(
+        "sim.hoist",
+        &["hijsen"],
+        &["kraan", "haak", "rem", "eindschakelaar", "tweesnelheden"],
+    ),
+    nl(
         "view.toggle_marks",
         &[],
         &["markeringen tonen of verbergen"],
