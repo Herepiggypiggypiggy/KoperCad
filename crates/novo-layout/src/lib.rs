@@ -567,6 +567,9 @@ pub fn clear_duct_spot(ducts: &[Duct], duct: &Duct, within: &Rect) -> Option<Duc
     if fits(duct) {
         return Some(duct.clone());
     }
+    if !duct.length.is_finite() || duct.length > 100_000.0 {
+        return None;
+    }
     let mut length = duct.length;
     while length >= 100.0 {
         for step in 0..=120 {
