@@ -67,18 +67,36 @@ pub fn sizing_device(project: &Project, device: &Device) -> SizingDevice {
     }
 }
 
-/// The devices of an enclosure: those whose tag location equals the
-/// enclosure's, the same set `place all` uses.
+/// The devices that take room on the plate of an enclosure: those that
+/// belong in it (see [`crate::model::belonging`], the set `Place all` uses)
+/// minus the ones mounted on the door or another surface. Devices in the
+/// field are not in the enclosure at all.
 pub fn sizing_devices(project: &Project, id: StructureId) -> Vec<SizingDevice> {
-    let Some(s) = project.get::<novo_core::Structure>(id) else {
-        return Vec::new();
-    };
-    if s.tag.location.is_empty() {
-        return Vec::new();
-    }
-    project
-        .all::<Device>()
-        .filter(|d| d.tag.location == s.tag.location)
+    let off = crate::model::off_plate_devices(project, id);
+    crate::model::belonging(project, id)
+        .into_iter()
+        .filter(|d| !off.contains(&d.id.raw()))
         .map(|d| sizing_device(project, d))
         .collect()
+}
+
+/// What the sizing leaves out, for a line under the result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LeftOut {
+    /// Motors, valves and other devices outside the cabinet.
+    pub field: usize,
+    /// Devices on the door or another surface.
+    pub door: usize,
+}
+
+/// How many devices of the enclosure `sizing_devices` does not count, and why.
+pub fn left_out(project: &Project, id: StructureId) -> LeftOut {
+    let off = crate::model::off_plate_devices(project, id);
+    LeftOut {
+        field: crate::model::in_the_field(project, id).len(),
+        door: crate::model::belonging(project, id)
+            .iter()
+            .filter(|d| off.contains(&d.id.raw()))
+            .count(),
+    }
 }

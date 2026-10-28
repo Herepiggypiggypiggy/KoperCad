@@ -237,6 +237,8 @@ pub(super) enum Ask {
     SetPanelValue(super::cabinet_panel::PanelEdit),
     /// Put a placed device on another surface of the cabinet (plate, door, ...).
     SetSurface(u64, String),
+    /// Say where a device is mounted: the cabinet, its door or the field.
+    SetSite(u64, novo_layout::site::Site),
     /// The size of a surface other than the plate (`None`: planning values).
     SetSurfaceSize(
         StructureId,
@@ -2451,6 +2453,9 @@ impl NovoApp {
             }
         }
 
+        self.sizing.left_out = structure
+            .map(|s| novo_layout::sizing_model::left_out(project, s))
+            .unwrap_or_default();
         let sizing_chip = self.learn.chip("sizing");
         let rails_chip = self.learn.chip("rails");
         let sizing_lesson = super::sizing::show_window(
@@ -2958,6 +2963,11 @@ impl NovoApp {
                     Ok(None) => {}
                     Err(e) => self.message(Level::Warning, e.to_string()),
                 }
+            }
+            Ask::SetSite(device, site) => {
+                self.cabinet_edit("Set mounting site", move |tx| {
+                    super::cabinet_surface_move::set_site(tx, device, site)
+                });
             }
             Ask::SetSurface(device, surface) => {
                 let Some(structure) = structure else {

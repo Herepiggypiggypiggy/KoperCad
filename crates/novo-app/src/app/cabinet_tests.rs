@@ -1936,3 +1936,128 @@ fn a_cooler_layout_asked_before_the_plate_exists_is_dropped_not_kept() {
         "the empty state keeps saying why, frame after frame"
     );
 }
+
+/// The cooling tower report: a contactor, a motor and a push button with no
+/// location in their tags, in the project's only cabinet, which has a door.
+fn cabinet_with_motor_and_button(d: &mut Drive) -> novo_core::StructureId {
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Cabinet", |tx| {
+            let cab = tx.add_structure(DeviceTag::parse("+CP1").unwrap(), "Cabinet", true)?;
+            let part = tx.add_part("ACME", "C1")?;
+            tx.set_property(part, "width_mm", Some(Value::Float(45.0)))?;
+            tx.set_property(part, "height_mm", Some(Value::Float(90.0)))?;
+            for tag in ["-K1", "-M1", "-S1"] {
+                let device = tx.add_device(DeviceTag::parse(tag).unwrap(), "")?;
+                tx.assign_part(device, part)?;
+            }
+            novo_layout::model::set_plate(
+                tx,
+                cab,
+                novo_core::MountingPlate {
+                    width: 600.0,
+                    height: 800.0,
+                    margin: 10.0,
+                },
+            )?;
+            novo_layout::model::set_enclosure(
+                tx,
+                cab,
+                &novo_layout::enclosure::Enclosure {
+                    width: 650.0,
+                    height: 850.0,
+                    depth: 300.0,
+                    plate_setback: 20.0,
+                    door: Some(novo_layout::enclosure::Door::default()),
+                    front_clearance: None,
+                    hinge_side_clearance: None,
+                },
+            )?;
+            Ok(cab)
+        })
+        .unwrap()
+        .0
+}
+
+fn device_named(d: &Drive, code: &str) -> u64 {
+    project(d)
+        .all::<novo_core::Device>()
+        .find(|dev| dev.tag.device_code() == Some(code))
+        .unwrap()
+        .id
+        .raw()
+}
+
+#[test]
+fn place_all_keeps_the_motor_out_puts_the_button_on_the_door_and_the_sizing_agrees() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let cab = cabinet_with_motor_and_button(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let (k1, m1, s1) = (
+        device_named(&d, "K1"),
+        device_named(&d, "M1"),
+        device_named(&d, "S1"),
+    );
+
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    assert_eq!(cands.len(), 2, "the motor is not a candidate");
+    d.app
+        .cabinet_ask(Ask::PlaceAll, Some(cab), layout_of(&d, cab), &cands);
+    d.frame();
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    d.frame();
+
+    let placed: Vec<u64> = project(&d)
+        .all::<CabinetPlacement>()
+        .map(|p| p.device.raw())
+        .collect();
+    assert!(placed.contains(&k1) && placed.contains(&s1), "{placed:?}");
+    assert!(!placed.contains(&m1), "the motor never goes on the plate");
+    assert_eq!(
+        super::cabinet_surface_move::surface_of(project(&d), cab, s1),
+        "door"
+    );
+    assert_eq!(
+        super::cabinet_surface_move::surface_of(project(&d), cab, k1),
+        "plate"
+    );
+
+    // The sizing counts what is on the plate (the contactor) and says what
+    // it left out, instead of "no devices yet" next to "3 placed".
+    assert_eq!(
+        novo_layout::sizing_model::sizing_devices(project(&d), cab).len(),
+        1
+    );
+    let left = novo_layout::sizing_model::left_out(project(&d), cab);
+    assert_eq!((left.field, left.door), (1, 1));
+
+    // Saying the motor is in the cabinet makes it a candidate again.
+    d.app.cabinet_ask(
+        Ask::SetSite(m1, novo_layout::site::Site::Plate),
+        Some(cab),
+        None,
+        &[],
+    );
+    d.frame();
+    assert_eq!(novo_layout::model::candidates(project(&d), cab).len(), 3);
+    // And In the field takes a placed device off the plate.
+    d.app.cabinet_ask(
+        Ask::SetSite(k1, novo_layout::site::Site::Field),
+        Some(cab),
+        None,
+        &[],
+    );
+    d.frame();
+    assert!(
+        !project(&d)
+            .all::<CabinetPlacement>()
+            .any(|p| p.device.raw() == k1)
+    );
+}

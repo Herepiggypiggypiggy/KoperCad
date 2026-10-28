@@ -38,6 +38,8 @@ pub(super) struct DeviceFacts {
     pub why: Option<String>,
     /// The surfaces the device can be put on; `None` for a plate-only cabinet.
     pub surface: Option<super::cabinet_surface_move::SurfaceChoice>,
+    /// Where the device is mounted: the cabinet, its door or the field.
+    pub site: novo_layout::site::Site,
 }
 
 /// What the inspector shows: the selected devices, or the plate.
@@ -103,6 +105,9 @@ pub(super) fn gather(
                 rule: None,
                 why: None,
                 surface: None,
+                site: device.map_or(novo_layout::site::Site::Plate, |d| {
+                    novo_layout::site::site_of(project, d).0
+                }),
             }
         })
         .collect();
@@ -219,6 +224,9 @@ fn show(
                     },
                 );
                 widgets::field(ui, "Position", &d.position);
+                if let Some(site) = super::cabinet_surface_move::show_site(ui, d) {
+                    ask = Some(Ask::SetSite(d.id, site));
+                }
                 if let Some(name) = super::cabinet_surface_move::show(ui, d) {
                     ask = Some(Ask::SetSurface(d.id, name));
                 }

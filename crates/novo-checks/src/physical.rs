@@ -26,6 +26,10 @@ pub(crate) fn unplaced_devices(cx: &Context<'_>, out: &mut Vec<Problem>) {
         .map(|p| p.device)
         .collect();
     for device in cx.project.devices() {
+        // A motor in the field never goes on a plate.
+        if novo_layout::site::is_field(cx.project, device) {
+            continue;
+        }
         let drawn = cx.by_device.contains_key(&device.id)
             || (device.kind == DeviceKind::TerminalStrip
                 && cx.project.symbols().any(|s| {
@@ -228,6 +232,28 @@ pub(crate) fn layout(cx: &Context<'_>, out: &mut Vec<Problem>) {
                 ),
             };
             out.push(Problem::new(ProblemKind::DuctOverlap, at, what));
+        }
+        for p in &layout.placements {
+            let Some(device) = project.device(DeviceId::from(p.id)) else {
+                continue;
+            };
+            let (site, source) = novo_layout::site::site_of(project, device);
+            if site != novo_layout::site::Site::Field {
+                continue;
+            }
+            let why = match source {
+                novo_layout::site::SiteSource::Stated => "its mounting site is the field",
+                _ => "its letter code makes it a field device",
+            };
+            out.push(Problem::new(
+                ProblemKind::FieldDeviceInCabinet,
+                vec![AnyId::Device(device.id)],
+                format!(
+                    "{} sits on the plate of {} but is mounted outside the cabinet ({why}): \
+                     take it off the plate, or set its mounting site to plate if it really is inside",
+                    device.tag, structure.tag
+                ),
+            ));
         }
         for (device, _rail, off) in report.off_centre {
             out.push(Problem::new(

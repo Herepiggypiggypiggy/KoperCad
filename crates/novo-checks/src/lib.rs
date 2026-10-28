@@ -71,6 +71,7 @@
 //! | [`DeviceOutsidePlate`](ProblemKind::DeviceOutsidePlate) | error | A device beyond the usable area of its plate |
 //! | [`DevicesTooClose`](ProblemKind::DevicesTooClose) | warning | Two devices closer than their clearance |
 //! | [`RailOverflow`](ProblemKind::RailOverflow) | warning | Devices needing more room than their DIN rail has |
+//! | [`FieldDeviceInCabinet`](ProblemKind::FieldDeviceInCabinet) | warning | A motor, valve or other field device placed on a mounting plate (it is outside the cabinet; its heat and size do not belong in the cabinet figures) |
 //! | [`DeviceOffRail`](ProblemKind::DeviceOffRail) | warning | A device on a DIN rail whose middle is not on the rail's line (plans made before rails ran through the device middles; Place all puts it right) |
 //! | [`DuctOverlap`](ProblemKind::DuctOverlap) | error | A wiring duct lying over a DIN rail or a device on the plate |
 //! | [`DeviceTooDeep`](ProblemKind::DeviceTooDeep) | error | A device deeper than the room between plate and door |
@@ -320,6 +321,8 @@ pub enum ProblemKind {
     /// runs through the middle of the devices it carries; older plans have it
     /// on their top edge.
     DeviceOffRail,
+    /// A device that is mounted outside the cabinet sits on a plate.
+    FieldDeviceInCabinet,
     /// A wiring duct that lies over a DIN rail or a device on the plate.
     DuctOverlap,
     /// A device deeper than the room between the plate and the door
@@ -347,7 +350,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 70] = [
+    pub const ALL: [ProblemKind; 71] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -383,6 +386,7 @@ impl ProblemKind {
         ProblemKind::DevicesTooClose,
         ProblemKind::RailOverflow,
         ProblemKind::DeviceOffRail,
+        ProblemKind::FieldDeviceInCabinet,
         ProblemKind::DuctOverlap,
         ProblemKind::DeviceTooDeep,
         ProblemKind::DoorGapTight,
@@ -456,6 +460,7 @@ impl ProblemKind {
             | ProblemKind::DevicesTooClose
             | ProblemKind::RailOverflow
             | ProblemKind::DeviceOffRail
+            | ProblemKind::FieldDeviceInCabinet
             | ProblemKind::DoorGapTight
             | ProblemKind::DoorSwing
             | ProblemKind::AmbiguousInterruption
@@ -533,6 +538,7 @@ impl ProblemKind {
             ProblemKind::DevicesTooClose => "Devices too close",
             ProblemKind::RailOverflow => "Rail overfull",
             ProblemKind::DeviceOffRail => "Device off its rail's middle",
+            ProblemKind::FieldDeviceInCabinet => "Field device in the cabinet",
             ProblemKind::DuctOverlap => "Duct over rail or device",
             ProblemKind::DeviceTooDeep => "Device too deep",
             ProblemKind::DoorGapTight => "Door gap tight",
@@ -609,6 +615,7 @@ impl ProblemKind {
             ProblemKind::DevicesTooClose => "check.devices_too_close",
             ProblemKind::RailOverflow => "check.rail_overflow",
             ProblemKind::DeviceOffRail => "check.device_off_rail",
+            ProblemKind::FieldDeviceInCabinet => "check.field_device_in_cabinet",
             ProblemKind::DuctOverlap => "check.duct_overlap",
             ProblemKind::DeviceTooDeep => "check.device_too_deep",
             ProblemKind::DoorGapTight => "check.door_gap_tight",
