@@ -1907,6 +1907,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-addons"
+version = "0.1.0"
+
+[[package]]
 name = "novo-ai"
 version = "0.1.0"
 dependencies = [
