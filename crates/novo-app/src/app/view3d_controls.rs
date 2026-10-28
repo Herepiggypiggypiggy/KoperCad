@@ -7,6 +7,8 @@ use std::collections::BTreeSet;
 
 use novo_view3d::{ItemId, Layers, Section, SectionAxis};
 
+use super::view3d_options::{ALL, Home, Values, ViewOption};
+
 /// Margin from the view's corner, in points.
 const MARGIN: f32 = 12.0;
 /// Width of the door angle slider.
@@ -35,8 +37,6 @@ pub(crate) struct Controls {
     pub(super) ssao: bool,
     /// This GPU draws occlusion at all. Set by the host each frame.
     pub(super) ssao_available: bool,
-    /// A swipe in wheel lines pans instead of zooming (Windows trackpads).
-    pub(super) trackpad_pans: bool,
     /// Measuring lines: the enclosure's size and the selected part's.
     pub(super) dimensions: bool,
     /// The frame governor has stepped the quality down: the toolbar offers
@@ -46,11 +46,6 @@ pub(crate) struct Controls {
     pub(super) restore: bool,
     /// The "?" badge (no part data) on every device, not only on hover.
     pub(super) missing_data: bool,
-    /// The Heat panel in the right-hand slot, under the view cube.
-    pub(super) heat_panel: bool,
-    /// The EMC view: class colours, keep-clear zones and hot spots, with its
-    /// panel and legend (View > EMC).
-    pub(super) emc: bool,
     /// The door, walls, roof, floor and extra plates as faint panes (View
     /// > Cabinet > Cabinet surfaces picks one to highlight).
     pub(super) surfaces: bool,
@@ -76,13 +71,10 @@ impl Default for Controls {
             hidden: BTreeSet::new(),
             ssao: true,
             ssao_available: true,
-            trackpad_pans: false,
             dimensions: false,
             reduced: false,
             restore: false,
             missing_data: false,
-            heat_panel: false,
-            emc: false,
             surfaces: false,
             pins: false,
             duct_fill: false,
@@ -172,13 +164,15 @@ pub(super) fn toolbar_inset(ctx: &egui::Context, view: egui::Rect) -> f32 {
 }
 
 /// The toolbar, top left of the view. `limit` is how far the enclosure's door
-/// opens, `None` when it has none.
+/// opens, `None` when it has none. `values` is a snapshot of the registry
+/// (`view3d_options`): a switch edits it and the host writes the difference
+/// back to the owner of each option.
 #[allow(clippy::too_many_arguments)] // one call site; a struct would only rename them
 pub(super) fn toolbar(
     ctx: &egui::Context,
     view: egui::Rect,
     controls: &mut Controls,
-    measure: &mut bool,
+    values: &mut Values,
     limit: Option<f64>,
     views: &[crate::settings::CameraBookmark],
     selected: bool,
@@ -211,209 +205,82 @@ pub(super) fn toolbar(
     panel.show(ctx, |ui| {
         ui.horizontal_wrapped(|ui| {
             // Layers: things that are drawn or not, in one popover.
-            let n_on = [
-                controls.layers.shell,
-                controls.layers.door,
-                controls.layers.wires,
-                controls.layers.shapes,
-                controls.layers.slots,
-                controls.shadows,
-                controls.assembly.is_some(),
-                controls.finish,
-                controls.ssao && controls.ssao_available,
-                controls.missing_data,
-                controls.surfaces,
-                controls.pins,
-                controls.duct_fill,
-            ]
-            .iter()
-            .filter(|b| **b)
-            .count();
+            let n_on = ALL
+                .iter()
+                .filter(|s| matches!(s.home, Home::Layer))
+                .filter(|s| values.get(s.option))
+                .filter(|s| s.option != ViewOption::Occlusion || controls.ssao_available)
+                .count();
             let config = egui::containers::menu::MenuConfig::new()
                 .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
             egui::containers::menu::MenuButton::new(format!("Layers ({n_on})"))
                 .config(config)
                 .ui(ui, |ui| {
-                    let layers = &mut controls.layers;
-                    changed.layers |=
-                        toggle(ui, &mut layers.shell, "Enclosure", "Show the enclosure box");
-                    changed.layers |= toggle(ui, &mut layers.door, "Door", "Show the door");
-                    changed.layers |=
-                        toggle(ui, &mut layers.wires, "Wires", "Show the routed wires");
-                    changed.layers |= toggle(
-                        ui,
-                        &mut layers.shapes,
-                        "Device shapes",
-                        "Draw each device with the typical form of its family (breaker, contactor, \
-                         terminal block, PLC, drive, power supply) at the part's real width, height \
-                         and depth. The details are typical, not the maker's. Off draws plain boxes.",
-                    );
-                    changed.layers |= toggle(
-                        ui,
-                        &mut layers.slots,
-                        "Slotted ducts",
-                        "Draw each duct with slotted walls (fingers) and mounting slots in the floor, \
-                         at the real width, height and length. The finger pitch (about 9 mm) and the \
-                         slot width are a generic drawing, not the data of a catalogue duct, and \
-                         the heat and fill figures do not read them. Far out the duct is drawn \
-                         solid. Off draws every duct solid.",
-                    );
-                    if let Some(text) = &controls.models_text {
-                        ui.label(egui::RichText::new(text).weak().small());
+                    for spec in ALL.iter().filter(|s| matches!(s.home, Home::Layer)) {
+                        match spec.option {
+                            ViewOption::Surfaces => {
+                                if let Some(text) = &controls.models_text {
+                                    ui.label(egui::RichText::new(text).weak().small());
+                                }
+                            }
+                            ViewOption::Occlusion if !controls.ssao_available => {
+                                ui.add_enabled_ui(false, |ui| {
+                                    novo_theme::widgets::filter_toggle(ui, spec.label, false)
+                                        .on_disabled_hover_text(
+                                            "Needs a discrete GPU; this one cannot draw ambient occlusion",
+                                        );
+                                });
+                                continue;
+                            }
+                            _ => {}
+                        }
+                        let before = values.get(spec.option);
+                        toggle(ui, values, spec.option);
+                        // These five rebuild the scene; the rest are drawn.
+                        if before != values.get(spec.option)
+                            && matches!(
+                                spec.option,
+                                ViewOption::Enclosure
+                                    | ViewOption::Door
+                                    | ViewOption::Wires
+                                    | ViewOption::DeviceShapes
+                                    | ViewOption::SlottedDucts
+                            )
+                        {
+                            changed.layers = true;
+                        }
                     }
-                    toggle(
-                        ui,
-                        &mut controls.surfaces,
-                        "Surfaces",
-                        "Show the door, walls, roof, floor and extra plates as faint panes. \
-                         The surface picked in the Cabinet header is highlighted.",
-                    );
-                    toggle(
-                        ui,
-                        &mut controls.duct_fill,
-                        "Duct fill",
-                        "Tint each duct by how full the routed wires leave it: green up to 80 % \
-                         of the allowed fill, amber above, red over the limit. A duct nothing runs in \
-                         keeps its normal colour; grey means the duct has no cross-section yet. The figure is the routing \
-                         engine's (wire section and the project's fill limit).",
-                    );
-                    toggle(
-                        ui,
-                        &mut controls.pins,
-                        "Connection points",
-                        "Mark where each terminal of a part is: green when measured or \
-                         typed, amber when estimated. Set them in the Parts window > \
-                         Connection points.",
-                    );
-                    let building = controls.assembly.is_some();
-                    if novo_theme::widgets::filter_toggle(ui, "Build order", building)
-                        .on_hover_text(
-                            "Step through the build order of this cabinet: rails, ducts, devices, \
-                             then wires, the same order as the printed assembly pack. The part a \
-                             step adds is shown in blue (View > 3D > Build order).",
-                        )
-                        .clicked()
-                    {
-                        controls.assembly = if building { None } else { Some(0) };
-                        controls.wire_it = None;
+                    ui.separator();
+                    ui.label(egui::RichText::new("Walk through").weak().small());
+                    for spec in ALL.iter().filter(|s| matches!(s.home, Home::Walk)) {
+                        toggle(ui, values, spec.option);
                     }
-                    let wiring = controls.wire_it.is_some();
-                    let wire_it = novo_theme::widgets::filter_toggle(ui, "Wire-it", wiring)
-                        .on_hover_text(
-                            "Run the wires one at a time in bench order (earth, power, 24 V, \
-                             signals): both ends and the path are lit, with the cut, strip, \
-                             ferrule, label and how full the duct is after each wire. Ticks \
-                             are saved in the project (View > 3D > Wire-it).",
-                        );
-                    if wire_it.clicked() {
-                        controls.wire_it = if wiring {
-                            None
-                        } else {
-                            Some(super::view3d_wire_it::RESUME)
-                        };
-                        controls.assembly = None;
+                    ui.separator();
+                    for spec in ALL.iter().filter(|s| matches!(s.home, Home::Preference)) {
+                        toggle(ui, values, spec.option);
                     }
-                    toggle(
-                        ui,
-                        &mut controls.shadows,
-                        "Shadows",
-                        "Soft shadows from the key light (View > 3D > Shadows)",
-                    );
-                    toggle(
-                        ui,
-                        &mut controls.finish,
-                        "Metal finish",
-                        "A faint brushed grain and soft patches on the plate and streaks \
-                         along the rails. It is subtle by design: broad patches show in the \
-                         overview, the fine grain only when you zoom in. Off: plain flat \
-                         colours (View > 3D > Metal finish).",
-                    );
-                    if controls.ssao_available {
-                        toggle(
-                            ui,
-                            &mut controls.ssao,
-                            "Occlusion",
-                            "Ambient occlusion: corners and contacts darken (View > 3D > \
-                             Ambient occlusion). The 3D view turns it off by itself when it \
-                             runs slowly; \"Restore quality\" or switching it off and on asks \
-                             for it back.",
-                        );
-                    } else {
-                        ui.add_enabled_ui(false, |ui| {
-                            novo_theme::widgets::filter_toggle(ui, "Occlusion", false)
-                                .on_disabled_hover_text(
-                                    "Needs a discrete GPU; this one cannot draw ambient occlusion",
-                                );
-                        });
-                    }
-                    toggle(
-                        ui,
-                        &mut controls.trackpad_pans,
-                        "Trackpad pans",
-                        "Two-finger swipes pan instead of zoom. For Windows touchpads, which \
-                         send swipes as mouse-wheel steps; a real mouse wheel then pans too. \
-                         Zoom with Ctrl + swipe or a pinch.",
-                    );
-                    toggle(
-                        ui,
-                        &mut controls.missing_data,
-                        "Missing data",
-                        "Mark every device that has no part data with a \"?\". Off: \
-                         the \"?\" shows on the device under the pointer.",
-                    );
                 });
             ui.separator();
-            // Modes and panels: what the pointer does, what sits at the side.
+            // Modes and overlays: what the pointer does, what sits at the side.
             // A mode, not a layer: keeps the copper wash of a tool.
-            let mode = if controls.move_items {
-                "✔ Move"
-            } else {
-                "Move"
-            };
+            let moving = values.get(ViewOption::Move);
+            let mode = if moving { "✔ Move" } else { "Move" };
             if ui
-                .selectable_label(controls.move_items, mode)
-                .on_hover_text(
-                    "Move mode. Drag a device, rail or duct to move it on the plate (grid \
-                     and checks as in the Cabinet). R turns the selection, Delete takes it \
-                     off. Off: a drag draws a selection box.",
-                )
+                .selectable_label(moving, mode)
+                .on_hover_text(ViewOption::Move.spec().hint)
                 .clicked()
             {
-                controls.move_items ^= true;
+                values.set(ViewOption::Move, !moving);
             }
-            let heat = novo_theme::widgets::filter_toggle(ui, "Heat", controls.heat_panel)
-                .on_hover_text("The Heat panel: simulate how heat and air move in this cabinet");
+            let heat = toggle(ui, values, ViewOption::Heat);
             super::cabinet_bar::note_ctx(ui.ctx(), "view3d.heat", "Heat button", &heat);
-            if heat.clicked() {
-                controls.heat_panel ^= true;
-            }
-            let emc_hint = format!(
-                "{}: electromagnetic compatibility: cable classes, keep-clear zones round noisy \
-                 runs and numbered hot spots, as an indicative model (View > EMC). Click to {}.",
-                if controls.emc { "On" } else { "Off" },
-                if controls.emc { "hide it" } else { "show it" },
-            );
-            toggle(ui, &mut controls.emc, "EMC", &emc_hint);
+            toggle(ui, values, ViewOption::Emc);
             changed.views = super::view3d_views::menu(ui, views);
             command = selection_menu(ui, selected, controls.hidden.len());
-            section_menu(ui, section, bounds);
-            toggle(
-                ui,
-                &mut controls.dimensions,
-                "Dimensions",
-                "Measuring lines in mm: the enclosure, and for one selected part its \
-                 size and its distances to neighbours and the plate edge, and a dashed \
-                 rectangle around it: the free space it asks for (View > 3D > \
-                 Dimensions)",
-            );
+            section_menu(ui, values, section, bounds);
+            toggle(ui, values, ViewOption::Dimensions);
             // A tool, not a layer: next to the other measuring control.
-            toggle(
-                ui,
-                measure,
-                "Measure",
-                "Click two points to read the distance, and the gap between two \
-                 devices (View > 3D > Measure)",
-            );
+            toggle(ui, values, ViewOption::Measure);
             if controls.reduced {
                 ui.label(
                     egui::RichText::new("Reduced quality")
@@ -432,7 +299,7 @@ pub(super) fn toolbar(
                 }
             }
             if let Some(limit) = limit
-                && controls.layers.door
+                && values.get(ViewOption::Door)
             {
                 // The slider does not wrap by itself: in a narrow window the door
                 // gets its own row instead of running under the view cube.
@@ -516,22 +383,23 @@ fn selection_menu(ui: &mut egui::Ui, selected: bool, hidden: usize) -> Option<&'
 /// the picture away so the inside shows. Only the picture is cut.
 fn section_menu(
     ui: &mut egui::Ui,
+    values: &mut Values,
     section: &mut Option<Section>,
     bounds: &dyn Fn() -> Option<novo_view3d::Aabb>,
 ) {
-    let title = if section.is_some() {
+    let title = if values.get(ViewOption::Section) {
         "✔ Section"
     } else {
         "Section"
     };
     ui.menu_button(title, |ui| {
-        let mut on = section.is_some();
+        let mut on = values.get(ViewOption::Section);
         if ui
             .checkbox(&mut on, "Cut the picture with a plane")
             .on_hover_text("Hide everything on one side of a plane to see inside")
             .changed()
         {
-            *section = on.then(Section::default);
+            values.set(ViewOption::Section, on);
         }
         let Some(s) = section.as_mut() else {
             return;
@@ -577,17 +445,28 @@ fn section_menu(
     });
 }
 
-/// A layer toggle: neutral, with a tick when on, so it never relies on
-/// colour alone and never reads as copper.
-fn toggle(ui: &mut egui::Ui, on: &mut bool, name: &str, hint: &str) -> bool {
-    if novo_theme::widgets::filter_toggle(ui, name, *on)
-        .on_hover_text(hint)
-        .clicked()
-    {
-        *on = !*on;
-        return true;
+/// A switch of the registry: neutral, with a tick when on, so it never relies
+/// on colour alone and never reads as copper. It edits the snapshot; the
+/// host writes the change to the option's owner.
+fn toggle(ui: &mut egui::Ui, values: &mut Values, option: ViewOption) -> egui::Response {
+    let on = values.get(option);
+    let spec = option.spec();
+    let mut response =
+        novo_theme::widgets::filter_toggle(ui, spec.label, on).on_hover_text(format!(
+            "{}: {}. {}",
+            if on { "On" } else { "Off" },
+            spec.hint,
+            if on {
+                "Click to turn it off."
+            } else {
+                "Click to turn it on."
+            }
+        ));
+    if response.clicked() {
+        values.set(option, !on);
+        response.mark_changed();
     }
-    false
+    response
 }
 
 #[cfg(test)]
@@ -621,10 +500,9 @@ mod tests {
     }
 
     #[test]
-    fn the_quiet_defaults_hide_badges_and_the_heat_panel() {
+    fn the_quiet_defaults_hide_badges() {
         let c = Controls::default();
         assert!(!c.missing_data);
-        assert!(!c.heat_panel);
         assert!(!c.move_items, "a plain drag must not move parts (KC-15)");
     }
 

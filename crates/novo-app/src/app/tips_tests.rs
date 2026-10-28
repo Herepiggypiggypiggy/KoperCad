@@ -139,6 +139,9 @@ fn the_handler_match_and_the_list_of_working_commands_agree() {
                     .iter()
                     .any(|(c, _)| c == *id)
                 && !id.starts_with("learn.")
+                // The switches of the 3D view run through one arm
+                // (`view3d_options`), not one string arm each.
+                && super::view3d_options::ViewOption::from_command(id).is_none()
                 && novo_workflow::keymap::FAVOURITE_COMMANDS
                     .iter()
                     .all(|f| f != *id)

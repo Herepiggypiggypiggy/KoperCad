@@ -28,6 +28,7 @@ use novo_view3d::scene::ItemKind;
 
 use super::standards_report::StandardsFormat;
 use super::view3d::Pending;
+use super::view3d_options::ViewOption;
 use super::workspace::Workspace;
 use super::{Level, NovoApp};
 use crate::actions::Action;
@@ -440,6 +441,14 @@ const EDITOR_KEYS: &[&str] = &[
 /// Commands the app runs besides the shell actions (`Action`) and the
 /// favourites; the command field shows the rest as "Comes later".
 pub(super) const APP_COMMANDS: &[&str] = &[
+    "view.3d_door_layer",
+    "view.3d_device_shapes",
+    "view.3d_surfaces",
+    "view.3d_duct_fill",
+    "view.3d_pins",
+    "view.3d_missing_data",
+    "view.3d_trackpad_pans",
+    "view.3d_move",
     "tool.place",
     "tool.repeat",
     "tool.connect",
@@ -1033,15 +1042,21 @@ impl NovoApp {
             | "heat.cooler_layout"
                 if self.is_open() =>
             {
-                // Simulate stays in the 3D view when it is the one open.
-                if !(id == "heat.simulate" && self.workspace() == Workspace::View3d) {
-                    self.switch_workspace(Workspace::Cabinet);
-                    self.cabinet.table = false;
+                // In the 3D view the Heat command flips the one heat switch
+                // in place (`view3d_options`); elsewhere it is the Cabinet's.
+                if id == "heat.toggle" && self.workspace() == Workspace::View3d {
+                    self.toggle_view3d_option(ViewOption::Heat);
                 } else {
-                    // The run's progress and stop button live in the panel.
-                    self.view3d.controls.heat_panel = true;
+                    // Simulate stays in the 3D view when it is the one open.
+                    if !(id == "heat.simulate" && self.workspace() == Workspace::View3d) {
+                        self.switch_workspace(Workspace::Cabinet);
+                        self.cabinet.table = false;
+                    } else {
+                        // The run's progress and stop button live in the panel.
+                        self.cabinet.heat.on = true;
+                    }
+                    self.cabinet.heat.command(id);
                 }
-                self.cabinet.heat.command(id);
             }
             "heat.cooling_whatif" if self.is_open() => {
                 // The preview is drawn in the 3D view, so the wizard lives there.
@@ -1061,7 +1076,7 @@ impl NovoApp {
             {
                 // The panel adds the opening: it knows the cabinet it is drawn in.
                 self.switch_workspace(Workspace::View3d);
-                self.view3d.controls.heat_panel = true;
+                self.cabinet.heat.on = true;
                 let preset = match id {
                     "heat.add_grille" => Some(0),
                     "heat.add_filter_fan" => Some(2),
@@ -1206,20 +1221,6 @@ impl NovoApp {
             "view.toggle_marks" => self.wb.marks ^= true,
             "view.reports" => self.switch_workspace(super::workspace::Workspace::Reports),
             "view.3d" => self.switch_workspace(Workspace::View3d),
-            "view.3d_shadows" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.controls.shadows ^= true;
-            }
-            "view.3d_assembly" => {
-                self.switch_workspace(Workspace::View3d);
-                let c = &mut self.view3d.controls;
-                c.assembly = if c.assembly.is_some() {
-                    None
-                } else {
-                    c.wire_it = None;
-                    Some(0)
-                };
-            }
             "view.3d_assembly_next" | "view.3d_assembly_previous" => {
                 self.switch_workspace(Workspace::View3d);
                 let last = self.view3d.assembly_steps.len();
@@ -1230,16 +1231,6 @@ impl NovoApp {
                     last,
                     id == "view.3d_assembly_next",
                 );
-            }
-            "view.3d_wire_it" => {
-                self.switch_workspace(Workspace::View3d);
-                let c = &mut self.view3d.controls;
-                c.wire_it = if c.wire_it.is_some() {
-                    None
-                } else {
-                    c.assembly = None;
-                    Some(super::view3d_wire_it::RESUME)
-                };
             }
             "view.3d_wire_it_next" | "view.3d_wire_it_previous" => {
                 self.switch_workspace(Workspace::View3d);
@@ -1272,50 +1263,25 @@ impl NovoApp {
             "export.wireit" => {
                 self.ask_wire_it();
             }
-            "view.3d_finish" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.controls.finish ^= true;
-            }
-            "view.3d_slotted_ducts" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.controls.layers.slots ^= true;
-            }
             "view.3d_quality" => {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.view.reset_quality();
             }
-            "view.3d_dimensions" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.controls.dimensions ^= true;
-            }
-            "view.3d_ssao" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.controls.ssao ^= true;
-            }
-            "view.3d_door" | "view.3d_shell" | "view.3d_wires" => {
+            "view.3d_door" => {
                 self.switch_workspace(Workspace::View3d);
                 let limit = self.view3d_door_limit();
                 let controls = &mut self.view3d.controls;
-                match id {
-                    "view.3d_door" => {
-                        controls.layers.door = true;
-                        controls.toggle_door(limit);
-                    }
-                    "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
-                    _ => controls.layers.wires = !controls.layers.wires,
+                controls.layers.door = true;
+                controls.toggle_door(limit);
+            }
+            // Every switch of the 3D view is one option with one owner
+            // (`view3d_options`): the toolbar, these commands and the menu
+            // rows all go through it.
+            _ if id != "heat.toggle" && ViewOption::from_command(id).is_some() => {
+                if let Some(option) = ViewOption::from_command(id) {
+                    self.switch_workspace(Workspace::View3d);
+                    self.toggle_view3d_option(option);
                 }
-            }
-            "view.3d_measure" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.measure.toggle();
-            }
-            "view.3d_section" => {
-                self.switch_workspace(Workspace::View3d);
-                let section = &mut self.view3d.view.state.section;
-                *section = match section {
-                    Some(_) => None,
-                    None => Some(novo_view3d::Section::default()),
-                };
             }
             "view.3d_save_view" => {
                 // Saved in the view's next frame, once the camera is fitted.
@@ -1335,18 +1301,7 @@ impl NovoApp {
                     self.view3d_arrange(op);
                 }
             }
-            "view.3d_wire_runs" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.wire_runs ^= true;
-                if self.view3d.wire_runs {
-                    self.view3d.controls.layers.wires = true;
-                }
-            }
             "view.emc_nets" => self.toggle_emc_nets(),
-            "view.emc" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.controls.emc ^= true;
-            }
             "view.3d_hints" => {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.hints.toggle();
