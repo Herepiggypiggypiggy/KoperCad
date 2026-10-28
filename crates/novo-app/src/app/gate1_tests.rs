@@ -490,6 +490,7 @@ fn gate1_motor_starter_through_the_window() {
         std::fs::create_dir_all(&out).unwrap();
         std::fs::copy(&pdf, out.join("Starter.pdf")).unwrap();
     }
+    assert!(d.app.save_to(&file), "the file changes only at Save");
     d.app.run(&d.ctx.clone(), Action::CloseProject);
     d.frame();
 

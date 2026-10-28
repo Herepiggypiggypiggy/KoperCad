@@ -208,7 +208,7 @@ fn write_tick(d: &mut Drive) {
     d.app.tick(&ctx);
 }
 
-/// A saved big project keeps writing its edits to the file while the design
+/// A saved big project can be saved again and again while the design
 /// check runs on a worker: the worker reads a snapshot, so it neither holds
 /// the file nor sees half an edit, and what lands on disk is the drawing.
 #[test]
@@ -228,8 +228,7 @@ fn a_saved_big_project_keeps_writing_while_a_check_runs() {
         add_symbols_recorded(&mut d, 1);
         let _ = d.app.shown_problems();
         assert!(d.app.is_dirty(), "round {round}: the edit is unsaved");
-        write_tick(&mut d);
-        assert!(!d.app.autosave_failing, "round {round}: the write failed");
+        assert!(d.app.save_to(&path), "round {round}: the save failed");
         assert!(!d.app.is_dirty(), "round {round}: written, so not unsaved");
         #[cfg(unix)]
         assert_eq!(

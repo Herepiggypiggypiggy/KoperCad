@@ -1,2 +1,4 @@
 2026-10-28 11:31 UTC Audit, 12 boards, 40 icons, design doc and handoff written; PR opened from claude/project-thread-1ytuxa.
 2026-10-28 12:05 UTC #1566 merged (a2293c4). Follow-up doc PR: R3 nits (Draw target 17, total 152; Mark done; 3D Move off; bar 42 to 40 shorter, 92 percent unmeasured; keyboard, High contrast, Reduce motion in acceptance) and the stamp fix.
+2026-10-28 12:57 UTC Add-on integration requested by the owner: addendum docs/design/visual-redesign-addons.md, two boards (manager, add-ons in the app), four example add-on icons; decisions against C0b proposal: puzzle-piece glyph (no drawn icon), one rail slot per workspace, shape-data icons optional in API v1.
+2026-10-28 13:00 UTC Add-ons PR #1575 reviewer fixes: Cabinet Cut list moved to assists (panels zone 5), Controllers panel has no key of its own, E-stop simulation-only note, sandbox and signed pill marked as design target, stamp corrected.

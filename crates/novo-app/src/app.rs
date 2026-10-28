@@ -523,18 +523,24 @@ const OUTLINE_WIDTH: f32 = 248.0;
 /// Windows at least this wide pin the outline unless the user chose.
 const PIN_OUTLINE_FROM: f32 = 1700.0;
 
-/// An action that replaces or closes the open project. Nothing asks first:
-/// the backend keeps the work (docs/DESIGN.md: no save prompts).
+/// An action that replaces or closes the open project. With unsaved changes
+/// it waits for the answer to "Save changes?" first ([`NovoApp::leave_then`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Leaving {
     New,
     Open,
     OpenReadOnly,
     Recover,
+    /// Open read-only, the file already chosen.
+    OpenReadOnlyPath(PathBuf),
+    /// Recover a damaged file, already chosen.
+    RecoverPath(PathBuf),
     OpenPath(PathBuf),
     Example,
     EmcExample,
     Practice,
+    /// Open this lesson's sample project and start the lesson.
+    Lesson(String),
     Close,
     Quit,
 }
@@ -572,6 +578,11 @@ pub struct NovoApp {
     next_tick: Instant,
     /// The last autosave failed; reported once until it works again.
     autosave_failing: bool,
+    /// What the person was doing when "Save changes?" came up, to be done
+    /// once they answer.
+    leaving: Option<Leaving>,
+    /// The window may close: the question was answered or nothing is unsaved.
+    quitting: bool,
     /// Focus mode (Ctrl+Shift+F) hides everything that is not pinned.
     focus_mode: bool,
     /// What the canvas area shows (docs/design/workspaces.md). The Cabinet
@@ -628,8 +639,6 @@ pub struct NovoApp {
 
 /// Most messages remembered; older ones are forgotten.
 const MESSAGE_HISTORY: usize = 200;
-/// How soon after a change a saved project is written to its file.
-const WRITE_DELAY: Duration = Duration::from_millis(500);
 /// How long to wait before retrying a failed autosave.
 const AUTOSAVE_RETRY: Duration = Duration::from_secs(30);
 
@@ -695,6 +704,8 @@ impl NovoApp {
             appearance_applied: None,
             next_tick: Instant::now(),
             autosave_failing: false,
+            leaving: None,
+            quitting: false,
             focus_mode: false,
             workspace: workspace::Workspace::Schematic,
             slot: layout_presets::Slot::Draw,
@@ -987,50 +998,133 @@ impl NovoApp {
     // ------------------------------------------------------------------
     // Project lifecycle
 
+    /// Does `next`, after asking "Save changes?" when it would drop unsaved
+    /// work. A file the action needs is chosen first, so cancelling the file
+    /// dialog never costs the open project its changes.
     fn leave_then(&mut self, ctx: &egui::Context, next: Leaving) {
+        let next = match next {
+            Leaving::Open => match self.pick_project("Open project") {
+                Some(path) => Leaving::OpenPath(path),
+                None => return,
+            },
+            Leaving::OpenReadOnly => match self.pick_project("Open project read-only") {
+                Some(path) => Leaving::OpenReadOnlyPath(path),
+                None => return,
+            },
+            Leaving::Recover => {
+                match self.pick_project("Recover a damaged project: pick the damaged file") {
+                    Some(path) => Leaving::RecoverPath(path),
+                    None => return,
+                }
+            }
+            other => other,
+        };
+        if self.leave_later(next.clone()) {
+            return;
+        }
+        self.do_leave(ctx, next);
+    }
+
+    /// Whether `next` has to wait for "Save changes?": true when it would
+    /// drop unsaved work, in which case it is remembered and done after the
+    /// answer. False: go ahead now.
+    fn leave_later(&mut self, next: Leaving) -> bool {
+        if self.is_open() && self.is_dirty() {
+            self.leaving = Some(next);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn pick_project(&self, title: &str) -> Option<PathBuf> {
+        let mut dialog = crate::dialogs::FileDialog::new()
+            .set_title(title)
+            .add_filter("KoperCAD project", &PROJECT_EXTENSIONS);
+        if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
+            dialog = dialog.set_directory(dir);
+        }
+        dialog.pick_file()
+    }
+
+    fn do_leave(&mut self, ctx: &egui::Context, next: Leaving) {
         match next {
             Leaving::New => self.new_project(),
-            Leaving::Open => {
-                let mut dialog = crate::dialogs::FileDialog::new()
-                    .set_title("Open project")
-                    .add_filter("KoperCAD project", &PROJECT_EXTENSIONS);
-                if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
-                    dialog = dialog.set_directory(dir);
-                }
-                if let Some(path) = dialog.pick_file() {
-                    self.open_path(&path);
-                }
-            }
-            Leaving::OpenReadOnly => {
-                let mut dialog = crate::dialogs::FileDialog::new()
-                    .set_title("Open project read-only")
-                    .add_filter("KoperCAD project", &PROJECT_EXTENSIONS);
-                if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
-                    dialog = dialog.set_directory(dir);
-                }
-                if let Some(path) = dialog.pick_file() {
-                    self.open_path_as(&path, true);
-                }
-            }
-            Leaving::Recover => {
-                let mut dialog = crate::dialogs::FileDialog::new()
-                    .set_title("Recover a damaged project: pick the damaged file")
-                    .add_filter("KoperCAD project", &PROJECT_EXTENSIONS);
-                if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
-                    dialog = dialog.set_directory(dir);
-                }
-                if let Some(path) = dialog.pick_file() {
-                    self.recover_path(&path);
-                }
-            }
+            // Resolved to a path by `leave_then`.
+            Leaving::Open | Leaving::OpenReadOnly | Leaving::Recover => {}
+            Leaving::OpenReadOnlyPath(path) => self.open_path_as(&path, true),
+            Leaving::RecoverPath(path) => self.recover_path(&path),
             Leaving::OpenPath(path) => self.open_path(&path),
             Leaving::Example => self.open_example(),
             Leaving::EmcExample => self.open_emc_example(),
             Leaving::Practice => self.start_practice(),
+            Leaving::Lesson(id) => self.start_lesson_now(&id),
             Leaving::Close => self.close_project(),
             Leaving::Quit => {
+                self.quitting = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
+        }
+    }
+
+    /// "Save changes?": asked before an action that would drop unsaved
+    /// work. Save writes the file, then goes on; Don't save drops the
+    /// changes (the recovery copy too), then goes on; Cancel stays.
+    fn save_changes_dialog(&mut self, ctx: &egui::Context) {
+        if self.leaving.is_none() {
+            return;
+        }
+        let name = self.project_name().unwrap_or_else(|| "Untitled".into());
+        let mut answer = None;
+        egui::Modal::new(egui::Id::new("save_changes")).show(ctx, |ui| {
+            ui.set_width(400.0);
+            ui.heading("Save changes?");
+            ui.label(format!("\"{name}\" has changes that are not saved."));
+            if self.project_path.is_some() {
+                ui.label("The file on disk stays as it is until you save.");
+            } else {
+                ui.label("Nothing is saved yet.");
+            }
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if primary_button(ui, "Save").clicked() {
+                    answer = Some(Some(true));
+                }
+                if ui.button("Don't save").clicked() {
+                    answer = Some(Some(false));
+                }
+                if ui.button("Cancel").clicked() {
+                    answer = Some(None);
+                }
+            });
+        });
+        // No implicit answer on a backdrop click; Escape cancels.
+        if answer.is_none() && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            answer = Some(None);
+        }
+        if let Some(answer) = answer {
+            self.answer_save_changes(ctx, answer);
+        }
+    }
+
+    /// `Some(true)`: save, then go on. `Some(false)`: don't save, go on.
+    /// `None`: cancel.
+    fn answer_save_changes(&mut self, ctx: &egui::Context, answer: Option<bool>) {
+        let Some(next) = self.leaving.take() else {
+            return;
+        };
+        match answer {
+            Some(true) => {
+                // Not saved (a cancelled dialog or a failure): stay put.
+                if self.save() {
+                    self.do_leave(ctx, next);
+                }
+            }
+            Some(false) => {
+                self.backend.discard_unsaved();
+                self.do_leave(ctx, next);
+            }
+            None => {}
         }
     }
 
@@ -1336,11 +1430,6 @@ impl NovoApp {
     /// time for the next one even when nothing else repaints.
     fn tick(&mut self, ctx: &egui::Context) {
         let now = Instant::now();
-        // A saved project is written to its file shortly after each change.
-        // While writing fails, wait for the slower retry instead.
-        if self.project_path.is_some() && self.is_dirty() && !self.autosave_failing {
-            self.next_tick = self.next_tick.min(now + WRITE_DELAY);
-        }
         if now < self.next_tick {
             ctx.request_repaint_after(self.next_tick - now);
             return;
@@ -1356,7 +1445,10 @@ impl NovoApp {
             Err(e) => {
                 if !self.autosave_failing {
                     self.autosave_failing = true;
-                    self.message(Level::Warning, format!("Could not save the project: {e}"));
+                    self.message(
+                        Level::Warning,
+                        format!("Could not keep a recovery copy of your changes: {e}"),
+                    );
                 }
                 Some(AUTOSAVE_RETRY)
             }
@@ -1664,6 +1756,7 @@ impl NovoApp {
         self.occurrences_popup(&ctx, canvas_rect);
         self.command_field(&ctx, canvas_rect);
         self.recovery_dialog(&ctx);
+        self.save_changes_dialog(&ctx);
         self.crash_dialog(&ctx);
         self.about_dialog(&ctx);
         self.standards_window(&ctx);
@@ -1841,6 +1934,7 @@ impl NovoApp {
             || self.wb.sheet_import.is_some()
             || self.ol.dialog_open()
             || self.backend.recovery_offer().is_some()
+            || self.leaving.is_some()
             || self.crash_report.is_some()
     }
 
@@ -1917,10 +2011,8 @@ impl NovoApp {
             "Read-only"
         } else if self.project_path.is_none() {
             "Not saved yet"
-        } else if self.autosave_failing {
-            "Not saved"
         } else if self.is_dirty() {
-            "Saving"
+            "Unsaved changes"
         } else if self.wb.recovered.is_some() {
             // Saved, yes, but the file is a rebuilt copy: not the same claim.
             "Saved (recovered copy)"
@@ -2796,6 +2888,16 @@ const ABOUT_NOTICES_URL: &str =
 impl eframe::App for NovoApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         fit_window_to_screen(ui.ctx());
+        // The window's close button asks like File > Quit does.
+        let ctx = ui.ctx().clone();
+        if !self.quitting
+            && ctx.input(|i| i.viewport().close_requested())
+            && self.is_open()
+            && self.is_dirty()
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.leave_then(&ctx, Leaving::Quit);
+        }
         motion::publish_reduce(ui.ctx(), self.settings.reduce_motion);
         self.show(ui);
         if crate::control::scene_wanted() {
@@ -2813,8 +2915,9 @@ impl eframe::App for NovoApp {
         // Only a process that died leaves a crash marker; a panic the program
         // survived (a failed solver run) is not offered as a crash.
         crate::diag::clear_pending_crash();
-        // A clean close deletes the recovery file, so the next start does
-        // not offer to restore work that was deliberately not saved.
+        // An answered close ("Don't save") deletes the recovery file; one
+        // nobody answered (a shutdown) keeps it, so the next start offers
+        // the work back.
         if let Err(e) = self.backend.close() {
             log::warn!("The project did not close cleanly: {e}");
         }
@@ -3123,14 +3226,91 @@ mod tests {
     }
 
     #[test]
-    fn closing_a_changed_project_does_not_ask() {
+    fn closing_a_changed_project_asks_and_cancel_keeps_it() {
         let ctx = themed_ctx();
         let mut app = app_with(DirtyBackend::default());
         app.run(&ctx, Action::NewProject);
         assert!(app.is_dirty());
         app.run(&ctx, Action::CloseProject);
+        assert!(app.is_open(), "the question comes first");
+        assert!(app.modal_open());
+        app.answer_save_changes(&ctx, None);
+        assert!(app.is_open());
+        assert!(app.is_dirty());
+        assert!(!app.modal_open());
+
+        app.run(&ctx, Action::CloseProject);
+        app.answer_save_changes(&ctx, Some(false));
         assert!(!app.is_open());
         assert!(!app.modal_open());
+    }
+
+    #[test]
+    fn quitting_asks_first_and_the_window_stays_open() {
+        let ctx = themed_ctx();
+        let mut app = app_with(DirtyBackend::default());
+        app.run(&ctx, Action::NewProject);
+        app.run(&ctx, Action::Quit);
+        assert!(app.modal_open());
+        assert!(!app.quitting, "nothing closes before the answer");
+        app.answer_save_changes(&ctx, Some(false));
+        assert!(app.quitting);
+        assert!(!app.is_dirty());
+
+        // Nothing unsaved: no question.
+        let mut clean = app_with(DirtyBackend::default());
+        clean.run(&ctx, Action::Quit);
+        assert!(!clean.modal_open());
+        assert!(clean.quitting);
+    }
+
+    #[test]
+    fn dont_save_and_save_both_replace_the_project() {
+        let ctx = themed_ctx();
+        let mut app = app_with(DirtyBackend::default());
+        app.run(&ctx, Action::NewProject);
+        app.project_path = Some(PathBuf::from("plant.novo"));
+        app.leave_then(&ctx, Leaving::OpenPath(PathBuf::from("other.novo")));
+        assert!(app.modal_open());
+        assert_eq!(app.project_path, Some(PathBuf::from("plant.novo")));
+        app.answer_save_changes(&ctx, Some(true));
+        assert_eq!(app.project_path, Some(PathBuf::from("other.novo")));
+        assert!(!app.modal_open());
+    }
+
+    #[test]
+    fn a_saved_files_bytes_are_unchanged_until_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let ctx = themed_ctx();
+        let mut app = storage_app();
+        app.run(&ctx, Action::NewProject);
+        assert!(app.save_to(&path));
+        let saved = std::fs::read(&path).unwrap();
+
+        let page = app.current_page.unwrap();
+        let mut open = OpenPage::new(&mut *app.backend, page).unwrap();
+        open.transact("Add page", |tx| tx.add_page("2")).unwrap();
+        assert!(app.is_dirty());
+        assert_eq!(app.saved_state(), "Unsaved changes");
+        app.backend.set_autosave_interval(Duration::ZERO);
+        for _ in 0..3 {
+            app.backend.tick().unwrap();
+        }
+        assert_eq!(std::fs::read(&path).unwrap(), saved, "no write before Save");
+
+        // Quit, answer "don't save": the file is still as saved.
+        app.run(&ctx, Action::Quit);
+        app.answer_save_changes(&ctx, Some(false));
+        eframe::App::on_exit(&mut app);
+        assert_eq!(std::fs::read(&path).unwrap(), saved);
+        let mut reopened = storage_app();
+        reopened.open_path(&path);
+        assert_eq!(page_count(&reopened), 1);
+        assert!(
+            !reopened.modal_open(),
+            "nothing to restore after Don't save"
+        );
     }
 
     #[test]
@@ -3330,6 +3510,85 @@ mod tests {
             cut,
             "the original is untouched"
         );
+    }
+
+    #[test]
+    fn a_file_cut_at_any_point_is_recovered_or_refused_in_words() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let mut app = storage_app();
+        app.run(&themed_ctx(), Action::NewProject);
+        {
+            let page = app.current_page.unwrap();
+            let mut open = OpenPage::new(&mut *app.backend, page).unwrap();
+            for n in 2..=60 {
+                open.transact("Add page", |tx| tx.add_page(n.to_string()))
+                    .unwrap();
+            }
+        }
+        assert!(app.save_to(&path));
+        app.run(&themed_ctx(), Action::CloseProject);
+        let bytes = std::fs::read(&path).unwrap();
+        for percent in [10, 25, 50, 75, 90] {
+            let cut = &bytes[..bytes.len() * percent / 100];
+            std::fs::write(&path, cut).unwrap();
+            let mut reopened = storage_app();
+            reopened.open_path(&path);
+            let said = reopened
+                .messages()
+                .iter()
+                .map(|m| m.text.clone())
+                .collect::<Vec<_>>()
+                .join(" | ");
+            assert!(
+                reopened.is_open() || !said.is_empty(),
+                "{percent}%: neither opened nor explained"
+            );
+            if reopened.is_open() {
+                assert!(said.contains("damaged"), "{percent}%: {said}");
+            }
+            assert_eq!(std::fs::read(&path).unwrap(), cut, "{percent}%: untouched");
+        }
+    }
+
+    #[test]
+    fn saving_into_a_missing_folder_or_over_a_directory_says_why() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = storage_app();
+        app.run(&themed_ctx(), Action::NewProject);
+        for target in [
+            dir.path().join("no-such-folder").join("plant.kopercad"),
+            dir.path().to_owned(),
+        ] {
+            let before = app.messages().len();
+            assert!(!app.save_to(&target), "{}", target.display());
+            let last = app.messages().last().expect("an error is shown");
+            assert!(app.messages().len() > before);
+            assert_eq!(last.level, Level::Error);
+            assert!(!last.text.is_empty());
+        }
+        assert!(app.is_dirty() || app.is_open());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn saving_into_a_read_only_folder_says_why() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let locked = dir.path().join("locked");
+        std::fs::create_dir(&locked).unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+        // A superuser ignores the mode: only meaningful when writing fails.
+        if std::fs::write(locked.join("probe"), b"x").is_ok() {
+            return;
+        }
+        let mut app = storage_app();
+        app.run(&themed_ctx(), Action::NewProject);
+        assert!(!app.save_to(&locked.join("plant.kopercad")));
+        let last = app.messages().last().expect("an error is shown");
+        assert_eq!(last.level, Level::Error);
+        assert!(!locked.join("plant.kopercad").exists());
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
 
     #[test]
@@ -3734,7 +3993,7 @@ mod tests {
         assert!(app.save_to(Path::new("plant.novo")));
         assert_eq!(app.saved_state(), "Saved");
         app.run(&ctx, Action::Undo);
-        assert_eq!(app.saved_state(), "Saving");
+        assert_eq!(app.saved_state(), "Unsaved changes");
     }
 
     #[test]

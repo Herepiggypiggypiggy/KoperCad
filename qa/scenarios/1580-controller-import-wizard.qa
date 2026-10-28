@@ -43,6 +43,7 @@ key Enter
 text 3;Frobnicate
 wait 10
 expect "to check"
+expect "with 1 control and 2 signals"
 expect "left out: names both directions"
 expect "Terminal 2 is used for"
 shot bad-table

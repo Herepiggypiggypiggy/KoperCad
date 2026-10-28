@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Add-on manager</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="@@KC@@">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.ad{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:5px;border:1px solid transparent}
+.ad.on{background:var(--wash);border-color:var(--ac)}
+.ad .ic{width:34px;height:34px;border-radius:6px;background:var(--sunken);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;color:var(--tx)}
+.ad.off .ic,.ad.off .nm{color:var(--tx3)}
+.nm{font-weight:600}
+.hs{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:11px;color:var(--tx2)}
+.prm{display:flex;align-items:center;gap:10px;height:30px;padding:0 10px;border-radius:5px;background:var(--control);border:1px solid var(--bd)}
+.prm .i{color:var(--tx2)}
+.pill.bad{color:var(--tx2)}
+</style>
+</helmet>
+<div class="kc {{theme}}" style="width:1060px;height:700px;background:var(--ground)">
+  <div class="scrim"></div>
+
+  <!-- MANAGE ADD-ONS: a centre window (960 class), opened from the app menu footer or Ctrl K "Manage add-ons" -->
+  <div class="float dlg" style="left:60px;top:40px;width:940px;height:620px;display:flex;flex-direction:column">
+    <div class="wt" style="height:44px;padding-left:16px;border-radius:10px 10px 0 0"><i class="i i-puzzle-piece i20" style="color:var(--ac)"></i><span class="t" style="font-size:15px">Add-ons</span>
+      <span class="cap">Example data: the list shows how states look</span>
+      <button class="btn" aria-label="Close"><i class="i i-x i18"></i></button></div>
+
+    <div class="row" style="flex:1;min-height:0;align-items:stretch">
+      <!-- the installed add-ons -->
+      <div class="col" style="width:330px;background:var(--panel);border-right:1px solid var(--bd);padding:10px 8px;gap:4px">
+        <div class="field" style="height:30px;margin-bottom:6px"><i class="i i-magnifying-glass i14" style="color:var(--tx3)"></i><span style="color:var(--tx3)">Find an add-on</span></div>
+        <div class="ad on"><span class="ic"><i class="i ki-controllers-radio i20"></i></span><span class="col" style="gap:2px"><span class="nm">Controllers</span><span class="cap">1.0.0 · KoperVonk</span></span><span class="grow"></span><span class="pill ok"><i class="i i-check-circle i14"></i>On</span></div>
+        <div class="ad off"><span class="ic"><i class="i i-package i20"></i></span><span class="col" style="gap:2px"><span class="nm">Company symbols</span><span class="cap">2.3 · from file</span></span><span class="grow"></span><span class="pill warn"><i class="i i-shield-warning i14"></i>Unsigned</span></div>
+        <div class="ad off"><span class="ic"><i class="i ki-drive i20"></i></span><span class="col" style="gap:2px"><span class="nm">Drive and crane</span><span class="cap">0.4 · KoperVonk</span></span><span class="grow"></span><span class="pill bad"><i class="i i-prohibit i14"></i>Needs app 0.2</span></div>
+        <div class="grow"></div>
+        <!-- install: a button and a drop target -->
+        <div class="col" style="gap:8px;align-items:stretch;padding:12px;border:1.5px dashed var(--bd2);border-radius:8px;align-items:center;text-align:center">
+          <i class="i i-file-zip i32" style="color:var(--tx2)"></i>
+          <span class="cap" style="color:var(--tx)">Drop a <span class="mono">.kcaddon</span> file here</span>
+          <button class="sec" style="height:28px"><i class="i i-plus i14"></i>Install from file…</button>
+        </div>
+      </div>
+
+      <!-- details of the selected one -->
+      <div class="col grow" style="padding:16px 18px;gap:14px;min-width:0">
+        <div class="row gap12">
+          <span class="ic" style="width:52px;height:52px;border-radius:10px;background:var(--sunken);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="i ki-controllers-radio i32" style="color:var(--ac)"></i></span>
+          <span class="col" style="gap:3px"><span style="font-size:18px;font-weight:600;letter-spacing:-.01em">Controllers</span>
+            <span class="row gap8"><span class="cap">Version 1.0.0</span><span class="pill ok"><i class="i i-seal-check i14"></i>Signed by KoperVonk</span></span></span>
+          <span class="grow"></span>
+          <span class="row gap8"><span class="cap">Enabled</span><i class="i i-toggle-right i32" style="color:var(--ac)"></i></span>
+        </div>
+        <span style="line-height:1.5;color:var(--tx)">A virtual radio or pendant panel for the live view. Operate the circuit from the panel and watch the contactors, brakes and motors follow.</span>
+
+        <div class="col gap8"><span class="lbl">What it may do</span>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">
+            <div class="prm"><i class="i i-list"></i>Add menu items</div>
+            <div class="prm"><i class="i i-sidebar-simple"></i>Add a panel and a rail tool</div>
+            <div class="prm"><i class="i i-eye"></i>Read the project</div>
+            <div class="prm"><i class="i i-pencil-simple"></i>Write controller bindings</div>
+            <div class="prm"><i class="i i-seal-check"></i>Add design checks</div>
+            <div class="prm"><i class="i i-game-controller"></i>Use input devices (off)</div>
+          </div>
+          <span class="cap" style="line-height:1.5">Add-ons run in a sandbox. They cannot open files, use the network or the clock, and cannot draw outside the panels they declare.</span>
+        </div>
+
+        <div class="col gap8"><span class="lbl">Contents · checked at every start</span>
+          <div class="col" style="gap:4px">
+            <div class="prm"><i class="i i-file-code"></i>engine.wasm<span class="grow"></span><span class="hs">9f3a…c21e</span><i class="i i-check-circle i14" style="color:var(--ok)"></i></div>
+            <div class="prm"><i class="i i-file-text"></i>data/ · 14 profiles, 6 layouts<span class="grow"></span><span class="hs">b7d0…44a9</span><i class="i i-check-circle i14" style="color:var(--ok)"></i></div>
+            <div class="prm"><i class="i i-graduation-cap"></i>help/ · 5 pages<span class="grow"></span><span class="hs">0c12…e7f3</span><i class="i i-check-circle i14" style="color:var(--ok)"></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row gap12" style="height:56px;padding:0 16px;border-top:1px solid var(--bd);background:var(--panel)">
+      <i class="i i-folder i18" style="color:var(--tx2)"></i><span class="mono" style="color:var(--tx2)">%LOCALAPPDATA% / KoperCAD / addons</span>
+      <span class="grow"></span>
+      <button class="sec" style="height:28px"><i class="i i-download-simple i14"></i>Update from file…</button>
+      <button class="sec" style="height:28px"><i class="i i-clock-counter-clockwise i14"></i>Roll back to 0.9.2</button>
+      <button class="sec" style="height:28px"><i class="i i-trash i14"></i>Remove</button>
+    </div>
+    <div class="grip" style="right:0;bottom:0"></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>

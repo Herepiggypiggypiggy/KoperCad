@@ -23,7 +23,7 @@ import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from koper_icons import ICONS, HEAD, body  # noqa: E402
+from koper_icons import ICONS, ADDON_ICONS, HEAD, body  # noqa: E402
 
 PHOSPHOR = """file-plus folder-open floppy-disk file-pdf printer arrow-counter-clockwise arrow-clockwise scissors copy clipboard trash
 magnifying-glass magnifying-glass-plus magnifying-glass-minus corners-out grid-four magnet check push-pin arrows-left-right seal-check play
@@ -38,7 +38,7 @@ shield-check circle push-pin-simple arrow-square-out frame-corners cursor-click 
 arrows-clockwise tray archive file-arrow-up image selection-all bounding-box toggle-left wave-sine flag note-pencil table  printer
 git-commit circle-notch sun moon palette rows-plus-bottom open-ai-logo hard-drives map-trifold  list-checks list-bullets textbox
 resize arrows-horizontal dock-simple monitor app-window picture-in-picture arrow-line-right arrow-line-left dots-six  cpu plug-charging
-wall power battery-charging lightning-a gear toolbox target fast-forward rewind pause stop timer clock""".split()
+wall power battery-charging lightning-a gear toolbox target fast-forward rewind pause stop timer clock puzzle-piece shield-warning toggle-right lock-key game-controller broadcast certificate fingerprint prohibit seal-warning plug record""".split()
 
 # the schematic and palette use these library symbols
 SUBSET = json.load(open(os.path.join(HERE, "symbols-subset.json")))
@@ -62,10 +62,10 @@ def icon_css(phos_dir):
             continue
         svg = open(p).read().strip()
         css.append(f".kc .i-{n}{{--m:{data_uri(svg)}}}")
-    for n, (_, _, b) in ICONS.items():
+    for n, (_, _, b) in {**ICONS, **ADDON_ICONS}.items():
         svg = HEAD + body(b).replace('fill="currentColor"', 'fill="#000"') + "</svg>"
         svg = svg.replace('stroke="currentColor"', 'stroke="#000"')
-        css.append(f".kc .ki-{n}{{--m:{data_uri(svg)}}}")
+        css.append(f".kc .ki-{n.replace('.', '-')}{{--m:{data_uri(svg)}}}")
     for sid, s in SUBSET.items():
         svg = s["svg"]
         svg = re.sub(r"<title>.*?</title>", "", svg)
