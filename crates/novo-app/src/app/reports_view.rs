@@ -487,13 +487,19 @@ impl NovoApp {
         if !typing && (ui.ctx().text_edit_focused() || self.modal_open()) {
             return None;
         }
+        // Escape is taken only when it has something to undo here (a filter, the
+        // row cursor); otherwise it passes on and closes the topmost floating window.
+        let escape_has_work = typing
+            || !self.reports_view.filter.is_empty()
+            || self.reports_view.cursor.is_some()
+            || self.reports_view.picked.is_some();
         let (find, up, down, enter, escape) = ui.input_mut(|i| {
             (
                 i.consume_key(Modifiers::COMMAND, Key::F),
                 !typing && i.consume_key(Modifiers::NONE, Key::ArrowUp),
                 i.consume_key(Modifiers::NONE, Key::ArrowDown),
                 i.consume_key(Modifiers::NONE, Key::Enter),
-                i.consume_key(Modifiers::NONE, Key::Escape),
+                escape_has_work && i.consume_key(Modifiers::NONE, Key::Escape),
             )
         });
         if find {
