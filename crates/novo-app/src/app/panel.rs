@@ -32,6 +32,11 @@ const MIN_WIDTH: f32 = 260.0;
 const MIN_HEIGHT: f32 = 120.0;
 /// A panel the person opens starts at least this wide.
 const DIALOG_MIN_WIDTH: f32 = 380.0;
+/// A dialog or modal cannot be dragged shorter than this (clamped to the
+/// window): its title, a full content row and the footer buttons stay in view.
+const DIALOG_MIN_HEIGHT: f32 = 240.0;
+/// The status bar along the bottom edge: a dialog is kept above it.
+const STATUS_BAR: f32 = 26.0;
 /// Width of the card that parks in the bottom right corner (the lesson card).
 pub(super) const CORNER_CARD_WIDTH: f32 = 316.0;
 
@@ -475,7 +480,8 @@ pub(super) fn dialog<'a>(
     // egui derives the window's id from `Some(title text)`; `esc` reads it
     // back. The test `escape_closes_the_dialog_on_top` catches a change.
     ctx.data_mut(|d| d.insert_temp(pending_id(), egui::Id::new(Some(title.text()))));
-    let full = ctx.content_rect().shrink(MARGIN);
+    let mut full = ctx.content_rect().shrink(MARGIN);
+    full.max.y = (full.max.y - STATUS_BAR).max(full.min.y + DIALOG_MIN_HEIGHT);
     let size = [size[0] * grow(full.width()), size[1] * grow(full.width())];
     let mut screen = full;
     // A dialog stays left of the parked corner card, so it does not open over
@@ -493,7 +499,8 @@ pub(super) fn dialog<'a>(
     let window = egui::Window::new(title)
         .resizable(true)
         .collapsible(true)
-        .min_width(MIN_WIDTH.min(width))
+        .min_width(DIALOG_MIN_WIDTH.min(width))
+        .min_height(DIALOG_MIN_HEIGHT.min((screen.height() - TOP - BOTTOM).max(MIN_HEIGHT)))
         .max_height((screen.height() - TOP - BOTTOM).max(MIN_HEIGHT))
         .constrain_to(screen)
         .scroll([false, true]);
@@ -644,7 +651,8 @@ pub(super) fn modal<R: Default>(
     let id = egui::Id::new(("modal", name));
     let layer = egui::LayerId::new(egui::Order::Foreground, id);
     let screen = ctx.content_rect();
-    let full = screen.shrink(MARGIN);
+    let mut full = screen.shrink(MARGIN);
+    full.max.y = (full.max.y - STATUS_BAR).max(full.min.y + DIALOG_MIN_HEIGHT);
     let (top_modal, any_popup) = {
         let top = ctx.memory_mut(|m| {
             m.set_modal_layer(layer);
@@ -664,12 +672,15 @@ pub(super) fn modal<R: Default>(
         });
     let moved = is_moved(ctx, id);
     let last = ctx.memory(|m| m.area_rect(id));
-    let width = size[0].min(full.width()).max(MIN_WIDTH.min(full.width()));
+    let width = size[0]
+        .min(full.width())
+        .max(DIALOG_MIN_WIDTH.min(full.width()));
     let mut window = egui::Window::new(title)
         .id(id)
         .order(egui::Order::Foreground)
         .collapsible(false)
-        .min_width(MIN_WIDTH.min(width))
+        .min_width(DIALOG_MIN_WIDTH.min(width))
+        .min_height(DIALOG_MIN_HEIGHT.min(full.height() - 2.0 * MARGIN))
         .max_height((full.height() - 2.0 * MARGIN).max(MIN_HEIGHT))
         .constrain_to(full)
         // A window with a size of its own scrolls and resizes both ways. One
@@ -1421,7 +1432,39 @@ mod tests {
         let rect = settle(&ctx, screen_1366());
         assert!(screen_1366().contains_rect(rect), "{rect:?}");
         assert!((rect.center().x - 683.0).abs() < 2.0, "{rect:?}");
-        assert!((rect.center().y - 384.0).abs() < 2.0, "{rect:?}");
+        // Centered above the status bar.
+        assert!(
+            (rect.center().y - (768.0 - STATUS_BAR) / 2.0).abs() < 2.0,
+            "{rect:?}"
+        );
+        assert!(rect.bottom() <= 768.0 - STATUS_BAR, "{rect:?}");
+    }
+
+    #[test]
+    fn a_modal_cannot_be_made_smaller_than_its_footer_needs() {
+        let screen = screen_1366();
+        let ctx = egui::Context::default();
+        let mut home = egui::Rect::NOTHING;
+        for _ in 0..4 {
+            home = modal_frame_sized(&ctx, screen, vec![], false, 480.0).0;
+        }
+        let from = home.right_bottom() - egui::vec2(2.0, 2.0);
+        let to = egui::pos2(100.0, 100.0);
+        let step = |events| modal_frame_sized(&ctx, screen, events, false, 480.0);
+        step(vec![egui::Event::PointerMoved(from), click_at(from, true)]);
+        for n in 1..=4 {
+            step(vec![egui::Event::PointerMoved(
+                from + (to - from) * (n as f32 / 4.0),
+            )]);
+        }
+        step(vec![click_at(to, false)]);
+        let mut small = egui::Rect::NOTHING;
+        for _ in 0..4 {
+            small = modal_frame_sized(&ctx, screen, vec![], false, 480.0).0;
+        }
+        assert!(small.width() < home.width() - 20.0, "{home:?} {small:?}");
+        assert!(small.width() >= DIALOG_MIN_WIDTH - 1.0, "{small:?}");
+        assert!(small.height() >= DIALOG_MIN_HEIGHT - 1.0, "{small:?}");
     }
 
     #[test]
