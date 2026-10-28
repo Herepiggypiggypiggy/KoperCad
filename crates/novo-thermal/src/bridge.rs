@@ -80,7 +80,7 @@ impl Default for BridgeOptions {
 }
 
 /// Why no scenario could be built.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum BridgeError {
     #[error("this is not an enclosure")]
     NotAnEnclosure,
@@ -88,7 +88,24 @@ pub enum BridgeError {
     NoPlate,
     #[error("the enclosure interior (width, height, depth) is not set")]
     NoInterior,
+    #[error(
+        "{tag} has a loss of {loss} W; no single device in a cabinet loses more than {max} W, so the loss is probably mistyped"
+    )]
+    ImplausibleLoss {
+        tag: String,
+        loss: String,
+        max: String,
+    },
+    #[error(
+        "{outside} of {placed} devices lie outside the enclosure interior; the enclosure size and the layout do not match"
+    )]
+    MostlyOutside { outside: usize, placed: usize },
 }
+
+/// The most heat one device of a cabinet gives off, W. A large drive loses a
+/// few kilowatts; more than this is a typing mistake, and a run with it
+/// would answer with temperatures that mean nothing.
+pub const MAX_PLAUSIBLE_DEVICE_LOSS_W: f64 = 50_000.0;
 
 /// A device the report points at.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,6 +128,8 @@ pub struct BridgeReport {
     /// Devices of this enclosure's location that are not placed on the plate
     /// and so are not part of the heat picture.
     pub unplaced: Vec<DeviceRef>,
+    /// Placed devices whose footprint reaches outside the enclosure interior.
+    pub outside: Vec<DeviceRef>,
     /// Sum of effective loss of the placed devices, W.
     pub total_loss_w: f64,
     /// Ducts with no height in the model (the solver takes the width).
@@ -142,6 +161,10 @@ impl BridgeReport {
             ),
             line(self.without_depth.len(), "no depth (60 mm is assumed)"),
             line(self.unplaced.len(), "not been placed on the plate"),
+            line(
+                self.outside.len(),
+                "a footprint outside the enclosure interior (check the enclosure size)",
+            ),
             (self.unsized_ducts > 0).then(|| {
                 format!(
                     "{} wire duct{} no height (the width is used as the height off the plate)",
@@ -321,6 +344,21 @@ pub fn scenario_from_project(
             .unwrap_or(1.0)
             .min(1.0);
         let loss_w = loss.unwrap_or(0.0) * factor;
+        if loss_w > MAX_PLAUSIBLE_DEVICE_LOSS_W {
+            return Err(BridgeError::ImplausibleLoss {
+                tag: who.tag,
+                loss: format!("{loss_w:.3e}"),
+                max: format!("{MAX_PLAUSIBLE_DEVICE_LOSS_W:.0}"),
+            });
+        }
+        let footprint = shift(p.footprint());
+        if footprint.x < -0.5
+            || footprint.y < -0.5
+            || footprint.x + footprint.w > interior.width + 0.5
+            || footprint.y + footprint.h > interior.height + 0.5
+        {
+            report.outside.push(who.clone());
+        }
         report.total_loss_w += loss_w;
         devices.push(ThermalDevice {
             id: p.id,
@@ -333,6 +371,12 @@ pub fn scenario_from_project(
         });
     }
     report.placed = devices.len();
+    if report.placed > 0 && report.outside.len() * 2 > report.placed {
+        return Err(BridgeError::MostlyOutside {
+            outside: report.outside.len(),
+            placed: report.placed,
+        });
+    }
 
     let placed: std::collections::HashSet<u64> = layout.placements.iter().map(|p| p.id).collect();
     if !structure.tag.location.is_empty() {

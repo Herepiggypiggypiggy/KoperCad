@@ -1255,6 +1255,9 @@ impl NovoApp {
                     text: p.title.clone(),
                 });
                 self.ol.reveal = Some(Reveal::Page { page, rename: true });
+                // The title box lives in the Pages panel: a rename from
+                // Ctrl+K with the panel closed would be invisible.
+                self.outline_open = true;
             }
             Act::RenameGroup(levels) => {
                 self.ol.rename = Some(Rename {

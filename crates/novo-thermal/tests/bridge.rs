@@ -284,3 +284,47 @@ fn a_duct_stands_as_high_as_its_cross_section_says() {
     // far below the old typical 70 % of the air depth
     assert!(duct.blockage() < 0.35);
 }
+
+#[test]
+fn an_absurd_device_loss_is_refused_with_the_device_named() {
+    let (mut p, cab) = fixture();
+    let k2 = p
+        .all::<novo_core::Device>()
+        .find(|d| d.tag.to_string() == "=A1+CAB1-K2")
+        .map(|d| d.id)
+        .unwrap();
+    p.transact("typo", |tx| {
+        tx.set_property(k2, "power_loss_w", Some(Value::Float(1e12)))
+    })
+    .unwrap();
+    let e = scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap_err();
+    assert!(matches!(e, BridgeError::ImplausibleLoss { .. }), "{e}");
+    assert!(e.to_string().contains("K2"), "{e}");
+}
+
+#[test]
+fn an_enclosure_too_small_for_the_layout_is_refused_and_a_few_strays_are_listed() {
+    let (mut p, cab) = fixture();
+    // The fixture layout fits: nothing outside.
+    let ok = scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap();
+    assert!(ok.report.outside.is_empty());
+    p.transact("shrink", |tx| {
+        set_enclosure(
+            tx,
+            cab,
+            &Enclosure {
+                width: 100.0,
+                height: 100.0,
+                depth: 250.0,
+                plate_setback: 0.0,
+                door: None,
+                front_clearance: None,
+                hinge_side_clearance: None,
+            },
+        )
+    })
+    .unwrap();
+    let e = scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap_err();
+    assert!(matches!(e, BridgeError::MostlyOutside { .. }), "{e}");
+    assert!(e.to_string().contains("outside the enclosure"), "{e}");
+}

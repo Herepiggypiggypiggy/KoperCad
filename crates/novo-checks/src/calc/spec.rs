@@ -44,6 +44,7 @@ use super::network::{Branch, Network, NodeId, SourceModel, Transformer};
 use super::selectivity::{Backup, Basis, PairTable, Status as SelStatus, backup, selectivity};
 use super::short_circuit::Trip;
 use super::tables::TableSet;
+use super::{num, within};
 
 /// A parsed supply with its circuits, ready to evaluate.
 #[derive(Debug, Clone)]
@@ -326,6 +327,60 @@ pub fn parse(root: &Value) -> Result<Plant, String> {
     Ok(Plant { network, circuits })
 }
 
+/// A circuit fed from another one sees the drop of every cable above it
+/// too: its *Voltage drop* row shows the sum along the chain (percent of
+/// each cable's own nominal voltage, a close sum when the voltage is the
+/// same all the way) and is judged against its own limit.
+fn accumulate_voltage_drop(plant: &Plant, reports: &mut [CircuitReport]) {
+    let own: Vec<Option<f64>> = reports
+        .iter()
+        .map(|r| {
+            r.rows
+                .iter()
+                .find(|r| r.rule == Rule::VoltageDrop)
+                .and_then(|r| r.value)
+        })
+        .collect();
+    for (i, c) in plant.circuits.iter().enumerate() {
+        let mut upstream = 0.0;
+        let mut names = Vec::new();
+        let (mut at, mut steps) = (c.parent, 0);
+        // The step count stops a loop of circuits fed from each other.
+        while let Some(p) = at.filter(|_| steps < plant.circuits.len()) {
+            if let Some(v) = own[p] {
+                upstream += v;
+                names.push(plant.circuits[p].design.name.clone());
+            }
+            at = plant.circuits[p].parent;
+            steps += 1;
+        }
+        let (Some(own_drop), true) = (own[i], upstream > 0.0) else {
+            continue;
+        };
+        let total = own_drop + upstream;
+        let limit = c.design.drop_limit_percent;
+        let Some(row) = reports[i]
+            .rows
+            .iter_mut()
+            .find(|r| r.rule == Rule::VoltageDrop)
+        else {
+            continue;
+        };
+        if row.status != Status::Fail && !within(total, limit) {
+            row.status = Status::Fail;
+        }
+        row.value = Some(total);
+        row.text = format!(
+            "{} % in total: {} % in this cable plus {} % above it ({}), limit {} %",
+            num(total),
+            num(own_drop),
+            num(upstream),
+            names.join(", "),
+            num(limit)
+        );
+    }
+}
+
 /// Evaluates every circuit of a parsed plant. Circuits fed from another
 /// circuit also get a *Selectivity* row against the device upstream, and a
 /// breaking-capacity failure is re-judged as back-up protection when
@@ -340,6 +395,7 @@ pub fn evaluate_all(
         .iter()
         .map(|c| evaluate(&plant.network, c.at, &c.design, tables))
         .collect();
+    accumulate_voltage_drop(plant, &mut reports);
     for (i, c) in plant.circuits.iter().enumerate() {
         let Some(parent) = c.parent else { continue };
         let up = &plant.circuits[parent].design.device;
@@ -442,6 +498,39 @@ mod tests {
                   "cable": { "section_mm2": 2.5, "length_m": 20, "pe_mm2": 2.5 } }
             ]
         })
+    }
+
+    #[test]
+    fn a_branch_circuit_carries_the_drop_of_its_feeder() {
+        let plant = parse(&sample()).unwrap();
+        let reports = evaluate_all(&plant, &TableSet::builtin(), None);
+        let drop = |i: usize| {
+            reports[i]
+                .rows
+                .iter()
+                .find(|r| r.rule == Rule::VoltageDrop)
+                .unwrap()
+                .clone()
+        };
+        let alone = |i: usize| {
+            let mut one = plant.clone();
+            one.circuits[i].parent = None;
+            let r = evaluate_all(&one, &TableSet::builtin(), None);
+            r[i].rows
+                .iter()
+                .find(|r| r.rule == Rule::VoltageDrop)
+                .unwrap()
+                .value
+                .unwrap()
+        };
+        let (q1, m1) = (drop(0), drop(1));
+        assert_eq!(
+            q1.value.unwrap(),
+            alone(0),
+            "the feeder has nothing above it"
+        );
+        assert!((m1.value.unwrap() - (alone(1) + alone(0))).abs() < 1e-9);
+        assert!(m1.text.contains("above it (Q1)"), "{}", m1.text);
     }
 
     #[test]

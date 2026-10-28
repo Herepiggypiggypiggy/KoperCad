@@ -2022,7 +2022,12 @@ impl SchematicView {
             };
             match done {
                 Ok(()) => close = true,
-                Err(e) => rename.error = Some(e),
+                Err(e) => {
+                    rename.error = Some(e);
+                    // Enter took the focus out of the box: give it back so
+                    // the text can be corrected without a click.
+                    rename.focus = true;
+                }
             }
         }
         if close {
