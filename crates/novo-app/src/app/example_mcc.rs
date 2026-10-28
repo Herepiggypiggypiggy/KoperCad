@@ -165,34 +165,42 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
     .into_iter()
     .enumerate()
     {
-        tb.push(kit.term(x0, name, key, (40.0 + 8.0 * i as f64, 30.0)));
+        tb.push(kit.term(x0, name, key, (40.0 + 16.0 * i as f64, 40.0)));
     }
     // The supply comes in from the left of the sheet: feeds on top of the
     // incoming terminals, N and PE continue to feeds under them.
     for (i, pot) in [l1, l2, l3, n].into_iter().enumerate() {
-        let f = kit.feed(pot, (40.0 + 8.0 * i as f64, 14.0));
+        let f = kit.feed(pot, (40.0 + 16.0 * i as f64, 12.0));
         supply_wires.push(kit.wire_mm2((f, "1"), (tb[i], "1"), 16.0));
     }
-    let f = kit.feed_pe(pe, (72.0, 14.0));
+    let f = kit.feed_pe(pe, (104.0, 12.0));
     supply_wires.push(kit.wire_mm2((f, "1"), (tb[4], "1"), 16.0));
-    let fnn_down = kit.feed_down(n, (64.0, 46.0));
+    let fnn_down = kit.feed_down(n, (88.0, 56.0));
     kit.wire_mm2((tb[3], "2"), (fnn_down, "1"), 16.0);
-    let fpe_down = kit.feed_down(pe, (72.0, 46.0));
+    let fpe_down = kit.feed_down(pe, (104.0, 56.0));
     kit.wire_mm2((tb[4], "2"), (fpe_down, "1"), 16.0);
     let q0 = kit.put(
         "iec/switches/switch_disconnector_3p",
-        (40.0, 56.0),
+        (40.0, 66.0),
         &format!("{CAB}-Q0"),
     );
     for (i, t) in tb.iter().take(3).enumerate() {
+        // The terminals sit 16 mm apart, the poles 8 mm: the outer two
+        // wires step in at their own level so none cross.
         let pole = ["1", "3", "5"][i];
-        kit.wire_mm2((*t, "2"), (q0, pole), 16.0);
+        let corners: &[(f64, f64)] = match i {
+            1 => &[(56.0, 50.0), (48.0, 50.0)],
+            2 => &[(72.0, 54.0), (56.0, 54.0)],
+            _ => &[],
+        };
+        let w = kit.wire_via((*t, "2"), (q0, pole), corners);
+        kit.set_mm2(w, 16.0);
     }
     kit.describe(&format!("{CAB}-Q0"), "Main switch");
     let feed_l = [l1, l2, l3];
     for (i, pot) in feed_l.into_iter().enumerate() {
         let pin = ["2", "4", "6"][i];
-        let f = kit.feed_down(pot, (40.0 + 8.0 * i as f64, 84.0));
+        let f = kit.feed_down(pot, (40.0 + 8.0 * i as f64, 94.0));
         kit.wire_mm2((q0, pin), (f, "1"), 16.0);
     }
     // Control supply: 2 pole breaker, then the 24 V DC power supply.
@@ -222,8 +230,8 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
     kit.wire((g1, "M"), (f0, "1"));
     kit.cable(
         "=MCC-W0",
-        &["L1", "L2", "L3", "N", "PE"],
-        &supply_wires,
+        &["PE", "N", "L3", "L2", "L1"],
+        &supply_wires.iter().rev().copied().collect::<Vec<_>>(),
         16.0,
         25.0,
         "Incoming supply cable",

@@ -217,10 +217,15 @@ impl<'a, 't> Kit<'a, 't> {
     /// [`Kit::wire`] with the conductor's cross-section in mm².
     pub fn wire_mm2(&mut self, a: Pin<'_>, b: Pin<'_>, mm2: f64) -> WireId {
         let wire = self.wire(a, b);
+        self.set_mm2(wire, mm2);
+        wire
+    }
+
+    /// Sets the cross-section of a drawn wire.
+    pub fn set_mm2(&mut self, wire: WireId, mm2: f64) {
         self.tx
             .update::<Wire>(wire, |w| w.cross_section_mm2 = Some(mm2))
             .expect("the wire was just drawn");
-        wire
     }
 
     /// Three wires between equal-numbered poles: `a` pins to `b` pins in
