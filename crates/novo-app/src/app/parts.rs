@@ -67,6 +67,9 @@ pub(crate) struct PartsWindow {
     /// The part whose Remove from library awaits a second click.
     confirm_remove: Option<PartKey>,
     focus_search: bool,
+    /// Whether a device is selected on the drawing, so "Use for selected
+    /// device" has something to act on. Set every frame.
+    pub(super) device_selected: bool,
     /// Builds the 3D models of imported STEP files in the background;
     /// created on the first frame, when the repaint handle is known.
     geometry: Option<GeometryService>,
@@ -171,6 +174,7 @@ impl PartsWindow {
             catalog_path: user_catalog_path(),
             confirm_remove: None,
             focus_search: true,
+            device_selected: false,
             geometry: None,
             quality: Default::default(),
             pins: Default::default(),
@@ -886,10 +890,25 @@ impl NovoApp {
         }
     }
 
+    /// The command `parts.browser` (Library > Parts): opens the Parts
+    /// window, or closes it when it is open.
+    pub(super) fn toggle_parts_browser(&mut self) {
+        if self.wb.parts.take().is_none() {
+            self.open_parts_browser();
+        }
+    }
+
     pub(super) fn parts_window(&mut self, ctx: &egui::Context) {
+        if self.wb.parts.is_none() {
+            return;
+        }
+        let device_selected = self.backend.document().is_some_and(|d| {
+            !super::part_picker::selected_devices(d.project(), &self.selection()).is_empty()
+        });
         let Some(win) = self.wb.parts.as_mut() else {
             return;
         };
+        win.device_selected = device_selected;
         let mut open = true;
         let mut actions = Vec::new();
         win.wake.get_or_insert_with(|| ctx.clone());
@@ -1462,8 +1481,17 @@ fn parts_ui(
         actions.push(PartsAction::Select(rows[next].0.clone()));
         win.reveal = true;
     }
-    if esc && (search_focused || ui.memory(|m| m.focused()).is_none()) {
-        actions.push(PartsAction::Close);
+    if esc {
+        // Esc clears a search first, then closes the window. It is left to
+        // the other text fields (the New part form) while one has the
+        // keyboard, but any other focus (a list row, a button, the maker
+        // menu) does not keep the window open.
+        let typing_elsewhere = ui.ctx().egui_wants_keyboard_input() && !search_focused;
+        if search_focused && !win.query.is_empty() {
+            win.query.clear();
+        } else if !typing_elsewhere {
+            actions.push(PartsAction::Close);
+        }
     }
     if win.import.is_some() || dragging {
         egui::Panel::bottom("parts_status")
@@ -1736,12 +1764,18 @@ fn detail_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAc
             );
             ui.add_space(6.0);
             ui.horizontal_wrapped(|ui| {
-                if widgets::primary_button(ui, "Use for selected device")
-                    .on_hover_text(
+                // The main action only when it can act: with no device
+                // selected it is an ordinary button that says what to do.
+                let use_it = if win.device_selected {
+                    widgets::primary_button(ui, "Use for selected device").on_hover_text(
                         "Gives the devices selected on the drawing this part (one undo step)",
                     )
-                    .clicked()
-                {
+                } else {
+                    ui.button("Use for selected device").on_hover_text(
+                        "Select a device on the drawing first, then give it this part",
+                    )
+                };
+                if use_it.clicked() {
                     actions.push(PartsAction::UseForSelection(key.clone()));
                 }
                 if !win.in_library(&key) && ui.button("Import").clicked() {
