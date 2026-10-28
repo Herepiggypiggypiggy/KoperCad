@@ -194,10 +194,19 @@ jobs:
           mkdir -p dist out
           cp target/release/kopercad.exe dist/
           cp target/release/kopercad-cli.exe dist/
-          # Launchers installed before the rename start novoelectric.exe after
-          # unpacking this zip; keep a copy until they have been refreshed.
-          cp target/release/kopercad.exe dist/novoelectric.exe
-          if [ -f target/release/examples/demo.exe ]; then cp target/release/examples/demo.exe dist/canvas-demo.exe; fi
+          # What a tester needs next to the exe: the two launchers (normal and
+          # safe graphics), and the readmes. No kopercad.portable marker: the
+          # launcher replaces this folder on every update, so settings, logs and
+          # recovery files stay in the user profile.
+          cp packaging/windows/portable/run.cmd packaging/windows/portable/run-safe-graphics.cmd dist/
+          cp packaging/windows/experimental/README-EXPERIMENTAL.txt dist/
+          cp docs/TESTER-README.md dist/TESTER-README.md
+          cp THIRD_PARTY_NOTICES.txt dist/
+          # The canvas stress demo is a separate release file: it is 74 MB and
+          # only the GPU check on real hardware needs it. (A copy of the exe
+          # under the old product name, novoelectric.exe, is no longer shipped;
+          # run-latest.ps1 still starts one if an old build has only that.)
+          if [ -f target/release/examples/demo.exe ]; then cp target/release/examples/demo.exe out/canvas-demo.exe; fi
           {
             echo "KoperCAD experimental build $stamp"
             echo
@@ -240,6 +249,7 @@ jobs:
           # build. For running kopercad.exe straight from a git clone.
           mkdir stage && unzip -q out/novoelectric-experimental-windows.zip kopercad.exe kopercad-cli.exe BUILD_INFO.txt -d stage
           cp scripts/latest-build/run.cmd scripts/latest-build/import-parts.cmd scripts/latest-build/README.md stage/
+          cp packaging/windows/portable/run-safe-graphics.cmd stage/
           size=$(stat -c %s stage/kopercad.exe)
           if [ "$size" -gt 95000000 ]; then echo "kopercad.exe is $size bytes, over the git file limit; skipping the branch"; exit 0; fi
           cd stage
@@ -258,5 +268,8 @@ jobs:
           fi
           gh release upload experimental --repo "$REPO" --clobber \
             out/novoelectric-experimental-windows.zip out/build-info.json
+          if [ -f out/canvas-demo.exe ]; then
+            gh release upload experimental --repo "$REPO" --clobber out/canvas-demo.exe
+          fi
           # The tag marks main at build time; build-info.json names the exact merged tree.
           gh release edit experimental --repo "$REPO" --target "$main_sha" --notes-file out/BUILD_INFO.txt

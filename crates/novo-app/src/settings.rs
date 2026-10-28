@@ -52,6 +52,9 @@ pub struct Settings {
     /// How tightly the contact table under a coil is drawn, `"full"` or
     /// `"compact"` (empty: full): a per-user preference.
     pub xref_density: String,
+    /// Whether the contact table under a coil leaves out the contacts the
+    /// device has but the drawing does not use (shown dim by default).
+    pub xref_hide_spare: bool,
     /// The colour theme, `"dark"` (empty), `"light"` or `"system"`.
     pub appearance_theme: String,
     /// The interface density, `"standard"` (empty), `"compact"` or `"touch"`.

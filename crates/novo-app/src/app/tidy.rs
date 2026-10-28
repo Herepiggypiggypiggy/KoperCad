@@ -82,8 +82,12 @@ impl NovoApp {
             Ok((joined, changes)) => {
                 self.changed_outside_canvas(&changes);
                 let text = match (found.wires.len(), joined) {
-                    (n, 0) => format!("Tidied {n} wires"),
-                    (n, j) => format!("Tidied {n} wires, joined {j} open ends"),
+                    (n, 0) => format!("Tidied {}", super::count_words::wires(n)),
+                    (n, 1) => format!("Tidied {}, joined 1 open end", super::count_words::wires(n)),
+                    (n, j) => format!(
+                        "Tidied {}, joined {j} open ends",
+                        super::count_words::wires(n)
+                    ),
                 };
                 self.message(Level::Info, text);
             }

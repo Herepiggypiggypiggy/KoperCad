@@ -22,6 +22,13 @@ pub fn headline_count(report_id: &str, output: &ReportOutput) -> (usize, &'stati
             .sum()
     };
     match report_id {
+        // The contents list also carries the panels table; the headline
+        // counts the pages (a generated page counts once per sheet).
+        id if id == crate::toc::TableOfContents::ID
+            || crate::toc::PanelContents::of_generator(id).is_some() =>
+        {
+            (rows_of(&["pages"]), "pages")
+        }
         "wires" => (output.row_count(), "connections"),
         "cutlist" => (
             output
@@ -48,6 +55,7 @@ pub fn count_text(n: usize, noun: &str) -> String {
         "drawn wires" => "drawn wire",
         "wire labels" => "wire label",
         "rows" => "row",
+        "pages" => "page",
         "supply and PE leads" => "supply or PE lead",
         "wire pieces" => "wire piece",
         other => other,

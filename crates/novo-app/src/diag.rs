@@ -46,6 +46,7 @@ thread_local! {
 static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static GPU: OnceLock<String> = OnceLock::new();
 static OS: OnceLock<String> = OnceLock::new();
+static DISPLAY: Mutex<String> = Mutex::new(String::new());
 
 /// `%LOCALAPPDATA%\KoperCAD\logs`, or the platform's per-user data folder.
 /// With a profile folder (`--profile-dir`) it is `<profile>/local/KoperCAD/logs`.
@@ -139,6 +140,13 @@ pub fn set_gpu(description: String) {
     let _ = GPU.set(description);
 }
 
+/// Remembers the window and monitor geometry, for the reports.
+pub fn set_display(description: String) {
+    if let Ok(mut d) = DISPLAY.lock() {
+        *d = description;
+    }
+}
+
 /// The graphics adapter in use, once the window has opened.
 pub fn gpu() -> Option<String> {
     GPU.get().cloned()
@@ -186,6 +194,11 @@ fn take_pending_in(dir: &Path) -> Option<PathBuf> {
     report.is_file().then_some(report)
 }
 
+/// The time now, in the form the log uses.
+pub(crate) fn utc_now() -> String {
+    utc_stamp(SystemTime::now())
+}
+
 fn write_header(out: &mut String) {
     let _ = writeln!(
         out,
@@ -214,6 +227,17 @@ fn write_header(out: &mut String) {
         "Graphics: {}",
         GPU.get().map_or("not known yet", String::as_str)
     );
+    if let Some(avoided) = crate::startup::avoided_for_report() {
+        let _ = writeln!(
+            out,
+            "Graphics adapters tried last (a start stopped while using them): {avoided}"
+        );
+    }
+    if let Ok(d) = DISPLAY.try_lock()
+        && !d.is_empty()
+    {
+        let _ = writeln!(out, "Display: {d}");
+    }
     let _ = writeln!(out, "Time: {}", utc_stamp(SystemTime::now()));
 }
 
