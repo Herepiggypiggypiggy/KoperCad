@@ -33,6 +33,7 @@ fn complete() -> CatalogPart {
         currency: "EUR".into(),
         per: 1,
         date: "2026-10-15".into(),
+        unit: String::new(),
     });
     p.provenance = Some(Provenance {
         source: "import:bmecat".into(),

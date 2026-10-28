@@ -208,6 +208,20 @@ impl LiveView {
         self.solved.as_ref().expect("solved above")
     }
 
+    /// One step of the hoist run (`hoist_run`): the circuit settles over `dt` seconds and the
+    /// derived motor and lamp states and the energized coils are returned.
+    pub(super) fn settle_for_run(
+        &mut self,
+        project: &Project,
+        dt: f64,
+    ) -> (novo_sim::DeviceStates, BTreeSet<SymbolId>) {
+        let solved = self.solved(project, dt);
+        (
+            novo_sim::device_states(project, &solved.netlist, &solved.settled),
+            solved.settled.energized.clone(),
+        )
+    }
+
     /// Forgets the last solution: the next frame solves again.
     pub(super) fn invalidate(&mut self) {
         self.solved = None;
@@ -811,9 +825,13 @@ impl NovoApp {
         let live = &mut self.wb.live;
         live.plc.sync(project, view.editor.catalog.library());
         let dt = f64::from(ctx.input(|i| i.stable_dt));
+        // A hoist run steps the circuit itself, in small fixed ticks; the frame only reads it.
+        let running = super::hoist_run::advance(&mut self.wb.hoist, &mut self.wb.live, project, dt);
+        let live = &mut self.wb.live;
+        let solve_dt = if running { 0.0 } else { dt };
         let why_target = live.why;
         let hide_flow_marks = live.hide_flow;
-        let solved = live.solved(project, dt);
+        let solved = live.solved(project, solve_dt);
         let timing = solved.settled.timing.then_some(solved.settled.remaining);
         let wires = lit_wires(project, page, &solved.netlist, &solved.settled.solution);
         let legend = legend(
@@ -926,6 +944,18 @@ impl NovoApp {
             reduced: self.settings.reduce_motion,
             dt: dt as f32,
         });
+
+        super::hoist_run::paint_badges(
+            ctx,
+            canvas,
+            &to_screen,
+            project,
+            self.canvas
+                .schematic_ref()
+                .map(|v| v.editor.catalog.library()),
+            page,
+            &self.wb.hoist,
+        );
 
         // Wires: lit in their colour, dimmed when nothing reaches them. The
         // canvas draws them in its wire layer, under the symbols and text.

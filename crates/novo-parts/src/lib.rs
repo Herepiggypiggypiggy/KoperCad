@@ -35,6 +35,7 @@ mod bulk;
 mod cadmatch;
 mod catalog;
 mod csv;
+mod etim;
 mod fit;
 mod import;
 mod library;
@@ -62,7 +63,7 @@ pub use assign::{
     suggestions_for_device, terminal_kind_of, terminal_part, unused_parts,
 };
 pub use bmecat::{
-    BmecatError, ECLASS_CLASS_KEY, ETIM_CLASS_KEY, import_bmecat, import_bmecat_report,
+    BmecatError, BmecatRead, ECLASS_CLASS_KEY, ETIM_CLASS_KEY, import_bmecat, read_bmecat,
 };
 pub use browser::{BrowserRow, RowAction, browser_rows};
 pub use bulk::{
@@ -81,6 +82,7 @@ pub use csv::{
     Column, DelimitedRow, ImportError, ImportReport, ParseError, column_for, import_catalog,
     parse_delimited,
 };
+pub use etim::{EtimError, EtimModel};
 pub use fit::{
     DeviceNeed, Fit, KindCheck, PartFacts, Role, Supply, check_kind, check_kind_with, coil_supply,
     conflict, conflict_with, device_role, fit, parse_supply, part_role,

@@ -149,7 +149,9 @@ impl Fix {
             Fix::Terminate360 { .. } => {
                 "Bond both shield ends all round at the gland or a shield bar.".to_owned()
             }
-            Fix::AddFilter { .. } => "Add a mains filter".to_owned(),
+            Fix::AddFilter { .. } => {
+                "Add a mains filter to the device list (you draw and wire it in series).".to_owned()
+            }
             Fix::MoveRun { points_after, .. } => {
                 format!("Run the wire in another duct (score about {points_after} after).")
             }

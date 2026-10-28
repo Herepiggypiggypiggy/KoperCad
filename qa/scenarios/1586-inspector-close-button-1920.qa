@@ -1,0 +1,21 @@
+@title Cabinet inspector: the plate card closes with its title-bar button (1920x1080)
+@area Cabinet
+@sizes 1920x1080
+# Plate setup opens the inspector with the plate card; its title bar now has a close button, so it can be dismissed without clicking an empty spot. (Tadjiro laptop test, finding 27.)
+open qa/fixtures/emc-cabinet-bonding.novo
+wait 20
+key ctrl+k
+wait 6
+text plate setup
+wait 8
+key Enter
+wait 30
+expect "Mounting plate (mm)"
+shot 01-plate-card-with-close
+check_layout
+# The close button sits at the right of the title bar.
+click 1885 194
+wait 15
+expect_not "Mounting plate (mm)"
+shot 02-closed
+check_layout
