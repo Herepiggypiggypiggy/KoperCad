@@ -1,8 +1,8 @@
-@title Live view: Why? on a coil whose return wire is missing says the return is open
+@title Live view: Why? on a coil whose return wire is missing names the other side of the supply
 @area Schematic
 @sizes 1366x768
 # LSC-03: a coil that can never pull in because its second pin is wired to nothing got only a generic
-# "dead" line. Why? now says the return is open and what to wire.
+# "dead" line. Why? now names the other side of the supply and what to wire.
 open qa/fixtures/coil-open-return.novo
 wait 30
 key shift+l
@@ -14,6 +14,9 @@ click_text "Why?"
 wait 10
 click 337 447
 wait 10
-expect "the return is open"
+expect "to the other side of the supply"
 shot why-coil
+scroll 130 600 -300
+wait 5
+shot why-coil-scrolled
 check_layout
