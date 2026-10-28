@@ -896,3 +896,15 @@ fn shift_g_list_leads_with_the_page_and_sorts_by_page() {
         "2.2 Power  \u{b7}  NO 13-14"
     );
 }
+
+#[test]
+fn the_refusal_to_share_a_tag_is_not_only_about_coils() {
+    // Hardware test LSC-09: renaming a second breaker to the first one's tag
+    // was refused with text that only talked about coils.
+    let text = LinkError::BothMain.to_string();
+    assert!(
+        text.contains("breaker") && text.contains("pick a free tag"),
+        "{text}"
+    );
+    assert!(LinkError::DeviceHasMain.to_string().contains("breaker"));
+}

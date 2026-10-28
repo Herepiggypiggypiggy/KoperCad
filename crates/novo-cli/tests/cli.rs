@@ -452,6 +452,13 @@ fn export_reports_as_excel_and_csv() {
     assert!(text.starts_with('\u{feff}'), "Excel reads mm² right");
     assert!(text.contains(';'));
 
+    // Hardware test FEC-14: a report of nothing wrote a bare byte order mark
+    // and said nothing; the project has no plugs.
+    let plugs = dir.path().join("plugs.csv");
+    let run = novo(&["export", "plugs", s(&path), "-o", s(&plugs)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(run.out.contains("Nothing to list"), "{}", run.out);
+
     let all = dir.path().join("reports.xlsx");
     let run = novo(&["export", "reports", s(&path), "-o", s(&all)]);
     assert_eq!(run.code, exit::OK, "{}", run.err);
@@ -843,6 +850,9 @@ fn compare_says_when_two_projects_match_and_where_they_differ() {
     let run = novo(&["compare", s(&one), s(&other)]);
     assert_eq!(run.code, exit::PROBLEMS, "{}{}", run.out, run.err);
     assert!(run.out.contains("device"), "{}", run.out);
+    // Hardware test FEC-14: it used to start "Nothing found. Left out: ...".
+    assert!(run.out.starts_with("The projects differ: "), "{}", run.out);
+    assert!(!run.out.contains("Nothing found"), "{}", run.out);
 }
 
 #[test]
@@ -1120,6 +1130,26 @@ fn eplan_script_is_written_and_an_export_is_checked() {
         "fr",
     ]);
     assert_eq!(r.code, exit::USAGE);
+}
+
+#[test]
+fn two_rails_under_ducts_are_not_the_same_error_twice() {
+    // Hardware test LSC-13: "2 errors", two identical lines.
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../qa/fixtures/neutral-black.novo");
+    let run = novo(&["check", s(&fixture)]);
+    let lines: Vec<&str> = run
+        .out
+        .lines()
+        .filter(|l| l.contains("runs under a duct"))
+        .collect();
+    assert_eq!(lines.len(), 2, "{}", run.out);
+    assert_ne!(lines[0], lines[1], "{}", run.out);
+    assert!(
+        lines.iter().all(|l| l.contains("The DIN rail with")),
+        "{}",
+        run.out
+    );
 }
 
 #[test]

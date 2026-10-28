@@ -818,3 +818,48 @@ fn prices_in_every_spelling_are_read_exactly_or_refused() {
         assert_eq!(got, *want, "price `{raw}`");
     }
 }
+
+#[test]
+fn an_absurd_price_is_refused_or_flagged_and_a_real_one_is_not() {
+    // Hardware test PIR-04: 99999999999999 and 0,001 were counted as prices
+    // with no warning.
+    let sheet = csv_sheet(
+        "Maker;Order number;Price EUR\nExample Maker;EX-1;12,50\nExample Maker;EX-2;99999999999999\nExample Maker;EX-3;0,001\nExample Maker;EX-4;250000\n",
+    );
+    let mapping = Mapping::suggest(&sheet, 0);
+    let p = preview(&sheet, &mapping);
+    let price = |order: &str| {
+        p.parts
+            .iter()
+            .find(|part| part.order_number == order)
+            .unwrap_or_else(|| panic!("no part {order}: {:#?}", p.rows))
+            .price
+            .clone()
+    };
+    let issues = |line: usize| {
+        p.rows
+            .iter()
+            .find(|r| r.line == line)
+            .unwrap()
+            .issues
+            .iter()
+            .map(|i| i.message.clone())
+            .collect::<Vec<_>>()
+            .join(" | ")
+    };
+    assert!(
+        price("EX-1").is_some() && issues(2).is_empty(),
+        "{}",
+        issues(2)
+    );
+    assert!(price("EX-2").is_none());
+    assert!(
+        issues(3).contains("too large to be a price"),
+        "{}",
+        issues(3)
+    );
+    assert!(price("EX-3").is_some());
+    assert!(issues(4).contains("unusually low"), "{}", issues(4));
+    assert!(price("EX-4").is_some());
+    assert!(issues(5).contains("unusually high"), "{}", issues(5));
+}

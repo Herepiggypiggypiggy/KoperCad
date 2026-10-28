@@ -377,8 +377,10 @@ enum Export {
 
 #[derive(Debug, Subcommand)]
 enum Import {
-    /// Preview an edited spreadsheet (`.xlsx` or CSV from the spreadsheet
-    /// export) against a project: every cell that would change, conflicts
+    /// Preview an edited spreadsheet against a project. The sheet comes from
+    /// File > Export interchange > Export for bulk edit (.xlsx) in the app
+    /// (`kopercad-cli export reports` writes report workbooks, which this
+    /// cannot read). It takes the `.xlsx` or CSV made that way: every cell that would change, conflicts
     /// with later edits and rows that cannot be used, with line and reason.
     /// Nothing is written unless `--output` names a new project file; the
     /// project given is never changed. Exits with 1 when rows were rejected.
@@ -545,7 +547,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
         Cmd::Compare { before, after } => {
             let (a, b) = (read(&before)?, read(&after)?);
             let c = novo_interop::compare::compare_projects(&a, &b);
-            print(out, &c.report.text())?;
+            print(out, &c.text())?;
             Ok(if c.is_equal() {
                 exit::OK
             } else {
@@ -1453,6 +1455,11 @@ fn export_reports(
             let bytes = novo_py::report_bytes_in(&project, ids, format, args.language.as_deref())
                 .map_err(usage)?;
             write_output(file, path, &bytes)?;
+            // A CSV of nothing is only the byte order mark: say so, so an
+            // empty file is not taken for a failed export.
+            if matches!(format, ReportFormat::Csv(_)) && bytes.len() <= 3 {
+                print(out, "Nothing to list in this project: the file has no rows")?;
+            }
         }
         None => {
             // On a terminal or in a pipe a byte order mark is only noise.

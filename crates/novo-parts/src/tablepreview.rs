@@ -1177,10 +1177,43 @@ fn price(raw: &str, warn: &mut impl FnMut(Severity, String)) -> Option<f64> {
         warn(Severity::Warning, note);
     }
     match parse_quantity(&text) {
-        Some(q) if q.low.is_finite() && q.low > 0.0 && !q.range => Some(q.low),
+        Some(q) if q.low.is_finite() && q.low > 0.0 && !q.range => {
+            let v = q.low;
+            // The same limit as the folder importer. Between the limits a
+            // price can be real, so it is kept and the person is asked to look.
+            if v > MAX_PRICE {
+                warn(
+                    Severity::Warning,
+                    format!("\"{raw}\" is too large to be a price; the price is left unknown"),
+                );
+                return None;
+            }
+            if v > UNUSUALLY_HIGH_PRICE {
+                warn(
+                    Severity::Warning,
+                    format!(
+                        "\"{raw}\" is unusually high for a list price; imported, please check the decimal separator and unit"
+                    ),
+                );
+            } else if v < UNUSUALLY_LOW_PRICE {
+                warn(
+                    Severity::Warning,
+                    format!(
+                        "\"{raw}\" is unusually low for a list price; imported, please check the decimal separator and unit"
+                    ),
+                );
+            }
+            Some(v)
+        }
         _ => not_a_price(warn),
     }
 }
+
+/// Prices above this are refused (the folder importer's limit).
+const MAX_PRICE: f64 = 1.0e8;
+/// Prices above this, or below the low one, are kept with a warning.
+const UNUSUALLY_HIGH_PRICE: f64 = 1.0e5;
+const UNUSUALLY_LOW_PRICE: f64 = 0.01;
 
 /// Makes the leading number of a cell readable by the quantity parser:
 /// `1.234,56` and `1,234.56` lose their thousands separator. A single
