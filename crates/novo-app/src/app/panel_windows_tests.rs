@@ -223,8 +223,19 @@ fn no_fixed_window_is_built_outside_the_panel_helpers() {
             continue;
         }
         let text = std::fs::read_to_string(&path).unwrap();
-        // Code below the first `#[cfg(test)]` is test code.
-        let code = text.split("#[cfg(test)]").next().unwrap_or(&text);
+        // Code from an inline `#[cfg(test)] mod x {` on is test code (a
+        // `#[cfg(test)] mod x;` line, as in app.rs, only registers a file).
+        let lines: Vec<&str> = text.lines().collect();
+        let end = (0..lines.len())
+            .find(|&i| {
+                lines[i].trim() == "#[cfg(test)]"
+                    && lines.get(i + 1).is_some_and(|n| {
+                        n.trim_start().starts_with("mod ") && n.trim_end().ends_with('{')
+                    })
+            })
+            .unwrap_or(lines.len());
+        let code = lines[..end].join("\n");
+        let code = code.as_str();
         for needle in ["egui::Modal::new(", "egui::Window::new("] {
             if code.contains(needle) {
                 found.push(format!("{name}: {needle}"));

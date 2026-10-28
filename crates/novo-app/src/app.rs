@@ -1081,9 +1081,7 @@ impl NovoApp {
         }
         let name = self.project_name().unwrap_or_else(|| "Untitled".into());
         let mut answer = None;
-        egui::Modal::new(egui::Id::new("save_changes")).show(ctx, |ui| {
-            ui.set_width(400.0);
-            ui.heading("Save changes?");
+        panel::modal(ctx, "save_changes", "Save changes?", [400.0, 0.0], |ui| {
             ui.label(format!("\"{name}\" has changes that are not saved."));
             if self.project_path.is_some() {
                 ui.label("The file on disk stays as it is until you save.");
