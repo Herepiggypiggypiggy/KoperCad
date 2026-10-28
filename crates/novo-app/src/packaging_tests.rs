@@ -113,3 +113,79 @@ fn a_running_program_is_closed_before_install_and_uninstall() {
         "match on the install path, not the image name"
     );
 }
+
+fn repo_file(relative: &str) -> String {
+    let path = format!("{}/../../{relative}", env!("CARGO_MANIFEST_DIR"));
+    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
+}
+
+/// Non-comment lines of a workflow or a script (`#` comments removed).
+fn code_of(text: &str) -> String {
+    text.lines()
+        .filter(|l| !l.trim_start().starts_with('#'))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn the_experimental_zip_has_launchers_readmes_and_one_copy_of_the_program() {
+    let workflow = code_of(&repo_file(".github/workflows/experimental.yml"));
+    let package = workflow
+        .split("- name: Package")
+        .nth(1)
+        .and_then(|rest| rest.split("- uses: actions/upload-artifact").next())
+        .expect("the Package step");
+    for shipped in [
+        "target/release/kopercad.exe",
+        "target/release/kopercad-cli.exe",
+        "packaging/windows/portable/run.cmd",
+        "packaging/windows/portable/run-safe-graphics.cmd",
+        "packaging/windows/experimental/README-EXPERIMENTAL.txt",
+        "docs/TESTER-README.md",
+    ] {
+        assert!(package.contains(shipped), "the zip does not get {shipped}");
+    }
+    // 74 MB each: a second copy of the program and the stress demo stay out.
+    assert!(!package.contains("dist/novoelectric.exe"));
+    assert!(!package.contains("dist/canvas-demo.exe"));
+    assert!(package.contains("out/canvas-demo.exe"));
+    // A portable marker would send data to the folder the launcher replaces.
+    assert!(!package.contains("kopercad.portable"));
+    for file in [
+        "packaging/windows/portable/run.cmd",
+        "packaging/windows/portable/run-safe-graphics.cmd",
+        "packaging/windows/experimental/README-EXPERIMENTAL.txt",
+    ] {
+        assert!(!repo_file(file).trim().is_empty(), "{file} is empty");
+    }
+    assert!(
+        repo_file("packaging/windows/portable/run-safe-graphics.cmd").contains("--safe-graphics")
+    );
+    // The branch for `git clone` users gets the safe graphics launcher too.
+    assert!(workflow.contains("packaging/windows/portable/run-safe-graphics.cmd stage/"));
+}
+
+#[test]
+fn the_launcher_scripts_need_no_github_sign_in() {
+    // The repository is public: no `gh`, no token, no `gh auth`.
+    for script in [
+        "scripts/run-latest.ps1",
+        "scripts/setup-new-pc.ps1",
+        "scripts/build-local.ps1",
+    ] {
+        let code = code_of(&repo_file(script));
+        for needle in ["gh.exe", "gh auth", "Bearer", "Get-Command gh"] {
+            assert!(
+                !code.contains(needle),
+                "{script} still uses {needle:?}, which needs a GitHub sign-in"
+            );
+        }
+        // The command `gh` as a word ("through " must not count).
+        let word_gh = code
+            .match_indices("gh ")
+            .any(|(i, _)| !code[..i].ends_with(|c: char| c.is_alphanumeric()));
+        assert!(!word_gh, "{script} still calls the GitHub CLI");
+    }
+    let run = repo_file("scripts/run-latest.ps1");
+    assert!(run.contains("releases/download/experimental"));
+}

@@ -60,6 +60,7 @@ mod commissioning_viewer;
 mod commissioning_viewer_tests;
 mod compare;
 mod controller_import;
+mod count_words;
 mod designer;
 mod device_renumber;
 mod diagnostics;
@@ -109,6 +110,8 @@ mod heat_live;
 mod heat_live_tests;
 mod heat_openings;
 mod heat_openings_store;
+#[cfg(test)]
+mod heat_preview_tests;
 mod heat_probe;
 mod heat_progress;
 #[cfg(test)]
@@ -131,6 +134,7 @@ mod heat_whatif_tests;
 mod heat_wires;
 #[cfg(test)]
 mod heat_wires_tests;
+mod hoist_run;
 mod inspector;
 mod interop;
 mod kitting;
@@ -363,6 +367,8 @@ mod learn_replay;
 #[cfg(test)]
 mod learn_tests;
 #[cfg(test)]
+mod lesson_claims_tests;
+#[cfg(test)]
 mod lesson_verify_cables;
 #[cfg(test)]
 mod lesson_verify_outputs;
@@ -414,6 +420,8 @@ mod wire_set_tests;
 mod workpack_tests;
 #[cfg(test)]
 mod workshop_tests;
+#[cfg(test)]
+mod xref_table_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -1365,6 +1373,8 @@ impl NovoApp {
         self.cabinet.heat.whatif.close();
         // The same for the vent and fan sweep: its answer is for the old cabinet.
         self.cabinet.heat.advice.close();
+        // And for the heat result itself: it would be drawn over the new plate.
+        self.cabinet.heat.forget_results();
         // The live view, an open drawer and a preview belong to the project
         // they were opened on; a lesson (or any project) starts clean.
         self.wb.live = Default::default();
@@ -1808,6 +1818,7 @@ impl NovoApp {
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
+        self.hoist_window(&ctx);
         self.add_fault_window(&ctx);
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);
@@ -1822,6 +1833,9 @@ impl NovoApp {
         self.outline_dialogs(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
+        }
+        if let Some(place) = self.wb.deferred_jump.take() {
+            self.jump(place, true);
         }
         self.place_hold_tick(&ctx);
         self.place_wheel(&ctx);
@@ -1888,6 +1902,7 @@ impl NovoApp {
         self.after_paste_click();
         let asked = self.canvas.take_commands();
         self.wb.queued.extend(asked);
+        self.follow_note_jump();
         let cable = self
             .canvas
             .schematic()
@@ -2780,6 +2795,11 @@ impl NovoApp {
                 }
                 if let Some(gpu) = crate::diag::gpu() {
                     ui.weak(format!("Graphics: {gpu}"));
+                }
+                if let Some(avoided) = crate::startup::avoided_for_report() {
+                    ui.weak(format!(
+                        "Graphics adapters tried last (a start stopped while using them): {avoided}"
+                    ));
                 }
                 ui.add_space(novo_theme::space::M);
                 ui.label("Made by KoperVonk");

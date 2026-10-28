@@ -246,6 +246,8 @@ pub fn print_style() -> ModelStyle {
         sheet_text_color: ink,
         note_color: ink,
         note_warning_color: ink,
+        // Grey survives a printer and a photocopier; thinner ink would not.
+        note_dim_color: Color::rgb(130, 130, 130),
         joint_color: ink,
         cable_color: ink,
         pin_joint_color: ink,

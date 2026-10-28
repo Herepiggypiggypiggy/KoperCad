@@ -78,12 +78,16 @@ impl DuctUse {
     pub(super) fn text(&self) -> String {
         match (self.ratio, self.share_pct) {
             (Some(_), Some(share)) => format!(
-                "{}: {:.0} % full of {:.0} % allowed, {} wires",
-                self.place, share, self.limit_pct, self.wires
+                "{}: {:.0} % full of {:.0} % allowed, {}",
+                self.place,
+                share,
+                self.limit_pct,
+                super::count_words::wires(self.wires)
             ),
             _ => format!(
-                "{}: no cross-section set, fill not checked, {} wires",
-                self.place, self.wires
+                "{}: no cross-section set, fill not checked, {}",
+                self.place,
+                super::count_words::wires(self.wires)
             ),
         }
     }
@@ -370,8 +374,8 @@ pub(super) fn list_body(
     }
     let total: f64 = all.values().map(|f| f.length_mm).sum();
     ui.weak(format!(
-        "{} wires, {} inside this cabinet",
-        all.len(),
+        "{}, {} inside this cabinet",
+        super::count_words::wires(all.len()),
         metres(total)
     ));
     if !chosen.is_empty() {

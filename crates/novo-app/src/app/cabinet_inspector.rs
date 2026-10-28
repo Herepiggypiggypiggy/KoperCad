@@ -168,10 +168,18 @@ pub(super) fn overlay(
         .scroll_bar_always()
         .height(HEIGHT)
         .bottom_room(room.bottom);
+    // The surface card belongs to the shown surface and goes with it; the
+    // plate card and a device's card have the window's close button.
+    if !matches!(facts, Facts::Surface(_)) {
+        panel = panel.closable();
+    }
     if let Some(top) = room.top {
         panel = panel.top(top);
     }
     let shown = panel.show(ctx, |ui| show(ui, facts, project, fields, door));
+    if super::panel::take_closed(ctx, "cabinet_inspector") {
+        return Some(Ask::CloseInspector);
+    }
     super::cabinet_bar::note_rect(
         ctx,
         "cabinet.inspector",

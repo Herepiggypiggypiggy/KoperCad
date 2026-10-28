@@ -235,6 +235,8 @@ pub struct ModelStyle {
     pub note_color: Color,
     /// A [`SymbolNote`] flagged as a warning.
     pub note_warning_color: Color,
+    /// A spare contact of a contact table: present on the device, unused.
+    pub note_dim_color: Color,
 }
 
 impl Default for ModelStyle {
@@ -263,6 +265,7 @@ impl Default for ModelStyle {
             sheet_text_color: Color::rgb(170, 170, 170),
             note_color: Color::rgb(60, 90, 140),
             note_warning_color: Color::rgb(190, 120, 20),
+            note_dim_color: Color::rgb(150, 160, 175),
         }
     }
 }
@@ -1689,7 +1692,9 @@ impl PageScene {
             item.labels.insert(0, label);
             if matches!(
                 sym.role,
-                SymbolRole::Device { .. } | SymbolRole::PotentialFeed { .. }
+                SymbolRole::Device { .. }
+                    | SymbolRole::PotentialFeed { .. }
+                    | SymbolRole::Interruption { .. }
             ) {
                 tag_slot = Some((pos, anchor));
             }
@@ -1832,6 +1837,40 @@ impl PageScene {
         Some(slot)
     }
 
+    /// The contact table of `note` with its top left corner at `origin`.
+    fn table_layout(&self, note: &SymbolNote, origin: Vec2) -> note_table::NoteTable {
+        let color = if note.warning {
+            self.style.note_warning_color
+        } else {
+            self.style.note_color
+        };
+        note_table::layout(
+            &note.rows,
+            note.density,
+            origin,
+            self.style.tag_height,
+            Stroke::world(0.25, color),
+            self.style.note_color,
+            self.style.note_dim_color,
+        )
+    }
+
+    /// The contact a double click at `at` (page coordinates) on a coil's
+    /// contact table leads to: the coil whose table is there, and the
+    /// symbol of the row under the point. `None` outside every table or on
+    /// a spare row.
+    pub fn note_row_at(&self, at: Vec2) -> Option<(SymbolId, SymbolId)> {
+        self.note_slots.iter().find_map(|(&coil, slot)| {
+            let NoteWhat::Table { note, size } = &slot.what else {
+                return None;
+            };
+            let origin = slot.at.0 - slot.at.1.fractions() * *size;
+            let table = self.table_layout(note, origin);
+            let row = note.rows.get(table.row_at(at)?)?;
+            Some((coil, row.target?))
+        })
+    }
+
     /// The contact table of `note` with its top left corner at `origin`,
     /// and the warning text under it: what is drawn, and the box it takes.
     fn table_parts(
@@ -1840,19 +1879,7 @@ impl PageScene {
         origin: Vec2,
     ) -> (Vec<crate::Primitive>, Vec<Label>, crate::Aabb) {
         let h = self.style.tag_height;
-        let color = if note.warning {
-            self.style.note_warning_color
-        } else {
-            self.style.note_color
-        };
-        let table = note_table::layout(
-            &note.rows,
-            note.density,
-            origin,
-            h,
-            Stroke::world(0.25, color),
-            self.style.note_color,
-        );
+        let table = self.table_layout(note, origin);
         let mut bounds = table.bounds;
         let mut labels = table.labels.clone();
         if !note.lines.is_empty() {
@@ -2784,7 +2811,11 @@ fn strip_heads(project: &Project, page: PageId) -> HashMap<SymbolId, String> {
         for i in 0..syms.len() {
             let (cx, cy) = cell(syms[i].0);
             for (dx, dy) in (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy))) {
-                for &j in grid.get(&(cx + dx, cy + dy)).into_iter().flatten() {
+                for &j in grid
+                    .get(&(cx.saturating_add(dx), cy.saturating_add(dy)))
+                    .into_iter()
+                    .flatten()
+                {
                     if j > i && near(syms[i].0, syms[j].0) {
                         let (a, b) = (root(&mut run, i), root(&mut run, j));
                         // The earlier terminal stays the root, so it heads the run.
@@ -3083,16 +3114,8 @@ mod tests {
             warning: false,
             anchor: NoteAnchor::Below,
             rows: vec![
-                NoteRow {
-                    glyph: NoteGlyph::NormallyClosed,
-                    pins: "95-96".into(),
-                    location: "2.1".into(),
-                },
-                NoteRow {
-                    glyph: NoteGlyph::NormallyOpen,
-                    pins: "13-14".into(),
-                    location: "2.2".into(),
-                },
+                NoteRow::new(NoteGlyph::NormallyClosed, "95-96", "2.1"),
+                NoteRow::new(NoteGlyph::NormallyOpen, "13-14", "2.2"),
             ],
             density: NoteDensity::default(),
         };
@@ -3105,13 +3128,13 @@ mod tests {
                 .map(Label::bounds)
                 .fold(crate::Aabb::EMPTY, |b, l| b.union(&l))
         };
-        let first = home.labels.iter().position(|l| l.text == "95-96").unwrap();
+        let first = home.labels.iter().position(|l| l.text == "95").unwrap();
         let home_box = rows_box(&home, first);
         // A wire runs down through the middle of the table.
         let (wire, _) = wire_at(&mut doc, page, home_box.center().x);
         ps.rebuild(doc.project(), &PlaceholderArt);
         let moved = item(&ps);
-        let at = moved.labels.iter().position(|l| l.text == "95-96").unwrap();
+        let at = moved.labels.iter().position(|l| l.text == "95").unwrap();
         let moved_box = rows_box(&moved, at);
         assert_ne!(moved_box.min, home_box.min, "the table moved");
         // It moved whole: every row kept its place inside the table.
@@ -3256,11 +3279,7 @@ mod tests {
     fn a_wire_far_below_a_tall_table_still_moves_it() {
         let (mut doc, page, k1, _s1, _w) = doc();
         let rows: Vec<NoteRow> = (0..40)
-            .map(|i| NoteRow {
-                glyph: NoteGlyph::NormallyOpen,
-                pins: "13-14".into(),
-                location: format!("2.{i}"),
-            })
+            .map(|i| NoteRow::new(NoteGlyph::NormallyOpen, "13-14", &format!("2.{i}")))
             .collect();
         let table = SymbolNote {
             symbol: k1,
@@ -3278,7 +3297,7 @@ mod tests {
                 .unwrap()
                 .labels
                 .iter()
-                .filter(|l| l.text == "13-14")
+                .filter(|l| l.text == "13")
                 .cloned()
                 .collect::<Vec<_>>()
         };
@@ -3447,11 +3466,7 @@ mod tests {
     fn a_coil_note_with_rows_draws_the_contact_table_under_the_symbol() {
         let (doc, page, k1, _s1, _w) = doc();
         let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
-        let row = |glyph, pins: &str, loc: &str| NoteRow {
-            glyph,
-            pins: pins.into(),
-            location: loc.into(),
-        };
+        let row = |glyph, pins: &str, loc: &str| NoteRow::new(glyph, pins, loc);
         let rows = vec![
             row(NoteGlyph::NormallyOpen, "13-14", "2.3"),
             row(NoteGlyph::NormallyClosed, "21-22", "3.5"),
@@ -3469,18 +3484,29 @@ mod tests {
         let item = ps.scene().get(item_id(k1)).unwrap().clone();
         assert!(item.primitives.len() > bare.primitives.len());
         let texts: Vec<&str> = item.labels.iter().map(|l| l.text.as_str()).collect();
-        for want in ["13-14", "2.3", "21-22", "3.5", "! 3 NO drawn, 2 available"] {
+        for want in [
+            "13",
+            "14",
+            "2.3",
+            "21",
+            "22",
+            "3.5",
+            "! 3 NO drawn, 2 available",
+        ] {
             assert!(texts.contains(&want), "{want} in {texts:?}");
         }
         let at = |t: &str| item.labels.iter().find(|l| l.text == t).unwrap().pos;
         // Columns line up and rows read top to bottom, warning last.
-        assert_eq!(at("13-14").x, at("21-22").x);
+        assert_eq!(at("13").x, at("21").x);
+        assert_eq!(at("14").x, at("22").x);
         assert_eq!(at("2.3").x, at("3.5").x);
-        assert!(at("2.3").x > at("13-14").x);
-        assert!(at("13-14").y < at("21-22").y);
-        assert!(at("21-22").y < at("! 3 NO drawn, 2 available").y);
+        assert!(at("2.3").x > at("14").x);
+        assert!(at("13").x < at("14").x);
+        assert_eq!(at("13").y, at("14").y);
+        assert!(at("13").y < at("21").y);
+        assert!(at("21").y < at("! 3 NO drawn, 2 available").y);
         // Compact packs the same rows tighter.
-        let full_gap = at("21-22").y - at("13-14").y;
+        let full_gap = at("21").y - at("13").y;
         ps.set_notes(
             doc.project(),
             [table(NoteDensity::Compact)],
@@ -3488,7 +3514,7 @@ mod tests {
         );
         let item = ps.scene().get(item_id(k1)).unwrap().clone();
         let y = |t: &str| item.labels.iter().find(|l| l.text == t).unwrap().pos.y;
-        assert!(y("21-22") - y("13-14") < full_gap);
+        assert!(y("21") - y("13") < full_gap);
         // Clearing the note restores the bare symbol.
         ps.set_notes(doc.project(), [], &PlaceholderArt);
         assert_eq!(
@@ -4965,6 +4991,44 @@ mod tests {
         };
         assert_eq!(kind(feed), Some(LabelKind::Potential));
         assert_eq!(kind(int), Some(LabelKind::InterruptionName));
+    }
+
+    #[test]
+    fn interruption_names_five_millimetres_apart_do_not_overlap() {
+        let mut doc = Document::default();
+        let ((page, ips), _) = doc
+            .transact("ips", |tx| {
+                let page = tx.add_page("1")?;
+                let mut ips = Vec::new();
+                for (i, name) in ["IP1", "IP2", "IP3"].into_iter().enumerate() {
+                    ips.push(tx.place_symbol(
+                        page,
+                        "iec/interruption",
+                        MPlacement::at(Point::new(80.0 + 5.0 * i as f64, 50.0)),
+                        vec![Pin::new("1", 0.0, 2.5)],
+                        SymbolRole::Interruption { name: name.into() },
+                    )?);
+                }
+                Ok((page, ips))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let names: Vec<Label> = ips
+            .iter()
+            .map(|s| ps.scene().get(item_id(*s)).unwrap().labels[0].clone())
+            .collect();
+        for (i, a) in names.iter().enumerate() {
+            for b in &names[i + 1..] {
+                assert!(
+                    !a.bounds().intersects(&b.bounds()),
+                    "{} and {} overlap: {:?} {:?}",
+                    a.text,
+                    b.text,
+                    a.bounds(),
+                    b.bounds()
+                );
+            }
+        }
     }
 
     #[test]
