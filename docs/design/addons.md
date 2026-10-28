@@ -19,7 +19,7 @@ Some features are not part of the base program. They are **add-ons**: a file end
 | `kopercad-cli addons list / inspect / install / enable / disable / remove / rollback / pack` | The same from a script or CI |
 | `kopercad.addons_list()`, `addons_install()`, `addons_set_enabled()`, `addons_remove()` (Python) | The same from Python |
 
-Not yet in the app, and listed so nobody looks for them: the rail slot and flyout (lane V3a draws the rail; the rows are ready in `Extensions::rail_rows`), the app-menu footer (V2b), the add-on chip in Ctrl K (V5), the drawn-icon painter for add-on icons (V0; the add-on glyph stands in), and the sandboxed engine (C0b-2: `[engine]` is read and checked, but nothing runs it yet).
+Not yet in the app, and listed so nobody looks for them: the rail slot and flyout (lane V3a draws the rail; the rows are ready in `Extensions::rail_rows`), the app-menu footer (V2b), the add-on chip in Ctrl K (V5), the drawn-icon painter for add-on icons (V0; the add-on glyph stands in), and the controller's own engine (the host is in; the controller add-on is lane C3).
 
 ## The package
 
@@ -28,7 +28,7 @@ A `.kcaddon` is a zip:
 ```
 manifest.toml       required; see below
 signature           optional; Ed25519 over the manifest
-engine.wasm         optional; the engine (read and checked now; run by the host in C0b-2)
+engine.wasm         optional; the sandboxed engine (see "The engine")
 data/...            panel layouts, profiles, symbols, word lists, icons, help
 LICENSE             optional
 ```
@@ -67,7 +67,7 @@ file = "data/panels/radio.panel.toml"
 kind = "controller-profile"
 file = "data/generic-radio.controller.toml"
 
-[engine]                            # optional, C0b-2
+[engine]                            # optional; see "The engine"
 file = "engine.wasm"
 host_api = 1
 ```
@@ -91,7 +91,7 @@ Each is declared in `permissions`, listed in the install prompt and in Details, 
 
 ### Panels
 
-`*.panel.toml` describes a panel as data: `heading`, `label`, `separator`, `button`, `lamp`, `row`. The program draws it with its own widgets and palette, so dark, light and High contrast work without the add-on knowing. A lamp is a filled or hollow mark **and** its text, never colour alone. Buttons send their id to the add-on's engine; with no engine they do nothing and the tooltip says so. Lane C3 adds the rocker with steps, joystick with detents, tabs and tables to this set; an unknown kind is refused at install, so an older program never shows half a panel.
+`*.panel.toml` describes a panel as data: `heading`, `label`, `separator`, `button`, `lamp`, `row`. The program draws it with its own widgets and palette, so dark, light and High contrast work without the add-on knowing. A lamp is a filled or hollow mark **and** its text, never colour alone. Buttons send their id to the add-on's engine (op `button`); with no engine they are greyed and the tooltip says so. An engine's answer can set lamp states (`lamps`) and show a message (`notice`). Lane C3 adds the rocker with steps, joystick with detents, tabs and tables to this set; an unknown kind is refused at install, so an older program never shows half a panel.
 
 ### Icons
 
@@ -107,7 +107,31 @@ Each is declared in `permissions`, listed in the install prompt and in Details, 
 
 Keys: built-in keys (`novo_addons::trust::BUILTIN_KEYS`, **empty until the release thread generates the KoperVonk key**; the private key never enters the repository) and keys the person adds in `%LOCALAPPDATA%\KoperCAD\addons\trusted-keys.toml` (`[[key]]` with `id`, `owner`, `public` as 64 hex digits). The signed message is `kopercad-addon-manifest-v1\n` followed by the manifest bytes.
 
-Honest limits: a signature says who made the file, not that it is good. In this version no add-on code runs at all (the engine host is C0b-2): an add-on adds rows, panels, icons and data files. When the engine host lands, what an add-on can do is meant to be limited to computing inside a step budget and a memory limit, without file, network or clock access, and to wrong results inside what its permissions allow, which is why the permissions are listed in plain words. The `.kcaddon` format is new; nothing outside this repository reads it.
+Honest limits: a signature says who made the file, not that it is good. An add-on's engine runs in a sandbox: no file, network, clock or thread access, a step budget and a memory limit. What it can do is limited to computing, so the worst case is wrong results inside what its permissions allow, which is why the permissions are listed in plain words. The `.kcaddon` format is new; nothing outside this repository reads it.
+
+## The engine
+
+An add-on may carry `engine.wasm`: a WebAssembly module the program runs in the `wasmi` interpreter (pure Rust, no `unsafe` in our crates, binary modules only). Source: `crates/novo-addons/src/host.rs`, tests `crates/novo-addons/tests/host.rs`.
+
+| Rule | How |
+| --- | --- |
+| No access to the PC | The module gets one import, `kopercad.log(ptr, len)`. Any other import (files, WASI, clock, threads) refuses the add-on when it loads, naming what it asked for |
+| Endless loops end | Every call (and the start-up) has a step budget of 50 million interpreter steps; running out stops the add-on |
+| Memory and stack | 32 MiB of linear memory (a failed grow is seen by the engine, a bigger start is refused), recursion depth 512, messages at most 1 MiB, log text at most 8 KiB kept |
+| A broken engine stops alone | A trap, a bad reply, a budget overrun or a start that fails *stops* that add-on for the session: its menu rows, commands and panels go, Details says why, a message names it, and the program goes on. Turning it off and on in the manager starts it again |
+| Deterministic | No clock or random source exists for it; the same calls cost the same steps |
+| Honest limit | The engine can still compute a wrong answer inside what its permissions allow; and WebAssembly floating point may differ in NaN bit patterns between machines |
+
+Host API 1, as the engine sees it (`[engine] host_api = 1`):
+
+| Export | Signature | What |
+| --- | --- | --- |
+| `memory` | memory | the messages go through it |
+| `kc_alloc` | `(len: i32) -> i32` | a buffer the host writes the request into |
+| `kc_call` | `(ptr: i32, len: i32) -> i64` | handle it; return `(reply_ptr << 32) \| reply_len` |
+| `kc_free` | `(ptr: i32, len: i32)` | optional; the host frees the request and the reply with it |
+
+Request `{"api":1,"op":"<name>","data":{...}}`, reply `{"ok":true,"data":{...}}` or `{"ok":false,"error":"words"}` (a refusal: the add-on stays on). Ops sent today: `hello` (once at start, answer `{"api":1}`), `command` (`{"id":"<command>"}`, for a command without a panel) and `button` (`{"panel","id"}`). Replies may carry `lamps` (`{"<id>":{"state":"ok","lit":true}}`) and `notice`. Lane C3 adds ops for the controller; the transport does not change. Build an engine from Rust with `cargo build --target wasm32-unknown-unknown` (not needed to use the host: the fixture engine `qa/fixtures/addons/engine-src/demo-engine.wat` is WebAssembly text).
 
 ## Install, update, roll back, remove
 
@@ -123,7 +147,7 @@ Honest limits: a signature says who made the file, not that it is good. In this 
 - Ask `app.addon_enabled("id")` before offering anything that belongs to an add-on (installed, intact, compatible, on). Never test for the add-on by its files.
 - Menus, the command search and panels read `Extensions` (built from the running add-ons whenever one is installed, turned on or off, removed). Nothing else should list add-on commands.
 - Data files for a `kind` your feature understands: `AddonSet::contributions(kind)` then `AddonSet::read_file(id, path)` (hash checked again on every read).
-- Tests: `crates/novo-addons/tests/` (hostile packages, install flow), `crates/novo-tests/tests/addons_fixtures.rs` (the fixtures and the CLI), `crates/novo-app/src/app/addons_tests.rs` (the window), QA scenario `qa/scenarios/560-addons-manager.qa`.
+- Tests: `crates/novo-addons/tests/` (hostile packages, install flow), `crates/novo-tests/tests/addons_fixtures.rs` (the fixtures and the CLI), `crates/novo-app/src/app/addons_tests.rs` (the window), QA scenarios `qa/scenarios/560-addons-manager.qa` and `561-addons-engine.qa`.
 - Fixtures: sources in `qa/fixtures/addons/src/<name>/`, packed files beside them. Rebuild with `KOPERCAD_REGENERATE=1 cargo test -p novo-tests --test addons_fixtures`.
 
 ## Follow-ups (not in this lane)
@@ -131,7 +155,7 @@ Honest limits: a signature says who made the file, not that it is good. In this 
 | Follow-up | Where |
 | --- | --- |
 | Gate the controller import wizard (File > Import > Controller profile) behind the controller add-on, once that package exists | after C3 packages the add-on |
-| Sandboxed engine: `wasmi` host, JSON host API v1, step budget, traps disable the add-on for the session | C0b-2 |
+| Build the controller as `engine.wasm` (`wasm32-unknown-unknown`) and pack it in CI | C3 / release |
 | Project data blocks tagged with the add-on id, kept untouched when the add-on is missing | needs a generic block in `novo-core`/`novo-storage` (WS-02/WS-04) |
 | Rail slot and flyout, app-menu footer with count badge, add-on chip and "Turn on" row in Ctrl K, drawn icons | V3a, V2b, V5, V0 |
 | Release signing key and `scripts/pack-addon` in CI | release thread |

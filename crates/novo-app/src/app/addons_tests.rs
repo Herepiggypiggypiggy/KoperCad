@@ -172,3 +172,112 @@ fn a_file_that_is_not_an_add_on_is_refused_in_words() {
             .contains("not a readable add-on")
     );
 }
+
+fn install_engine_fixture(d: &mut Drive) {
+    let store = d.app.wb.addons.store.clone().unwrap();
+    store
+        .install_file(
+            &fixture("demo-engine-0.1.0.kcaddon"),
+            novo_addons::InstallOptions {
+                accept_unsigned: true,
+                enable: true,
+            },
+        )
+        .unwrap();
+    d.app.refresh_addons();
+    d.frame();
+}
+
+#[test]
+fn an_engine_answers_buttons_and_commands() {
+    let (mut d, _dir) = drive();
+    install_engine_fixture(&mut d);
+    assert!(d.app.addon_enabled("demo-engine"));
+    // a button press goes to the engine and its lamp answer is kept
+    let reply = d
+        .app
+        .addon_engine_call(
+            "demo-engine",
+            "button",
+            &serde_json::json!({"panel": "panel", "id": "start"}),
+        )
+        .expect("it has an engine")
+        .expect("the engine answers");
+    d.app.apply_engine_reply("demo-engine", &reply);
+    let key = ("demo-engine".to_owned(), "power".to_owned());
+    assert_eq!(
+        d.app.wb.addons.lamps.get(&key).map(|l| l.1),
+        Some(Some(true)),
+        "the Power lamp is lit"
+    );
+    // a command without a panel goes to the engine too
+    d.app.run_addon_command("addon.demo-engine.ping");
+    assert!(d.app.wb.addons.stopped.is_empty());
+    // a request the engine does not know is a refusal in its words, not a stop
+    let refused = d
+        .app
+        .addon_engine_call("demo-engine", "dance", &serde_json::json!({}))
+        .unwrap();
+    assert_eq!(refused, Err("unknown request".to_owned()));
+    assert!(d.app.wb.addons.stopped.is_empty());
+}
+
+#[test]
+fn a_broken_engine_stops_alone_and_takes_its_rows_with_it() {
+    let (mut d, _dir) = drive();
+    install_engine_fixture(&mut d);
+    let store = d.app.wb.addons.store.clone().unwrap();
+    store
+        .install_file(
+            &fixture("demo-tools-0.1.0.kcaddon"),
+            novo_addons::InstallOptions {
+                accept_unsigned: true,
+                enable: true,
+            },
+        )
+        .unwrap();
+    d.app.refresh_addons();
+    assert!(
+        d.app
+            .wb
+            .addons
+            .ext
+            .commands
+            .iter()
+            .any(|c| c.addon_id == "demo-engine")
+    );
+    d.app.run_addon_command("addon.demo-engine.crash");
+    d.frame();
+    let why = d
+        .app
+        .wb
+        .addons
+        .stopped
+        .get("demo-engine")
+        .expect("the engine stopped");
+    assert!(!why.is_empty());
+    // its commands and panels are gone from the tables, the other add-on is untouched
+    assert!(
+        !d.app
+            .wb
+            .addons
+            .ext
+            .commands
+            .iter()
+            .any(|c| c.addon_id == "demo-engine")
+    );
+    assert!(
+        d.app
+            .wb
+            .addons
+            .ext
+            .panel("addon.demo-tools.status")
+            .is_some()
+    );
+    // and it answers nothing more this run
+    let again = d
+        .app
+        .addon_engine_call("demo-engine", "hello", &serde_json::json!({}))
+        .unwrap();
+    assert!(again.is_err());
+}

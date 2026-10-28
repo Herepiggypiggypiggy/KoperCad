@@ -9,7 +9,7 @@
 //! Nothing here knows any particular add-on. With none installed the program shows one extra
 //! command ("Add-ons") and nothing else.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use eframe::egui;
@@ -20,10 +20,12 @@ use novo_addons::{
     AddonSet, AppInfo, Entry, ExtCommand, Extensions, Inspection, InstallOptions, Status, Store,
     Trust, Version,
 };
+use novo_addons::{CallError, EngineHost, HostLimits};
 use novo_theme::widgets::{self, EmptySize, Level as Tone};
 use novo_theme::{icons, space};
 use novo_workflow::keymap::Chord;
 use novo_workflow::palette::AddonEntry;
+use serde_json::{Value, json};
 
 use super::{Level, NovoApp};
 
@@ -41,6 +43,13 @@ pub(super) struct AddonsState {
     pub(super) open_panels: BTreeSet<String>,
     /// Live view cards the person closed this run.
     pub(super) closed_cards: BTreeSet<String>,
+    /// Engines that are running, by add-on id (started when first needed).
+    engines: BTreeMap<String, EngineHost>,
+    /// Add-ons whose engine stopped or would not start this run, with the reason in words. They
+    /// add nothing until the person turns them off and on again.
+    pub(super) stopped: BTreeMap<String, String>,
+    /// What engines last said about lamps: add-on id and lamp id to its state.
+    pub(super) lamps: BTreeMap<(String, String), (Option<Role>, Option<bool>)>,
 }
 
 /// The manager window's own state.
@@ -114,18 +123,90 @@ impl NovoApp {
         let in_use = |key: &str| {
             Chord::parse(key).is_some_and(|c| keymap.bindings().iter().any(|b| b.chord == c))
         };
-        let ext = Extensions::build(&set, &in_use);
+        let stopped = &self.wb.addons.stopped;
+        let ext = Extensions::build_excluding(&set, &in_use, &|id| stopped.contains_key(id));
         for warning in &set.warnings {
             log::warn!("add-ons: {warning}");
         }
         self.wb.addons.set = set;
         self.wb.addons.ext = ext;
+        // Engines start again, from the files as they are now, the next time they are needed.
+        self.wb
+            .addons
+            .engines
+            .retain(|id, _| self.wb.addons.set.is_enabled(id));
         // A panel of an add-on that is gone is not open any more.
         let ext = &self.wb.addons.ext;
         self.wb
             .addons
             .open_panels
             .retain(|p| ext.panel(p).is_some());
+    }
+
+    /// Sends one request to the engine of add-on `id`, starting it first when needed. `None`
+    /// when the add-on has no engine. A stop (or a start that fails) puts the add-on out of the
+    /// menus and panels for this run and says why in Details.
+    pub(super) fn addon_engine_call(
+        &mut self,
+        id: &str,
+        op: &str,
+        data: &Value,
+    ) -> Option<Result<Value, String>> {
+        if let Some(why) = self.wb.addons.stopped.get(id) {
+            return Some(Err(why.clone()));
+        }
+        if !self.wb.addons.engines.contains_key(id) {
+            match self.wb.addons.set.load_engine(id, HostLimits::default()) {
+                Ok(None) => return None,
+                Ok(Some(host)) => {
+                    self.wb.addons.engines.insert(id.to_owned(), host);
+                }
+                Err(e) => {
+                    self.stop_addon(id, e.to_string());
+                    return Some(Err(e.to_string()));
+                }
+            }
+        }
+        let host = self.wb.addons.engines.get_mut(id)?;
+        match host.call(op, data) {
+            Ok(v) => Some(Ok(v)),
+            Err(CallError::Refused(why)) => Some(Err(why)),
+            Err(CallError::Stopped(why)) => {
+                self.stop_addon(id, why.clone());
+                Some(Err(why))
+            }
+        }
+    }
+
+    fn stop_addon(&mut self, id: &str, why: String) {
+        log::warn!("add-on {id} stopped: {why}");
+        let name = self.addon_name(id);
+        self.wb.addons.engines.remove(id);
+        self.wb.addons.stopped.insert(id.to_owned(), why.clone());
+        self.refresh_addons();
+        self.message(
+            Level::Warning,
+            format!("{name} stopped: {why}. Turn it off and on in Add-ons to start it again."),
+        );
+    }
+
+    /// Applies what an engine answered: lamp states and a notice.
+    pub(super) fn apply_engine_reply(&mut self, id: &str, reply: &Value) {
+        if let Some(lamps) = reply.get("lamps").and_then(Value::as_object) {
+            for (lamp, v) in lamps.iter().take(200) {
+                let state = v
+                    .get("state")
+                    .and_then(|s| serde_json::from_value::<Role>(s.clone()).ok());
+                let lit = v.get("lit").and_then(Value::as_bool);
+                self.wb
+                    .addons
+                    .lamps
+                    .insert((id.to_owned(), lamp.clone()), (state, lit));
+            }
+        }
+        if let Some(text) = reply.get("notice").and_then(Value::as_str) {
+            self.message(Level::Info, text.chars().take(200).collect::<String>());
+        }
     }
 
     /// Whether add-on `id` is installed, intact, compatible and on. The gate the rest of the
@@ -168,13 +249,26 @@ impl NovoApp {
                     }
                 }
             }
-            None => self.message(
-                Level::Info,
-                format!(
-                    "{} has no engine in this version of KoperCAD",
-                    cmd.addon_name
-                ),
-            ),
+            None => {
+                let local = cmd
+                    .id
+                    .strip_prefix(&format!("addon.{}.", cmd.addon_id))
+                    .unwrap_or(&cmd.id)
+                    .to_owned();
+                match self.addon_engine_call(&cmd.addon_id, "command", &json!({ "id": local })) {
+                    Some(Ok(reply)) => self.apply_engine_reply(&cmd.addon_id, &reply),
+                    Some(Err(why)) => {
+                        // A refusal is the engine's own words; a stop was already shown.
+                        if !self.wb.addons.stopped.contains_key(&cmd.addon_id) {
+                            self.message(Level::Info, why);
+                        }
+                    }
+                    None => self.message(
+                        Level::Info,
+                        format!("{} has no engine to run this command", cmd.addon_name),
+                    ),
+                }
+            }
         }
     }
 
@@ -254,6 +348,7 @@ impl NovoApp {
             .as_ref()
             .map(|s| s.root().to_path_buf());
         let can_store = self.wb.addons.store.is_some();
+        let stopped = self.wb.addons.stopped.clone();
         super::panel::dialog(
             ctx,
             format!("{} Add-ons", icons::ADDON_ICON),
@@ -268,6 +363,7 @@ impl NovoApp {
                 &set,
                 root.as_deref(),
                 can_store,
+                &stopped,
                 &mut actions,
             );
         });
@@ -354,6 +450,9 @@ impl NovoApp {
                 return;
             }
         };
+        // Any change in the manager is a fresh start for engines that stopped.
+        self.wb.addons.stopped.clear();
+        self.wb.addons.lamps.clear();
         self.refresh_addons();
         if let Some(m) = &mut self.wb.addons.manager {
             m.prompt = None;
@@ -463,13 +562,31 @@ impl NovoApp {
                 .and_then(|b| PanelLayout::parse(&b).map_err(|e| e.to_string()));
             let mut open = true;
             let title = format!("{} {}", icons::ADDON_ICON, panel.title);
+            let env = PanelEnv {
+                has_engine: self
+                    .wb
+                    .addons
+                    .set
+                    .get(&panel.addon_id)
+                    .and_then(|e| e.manifest.as_ref())
+                    .is_some_and(|m| m.engine.is_some()),
+                lamps: self
+                    .wb
+                    .addons
+                    .lamps
+                    .iter()
+                    .filter(|((id, _), _)| id == &panel.addon_id)
+                    .map(|((_, lamp), v)| (lamp.clone(), *v))
+                    .collect(),
+            };
+            let mut clicked: Vec<String> = Vec::new();
             super::panel::dialog(ctx, title, [320.0, 0.0])
                 .id(super::panel::id(&panel.id))
                 .open(&mut open)
                 .show(ctx, |ui| match &layout {
                     Ok(layout) => {
                         for w in &layout.widgets {
-                            widget_ui(ui, w);
+                            widget_ui(ui, w, &env, &mut clicked);
                         }
                         ui.add_space(space::S);
                         ui.weak(format!("From the add-on {}", panel.addon_name));
@@ -478,12 +595,34 @@ impl NovoApp {
                         widgets::banner(ui, Tone::Error, why, |_| {});
                     }
                 });
+            let local = panel
+                .id
+                .strip_prefix(&format!("addon.{}.", panel.addon_id))
+                .unwrap_or(&panel.id)
+                .to_owned();
+            for button in clicked {
+                let sent = json!({ "panel": local, "id": button });
+                match self.addon_engine_call(&panel.addon_id, "button", &sent) {
+                    Some(Ok(reply)) => self.apply_engine_reply(&panel.addon_id, &reply),
+                    Some(Err(why)) if !self.wb.addons.stopped.contains_key(&panel.addon_id) => {
+                        self.message(Level::Info, why);
+                    }
+                    _ => {}
+                }
+            }
             if !open {
                 self.wb.addons.open_panels.remove(&panel.id);
                 self.wb.addons.closed_cards.insert(panel.id.clone());
             }
         }
     }
+}
+
+/// What a panel needs to know about its add-on to draw: whether an engine can answer the
+/// buttons, and the lamp states the engine last set.
+struct PanelEnv {
+    has_engine: bool,
+    lamps: BTreeMap<String, (Option<Role>, Option<bool>)>,
 }
 
 // ----------------------------------------------------------------------
@@ -564,6 +703,7 @@ fn manager_ui(
     set: &AddonSet,
     root: Option<&std::path::Path>,
     can_store: bool,
+    stopped: &BTreeMap<String, String>,
     actions: &mut Vec<Act>,
 ) {
     let p = crate::theme::ui_palette();
@@ -624,7 +764,7 @@ fn manager_ui(
             egui::vec2(ui.available_width(), full.y),
             egui::Layout::top_down(egui::Align::Min),
             |ui| match m.selected.as_ref().and_then(|id| set.get(id)) {
-                Some(entry) => details_ui(ui, m, entry, root, actions),
+                Some(entry) => details_ui(ui, m, entry, root, stopped.get(&entry.id).map(String::as_str), actions),
                 None if set.entries.is_empty() => widgets::empty_state(
                     ui,
                     EmptySize::Panel,
@@ -691,6 +831,7 @@ fn details_ui(
     m: &mut Manager,
     entry: &Entry,
     root: Option<&std::path::Path>,
+    stopped: Option<&str>,
     actions: &mut Vec<Act>,
 ) {
     let p = crate::theme::ui_palette();
@@ -730,6 +871,14 @@ fn details_ui(
                 }
             }
             ui.add_space(space::M);
+            if let Some(why) = stopped {
+                widgets::banner(
+                    ui,
+                    Tone::Error,
+                    &format!("It stopped: {why}. Turn it off and on again to start it."),
+                    |_| {},
+                );
+            }
             match &entry.status {
                 Status::Incompatible(why) => {
                     widgets::banner(ui, Tone::Warning, &format!("It is installed but off: {why}."), |_| {});
@@ -752,7 +901,7 @@ fn details_ui(
                     ui.label(format!("•  {}", perm.describe()));
                 }
                 if manifest.engine.is_some() {
-                    ui.weak("It carries a program (engine.wasm). This version of KoperCAD cannot run it yet.");
+                    ui.weak("It carries a program (engine.wasm). It runs in a sandbox: it cannot use files, the network or the clock.");
                 }
 
                 ui.add_space(space::M);
@@ -886,7 +1035,7 @@ fn install_prompt_ui(ui: &mut egui::Ui, prompt: &mut Prompt, cancel: &mut bool, 
         ui.label(format!("•  {}", perm.describe()));
     }
     if package.manifest.engine.is_some() {
-        ui.weak("It carries a program (engine.wasm). This version of KoperCAD cannot run it yet.");
+        ui.weak("It carries a program (engine.wasm). It runs in a sandbox: it cannot use files, the network or the clock.");
     }
     ui.add_space(space::S);
     fingerprint_row(ui, "Fingerprint", &package.fingerprint);
@@ -918,7 +1067,7 @@ fn install_prompt_ui(ui: &mut egui::Ui, prompt: &mut Prompt, cancel: &mut bool, 
 }
 
 /// One widget of a declared panel, in the program's own look.
-fn widget_ui(ui: &mut egui::Ui, w: &Widget) {
+fn widget_ui(ui: &mut egui::Ui, w: &Widget, env: &PanelEnv, clicked: &mut Vec<String>) {
     let p = crate::theme::ui_palette();
     match w {
         Widget::Heading { text } => {
@@ -934,19 +1083,29 @@ fn widget_ui(ui: &mut egui::Ui, w: &Widget) {
         Widget::Separator => {
             ui.separator();
         }
-        Widget::Button { text, hint, .. } => {
-            let response = ui.button(text);
+        Widget::Button { id, text, hint } => {
             // Without an engine nothing answers a press; say so instead of doing nothing.
-            let tip = if hint.is_empty() {
-                "This add-on's engine is not running in this version of KoperCAD".to_owned()
+            let response = ui.add_enabled(env.has_engine, egui::Button::new(text));
+            let tip = if !env.has_engine {
+                "This add-on has no engine to answer this button".to_owned()
+            } else if hint.is_empty() {
+                text.clone()
             } else {
                 hint.clone()
             };
-            response.on_hover_text(tip);
+            if response.on_hover_text(tip).clicked() {
+                clicked.push(id.clone());
+            }
         }
         Widget::Lamp {
-            text, state, lit, ..
+            id,
+            text,
+            state,
+            lit,
         } => {
+            let (set_state, set_lit) = env.lamps.get(id).copied().unwrap_or((None, None));
+            let state = &set_state.unwrap_or(*state);
+            let lit = &set_lit.unwrap_or(*lit);
             let color = match state {
                 Role::Neutral => p.text_secondary,
                 Role::Accent => p.accent,
@@ -962,7 +1121,7 @@ fn widget_ui(ui: &mut egui::Ui, w: &Widget) {
         Widget::Row { widgets } => {
             ui.horizontal_wrapped(|ui| {
                 for child in widgets {
-                    widget_ui(ui, child);
+                    widget_ui(ui, child, env, clicked);
                 }
             });
         }
