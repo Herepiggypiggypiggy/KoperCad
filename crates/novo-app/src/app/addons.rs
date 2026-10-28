@@ -863,7 +863,8 @@ fn details_ui(
             if let Some(manifest) = &entry.manifest {
                 let a = &manifest.addon;
                 ui.label(
-                    egui::RichText::new(format!("by {}", a.publisher)).color(p.text_secondary),
+                    egui::RichText::new(publisher_line(&a.publisher, entry.trust.is_signed()))
+                        .color(p.text_secondary),
                 );
                 if !a.description.is_empty() {
                     ui.add_space(space::S);
@@ -992,6 +993,15 @@ fn short(hash: &str) -> String {
     hash.chars().take(16).collect::<String>() + "…"
 }
 
+/// The publisher is the add-on's own claim unless a trusted key signed the package.
+fn publisher_line(publisher: &str, signed: bool) -> String {
+    if signed {
+        format!("by {publisher}")
+    } else {
+        format!("claims to be from {publisher}")
+    }
+}
+
 /// A hash as its first 16 characters and a Copy button for the whole of it, so it never wraps.
 fn fingerprint_row(ui: &mut egui::Ui, label: &str, hash: &str) {
     ui.horizontal(|ui| {
@@ -1015,7 +1025,13 @@ fn install_prompt_ui(ui: &mut egui::Ui, prompt: &mut Prompt, cancel: &mut bool, 
         _ => format!("Install {} {}", a.name, a.version),
     };
     ui.heading(verb);
-    ui.label(egui::RichText::new(format!("by {}", a.publisher)).color(p.text_secondary));
+    ui.label(
+        egui::RichText::new(publisher_line(
+            &a.publisher,
+            prompt.inspection.package.trust.is_signed(),
+        ))
+        .color(p.text_secondary),
+    );
     if !a.description.is_empty() {
         ui.add_space(space::S);
         ui.label(&a.description);

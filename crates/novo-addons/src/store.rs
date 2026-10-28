@@ -352,10 +352,23 @@ impl Store {
         match toml::from_str::<Registry>(&text) {
             Ok(mut r) => {
                 let before = r.addons.len();
-                r.addons.retain(|rec| valid_id(&rec.id, 2, 48));
+                // The registry is the user's own file, but its names become folder names: an id or
+                // version that is not plain is ignored, never joined into a path.
+                r.addons.retain(|rec| {
+                    valid_id(&rec.id, 2, 48) && Version::parse(&rec.active).is_some()
+                });
+                for rec in &mut r.addons {
+                    if rec
+                        .previous
+                        .as_deref()
+                        .is_some_and(|v| Version::parse(v).is_none())
+                    {
+                        rec.previous = None;
+                    }
+                }
                 if r.addons.len() != before {
                     warnings.push(
-                        "The add-on list had entries with unusable names; they were ignored."
+                        "The add-on list had entries with unusable names or versions; they were ignored."
                             .into(),
                     );
                 }
@@ -777,7 +790,7 @@ impl Store {
 }
 
 /// A lock file beside the registry, so two program windows cannot rewrite it at the same time.
-/// A lock older than a minute belongs to a crashed program and is broken.
+/// A lock older than five minutes (an install of the largest package takes seconds) belongs to a crashed program and is broken.
 struct Lock(PathBuf);
 
 impl Lock {
@@ -796,7 +809,7 @@ impl Lock {
                         .and_then(|m| m.modified())
                         .ok()
                         .and_then(|t| t.elapsed().ok())
-                        .is_some_and(|age| age > std::time::Duration::from_secs(60));
+                        .is_some_and(|age| age > std::time::Duration::from_secs(300));
                     if stale {
                         let _ = std::fs::remove_file(&path);
                     } else {
@@ -850,7 +863,11 @@ fn unlisted_file(dir: &Path, listed: &BTreeMap<String, String>) -> Option<String
                 if let Some(found) = walk(base, &path, listed, seen, depth + 1) {
                     return Some(found);
                 }
-            } else if rel != "manifest.toml" && rel != "signature" && !listed.contains_key(&rel) {
+            } else if rel != "manifest.toml"
+                && rel != "signature"
+                && !listed.contains_key(&rel)
+                && !is_os_litter(&rel)
+            {
                 return Some(rel);
             }
         }
@@ -858,6 +875,13 @@ fn unlisted_file(dir: &Path, listed: &BTreeMap<String, String>) -> Option<String
     }
     let mut seen = 0;
     walk(dir, dir, listed, &mut seen, 0)
+}
+
+/// Files a file manager drops into folders on its own; they are not part of an add-on and do
+/// not fail it.
+fn is_os_litter(rel: &str) -> bool {
+    let name = rel.rsplit('/').next().unwrap_or(rel).to_ascii_lowercase();
+    matches!(name.as_str(), "thumbs.db" | "desktop.ini" | ".ds_store")
 }
 
 fn read_package_file(path: &Path) -> Result<Vec<u8>> {
