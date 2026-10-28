@@ -89,6 +89,59 @@ Type: files; Name: "{userprograms}\{#AppName} (safe graphics).lnk"
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+{ Runs one PowerShell line on this user's kopercad.exe that sits in the install folder; the
+  result is true when it exited with 0. A portable copy elsewhere is left alone. }
+function OwnProcess(const Action: String): Boolean;
+var
+  Code: Integer;
+  Cmd: String;
+begin
+  Cmd := '-NoProfile -NonInteractive -Command "$p = Get-Process kopercad -ErrorAction SilentlyContinue | ' +
+    'Where-Object { $_.Path -eq ''' + ExpandConstant('{app}\{#AppExe}') + ''' }; ' + Action + '"';
+  Result := Exec('powershell.exe', Cmd, '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+end;
+
+{ True while a kopercad.exe of this install is running. }
+function AppIsRunning: Boolean;
+begin
+  Result := OwnProcess('if ($p) { exit 0 } else { exit 1 }');
+end;
+
+{ The Restart Manager cannot close the program's window, so ask it ourselves: first a normal
+  close (the program keeps its recovery copy), and only after about ten seconds end it. Only
+  the copy in the install folder; per-user process, no admin rights needed. }
+procedure CloseRunningApp;
+var
+  Waited: Integer;
+begin
+  if not AppIsRunning then
+    exit;
+  OwnProcess('$p | ForEach-Object { [void]$_.CloseMainWindow() }; exit 0');
+  Waited := 0;
+  while AppIsRunning and (Waited < 10000) do
+  begin
+    Sleep(500);
+    Waited := Waited + 500;
+  end;
+  if AppIsRunning then
+  begin
+    OwnProcess('$p | Stop-Process -Force; exit 0');
+    Sleep(500);
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  CloseRunningApp;
+  Result := '';
+end;
+
+function InitializeUninstall: Boolean;
+begin
+  CloseRunningApp;
+  Result := True;
+end;
+
 { The program is removed; projects are never touched. Settings, logs and the
   recovery files stay unless the user asks for them to go too, so a later
   reinstall finds the same preferences. }
