@@ -10,3 +10,5 @@ Rules: no vendor profiles or customer files in the repository; shipped profiles 
 Traps: `requires`/`drops_when` are receiver-side latch semantics (validator warns on other kinds); selector remap is signals with
 `requires = ["sel=pos"]`; E-stop leaves `pressed` only through `reset`.
 People: C4 import thread cmsg_01TV2QyH4AYw9X2aTmgUsuhC8mQQyNbZNcy3uo9rm8bA8D (builds `Profile` values); reviewers and leads per coordination/threads.md.
+
+2026-10-28 C4 import wizard: `novo_controller::import` (table parser, NL/EN word lists in `data/`, `propose` with warnings, TOML in the C1 profile format, device pins, generic library) and the wizard window `crates/novo-app/src/app/controller_import.rs` (File > Import > Controller profile from I/O table). Design: `docs/design/controller-import.md`. Resume: `cargo test -p novo-controller -p novo-app controller_import`. A test parses every library profile with `Profile::parse` and `validate`.

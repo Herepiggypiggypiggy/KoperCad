@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Place palette</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="@@KC@@">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0}</style>
+</helmet>
+<div class="kc {{theme}}" style="width:1100px;height:720px;background:var(--ground)">
+  <div class="cv art-canvas-{{theme}}" style="position:absolute;inset:0;background-size:1100px auto"></div>
+  <div class="scrim"></div>
+
+  <!-- PLACE PALETTE (Q or Space): the search that exists today, plus the symbols drawn to one scale -->
+  <div class="float dlg" style="left:60px;top:40px;width:980px;height:640px;display:flex;flex-direction:column">
+    <div class="row gap8" style="padding:12px 14px;border-bottom:1px solid var(--bd)">
+      <div class="field focus grow" style="height:34px"><i class="i i-magnifying-glass i18" style="color:var(--tx2)"></i><span style="color:var(--tx3)">Search symbols, circuits, macros and parts</span><span class="grow"></span><span class="kbd">Esc</span></div>
+      <div class="seg"><button class="btn on" style="height:26px;font-size:12px">Symbols</button><button class="btn" style="height:26px;font-size:12px">Circuits</button><button class="btn" style="height:26px;font-size:12px">Macros</button><button class="btn" style="height:26px;font-size:12px">Parts</button></div>
+    </div>
+
+    <div class="row" style="flex:1;min-height:0;align-items:stretch">
+      <!-- categories: the library's own 21, each with its drawn icon -->
+      <div class="col" style="width:186px;background:var(--panel);border-right:1px solid var(--bd);padding:8px 6px;gap:1px;overflow:hidden">
+        <div class="mrow" style="height:28px"><i class="i i-clock-counter-clockwise"></i>Recent<span class="cap" style="margin-left:auto">6</span></div>
+        <div class="mrow" style="height:28px"><i class="i i-bookmark"></i>Favourites<span class="cap" style="margin-left:auto">11</span></div>
+        <div class="hsep" style="margin:3px 4px"></div>
+        <div class="mrow" style="height:28px"><i class="i ki-contact-no"></i>Contacts<span class="cap" style="margin-left:auto">11</span></div>
+        <div class="mrow" style="height:28px"><i class="i ki-coil"></i>Coils<span class="cap" style="margin-left:auto">7</span></div>
+        <div class="mrow" style="height:28px"><i class="i ki-contactor"></i>Contactors<span class="cap" style="margin-left:auto">4</span></div>
+        <div class="mrow on" style="height:28px"><i class="i ki-breaker"></i><b>Protection</b><span class="cap" style="margin-left:auto">21</span></div>
+        <div class="mrow" style="height:28px"><i class="i ki-pushbutton"></i>Operators<span class="cap" style="margin-left:auto">14</span></div>
+        <div class="mrow" style="height:28px"><i class="i ki-lamp"></i>Signalling<span class="cap" style="margin-left:auto">10</span></div>
+        <div class="mrow" style="height:28px"><i class="i ki-motor"></i>Motors<span class="cap" style="margin-left:auto">9</span></div>
+        <div class="mrow" style="height:28px"><i class="i ki-drive"></i>Drives<span class="cap" style="margin-left:auto">2</span></div>
+        <div class="mrow" style="height:28px"><i class="i ki-terminal"></i>Terminals<span class="cap" style="margin-left:auto">25</span></div>
+        <div class="mrow" style="height:28px"><i class="i ki-sensor"></i>Sensors<span class="cap" style="margin-left:auto">19</span></div>
+        <div class="mrow" style="height:28px"><i class="i ki-plc"></i>PLC<span class="cap" style="margin-left:auto">8</span></div>
+        <div class="mrow" style="height:28px"><i class="i ki-transformer"></i>Transformers<span class="cap" style="margin-left:auto">5</span></div>
+        <div class="mrow" style="height:28px"><i class="i ki-psu"></i>Supplies<span class="cap" style="margin-left:auto">2</span></div>
+        <div class="mrow" style="height:28px"><i class="i ki-ground"></i>Earth<span class="cap" style="margin-left:auto">3</span></div>
+        <div class="mrow" style="height:28px"><i class="i ki-estop"></i>Safety<span class="cap" style="margin-left:auto">7</span></div>
+      </div>
+
+      <!-- the grid: every symbol at the same scale, so a fuse looks small next to a 4-pole RCD, as it is -->
+      <div class="col grow" style="padding:12px 14px;gap:10px;min-width:0">
+        <div class="row gap8"><span class="lbl">Protection</span><span class="cap">21 symbols · IEC 60617</span><span class="grow"></span><span class="chip on">All</span><span class="chip">1-pole</span><span class="chip">3-pole</span><span class="chip">Motor</span></div>
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">
+          <div class="col" style="gap:4px;align-items:center"><div class="thumb" style="width:100%;height:80px"><i class="sym sy-protection-fuse" style="width:16px;height:48px"></i></div><span class="cap" style="color:var(--tx)">Fuse</span></div>
+          <div class="col" style="gap:4px;align-items:center"><div class="thumb" style="width:100%;height:80px"><i class="sym sy-protection-fuse-3p" style="width:55px;height:48px"></i></div><span class="cap" style="color:var(--tx)">Fuse, 3-pole</span></div>
+          <div class="col" style="gap:4px;align-items:center"><div class="thumb" style="width:100%;height:80px"><i class="sym sy-protection-fuse-switch-3p" style="width:61px;height:48px"></i></div><span class="cap" style="color:var(--tx)">Fuse switch, 3-pole</span></div>
+          <div class="col" style="gap:4px;align-items:center"><div class="thumb" style="width:100%;height:80px"><i class="sym sy-protection-mcb-1p" style="width:51px;height:48px"></i></div><span class="cap" style="color:var(--tx)">MCB, 1-pole</span></div>
+          <div class="col" style="gap:4px;align-items:center"><div class="thumb" style="width:100%;height:80px"><i class="sym sy-protection-mcb-3p" style="width:90px;height:48px"></i></div><span class="cap" style="color:var(--tx)">MCB, 3-pole</span></div>
+          <div class="col" style="gap:4px;align-items:center"><div class="thumb on" style="width:100%;height:80px"><i class="sym sy-protection-motor-protection-breaker" style="width:90px;height:48px;color:var(--ac2)"></i></div><span class="cap" style="color:var(--tx);font-weight:600">Motor protection breaker</span></div>
+          <div class="col" style="gap:4px;align-items:center"><div class="thumb" style="width:100%;height:80px"><i class="sym sy-protection-overload-relay" style="width:61px;height:48px"></i></div><span class="cap" style="color:var(--tx)">Overload relay</span></div>
+          <div class="col" style="gap:4px;align-items:center"><div class="thumb" style="width:100%;height:80px"><i class="sym sy-protection-mcb-3p-n" style="width:109px;height:48px"></i></div><span class="cap" style="color:var(--tx)">MCB, 3-pole + N</span></div>
+          <div class="col" style="gap:4px;align-items:center"><div class="thumb" style="width:100%;height:80px"><i class="sym sy-protection-rcd-2p" style="width:64px;height:66px"></i></div><span class="cap" style="color:var(--tx)">RCD, 2-pole</span></div>
+          <div class="col" style="gap:4px;align-items:center"><div class="thumb" style="width:100%;height:80px"><i class="sym sy-protection-rcd-4p" style="width:101px;height:66px"></i></div><span class="cap" style="color:var(--tx)">RCD, 4-pole</span></div>
+          <div class="col" style="gap:4px;align-items:center"><div class="thumb" style="width:100%;height:80px"><i class="sym sy-protection-rcbo-2p" style="width:75px;height:66px"></i></div><span class="cap" style="color:var(--tx)">RCBO, 1-pole + N</span></div>
+          <div class="col" style="gap:4px;align-items:center"><div class="thumb" style="width:100%;height:80px"><i class="sym sy-protection-surge-arrester" style="width:16px;height:48px"></i></div><span class="cap" style="color:var(--tx)">Surge arrester</span></div>
+        </div>
+      </div>
+
+      <!-- the one under the cursor, large, with its pins and what Enter does -->
+      <div class="col" style="width:252px;border-left:1px solid var(--bd);padding:14px;gap:12px;background:var(--panel)">
+        <div class="thumb" style="height:150px;background:var(--sunken)"><i class="sym sy-protection-motor-protection-breaker" style="width:170px;height:90px;color:var(--tx)"></i></div>
+        <div class="col" style="gap:2px"><b style="font-size:14px">Motor protection circuit breaker, 3-pole</b><span class="cap">Adjustable thermal and magnetic trip</span></div>
+        <div class="col gap4"><div class="row" style="justify-content:space-between"><span class="cap">Tag</span><span class="mono">-Q</span></div>
+          <div class="row" style="justify-content:space-between"><span class="cap">Pins</span><span class="mono">1 2 3 4 5 6</span></div>
+          <div class="row" style="justify-content:space-between"><span class="cap">Type in the box</span><span class="mono">mpcb</span></div></div>
+        <div class="grow"></div>
+        <button class="prim" style="justify-content:center"><i class="i ki-place i18"></i>Place<span class="kbd" style="background:rgba(0,0,0,.18);color:inherit;border-color:transparent">Enter</span></button>
+        <div class="row gap8" style="justify-content:center"><span class="cap"><span class="kbd">R</span> rotates</span><span class="cap"><span class="kbd">X</span> mirrors</span></div>
+      </div>
+    </div>
+    <div class="row gap8" style="height:34px;padding:0 14px;border-top:1px solid var(--bd);background:var(--panel)"><span class="cap">Arrow keys move through the grid · Tab changes category · hold Q for the wheel</span></div>
+    <div class="grip" style="right:0;bottom:0"></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>

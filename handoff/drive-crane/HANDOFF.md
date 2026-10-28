@@ -1,6 +1,10 @@
 # Drive and crane: handoff
 
-Branch `claude/project-thread-inah5y`, PR "Register novo-drive and novo-machine crates".
-State: skeletons only. `novo-drive` has no dependencies yet (lanes add `novo-core`/`novo-sim` in their own Cargo.toml; avoid a cycle with L5 hooks in `novo-sim`). `novo-machine` depends on `novo-drive`.
+Crates `novo-drive` and `novo-machine` are on main (L0). L2a adds the two-speed hoist engine in `novo-drive` (`motor`, `sequencer`, `brake`, `mechanics`, `hoist_unit`, `error`).
+Entry point for the loop lane (L5a): `hoist_unit::TwoSpeedHoistUnit::step(HoistInput, dt)` returns a `HoistSnapshot`; the schematic supplies `Command` (direction, step 0/1/2), `mains_on` and, with `BrakeFeed::Separate`, the brake coil.
+Brake torque of a tick is the value at its start (one tick of latency, deterministic).
+Conventions: positive shaft speed raises the hook; see `mechanics.rs` header for the efficiency convention.
 Resume: `cargo test -p novo-drive -p novo-machine`.
-Owner for new lanes: see the plan lane table.
+No UI entry yet: the "Mechanical load" section of the motor property sheet (L3/L6) and the loop (L5a) consume it.
+
+L7 validation: `docs/design/drive-crane-validation.md` lists every case, what runs now and which lane un-ignores which test. A lane that lands engine code replaces the `todo!` in its tests and keeps the hand value; disagreements go to the doc, not to a changed hand value.
