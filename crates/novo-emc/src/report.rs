@@ -371,6 +371,7 @@ impl Report {
 pub const NOT_CHECKED: &[&str] = &[
     "Radiated and conducted emission margins (needs a measurement or a full-wave solver).",
     "Real filter insertion loss and drive-maker limits on motor cable length.",
+    "Whether a filter is wired in series with its drive: the filter rule counts a filter as wired when two of its pins carry a wire, so a filter wired in parallel, or with both wires on one side, would count too.",
     "Enclosure shielding: seams, slots, gaskets and cavity resonances.",
     "The magnetic field estimate covers the differential-mode field of the currents it lists: no common-mode current, no capacitive coupling, no eddy currents in a steel plate at mains frequency, no riser wires between plate and device.",
     "Rules not built yet, so they say nothing either way: EMC-03 crossing angles, EMC-06 shield carried through terminals, EMC-08 motor cable length against the filter, EMC-10 return through the plate, EMC-13 coil suppression, EMC-15 24 V supply and return, EMC-16 surge protection, EMC-18 ferrite advice.",

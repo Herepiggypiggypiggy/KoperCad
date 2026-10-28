@@ -10,7 +10,8 @@
 //! below its entered height and open at or above it, for an upper limit). Model: everything
 //! inside `novo_drive` (see `novo_drive::motor::MOTOR_MODEL_LEAVES_OUT`).
 
-use novo_drive::hoist_unit::{HoistSnapshot, TwoSpeedHoistUnit};
+use novo_drive::InputError;
+use novo_drive::hoist_unit::{BrakeFeed, HoistSnapshot, TwoSpeedHoistUnit};
 use novo_drive::sequencer::Energised;
 
 use crate::bindings::SensorBinding;
@@ -59,8 +60,23 @@ pub struct HoistBinding {
     pub limits: Vec<LimitSwitch>,
 }
 
+/// A hoist bound to something the circuit does not have.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BindingFinding {
+    pub module: String,
+    pub message: String,
+}
+
+fn missing(module: &str, what: &str, tag: &str) -> BindingFinding {
+    BindingFinding {
+        module: module.to_owned(),
+        message: format!("{what} {tag} is not in the circuit"),
+    }
+}
+
 /// A hoist module: engine plus bindings. Bindings are per instance, so two identical hoists
 /// on one crab bind to different devices.
+#[derive(Debug)]
 pub struct HoistModule {
     pub id: String,
     pub unit: TwoSpeedHoistUnit,
@@ -99,12 +115,14 @@ pub struct HoistLoop {
 }
 
 impl HoistLoop {
-    pub fn new(config: StepConfig) -> Self {
-        Self {
+    /// The step is validated (see [`StepConfig::validate`]).
+    pub fn new(config: StepConfig) -> Result<Self, InputError> {
+        config.validate()?;
+        Ok(Self {
             config,
             hoists: Vec::new(),
             time_s: 0.0,
-        }
+        })
     }
 
     pub fn time_s(&self) -> f64 {
@@ -113,6 +131,40 @@ impl HoistLoop {
 
     pub fn hoist(&self, id: &str) -> Option<&HoistModule> {
         self.hoists.iter().find(|h| h.id == id)
+    }
+
+    /// Binding problems to show the user. A hoist bound to a device the circuit does not know
+    /// would otherwise run as "never fed" or "brake held" without a word.
+    pub fn check_bindings(&self, circuit: &impl CircuitPort) -> Vec<BindingFinding> {
+        let mut out = Vec::new();
+        for h in &self.hoists {
+            if !circuit.knows_device(&h.binding.motor) {
+                out.push(missing(&h.id, "motor", &h.binding.motor));
+            }
+            if let Some(tag) = &h.binding.mains
+                && !circuit.knows_device(tag)
+            {
+                out.push(missing(&h.id, "main contactor", tag));
+            }
+            match &h.binding.brake_feed {
+                Some(tag) if !circuit.knows_device(tag) => {
+                    out.push(missing(&h.id, "brake feed", tag))
+                }
+                None if h.unit.brake_feed() == BrakeFeed::Separate => out.push(BindingFinding {
+                    module: h.id.clone(),
+                    message: "the brake is fed separately but no brake feed device is bound, \
+                              so the brake stays applied"
+                        .into(),
+                }),
+                _ => {}
+            }
+            for limit in &h.binding.limits {
+                if !circuit.knows_device(&limit.binding.device_tag) {
+                    out.push(missing(&h.id, "limit switch", &limit.binding.device_tag));
+                }
+            }
+        }
+        out
     }
 
     /// One tick.

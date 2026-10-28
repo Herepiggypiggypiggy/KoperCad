@@ -66,7 +66,7 @@ pub static RULES: &[Rule] = &[
         id: "EMC-07",
         title: "Drive input filter",
         level: Level::Index,
-        requirement: "A drive has a mains filter (built in, or drawn, wired in series and fitted close by on the same plate). A filter that is only in the device list does not count.",
+        requirement: "A drive has a mains filter (built in, or drawn, wired and fitted close by on the same plate). A filter counts as wired when two of its pins carry a wire; whether it is in series with the drive is not checked. A filter that is only in the device list does not count.",
         source: "Drive makers' guides; EN 61800-3 context, not verified",
         verify: true,
         inputs: "Drive devices, filter devices and their positions, `emc.filter` on the drive or its part",

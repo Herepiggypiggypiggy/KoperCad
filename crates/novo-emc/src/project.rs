@@ -891,7 +891,7 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
                 Some(Value::Text(d.tag.to_string())),
             )?;
             Ok(format!(
-                "Filter {tag} added to the device list for {}. It is not drawn yet and filters nothing: draw it on a page, wire it in series between the supply and the drive, and place it next to the drive. The finding stays until it is wired",
+                "Filter {tag} added to the device list for {}. It is not drawn yet and filters nothing: draw it on a page, wire it in series between the supply and the drive, and place it next to the drive. The finding stays until it is wired.",
                 d.tag
             ))
         }
