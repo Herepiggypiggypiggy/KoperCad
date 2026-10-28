@@ -1345,7 +1345,12 @@ pub(super) fn paint_over(
             FlowMode::SpeedMap | FlowMode::Off => {}
         }
         if state.flow.mode != FlowMode::Off {
-            heat_flow::paint_key(&painter, cache.speed_top);
+            let title = if state.flow.mode == FlowMode::SpeedMap {
+                "Map: air speed along the plate"
+            } else {
+                "Air speed along the plate"
+            };
+            heat_flow::paint_key(&painter, cache.speed_top, title);
         }
     }
     // No hot-spot cards or contour labels on an empty plate or beside

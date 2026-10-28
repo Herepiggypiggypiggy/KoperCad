@@ -196,14 +196,22 @@ pub(crate) fn kept_count(n: usize, strength: f32) -> usize {
         .min(n)
 }
 
-/// A small key in the bottom left corner of a painter's clip rectangle: the
-/// speed bar with its end in m/s and the words, for the flat Cabinet view.
-pub(crate) fn paint_key(painter: &egui::Painter, scale_top: f32) {
+/// A small key in the bottom left corner of a painter's clip rectangle: a
+/// title, the speed bar and one line with its range in m/s and the word for
+/// its top end, for the flat Cabinet view.
+pub(crate) fn paint_key(painter: &egui::Painter, scale_top: f32, title: &str) {
     let pal = crate::theme::ui_palette();
     let clip = painter.clip_rect();
-    let origin = egui::pos2(clip.min.x + 12.0, clip.max.y - 34.0);
-    let bar = egui::Rect::from_min_size(origin, egui::vec2(120.0, 8.0));
-    painter.rect_filled(bar.expand(5.0), 4.0, pal.raised.gamma_multiply(0.85));
+    let origin = egui::pos2(clip.min.x + 12.0, clip.max.y - 38.0);
+    let bar = egui::Rect::from_min_size(origin, egui::vec2(150.0, 8.0));
+    painter.rect_filled(
+        egui::Rect::from_min_max(
+            egui::pos2(bar.min.x - 6.0, bar.min.y - 18.0),
+            egui::pos2(bar.max.x + 150.0, bar.max.y + 20.0),
+        ),
+        4.0,
+        pal.raised.gamma_multiply(0.85),
+    );
     let step = bar.width() / 32.0;
     for i in 0..32 {
         let [r, g, b] = speed_rgb((i as f32 + 0.5) / 32.0);
@@ -219,16 +227,20 @@ pub(crate) fn paint_key(painter: &egui::Painter, scale_top: f32) {
     }
     let font = egui::FontId::proportional(10.0);
     painter.text(
-        egui::pos2(bar.min.x, bar.max.y + 3.0),
-        egui::Align2::LEFT_TOP,
-        "0",
+        egui::pos2(bar.min.x, bar.min.y - 4.0),
+        egui::Align2::LEFT_BOTTOM,
+        title,
         font.clone(),
-        pal.text_secondary,
+        pal.text_primary,
     );
     painter.text(
-        egui::pos2(bar.max.x, bar.max.y + 3.0),
-        egui::Align2::RIGHT_TOP,
-        format!("{} m/s {} (model)", trim(scale_top), speed_word(scale_top)),
+        egui::pos2(bar.min.x, bar.max.y + 3.0),
+        egui::Align2::LEFT_TOP,
+        format!(
+            "0 to {} m/s, top end is {} air (model)",
+            trim(scale_top),
+            speed_word(scale_top)
+        ),
         font,
         pal.text_secondary,
     );
