@@ -1,0 +1,41 @@
+@title Learn panels: the window resizes and moves, the card moves, both stay usable
+@area Learn
+@sizes 1366x768
+# The Learn window is resized from its bottom right corner and moved by its title bar; the lesson card is moved by its body (the grip in its header says so). Both keep their content readable.
+click_text "Learn…"
+wait 15
+drag 1172 701 1000 600
+wait 10
+shot 01-window-smaller
+check_layout
+drag 600 88 500 128
+wait 10
+shot 02-window-moved
+check_layout
+click_text "Start" #1
+wait 30
+mouse_down 1190 500
+move 1141 480
+wait 2
+move 1092 460
+wait 2
+move 1043 440
+wait 2
+move 994 420
+wait 2
+move 945 400
+wait 2
+move 896 380
+wait 2
+move 847 360
+wait 2
+move 798 340
+wait 2
+move 749 320
+wait 2
+move 700 300
+wait 2
+mouse_up 700 300
+wait 10
+shot 03-card-moved
+check_layout

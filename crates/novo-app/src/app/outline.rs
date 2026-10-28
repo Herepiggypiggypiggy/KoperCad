@@ -7,6 +7,11 @@
 //!   adds one.
 //! - Pages drag onto a group or a cabinet to file them there, onto another
 //!   page to take its place; a cabinet drags onto a group.
+//! - Ctrl+click adds a page to the selection or takes it out, Shift+click
+//!   selects the range from the last click, Ctrl+A selects every page shown
+//!   and Esc clears the selection. Dragging one of the selected pages
+//!   drags them all, as one block, keeping their order; Delete, Ctrl+D and
+//!   Ctrl+Up/Down act on all of them, each as one undo step.
 //! - New groups and cabinets name themselves from the pattern the project
 //!   already uses (see [`tree::next_name`]); nothing has to be configured
 //!   first.
@@ -54,6 +59,8 @@ pub(super) struct Rename {
 #[derive(Debug, Clone, PartialEq)]
 enum Drag {
     Page(PageId),
+    /// The selected pages (two or more) in the order the tree shows them.
+    Pages(Vec<PageId>),
     /// A cabinet with the group it is listed under.
     Cabinet {
         location: Levels,
@@ -115,6 +122,11 @@ pub(super) struct Confirm {
 pub(super) struct OutlineState {
     pub(super) collapsed: BTreeSet<String>,
     pub(super) selected: Option<String>,
+    /// The pages of a multi-selection (Ctrl or Shift click), besides the
+    /// plain `selected` row. Empty for a single selection.
+    pub(super) picked: BTreeSet<PageId>,
+    /// Where a Shift click starts its range: the last plain or Ctrl click.
+    anchor: Option<String>,
     /// The tree took the last click, so its keys apply.
     pub(super) focused: bool,
     /// Where the tree was drawn last frame.
@@ -142,6 +154,8 @@ impl OutlineState {
         Self {
             collapsed: BTreeSet::new(),
             selected: None,
+            picked: BTreeSet::new(),
+            anchor: None,
             focused: false,
             rect: None,
             rename: None,
@@ -161,6 +175,70 @@ impl OutlineState {
 
     pub(super) fn dialog_open(&self) -> bool {
         self.cabinet_form.is_some() || self.props.is_some() || self.confirm.is_some()
+    }
+
+    /// The pages selected, in the order the tree shows them: the multi-
+    /// selection, else the page of the selected row.
+    pub(super) fn chosen_pages(&self) -> Vec<PageId> {
+        let mut seen = BTreeSet::new();
+        let mut pages: Vec<PageId> = Vec::new();
+        for row in &self.rows {
+            if let Some((page, _)) = row.page()
+                && self.picked.contains(&page)
+                && seen.insert(page)
+            {
+                pages.push(page);
+            }
+        }
+        if pages.is_empty()
+            && let Some((page, _)) = self
+                .selected
+                .as_deref()
+                .and_then(|k| self.row(k))
+                .and_then(|r| r.page())
+        {
+            pages.push(page);
+        }
+        pages
+    }
+
+    /// Ctrl+click: the page joins the multi-selection or leaves it. A first
+    /// Ctrl+click keeps the page that was already selected.
+    fn toggle_picked(&mut self, page: PageId, key: &str) {
+        if self.picked.is_empty()
+            && let Some((first, _)) = self
+                .selected
+                .as_deref()
+                .and_then(|k| self.row(k))
+                .and_then(|r| r.page())
+        {
+            self.picked.insert(first);
+        }
+        if !self.picked.remove(&page) {
+            self.picked.insert(page);
+        }
+        self.anchor = Some(key.to_owned());
+    }
+
+    /// Shift+click (or Shift+arrow): every page between the anchor and the
+    /// row `to`, both included.
+    fn pick_range(&mut self, to: &str) {
+        let from = self.anchor.clone().or_else(|| self.selected.clone());
+        let at = |key: &str| self.rows.iter().position(|r| r.key == key);
+        let (Some(a), Some(b)) = (from.as_deref().and_then(at), at(to)) else {
+            if let Some((page, _)) = self.row(to).and_then(|r| r.page()) {
+                self.picked = BTreeSet::from([page]);
+            }
+            return;
+        };
+        let (lo, hi) = (a.min(b), a.max(b));
+        self.picked = self.rows[lo..=hi]
+            .iter()
+            .filter_map(|r| r.page().map(|(p, _)| p))
+            .collect();
+        if self.anchor.is_none() {
+            self.anchor = from;
+        }
     }
 
     fn row(&self, key: &str) -> Option<&TreeRow> {
@@ -234,6 +312,22 @@ impl NovoApp {
             self.outline_more_menu(ui);
         });
         ui.add_space(4.0);
+        // One fixed line, so the rows do not jump when a selection starts.
+        let many = self.ol.picked.len() > 1;
+        let pal = crate::theme::ui_palette();
+        ui.label(
+            egui::RichText::new(if many {
+                format!(
+                    "{} pages selected \u{b7} drag to move, Esc clears",
+                    self.ol.picked.len()
+                )
+            } else {
+                "Ctrl or Shift click selects several pages".to_owned()
+            })
+            .size(tokens::FONT_SMALL)
+            .color(if many { pal.accent } else { pal.text_tertiary }),
+        );
+        ui.add_space(2.0);
         self.filing_banner(ui);
 
         let page_rows = self.page_rows();
@@ -253,6 +347,43 @@ impl NovoApp {
             _ => Vec::new(),
         };
         self.ol.rows = tree_rows.clone();
+        if filter.is_empty() {
+            // Pages that are gone or folded away leave the selection.
+            let shown: BTreeSet<PageId> = tree_rows
+                .iter()
+                .filter_map(|r| r.page().map(|(p, _)| p))
+                .collect();
+            self.ol.picked.retain(|p| shown.contains(p));
+        }
+
+        if let Some(drag) = egui::DragAndDrop::payload::<Drag>(ui.ctx())
+            && let Drag::Pages(pages) = &*drag
+            && let Some(at) = ui.ctx().pointer_latest_pos()
+        {
+            // The block being carried, next to the pointer.
+            let painter = ui.ctx().layer_painter(egui::LayerId::new(
+                egui::Order::Tooltip,
+                egui::Id::new("outline_drag_badge"),
+            ));
+            let pal = crate::theme::ui_palette();
+            let galley = painter.layout_no_wrap(
+                format!("{} pages", pages.len()),
+                egui::FontId::proportional(tokens::FONT_BODY),
+                pal.text_primary,
+            );
+            let rect = egui::Rect::from_min_size(
+                at + egui::vec2(14.0, 10.0),
+                galley.size() + egui::vec2(12.0, 6.0),
+            );
+            painter.rect_filled(rect, 4.0, pal.accent_wash);
+            painter.rect_stroke(
+                rect,
+                4.0,
+                egui::Stroke::new(1.0, pal.border_strong),
+                egui::StrokeKind::Inside,
+            );
+            painter.galley(rect.min + egui::vec2(6.0, 3.0), galley, pal.text_primary);
+        }
 
         let mut acts: Vec<Act> = Vec::new();
         let mut opened = None;
@@ -311,6 +442,7 @@ impl NovoApp {
                     self.ol.focused = true;
                     if bg.clicked() {
                         self.ol.selected = None;
+                        self.ol.picked.clear();
                     }
                 }
                 if let Some(doc) = self.backend.document() {
@@ -703,7 +835,8 @@ impl NovoApp {
         }
         let current = matches!(&row.kind, RowKind::Page { page, sheet, .. }
             if self.current_page == Some(*page) && self.wb.sheet == *sheet && self.workspace() != super::workspace::Workspace::Cabinet);
-        let selected = self.ol.selected.as_deref() == Some(row.key.as_str());
+        let selected = self.ol.selected.as_deref() == Some(row.key.as_str())
+            || matches!(&row.kind, RowKind::Page { page, .. } if self.ol.picked.contains(page));
         let x0 = rect.left() + 4.0 + row.depth as f32 * INDENT;
 
         // Background
@@ -941,6 +1074,11 @@ impl NovoApp {
 
         // Drag source
         match &row.kind {
+            RowKind::Page { page, .. }
+                if self.ol.picked.len() > 1 && self.ol.picked.contains(page) =>
+            {
+                resp.dnd_set_drag_payload(Drag::Pages(self.ol.chosen_pages()))
+            }
             RowKind::Page { page, .. } => resp.dnd_set_drag_payload(Drag::Page(*page)),
             RowKind::Cabinet {
                 location, context, ..
@@ -956,9 +1094,24 @@ impl NovoApp {
         if resp.clicked() || resp.secondary_clicked() || resp.double_clicked() {
             out.select = true;
         }
+        if resp.secondary_clicked()
+            && let RowKind::Page { page, .. } = &row.kind
+            && !self.ol.picked.contains(page)
+        {
+            self.ol.picked.clear();
+        }
         if resp.clicked() {
+            let modifiers = ui.input(|i| i.modifiers);
             match &row.kind {
-                RowKind::Page { page, sheet, .. } => out.open = Some((*page, *sheet)),
+                RowKind::Page { page, .. } if modifiers.command => {
+                    self.ol.toggle_picked(*page, &row.key)
+                }
+                RowKind::Page { .. } if modifiers.shift => self.ol.pick_range(&row.key),
+                RowKind::Page { page, sheet, .. } => {
+                    self.ol.picked.clear();
+                    self.ol.anchor = Some(row.key.clone());
+                    out.open = Some((*page, *sheet));
+                }
                 _ if row.foldable => out.acts.push(Act::Fold(row.key.clone(), !folded)),
                 _ => {}
             }
@@ -1013,7 +1166,14 @@ impl NovoApp {
         if let Some(doc) = self.backend.document()
             && let Some(target) = target_of(row)
         {
-            let items = tree::menu(doc.project(), &target);
+            let chosen = self.ol.chosen_pages();
+            let items = if self.ol.picked.len() > 1
+                && matches!(&row.kind, RowKind::Page { page, .. } if self.ol.picked.contains(page))
+            {
+                tree::multi_menu(doc.project(), &chosen)
+            } else {
+                tree::menu(doc.project(), &target)
+            };
             resp.context_menu(|ui| {
                 ui.set_min_width(210.0);
                 menu_items(ui, &items, &mut out.acts)
@@ -1255,6 +1415,9 @@ impl NovoApp {
                     text: p.title.clone(),
                 });
                 self.ol.reveal = Some(Reveal::Page { page, rename: true });
+                // The title box lives in the Pages panel: a rename from
+                // Ctrl+K with the panel closed would be invisible.
+                self.outline_open = true;
             }
             Act::RenameGroup(levels) => {
                 self.ol.rename = Some(Rename {
@@ -1282,6 +1445,50 @@ impl NovoApp {
                     self.message(Level::Info, "Duplicated the page, devices got new tags");
                 }
             }
+            Act::DuplicatePages(pages) => {
+                let copies = self.edit("Duplicate pages", |tx| {
+                    pages
+                        .iter()
+                        .map(|p| tree::duplicate_page(tx, *p))
+                        .collect::<novo_core::Result<Vec<_>>>()
+                });
+                if let Some(copies) = copies
+                    && let Some(&first) = copies.first()
+                {
+                    self.show_page(first);
+                    self.ol.picked = copies.iter().copied().collect();
+                    self.ol.reveal = Some(Reveal::Page {
+                        page: first,
+                        rename: false,
+                    });
+                    self.message(
+                        Level::Info,
+                        format!("Duplicated {} pages, devices got new tags", copies.len()),
+                    );
+                }
+            }
+            Act::DeletePages(pages) => self.delete_pages(pages),
+            Act::MoveManyTo {
+                pages,
+                function,
+                location,
+            } => {
+                let n = self.edit("Move pages", |tx| {
+                    for page in &pages {
+                        tree::move_page(tx, *page, function.clone(), location.clone())?;
+                    }
+                    Ok(pages.len())
+                });
+                if let (Some(n), Some(&first)) = (n, pages.first()) {
+                    self.ol.picked = pages.iter().copied().collect();
+                    self.ol.reveal = Some(Reveal::Page {
+                        page: first,
+                        rename: false,
+                    });
+                    self.message(Level::Info, format!("Moved {n} pages (Ctrl+Z undoes)"));
+                }
+            }
+            Act::StepPages(pages, down) => self.step_pages(&pages, down),
             Act::MoveUp(page) => self.step_page(page, false),
             Act::MoveDown(page) => self.step_page(page, true),
             Act::MoveTo {
@@ -1431,6 +1638,101 @@ impl NovoApp {
         }
     }
 
+    /// Moves a block of pages one place among their siblings, as one step.
+    fn step_pages(&mut self, pages: &[PageId], down: bool) {
+        let Some(&first) = pages.first() else {
+            return;
+        };
+        let Some(siblings) = self
+            .backend
+            .document()
+            .map(|d| d.project().sibling_pages(first))
+        else {
+            return;
+        };
+        let at: Vec<usize> = siblings
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| pages.contains(p))
+            .map(|(i, _)| i)
+            .collect();
+        if at.len() != pages.len() {
+            return;
+        }
+        let neighbour = if down {
+            siblings.get(at[at.len() - 1] + 1)
+        } else {
+            at[0].checked_sub(1).and_then(|n| siblings.get(n))
+        };
+        // A neighbour inside the block (a gap in the selection) is stepped
+        // over to the nearest page outside it.
+        let neighbour = neighbour.copied().filter(|n| !pages.contains(n));
+        let Some(neighbour) = neighbour else {
+            return;
+        };
+        if let Some(order) = super::pages::order_after_group_drop(&siblings, pages, neighbour, down)
+        {
+            self.reorder_pages(order);
+            self.ol.reveal = Some(Reveal::Page {
+                page: first,
+                rename: false,
+            });
+        }
+    }
+
+    /// Deletes the drawn pages of a multi-selection as one undo step.
+    fn delete_pages(&mut self, pages: Vec<PageId>) {
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return;
+        };
+        let pages: Vec<PageId> = pages
+            .into_iter()
+            .filter(|id| {
+                project
+                    .page(*id)
+                    .is_some_and(|p| !matches!(p.kind, PageKind::Generated { .. }))
+            })
+            .collect();
+        if pages.is_empty() {
+            return;
+        }
+        // Where the selection goes: the first page that stays, below the
+        // lowest deleted page else above it.
+        let order: Vec<PageId> = self
+            .ol
+            .rows
+            .iter()
+            .filter_map(|r| r.page().map(|(p, _)| p))
+            .collect();
+        let last = order.iter().rposition(|p| pages.contains(p));
+        let next = last
+            .and_then(|l| order[l + 1..].iter().find(|p| !pages.contains(p)))
+            .or_else(|| order.iter().rev().find(|p| !pages.contains(p)))
+            .copied();
+        let n = pages.len();
+        if self
+            .edit("Delete pages", |tx| {
+                pages.iter().try_for_each(|p| tx.delete_page(*p))
+            })
+            .is_some()
+        {
+            self.message(Level::Info, format!("Deleted {n} pages (Ctrl+Z undoes)"));
+            if self.current_page.is_some_and(|c| pages.contains(&c))
+                && let Some(next) = next
+            {
+                self.show_page(next);
+            }
+            self.ol.selected = None;
+            self.ol.picked.clear();
+            if let Some(next) = next {
+                self.ol.reveal = Some(Reveal::Page {
+                    page: next,
+                    rename: false,
+                });
+            }
+        }
+    }
+
     fn delete_page(&mut self, page: PageId) {
         let Some(p) = self.backend.document().and_then(|d| d.project().page(page)) else {
             return;
@@ -1552,6 +1854,33 @@ impl NovoApp {
                 _ => {}
             }
         }
+        let chosen = self.ol.chosen_pages();
+        let many = self.ol.picked.len() > 1 && chosen.len() > 1;
+        if press(Modifiers::COMMAND, Key::A) {
+            self.ol.picked = self
+                .ol
+                .rows
+                .iter()
+                .filter_map(|r| r.page().map(|(p, _)| p))
+                .collect();
+        }
+        if !self.ol.picked.is_empty() && press(Modifiers::NONE, Key::Escape) {
+            self.ol.picked.clear();
+        }
+        if many {
+            if press(Modifiers::NONE, Key::Delete) {
+                acts.push(Act::DeletePages(chosen.clone()));
+            }
+            if press(Modifiers::COMMAND, Key::ArrowUp) {
+                acts.push(Act::StepPages(chosen.clone(), false));
+            }
+            if press(Modifiers::COMMAND, Key::ArrowDown) {
+                acts.push(Act::StepPages(chosen.clone(), true));
+            }
+            if press(Modifiers::COMMAND, Key::D) {
+                acts.push(Act::DuplicatePages(chosen.clone()));
+            }
+        }
         if press(Modifiers::NONE, Key::Delete)
             && let Some(row) = &row
         {
@@ -1589,6 +1918,8 @@ impl NovoApp {
             if press(Modifiers::NONE, key)
                 && let Some(next) = self.ol.neighbour(down).cloned()
             {
+                self.ol.picked.clear();
+                self.ol.anchor = Some(next.key.clone());
                 self.ol.selected = Some(next.key.clone());
                 self.ol.scroll_to = Some(next.key.clone());
                 if let Some((p, s)) = next.page() {
@@ -1740,6 +2071,12 @@ enum DropPlan {
         function: Option<Levels>,
         location: Option<Levels>,
     },
+    /// Files several pages under the group and/or cabinet.
+    FileMany {
+        pages: Vec<PageId>,
+        function: Option<Levels>,
+        location: Option<Levels>,
+    },
     /// Puts the pages in this order.
     Reorder(Vec<PageId>),
     /// Moves all pages of a cabinet, as listed under `from`, into a group.
@@ -1762,10 +2099,39 @@ impl DropPlan {
                 function,
                 location,
             },
+            DropPlan::FileMany {
+                pages,
+                function,
+                location,
+            } => Act::MoveManyTo {
+                pages,
+                function,
+                location,
+            },
             DropPlan::Reorder(order) => Act::Reorder(order),
             DropPlan::Cabinet { location, from, to } => Act::MoveCabinet { location, from, to },
         }
     }
+}
+
+/// The pages of `pages` that are not already in the group and cabinet given
+/// (`None` leaves that level out of the comparison).
+fn pages_not_at(
+    project: &novo_core::Project,
+    pages: &[PageId],
+    function: Option<&Levels>,
+    location: Option<&Levels>,
+) -> Vec<PageId> {
+    pages
+        .iter()
+        .copied()
+        .filter(|id| {
+            project.page(*id).is_some_and(|p| {
+                function.is_some_and(|f| p.structure.function != *f)
+                    || location.is_some_and(|l| p.structure.location != *l)
+            })
+        })
+        .collect()
 }
 
 /// What dropping `drag` on `row` does, or `None` when it does nothing.
@@ -1822,6 +2188,58 @@ fn drop_plan(
                 let t = project.page(*target)?;
                 Some(DropPlan::File {
                     page: *page,
+                    function: Some(t.structure.function.clone()),
+                    location: Some(t.structure.location.clone()),
+                })
+            }
+        }
+        (
+            Drag::Pages(pages),
+            RowKind::Group {
+                function, context, ..
+            },
+        ) => {
+            let location = (view == PageView::Location).then(|| context.location.clone());
+            let moving = pages_not_at(project, pages, Some(function), location.as_ref());
+            (!moving.is_empty()).then(|| DropPlan::FileMany {
+                pages: moving,
+                function: Some(function.clone()),
+                location,
+            })
+        }
+        (
+            Drag::Pages(pages),
+            RowKind::Cabinet {
+                location, context, ..
+            },
+        ) => {
+            let function = (view == PageView::Function).then(|| context.function.clone());
+            let moving = pages_not_at(project, pages, function.as_ref(), Some(location));
+            (!moving.is_empty()).then(|| DropPlan::FileMany {
+                pages: moving,
+                function,
+                location: Some(location.clone()),
+            })
+        }
+        (Drag::Pages(pages), RowKind::Page { page: target, .. }) => {
+            if pages.contains(target) {
+                return None;
+            }
+            let siblings = project.sibling_pages(*target);
+            if pages.iter().all(|p| siblings.contains(p)) {
+                super::pages::order_after_group_drop(&siblings, pages, *target, lower_half)
+                    .map(DropPlan::Reorder)
+            } else {
+                // Another group or cabinet: the pages join that one.
+                let t = project.page(*target)?;
+                let moving = pages_not_at(
+                    project,
+                    pages,
+                    Some(&t.structure.function),
+                    Some(&t.structure.location),
+                );
+                (!moving.is_empty()).then(|| DropPlan::FileMany {
+                    pages: moving,
                     function: Some(t.structure.function.clone()),
                     location: Some(t.structure.location.clone()),
                 })

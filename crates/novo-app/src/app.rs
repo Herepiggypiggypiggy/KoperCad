@@ -267,6 +267,7 @@ mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
 mod view3d_nudge;
+mod view3d_options;
 mod view3d_pins;
 #[cfg(test)]
 mod view3d_pins_tests;
@@ -370,9 +371,13 @@ mod handover_tests;
 #[cfg(test)]
 mod kitting_tests;
 #[cfg(test)]
+mod learn_nav_tests;
+#[cfg(test)]
 mod learn_replay;
 #[cfg(test)]
 mod learn_tests;
+#[cfg(test)]
+mod lesson_claims_bench_tests;
 #[cfg(test)]
 mod lesson_claims_tests;
 #[cfg(test)]
@@ -1207,13 +1212,17 @@ impl NovoApp {
             // keeps changes in a copy.
             Err(BackendError::Storage(novo_storage::StorageError::ReadOnly(_))) if !read_only => {
                 self.open_path_as(path, true);
-                self.message(
-                    Level::Warning,
-                    format!(
-                        "{} is write-protected, so it was opened read-only. Use Save as to keep changes in a copy.",
-                        path.display()
-                    ),
-                );
+                // Only when it really opened: a failed retry has already
+                // said why, and must not be followed by a claim that it did.
+                if self.project_path.as_deref() == Some(path) {
+                    self.message(
+                        Level::Warning,
+                        format!(
+                            "{} is write-protected, so it was opened read-only. Use Save as to keep changes in a copy.",
+                            path.display()
+                        ),
+                    );
+                }
             }
             // A damaged file is never edited in place. What can be read is
             // written to a recovered copy beside it, and the copy opens.
@@ -3018,6 +3027,10 @@ fn describe_error(verb: &str, path: &Path, e: &BackendError) -> String {
             | S::ReadOnly(_)
             | S::Corrupt { .. },
         ) => format!("Could not {verb} the project: {e}"),
+        // These already name the file the person chose, once.
+        BackendError::Storage(S::CannotSave { .. } | S::ReservedName(_)) => {
+            format!("Could not {verb}: {e}")
+        }
         _ if is_not_found(e) => format!(
             "Could not {verb} {}: the file does not exist",
             path.display()
@@ -3349,6 +3362,47 @@ mod tests {
         app.answer_save_changes(&ctx, Some(true));
         assert_eq!(app.project_path, Some(PathBuf::from("other.novo")));
         assert!(!app.modal_open());
+    }
+
+    #[test]
+    fn a_refused_save_names_the_chosen_file_once() {
+        use novo_storage::StorageError as S;
+        let path = Path::new("D:/plans/nofolder/x.kopercad");
+        for (error, needle) in [
+            (
+                S::CannotSave {
+                    path: path.to_owned(),
+                    why: "the folder does not exist",
+                },
+                "the folder does not exist",
+            ),
+            (S::ReservedName(path.to_owned()), "reserves for devices"),
+        ] {
+            let text = describe_error("save", path, &BackendError::Storage(error));
+            assert!(text.contains(needle), "{text}");
+            assert_eq!(text.matches("x.kopercad").count(), 1, "{text}");
+            assert!(!text.contains(".saving"), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_failed_read_only_retry_is_not_followed_by_a_claim_that_it_opened() {
+        // An empty file is no project: the retry fails too, and the only
+        // message is the refusal itself.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty.kopercad");
+        std::fs::write(&path, b"").unwrap();
+        let mut app = storage_app();
+        app.open_path(&path);
+        assert_eq!(app.project_path, None);
+        assert!(
+            app.messages
+                .iter()
+                .all(|m| !m.text.contains("opened read-only")),
+            "{:?}",
+            app.messages.iter().map(|m| &m.text).collect::<Vec<_>>()
+        );
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), 0);
     }
 
     #[test]

@@ -29,7 +29,7 @@ fn area(ctx: &egui::Context, name: &str) -> Option<egui::Rect> {
 fn an_added_opening_is_drawn_at_once_and_the_panel_keeps_its_size() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
-    d.app.view3d.controls.heat_panel = true;
+    d.app.cabinet.heat.on = true;
     let size = egui::vec2(1366.0, 768.0);
     for _ in 0..4 {
         d.frame_sized(size, Vec::new());
@@ -62,7 +62,7 @@ fn a_run_with_a_filter_fan_shows_the_airflow_and_reads_its_flow() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
     let ctx = d.ctx.clone();
-    d.app.view3d.controls.heat_panel = true;
+    d.app.cabinet.heat.on = true;
     let size = egui::vec2(1366.0, 768.0);
     d.frame_sized(size, Vec::new());
     let e = enclosure(&d);
@@ -106,7 +106,7 @@ fn a_run_with_a_filter_fan_shows_the_airflow_and_reads_its_flow() {
 fn a_filter_fan_open_in_the_editor_keeps_the_panel_narrow() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
-    d.app.view3d.controls.heat_panel = true;
+    d.app.cabinet.heat.on = true;
     let size = egui::vec2(1366.0, 768.0);
     d.frame_sized(size, Vec::new());
     let e = enclosure(&d);
@@ -139,7 +139,7 @@ fn stored(d: &super::gate1_tests::Drive) -> String {
 fn openings_are_saved_in_the_project_and_follow_its_undo() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
-    d.app.view3d.controls.heat_panel = true;
+    d.app.cabinet.heat.on = true;
     let size = egui::vec2(1366.0, 768.0);
     for _ in 0..3 {
         d.frame_sized(size, Vec::new());
@@ -196,7 +196,7 @@ fn openings_are_saved_in_the_project_and_follow_its_undo() {
 fn dragging_a_label_slides_the_opening_and_is_one_undo_step() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
-    d.app.view3d.controls.heat_panel = true;
+    d.app.cabinet.heat.on = true;
     let size = egui::vec2(1366.0, 768.0);
     for _ in 0..3 {
         d.frame_sized(size, Vec::new());
@@ -257,7 +257,7 @@ fn the_vent_commands_open_the_panel_and_add_the_opening() {
     for _ in 0..4 {
         d.frame_sized(size, Vec::new());
     }
-    assert!(d.app.view3d.controls.heat_panel, "the panel is open");
+    assert!(d.app.cabinet.heat.on, "the panel is open");
     let vents = &d.app.cabinet.heat.settings.vents;
     assert_eq!(vents.len(), 1);
     assert_eq!(vents[0].kind, super::heat_settings::Kind::FilterFan);
@@ -275,7 +275,7 @@ fn the_vent_commands_open_the_panel_and_add_the_opening() {
 fn another_enclosure_never_receives_the_openings_of_the_last_one() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
-    d.app.view3d.controls.heat_panel = true;
+    d.app.cabinet.heat.on = true;
     let size = egui::vec2(1366.0, 768.0);
     for _ in 0..3 {
         d.frame_sized(size, Vec::new());
@@ -332,7 +332,7 @@ fn another_enclosure_never_receives_the_openings_of_the_last_one() {
 fn hovering_a_row_marks_its_opening_in_the_cabinet() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
-    d.app.view3d.controls.heat_panel = true;
+    d.app.cabinet.heat.on = true;
     let size = egui::vec2(1366.0, 768.0);
     for _ in 0..3 {
         d.frame_sized(size, Vec::new());
@@ -370,7 +370,7 @@ fn hovering_a_row_marks_its_opening_in_the_cabinet() {
     assert_eq!(marked(&d), vec![false, false], "and let go again");
     // Closing the panel while a row is under the pointer leaves nothing marked.
     d.app.cabinet.heat.settings.hovered = Some(1);
-    d.app.view3d.controls.heat_panel = false;
+    d.app.cabinet.heat.on = false;
     d.frame_sized(size, Vec::new());
     assert_eq!(d.app.cabinet.heat.settings.hovered, None);
 }

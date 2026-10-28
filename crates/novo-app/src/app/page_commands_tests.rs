@@ -82,9 +82,11 @@ fn rename_opens_the_title_box_and_move_reorders() {
     d.app.run_command(&ctx, "page.move_down", None);
     d.frame();
     assert_eq!(at(&d), start);
+    d.app.outline_open = false;
     d.app.run_command(&ctx, "page.rename", None);
     d.frame();
     assert!(d.app.ol.rename.is_some(), "the title is being edited");
+    assert!(d.app.outline_open, "the Pages panel opens to show the box");
 }
 
 #[test]

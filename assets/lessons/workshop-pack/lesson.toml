@@ -32,8 +32,8 @@ Elk daarvan zegt waar een getal exact is en waar het een schatting is.
 id = "open"
 title = "Open the bench output"
 title_nl = "Open de werkbankuitvoer"
-text = "One window holds the three bench sheets and, above them, a strip that says what is still missing before printing makes sense."
-text_nl = "Een venster bevat de drie werkbankvellen en erboven een strook die zegt wat er nog ontbreekt voordat printen zinvol is."
+text = "One window holds the bench sheets as tabs (Cut list, Ferrules, Labels and Kitting, which has its own lesson) and a strip that says what is still missing before printing makes sense."
+text_nl = "Een venster bevat de werkbankvellen als tabbladen (Cut list, Ferrules, Labels en Kitting, die een eigen les heeft) en een strook die zegt wat er nog ontbreekt voordat printen zinvol is."
 how = [
   "Open {ui:menu.Reports} and choose {ui:cmd.view.bench}.",
   "Or press {key:view.command_palette}, type bench output and press Enter.",
@@ -51,11 +51,11 @@ id = "before"
 title = "Read what is missing first"
 title_nl = "Lees eerst wat ontbreekt"
 text = """
-“Before you print” lists the gaps that would put a wrong number on paper: wires with no cross-section, lengths that were never routed, no mounting plate. Each has a button that fixes it: **Number wires**, {ui:autopilot.window}, **Open Cabinet**.
+“Before you print” lists the gaps that would put a wrong number on paper: wires with no number, wires with no cross-section, lengths that were never routed, no mounting plate. Most have a button that fixes it: **Number wires**, {ui:autopilot.window}, **Open Cabinet**.
 A wire with no size gets no ferrule and sits in one group, so fix the list before you trust the sheet.
 """
 text_nl = """
-“Before you print” noemt de lacunes die een verkeerd getal op papier zouden zetten: draden zonder doorsnede, lengtes die nooit zijn gerouteerd, geen montageplaat. Elk heeft een knop die het herstelt: **Number wires**, {ui:autopilot.window}, **Open Cabinet**.
+“Before you print” noemt de lacunes die een verkeerd getal op papier zouden zetten: draden zonder nummer, draden zonder doorsnede, lengtes die nooit zijn gerouteerd, geen montageplaat. De meeste hebben een knop die het herstelt: **Number wires**, {ui:autopilot.window}, **Open Cabinet**.
 Een draad zonder maat krijgt geen adereindhuls en staat in één groep, dus herstel de lijst voordat je het vel vertrouwt.
 """
 point = { ui = "bench.window" }
@@ -102,8 +102,8 @@ solve = [ { ui_click = "bench.tab.ferrules" } ]
 id = "labels"
 title = "Labels in the order you stick them"
 title_nl = "Labels in de volgorde waarin je ze plakt"
-text = "Wire flags, terminal, device and cable labels come out on A4 sticker sheets or as pieces of tape, at 1:1. Choose your stock under **Label settings**; the sheet is checked against the stock size before it is written."
-text_nl = "Draadvlaggetjes, klem-, apparaat- en kabellabels komen op A4-stickervellen of als stukjes tape, op 1:1. Kies je voorraad onder **Label settings**; het vel wordt gecontroleerd op de maat van de voorraad voordat het wordt geschreven."
+text = "Wire flags, terminal, device and cable labels come out on A4 sticker sheets or as pieces of tape, at 1:1. Choose your stock under **Label stock** on the Labels tab; the sheet is checked against the stock size before it is written."
+text_nl = "Draadvlaggetjes, klem-, apparaat- en kabellabels komen op A4-stickervellen of als stukjes tape, op 1:1. Kies je voorraad onder **Label stock** op het tabblad Labels; het vel wordt gecontroleerd op de maat van de voorraad voordat het wordt geschreven."
 how = [
   "Press the {ui:bench.tab.labels}.",
   "Look at the label kinds and the sticker layout.",
@@ -133,8 +133,8 @@ Print op **100 %**, meet de lineaal met een meetlint en plak dan pas op de plaat
 id = "pack"
 title = "Write the whole pack"
 title_nl = "Schrijf het hele pakket"
-text = "One command writes a folder next to the project: the bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans), the templates and the labels. A part with nothing to print is skipped and the summary says so."
-text_nl = "Eén commando schrijft een map naast het project: het werkbankpakket (omslag, bouwvolgorde, knippelijst, adereindhulzen, een afvinkvel per schema, klemmenplannen), de sjablonen en de labels. Wat niets te printen heeft wordt overgeslagen en de samenvatting zegt dat."
+text = "One command writes a folder next to the project, named `<project> workshop`: the bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans), the print scale check, the 1:1 drilling templates and the plate on one sheet, the labels, the kitting list and the work cards. A part with nothing to print is skipped and the summary says so."
+text_nl = "Eén commando schrijft een map naast het project, genaamd `<project> workshop`: het werkbankpakket (omslag, bouwvolgorde, knippelijst, adereindhulzen, een afvinkvel per schema, klemmenplannen), de printschaalcontrole, de 1:1 boorsjablonen en de plaat op één vel, de labels, de kitlijst en de werkkaarten. Wat niets te printen heeft wordt overgeslagen en de samenvatting zegt dat."
 how = [
   "Press {key:view.command_palette}, type workshop pack and choose {ui:cmd.export.workshop}.",
   "Open the folder and print `0 Bench packet.pdf` first; its cover says which files to print at 100 %.",

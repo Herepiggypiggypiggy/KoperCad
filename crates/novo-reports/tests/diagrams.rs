@@ -425,8 +425,9 @@ fn oversized_cells_are_cut_to_excels_limit() {
     let Some(Data::String(text)) = range.get((1, 0)) else {
         panic!("text cell");
     };
-    assert_eq!(text.chars().count(), 32_767);
-    assert!(text.ends_with('…'));
+    assert!(text.chars().count() <= 32_767);
+    // The cut says how much is missing (PIR-05).
+    assert!(text.contains("… [cut: ") && text.ends_with("export CSV for all]"));
 }
 
 #[test]

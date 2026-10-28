@@ -227,6 +227,13 @@ struct ReportArgs {
     /// writes `;` like File > Export wire cut in the app.
     #[arg(long)]
     delimiter: Option<char>,
+    /// CSV only: leave tags and other text exactly as they are. By default
+    /// a field starting with `=`, `+`, `-` or `@` (every device tag, as in
+    /// `=A1+CAB-K1`) gets a leading apostrophe so Excel does not read it as
+    /// a formula; use this for CSV that other programs read. `.xlsx` files
+    /// never need it.
+    #[arg(long)]
+    plain_text: bool,
     /// Language of titles and headers (`en`, `nl`); the project's report
     /// language when left out.
     #[arg(long, value_name = "CODE")]
@@ -583,6 +590,15 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             out,
         ),
         Cmd::Export(Export::Eplan { file, output }) => {
+            if novo_storage::reserved_device_name(&output) {
+                return Err(Failure::new(
+                    exit::WRITE,
+                    format!(
+                        "cannot write {}: the name is reserved by Windows for a device; pick another file name",
+                        output.display()
+                    ),
+                ));
+            }
             if output.exists() {
                 return Err(Failure::new(
                     exit::WRITE,
@@ -637,6 +653,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
                 file,
                 output: Some(output),
                 delimiter: Some(','),
+                plain_text: false,
                 language: None,
             };
             if !matches!(
@@ -1244,7 +1261,7 @@ fn calc(
     use novo_checks::calc::tables::TableSet;
 
     let usage = |m: String| Failure::new(exit::USAGE, m);
-    let text = std::fs::read_to_string(file)
+    let text = read_text(file)
         .map_err(|e| Failure::new(exit::READ, format!("cannot read {}: {e}", file.display())))?;
     let root: Value = serde_json::from_str(&text)
         .map_err(|e| usage(format!("{} is not valid JSON: {e}", file.display())))?;
@@ -1252,7 +1269,7 @@ fn calc(
     let set = match tables {
         None => TableSet::builtin(),
         Some(path) => {
-            let csv = std::fs::read_to_string(path).map_err(|e| {
+            let csv = read_text(path).map_err(|e| {
                 Failure::new(exit::READ, format!("cannot read {}: {e}", path.display()))
             })?;
             let name = path.file_name().map_or_else(
@@ -1267,7 +1284,7 @@ fn calc(
     let pair_table = match pairs {
         None => None,
         Some(path) => {
-            let csv = std::fs::read_to_string(path).map_err(|e| {
+            let csv = read_text(path).map_err(|e| {
                 Failure::new(exit::READ, format!("cannot read {}: {e}", path.display()))
             })?;
             let name = path
@@ -1309,6 +1326,16 @@ fn calc(
         exit::PROBLEMS
     } else {
         exit::OK
+    })
+}
+
+/// A text file as UTF-8 without a leading byte-order mark, which Windows
+/// editors add and neither JSON nor CSV parsers expect.
+fn read_text(path: &Path) -> std::io::Result<String> {
+    let text = std::fs::read_to_string(path)?;
+    Ok(match text.strip_prefix('\u{feff}') {
+        Some(rest) => rest.to_owned(),
+        None => text,
     })
 }
 
@@ -1444,6 +1471,7 @@ fn export_reports(
     let usage = |e: novo_py::ScriptError| Failure::new(exit::USAGE, e.to_string());
     let csv = CsvOptions {
         delimiter: args.delimiter.unwrap_or(','),
+        excel_safe: !args.plain_text,
         ..CsvOptions::default()
     };
     match &args.output {

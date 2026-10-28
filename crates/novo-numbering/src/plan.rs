@@ -333,6 +333,16 @@ pub fn plan(project: &Project, scheme: &Scheme, mode: Mode, scope: &Scope) -> Pl
             _ => Reason::New,
         };
         result[i] = Some(match st.allocate(i, &targets[i], lowest) {
+            // Renumber that lands on the number the wires already have
+            // changes nothing: report it as unchanged.
+            Some(n)
+                if reason == Reason::Renumbered
+                    && g.current.as_deref() == Some(n.as_str())
+                    && g.unnumbered == 0
+                    && g.numbers.len() == 1 =>
+            {
+                (Some(n), Reason::Kept)
+            }
             Some(n) => (Some(n), reason),
             None => (g.current.clone(), Reason::Blocked),
         });

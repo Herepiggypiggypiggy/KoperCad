@@ -1980,7 +1980,8 @@ impl SchematicView {
             )
         });
         let mut close = escape;
-        egui::Area::new(egui::Id::new("novo-editor-rename"))
+        let opened_now = rename.focus;
+        let area = egui::Area::new(egui::Id::new("novo-editor-rename"))
             .order(egui::Order::Foreground)
             .fixed_pos(rename.anchor)
             .show(ctx, |ui| {
@@ -2014,6 +2015,7 @@ impl SchematicView {
                     match &rename.error {
                         Some(e) => {
                             ui.colored_label(ui.visuals().error_fg_color, e);
+                            ui.weak("Esc cancels");
                         }
                         None => {
                             let feed = matches!(
@@ -2039,6 +2041,17 @@ impl SchematicView {
                     }
                 });
             });
+        // A click anywhere else on the drawing closes the box, as for any popup.
+        let clicked_outside = !opened_now
+            && ctx.input(|i| {
+                i.pointer.any_pressed()
+                    && i.pointer
+                        .interact_pos()
+                        .is_some_and(|p| !area.response.rect.contains(p))
+            });
+        if clicked_outside {
+            close = true;
+        }
         if enter {
             let done = match rename.target {
                 RenameTarget::Device(device) => self.editor.rename(document, device, &rename.text),
@@ -2076,7 +2089,12 @@ impl SchematicView {
             };
             match done {
                 Ok(()) => close = true,
-                Err(e) => rename.error = Some(e),
+                Err(e) => {
+                    rename.error = Some(e);
+                    // Enter took the focus out of the box: give it back so
+                    // the text can be corrected without a click.
+                    rename.focus = true;
+                }
             }
         }
         if close {
