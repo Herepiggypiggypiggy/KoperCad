@@ -1,9 +1,9 @@
-@title Cabinet: a duct has end handles, a length with its bar and offcut, and trim buttons
+@title Cabinet: drag a duct's end handle shorter, then cut it to a stock length (1366x768)
 @area Cabinet
-@sizes 1366x768 1920x1080
-# Rails and ducts window (palette: rails): add a duct, it is selected and the card under the list names its length
-# and the bar it is cut from; Cut to length offers the stock lengths; a cut is one undo step. Pictures: window with
-# the card, the cut menu, after a cut to 1000 mm, after undo. Dragging the end handles is covered by unit tests.
+@sizes 1366x768
+# Rails and ducts window (palette: rails): Add duct selects the new duct, with its two end handles on the plate and
+# its length and bar in the card at the top of the window. The finish handle is dragged left (the label shows the
+# new length), the duct stays put at its start; Cut to length offers the stock lengths; Ctrl+Z undoes each step.
 open qa/fixtures/cabinet-lesson.novo
 wait 20
 click_text Cabinet #1
@@ -19,15 +19,19 @@ wait 10
 expect "Cut from one 2000 mm bar"
 expect "Trim at point"
 shot card
-click_text "Cut to length"
+mouse_down 985 705
+move 925 705
+move 865 705
 wait 5
-expect "1000 mm"
-shot cut-menu
-click_text "1000 mm  (half a bar)"
+shot dragging
+mouse_up 865 705
 wait 10
-expect "Length 1000 mm"
-shot cut-1000
+expect "Cut from one 2000 mm bar"
+shot shortened
 check_layout
 key ctrl+z
 wait 10
 shot undone
+click_text "Cut to length"
+wait 5
+shot cut-menu

@@ -268,6 +268,11 @@ fn resize(
     let mut limit_out = if dir > 0.0 { hi } else { lo };
     let mut out_stop = Stop::Plate;
     for (kind, r) in obstacles(layout, &me) {
+        // Something it already lies over (an old plan) is not in the way of
+        // the end: only what is clear of it now can stop it.
+        if me.rect().overlaps(&r) {
+            continue;
+        }
         let ((s0, s1), (c0, c1)) = span(&r, me.vertical);
         if !(c0 < a1 - 1e-6 && a0 + 1e-6 < c1) {
             continue;
@@ -826,6 +831,16 @@ mod tests {
         let m = move_to(&l, 7, 20.0, 405.0, 2.0).unwrap();
         assert_eq!(m.stop, None);
         assert_eq!((m.x, m.y), (20.0, 405.0));
+    }
+
+    #[test]
+    fn something_the_duct_already_lies_over_does_not_block_its_end() {
+        let mut l = layout();
+        l.ducts.push(duct(1, 10.0, 100.0, 580.0, false));
+        // A vertical trunk crossing the row near its start (an old plan).
+        l.ducts.push(duct(2, 32.5, 20.0, 700.0, true));
+        let e = resize_end(&l, 1, End::Finish, 400.0, 2.0).unwrap();
+        assert_eq!((e.length, e.stop), (390.0, None));
     }
 
     #[test]

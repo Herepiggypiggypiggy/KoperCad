@@ -379,6 +379,10 @@ pub(super) fn show_window(
                  its body to move, either end handle to cut it shorter or longer. \
                  Delete removes it. Ctrl+Z undoes each step.",
             );
+            if let Some(a) = super::cabinet_rail_ends::selected_card(ui, state, project, structure)
+            {
+                ask = Some(a);
+            }
             let mut rails: Vec<&Rail> = project
                 .all::<Rail>()
                 .filter(|r| r.structure == structure)
@@ -468,10 +472,6 @@ pub(super) fn show_window(
                         ui.end_row();
                     }
                 });
-            if let Some(a) = super::cabinet_rail_ends::selected_card(ui, state, project, structure)
-            {
-                ask = Some(a);
-            }
         });
     if let Some(w) = window {
         super::cabinet_bar::note_rect(
