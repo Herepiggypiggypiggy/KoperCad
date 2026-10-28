@@ -27,7 +27,7 @@ use crate::catalog::{CatalogPart, Dimensions, PartKey};
 use crate::csv::import_catalog;
 use crate::library::{FileKind, ImportFlow, LocalLibrary, NewSource, SourceRecord};
 use crate::recipes::{ApplyContext, GENERIC, MakerRecipe, RecipeReport, recipe_for};
-use crate::step::step_box;
+use crate::step::{StepMeasurer, step_box};
 
 /// A file a maker offers for a part.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -229,6 +229,7 @@ pub struct ImportJob<'a> {
     state: ImportState,
     files: Vec<RemoteFile>,
     outcome: ImportOutcome,
+    measurer: Option<StepMeasurer>,
 }
 
 impl<'a> ImportJob<'a> {
@@ -251,6 +252,41 @@ impl<'a> ImportJob<'a> {
             state: ImportState::Idle,
             files: Vec::new(),
             outcome: ImportOutcome::default(),
+            measurer: None,
+        }
+    }
+
+    /// Measures STEP files from their solid geometry instead of from all
+    /// points (which counts construction geometry and can be far too large).
+    #[must_use]
+    pub fn with_step_measurer(mut self, measurer: StepMeasurer) -> Self {
+        self.measurer = Some(measurer);
+        self
+    }
+
+    /// Reads the size of STEP text into the outcome. The solid's size when a
+    /// measurer is set and succeeds; otherwise the all-points estimate, with
+    /// a note saying that it may be too large.
+    fn measure_step(&mut self, label: &str, text: &str) {
+        let why = match self.measurer.map(|m| m(text)) {
+            Some(Ok(b)) => {
+                self.outcome.dimensions = Some(b.as_dimensions());
+                return;
+            }
+            Some(Err(e)) => e,
+            None => "the solid was not measured".to_owned(),
+        };
+        match step_box(text) {
+            Ok(b) => {
+                self.outcome.dimensions = Some(b.as_dimensions());
+                self.outcome.notes.push(format!(
+                    "{label}: size is only an estimate from all points in the file ({why}); it can be too large. Check it against the data sheet."
+                ));
+            }
+            Err(e) => self
+                .outcome
+                .notes
+                .push(format!("{label}: no size read ({e})")),
         }
     }
 
@@ -440,15 +476,12 @@ impl<'a> ImportJob<'a> {
             )
             .map_err(|e| e.to_string())?;
         match record.kind {
-            FileKind::Step => match std::str::from_utf8(bytes)
-                .map_err(|_| "not text".to_owned())
-                .and_then(|t| step_box(t).map_err(|e| e.to_string()))
-            {
-                Ok(b) => self.outcome.dimensions = Some(b.as_dimensions()),
-                Err(e) => self
+            FileKind::Step => match std::str::from_utf8(bytes) {
+                Ok(t) => self.measure_step(name, t),
+                Err(_) => self
                     .outcome
                     .notes
-                    .push(format!("{name}: no size read ({e})")),
+                    .push(format!("{name}: no size read (not text)")),
             },
             FileKind::Bmecat => match std::str::from_utf8(bytes) {
                 Ok(t) => self.read_bmecat(name, t),
@@ -460,13 +493,7 @@ impl<'a> ImportJob<'a> {
             FileKind::Csv => self.read_csv(name, bytes),
             FileKind::Zip | FileKind::Edz => {
                 if let Some((inner, text)) = inner_step {
-                    match step_box(&text) {
-                        Ok(b) => self.outcome.dimensions = Some(b.as_dimensions()),
-                        Err(e) => self
-                            .outcome
-                            .notes
-                            .push(format!("{name}: {inner}: no size read ({e})")),
-                    }
+                    self.measure_step(&format!("{name}: {inner}"), &text);
                 } else if record.kind == FileKind::Zip {
                     self.outcome
                         .notes
