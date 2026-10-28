@@ -312,6 +312,17 @@ impl NovoApp {
             self.outline_more_menu(ui);
         });
         ui.add_space(4.0);
+        if self.ol.picked.len() > 1 {
+            ui.label(
+                egui::RichText::new(format!(
+                    "{} pages selected \u{b7} drag to move, Esc clears",
+                    self.ol.picked.len()
+                ))
+                .size(tokens::FONT_SMALL)
+                .color(crate::theme::ui_palette().accent),
+            );
+            ui.add_space(2.0);
+        }
         self.filing_banner(ui);
 
         let page_rows = self.page_rows();

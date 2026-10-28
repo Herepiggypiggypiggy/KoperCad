@@ -1,0 +1,42 @@
+@title Several pages in the navigator on a small window: Ctrl and Shift click, drag as a block (Pages flyout)
+@area Schematic
+@sizes 1366x768
+# Same as 1602 for the Pages flyout of a 1366x768 window. A plain click on a page opens it and closes the flyout, so the selection here starts with Ctrl+click. The drop line must read on the dark theme and the list says how many pages are selected.
+click_text "Open example"
+wait 20
+click_text "Pages"
+wait 10
+click 150 371 ctrl
+wait 6
+click 150 429 ctrl
+wait 6
+expect "2 pages selected"
+shot ctrl-selected-10-and-30
+click 150 371 ctrl
+wait 6
+click 150 429 shift
+wait 6
+expect "3 pages selected"
+shot shift-range-10-to-30
+mouse_down 120 400
+move 120 415
+move 120 440
+move 120 460
+move 120 467
+wait 6
+shot dragging-block-with-drop-line
+mouse_up 120 467
+wait 10
+shot block-moved-below-40
+key ctrl+z
+wait 10
+shot undone-in-one-step
+key ctrl+a
+wait 6
+expect "pages selected"
+shot ctrl-a-all-pages
+key Escape
+wait 6
+expect_not "pages selected"
+shot escape-clears
+check_layout

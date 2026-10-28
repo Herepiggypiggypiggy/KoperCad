@@ -1,7 +1,7 @@
-@title Several pages in the navigator: Ctrl and Shift click, drag them as a block
+@title Several pages in the navigator: Ctrl and Shift click, drag them as a block (pinned outline)
 @area Schematic
 @sizes 1920x1080
-# Ctrl+click adds a page to the selection or takes it out, Shift+click selects the range from the last click, and dragging one selected page drags them all: a badge shows the count and a line shows where the block lands. The outline is pinned at this size, so this scenario is 1920x1080 only. The pictures are the evidence: Ctrl selection, Shift range, mid-drag with the drop line, and the new order.
+# Ctrl+click adds a page to the selection or takes it out, Shift+click selects the range from the last click, and dragging one selected page drags them all: a badge shows the count and a line shows where the block lands. The outline shows "N pages selected". The outline is pinned at this size; the 1366x768 flyout version is 1603. Pictures: Ctrl selection, Shift range, mid-drag with the drop line, the new order, undo in one step, Ctrl+A, Esc.
 click_text "Open example"
 wait 20
 click 124 213
@@ -10,11 +10,13 @@ click 150 358 ctrl
 wait 6
 click 150 416 ctrl
 wait 6
+expect "2 pages selected"
 shot ctrl-selected-10-and-30
 click 100 358
 wait 4
 click 100 416 shift
 wait 6
+expect "3 pages selected"
 shot shift-range-10-to-30
 mouse_down 120 387
 move 120 400
@@ -31,8 +33,10 @@ wait 10
 shot undone-in-one-step
 key ctrl+a
 wait 6
+expect "pages selected"
 shot ctrl-a-all-pages
 key Escape
 wait 6
+expect_not "pages selected"
 shot escape-clears
 check_layout
