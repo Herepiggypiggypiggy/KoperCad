@@ -1,0 +1,20 @@
+@title Contact mirror under a coil: numbers either side of each contact symbol, poles stacked, spare contacts dim (1366x768)
+@area Schematic
+@sizes 1366x768
+# The coil -K1 on page 2 shows its contacts as a mirror: `1 [symbol] 2` per pole for the three-pole main contact, `13 [symbol] 14`, `21 [symbol] 22`, a changeover with its two throws stacked, then the spare contacts the device has (contacts.* properties) dimmed. -K2 has a four-pole main contact. A double click on a row jumps to that contact; Alt+Left comes back.
+open qa/fixtures/contact-mirror.kopercad
+wait 30
+key PageDown
+wait 10
+shot page-fitted
+double_click 120 400
+wait 30
+shot jumped-to-the-contact-page
+# The contact shows the page.column of its coil under its tag; a double click on it jumps back.
+double_click 422 387
+wait 30
+shot jumped-from-the-contact-to-its-coil
+key alt+Left
+wait 30
+shot back-at-the-contact
+check_layout

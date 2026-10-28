@@ -16,6 +16,7 @@ crate-type = ["cdylib", "rlib"]
 python = ["dep:pyo3", "pyo3/extension-module"]
 
 [dependencies]
+novo-addons.workspace = true
 novo-core.workspace = true
 novo-storage.workspace = true
 novo-symbols.workspace = true

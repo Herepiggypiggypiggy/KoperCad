@@ -1,0 +1,25 @@
+@title 3D Heat: the cloud is visible at its default and the slice shows device cuts, not holes
+@area 3D
+@sizes 1366x768 1920x1080
+# Tadjiro: the cloud was too subtle even at its maximum, and the slice had a cut-out where the devices stand. Opacity now stretches over the air's own temperature range (Strength and Contrast sliders) and the cells of a slice inside a device are drawn darker at the device's temperature. Pictures are the evidence (painted overlays): cloud-on and slice-solids.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 200
+expect_not "Preliminary"
+move 700 650
+wait 10
+shot slice-solids
+expect "Slice: darker squares"
+click_text Cloud
+wait 20
+shot cloud-on
+check_layout

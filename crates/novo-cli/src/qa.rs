@@ -221,6 +221,7 @@ const KNOWN_VERBS: &[&str] = &[
     "resize",
     "click_text",
     "click",
+    "double_click",
     "move",
     "mouse_down",
     "mouse_up",
@@ -989,6 +990,10 @@ impl Ctx<'_> {
                 })?;
                 let r = rect(n).ok_or("widget has no rect")?;
                 let args = json!({"x": (r[0] + r[2]) / 2.0, "y": (r[1] + r[3]) / 2.0});
+                self.srv.tool("click", &args).map(|_| ())
+            }
+            "double_click" => {
+                let args = json!({"x": num(1, "x")?, "y": num(2, "y")?, "count": 2});
                 self.srv.tool("click", &args).map(|_| ())
             }
             "click" | "move" => {

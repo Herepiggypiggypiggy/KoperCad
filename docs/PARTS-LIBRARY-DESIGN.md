@@ -424,7 +424,11 @@ does not set: it was run by hand). The size check uses the measured solid
 (`measure_step`): the real LC1D09 model reads 45 x 77 x 95 mm and fits the
 catalog part. Not verified: any WAGO, Siemens or Phoenix file (they need an
 account the project does not have), and file names other than the ones above.
-A file for a variant (`LC1D09BD`) can be taken as "Checked" for the base
+Files are read on a worker thread (`parts_identity.rs`), one after the other,
+and the answer is kept for the file's size and modification time; the window
+shows "Reading the files..." and handles dropped or picked files once they are
+read, so a batch of large STEP files never stops it. A file for a variant
+(`LC1D09BD`) can be taken as "Checked" for the base
 article when the longer article is not in the catalog.
 
 ## 3e. Maker recipes (parts: maker packs)

@@ -57,10 +57,11 @@ mod tablepreview;
 pub mod xlsx_guard;
 
 pub use assign::{
-    AssignMode, PartProposal, Suggestion, assign_cable_part, assign_part, assign_terminal_part,
-    auto_assign_parts, catalog_entry, clear_parts, find_project_part, is_terminal_block,
-    missing_parts, missing_parts_summary, propose_parts, remove_unused_parts, suggest_for_device,
-    suggest_for_terminal, suggestions_for_device, terminal_kind_of, terminal_part, unused_parts,
+    AssignMode, Confidence, PartCandidate, PartProposal, Suggestion, assign_cable_part,
+    assign_choices, assign_part, assign_terminal_part, auto_assign_parts, catalog_entry,
+    clear_parts, find_project_part, is_terminal_block, missing_parts, missing_parts_summary,
+    propose_parts, remove_unused_parts, suggest_for_device, suggest_for_terminal,
+    suggestions_for_device, terminal_kind_of, terminal_part, unused_parts,
 };
 pub use bmecat::{
     BmecatError, BmecatRead, ECLASS_CLASS_KEY, ETIM_CLASS_KEY, import_bmecat, read_bmecat,
@@ -88,7 +89,8 @@ pub use csv::{
 };
 pub use etim::{EtimError, EtimModel};
 pub use fit::{
-    DeviceNeed, Fit, Role, Supply, coil_supply, device_role, fit, parse_supply, part_role,
+    DeviceNeed, Fit, KindCheck, PartFacts, Role, Supply, check_kind, check_kind_with, coil_supply,
+    conflict, conflict_with, device_role, fit, parse_supply, part_role,
 };
 pub use import::{
     Arrival, DownloadsWatcher, FallbackReason, FetchError, Fetcher, ImportJob, ImportOutcome,

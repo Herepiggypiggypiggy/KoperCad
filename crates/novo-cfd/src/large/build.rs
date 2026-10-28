@@ -413,6 +413,16 @@ fn assemble(
 
 /// Reduces `scn` to about `settings.mesh.target_cells` cells.
 pub fn reduce(scn: &Scenario, settings: &ReduceSettings) -> Reduction {
+    reduce_with(scn, settings, &|| false).expect("never cancelled")
+}
+
+/// [`reduce`] that asks `cancelled` between the pitches it tries and gives
+/// `None` once it says yes.
+pub fn reduce_with(
+    scn: &Scenario,
+    settings: &ReduceSettings,
+    cancelled: &dyn Fn() -> bool,
+) -> Option<Reduction> {
     let (hot_n, groups) = plan_blocks(scn, settings);
     let total_heat: f64 = scn.devices.iter().map(|d| d.loss_w).sum();
     let target = settings.mesh.target_cells as f64;
@@ -429,6 +439,10 @@ pub fn reduce(scn: &Scenario, settings: &ReduceSettings) -> Reduction {
     type Candidate = (Scenario, Vec<Block>, usize, f64, usize, bool, f64);
     let mut best: Option<Candidate> = None;
     for &p in &PITCHES {
+        if cancelled() {
+            return None;
+        }
+        let t_pitch = std::time::Instant::now();
         let (s, blocks, smeared) = assemble(scn, &groups, hot_n, p);
         let Ok(plan) = plan_grid_report(&s, &settings.mesh) else {
             continue;
@@ -437,8 +451,13 @@ pub fn reduce(scn: &Scenario, settings: &ReduceSettings) -> Reduction {
         let ratio = vol(&s) / vol0;
         if std::env::var("LARGE_DEBUG").is_ok() {
             eprintln!(
-                "pitch {p}: {}x{}x{} = {cells} across {} over {} volume x{ratio:.2}",
-                plan.grid.nx, plan.grid.ny, plan.grid.nz, plan.cells_across, plan.over_budget
+                "pitch {p}: {}x{}x{} = {cells} across {} over {} volume x{ratio:.2} in {:.2} s",
+                plan.grid.nx,
+                plan.grid.ny,
+                plan.grid.nz,
+                plan.cells_across,
+                plan.over_budget,
+                t_pitch.elapsed().as_secs_f64()
             );
         }
         // A pitch that makes the bodies much bigger than they are would
@@ -500,9 +519,9 @@ pub fn reduce(scn: &Scenario, settings: &ReduceSettings) -> Reduction {
             })
             .fold(0.0, f64::max),
     };
-    Reduction {
+    Some(Reduction {
         scenario,
         blocks,
         report,
-    }
+    })
 }
