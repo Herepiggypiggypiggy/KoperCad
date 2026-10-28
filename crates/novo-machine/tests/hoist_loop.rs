@@ -128,10 +128,8 @@ fn coarse_only_upper_limit_stops_coarse_and_fine_still_runs() {
         if crossed_at.is_none() && h.height_m() >= 1.0 {
             crossed_at = Some(tick);
         }
-        if let Some(t0) = crossed_at {
-            if tick == t0 + 1 {
-                winding_after = w;
-            }
+        if crossed_at.is_some_and(|t0| tick == t0 + 1) {
+            winding_after = w;
         }
     }
     assert!(crossed_at.is_some(), "never reached the limit");
