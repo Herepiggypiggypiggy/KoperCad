@@ -263,7 +263,7 @@ impl NovoApp {
         .fixed_open()
         .show(ctx, |ui| {
                     ui.heading(if wires.len() > 1 {
-                        format!("{} wires", wires.len())
+                        super::count_words::wires(wires.len())
                     } else if shown.number.is_empty() {
                         "Wire".to_owned()
                     } else {

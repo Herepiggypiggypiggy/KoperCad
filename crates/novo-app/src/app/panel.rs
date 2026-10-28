@@ -67,6 +67,7 @@ pub(super) struct Panel {
     scroll: bool,
     title_bar: bool,
     above_card: bool,
+    closable: bool,
 }
 
 impl Panel {
@@ -92,7 +93,16 @@ impl Panel {
             scroll: false,
             title_bar: true,
             above_card: false,
+            closable: false,
         }
+    }
+
+    /// Gives the window a close button in its title bar. The click is read
+    /// with [`take_closed`]; the panel itself stays until the caller stops
+    /// showing it.
+    pub(super) fn closable(mut self) -> Self {
+        self.closable = true;
+        self
     }
 
     /// Starts this far below the canvas top instead of under the top bar.
@@ -262,6 +272,10 @@ impl Panel {
             // shrinks it back to its content.
             window = window.default_height(max_height);
         }
+        let mut open = true;
+        if self.closable {
+            window = window.open(&mut open);
+        }
         let shown = window.show(ctx, |ui| {
             if scrolls {
                 // The card is as tall as its content up to the canvas, then scrolls
@@ -277,6 +291,9 @@ impl Panel {
         });
         if let Some(scroll) = before {
             ctx.global_style_mut(|st| st.spacing.scroll = scroll);
+        }
+        if self.closable && !open {
+            ctx.data_mut(|d| d.insert_temp(id.with("closed"), true));
         }
         // Only a drag in which the pointer moved counts: a click on a button
         // inside it presses on the window too, and that must not pin it
@@ -303,6 +320,14 @@ impl Panel {
         }
         shown
     }
+}
+
+/// Whether the close button of the panel `name` (a [`Panel::closable`] one)
+/// was clicked since the last call.
+pub(super) fn take_closed(ctx: &egui::Context, name: &str) -> bool {
+    let key = id(name).with("closed");
+    ctx.data_mut(|d| d.remove_temp::<bool>(key))
+        .unwrap_or(false)
 }
 
 /// The point of `rect` that `pivot` names: the corner a panel hangs from.
@@ -866,6 +891,39 @@ mod tests {
     fn a_dialog_keeps_clear_of_the_pinned_issues_list() {
         let ctx = egui::Context::default();
         assert!(dialog_left(&ctx, 0.0, 248.0) >= 255.5);
+    }
+
+    #[test]
+    fn a_closable_panel_has_a_close_button_and_reports_the_click_once() {
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1366.0, 768.0));
+        let run = |ctx: &egui::Context, closable: bool| {
+            let mut out = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    ..Default::default()
+                },
+                |ctx| {
+                    let mut p =
+                        Panel::new("close_test", "Test", screen, Side::Right, 300.0).fixed_open();
+                    if closable {
+                        p = p.closable();
+                    }
+                    p.show(ctx, |ui| {
+                        ui.label("content");
+                    });
+                },
+            );
+            out.textures_delta.clear();
+        };
+        run(&ctx, true);
+        assert!(!take_closed(&ctx, "close_test"), "nothing clicked yet");
+        // The close click is what the window writes when its open flag drops.
+        ctx.data_mut(|d| d.insert_temp(id("close_test").with("closed"), true));
+        assert!(take_closed(&ctx, "close_test"));
+        assert!(!take_closed(&ctx, "close_test"), "reported once");
+        run(&ctx, false);
+        assert!(!take_closed(&ctx, "close_test"));
     }
 
     #[test]

@@ -34,6 +34,7 @@ fn plc(y: f64) -> Device {
         rect: Some((250.0, y, 60.0, 40.0)),
         filter: FilterState::Unknown,
         filter_for: None,
+        wired: true,
         bonded: None,
         height_mm: None,
         on_door: false,

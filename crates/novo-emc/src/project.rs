@@ -621,6 +621,17 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
         }
     }
 
+    // The pins that carry a wire, by device: a filter counts only when it is
+    // drawn and wired (a line side and a load side).
+    let mut wired_pins: HashMap<u64, std::collections::HashSet<PinRef>> = HashMap::new();
+    for w in project.wires() {
+        for pin in [w.from.as_pin(), w.to.as_pin()].into_iter().flatten() {
+            if let Some(dev) = novo_routing::model::device_of_pin(project, pin) {
+                wired_pins.entry(dev.raw()).or_default().insert(pin);
+            }
+        }
+    }
+
     // Devices that matter for EMC.
     let mut devices = Vec::new();
     for d in project.devices() {
@@ -666,6 +677,7 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
             rect,
             filter,
             filter_for: text(&d.properties, "emc.filter_for").map(str::to_owned),
+            wired: wired_pins.get(&d.id.raw()).is_some_and(|p| p.len() >= 2),
             bonded: d.properties.get("emc.bonded").and_then(as_bool),
             height_mm: novo_layout::model::device_depth(project, d).filter(|h| *h > 0.0),
             on_door: door,
@@ -824,6 +836,11 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
         }
         Fix::AddShield { cable } => {
             let id = novo_core::CableId::from(*cable);
+            let before = tx
+                .project()
+                .get::<Cable>(id)
+                .ok_or(ModelError::NotFound(id.into()))?
+                .clone();
             tx.update::<Cable>(id, |c| {
                 if !c.cores.iter().any(|k| k.shield) {
                     let mut core = CableCore::new("SH");
@@ -831,7 +848,20 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
                     c.cores.push(core);
                 }
             })?;
-            Ok("Shield core added to the cable; set both ends to all round".to_owned())
+            // One complete fix: a shield end the project has not stated is
+            // stated as all round, so the next check has nothing left to ask.
+            // An end already stated (a pigtail, open) is left as it is.
+            let mut stated = 0;
+            for key in ["emc.shield_a", "emc.shield_b"] {
+                if matches!(shield_end(&before, key), Termination::Unknown) {
+                    tx.set_property(id, key, Some(Value::Text("360".to_owned())))?;
+                    stated += 1;
+                }
+            }
+            Ok(match stated {
+                0 => "Shield core added to the cable; its shield ends were already stated".to_owned(),
+                _ => "Shield core added and the unstated shield ends set to all round (a requirement for the build: bond the shield all round at the gland or a shield bar at each end)".to_owned(),
+            })
         }
         Fix::Terminate360 { cable } => {
             let id = novo_core::CableId::from(*cable);
@@ -861,7 +891,7 @@ pub fn apply(tx: &mut Tx<'_>, fix: &Fix) -> Result<String> {
                 Some(Value::Text(d.tag.to_string())),
             )?;
             Ok(format!(
-                "Filter {tag} added for {}: place it next to the drive",
+                "Filter {tag} added to the device list for {}. It is not drawn yet and filters nothing: draw it on a page, wire it in series between the supply and the drive, and place it next to the drive. The finding stays until it is wired",
                 d.tag
             ))
         }

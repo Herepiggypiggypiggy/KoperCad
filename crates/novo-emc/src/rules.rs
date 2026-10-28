@@ -66,7 +66,7 @@ pub static RULES: &[Rule] = &[
         id: "EMC-07",
         title: "Drive input filter",
         level: Level::Index,
-        requirement: "A drive has a mains filter (built in, or fitted close by on the same plate).",
+        requirement: "A drive has a mains filter (built in, or drawn, wired in series and fitted close by on the same plate). A filter that is only in the device list does not count.",
         source: "Drive makers' guides; EN 61800-3 context, not verified",
         verify: true,
         inputs: "Drive devices, filter devices and their positions, `emc.filter` on the drive or its part",
@@ -880,7 +880,7 @@ fn drive_filters(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
         if d.filter == FilterState::Built || d.filter == FilterState::Declared {
             continue;
         }
-        let filters: Vec<&Device> = cx
+        let listed: Vec<&Device> = cx
             .input
             .devices
             .iter()
@@ -890,6 +890,32 @@ fn drive_filters(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                         || (f.filter_for.is_none() && f.plate == d.plate))
             })
             .collect();
+        // Only a filter that is wired into the circuit filters anything.
+        let filters: Vec<&Device> = listed.iter().copied().filter(|f| f.wired).collect();
+        if filters.is_empty() && !listed.is_empty() {
+            let names: Vec<String> = listed.iter().map(|f| cx.dev(f.id)).collect();
+            out.push(Finding {
+                rule: "EMC-07",
+                level: Level::Fact,
+                severity: Severity::Warning,
+                // The drive only, as for "no filter": the preview then shows
+                // the same finding staying, not one cleared and one brought.
+                subjects: vec![Subject::Device(d.id)],
+                points: vec![(Subject::Device(d.id), 30)],
+                message: format!(
+                    "{} has a filter in the device list ({}) but it is not drawn and wired: draw it on a page and wire it in series between the supply and the drive. Until then nothing is filtered.",
+                    cx.dev(d.id),
+                    names.join(", ")
+                ),
+                metrics: Vec::new(),
+                fixes: Vec::new(),
+                at: d.plate.zip(d.rect).map(|(pl, r)| (pl, (r.0, r.1))),
+                ribbons: Vec::new(),
+                loop_polygon: Vec::new(),
+                band_hz: None,
+            });
+            continue;
+        }
         if filters.is_empty() {
             out.push(Finding {
                 rule: "EMC-07",
