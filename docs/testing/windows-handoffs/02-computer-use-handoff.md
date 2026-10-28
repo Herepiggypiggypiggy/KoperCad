@@ -70,7 +70,7 @@ For each of 100%, 125%, 150%, 200% (and 175% if offered):
 - I1 Open each COPY in `incoming` (File > Open). Opens without error? Tadjiro tells you the expected page count. Open the biggest: seconds to open.
 - I2 Edit one thing in a `.novo` COPY; in Explorer a file `<name>.v<old>.bak` should appear beside it (expected behaviour).
 - I3 Ctrl+Z several times, Ctrl+Shift+Z; Save as a new name; close; reopen; 📷 first page before and after, identical?
-- I4 Crash recovery: draw a wire without saving, end `kopercad.exe` in Task Manager (Details tab > End task), start again, open the same project: dialog "Restore unsaved work?" (Escape and a click outside do nothing; only Restore/Discard answer). Restore brings the wire back.
+- I4 Crash recovery: draw a wire without saving, first make sure no other KoperCAD is open (if Tadjiro's real copy is, ask him to save and close it, or skip this test). In Task Manager Details tab end ONLY the `kopercad.exe` row you started (check its start time or, in Properties, its path in your portable test folder); if two rows exist and you cannot tell which is yours, ask first. Start again, open the same project: dialog "Restore unsaved work?" (Escape and a click outside do nothing; only Restore/Discard answer). Restore brings the wire back.
 
 **J. Parts import with the real list** (COPY only. This changes the parts catalog of the profile you are in: use the portable copy so his real catalog is untouched.)
 - J1 File > Import parts > Import parts from a table; choose the COPY of his list. 📷 the mapping step. Are his columns recognised? Read the import report to him.

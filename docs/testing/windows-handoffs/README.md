@@ -17,7 +17,7 @@ Best result: run **both**. They overlap on purpose (install, portable, safe grap
 5. Open the file, copy everything under the line `-----` and paste it into the new session. Answer its first questions. Stay nearby: it asks you to change display scale, type your Ask Claude key (only you, it never sees it) and answer "did an admin prompt appear?".
 
 ## Safety built into both prompts
-No admin, no UAC workarounds, no bypassing company software control; your real projects and data folders are read-only for the tester (copies only); no uninstall with data removal on a working install; no secrets in any file; Schneider manuals and your drive exports are never copied into results.
+No admin, no UAC workarounds, no bypassing company software control; your real projects and data folders are read-only for the tester (copies only); no uninstall with data removal on a working install; no secrets in any file; maker manuals and your drive exports are never copied into results.
 
 ## What comes back
 A short paste block (summary + findings table, max 60 lines) that you paste into the KoperCAD project chat, plus (VS Code) a zip `Documents\KoperCAD-tests\results\KoperCAD-windows-test-<build>-<date>.zip` with the full `results.md`, screenshots, problem reports and QA reports. Severity scale S1 (data loss, crash, cannot start, admin prompt) to S4 (polish), same as the QA reports. Attach screenshots of S1 and S2 findings yourself.
