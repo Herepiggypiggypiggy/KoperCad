@@ -184,6 +184,22 @@ fn a_terminal_facing_away_from_the_duct_pays_a_detour() {
 }
 
 #[test]
+fn a_terminal_facing_away_turns_round_within_a_short_distance() {
+    // The duct is 150 mm behind the terminal (the terminal is on top of its
+    // device, the duct below it): the wire leaves 40 mm, turns and runs down
+    // beside the device. The detour is up and back, not twice the 150 mm.
+    let net = Network::new(&[duct(1, 0.0, 210.0, 400.0, 210.0)]);
+    let j = job(
+        1,
+        anchor(50.0, 60.0, Facing::Up),
+        anchor(350.0, 60.0, Facing::Down),
+    );
+    let r = net.route(&j, &NO_SLACK);
+    assert_eq!(r.detour_mm, 80.0);
+    assert_eq!(r.length_mm, 150.0 + 300.0 + 150.0 + 80.0);
+}
+
+#[test]
 fn diagonal_and_zero_length_ducts_are_ignored_and_reported() {
     let net = Network::new(&[
         duct(1, 0.0, 0.0, 100.0, 100.0),
@@ -297,5 +313,13 @@ fn a_wire_does_not_cross_the_plate_in_free_air_to_save_duct_length() {
         max_stub_mm: 1000.0,
         ..NO_SLACK
     };
-    assert!(net.route(&j, &far).length_mm < 480.0);
+    // Facing a duct across their direction costs extra (the wire would run
+    // sideways past its neighbours), so a facing wire keeps to its own side.
+    assert_eq!(net.route(&j, &far).length_mm, 480.0);
+    let open = job(
+        1,
+        anchor(50.0, 60.0, Facing::Any),
+        anchor(450.0, 60.0, Facing::Any),
+    );
+    assert!(net.route(&open, &far).length_mm < 480.0);
 }

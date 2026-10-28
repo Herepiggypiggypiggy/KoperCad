@@ -69,7 +69,7 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
                     out.push(Problem::new(
                         ProblemKind::WireWithoutDuct,
                         vec![AnyId::Wire(w)],
-                        "No duct serves this wire: it would run in free air".to_owned(),
+                        "No duct path joins the two ends of this wire, so it is not routed and its length is only an estimate: add a duct that reaches both ends".to_owned(),
                     ));
                 }
                 RoutingProblem::OverfullDuct { ratio, jobs, .. } => {

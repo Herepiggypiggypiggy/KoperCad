@@ -18,7 +18,10 @@ pub(super) struct RouteLine {
     /// The wire's id.
     pub(super) wire: u64,
     pub(super) points: Vec<(f32, f32)>,
-    /// No duct reaches both ends: drawn dashed and red.
+    /// No duct path between the two ends: the wire is not drawn (a straight
+    /// line across the plate would be no wiring), its two ends are marked in
+    /// red and it is listed in the notes and in Issues. Its length is an
+    /// estimate.
     pub(super) free_air: bool,
     pub(super) length_mm: f64,
 }
@@ -45,7 +48,7 @@ pub(super) struct RouteRow {
     pub(super) ends: String,
     /// The cut length, rounded up to a whole millimetre.
     pub(super) length_mm: f64,
-    /// `routed`, `routed, no depth`, `free air`, `door, no gap` or
+    /// `routed`, `routed, no depth`, `no duct path, estimate`, `door, no gap` or
     /// `to entry, outside not included`.
     pub(super) basis: &'static str,
     pub(super) ducts: usize,
@@ -75,21 +78,18 @@ pub(super) struct Overlay {
 }
 
 impl Overlay {
-    /// One line for the header strip: routed wires, those in free air, the
-    /// fullest duct.
+    /// One line for the header strip: routed wires, those no duct path
+    /// reaches, the fullest duct.
     pub(super) fn summary(&self) -> String {
         let free = self.routes.iter().filter(|r| r.free_air).count();
+        let routed = self.routes.len() - free;
         let mut text = format!(
             "{} {} routed",
-            self.routes.len(),
-            if self.routes.len() == 1 {
-                "wire"
-            } else {
-                "wires"
-            }
+            routed,
+            if routed == 1 { "wire" } else { "wires" }
         );
         if free > 0 {
-            text.push_str(&format!(", {free} in free air"));
+            text.push_str(&format!(", {free} without a duct path"));
         }
         let fullest = self
             .ducts
@@ -128,7 +128,7 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
         };
     };
     let rows = rows(project, &routed, plan);
-    let notes = notes(plan, &routed, &rows);
+    let notes = notes(project, structure, plan, &routed, &rows);
     let routes = plan
         .routes
         .iter()
@@ -220,7 +220,7 @@ fn rows(
             let basis = match r.kind {
                 _ if to_door => "door, no gap",
                 _ if routed.entry_legs.contains_key(&r.job) => "to entry, outside not included",
-                Kind::FreeAir => "free air",
+                Kind::FreeAir => "no duct path, estimate",
                 Kind::Ducted if routed.unknown_height.contains(&r.job) => "routed, no depth",
                 Kind::Ducted => "routed",
             };
@@ -244,6 +244,8 @@ fn rows(
 
 /// The plan's problems and the unknown depths, as sentences.
 fn notes(
+    project: &Project,
+    structure: StructureId,
     plan: &novo_routing::Plan,
     routed: &novo_routing::model::Routed,
     rows: &[RouteRow],
@@ -256,8 +258,8 @@ fn notes(
     let free = count(&|p| matches!(p, Problem::FreeAir { .. }));
     if free > 0 {
         notes.push(format!(
-            "{} no duct reaches: they run in free air",
-            plural(free, "wire", "wires")
+            "{} no duct path: not drawn (ends marked in red), length is an estimate. Add a duct that joins them",
+            plural(free, "wire has", "wires have")
         ));
     }
     let overfull = count(&|p| matches!(p, Problem::OverfullDuct { .. }));
@@ -281,6 +283,25 @@ fn notes(
             plural(guessed, "wire has", "wires have")
         ));
     }
+    let leaving = wires_leaving_without_entry(project, structure, routed);
+    if leaving > 0 {
+        notes.push(format!(
+            "{} the cabinet but it has no entry point: set the cabinet entry to route {} to it",
+            plural(leaving, "wire leaves", "wires leave"),
+            if leaving == 1 { "it" } else { "them" }
+        ));
+    }
+    let estimated = rows
+        .iter()
+        .filter(|r| routed.estimated.contains(&r.wire))
+        .count();
+    if estimated > 0 {
+        notes.push(format!(
+            "{} end{} at an estimated terminal position: the part has no terminal data (Parts > Detect connection points)",
+            plural(estimated, "wire", "wires"),
+            if estimated == 1 { "s" } else { "" }
+        ));
+    }
     let flat = rows
         .iter()
         .filter(|r| routed.unknown_height.contains(&r.wire))
@@ -292,6 +313,35 @@ fn notes(
         ));
     }
     notes
+}
+
+/// Wires with one end on this plate and the other outside it (a supply, a
+/// field device) that are not routed because the plate has no entry point.
+fn wires_leaving_without_entry(
+    project: &Project,
+    structure: StructureId,
+    routed: &novo_routing::model::Routed,
+) -> usize {
+    if novo_routing::entry::entry_point(project, structure).is_some() {
+        return 0;
+    }
+    let here: std::collections::HashSet<novo_core::DeviceId> = project
+        .all::<novo_core::CabinetPlacement>()
+        .filter(|p| p.structure == structure)
+        .map(|p| p.device)
+        .collect();
+    let on_plate = |pin: novo_core::PinRef| {
+        novo_routing::model::device_of_pin(project, pin).is_some_and(|d| here.contains(&d))
+    };
+    project
+        .wires()
+        .filter(|w| routed.unrouted.contains(&w.id.raw()))
+        .filter(|w| match (w.from.as_pin(), w.to.as_pin()) {
+            (Some(a), Some(b)) => on_plate(a) != on_plate(b),
+            (Some(p), None) | (None, Some(p)) => on_plate(p),
+            _ => false,
+        })
+        .count()
 }
 
 /// How a duct reads on the plate. The colour is never the only cue: each
@@ -725,8 +775,12 @@ pub(super) fn draw(painter: &egui::Painter, rect: egui::Rect, view: &Viewport, o
     for r in &overlay.routes {
         let points: Vec<egui::Pos2> = r.points.iter().map(|&(x, y)| to_screen(x, y)).collect();
         if r.free_air {
+            // No duct path: no line, only the two terminals that cannot be
+            // joined.
             let stroke = egui::Stroke::new(1.5, crate::theme::ui_palette().error);
-            painter.extend(egui::Shape::dashed_line(&points, stroke, 6.0, 4.0));
+            for end in [points.first(), points.last()].into_iter().flatten() {
+                painter.circle_stroke(*end, 5.0, stroke);
+            }
         } else {
             let stroke = egui::Stroke::new(1.5, crate::theme::ui_palette().info);
             painter.add(egui::Shape::line(points, stroke));
@@ -809,13 +863,19 @@ mod tests {
     }
 
     #[test]
-    fn without_a_duct_the_wire_is_drawn_as_free_air() {
+    fn without_a_duct_the_wire_is_listed_not_drawn_as_a_line() {
         let (p, cab) = cabinet(None);
         let o = overlay(&p, cab);
         assert_eq!(o.routes.len(), 1);
         assert!(o.routes[0].free_air);
         assert!(o.ducts.is_empty());
-        assert_eq!(o.summary(), "1 wire routed, 1 in free air");
+        assert_eq!(o.summary(), "0 wires routed, 1 without a duct path");
+        assert!(
+            o.notes.iter().any(|n| n.contains("no duct path")),
+            "{:?}",
+            o.notes
+        );
+        assert_eq!(o.rows[0].basis, "no duct path, estimate");
     }
 
     #[test]

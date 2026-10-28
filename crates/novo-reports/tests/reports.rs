@@ -803,14 +803,18 @@ fn wire_list_routes_lengths_through_the_ducts_of_the_plate() {
         .expect("layout")
         .0;
     let wires = report(&doc, "wires");
-    // Both footprints are the default 45 x 90 mm: anchors at the centres,
-    // 105 mm down to the duct each, 300 mm along it, 50 mm slack per end, and
-    // 30 mm per end from the plate to the middle of the 60 mm duct: the
-    // parts have no depth yet, so the list says it measured from the plate.
+    // Both footprints are the default 45 x 90 mm. The pins of a device are
+    // spread along its edge in marking order, F1:2 is the first of three
+    // below F1 (x 107.5), K1:1 the first of three above K1 (x 413.5). F1:2 leaves the bottom edge
+    // (y 190), 60 mm above the duct at y 250. K1:1 is on the top edge (y 100),
+    // 150 mm above the duct, facing away from it: the wire leaves 40 mm, turns
+    // and comes back (80 mm detour). 306 mm along the duct, 50 mm slack per
+    // end, and 30 mm per end from the plate to the middle of the 60 mm duct:
+    // the parts have no depth yet, so the list says it measured from the plate.
     let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
     assert_eq!(
         (row[8].as_str(), row[9].as_str()),
-        ("670", "routed, no depth")
+        ("756", "routed, no depth")
     );
     // With a depth the terminals stand 80 mm off the plate: 50 mm to the duct.
     let parts: Vec<_> = [h.f1, h.k1]
@@ -827,7 +831,7 @@ fn wire_list_routes_lengths_through_the_ducts_of_the_plate() {
     .expect("depth");
     let wires = report(&doc, "wires");
     let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
-    assert_eq!((row[8].as_str(), row[9].as_str()), ("710", "routed"));
+    assert_eq!((row[8].as_str(), row[9].as_str()), ("796", "routed"));
     // F2 is not placed: that wire stays an estimate.
     let row = wire_row(&wires, "=A1+CAB-K1:2", "=A1+CAB-F2:1");
     assert_eq!(row[9], "estimate");
@@ -837,7 +841,7 @@ fn wire_list_routes_lengths_through_the_ducts_of_the_plate() {
         .expect("delete");
     let wires = report(&doc, "wires");
     let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
-    assert_eq!((row[8].as_str(), row[9].as_str()), ("400", "free air"));
+    assert_eq!((row[8].as_str(), row[9].as_str()), ("496", "free air"));
 
     // Moving a device changes the length with no extra edit.
     doc.transact("Move", |tx| {
@@ -846,7 +850,7 @@ fn wire_list_routes_lengths_through_the_ducts_of_the_plate() {
     .expect("move");
     let wires = report(&doc, "wires");
     let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
-    assert_eq!(row[8], "500");
+    assert_eq!(row[8], "596");
 }
 
 #[test]
