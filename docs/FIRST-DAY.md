@@ -32,6 +32,9 @@ Tick the desktop icon if you want one.
 To update later, **close KoperCAD first** (save your work), then run the newer setup. If a company policy blocks the installer, try the
 portable zip.
 
+Pick one of the two, installed copy or portable zip: they keep separate settings (installed: `%LOCALAPPDATA%` and `%APPDATA%`;
+portable: the `data` folder). Save projects into an explicit folder in Documents.
+
 If the window stays black or the program does not start, use the Start menu entry **KoperCAD (safe graphics)**
 (portable: `run-safe-graphics.cmd`).
 
