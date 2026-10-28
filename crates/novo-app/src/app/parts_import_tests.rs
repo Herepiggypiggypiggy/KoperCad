@@ -469,3 +469,149 @@ fn overlapping_reads_do_not_lose_each_others_catalog_changes() {
     }
     assert!(!cat.with_extension("json.tmp").exists());
 }
+
+/// A STEP file in the style of Schneider's real LC1D09 model: the file name
+/// is a document id, the model inside names the family `LC1D09-18-DC`.
+fn family_step() -> String {
+    "ISO-10303-21;\nHEADER;\nFILE_NAME('LC1D09-18-DC-3D_ASM','2021-09-16T13:53:08',('SESA540900'),(\n'Schneider-Electric'),'CREO','CREO','');\nENDSEC;\nDATA;\n#9=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.MILLI.,.METRE.));\n#1=CARTESIAN_POINT('',(0.,0.,0.));\n#2=CARTESIAN_POINT('',(45.,77.,90.));\n#7=PRODUCT('LC1D09-18-DC-3D_ASM','LC1D09-18-DC-3D_ASM','NOT SPECIFIED',(#8));\nENDSEC;\nEND-ISO-10303-21;\n".to_owned()
+}
+
+fn schneider(b: &mut Bench, order: &str) -> PartKey {
+    let part = novo_parts::CatalogPart {
+        manufacturer: "Schneider Electric".into(),
+        order_number: order.into(),
+        description: "Contactor coil 24 V DC".into(),
+        dimensions: Some(novo_parts::Dimensions {
+            width_mm: 45.0,
+            height_mm: 77.0,
+            depth_mm: 86.0,
+        }),
+        ..Default::default()
+    };
+    let k = part.key();
+    b.win.catalog.upsert(part);
+    k
+}
+
+#[test]
+fn a_download_named_after_a_document_id_is_taken_when_the_model_inside_names_the_part() {
+    let mut b = bench();
+    let k = schneider(&mut b, "LC1D09BD");
+    b.click_import(&k);
+    // The user also downloaded something unrelated; it must be left alone,
+    // with the reason shown.
+    write(&b.downloads, "invoice-4711.stp", &step(1.0, 1.0, 1.0));
+    write(
+        &b.downloads,
+        "MCADPP0003371_3D-simplified.stp",
+        &family_step(),
+    );
+    let phase = b.pump_until_settled(20);
+    let Phase::Done(summary) = phase else {
+        panic!("{phase:?}");
+    };
+    assert_eq!(summary.file, "MCADPP0003371_3D-simplified.stp");
+    assert!(
+        summary
+            .lines
+            .iter()
+            .any(|l| l.starts_with("Checked:") && l.contains("LC1D09-18-DC")),
+        "{:?}",
+        summary.lines
+    );
+    assert_eq!(b.row(&k), RowAction::InLibrary);
+    let records = b.win.records(&k);
+    assert_eq!(records.len(), 1, "only the matching file was stored");
+    // The set is remembered: its drawing, which names nothing, follows.
+    b.win.import = None;
+    b.click_import(&k);
+    write(&b.downloads, "MCADPP0003371_2D-front.dxf", "0\nSECTION\n");
+    let Phase::Done(summary) = b.pump_until_settled(20) else {
+        panic!("the drawing of the same set was not taken");
+    };
+    assert_eq!(summary.file, "MCADPP0003371_2D-front.dxf");
+    assert!(
+        summary
+            .lines
+            .iter()
+            .any(|l| l.contains("same download set") || l.contains("download set MCADPP0003371")),
+        "{:?}",
+        summary.lines
+    );
+}
+
+#[test]
+fn an_unrelated_download_is_left_alone_and_says_why() {
+    let mut b = bench();
+    let k = schneider(&mut b, "LC1F185BD");
+    b.click_import(&k);
+    write(
+        &b.downloads,
+        "MCADPP0003371_3D-simplified.stp",
+        &family_step(),
+    );
+    for i in 0..10 {
+        b.win.pump_import(100.0 + f64::from(i) * 1.1);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(b.win.import.as_ref().unwrap().phase, Phase::Waiting);
+    let text = b.painted();
+    assert!(
+        text.contains("Arrived in Downloads but not taken"),
+        "{text}"
+    );
+    assert!(text.contains("LC1D09-18-DC"), "{text}");
+    assert!(!b.win.library.as_ref().unwrap().has(&k));
+}
+
+#[test]
+fn a_file_dropped_on_the_wrong_part_opens_the_panel_and_stores_nothing() {
+    let mut b = bench();
+    let wrong = schneider(&mut b, "LC1F185BD");
+    let right = schneider(&mut b, "LC1D12BD");
+    b.win.select(wrong.clone());
+    let elsewhere = tempfile::tempdir().unwrap();
+    write(
+        elsewhere.path(),
+        "MCADPP0003371_3D-simplified.stp",
+        &family_step(),
+    );
+    b.win
+        .drop_on_target(&elsewhere.path().join("MCADPP0003371_3D-simplified.stp"));
+    assert!(b.win.cad.is_some(), "the doubt opens Add CAD files");
+    assert!(b.win.import.is_none(), "nothing is being imported");
+    assert!(!b.win.library.as_ref().unwrap().has(&wrong));
+    assert!(!b.win.library.as_ref().unwrap().has(&right));
+    let text = b.painted();
+    assert!(text.contains("Add CAD files"), "{text}");
+    assert!(text.contains("LC1D09-18-DC"), "{text}");
+    assert!(text.contains("Import ticked"), "{text}");
+}
+
+#[test]
+fn the_waiting_strip_says_whether_an_account_is_needed_and_that_no_password_is_taken() {
+    let mut b = bench();
+    let wago = novo_parts::CatalogPart {
+        manufacturer: "WAGO".into(),
+        order_number: "2002-1201".into(),
+        ..Default::default()
+    };
+    let k = wago.key();
+    b.win.catalog.upsert(wago);
+    b.click_import(&k);
+    b.win.pump_import(10.0);
+    let text = b.painted();
+    assert!(text.contains("An account is needed at WAGO"), "{text}");
+    assert!(
+        text.contains("never asks for or keeps your password"),
+        "{text}"
+    );
+    let s = schneider(&mut b, "LC1D09BD");
+    b.win.import = None;
+    b.click_import(&s);
+    b.win.pump_import(10.0);
+    assert!(
+        b.painted().contains("No account is needed"),
+        "Schneider's CAD download needs no login"
+    );
+}

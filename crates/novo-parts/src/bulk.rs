@@ -254,6 +254,7 @@ pub fn maker_guide(have: &[String]) -> Vec<String> {
                 lines.push(format!("    {s}"));
             }
         }
+        lines.push(format!("    {}", r.account_note()));
     }
     lines
 }
