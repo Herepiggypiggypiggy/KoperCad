@@ -110,18 +110,3 @@ fn a_running_program_is_closed_before_install_and_uninstall() {
         "match on the install path, not the image name"
     );
 }
-
-#[test]
-fn a_running_program_is_closed_before_install_and_uninstall() {
-    // The Restart Manager cannot close the window (hardware test KC-14). Only
-    // the copy in the install folder is closed, never a portable copy.
-    let s = script();
-    assert!(s.contains("function PrepareToInstall"));
-    assert!(s.contains("function InitializeUninstall"));
-    assert!(s.contains("CloseMainWindow"));
-    assert!(s.contains("{app}"));
-    assert!(
-        !s.contains("taskkill"),
-        "match on the install path, not the image name"
-    );
-}
