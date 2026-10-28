@@ -445,6 +445,15 @@ fn export_reports_as_excel_and_csv() {
     assert!(!run.out.starts_with('\u{feff}'), "no BOM on stdout");
     assert!(run.out.contains("'-K1"), "{}", run.out);
 
+    // `--plain-text` leaves tags as they are, for programs that read the CSV.
+    let run = novo(&["export", "devices", s(&path), "--plain-text"]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(
+        run.out.contains("\n-K1,") && !run.out.contains("'-K1"),
+        "{}",
+        run.out
+    );
+
     let csv = dir.path().join("bom.csv");
     let run = novo(&["export", "bom", s(&path), "-o", s(&csv), "--delimiter", ";"]);
     assert_eq!(run.code, exit::OK, "{}", run.err);

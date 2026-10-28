@@ -222,6 +222,13 @@ struct ReportArgs {
     /// writes `;` like File > Export wire cut in the app.
     #[arg(long)]
     delimiter: Option<char>,
+    /// CSV only: leave tags and other text exactly as they are. By default
+    /// a field starting with `=`, `+`, `-` or `@` (every device tag, as in
+    /// `=A1+CAB-K1`) gets a leading apostrophe so Excel does not read it as
+    /// a formula; use this for CSV that other programs read. `.xlsx` files
+    /// never need it.
+    #[arg(long)]
+    plain_text: bool,
     /// Language of titles and headers (`en`, `nl`); the project's report
     /// language when left out.
     #[arg(long, value_name = "CODE")]
@@ -631,6 +638,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
                 file,
                 output: Some(output),
                 delimiter: Some(','),
+                plain_text: false,
                 language: None,
             };
             if !matches!(
@@ -1438,6 +1446,7 @@ fn export_reports(
     let usage = |e: novo_py::ScriptError| Failure::new(exit::USAGE, e.to_string());
     let csv = CsvOptions {
         delimiter: args.delimiter.unwrap_or(','),
+        excel_safe: !args.plain_text,
         ..CsvOptions::default()
     };
     match &args.output {
