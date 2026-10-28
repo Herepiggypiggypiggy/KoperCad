@@ -414,9 +414,12 @@ Nothing is stored until you press Import.",
             );
         });
         let busy = panel.busy();
+        // Leave room for the parts list below: at most 300, at least 140
+        // points, about a third of the window otherwise.
+        let rows_height = (ui.ctx().content_rect().height() * 0.35).clamp(140.0, 300.0);
         egui::ScrollArea::vertical()
             .id_salt("cad_rows")
-            .max_height(300.0)
+            .max_height(rows_height)
             .auto_shrink([false, true])
             .show(ui, |ui| {
                 for (ri, row) in panel.rows.iter_mut().enumerate() {
@@ -455,6 +458,11 @@ Nothing is stored until you press Import.",
                             }
                             for w in &c.warnings {
                                 ui.colored_label(warn, w);
+                            }
+                            // Could not be checked, or only worth knowing:
+                            // quiet, so a real warning stands out.
+                            for n in &c.notes {
+                                ui.weak(n);
                             }
                         });
                     }
@@ -504,6 +512,11 @@ Nothing is stored until you press Import.",
                         ui.label(l);
                     }
                 });
+        }
+        if panel.rows.iter().any(|r| r.candidates.len() > 1) {
+            ui.weak(
+                "A family model fits several parts: tick the ones you want, or press Tick all probable.",
+            );
         }
         ui.horizontal(|ui| {
             let import = panel.can_import();

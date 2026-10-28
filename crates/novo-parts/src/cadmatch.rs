@@ -476,8 +476,12 @@ pub struct Candidate {
     pub score: i32,
     /// What speaks for it.
     pub evidence: Vec<String>,
-    /// What speaks against it or could not be checked.
+    /// What speaks against it.
     pub warnings: Vec<String>,
+    /// What could not be checked or is only worth knowing (the size could
+    /// not be compared; the file was made by a CAD service). Not a reason
+    /// to doubt the match.
+    pub notes: Vec<String>,
 }
 
 const ORDER: i32 = 100;
@@ -490,8 +494,34 @@ struct NameHit {
     evidence: Vec<String>,
 }
 
+/// What does not depend on the part, worked out once per file: the
+/// normalized names and the family ranges written in them. A catalog of tens
+/// of thousands of parts is matched against one file without reading the
+/// file's names again for each part.
+struct Prepared {
+    hays: Vec<String>,
+    /// Per name, the words that are family ranges.
+    families: Vec<Vec<(String, Family)>>,
+}
+
+fn prepare(id: &CadIdentity) -> Prepared {
+    Prepared {
+        hays: id.names.iter().map(|n| normalize_code(&n.text)).collect(),
+        families: id
+            .names
+            .iter()
+            .map(|n| {
+                n.text
+                    .split(|c: char| c.is_whitespace() || ",;:()/".contains(c))
+                    .filter_map(|w| family_of(w).map(|f| (w.to_owned(), f)))
+                    .collect()
+            })
+            .collect(),
+    }
+}
+
 /// Names against a part; `score` 0 when nothing ties them.
-fn name_hit(id: &CadIdentity, part: &CatalogPart, links: &CadLinks) -> NameHit {
+fn name_hit(id: &CadIdentity, prep: &Prepared, part: &CatalogPart, links: &CadLinks) -> NameHit {
     let codes = recipe_for(&part.manufacturer).map_or_else(
         || vec![normalize_code(&part.order_number)],
         |r| r.file_codes(&part.order_number),
@@ -510,9 +540,9 @@ fn name_hit(id: &CadIdentity, part: &CatalogPart, links: &CadLinks) -> NameHit {
             };
         }
     };
-    for name in &id.names {
-        let hay = normalize_code(&name.text);
-        if codes.iter().any(|c| c.len() >= 5 && holds_code(&hay, c)) {
+    for (n, name) in id.names.iter().enumerate() {
+        let hay = &prep.hays[n];
+        if codes.iter().any(|c| c.len() >= 5 && holds_code(hay, c)) {
             consider(
                 ORDER,
                 format!(
@@ -522,7 +552,7 @@ fn name_hit(id: &CadIdentity, part: &CatalogPart, links: &CadLinks) -> NameHit {
                     part.order_number
                 ),
             );
-        } else if type_code.len() >= 4 && holds_code(&hay, &type_code) {
+        } else if type_code.len() >= 4 && holds_code(hay, &type_code) {
             consider(
                 TYPE_NUMBER,
                 format!(
@@ -534,13 +564,8 @@ fn name_hit(id: &CadIdentity, part: &CatalogPart, links: &CadLinks) -> NameHit {
             );
         }
         // Family ranges are written with dashes, so look at each word of the name.
-        for word in name
-            .text
-            .split(|c: char| c.is_whitespace() || ",;:()/".contains(c))
-        {
-            if let Some(f) = family_of(word)
-                && f.covers(&part_code)
-            {
+        for (word, f) in &prep.families[n] {
+            if f.covers(&part_code) {
                 let mut text = format!(
                     "{} says \u{201c}{word}\u{201d}, a model for {}{:0w$} to {}{:0w$}; {} is in that range.",
                     cap(name.from.words()),
@@ -551,7 +576,7 @@ fn name_hit(id: &CadIdentity, part: &CatalogPart, links: &CadLinks) -> NameHit {
                     part.order_number,
                     w = f.width
                 );
-                let said = variant_words(&f, part);
+                let said = variant_words(f, part);
                 if !said.is_empty() {
                     text.push_str(&format!(
                         " The part's description also says {}.",
@@ -607,9 +632,15 @@ fn variant_words(f: &Family, part: &CatalogPart) -> Vec<String> {
 
 /// The size of a model against a part's dimensions, axes sorted so the
 /// model's orientation does not matter.
-fn size_view(size: &SizeMeasure, part: &CatalogPart) -> (Option<String>, Option<String>) {
+/// Returns what speaks for the part, what speaks against it, and a note
+/// when the size could not be compared.
+fn size_view(
+    size: &SizeMeasure,
+    part: &CatalogPart,
+) -> (Option<String>, Option<String>, Option<String>) {
     let Some(d) = part.dimensions else {
         return (
+            None,
             None,
             Some("The part has no dimensions to compare the model's size with.".into()),
         );
@@ -620,7 +651,7 @@ fn size_view(size: &SizeMeasure, part: &CatalogPart) -> (Option<String>, Option<
     have.sort_by(f64::total_cmp);
     let text = |s: [f64; 3]| format!("{:.0} \u{d7} {:.0} \u{d7} {:.0} mm", s[0], s[1], s[2]);
     if want.iter().any(|w| *w <= 0.0) {
-        return (None, None);
+        return (None, None, None);
     }
     if size.exact {
         let worst = (0..3)
@@ -634,6 +665,7 @@ fn size_view(size: &SizeMeasure, part: &CatalogPart) -> (Option<String>, Option<
                     text(want)
                 )),
                 None,
+                None,
             )
         } else if worst <= 0.30 {
             (
@@ -643,6 +675,7 @@ fn size_view(size: &SizeMeasure, part: &CatalogPart) -> (Option<String>, Option<
                     text(have),
                     text(want)
                 )),
+                None,
             )
         } else {
             (
@@ -652,6 +685,7 @@ fn size_view(size: &SizeMeasure, part: &CatalogPart) -> (Option<String>, Option<
                     text(have),
                     text(want)
                 )),
+                None,
             )
         }
     } else {
@@ -666,9 +700,11 @@ fn size_view(size: &SizeMeasure, part: &CatalogPart) -> (Option<String>, Option<
                     text(have),
                     text(want)
                 )),
+                None,
             )
         } else {
             (
+                None,
                 None,
                 Some(
                     "The size was not compared: the file's size could only be estimated from all its points."
@@ -686,7 +722,23 @@ pub fn assess_part(
     catalog: Option<&Catalog>,
     links: &CadLinks,
 ) -> Candidate {
-    let hit = name_hit(id, part, links);
+    let prep = prepare(id);
+    let hit = name_hit(id, &prep, part, links);
+    // The index of longer article numbers is worth building only for a part
+    // the file is tied to, and only once.
+    let index = (hit.score > 0)
+        .then(|| catalog.map(LongerIndex::new))
+        .flatten();
+    assess_with(id, &prep, part, hit, index.as_ref())
+}
+
+fn assess_with(
+    id: &CadIdentity,
+    prep: &Prepared,
+    part: &CatalogPart,
+    hit: NameHit,
+    index: Option<&LongerIndex>,
+) -> Candidate {
     let mut c = Candidate {
         key: part.key(),
         label: part.to_string(),
@@ -694,12 +746,13 @@ pub fn assess_part(
         score: hit.score,
         evidence: hit.evidence,
         warnings: Vec::new(),
+        notes: Vec::new(),
     };
     if hit.score == 0 {
         return c;
     }
-    if let Some(cat) = catalog
-        && let Some(longer) = named_by_longer(id, part, cat)
+    if let Some(idx) = index
+        && let Some(longer) = idx.named_by_longer(&prep.hays, part)
     {
         c.score = 0;
         c.evidence.clear();
@@ -711,21 +764,22 @@ pub fn assess_part(
     }
     let mut against = false;
     if let Some(size) = &id.size {
-        let (fits, note) = size_view(size, part);
+        let (fits, warning, note) = size_view(size, part);
         if let Some(f) = fits {
             c.evidence.push(f);
         }
-        if let Some(n) = note {
+        if let Some(n) = warning {
             against |= n.starts_with("SIZE:");
             c.warnings.push(n.trim_start_matches("SIZE: ").to_owned());
         }
+        c.notes.extend(note);
     }
     if let Some(m) = &id.maker {
         if maker_fits(m, &part.manufacturer) {
             c.evidence
                 .push(format!("The file was made by {m}, the part's maker."));
         } else {
-            c.warnings.push(format!(
+            c.notes.push(format!(
                 "The file was made by {m}, not {} (this can be a CAD service, so it is only a note).",
                 part.manufacturer
             ));
@@ -751,35 +805,165 @@ fn maker_fits(file_maker: &str, maker: &str) -> bool {
         })
 }
 
-/// An order number of the same maker, longer than this part's and starting
-/// with it, that the file's names hold: `LC1D09BD` is not `LC1D09`.
-fn named_by_longer(id: &CadIdentity, part: &CatalogPart, catalog: &Catalog) -> Option<String> {
-    let code = normalize_code(&part.order_number);
-    let maker = normalize_code(&part.manufacturer);
-    let hays: Vec<String> = id.names.iter().map(|n| normalize_code(&n.text)).collect();
-    catalog
-        .parts()
-        .iter()
-        .filter(|q| normalize_code(&q.manufacturer) == maker)
-        .filter(|q| {
-            let qc = normalize_code(&q.order_number);
-            qc.len() > code.len() && qc.starts_with(&code)
-        })
-        .find(|q| {
-            let qc = normalize_code(&q.order_number);
-            hays.iter().any(|h| holds_code(h, &qc))
-        })
-        .map(|q| q.order_number.clone())
+/// The normalized order numbers of a catalog per maker, sorted, so the
+/// numbers that start with a given one are found by bisection instead of by
+/// reading the whole catalog for each part.
+struct LongerIndex {
+    by_maker: std::collections::HashMap<String, Vec<(String, String)>>,
+}
+
+impl LongerIndex {
+    fn new(catalog: &Catalog) -> Self {
+        let mut by_maker: std::collections::HashMap<String, Vec<(String, String)>> =
+            std::collections::HashMap::new();
+        for p in catalog.parts() {
+            by_maker
+                .entry(normalize_code(&p.manufacturer))
+                .or_default()
+                .push((normalize_code(&p.order_number), p.order_number.clone()));
+        }
+        for v in by_maker.values_mut() {
+            v.sort();
+        }
+        LongerIndex { by_maker }
+    }
+
+    /// An order number of the same maker, longer than this part's and
+    /// starting with it, that the file's names hold: `LC1D09BD` is not
+    /// `LC1D09`.
+    fn named_by_longer(&self, hays: &[String], part: &CatalogPart) -> Option<String> {
+        let code = normalize_code(&part.order_number);
+        let list = self.by_maker.get(&normalize_code(&part.manufacturer))?;
+        let start = list.partition_point(|(n, _)| n.as_str() < code.as_str());
+        list[start..]
+            .iter()
+            .take_while(|(n, _)| n.starts_with(&code))
+            .filter(|(n, _)| n.len() > code.len())
+            .find(|(n, _)| hays.iter().any(|h| holds_code(h, n)))
+            .map(|(_, shown)| shown.clone())
+    }
+}
+
+/// A catalog read once for a whole batch of files: which parts each code
+/// belongs to, and the order numbers in sorted order. A file then finds the
+/// parts it may be for by looking up the codes written in its names and the
+/// range of a family, not by testing every part of the catalog; the full
+/// judgement ([`name_hit`]) is then made on those parts only.
+struct Index<'a> {
+    parts: &'a [CatalogPart],
+    /// Normalized order codes (as the maker's recipe writes them in file
+    /// names) and type numbers, to the parts that have them.
+    by_code: std::collections::HashMap<String, Vec<usize>>,
+    longest_code: usize,
+    /// Normalized order number and part, sorted: the family range is a
+    /// stretch of this list.
+    orders: Vec<(String, usize)>,
+    by_key: std::collections::HashMap<PartKey, usize>,
+    longer: LongerIndex,
+}
+
+/// Shortest code worth looking up (the judgement requires 5 for an order
+/// code and 4 for a type number).
+const MIN_CODE: usize = 4;
+/// Names longer than this are looked at only up to here when searching for
+/// codes.
+const MAX_HAY: usize = 512;
+
+impl<'a> Index<'a> {
+    fn new(catalog: &'a Catalog) -> Self {
+        let parts = catalog.parts();
+        let mut by_code: std::collections::HashMap<String, Vec<usize>> =
+            std::collections::HashMap::new();
+        let mut orders = Vec::with_capacity(parts.len());
+        let mut by_key = std::collections::HashMap::with_capacity(parts.len());
+        let mut longest_code = MIN_CODE;
+        for (i, p) in parts.iter().enumerate() {
+            let order = normalize_code(&p.order_number);
+            let codes = recipe_for(&p.manufacturer)
+                .map_or_else(|| vec![order.clone()], |r| r.file_codes(&p.order_number));
+            let type_code = normalize_code(&p.type_number);
+            for c in codes.into_iter().chain(Some(type_code)) {
+                if c.chars().count() >= MIN_CODE {
+                    longest_code = longest_code.max(c.chars().count());
+                    let v = by_code.entry(c).or_default();
+                    if v.last() != Some(&i) {
+                        v.push(i);
+                    }
+                }
+            }
+            orders.push((order, i));
+            by_key.insert(p.key(), i);
+        }
+        orders.sort();
+        Index {
+            parts,
+            by_code,
+            longest_code,
+            orders,
+            by_key,
+            longer: LongerIndex::new(catalog),
+        }
+    }
+
+    /// The parts a file may tie to: a superset of those [`name_hit`] scores
+    /// above zero, in catalog order.
+    fn candidates(
+        &self,
+        id: &CadIdentity,
+        prep: &Prepared,
+        links: &CadLinks,
+    ) -> Vec<&'a CatalogPart> {
+        let mut found = std::collections::BTreeSet::new();
+        for hay in &prep.hays {
+            let chars: Vec<(usize, char)> = hay.char_indices().take(MAX_HAY).collect();
+            for start in 0..chars.len() {
+                let from = chars[start].0;
+                for end in (start + MIN_CODE)..=(start + self.longest_code).min(chars.len()) {
+                    let to = chars.get(end).map_or(hay.len(), |c| c.0);
+                    if let Some(v) = self.by_code.get(&hay[from..to]) {
+                        found.extend(v.iter().copied());
+                    }
+                }
+            }
+        }
+        for fam in prep.families.iter().flatten().map(|(_, f)| f) {
+            let first = self
+                .orders
+                .partition_point(|(n, _)| n.as_str() < fam.stem.as_str());
+            found.extend(
+                self.orders[first..]
+                    .iter()
+                    .take_while(|(n, _)| n.starts_with(&fam.stem))
+                    .filter(|(n, _)| fam.covers(n))
+                    .map(|(_, i)| *i),
+            );
+        }
+        if let Some(doc) = &id.doc_id {
+            found.extend(
+                links
+                    .keys_for(doc)
+                    .iter()
+                    .filter_map(|k| self.by_key.get(k)),
+            );
+        }
+        found.into_iter().map(|i| &self.parts[i]).collect()
+    }
 }
 
 /// The parts a file may be for, best first. Parts with no tie to the file
 /// are left out. At most `limit` are returned.
 pub fn rank(id: &CadIdentity, catalog: &Catalog, links: &CadLinks, limit: usize) -> Vec<Candidate> {
-    let mut out: Vec<Candidate> = catalog
-        .parts()
-        .iter()
-        .filter(|p| name_hit(id, p, links).score > 0)
-        .map(|p| assess_part(id, p, Some(catalog), links))
+    rank_in(id, &Index::new(catalog), links, limit)
+}
+
+fn rank_in(id: &CadIdentity, index: &Index, links: &CadLinks, limit: usize) -> Vec<Candidate> {
+    let prep = prepare(id);
+    let mut out: Vec<Candidate> = index
+        .candidates(id, &prep, links)
+        .into_iter()
+        .map(|p| (p, name_hit(id, &prep, p, links)))
+        .filter(|(_, h)| h.score > 0)
+        .map(|(p, h)| assess_with(id, &prep, p, h, Some(&index.longer)))
         .filter(|c| c.score > 0)
         .collect();
     out.sort_by(|a, b| {
@@ -820,6 +1004,7 @@ pub fn decide_drop(
         Verdict::Verified | Verdict::Likely => {
             let mut notes = c.evidence;
             notes.extend(c.warnings);
+            notes.extend(c.notes);
             DropDecision::Import { notes }
         }
         Verdict::Check => {
@@ -874,10 +1059,11 @@ pub fn match_batch(
     links: &CadLinks,
     limit: usize,
 ) -> Vec<FileMatch> {
+    let index = Index::new(catalog);
     let mut out: Vec<FileMatch> = ids
         .into_iter()
         .map(|identity| FileMatch {
-            candidates: rank(&identity, catalog, links, limit),
+            candidates: rank_in(&identity, &index, links, limit),
             identity,
         })
         .collect();
@@ -909,6 +1095,7 @@ pub fn match_batch(
                         c.label
                     )],
                     warnings: Vec::new(),
+                    notes: Vec::new(),
                     ..c.clone()
                 })
                 .collect();
@@ -960,6 +1147,13 @@ impl CadLinks {
         };
         let mut links = CadLinks::default();
         for r in file.links {
+            // A row that names no download set or no part links nothing.
+            if [&r.doc_id, &r.manufacturer, &r.order_number]
+                .iter()
+                .any(|f| f.trim().is_empty())
+            {
+                continue;
+            }
             links.add(&r.doc_id, &PartKey::new(&r.manufacturer, &r.order_number));
         }
         links
@@ -1179,7 +1373,8 @@ mod tests {
         });
         let a = assess_part(&inflated, p, Some(&c), &CadLinks::default());
         assert_eq!(a.verdict, Verdict::Likely);
-        assert!(a.warnings[0].contains("not compared"), "{a:?}");
+        assert!(a.warnings.is_empty(), "{a:?}");
+        assert!(a.notes[0].contains("not compared"), "{a:?}");
         // A box smaller than the part cannot hold a solid of that part.
         let small = schneider().with_size(SizeMeasure {
             size_mm: [10.0, 12.0, 15.0],
@@ -1285,5 +1480,144 @@ mod tests {
         assert_eq!((f.lo, f.hi, f.width), (9, 18, 2));
         assert_eq!(f.rest, ["C", "DC"]);
         assert!(f.covers("lc1d12bd") && !f.covers("lc1d25bd") && !f.covers("lc1d9bd"));
+    }
+
+    /// A maker catalog of tens of thousands of parts, and a family file that
+    /// ties the file to hundreds of them: matching must not read the whole
+    /// catalog again for each candidate.
+    #[test]
+    fn a_family_file_against_a_large_catalog_is_matched_in_reasonable_time() {
+        let mut c = Catalog::new();
+        let mut n = 0;
+        for nn in 9..100 {
+            for k in 0..220 {
+                c.upsert(part(
+                    "Schneider Electric",
+                    &format!("LC1D{nn:02}BD{k}"),
+                    Some([45.0, 77.0, 86.0]),
+                ));
+                n += 1;
+            }
+        }
+        assert!(n >= 20_000);
+        // The file names the family and, for one of its members, the number.
+        let id = schneider();
+        let t = std::time::Instant::now();
+        let out = rank(&id, &c, &CadLinks::default(), 10_000);
+        let took = t.elapsed();
+        eprintln!("{} parts, {} candidates in {took:?}", c.len(), out.len());
+        assert!(out.len() >= 2000, "{}", out.len());
+        assert!(took.as_secs_f64() < 3.0, "{took:?}");
+
+        // The exact order number is still told apart from a shorter one.
+        let exact = CadIdentity::from_file_name("LC1D09BD5.stp");
+        let t = std::time::Instant::now();
+        let top = rank(&exact, &c, &CadLinks::default(), 3);
+        assert!(t.elapsed().as_secs_f64() < 3.0, "{:?}", t.elapsed());
+        assert_eq!(top[0].label, "Schneider Electric LC1D09BD5");
+    }
+
+    /// Many files dropped together against a large catalog: the catalog is
+    /// read once for the batch, not once per file.
+    #[test]
+    fn many_files_against_a_large_catalog_are_matched_in_reasonable_time() {
+        // 50 product lines of 91 sizes with 5 variants each: a family file
+        // (`LC1D09-18`) ties to the 50 parts of its own line only.
+        let mut c = Catalog::new();
+        let lines: Vec<String> = std::iter::once("LC1D".to_owned())
+            .chain((0..49).map(|s| format!("LK{s:02}D")))
+            .collect();
+        for line in &lines {
+            for nn in 9..100 {
+                for k in 0..5 {
+                    c.upsert(part(
+                        "Schneider Electric",
+                        &format!("{line}{nn:02}BD{k}"),
+                        Some([45.0, 77.0, 86.0]),
+                    ));
+                }
+            }
+        }
+        let mut ids = Vec::new();
+        for i in 0..300 {
+            ids.push(match i % 3 {
+                0 => CadIdentity::from_file_name(&format!("LC1D{:02}BD{}.stp", 9 + i % 90, i % 5)),
+                1 => schneider(),
+                _ => CadIdentity::from_file_name(&format!("MCADPP{i:07}_3D-simplified.stp")),
+            });
+        }
+        let t = std::time::Instant::now();
+        let out = match_batch(ids, &c, &CadLinks::default(), 20);
+        let took = t.elapsed();
+        eprintln!("300 files against {} parts in {took:?}", c.len());
+        assert!(c.len() > 20_000);
+        assert_eq!(out.len(), 300);
+        assert!(took.as_secs_f64() < 6.0, "{took:?}");
+        assert_eq!(out[0].candidates[0].verdict, Verdict::Verified);
+        assert_eq!(out[1].candidates.len(), 20, "the family's first twenty");
+        assert!(
+            out[2].candidates.is_empty(),
+            "a bare document id names nothing"
+        );
+    }
+
+    /// The lookup by codes finds every part the full judgement would tie to
+    /// the file: same answer as testing every part.
+    #[test]
+    fn the_indexed_match_equals_testing_every_part() {
+        let mut c = catalog();
+        let mut typed = part("Schneider Electric", "LC1D32BD", None);
+        typed.type_number = "TYPE-D32".into();
+        c.upsert(typed);
+        c.upsert(part("Schneider Electric", "LC1D09", None));
+        c.upsert(part("Schneider Electric", "LC1D09BD7", None));
+        let mut links = CadLinks::default();
+        links.add("MCADQQ0000001", &c.find("WAGO", "2002-1201").unwrap().key());
+        let ids = [
+            schneider(),
+            CadIdentity::from_file_name("LC1D18BD_3D.stp"),
+            CadIdentity::from_file_name("LC1D09BD7.stp"),
+            CadIdentity::from_file_name("TYPE-D32.stp"),
+            CadIdentity::from_file_name("2002-1201.stp"),
+            CadIdentity::from_file_name("MCADQQ0000001_2D-front.dxf"),
+            CadIdentity::from_file_name("holiday.stp"),
+        ];
+        for id in &ids {
+            let mut brute: Vec<Candidate> = c
+                .parts()
+                .iter()
+                .map(|p| assess_part(id, p, Some(&c), &links))
+                .filter(|x| x.score > 0)
+                .collect();
+            brute.sort_by(|a, b| {
+                b.verdict
+                    .cmp(&a.verdict)
+                    .then(b.score.cmp(&a.score))
+                    .then(a.label.cmp(&b.label))
+            });
+            assert_eq!(rank(id, &c, &links, 100), brute, "{}", id.file_name);
+        }
+    }
+
+    #[test]
+    fn a_links_file_with_garbage_or_empty_rows_links_nothing_wrong() {
+        let dir = std::env::temp_dir().join(format!("kopercad-links-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = CadLinks::path_in(&dir);
+        std::fs::write(&path, "{ not json").unwrap();
+        assert!(CadLinks::load(&dir).is_empty());
+        std::fs::write(
+            &path,
+            r#"{"format":1,"links":[
+              {"doc_id":"","manufacturer":"X","order_number":"A-1"},
+              {"doc_id":"MCAD1","manufacturer":" ","order_number":"A-1"},
+              {"doc_id":"MCAD1","manufacturer":"X","order_number":""},
+              {"doc_id":"MCAD2","manufacturer":"X","order_number":"A-2"}]}"#,
+        )
+        .unwrap();
+        let links = CadLinks::load(&dir);
+        assert!(links.keys_for("MCAD1").is_empty());
+        assert_eq!(links.keys_for("mcad2").len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
