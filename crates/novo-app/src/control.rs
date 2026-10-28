@@ -647,6 +647,10 @@ impl Control {
                 // Hover first so the widget under the pointer is known, then press and release.
                 steps.push_back(Step::Events(vec![Event::PointerMoved(p)]));
                 steps.push_back(Step::Idle(1));
+                // Held keys reach the app the way a window reports them.
+                if mods != Modifiers::NONE {
+                    steps.push_back(Step::Events(vec![Event::ModifiersChanged(mods)]));
+                }
                 for _ in 0..count {
                     steps.push_back(Step::Events(vec![Event::PointerButton {
                         pos: p,
@@ -660,6 +664,9 @@ impl Control {
                         pressed: false,
                         modifiers: mods,
                     }]));
+                }
+                if mods != Modifiers::NONE {
+                    steps.push_back(Step::Events(vec![Event::ModifiersChanged(Modifiers::NONE)]));
                 }
                 steps.push_back(Step::Idle(SETTLE_FRAMES));
             }

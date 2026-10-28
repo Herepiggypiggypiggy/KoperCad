@@ -559,6 +559,19 @@ pub enum Act {
     RenameCabinet(Levels),
     Properties(Key),
     DuplicatePage(PageId),
+    /// Several pages at once (a multi-selection), one undo step.
+    DuplicatePages(Vec<PageId>),
+    /// Deletes several drawn pages at once, one undo step.
+    DeletePages(Vec<PageId>),
+    /// Files several pages under another group and/or cabinet, one undo
+    /// step.
+    MoveManyTo {
+        pages: Vec<PageId>,
+        function: Option<Levels>,
+        location: Option<Levels>,
+    },
+    /// Moves the picked pages one place up or down among their siblings.
+    StepPages(Vec<PageId>, bool),
     MoveUp(PageId),
     MoveDown(PageId),
     /// Files the page under another group and/or cabinet.
@@ -852,6 +865,93 @@ pub fn menu(project: &Project, target: &Target) -> Vec<Item> {
             items
         }
     }
+}
+
+/// The menu of a multi-selection of pages: what the single-page menu does,
+/// on all of them. Generated pages are made by the program, so they are not
+/// duplicated or deleted.
+pub fn multi_menu(project: &Project, pages: &[PageId]) -> Vec<Item> {
+    let n = pages.len();
+    let drawn: Vec<PageId> = pages
+        .iter()
+        .copied()
+        .filter(|id| {
+            project
+                .page(*id)
+                .is_some_and(|p| !matches!(p.kind, PageKind::Generated { .. }))
+        })
+        .collect();
+    let same_place = pages
+        .first()
+        .map(|first| project.sibling_pages(*first))
+        .is_some_and(|sib| pages.iter().all(|p| sib.contains(p)));
+    let mut moves = Vec::new();
+    for g in project.page_groups() {
+        moves.push(entry(
+            format!("Group {g}"),
+            Act::MoveManyTo {
+                pages: pages.to_vec(),
+                function: Some(g.function.clone()),
+                location: None,
+            },
+        ));
+    }
+    for c in project.panels() {
+        moves.push(entry(
+            format!("Cabinet {}", c.location),
+            Act::MoveManyTo {
+                pages: pages.to_vec(),
+                function: None,
+                location: Some(c.location.location.clone()),
+            },
+        ));
+    }
+    let mut items = vec![
+        off_unless(
+            entry(
+                format!("Duplicate {n} pages"),
+                Act::DuplicatePages(drawn.clone()),
+            ),
+            !drawn.is_empty(),
+            "Generated pages are made by the program",
+        ),
+        Item::Separator,
+        off_unless(
+            entry_keys(
+                "Move up",
+                Act::StepPages(pages.to_vec(), false),
+                "Ctrl+\u{2191}",
+            ),
+            same_place,
+            "The pages are not in the same group and cabinet",
+        ),
+        off_unless(
+            entry_keys(
+                "Move down",
+                Act::StepPages(pages.to_vec(), true),
+                "Ctrl+\u{2193}",
+            ),
+            same_place,
+            "The pages are not in the same group and cabinet",
+        ),
+    ];
+    if !moves.is_empty() {
+        items.push(Item::Submenu {
+            label: "Move to".into(),
+            items: moves,
+        });
+    }
+    items.push(Item::Separator);
+    items.push(off_unless(
+        entry_keys(
+            format!("Delete {} pages", drawn.len()),
+            Act::DeletePages(drawn.clone()),
+            "Del",
+        ),
+        !drawn.is_empty(),
+        "Generated pages are turned off in the project rules",
+    ));
+    items
 }
 
 fn new_page_here(context: &DeviceTag) -> Act {

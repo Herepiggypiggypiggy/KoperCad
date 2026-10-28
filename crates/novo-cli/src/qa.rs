@@ -993,11 +993,19 @@ impl Ctx<'_> {
             }
             "click" | "move" => {
                 let mut args = json!({"x": num(1, "x")?, "y": num(2, "y")?});
-                // `click X Y right` (or `middle`) presses that button.
-                if words[0] == "click"
-                    && let Some(button) = words.get(3)
-                {
-                    args["button"] = json!(button);
+                // `click X Y right` (or `middle`) presses that button; `ctrl`
+                // and `shift` hold those keys, in any order.
+                if words[0] == "click" {
+                    let mut held = Vec::new();
+                    for word in &words[3.min(words.len())..] {
+                        match word.as_str() {
+                            "ctrl" | "shift" => held.push(json!(word)),
+                            button => args["button"] = json!(button),
+                        }
+                    }
+                    if !held.is_empty() {
+                        args["modifiers"] = json!(held);
+                    }
                 }
                 self.srv.tool(&words[0], &args).map(|_| ())
             }

@@ -1,0 +1,38 @@
+@title Several pages in the navigator: Ctrl and Shift click, drag them as a block
+@area Schematic
+@sizes 1920x1080
+# Ctrl+click adds a page to the selection or takes it out, Shift+click selects the range from the last click, and dragging one selected page drags them all: a badge shows the count and a line shows where the block lands. The outline is pinned at this size, so this scenario is 1920x1080 only. The pictures are the evidence: Ctrl selection, Shift range, mid-drag with the drop line, and the new order.
+click_text "Open example"
+wait 20
+click 124 213
+wait 6
+click 150 358 ctrl
+wait 6
+click 150 416 ctrl
+wait 6
+shot ctrl-selected-10-and-30
+click 100 358
+wait 4
+click 100 416 shift
+wait 6
+shot shift-range-10-to-30
+mouse_down 120 387
+move 120 400
+move 120 420
+move 120 440
+move 120 452
+wait 6
+shot dragging-block-with-drop-line
+mouse_up 120 452
+wait 10
+shot block-moved-below-40
+key ctrl+z
+wait 10
+shot undone-in-one-step
+key ctrl+a
+wait 6
+shot ctrl-a-all-pages
+key Escape
+wait 6
+shot escape-clears
+check_layout
