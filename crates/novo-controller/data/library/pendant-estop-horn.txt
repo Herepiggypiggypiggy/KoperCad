@@ -1,0 +1,12 @@
+Terminal;Function;Step
+C;Common;
+11;Hoist up;1
+12;Hoist up;2
+13;Hoist down;1
+14;Hoist down;2
+15;Bridge forward;1
+16;Bridge forward;2
+17;Bridge back;1
+18;Bridge back;2
+21;Emergency stop;
+22;Horn;

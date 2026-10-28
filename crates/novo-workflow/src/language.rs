@@ -803,6 +803,11 @@ pub const DUTCH: &[Aliases] = &[
         &["eplan", "pxf", "terugsturen", "uitwisselen"],
     ),
     nl(
+        "file.import_controller",
+        &["importeer bediening"],
+        &["afstandsbediening", "zender", "hangkast", "klemmenlijst"],
+    ),
+    nl(
         "file.import_aml",
         &["importeer aml"],
         &["automationml", "installatie", "overnemen", "migreren"],

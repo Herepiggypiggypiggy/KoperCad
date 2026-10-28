@@ -6,3 +6,4 @@ Crate `novo-controller` (pure engine). Lanes: C1 engine (profile format and vali
 - Done (PR open): C1 engine, see `docs/design/controller-profile.md`.
 - Next: C4 and C7 in parallel, then C2 (needs C0b wasm host to run in-app; tests run natively until then), then C3, C5, C6.
 - Open: host JSON API for the wasm module (C0b); profile structure agreed with C4 (import produces `Profile` values).
+- C4 done in PR: import wizard (paste, from device, table/EPLAN file, generic library). Next for C4: real-page tuning of the word lists with the user's own pages.
