@@ -151,7 +151,7 @@ impl super::NovoApp {
         }
         let p = crate::theme::ui_palette();
         let width = novo_theme::dialog_width::MEDIUM;
-        let modal = super::panel::modal(
+        let modal = super::panel::modal_fill(
             ctx,
             "about_numbers",
             "About the numbers",
@@ -161,14 +161,14 @@ impl super::NovoApp {
                     ui,
                     "Some numbers are a model, an estimate or a placeholder. Each carries a label where it is shown; this is the list.",
                 );
-                egui::ScrollArea::vertical()
-                .max_height(ctx.content_rect().height() * 0.6)
-                .show(ui, |ui| {
+                super::panel::fill_above(ui, 72.0, |ui| {
                     for r in &ROWS {
                         ui.add_space(6.0);
                         ui.horizontal_wrapped(|ui| {
                             ui.strong(r.number);
-                            ui.label(egui::RichText::new(format!("({})", r.label)).color(p.warning));
+                            ui.label(
+                                egui::RichText::new(format!("({})", r.label)).color(p.warning),
+                            );
                         });
                         ui.label(r.text);
                         ui.weak(format!("Shown in: {}", r.shown));

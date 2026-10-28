@@ -75,6 +75,7 @@ pub(super) struct Panel {
     flyout: bool,
     low: bool,
     own_scroll: bool,
+    closable: bool,
 }
 
 impl Panel {
@@ -103,7 +104,16 @@ impl Panel {
             flyout: false,
             low: false,
             own_scroll: false,
+            closable: false,
         }
+    }
+
+    /// Gives the window a close button in its title bar. The click is read
+    /// with [`take_closed`]; the panel itself stays until the caller stops
+    /// showing it.
+    pub(super) fn closable(mut self) -> Self {
+        self.closable = true;
+        self
     }
 
     /// Starts this far below the canvas top instead of under the top bar.
@@ -302,6 +312,10 @@ impl Panel {
             // shrinks it back to its content.
             window = window.default_height(max_height);
         }
+        let mut open = true;
+        if self.closable {
+            window = window.open(&mut open);
+        }
         let shown = window.show(ctx, |ui| {
             if scrolls {
                 // The card is as tall as its content up to the canvas, then scrolls
@@ -317,6 +331,9 @@ impl Panel {
         });
         if let Some(scroll) = before {
             ctx.global_style_mut(|st| st.spacing.scroll = scroll);
+        }
+        if self.closable && !open {
+            ctx.data_mut(|d| d.insert_temp(id.with("closed"), true));
         }
         // Only a drag in which the pointer moved counts: a click on a button
         // inside it presses on the window too, and that must not pin it
@@ -450,6 +467,14 @@ fn float_pos(ctx: &egui::Context, id: egui::Id) -> Option<egui::Pos2> {
 
 fn set_float_pos(ctx: &egui::Context, id: egui::Id, pos: egui::Pos2) {
     ctx.data_mut(|d| d.insert_persisted(float_pos_id(id), [pos.x, pos.y]));
+}
+
+/// Whether the close button of the panel `name` (a [`Panel::closable`] one)
+/// was clicked since the last call.
+pub(super) fn take_closed(ctx: &egui::Context, name: &str) -> bool {
+    let key = id(name).with("closed");
+    ctx.data_mut(|d| d.remove_temp::<bool>(key))
+        .unwrap_or(false)
 }
 
 /// The point of `rect` that `pivot` names: the corner a panel hangs from.
@@ -655,6 +680,44 @@ pub(super) fn modal<R: Default>(
     size: [f32; 2],
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> ModalOut<R> {
+    modal_impl(ctx, name, title, size, true, add)
+}
+
+/// A [`modal`] with a size of its own whose content lays itself out in the
+/// window: the window does not scroll, so a scroll area inside it sized with
+/// [`fill_above`] leaves the footer (buttons) in view at every window size.
+pub(super) fn modal_fill<R: Default>(
+    ctx: &egui::Context,
+    name: &'static str,
+    title: impl Into<egui::WidgetText>,
+    size: [f32; 2],
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> ModalOut<R> {
+    modal_impl(ctx, name, title, size, false, add)
+}
+
+/// A vertical scroll area for the body of a [`modal_fill`] window: it takes
+/// the height that is left above `footer` points of buttons.
+pub(super) fn fill_above<R>(
+    ui: &mut egui::Ui,
+    footer: f32,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    egui::ScrollArea::vertical()
+        .max_height((ui.available_height() - footer).max(60.0))
+        .auto_shrink([false, false])
+        .show(ui, add)
+        .inner
+}
+
+fn modal_impl<R: Default>(
+    ctx: &egui::Context,
+    name: &'static str,
+    title: impl Into<egui::WidgetText>,
+    size: [f32; 2],
+    own_scroll: bool,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> ModalOut<R> {
     let id = egui::Id::new(("modal", name));
     let layer = egui::LayerId::new(egui::Order::Foreground, id);
     let screen = ctx.content_rect();
@@ -693,7 +756,7 @@ pub(super) fn modal<R: Default>(
         // A window with a size of its own scrolls and resizes both ways. One
         // that fits its content is only made wider or narrower: it starts too
         // short for a scroll area to show anything, and taller would be empty.
-        .scroll([false, size[1] > 0.0])
+        .scroll([false, own_scroll && size[1] > 0.0])
         .resizable([true, size[1] > 0.0]);
     let height = if size[1] > 0.0 {
         size[1].min(full.height() - 2.0 * MARGIN)
@@ -1211,6 +1274,39 @@ mod tests {
     }
 
     #[test]
+    fn a_closable_panel_has_a_close_button_and_reports_the_click_once() {
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1366.0, 768.0));
+        let run = |ctx: &egui::Context, closable: bool| {
+            let mut out = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    ..Default::default()
+                },
+                |ctx| {
+                    let mut p =
+                        Panel::new("close_test", "Test", screen, Side::Right, 300.0).fixed_open();
+                    if closable {
+                        p = p.closable();
+                    }
+                    p.show(ctx, |ui| {
+                        ui.label("content");
+                    });
+                },
+            );
+            out.textures_delta.clear();
+        };
+        run(&ctx, true);
+        assert!(!take_closed(&ctx, "close_test"), "nothing clicked yet");
+        // The close click is what the window writes when its open flag drops.
+        ctx.data_mut(|d| d.insert_temp(id("close_test").with("closed"), true));
+        assert!(take_closed(&ctx, "close_test"));
+        assert!(!take_closed(&ctx, "close_test"), "reported once");
+        run(&ctx, false);
+        assert!(!take_closed(&ctx, "close_test"));
+    }
+
+    #[test]
     fn a_closed_flyout_leaves_no_offset_behind() {
         let ctx = egui::Context::default();
         reserve_left(&ctx, 256.0);
@@ -1445,6 +1541,77 @@ mod tests {
             "{rect:?}"
         );
         assert!(rect.bottom() <= 768.0 - STATUS_BAR, "{rect:?}");
+    }
+
+    /// One frame of a `modal_fill` with a long body and a footer button;
+    /// returns the window and the button.
+    fn fill_frame(
+        ctx: &egui::Context,
+        screen: egui::Rect,
+        events: Vec<egui::Event>,
+    ) -> (egui::Rect, egui::Rect) {
+        let mut button = egui::Rect::NOTHING;
+        let mut out = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(screen),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                let _ = modal_fill(ctx, "ask", "Ask", [460.0, 480.0], |ui| {
+                    fill_above(ui, 44.0, |ui| {
+                        for n in 0..60 {
+                            ui.label(format!("row {n}"));
+                        }
+                    });
+                    ui.add_space(8.0);
+                    button = ui.button("Done").rect;
+                });
+            },
+        );
+        out.textures_delta.clear();
+        let window = ctx
+            .memory(|m| m.area_rect(egui::Id::new(("modal", "ask"))))
+            .unwrap_or(egui::Rect::NOTHING);
+        (window, button)
+    }
+
+    #[test]
+    fn the_footer_of_a_filled_modal_stays_in_view_at_the_smallest_size() {
+        let screen = screen_1366();
+        let ctx = egui::Context::default();
+        let mut last = (egui::Rect::NOTHING, egui::Rect::NOTHING);
+        for _ in 0..4 {
+            last = fill_frame(&ctx, screen, vec![]);
+        }
+        let (home, button) = last;
+        assert!(home.contains_rect(button), "{home:?} {button:?}");
+        let from = home.right_bottom() - egui::vec2(2.0, 2.0);
+        let to = egui::pos2(100.0, 100.0);
+        fill_frame(
+            &ctx,
+            screen,
+            vec![egui::Event::PointerMoved(from), click_at(from, true)],
+        );
+        for n in 1..=4 {
+            fill_frame(
+                &ctx,
+                screen,
+                vec![egui::Event::PointerMoved(
+                    from + (to - from) * (n as f32 / 4.0),
+                )],
+            );
+        }
+        fill_frame(&ctx, screen, vec![click_at(to, false)]);
+        for _ in 0..4 {
+            last = fill_frame(&ctx, screen, vec![]);
+        }
+        let (small, button) = last;
+        assert!(small.height() < home.height() - 100.0, "{home:?} {small:?}");
+        // (egui counts a window without its own scroll area a little short of
+        // the floor it is given.)
+        assert!(small.height() >= DIALOG_MIN_HEIGHT - 20.0, "{small:?}");
+        assert!(small.contains_rect(button), "{small:?} {button:?}");
     }
 
     #[test]

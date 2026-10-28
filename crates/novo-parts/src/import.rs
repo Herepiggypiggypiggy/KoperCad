@@ -591,14 +591,16 @@ pub type ScriptedAnswer = Result<Vec<(RemoteFile, Vec<u8>)>, FetchError>;
 
 /// What a maker's ZIP holds.
 pub(crate) struct ZipContent {
+    /// Names of the files in the archive, at most [`ZIP_MAX_ENTRIES`].
+    pub(crate) names: Vec<String>,
     /// Name and text of the first STEP file.
-    step: Option<(String, String)>,
+    pub(crate) step: Option<(String, String)>,
     /// The first link to terms of use found in a readme.
     terms_url: Option<String>,
     /// XML members (name, text), at most [`ZIP_MAX_XML`].
     pub(crate) xml: Vec<(String, String)>,
     /// DXF members (name, text), at most [`ZIP_MAX_DXF`].
-    dxf: Vec<(String, String)>,
+    pub(crate) dxf: Vec<(String, String)>,
 }
 
 const ZIP_MAX_DXF: usize = 8;
@@ -621,6 +623,7 @@ pub(crate) fn read_zip(bytes: &[u8]) -> Result<ZipContent, String> {
         ));
     }
     let mut out = ZipContent {
+        names: Vec::new(),
         step: None,
         terms_url: None,
         xml: Vec::new(),
@@ -635,6 +638,7 @@ pub(crate) fn read_zip(bytes: &[u8]) -> Result<ZipContent, String> {
             continue;
         }
         let name = file.name().to_owned();
+        out.names.push(name.clone());
         let lower = name.to_ascii_lowercase();
         let is_step = FileKind::of_file_name(&name) == FileKind::Step;
         let is_text = lower.ends_with(".txt");

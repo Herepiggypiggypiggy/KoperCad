@@ -27,10 +27,13 @@ impl NovoApp {
         let mut dock_labels = self.settings.dock_labels();
         let mut ui_scale = self.settings.ui_scale_factor().to_bits();
         let width = novo_theme::dialog_width::MEDIUM;
-        let modal = super::panel::modal(ctx, "preferences", "Preferences", [width, 560.0], |ui| {
-            egui::ScrollArea::vertical()
-                .max_height((ctx.content_rect().height() - 180.0).max(200.0))
-                .show(ui, |ui| {
+        let modal = super::panel::modal_fill(
+            ctx,
+            "preferences",
+            "Preferences",
+            [width, 560.0],
+            |ui| {
+                super::panel::fill_above(ui, 44.0, |ui| {
                     section(ui, "Appearance", true);
                     choice(
                         ui,
@@ -120,7 +123,10 @@ impl NovoApp {
                         "Contact table under a coil",
                         "One row per contact with its symbol, pins and page.column. Compact fits more on a busy sheet.",
                         &mut density,
-                        &[(NoteDensity::Full, "Full"), (NoteDensity::Compact, "Compact")],
+                        &[
+                            (NoteDensity::Full, "Full"),
+                            (NoteDensity::Compact, "Compact"),
+                        ],
                     );
                     section(ui, "Macros", false);
                     row_title(
@@ -198,12 +204,13 @@ impl NovoApp {
                         "The live view switches states at once and shows an arrow on running motors instead of spinning them. Fans and air in the 3D view stand still.",
                     );
                 });
-            ui.add_space(8.0);
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                novo_theme::widgets::primary_button(ui, "Done").clicked()
-            })
-            .inner
-        });
+                ui.add_space(8.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    novo_theme::widgets::primary_button(ui, "Done").clicked()
+                })
+                .inner
+            },
+        );
         if mode != self.settings.connect_mode() {
             self.settings.set_connect_mode(mode);
         }

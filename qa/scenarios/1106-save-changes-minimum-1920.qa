@@ -1,0 +1,52 @@
+@title Save changes? at its smallest width (1920): title, text and Save, Don't save, Cancel stay in view
+@area Windows
+@sizes 1920x1080
+# Critical hardware finding KC-02: edits were written to the project file, Quit never asked.
+fresh
+key ctrl+n
+wait 20
+key q
+wait 4
+text circuit breaker
+wait 6
+click_text "Miniature circuit breaker, 3-pole" Button
+wait 6
+click 450 200
+wait 6
+key Escape
+answer_dialog ~/Documents/KoperCAD/unsaved-edits.kopercad
+key ctrl+s
+wait 20
+expect_file ~/Documents/KoperCAD/unsaved-edits.kopercad 4000
+expect "Saved"
+key q
+wait 4
+text contactor
+wait 6
+click_text "Contactor main contacts, 3-pole" Button
+wait 6
+click 450 350
+wait 6
+key Escape
+expect_scene K1
+expect "Unsaved changes"
+shot edited-not-saved
+key ctrl+k
+wait 6
+text close project
+wait 8
+key Enter
+wait 20
+expect "Save changes?"
+expect "Don't save"
+expect "Save changes?"
+shot asks-home
+drag 1157 528 200 528
+wait 10
+expect "Save changes?"
+expect "Cancel"
+shot save-changes-minimum
+check_layout
+click_text Cancel
+wait 10
+expect_not "Save changes?"

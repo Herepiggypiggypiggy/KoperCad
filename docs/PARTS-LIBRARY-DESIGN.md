@@ -363,6 +363,70 @@ watch imports the DXF, DWG or STEP the user saves. Notes:
   use, the first-use notice stays in place and the question list (section 2a)
   asks Schneider about CAD use in commercial projects.
 
+## 3d-2. CAD file matching (Add CAD files)
+
+Why: the hardware test of 2026-10-28 showed that real CAD downloads are not
+named after the article. Schneider's LC1D09 model arrives as
+`MCADPP0003371_3D-simplified.stp` and its drawing as
+`MCADPP0003371_2D-front.dxf` (a document id, no order number), and the model
+inside calls itself `LC1D09-18-DC`, a family of contactors. The old window
+filed a dropped file under the selected part without a check, took only the
+first of several dropped files, and the Downloads watch passed over any file
+whose name did not hold the order number.
+
+What happens now (`novo-parts::cadmatch`, window code `parts_cad.rs`):
+
+- **Reading.** For a STEP file: `FILE_NAME`, the maker named in its header, the
+  `PRODUCT` names (not `PRODUCT_DEFINITION`), and a size. For a DXF: the
+  comment lines (the source path of a CAD export). For a ZIP or EDZ: member
+  names and the STEP and DXF inside. Generic names (`NOT SPECIFIED`, `Part1`)
+  are dropped.
+- **Names against a part.** The order number in any name is the strongest
+  evidence (`Verified`), counting the digits-only spelling WAGO uses and the
+  stems a maker's recipe leaves out; a name that holds a longer article number
+  starting with this part's (`LC1D09BD` vs `LC1D09`) belongs to the longer
+  one. A type number is next, then a family range (`LC1D09-18` covers
+  `LC1D09BD` to `LC1D18BD`; the letters after the range are noted when the
+  part's description repeats them). A family, type or download set is only
+  `Likely`, never `Verified`.
+- **Download sets.** Files that share a document id (the first `_` segment
+  of the name, eight characters or more with five digits or more) belong
+  together. Once one is matched, the others in the same batch, and later ones
+  through `cad-links.json` in the library folder, follow without naming the
+  part. A link is saved only for files the matcher stood behind.
+- **Size.** Compared with the part's dimensions with the axes sorted. A size
+  from the solid fits within 15 %, is "a bit different" within 30 %, and
+  speaks against the part beyond that. The box around all points of a STEP
+  file can be 6 to 12 times too large (construction geometry), so such a size
+  can only speak against a part (smaller than the part by 30 % or more along
+  an axis), never for it.
+- **What the user sees.** `Parts > Add CAD files...` (or drop one or more
+  files on the window): a row per file, the parts it may be for with a verdict
+  (Checked, Probably this part, Please check) and the evidence in words,
+  tick boxes, and Import ticked. A family file can be stored for several
+  parts. A single file dropped on a selected part is checked first; if it
+  looks like another part's the panel opens with the reasons and a better
+  home ticked, and nothing is stored until Import. A file that names nothing
+  at all is imported and the result says that nothing was checked. The
+  Downloads watch reads files whose names do not mention the part and imports
+  one whose own names say it is for the part; the others are listed with
+  the reason.
+- **Accounts.** `MakerRecipe::account_note`: one sentence per maker saying
+  whether an account is needed; KoperCAD never signs in, never asks for or keeps
+  a password. Shown while the Parts window waits for a download and in the
+  maker guide.
+
+Verified against a real source: Schneider LC1D09 STEP and DXF (downloaded by
+hand from se.com, 2026-10-28; kept out of the repository): the identity is
+read in 8 ms, the family range and document id are found, the DXF follows its
+STEP (`tests/cadmatch_real.rs`, run with `KOPERCAD_REAL_CAD_DIR`, which CI
+does not set: it was run by hand). The size check uses the measured solid
+(`measure_step`): the real LC1D09 model reads 45 x 77 x 95 mm and fits the
+catalog part. Not verified: any WAGO, Siemens or Phoenix file (they need an
+account the project does not have), and file names other than the ones above.
+A file for a variant (`LC1D09BD`) can be taken as "Checked" for the base
+article when the longer article is not in the catalog.
+
 ## 3e. Maker recipes (parts: maker packs)
 
 One recipe per maker (`crates/novo-parts/src/recipes/`): WAGO, Phoenix

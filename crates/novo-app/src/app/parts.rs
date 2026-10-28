@@ -15,10 +15,10 @@ use novo_interop::part3d::cache::MeshCache;
 use novo_interop::part3d::service::{GeometryJob, GeometryService, GeometryState, TIME_LIMIT};
 use novo_interop::part3d::{Fallback, MeshOrigin, Quality};
 use novo_parts::{
-    Catalog, CatalogPart, ConnectionKind, DataSource, FileKind, ImportFlow, Lifecycle,
-    LocalLibrary, PartKey, RowAction, Side, SourceRecord, SourceTable, browser_rows,
-    default_downloads_dir, default_inbox, default_library_root, display_value, is_internal_key,
-    maker_guide, property_label, user_catalog_path,
+    CadLinks, Catalog, CatalogPart, ConnectionKind, DataSource, DropDecision, FileKind, ImportFlow,
+    Lifecycle, LocalLibrary, PartKey, RowAction, Side, SourceRecord, SourceTable, browser_rows,
+    decide_drop, default_downloads_dir, default_inbox, default_library_root, display_value,
+    is_internal_key, maker_guide, property_label, user_catalog_path,
 };
 
 use novo_theme::table::{
@@ -27,7 +27,8 @@ use novo_theme::table::{
 };
 use novo_theme::{Palette, widgets};
 
-use super::parts_import::{Import, Phase};
+use super::parts_cad::{CadAction, CadPanel, Dropped, cad_ui, classify, identity_of};
+use super::parts_import::{Checked, Import, Phase};
 use super::revisions::today;
 use super::{Level, NovoApp};
 
@@ -77,6 +78,8 @@ pub(crate) struct PartsWindow {
     new_part: Option<NewPartForm>,
     /// The maker guide (what to download, where to save), while open.
     guide: bool,
+    /// Add CAD files: matching of downloaded files to parts, while open.
+    cad: Option<CadPanel>,
     /// Repaints the window when a background read finishes; set on the first
     /// frame.
     wake: Option<egui::Context>,
@@ -168,6 +171,7 @@ impl PartsWindow {
             pins: Default::default(),
             new_part: None,
             guide: false,
+            cad: None,
             wake: None,
         }
     }
@@ -244,6 +248,12 @@ impl PartsWindow {
     /// worker thread (a big ZIP or EDZ must not freeze the window); the
     /// window collects the result in [`PartsWindow::collect_import`].
     fn import_file(&mut self, path: &Path, flow: ImportFlow) {
+        self.import_file_checked(path, flow, Checked::default());
+    }
+
+    /// [`PartsWindow::import_file`] for a file the matcher looked at: what it
+    /// found is said first in the result.
+    fn import_file_checked(&mut self, path: &Path, flow: ImportFlow, checked: Checked) {
         let Some(part) = self.target() else {
             return;
         };
@@ -268,6 +278,7 @@ impl PartsWindow {
                 sources,
                 catalog_path,
                 today,
+                checked,
                 move || {
                     if let Some(ctx) = &wake {
                         ctx.request_repaint();
@@ -295,6 +306,7 @@ impl PartsWindow {
     /// read that ran too long, and takes in a file the Downloads watch found.
     fn pump_import(&mut self, now: f64) {
         self.collect_import(now);
+        self.judge_downloads();
         if let Some(found) = self.import.as_mut().and_then(|i| i.poll(now)) {
             if found.names_the_part {
                 self.import_file(&found.path, ImportFlow::Downloads);
@@ -304,11 +316,93 @@ impl PartsWindow {
         }
     }
 
+    /// Downloads whose names do not mention the part are read; one whose own
+    /// names say it is for the part is imported at once, the others are
+    /// listed with the reason.
+    fn judge_downloads(&mut self) {
+        let Some(part) = self.target() else {
+            return;
+        };
+        let links = self
+            .library
+            .as_ref()
+            .map_or_else(CadLinks::default, |l| CadLinks::load(l.root()));
+        let found = match self.import.as_mut() {
+            Some(i) if i.phase == Phase::Waiting => {
+                i.judge_passed_over(&part, &self.catalog, &links)
+            }
+            _ => None,
+        };
+        if let Some((path, checked)) = found {
+            self.import_file_checked(&path, ImportFlow::Downloads, checked);
+        }
+    }
+
+    /// A file dropped or picked for the target part. The matcher reads it
+    /// first: a file that belongs is imported with its reasons, a file that
+    /// says nothing is imported and said to be unchecked, and a file that
+    /// looks like another part's opens Add CAD files instead, with the
+    /// reasons and a better home ticked.
+    fn drop_on_target(&mut self, path: &Path) {
+        let Some(part) = self.target() else {
+            return;
+        };
+        if !matches!(classify(path), Dropped::Cad) {
+            self.import_file(path, ImportFlow::Manual);
+            return;
+        }
+        let links = self
+            .library
+            .as_ref()
+            .map_or_else(CadLinks::default, |l| CadLinks::load(l.root()));
+        match decide_drop(&identity_of(path), &part, &self.catalog, &links) {
+            DropDecision::Import { notes } => {
+                self.import_file_checked(path, ImportFlow::Manual, Checked { notes, link: true });
+            }
+            DropDecision::ImportUnchecked { why } => {
+                self.import_file_checked(
+                    path,
+                    ImportFlow::Manual,
+                    Checked {
+                        notes: vec![why],
+                        link: false,
+                    },
+                );
+            }
+            DropDecision::Ask { reasons, better } => {
+                self.cad = Some(CadPanel::for_doubt(
+                    path,
+                    &part,
+                    reasons,
+                    better,
+                    &self.catalog,
+                    self.library.as_ref().map(LocalLibrary::root),
+                    ImportFlow::Manual,
+                ));
+            }
+        }
+    }
+
+    /// Opens Add CAD files for these files.
+    fn add_cad_files(&mut self, paths: &[PathBuf]) {
+        self.cad = Some(CadPanel::new(
+            paths,
+            &self.catalog,
+            self.library.as_ref().map(LocalLibrary::root),
+            ImportFlow::Manual,
+        ));
+    }
+
     /// Moves the import's clocks on and merges what a finished read added
     /// into the open catalog. Called every frame.
     fn collect_import(&mut self, now: f64) {
         if let Some(done) = self.import.as_mut().and_then(|i| i.tick(now)) {
             for p in done.changed {
+                self.catalog.upsert(p);
+            }
+        }
+        if let Some(panel) = self.cad.as_mut() {
+            for p in panel.poll() {
                 self.catalog.upsert(p);
             }
         }
@@ -704,6 +798,11 @@ enum PartsAction {
     UseForSelection(PartKey),
     /// Pick catalog files (BMEcat, CSV, ZIP) and import them as a catalog.
     ImportCatalogFiles,
+    /// Pick STEP, DXF, ZIP or EDZ files and match them to parts.
+    AddCadFiles,
+    /// Store the ticked files of Add CAD files.
+    CadImport,
+    CadClose,
     /// Import everything in the default inbox.
     ImportInbox,
     OpenInbox,
@@ -788,27 +887,35 @@ impl NovoApp {
         let mut catalog_files = Vec::new();
         let mut table_file = None;
         let mut no_part_for = None;
+        let kinds: Vec<(PathBuf, Dropped)> =
+            dropped.iter().map(|p| (p.clone(), classify(p))).collect();
+        let cad_files: Vec<PathBuf> = kinds
+            .iter()
+            .filter(|(_, k)| *k == Dropped::Cad)
+            .map(|(p, _)| p.clone())
+            .collect();
         if win.target().is_some() {
-            if let Some(path) = dropped.first() {
-                win.import_file(path, ImportFlow::Manual);
+            // One file on a chosen part is checked against it; several
+            // CAD files go to Add CAD files, which matches each one.
+            if cad_files.len() > 1 || (cad_files.len() == 1 && dropped.len() > 1) {
+                win.add_cad_files(&cad_files);
+            } else if let Some(path) = dropped.first() {
+                win.drop_on_target(path);
             }
         } else {
-            // No part picked: a catalog file is imported as a catalog.
-            for path in &dropped {
-                let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
-                if name.as_deref().is_some_and(|n| {
-                    n.rsplit('.')
-                        .next()
-                        .is_some_and(|e| e.eq_ignore_ascii_case("xlsx"))
-                }) {
-                    table_file = Some(path.clone());
-                    continue;
-                }
-                match name.as_deref().map(FileKind::of_file_name) {
-                    Some(FileKind::Bmecat | FileKind::Csv | FileKind::Zip) => {
-                        catalog_files.push(path.clone());
+            // No part picked: CAD files are matched, a catalog file is
+            // imported as a catalog.
+            if !cad_files.is_empty() {
+                win.add_cad_files(&cad_files);
+            }
+            for (path, kind) in &kinds {
+                match kind {
+                    Dropped::Table => table_file = Some(path.clone()),
+                    Dropped::Catalog => catalog_files.push(path.clone()),
+                    Dropped::Cad => {}
+                    Dropped::Other => {
+                        no_part_for = path.file_name().map(|n| n.to_string_lossy().into_owned());
                     }
-                    _ => no_part_for = name,
                 }
             }
         }
@@ -818,6 +925,7 @@ impl NovoApp {
             .import
             .as_ref()
             .is_some_and(|i| matches!(i.phase, Phase::Waiting | Phase::Reading))
+            || win.cad.as_ref().is_some_and(CadPanel::busy)
         {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(
                 super::parts_import::POLL_SECONDS,
@@ -836,6 +944,37 @@ impl NovoApp {
                         .pick_file()
                     {
                         table_file = Some(path);
+                    }
+                }
+                PartsAction::AddCadFiles => {
+                    if let Some(files) = crate::dialogs::FileDialog::new()
+                        .set_title("CAD files (STEP, DXF, ZIP, EDZ)")
+                        .add_filter("CAD files", &["stp", "step", "p21", "dxf", "zip", "edz"])
+                        .pick_files()
+                    {
+                        win.add_cad_files(&files);
+                    }
+                }
+                PartsAction::CadImport => {
+                    if let (Some(library), Some(panel)) = (win.library.clone(), win.cad.as_mut()) {
+                        let wake = win.wake.clone();
+                        panel.start(
+                            &win.catalog,
+                            library,
+                            win.sources.clone(),
+                            win.catalog_path.clone(),
+                            today(),
+                            move || {
+                                if let Some(ctx) = &wake {
+                                    ctx.request_repaint();
+                                }
+                            },
+                        );
+                    }
+                }
+                PartsAction::CadClose => {
+                    if win.cad.as_ref().is_some_and(|c| !c.busy()) {
+                        win.cad = None;
                     }
                 }
                 PartsAction::ImportCatalogFiles => {
@@ -870,7 +1009,7 @@ impl NovoApp {
                         .set_title("Choose the downloaded file")
                         .pick_file()
                     {
-                        win.import_file(&path, ImportFlow::Manual);
+                        win.drop_on_target(&path);
                     }
                 }
                 PartsAction::ChooseModel => win.choose_model(),
@@ -1122,6 +1261,15 @@ fn parts_ui(
                 actions.push(PartsAction::ImportTable);
             }
             if ui
+                .button("Add CAD files\u{2026}")
+                .on_hover_text(
+                    "Pick the STEP, DXF or ZIP files you downloaded, any number at once. KoperCAD reads each file, finds the parts it is for and shows why before it stores anything. You can also drop them on this window.",
+                )
+                .clicked()
+            {
+                actions.push(PartsAction::AddCadFiles);
+            }
+            if ui
                 .button("Import catalog files")
                 .on_hover_text(
                     "Read BMEcat, CSV or ZIP catalog files from a maker or wholesaler into your catalog. You can also drop them on this window.",
@@ -1143,6 +1291,13 @@ fn parts_ui(
     }
     if win.new_part.is_some() {
         new_part_ui(ui, win);
+    }
+    if let Some(panel) = win.cad.as_mut() {
+        match cad_ui(ui, panel, &win.catalog) {
+            Some(CadAction::Import) => actions.push(PartsAction::CadImport),
+            Some(CadAction::Close) => actions.push(PartsAction::CadClose),
+            None => {}
+        }
     }
     ui.add_space(4.0);
     let rows = win.rows();
@@ -1304,6 +1459,15 @@ you can also drop it on this window.",
 itself; Stop ends it now.",
                 import.waited_text()
             ));
+            if let Some(note) = &import.account {
+                ui.label(note);
+            }
+            for (name, why) in import.left_alone() {
+                ui.colored_label(
+                    ui.visuals().warn_fg_color,
+                    format!("Arrived in Downloads but not taken: {name}. {why}"),
+                );
+            }
             let passed = import.passed_over();
             if !passed.is_empty() {
                 ui.colored_label(

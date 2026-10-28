@@ -169,7 +169,7 @@ impl NovoApp {
         let sections = sections(&self.wb.keymap, &self.wb.shortcuts.filter);
         let mut run: Option<&'static str> = None;
         let width = novo_theme::dialog_width::MEDIUM;
-        let modal = super::panel::modal(
+        let modal = super::panel::modal_fill(
             ctx,
             "shortcut_sheet",
             "Keyboard shortcuts",
@@ -187,22 +187,20 @@ impl NovoApp {
                 );
                 field.request_focus();
                 ui.add_space(4.0);
-                egui::ScrollArea::vertical()
-                    .max_height(ctx.content_rect().height() * 0.6)
-                    .show(ui, |ui| {
-                        if sections.is_empty() {
-                            ui.weak("Nothing matches. Ctrl+K searches every command.");
-                        }
-                        for section in &sections {
-                            ui.add_space(6.0);
-                            novo_theme::widgets::section_label(ui, section.heading);
-                            for row in &section.rows {
-                                if let Some(id) = row_ui(ui, row) {
-                                    run = Some(id);
-                                }
+                super::panel::fill_above(ui, 0.0, |ui| {
+                    if sections.is_empty() {
+                        ui.weak("Nothing matches. Ctrl+K searches every command.");
+                    }
+                    for section in &sections {
+                        ui.add_space(6.0);
+                        novo_theme::widgets::section_label(ui, section.heading);
+                        for row in &section.rows {
+                            if let Some(id) = row_ui(ui, row) {
+                                run = Some(id);
                             }
                         }
-                    });
+                    }
+                });
             },
         );
         if let Some(id) = run {

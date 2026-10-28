@@ -103,29 +103,27 @@ impl NovoApp {
         }
         let all = entries();
         let fresh = unseen(&all, &self.settings.whats_new_seen).len();
-        let modal = super::panel::modal(
+        let modal = super::panel::modal_fill(
             ctx,
             "whats_new",
             "What's new",
             [novo_theme::dialog_width::MEDIUM, 480.0],
             |ui| {
-                egui::ScrollArea::vertical()
-                    .max_height(ctx.content_rect().height() * 0.6)
-                    .show(ui, |ui| {
-                        for (n, entry) in all.iter().enumerate() {
-                            ui.add_space(6.0);
-                            ui.horizontal(|ui| {
-                                ui.strong(&entry.title);
-                                if n < fresh {
-                                    ui.weak("new");
-                                }
-                            });
-                            ui.label(&entry.text);
-                            if !entry.whence.is_empty() {
-                                ui.weak(format!("Where: {}", entry.whence));
+                super::panel::fill_above(ui, 44.0, |ui| {
+                    for (n, entry) in all.iter().enumerate() {
+                        ui.add_space(6.0);
+                        ui.horizontal(|ui| {
+                            ui.strong(&entry.title);
+                            if n < fresh {
+                                ui.weak("new");
                             }
+                        });
+                        ui.label(&entry.text);
+                        if !entry.whence.is_empty() {
+                            ui.weak(format!("Where: {}", entry.whence));
                         }
-                    });
+                    }
+                });
                 ui.add_space(8.0);
                 super::dialog_ui::done(ui)
             },
