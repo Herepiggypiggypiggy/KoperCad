@@ -19,7 +19,7 @@ pub(super) const CUBE_SIZE: f32 = 88.0;
 const CUBE_MARGIN: f32 = 12.0;
 const GAP: f32 = 8.0;
 /// What the toolbar covers from the view's top, with the strip above it.
-const TOOLBAR_CLEAR: f32 = 150.0;
+const TOOLBAR_CLEAR: f32 = 150.0 + super::view3d_controls::CHIP_SHIFT;
 
 /// Top right corner of the panel: under the cube, inside the view.
 #[cfg(test)]
