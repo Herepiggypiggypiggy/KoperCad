@@ -871,3 +871,159 @@ fn drive_input_current_and_logic_outputs() {
         o.mains_current_a
     );
 }
+
+#[test]
+fn non_finite_reference_trips_instead_of_running_at_max() {
+    for source in [
+        ReferenceSource::Word,
+        ReferenceSource::Panel(f64::NAN),
+        ReferenceSource::AnalogVoltage {
+            min_v: 0.0,
+            max_v: 10.0,
+            min_hz: 0.0,
+            max_hz: 50.0,
+        },
+    ] {
+        let mut cfg = DriveConfig::generic_travel(nameplate(), 7.0);
+        cfg.macro_ = TerminalMacro::two_wire_presets();
+        cfg.reference = source;
+        let mut d = Drive::new(cfg);
+        let inp = DriveInputs {
+            di: vec![true, false, false, false],
+            word_hz: f64::NAN,
+            analog: f64::NAN,
+            ..Default::default()
+        };
+        let o = run_for(&mut d, &inp, 3.0);
+        assert_eq!(o.fault, Some(Fault::ReferenceLost), "{source:?}");
+        assert_eq!(o.frequency_hz, 0.0);
+        assert_eq!(o.target_hz, 0.0);
+    }
+    // A bad preset or jog value is caught the same way.
+    let mut cfg = DriveConfig::generic_travel(nameplate(), 7.0);
+    cfg.macro_ = TerminalMacro::two_wire_presets();
+    cfg.presets_hz = [0.0, f64::NAN, 10.0, 10.0];
+    let mut d = Drive::new(cfg);
+    let o = run_for(
+        &mut d,
+        &DriveInputs {
+            di: vec![true, false, true, false],
+            ..Default::default()
+        },
+        1.0,
+    );
+    assert_eq!(o.fault, Some(Fault::ReferenceLost));
+}
+
+#[test]
+fn reset_does_not_restart_while_run_is_still_held() {
+    let mut cfg = DriveConfig::generic_travel(nameplate(), 7.0);
+    cfg.macro_ = TerminalMacro {
+        name: "test".into(),
+        inputs: vec![
+            DigitalInput::new(TerminalFunction::Forward),
+            DigitalInput::nc(TerminalFunction::ExternalFault),
+            DigitalInput::new(TerminalFunction::FaultReset),
+        ],
+    };
+    cfg.accel_time_s = 1.0;
+    let mut d = Drive::new(cfg);
+    run_for(
+        &mut d,
+        &DriveInputs {
+            di: vec![true, true, false],
+            ..Default::default()
+        },
+        1.0,
+    );
+    run_for(
+        &mut d,
+        &DriveInputs {
+            di: vec![true, false, false],
+            ..Default::default()
+        },
+        0.01,
+    );
+    // Cause removed, reset pulse with Forward still held: ready, but it must not start.
+    run_for(
+        &mut d,
+        &DriveInputs {
+            di: vec![true, true, false],
+            ..Default::default()
+        },
+        0.1,
+    );
+    let o = run_for(
+        &mut d,
+        &DriveInputs {
+            di: vec![true, true, true],
+            ..Default::default()
+        },
+        0.01,
+    );
+    assert_eq!(o.state, DriveState::Stopped);
+    let o = run_for(
+        &mut d,
+        &DriveInputs {
+            di: vec![true, true, false],
+            ..Default::default()
+        },
+        2.0,
+    );
+    assert_eq!(o.state, DriveState::Stopped);
+    assert_eq!(o.frequency_hz, 0.0);
+    // Release once, press again: runs.
+    run_for(
+        &mut d,
+        &DriveInputs {
+            di: vec![false, true, false],
+            ..Default::default()
+        },
+        0.1,
+    );
+    let o = run_for(
+        &mut d,
+        &DriveInputs {
+            di: vec![true, true, false],
+            ..Default::default()
+        },
+        0.5,
+    );
+    assert_eq!(o.state, DriveState::Running);
+    assert!(o.frequency_hz > 0.0);
+}
+
+#[test]
+fn bad_bus_and_input_numbers_are_flagged() {
+    let mut cfg = DriveConfig::generic_travel(nameplate(), 7.0);
+    cfg.bus.capacitance_f = 0.0;
+    cfg.bus.resistor_ohm = Some(-10.0);
+    let d = Drive::new(cfg);
+    assert_eq!(d.config_problems().len(), 2);
+    assert!(d.bus.volts().is_finite());
+    let duty = BrakingDuty {
+        inertia_kg_m2: f64::NAN,
+        speed_rpm: 1500.0,
+        stop_time_s: 4.0,
+        cycle_time_s: 60.0,
+    };
+    let r = BrakingResistor {
+        ohm: 47.0,
+        continuous_w: 1000.0,
+        thermal_capacity_j: 0.0,
+    };
+    assert!(
+        check_braking_resistor(&duty, &r, 780.0, 0.0)
+            .flags
+            .contains(&ResistorFlag::InvalidInput)
+    );
+}
+
+#[test]
+fn s_ramp_with_zero_edge_time_is_exactly_linear() {
+    let mut s = SRamp::new(5.0, 5.0, 50.0, 0.0);
+    for _ in 0..2500 {
+        s.step(50.0, 0.001);
+    }
+    close(s.frequency_hz, 25.0, 1e-9, "linear midpoint");
+}

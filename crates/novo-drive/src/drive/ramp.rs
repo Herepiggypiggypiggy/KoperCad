@@ -188,7 +188,13 @@ impl SRamp {
                 next
             }
         };
-        let f_new = self.frequency_hz + 0.5 * (a + a_after) * dt_s;
+        // Zero edge time: acceleration jumps, so the step is a plain linear move.
+        let a_mean = if jerk.is_infinite() {
+            a_after
+        } else {
+            0.5 * (a + a_after)
+        };
+        let f_new = self.frequency_hz + a_mean * dt_s;
         self.accel_hz_s = a_after;
         if s * (aim - f_new) <= 0.0 {
             self.snap(aim);

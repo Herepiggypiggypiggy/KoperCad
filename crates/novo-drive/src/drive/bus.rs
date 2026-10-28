@@ -93,7 +93,18 @@ pub struct DcBus {
 
 impl DcBus {
     /// Bus charged to the rectified mains voltage.
-    pub fn new(cfg: BusConfig) -> Self {
+    pub fn new(mut cfg: BusConfig) -> Self {
+        // A zero or negative capacitance would give an infinite bus voltage; `config_problems`
+        // of the drive reports it, the bus itself falls back to a small positive value.
+        if !(cfg.capacitance_f.is_finite() && cfg.capacitance_f > 0.0) {
+            cfg.capacitance_f = 1.0e-6;
+        }
+        if cfg
+            .resistor_ohm
+            .is_some_and(|r| !(r.is_finite() && r > 0.0))
+        {
+            cfg.resistor_ohm = None;
+        }
         let v = cfg.rectified_v();
         Self {
             cfg,

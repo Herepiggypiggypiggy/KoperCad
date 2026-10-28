@@ -218,6 +218,8 @@ pub struct Drive {
     ramp: Ramp,
     sramp: SRamp,
     pub bus: DcBus,
+    raw_bus_cfg: BusConfig,
+    run_inhibit: bool,
     motor_i2t: I2tOverload,
     drive_i2t: I2tOverload,
     state: DriveState,
@@ -242,6 +244,7 @@ impl Drive {
             cfg.ramp_reference_hz,
             cfg.s_ramp_fraction,
         );
+        let raw_bus_cfg = cfg.bus;
         let bus = DcBus::new(cfg.bus);
         let motor_i2t = I2tOverload::new(
             cfg.motor.current_a,
@@ -258,6 +261,8 @@ impl Drive {
             ramp,
             sramp,
             bus,
+            raw_bus_cfg,
+            run_inhibit: false,
             motor_i2t,
             drive_i2t,
             state: DriveState::Stopped,
@@ -272,6 +277,13 @@ impl Drive {
     /// Problems in the configuration that would silently disable a protection; empty when fine.
     pub fn config_problems(&self) -> Vec<&'static str> {
         let mut v = Vec::new();
+        let b = &self.raw_bus_cfg;
+        if !(b.capacitance_f.is_finite() && b.capacitance_f > 0.0) {
+            v.push("DC bus capacitance must be above 0: a small value was substituted");
+        }
+        if b.resistor_ohm.is_some_and(|r| !(r.is_finite() && r > 0.0)) {
+            v.push("Braking resistor value must be above 0: the resistor was ignored");
+        }
         if !self.motor_i2t.is_valid() {
             v.push("Motor overload point is not valid (needs a rated current, a ratio above 1 and a time above 0): the motor model never trips");
         }
@@ -308,6 +320,8 @@ impl Drive {
             self.fault = Some(f);
         }
         self.state = DriveState::Faulted;
+        // After a trip the run command must be released once before the drive starts again.
+        self.run_inhibit = true;
         self.set_frequency(0.0);
     }
 
@@ -454,7 +468,10 @@ impl Drive {
         } else {
             None
         };
-        let run_cmd = dir_cmd.is_some() && cmd.enable && !cmd.fast_stop;
+        if dir_cmd.is_none() {
+            self.run_inhibit = false;
+        }
+        let run_cmd = dir_cmd.is_some() && cmd.enable && !cmd.fast_stop && !self.run_inhibit;
 
         // Reset: needs the cause gone and the run command off (restart on level is blocked).
         if self.state == DriveState::Faulted && (reset_edge || (self.fault.is_none())) {
@@ -496,6 +513,11 @@ impl Drive {
                 } else {
                     main_ref
                 };
+                if !mag.is_finite() {
+                    // A bad reference must never command speed: trip like a lost signal.
+                    self.trip(Fault::ReferenceLost);
+                    return self.outputs(&bus, 0.0);
+                }
                 let mag = mag.abs().min(self.cfg.max_hz);
                 let mag = if mag > 0.0 {
                     mag.max(self.cfg.min_hz)
@@ -566,6 +588,10 @@ impl Drive {
             }
         }
 
+        self.outputs(&bus, target)
+    }
+
+    fn outputs(&self, bus: &BusStep, target: f64) -> DriveOutputs {
         let f = self.frequency();
         let on = matches!(self.state, DriveState::Running | DriveState::Stopping);
         let voltage_v = if on {

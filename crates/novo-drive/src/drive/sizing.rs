@@ -82,6 +82,8 @@ pub enum ResistorFlag {
     DutyExceedsContinuous,
     /// Resistance below the drive's minimum value (chopper current too high).
     BelowMinimumOhm,
+    /// An input number (inertia, speed, times, bus level) is not finite: nothing can be computed.
+    InvalidInput,
     /// Resistance is zero, negative or not a number: nothing can be computed.
     InvalidResistance,
     /// Energy of one stop above the thermal capacity.
@@ -137,6 +139,16 @@ pub fn check_braking_resistor(
         0.0
     };
     let mut flags = Vec::new();
+    let inputs = [
+        duty.inertia_kg_m2,
+        duty.speed_rpm,
+        duty.stop_time_s,
+        duty.cycle_time_s,
+        bus_threshold_v,
+    ];
+    if inputs.iter().any(|x| !x.is_finite()) {
+        flags.push(ResistorFlag::InvalidInput);
+    }
     if !valid {
         flags.push(ResistorFlag::InvalidResistance);
     }
