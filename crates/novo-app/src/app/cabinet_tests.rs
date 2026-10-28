@@ -1958,3 +1958,152 @@ fn the_table_toggle_without_a_plate_stays_on_the_plate_view_and_the_toggle_works
         .cabinet_ask(Ask::ToggleTable, Some(cab), layout_of(&d, cab), &[]);
     assert!(d.app.cabinet.table);
 }
+
+#[test]
+fn ctrl_t_without_a_plate_says_why_and_leaves_the_table_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    d.app.run_command(&ctx, "view.cabinet_table", None);
+    d.frame();
+    d.frame();
+    assert!(!d.app.cabinet.table, "no plate, no table");
+    assert!(
+        d.app
+            .messages()
+            .iter()
+            .any(|m| m.text.contains("Set the plate first")),
+        "{:?}",
+        d.app.messages()
+    );
+}
+
+/// Where the QA fixtures of the plate follow scenario live.
+fn plate_follow_fixture_path(name: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../qa/fixtures")
+        .join(name)
+}
+
+/// A cabinet with devices and no mounting plate, and one with a 600 x 800
+/// plate that has two full width rails and a full height duct.
+fn build_plate_follow_fixture(doc: &mut novo_core::Document, with_plate: bool) {
+    doc.transact("Plate follow", |tx| {
+        let cab = tx.add_structure(DeviceTag::parse("+CP1").unwrap(), "Cabinet", true)?;
+        let part = tx.add_part("ACME", "C1")?;
+        tx.set_property(part, "width_mm", Some(Value::Float(45.0)))?;
+        tx.set_property(part, "height_mm", Some(Value::Float(90.0)))?;
+        for tag in ["-K1", "-K2", "-Q1"] {
+            let device = tx.add_device(DeviceTag::parse(tag).unwrap(), "")?;
+            tx.assign_part(device, part)?;
+        }
+        if with_plate {
+            novo_layout::model::set_plate(
+                tx,
+                cab,
+                novo_core::MountingPlate {
+                    width: 600.0,
+                    height: 800.0,
+                    margin: 10.0,
+                },
+            )?;
+            for (x, y, length, vertical, kind, width, height) in [
+                (
+                    10.0,
+                    300.0,
+                    580.0,
+                    false,
+                    novo_core::RailKind::DinRail,
+                    0.0,
+                    0.0,
+                ),
+                (
+                    10.0,
+                    550.0,
+                    580.0,
+                    false,
+                    novo_core::RailKind::DinRail,
+                    0.0,
+                    0.0,
+                ),
+                (
+                    300.0,
+                    10.0,
+                    780.0,
+                    true,
+                    novo_core::RailKind::Duct,
+                    25.0,
+                    60.0,
+                ),
+            ] {
+                tx.execute(novo_core::Command::AddRail {
+                    structure: cab,
+                    x,
+                    y,
+                    length,
+                    kind,
+                    vertical,
+                    width,
+                    height,
+                })?;
+            }
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// Rewrites the fixtures: `cargo test -p novo-app write_plate_follow_fixtures -- --ignored`.
+#[test]
+#[ignore = "writes qa/fixtures/plate-follow-*.novo"]
+fn write_plate_follow_fixtures() {
+    use crate::backend::ProjectBackend;
+    for (name, title, with_plate) in [
+        (
+            "plate-follow-none.novo",
+            "Cabinet without plate (QA)",
+            false,
+        ),
+        (
+            "plate-follow-rail.novo",
+            "Cabinet with rail and duct (QA)",
+            true,
+        ),
+    ] {
+        let mut backend = crate::backend::StorageBackend::default();
+        backend.new_project(title).unwrap();
+        build_plate_follow_fixture(backend.document_mut().unwrap(), with_plate);
+        let path = plate_follow_fixture_path(name);
+        let _ = std::fs::remove_file(&path);
+        backend.save(&path).unwrap();
+    }
+}
+
+#[test]
+fn the_committed_plate_follow_fixtures_have_no_plate_and_a_full_width_rail() {
+    use crate::backend::ProjectBackend;
+    for (name, with_plate) in [
+        ("plate-follow-none.novo", false),
+        ("plate-follow-rail.novo", true),
+    ] {
+        let path = plate_follow_fixture_path(name);
+        assert!(path.exists(), "run write_plate_follow_fixtures");
+        let dir = tempfile::tempdir().unwrap();
+        let copy = dir.path().join("fixture.novo");
+        std::fs::copy(&path, &copy).unwrap();
+        let mut backend = crate::backend::StorageBackend::default();
+        backend.open(&copy).unwrap();
+        let project = backend.document().unwrap().project();
+        let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+        let layout = novo_layout::model::load(project, cab);
+        assert_eq!(layout.is_some(), with_plate, "{name}");
+        if let Some(layout) = layout {
+            assert!(layout.rails.iter().any(|r| (r.length - 580.0).abs() < 0.5));
+        }
+    }
+}
