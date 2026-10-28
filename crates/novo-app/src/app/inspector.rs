@@ -1117,18 +1117,26 @@ pub(super) fn select_all(ctx: &egui::Context, id: egui::Id, text: &str) {
 /// Asks the edit `id` to select all of its text when it next has focus
 /// (focus requested from outside, as F2 does for the inspector's tag).
 pub(super) fn select_all_when_focused(ctx: &egui::Context, id: egui::Id) {
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new(("select_all_when_focused", id)), true));
+    let frame = ctx.cumulative_frame_nr();
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(("select_all_when_focused", id)), frame));
 }
 
 /// Completes [`select_all_when_focused`] once the edit has the focus.
 pub(super) fn select_all_if_asked(ui: &egui::Ui, response: &egui::Response, text: &str) {
     let flag = egui::Id::new(("select_all_when_focused", response.id));
-    if response.has_focus()
-        && ui
-            .data_mut(|d| d.remove_temp::<bool>(flag))
-            .unwrap_or(false)
-    {
-        select_all(ui.ctx(), response.id, text);
+    let Some(asked) = ui.data_mut(|d| d.get_temp::<u64>(flag)) else {
+        return;
+    };
+    // The focus arrives within a frame or two; a request the field never
+    // answered (the inspector is hidden) must not select on a later click.
+    let now = ui.ctx().cumulative_frame_nr();
+    if response.has_focus() {
+        ui.data_mut(|d| d.remove_temp::<u64>(flag));
+        if now.saturating_sub(asked) <= 3 {
+            select_all(ui.ctx(), response.id, text);
+        }
+    } else if now.saturating_sub(asked) > 3 {
+        ui.data_mut(|d| d.remove_temp::<u64>(flag));
     }
 }
 
