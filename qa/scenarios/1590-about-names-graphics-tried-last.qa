@@ -1,0 +1,17 @@
+@title About names the graphics adapters a stopped start made KoperCAD try last
+@area Start
+@env KOPERCAD_GRAPHICS_AVOID=Intel(R) UHD Graphics/Vulkan
+# Test hook for the avoid list that a start which died before its first frame fills
+# (see crates/novo-app/src/startup.rs). The same line is in Help > Copy problem report.
+key ctrl+k
+wait 6
+text about
+wait 8
+key Return
+wait 8
+expect "Graphics adapters tried last"
+expect "intel(r) uhd graphics / vulkan"
+shot about-tried-last
+check_layout
+click_text "Close"
+wait 4

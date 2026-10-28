@@ -153,11 +153,11 @@ fn a_wire_between_placed_devices_without_a_duct_is_found() {
         Ok(())
     });
     let problems = check(&project);
-    assert_eq!(
-        of_kind(&problems, ProblemKind::WireWithoutDuct).len(),
-        1,
-        "{problems:#?}"
-    );
+    let free = of_kind(&problems, ProblemKind::WireWithoutDuct);
+    assert_eq!(free.len(), 1, "{problems:#?}");
+    // The message names the wire by its ends and the page it is on.
+    assert!(free[0].message.contains("page 1"), "{}", free[0].message);
+    assert!(free[0].message.contains(" to "), "{}", free[0].message);
 }
 
 /// -K1 and -K2 on a 400 mm plate with a vertical duct between them and a

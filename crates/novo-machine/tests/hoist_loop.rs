@@ -71,7 +71,7 @@ fn fed(w: WindingSel) -> MotorFeed {
 }
 
 fn the_loop(h: Vec<HoistModule>) -> HoistLoop {
-    let mut l = HoistLoop::new(StepConfig { dt_s: 0.005 });
+    let mut l = HoistLoop::new(StepConfig { dt_s: 0.005 }).unwrap();
     l.hoists = h;
     l
 }
@@ -247,4 +247,53 @@ fn ten_hoists_run_twice_to_identical_bits() {
     let first = run();
     assert_eq!(first, run());
     assert!(first.iter().any(|b| f64::from_bits(*b) > 1.0));
+}
+
+#[test]
+fn bindings_to_unknown_devices_are_reported() {
+    let mut c = FakeCircuit::new();
+    c.energised.insert("=K-MAIN".into());
+    c.known.insert("=K-BRK".into());
+    c.feeds.insert("=M1".into(), MotorFeed::Off);
+    let ok = module("ok", "=M1", BrakeFeed::MotorTerminals, vec![]);
+    let mut bad = module(
+        "bad",
+        "=NOPE",
+        BrakeFeed::Separate,
+        vec![upper_limit(1000.0)],
+    );
+    bad.binding.brake_feed = None;
+    let l = the_loop(vec![ok, bad]);
+    let found = l.check_bindings(&c);
+    let texts: Vec<_> = found.iter().map(|f| f.message.as_str()).collect();
+    assert!(found.iter().all(|f| f.module == "bad"), "{texts:?}");
+    assert!(texts.iter().any(|t| t.contains("motor =NOPE")), "{texts:?}");
+    assert!(
+        texts.iter().any(|t| t.contains("no brake feed")),
+        "{texts:?}"
+    );
+    assert!(
+        texts.iter().any(|t| t.contains("limit switch =S-UP")),
+        "{texts:?}"
+    );
+}
+
+#[test]
+fn the_loop_refuses_a_bad_step() {
+    for bad in [0.0, -1.0, 1e9, f64::NAN] {
+        assert!(HoistLoop::new(StepConfig { dt_s: bad }).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn winding_follows_the_circuit_not_the_sequencer() {
+    let mut c = FakeCircuit::new();
+    c.energised.insert("=K-MAIN".into());
+    c.feeds.insert("=M1".into(), fed(WindingSel::Coarse));
+    let mut l = the_loop(vec![module("h", "=M1", BrakeFeed::MotorTerminals, vec![])]);
+    l.run(&mut c, 3);
+    assert_eq!(
+        l.hoist("h").unwrap().unit.winding(),
+        Some(WindingSel::Coarse)
+    );
 }

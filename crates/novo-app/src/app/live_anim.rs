@@ -37,7 +37,10 @@ pub(crate) struct Anim {
 
 /// Page position of the circle in a symbol's artwork (lamp bulb, motor M),
 /// else the middle of its pins, with the radius in millimetres.
-fn body(library: Option<&Library>, symbol: &SymbolInstance) -> Option<(egui::Vec2, f32)> {
+pub(super) fn body(
+    library: Option<&Library>,
+    symbol: &SymbolInstance,
+) -> Option<(egui::Vec2, f32)> {
     let circle = library.and_then(|l| l.get(&symbol.symbol.0)).and_then(|s| {
         s.graphics.iter().find_map(|g| match g {
             Graphic::Circle { center, r, .. } => Some((center[0], center[1], *r)),

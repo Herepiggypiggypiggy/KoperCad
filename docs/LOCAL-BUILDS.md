@@ -22,7 +22,7 @@ zip. It needs `gcc-mingw-w64-x86-64` and the `x86_64-pc-windows-gnu` target.
 
 ## 2. Build on Tadjiro's PC (recommended)
 
-`scripts/build-local.ps1` downloads the source of a branch with `gh`, builds it
+`scripts/build-local.ps1` downloads the source of a branch from the public repository (no `gh`, no sign-in), builds it
 and puts it where the "KoperCAD (latest)" shortcut starts from. The
 installer script adds a second desktop shortcut, "KoperCAD (build here)",
 that runs it and starts the result.

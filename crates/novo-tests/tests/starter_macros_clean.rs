@@ -28,7 +28,10 @@ fn open_points(doc: &Document) -> Vec<String> {
         .map(|p| {
             p.message
                 .replace(" not connected", "")
-                .replace("iec/terminals/", "")
+                // A symbol without a tag is named in words (`terminal PE (no
+                // tag)`); the lists below keep the library names.
+                .replace("terminal PE (no tag)", "terminal_pe")
+                .replace("terminal N (no tag)", "terminal_n")
         })
         .collect();
     open.sort();
@@ -151,6 +154,9 @@ fn no_starter_has_wires_on_each_other_or_a_contact_drawn_twice() {
                         | ProblemKind::ContactDrawnTwice
                         | ProblemKind::OpenWire
                         | ProblemKind::DanglingJunction
+                        // No starter shorts anything, the star-delta and
+                        // reversing ones included.
+                        | ProblemKind::PotentialConflict
                 ),
                 "{}: {:?}: {}",
                 file.name,
