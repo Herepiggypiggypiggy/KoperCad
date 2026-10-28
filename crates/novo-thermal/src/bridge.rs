@@ -88,17 +88,13 @@ pub enum BridgeError {
     NoPlate,
     #[error("the enclosure interior (width, height, depth) is not set")]
     NoInterior,
-    #[error(
-        "{tag} loses {loss} W (over {max} W): check its loss value"
-    )]
+    #[error("{tag} loses {loss} W (over {max} W): check its loss value")]
     ImplausibleLoss {
         tag: String,
         loss: String,
         max: String,
     },
-    #[error(
-        "{outside} of {placed} devices lie outside the enclosure: check its size"
-    )]
+    #[error("{outside} of {placed} devices lie outside the enclosure: check its size")]
     MostlyOutside { outside: usize, placed: usize },
 }
 

@@ -737,7 +737,7 @@ impl NovoApp {
                     self.message(
                         Level::Warning,
                         format!(
-                            "{name}: {off_sheet} {} outside the page edge; move {} onto the sheet or use a bigger page (Page > Page format)",
+                            "{name}: {off_sheet} {} outside the page edge; move {} onto the sheet or use a bigger page",
                             if off_sheet == 1 { "symbol is" } else { "symbols are" },
                             if off_sheet == 1 { "it" } else { "them" }
                         ),

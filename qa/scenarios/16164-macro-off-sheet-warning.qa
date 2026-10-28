@@ -1,5 +1,6 @@
 @title A macro placed past the sheet edge is reported
 @area Schematic
+# SB-03 (the fourth macro runs past the A3 sheet)
 # SB-03: several macros in a row run off the right edge of the sheet without a word.
 click_text "New project"
 wait 20
@@ -45,6 +46,20 @@ click_text "Motor starter DOL" Label
 wait 10
 click_text Place Button #2
 wait 20
-shot third-macro
+key ctrl+k
+wait 3
+text place macro
+wait 5
+key Enter
+wait 10
+click 237 94
+key ctrl+a
+text motor starter dol
+wait 5
+click_text "Motor starter DOL" Label
+wait 10
+click_text Place Button #2
+wait 20
+shot fourth-macro
 expect "outside the page edge"
 check_layout
