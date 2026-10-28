@@ -1645,19 +1645,23 @@ fn pdf(project: &Project, pages: &[String]) -> Result<Vec<u8>, Failure> {
 /// contact table, its warnings stay text below it.
 fn note_of(l: novo_xref::Label) -> SymbolNote {
     use novo_xref::ContactKind;
+    let glyph_of = |kind| match kind {
+        ContactKind::Power => NoteGlyph::Power,
+        ContactKind::NormallyClosed => NoteGlyph::NormallyClosed,
+        ContactKind::Changeover => NoteGlyph::Changeover,
+        ContactKind::NormallyOpen | ContactKind::Other => NoteGlyph::NormallyOpen,
+    };
     let rows: Vec<NoteRow> = l
         .rows
         .iter()
         .map(|r| NoteRow {
-            glyph: match r.kind {
-                ContactKind::Power => NoteGlyph::Power,
-                ContactKind::NormallyClosed => NoteGlyph::NormallyClosed,
-                ContactKind::Changeover => NoteGlyph::Changeover,
-                ContactKind::NormallyOpen | ContactKind::Other => NoteGlyph::NormallyOpen,
-            },
-            pins: r.pins.clone(),
-            location: r.location.clone(),
+            target: Some(r.symbol),
+            ..NoteRow::new(glyph_of(r.kind), &r.pins, &r.location)
         })
+        .chain(l.spare.iter().map(|r| NoteRow {
+            spare: true,
+            ..NoteRow::new(glyph_of(r.kind), &r.pins, "spare")
+        }))
         .collect();
     let lines = if rows.is_empty() {
         l.lines

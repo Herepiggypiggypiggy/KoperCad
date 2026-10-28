@@ -123,6 +123,89 @@ fn coil_label_has_one_table_row_per_contact_group() {
     assert!(x.label(f.k1_contacts[0]).unwrap().rows.is_empty());
 }
 
+fn limits(f: &mut Fixture, limits: &[(&str, i64)]) {
+    let k1 = f.k1;
+    f.doc
+        .transact("Limits", |tx| {
+            for &(key, n) in limits {
+                tx.set_property(k1, key, Some(n.into()))?;
+            }
+            Ok(())
+        })
+        .unwrap();
+}
+
+fn spare(f: &Fixture) -> Vec<(ContactKind, String)> {
+    let x = XrefIndex::build(f.doc.project(), &FromKey);
+    x.label(f.k1_coil)
+        .unwrap()
+        .spare
+        .iter()
+        .map(|r| (r.kind, r.pins.clone()))
+        .collect()
+}
+
+#[test]
+fn contacts_the_device_has_but_the_drawing_does_not_use_are_spare() {
+    let mut f = fixture();
+    // Nothing is known about the device: no spare rows.
+    assert!(spare(&f).is_empty());
+    // 13-14, 21-22 and 33-34 are drawn; the next free ordinals continue the
+    // EN 50005 sequence, across the kinds.
+    limits(
+        &mut f,
+        &[("contacts.no", 3), ("contacts.nc", 2), ("contacts.co", 1)],
+    );
+    assert_eq!(
+        spare(&f),
+        [
+            (ContactKind::NormallyOpen, "43-44".to_string()),
+            (ContactKind::NormallyClosed, "51-52".to_string()),
+            (ContactKind::Changeover, "61-62-64".to_string()),
+        ]
+    );
+    // The table's drawn rows and its text lines are unchanged by them.
+    let x = XrefIndex::build(f.doc.project(), &FromKey);
+    let label = x.label(f.k1_coil).unwrap();
+    assert_eq!(label.rows.len(), 3);
+    assert_eq!(label.lines.len(), 3);
+    assert!(!label.warning);
+    // Everything drawn: nothing is spare. Over the limit is the warning.
+    limits(
+        &mut f,
+        &[("contacts.no", 2), ("contacts.nc", 1), ("contacts.co", 0)],
+    );
+    assert!(spare(&f).is_empty());
+}
+
+#[test]
+fn spare_contacts_are_not_numbered_when_the_drawn_ones_are_not() {
+    let mut f = fixture();
+    let k1 = f.k1;
+    f.doc
+        .transact("Custom", |tx| {
+            // A contact numbered by the maker, not by EN 50005.
+            let page = tx.add_page("9")?;
+            contact(tx, page, 20.0, "iec/contacts/no", ["A", "B"], k1);
+            tx.set_property(k1, "contacts.no", Some(4i64.into()))
+        })
+        .unwrap();
+    assert_eq!(spare(&f), [(ContactKind::NormallyOpen, String::new())]);
+}
+
+#[test]
+fn a_spare_main_contact_is_numbered_only_when_none_is_drawn() {
+    let mut f = fixture();
+    limits(&mut f, &[("contacts.main", 2)]);
+    assert_eq!(
+        spare(&f),
+        [
+            (ContactKind::Power, "1-2 3-4 5-6".to_string()),
+            (ContactKind::Power, String::new()),
+        ]
+    );
+}
+
 #[test]
 fn moving_a_contact_updates_the_coil_at_once() {
     let mut f = fixture();

@@ -177,6 +177,9 @@ pub struct Label {
     /// text, then the warnings): one row per contact group, for drawing a
     /// contact table. Empty for every other label.
     pub rows: Vec<LabelRow>,
+    /// The contacts the device has that no symbol draws (from its
+    /// `contacts.*` properties), after the rows: see [`SpareRow`].
+    pub spare: Vec<SpareRow>,
 }
 
 impl Label {
@@ -197,6 +200,19 @@ pub struct LabelRow {
     pub pins: String,
     /// Where it is drawn as read from the coil's page: `3.4`, `=A2/3.4`.
     pub location: String,
+}
+
+/// A contact the device has and the drawing does not use, for the dim
+/// rows at the end of a contact table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpareRow {
+    pub kind: ContactKind,
+    /// Connection designations, or empty when they cannot be told. They are
+    /// not read from the part: they continue the EN 50005 sequence of the
+    /// contacts that are drawn (`13-14`, `23-24` drawn, so `33-34` next), and
+    /// only when every drawn contact follows it. A main contact is numbered
+    /// `1-2 3-4 5-6` only when none is drawn.
+    pub pins: String,
 }
 
 /// Device property giving how many contacts of a kind the device has,
@@ -243,6 +259,8 @@ struct Group {
     symbols: Vec<SymbolId>,
     /// Contact kinds over their limit: (kind, drawn, available).
     over: Vec<(ContactKind, usize, usize)>,
+    /// How many contacts of each kind the device has, where it says.
+    available: Vec<(ContactKind, usize)>,
 }
 
 /// Cross references of a whole project, built from one revision of it.
@@ -382,6 +400,7 @@ impl XrefIndex {
                         let Ok(available) = usize::try_from(*limit) else {
                             continue;
                         };
+                        group.available.push((kind, available));
                         let drawn = group
                             .symbols
                             .iter()
@@ -476,9 +495,11 @@ impl XrefIndex {
         let me = self.refs.get(&symbol)?;
         let mut warning = false;
         let mut rows: Vec<LabelRow> = Vec::new();
+        let mut spare: Vec<SpareRow> = Vec::new();
         let lines: Vec<String> = match &me.owner {
             Owner::Device(device) if me.main => {
                 let image = self.contact_image(*device);
+                spare = self.spare_contacts(&self.groups[&me.owner], &image);
                 rows = image
                     .iter()
                     .map(|r| LabelRow {
@@ -526,7 +547,47 @@ impl XrefIndex {
             lines,
             warning,
             rows,
+            spare,
         })
+    }
+
+    /// The contacts a device has beyond the ones drawn, with their
+    /// numbers where they can be told (see [`SpareRow::pins`]).
+    fn spare_contacts(&self, group: &Group, drawn: &[&Reference]) -> Vec<SpareRow> {
+        // Ordinals (the first digit of 13-14, 21-22, ...) already taken by
+        // a drawn contact; `None` when one does not follow EN 50005.
+        let mut taken = [false; 10];
+        let mut numbered = true;
+        for r in drawn.iter().filter(|r| r.kind != ContactKind::Power) {
+            match r.pins.as_bytes().first() {
+                Some(d) if r.kind.numbered_as(&r.pins) => taken[usize::from(d - b'0')] = true,
+                _ => numbered = false,
+            }
+        }
+        let mut out = Vec::new();
+        for &(kind, available) in &group.available {
+            let used = drawn.iter().filter(|r| r.kind == kind).count();
+            for k in used..available {
+                let pins = match kind.function_digits() {
+                    Some(digits) if numbered => {
+                        (1..10).find(|&o| !taken[o]).map_or_else(String::new, |o| {
+                            taken[o] = true;
+                            digits
+                                .iter()
+                                .map(|d| format!("{o}{d}"))
+                                .collect::<Vec<_>>()
+                                .join("-")
+                        })
+                    }
+                    None if kind == ContactKind::Power && used == 0 && k == 0 => {
+                        "1-2 3-4 5-6".into()
+                    }
+                    _ => String::new(),
+                };
+                out.push(SpareRow { kind, pins });
+            }
+        }
+        out
     }
 
     /// Labels of every cross-referenced symbol on a page.
