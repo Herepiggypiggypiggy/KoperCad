@@ -1,6 +1,6 @@
 @title A placed circuit lands in the visible part of a drawn page
 @area Schematic
-@sizes 1366x768
+@sizes 1366x768 1920x1080
 # Test report 16: circuits dropped at a fixed top-left spot, off screen once the page had a drawing and the view was panned.
 click_text "New project"
 wait 20

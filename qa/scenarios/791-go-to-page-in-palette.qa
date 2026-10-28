@@ -1,6 +1,6 @@
 @title Ctrl+K "go to page 1a" finds the page
 @area Schematic
-@sizes 1366x768
+@sizes 1366x768 1920x1080
 # Test report 29: "go to page 1a" gave No match while "1a" worked.
 click_text "New project"
 wait 20
