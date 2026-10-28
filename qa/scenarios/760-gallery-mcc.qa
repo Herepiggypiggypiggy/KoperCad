@@ -14,16 +14,16 @@ shot mcc-page-1
 check_blank mcc-page-1
 check_layout
 click 140 242
-wait 12
+wait 20
 shot mcc-page-2
 click 140 271
-wait 12
+wait 20
 shot mcc-page-3
 click 140 300
-wait 12
+wait 20
 shot mcc-page-4
 click 140 329
-wait 12
+wait 20
 shot mcc-page-5
 click_text "Cabinet" 
 wait 20
