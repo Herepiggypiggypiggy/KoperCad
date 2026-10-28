@@ -116,7 +116,7 @@ An add-on may carry `engine.wasm`: a WebAssembly module the program runs in the 
 | Rule | How |
 | --- | --- |
 | No access to the PC | The module gets one import, `kopercad.log(ptr, len)`. Any other import (files, WASI, clock, threads) refuses the add-on when it loads, naming what it asked for |
-| Endless loops end | Every call (and the start-up) has a step budget of 50 million interpreter steps; running out stops the add-on |
+| Endless loops end | Every call (and the start-up) has a step budget of 50 million interpreter steps; a `kopercad.log` call costs 2 000 steps on top (a host call is not free), so a loop of log calls ends as fast as any loop; running out stops the add-on |
 | Memory and stack | 32 MiB of linear memory (a failed grow is seen by the engine, a bigger start is refused), recursion depth 512, messages at most 1 MiB, log text at most 8 KiB kept |
 | A broken engine stops alone | A trap, a bad reply, a budget overrun or a start that fails *stops* that add-on for the session: its menu rows, commands and panels go, Details says why, a message names it, and the program goes on. Turning it off and on in the manager starts it again |
 | Deterministic | No clock or random source exists for it; the same calls cost the same steps |

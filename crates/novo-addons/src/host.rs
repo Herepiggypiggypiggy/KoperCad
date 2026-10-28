@@ -38,6 +38,9 @@ use crate::error::{AddonError, Result};
 /// The host API generation this program speaks (`[engine] host_api` of the manifest).
 pub const HOST_API: u32 = 1;
 
+/// Fuel one `kopercad.log` call costs (a call copies up to 512 bytes and keeps a line).
+const LOG_FUEL: u64 = 2_000;
+
 /// Budgets of one engine. The defaults suit a controller or a drive model stepped every few
 /// milliseconds; the tests lower them.
 #[derive(Debug, Clone)]
@@ -174,15 +177,26 @@ impl EngineHost {
             .func_wrap(
                 "kopercad",
                 "log",
-                |mut caller: Caller<'_, State>, ptr: i32, len: i32| {
+                |mut caller: Caller<'_, State>,
+                 ptr: i32,
+                 len: i32|
+                 -> std::result::Result<(), wasmi::Error> {
+                    // A host call is not free: it costs fuel like the steps around it, so a loop
+                    // of log calls ends as fast as any other loop.
+                    let left = caller.get_fuel().unwrap_or(0);
+                    if left < LOG_FUEL {
+                        let _ = caller.set_fuel(0);
+                        return Err(wasmi::Error::from(wasmi::TrapCode::OutOfFuel));
+                    }
+                    let _ = caller.set_fuel(left - LOG_FUEL);
                     let Some(memory) = caller.get_export("memory").and_then(Extern::into_memory)
                     else {
-                        return;
+                        return Ok(());
                     };
                     let len = (len.max(0) as usize).min(512);
                     let mut buf = vec![0u8; len];
                     if memory.read(&caller, ptr.max(0) as usize, &mut buf).is_err() {
-                        return;
+                        return Ok(());
                     }
                     let line = String::from_utf8_lossy(&buf).into_owned();
                     let state = caller.data_mut();
@@ -194,6 +208,7 @@ impl EngineHost {
                             None => break,
                         }
                     }
+                    Ok(())
                 },
             )
             .map_err(engine_error)?;
@@ -281,6 +296,14 @@ impl EngineHost {
     }
 
     fn run(&mut self, request: &[u8]) -> std::result::Result<Value, String> {
+        let result = self.run_inner(request);
+        // the call that stops counts too
+        let left = self.store.get_fuel().unwrap_or(0);
+        self.fuel_used += self.limits.fuel_per_call.saturating_sub(left);
+        result
+    }
+
+    fn run_inner(&mut self, request: &[u8]) -> std::result::Result<Value, String> {
         let limits = self.limits.clone();
         let fail = |e: wasmi::Error| why_stopped(&e, &limits);
         self.store
@@ -310,8 +333,6 @@ impl EngineHost {
             free.call(&mut self.store, (reply_ptr as i32, reply_len as i32))
                 .map_err(fail)?;
         }
-        let left = self.store.get_fuel().unwrap_or(0);
-        self.fuel_used += limits.fuel_per_call.saturating_sub(left);
         serde_json::from_slice::<Value>(&reply)
             .map_err(|e| format!("its reply is not valid JSON ({e})"))
     }

@@ -193,7 +193,29 @@ impl NovoApp {
     /// Applies what an engine answered: lamp states and a notice.
     pub(super) fn apply_engine_reply(&mut self, id: &str, reply: &Value) {
         if let Some(lamps) = reply.get("lamps").and_then(Value::as_object) {
-            for (lamp, v) in lamps.iter().take(200) {
+            // Only lamps one of the add-on's own panels declares are kept, so an engine cannot
+            // grow the table with ids nothing shows.
+            let mut declared: Vec<String> = Vec::new();
+            for panel in self
+                .wb
+                .addons
+                .ext
+                .panels
+                .iter()
+                .filter(|p| p.addon_id == id)
+            {
+                if let Ok(layout) = self
+                    .wb
+                    .addons
+                    .set
+                    .read_file(id, &panel.file)
+                    .map_err(|e| e.to_string())
+                    .and_then(|b| PanelLayout::parse(&b).map_err(|e| e.to_string()))
+                {
+                    declared.extend(layout.ids().into_iter().map(str::to_owned));
+                }
+            }
+            for (lamp, v) in lamps.iter().filter(|(l, _)| declared.contains(l)).take(200) {
                 let state = v
                     .get("state")
                     .and_then(|s| serde_json::from_value::<Role>(s.clone()).ok());

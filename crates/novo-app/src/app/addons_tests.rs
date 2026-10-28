@@ -223,6 +223,27 @@ fn an_engine_answers_buttons_and_commands() {
 }
 
 #[test]
+fn lamps_an_engine_names_but_no_panel_declares_are_not_kept() {
+    let (mut d, _dir) = drive();
+    install_engine_fixture(&mut d);
+    let reply = serde_json::json!({"lamps": {
+        "power": {"lit": true},
+        "not-in-any-panel": {"lit": true},
+        "x2": {"lit": false},
+    }});
+    d.app.apply_engine_reply("demo-engine", &reply);
+    let kept: Vec<_> = d
+        .app
+        .wb
+        .addons
+        .lamps
+        .keys()
+        .map(|(_, lamp)| lamp.as_str())
+        .collect();
+    assert_eq!(kept, ["power"]);
+}
+
+#[test]
 fn a_broken_engine_stops_alone_and_takes_its_rows_with_it() {
     let (mut d, _dir) = drive();
     install_engine_fixture(&mut d);

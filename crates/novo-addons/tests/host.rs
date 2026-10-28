@@ -327,3 +327,56 @@ fn an_installed_add_on_starts_its_engine_through_the_store() {
         Err(AddonError::Unknown(_))
     ));
 }
+
+/// An engine whose op "z..." calls `kopercad.log` in an endless loop.
+fn log_spammer() -> Vec<u8> {
+    engine(
+        "",
+        r#"(if (i32.eq (local.get $c) (i32.const 122)) (then
+      (loop $l (call $log (i32.const 384) (i32.const 17)) (br $l))))"#,
+    )
+}
+
+#[test]
+fn log_calls_cost_fuel_so_a_log_loop_stops_like_any_loop() {
+    let mut host = EngineHost::load(
+        &log_spammer(),
+        HostLimits {
+            log_bytes: 1 << 20,
+            ..small()
+        },
+    )
+    .unwrap();
+    let err = host.call("zap", &json!({})).unwrap_err();
+    assert!(
+        matches!(&err, CallError::Stopped(why) if why.contains("step budget")),
+        "{err:?}"
+    );
+    // 200 000 fuel at 2 000 per log call: at most 100 lines got in
+    assert!(host.log().len() <= 100, "{} lines", host.log().len());
+    assert!(host.stopped().is_some());
+}
+
+#[test]
+fn a_log_loop_at_the_default_budget_stops_in_a_short_time() {
+    let mut host = EngineHost::load(&log_spammer(), HostLimits::default()).unwrap();
+    let started = std::time::Instant::now();
+    assert!(host.call("zap", &json!({})).is_err());
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(5),
+        "took {:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
+fn the_call_that_stops_counts_in_the_fuel_used() {
+    let mut host = load(&good());
+    let before = host.fuel_used();
+    assert!(host.call("spin", &json!({})).is_err());
+    assert!(
+        host.fuel_used() - before >= small().fuel_per_call,
+        "{} steps counted",
+        host.fuel_used() - before
+    );
+}
