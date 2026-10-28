@@ -361,6 +361,16 @@ impl HeatState {
         self.notice = Some(text);
     }
 
+    /// The run could not start and nothing was solved, so the picture is the
+    /// preview: its numbers would pass for a result.
+    fn preview_cannot_simulate(&self, cache: &Cache) -> bool {
+        !matches!(cache.source, Source::Solved(_))
+            && self
+                .notice
+                .as_deref()
+                .is_some_and(|n| n.starts_with("Cannot simulate"))
+    }
+
     /// Stops the run and keeps the latest result, labelled not converged.
     pub(super) fn cancel(&mut self) {
         if let Some(r) = &self.run {
@@ -1186,16 +1196,20 @@ pub(super) fn paint_over(
     if state.airflow {
         paint_airflow(&painter, cache, &to_screen);
     }
-    if state.contours && delta.is_none() {
+    // No hot-spot cards or contour labels on an empty plate or beside
+    // "Cannot simulate": the colours stay as a preview, but "46 °C, +5 K"
+    // would read as a result.
+    let numbers = !input.items.is_empty() && !state.preview_cannot_simulate(cache);
+    if state.contours && delta.is_none() && numbers {
         paint_contours(&painter, cache, &to_screen);
     }
     paint_rims(&painter, cache, input, &to_screen);
     // The badge pills, which the hot-spot cards keep clear of.
     let mut badges: Vec<Rect> = Vec::new();
-    if state.badges {
+    if state.badges && numbers {
         badges = paint_badges(&painter, cache, input, &to_screen, viewport.zoom);
     }
-    if delta.is_none() {
+    if delta.is_none() && numbers {
         paint_peaks(&painter, cache, input, &to_screen, &badges);
     }
     let stale = matches!(&cache.source, Source::Solved(sol) if state.live.out_of_date(sol, layout_key(input)));
@@ -2106,6 +2120,20 @@ mod tests {
             solution: None,
             kept: None,
         }
+    }
+
+    #[test]
+    fn a_preview_beside_cannot_simulate_shows_no_numbers() {
+        let preview = build(&input());
+        let mut state = HeatState::new();
+        assert!(!state.preview_cannot_simulate(&preview), "no notice yet");
+        state.fail("Cannot simulate: the enclosure size is not set".into());
+        assert!(state.preview_cannot_simulate(&preview));
+        state.fail("The simulation failed: x".into());
+        assert!(
+            !state.preview_cannot_simulate(&preview),
+            "other notices keep the cards"
+        );
     }
 
     #[test]
