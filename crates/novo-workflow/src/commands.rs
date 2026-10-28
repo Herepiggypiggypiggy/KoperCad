@@ -168,6 +168,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "file.example_mcc",
+        "Open example: motor control centre (4 feeders, 24 V control, full cabinet)",
+        "Project",
+        &[
+            "mcc",
+            "motor control centre",
+            "star-delta",
+            "cabinet",
+            "demo",
+            "example",
+        ],
+        Needs::Nothing,
+    ),
+    cmd(
         "file.practice",
         "Try the fast keys",
         "Project",

@@ -67,6 +67,11 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["emc voorbeeld", "storing voorbeeld"],
     ),
+    nl(
+        "file.example_mcc",
+        &[],
+        &["motorgroepenkast voorbeeld", "kast voorbeeld"],
+    ),
     nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
     nl(
         "help.walkthrough",

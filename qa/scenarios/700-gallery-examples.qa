@@ -1,0 +1,37 @@
+@title Example gallery: motor control centre
+@area Examples
+# File > Examples > Open example: motor control centre. Every page, the cabinet, 3D and the parts list.
+fresh
+wait 10
+key ctrl+k
+wait 6
+text motor control centre
+wait 8
+key Enter
+wait 40
+expect "Incoming supply and 24 V"
+shot mcc-page-1
+check_blank mcc-page-1
+check_layout
+click 140 242
+wait 12
+shot mcc-page-2
+click 140 271
+wait 12
+shot mcc-page-3
+click 140 300
+wait 12
+shot mcc-page-4
+click 140 329
+wait 12
+shot mcc-page-5
+click_text "Cabinet" 
+wait 20
+shot mcc-cabinet
+check_blank mcc-cabinet
+click_text "3D"
+wait 30
+shot mcc-3d
+click_text "Reports"
+wait 20
+shot mcc-reports
