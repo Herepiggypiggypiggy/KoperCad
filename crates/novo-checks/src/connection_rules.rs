@@ -9,28 +9,37 @@ use novo_core::{AnyId, Endpoint, Netlist, SymbolRole};
 
 use crate::{Context, Problem, ProblemKind};
 
-/// A name used by more than two interruption points. EPLAN pairs interruption
-/// points two by two in page order, so a third point of one name has no
-/// partner there; KoperCAD joins every point of a name. Either way the name
-/// is ambiguous.
+/// A name used by more than two interruption points: a branch, one feeder
+/// serving several pages. KoperCAD joins every point of a name into one net
+/// and shows the one-to-many cross reference, so nothing is wrong here; the
+/// note is for the day the project goes to a tool that pairs interruption
+/// points two by two in page order (EPLAN), where a third point of one name
+/// has no partner.
 pub(crate) fn ambiguous_interruptions(cx: &Context<'_>, out: &mut Vec<Problem>) {
-    let mut by_name: BTreeMap<&str, Vec<AnyId>> = BTreeMap::new();
+    let mut by_name: BTreeMap<&str, Vec<&novo_core::SymbolInstance>> = BTreeMap::new();
     for symbol in cx.project.symbols() {
         if let SymbolRole::Interruption { name } = &symbol.role {
-            by_name
-                .entry(name.as_str())
-                .or_default()
-                .push(symbol.id.into());
+            by_name.entry(name.as_str()).or_default().push(symbol);
         }
     }
     for (name, symbols) in by_name {
         if symbols.len() > 2 {
+            let mut pages: Vec<&str> = Vec::new();
+            for s in &symbols {
+                if let Some(page) = cx.project.page(s.page)
+                    && !pages.contains(&page.name.as_str())
+                {
+                    pages.push(page.name.as_str());
+                }
+            }
             out.push(Problem::new(
                 ProblemKind::AmbiguousInterruption,
-                symbols.clone(),
+                symbols.iter().map(|s| s.id.into()).collect(),
                 format!(
-                    "Interruption point {name} is used {} times; interruption points go in pairs",
-                    symbols.len()
+                    "Interruption point {name} joins {} points (pages {}) into one net, a branch; \
+                     tools that pair interruption points two by two need a name per pair",
+                    symbols.len(),
+                    pages.join(", ")
                 ),
             ));
         }

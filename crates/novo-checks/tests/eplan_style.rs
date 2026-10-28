@@ -43,9 +43,14 @@ fn three_interruption_points_of_one_name_are_ambiguous() {
     let problems = check(&project);
     let found = of_kind(&problems, ProblemKind::AmbiguousInterruption);
     assert_eq!(found.len(), 1);
-    assert_eq!(found[0].severity, Severity::Warning);
+    // A branch is allowed here: a note, not something to fix.
+    assert_eq!(found[0].severity, Severity::Info);
     assert_eq!(found[0].at.len(), ids.len());
-    assert!(found[0].message.contains("A is used 3 times"));
+    assert!(
+        found[0].message.contains("A joins 3 points (pages 1, 2)"),
+        "{}",
+        found[0].message
+    );
 }
 
 fn two_wires_between(
