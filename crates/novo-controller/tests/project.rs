@@ -901,7 +901,7 @@ fn shared_estop_chain_is_an_and_so_a_pressed_pendant_estop_opens_it() {
 
     // a profile that forgot `combine = "and"` on its chain signal gets a warning
     let text = RADIO
-        .replace("combine = \"and\"\n", "")
+        .replace("combine = \"and\"", "")
         .replace("generic = true", "generic = true\nshared = true");
     let lax = Profile::load(&text).unwrap();
     let mut set = ControllerSet::new();
