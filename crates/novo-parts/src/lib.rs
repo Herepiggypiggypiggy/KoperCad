@@ -32,6 +32,7 @@ mod assign;
 mod bmecat;
 mod browser;
 mod bulk;
+mod bundle;
 mod cadmatch;
 mod catalog;
 mod csv;
@@ -67,6 +68,10 @@ pub use browser::{BrowserRow, RowAction, browser_rows};
 pub use bulk::{
     InboxError, InboxOptions, InboxReport, MakerSummary, default_inbox, import_inbox, maker_guide,
     prepare_inbox,
+};
+pub use bundle::{
+    Applied, BUNDLE_FORMAT, Bundle, BundleError, BundleMode, Choices, ExportOptions, ExportReport,
+    FileEntry, Manifest, Needed, Preview, export_bundle,
 };
 pub use cadmatch::{
     CadIdentity, CadLinks, CadName, Candidate, DropDecision, FileMatch, NameFrom, SizeMeasure,

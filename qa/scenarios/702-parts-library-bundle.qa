@@ -1,0 +1,49 @@
+@title Parts: a library bundle is opened, its parts are added, and the user's own parts are exported
+@area Parts
+# Made-up workshop parts. A shared bundle holds only parts the sender wrote; the sender's maker parts are only listed by order number.
+fresh
+key ctrl+k
+text "parts"
+wait 10
+key Return
+wait 20
+shot parts-window
+click_text "More"
+wait 10
+expect "Import library"
+expect "Export library"
+shot more-menu
+answer_dialog qa/fixtures/parts/library/example-share.kcpl
+click_text "Import library"
+wait 40
+expect "2 new parts"
+expect "1 part the sender used is not included"
+shot bundle-preview
+check_layout
+click_text "Import"
+wait 40
+expect "Added 2 parts,"
+shot bundle-done
+check_layout
+click_text "Close"
+wait 10
+click 180 130
+text "EW-100"
+wait 20
+expect "Mounting bracket"
+shot part-added
+# The export form: share is the default, a backup warns about makers' files.
+click_text "More"
+wait 10
+click_text "Export library"
+wait 20
+expect "Share: only the parts I wrote myself"
+shot export-form
+check_layout
+click_text "Backup for me"
+wait 10
+expect "Keep it for yourself"
+shot export-backup
+check_layout
+click_text "Cancel"
+wait 10

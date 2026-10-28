@@ -178,6 +178,7 @@ mod panel;
 mod part_picker;
 mod parts;
 mod parts_bulk;
+mod parts_bundle;
 mod parts_cad;
 mod parts_import;
 mod parts_pins;

@@ -462,6 +462,38 @@ never copies EPLAN's library; the user's download stays the only way in.
   `sample.expected.json`, one per recipe. The samples are synthetic (see the
   README there); a real file replaces one with one command.
 
+## 3f. Library bundles (Export library, Import library)
+
+Moving a library to another computer, or giving your own parts to a colleague,
+is one file: a `.kcpl` bundle (`crates/novo-parts/src/bundle.rs`). Where: Parts
+window, More, **Export library\u2026** and **Import library\u2026**; a `.kcpl` dropped on the
+Parts window opens the same import dialog; `kopercad-cli parts export-library`
+and `import-library` do the same without the window.
+
+- A bundle is a ZIP: `manifest.json` (format, who made it, a notice, the parts
+  the sender used but did not include), `parts.json` (the catalog format, read
+  with the same migrations as a catalog file), `sources.json` (the file
+  records) and `files/00001.bin` and so on.
+- **Share** writes only parts you wrote yourself (`provenance.source` is
+  `authored`). A part that came from a maker's catalog is not included; only its
+  maker and order number go into the "used but not included" list, so the
+  receiver can import it from the maker. CAD files are left out unless you
+  confirm that they are yours to share; the confirmation is written into the
+  bundle.
+- **Backup** writes everything, with the maker files, for your own use on
+  another computer. The bundle says it is a backup and the import asks for "It
+  is my own backup" before any file is stored.
+- Opening a bundle shows a preview (new parts, the same, different from yours,
+  files) and changes nothing until you press Import. A part that differs from
+  yours is kept as yours unless you choose to replace it.
+- Safety: a file is stored under a number, never under a path from the bundle,
+  through `LocalLibrary::store`, which builds the path itself. Every file is
+  checked against its SHA-256; entry count, member sizes and the format number
+  are limited. Export and import run on a worker thread; a failed export leaves
+  no half-written file.
+- Not done: no merge of two edited versions of one part (the preview lists the
+  difference and you pick one), no signing of bundles.
+
 ## 4. Offline and no admin rights
 
 - The catalog is a file under `%LOCALAPPDATA%\KoperCAD\Catalog\` (already so in

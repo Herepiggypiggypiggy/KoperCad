@@ -34,6 +34,8 @@ pub(crate) enum Dropped {
     Catalog,
     /// An Excel table.
     Table,
+    /// A library bundle written by Export library.
+    Bundle,
     Other,
 }
 
@@ -43,6 +45,9 @@ pub(crate) fn classify(path: &Path) -> Dropped {
         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
     if name.to_ascii_lowercase().ends_with(".xlsx") {
         return Dropped::Table;
+    }
+    if name.to_ascii_lowercase().ends_with(".kcpl") {
+        return Dropped::Bundle;
     }
     match FileKind::of_file_name(&name) {
         FileKind::Step | FileKind::Dxf | FileKind::Edz => Dropped::Cad,
