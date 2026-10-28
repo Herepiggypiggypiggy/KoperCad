@@ -616,6 +616,10 @@ impl Bundle {
             );
             return Ok(done);
         }
+        // One write of the records file at the end, not one per file.
+        let mut batch = lib
+            .batch()
+            .map_err(|e| BundleError::Library(e.to_string()))?;
         for (i, record) in self.records.clone().iter().enumerate() {
             let label = format!(
                 "{} of {} {}",
@@ -652,7 +656,7 @@ impl Bundle {
                 ));
                 continue;
             }
-            let stored = lib.store(
+            let stored = batch.add(
                 &NewSource {
                     manufacturer: &record.manufacturer,
                     order_number: &record.order_number,
@@ -669,6 +673,9 @@ impl Bundle {
                 Err(e) => done.notes.push(format!("{label} was not stored: {e}")),
             }
         }
+        batch
+            .finish()
+            .map_err(|e| BundleError::Library(e.to_string()))?;
         Ok(done)
     }
 }
@@ -1065,6 +1072,47 @@ mod tests {
             w.write_all(&data).unwrap();
         }
         w.finish().unwrap();
+    }
+
+    #[test]
+    fn restoring_many_files_writes_the_records_file_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let library = LocalLibrary::at(dir.path().join("lib"));
+        let mut catalog = Catalog::new();
+        for i in 0..120 {
+            let p = part("Workshop", &format!("W-{i}"), Some("authored"));
+            library
+                .store(&source(&p, "m.stp"), format!("STEP {i}").as_bytes())
+                .unwrap();
+            catalog.upsert(p);
+        }
+        let out = dir.path().join("many.kcpl");
+        let r = export_bundle(
+            &catalog,
+            Some(&library),
+            &options(BundleMode::Backup, true, false),
+            &out,
+        )
+        .unwrap();
+        assert_eq!(r.files, 120);
+        let lib2 = LocalLibrary::at(dir.path().join("lib2"));
+        let mut cat2 = Catalog::new();
+        let mut bundle = Bundle::open(&out).unwrap();
+        let before = crate::library::RECORD_WRITES.with(std::cell::Cell::get);
+        let done = bundle
+            .apply(
+                &mut cat2,
+                Some(&lib2),
+                &Choices {
+                    confirmed_own_backup: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let writes = crate::library::RECORD_WRITES.with(std::cell::Cell::get) - before;
+        assert_eq!(done.files_stored, 120, "{:?}", done.notes);
+        assert_eq!(writes, 1, "one write of the records file, not one per file");
+        assert_eq!(lib2.records().unwrap().len(), 120);
     }
 
     #[test]

@@ -152,6 +152,89 @@ pub struct LocalLibrary {
     root: PathBuf,
 }
 
+/// Files being stored by [`LocalLibrary::batch`]. The files are written as
+/// they are added; their records are written together by
+/// [`StoreBatch::finish`] (or when the batch is dropped), merged into the
+/// records file as it is then, so another import's records are not lost.
+pub struct StoreBatch<'a> {
+    library: &'a LocalLibrary,
+    records: Vec<SourceRecord>,
+}
+
+impl StoreBatch<'_> {
+    /// Stores a copy of `bytes`; a file of the same part and name replaces
+    /// the earlier one. The record is kept once [`StoreBatch::finish`] runs.
+    pub fn add(&mut self, source: &NewSource, bytes: &[u8]) -> Result<SourceRecord, LibraryError> {
+        let NewSource {
+            manufacturer,
+            order_number,
+            file_name,
+            url,
+            flow,
+            imported,
+            terms_url: _,
+        } = *source;
+        let name = safe_file_name(file_name);
+        let stored_path = format!(
+            "sources/{}/{}/{}",
+            dir_name(&normalize_code(manufacturer)),
+            dir_name(&normalize_code(order_number)),
+            name
+        );
+        let record = SourceRecord {
+            manufacturer: manufacturer.to_owned(),
+            order_number: order_number.to_owned(),
+            kind: FileKind::of_file_name(&name),
+            file_name: name,
+            stored_path,
+            url: url.map(str::to_owned),
+            terms_url: source.terms_url.map(str::to_owned),
+            sha256: hex(&Sha256::digest(bytes)),
+            bytes: bytes.len() as u64,
+            imported: imported.to_owned(),
+            flow,
+        };
+        let target = self.library.path_of(&record);
+        let io_err = |source| LibraryError::Io {
+            path: target.clone(),
+            source,
+        };
+        fs::create_dir_all(target.parent().expect("stored path has a parent")).map_err(io_err)?;
+        fs::write(&target, bytes).map_err(io_err)?;
+        self.records.retain(|r| r.stored_path != record.stored_path);
+        self.records.push(record.clone());
+        Ok(record)
+    }
+
+    /// Writes the records of the files added so far.
+    pub fn finish(mut self) -> Result<(), LibraryError> {
+        self.commit()
+    }
+
+    fn commit(&mut self) -> Result<(), LibraryError> {
+        if self.records.is_empty() {
+            return Ok(());
+        }
+        let _lock = LocalLibrary::lock();
+        let mut file = self.library.read()?;
+        file.records.retain(|old| {
+            self.records
+                .iter()
+                .all(|r| r.stored_path != old.stored_path)
+        });
+        file.records.append(&mut self.records);
+        self.library.write(file)
+    }
+}
+
+impl Drop for StoreBatch<'_> {
+    /// A batch that is dropped without `finish` (an early return) still
+    /// records the files it wrote, so none is left unknown.
+    fn drop(&mut self) {
+        let _ = self.commit();
+    }
+}
+
 impl LocalLibrary {
     /// A library below `root`. Nothing is created until something is stored.
     pub fn at(root: impl Into<PathBuf>) -> Self {
@@ -212,6 +295,8 @@ impl LocalLibrary {
         // Write beside the target and rename, so a crash never leaves half a file.
         let tmp = path.with_extension("json.tmp");
         fs::write(&tmp, text).map_err(io_err)?;
+        #[cfg(test)]
+        RECORD_WRITES.with(|n| n.set(n.get() + 1));
         fs::rename(&tmp, &path).map_err(io_err)
     }
 
@@ -246,50 +331,22 @@ impl LocalLibrary {
     /// Stores a copy of `bytes` and its record. A file of the same part
     /// and name replaces the earlier one.
     pub fn store(&self, source: &NewSource, bytes: &[u8]) -> Result<SourceRecord, LibraryError> {
-        let NewSource {
-            manufacturer,
-            order_number,
-            file_name,
-            url,
-            flow,
-            imported,
-            terms_url: _,
-        } = *source;
-        let name = safe_file_name(file_name);
-        let stored_path = format!(
-            "sources/{}/{}/{}",
-            dir_name(&normalize_code(manufacturer)),
-            dir_name(&normalize_code(order_number)),
-            name
-        );
-        let record = SourceRecord {
-            manufacturer: manufacturer.to_owned(),
-            order_number: order_number.to_owned(),
-            kind: FileKind::of_file_name(&name),
-            file_name: name,
-            stored_path,
-            url: url.map(str::to_owned),
-            terms_url: source.terms_url.map(str::to_owned),
-            sha256: hex(&Sha256::digest(bytes)),
-            bytes: bytes.len() as u64,
-            imported: imported.to_owned(),
-            flow,
-        };
-        let _lock = Self::lock();
-        // Read the records first: a newer or damaged records file must not
-        // leave a stored file nobody knows about.
-        let mut file = self.read()?;
-        let target = self.path_of(&record);
-        let io_err = |source| LibraryError::Io {
-            path: target.clone(),
-            source,
-        };
-        fs::create_dir_all(target.parent().expect("stored path has a parent")).map_err(io_err)?;
-        fs::write(&target, bytes).map_err(io_err)?;
-        file.records.retain(|r| r.stored_path != record.stored_path);
-        file.records.push(record.clone());
-        self.write(file)?;
+        let mut batch = self.batch()?;
+        let record = batch.add(source, bytes)?;
+        batch.finish()?;
         Ok(record)
+    }
+
+    /// Starts storing many files with one write of the records file at the
+    /// end, instead of one per file (which makes restoring thousands of
+    /// files quadratic). Fails now when the records file is newer or damaged,
+    /// so no file is stored that nobody would know about.
+    pub fn batch(&self) -> Result<StoreBatch<'_>, LibraryError> {
+        self.read()?;
+        Ok(StoreBatch {
+            library: self,
+            records: Vec::new(),
+        })
     }
 
     /// Removes a part's files and records (the user's "Remove from library").
@@ -418,4 +475,118 @@ fn hex(bytes: &[u8]) -> String {
 /// rights. `None` if no profile folder is known.
 pub fn default_library_root() -> Option<PathBuf> {
     crate::catalog::user_catalog_path().and_then(|p| p.parent().map(|d| d.join("library")))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times this thread wrote the records file (for tests).
+    pub(crate) static RECORD_WRITES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+mod batch_tests {
+    use super::*;
+
+    fn source<'a>(order: &'a str, name: &'a str) -> NewSource<'a> {
+        NewSource {
+            manufacturer: "Example",
+            order_number: order,
+            file_name: name,
+            url: None,
+            flow: ImportFlow::Manual,
+            imported: "2026-10-29",
+            terms_url: None,
+        }
+    }
+
+    #[test]
+    fn a_batch_writes_the_records_file_once_however_many_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let lib = LocalLibrary::at(dir.path());
+        let before = RECORD_WRITES.with(std::cell::Cell::get);
+        let mut batch = lib.batch().unwrap();
+        for i in 0..300 {
+            batch
+                .add(
+                    &source(&format!("EX-{i}"), "m.stp"),
+                    format!("solid {i}").as_bytes(),
+                )
+                .unwrap();
+        }
+        // Nothing is recorded until the batch is finished.
+        assert!(lib.records().unwrap().is_empty());
+        batch.finish().unwrap();
+        let writes = RECORD_WRITES.with(std::cell::Cell::get) - before;
+        assert_eq!(writes, 1, "records written once, not once per file");
+        let records = lib.records().unwrap();
+        assert_eq!(records.len(), 300);
+        let r = records.iter().find(|r| r.order_number == "EX-7").unwrap();
+        assert_eq!(fs::read(lib.path_of(r)).unwrap(), b"solid 7");
+    }
+
+    #[test]
+    fn a_batch_gives_the_same_records_as_storing_one_by_one() {
+        let one = tempfile::tempdir().unwrap();
+        let many = tempfile::tempdir().unwrap();
+        let (a, b) = (LocalLibrary::at(one.path()), LocalLibrary::at(many.path()));
+        let items = [("EX-1", "a.stp"), ("EX-2", "b.stp"), ("EX-1", "a.stp")];
+        for (order, name) in items {
+            a.store(&source(order, name), order.as_bytes()).unwrap();
+        }
+        let mut batch = b.batch().unwrap();
+        for (order, name) in items {
+            batch.add(&source(order, name), order.as_bytes()).unwrap();
+        }
+        batch.finish().unwrap();
+        let key = |r: &SourceRecord| (r.stored_path.clone(), r.sha256.clone());
+        let ra: Vec<_> = a.records().unwrap().iter().map(key).collect();
+        let rb: Vec<_> = b.records().unwrap().iter().map(key).collect();
+        assert_eq!(
+            ra, rb,
+            "a file of the same part and name replaces the earlier one"
+        );
+        assert_eq!(rb.len(), 2);
+    }
+
+    #[test]
+    fn a_batch_keeps_what_another_import_stored_meanwhile() {
+        let dir = tempfile::tempdir().unwrap();
+        let lib = LocalLibrary::at(dir.path());
+        let mut batch = lib.batch().unwrap();
+        batch.add(&source("EX-1", "a.stp"), b"one").unwrap();
+        lib.store(&source("EX-2", "b.stp"), b"two").unwrap();
+        batch.finish().unwrap();
+        let orders: Vec<String> = lib
+            .records()
+            .unwrap()
+            .into_iter()
+            .map(|r| r.order_number)
+            .collect();
+        assert!(
+            orders.contains(&"EX-1".into()) && orders.contains(&"EX-2".into()),
+            "{orders:?}"
+        );
+    }
+
+    #[test]
+    fn a_dropped_batch_still_records_the_files_it_wrote() {
+        let dir = tempfile::tempdir().unwrap();
+        let lib = LocalLibrary::at(dir.path());
+        {
+            let mut batch = lib.batch().unwrap();
+            batch.add(&source("EX-1", "a.stp"), b"one").unwrap();
+        }
+        assert_eq!(lib.records().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_batch_is_refused_when_the_records_file_is_newer_or_damaged() {
+        let dir = tempfile::tempdir().unwrap();
+        let lib = LocalLibrary::at(dir.path());
+        fs::write(dir.path().join("records.json"), "{ not json").unwrap();
+        assert!(
+            lib.batch().is_err(),
+            "no file is stored that nobody would know"
+        );
+    }
 }
