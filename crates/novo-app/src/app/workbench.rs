@@ -145,6 +145,10 @@ pub(crate) struct Workbench {
     pub(super) nav: Navigator,
     /// Where to select and centre once the canvas shows its page.
     pub(super) pending: Option<Place>,
+    /// A jump a double click on a cross reference asked for while the
+    /// canvas was still showing the old page; made after it, so the new
+    /// page selects its target (see `follow_note_jump`).
+    pub(super) deferred_jump: Option<Place>,
     /// An item to select and centre once its page is shown (a row of the
     /// Changes list).
     pub(super) pending_item: Option<(PageId, AnyId)>,
@@ -356,6 +360,7 @@ impl Default for Workbench {
             generate: None,
             nav: Navigator::default(),
             pending: None,
+            deferred_jump: None,
             pending_item: None,
             custom_symbols: Default::default(),
             pending_items: None,

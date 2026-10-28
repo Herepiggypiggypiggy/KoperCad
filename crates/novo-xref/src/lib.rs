@@ -7,7 +7,9 @@
 //! [`XrefIndex`] (or let [`LiveXref`] do it) and every reference is current.
 //!
 //! - [`XrefIndex::label`]: text drawn next to a symbol. A coil shows its
-//!   contact image below it (`13-14 3.4`), a contact the coil location
+//!   contact image below it (`13-14 3.4` as text; the app draws it as a
+//!   contact mirror, `13 [symbol] 14  3.4`, with [`Label::rows`] and the
+//!   dim [`Label::spare`] contacts), a contact the coil location
 //!   (`2.5`) at its right,
 //!   an interruption point its partners.
 //! - [`Navigator`]: G jumps coil to contact and back, Shift+G lists every
@@ -71,8 +73,8 @@ mod number;
 pub use actions::XrefAction;
 pub use function::{ContactKind, FromKey, Functions};
 pub use index::{
-    Highlight, Issue, Label, LabelAnchor, LabelRow, LiveXref, Owner, Reference, TagJump, XrefIndex,
-    contact_limit_property,
+    Highlight, Issue, Label, LabelAnchor, LabelRow, LiveXref, MAX_SPARE_ROWS, Owner, Reference,
+    SpareRow, TagJump, XrefIndex, contact_limit_property,
 };
 pub use link::{LINK_LABEL, LinkError, can_link, link_command, link_to_device_command};
 pub use nav::{Go, JumpHistory, Navigator, Place};

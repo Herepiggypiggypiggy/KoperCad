@@ -426,6 +426,8 @@ mod wire_set_tests;
 mod workpack_tests;
 #[cfg(test)]
 mod workshop_tests;
+#[cfg(test)]
+mod xref_table_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -1839,6 +1841,9 @@ impl NovoApp {
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
         }
+        if let Some(place) = self.wb.deferred_jump.take() {
+            self.jump(place, true);
+        }
         self.place_hold_tick(&ctx);
         self.place_wheel(&ctx);
 
@@ -1904,6 +1909,7 @@ impl NovoApp {
         self.after_paste_click();
         let asked = self.canvas.take_commands();
         self.wb.queued.extend(asked);
+        self.follow_note_jump();
         let cable = self
             .canvas
             .schematic()
