@@ -6,7 +6,8 @@
 /// after `trip_time_s`. The model trips when the integral of `(I/In)^2 - 1` over time reaches
 /// `K = (trip_ratio^2 - 1) * trip_time_s`. Only the entered point is exact; other times are
 /// the model. Below rated current the accumulator cools with `cooling` times the same square
-/// law (0 = no memory loss, 1 = symmetric).
+/// law (0 = no memory loss, 1 = symmetric). The default of 1 is optimistic: a self-ventilated
+/// motor cools much more slowly at low speed or standstill, so lower `cooling` to be safe.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct I2tOverload {
     pub rated_a: f64,
@@ -26,6 +27,16 @@ impl I2tOverload {
             cooling: 1.0,
             accumulated: 0.0,
         }
+    }
+
+    /// True when the entered point can trip at all (`rated > 0`, ratio above 1, time above 0).
+    pub fn is_valid(&self) -> bool {
+        self.rated_a.is_finite()
+            && self.rated_a > 0.0
+            && self.trip_ratio.is_finite()
+            && self.trip_ratio > 1.0
+            && self.trip_time_s.is_finite()
+            && self.trip_time_s > 0.0
     }
 
     /// Trip threshold `K`.

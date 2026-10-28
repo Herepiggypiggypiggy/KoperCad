@@ -189,7 +189,8 @@ pub struct DriveOutputs {
     pub voltage_v: f64,
     /// Target the ramp is heading for (after limits), Hz.
     pub target_hz: f64,
-    /// Torque limit in N m (vector mode; V/f mode reports the capability from the V/f law).
+    /// Torque limit in N m (model). Vector mode: current limit and flux current. V/f mode: the
+    /// same limit scaled by the flux-squared capability, which neglects the stator resistance.
     pub torque_limit_nm: f64,
     pub current_limit_active: bool,
     pub bus_v: f64,
@@ -266,6 +267,18 @@ impl Drive {
             last_dir: 1.0,
             current_limit_active: false,
         }
+    }
+
+    /// Problems in the configuration that would silently disable a protection; empty when fine.
+    pub fn config_problems(&self) -> Vec<&'static str> {
+        let mut v = Vec::new();
+        if !self.motor_i2t.is_valid() {
+            v.push("Motor overload point is not valid (needs a rated current, a ratio above 1 and a time above 0): the motor model never trips");
+        }
+        if !self.drive_i2t.is_valid() {
+            v.push("Drive overload point is not valid (needs a rated current, a ratio above 1 and a time above 0): the drive model never trips");
+        }
+        v
     }
 
     pub fn state(&self) -> DriveState {

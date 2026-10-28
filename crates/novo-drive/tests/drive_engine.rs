@@ -255,15 +255,15 @@ fn braking_resistor_flags() {
 
 #[test]
 fn sizing_rule_two_times_sum_of_motor_currents() {
-    // Two 6.5 A bridge motors and one 4.2 A trolley motor: 2 x 17.2 = 34.4 A -> process class.
-    let c = check_drive_sizing(32.0, &[6.5, 6.5, 4.2], 33.0);
+    // Three motors of 6.5, 6.5 and 4.2 A with factor 2: 2 x 17.2 = 34.4 A, above a 33 A boundary.
+    let c = check_drive_sizing(32.0, &[6.5, 6.5, 4.2], 2.0, 33.0);
     close(c.required_a, 34.4, 1e-12, "required");
     assert!(!c.ok);
     assert_eq!(c.class, DriveClass::Process);
-    let c = check_drive_sizing(16.0, &[3.0, 3.0], 33.0);
+    let c = check_drive_sizing(16.0, &[3.0, 3.0], 2.0, 33.0);
     assert!(c.ok && c.class == DriveClass::Compact);
     close(
-        required_drive_current_a(&[f64::NAN, -1.0, 2.0]),
+        required_drive_current_a(&[f64::NAN, -1.0, 2.0], 2.0),
         4.0,
         1e-12,
         "bad values ignored",
@@ -299,6 +299,34 @@ fn i2t_trip_times() {
         "120 % model value",
     );
     assert!(o.time_to_trip_s(1.0).is_none());
+}
+
+#[test]
+fn invalid_inputs_are_flagged_not_silent() {
+    let duty = BrakingDuty {
+        inertia_kg_m2: 2.0,
+        speed_rpm: 1500.0,
+        stop_time_s: 4.0,
+        cycle_time_s: 60.0,
+    };
+    for ohm in [0.0, -5.0, f64::NAN] {
+        let r = BrakingResistor {
+            ohm,
+            continuous_w: 1000.0,
+            thermal_capacity_j: 0.0,
+        };
+        let c = check_braking_resistor(&duty, &r, 780.0, 40.0);
+        assert!(c.flags.contains(&ResistorFlag::InvalidResistance), "{ohm}");
+        assert!(c.capacity_w.is_finite());
+    }
+    assert!(I2tOverload::new(10.0, 1.5, 60.0).is_valid());
+    assert!(!I2tOverload::new(10.0, 1.0, 60.0).is_valid());
+    assert!(!I2tOverload::new(10.0, 1.5, 0.0).is_valid());
+    assert!(!I2tOverload::new(0.0, 1.5, 60.0).is_valid());
+    let mut cfg = DriveConfig::generic_travel(nameplate(), 7.0);
+    assert!(Drive::new(cfg.clone()).config_problems().is_empty());
+    cfg.motor_overload = (1.0, 60.0);
+    assert_eq!(Drive::new(cfg).config_problems().len(), 1);
 }
 
 #[test]

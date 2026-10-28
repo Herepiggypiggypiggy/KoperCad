@@ -2,18 +2,22 @@
 
 use std::f64::consts::PI;
 
-/// Output current rule of the crane configurator: drive output current at least
-/// `2 x` the sum of the motor nominal currents. Returns the required current in A.
-pub fn required_drive_current_a(motor_currents_a: &[f64]) -> f64 {
-    2.0 * motor_currents_a
-        .iter()
-        .copied()
-        .filter(|i| i.is_finite() && *i > 0.0)
-        .sum::<f64>()
+/// Default factor of the sizing planning rule (user-entered; not a standard and not a
+/// manufacturer's statement).
+pub const DEFAULT_SIZING_FACTOR: f64 = 2.0;
+
+/// Planning rule: drive output current at least `factor x` the sum of the motor nominal
+/// currents (default [`DEFAULT_SIZING_FACTOR`]). Returns the required current in A.
+pub fn required_drive_current_a(motor_currents_a: &[f64], factor: f64) -> f64 {
+    factor
+        * motor_currents_a
+            .iter()
+            .copied()
+            .filter(|i| i.is_finite() && *i > 0.0)
+            .sum::<f64>()
 }
 
-/// Which drive class a required current falls in, by an entered boundary (33 A in the
-/// configurator rule: a compact machine series up to it, a process series above).
+/// Which drive class a required current falls in, by an entered boundary current.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DriveClass {
     Compact,
@@ -30,13 +34,15 @@ pub struct SizingCheck {
     pub class: DriveClass,
 }
 
-/// Check a drive rating against the rule; `compact_limit_a` is the largest compact drive.
+/// Check a drive rating against the rule; `compact_limit_a` is the entered boundary between
+/// the compact and the process class.
 pub fn check_drive_sizing(
     drive_a: f64,
     motor_currents_a: &[f64],
+    factor: f64,
     compact_limit_a: f64,
 ) -> SizingCheck {
-    let required_a = required_drive_current_a(motor_currents_a);
+    let required_a = required_drive_current_a(motor_currents_a, factor);
     SizingCheck {
         required_a,
         drive_a,
@@ -76,6 +82,8 @@ pub enum ResistorFlag {
     DutyExceedsContinuous,
     /// Resistance below the drive's minimum value (chopper current too high).
     BelowMinimumOhm,
+    /// Resistance is zero, negative or not a number: nothing can be computed.
+    InvalidResistance,
     /// Energy of one stop above the thermal capacity.
     EnergyExceedsThermalCapacity,
 }
@@ -122,15 +130,23 @@ pub fn check_braking_resistor(
     } else {
         f64::INFINITY
     };
-    let capacity_w = bus_threshold_v * bus_threshold_v / resistor.ohm;
+    let valid = resistor.ohm.is_finite() && resistor.ohm > 0.0;
+    let capacity_w = if valid {
+        bus_threshold_v * bus_threshold_v / resistor.ohm
+    } else {
+        0.0
+    };
     let mut flags = Vec::new();
+    if !valid {
+        flags.push(ResistorFlag::InvalidResistance);
+    }
     if peak_w > capacity_w {
         flags.push(ResistorFlag::PeakExceedsCapacity);
     }
     if duty_average_w > resistor.continuous_w {
         flags.push(ResistorFlag::DutyExceedsContinuous);
     }
-    if resistor.ohm < min_ohm {
+    if valid && resistor.ohm < min_ohm {
         flags.push(ResistorFlag::BelowMinimumOhm);
     }
     if resistor.thermal_capacity_j > 0.0 && energy_j > resistor.thermal_capacity_j {
