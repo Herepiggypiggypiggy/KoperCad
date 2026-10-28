@@ -71,6 +71,7 @@ coordinator in its own small PR first.
 | `novo-emc` | EMC rule engine | EMC classification, geometric indices, analytic estimates and the EMC-01..20 rules (eleven built, the rest listed as not built); findings go to `novo-checks` (plan `docs/EMC.md`, pure, depends on novo-core, novo-routing, novo-layout) |
 | `novo-drive` | Drive and motor | Frequency drive, motor at frequency, mechanics, holding brake (pure, averaged model; plan `docs/design/drive-crane-simulation.md`) |
 | `novo-machine` | Machine and crane | Crane kinematics, schematic bindings, fixed-step co-simulation loop (pure, depends on novo-drive) |
+| `novo-controller` | Controller | Virtual operator controller for the live view: controls, signals, interlocks from plain-data profiles (pure) |
 | `novo-tests` | Tester | Cross-crate tests and the Gate 1 fixture |
 | `novo-app` | WS-01 | Application shell, wiring crates together |
 
