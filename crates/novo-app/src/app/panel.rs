@@ -344,7 +344,8 @@ pub(super) fn dialog<'a>(
     }
     // While the outline flyout (Pages, Issues) is open the dialog is kept
     // beside it, so the flyout does not cut off the dialog's left edge.
-    screen.min.x = (screen.min.x + reserved_left(ctx)).min(screen.max.x - DIALOG_MIN_WIDTH);
+    screen.min.x = (screen.min.x + reserved_left(ctx) + reserved_dock(ctx))
+        .min(screen.max.x - DIALOG_MIN_WIDTH);
     let width = size[0].max(DIALOG_MIN_WIDTH).min(screen.width());
     let window = egui::Window::new(title)
         .resizable(true)
@@ -450,6 +451,18 @@ pub(super) fn reserve_bottom_right(ctx: &egui::Context, height: f32) {
 /// covers (0 while it is closed).
 pub(super) fn reserve_left(ctx: &egui::Context, width: f32) {
     ctx.data_mut(|d| d.insert_temp(egui::Id::new("panel_flyout_left"), width));
+}
+
+/// Tells the dialogs how wide the pinned Issues list is: it sits left of the
+/// canvas, and a dialog opens beside it so the list stays readable. Panels
+/// already start at the canvas, so they do not use this.
+pub(super) fn reserve_dock(ctx: &egui::Context, width: f32) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("panel_dock_left"), width));
+}
+
+fn reserved_dock(ctx: &egui::Context) -> f32 {
+    ctx.data(|d| d.get_temp::<f32>(egui::Id::new("panel_dock_left")))
+        .unwrap_or(0.0)
 }
 
 fn reserved_left(ctx: &egui::Context) -> f32 {
@@ -816,6 +829,51 @@ mod tests {
         assert!(open, "stays open without a key");
         dialog_frame(&ctx, &mut open, true);
         assert!(!open, "Escape closes it");
+    }
+
+    /// Left edge of a dialog after a few frames with the given reservations.
+    fn dialog_left(ctx: &egui::Context, flyout: f32, dock: f32) -> f32 {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1366.0, 768.0));
+        reserve_left(ctx, flyout);
+        reserve_dock(ctx, dock);
+        let mut left = 0.0;
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    ..Default::default()
+                },
+                |ctx| {
+                    let shown = dialog(ctx, "Beside test", [600.0, 0.0]).show(ctx, |ui| {
+                        ui.label("content");
+                    });
+                    left = shown.map_or(0.0, |r| r.response.rect.min.x);
+                },
+            );
+            out.textures_delta.clear();
+        }
+        left
+    }
+
+    #[test]
+    fn a_dialog_opened_first_moves_right_of_a_flyout_that_opens_after_it() {
+        let ctx = egui::Context::default();
+        assert!(dialog_left(&ctx, 0.0, 0.0) < 100.0, "starts at the left");
+        assert!(dialog_left(&ctx, 256.0, 0.0) >= 255.5, "clears the flyout");
+    }
+
+    #[test]
+    fn a_dialog_keeps_clear_of_the_pinned_issues_list() {
+        let ctx = egui::Context::default();
+        assert!(dialog_left(&ctx, 0.0, 248.0) >= 255.5);
+    }
+
+    #[test]
+    fn a_closed_flyout_leaves_no_offset_behind() {
+        let ctx = egui::Context::default();
+        reserve_left(&ctx, 256.0);
+        reserve_left(&ctx, 0.0);
+        assert_eq!(reserved_left(&ctx), 0.0);
     }
 
     #[test]

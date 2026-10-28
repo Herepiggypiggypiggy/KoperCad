@@ -11,3 +11,5 @@ click_text "warning"
 wait 10
 shot issues-beside-bench
 check_layout
+# At 1920x1080 the Issues list is pinned beside the canvas; the dialog opens beside it, not over it. The distances are
+# asserted by the unit tests in panel.rs; the picture shows them.

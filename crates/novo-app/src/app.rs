@@ -1605,7 +1605,22 @@ impl NovoApp {
 
         if !self.focus_mode && !pinned && !reports && self.is_open() {
             self.outline_flyout(&ctx, canvas_rect, &mut picked);
+        } else {
+            // No flyout this frame (pinned, Reports, focus mode): the width
+            // stored by an earlier frame must not keep panels pushed aside.
+            panel::reserve_left(&ctx, 0.0);
         }
+        // A dialog opens beside the pinned Issues list, not over it.
+        let issues_dock =
+            pinned && !reports && self.is_open() && self.outline_mode == OutlineMode::Issues;
+        panel::reserve_dock(
+            &ctx,
+            if issues_dock {
+                self.outline_width() + 8.0
+            } else {
+                0.0
+            },
+        );
         if !self.focus_mode && self.workspace() == workspace::Workspace::Schematic {
             self.hud(&ctx, canvas_rect);
             self.sync_wiring_mode();
