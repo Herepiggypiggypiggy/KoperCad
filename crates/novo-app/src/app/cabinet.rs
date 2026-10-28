@@ -2726,6 +2726,14 @@ impl NovoApp {
                 self.cabinet.preview = None;
                 self.cabinet.surface_preview.clear();
             }
+            Ask::ToggleTable if structure.is_some() && layout.is_none() && !self.cabinet.table => {
+                // The table lists the devices of the plate; with no plate
+                // there is nothing to show, and silence reads as a dead button.
+                self.message(
+                    Level::Info,
+                    "The table lists the devices of the mounting plate. Set the plate first (Cabinet, Plate setup).",
+                );
+            }
             Ask::ToggleTable => self.cabinet.table ^= true,
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
             Ask::ExportPlate => {
@@ -2976,7 +2984,22 @@ impl NovoApp {
                 // A preview was made for the old plate.
                 self.cabinet.preview = None;
                 self.cabinet.surface_preview.clear();
-                self.cabinet_edit("Set plate size", move |tx| set_plate(tx, s, plate));
+                let mut resized = 0;
+                if self.cabinet_edit("Set plate size", |tx| {
+                    resized = novo_layout::model::set_plate_following(tx, s, plate)?;
+                    Ok(())
+                }) && resized > 0
+                {
+                    self.message(
+                        Level::Info,
+                        format!(
+                            "{resized} {} that ran across the old plate now {} the new size. Undo restores the plate and {}.",
+                            if resized == 1 { "rail or duct" } else { "rails and ducts" },
+                            if resized == 1 { "follows" } else { "follow" },
+                            if resized == 1 { "it" } else { "them" },
+                        ),
+                    );
+                }
             }
             Ask::SetPlate(s) => {
                 self.cabinet_edit("Set plate", move |tx| set_plate(tx, s, DEFAULT_PLATE));

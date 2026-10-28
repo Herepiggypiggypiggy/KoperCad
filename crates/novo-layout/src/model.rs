@@ -300,6 +300,82 @@ pub fn set_plate(tx: &mut Tx<'_>, id: StructureId, plate: MountingPlate) -> Resu
     .map(|_| ())
 }
 
+/// How close to the old edge of the plate a rail or duct is to count as
+/// running the whole way across it, mm.
+const SPAN_TOLERANCE_MM: f64 = 2.0;
+
+/// The rails and ducts that follow a plate change from `old` to `new`, as
+/// (rail, new length). A rail or duct that ran the whole way across the old
+/// usable area keeps doing so; a shorter one is only shortened when the
+/// smaller plate would leave it sticking out. Nothing is lengthened except
+/// a full-width one, and nothing moves.
+pub fn rails_following(
+    project: &Project,
+    id: StructureId,
+    old: Plate,
+    new: Plate,
+) -> Vec<(RailId, f64)> {
+    let (old_use, new_use) = (old.usable(), new.usable());
+    let mut out = Vec::new();
+    for r in project.all::<ModelRail>().filter(|r| r.structure == id) {
+        // Along the run: its start, the old usable start and end, the new end.
+        let (start, old_lo, old_hi, new_hi) = if r.vertical {
+            (r.y, old_use.y, old_use.y + old_use.h, new_use.y + new_use.h)
+        } else {
+            (r.x, old_use.x, old_use.x + old_use.w, new_use.x + new_use.w)
+        };
+        let end = start + r.length;
+        let spans = (start - old_lo).abs() <= SPAN_TOLERANCE_MM
+            && (end - old_hi).abs() <= SPAN_TOLERANCE_MM;
+        let wanted = if spans {
+            // Same start, new end; a changed margin moves the start, which
+            // is left to the person (the rail stays where devices sit).
+            (new_hi - start).max(1.0)
+        } else if end > new_hi + SPAN_TOLERANCE_MM {
+            (new_hi - start).max(1.0)
+        } else {
+            continue;
+        };
+        if (wanted - r.length).abs() > 1e-6 {
+            out.push((r.id, wanted));
+        }
+    }
+    out
+}
+
+/// Sets the plate and lets the rails and ducts that ran across the old one
+/// follow it. Returns how many were resized.
+pub fn set_plate_following(
+    tx: &mut Tx<'_>,
+    id: StructureId,
+    plate: MountingPlate,
+) -> Result<usize> {
+    let old = structure(tx.project(), id).and_then(|s| s.plate);
+    set_plate(tx, id, plate)?;
+    let Some(old) = old else {
+        return Ok(0);
+    };
+    let to_plate = |p: MountingPlate| Plate {
+        width: p.width,
+        height: p.height,
+        margin: p.margin,
+    };
+    let follow = rails_following(tx.project(), id, to_plate(old), to_plate(plate));
+    for (rail, length) in &follow {
+        let (width, height) = tx
+            .project()
+            .get::<ModelRail>(*rail)
+            .map_or((0.0, 0.0), |r| (r.width, r.height));
+        tx.execute(Command::SetRailSize {
+            rail: *rail,
+            length: *length,
+            width,
+            height,
+        })?;
+    }
+    Ok(follow.len())
+}
+
 /// Applies a plan inside one edit, so `place all` is one undo step: adds the
 /// plan's rails, then places each device on its rail. Devices that are
 /// already placed are left where they are.

@@ -1938,3 +1938,23 @@ fn a_cooler_layout_asked_before_the_plate_exists_is_dropped_not_kept() {
         "the empty state keeps saying why, frame after frame"
     );
 }
+
+#[test]
+fn the_table_toggle_without_a_plate_stays_on_the_plate_view_and_the_toggle_works_with_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::ToggleTable, Some(cab), None, &[]);
+    assert!(!d.app.cabinet.table, "no plate, no table");
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    d.app
+        .cabinet_ask(Ask::ToggleTable, Some(cab), layout_of(&d, cab), &[]);
+    assert!(d.app.cabinet.table);
+}
