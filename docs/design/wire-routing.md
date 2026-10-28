@@ -50,8 +50,12 @@ overrides the designer makes (see §6) are stored.
    stub runs to the nearest point on a duct by Manhattan distance, but only
    in the direction the terminal faces (a terminal on top of a device exits
    upwards). A duct behind the terminal is still reachable: the wire leaves,
-   turns and comes back, which costs twice the backwards distance as a
-   **detour** (shown separately from the path). A stub that would run across
+   turns and comes back beside the device, which costs twice the backwards
+   distance, at most 2 x 40 mm, as a **detour** (shown separately from the
+   path). A terminal that has no position from its part is put on the edge of
+   its device the pin leaves through, in marking order (an estimate, flagged
+   in the Cabinet), and a duct on the terminal's own side is preferred to
+   one that needs the wire to run along the device row. A stub that would run across
    another duct is not used while a clear one exists. Ducts farther
    than a **reach** (default 150 mm) are used only when none is within reach,
    so a wire never crosses the plate in free air to save duct length. The
@@ -67,7 +71,8 @@ overrides the designer makes (see §6) are stored.
 5. **No duct path.** If both anchors reach the same duct network, route
    through it. Otherwise (no duct at all, or two disconnected networks) the
    job gets a **direct route**: an L-shaped Manhattan line between the anchors,
-   flagged "free air", and a problem entry says so. It never fails silently
+   flagged "free air", used only for an estimated length: the Cabinet does
+   not draw it (it marks the two terminals) and Issues lists the wire. It never fails silently
    and never returns length zero.
 
 ## 5. Order and fill

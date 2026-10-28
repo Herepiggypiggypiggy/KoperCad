@@ -1,0 +1,34 @@
+@title Preferences and the status bar at 200 % interface size
+@area Layout
+# Windows hardware test UWL-01 and UWL-05: after the screen shrank, the dialog
+# kept its old size and sat partly off screen. Done must stay in view.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+shot preferences-100
+click_text "200%"
+wait 12
+shot preferences-200-refit
+expect "Interface size"
+expect_enabled Done
+check_layout
+click_text Done
+wait 10
+shot status-bar-200
+check_layout
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text "100%"
+wait 10
+shot preferences-back-to-100
+click_text Done
+wait 6

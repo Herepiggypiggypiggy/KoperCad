@@ -1,0 +1,18 @@
+@title Enclosure list import skips a size over 5000 mm and says so
+@area Cabinet
+# CH-05: such a row was changed to 5000 without a word. File: qa/fixtures/enclosures-too-big.csv.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text Cabinet #1
+wait 30
+click_text "Size enclosure"
+wait 20
+shot size-window
+click_text "Enclosures..."
+wait 10
+answer_dialog qa/fixtures/enclosures-too-big.csv
+click_text "Import CSV..."
+wait 20
+shot import-notice
+expect "over 5000 mm"
+check_layout

@@ -621,6 +621,61 @@ fn the_waiting_strip_says_whether_an_account_is_needed_and_that_no_password_is_t
     );
 }
 
+fn etim_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../qa/fixtures/parts/etim-test")
+}
+
+fn wait_for_etim(win: &mut PartsWindow) -> Result<String, String> {
+    let started = Instant::now();
+    loop {
+        if let Some(done) = win.poll_etim() {
+            return done;
+        }
+        assert!(started.elapsed() < Duration::from_secs(20), "never done");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn an_etim_release_is_installed_on_a_worker_and_the_window_is_told_when_it_is_done() {
+    let mut b = bench();
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("etim");
+    assert!(b.win.poll_etim().is_none(), "nothing is installing");
+    b.win
+        .start_etim_install(etim_fixture(), Some(target.clone()));
+    assert!(
+        b.win.etim_job.is_some(),
+        "the window knows it is installing"
+    );
+    // A second install while one runs is ignored, not queued over it.
+    b.win
+        .start_etim_install(etim_fixture(), Some(target.clone()));
+    let line = wait_for_etim(&mut b.win).expect("the release installs");
+    assert!(!line.is_empty());
+    assert!(b.win.etim_job.is_none());
+    assert_eq!(b.win.etim_line, Some(Some(line)));
+    assert!(novo_parts::EtimModel::load_installed(&target).is_some());
+    assert!(b.win.poll_etim().is_none(), "the answer is given once");
+}
+
+#[test]
+fn an_etim_release_that_cannot_be_read_says_so_and_the_window_goes_on() {
+    let mut b = bench();
+    let dir = tempfile::tempdir().unwrap();
+    let junk = dir.path().join("release.zip");
+    fs::write(&junk, b"not a zip").unwrap();
+    b.win
+        .start_etim_install(junk, Some(dir.path().join("etim")));
+    let err = wait_for_etim(&mut b.win).expect_err("junk is refused");
+    assert!(err.starts_with("ETIM release:"), "{err}");
+    assert!(b.win.etim_line.is_none(), "no release is claimed");
+    // With no profile folder there is nowhere to keep it.
+    b.win.start_etim_install(etim_fixture(), None);
+    let err = wait_for_etim(&mut b.win).expect_err("no folder");
+    assert!(err.contains("nowhere to keep"), "{err}");
+}
+
 #[test]
 fn a_second_drop_while_the_first_is_read_loses_no_file() {
     let mut b = bench();

@@ -172,10 +172,10 @@ id = "type-number"
 title = "Type a number yourself"
 title_nl = "Typ zelf een nummer"
 text = """
-Click the wire from terminal 4 to the transmitter to select it, then run **number wire 100** from the command field. The whole net takes 100 and numbering runs leave it alone from now on. A number another net already uses, such as 1, is refused: the toast reads "1 is already used on another net" and nothing changes.
+Click the wire from terminal 4 to the transmitter to select it, then run **number wire 100** from the command field. The whole net takes 100 and numbering runs leave it alone from now on. A number another net already uses, such as 1, is refused: the toast reads "Wire number: 1 is already used on another net" and nothing changes.
 """
 text_nl = """
-Klik op de draad van klem 4 naar de zender om hem te selecteren en voer dan **number wire 100** uit in het opdrachtveld. Het hele net krijgt 100 en nummerrondes laten het voortaan met rust. Een nummer dat een ander net al gebruikt, zoals 1, wordt geweigerd: de melding zegt "1 is already used on another net" en er verandert niets.
+Klik op de draad van klem 4 naar de zender om hem te selecteren en voer dan **number wire 100** uit in het opdrachtveld. Het hele net krijgt 100 en nummerrondes laten het voortaan met rust. Een nummer dat een ander net al gebruikt, zoals 1, wordt geweigerd: de melding zegt "Wire number: 1 is already used on another net" en er verandert niets.
 """
 how = [
   "Click the vertical wire between terminal 4 and the transmitter -B1; it turns selected",

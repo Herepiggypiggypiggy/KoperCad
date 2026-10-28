@@ -36,6 +36,8 @@ pub fn browser_rows<'a>(
     query: &str,
 ) -> Vec<BrowserRow<'a>> {
     let matcher = Matcher::new(query);
+    // One read of the records for all rows, not one per row.
+    let stored = library.stored_keys();
     catalog
         .parts()
         .iter()
@@ -49,7 +51,7 @@ pub fn browser_rows<'a>(
                 ])
         })
         .map(|part| {
-            let action = if library.has(&part.key()) {
+            let action = if stored.contains(&part.key()) {
                 RowAction::InLibrary
             } else {
                 match sources.get(&part.manufacturer) {

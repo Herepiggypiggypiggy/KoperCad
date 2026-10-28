@@ -1322,6 +1322,7 @@ impl NovoApp {
                     flows: &vent_flows,
                     running: heat_running,
                     stale: stale && has_result,
+                    whatif_open: self.cabinet.heat.whatif.is_open(),
                     suggestion: suggestion.as_ref(),
                 },
             );
