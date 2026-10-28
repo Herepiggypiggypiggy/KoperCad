@@ -22,9 +22,10 @@ use std::time::SystemTime;
 
 use thiserror::Error;
 
-use crate::bmecat::import_bmecat;
+use crate::bmecat::read_bmecat;
 use crate::catalog::{CatalogPart, Dimensions, PartKey};
 use crate::csv::import_catalog;
+use crate::etim::EtimModel;
 use crate::library::{FileKind, ImportFlow, LocalLibrary, NewSource, SourceRecord};
 use crate::recipes::{ApplyContext, GENERIC, MakerRecipe, RecipeReport, recipe_for};
 use crate::step::{StepMeasurer, step_box};
@@ -230,6 +231,7 @@ pub struct ImportJob<'a> {
     files: Vec<RemoteFile>,
     outcome: ImportOutcome,
     measurer: Option<StepMeasurer>,
+    etim: Option<std::sync::Arc<EtimModel>>,
 }
 
 impl<'a> ImportJob<'a> {
@@ -253,6 +255,7 @@ impl<'a> ImportJob<'a> {
             files: Vec::new(),
             outcome: ImportOutcome::default(),
             measurer: None,
+            etim: None,
         }
     }
 
@@ -261,6 +264,14 @@ impl<'a> ImportJob<'a> {
     #[must_use]
     pub fn with_step_measurer(mut self, measurer: StepMeasurer) -> Self {
         self.measurer = Some(measurer);
+        self
+    }
+
+    /// Translates ETIM feature, unit and value codes in BMEcat files with
+    /// the user's ETIM release.
+    #[must_use]
+    pub fn with_etim(mut self, model: std::sync::Arc<EtimModel>) -> Self {
+        self.etim = Some(model);
         self
     }
 
@@ -518,8 +529,19 @@ impl ImportJob<'_> {
 
     /// Reads BMEcat text into parts and runs the maker's recipe over them.
     fn read_bmecat(&mut self, name: &str, text: &str) {
-        match import_bmecat(text, &self.manufacturer) {
-            Ok(parts) => self.take_parts(parts, name, "import:bmecat"),
+        match read_bmecat(text, &self.manufacturer, self.etim.as_deref()) {
+            Ok(read) => {
+                for n in read.notes {
+                    self.outcome.notes.push(format!("{name}: {n}"));
+                }
+                if !read.etim_unread.is_empty() {
+                    self.outcome.notes.push(format!(
+                        "{name}: {}",
+                        crate::etim::unread_note(&read.etim_unread, self.etim.as_deref())
+                    ));
+                }
+                self.take_parts(read.parts, name, "import:bmecat")
+            }
             Err(e) => self
                 .outcome
                 .notes

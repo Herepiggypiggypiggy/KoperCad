@@ -2072,6 +2072,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "sim.hoist",
+        "Simulate hoist run",
+        "View",
+        &[
+            "hoist",
+            "crane",
+            "hook",
+            "lift",
+            "brake",
+            "limit switch",
+            "two speed",
+            "fine coarse",
+            "pole change",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "sim.add_fault",
         "Add fault to selection",
         "View",

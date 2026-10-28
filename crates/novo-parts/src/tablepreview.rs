@@ -15,7 +15,7 @@ use novo_core::Value;
 use crate::catalog::{Catalog, CatalogPart, Dimensions, MergePreview, PartKey, keys, split_list};
 use crate::csv::cell_value;
 use crate::recipes::{
-    connection_kind, currency_of, lifecycle_of, local_keys as lk, parse_quantity,
+    connection_kind, currency_of, lifecycle_of, local_keys as lk, parse_quantity, recipe_for,
 };
 use crate::schema::{
     ConnectionKind, DataSource, Lifecycle, PartTerminal, Price, Provenance, Side, eng,
@@ -769,6 +769,17 @@ fn read_row(
         });
         return None;
     }
+    // The same check the folder import runs: an order number that does not
+    // look like the maker's (a date Excel made out of 2002-12, a type name).
+    if let Some(r) = recipe_for(&d.manufacturer)
+        && let Some(w) = r.check_order(&d.order_number)
+    {
+        row.issues.push(Issue {
+            severity: Severity::Warning,
+            column: String::new(),
+            message: w,
+        });
+    }
     if let Some(basis) = d.price_basis_other.take()
         && d.price.take().is_some()
     {
@@ -873,6 +884,7 @@ fn make_part(d: Draft, mapping: &Mapping, file: &str, today: &str) -> CatalogPar
             currency,
             per: d.price_per.unwrap_or(1),
             date: d.price_date.unwrap_or_else(|| today.to_owned()),
+            unit: String::new(),
         });
     }
     // The person says what the file is; not saying it leaves the source of

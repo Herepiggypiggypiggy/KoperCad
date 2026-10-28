@@ -1,5 +1,7 @@
 # L5a handoff (2026-10-28)
-Branch claude/project-thread-agxv7b. PR 1 (loop core): `novo_machine::port::{CircuitPort, FakeCircuit}`, `novo_machine::hoist_loop` (HoistLoop, HoistModule, LimitSwitch), and `TwoSpeedHoistUnit::step_energised` in novo-drive. 7 loop tests + design in docs/design/electromechanical-loop.md.
-Next (PR 2, after PR 1 merges, from main): `SimCircuit` in novo-app implementing CircuitPort on novo-sim (settle_timed, device_states MotorRun speed 0 = fine, 1 = coarse; limit switch via manual PoleState), property sheet "Mechanical load", Simulate > Drive run..., live badges, QA scenarios 1366x768 and 1920x1080. Then PR 3: drive module (Drive::step with motor current feedback) once L2b gives motor at frequency.
-L1 thread (cse_015gECXUkTwb2c16x4majyua) hands UI entries for Drive over to PR 2.
+Branch claude/project-thread-agxv7b.
+PR 1 (merged, #1561): `novo_machine::port` (CircuitPort, FakeCircuit, MotorFeed), `novo_machine::hoist_loop` (HoistLoop, HoistModule, HoistBinding, LimitSwitch), `TwoSpeedHoistUnit::step_energised`.
+PR 2 (Hoist run in the live view): `novo_machine::spec` (mech_* properties), step config validation, `HoistLoop::check_bindings`, `novo-app` `app/hoist_run.rs` (LiveCircuit adapter, Hoist run window, badges), property sheet "Mechanical load", command `sim.hoist` (Simulate > Hoist run), fixture `qa/fixtures/hoist-two-speed.novo` (built by `crates/novo-tests/examples/hoist_fixture.rs`), QA scenarios `600-hoist-run` and `600-hoist-run-1920`.
+Known model limits: the generic Kloss fit gives the fine winding about 5 N m start torque, so the fixture hook is 100 kg; a real high-torque hoist motor lifts more. Limit tags in properties are the full device tag string.
+Next (PR 3): drive module in the loop (Drive::step with motor current feedback, "Drive" section, Simulate > Drive run) after L2b. Then bindings stored in the project model (ask WS-02), controller panel signals (C2), a checks entry for binding problems.
 Customer facts (plans/crane-setup-facts.md) stay out of public files.
