@@ -176,6 +176,9 @@ enum Cmd {
     /// rating, voltage drop, breaking capacity, short-circuit withstand,
     /// disconnection and protective conductor, each Pass, Fail or Unknown.
     /// Exits with 1 when a circuit fails (unknown does not fail).
+    /// A single-phase circuit off a three-phase feeder (voltage about 1/sqrt(3)
+    /// of it) is taken from a phase, no transformer between, and carries the
+    /// feeder's drop; give it another voltage to stop that.
     Calc {
         /// The supply and circuits as JSON (see the novo-checks `calc::spec`
         /// documentation).
