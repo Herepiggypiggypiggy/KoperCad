@@ -819,11 +819,23 @@ fn read_price(value: &Value) -> Result<PriceRead, &'static str> {
             let t = raw.trim();
             let (head, basis) = match t.split_once('/') {
                 Some((h, b)) => (h, Some(b)),
-                None => match t.to_lowercase().find(" per ") {
+                None => match t.to_ascii_lowercase().find(" per ") {
                     Some(i) => (&t[..i], Some(&t[i + 5..])),
                     None => (t, None),
                 },
             };
+            // `1e3` would read as 1 with the unit "e3": refuse instead of guessing.
+            let lead = head.trim_start_matches(['+', '-']);
+            let after =
+                lead.trim_start_matches(|c: char| c.is_ascii_digit() || matches!(c, '.' | ','));
+            if after.len() < lead.len()
+                && after.strip_prefix(['e', 'E']).is_some_and(|r| {
+                    r.trim_start_matches(['+', '-'])
+                        .starts_with(|c: char| c.is_ascii_digit())
+                })
+            {
+                return Err("price in exponent notation");
+            }
             let (norm, note) = crate::tablepreview::normalise_number_text(head);
             let q = super::quantity::parse_quantity(&norm).ok_or("price that is not a number")?;
             if q.range {

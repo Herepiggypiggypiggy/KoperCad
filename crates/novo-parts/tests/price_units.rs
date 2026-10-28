@@ -99,3 +99,37 @@ fn an_ambiguous_thousands_separator_warns() {
         o.recipe.warnings
     );
 }
+
+#[test]
+fn a_price_cell_with_non_ascii_capitals_does_not_panic() {
+    let o = import_prices(&[
+        ("2002-1201", "İİİİ 10 per 100"),
+        ("2002-1202", "5 İ per 100 pcs"),
+        ("2002-1203", "Ⱥ9 per 100"),
+        ("2002-1204", "İ per 日"),
+        ("2002-1205", "5 İ per 日本語"),
+        ("2002-1206", "İİ 5 per 日日日日日"),
+    ]);
+    for order in [
+        "2002-1201",
+        "2002-1202",
+        "2002-1203",
+        "2002-1204",
+        "2002-1205",
+        "2002-1206",
+    ] {
+        assert!(price(&o, order).is_none(), "{order}");
+    }
+}
+
+#[test]
+fn a_price_in_exponent_notation_is_refused() {
+    let o = import_prices(&[("2002-1201", "1e3 EUR")]);
+    assert!(price(&o, "2002-1201").is_none());
+    assert!(
+        o.recipe
+            .skipped
+            .iter()
+            .any(|s| s.reason == "price in exponent notation")
+    );
+}
