@@ -178,6 +178,9 @@ impl Failure {
             }
             text.push('.');
         }
+        text.push_str(
+            "\n\nThis question also comes after KoperCAD was ended in Task Manager while it was starting.",
+        );
         text.push_str(&format!("\n\nThe log is in {}", self.log_dir.display()));
         text
     }
@@ -334,7 +337,7 @@ pub(crate) fn stage(text: &str) {
 pub(crate) fn adapter(adapter: &Adapter, text: &str) {
     log::info!("Start: {} - {text}", adapter.describe());
     if let Some(t) = tracker().as_mut() {
-        t.marker.stage = format!("{text} ({})", adapter.describe());
+        t.marker.stage = text.to_owned();
         t.marker.adapter = Some(adapter.clone());
         t.write();
     }
@@ -369,11 +372,26 @@ fn finish(t: Tracker) {
     let _ = std::fs::remove_file(path);
 }
 
+/// Test hook: `KOPERCAD_GRAPHICS_AVOID="name/backend;name/backend"` adds
+/// adapters to the avoid list for this run only (the QA scenarios use it).
+const AVOID_ENV: &str = "KOPERCAD_GRAPHICS_AVOID";
+
 /// The adapters that stopped a start, as [`key`]s.
 pub(crate) fn avoided() -> Vec<String> {
-    crate::diag::log_dir()
+    let mut keys = crate::diag::log_dir()
         .map(|d| read_avoid(&d))
-        .unwrap_or_default()
+        .unwrap_or_default();
+    if let Ok(list) = std::env::var(AVOID_ENV) {
+        keys.extend(parse_avoid_env(&list));
+    }
+    keys
+}
+
+fn parse_avoid_env(list: &str) -> Vec<String> {
+    list.split(';')
+        .filter_map(|entry| entry.rsplit_once('/'))
+        .map(|(name, backend)| key(name, backend.trim()))
+        .collect()
 }
 
 fn read_avoid(dir: &Path) -> Vec<String> {
@@ -429,12 +447,14 @@ fn forget_avoid(dir: &Path, adapter: &Adapter) {
 /// A line for the problem report: the adapters that are tried last.
 pub(crate) fn avoided_for_report() -> Option<String> {
     let keys = avoided();
-    (!keys.is_empty()).then(|| {
-        keys.iter()
-            .map(|k| k.replace('\t', " / "))
-            .collect::<Vec<_>>()
-            .join("; ")
-    })
+    (!keys.is_empty()).then(|| format_avoid(&keys))
+}
+
+fn format_avoid(keys: &[String]) -> String {
+    keys.iter()
+        .map(|k| k.replace('\t', " / "))
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 #[cfg(test)]
@@ -482,7 +502,7 @@ mod tests {
             "{text}"
         );
         assert!(
-            text.contains("stage=opening the graphics adapter (Intel"),
+            text.contains("stage=opening the graphics adapter\n"),
             "{text}"
         );
 
@@ -617,19 +637,34 @@ mod tests {
     }
 
     #[test]
+    fn the_test_hook_and_the_report_line_use_the_same_form() {
+        let keys = parse_avoid_env("Intel(R) UHD Graphics/Vulkan; Other GPU/Dx12");
+        assert_eq!(keys[0], key("Intel(R) UHD Graphics", "Vulkan"));
+        assert_eq!(keys.len(), 2);
+        assert_eq!(
+            format_avoid(&keys),
+            "intel(r) uhd graphics / vulkan; other gpu / dx12"
+        );
+        assert!(parse_avoid_env("no slash here").is_empty());
+    }
+
+    #[test]
     fn the_question_names_the_step_the_adapter_and_the_log() {
         let f = Failure {
             was_safe_graphics: false,
-            stage: "opening the graphics adapter (Intel UHD (Vulkan))".into(),
+            stage: "opening the graphics device".into(),
             adapter: Some("Intel UHD (Vulkan)".into()),
             time: "t".into(),
             log_dir: PathBuf::from("C:/logs"),
         };
         let text = f.message();
-        assert!(text.contains("opening the graphics adapter"));
+        assert!(text.contains("opening the graphics device"));
         assert!(text.contains("Graphics adapter involved: Intel UHD (Vulkan)"));
         assert!(text.contains("Start with safe graphics now?"));
         assert!(text.contains("tried last"));
+        assert!(text.contains("Task Manager"));
+        // The adapter is named once, on its own line.
+        assert_eq!(text.matches("Intel UHD (Vulkan)").count(), 1, "{text}");
         assert!(text.contains("C:/logs"));
         let safe = Failure {
             was_safe_graphics: true,

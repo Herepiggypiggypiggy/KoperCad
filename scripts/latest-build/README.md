@@ -12,6 +12,10 @@ Run and update: double-click `run.cmd` in that folder. It fetches the newest
 build, resets to it and starts `kopercad.exe`. `BUILD_INFO.txt` lists exactly
 what is inside. Your projects live under your user profile, not here.
 
+If no window appears (a crash in the graphics driver), double-click `run-safe-graphics.cmd`: it starts
+the software renderer, slower but needing no graphics driver. KoperCAD also notices such a start and
+asks about safe graphics the next time.
+
 ## Real part data
 
 Double-click `import-parts.cmd`. It creates `%APPDATA%\KoperCAD\inbox\<maker>\`,

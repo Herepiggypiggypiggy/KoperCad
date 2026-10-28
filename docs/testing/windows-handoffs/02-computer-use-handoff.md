@@ -45,6 +45,7 @@ Mark each: PASS / FAIL (S1-S4) / BLOCKED (why) / SKIPPED (why). Take a screensho
 **D. Safe graphics**
 - D1 Start `run-safe-graphics.cmd` or the Start menu entry. Open the example (Start panel > Open example), pan with middle-drag, scroll to zoom, switch workspaces Cabinet, 3D, Reports. 📷 About graphics line (should say software). How smooth is it (describe: smooth / laggy / slideshow)?
 - D2 Normal start, same moves, compare smoothness and 📷 the 3D view in both.
+- D3 📷 **Normal start with the new graphics order (PR #1580, not tested on real Windows).** Start `run.cmd` (or the Start menu entry) on the Intel PC and on a PC with a non-Intel GPU. Does the window open? 📷 Help > About: the graphics line should name the real GPU with `Dx12`. Click "Copy version info" and paste it into the results. The Intel UHD laptop used to close without any window.
 
 **E. HiDPI** (change scale in Settings > System > Display > Scale; you may do this yourself, no admin needed. Note the original value and RESTORE it at the end. Close and restart KoperCAD after each change.)
 For each of 100%, 125%, 150%, 200% (and 175% if offered):
