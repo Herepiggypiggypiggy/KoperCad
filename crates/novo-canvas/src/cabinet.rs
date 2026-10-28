@@ -366,7 +366,7 @@ impl CabinetScene {
             // box is a few dozen points wide, so a horizontal tag meets the
             // neighbour's and is hidden, a vertical one has the room.
             let tall = b.height > b.width * 1.2;
-            let label = Label::new((min + max) * 0.5, b.tag.clone(), tag_height)
+            let label = Label::new((min + max) * 0.5, short_tag(&b.tag), tag_height)
                 .anchored(Anchor::Center)
                 .colored(color);
             item.labels.push(if tall {
@@ -655,6 +655,25 @@ pub fn view_bounds(view: &CabinetView) -> Aabb {
     b
 }
 
+/// Most characters of a tag drawn on the plate.
+const TAG_CHARS: usize = 28;
+
+/// A tag short enough to draw over a device: past [`TAG_CHARS`] the middle
+/// goes, as the start (plant, location) and the end (the device code) are
+/// what tell tags apart. The full tag is in the inspector and on hover.
+fn short_tag(tag: &str) -> String {
+    let count = tag.chars().count();
+    if count <= TAG_CHARS {
+        return tag.to_owned();
+    }
+    let tail = 10;
+    let head = TAG_CHARS - tail - 1;
+    let mut out: String = tag.chars().take(head).collect();
+    out.push('…');
+    out.extend(tag.chars().skip(count - tail));
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -734,6 +753,23 @@ mod tests {
         assert_eq!(wide.rotation, 0.0);
         let tall = &c.scene().get(box_item(v.boxes[1].id)).unwrap().labels[0];
         assert!(tall.rotation < 0.0);
+    }
+
+    #[test]
+    fn a_very_long_tag_is_cut_in_the_middle_on_the_plate() {
+        // Hardware test CH-03: a 229 character tag ran across the whole plate.
+        let long = format!("=A1+CAB1-{}K7", "L".repeat(220));
+        let mut c = CabinetScene::new(CabinetStyle::default());
+        let mut v = view();
+        v.boxes[0].tag = long.clone();
+        c.set(&v);
+        let label = &c.scene().get(box_item(v.boxes[0].id)).unwrap().labels[0];
+        assert_eq!(label.text.chars().count(), TAG_CHARS);
+        assert!(label.text.starts_with("=A1+CAB1-") && label.text.ends_with("LK7"));
+        assert!(label.text.contains('…'));
+        // A normal tag is drawn as it is.
+        assert_eq!(short_tag("=A1+CAB1-K10"), "=A1+CAB1-K10");
+        assert_eq!(short_tag(&"x".repeat(TAG_CHARS)), "x".repeat(TAG_CHARS));
     }
 
     #[test]

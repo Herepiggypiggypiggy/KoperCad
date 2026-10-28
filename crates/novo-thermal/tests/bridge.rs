@@ -284,3 +284,32 @@ fn a_duct_stands_as_high_as_its_cross_section_says() {
     // far below the old typical 70 % of the air depth
     assert!(duct.blockage() < 0.35);
 }
+
+#[test]
+fn an_enclosure_over_20_m_is_refused_before_any_run() {
+    // Hardware test CH-02: the 3D run never reached the solver's size check.
+    let (mut p, cab) = fixture();
+    let huge = |w: f64, h: f64| Enclosure {
+        width: w,
+        height: h,
+        depth: 250.0,
+        plate_setback: 0.0,
+        door: None,
+        front_clearance: None,
+        hinge_side_clearance: None,
+    };
+    let o = BridgeOptions::default();
+    // The outside size counts: 19999 inside and a 2 mm wall is 20003 outside.
+    for (w, h) in [(20_001.0, 700.0), (500.0, 25_000.0), (19_999.0, 700.0)] {
+        p.transact("size", |tx| set_enclosure(tx, cab, &huge(w, h)))
+            .unwrap();
+        assert_eq!(
+            scenario_from_project(&p, cab, &o).err(),
+            Some(BridgeError::TooLarge),
+            "{w} x {h}"
+        );
+    }
+    p.transact("size", |tx| set_enclosure(tx, cab, &huge(19_990.0, 700.0)))
+        .unwrap();
+    assert!(scenario_from_project(&p, cab, &o).is_ok());
+}

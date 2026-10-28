@@ -88,6 +88,8 @@ pub enum BridgeError {
     NoPlate,
     #[error("the enclosure interior (width, height, depth) is not set")]
     NoInterior,
+    #[error("the enclosure is over 20 m on a side; check its width, height and depth")]
+    TooLarge,
 }
 
 /// A device the report points at.
@@ -268,6 +270,15 @@ pub fn scenario_from_project(
     }
     let interior = enclosure_of(project, enclosure).ok_or(BridgeError::NoInterior)?;
     let layout = load(project, enclosure).ok_or(BridgeError::NoPlate)?;
+    // The same limit as the solver's own check, which the 3D run never
+    // reaches: a cabinet that size is a typing mistake, not a cabinet.
+    let wall_mm = options.wall_mm.max(0.0);
+    if [interior.width, interior.height, interior.depth]
+        .iter()
+        .any(|side| side + 2.0 * wall_mm > crate::setup::MAX_ENCLOSURE_MM)
+    {
+        return Err(BridgeError::TooLarge);
+    }
 
     let plate_x = interior.plate_left(&layout.plate);
     let plate_y = ((interior.height - layout.plate.height) / 2.0).max(0.0);

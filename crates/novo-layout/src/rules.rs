@@ -654,6 +654,9 @@ pub enum UnplacedWhy {
     TooLarge,
     /// Its row does not fit on the plate any more.
     NoRoom,
+    /// It is smaller than the plate, but the ducts already on the plate cut
+    /// it into areas none of which takes the device.
+    Ducts,
 }
 
 impl UnplacedWhy {
@@ -662,6 +665,7 @@ impl UnplacedWhy {
         match self {
             UnplacedWhy::TooLarge => "larger than the usable plate",
             UnplacedWhy::NoRoom => "no room left on the plate",
+            UnplacedWhy::Ducts => "no free area between the ducts on the plate is big enough",
         }
     }
 }
@@ -707,6 +711,11 @@ impl Explanation {
             return match why {
                 UnplacedWhy::TooLarge => "Not placed: it is larger than the usable plate.".into(),
                 UnplacedWhy::NoRoom => "Not placed: no room left on the plate.".into(),
+                UnplacedWhy::Ducts => {
+                    "Not placed: no free area between the ducts on the plate is big enough. \
+                     Move or remove a duct, or use a bigger plate."
+                        .into()
+                }
             };
         }
         let Some(d) = self.decision(id) else {
@@ -848,6 +857,19 @@ pub(crate) fn plan_around(
         why.unplaced = left.iter().map(|s| (s.id, UnplacedWhy::NoRoom)).collect();
     }
     why.unplaced.retain(|(id, _)| plan.unplaced.contains(id));
+    // The reason of the last region tried says how big that region was, not
+    // why the device has no place: judge it against the whole plate.
+    let usable = plate.usable();
+    for (id, reason) in &mut why.unplaced {
+        let Some(spec) = left.iter().find(|s| s.id == *id) else {
+            continue;
+        };
+        if spec.size.width > usable.w || spec.size.height > usable.h {
+            *reason = UnplacedWhy::TooLarge;
+        } else if !blocked.is_empty() && !regions.is_empty() {
+            *reason = UnplacedWhy::Ducts;
+        }
+    }
     (plan, why)
 }
 

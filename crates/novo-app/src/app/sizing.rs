@@ -470,7 +470,7 @@ pub(super) fn show_editor(ctx: &egui::Context, state: &mut SizingState) {
                             &mut e.margin,
                         ] {
                             changed |= ui
-                                .add(egui::DragValue::new(value).range(0.0..=5000.0).speed(1.0))
+                                .add(egui::DragValue::new(value).range(0.0..=novo_layout::sizing::MAX_LIST_MM).speed(1.0))
                                 .changed();
                         }
                         egui::ComboBox::from_id_salt(("enclosure_material", i))

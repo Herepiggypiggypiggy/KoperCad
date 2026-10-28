@@ -163,6 +163,10 @@ pub struct Setup {
     pub c_plate: Vec<f64>,
 }
 
+/// The largest outside size of an enclosure the heat run takes, mm. Beyond
+/// it a typed-by-mistake size would make the run look hung.
+pub const MAX_ENCLOSURE_MM: f64 = 20_000.0;
+
 fn validate(s: &Scenario) -> Result<(), Error> {
     let e = &s.enclosure;
     let bad = |msg: &str| Err(Error::Invalid(msg.to_string()));
@@ -172,7 +176,11 @@ fn validate(s: &Scenario) -> Result<(), Error> {
     }
     // A negative wall or a size over 20 m (typed by mistake) would grow the
     // grid until the run seems to hang; refuse it plainly instead.
-    if e.wall_mm < 0.0 || e.width_mm > 20_000.0 || e.height_mm > 20_000.0 || e.depth_mm > 20_000.0 {
+    if e.wall_mm < 0.0
+        || e.width_mm > MAX_ENCLOSURE_MM
+        || e.height_mm > MAX_ENCLOSURE_MM
+        || e.depth_mm > MAX_ENCLOSURE_MM
+    {
         return bad("enclosure size or wall thickness is out of range");
     }
     if e.interior_width_mm() < 50.0 || e.interior_height_mm() < 50.0 || e.interior_depth_mm() < 20.0

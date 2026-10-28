@@ -97,6 +97,11 @@ impl EnclosureSize {
     }
 }
 
+/// The largest size or margin, mm, the enclosure list takes: what its editor
+/// allows. An import above it is refused with a reason instead of being cut
+/// down in silence.
+pub const MAX_LIST_MM: f64 = 5000.0;
+
 /// A problem found while reading a CSV list, with the 1-based line number.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogError {
@@ -179,9 +184,13 @@ impl EnclosureCatalog {
             }
             let mut numbers = [0.0; 6];
             let mut bad = None;
+            let mut too_big = None;
             for (slot, cell) in numbers.iter_mut().zip(&cells[1..6]) {
                 match parse_mm(cell, separator) {
-                    Some(v) if v > 0.0 => *slot = v,
+                    Some(v) if v > 0.0 && v <= MAX_LIST_MM => *slot = v,
+                    Some(v) if v > MAX_LIST_MM => {
+                        too_big.get_or_insert(*cell);
+                    }
                     _ => bad = Some(*cell),
                 }
             }
@@ -192,14 +201,23 @@ impl EnclosureCatalog {
                 });
                 continue;
             }
+            if let Some(cell) = too_big {
+                errors.push(CatalogError {
+                    line,
+                    message: format!(
+                        "'{cell}' is over {MAX_LIST_MM} mm, the largest size the list takes"
+                    ),
+                });
+                continue;
+            }
             let margin = match cells.get(6).filter(|c| !c.is_empty()) {
                 None => 0.0,
                 Some(cell) => match parse_mm(cell, separator) {
-                    Some(v) if v >= 0.0 => v,
+                    Some(v) if (0.0..=MAX_LIST_MM).contains(&v) => v,
                     _ => {
                         errors.push(CatalogError {
                             line,
-                            message: format!("'{cell}' is not a margin in mm"),
+                            message: format!("'{cell}' is not a margin in mm (0 to {MAX_LIST_MM})"),
                         });
                         continue;
                     }

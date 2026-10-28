@@ -34,8 +34,9 @@ use crate::actions::Action;
 use crate::command_field::CommandField;
 use crate::keys;
 
-/// Drawer height as a share of the window (docs/DESIGN.md §3: at most 35%).
-pub(super) const DRAWER_SHARE: f32 = 0.3;
+/// Height the drawer opens at, as a share of the window (docs/DESIGN.md §3:
+/// 35%). The user can drag it taller; see `DRAWER_MAX_SHARE`.
+pub(super) const DRAWER_SHARE: f32 = 0.35;
 
 /// The drawer's tabs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -51,6 +51,16 @@ struct DeviceRow {
     selected: bool,
 }
 
+/// The drawer's least height, points.
+const DRAWER_MIN_HEIGHT: f32 = 120.0;
+/// The most of the window height the user can drag the drawer to.
+const DRAWER_MAX_SHARE: f32 = 0.6;
+
+/// The height the drawer opens at in a window `screen_height` points high.
+fn drawer_height(screen_height: f32) -> f32 {
+    (screen_height * DRAWER_SHARE).max(DRAWER_MIN_HEIGHT)
+}
+
 impl NovoApp {
     /// The drawer, docked under the canvas while a tab is open.
     pub(super) fn drawer(&mut self, ui: &mut egui::Ui) {
@@ -60,7 +70,8 @@ impl NovoApp {
         if !self.is_open() {
             return;
         }
-        let height = (ui.ctx().content_rect().height() * DRAWER_SHARE).max(120.0);
+        let screen_height = ui.ctx().content_rect().height();
+        let height = drawer_height(screen_height);
         let selected = self.selection();
         self.sync_strip_follow();
         let strip = self.drawer_strip();
@@ -99,8 +110,9 @@ impl NovoApp {
         // Controls for lessons to point at, registered after the panel.
         let mut spots: Vec<(String, egui::Rect, bool, String)> = Vec::new();
         let panel = egui::Panel::bottom("drawer")
-            .exact_size(height)
-            .resizable(false)
+            .default_size(height)
+            .size_range(DRAWER_MIN_HEIGHT..=(screen_height * DRAWER_MAX_SHARE).max(DRAWER_MIN_HEIGHT))
+            .resizable(true)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     for (t, label) in [
@@ -580,6 +592,14 @@ fn drawer_name(tab: Drawer) -> &'static str {
 mod tests {
     use super::*;
     use novo_core::DeviceTag;
+
+    #[test]
+    fn the_drawer_opens_at_the_design_share_and_can_be_dragged_taller() {
+        // Hardware test TCN-04: 30% of 768 left three rows of a long strip.
+        assert!((drawer_height(768.0) - 268.8).abs() < 0.01);
+        assert_eq!(drawer_height(200.0), DRAWER_MIN_HEIGHT);
+        assert!(768.0 * DRAWER_MAX_SHARE > drawer_height(768.0) * 1.5);
+    }
 
     #[test]
     fn devices_are_listed_in_natural_tag_order() {

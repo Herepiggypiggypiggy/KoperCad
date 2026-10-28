@@ -36,6 +36,24 @@ fn csv_accepts_spreadsheet_exports_and_reports_bad_rows() {
 }
 
 #[test]
+fn a_size_over_what_the_editor_allows_is_refused_not_cut_down() {
+    // Hardware test CH-05: 20000 was shown as 5000 and nothing said so.
+    let (c, e) = EnclosureCatalog::from_csv(
+        "Huge;20000;20000;20000;19000;19000;10;steel\nEdge;5000;5000;5000;5000;5000;5000;steel\nM;500;500;300;400;400;6000;steel\n",
+    );
+    assert_eq!(c.items.len(), 1, "{c:?}");
+    assert_eq!(c.items[0].name, "Edge");
+    assert_eq!(e.len(), 2, "{e:?}");
+    assert_eq!(e[0].line, 1);
+    assert!(e[0].message.contains("'20000' is over 5000 mm"), "{}", e[0]);
+    assert!(
+        e[1].message.contains("'6000'") && e[1].message.contains("margin"),
+        "{}",
+        e[1]
+    );
+}
+
+#[test]
 fn csv_round_trips_and_upsert_replaces() {
     let mut c = catalog();
     let again = EnclosureCatalog::from_csv(&c.to_csv()).0;

@@ -1,0 +1,12 @@
+@title Terminals drawer opens at 35% of the window and shows more rows
+@area Terminals
+# Hardware test TCN-04: at 1366x768 the drawer showed three rows of a long strip.
+click_text "Open example"
+wait 20
+key ctrl+3
+wait 10
+expect "Terminals"
+shot drawer
+check_layout
+key ctrl+3
+wait 6

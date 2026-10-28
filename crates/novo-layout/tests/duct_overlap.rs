@@ -2,7 +2,7 @@
 //! the ducts that are already on the plate.
 
 use novo_layout::plan::Plan;
-use novo_layout::rules::{Gaps, RuleSet, Spec, place_all_around, place_all_explained};
+use novo_layout::rules::{Gaps, RuleSet, Spec, UnplacedWhy, place_all_around, place_all_explained};
 use novo_layout::state::CabinetLayout;
 use novo_layout::{Duct, DuctHit, Margins, Placement, Plate, Rail, Rect, Size, duct_overlaps};
 
@@ -291,4 +291,32 @@ fn the_ducts_place_all_plans_do_not_trip_the_check() {
         .collect();
     assert!(!ducts.is_empty());
     clear_of_ducts(&plan, &specs, &ducts);
+}
+
+#[test]
+fn a_device_the_ducts_leave_no_room_for_is_not_called_too_large() {
+    // Hardware test CH-04: a 120 x 220 device on a 900 x 1300 plate was
+    // "larger than the usable plate" because the ducts cut the plate up.
+    let plate = Plate {
+        width: 600.0,
+        height: 800.0,
+        margin: 10.0,
+    };
+    let duct = vertical_duct(7, 300.0, 10.0, 780.0);
+    let rules = RuleSet::standard();
+    let specs = vec![spec(1, "T", 350.0, 100.0), spec(2, "T", 700.0, 100.0)];
+    let (plan, why) = place_all_around(&plate, &specs, &rules, 1, 0.0, &[duct.footprint()]);
+    assert_eq!(plan.unplaced, vec![1, 2]);
+    assert_eq!(
+        why.unplaced,
+        vec![(1, UnplacedWhy::Ducts), (2, UnplacedWhy::TooLarge)]
+    );
+    assert!(why.describe(1, &rules).contains("between the ducts"));
+    assert!(
+        why.describe(2, &rules)
+            .contains("larger than the usable plate")
+    );
+    // Without the duct the first one fits.
+    let (plan, _) = place_all_around(&plate, &specs, &rules, 1, 0.0, &[]);
+    assert_eq!(plan.unplaced, vec![2]);
 }
