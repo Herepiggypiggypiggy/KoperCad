@@ -89,6 +89,47 @@ Type: files; Name: "{userprograms}\{#AppName} (safe graphics).lnk"
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+{ Closes the kopercad.exe that sits in the install folder, in ONE PowerShell call that bounds its own
+  wait (Wait-Process -Timeout), so no loop of ours can run long and a hung step cannot block an
+  install: ask the window to close, wait up to the given seconds for the answer to "Save changes?",
+  then end what is left. A portable copy elsewhere is left alone. Per-user process, no admin rights.
+  If company policy blocks PowerShell this does nothing and the old locked-file message returns.
+  The recovery copy is offered at the next start. }
+procedure CloseRunningApp(Silent: Boolean);
+var
+  Code, Seconds: Integer;
+  Cmd, Path: String;
+begin
+  { KoperCAD asks "Save changes?" on close: an interactive install waits a minute for the answer,
+    a silent one ten seconds. }
+  if Silent then
+    Seconds := 10
+  else
+    Seconds := 60;
+  { A single quote in the path (a user called O'Brien) must be doubled inside a PowerShell '...' string. }
+  Path := ExpandConstant('{app}\{#AppExe}');
+  StringChangeEx(Path, '''', '''''', True);
+  Cmd := '-NoProfile -NonInteractive -Command "$p = @(Get-Process kopercad -ErrorAction SilentlyContinue | ' +
+    'Where-Object { $_.Path -eq ''' + Path + ''' }); ' +
+    'if ($p.Count -gt 0) { $p | ForEach-Object { [void]$_.CloseMainWindow() }; ' +
+    '$p | Wait-Process -Timeout ' + IntToStr(Seconds) + ' -ErrorAction SilentlyContinue; ' +
+    '$p | Where-Object { -not $_.HasExited } | Stop-Process -Force -ErrorAction SilentlyContinue }; exit 0"';
+  Exec('powershell.exe', Cmd, '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  CloseRunningApp(WizardSilent);
+  Result := '';
+end;
+
+function InitializeUninstall: Boolean;
+begin
+  { WizardSilent exists only in Setup; the uninstaller has UninstallSilent. }
+  CloseRunningApp(UninstallSilent);
+  Result := True;
+end;
+
 { The program is removed; projects are never touched. Settings, logs and the
   recovery files stay unless the user asks for them to go too, so a later
   reinstall finds the same preferences. }

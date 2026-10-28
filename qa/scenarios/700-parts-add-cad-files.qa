@@ -1,0 +1,31 @@
+@title Parts: Add CAD files matches a file that is not named after the article
+@area Parts
+# A maker's CAD file is named after a document id (MCADXX0001234_3D.stp); the model inside names the article.
+# The panel shows the verdict and the reasons before anything is stored, and a file for no part in the catalog says so.
+fresh
+key ctrl+k
+text "parts"
+wait 10
+key Return
+wait 20
+shot parts-window
+answer_dialog qa/fixtures/parts/cad/MCADXX0001234_3D.stp
+click_text "Add CAD files"
+wait 30
+expect "Add CAD files"
+expect "Checked"
+expect "Siemens 3RT2016-1AP01"
+shot matched
+check_layout
+click_text "Import ticked"
+wait 40
+expect "stored for Siemens 3RT2016-1AP01"
+shot stored
+answer_dialog qa/fixtures/parts/cad/MCADXX0009999_3D.stp
+click_text "Done"
+wait 10
+click_text "Add CAD files"
+wait 30
+expect "No part in your catalog matches"
+shot no-part
+check_layout
