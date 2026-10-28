@@ -2692,6 +2692,28 @@ mod tests {
     }
 
     #[test]
+    fn the_legend_words_the_heat_lesson_quotes_are_the_legends() {
+        let lesson = include_str!("../../../../assets/lessons/heat-and-sizing/lesson.toml");
+        let mut state = HeatState::new();
+        let i = input();
+        state.start(scenario(), meta(&i));
+        run_to_end(&mut state);
+        let mut p = state.solution().unwrap().snapshot.progress.clone();
+        p.fidelity = novo_cfd::Fidelity::Coarse;
+        for said in [
+            PREVIEW_NOTE,
+            status_label(&p, false).as_str(),
+            "Out of date: the layout changed since this run",
+            "no loss data (shown dashed)",
+            "No heat picture yet",
+            "Stopping…",
+        ] {
+            assert!(lesson.contains(said), "the lesson does not quote: {said}");
+        }
+        assert!(!lesson.contains("Preview model from the part losses"));
+    }
+
+    #[test]
     fn a_cooler_second_run_shows_as_a_negative_difference() {
         let mut state = HeatState::new();
         let mut i = input();
