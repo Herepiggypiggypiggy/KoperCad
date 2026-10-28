@@ -1994,8 +1994,8 @@ fn legend(
             ))
             .on_hover_text(
                 "Worked out from the part losses and sizes alone: each device's rise is its loss \
-             over a surface conductance fitted to the 2D thermal model, so the order of the \
-             devices is right and the numbers are rough (often within 15 K). The airflow lines \
+             over a surface conductance, fitted to the 2D thermal model on one sample cabinet \
+             and within 10 K of it there; other layouts are not checked. The airflow lines \
              only show where warm air rises. Simulate runs the solver.",
             );
         }

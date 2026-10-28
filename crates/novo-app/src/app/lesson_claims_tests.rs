@@ -2,7 +2,7 @@
 //! engines give: the quoted losses and totals, which device is the hottest place in the preview,
 //! the sizing numbers, and the cooling lessons' "one device runs hotter than it allows". The
 //! lesson text is the claim; these tests are the reviewer who reads it against the code. A lesson
-//! that quotes a figure from an engine adds its claim here (and `qa/scenarios/231-learn-heat-claims.qa`
+//! that quotes a figure from an engine adds its claim here (and `qa/scenarios/530-learn-heat-claims.qa`
 //! walks the same lesson in the window at both sizes).
 
 use novo_core::{Device, DeviceId, Project, Structure, StructureId};

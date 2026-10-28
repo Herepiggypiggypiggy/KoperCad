@@ -14,8 +14,10 @@ const AIR_K_PER_W: f64 = 0.17;
 const NEIGHBOUR_SHARE: f64 = 0.2;
 /// Surface conductance of a device to its air and the plate, W/K: a fixed
 /// part (the connections and the plate) and a part per square metre of the
-/// footprint. Fitted to the 2D model: 20 W on 90 x 110 mm runs about 38 K
-/// over its air, 1.5 W on 18 x 90 mm about 10 K.
+/// footprint. Fitted to the 2D thermal model on one sample cabinet (the lesson
+/// cabinet): 20 W on 90 x 110 mm runs about 38 K over its air, 1.5 W on
+/// 18 x 90 mm about 10 K, and every device there is within 10 K of the 2D
+/// result. Other layouts are not checked.
 const SURFACE_G0_W_PER_K: f64 = 0.07;
 const SURFACE_G_W_PER_K_M2: f64 = 47.0;
 

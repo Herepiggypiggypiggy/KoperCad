@@ -87,11 +87,11 @@ title = "The hottest place"
 title_nl = "De heetste plek"
 text = """
 The hottest place sits on the transformer **-T1**, the biggest source: how hot a device runs follows its own loss and its size, so one 20 W device stands out from several small ones side by side.
-The preview ranks the devices the way the solver does, but its temperatures are rough.
+On this cabinet the preview ranks the devices the way the solver does, but its temperatures are rough.
 """
 text_nl = """
 De heetste plek zit bij de transformator **-T1**, de grootste bron: hoe heet een component wordt volgt uit zijn eigen verlies en zijn afmeting, dus één component van 20 W valt op tussen meerdere kleine naast elkaar.
-Het voorbeeld zet de componenten in dezelfde volgorde als de solver, maar de temperaturen zijn ruw.
+Op deze kast zet het voorbeeld de componenten in dezelfde volgorde als de solver, maar de temperaturen zijn ruw.
 """
 point = { ui = "heat.legend" }
 
@@ -100,10 +100,10 @@ id = "total-loss"
 title = "Total loss"
 title_nl = "Totaal verlies"
 text = """
-Under the colour bar the legend says "Total loss 34 W", the sum of the part losses. When a part has no loss data, the legend also says how many devices lack it.
+Under the colour bar the legend says "Total loss 34 W", the sum of the part losses. When a part has no loss data, the legend also says how many devices lack it. In a small window the legend scrolls: scroll it to see the line.
 """
 text_nl = """
-Onder de kleurbalk zegt de legenda "Total loss 34 W", de som van de artikelverliezen. Heeft een artikel geen verliesgegevens, dan zegt de legenda ook hoeveel componenten die missen.
+Onder de kleurbalk zegt de legenda "Total loss 34 W", de som van de artikelverliezen. Heeft een artikel geen verliesgegevens, dan zegt de legenda ook hoeveel componenten die missen. In een klein venster scrolt de legenda: scrol om de regel te zien.
 """
 point = { ui = "heat.legend" }
 
