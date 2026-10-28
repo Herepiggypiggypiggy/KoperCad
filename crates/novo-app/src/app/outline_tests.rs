@@ -177,7 +177,7 @@ fn new_group_page_and_cabinet_name_themselves() {
     d.frame();
     d.frame();
     let form = d.app.ol.cabinet_form.as_ref().expect("the window is open");
-    assert_eq!(d.app.naming().next_cabinet(d.doc().project()), "A1");
+    assert_eq!(d.app.naming().next_cabinet(d.doc().project()), "CAB1");
     let _ = form;
     key(&mut d, egui::Key::Enter, egui::Modifiers::NONE);
     d.frame();
@@ -185,26 +185,26 @@ fn new_group_page_and_cabinet_name_themselves() {
     let cab = d
         .doc()
         .project()
-        .structure_by_tag(&DeviceTag::parse("+A1").unwrap())
-        .expect("cabinet +A1");
+        .structure_by_tag(&DeviceTag::parse("+CAB1").unwrap())
+        .expect("cabinet +CAB1");
     assert!(cab.enclosure);
     assert!(cab.plate.is_some());
     let page = d
         .doc()
         .project()
         .pages()
-        .find(|p| p.structure.to_string() == "=G1+A1")
+        .find(|p| p.structure.to_string() == "=G1+CAB1")
         .expect("its first page sits in the group");
     assert_eq!(page.name, "1");
-    // The next cabinet is +A2 without typing anything.
-    assert_eq!(d.app.naming().next_cabinet(d.doc().project()), "A2");
+    // The next cabinet is +CAB2 without typing anything.
+    assert_eq!(d.app.naming().next_cabinet(d.doc().project()), "CAB2");
     // One undo takes the cabinet back, plate and page together.
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::Undo);
     assert!(
         d.doc()
             .project()
-            .structure_by_tag(&DeviceTag::parse("+A1").unwrap())
+            .structure_by_tag(&DeviceTag::parse("+CAB1").unwrap())
             .is_none()
     );
 }
@@ -376,7 +376,7 @@ fn a_page_dragged_onto_a_cabinet_is_filed_there() {
     key(&mut d, egui::Key::Enter, egui::Modifiers::NONE);
     d.frame();
     d.frame();
-    // The new page sits in +A1; make a loose page and drag it there.
+    // The new page sits in +CAB1; make a loose page and drag it there.
     let here = DeviceTag::default();
     d.app.perform(Act::NewPage {
         structure: here,
@@ -391,7 +391,7 @@ fn a_page_dragged_onto_a_cabinet_is_filed_there() {
     d.frame();
     let loose = page_named(&d, "Loose");
     let from = row_pos(&d, &format!("p:{}:0", loose.0));
-    let to = row_pos(&d, "c:A1");
+    let to = row_pos(&d, "c:CAB1");
     let m = egui::Modifiers::NONE;
     d.frame_with(vec![egui::Event::PointerMoved(from)]);
     d.frame_with(vec![egui::Event::PointerButton {
@@ -414,7 +414,7 @@ fn a_page_dragged_onto_a_cabinet_is_filed_there() {
     d.frame();
     assert_eq!(
         d.doc().project().page(loose).unwrap().structure.to_string(),
-        "+A1",
+        "+CAB1",
         "dropped on the cabinet row"
     );
 }
