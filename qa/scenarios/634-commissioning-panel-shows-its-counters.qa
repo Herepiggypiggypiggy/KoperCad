@@ -1,0 +1,11 @@
+@title Commissioning side panel shows the Project and This page counters whole
+@area Commissioning
+# The counters ("0 / 76") and the name box sit inside the panel, not cut at its right edge.
+click_text "Open example"
+wait 20
+click_text Commissioning #1
+wait 20
+shot commissioning-panel
+expect "Project"
+expect "This page"
+check_layout

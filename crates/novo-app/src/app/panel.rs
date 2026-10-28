@@ -157,10 +157,10 @@ impl Panel {
 
     /// The corner the panel hangs from and where that corner starts: against
     /// its side of the canvas, so the panel's own size never matters.
-    fn start(&self) -> (egui::Align2, egui::Pos2) {
+    fn start(&self, flyout: f32) -> (egui::Align2, egui::Pos2) {
         let top = self.canvas.top() + self.top;
         let bottom = self.canvas.bottom() - BOTTOM - MARGIN;
-        let left = self.canvas.left() + MARGIN;
+        let left = self.canvas.left() + MARGIN + flyout;
         let right = self.canvas.right() - MARGIN;
         match self.side {
             Side::Left => (egui::Align2::LEFT_TOP, egui::pos2(left, top)),
@@ -194,7 +194,10 @@ impl Panel {
             None => None,
         };
         let moved = is_moved(ctx, id);
-        let (pivot, start) = self.start();
+        // The outline flyout (Pages, Issues) hangs over the left edge of the
+        // canvas; a panel on that side starts beside it, not under it.
+        let flyout = if moved { 0.0 } else { reserved_left(ctx) };
+        let (pivot, start) = self.start(flyout);
         // A panel hanging from the right edge stays clear of a card in the
         // bottom right corner, unless the person has moved it.
         let corner = if self.above_card && self.side == Side::Right && !moved {
@@ -339,6 +342,9 @@ pub(super) fn dialog<'a>(
     if reserved_bottom_right(ctx) > 0.0 {
         screen.max.x = (full.max.x - CORNER_CARD_WIDTH - MARGIN).max(full.min.x + DIALOG_MIN_WIDTH);
     }
+    // While the outline flyout (Pages, Issues) is open the dialog is kept
+    // beside it, so the flyout does not cut off the dialog's left edge.
+    screen.min.x = (screen.min.x + reserved_left(ctx)).min(screen.max.x - DIALOG_MIN_WIDTH);
     let width = size[0].max(DIALOG_MIN_WIDTH).min(screen.width());
     let window = egui::Window::new(title)
         .resizable(true)
@@ -438,6 +444,17 @@ fn corner_id() -> egui::Id {
 /// under it. 0 gives the corner back. Read on the next frame.
 pub(super) fn reserve_bottom_right(ctx: &egui::Context, height: f32) {
     ctx.data_mut(|d| d.insert_temp(corner_id(), height));
+}
+
+/// Tells the panels how much of the canvas's left edge the outline flyout
+/// covers (0 while it is closed).
+pub(super) fn reserve_left(ctx: &egui::Context, width: f32) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("panel_flyout_left"), width));
+}
+
+fn reserved_left(ctx: &egui::Context) -> f32 {
+    ctx.data(|d| d.get_temp::<f32>(egui::Id::new("panel_flyout_left")))
+        .unwrap_or(0.0)
 }
 
 pub(super) fn reserved_bottom_right(ctx: &egui::Context) -> f32 {

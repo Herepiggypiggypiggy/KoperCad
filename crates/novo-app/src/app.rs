@@ -2237,11 +2237,14 @@ impl NovoApp {
         picked: &mut Vec<Action>,
     ) {
         let Some(toggle) = self.outline_toggle.clone() else {
+            panel::reserve_left(ctx, 0.0);
             return;
         };
         if !self.outline_open {
+            panel::reserve_left(ctx, 0.0);
             return;
         }
+        panel::reserve_left(ctx, self.outline_width() + 8.0);
         let top = canvas.top() + 8.0;
         let height = (canvas.bottom() - top - 8.0).max(120.0);
         let area = egui::Area::new(egui::Id::new("outline_flyout"))
