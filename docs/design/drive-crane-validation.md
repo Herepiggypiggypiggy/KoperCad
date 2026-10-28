@@ -27,16 +27,16 @@ Plan: `docs/design/drive-crane-simulation.md`, validation cases 1-21. Tests:
 | 2 | Linear ramp points, reversal through zero, S-ramp end points and jerk | yes (L1 landed) | |
 | 3 | V/f law and flux ratio | yes (L1 landed) | |
 | 4 | Breakdown torque against closed-form Thevenin, `(V/f)^2` scaling | hand values only | L2b |
-| 5 | Hoisting torque 345.91 N m | yes | lowering sign and brake hold ratio: L2a |
-| 6 | Brake opens before torque: 110.32 mm bound, 31.70 mm with inertia | hand values only | L2a |
+| 5 | Hoisting torque 345.91 N m | yes (L2a landed) | |
+| 6 | Brake opens before torque: 110.32 mm bound, 31.70 mm with inertia | yes (L2a landed) | |
 | 7 | Braking energy 24.67 kJ, peak 12.34 kW, resistor limits | yes (L1 landed) | |
 | 8 | DC bus energy balance (200 random runs) | yes (L1 landed) | |
 | 9 | Current limit acceleration time 2.618 s | hand values only | L2b (torque from the motor model) |
 | 10 | I2t trip times 60 s, 170.5 s, 25 s | yes (L1 landed) | |
 | 11 | Pendulum period, 30 degree correction 4.0827 s | small angle yes | nonlinear option: L4b |
 | 12 | Raise button stops at the entered limit within one sample | tolerance only | L5a |
-| 13 | Two-speed run-up 0.2384 s + dead time + 0.5676 s | hand values only | L2a |
-| 14 | Brake apply delay, AC side -14.03 mm against DC side +0.42 mm | hand values only | L2a |
+| 13 | Two-speed run-up 0.2384 s + dead time + 0.5676 s | mechanics yes (L2a landed) | sequencer with motor curves: L5a |
+| 14 | Brake apply delay, AC side -14.03 mm against DC side +0.42 mm | yes (L2a landed) | |
 | 15 | End switch stops coarse only, ideal time 27.2 s | hand values only | L2a, L5a |
 | 16 | Two cranes: coarse stop 27.0 m, fine to 29.5 m, 59 s | hand values only | L4a, L5b |
 | 17 | Two crabs: reach 7.5 m, refusal at 1.5 m separation | hand values only | L4a |
