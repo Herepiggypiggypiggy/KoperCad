@@ -562,7 +562,7 @@ mod tests {
 
     use super::*;
 
-    const STEP: &str = "ISO-10303-21;\nHEADER;\nFILE_NAME('LC1D09-18-DC-3D_ASM','2021-09-16T13:53:08',('SESA540900'),(\n'Schneider-Electric'),'CREO','CREO','');\nENDSEC;\nDATA;\n#9=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.MILLI.,.METRE.));\n#1=CARTESIAN_POINT('',(0.,0.,0.));\n#2=CARTESIAN_POINT('',(45.,77.,90.));\n#7=PRODUCT('LC1D09-18-DC-3D_ASM','LC1D09-18-DC-3D_ASM','NOT SPECIFIED',(#2));\nENDSEC;\nEND-ISO-10303-21;\n";
+    const STEP: &str = "ISO-10303-21;\nHEADER;\nFILE_NAME('LC1D09-18-DC-3D_ASM','2000-01-01T00:00:00',('AUTHOR01'),(\n'Schneider-Electric'),'CREO','CREO','');\nENDSEC;\nDATA;\n#9=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.MILLI.,.METRE.));\n#1=CARTESIAN_POINT('',(0.,0.,0.));\n#2=CARTESIAN_POINT('',(45.,77.,90.));\n#7=PRODUCT('LC1D09-18-DC-3D_ASM','LC1D09-18-DC-3D_ASM','NOT SPECIFIED',(#2));\nENDSEC;\nEND-ISO-10303-21;\n";
 
     fn part(order: &str) -> CatalogPart {
         CatalogPart {

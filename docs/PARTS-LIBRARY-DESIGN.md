@@ -419,10 +419,13 @@ What happens now (`novo-parts::cadmatch`, window code `parts_cad.rs`):
 Verified against a real source: Schneider LC1D09 STEP and DXF (downloaded by
 hand from se.com, 2026-10-28; kept out of the repository): the identity is
 read in 8 ms, the family range and document id are found, the DXF follows its
-STEP (`tests/cadmatch_real.rs`, run with `KOPERCAD_REAL_CAD_DIR`). Not
-verified: any WAGO, Siemens or Phoenix file (they need an account the project
-does not have), the size check with a solid-measured size (PR "Measure STEP
-part size from the solid"), and file names other than the ones above.
+STEP (`tests/cadmatch_real.rs`, run with `KOPERCAD_REAL_CAD_DIR`, which CI
+does not set: it was run by hand). The size check uses the measured solid
+(`measure_step`): the real LC1D09 model reads 45 x 77 x 95 mm and fits the
+catalog part. Not verified: any WAGO, Siemens or Phoenix file (they need an
+account the project does not have), and file names other than the ones above.
+A file for a variant (`LC1D09BD`) can be taken as "Checked" for the base
+article when the longer article is not in the catalog.
 
 ## 3e. Maker recipes (parts: maker packs)
 

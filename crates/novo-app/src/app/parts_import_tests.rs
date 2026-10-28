@@ -473,7 +473,7 @@ fn overlapping_reads_do_not_lose_each_others_catalog_changes() {
 /// A STEP file in the style of Schneider's real LC1D09 model: the file name
 /// is a document id, the model inside names the family `LC1D09-18-DC`.
 fn family_step() -> String {
-    "ISO-10303-21;\nHEADER;\nFILE_NAME('LC1D09-18-DC-3D_ASM','2021-09-16T13:53:08',('SESA540900'),(\n'Schneider-Electric'),'CREO','CREO','');\nENDSEC;\nDATA;\n#9=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.MILLI.,.METRE.));\n#1=CARTESIAN_POINT('',(0.,0.,0.));\n#2=CARTESIAN_POINT('',(45.,77.,90.));\n#7=PRODUCT('LC1D09-18-DC-3D_ASM','LC1D09-18-DC-3D_ASM','NOT SPECIFIED',(#8));\nENDSEC;\nEND-ISO-10303-21;\n".to_owned()
+    "ISO-10303-21;\nHEADER;\nFILE_NAME('LC1D09-18-DC-3D_ASM','2000-01-01T00:00:00',('AUTHOR01'),(\n'Schneider-Electric'),'CREO','CREO','');\nENDSEC;\nDATA;\n#9=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.MILLI.,.METRE.));\n#1=CARTESIAN_POINT('',(0.,0.,0.));\n#2=CARTESIAN_POINT('',(45.,77.,90.));\n#7=PRODUCT('LC1D09-18-DC-3D_ASM','LC1D09-18-DC-3D_ASM','NOT SPECIFIED',(#8));\nENDSEC;\nEND-ISO-10303-21;\n".to_owned()
 }
 
 fn schneider(b: &mut Bench, order: &str) -> PartKey {
@@ -524,6 +524,11 @@ fn a_download_named_after_a_document_id_is_taken_when_the_model_inside_names_the
     assert_eq!(records.len(), 1, "only the matching file was stored");
     // The set is remembered: its drawing, which names nothing, follows.
     b.win.import = None;
+    // The first model is still in Downloads, and a file counts as new for
+    // two seconds before the click (file-time slack): a browser would have
+    // left it there long before, so take it away to keep the order in which
+    // the file system lists the two files out of the test.
+    std::fs::remove_file(b.downloads.join("MCADPP0003371_3D-simplified.stp")).unwrap();
     b.click_import(&k);
     write(&b.downloads, "MCADPP0003371_2D-front.dxf", "0\nSECTION\n");
     let Phase::Done(summary) = b.pump_until_settled(20) else {
