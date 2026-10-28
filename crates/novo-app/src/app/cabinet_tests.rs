@@ -713,6 +713,7 @@ fn a_new_project_or_a_closed_one_does_not_stay_on_the_greyed_3d_tab() {
     assert_eq!(d.app.workspace(), Workspace::View3d);
     // Ctrl+N: the new project has no plate, so 3D is greyed: the schematic shows.
     d.app.run(&ctx, Action::NewProject);
+    d.app.answer_save_changes(&ctx, Some(false));
     d.frame();
     assert_eq!(d.app.workspace(), Workspace::Schematic);
 }
@@ -1073,6 +1074,7 @@ fn place_every_panel_says_when_it_used_guessed_sizes() {
     );
     // The banner belongs to the project it was raised on.
     d.app.run(&ctx, Action::NewProject);
+    d.app.answer_save_changes(&ctx, Some(false));
     d.frame();
     assert!(d.app.cabinet.result.is_none());
 }

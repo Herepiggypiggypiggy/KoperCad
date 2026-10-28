@@ -132,7 +132,7 @@ pub struct Settings {
 }
 
 /// The autosave interval when the person has not chosen one.
-pub const DEFAULT_AUTOSAVE_SECONDS: u32 = 30;
+pub const DEFAULT_AUTOSAVE_SECONDS: u32 = 10;
 /// The intervals Preferences offers, in seconds.
 pub const AUTOSAVE_CHOICES: [u32; 5] = [10, 30, 60, 120, 300];
 
@@ -453,7 +453,7 @@ mod tests {
     fn the_autosave_interval_defaults_and_stays_in_the_offered_range() {
         use std::time::Duration;
         let mut s = Settings::default();
-        assert_eq!(s.autosave_interval(), Duration::from_secs(30));
+        assert_eq!(s.autosave_interval(), Duration::from_secs(10));
         s.autosave_seconds = 60;
         assert_eq!(s.autosave_interval(), Duration::from_secs(60));
         s.autosave_seconds = 1;

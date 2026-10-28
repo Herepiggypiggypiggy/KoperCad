@@ -61,6 +61,7 @@ novo-cfd = { workspace = true, features = ["demo"] }
 ron = "0.12"
 tempfile.workspace = true
 lopdf.workspace = true
+zip.workspace = true
 
 [build-dependencies]
 winresource = "0.1"
