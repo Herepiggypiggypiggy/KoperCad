@@ -1,5 +1,8 @@
-# L5a handoff (2026-10-28)
-Branch claude/project-thread-agxv7b. No PR yet. Waiting for #1556 (L2a, head 523b26c5) and #1557 (L1, head 13a2f8fd) to merge into main; then rebase the branch on main and start the loop core.
-Design: docs/design/electromechanical-loop.md (CircuitPort trait cuts the sim/drive cycle).
-The L1 thread (session cse_015gECXUkTwb2c16x4majyua) hands over its UI entries: Drive section, Simulate > Drive run..., badge on drive and motor.
-Customer facts (plans/crane-setup-facts.md) stay out of public files.
+# Drive and crane: handoff
+
+Crates `novo-drive` and `novo-machine` are on main (L0). L2a adds the two-speed hoist engine in `novo-drive` (`motor`, `sequencer`, `brake`, `mechanics`, `hoist_unit`, `error`).
+Entry point for the loop lane (L5a): `hoist_unit::TwoSpeedHoistUnit::step(HoistInput, dt)` returns a `HoistSnapshot`; the schematic supplies `Command` (direction, step 0/1/2), `mains_on` and, with `BrakeFeed::Separate`, the brake coil.
+Brake torque of a tick is the value at its start (one tick of latency, deterministic).
+Conventions: positive shaft speed raises the hook; see `mechanics.rs` header for the efficiency convention.
+Resume: `cargo test -p novo-drive -p novo-machine`.
+No UI entry yet: the "Mechanical load" section of the motor property sheet (L3/L6) and the loop (L5a) consume it.

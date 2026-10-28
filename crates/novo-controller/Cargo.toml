@@ -1,0 +1,18 @@
+[package]
+name = "novo-controller"
+description = "Virtual operator controller for the live view: controls, signals and interlocks from plain-data profiles (pure engine)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Wasm-clean on purpose: std only (no files, clock, threads, globals), BTreeMap for a
+# deterministic order. It must also build as the add-on `engine.wasm`.
+[dependencies]
+serde.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

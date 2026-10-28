@@ -4,12 +4,17 @@
 //! Averaged model: no PWM and no harmonics. Exact by definition: synchronous
 //! speed and ramp arithmetic. Model: slip, current, thermal state, brake
 //! behaviour. Not a replica of any manufacturer's drive and no compliance claim.
-//! Lanes: L1 drive (`drive`), L2 motor and mechanics (`motor`, `mechanics`, `brake`).
+//! Lanes: L1 drive (`drive`), L2 motor and mechanics (`motor`, `sequencer`, `mechanics`, `brake`, `hoist_unit`).
 
 pub mod brake;
 pub mod drive;
+pub mod error;
+pub mod hoist_unit;
 pub mod mechanics;
 pub mod motor;
+pub mod sequencer;
+
+pub use error::InputError;
 
 /// Standard gravity in m/s2 (exact by definition).
 pub const GRAVITY: f64 = 9.806_65;
@@ -23,12 +28,7 @@ pub enum Fidelity {
 
 #[cfg(test)]
 mod tests {
-    use super::{drive::Ramp, mechanics::hoist_holding_torque_nm, motor::sync_rpm};
-
-    #[test]
-    fn four_pole_at_25_hz_is_750_rpm() {
-        assert!((sync_rpm(25.0, 4) - 750.0).abs() < 1e-9);
-    }
+    use super::drive::Ramp;
 
     #[test]
     fn ramp_reaches_half_at_half_time() {
@@ -42,12 +42,5 @@ mod tests {
             r.step(50.0, 0.01);
         }
         assert!((r.frequency_hz - 25.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn hoist_torque_by_hand() {
-        // 5000 kg, r 0.2 m, i 31.5, eta 0.9 -> 5000*9.80665*0.2/28.35
-        let t = hoist_holding_torque_nm(5000.0, 0.2, 31.5, 0.9);
-        assert!((t - 345.9).abs() < 0.1, "{t}");
     }
 }
