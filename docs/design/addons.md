@@ -28,7 +28,7 @@ A `.kcaddon` is a zip:
 ```
 manifest.toml       required; see below
 signature           optional; Ed25519 over the manifest
-engine.wasm         optional; the sandboxed engine (C0b-2)
+engine.wasm         optional; the engine (read and checked now; run by the host in C0b-2)
 data/...            panel layouts, profiles, symbols, word lists, icons, help
 LICENSE             optional
 ```
@@ -107,7 +107,7 @@ Each is declared in `permissions`, listed in the install prompt and in Details, 
 
 Keys: built-in keys (`novo_addons::trust::BUILTIN_KEYS`, **empty until the release thread generates the KoperVonk key**; the private key never enters the repository) and keys the person adds in `%LOCALAPPDATA%\KoperCAD\addons\trusted-keys.toml` (`[[key]]` with `id`, `owner`, `public` as 64 hex digits). The signed message is `kopercad-addon-manifest-v1\n` followed by the manifest bytes.
 
-Honest limits: a signature says who made the file, not that it is good. An add-on runs without file, network or clock access (engine, C0b-2), so the worst it can do is give wrong results inside what its permissions allow, which is why the permissions are listed in plain words. The `.kcaddon` format is new; nothing outside this repository reads it.
+Honest limits: a signature says who made the file, not that it is good. In this version no add-on code runs at all (the engine host is C0b-2): an add-on adds rows, panels, icons and data files. When the engine host lands it runs the engine without file, network or clock access, so the worst an add-on can do is give wrong results inside what its permissions allow, which is why the permissions are listed in plain words. The `.kcaddon` format is new; nothing outside this repository reads it.
 
 ## Install, update, roll back, remove
 

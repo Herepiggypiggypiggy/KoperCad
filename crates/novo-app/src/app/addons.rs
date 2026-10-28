@@ -709,6 +709,8 @@ fn details_ui(
                 let on = entry.status.is_enabled();
                 let can_toggle = matches!(entry.status, Status::Enabled | Status::Disabled);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Room for the scroll bar, so the label is never clipped at the minimum width.
+                    ui.add_space(space::M);
                     ui.add_enabled_ui(can_toggle, |ui| {
                         let mut value = on;
                         if ui.checkbox(&mut value, "On").changed() {
@@ -750,7 +752,7 @@ fn details_ui(
                     ui.label(format!("•  {}", perm.describe()));
                 }
                 if manifest.engine.is_some() {
-                    ui.weak("It carries a program that runs in a sandbox: no files, no network, no clock.");
+                    ui.weak("It carries a program (engine.wasm). This version of KoperCAD cannot run it yet.");
                 }
 
                 ui.add_space(space::M);
@@ -789,7 +791,7 @@ fn details_ui(
 
                 ui.add_space(space::M);
                 widgets::section_label(ui, "Files, checked at every start");
-                ui.weak(format!("Fingerprint {}", short(&entry.fingerprint)));
+                fingerprint_row(ui, "Fingerprint", &entry.fingerprint);
                 for (path, hash) in &manifest.files {
                     let ok = entry.verified.get(path).copied().unwrap_or(false);
                     ui.horizontal(|ui| {
@@ -800,7 +802,7 @@ fn details_ui(
                         };
                         ui.label(egui::RichText::new(mark).color(color));
                         ui.label(path);
-                        ui.label(egui::RichText::new(short(hash)).color(p.text_tertiary));
+                        ui.label(egui::RichText::new(hash.chars().take(12).collect::<String>() + "…").color(p.text_tertiary));
                     });
                 }
             }
@@ -838,7 +840,20 @@ fn details_ui(
 }
 
 fn short(hash: &str) -> String {
-    hash.chars().take(12).collect::<String>() + "…"
+    hash.chars().take(16).collect::<String>() + "…"
+}
+
+/// A hash as its first 16 characters and a Copy button for the whole of it, so it never wraps.
+fn fingerprint_row(ui: &mut egui::Ui, label: &str, hash: &str) {
+    ui.horizontal(|ui| {
+        ui.weak(format!("{label} {}", short(hash)));
+        if widgets::ghost_button(ui, "Copy")
+            .on_hover_text("Copy the whole value")
+            .clicked()
+        {
+            ui.ctx().copy_text(hash.to_owned());
+        }
+    });
 }
 
 fn install_prompt_ui(ui: &mut egui::Ui, prompt: &mut Prompt, cancel: &mut bool, go: &mut bool) {
@@ -871,11 +886,11 @@ fn install_prompt_ui(ui: &mut egui::Ui, prompt: &mut Prompt, cancel: &mut bool, 
         ui.label(format!("•  {}", perm.describe()));
     }
     if package.manifest.engine.is_some() {
-        ui.weak("It carries a program that runs in a sandbox: no files, no network, no clock.");
+        ui.weak("It carries a program (engine.wasm). This version of KoperCAD cannot run it yet.");
     }
     ui.add_space(space::S);
-    ui.weak(format!("Fingerprint {}", package.fingerprint));
-    ui.weak(format!("File {}", short(&package.file_sha256)));
+    fingerprint_row(ui, "Fingerprint", &package.fingerprint);
+    fingerprint_row(ui, "File", &package.file_sha256);
     let needs_tick = prompt.inspection.needs_trust_tick();
     if needs_tick {
         ui.add_space(space::M);
