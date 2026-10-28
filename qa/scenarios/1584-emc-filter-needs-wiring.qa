@@ -19,6 +19,7 @@ wait 10
 expect "Preview on a copy of the project"
 expect "not drawn yet and filters nothing"
 expect_not "Clears EMC-07"
+expect_not "Brings EMC-07"
 shot 01-preview
 check_layout
 click_text "Apply (one undo step)"

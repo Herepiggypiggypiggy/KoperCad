@@ -211,6 +211,7 @@ fn fixes_apply_as_commands_and_clear_their_findings() {
     let add = Fix::AddFilter {
         drive: c.drive.raw(),
     };
+    let before_filter = c.project.clone();
     c.project
         .transact("filter", |tx| apply(tx, &add).map(|_| ()))
         .unwrap();
@@ -235,6 +236,10 @@ fn fixes_apply_as_commands_and_clear_their_findings() {
     let f = listed.of_rule("EMC-07").next().expect("finding stays");
     assert!(f.message.contains("not drawn and wired"), "{}", f.message);
     assert!(f.fixes.is_empty());
+    // The preview of the same fix on the project before it: the finding stays.
+    let pv = novo_emc::project::preview(&before_filter, &add).unwrap();
+    assert!(pv.cleared.is_empty(), "{:?}", pv.cleared);
+    assert!(pv.added.is_empty(), "{:?}", pv.added);
     assert!(
         listed
             .score_of(Subject::Device(c.drive.raw()))

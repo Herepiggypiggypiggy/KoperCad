@@ -898,9 +898,9 @@ fn drive_filters(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                 rule: "EMC-07",
                 level: Level::Fact,
                 severity: Severity::Warning,
-                subjects: std::iter::once(Subject::Device(d.id))
-                    .chain(listed.iter().map(|f| Subject::Device(f.id)))
-                    .collect(),
+                // The drive only, as for "no filter": the preview then shows
+                // the same finding staying, not one cleared and one brought.
+                subjects: vec![Subject::Device(d.id)],
                 points: vec![(Subject::Device(d.id), 30)],
                 message: format!(
                     "{} has a filter in the device list ({}) but it is not drawn and wired: draw it on a page and wire it in series between the supply and the drive. Until then nothing is filtered.",
