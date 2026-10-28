@@ -5,7 +5,31 @@
 fn main() -> eframe::Result {
     novo_app::apply_profile_flag();
     novo_app::diag::init();
+    // A native crash in the graphics driver leaves no report, so the program
+    // leaves a marker while it starts. If the last start died, ask here, before
+    // the window opens, whether to use safe graphics this time.
+    novo_app::startup::begin(|failure| {
+        let offer = !failure.was_safe_graphics;
+        let result = rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Warning)
+            .set_title("KoperCAD did not start last time")
+            .set_description(failure.message())
+            .set_buttons(if offer {
+                rfd::MessageButtons::YesNo
+            } else {
+                rfd::MessageButtons::Ok
+            })
+            .show();
+        if offer && result == rfd::MessageDialogResult::Yes {
+            novo_app::startup::Answer::SafeGraphics
+        } else {
+            novo_app::startup::Answer::Normal
+        }
+    });
     let result = novo_app::run();
+    // The program came back by itself (closed early, or an error it reports
+    // below): that is not a start that died.
+    novo_app::startup::ended();
     if let Err(e) = &result {
         // Release builds on Windows have no console, so say it in a dialog.
         log::error!("KoperCAD could not start: {e}");
