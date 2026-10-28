@@ -18,6 +18,7 @@
 
 pub mod binding;
 pub mod engine;
+pub mod import;
 pub mod profile;
 pub mod sequence;
 pub mod set;

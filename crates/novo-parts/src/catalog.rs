@@ -653,8 +653,18 @@ impl FromIterator<CatalogPart> for Catalog {
 /// on Windows (the app moves it there from the old `NovoElectric` folder at
 /// start; until then the old file is used), `$XDG_DATA_HOME/novoelectric/parts.json` (or
 /// `~/.local/share/...`) elsewhere. Always inside the user's profile, so it
-/// is writable without admin rights. `None` if no profile folder is known.
+/// is writable without admin rights. With a profile folder (`--profile-dir`,
+/// `KOPERCAD_PROFILE_DIR` or a portable install) it is
+/// `<profile>/roaming/KoperCAD/parts.json`, so the inbox, library and saved
+/// mappings beside it follow the profile too. `None` if no profile folder is known.
 pub fn user_catalog_path() -> Option<PathBuf> {
+    catalog_path_for(novo_storage::profile::root().as_deref())
+}
+
+fn catalog_path_for(profile: Option<&std::path::Path>) -> Option<PathBuf> {
+    if let Some(root) = profile {
+        return Some(root.join("roaming").join("KoperCAD").join("parts.json"));
+    }
     let var = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty());
     if cfg!(windows) {
         var("APPDATA").map(|dir| {

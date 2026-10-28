@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Top bar at every width</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="@@KC@@">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.strip{border:1px solid var(--bd2);border-radius:4px;overflow:hidden;background:var(--panel)}
+.mn{padding:0 7px;height:28px;display:inline-flex;align-items:center;border-radius:3px;color:var(--tx)}
+</style>
+</helmet>
+<div class="kc {{theme}}" style="width:1420px;height:700px;background:var(--ground);padding:36px 40px;display:flex;flex-direction:column;gap:22px">
+
+  <div class="col" style="gap:6px"><span class="lbl">Top bar · what changes, and what gives way first</span>
+    <span style="font-size:22px;font-weight:600">Before: 8 menu words, 5 workspace words, 1 breadcrumb. After: icons, one active label.</span></div>
+
+  <!-- BEFORE, 1366: as it is today -->
+  <div class="col" style="gap:6px"><span class="cap">Today at 1366 · only words in the bar, one weight, one level</span>
+    <div class="strip" style="width:1366px"><div class="top" style="gap:0;padding:0 8px">
+      <span class="mn strong">KoperCAD</span><span class="mn">File</span><span class="mn">Edit</span><span class="mn">Draw</span><span class="mn">View</span><span class="mn">Check</span><span class="mn">Reports</span><span class="mn">Simulate</span><span class="mn">Help</span>
+      <span class="vsep"></span>
+      <span class="mn" style="background:var(--control);border:1px solid var(--bd)">Sch</span><span class="mn" style="color:var(--tx3)">Cab</span><span class="mn" style="color:var(--tx3)">3D</span><span class="mn" style="color:var(--tx3)">Rpt</span><span class="mn" style="color:var(--tx3)">Cmn</span>
+      <span class="vsep"></span>
+      <span class="mn">Motor starte…</span><span style="color:var(--tx3)">/</span><span class="mn strong">1 Main circuit</span>
+      <span class="grow"></span>
+      <span class="mn" style="border:1px solid var(--bd2);background:var(--control)">Search</span><span class="mn" style="color:var(--warn)">⚠ 1 warning</span>
+    </div></div></div>
+
+  <!-- AFTER at 1920 -->
+  <div class="col" style="gap:6px"><span class="cap">After at 1500 and wider · every workspace shows its name (drawn at 1340 so it fits this board)</span>
+    <div class="strip" style="width:1340px;position:relative"><div class="top">
+      <button class="mark"><span class="logo"><i class="brand"></i></span><i class="i i-caret-down i14" style="color:var(--tx3)"></i></button>
+      <button class="btn"><i class="i i-arrow-counter-clockwise i18"></i></button><button class="btn dim"><i class="i i-arrow-clockwise i18"></i></button>
+      <span class="vsep"></span>
+      <div class="seg"><button class="btn on"><i class="i ki-schematic i18"></i><span>Schematic</span></button><button class="btn"><i class="i ki-cabinet i18"></i><span>Cabinet</span></button><button class="btn"><i class="i i-cube i18"></i><span>3D</span></button><button class="btn"><i class="i ki-report i18"></i><span>Reports</span></button><button class="btn"><i class="i i-clipboard-text i18"></i><span>Commissioning</span></button></div>
+      <span class="vsep"></span>
+      <span class="crumb"><i class="i i-files i14"></i><span>Motor starter (example)</span><span style="color:var(--tx3)">/</span><b>1 Main circuit</b><i class="i i-caret-down i14" style="color:var(--tx3)"></i></span>
+      <span class="grow"></span>
+      <span class="search"><i class="i i-magnifying-glass i14"></i><span style="min-width:150px">Search or run</span><span class="kbd">Ctrl K</span></span>
+      <span class="pill warn"><i class="i i-warning i14"></i>1 warning</span><button class="btn"><i class="i i-sparkle i18"></i></button><button class="btn"><i class="i i-question i18"></i></button>
+    </div></div></div>
+
+  <!-- AFTER at 1366 -->
+  <div class="col" style="gap:6px"><span class="cap">After at 1366 · only the open workspace carries its name</span>
+    <div class="strip" style="width:1366px"><div class="top">
+      <button class="mark"><span class="logo"><i class="brand"></i></span><i class="i i-caret-down i14" style="color:var(--tx3)"></i></button>
+      <button class="btn"><i class="i i-arrow-counter-clockwise i18"></i></button><button class="btn dim"><i class="i i-arrow-clockwise i18"></i></button>
+      <span class="vsep"></span>
+      <div class="seg"><button class="btn on"><i class="i ki-schematic i18"></i><span>Schematic</span></button><button class="btn"><i class="i ki-cabinet i18"></i></button><button class="btn"><i class="i i-cube i18"></i></button><button class="btn"><i class="i ki-report i18"></i></button><button class="btn"><i class="i i-clipboard-text i18"></i></button></div>
+      <span class="vsep"></span>
+      <span class="crumb"><i class="i i-files i14"></i><span>Motor starter (example)</span><span style="color:var(--tx3)">/</span><b>1 Main circuit</b><i class="i i-caret-down i14" style="color:var(--tx3)"></i></span>
+      <span class="grow"></span>
+      <span class="search"><i class="i i-magnifying-glass i14"></i><span style="min-width:96px">Search or run</span><span class="kbd">Ctrl K</span></span>
+      <span class="pill warn"><i class="i i-warning i14"></i>1</span><button class="btn"><i class="i i-sparkle i18"></i></button><button class="btn"><i class="i i-question i18"></i></button>
+    </div></div></div>
+
+  <!-- AFTER at 1100 and at 760 side by side -->
+  <div class="row" style="align-items:flex-start;gap:28px">
+    <div class="col" style="gap:6px"><span class="cap">At 1100 · the breadcrumb is cut, search keeps only its key</span>
+      <div class="strip" style="width:1100px"><div class="top">
+        <button class="mark"><span class="logo"><i class="brand"></i></span><i class="i i-caret-down i14" style="color:var(--tx3)"></i></button>
+        <button class="btn"><i class="i i-arrow-counter-clockwise i18"></i></button><button class="btn dim"><i class="i i-arrow-clockwise i18"></i></button>
+        <span class="vsep"></span>
+        <div class="seg"><button class="btn on"><i class="i ki-schematic i18"></i><span>Schematic</span></button><button class="btn"><i class="i ki-cabinet i18"></i></button><button class="btn"><i class="i i-cube i18"></i></button><button class="btn"><i class="i ki-report i18"></i></button><button class="btn"><i class="i i-clipboard-text i18"></i></button></div>
+        <span class="vsep"></span>
+        <span class="crumb"><i class="i i-files i14"></i><span>Motor sta…</span><span style="color:var(--tx3)">/</span><b>1 Main</b></span>
+        <span class="grow"></span>
+        <span class="search"><i class="i i-magnifying-glass i14"></i><span class="kbd">Ctrl K</span></span>
+        <span class="pill warn"><i class="i i-warning i14"></i>1</span><button class="btn"><i class="i i-question i18"></i></button>
+      </div></div></div>
+  </div>
+  <div class="col" style="gap:6px"><span class="cap">Under 760 (a 1366 screen at 200 %) · icons only, the rest folds into the app menu</span>
+    <div class="strip" style="width:700px"><div class="top">
+      <button class="mark"><span class="logo"><i class="brand"></i></span><i class="i i-caret-down i14" style="color:var(--tx3)"></i></button>
+      <button class="btn"><i class="i i-arrow-counter-clockwise i18"></i></button>
+      <span class="vsep"></span>
+      <div class="seg"><button class="btn on"><i class="i ki-schematic i18"></i></button><button class="btn"><i class="i ki-cabinet i18"></i></button><button class="btn"><i class="i i-cube i18"></i></button><button class="btn"><i class="i ki-report i18"></i></button><button class="btn"><i class="i i-clipboard-text i18"></i></button></div>
+      <span class="crumb"><b>1</b><i class="i i-caret-down i14" style="color:var(--tx3)"></i></span>
+      <span class="grow"></span>
+      <button class="btn"><i class="i i-magnifying-glass i18"></i></button><span class="pill warn"><i class="i i-warning i14"></i>1</span><button class="btn"><i class="i i-dots-three i18"></i></button>
+    </div></div></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>

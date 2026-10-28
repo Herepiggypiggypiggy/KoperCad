@@ -1,0 +1,29 @@
+# Woordenlijst voor de importwizard van bedieningen, Nederlands.
+# Zelfde opbouw als words-en.txt: `categorie: woord, woord, zin met spaties, stam*`.
+motion.hoist: hijs, hijswerk, hijsbeweging, takel, lier
+motion.aux: hulphijs, hulphijsen, hulp
+motion.bridge: brug, rijbrug, kraanbrug, lang rijden, langsrijden, rijden brug
+motion.trolley: kat, loopkat, dwarsrijden, kruiprijden, dwars, katrijden
+motion.slew: draaien, draai, zwenk, zwenken
+motion.tilt: kantelen, kantel
+dir.up: op, omhoog, omhoog*, hoger
+dir.down: neer, omlaag, omlaag*, lager
+dir.forward: vooruit, voorwaarts, vw
+dir.back: achteruit, achterwaarts, terug
+dir.left: links, linksom
+dir.right: rechts, rechtsom
+combo.hoist.up: hijsen
+combo.hoist.down: zakken, vieren, laten zakken
+speed.slow: langzaam, laag, kruip, fijn, traag, 1e snelheid, eerste snelheid
+speed.fast: snel, hoog, vlot, grof, 2e snelheid, tweede snelheid
+role.estop: noodstop, nood stop, nood-stop, noodstop*, nood*, paddestoel
+role.main: hoofd, hoofdcontactor, hoofdschakelaar, inschakelen, start
+role.stop: stop, uitschakelen
+role.common: com, gemeenschappelijk, gemeenschap, gemeen, c, 0v
+role.horn: claxon, hoorn, toeter, sirene
+role.light: licht, lamp, werklamp
+role.selector: keuze, keuzeschakelaar, wissel, sleutelschakelaar
+kind.radio: radio, zender, ontvanger, afstandsbediening
+kind.pendant: drukknoppenkast, drukknopkast, bedieningskast, hangkast, bedieningsstation
+kind.joystick: joystick, meesterschakelaar
+kind.plc-panel: plc, testpaneel
