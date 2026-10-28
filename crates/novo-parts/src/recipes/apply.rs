@@ -646,6 +646,8 @@ struct Draft {
     price: Option<f64>,
     currency: Option<String>,
     per: Option<u32>,
+    /// The pieces named inside the price text itself (`9 EUR/100`).
+    per_in_text: Option<u32>,
     price_date: Option<String>,
 }
 
@@ -795,6 +797,76 @@ pub(crate) fn currency_of(text: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+/// The largest price per piece or per price unit accepted, in any currency.
+/// Larger values are typing errors or a number read from the wrong column.
+const MAX_PRICE: f64 = 1.0e8;
+
+struct PriceRead {
+    amount: f64,
+    /// Pieces the price is for, when the text says (`9 EUR/100`, `per 1000 pcs`).
+    per: Option<u32>,
+    /// A reading that may not be what the file means (`1.500`).
+    note: Option<String>,
+}
+
+/// Reads a price cell: the amount, an optional "per 100" style basis, and
+/// refuses what cannot be a price (zero, negative, absurd, per metre or kilogram).
+fn read_price(value: &Value) -> Result<PriceRead, &'static str> {
+    let (amount, per, note) = match value {
+        Value::Text(raw) => {
+            let t = raw.trim();
+            let (head, basis) = match t.split_once('/') {
+                Some((h, b)) => (h, Some(b)),
+                None => match t.to_ascii_lowercase().find(" per ") {
+                    Some(i) => (&t[..i], Some(&t[i + 5..])),
+                    None => (t, None),
+                },
+            };
+            // `1e3` would read as 1 with the unit "e3": refuse instead of guessing.
+            let lead = head.trim_start_matches(['+', '-']);
+            let after =
+                lead.trim_start_matches(|c: char| c.is_ascii_digit() || matches!(c, '.' | ','));
+            if after.len() < lead.len()
+                && after.strip_prefix(['e', 'E']).is_some_and(|r| {
+                    r.trim_start_matches(['+', '-'])
+                        .starts_with(|c: char| c.is_ascii_digit())
+                })
+            {
+                return Err("price in exponent notation");
+            }
+            let (norm, note) = crate::tablepreview::normalise_number_text(head);
+            let q = super::quantity::parse_quantity(&norm).ok_or("price that is not a number")?;
+            if q.range {
+                return Err("price that is not a number");
+            }
+            let per = match basis {
+                None => None,
+                Some(b) => match crate::tablepreview::price_basis(b) {
+                    Ok(n) => Some(n),
+                    Err(crate::tablepreview::PriceBasis::Other) => {
+                        return Err("price per metre or other unit, not per piece");
+                    }
+                    Err(crate::tablepreview::PriceBasis::Unreadable) => {
+                        return Err("price unit that is not understood");
+                    }
+                },
+            };
+            (q.low, per, note)
+        }
+        other => match value_quantity(other) {
+            Some(q) if !q.range => (q.low, None, None),
+            _ => return Err("price that is not a number"),
+        },
+    };
+    if !amount.is_finite() || amount <= 0.0 {
+        return Err("price that is zero or negative");
+    }
+    if amount > MAX_PRICE {
+        return Err("price that is too large to be real");
+    }
+    Ok(PriceRead { amount, per, note })
 }
 
 fn text_of(v: &Value) -> String {
@@ -1130,14 +1202,21 @@ impl MakerRecipe {
                 }
                 Target::Price => {
                     let text = text_of(&value);
-                    match value_quantity(&value) {
-                        Some(q) if !q.range => {
-                            draft.price = Some(q.low);
+                    match read_price(&value) {
+                        Ok(read) => {
+                            draft.price = Some(read.amount);
+                            draft.per_in_text = read.per;
                             if draft.currency.is_none() {
                                 draft.currency = currency_of(&text);
                             }
+                            if let Some(note) = read.note {
+                                let w = format!("{order}: {note}");
+                                if !report.warnings.contains(&w) {
+                                    report.warnings.push(w);
+                                }
+                            }
                         }
-                        _ => skip!("price that is not a number"),
+                        Err(reason) => skip!(reason),
                     }
                 }
                 Target::Currency => draft.currency = currency_of(&text_of(&value)),
@@ -1272,7 +1351,7 @@ impl MakerRecipe {
                     part.price = Some(Price {
                         amount,
                         currency,
-                        per: draft.per.unwrap_or(1).max(1),
+                        per: draft.per.or(draft.per_in_text).unwrap_or(1).max(1),
                         date: draft.price_date.unwrap_or_default(),
                     });
                 }
