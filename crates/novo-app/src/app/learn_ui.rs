@@ -7,7 +7,8 @@
 
 use eframe::egui;
 use novo_learn::{Demo, Phase, Span, Target, parse_markup};
-use novo_theme::widgets::section_label;
+use novo_theme::icons;
+use novo_theme::widgets::{icon_button, section_label};
 
 use super::NovoApp;
 use super::learn::Move;
@@ -22,6 +23,8 @@ enum CardAction {
     ConfirmRestart,
     CancelRestart,
     Close,
+    /// The Learn window, at this lesson's topic.
+    Contents,
     Open(String),
     Hint,
     Predict(usize),
@@ -33,10 +36,16 @@ enum CardAction {
 /// The card's words for one frame, copied out so drawing needs no borrow.
 pub(super) struct Card {
     header: String,
+    /// "2 of 14": kept whole when a long title is cut.
+    counter: String,
     step_title: String,
     text: String,
     /// The author's numbered instructions (`how`), with markup.
     steps: Vec<String>,
+    /// The control the step waits for a click on is greyed out right now.
+    greyed: bool,
+    /// Steps done of the lesson, 0 to 1, for the bar under the header.
+    fraction: f32,
     ticked: bool,
     pub(super) finished: bool,
     can_next: bool,
@@ -90,7 +99,13 @@ struct Words {
     restart_confirm: String,
     yes_restart: String,
     cancel: String,
+    /// Tooltip of the cross: what closing the card does.
     close: String,
+    close_tip: String,
+    /// The Learn window (all lessons, paths, topics).
+    contents: String,
+    greyed_note: String,
+    drag_tip: String,
     done: String,
     done_text: String,
     next_lessons: String,
@@ -108,20 +123,36 @@ impl NovoApp {
     pub(super) fn learn_overlay(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         if !self.learn.card_on() {
             super::panel::reserve_bottom_right(ctx, 0.0);
+            super::panel::reserve_bottom_left(ctx, None);
             return;
         }
         self.pointer(ctx, canvas);
         self.learn_demo_overlay(ctx, canvas);
-        let Some(card) = self.card() else {
+        let Some(mut card) = self.card() else {
             return;
         };
+        card.greyed = self.learn.run.as_ref().is_some_and(|run| {
+            run.phase() == Phase::Active
+                && run
+                    .step()
+                    .and_then(|s| s.expect.as_ref())
+                    .is_some_and(|c| click_target_greyed(ctx, c))
+        });
         let confirm = self.learn.confirm_restart;
         let mut action = None;
+        // In the Cabinet the inspector, which a lesson step opens and reads
+        // from, takes the whole right edge: the card parks bottom left, beside
+        // the plate, so neither covers the other at 1366x768.
+        let side = if self.workspace() == super::workspace::Workspace::Cabinet {
+            super::panel::Side::BottomLeft
+        } else {
+            super::panel::Side::BottomRight
+        };
         let card_rect = super::panel::Panel::new(
             "lesson_card",
             self.learn.say("learn"),
             canvas,
-            super::panel::Side::BottomRight,
+            side,
             super::panel::CORNER_CARD_WIDTH,
         )
         .fixed_open()
@@ -134,8 +165,9 @@ impl NovoApp {
         self.learn.card_pos = Some(card_rect.center());
         // The inspector and the other right-hand panels keep above the card
         // while it sits in its corner.
-        let parked =
-            card_rect.is_finite() && !super::panel::is_moved(ctx, super::panel::id("lesson_card"));
+        let parked = card_rect.is_finite()
+            && side == super::panel::Side::BottomRight
+            && !super::panel::is_moved(ctx, super::panel::id("lesson_card"));
         super::panel::reserve_bottom_right(
             ctx,
             if parked {
@@ -143,6 +175,14 @@ impl NovoApp {
             } else {
                 0.0
             },
+        );
+        // Dialogs open right of a card parked at the left, not over it.
+        let parked_left = card_rect.is_finite()
+            && side == super::panel::Side::BottomLeft
+            && !super::panel::is_moved(ctx, super::panel::id("lesson_card"));
+        super::panel::reserve_bottom_left(
+            ctx,
+            parked_left.then_some(card_rect.max.x + super::panel::MARGIN),
         );
         match action {
             Some(CardAction::Move(Move::Skip)) => self.learn_skip(ctx),
@@ -156,6 +196,7 @@ impl NovoApp {
             }
             Some(CardAction::CancelRestart) => self.learn.confirm_restart = false,
             Some(CardAction::Close) => self.learn.hidden = true,
+            Some(CardAction::Contents) => self.learn_contents(),
             Some(CardAction::Open(id)) => self.start_lesson(&id),
             Some(CardAction::Hint) => self.learn_open_hint(),
             Some(CardAction::Predict(choice)) => {
@@ -190,6 +231,10 @@ impl NovoApp {
             yes_restart: say("yes_restart"),
             cancel: say("cancel"),
             close: say("close"),
+            close_tip: say("close_tip"),
+            contents: say("contents"),
+            greyed_note: say("greyed_note"),
+            drag_tip: say("drag_tip"),
             done: say("done"),
             done_text: say("done_text"),
             next_lessons: say("next_lessons"),
@@ -208,13 +253,10 @@ impl NovoApp {
         } else {
             lesson.title(lang).to_owned()
         };
-        let header = format!(
-            "{} · {}",
-            title,
-            self.learn
-                .say_with("step_of", &[("n", &n), ("total", &total.to_string())])
-        );
-        let _ = behind;
+        let counter = self
+            .learn
+            .say_with("step_of", &[("n", &n), ("total", &total.to_string())]);
+        let header = title;
         let finished = run.phase() == Phase::Finished;
         let next_lessons = if finished {
             lesson
@@ -229,6 +271,7 @@ impl NovoApp {
         let step = run.step();
         Some(Card {
             header,
+            counter,
             step_title: step.map(|s| s.title(lang).to_owned()).unwrap_or_default(),
             text: step.map(|s| s.text(lang).to_owned()).unwrap_or_default(),
             steps: step
@@ -240,6 +283,12 @@ impl NovoApp {
                         .collect()
                 })
                 .unwrap_or_default(),
+            greyed: false,
+            fraction: if total == 0 {
+                0.0
+            } else {
+                (behind as f32 / total as f32).clamp(0.0, 1.0)
+            },
             ticked: run.phase() == Phase::Ticked,
             finished,
             can_next: run.can_advance(),
@@ -286,21 +335,38 @@ impl NovoApp {
         let mut action = None;
         ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui
-                    .small_button("✕")
-                    .on_hover_text(&card.words.close)
+                // The two ways off the card, always in the same place: the
+                // cross hides it (the lesson waits), the list opens all lessons.
+                if named_icon(ui, icons::X, &card.words.close, &card.words.close_tip).clicked() {
+                    action = Some(CardAction::Close);
+                }
+                // A finished card has its own "All lessons" button below.
+                if !card.finished
+                    && named_icon(
+                        ui,
+                        icons::LIST_BULLETS,
+                        &card.words.contents,
+                        &card.words.contents,
+                    )
                     .clicked()
                 {
-                    action = Some(CardAction::Close);
+                    action = Some(CardAction::Contents);
+                }
+                if !card.finished {
+                    ui.weak(&card.counter);
                 }
                 // The title gives way to the button, not the other way round.
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                    // The card moves by its body; the grip says so.
+                    ui.weak(icons::DOTS_SIX_VERTICAL)
+                        .on_hover_text(&card.words.drag_tip);
                     section_label(ui, &card.header).on_hover_text(&card.header);
                 });
             });
         });
-        ui.add_space(2.0);
+        super::learn_suite::progress_bar(ui, card.fraction);
+        ui.add_space(4.0);
         if card.finished {
             ui.label(egui::RichText::new(format!("✓ {}", card.words.done)).strong());
             if card.explain.is_empty() {
@@ -327,10 +393,12 @@ impl NovoApp {
             }
             ui.add_space(4.0);
             ui.horizontal(|ui| {
-                if ui.button(&card.words.close).clicked() {
-                    action = Some(CardAction::Close);
+                let all = format!("{} {}", icons::LIST_BULLETS, card.words.contents);
+                if novo_theme::widgets::primary_button(ui, &all).clicked() {
+                    action = Some(CardAction::Contents);
                 }
-                if ui.small_button(&card.words.restart).clicked() {
+                let again = format!("{} {}", icons::ARROW_COUNTER_CLOCKWISE, card.words.restart);
+                if ui.button(again).clicked() {
                     action = Some(CardAction::Restart);
                 }
             });
@@ -410,14 +478,21 @@ impl NovoApp {
                     card.hints_open.len() + 1,
                     card.hints_total
                 );
-                if ui.button(label).clicked() {
+                if ui.button(format!("{} {label}", icons::LIGHTBULB)).clicked() {
                     action = Some(CardAction::Hint);
                 }
+            }
+            if card.greyed {
+                ui.add_space(4.0);
+                ui.weak(&card.words.greyed_note);
             }
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {
                 if ui
-                    .add_enabled(!card.first, egui::Button::new(&card.words.back))
+                    .add_enabled(
+                        !card.first,
+                        egui::Button::new(format!("{} {}", icons::ARROW_LEFT, card.words.back)),
+                    )
                     .clicked()
                 {
                     action = Some(CardAction::Move(Move::Back));
@@ -428,22 +503,27 @@ impl NovoApp {
                     } else {
                         &card.words.show_me
                     };
-                    if ui.button(label).clicked() {
+                    if ui.button(format!("{} {label}", icons::EYE)).clicked() {
                         action = Some(CardAction::ShowMe);
                     }
                 }
-                if card.demo_on && ui.button(&card.words.stop).clicked() {
+                if card.demo_on
+                    && ui
+                        .button(format!("{} {}", icons::STOP, card.words.stop))
+                        .clicked()
+                {
                     action = Some(CardAction::StopDemo);
                 }
                 if card.can_next {
-                    if novo_theme::widgets::primary_button(ui, &card.words.next).clicked() {
+                    let next = format!("{} {}", card.words.next, icons::ARROW_RIGHT);
+                    if novo_theme::widgets::primary_button(ui, &next).clicked() {
                         action = Some(CardAction::Move(Move::Next));
                     }
                 } else if ui
                     .button(if card.skip_does_it {
-                        &card.words.do_it
+                        format!("{} {}", icons::MAGIC_WAND, card.words.do_it)
                     } else {
-                        &card.words.skip
+                        format!("{} {}", icons::SKIP_FORWARD, card.words.skip)
                     })
                     .clicked()
                 {
@@ -462,7 +542,11 @@ impl NovoApp {
                     }
                 });
             } else if ui
-                .small_button(format!("⟲ {}", card.words.restart))
+                .small_button(format!(
+                    "{} {}",
+                    icons::ARROW_COUNTER_CLOCKWISE,
+                    card.words.restart
+                ))
                 .clicked()
             {
                 action = Some(CardAction::Restart);
@@ -683,6 +767,26 @@ impl NovoApp {
             self.learn.window = true;
         }
     }
+}
+
+/// Whether a click the check waits for is on a control that is greyed out now:
+/// it cannot be clicked, so the card says why the step does not move.
+fn click_target_greyed(ctx: &egui::Context, check: &novo_learn::Check) -> bool {
+    use novo_learn::Check;
+    match check {
+        Check::Clicked(id) => super::cabinet_bar::is_greyed(ctx, id),
+        Check::Any(list) | Check::All(list) => list.iter().any(|c| click_target_greyed(ctx, c)),
+        _ => false,
+    }
+}
+
+/// An icon-only button that still has a name for a screen reader and the
+/// test tool; the tooltip says more.
+fn named_icon(ui: &mut egui::Ui, icon: &str, name: &str, tip: &str) -> egui::Response {
+    let enabled = ui.is_enabled();
+    let response = icon_button(ui, icon, tip);
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, name));
+    response
 }
 
 /// Draws a lesson chip from [`LearnState::chip`] and returns the lesson id

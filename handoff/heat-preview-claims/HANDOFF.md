@@ -18,3 +18,4 @@ Traps
   `cargo test -p novo-app --lib lesson_claims_tests` and fix the text, EN and NL.
 - Another thread owns lesson navigation (suite, panel highlight, Apply fixes): this PR touches only the
   text of heat-and-sizing, cut-lengths, panel-labels and wire-routing, plus a split step in two of them.
+- Bench-output lessons: claims live in `lesson_claims_bench_tests.rs` (builds the example pack once, reads the PDF text with lopdf, whitespace collapsed because the PDF wraps lines). Run `cargo test -p novo-app --lib lesson_claims_bench`.

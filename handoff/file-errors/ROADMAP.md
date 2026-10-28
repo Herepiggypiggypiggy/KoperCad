@@ -1,0 +1,1 @@
+Saving, autosave and file error handling from the 2026-10-28 Windows hardware test (HPR-01/02, FEC-01..10). Done in one PR; open: FEC-12 (wire list CSV drops its section title, reports lane), FEC-09 (calc), UWL-04 (keymap BOM).

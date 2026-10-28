@@ -636,6 +636,15 @@ impl Catalog {
         serde_json::to_string_pretty(&file).expect("catalog serializes")
     }
 
+    /// Reads catalog text that is not a file of ours (a part of a bundle):
+    /// the same format and migrations as [`Catalog::load`].
+    pub fn parse(text: &str) -> Result<Self, String> {
+        Catalog::from_json(text).map_err(|e| match e {
+            FromJsonError::Format(e) => e.to_string(),
+            FromJsonError::TooNew(v) => format!("written by a newer KoperCAD (format {v})"),
+        })
+    }
+
     fn from_json(text: &str) -> Result<Self, FromJsonError> {
         let file: CatalogFile = serde_json::from_str(text).map_err(FromJsonError::Format)?;
         if file.format > CATALOG_FORMAT_VERSION {

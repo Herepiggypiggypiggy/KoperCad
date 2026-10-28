@@ -707,7 +707,7 @@ impl NovoApp {
         );
         let layers = match ws {
             Workspace::View3d => {
-                self.view3d.controls.emc = true;
+                self.view3d.emc.on = true;
                 &mut self.view3d.emc.layers
             }
             _ => {

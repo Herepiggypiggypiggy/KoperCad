@@ -505,7 +505,7 @@ fn the_3d_panels_start_clear_of_each_other_and_of_the_view_cube() {
         let ctx = d.ctx.clone();
         d.app.run_command(&ctx, "view.3d_stats", None);
         // The Heat panel is off by default; the worst case has it open.
-        d.app.view3d.controls.heat_panel = true;
+        d.app.cabinet.heat.on = true;
         for _ in 0..12 {
             d.frame_sized(egui::vec2(w, h), Vec::new());
         }
@@ -712,7 +712,7 @@ fn the_rail_card_starts_clear_of_the_other_3d_panels() {
         d.app.view3d.view.state.selection = BTreeSet::from([ItemId::new(ItemKind::Duct, duct)]);
         let ctx = d.ctx.clone();
         d.app.run_command(&ctx, "view.3d_stats", None);
-        d.app.view3d.controls.heat_panel = true;
+        d.app.cabinet.heat.on = true;
         for _ in 0..12 {
             d.frame_sized(egui::vec2(w, h), Vec::new());
         }
