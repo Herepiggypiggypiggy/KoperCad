@@ -1,8 +1,23 @@
-//! A made-up thermal result: devices that heat the air around them, a plume
-//! above each, a fan and an outlet. It drives the pictures before the solver
-//! can, in the demos and in every test. Not physics, only a believable shape.
+//! A quick thermal picture from the part losses alone: devices that heat the
+//! air around them, a plume above each, an inlet and an outlet. It drives the
+//! pictures before the solver can, in the demos and in every test. A
+//! calibrated estimate of the device and air temperatures (see
+//! [`SynthScene::temperature`]); the airflow is only an indication of where
+//! warm air rises.
 
 use crate::field::{Grid, Scalar, Vector};
+
+/// Air of the cabinet: kelvin per watt of total loss, on the lesson cabinet
+/// (600 x 800 mm plate, 34.5 W gives about 6 K over the room).
+const AIR_K_PER_W: f64 = 0.17;
+/// Share of the rises of the other devices that adds to the strongest one at a point.
+const NEIGHBOUR_SHARE: f64 = 0.2;
+/// Surface conductance of a device to its air and the plate, W/K: a fixed
+/// part (the connections and the plate) and a part per square metre of the
+/// footprint. Fitted to the 2D model: 20 W on 90 x 110 mm runs about 38 K
+/// over its air, 1.5 W on 18 x 90 mm about 10 K.
+const SURFACE_G0_W_PER_K: f64 = 0.07;
+const SURFACE_G_W_PER_K_M2: f64 = 47.0;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SynthDevice {
@@ -65,23 +80,54 @@ impl SynthScene {
             .any(|d| x > d.x && x < d.x + d.w && y > d.y && y < d.y + d.h)
     }
 
-    /// Air temperature at a point, degrees C. Heat rises (towards smaller
-    /// `y`), gathers under the top and is cooled near the inlet.
+    /// Temperature at a point, degrees C: the air of the cabinet plus, around
+    /// every device, the rise its own loss makes there.
+    ///
+    /// - Air: `AIR_K_PER_W` kelvin for every watt of loss in the cabinet,
+    ///   a little cooler low on the plate and warmer high up (heat rises).
+    /// - Device: its loss over its own surface conductance, `loss / (G0 + G_A
+    ///   area)`, flat over the device and fading with the distance from it,
+    ///   further up than down. Where devices stand close the strongest rise
+    ///   counts in full and the others at a fifth.
+    ///
+    /// Everything scales with the loss alone, so a 20 W device is never
+    /// cooler than a 3 W device of the same size, and several small devices
+    /// side by side add up. The constants are fitted to the 2D thermal model
+    /// of `novo-thermal` on the lesson cabinet (the test
+    /// `heat_preview_tests` in `novo-app` keeps them honest); they give a
+    /// ranking and a rough size, not an exact temperature.
     pub fn temperature(&self, x: f64, y: f64) -> f64 {
         let up = 1.0 - y / self.height; // 1 at the top
-        let mut t = self.ambient + 4.0 + 7.0 * up.powf(1.4);
+        let total: f64 = self.devices.iter().map(|d| d.loss_w.max(0.0)).sum();
+        let (mut hottest, mut sum) = (0.0_f64, 0.0_f64);
         for d in &self.devices {
-            let (cx, cy) = (d.x + d.w / 2.0, d.y + d.h / 2.0);
-            let s = 55.0 + d.w.max(d.h) * 0.35;
-            // The effect centre sits above the device: heat is carried up.
-            let (dx, dy) = (x - cx, y - (cy - 40.0));
-            t += d.loss_w
-                * 0.21
-                * (-(dx * dx / (2.0 * s * s) + dy * dy / (2.0 * (s * 1.5).powi(2)))).exp();
+            let r = self.device_rise(d) * Self::reach(d, x, y);
+            hottest = hottest.max(r);
+            sum += r;
         }
-        let (ix, iy) = (x, y - self.height); // inlet bottom left
-        t -= 9.0 * (-((ix * ix + iy * iy) / (2.0 * 150.0 * 150.0))).exp();
-        t
+        // A neighbour warms the air around a device, not the device as much as its own loss
+        // does: the strongest rise counts in full, the others a fifth.
+        self.ambient
+            + AIR_K_PER_W * total * (0.8 + 0.4 * up)
+            + hottest
+            + NEIGHBOUR_SHARE * (sum - hottest)
+    }
+
+    /// Kelvin a device runs above the air around it, steady state.
+    pub fn device_rise(&self, d: &SynthDevice) -> f64 {
+        let area_m2 = d.w * d.h / 1.0e6;
+        d.loss_w.max(0.0) / (SURFACE_G0_W_PER_K + SURFACE_G_W_PER_K_M2 * area_m2)
+    }
+
+    /// How much of a device's rise reaches a point: 1 on the device, fading
+    /// with the distance, reaching further above it than below.
+    fn reach(d: &SynthDevice, x: f64, y: f64) -> f64 {
+        let l = 25.0 + 0.2 * d.w.max(d.h);
+        let dx = (d.x - x).max(0.0).max(x - (d.x + d.w));
+        let above = (d.y - y).max(0.0);
+        let below = (y - (d.y + d.h)).max(0.0);
+        let u2 = (dx / l).powi(2) + (above / (1.6 * l)).powi(2) + (below / (0.7 * l)).powi(2);
+        (-u2).exp()
     }
 
     /// Air velocity at a point, m/s (y down: up is negative).
@@ -184,7 +230,7 @@ mod tests {
         let (c, r) = f.grid.cell_at(300.0, 150.0);
         assert!(f.at(c, r).is_nan());
         let (lo, hi) = f.extent().unwrap();
-        assert!(lo > 25.0 && hi < 100.0, "{lo} {hi}");
+        assert!(lo > 25.0 && hi < 140.0, "{lo} {hi}");
     }
 
     #[test]
@@ -200,6 +246,81 @@ mod tests {
             8,
         );
         assert!(!contour::contours(&f, &levels.iter().map(|l| l.0).collect::<Vec<_>>()).is_empty());
+    }
+
+    fn one(loss_w: f64, w: f64, h: f64, x: f64, y: f64) -> SynthDevice {
+        SynthDevice {
+            id: 0,
+            x,
+            y,
+            w,
+            h,
+            loss_w,
+        }
+    }
+
+    fn hottest(devices: Vec<SynthDevice>) -> f64 {
+        let s = SynthScene {
+            width: 600.0,
+            height: 800.0,
+            ambient: 35.0,
+            devices,
+        };
+        f64::from(s.temperature_field(10.0).extent().unwrap().1)
+    }
+
+    #[test]
+    fn more_loss_is_never_cooler_on_the_same_footprint() {
+        let at = |w| hottest(vec![one(w, 90.0, 110.0, 200.0, 300.0)]);
+        assert!(at(1.5) < at(3.0) && at(3.0) < at(6.0) && at(6.0) < at(20.0));
+    }
+
+    #[test]
+    fn one_twenty_watt_device_beats_small_devices_standing_close() {
+        // The case behind the lesson: 20 W on a transformer against 6 + 4 + 1.5 W of small
+        // devices side by side, the small ones high on the plate.
+        let transformer = hottest(vec![one(20.0, 90.0, 110.0, 55.0, 550.0)]);
+        let small = hottest(vec![
+            one(6.0, 54.0, 90.0, 55.0, 10.0),
+            one(4.0, 45.0, 75.0, 119.0, 18.0),
+            one(1.5, 18.0, 90.0, 174.0, 10.0),
+        ]);
+        assert!(transformer > small + 10.0, "{transformer} against {small}");
+    }
+
+    #[test]
+    fn neighbours_add_up() {
+        let alone = hottest(vec![one(6.0, 54.0, 90.0, 100.0, 100.0)]);
+        let pair = hottest(vec![
+            one(6.0, 54.0, 90.0, 100.0, 100.0),
+            one(6.0, 54.0, 90.0, 160.0, 100.0),
+        ]);
+        assert!(pair > alone + 1.0, "{pair} against {alone}");
+    }
+
+    #[test]
+    fn a_device_does_not_cool_the_cabinet_by_standing_low() {
+        // Where a lone device stands changes its own temperature by a few kelvin, never by more
+        // than the part it adds itself (the old picture cooled a device by 9 K at the inlet).
+        let low = hottest(vec![one(20.0, 90.0, 110.0, 50.0, 650.0)]);
+        let high = hottest(vec![one(20.0, 90.0, 110.0, 50.0, 20.0)]);
+        assert!((high - low).abs() < 6.0, "{low} {high}");
+        assert!(high > low, "heat rises: high {high}, low {low}");
+    }
+
+    #[test]
+    fn a_cabinet_without_loss_is_at_ambient() {
+        let s = SynthScene {
+            width: 600.0,
+            height: 800.0,
+            ambient: 35.0,
+            devices: vec![one(0.0, 90.0, 110.0, 50.0, 50.0)],
+        };
+        let (lo, hi) = s.temperature_field(10.0).extent().unwrap();
+        assert!(
+            (lo - 35.0).abs() < 1e-3 && (hi - 35.0).abs() < 1e-3,
+            "{lo} {hi}"
+        );
     }
 
     #[test]

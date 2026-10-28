@@ -109,6 +109,8 @@ mod heat_live;
 mod heat_live_tests;
 mod heat_openings;
 mod heat_openings_store;
+#[cfg(test)]
+mod heat_preview_tests;
 mod heat_probe;
 mod heat_progress;
 #[cfg(test)]
@@ -361,6 +363,8 @@ mod kitting_tests;
 mod learn_replay;
 #[cfg(test)]
 mod learn_tests;
+#[cfg(test)]
+mod lesson_claims_tests;
 #[cfg(test)]
 mod lesson_verify_cables;
 #[cfg(test)]
