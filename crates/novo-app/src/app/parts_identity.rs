@@ -152,6 +152,7 @@ fn work(wake: Option<&egui::Context>) {
             s.running = Some(path.clone());
             path
         };
+        slow_for_qa();
         let stamp = stamp_of(&path);
         let id = std::panic::catch_unwind(|| read_identity(&path)).unwrap_or_else(|_| {
             let name = path
@@ -171,6 +172,22 @@ fn work(wake: Option<&egui::Context>) {
     }
     if let Some(ctx) = wake {
         ctx.request_repaint();
+    }
+}
+
+/// Holds the worker before each file for `KOPERCAD_QA_SLOW_READ_MS`
+/// milliseconds (at most a minute), so a QA scenario can take a picture of
+/// the window while files are being read. Unset, it does nothing.
+fn slow_for_qa() {
+    static DELAY: OnceLock<u64> = OnceLock::new();
+    let ms = *DELAY.get_or_init(|| {
+        std::env::var("KOPERCAD_QA_SLOW_READ_MS")
+            .ok()
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .map_or(0, |ms| ms.min(60_000))
+    });
+    if ms > 0 {
+        std::thread::sleep(std::time::Duration::from_millis(ms));
     }
 }
 

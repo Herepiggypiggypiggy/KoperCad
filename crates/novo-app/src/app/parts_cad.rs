@@ -405,6 +405,7 @@ pub(crate) fn cad_ui(
     ui: &mut egui::Ui,
     panel: &mut CadPanel,
     catalog: &Catalog,
+    reading: bool,
 ) -> Option<CadAction> {
     let mut action = None;
     let mut add: Option<(usize, CatalogPart)> = None;
@@ -523,16 +524,21 @@ Nothing is stored until you press Import.",
             );
         }
         ui.horizontal(|ui| {
-            let import = panel.can_import();
+            // New files are being read: this panel is replaced when they are.
+            let import = panel.can_import() && !reading;
             if ui
                 .add_enabled(import, egui::Button::new("Import ticked"))
-                .on_hover_text("Store each file in your parts library for the parts you ticked.")
+                .on_hover_text(if reading {
+                    "Wait until the new files have been read."
+                } else {
+                    "Store each file in your parts library for the parts you ticked."
+                })
                 .clicked()
             {
                 action = Some(CadAction::Import);
             }
             if ui
-                .add_enabled(!panel.busy(), egui::Button::new("Tick all probable"))
+                .add_enabled(!panel.busy() && !reading, egui::Button::new("Tick all probable"))
                 .on_hover_text(
                     "A family model (LC1D09-18) fits several parts; this ticks every one it probably fits.",
                 )

@@ -1355,7 +1355,7 @@ fn parts_ui(
         });
     }
     if let Some(panel) = win.cad.as_mut() {
-        match cad_ui(ui, panel, &win.catalog) {
+        match cad_ui(ui, panel, &win.catalog, win.waiting.is_some()) {
             Some(CadAction::Import) => actions.push(PartsAction::CadImport),
             Some(CadAction::Close) => actions.push(PartsAction::CadClose),
             None => {}
