@@ -96,6 +96,24 @@ fn uninstall_leaves_no_empty_file_type_keys_and_clears_the_old_name_folders() {
     assert!(s.contains("DelTree(OldRoaming"));
 }
 
+#[test]
+fn a_running_program_is_closed_before_install_and_uninstall() {
+    // The Restart Manager cannot close the window (hardware test KC-14). Only
+    // the copy in the install folder is closed, never a portable copy.
+    let s = script();
+    assert!(s.contains("function PrepareToInstall"));
+    assert!(s.contains("function InitializeUninstall"));
+    assert!(s.contains("CloseMainWindow"));
+    // WizardSilent is Setup-only: the uninstaller must read UninstallSilent.
+    assert!(s.contains("CloseRunningApp(WizardSilent)"));
+    assert!(s.contains("CloseRunningApp(UninstallSilent)"));
+    assert!(s.contains("{app}"));
+    assert!(
+        !s.contains("taskkill"),
+        "match on the install path, not the image name"
+    );
+}
+
 fn repo_file(relative: &str) -> String {
     let path = format!("{}/../../{relative}", env!("CARGO_MANIFEST_DIR"));
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
