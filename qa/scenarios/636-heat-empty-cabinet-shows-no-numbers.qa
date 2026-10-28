@@ -1,0 +1,27 @@
+@title Heat on an empty cabinet that cannot simulate shows no temperatures
+@area Cabinet
+# Edge test E-2: a cabinet with no size and no devices showed "46 °C, +5 K" hot-spot cards beside "Cannot simulate".
+fresh
+key ctrl+n
+wait 20
+click_text Cabinet #1
+wait 15
+click_text "New cabinet..."
+wait 8
+key Enter
+wait 10
+click_text Cabinet #1
+wait 15
+shot cabinet-empty
+key ctrl+k
+wait 4
+text show or hide heat
+wait 6
+key Enter
+wait 15
+shot heat-preview
+click_text Simulate #2
+wait 10
+shot heat-empty
+expect "Cannot simulate"
+# The hot-spot cards are painted text, not widgets, so the picture (heat-empty) shows they are gone.
