@@ -418,7 +418,7 @@ fn the_wire_runs_panel_keeps_clear_of_the_heat_panel_even_before_there_is_a_resu
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
     let ctx = d.ctx.clone();
-    d.app.view3d.controls.heat_panel = true;
+    d.app.cabinet.heat.on = true;
     d.app.run_command(&ctx, "view.3d_wire_runs", None);
     for size in [egui::vec2(1366.0, 768.0), egui::vec2(1920.0, 1080.0)] {
         for _ in 0..4 {
@@ -436,7 +436,7 @@ fn the_wire_runs_panel_keeps_clear_of_the_heat_panel_even_before_there_is_a_resu
     }
     // With the Heat panel closed, the stale rectangle it left is not used:
     // the panel starts under the view cube again.
-    d.app.view3d.controls.heat_panel = false;
+    d.app.cabinet.heat.on = false;
     for _ in 0..4 {
         d.frame_sized(egui::vec2(1366.0, 768.0), Vec::new());
     }

@@ -169,6 +169,11 @@ pub fn is_project_path(path: &Path) -> bool {
 /// temporary file next to `output` that is moved into place only once
 /// complete, so a failed write leaves an earlier export whole.
 pub fn write_export(output: &Path, bytes: &[u8], source: Option<&Path>) -> Result<()> {
+    // First of all: looking at a device name such as CON (the checks below
+    // open the path) waits for keyboard input forever.
+    if novo_storage::reserved_device_name(output) {
+        return Err(ScriptError::ReservedName(output.to_path_buf()));
+    }
     let same_as_source = source.is_some_and(|source| {
         matches!(
             (source.canonicalize(), output.canonicalize()),

@@ -249,6 +249,18 @@ fn renumber_restarts_but_keeps_locked_numbers_and_undoes() {
 }
 
 #[test]
+fn renumber_that_changes_nothing_counts_nothing() {
+    let mut doc = Document::default();
+    doc.transact("Draw", scene).unwrap();
+    let scheme = Scheme::new(SchemeKind::Sequential);
+    run(&mut doc, &scheme, Mode::Fill);
+    let p = plan(doc.project(), &scheme, Mode::Renumber, &Scope::Project);
+    assert!(p.is_empty(), "{:?}", p.changes);
+    assert_eq!(p.summary(), "Nothing to change, 3 unchanged");
+    assert_eq!(p.preview_summary(), "Nothing to change, 3 unchanged");
+}
+
+#[test]
 fn typing_a_used_number_is_refused_and_unlock_releases() {
     let mut doc = Document::default();
     let (s, _) = doc.transact("Draw", scene).unwrap();

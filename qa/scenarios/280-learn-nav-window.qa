@@ -1,0 +1,30 @@
+@title Learn window: one way home on every page, no second Home button
+@area Learn
+# The rail (or, in a narrow window, the chip row) is the only navigation. A path or topic page names itself with a small label and has no "Back to Home" button beside Home.
+click_text "Learn…"
+wait 15
+shot 01-home
+check_layout
+expect "Learn KoperCAD"
+click_text "First hour" #1
+wait 10
+shot 02-path
+check_layout
+expect "Learning path"
+expect_not "Back to Home"
+click_text "Home" #1
+wait 8
+shot 03-back-on-home
+check_layout
+expect "Learn KoperCAD"
+click_text "Cabinet and panel building" #1
+wait 10
+shot 04-topic
+check_layout
+expect "Topic"
+expect_not "Back to Home"
+click_text "Home" #1
+wait 8
+key Escape
+wait 6
+expect_not "Learn KoperCAD"

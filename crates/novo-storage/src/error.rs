@@ -31,6 +31,17 @@ pub enum StorageError {
         .0.display()
     )]
     ReadOnly(PathBuf),
+    /// A save was refused before anything was written; `why` says in plain
+    /// words what is wrong with the place the person chose. The project and
+    /// any earlier file are untouched.
+    #[error("{} cannot be saved: {why}", path.display())]
+    CannotSave { path: PathBuf, why: &'static str },
+    /// The name is one Windows reserves for a device (CON, NUL, COM1 ...).
+    #[error(
+        "{} uses a name Windows reserves for devices (CON, PRN, AUX, NUL, COM1 to COM9, LPT1 to LPT9). Pick another name",
+        .0.display()
+    )]
+    ReservedName(PathBuf),
     /// The file holds a kind of object this version does not know, so it was
     /// saved by a newer KoperCAD that added one without a schema change.
     #[error(
@@ -49,6 +60,9 @@ pub enum StorageError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
+
+/// The plain reason for a file SQLite reports as malformed.
+pub(crate) const DAMAGED_PAGES: &str = "the file is incomplete or has damaged pages (it may have been cut short by a full disk or a bad copy)";
 
 /// Result type for storage operations.
 pub type Result<T, E = StorageError> = std::result::Result<T, E>;
@@ -99,7 +113,7 @@ impl StorageError {
         match self {
             StorageError::Sqlite(e) if is_malformed(&e) => StorageError::Corrupt {
                 path: path.to_owned(),
-                reason: "the file is incomplete or has damaged pages (it may have been cut short by a full disk or a bad copy)".into(),
+                reason: DAMAGED_PAGES.into(),
             },
             other => other,
         }

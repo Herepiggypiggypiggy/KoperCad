@@ -62,8 +62,8 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `fresh` | restart with no project |
 | `library DIR` | restart with this parts library (a folder holding `records.json` and the files it names) copied into the profile, so maker models and other library files are there from the start; every later launch of the scenario has it too |
 | `click_text "Label" [Role] [#n]` | click the enabled widget with this label (exact match first); `#2` = second match (a label can be a menu and a workspace button) |
+| `click X Y [right\|middle] [ctrl] [shift]`, `move X Y`, `drag X1 Y1 X2 Y2`, `scroll X Y DY` | pointer, window points |
 | `double_click X Y` | two quick clicks at a window point |
-| `click X Y [right\|middle]`, `move X Y`, `drag X1 Y1 X2 Y2`, `scroll X Y DY` | pointer, window points |
 | `mouse_down X Y`, `mouse_up X Y` | press or release and leave it, so `move` and `shot` can capture the middle of a drag or hold a Live view pushbutton (the Operate rows' "Hold to press") for as long as the scenario needs |
 | `key ctrl+k Escape`, `text some words` | keyboard |
 | `answer_dialog FILE` | the next native file dialog gets this path (queue it first) |
@@ -192,7 +192,7 @@ picture can show. Run it with `scripts/qa.sh --only critic`.
 `qa/scenarios/30-heat-cabinet.qa` runs Cabinet > Simulate heat of the cabinet (Ctrl+K),
 takes a picture right after the start, waits 60 s of wall time (`wait_s`, the solver runs on
 the wall clock) and expects the `· it N · S s` strip at both sizes. The running state is a
-spinner bar with no text, "meshing and setting up" before the first iteration and the
+spinner bar with no text, the solver's stage ("planning the grid", "meshing", "building the flow model") before the first iteration and the
 iteration strip after it; the second picture shows the unconverged first-look result.
 Use it before and after a change to the hot-spot cards or the Temperature panel.
 

@@ -265,7 +265,7 @@ impl DoorState {
         }
         let card =
             egui::Rect::from_min_max(top, egui::pos2(ui.max_rect().right(), ui.cursor().top()));
-        super::cabinet_bar::note_rect(ui.ctx(), "cabinet.door", "Door and depth", card, false);
+        super::cabinet_bar::note_rect_in(ui, "cabinet.door", "Door and depth", card, false);
         ask
     }
 }

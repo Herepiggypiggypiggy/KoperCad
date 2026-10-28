@@ -1,0 +1,16 @@
+# Needs a newer KoperCAD than any release: the manager shows it as "Needs another version".
+[addon]
+id = "future-addon"
+name = "Future feature"
+version = "1.0.0"
+publisher = "KoperVonk (test fixture)"
+description = "Built for a program version that does not exist yet."
+requires_app = ">=9.0.0"
+api_version = 1
+permissions = ["floating-panel"]
+
+[[panel]]
+id = "main"
+title = "Future"
+slot = "floating"
+file = "data/main.panel.toml"

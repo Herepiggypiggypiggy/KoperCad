@@ -24,7 +24,7 @@ click_text "Add the filter fan and a grille to the cabinet"
 wait 10
 expect "Already added"
 expect "Grille, in the right wall"
-# Auto is on: adding the openings starts a new run, and the list is locked until it ends.
+# Auto is on: adding the openings starts a new run (the list stays editable while it goes).
 shot 02-fan-and-grille-added-run-started
 wait_s 150
 expect_not "No air moves"
