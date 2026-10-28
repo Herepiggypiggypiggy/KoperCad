@@ -254,7 +254,9 @@ pub(super) fn selected_card(
             let button = ui.add_enabled(found.is_some(), egui::Button::new(label));
             let button = match found {
                 Some(t) => button.on_hover_text(format!("{tip}: {:.0} mm come off.", t.cut_off)),
-                None => button.on_disabled_hover_text("Nothing crosses it between its ends."),
+                None => {
+                    button.on_disabled_hover_text(railedit::no_crossing_reason(&layout, id, end))
+                }
             };
             if button.clicked() {
                 ask = Some(RailAsk::Trim { id, end });
@@ -273,8 +275,7 @@ pub(super) fn selected_card(
         ui.menu_button("Cut to length", |ui| {
             let stock = Stock::default();
             for len in railedit::stock_lengths(&stock) {
-                let fits = !duct && layout.placements.iter().any(|p| p.rail == Some(id)) || true;
-                let enabled = fits && railedit::set_length(&layout, id, len).is_some();
+                let enabled = railedit::set_length(&layout, id, len).is_some();
                 if ui
                     .add_enabled(
                         enabled,
@@ -365,10 +366,11 @@ impl super::NovoApp {
             RailAsk::Trim { id, end } => match railedit::trim_to_crossing(&layout, id, end) {
                 Some(t) => (id, t.edit, format!("Trimmed {:.0} mm off", t.cut_off)),
                 None => {
-                    self.message(
-                        super::Level::Info,
-                        "Nothing crosses it between its ends".to_string(),
-                    );
+                    let why = match *ask {
+                        RailAsk::Trim { id, end } => railedit::no_crossing_reason(&layout, id, end),
+                        _ => String::new(),
+                    };
+                    self.message(super::Level::Info, why);
                     return;
                 }
             },
