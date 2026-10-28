@@ -1,6 +1,8 @@
 //! Place all per surface (PANEL-B2): which kinds of device belong on which
 //! surface. Pilot lights, push buttons and meters go on the door, the rest
-//! stays on the plate.
+//! stays on the plate. An enclosure that carries no rule text of its own
+//! gets that standard (`door: H S P`); a device can also name its surface
+//! itself (`mounting_site`, see [`crate::site`]), which wins.
 //!
 //! The rules are text in the structure property [`SURFACE_RULES_KEY`], one
 //! line per surface: `door: H S P`. A device goes to the surface whose code
@@ -27,9 +29,25 @@ pub struct SurfaceRule {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SurfaceRules {
     pub rules: Vec<SurfaceRule>,
+    /// The built-in rules, because the enclosure has none of its own.
+    pub standard: bool,
 }
 
+/// Letter codes of the pilot devices the standard rules send to the door.
+pub const DOOR_CODES: [&str; 3] = ["H", "S", "P"];
+
 impl SurfaceRules {
+    /// What an enclosure without rule text gets: pilot devices on the door.
+    pub fn standard() -> SurfaceRules {
+        SurfaceRules {
+            rules: vec![SurfaceRule {
+                surface: "door".to_owned(),
+                codes: DOOR_CODES.iter().map(|c| (*c).to_owned()).collect(),
+            }],
+            standard: true,
+        }
+    }
+
     /// Reads the rule text; unreadable lines come back as sentences.
     pub fn parse(text: &str) -> (SurfaceRules, Vec<String>) {
         let (mut rules, mut problems) = (Vec::new(), Vec::new());
@@ -55,7 +73,13 @@ impl SurfaceRules {
                 )),
             }
         }
-        (SurfaceRules { rules }, problems)
+        (
+            SurfaceRules {
+                rules,
+                standard: false,
+            },
+            problems,
+        )
     }
 
     /// The surface for a letter code: the longest matching code wins, the
@@ -90,18 +114,27 @@ pub struct Split {
 /// plate and adds a sentence for the unknown ones.
 pub fn split(specs: &[Spec], rules: &SurfaceRules, surfaces: &Surfaces) -> Split {
     let mut out = Split::default();
-    let mut reported: Vec<String> = Vec::new();
+    // Surface name, devices that wanted it, and whether the wish was the
+    // device's own or the standard rules' (not a rule the person wrote).
+    let mut missing: Vec<(String, usize, bool)> = Vec::new();
     for spec in specs {
-        match rules.surface_for(&spec.kind) {
+        let own = spec.surface.is_some();
+        let wanted = spec
+            .surface
+            .as_deref()
+            .or_else(|| rules.surface_for(&spec.kind));
+        match wanted {
             None => out.plate.push(spec.clone()),
             Some(name) if name == MAIN_PLATE => out.plate.push(spec.clone()),
             Some(name) => {
                 if surfaces.find(Some(name)).is_none() {
-                    if !reported.iter().any(|r| r == name) {
-                        reported.push(name.to_string());
-                        out.problems.push(format!(
-                            "Surface rule '{name}' names a surface this enclosure does not have; its devices stay on the plate."
-                        ));
+                    let plain = own || rules.standard;
+                    match missing
+                        .iter_mut()
+                        .find(|(n, _, p)| n == name && *p == plain)
+                    {
+                        Some((_, count, _)) => *count += 1,
+                        None => missing.push((name.to_string(), 1, plain)),
                     }
                     out.plate.push(spec.clone());
                     continue;
@@ -112,6 +145,21 @@ pub fn split(specs: &[Spec], rules: &SurfaceRules, surfaces: &Surfaces) -> Split
                 }
             }
         }
+    }
+    for (name, count, plain) in missing {
+        out.problems.push(if plain {
+            format!(
+                "{count} {} belong{} on the {name}, but this enclosure has no {name} yet; {} stay{} on the plate.",
+                if count == 1 { "device" } else { "devices" },
+                if count == 1 { "s" } else { "" },
+                if count == 1 { "it" } else { "they" },
+                if count == 1 { "s" } else { "" },
+            )
+        } else {
+            format!(
+                "Surface rule '{name}' names a surface this enclosure does not have; its devices stay on the plate."
+            )
+        });
     }
     out
 }

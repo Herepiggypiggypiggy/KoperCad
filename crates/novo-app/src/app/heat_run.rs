@@ -92,6 +92,11 @@ impl Runner {
         self.scheduler.cancel();
     }
 
+    /// The stage the solver says it is in; empty before it names one.
+    pub(super) fn phase(&self) -> &'static str {
+        self.scheduler.current().map_or("", |j| j.phase())
+    }
+
     pub(super) fn elapsed_s(&self) -> f64 {
         self.started.elapsed().as_secs_f64()
     }

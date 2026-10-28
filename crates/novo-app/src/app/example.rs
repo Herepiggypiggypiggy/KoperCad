@@ -153,6 +153,23 @@ fn add_cabinet(tx: &mut Tx<'_>) -> ModelResult<StructureId> {
             );
         })?;
     }
+    // The stop and start buttons stay on the plate here: a button on the door
+    // needs a wiring opening before its wires can be routed, and the example
+    // routes every wire. In a real cabinet Place all puts them on the door.
+    for tag in ["=A1+CAB-S0", "=A1+CAB-S1"] {
+        let button = tx
+            .project()
+            .devices_by_tag(&DeviceTag::parse(tag)?)
+            .first()
+            .copied();
+        if let Some(button) = button {
+            tx.set_property(
+                button,
+                novo_layout::site::SITE_KEY,
+                Some(Value::Text("plate".into())),
+            )?;
+        }
+    }
     plan_cabinet(tx, cab)?;
     Ok(cab)
 }
@@ -188,6 +205,36 @@ pub(super) fn prepare_cabinet(
 /// Lets the rules planner propose rails, ducts and device places for the
 /// devices of the cabinet (what Place all does).
 pub(super) fn plan_cabinet(tx: &mut Tx<'_>, cab: StructureId) -> ModelResult<()> {
+    // Pilot devices (buttons, lamps) would go to the door, which needs a
+    // wiring opening before their wires can be routed; the examples draw
+    // every wire, so they stay on the plate.
+    let location = tx
+        .project()
+        .structures()
+        .find(|s| s.id == cab)
+        .map(|s| s.tag.location.clone());
+    if let Some(location) = location {
+        let pilots: Vec<_> = tx
+            .project()
+            .devices()
+            .filter(|d| {
+                d.tag.location == location
+                    && matches!(
+                        d.tag.letter_code().to_ascii_uppercase().as_str(),
+                        "S" | "H" | "P"
+                    )
+                    && novo_layout::site::stated_site(tx.project(), d).is_none()
+            })
+            .map(|d| d.id)
+            .collect();
+        for pilot in pilots {
+            tx.set_property(
+                pilot,
+                novo_layout::site::SITE_KEY,
+                Some(Value::Text("plate".into())),
+            )?;
+        }
+    }
     let layout = load(tx.project(), cab).expect("the plate was just set");
     let (plan, _) = super::cabinet_rules::plan(tx.project(), cab, &layout, &RuleSet::standard());
     apply_plan(tx, cab, &plan)

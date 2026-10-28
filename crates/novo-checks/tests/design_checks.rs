@@ -372,3 +372,91 @@ fn a_device_is_centred_on_its_rail_or_listed_with_how_far_off_it_is() {
     );
     assert_eq!(ProblemKind::DeviceOffRail.severity(), Severity::Warning);
 }
+
+/// A cabinet with a contactor and a motor, both on the plate.
+fn contactor_and_motor_on_a_plate(motor_site: Option<&str>) -> Project {
+    build(|tx| {
+        let page = tx.add_page("1")?;
+        let cab = tx.add_structure(tag("+CAB1"), "", true)?;
+        tx.set_plate(
+            cab,
+            Some(MountingPlate {
+                width: 400.0,
+                height: 400.0,
+                margin: 10.0,
+            }),
+        )?;
+        for (t, x) in [("+CAB1-K1", 20.0), ("+CAB1-M1", 200.0)] {
+            let d = tx.add_device(tag(t), "")?;
+            tx.place_symbol(
+                page,
+                "iec/contacts/no",
+                Placement::at(Point::new(10.0, 10.0)),
+                vec![Pin::new("1", 0.0, 0.0)],
+                SymbolRole::Device {
+                    device: d,
+                    main: true,
+                },
+            )?;
+            if t.ends_with("M1")
+                && let Some(site) = motor_site
+            {
+                tx.set_property(
+                    AnyId::Device(d),
+                    "mounting_site",
+                    Some(Value::Text(site.into())),
+                )?;
+            }
+            tx.place_device(d, cab, Point::new(x, 20.0), false, None)?;
+        }
+        Ok(())
+    })
+    .0
+}
+
+#[test]
+fn a_motor_on_the_plate_is_a_warning_and_a_field_device_is_never_unplaced() {
+    let problems = check(&contactor_and_motor_on_a_plate(None));
+    let found = of_kind(&problems, ProblemKind::FieldDeviceInCabinet);
+    assert_eq!(found.len(), 1, "{problems:#?}");
+    assert!(found[0].message.contains("-M1"), "{}", found[0].message);
+    assert_eq!(
+        ProblemKind::FieldDeviceInCabinet.severity(),
+        Severity::Warning
+    );
+    // The person says the motor really is in the cabinet: no warning.
+    let inside = check(&contactor_and_motor_on_a_plate(Some("plate")));
+    assert!(of_kind(&inside, ProblemKind::FieldDeviceInCabinet).is_empty());
+
+    // A motor that is not placed is not "unplaced": it belongs in the field.
+    let (project, _) = build(|tx| {
+        let page = tx.add_page("1")?;
+        let cab = tx.add_structure(tag("+CAB1"), "", true)?;
+        tx.set_plate(
+            cab,
+            Some(MountingPlate {
+                width: 400.0,
+                height: 400.0,
+                margin: 10.0,
+            }),
+        )?;
+        for (t, placed) in [("+CAB1-K1", true), ("+CAB1-M1", false)] {
+            let d = tx.add_device(tag(t), "")?;
+            tx.place_symbol(
+                page,
+                "iec/contacts/no",
+                Placement::at(Point::new(10.0, 10.0)),
+                vec![Pin::new("1", 0.0, 0.0)],
+                SymbolRole::Device {
+                    device: d,
+                    main: true,
+                },
+            )?;
+            if placed {
+                tx.place_device(d, cab, Point::new(20.0, 20.0), false, None)?;
+            }
+        }
+        Ok(())
+    });
+    assert!(of_kind(&check(&project), ProblemKind::UnplacedDevice).is_empty());
+}

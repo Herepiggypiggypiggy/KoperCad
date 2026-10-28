@@ -122,3 +122,23 @@ fn the_project_list_names_a_panel_list_as_one_page() {
         "{rows:?}"
     );
 }
+
+#[test]
+fn the_headline_counts_pages_not_the_rows_of_the_panels_table() {
+    let doc = project();
+    let mut reports = LiveReports::standard();
+    let all = reports.get(doc.project(), "toc").unwrap();
+    // Six pages and a panels table: the old count said seven rows.
+    assert_eq!(
+        novo_reports::headline_count("toc", all),
+        (6, "pages"),
+        "{:?}",
+        all.sections
+            .iter()
+            .map(|s| s.rows.len())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(novo_reports::count_text(1, "pages"), "1 page");
+    let panel = reports.get(doc.project(), "toc@+K1").unwrap();
+    assert_eq!(novo_reports::headline_count("toc@+K1", panel), (4, "pages"));
+}

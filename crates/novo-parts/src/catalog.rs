@@ -29,6 +29,9 @@ use crate::search::{Matcher, SearchDoc, normalize_code};
 /// renamed, mounting text normalized) when read.
 pub const CATALOG_FORMAT_VERSION: u32 = 2;
 
+/// Maker name of the generic sample parts. They rank after real maker parts at equal fit.
+const GENERIC_MAKER: &str = "Generic";
+
 /// Property keys this crate writes into `novo_core::Part::properties`. Other
 /// workstreams read them (cabinet layout reads the dimensions, cables read
 /// the cores), so they are stable.
@@ -368,14 +371,23 @@ impl Catalog {
 
     /// The starter catalog shipped with the program: common IEC parts for
     /// motor starters and control circuits (contactors, breakers, overload
-    /// relays, push buttons, terminals, cables). Example data to check
+    /// relays, push buttons, terminals, cables), and a set of generic parts
+    /// (manufacturer `Generic`: frequency converters, power supplies, PLC,
+    /// Ethernet switches, main switches, pilot lamps, fans, vents,
+    /// enclosures, motors) with typical sizes and losses so a whole machine
+    /// can be assigned and its heat estimated. Example data to check
     /// against the manufacturer's current catalogue before ordering.
     pub fn starter() -> Self {
-        let file: CatalogFile = serde_json::from_str(include_str!("../catalog/starter.json"))
-            .expect("the built-in starter catalog is valid");
         let mut catalog = Catalog::new();
-        for part in file.parts {
-            catalog.upsert(part);
+        for json in [
+            include_str!("../catalog/starter.json"),
+            include_str!("../catalog/generic.json"),
+        ] {
+            let file: CatalogFile =
+                serde_json::from_str(json).expect("the built-in starter catalog is valid");
+            for part in file.parts {
+                catalog.upsert(part);
+            }
         }
         catalog
     }
@@ -528,6 +540,9 @@ impl Catalog {
             .collect();
         hits.sort_by(|a, b| {
             b.0.cmp(&a.0)
+                .then_with(|| {
+                    (a.1.manufacturer == GENERIC_MAKER).cmp(&(b.1.manufacturer == GENERIC_MAKER))
+                })
                 .then_with(|| a.1.manufacturer.cmp(&b.1.manufacturer))
                 .then_with(|| novo_core::natural_cmp(&a.1.order_number, &b.1.order_number))
         });
@@ -563,6 +578,9 @@ impl Catalog {
             .collect();
         hits.sort_by(|a, b| {
             b.0.cmp(&a.0)
+                .then_with(|| {
+                    (a.1.manufacturer == GENERIC_MAKER).cmp(&(b.1.manufacturer == GENERIC_MAKER))
+                })
                 .then_with(|| a.1.manufacturer.cmp(&b.1.manufacturer))
                 .then_with(|| novo_core::natural_cmp(&a.1.order_number, &b.1.order_number))
         });

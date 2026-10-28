@@ -3,6 +3,7 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod addons;
 mod appearance;
 mod assembly;
 mod assistant;
@@ -125,6 +126,9 @@ mod heat_run;
 mod heat_run_tests;
 mod heat_settings;
 mod heat_spots;
+mod heat_status;
+#[cfg(test)]
+mod heat_status_tests;
 mod heat_sweep;
 #[cfg(test)]
 mod heat_sweep_tests;
@@ -187,6 +191,7 @@ mod part_picker;
 mod parts;
 mod parts_bulk;
 mod parts_cad;
+mod parts_identity;
 mod parts_import;
 mod parts_pins;
 #[cfg(test)]
@@ -306,6 +311,8 @@ mod workshop;
 mod workspace;
 mod xref;
 
+#[cfg(test)]
+mod addons_tests;
 #[cfg(test)]
 mod assembly_pack_tests;
 #[cfg(test)]
@@ -675,6 +682,7 @@ impl NovoApp {
         );
         let mut app = Self::with_settings(backend, canvas, settings);
         app.load_user_keymap();
+        app.init_addons();
         app.learn_init_paths();
         app.crash_report = crate::diag::take_pending_crash();
         if std::env::var_os("KOPERCAD_FORCE_PANIC").is_some() {
@@ -1382,6 +1390,8 @@ impl NovoApp {
         self.cabinet.heat.whatif.close();
         // The same for the vent and fan sweep: its answer is for the old cabinet.
         self.cabinet.heat.advice.close();
+        // And for the heat result itself: it would be drawn over the new plate.
+        self.cabinet.heat.forget_results();
         // The live view, an open drawer and a preview belong to the project
         // they were opened on; a lesson (or any project) starts clean.
         self.wb.live = Default::default();
@@ -1822,6 +1832,7 @@ impl NovoApp {
         self.eplan_import_dialog(&ctx);
         self.eplan_guide_dialog(&ctx);
         self.controller_import_dialog(&ctx);
+        self.addons_windows(&ctx);
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);

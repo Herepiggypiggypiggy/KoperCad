@@ -68,7 +68,7 @@ impl Geometry {
 /// window is usable. `monitor_changed` is true on the first frame and when
 /// the monitor or the scale changed: then a window larger than the screen is
 /// also made to fit (the old rule of `fit_window_to_screen`).
-pub fn corrected_size(g: Geometry, monitor_changed: bool) -> Option<Vec2> {
+pub fn corrected_size(g: Geometry, monitor_changed: bool, user_sized: bool) -> Option<Vec2> {
     let ppp = if g.pixels_per_point.is_finite() && g.pixels_per_point > 0.0 {
         g.pixels_per_point
     } else {
@@ -79,7 +79,9 @@ pub fn corrected_size(g: Geometry, monitor_changed: bool) -> Option<Vec2> {
     let believable = size.x.is_finite()
         && size.y.is_finite()
         && size.min_elem() > 0.0
-        && size.max_elem() / size.min_elem() <= MAX_ASPECT;
+        // A window the user maximized or made full screen can be very wide
+        // (a 7680 x 1080 super-wide screen); only the surface cap applies.
+        && (user_sized || size.max_elem() / size.min_elem() <= MAX_ASPECT);
     if !believable {
         size = DEFAULT_SIZE;
     }
@@ -129,7 +131,7 @@ pub fn track(ctx: &Context) {
     }
     // A window the user maximized fills the screen on purpose.
     let user_sized = maximized == Some(true) || fullscreen == Some(true);
-    if let Some(size) = corrected_size(geometry, monitor_changed && !user_sized) {
+    if let Some(size) = corrected_size(geometry, monitor_changed && !user_sized, user_sized) {
         log::warn!(
             "Window size {:.0} x {:.0} points is not usable here; set to {:.0} x {:.0}",
             inner.x,
@@ -167,7 +169,7 @@ pub fn install_error_guard(device: &wgpu::Device) {
         std::sync::atomic::Ordering::Relaxed,
     );
     device.on_uncaptured_error(std::sync::Arc::new(|error: wgpu::Error| {
-        log::error!("Graphics error, continuing: {error}");
+        crate::diag::note_graphics_error(&error.to_string());
     }));
 }
 
@@ -187,7 +189,7 @@ mod tests {
     fn the_crash_size_from_the_mirrored_monitor_is_replaced() {
         // KC-01: the surface was asked for 3378 x 32711 pixels at scale 1.5.
         let g = geo(3378.0 / 1.5, 32711.0 / 1.5, 1.5, Some((1440.0, 2560.0)));
-        let fixed = corrected_size(g, true).expect("must be corrected");
+        let fixed = corrected_size(g, true, false).expect("must be corrected");
         assert!(fixed.x * 1.5 <= MAX_SURFACE_SIDE && fixed.y * 1.5 <= MAX_SURFACE_SIDE);
         assert!(fixed.max_elem() / fixed.min_elem() <= MAX_ASPECT);
     }
@@ -196,7 +198,7 @@ mod tests {
     fn a_huge_but_square_window_is_capped_to_the_surface_limit() {
         let g = geo(9000.0, 9000.0, 1.0, None);
         assert_eq!(
-            corrected_size(g, false),
+            corrected_size(g, false, false),
             Some(Vec2::splat(MAX_SURFACE_SIDE))
         );
     }
@@ -204,41 +206,62 @@ mod tests {
     #[test]
     fn a_normal_window_is_left_alone_even_after_a_monitor_change() {
         let g = geo(1280.0, 800.0, 1.5, Some((2560.0, 1440.0)));
-        assert_eq!(corrected_size(g, true), None);
-        assert_eq!(corrected_size(g, false), None);
+        assert_eq!(corrected_size(g, true, false), None);
+        assert_eq!(corrected_size(g, false, false), None);
     }
 
     #[test]
     fn a_window_wider_than_the_portrait_screen_fits_after_a_move() {
         // KC-12: 1280 points wide on a 1080-point wide portrait monitor.
         let g = geo(1280.0, 800.0, 2.0, Some((1080.0, 1920.0)));
-        let fixed = corrected_size(g, true).unwrap();
+        let fixed = corrected_size(g, true, false).unwrap();
         assert_eq!(fixed.x, 1080.0);
         assert_eq!(fixed.y, 800.0);
         // Without a monitor change the user's size is respected.
-        assert_eq!(corrected_size(g, false), None);
+        assert_eq!(corrected_size(g, false, false), None);
     }
 
     #[test]
     fn nonsense_numbers_give_the_default_size() {
         for bad in [f32::NAN, f32::INFINITY, 0.0, -5.0] {
             let g = geo(bad, 800.0, 1.0, None);
-            assert_eq!(corrected_size(g, false), Some(DEFAULT_SIZE), "{bad}");
+            assert_eq!(corrected_size(g, false, false), Some(DEFAULT_SIZE), "{bad}");
         }
         let g = geo(1280.0, 800.0, f32::NAN, None);
-        assert_eq!(corrected_size(g, false), None);
+        assert_eq!(corrected_size(g, false, false), None);
     }
 
     #[test]
     fn the_window_never_goes_below_the_minimum() {
         let g = geo(700.0, 330.0, 1.0, Some((600.0, 400.0)));
-        assert_eq!(corrected_size(g, true), Some(Vec2::new(680.0, 320.0)));
+        assert_eq!(
+            corrected_size(g, true, false),
+            Some(Vec2::new(680.0, 320.0))
+        );
     }
 
     #[test]
     fn a_window_taller_than_a_small_screen_shrinks_to_it() {
         let g = geo(1280.0, 800.0, 1.0, Some((1366.0, 768.0)));
-        assert_eq!(corrected_size(g, true), Some(Vec2::new(1280.0, 688.0)));
+        assert_eq!(
+            corrected_size(g, true, false),
+            Some(Vec2::new(1280.0, 688.0))
+        );
+    }
+
+    #[test]
+    fn a_maximized_super_wide_window_keeps_its_shape() {
+        // 7680 x 1080 at scale 1 is wider than 6:1 but fits the surface.
+        let g = geo(7680.0, 1080.0, 1.0, Some((7680.0, 1080.0)));
+        assert_eq!(corrected_size(g, false, true), None);
+        // The same size on a window the user did not maximize is not believed.
+        assert!(corrected_size(g, false, false).is_some());
+        // The surface cap still holds for a maximized window.
+        let huge = geo(9000.0, 1080.0, 1.0, None);
+        assert_eq!(
+            corrected_size(huge, false, true).unwrap().x,
+            MAX_SURFACE_SIDE
+        );
     }
 
     #[test]
@@ -246,7 +269,7 @@ mod tests {
         for scale in [1.0_f32, 1.25, 1.5, 2.0] {
             let monitor = Vec2::new(1366.0, 768.0) / scale;
             let g = geo(1280.0, 800.0, scale, Some((monitor.x, monitor.y)));
-            let got = corrected_size(g, true).unwrap();
+            let got = corrected_size(g, true, false).unwrap();
             assert!(got.x <= monitor.x && got.y <= monitor.y, "{scale}: {got:?}");
         }
     }

@@ -192,7 +192,7 @@ picture can show. Run it with `scripts/qa.sh --only critic`.
 `qa/scenarios/30-heat-cabinet.qa` runs Cabinet > Simulate heat of the cabinet (Ctrl+K),
 takes a picture right after the start, waits 60 s of wall time (`wait_s`, the solver runs on
 the wall clock) and expects the `· it N · S s` strip at both sizes. The running state is a
-spinner bar with no text, "meshing and setting up" before the first iteration and the
+spinner bar with no text, the solver's stage ("planning the grid", "meshing", "building the flow model") before the first iteration and the
 iteration strip after it; the second picture shows the unconverged first-look result.
 Use it before and after a change to the hot-spot cards or the Temperature panel.
 
