@@ -7,7 +7,9 @@ click_text Cabinet #1
 wait 20
 shot cabinet-before
 # The Mounted row of the Inspector, with the choice open.
+# The motor sits at a different spot at each window size; the click that misses lands on bare plate.
 click 969 192
+try click 1470 218
 wait 10
 shot inspector-mounted
 expect "Mounted"
@@ -54,6 +56,11 @@ wait 20
 shot placed
 expect_not "M1 is not placed"
 # The button and the lamp are on the door surface.
-click 177 70
+click_text "plate" #1
 wait 6
 shot surface-choice
+expect "2 devices"
+click_text door
+wait 10
+shot door-surface
+check_layout
