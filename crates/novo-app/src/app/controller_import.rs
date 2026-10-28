@@ -40,6 +40,9 @@ pub(super) struct ControllerWizard {
     saved: Option<String>,
     /// The table box takes the keyboard when the wizard opens, so a paste goes straight in.
     focus_table: bool,
+    /// Set while the table is a generic library one: its kind and flags are applied to the
+    /// proposal. Editing the table by hand clears it.
+    library: Option<&'static str>,
 }
 
 /// The folder generic and personal controller profiles live in.
@@ -80,6 +83,7 @@ impl ControllerWizard {
             pxf: None,
             saved: None,
             focus_table: true,
+            library: None,
         };
         w.refresh();
         w
@@ -94,10 +98,14 @@ impl ControllerWizard {
             gate_on_main: self.gate_on_main,
         };
         self.proposal = import::propose(&table, &self.words, &options);
+        if let Some(id) = self.library {
+            library::finish(id, &mut self.proposal);
+        }
         self.saved = None;
     }
 
     fn set_text(&mut self, text: String, source: impl Into<String>) {
+        self.library = None;
         self.text = text;
         self.source = source.into();
         self.refresh();
@@ -333,7 +341,10 @@ impl NovoApp {
                     if std::mem::take(&mut w.focus_table) {
                         table_box.request_focus();
                     }
-                    changed |= table_box.changed();
+                    if table_box.changed() {
+                        w.library = None;
+                        changed = true;
+                    }
                 });
             ui.add_space(6.0);
             ui.horizontal(|ui| {
@@ -439,6 +450,8 @@ impl NovoApp {
                         library::table(id).unwrap_or_default().to_owned(),
                         "Generic library",
                     );
+                    w.library = Some(id);
+                    w.refresh();
                 }
             }
             Action::Save => match self.save_controller_profile() {

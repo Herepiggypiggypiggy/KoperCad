@@ -59,6 +59,22 @@ pub fn build(id: &str) -> Option<Proposal> {
         ..Options::default()
     };
     let mut proposal = propose(&table, &WordList::builtin(), &options);
+    finish(id, &mut proposal);
+    Some(proposal)
+}
+
+/// The I/O table a generic profile is built from, as text the wizard can show and edit.
+pub fn table(id: &str) -> Option<&'static str> {
+    ENTRIES.iter().find(|e| e.id == id).map(|e| e.table)
+}
+
+/// What a table cannot say about a generic profile: its kind, that it is a generic stand-in,
+/// and that the receiver latch of a radio needs the link. Applied by [`build`], and by the
+/// wizard when the person edits a library table.
+pub fn finish(id: &str, proposal: &mut Proposal) {
+    let Some(e) = ENTRIES.iter().find(|e| e.id == id) else {
+        return;
+    };
     proposal.profile.kind = e.kind.to_owned();
     if e.kind == "radio" {
         for c in proposal
@@ -71,10 +87,4 @@ pub fn build(id: &str) -> Option<Proposal> {
         }
     }
     proposal.profile.generic = true;
-    Some(proposal)
-}
-
-/// The I/O table a generic profile is built from, as text the wizard can show and edit.
-pub fn table(id: &str) -> Option<&'static str> {
-    ENTRIES.iter().find(|e| e.id == id).map(|e| e.table)
 }
