@@ -72,7 +72,7 @@
 //! | [`DevicesTooClose`](ProblemKind::DevicesTooClose) | warning | Two devices closer than their clearance |
 //! | [`RailOverflow`](ProblemKind::RailOverflow) | warning | Devices needing more room than their DIN rail has |
 //! | [`DeviceOffRail`](ProblemKind::DeviceOffRail) | warning | A device on a DIN rail whose middle is not on the rail's line (plans made before rails ran through the device middles; Place all puts it right) |
-//! | [`DuctOverlap`](ProblemKind::DuctOverlap) | error | A wiring duct lying over a DIN rail or a device on the plate |
+//! | [`DuctOverlap`](ProblemKind::DuctOverlap) | error | A wiring duct lying over another duct, a DIN rail or a device on the plate |
 //! | [`DeviceTooDeep`](ProblemKind::DeviceTooDeep) | error | A device deeper than the room between plate and door |
 //! | [`DoorGapTight`](ProblemKind::DoorGapTight) | warning | A device that leaves less than the minimum gap to the door |
 //! | [`DepthUnknown`](ProblemKind::DepthUnknown) | info | A placed device without a depth, so the door was not checked |
@@ -533,7 +533,7 @@ impl ProblemKind {
             ProblemKind::DevicesTooClose => "Devices too close",
             ProblemKind::RailOverflow => "Rail overfull",
             ProblemKind::DeviceOffRail => "Device off its rail's middle",
-            ProblemKind::DuctOverlap => "Duct over rail or device",
+            ProblemKind::DuctOverlap => "Duct over duct, rail or device",
             ProblemKind::DeviceTooDeep => "Device too deep",
             ProblemKind::DoorGapTight => "Door gap tight",
             ProblemKind::DepthUnknown => "Depth unknown",

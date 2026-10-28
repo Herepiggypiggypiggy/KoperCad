@@ -204,6 +204,19 @@ pub(crate) fn layout(cx: &Context<'_>, out: &mut Vec<Problem>) {
                         structure.tag
                     ),
                 ),
+                DuctHit::Duct { id: other, w, h } => (
+                    // Ducts have no tag: the plate's enclosure stands for them.
+                    vec![AnyId::Structure(structure.id)],
+                    format!(
+                        "Duct {} crosses duct {} on the plate of {} ({} x {} mm): ducts cannot \
+                         pass through each other, so move one or end one against the side of the other",
+                        o.duct,
+                        other,
+                        structure.tag,
+                        w.round(),
+                        h.round()
+                    ),
+                ),
                 DuctHit::Rail { id: rail, by } => (
                     // A rail has no tag: the devices on it stand for it, a
                     // bare rail is found by its plate.

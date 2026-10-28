@@ -512,6 +512,10 @@ pub enum DuctHit {
     /// A device footprint overlaps the duct by `across` x `along` mm
     /// (across the duct, then along it).
     Device { id: u64, across: f64, along: f64 },
+    /// Another duct covers the duct by `w` x `h` mm (x then y). Ducts cannot
+    /// pass through each other: a junction is one duct ending against the
+    /// side of the other.
+    Duct { id: u64, w: f64, h: f64 },
 }
 
 /// A duct that covers part of a rail or of a device: nothing can be mounted
@@ -522,14 +526,95 @@ pub struct DuctOverlap {
     pub hit: DuctHit,
 }
 
-/// Ducts that lie over a rail or a device. A rail is its band
+/// How far two plate areas cover each other, in x and in y (negative or zero
+/// when they only touch or lie apart).
+fn duct_cover(a: &Rect, b: &Rect) -> (f64, f64) {
+    (
+        a.right().min(b.right()) - a.x.max(b.x),
+        a.bottom().min(b.bottom()) - a.y.max(b.y),
+    )
+}
+
+/// The ducts a duct would lie over, other than itself. Touching edges are
+/// clear: a T or a corner is a duct ending against the side of another.
+pub fn ducts_in_the_way(ducts: &[Duct], duct: &Duct) -> Vec<u64> {
+    let f = duct.footprint();
+    ducts
+        .iter()
+        .filter(|o| o.id != duct.id)
+        .filter(|o| {
+            let (w, h) = duct_cover(&f, &o.footprint());
+            w > 1e-6 && h > 1e-6
+        })
+        .map(|o| o.id)
+        .collect()
+}
+
+/// The nearest place for `duct` that crosses no other duct and stays on
+/// `within`. Tries moving it in 5 mm steps out to 600 mm, along its run and
+/// across it, nearest first; when it has no place at its full length, the
+/// same with the duct shortened in 10 mm steps down to 100 mm. `None` when
+/// there is no room. The duct itself is returned when it is already clear.
+pub fn clear_duct_spot(ducts: &[Duct], duct: &Duct, within: &Rect) -> Option<Duct> {
+    let fits = |d: &Duct| {
+        let f = d.footprint();
+        f.x >= within.x - 1e-6
+            && f.y >= within.y - 1e-6
+            && f.right() <= within.right() + 1e-6
+            && f.bottom() <= within.bottom() + 1e-6
+            && ducts_in_the_way(ducts, d).is_empty()
+    };
+    if fits(duct) {
+        return Some(duct.clone());
+    }
+    let mut length = duct.length;
+    while length >= 100.0 {
+        for step in 0..=120 {
+            let by = f64::from(step) * 5.0;
+            for (dx, dy) in [
+                (0.0, by),
+                (0.0, -by),
+                (by, 0.0),
+                (-by, 0.0),
+                (by, by),
+                (-by, by),
+                (by, -by),
+                (-by, -by),
+            ] {
+                let moved = Duct {
+                    x: duct.x + dx,
+                    y: duct.y + dy,
+                    length,
+                    ..duct.clone()
+                };
+                if fits(&moved) {
+                    return Some(moved);
+                }
+            }
+        }
+        length -= 10.0;
+    }
+    None
+}
+
+/// Ducts that lie over another duct, a rail or a device. A rail is its band
 /// ([`RAIL_BAND_MM`] across, centred on its line); touching edges do not
 /// count, so a duct may sit against a rail.
 pub fn duct_overlaps(ducts: &[Duct], rails: &[Rail], placements: &[Placement]) -> Vec<DuctOverlap> {
     const EPS: f64 = 1e-6;
     let mut out = Vec::new();
-    for d in ducts {
+    for (i, d) in ducts.iter().enumerate() {
         let f = d.footprint();
+        // Each pair of ducts once, reported on the first of the two.
+        for other in &ducts[i + 1..] {
+            let (w, h) = duct_cover(&f, &other.footprint());
+            if w > EPS && h > EPS {
+                out.push(DuctOverlap {
+                    duct: d.id,
+                    hit: DuctHit::Duct { id: other.id, w, h },
+                });
+            }
+        }
         for r in rails {
             let half = RAIL_BAND_MM / 2.0;
             let band = if r.vertical {

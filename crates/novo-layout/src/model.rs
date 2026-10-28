@@ -291,6 +291,29 @@ pub fn without_enclosure(project: &Project, id: StructureId) -> Vec<u64> {
         .collect()
 }
 
+/// The other ducts of an enclosure that a duct would lie over if it stood
+/// as `duct` (an id of a stored duct replaces that duct; any other id is a
+/// new one). Empty when the place is clear.
+pub fn duct_clash(project: &Project, id: StructureId, duct: &Duct) -> Vec<u64> {
+    let others: Vec<Duct> = project
+        .all::<ModelRail>()
+        .filter(|r| r.structure == id && r.kind == RailKind::Duct && r.id.raw() != duct.id)
+        .map(|r| Duct {
+            id: r.id.raw(),
+            x: r.x,
+            y: r.y,
+            length: r.length,
+            width: if r.width > 0.0 {
+                r.width
+            } else {
+                DEFAULT_DUCT_MM
+            },
+            vertical: r.vertical,
+        })
+        .collect();
+    crate::ducts_in_the_way(&others, duct)
+}
+
 /// Sets the plate of an enclosure.
 pub fn set_plate(tx: &mut Tx<'_>, id: StructureId, plate: MountingPlate) -> Result<()> {
     tx.execute(Command::SetPlateSize {

@@ -483,6 +483,37 @@ impl NovoApp {
         let Some(layout) = layout else {
             return;
         };
+        // Ducts never end up over other ducts: the group moves as a whole or
+        // not at all.
+        let moved_ducts: Vec<novo_layout::Duct> = layout
+            .ducts
+            .iter()
+            .filter_map(|d| {
+                let &(_, x, y) = rails.iter().find(|(id, ..)| *id == d.id)?;
+                Some(novo_layout::Duct { x, y, ..d.clone() })
+            })
+            .collect();
+        let after: Vec<novo_layout::Duct> = layout
+            .ducts
+            .iter()
+            .map(|d| {
+                moved_ducts
+                    .iter()
+                    .find(|m| m.id == d.id)
+                    .unwrap_or(d)
+                    .clone()
+            })
+            .collect();
+        if moved_ducts
+            .iter()
+            .any(|m| !novo_layout::ducts_in_the_way(&after, m).is_empty())
+        {
+            self.message(
+                super::Level::Warning,
+                "Not moved: a duct cannot lie over another duct. Move it clear, or end it against the side of the other for a T or a corner",
+            );
+            return;
+        }
         let moves_devices = !devices.is_empty();
         let done = self.cabinet_edit("Move selection", move |tx| {
             // Rails first: the move carries what is mounted on them, then
