@@ -209,20 +209,26 @@ pub(super) fn show(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug
                 ui.add(egui::Label::new(egui::RichText::new(c).monospace()));
             }
             Block::Table { head, rows } => {
-                egui::Grid::new((&id, n))
-                    .striped(true)
-                    .spacing([12.0, 2.0])
+                // A wide table scrolls sideways instead of cutting text off.
+                egui::ScrollArea::horizontal()
+                    .id_salt(("claude_table_scroll", &id, n))
+                    .auto_shrink([false, true])
                     .show(ui, |ui| {
-                        for h in head {
-                            inline(ui, h, None, true);
-                        }
-                        ui.end_row();
-                        for r in rows {
-                            for c in r {
-                                inline(ui, c, None, false);
-                            }
-                            ui.end_row();
-                        }
+                        egui::Grid::new((&id, n))
+                            .striped(true)
+                            .spacing([12.0, 2.0])
+                            .show(ui, |ui| {
+                                for h in head {
+                                    inline(ui, h, None, true);
+                                }
+                                ui.end_row();
+                                for r in rows {
+                                    for c in r {
+                                        inline(ui, c, None, false);
+                                    }
+                                    ui.end_row();
+                                }
+                            });
                     });
             }
             Block::Rule => {

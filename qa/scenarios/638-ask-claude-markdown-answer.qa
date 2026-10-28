@@ -16,15 +16,18 @@ scroll 250 300 -300
 wait 4
 click_text "Whole project"
 wait 4
+scroll 250 300 -3000
+wait 4
 click_text "I have read this and agree"
 wait 4
 click_text "Turn Claude on" Button
 wait 8
+expect "Claude is on"
 click_text "" MultilineTextInput
 wait 3
 text Number the wires.
 click_text Send Button
-wait 40
+wait 120
 expect "Wire numbering result"
 expect "13 nets"
 expect_not "**"
