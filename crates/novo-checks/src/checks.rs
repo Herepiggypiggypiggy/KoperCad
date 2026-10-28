@@ -298,7 +298,10 @@ pub(crate) fn device_functions(cx: &Context<'_>, out: &mut Vec<Problem>) {
     }
 }
 
-/// Interruption points whose name appears only once in the project.
+/// Interruption points whose name appears only once in the project. When
+/// other points on other pages are alone too, the message names them: the
+/// likely partners, joined by "Link cross reference" (right-click, then click
+/// the other) or by giving both the same name.
 pub(crate) fn lone_interruptions(cx: &Context<'_>, out: &mut Vec<Problem>) {
     let mut by_name: BTreeMap<&str, Vec<&SymbolInstance>> = BTreeMap::new();
     for symbol in cx.project.symbols() {
@@ -306,14 +309,47 @@ pub(crate) fn lone_interruptions(cx: &Context<'_>, out: &mut Vec<Problem>) {
             by_name.entry(name.as_str()).or_default().push(symbol);
         }
     }
-    for (name, symbols) in by_name {
-        if let [lone] = symbols.as_slice() {
-            out.push(Problem::new(
-                ProblemKind::LoneInterruption,
-                vec![lone.id.into()],
-                format!("Interruption point {name} has no partner"),
+    let lone: Vec<(&str, &SymbolInstance)> = by_name
+        .iter()
+        .filter_map(|(name, symbols)| match symbols.as_slice() {
+            [lone] => Some((*name, *lone)),
+            _ => None,
+        })
+        .collect();
+    for &(name, point) in &lone {
+        let others: Vec<String> = lone
+            .iter()
+            .filter(|(_, o)| o.page != point.page)
+            .map(|(n, o)| {
+                let page = cx.project.page(o.page).map_or("?", |p| p.name.as_str());
+                format!("{n} on page {page}")
+            })
+            .collect();
+        let mut message = format!("Interruption point {name} has no partner");
+        if !others.is_empty() {
+            let shown = others
+                .iter()
+                .take(3)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
+            let more = others.len().saturating_sub(3);
+            message.push_str(&format!(
+                "; {shown}{} {} no partner either. Right-click one and choose Link \
+                 cross reference, then click the other, to give them one name",
+                if more > 0 {
+                    format!(" and {more} more")
+                } else {
+                    String::new()
+                },
+                if others.len() == 1 { "has" } else { "have" }
             ));
         }
+        out.push(Problem::new(
+            ProblemKind::LoneInterruption,
+            vec![point.id.into()],
+            message,
+        ));
     }
 }
 

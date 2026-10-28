@@ -3,7 +3,7 @@
 # placements and ducts, nothing is stored, so there is no finished.json.
 #
 # Verified on main (e2fa0013) with the overlay code on this sample: 11 wires routed, none in free
-# air, fullest duct 10 %, the longest wires 1047 mm (-F2 to -X1), the note "11 wires have no size:
+# air, fullest duct 10 %, the longest wires 966 to 1014 mm (-F2 to -X1), the note "11 wires have no size:
 # duct fill assumes 3 mm", and every length +100 mm when the service loop goes from 50 to 100 mm.
 # Needs from the Cabinet owner: the anchors named below. The old "take a duct away" step is gone;
 # free air is explained in words.
@@ -80,12 +80,12 @@ title = "Every wire has a length"
 title_nl = "Elke draad heeft een lengte"
 text = """
 The list below is sorted longest first. Each wire shows its number and cut length in mm; the line under it shows both ends, "routed" and how many ducts it uses.
-The longest are the three from **-F2** to **-X1** at 1047 mm each: the terminal strip is at the bottom, and every wire has to go round through the duct on the left-hand edge.
+The longest are the three from **-F2** to **-X1** at 966 to 1014 mm: the terminal strip is at the bottom, and every wire has to go round through the duct on the left-hand edge.
 The length includes a 50 mm service loop at each end.
 """
 text_nl = """
 De lijst eronder staat op lengte, langste eerst. Elke draad toont nummer en zaaglengte in mm; de regel eronder toont beide einden, "routed" en hoeveel kanalen de draad gebruikt.
-De langste zijn de drie van **-F2** naar **-X1** met 1047 mm per stuk: de klemmenstrook zit onderaan en elke draad moet via het kanaal langs de linkerrand.
+De langste zijn de drie van **-F2** naar **-X1** met 966 tot 1014 mm: de klemmenstrook zit onderaan en elke draad moet via het kanaal langs de linkerrand.
 De lengte bevat een lus van 50 mm per uiteinde.
 """
 point = { ui = "cabinet.routes_panel" }
@@ -130,12 +130,12 @@ title = "Change a wire rule"
 title_nl = "Verander een draadregel"
 text = """
 In the Routes panel open **Wire rules**. Set **Service loop per end** from 50 mm to 100 mm.
-Every length in the table grows by 100 mm (1047 becomes 1147), because each wire has two ends.
+Every length in the table grows by 100 mm (966 becomes 1066), because each wire has two ends.
 The rules are kept in the project, so the wire list and the cut files use the same numbers. The reset arrow puts a rule back to its default.
 """
 text_nl = """
 Open in het paneel Routes **Wire rules**. Zet **Service loop per end** van 50 mm op 100 mm.
-Elke lengte in de tabel wordt 100 mm langer (1047 wordt 1147), want elke draad heeft twee uiteinden.
+Elke lengte in de tabel wordt 100 mm langer (966 wordt 1066), want elke draad heeft twee uiteinden.
 De regels worden in het project bewaard, dus de draadlijst en de zaagbestanden gebruiken dezelfde getallen. Met de reset-pijl zet je een regel terug op de standaardwaarde.
 """
 point = { ui = "cabinet.wire_rules" }

@@ -1,12 +1,14 @@
 # Cabinet track, lesson 4. Sample: wire-routing/project.json (placed plate, ducts joined).
 #
-# Verified on main (59a37de0) with the wire list on this sample: 19 rows, 15 "routed" (1047 mm
-# for -F2 to -X1, 490 for -F1 to -K1, 579 for -K1 to -F2, 250 and 310 between the buttons) and
-# 4 "estimate" at 200 mm for the motor wires, whose device is in the field. The wire cut export
-# is Cabinet > Route all > Export wire cut (wire_production.rs): a semicolon CSV next to the
-# project. Since #597 the Reports workspace has a Cut list report (command report.cutlist): a
-# summary (1.5 mm2: 4 wires, 0.88 m; size unknown: 15 wires, 9.32 m) and one table per size with
-# Wire mm + Ends mm (20) = Cut mm, e.g. wire 4: 1047 + 20 = 1067.
+# Checked against the engines by `lesson_claims_tests` (novo-app), on this sample: the wire list has
+# 19 rows, 15 "routed" (966 mm for -F2 to -X1, 490 for -F1 to -K1, 572 for -K1 to -F2, 335 between
+# the buttons -S0 and -S1) and 4 "cable length" at 12000 mm for the motor wires, the cores of cable
+# -W1 whose 12 m length is stated. The wire cut export is Cabinet > Route all > Export wire cut
+# (wire_production.rs): a semicolon CSV next to the project. The Reports workspace has a Cut list
+# report (command report.cutlist): a summary (1.5 mm2: 4 wires, 0 m because cable cores are left
+# out; size unknown: 21 wires, 10.85 m; the cut list also counts the supply and earth leads, 25 wires
+# against 19 rows) and one table per size with Wire mm + Ends mm (20) = Cut mm, e.g. wire 4:
+# 966 + 20 = 986.
 format = 1
 id = "cut-lengths"
 version = 2
@@ -50,13 +52,13 @@ title = "Two columns at the end"
 title_nl = "Twee kolommen achteraan"
 text = """
 The last two columns are **Route length mm** and **Length basis**.
-The first is the length of the route; the bench cut list adds the allowance at each end. The second says how that length was found: "routed" or "estimate", and in free air when no duct reaches.
-Of the 19 rows here, 15 say **routed** and 4 say **estimate**.
+The first is the length of the route; the bench cut list adds the allowance at each end. The second says how that length was found: "routed", "cable length" or "estimate", and "free air" when no duct reaches.
+Of the 19 rows here, 15 say **routed** and 4 say **cable length**.
 """
 text_nl = """
 De laatste twee kolommen zijn **Route length mm** en **Length basis**.
-De eerste is de lengte van de route; de bankwerklijst telt de toeslag aan elk uiteinde erbij. De tweede zegt hoe die lengte is bepaald: "routed" of "estimate", en free air als geen kanaal de draad bereikt.
-Van de 19 rijen hier staat er bij 15 **routed** en bij 4 **estimate**.
+De eerste is de lengte van de route; de bankwerklijst telt de toeslag aan elk uiteinde erbij. De tweede zegt hoe die lengte is bepaald: "routed", "cable length" of "estimate", en "free air" als geen kanaal de draad bereikt.
+Van de 19 rijen hier staat er bij 15 **routed** en bij 4 **cable length**.
 """
 
 [[step]]
@@ -65,26 +67,26 @@ title = "Routed"
 title_nl = "Gerouteerd"
 text = """
 Both devices are on the plate and a duct path joins them. The length is stub, duct run and stub, plus a {tip:service-loop} at each end.
-For example wire 4, from **-F2** to **-X1**, is 1047 mm, and the two wires between the push buttons on the same rail are only 250 mm and 310 mm.
+For example wire 4, from **-F2** to **-X1**, is 966 mm, and the wire between the two push buttons on the same rail, **-S0** to **-S1**, is only 335 mm.
 That is the number the workshop cuts to.
 """
 text_nl = """
 Beide componenten staan op de plaat en een kanaalpad verbindt ze. De lengte is stub, kanaaldeel en stub, plus een {tip:service-loop} aan elk uiteinde.
-Draad 4 van **-F2** naar **-X1** is bijvoorbeeld 1047 mm en de twee draden tussen de drukknoppen op dezelfde rail zijn maar 250 mm en 310 mm.
+Draad 4 van **-F2** naar **-X1** is bijvoorbeeld 966 mm en de draad tussen de twee drukknoppen op dezelfde rail, **-S0** naar **-S1**, is maar 335 mm.
 Dat is het getal waarop de werkplaats afkort.
 """
 
 [[step]]
 id = "estimate"
-title = "Estimate"
-title_nl = "Schatting"
+title = "Cable length and estimate"
+title_nl = "Kabellengte en schatting"
 text = """
-The motor is in the field, not on this plate, so its four wires (**-X1** to **-M1**) say **estimate** and 200 mm:
-a distance guessed from the schematic plus the loops. It is a planning figure, always labelled as one, and it only becomes a real length when both ends sit on a plate.
+The motor is in the field, not on this plate, so its four wires (**-X1** to **-M1**) are the cores of the cable **-W1** and say **cable length** and 12000 mm: the length stated on the cable.
+Without a stated length such a wire says **estimate**: a distance guessed from the schematic plus the loops. That is a planning figure, always labelled as one, and it only becomes a real length when both ends sit on a plate or the cable has its length.
 """
 text_nl = """
-De motor staat in het veld, niet op deze plaat, dus zijn vier draden (**-X1** naar **-M1**) zeggen **estimate** en 200 mm:
-een afstand geschat uit het schema plus de lussen. Het is een planningsgetal, altijd als zodanig gemarkeerd, en het wordt pas een echte lengte als beide einden op een plaat zitten.
+De motor staat in het veld, niet op deze plaat, dus zijn vier draden (**-X1** naar **-M1**) zijn de aders van kabel **-W1** en zeggen **cable length** en 12000 mm: de lengte die op de kabel staat.
+Zonder opgegeven lengte staat er bij zo'n draad **estimate**: een afstand geschat uit het schema plus de lussen. Dat is een planningsgetal, altijd als zodanig gemarkeerd, en het wordt pas een echte lengte als beide einden op een plaat zitten of de kabel zijn lengte heeft.
 """
 
 [[step]]
@@ -94,15 +96,26 @@ how_nl = ["Voer Cut list uit in het opdrachtveld, of open Reports in de schakela
 title = "The cut list"
 title_nl = "De zaaglijst"
 text = """
-Run **Cut list** from the command field, or open **Reports** in the switcher at the top and click **Cut list** in the list. The report starts with a summary: per wire size the number of wires and the total metres to order, here 4 wires of 1.5 mm² (0.88 m) and 15 wires whose size is not set yet (9.32 m).
-Below it is one table per size. Wire 4 shows **Wire mm** 1047, **Ends mm** 20 and **Cut mm** 1067: the wire list length plus 10 mm per end for the ferrule.
+Run **Cut list** from the command field, or open **Reports** in the switcher at the top and click **Cut list** in the list. The report starts with a summary: per wire size the number of wires and the total metres to order, here 4 wires of 1.5 mm² and 21 wires whose size is not set yet (10.85 m).
 """
 text_nl = """
-Voer **Cut list** uit in het opdrachtveld, of open **Reports** in de schakelaar bovenin en klik op **Cut list** in de lijst. Het rapport begint met een samenvatting: per draaddoorsnede het aantal draden en de totale meters om te bestellen, hier 4 draden van 1,5 mm² (0,88 m) en 15 draden waarvan de doorsnede nog niet is ingesteld (9,32 m).
-Daaronder staat een tabel per doorsnede. Draad 4 toont **Wire mm** 1047, **Ends mm** 20 en **Cut mm** 1067: de lengte uit de draadlijst plus 10 mm per uiteinde voor de adereindhuls.
+Voer **Cut list** uit in het opdrachtveld, of open **Reports** in de schakelaar bovenin en klik op **Cut list** in de lijst. Het rapport begint met een samenvatting: per draaddoorsnede het aantal draden en de totale meters om te bestellen, hier 4 draden van 1,5 mm² en 21 draden waarvan de doorsnede nog niet is ingesteld (10,85 m).
 """
 expect = { command = "report.cutlist" }
 solve = [ { command = "report.cutlist" } ]
+
+[[step]]
+id = "cut-list-rows"
+title = "Reading the cut list"
+title_nl = "De zaaglijst lezen"
+text = """
+The 4 wires of 1.5 mm² are the cores of cable **-W1**: a cable is bought once, so its cores add no metres to the total (the column says "cable cores left out"). The cut list also counts the supply and earth leads, so it has 25 wires where the wire list has 19 rows.
+Below the summary is one table per size. Wire 4 shows **Wire mm** 966, **Ends mm** 20 and **Cut mm** 986: the wire list length plus 10 mm per end for the ferrule.
+"""
+text_nl = """
+De 4 draden van 1,5 mm² zijn de aders van kabel **-W1**: een kabel koop je één keer, dus zijn aders tellen niet mee in de meters (de kolom zegt "cable cores left out"). De zaaglijst telt ook de voedings- en aardedraden mee, dus ze heeft 25 draden waar de draadlijst 19 rijen heeft.
+Onder de samenvatting staat een tabel per doorsnede. Draad 4 toont **Wire mm** 966, **Ends mm** 20 en **Cut mm** 986: de lengte uit de draadlijst plus 10 mm per uiteinde voor de adereindhuls.
+"""
 
 [[step]]
 id = "back-to-cabinet"

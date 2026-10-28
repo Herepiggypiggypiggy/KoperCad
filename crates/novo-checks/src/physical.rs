@@ -1,8 +1,8 @@
 //! Cabinet checks: devices not placed, wires and ducts (novo-routing).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
-use novo_core::{AnyId, CabinetPlacement, DeviceId, DeviceKind, SymbolRole, WireId};
+use novo_core::{AnyId, CabinetPlacement, DeviceId, DeviceKind, PageId, SymbolRole, WireId};
 use novo_layout::DuctHit;
 use novo_layout::model::load;
 use novo_routing::Problem as RoutingProblem;
@@ -61,28 +61,15 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
         project.wires().map(|w| (w.id.raw(), w.id)).collect();
     let wire = |job: u64| wires.get(&job).copied();
     let mut guessed: Vec<AnyId> = Vec::new();
+    let mut free_air: BTreeMap<PageId, Vec<WireId>> = BTreeMap::new();
     for (structure, plan) in &routed.plans {
         for problem in &plan.problems {
             match problem {
                 RoutingProblem::FreeAir { job } => {
                     let Some(w) = wire(*job) else { continue };
-                    let ends = project
-                        .wires()
-                        .find(|x| x.id == w)
-                        .and_then(|x| Some((x.from.as_pin()?, x.to.as_pin()?)))
-                        .map(|(a, b)| {
-                            format!(
-                                "{} > {}: ",
-                                project.pin_designation(a).unwrap_or_default(),
-                                project.pin_designation(b).unwrap_or_default()
-                            )
-                        })
-                        .unwrap_or_default();
-                    out.push(Problem::new(
-                        ProblemKind::WireWithoutDuct,
-                        vec![AnyId::Wire(w)],
-                        format!("{ends}no duct path joins the two ends of this wire, so it is not routed and its length is only an estimate: add a duct that reaches both ends"),
-                    ));
+                    if let Some(page) = project.wire(w).map(|w| w.page) {
+                        free_air.entry(page).or_default().push(w);
+                    }
                 }
                 RoutingProblem::OverfullDuct { ratio, jobs, .. } => {
                     let wires: Vec<WireId> = jobs.iter().filter_map(|j| wire(*j)).collect();
@@ -132,6 +119,11 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
             }
         }
     }
+    for (page, mut wires) in free_air {
+        wires.sort();
+        wires.dedup();
+        out.push(free_air_problem(cx, page, &wires));
+    }
     if !guessed.is_empty() {
         guessed.sort();
         let n = guessed.len();
@@ -145,6 +137,57 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
             ),
         ));
     }
+}
+
+/// How many wires of a free-air problem are named in its message.
+const NAMED_WIRES: usize = 5;
+
+/// One problem for the wires of a page that no duct serves, naming them:
+/// `-F5:2 to -F6:1`, or the wire number when it has one.
+fn free_air_problem(cx: &Context<'_>, page: PageId, wires: &[WireId]) -> Problem {
+    let project = cx.project;
+    let name = project.page(page).map_or("?", |p| p.name.as_str());
+    let labels: Vec<String> = wires
+        .iter()
+        .filter_map(|&w| project.wire(w))
+        .map(|w| {
+            let ends = format!(
+                "{} to {}",
+                cx.endpoint_label(w.from),
+                cx.endpoint_label(w.to)
+            );
+            match w.number.as_deref().filter(|n| !n.is_empty()) {
+                Some(number) => format!("{number} ({ends})"),
+                None => ends,
+            }
+        })
+        .collect();
+    let shown = labels
+        .iter()
+        .take(NAMED_WIRES)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("; ");
+    let more = labels.len().saturating_sub(NAMED_WIRES);
+    let n = wires.len();
+    Problem::new(
+        ProblemKind::WireWithoutDuct,
+        wires.iter().map(|&w| AnyId::Wire(w)).collect(),
+        format!(
+            "No duct serves {} on page {name}, so {} would run in free air: {shown}{}",
+            if n == 1 {
+                "this wire".to_owned()
+            } else {
+                format!("these {n} wires")
+            },
+            if n == 1 { "it" } else { "they" },
+            if more > 0 {
+                format!(" and {more} more")
+            } else {
+                String::new()
+            }
+        ),
+    )
 }
 
 /// Collisions, devices off the plate, tight spacing and full rails on each
