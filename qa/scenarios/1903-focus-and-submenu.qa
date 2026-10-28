@@ -1,0 +1,31 @@
+@title Keyboard focus ring on a segment and a long submenu that scrolls
+@area Layout
+@sizes 1366x768
+# UWL-02: the selected segment shows where the keyboard focus is.
+# UWL-04: View > 3D has dozens of rows and scrolls inside the window.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+shot preferences-before-tab
+key Tab
+wait 4
+shot focus-on-dark
+key Tab
+wait 4
+shot focus-on-light
+click_text Done
+wait 6
+click_text View #1
+wait 6
+click_text "3D ⏵"
+wait 8
+shot view-3d-submenu
+scroll 1000 400 -3000
+wait 6
+shot view-3d-submenu-scrolled
+expect "Isometric"

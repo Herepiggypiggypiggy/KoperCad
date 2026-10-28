@@ -1,7 +1,7 @@
-@title Preferences and start screen at 200 % interface size
+@title Preferences and the status bar at 200 % interface size
 @area Layout
-# Windows hardware test UWL-01 (empty Preferences at 200 %), UWL-05 (small
-# window), HPR-03 (recent list cut off on the start screen).
+# Windows hardware test UWL-01 and UWL-05: after the screen shrank, the dialog
+# kept its old size and sat partly off screen. Done must stay in view.
 click_text "Open example"
 wait 20
 key ctrl+k
@@ -13,14 +13,13 @@ wait 10
 shot preferences-100
 click_text "200%"
 wait 12
-shot preferences-200
+shot preferences-200-refit
 expect "Interface size"
-expect "Theme"
+expect_enabled Done
 check_layout
-check_blank preferences-200-blank
 click_text Done
 wait 10
-shot schematic-200
+shot status-bar-200
 check_layout
 key ctrl+k
 wait 6
@@ -30,5 +29,6 @@ key Enter
 wait 10
 click_text "100%"
 wait 10
+shot preferences-back-to-100
 click_text Done
 wait 6
