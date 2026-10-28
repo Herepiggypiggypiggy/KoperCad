@@ -10,7 +10,11 @@ shot page-fitted
 double_click 120 400
 wait 30
 shot jumped-to-the-contact-page
+# The contact shows the page.column of its coil under its tag; a double click on it jumps back.
+double_click 422 387
+wait 30
+shot jumped-from-the-contact-to-its-coil
 key alt+Left
 wait 30
-shot back-at-the-coil
+shot back-at-the-contact
 check_layout
