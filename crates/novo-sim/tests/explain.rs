@@ -426,9 +426,9 @@ fn a_coil_with_its_return_pin_unwired_says_so() {
     let a = answer_symbol(project, &netlist, &settled, &none, coil, &names);
     assert!(a.dead);
     assert!(
-        a.lines
-            .iter()
-            .any(|l| l.text.contains("Nothing connects pin 2 to a supply")),
+        a.lines.iter().any(|l| l
+            .text
+            .contains("Nothing connects pin 2 to a supply: the return is open")),
         "{:?}",
         a.lines
     );

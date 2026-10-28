@@ -666,7 +666,7 @@ pub fn answer_symbol(
             // The other side of a coil that is off for want of a return: the
             // generic "dead" line names no cause.
             about = vec![Line::plain(format!(
-                "Nothing connects pin {pin_name} to a supply: the return is open. Wire it to the return (N or L2), or check the wire that should reach it."
+                "Nothing connects pin {pin_name} to a supply: the return is open. Wire it to N or L2."
             ))];
         }
         lines.extend(about.into_iter().map(|mut l| {
