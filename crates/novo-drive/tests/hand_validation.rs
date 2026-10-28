@@ -14,11 +14,12 @@
 
 use novo_drive::{
     Fidelity, GRAVITY,
+    brake::{SpringBrake, Switching},
     drive::{
         BrakingDuty, BrakingResistor, BusConfig, DcBus, I2tOverload, Ramp, ResistorFlag, SRamp,
         VfCurve, check_braking_resistor,
     },
-    mechanics::hoist_raising_torque_nm,
+    mechanics::{Hoist, Shaft, hoist_lowering_torque_nm, hoist_raising_torque_nm},
     motor::{SYNC_RPM_FIDELITY, sync_rpm},
 };
 use std::f64::consts::PI;
@@ -388,9 +389,27 @@ fn oracle_case05_lowering_and_holding() {
 }
 
 #[test]
-#[ignore = "L2a: lowering sign, overhauling flag and brake holding ratio not in the engine yet"]
 fn case05_lowering_sign_and_brake_hold() {
-    todo!("L2a: lowering torque -280.19 N m (overhauling), hold ratio 1.606 for a 500 N m brake");
+    let h = Hoist::new(5000.0, 0.2, 31.5, 1, 0.9).unwrap();
+    close(h.raising_torque_nm(), 345.913_580, 1e-5, "raising");
+    // Lowering holds the load back with efficiency in its favour: 280.19 N m.
+    close(h.lowering_torque_nm(), 280.19, 1e-9, "lowering");
+    close(h.static_torque_nm(), 311.322_222, 1e-5, "static");
+    // A 500 N m brake against the static torque: ratio 1.606.
+    let brake = SpringBrake::new(500.0, 0.0, 0.0, 0.0, 0.0, Switching::AcSide).unwrap();
+    close(
+        brake.holding_torque_nm() / h.static_torque_nm(),
+        1.606_0,
+        1e-3,
+        "hold ratio",
+    );
+    // Sign convention: the weight is a negative (lowering) torque on the shaft.
+    close(
+        hoist_lowering_torque_nm(5000.0, 0.2, 31.5, 0.9).unwrap(),
+        280.19,
+        1e-9,
+        "function",
+    );
 }
 
 // ---------------------------------------------------------------- case 6: brake drop
@@ -416,11 +435,21 @@ fn oracle_case06_free_fall_bound_and_with_inertia() {
 }
 
 #[test]
-#[ignore = "L2a: brake-open-before-torque drop (hoist mechanics step) not in the engine yet"]
 fn case06_brake_opens_before_torque() {
-    todo!(
-        "L2a: drop in 150 ms is 31.70 mm with J_motor 0.5 kg m2 and must never exceed 110.32 mm; with J_motor 0 it equals 110.32 mm"
-    );
+    // Brake open, no motor torque for 150 ms, then the shaft is caught (we only look at the drop).
+    let drop_mm = |j_motor: f64| {
+        let h = Hoist::new(5000.0, 0.2, 31.5, 1, 1.0).unwrap();
+        let mut shaft = Shaft::new(j_motor + h.reflected_inertia_kg_m2()).unwrap();
+        for _ in 0..150 {
+            shaft.step(0.001, -h.static_torque_nm(), 0.0, 0.0);
+        }
+        -shaft.angle_rad * h.metres_per_rad() * 1000.0
+    };
+    // With the 0.5 kg m2 rotor reflected through the gearbox: 31.70 mm.
+    close(drop_mm(0.5), 31.697, 0.01, "drop with rotor inertia");
+    // With no rotor inertia it is free fall, 0.5 g t^2 = 110.32 mm, and never more than that.
+    close(drop_mm(1e-9), 110.325, 0.01, "free fall bound");
+    assert!(drop_mm(0.5) < 110.325);
 }
 
 // ---------------------------------------------------------------- case 7: braking resistor
@@ -606,10 +635,42 @@ fn oracle_case13_two_speed_runup() {
 }
 
 #[test]
-#[ignore = "L2a: two-speed hoist sequencing not in the engine yet"]
 fn case13_two_speed_runup_and_changeover() {
-    todo!(
-        "L2a: fine stage 0.2384 s, speed 27.707 rad/s after 50 ms dead time, coarse stage 0.5676 s (constant-torque idealisation inputs in the oracle)"
+    // Mechanics part of case 13 with the constant-torque idealisation (fine 500 N m, coarse
+    // 700 N m, 50 ms dead time with no motor torque and the brake released). The motor torque
+    // curves and contactor sequencing are checked in the L2a motor tests; here the stage times
+    // follow from the shaft, the gravity torque and the efficiency convention alone.
+    let h = Hoist::new(5000.0, 0.2, 31.5, 1, 0.9).unwrap();
+    let mut shaft = Shaft::new(0.5 + h.reflected_inertia_kg_m2()).unwrap();
+    let dt = 1e-4;
+    let (wf, wc) = (2.0 * PI * 500.0 / 60.0, 2.0 * PI * 3000.0 / 60.0);
+    let run = |shaft: &mut Shaft, motor_nm: f64, until: Option<f64>, max_s: f64| {
+        let mut t = 0.0;
+        while t < max_s && until.is_none_or(|w| shaft.omega_rad_s < w) {
+            // Gravity and the upward loss torque, as the loop will apply them.
+            shaft.step(
+                dt,
+                motor_nm - h.static_torque_nm(),
+                h.friction_up_nm(),
+                h.friction_down_nm(),
+            );
+            t += dt;
+        }
+        t
+    };
+    close(
+        run(&mut shaft, 500.0, Some(wf), 5.0),
+        0.238_397,
+        0.001,
+        "fine stage",
+    );
+    run(&mut shaft, 0.0, None, 0.05);
+    close(shaft.omega_rad_s, 27.706_78, 0.01, "speed after dead time");
+    close(
+        run(&mut shaft, 700.0, Some(wc), 5.0),
+        0.567_557,
+        0.001,
+        "coarse stage",
     );
 }
 
@@ -639,6 +700,14 @@ fn brake_apply_stop(v0: f64, delay_s: f64, t_brake: f64) -> (f64, f64, f64) {
 }
 
 #[test]
+#[ignore = "L2a part 2 / L5a: contactor sequencing and the motor torque curves through the changeover"]
+fn case13_sequencer_changeover_with_motor_curves() {
+    todo!(
+        "L5a: fine to coarse changeover time and speed dip with the pole-change motor torque curves and the entered changeover time"
+    );
+}
+
+#[test]
 fn oracle_case14_brake_apply_delay() {
     // Fine speed 0.05 m/s upward, motor torque cut, brake 500 N m.
     // AC-side switching, apply delay 80 ms: moves up 4.0 mm, loses 9.02 mm to the pull of the
@@ -655,11 +724,32 @@ fn oracle_case14_brake_apply_delay() {
 }
 
 #[test]
-#[ignore = "L2a: rectifier-fed brake with AC-side and DC-side delays not in the engine yet"]
 fn case14_brake_ac_versus_dc_switching() {
-    todo!(
-        "L2a: total hook movement -14.025 mm (80 ms) and +0.415 mm (12 ms) at 500 N m brake, 0.05 m/s"
-    );
+    // Hoisting at 0.05 m/s, motor torque cut at t = 0, brake 500 N m with apply delay AC side
+    // 80 ms and DC side 12 ms (entered values), efficiency 1 as in the hand calculation.
+    let total_mm = |switching: Switching| {
+        let h = Hoist::new(5000.0, 0.2, 31.5, 1, 1.0).unwrap();
+        let mut shaft = Shaft::new(0.5 + h.reflected_inertia_kg_m2()).unwrap();
+        shaft.omega_rad_s = 0.05 / h.metres_per_rad();
+        let mut brake = SpringBrake::new(500.0, 0.0, 0.080, 0.012, 0.0, switching).unwrap();
+        brake.step(true, 0.001); // released
+        let dt = 1e-4;
+        for _ in 0..5000 {
+            shaft.step(
+                dt,
+                -h.static_torque_nm(),
+                brake.holding_torque_nm(),
+                brake.holding_torque_nm(),
+            );
+            brake.step(false, dt);
+        }
+        assert_eq!(shaft.omega_rad_s, 0.0, "stopped and held");
+        shaft.angle_rad * h.metres_per_rad() * 1000.0
+    };
+    // Hand totals: -14.025 mm (AC side) against +0.415 mm (DC side). The tolerance covers the
+    // one-step latency of the brake torque (0.1 ms at 0.17 m/s is 0.02 mm).
+    close(total_mm(Switching::AcSide), -14.025, 0.1, "AC side");
+    close(total_mm(Switching::DcSide), 0.415, 0.1, "DC side");
 }
 
 // ---------------------------------------------------------------- case 11 (pendulum) lives in novo-machine
