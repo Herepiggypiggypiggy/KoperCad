@@ -106,6 +106,8 @@ pub(super) struct Wizard {
     view: Option<u8>,
     /// The option choice leaves devices out (set each frame by the view).
     pub(super) left_out: bool,
+    /// A lesson step points at Apply: the list scrolls to it once it is drawn.
+    reveal: std::cell::Cell<bool>,
     #[cfg(test)]
     pub(super) settings: Option<whatif::Settings>,
 }
@@ -115,6 +117,13 @@ impl Wizard {
     pub(super) fn request(&mut self) {
         self.requested = true;
         self.open = true;
+    }
+
+    /// A lesson step points at the Apply button (or no longer does): the
+    /// list scrolls to it when it is drawn, so the ring is not around a
+    /// control cut off by a short window.
+    pub(super) fn reveal_apply(&self, on: bool) {
+        self.reveal.set(on);
     }
 
     /// Asked for and the 3D view has not taken it up.
@@ -692,6 +701,9 @@ fn card(
             "Apply button of the fix",
             &apply,
         );
+        if w.reveal.take() {
+            apply.scroll_to_me(Some(egui::Align::Center));
+        }
         if apply.clicked() {
             *ask = Some(match &c.fix {
                 Fix::Layout { moves } => Ask::Move(found.structure, moves.clone()),

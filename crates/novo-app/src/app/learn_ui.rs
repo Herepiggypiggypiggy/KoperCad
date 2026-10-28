@@ -352,12 +352,10 @@ impl NovoApp {
                 {
                     action = Some(CardAction::Contents);
                 }
-                if !card.finished {
-                    ui.weak(&card.counter);
-                }
-                // The title gives way to the button, not the other way round.
+                // The title gives way to the buttons, not the other way round:
+                // a long one wraps to a second line instead of being cut.
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
                     // The card moves by its body; the grip says so.
                     ui.weak(icons::DOTS_SIX_VERTICAL)
                         .on_hover_text(&card.words.drag_tip);
@@ -365,7 +363,16 @@ impl NovoApp {
                 });
             });
         });
-        super::learn_suite::progress_bar(ui, card.fraction);
+        // "n of N" sits at the end of the step bar, so a long title keeps the
+        // width of the header.
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if !card.finished {
+                    ui.weak(&card.counter);
+                }
+                super::learn_suite::progress_bar(ui, card.fraction);
+            });
+        });
         ui.add_space(4.0);
         if card.finished {
             ui.label(egui::RichText::new(format!("✓ {}", card.words.done)).strong());
