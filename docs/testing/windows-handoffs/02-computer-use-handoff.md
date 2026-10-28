@@ -78,7 +78,7 @@ For each of 100%, 125%, 150%, 200% (and 175% if offered):
 - J3 Special characters (é ø ü µ Ω), Dutch decimal comma, number of rows in vs imported.
 
 **K. Export and printing**
-- K1 File > Export > PDF of the whole set (use Print preview first). Open the PDF in the PDF reader. 📷 first page title block and a page he knows well. Check: Ω µ ° signs, page count, bookmarks panel, clicking a link.
+- K1 File > Export drawings (PDF, DXF) and File > Export print (Print preview, plot sets, PDF options): PDF of the whole set (use Print preview first). Open the PDF in the PDF reader. 📷 first page title block and a page he knows well. Check: Ω µ ° signs, page count, bookmarks panel, clicking a link.
 - K2 Export DXF (This page); export a wire list or BOM as Excel and open it in Excel: 📷 numbers, decimal separators, columns.
 - K3 Reports > Export work cards (PDF): print at 100% to "Microsoft Print to PDF" (and the real printer only if allowed). Measure the printed 100 mm ruler on the card with a real ruler if printed on paper (Tadjiro measures); on PDF compare in the reader at 100%.
 - K4 Save a file with spaces and a non-ASCII character in the name (for example `Tést ø 1.pdf`): exports without error.

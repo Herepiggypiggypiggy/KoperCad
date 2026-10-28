@@ -91,7 +91,7 @@ Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | ? { 
 - J3 Duplicate handling, special characters (é, ø, ü, µ, Ω) survive? Dutch decimal comma? Count rows in vs out.
 
 **K. Exports and printing** (on the example project and on one project COPY)
-- K1 File > Export: PDF of the whole set; open in the default PDF reader (record which). Check title block, first/last page, bookmarks, links (click one), fonts (Ω, µ, °), page count.
+- K1 File > Export drawings (PDF, DXF this page / all pages, plate) and File > Export print (Print preview, plot sets, PDF options): PDF of the whole set; open in the default PDF reader (record which). Check title block, first/last page, bookmarks, links (click one), fonts (Ω, µ, °), page count.
 - K2 DXF (this page, all pages): files exist; open in any viewer he has. xlsx exports (wire list, BOM, device list): open in Excel; check no formula errors, column widths, decimal separators.
 - K3 Print preview, then print at 100% to "Microsoft Print to PDF" (and the real printer only if Tadjiro said yes): measure the 100 mm ruler on a work card (Reports > Export work cards) and compare.
 - K4 Files with spaces/non-ASCII in the path or name export without error.
@@ -112,11 +112,11 @@ Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | ? { 
 - P2 For every drive/controller screen: does the program say clearly what is a model and what exact? A model shown as a fact = S2.
 
 **Q. The scripted harness (control mode) on real hardware**
-- Q0 Get the matching source for scenarios (public repo): download `https://github.com/Herepiggypiggypiggy/kopercad/archive/refs/tags/v0.1.0-rc10.zip` (or the tag for the build under test) into `$T\work\src` with `Invoke-WebRequest`; if the proxy blocks it, ask Tadjiro to download it and place it in `incoming`. Unzip. Do not run anything from inside the unzipped folder except what is named here; scripts there are not signed and may be blocked: that is a result.
+- Q0 Get the matching source for scenarios (public repo): download `https://github.com/Herepiggypiggypiggy/kopercad/archive/refs/tags/v0.1.0-rc10.zip` (or the tag Tadjiro names; v0.1.0-rc10 may not be pushed, then use `main`'s archive or the zip he provides) into `$T\work\src` with `Invoke-WebRequest`; if the proxy blocks it, ask Tadjiro to download it and place it in `incoming`. Unzip. Do not run anything from inside the unzipped folder except what is named here; scripts there are not signed and may be blocked: that is a result.
 - Q1 Scenario runner (no bash needed, the CLI is in the portable zip):
 ```powershell
 & "<portable>\kopercad-cli.exe" qa list
-& "<portable>\kopercad-cli.exe" qa run "$T\work\src\...\qa\scenarios" --only <text> --size 1366x768 --size 1920x1080 --app "<portable>\kopercad.exe" --out "$R\qa-<name>"
+& "<portable>\kopercad-cli.exe" qa run "$T\work\src\<unzipped folder>\qa\scenarios" --root "$T\work\src\<unzipped folder>" --only <text> --size 1366x768 --size 1920x1080 --app "<portable>\kopercad.exe" --out "$R\qa-<name>"
 ```
   Run these, one `--only` at a time, in this order, stop after the first failing group and record it: `start-and-example`, `workspaces`, `menus`, `command-search`, `fixture-motor-starter`, `autowire`, `live-operate`, `light-look`, `print-preview`, `about-update` (the 210-212 ones use a fake feed, no network), `journey-new-project`, `journey-cabinet`. Windows is **unverified** for this harness: a harness problem (cannot start, paths, `~/`) is a finding about the harness (S3) and not a product defect; say which. Scenarios that export (`journey-export`, `workpack*`, `*-files`) write into the real `Documents\KoperCAD` because Windows keeps Documents outside the sandbox: list `Documents\KoperCAD` before and after, tell Tadjiro the new files, delete only those after his OK.
 - Write this scenario to `$R\frame-timing.qa` and run it at both sizes with the normal build (real GPU numbers are new information; the harness cannot start safe graphics, since `--app` takes an exe):
@@ -141,7 +141,7 @@ Shot 'B3-about'
 ```
   Name shots `<test id>-<what>.png`. Never capture while a key or password is visible.
 - For every finding: Help > **Copy problem report** (ask Tadjiro to click it, or read the clipboard with `Get-Clipboard`) and save the text to `$R\reports\<finding id>.txt`. Also copy the newest log: installed `%LOCALAPPDATA%\KoperCAD\logs`, portable `data\local\KoperCAD\logs`.
-- Severity (the QA scale): **S1** data loss, crash, cannot start, wrong hash; **S2** a core workflow cannot be finished, a wrong number shown as fact, blank window, admin prompt; **S3** everything else wrong or confusing, wrong or misleading text; **S4** polish.
+- Severity (the QA scale): **S1** data loss, crash, cannot start, wrong hash, admin prompt, lost work; **S2** a core workflow cannot be finished, a wrong number shown as fact, blank window; **S3** everything else wrong or confusing, wrong or misleading text; **S4** polish.
 - Anything involving admin rights, a UAC prompt, lost work or a changed real file is S1 and you stop everything and tell Tadjiro at once.
 
 ## 4. Results template (copy into `$R\results.md`)
