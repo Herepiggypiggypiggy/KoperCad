@@ -1,0 +1,19 @@
+@title Heat: Cancel on a running simulation stops it and the Simulate button comes back
+@area 3D
+@sizes 1366x768 1920x1080
+# Laptop test finding 6: the run sat at "meshing and setting up" for minutes and Cancel did nothing. The progress line now names the stage and Cancel always ends the run (the setup checks the flag between stages; a run that does not end within 3 s is let go).
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text Simulate #2
+wait_s 3
+shot running
+click_text Cancel
+wait_s 5
+shot after-cancel
+expect_not "Stopping"
+expect "Stopped"
+check_layout

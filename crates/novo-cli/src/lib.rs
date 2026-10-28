@@ -23,6 +23,7 @@ use novo_revisions::{Comparison, FieldChange, Side, group_of};
 use novo_storage::ProjectFile;
 use serde_json::{Value, json};
 
+mod addons;
 mod eplan;
 mod macros;
 mod parts;
@@ -65,6 +66,10 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Cmd {
+    /// Add-ons: list, inspect, install, turn on and off, remove, roll back, and pack a folder
+    /// into a `.kcaddon`.
+    #[command(subcommand)]
+    Addons(addons::Addons),
     /// The macro library: list, export, import, install the starter set.
     #[command(subcommand)]
     Macros(macros::Macros),
@@ -535,6 +540,7 @@ fn manual(dir: &Path, images: Option<&Path>, out: &mut dyn Write) -> Result<i32,
 
 fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
     match command {
+        Cmd::Addons(cmd) => addons::run(cmd, out),
         Cmd::Macros(cmd) => macros::run(cmd, out),
         Cmd::Eplan(cmd) => eplan::run(cmd, out),
         Cmd::TestUser(opts) => testuser::run(opts, out),
@@ -1645,25 +1651,32 @@ fn pdf(project: &Project, pages: &[String]) -> Result<Vec<u8>, Failure> {
 /// contact table, its warnings stay text below it.
 fn note_of(l: novo_xref::Label) -> SymbolNote {
     use novo_xref::ContactKind;
+    let glyph_of = |kind| match kind {
+        ContactKind::Power => NoteGlyph::Power,
+        ContactKind::NormallyClosed => NoteGlyph::NormallyClosed,
+        ContactKind::Changeover => NoteGlyph::Changeover,
+        ContactKind::NormallyOpen | ContactKind::Other => NoteGlyph::NormallyOpen,
+    };
     let rows: Vec<NoteRow> = l
         .rows
         .iter()
         .map(|r| NoteRow {
-            glyph: match r.kind {
-                ContactKind::Power => NoteGlyph::Power,
-                ContactKind::NormallyClosed => NoteGlyph::NormallyClosed,
-                ContactKind::Changeover => NoteGlyph::Changeover,
-                ContactKind::NormallyOpen | ContactKind::Other => NoteGlyph::NormallyOpen,
-            },
-            pins: r.pins.clone(),
-            location: r.location.clone(),
+            target: Some(r.symbol),
+            ..NoteRow::new(glyph_of(r.kind), &r.pins, &r.location)
         })
+        .chain(l.spare.iter().map(|r| NoteRow {
+            spare: true,
+            ..NoteRow::new(glyph_of(r.kind), &r.pins, "spare")
+        }))
         .collect();
-    let lines = if rows.is_empty() {
-        l.lines
+    let mut lines = if rows.is_empty() {
+        l.lines.clone()
     } else {
         l.extra_lines().to_vec()
     };
+    if !rows.is_empty() {
+        lines.extend(l.spare_more_line());
+    }
     SymbolNote {
         symbol: l.symbol,
         lines,

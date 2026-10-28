@@ -79,6 +79,8 @@ quick-xml = "0.41"
 ureq = "3"
 # Hashes imported maker files for their source record (novo-parts).
 sha2 = "0.11"
+# Verifies the publisher signature of add-on packages (novo-addons); verify-only, no randomness needed.
+ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
 # Decodes punch item photos for the viewer (novo-app): PNG and JPEG only.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }

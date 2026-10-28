@@ -181,6 +181,23 @@ fn add_cabinet(tx: &mut Tx<'_>) -> ModelResult<StructureId> {
             );
         })?;
     }
+    // The stop and start buttons stay on the plate here: a button on the door
+    // needs a wiring opening before its wires can be routed, and the example
+    // routes every wire. In a real cabinet Place all puts them on the door.
+    for tag in ["=A1+CAB-S0", "=A1+CAB-S1"] {
+        let button = tx
+            .project()
+            .devices_by_tag(&DeviceTag::parse(tag)?)
+            .first()
+            .copied();
+        if let Some(button) = button {
+            tx.set_property(
+                button,
+                novo_layout::site::SITE_KEY,
+                Some(Value::Text("plate".into())),
+            )?;
+        }
+    }
     let layout = load(tx.project(), cab).expect("the plate was just set");
     let (plan, _) = super::cabinet_rules::plan(tx.project(), cab, &layout, &RuleSet::standard());
     apply_plan(tx, cab, &plan)?;

@@ -20,7 +20,7 @@ use novo_plc::link::LinkFormat;
 use novo_symbols::Library;
 use novo_workflow::commands::Context;
 use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
-use novo_workflow::palette::{LessonEntry, MacroEntry, Mode, Sources, Target};
+use novo_workflow::palette::{AddonEntry, LessonEntry, MacroEntry, Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
 use novo_view3d::camera::ViewPreset;
@@ -28,6 +28,7 @@ use novo_view3d::scene::ItemKind;
 
 use super::standards_report::StandardsFormat;
 use super::view3d::Pending;
+use super::view3d_options::ViewOption;
 use super::workspace::Workspace;
 use super::{Level, NovoApp};
 use crate::actions::Action;
@@ -145,6 +146,10 @@ pub(crate) struct Workbench {
     pub(super) nav: Navigator,
     /// Where to select and centre once the canvas shows its page.
     pub(super) pending: Option<Place>,
+    /// A jump a double click on a cross reference asked for while the
+    /// canvas was still showing the old page; made after it, so the new
+    /// page selects its target (see `follow_note_jump`).
+    pub(super) deferred_jump: Option<Place>,
     /// An item to select and centre once its page is shown (a row of the
     /// Changes list).
     pub(super) pending_item: Option<(PageId, AnyId)>,
@@ -287,6 +292,8 @@ pub(crate) struct Workbench {
     pub(super) eplan_guide: Option<super::interop::EplanGuide>,
     /// The controller profile import wizard, while open.
     pub(super) controller_wizard: Option<Box<super::controller_import::ControllerWizard>>,
+    /// Installed add-ons, what they add to the tables, and the manager window.
+    pub(super) addons: super::addons::AddonsState,
     /// A DWG being converted in the background.
     pub(super) dwg_job: Option<super::interop::DwgJob>,
 }
@@ -356,6 +363,7 @@ impl Default for Workbench {
             generate: None,
             nav: Navigator::default(),
             pending: None,
+            deferred_jump: None,
             pending_item: None,
             custom_symbols: Default::default(),
             pending_items: None,
@@ -422,6 +430,7 @@ impl Default for Workbench {
             plc_overview: false,
             eplan_guide: None,
             controller_wizard: None,
+            addons: Default::default(),
             dwg_job: None,
         }
     }
@@ -443,6 +452,14 @@ const EDITOR_KEYS: &[&str] = &[
 /// Commands the app runs besides the shell actions (`Action`) and the
 /// favourites; the command field shows the rest as "Comes later".
 pub(super) const APP_COMMANDS: &[&str] = &[
+    "view.3d_door_layer",
+    "view.3d_device_shapes",
+    "view.3d_surfaces",
+    "view.3d_duct_fill",
+    "view.3d_pins",
+    "view.3d_missing_data",
+    "view.3d_trackpad_pans",
+    "view.3d_move",
     "tool.place",
     "tool.repeat",
     "tool.connect",
@@ -634,6 +651,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.eplan",
     "file.import_aml",
     "file.import_controller",
+    "addons.manage",
     "file.import_crane",
     "file.import_eplan",
     "file.import_dwg",
@@ -1037,15 +1055,21 @@ impl NovoApp {
             | "heat.cooler_layout"
                 if self.is_open() =>
             {
-                // Simulate stays in the 3D view when it is the one open.
-                if !(id == "heat.simulate" && self.workspace() == Workspace::View3d) {
-                    self.switch_workspace(Workspace::Cabinet);
-                    self.cabinet.table = false;
+                // In the 3D view the Heat command flips the one heat switch
+                // in place (`view3d_options`); elsewhere it is the Cabinet's.
+                if id == "heat.toggle" && self.workspace() == Workspace::View3d {
+                    self.toggle_view3d_option(ViewOption::Heat);
                 } else {
-                    // The run's progress and stop button live in the panel.
-                    self.view3d.controls.heat_panel = true;
+                    // Simulate stays in the 3D view when it is the one open.
+                    if !(id == "heat.simulate" && self.workspace() == Workspace::View3d) {
+                        self.switch_workspace(Workspace::Cabinet);
+                        self.cabinet.table = false;
+                    } else {
+                        // The run's progress and stop button live in the panel.
+                        self.cabinet.heat.on = true;
+                    }
+                    self.cabinet.heat.command(id);
                 }
-                self.cabinet.heat.command(id);
             }
             "heat.cooling_whatif" if self.is_open() => {
                 // The preview is drawn in the 3D view, so the wizard lives there.
@@ -1065,7 +1089,7 @@ impl NovoApp {
             {
                 // The panel adds the opening: it knows the cabinet it is drawn in.
                 self.switch_workspace(Workspace::View3d);
-                self.view3d.controls.heat_panel = true;
+                self.cabinet.heat.on = true;
                 let preset = match id {
                     "heat.add_grille" => Some(0),
                     "heat.add_filter_fan" => Some(2),
@@ -1210,20 +1234,6 @@ impl NovoApp {
             "view.toggle_marks" => self.wb.marks ^= true,
             "view.reports" => self.switch_workspace(super::workspace::Workspace::Reports),
             "view.3d" => self.switch_workspace(Workspace::View3d),
-            "view.3d_shadows" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.controls.shadows ^= true;
-            }
-            "view.3d_assembly" => {
-                self.switch_workspace(Workspace::View3d);
-                let c = &mut self.view3d.controls;
-                c.assembly = if c.assembly.is_some() {
-                    None
-                } else {
-                    c.wire_it = None;
-                    Some(0)
-                };
-            }
             "view.3d_assembly_next" | "view.3d_assembly_previous" => {
                 self.switch_workspace(Workspace::View3d);
                 let last = self.view3d.assembly_steps.len();
@@ -1234,16 +1244,6 @@ impl NovoApp {
                     last,
                     id == "view.3d_assembly_next",
                 );
-            }
-            "view.3d_wire_it" => {
-                self.switch_workspace(Workspace::View3d);
-                let c = &mut self.view3d.controls;
-                c.wire_it = if c.wire_it.is_some() {
-                    None
-                } else {
-                    c.assembly = None;
-                    Some(super::view3d_wire_it::RESUME)
-                };
             }
             "view.3d_wire_it_next" | "view.3d_wire_it_previous" => {
                 self.switch_workspace(Workspace::View3d);
@@ -1276,50 +1276,25 @@ impl NovoApp {
             "export.wireit" => {
                 self.ask_wire_it();
             }
-            "view.3d_finish" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.controls.finish ^= true;
-            }
-            "view.3d_slotted_ducts" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.controls.layers.slots ^= true;
-            }
             "view.3d_quality" => {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.view.reset_quality();
             }
-            "view.3d_dimensions" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.controls.dimensions ^= true;
-            }
-            "view.3d_ssao" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.controls.ssao ^= true;
-            }
-            "view.3d_door" | "view.3d_shell" | "view.3d_wires" => {
+            "view.3d_door" => {
                 self.switch_workspace(Workspace::View3d);
                 let limit = self.view3d_door_limit();
                 let controls = &mut self.view3d.controls;
-                match id {
-                    "view.3d_door" => {
-                        controls.layers.door = true;
-                        controls.toggle_door(limit);
-                    }
-                    "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
-                    _ => controls.layers.wires = !controls.layers.wires,
+                controls.layers.door = true;
+                controls.toggle_door(limit);
+            }
+            // Every switch of the 3D view is one option with one owner
+            // (`view3d_options`): the toolbar, these commands and the menu
+            // rows all go through it.
+            _ if id != "heat.toggle" && ViewOption::from_command(id).is_some() => {
+                if let Some(option) = ViewOption::from_command(id) {
+                    self.switch_workspace(Workspace::View3d);
+                    self.toggle_view3d_option(option);
                 }
-            }
-            "view.3d_measure" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.measure.toggle();
-            }
-            "view.3d_section" => {
-                self.switch_workspace(Workspace::View3d);
-                let section = &mut self.view3d.view.state.section;
-                *section = match section {
-                    Some(_) => None,
-                    None => Some(novo_view3d::Section::default()),
-                };
             }
             "view.3d_save_view" => {
                 // Saved in the view's next frame, once the camera is fitted.
@@ -1339,18 +1314,7 @@ impl NovoApp {
                     self.view3d_arrange(op);
                 }
             }
-            "view.3d_wire_runs" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.wire_runs ^= true;
-                if self.view3d.wire_runs {
-                    self.view3d.controls.layers.wires = true;
-                }
-            }
             "view.emc_nets" => self.toggle_emc_nets(),
-            "view.emc" => {
-                self.switch_workspace(Workspace::View3d);
-                self.view3d.controls.emc ^= true;
-            }
             "view.3d_hints" => {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.hints.toggle();
@@ -1600,6 +1564,7 @@ impl NovoApp {
             }
             "file.import_aml" => self.import_aml(),
             "file.import_controller" => self.open_controller_import(),
+            "addons.manage" => self.open_addons(),
             "file.import_crane" => self.import_crane(),
             "file.import_eplan" => self.import_eplan(),
             "file.import_dwg" => self.import_dwg(),
@@ -1642,7 +1607,7 @@ impl NovoApp {
             | "layout.reset" | "layout.reset_all" => {
                 self.run_layout_command(id);
             }
-            "parts.browser" => self.open_parts_browser(),
+            "parts.browser" => self.toggle_parts_browser(),
             "parts.import_step" => self.import_part_model(),
             "parts.import_eplan" => self.import_eplan_parts(),
             "parts.import_table" => self.import_parts_table(),
@@ -1753,6 +1718,7 @@ impl NovoApp {
             Target::Lesson(id) => self.learn_run_command_lesson(&id),
             // The place window opens on the macro, to be confirmed there.
             Target::Macro(name) => self.open_macro_place(Some(&name)),
+            Target::Addon(id) => self.run_addon_command(&id),
             Target::Cable(cable) => self.show_cable(cable),
             Target::Wire(wire) => self.go_to_wire(wire),
             Target::Symbol(symbol) => self.begin_place(&symbol, None),
@@ -1851,8 +1817,9 @@ impl NovoApp {
         let mut field = std::mem::take(&mut self.wb.field);
         let lessons = self.learn.palette_entries();
         let macros = self.wb.macro_place.palette_entries();
+        let addons = self.wb.addons.palette_entries();
         let result = {
-            let sources = sources(self, &lessons, &macros);
+            let sources = sources(self, &lessons, &macros, &addons);
             f(&mut field, &sources)
         };
         self.wb.field = field;
@@ -2029,10 +1996,12 @@ fn sources<'a>(
     app: &'a NovoApp,
     lessons: &'a [LessonEntry],
     macros: &'a [MacroEntry],
+    addons: &'a [AddonEntry],
 ) -> Sources<'a> {
     Sources {
         lessons,
         macros,
+        addons,
         project: app.backend.document().map(Document::project),
         library: app.library(),
         keymap: &app.wb.keymap,

@@ -7,6 +7,7 @@
 
 use eframe::egui;
 use novo_core::{AnyId, DeviceId, StructureId, Value};
+use novo_layout::site::{SITE_KEY, Site};
 use novo_layout::surfaces::{MAIN_PLATE, SURFACE_PROPERTY};
 
 use super::cabinet_inspector::{DeviceFacts, Facts};
@@ -80,6 +81,55 @@ pub(super) fn show(ui: &mut egui::Ui, d: &DeviceFacts) -> Option<String> {
             );
     });
     picked
+}
+
+/// The "Mounted" row: in the cabinet, on the door or in the field. Returns
+/// the site picked.
+pub(super) fn show_site(ui: &mut egui::Ui, d: &DeviceFacts) -> Option<Site> {
+    let current = match d.surface.as_ref() {
+        Some(s) if s.current.starts_with("door") => Site::Door,
+        _ => d.site,
+    };
+    let mut picked = None;
+    ui.horizontal(|ui| {
+        ui.label("Mounted");
+        egui::ComboBox::from_id_salt(("cabinet_device_site", d.id))
+            .selected_text(current.label())
+            .show_ui(ui, |ui| {
+                for site in [Site::Plate, Site::Door, Site::Field] {
+                    if ui.selectable_label(site == current, site.label()).clicked()
+                        && site != current
+                    {
+                        picked = Some(site);
+                    }
+                }
+            })
+            .response
+            .on_hover_text(
+                "Where this device is mounted. Only devices in the cabinet take room on the \
+                 plate; motors and valves are in the field by default, push buttons and lamps \
+                 go on the door. In the field takes the device off the plate.",
+            );
+    });
+    picked
+}
+
+/// Writes the mounting site of `device`; the field also takes it off the
+/// plate, since it is not in the cabinet.
+pub(super) fn set_site(
+    tx: &mut novo_core::Tx<'_>,
+    device: u64,
+    site: Site,
+) -> novo_core::Result<()> {
+    tx.set_property(
+        AnyId::Device(DeviceId::from(device)),
+        SITE_KEY,
+        Some(Value::Text(site.as_str().to_owned())),
+    )?;
+    if site == Site::Field {
+        novo_layout::model::unplace_device(tx, device)?;
+    }
+    Ok(())
 }
 
 /// Writes the surface of `device`'s placement in `structure`; the plate clears

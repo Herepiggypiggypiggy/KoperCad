@@ -564,9 +564,16 @@ fn preview(ui: &mut egui::Ui, w: &ControllerWizard, palette: &novo_theme::Palett
             )),
         ));
     }
+    if !p.rows.is_empty() {
+        ui.weak(format!(
+            "{}: scroll the preview below to see every row and note",
+            plural(p.rows.len(), "row")
+        ));
+    }
     egui::ScrollArea::vertical()
         .id_salt("controller_preview")
         .max_height(height)
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .show(ui, |ui| {
             if !p.warnings.is_empty() {
                 ui.strong(format!("{} to check", p.warnings.len()));

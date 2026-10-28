@@ -13,7 +13,7 @@
 //! | --- | --- | --- |
 //! | [`DuplicateTag`](ProblemKind::DuplicateTag) | error | One tag on several devices or cables |
 //! | [`TooManyContacts`](ProblemKind::TooManyContacts) | error | More contacts of a kind drawn than the device has (`contacts.main/no/nc/co` device properties) |
-//! | [`PotentialConflict`](ProblemKind::PotentialConflict) | error | Two potentials defined on one net (a short) |
+//! | [`PotentialConflict`](ProblemKind::PotentialConflict) | error | Two potentials defined on one net (a short), a `PE` or `N` pin on a net with a phase, or two poles of one device joined on one side while the other sides carry different conductors (`net_shorts`) |
 //! | [`UnconnectedPin`](ProblemKind::UnconnectedPin) | warning | Connection points no wire ends on |
 //! | [`LoneInterruption`](ProblemKind::LoneInterruption) | warning | An interruption point without a partner of the same name |
 //! | [`NoMainFunction`](ProblemKind::NoMainFunction) | warning | A device drawn only through contacts, without its coil |
@@ -40,7 +40,7 @@
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
 //! | [`UnsizedDuct`](ProblemKind::UnsizedDuct) | info | A duct with wires through it but no cross-section, so its fill cannot be checked |
 //! | [`GuessedWire`](ProblemKind::GuessedWire) | info | Wires with no cross-section, routed with a default size (one problem for all of them) |
-//! | [`AmbiguousInterruption`](ProblemKind::AmbiguousInterruption) | warning | A name used by more than two interruption points |
+//! | [`AmbiguousInterruption`](ProblemKind::AmbiguousInterruption) | info | A name used by more than two interruption points: a branch, which EPLAN would read differently |
 //! | [`WireNumber`](ProblemKind::WireNumber) | warning | A wire number used on two nets |
 //! | [`UntaggedDevice`](ProblemKind::UntaggedDevice) | warning | A device without a product level in its tag |
 //! | [`UnnamedTerminal`](ProblemKind::UnnamedTerminal) | warning | A terminal without a number or name |
@@ -71,6 +71,7 @@
 //! | [`DeviceOutsidePlate`](ProblemKind::DeviceOutsidePlate) | error | A device beyond the usable area of its plate |
 //! | [`DevicesTooClose`](ProblemKind::DevicesTooClose) | warning | Two devices closer than their clearance |
 //! | [`RailOverflow`](ProblemKind::RailOverflow) | warning | Devices needing more room than their DIN rail has |
+//! | [`FieldDeviceInCabinet`](ProblemKind::FieldDeviceInCabinet) | warning | A motor, valve or other field device placed on a mounting plate (it is outside the cabinet; its heat and size do not belong in the cabinet figures) |
 //! | [`DeviceOffRail`](ProblemKind::DeviceOffRail) | warning | A device on a DIN rail whose middle is not on the rail's line (plans made before rails ran through the device middles; Place all puts it right) |
 //! | [`DuctOverlap`](ProblemKind::DuctOverlap) | error | A wiring duct lying over a DIN rail or a device on the plate |
 //! | [`DeviceTooDeep`](ProblemKind::DeviceTooDeep) | error | A device deeper than the room between plate and door |
@@ -113,6 +114,7 @@ mod door;
 mod emc;
 mod house_rules;
 mod more_rules;
+mod net_shorts;
 mod physical;
 pub mod protection;
 pub mod safety;
@@ -228,9 +230,11 @@ pub enum ProblemKind {
     /// A protective conductor thinner than the rule for its phase
     /// conductors (`calc::pe`).
     ProtectiveConductor,
-    /// A name used by more than two interruption points. EPLAN pairs them
-    /// two by two in page order, KoperCAD joins all of one name, so an
-    /// imported project and this one read it differently.
+    /// A name used by more than two interruption points: a branch (one
+    /// feeder serving several pages). KoperCAD joins all of one name and
+    /// shows it as a one-to-many cross reference, so this is only worth
+    /// knowing: EPLAN pairs them two by two in page order, so a project
+    /// exported there needs a name per pair.
     AmbiguousInterruption,
     /// A wire number used on two nets.
     WireNumber,
@@ -320,6 +324,8 @@ pub enum ProblemKind {
     /// runs through the middle of the devices it carries; older plans have it
     /// on their top edge.
     DeviceOffRail,
+    /// A device that is mounted outside the cabinet sits on a plate.
+    FieldDeviceInCabinet,
     /// A wiring duct that lies over a DIN rail or a device on the plate.
     DuctOverlap,
     /// A device deeper than the room between the plate and the door
@@ -347,7 +353,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 70] = [
+    pub const ALL: [ProblemKind; 71] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -383,6 +389,7 @@ impl ProblemKind {
         ProblemKind::DevicesTooClose,
         ProblemKind::RailOverflow,
         ProblemKind::DeviceOffRail,
+        ProblemKind::FieldDeviceInCabinet,
         ProblemKind::DuctOverlap,
         ProblemKind::DeviceTooDeep,
         ProblemKind::DoorGapTight,
@@ -456,9 +463,9 @@ impl ProblemKind {
             | ProblemKind::DevicesTooClose
             | ProblemKind::RailOverflow
             | ProblemKind::DeviceOffRail
+            | ProblemKind::FieldDeviceInCabinet
             | ProblemKind::DoorGapTight
             | ProblemKind::DoorSwing
-            | ProblemKind::AmbiguousInterruption
             | ProblemKind::WireNumber
             | ProblemKind::UntaggedDevice
             | ProblemKind::UnnamedTerminal
@@ -491,6 +498,7 @@ impl ProblemKind {
             | ProblemKind::GuessedWire
             | ProblemKind::DepthUnknown
             | ProblemKind::PlugPins
+            | ProblemKind::AmbiguousInterruption
             | ProblemKind::SameShortTag => Severity::Info,
         }
     }
@@ -533,6 +541,7 @@ impl ProblemKind {
             ProblemKind::DevicesTooClose => "Devices too close",
             ProblemKind::RailOverflow => "Rail overfull",
             ProblemKind::DeviceOffRail => "Device off its rail's middle",
+            ProblemKind::FieldDeviceInCabinet => "Field device in the cabinet",
             ProblemKind::DuctOverlap => "Duct over rail or device",
             ProblemKind::DeviceTooDeep => "Device too deep",
             ProblemKind::DoorGapTight => "Door gap tight",
@@ -542,7 +551,7 @@ impl ProblemKind {
             ProblemKind::SafetyBinding => "Safety function binding",
             ProblemKind::DoorSwing => "Door swing",
             ProblemKind::Emc => "EMC",
-            ProblemKind::AmbiguousInterruption => "Interruption name used often",
+            ProblemKind::AmbiguousInterruption => "Interruption branch",
             ProblemKind::WireNumber => "Wire number",
             ProblemKind::UntaggedDevice => "Device without tag",
             ProblemKind::UnnamedTerminal => "Unnamed terminal",
@@ -609,6 +618,7 @@ impl ProblemKind {
             ProblemKind::DevicesTooClose => "check.devices_too_close",
             ProblemKind::RailOverflow => "check.rail_overflow",
             ProblemKind::DeviceOffRail => "check.device_off_rail",
+            ProblemKind::FieldDeviceInCabinet => "check.field_device_in_cabinet",
             ProblemKind::DuctOverlap => "check.duct_overlap",
             ProblemKind::DeviceTooDeep => "check.device_too_deep",
             ProblemKind::DoorGapTight => "check.door_gap_tight",
@@ -761,6 +771,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::device_functions(&cx, &mut problems);
     checks::lone_interruptions(&cx, &mut problems);
     checks::potential_conflicts(&cx, netlist, &mut problems);
+    net_shorts::run(&cx, netlist, &mut problems);
     checks::zero_length_wires(&cx, &mut problems);
     checks::missing_parts(&cx, &mut problems);
     checks::undersized_wires(&cx, netlist, &mut problems);
@@ -804,6 +815,28 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     emc::run(&cx, netlist, &mut problems);
     cx.sort(&mut problems);
     problems
+}
+
+/// A symbol without a tag, named for people: the library key's last part in
+/// words (`iec/terminals/terminal_pe` reads `terminal PE (no tag)`), never
+/// the key itself.
+fn plain_key(key: &str) -> String {
+    let words: Vec<String> = key
+        .rsplit('/')
+        .next()
+        .unwrap_or(key)
+        .split('_')
+        .filter(|w| !w.is_empty())
+        .map(|w| match w {
+            "pe" | "n" | "pen" | "dc" | "ac" | "plc" | "hmi" => w.to_uppercase(),
+            _ => w.to_owned(),
+        })
+        .collect();
+    if words.is_empty() {
+        "a symbol (no tag)".to_owned()
+    } else {
+        format!("{} (no tag)", words.join(" "))
+    }
 }
 
 /// Where something sits in reading order: page rank, then x, then y, as
@@ -966,17 +999,17 @@ impl<'a> Context<'a> {
         match &symbol.role {
             SymbolRole::Device { device, .. } => project
                 .device(*device)
-                .map_or_else(|| symbol.symbol.0.clone(), |d| d.tag.to_string()),
+                .map_or_else(|| plain_key(&symbol.symbol.0), |d| d.tag.to_string()),
             SymbolRole::Terminal { terminals } => terminals
                 .first()
                 .and_then(|&t| project.terminal_designation(t))
-                .unwrap_or_else(|| symbol.symbol.0.clone()),
+                .unwrap_or_else(|| plain_key(&symbol.symbol.0)),
             SymbolRole::Interruption { name } => format!("Interruption point {name}"),
             SymbolRole::PotentialFeed { potential } => project.potential(*potential).map_or_else(
                 || "Potential feed".to_owned(),
                 |p| format!("Feed {}", p.name),
             ),
-            SymbolRole::Unassigned => symbol.symbol.0.clone(),
+            SymbolRole::Unassigned => plain_key(&symbol.symbol.0),
         }
     }
 

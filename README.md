@@ -13,8 +13,8 @@ layout and circuit simulation. Native Rust, no web technology, fully offline, sc
 > crates and the release asset name. The program is `kopercad.exe`, the Python module `kopercad`
 > (`crates/novo-py/compat` is a shim that keeps `import novoelectric` working) and the command-line tool
 > `kopercad-cli`
-> (the experimental zip also carries a `novoelectric.exe` copy for launchers installed before the
-> rename). Settings and the parts catalog moved to `%APPDATA%\KoperCAD`; projects stay in
+> (the experimental zip no longer carries a `novoelectric.exe` copy; `run-latest.ps1` still starts
+> one if an old local copy has only that). Settings and the parts catalog moved to `%APPDATA%\KoperCAD`; projects stay in
 > `Documents\NovoElectric` for anyone who already has one; `%LOCALAPPDATA%\NovoElectric` still holds
 > the launcher's builds.
 
@@ -106,7 +106,8 @@ pull requests merged in order.
 Test users get the installer or the portable zip from the release page and start with
 [`docs/TESTER-README.md`](docs/TESTER-README.md). To follow the newest experimental build instead, paste
 `scripts/setup-new-pc.ps1` into PowerShell once (no admin rights needed); it puts a "KoperCAD (latest)" desktop
-shortcut that always starts the newest build. See `docs/LOCAL-BUILDS.md` for building on your own PC.
+shortcut that always starts the newest build (the repository is public: no GitHub sign-in or `gh` needed).
+The experimental zip also holds `run.cmd`, `run-safe-graphics.cmd` and a short readme. See `docs/LOCAL-BUILDS.md` for building on your own PC.
 
 **No admin rights, ever.** Everything installs, runs, updates and is scripted as a standard Windows
 user: per-user install, writes only under `%LOCALAPPDATA%`, `%APPDATA%` and Documents, and `HKCU`.
