@@ -94,10 +94,13 @@ Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags
 function OwnProcess(const Action: String): Boolean;
 var
   Code: Integer;
-  Cmd: String;
+  Cmd, Path: String;
 begin
+  { A single quote in the path (a user called O'Brien) must be doubled inside a PowerShell '...' string. }
+  Path := ExpandConstant('{app}\{#AppExe}');
+  StringChangeEx(Path, '''', '''''', True);
   Cmd := '-NoProfile -NonInteractive -Command "$p = Get-Process kopercad -ErrorAction SilentlyContinue | ' +
-    'Where-Object { $_.Path -eq ''' + ExpandConstant('{app}\{#AppExe}') + ''' }; ' + Action + '"';
+    'Where-Object { $_.Path -eq ''' + Path + ''' }; ' + Action + '"';
   Result := Exec('powershell.exe', Cmd, '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
 end;
 
@@ -108,17 +111,24 @@ begin
 end;
 
 { The Restart Manager cannot close the program's window, so ask it ourselves: first a normal
-  close (the program keeps its recovery copy), and only after about ten seconds end it. Only
+  close, and only after the wait below end it (the recovery copy is offered at the next start).
+  If company policy blocks PowerShell, this does nothing and the old locked-file message returns. Only
   the copy in the install folder; per-user process, no admin rights needed. }
 procedure CloseRunningApp;
 var
-  Waited: Integer;
+  Waited, Limit: Integer;
 begin
   if not AppIsRunning then
     exit;
   OwnProcess('$p | ForEach-Object { [void]$_.CloseMainWindow() }; exit 0');
+  { KoperCAD asks "Save changes?" on close: an interactive install waits a minute for the answer,
+    a silent one ten seconds. }
+  if WizardSilent then
+    Limit := 10000
+  else
+    Limit := 60000;
   Waited := 0;
-  while AppIsRunning and (Waited < 10000) do
+  while AppIsRunning and (Waited < Limit) do
   begin
     Sleep(500);
     Waited := Waited + 500;
