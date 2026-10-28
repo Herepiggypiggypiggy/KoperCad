@@ -69,7 +69,7 @@ Your work is in `Documents\KoperCAD`, settings in `%APPDATA%\KoperCAD`, recovery
 - In the New cabinet dialog, Ctrl+K and typed words go into the Name field.
 - Closing an edited example project gives no prompt: a draft is kept under Unsaved on the start screen (named "Untitled", without undo history).
 - A price written "1.500" or "1,500" is read as 1.5 with a warning.
-- The newest build also fixes: Delete with the pointer off the page (now says why), F2 rename appending, Ctrl+N from 3D, Ctrl+K "wire numbers" opening a lesson, clipped Commissioning counters, hot-spot cards on an empty cabinet.
+- Also in rc9, fixed in the later rc10 draft: Delete with the pointer off the page is ignored without a message; F2 rename appends to the old tag instead of replacing it; Ctrl+N from 3D stays on the greyed 3D tab; Ctrl+K "wire numbers" opens a lesson first; the Commissioning side panel clips its counters; an empty cabinet shows hot-spot cards.
 
 ## 5. What to treat as a model, not a fact
 
