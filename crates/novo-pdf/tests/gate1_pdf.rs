@@ -123,6 +123,7 @@ fn cross_reference_notes_are_printed_on_their_page() {
             anchor: Default::default(),
             rows: Vec::new(),
             density: Default::default(),
+            faded: false,
         }],
     );
     let pdf = parse(&export_pdf(doc.project(), &options).unwrap());
@@ -151,6 +152,7 @@ fn coil_contact_table_is_printed_with_its_symbols() {
                 NoteRow::new(NoteGlyph::NormallyOpen, "13-14", "2.4"),
             ],
             density: Default::default(),
+            faded: false,
         }],
     );
     let with = export_pdf(doc.project(), &options).unwrap();

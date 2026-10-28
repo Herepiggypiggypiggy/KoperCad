@@ -8,7 +8,10 @@ Done
 - App: Preferences > Cross references > Spare contacts in the table (Show/Hide); double click on a table row jumps to that contact, on a contact's reference jumps to its coil.
 - PDF/print: same scene, spare rows in grey (`print_style().note_dim_color`).
 
+- Fade or hide cross references on screen (Shift+X), selection and hover bring one back; PDF unaffected.
+
 Next / open
 - Spare numbers are derived, not read from the part. When parts carry contact numbering, read it from there.
 - Hover highlight of a row under the pointer, and a tooltip naming the double click.
 - Contact reference at a contact still prints only the coil location (`2.5`); a coil pole mirror ("which pole of the coil") has no source in the model.
+- Fade only where a table really overlaps a line, part or text (needs overlap detection from the page scene), per-page and per-coil hide, fade strength in Preferences.

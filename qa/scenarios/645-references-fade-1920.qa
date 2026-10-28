@@ -1,0 +1,24 @@
+@title Cross references fade or hide with Shift+X; the selected coil stays clear (1920x1080)
+@area Schematic
+@sizes 1920x1080
+# Shift+X steps the cross references on screen: full, faded, hidden, full. Faded keeps the layout and lowers the opacity so they stay out of the way of lines, parts and text; selecting a coil brings its table back. A status bar chip says what is on and clicks back. The PDF always prints them in full.
+open qa/fixtures/contact-mirror.kopercad
+wait 30
+key PageDown
+wait 10
+shot full
+key shift+x
+wait 20
+shot faded
+click 690 293
+wait 30
+shot faded-coil-selected-is-clear
+key escape
+wait 10
+key shift+x
+wait 20
+shot hidden
+key shift+x
+wait 20
+shot full-again
+check_layout

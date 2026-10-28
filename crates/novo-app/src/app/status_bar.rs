@@ -11,6 +11,7 @@ use novo_core::AnyId;
 
 use super::workspace::Workspace;
 use super::{Level, NovoApp, TOAST_INFO};
+use crate::settings::XrefView;
 
 /// Height of the bar.
 pub(super) const STATUS_BAR: f32 = 22.0;
@@ -325,6 +326,20 @@ impl NovoApp {
                 command: "view.toggle_marks",
                 hover: "Show the marks again".into(),
             });
+        }
+        match self.settings.xref_view() {
+            XrefView::Full => {}
+            view => chips.push(ModeChip {
+                label: if view == XrefView::Faded {
+                    "References faded"
+                } else {
+                    "References hidden"
+                }
+                .into(),
+                command: "view.toggle_references",
+                hover: "Click to step references: full, faded, hidden. They always print in full"
+                    .into(),
+            }),
         }
         if self.wb.live.on {
             chips.push(ModeChip {

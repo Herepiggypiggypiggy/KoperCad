@@ -712,6 +712,11 @@ pub const DUTCH: &[Aliases] = &[
         &["markeringen tonen of verbergen"],
     ),
     nl(
+        "view.toggle_references",
+        &[],
+        &["verwijzingen tonen, vervagen of verbergen"],
+    ),
+    nl(
         "view.override_marks",
         &[],
         &["handmatige wijzigingen tonen"],

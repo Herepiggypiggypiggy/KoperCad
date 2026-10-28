@@ -3597,6 +3597,7 @@ mod tests {
             anchor: NoteAnchor::Right,
             rows: Vec::new(),
             density: NoteDensity::default(),
+            faded: false,
         }]);
         h.frame(vec![]);
         let origin = h.doc.project().symbol(sym).unwrap().placement.origin;

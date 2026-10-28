@@ -1681,6 +1681,7 @@ fn note_of(l: novo_xref::Label) -> SymbolNote {
         },
         rows,
         density: NoteDensity::default(),
+        faded: false,
     }
 }
 
