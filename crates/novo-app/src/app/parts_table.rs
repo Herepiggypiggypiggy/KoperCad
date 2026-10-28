@@ -301,7 +301,7 @@ impl NovoApp {
             return;
         };
         let screen = ctx.content_rect().size();
-        let width = (screen.x - 80.0).clamp(640.0, 1180.0);
+        let width = dialog_width(screen.x);
         let body_height = (screen.y - 330.0).clamp(150.0, 560.0);
         let (mut go, mut cancel) = (false, false);
         let mut changed = false;
@@ -342,6 +342,16 @@ impl NovoApp {
             self.wb.parts_table = None;
         }
     }
+}
+
+/// How wide the import dialog is for a window `screen_x` points wide: roomy
+/// on a big screen, never wider than the window on a small one (the content
+/// scrolls sideways there instead of being cut off at both edges).
+fn dialog_width(screen_x: f32) -> f32 {
+    (screen_x - 80.0)
+        .clamp(640.0, 1180.0)
+        .min(screen_x - 48.0)
+        .max(280.0)
 }
 
 /// Sheet, header row, maker, origin and currency. Returns whether the
@@ -454,7 +464,7 @@ fn columns_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) -> 
         .map(|i| import.samples(i))
         .collect();
     let mut pick: Option<(usize, Target)> = None;
-    egui::ScrollArea::vertical()
+    egui::ScrollArea::both()
         .id_salt("parts_table_columns")
         .max_height(height)
         .auto_shrink([false, true])
@@ -591,7 +601,7 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
         }
         ui.label(egui::RichText::new("Description").weak());
     });
-    egui::ScrollArea::vertical()
+    egui::ScrollArea::both()
         .id_salt("parts_table_rows")
         .max_height(height)
         .auto_shrink([false, true])
@@ -781,4 +791,21 @@ fn footer_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, cancel: &mut bool
         );
     });
     go
+}
+
+#[cfg(test)]
+mod width_tests {
+    use super::dialog_width;
+
+    #[test]
+    fn the_dialog_fits_the_window_it_opens_in() {
+        // The hardware test opened it in a 700 point wide window and saw it
+        // cut off at both edges.
+        for screen in [320.0, 420.0, 640.0, 700.0, 1024.0, 1366.0, 1920.0] {
+            let w = dialog_width(screen);
+            assert!(w <= screen - 48.0 || w <= 280.0, "{screen}: {w}");
+        }
+        assert_eq!(dialog_width(1920.0), 1180.0);
+        assert_eq!(dialog_width(1366.0), 1180.0);
+    }
 }

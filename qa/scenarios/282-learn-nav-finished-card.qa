@@ -1,0 +1,29 @@
+@title Finished lesson card: one cross, one All lessons button, Restart, no second Close
+@area Learn
+# A short challenge lesson played to its end with Do it for me. The end card keeps the cross in the header and offers All lessons and Restart; it no longer repeats Close next to the cross.
+key ctrl+k
+wait 4
+text hold in
+wait 6
+click_text "The motor will not hold in"
+wait 40
+key shift+l
+wait 40
+click_text "Do it for me"
+wait 60
+shot 01-end-card
+check_layout
+expect "Shown, not solved"
+expect "All lessons"
+expect_not "Back to Home"
+click_text "All lessons"
+wait 15
+shot 02-all-lessons-from-end-card
+expect "Topic"
+key Escape
+wait 6
+click_text "Close" #1
+wait 10
+shot 03-card-closed
+check_layout
+expect_not "Shown, not solved"

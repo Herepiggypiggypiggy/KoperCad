@@ -838,7 +838,7 @@ pub(super) fn strip(ui: &mut egui::Ui, state: &mut HeatState) {
     chips = chips.union(chip(ui, &mut state.contours, "Contours"));
     chips = chips.union(chip(ui, &mut state.airflow, "Airflow"));
     chips = chips.union(chip(ui, &mut state.badges, "Badges"));
-    super::cabinet_bar::note_rect(ui.ctx(), "heat.chips", "Heat chips", chips, false);
+    super::cabinet_bar::note_rect_in(ui, "heat.chips", "Heat chips", chips, false);
     simulate_controls(ui, state);
 }
 

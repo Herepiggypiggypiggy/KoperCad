@@ -12,6 +12,7 @@
 use eframe::egui;
 use novo_learn::lesson::Level;
 use novo_learn::{Entry, LearningPath, Standing, Track, TrackSummary};
+use novo_theme::icons;
 use novo_theme::widgets::section_label;
 
 use super::NovoApp;
@@ -97,6 +98,24 @@ impl NovoApp {
                 self.start_lesson(&id);
             }
         }
+    }
+
+    /// The card's list button: the Learn window, at the topic of the lesson
+    /// on the card.
+    pub(super) fn learn_contents(&mut self) {
+        let track = self
+            .learn
+            .run
+            .as_ref()
+            .map(|r| r.lesson().track.clone())
+            .filter(|t| self.learn.catalog.tracks.iter().any(|x| x.id == *t));
+        self.go(match track {
+            Some(id) => Section::Topic(id),
+            None => Section::Home,
+        });
+        self.learn.filter.clear();
+        self.learn.level = None;
+        self.learn.window = true;
     }
 
     pub(super) fn suite_section(&self) -> Section {
@@ -232,7 +251,8 @@ impl NovoApp {
 
     fn suite_footer(&mut self, ui: &mut egui::Ui, reload: &mut bool, reset: &mut bool) {
         ui.horizontal(|ui| {
-            if ui.small_button(self.learn.say("reload")).clicked() {
+            let reload_label = format!("{} {}", icons::ARROW_CLOCKWISE, self.learn.say("reload"));
+            if ui.small_button(reload_label).clicked() {
                 *reload = true;
             }
             if self.learn.confirm_reset {
@@ -243,7 +263,14 @@ impl NovoApp {
                 if ui.small_button(self.learn.say("cancel")).clicked() {
                     self.learn.confirm_reset = false;
                 }
-            } else if ui.small_button(self.learn.say("reset_progress")).clicked() {
+            } else if ui
+                .small_button(format!(
+                    "{} {}",
+                    icons::ARROW_COUNTER_CLOCKWISE,
+                    self.learn.say("reset_progress")
+                ))
+                .clicked()
+            {
                 self.learn.confirm_reset = true;
             }
             let drafts_label = self.learn.say("show_drafts");
@@ -261,7 +288,15 @@ impl NovoApp {
         let current = self.suite_section();
         let width = ui.available_width();
         let home = self.learn.say("suite_home");
-        if rail_item(ui, width, pad, current == Section::Home, &home, None) {
+        if rail_item(
+            ui,
+            width,
+            pad,
+            current == Section::Home,
+            &home,
+            Some(icons::HOUSE),
+            None,
+        ) {
             self.go(Section::Home);
         }
         let paths = self.learn.catalog.paths.clone();
@@ -278,7 +313,7 @@ impl NovoApp {
             }
             let on = current == Section::Path(path.id.clone());
             let count = format!("{}/{}", sum.done, sum.total);
-            if rail_item(ui, width, pad, on, path.title(lang), Some(&count)) {
+            if rail_item(ui, width, pad, on, path.title(lang), None, Some(&count)) {
                 self.go(Section::Path(path.id.clone()));
             }
         }
@@ -296,7 +331,7 @@ impl NovoApp {
             }
             let on = current == Section::Topic(track.id.clone());
             let count = format!("{}/{}", sum.done, sum.total);
-            if rail_item(ui, width, pad, on, track.title(lang), Some(&count)) {
+            if rail_item(ui, width, pad, on, track.title(lang), None, Some(&count)) {
                 self.go(Section::Topic(track.id.clone()));
             }
         }
@@ -423,7 +458,10 @@ impl NovoApp {
                 )
                 .strong(),
             );
-            if ui.small_button(self.learn.say("clear_filters")).clicked() {
+            if ui
+                .small_button(format!("{} {}", icons::X, self.learn.say("clear_filters")))
+                .clicked()
+            {
                 self.learn.filter.clear();
                 self.learn.level = None;
             }
@@ -565,7 +603,7 @@ impl NovoApp {
     fn suite_path(&mut self, ui: &mut egui::Ui, path: &LearningPath, start: &mut Start) {
         let lang = self.learn.lang;
         let drafts = self.learn.show_drafts;
-        self.crumb(ui);
+        self.eyebrow(ui, "eyebrow_path");
         ui.label(egui::RichText::new(path.title(lang)).heading());
         ui.add_space(2.0);
         ui.weak(path.summary(lang));
@@ -592,7 +630,7 @@ impl NovoApp {
     fn suite_topic(&mut self, ui: &mut egui::Ui, track: &Track, start: &mut Start) {
         let lang = self.learn.lang;
         let drafts = self.learn.show_drafts;
-        self.crumb(ui);
+        self.eyebrow(ui, "eyebrow_topic");
         ui.label(egui::RichText::new(track.title(lang)).heading());
         ui.add_space(2.0);
         let summary = match (lang, &track.summary_nl) {
@@ -621,11 +659,11 @@ impl NovoApp {
         }
     }
 
-    fn crumb(&mut self, ui: &mut egui::Ui) {
-        if ui.small_button(self.learn.say("back_home")).clicked() {
-            self.go(Section::Home);
-        }
-        ui.add_space(4.0);
+    /// What kind of page this is, in place of a second way home: the rail
+    /// (or the chips) above is the one navigation of the suite.
+    fn eyebrow(&self, ui: &mut egui::Ui, key: &str) {
+        section_label(ui, &self.learn.say(key));
+        ui.add_space(2.0);
     }
 
     fn progress_line(&self, ui: &mut egui::Ui, sum: &TrackSummary) {
@@ -745,7 +783,9 @@ impl NovoApp {
                             self.learn.say("start")
                         };
                         let button = egui::Button::new(
-                            egui::RichText::new(label).strong().color(p.on_accent),
+                            egui::RichText::new(format!("{} {label}", icons::PLAY))
+                                .strong()
+                                .color(p.on_accent),
                         )
                         .fill(p.accent);
                         if ui.add_sized([button_w, 34.0], button).clicked() {
@@ -821,11 +861,18 @@ impl NovoApp {
                         } else {
                             self.learn.say("start")
                         };
-                        if ui.button(label).clicked() {
+                        if ui.button(format!("{} {label}", icons::PLAY)).clicked() {
                             *start = Some((id.clone(), running));
                         }
                     }
-                    if ui.button(self.learn.say("path_show")).clicked() {
+                    if ui
+                        .button(format!(
+                            "{} {}",
+                            self.learn.say("path_show"),
+                            icons::CARET_RIGHT
+                        ))
+                        .clicked()
+                    {
                         self.go(Section::Path(path.id.clone()));
                     }
                 });
@@ -850,7 +897,14 @@ impl NovoApp {
                 ui.label(egui::RichText::new(track.title(lang)).strong());
                 self.progress_line(ui, &sum);
                 ui.add_space(6.0);
-                if ui.button(self.learn.say("open_topic")).clicked() {
+                if ui
+                    .button(format!(
+                        "{} {}",
+                        self.learn.say("open_topic"),
+                        icons::CARET_RIGHT
+                    ))
+                    .clicked()
+                {
                     self.go(Section::Topic(track.id.clone()));
                 }
             });
@@ -912,13 +966,17 @@ impl NovoApp {
                     });
                     ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
                         let label = if running {
-                            self.learn.say("continue")
+                            format!("{} {}", icons::PLAY, self.learn.say("continue"))
                         } else if standing == Standing::Completed {
-                            self.learn.say("do_again")
+                            format!(
+                                "{} {}",
+                                icons::ARROW_COUNTER_CLOCKWISE,
+                                self.learn.say("do_again")
+                            )
                         } else if matches!(standing, Standing::InProgress { .. }) {
-                            self.learn.say("continue")
+                            format!("{} {}", icons::PLAY, self.learn.say("continue"))
                         } else {
-                            self.learn.say("start")
+                            format!("{} {}", icons::PLAY, self.learn.say("start"))
                         };
                         let button = egui::Button::new(label);
                         if ui
@@ -1009,13 +1067,18 @@ fn rail_item(
     pad: f32,
     selected: bool,
     label: &str,
+    icon: Option<&str>,
     count: Option<&str>,
 ) -> bool {
     let p = ui_palette();
     let font = egui::TextStyle::Body.resolve(ui.style());
     let count_w = if count.is_some() { 36.0 } else { 0.0 };
+    let shown = match icon {
+        Some(icon) => format!("{icon}  {label}"),
+        None => label.to_owned(),
+    };
     let galley = ui.painter().layout(
-        label.to_owned(),
+        shown,
         font.clone(),
         if selected {
             p.text_strong
@@ -1069,7 +1132,7 @@ fn rail_item(
 }
 
 /// A thin bar, `fraction` of it filled.
-fn progress_bar(ui: &mut egui::Ui, fraction: f32) {
+pub(super) fn progress_bar(ui: &mut egui::Ui, fraction: f32) {
     let p = ui_palette();
     let (rect, _) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), 6.0), egui::Sense::hover());

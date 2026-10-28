@@ -53,6 +53,23 @@ impl Drive {
         output.textures_delta.clear();
     }
 
+    /// A frame with these keys held down.
+    pub(super) fn frame_held(&mut self, modifiers: egui::Modifiers, events: Vec<egui::Event>) {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1600.0, 900.0),
+            )),
+            events: std::iter::once(egui::Event::ModifiersChanged(modifiers))
+                .chain(events)
+                .collect(),
+            ..Default::default()
+        };
+        let app = &mut self.app;
+        let mut output = self.ctx.run_ui(input, |ui| app.show(ui));
+        output.textures_delta.clear();
+    }
+
     pub(super) fn frame(&mut self) {
         self.frame_with(Vec::new());
     }

@@ -610,7 +610,18 @@ fn xlsx_round_trips() {
         let header: Vec<String> = sheet[0].iter().map(ToString::to_string).collect();
         let expected: Vec<String> = section.columns.iter().map(|c| c.header.clone()).collect();
         assert_eq!(header, expected, "{}", output.title);
-        assert_eq!(sheet.len(), 1 + section.rows.len(), "{}", output.title);
+        // An explanatory section title goes under the table after a blank row.
+        let note = if section.title.is_empty() || section.title == output.title {
+            0
+        } else {
+            2
+        };
+        assert_eq!(
+            sheet.len(),
+            1 + section.rows.len() + note,
+            "{}",
+            output.title
+        );
         for (data, row) in sheet[1..].iter().zip(&section.rows) {
             for (value, cell) in data.iter().zip(&row.cells) {
                 match cell {
@@ -914,6 +925,31 @@ fn wire_list_csv_carries_the_cut_length() {
         "{header}"
     );
     assert!(csv.contains(",estimate\r\n"));
+}
+
+#[test]
+fn wire_list_files_say_what_the_rows_count() {
+    // The wire list leaves the supply and PE leads out; its section title
+    // says so. A one-table file keeps the header first and the title below.
+    let (doc, _) = starter();
+    let wires = report(&doc, "wires");
+    let title = wires.sections[0].title.clone();
+    assert!(title.contains("supply and PE leads"), "{title}");
+
+    let csv = to_csv(&wires, &CsvOptions::default());
+    assert!(csv.starts_with('\u{feff}'));
+    assert!(csv.trim_start_matches('\u{feff}').starts_with("Wire no.,"));
+    assert!(csv.ends_with(&format!("\r\n\r\n{title}\r\n")), "{csv}");
+
+    let bytes = xlsx_bytes(&[&wires]).expect("xlsx");
+    let mut book: Xlsx<_> = open_workbook_from_rs(Cursor::new(bytes)).expect("opens");
+    let range = book.worksheet_range("Wire list").expect("sheet");
+    let last = range.rows().next_back().expect("rows");
+    assert_eq!(last[0], Data::String(title));
+    assert_eq!(
+        range.rows().next().expect("header")[0].to_string(),
+        "Wire no."
+    );
 }
 
 #[test]

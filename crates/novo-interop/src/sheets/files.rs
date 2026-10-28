@@ -27,7 +27,7 @@ pub enum SheetError {
     #[error("a quote that opens a cell on line {0} is never closed")]
     UnclosedQuote(usize),
     #[error(
-        "this file does not look like a KoperCAD export: no sheet is called Devices, Terminals, Wires, Cables or Cores"
+        "this file does not look like a KoperCAD bulk edit export (no sheet is called Devices, Terminals, Wires, Cables or Cores); make one with File > Export interchange > Export for bulk edit (.xlsx). Report workbooks cannot be imported"
     )]
     NoTables,
     #[error(

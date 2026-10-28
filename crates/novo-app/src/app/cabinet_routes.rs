@@ -467,8 +467,8 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
                 },
             );
         });
-    super::cabinet_bar::note_rect(
-        ui.ctx(),
+    super::cabinet_bar::note_rect_in(
+        ui,
         "cabinet.routes_panel",
         "Routes",
         panel.response.rect,
@@ -688,7 +688,7 @@ fn rules_section(ui: &mut egui::Ui, rules: &WireRules) -> Option<Ask> {
         .map_or(section.header_response.rect, |b| {
             section.header_response.rect.union(b.rect)
         });
-    super::cabinet_bar::note_rect(ui.ctx(), "cabinet.wire_rules", "Wire rules", rect, false);
+    super::cabinet_bar::note_rect_in(ui, "cabinet.wire_rules", "Wire rules", rect, false);
     ask
 }
 

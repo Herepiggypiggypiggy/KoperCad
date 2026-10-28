@@ -1,0 +1,23 @@
+@title Renumber wires that are already numbered says nothing changes
+@area Schematic
+# TCN-01: a renumber that lands on the numbers the wires have counted them as renumbered.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 3
+text number wires
+wait 4
+key Enter
+wait 30
+shot numbered
+key Escape
+wait 5
+key ctrl+k
+wait 3
+text renumber wires
+wait 4
+key Enter
+wait 30
+shot renumber-preview
+expect "Nothing to change"
+check_layout

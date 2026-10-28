@@ -154,3 +154,12 @@ fn parallel_beats_either_alone() {
     let c = combine_parallel(&a, &b, 0.05);
     assert!(c.pfhd < a.pfhd);
 }
+
+#[test]
+fn an_mttfd_of_zero_gives_no_rate_above_one_per_hour() {
+    // Hardware test LSC-11: MTTFd 0 printed a PFHd of 9.97e7 /h.
+    let r = sub(Category::B, 0.0, 0.0, 0).calculate();
+    assert!(r.pfhd <= 1.0, "{}", r.pfhd);
+    assert_eq!(r.pl, PerformanceLevel::None);
+    assert!(!r.problems.is_empty());
+}

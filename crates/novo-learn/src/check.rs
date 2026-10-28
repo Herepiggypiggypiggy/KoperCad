@@ -54,6 +54,9 @@ pub struct Facts {
     pub live_closed: BTreeSet<String>,
     /// The learner has answered the open step's prediction question.
     pub predicted: bool,
+    /// Inside depth in mm of the enclosure stored for the cabinet shown, if
+    /// one is stored (Inside and door, Apply).
+    pub enclosure_depth: Option<f64>,
 }
 
 /// A check, as written in a lesson file (`expect = { ... }`).
@@ -74,6 +77,10 @@ pub enum Check {
     CoilOn(String),
     /// The open step's prediction question has an answer (`predict`).
     Predicted(bool),
+    /// The cabinet's stored enclosure has this inside depth in mm. For a step
+    /// whose button is greyed out once its work is done (Apply): the state
+    /// ticks the step when the click can no longer happen.
+    EnclosureDepth(f64),
     Lit(String),
     PoleClosed(String),
     Potential(PotentialCheck),
@@ -260,6 +267,10 @@ impl Check {
             Check::WiringMode(mode) => cx.facts.wiring_mode == *mode,
             Check::Live(on) => cx.facts.live == *on,
             Check::Predicted(want) => cx.facts.predicted == *want,
+            Check::EnclosureDepth(mm) => cx
+                .facts
+                .enclosure_depth
+                .is_some_and(|have| (have - mm).abs() < 0.5),
             Check::CoilOn(tag) => cx
                 .facts
                 .live_coils
@@ -561,6 +572,24 @@ mod tests {
             facts,
             events: &events,
         })
+    }
+
+    #[test]
+    fn an_applied_enclosure_ticks_the_step_whose_button_is_then_greyed() {
+        // Apply is greyed out once the values are stored, so the click can
+        // no longer come: the state ticks the step instead.
+        let c = check(
+            r#"{ any = [ { clicked = "cabinet.door.apply" }, { enclosure_depth = 250.0 } ] }"#,
+        );
+        let doc = starter();
+        let mut facts = Facts::default();
+        assert!(!holds(&c, &doc, &facts, &[]), "nothing stored, no click");
+        facts.enclosure_depth = Some(250.0);
+        assert!(holds(&c, &doc, &facts, &[]), "already applied");
+        facts.enclosure_depth = Some(100.0);
+        assert!(!holds(&c, &doc, &facts, &[]), "another depth is stored");
+        let click = [Event::Clicked("cabinet.door.apply".into())];
+        assert!(holds(&c, &doc, &facts, &click), "the click still works");
     }
 
     #[test]

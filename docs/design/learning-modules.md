@@ -224,6 +224,7 @@ now has X".
 | `{ potential = { wire = "-F1:2", is = "L1" } }` | the net of that pin carries that potential |
 | `{ potential_kind = { kind = "protective_earth", page = "Motor feeder" } }` | some wire (on that page) is on a net with a potential of that kind |
 | `{ wiring_mode = "lines" }` | the wiring mode setting |
+| `{ enclosure_depth = 250.0 }` | the cabinet's stored enclosure has this inside depth in mm (for a step whose button greys out once its work is done, such as Apply; use inside `any` beside `clicked`) |
 | `{ live = true }`, `{ coil_on = "-K1" }`, `{ pole_closed = "-S1" }`, `{ lit = "-K1:A1" }` | the live view is on, a coil is energized, a pole is closed, a pin carries voltage (the shell passes these in `Facts`; "released" is `{ not = { coil_on = ... } }`) |
 
 Anything that is shell or simulation state rather than document state (tool, page, selection,

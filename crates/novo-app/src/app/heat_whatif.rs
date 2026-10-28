@@ -1117,7 +1117,7 @@ impl super::NovoApp {
             self.sync_openings_now();
             super::heat_sweep::add_pair(&mut self.cabinet.heat.settings, &c);
             self.sync_openings_now();
-            self.view3d.controls.heat_panel = true;
+            self.cabinet.heat.on = true;
             said.push(super::heat_sweep::added_text(&c));
             if moved {
                 said.push(
