@@ -295,7 +295,22 @@ impl Palette {
                     })
             });
             command_rows(query, wants_next, names_part, sources, &mut rows);
+            let before_lessons = rows.len();
             lesson_rows(query, sources.lessons, &mut rows);
+            // Enter on a lesson replaces the view: a lesson leads only when it
+            // was asked for (`lesson wire`); otherwise it comes after the best
+            // command or device that matches (`wire numbers` is a command).
+            if !asks_for_lesson(query)
+                && let Some(best) = rows[..before_lessons]
+                    .iter()
+                    .filter(|r| r.disabled.is_none())
+                    .map(|r| r.score)
+                    .max()
+            {
+                for row in &mut rows[before_lessons..] {
+                    row.score = row.score.min(best - 1);
+                }
+            }
             macro_rows(query, sources.macros, MACRO_BONUS, &mut rows);
         }
         if let Some(library) = sources.library {
@@ -664,6 +679,15 @@ const LESSON_WORDS: [&str; 4] = ["lesson", "learn", "les", "leren"];
 /// Lessons by title, or by a topic word: `wheel`, `lesson wheel`, `les
 /// klemmen`. With the word `lesson` the lessons come first; without it
 /// they come after the commands and symbols that match as well.
+/// The query starts with a lesson word (`lesson`, `learn`...).
+fn asks_for_lesson(query: &str) -> bool {
+    query
+        .to_lowercase()
+        .split_whitespace()
+        .next()
+        .is_some_and(|w| LESSON_WORDS.contains(&w))
+}
+
 fn lesson_rows(query: &str, lessons: &[LessonEntry], rows: &mut Vec<Row>) {
     let lower = query.to_lowercase();
     let mut words: Vec<&str> = lower.split_whitespace().collect();

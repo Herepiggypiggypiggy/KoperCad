@@ -696,6 +696,28 @@ fn the_3d_workspace_opens_once_the_cabinet_has_a_plate() {
 }
 
 #[test]
+fn a_new_project_or_a_closed_one_does_not_stay_on_the_greyed_3d_tab() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    d.app.run_command(&ctx, "view.3d", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    // Ctrl+N: the new project has no plate, so 3D is greyed: the schematic shows.
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::Schematic);
+}
+
+#[test]
 fn space_in_the_3d_workspace_leaves_the_hidden_schematic_alone_and_taps_open_the_field() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));

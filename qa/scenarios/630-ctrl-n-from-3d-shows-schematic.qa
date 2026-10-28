@@ -1,0 +1,14 @@
+@title New project from the 3D workspace shows the schematic, not the greyed 3D tab
+@area Workspaces
+# Click test C-04: Ctrl+N while 3D is shown left the new project on the greyed 3D tab ("Set a mounting plate in the Cabinet to see it in 3D"). The new project has no plate, so the schematic shows.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 40
+expect "Open door"
+key ctrl+n
+wait 25
+shot after-ctrl-n
+expect_not "Set a mounting plate in the Cabinet"
+expect "Press Q to place a symbol"
+check_layout
