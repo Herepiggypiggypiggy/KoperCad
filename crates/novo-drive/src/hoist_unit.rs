@@ -80,9 +80,23 @@ impl TwoSpeedHoistUnit {
             Command::OFF
         };
         let energised = self.sequencer.step(command, dt_s);
+        self.step_energised(energised, input.mains_on, input.brake_coil_fed, dt_s)
+    }
+
+    /// Like [`step`](Self::step) but the winding and direction come from the circuit: the
+    /// schematic's contactors decide what is fed, so the internal sequencer is bypassed
+    /// (the L5a loop uses this). `energised` is `None` when no winding contactor is closed.
+    pub fn step_energised(
+        &mut self,
+        energised: Option<Energised>,
+        mains_on: bool,
+        brake_coil_fed: bool,
+        dt_s: f64,
+    ) -> HoistSnapshot {
+        let energised = if mains_on { energised } else { None };
         let coil_fed = match self.brake_feed {
             BrakeFeed::MotorTerminals => energised.is_some(),
-            BrakeFeed::Separate => input.mains_on && input.brake_coil_fed,
+            BrakeFeed::Separate => mains_on && brake_coil_fed,
         };
         // The brake torque of this tick is the one at its start; the coil acts on the next tick.
         let brake_torque = self.brake.holding_torque_nm();
