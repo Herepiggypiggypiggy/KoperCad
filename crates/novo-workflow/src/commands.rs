@@ -2027,6 +2027,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "sim.controller",
+        "Controller panel",
+        "View",
+        &[
+            "controller",
+            "radio",
+            "pendant",
+            "remote",
+            "receiver",
+            "crane",
+            "joystick",
+            "hoist",
+            "afstandsbediening",
+        ],
+        Needs::Page,
+    ),
+    cmd(
         "sim.why",
         "Why is this lit or dead?",
         "View",

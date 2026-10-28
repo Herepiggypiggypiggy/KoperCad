@@ -1,20 +1,19 @@
 # conflicts per cause on the text stress matrix: count<TAB>cause
-3	device tag / device tag (neighbour)
-3	device tag / device tag (neighbour) [tight]
-229	device tag / symbol line (neighbour)
-25	device tag / text inside symbol art (neighbour)
-10	device tag / text inside symbol art (neighbour) [tight]
+5	device tag / device tag (neighbour)
+2	device tag / device tag (neighbour) [tight]
+258	device tag / symbol line (neighbour)
+16	device tag / text inside symbol art (neighbour)
+2	device tag / text inside symbol art (neighbour) [tight]
 1	free text / free text (neighbour)
 1	free text / outside the sheet
 4	strip name / frame line (neighbour)
 11	strip name / symbol line (neighbour)
-232	terminal name / symbol line (neighbour)
+235	terminal name / symbol line (neighbour)
 1	terminal name / terminal name (neighbour)
 1	terminal name / terminal name (neighbour) [tight]
-22	text inside symbol art / frame line (neighbour)
-4	text inside symbol art / outside the sheet
-435	text inside symbol art / symbol line (neighbour)
-9	text inside symbol art / text inside symbol art (neighbour)
-9	text inside symbol art / text inside symbol art (neighbour) [tight]
+13	text inside symbol art / frame line (neighbour)
+373	text inside symbol art / symbol line (neighbour)
+7	text inside symbol art / text inside symbol art (neighbour)
+6	text inside symbol art / text inside symbol art (neighbour) [tight]
 5	wire number / wire (neighbour)
 5	wire number / wire number (neighbour) [tight]

@@ -10,6 +10,7 @@ publish = false
 novo-core.workspace = true
 novo-layout.workspace = true
 novo-canvas.workspace = true
+novo-controller.workspace = true
 novo-editor = { workspace = true, features = ["art"] }
 novo-symbols.workspace = true
 novo-xref.workspace = true
@@ -41,6 +42,7 @@ novo-view3d.workspace = true
 novo-thermal.workspace = true
 novo-cfd.workspace = true
 novo-routing.workspace = true
+novo-sim.workspace = true
 
 [lints]
 workspace = true

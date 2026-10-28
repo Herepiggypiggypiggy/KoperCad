@@ -4,8 +4,9 @@ Crate `novo-controller`. Plan: `plans/controller-live-view.md` (project files). 
 logic of an operator controller (radio, pendant, joystick, PLC test panel). It is not a radio protocol, receiver
 firmware or compliance model. Profiles shipped with the program are generic; vendor profiles are made by the user.
 
-Where the user finds it: not yet in the app. This PR is the engine only. The panel, instance list and binding table
-come with lane C3 (live view card, Shift+L) and the add-on manager (C0b); the engine has no UI dependency by design.
+Where the user finds it: Shift+L, **Controller…** on the Live potentials card, or Simulate > Controller panel (lane C2,
+`docs/design/controller-live.md`). File > Import > Controller profile from I/O table builds a profile
+(`docs/design/controller-import.md`). The engine itself has no UI dependency by design.
 
 ## Profile file (`*.controller.toml`)
 

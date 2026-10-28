@@ -243,3 +243,36 @@ fn a_faulted_program_keeps_the_outputs_and_reports_why() {
     assert!(r.sim.bench.fault().is_some());
     assert!(!r.coil(), "the fault rolled the scan back before K1 closed");
 }
+
+#[test]
+fn a_held_input_stands_in_for_the_drawn_channel() {
+    let plant = plant();
+    let mut r = Run::new(&plant, PROGRAM);
+    // No button is pressed in the drawing; something outside it holds the start input.
+    assert!(r.sim.bench.override_input("%IX0.0", Some(true)));
+    r.run(0.2);
+    assert!(r.coil() && r.lamp());
+    // Letting go leaves the program's seal-in holding the contactor.
+    assert!(r.sim.bench.override_input("%IX0.0", None));
+    r.run(0.5);
+    assert!(r.coil());
+    // A held stop input wins over the healthy drawn circuit.
+    assert!(r.sim.bench.override_input("%IX0.1", Some(false)));
+    r.run(0.2);
+    assert!(!r.coil());
+    r.sim.bench.clear_overrides();
+    r.run(0.5);
+    assert!(!r.coil(), "letting go does not restart it");
+}
+
+#[test]
+fn only_input_bits_can_be_held() {
+    let plant = plant();
+    let mut r = Run::new(&plant, PROGRAM);
+    for address in ["%QX0.0", "%IW0", "%MX0.0", "start", ""] {
+        assert!(
+            !r.sim.bench.override_input(address, Some(true)),
+            "{address}"
+        );
+    }
+}
