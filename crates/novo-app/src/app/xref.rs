@@ -240,12 +240,13 @@ pub(crate) fn note(label: Label, density: NoteDensity, spare: bool) -> SymbolNot
             ..NoteRow::new(glyph_of(r.kind), &r.pins, &r.location)
         })
         .collect();
-    let lines = if rows.is_empty() {
-        label.lines
+    let mut lines = if rows.is_empty() {
+        label.lines.clone()
     } else {
         label.extra_lines().to_vec()
     };
     if !rows.is_empty() && spare {
+        lines.extend(label.spare_more_line());
         rows.extend(label.spare.iter().map(|r| NoteRow {
             spare: true,
             ..NoteRow::new(glyph_of(r.kind), &r.pins, "spare")

@@ -1663,11 +1663,14 @@ fn note_of(l: novo_xref::Label) -> SymbolNote {
             ..NoteRow::new(glyph_of(r.kind), &r.pins, "spare")
         }))
         .collect();
-    let lines = if rows.is_empty() {
-        l.lines
+    let mut lines = if rows.is_empty() {
+        l.lines.clone()
     } else {
         l.extra_lines().to_vec()
     };
+    if !rows.is_empty() {
+        lines.extend(l.spare_more_line());
+    }
     SymbolNote {
         symbol: l.symbol,
         lines,

@@ -73,8 +73,8 @@ mod number;
 pub use actions::XrefAction;
 pub use function::{ContactKind, FromKey, Functions};
 pub use index::{
-    Highlight, Issue, Label, LabelAnchor, LabelRow, LiveXref, Owner, Reference, SpareRow, TagJump,
-    XrefIndex, contact_limit_property,
+    Highlight, Issue, Label, LabelAnchor, LabelRow, LiveXref, MAX_SPARE_ROWS, Owner, Reference,
+    SpareRow, TagJump, XrefIndex, contact_limit_property,
 };
 pub use link::{LINK_LABEL, LinkError, can_link, link_command, link_to_device_command};
 pub use nav::{Go, JumpHistory, Navigator, Place};

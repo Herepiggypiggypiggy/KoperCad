@@ -224,3 +224,31 @@ fn spare_contacts_follow_the_device_and_the_setting() {
     let labels = t.labels_of(t.coil);
     assert!(!labels.iter().any(|l| l == "spare"), "{labels:?}");
 }
+
+#[test]
+fn a_mistyped_contact_count_stays_a_short_table() {
+    let mut t = table();
+    let k1 = {
+        let doc = t.d.app.backend.document().unwrap();
+        doc.project().devices().next().unwrap().id
+    };
+    t.d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Limits", |tx| {
+            tx.set_property(k1, "contacts.no", Some(3_000_000i64.into()))
+        })
+        .unwrap();
+    t.d.frame();
+    t.d.frame();
+    let labels = t.labels_of(t.coil);
+    let spare = labels.iter().filter(|l| *l == "spare").count();
+    assert_eq!(spare, novo_xref::MAX_SPARE_ROWS, "{spare} spare rows");
+    assert!(
+        labels
+            .iter()
+            .any(|l| l.starts_with("and ") && l.ends_with(" more spare")),
+        "{labels:?}"
+    );
+}
