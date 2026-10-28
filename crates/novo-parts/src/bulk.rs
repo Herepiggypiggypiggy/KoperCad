@@ -18,9 +18,10 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
-use crate::bmecat::import_bmecat;
+use crate::bmecat::{BmecatRead, read_bmecat};
 use crate::catalog::{Catalog, CatalogError, CatalogPart, user_catalog_path};
 use crate::csv::import_catalog;
+use crate::etim::EtimModel;
 use crate::import::{decode_text, looks_like_bmecat, read_zip};
 use crate::library::FileKind;
 use crate::quality::{Grade, assess};
@@ -63,6 +64,7 @@ pub struct MakerSummary {
     pub unchanged: usize,
     pub no_dimensions: usize,
     pub no_etim: usize,
+    pub no_price: usize,
     pub no_terminals: usize,
     pub good: usize,
     pub fair: usize,
@@ -103,12 +105,21 @@ impl InboxReport {
             t.push_str("No parts were read.\n");
         } else {
             t.push_str(&format!(
-                "{:<22}{:>6}{:>8}{:>8}{:>8}{:>9}{:>8}{:>8}{:>7}\n",
-                "Maker", "files", "parts", "new", "updated", "same", "no size", "no ETIM", "flags"
+                "{:<22}{:>6}{:>8}{:>8}{:>8}{:>9}{:>8}{:>8}{:>9}{:>7}\n",
+                "Maker",
+                "files",
+                "parts",
+                "new",
+                "updated",
+                "same",
+                "no size",
+                "no ETIM",
+                "no price",
+                "flags"
             ));
             for (maker, m) in &self.makers {
                 t.push_str(&format!(
-                    "{:<22}{:>6}{:>8}{:>8}{:>8}{:>9}{:>8}{:>8}{:>7}\n",
+                    "{:<22}{:>6}{:>8}{:>8}{:>8}{:>9}{:>8}{:>8}{:>9}{:>7}\n",
                     truncate(maker, 21),
                     m.files,
                     m.read,
@@ -117,6 +128,7 @@ impl InboxReport {
                     m.unchanged,
                     m.no_dimensions,
                     m.no_etim,
+                    m.no_price,
                     m.flagged
                 ));
             }
@@ -262,6 +274,8 @@ pub fn maker_guide(have: &[String]) -> Vec<String> {
 struct Run {
     report: InboxReport,
     parts: Vec<CatalogPart>,
+    /// The ETIM release the user installed, for codes in BMEcat files.
+    etim: Option<EtimModel>,
 }
 
 /// Reads every file under `inbox`, checks the parts and merges them into
@@ -279,7 +293,10 @@ pub fn import_inbox(
     collect(inbox, &mut files)?;
     files.sort();
 
-    let mut run = Run::default();
+    let mut run = Run {
+        etim: EtimModel::dir_for(Some(&catalog_path)).and_then(|d| EtimModel::load_installed(&d)),
+        ..Run::default()
+    };
     for file in &files {
         read_file(inbox, file, opts, &mut run);
     }
@@ -287,6 +304,18 @@ pub fn import_inbox(
     // Duplicates inside the run: the later file wins.
     let mut unique: BTreeMap<_, CatalogPart> = BTreeMap::new();
     for p in std::mem::take(&mut run.parts) {
+        if let Some(old) = unique.get(&p.key())
+            && let Some(what) = differs(old, &p)
+        {
+            run.report.warnings.push(format!(
+                "{} {}: in {} and in {} with {what}; the later file ({}) was used",
+                p.manufacturer,
+                p.order_number,
+                file_of(old),
+                file_of(&p),
+                file_of(&p),
+            ));
+        }
         unique.insert(p.key(), p);
     }
     let parts: Vec<CatalogPart> = unique.into_values().collect();
@@ -317,6 +346,9 @@ pub fn import_inbox(
         }
         if p.class.etim.is_none() {
             m.no_etim += 1;
+        }
+        if p.price.is_none() {
+            m.no_price += 1;
         }
         if p.terminals.is_empty() {
             m.no_terminals += 1;
@@ -352,6 +384,36 @@ pub fn import_inbox(
     }
     report.catalog_size = catalog.len();
     Ok(report)
+}
+
+fn file_of(p: &CatalogPart) -> String {
+    p.provenance
+        .as_ref()
+        .map(|x| x.file.clone())
+        .filter(|f| !f.is_empty())
+        .unwrap_or_else(|| "another file".into())
+}
+
+/// How two readings of the same part differ in what matters when one
+/// replaces the other, or `None` when the later adds nothing different.
+fn differs(old: &CatalogPart, new: &CatalogPart) -> Option<String> {
+    let show = |p: &CatalogPart| match &p.price {
+        Some(pr) => format!("{:.2} {} {}", pr.amount, pr.currency, pr.per_label())
+            .trim_end()
+            .to_owned(),
+        None => "no price".to_owned(),
+    };
+    if show(old) != show(new) {
+        return Some(format!(
+            "a different price ({} against {})",
+            show(old),
+            show(new)
+        ));
+    }
+    (old.description.trim() != new.description.trim()
+        && !old.description.trim().is_empty()
+        && !new.description.trim().is_empty())
+    .then(|| "a different description".to_owned())
 }
 
 fn collect(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), InboxError> {
@@ -416,10 +478,16 @@ fn read_file(inbox: &Path, file: &Path, opts: &InboxOptions, run: &mut Run) {
 
     let kind = FileKind::of_file_name(&name);
     let lower = name.to_ascii_lowercase();
+    let mut extras = Extras::default();
     let parts: Result<Vec<(CatalogPart, &'static str)>, String> = match kind {
-        FileKind::Bmecat => fs::read(file)
-            .map_err(|e| e.to_string())
-            .and_then(|b| bmecat(&String::from_utf8_lossy(&b), &hint_name)),
+        FileKind::Bmecat => fs::read(file).map_err(|e| e.to_string()).and_then(|b| {
+            bmecat(
+                &String::from_utf8_lossy(&b),
+                &hint_name,
+                run.etim.as_ref(),
+                &mut extras,
+            )
+        }),
         FileKind::Csv => fs::read(file)
             .map_err(|e| e.to_string())
             .and_then(|b| csv(&decode_text(&b), &hint_name)),
@@ -430,7 +498,10 @@ fn read_file(inbox: &Path, file: &Path, opts: &InboxOptions, run: &mut Run) {
                 let mut all = Vec::new();
                 for (member, text) in z.xml {
                     if looks_like_bmecat(&text) {
-                        all.extend(bmecat(&text, &hint_name).map_err(|e| format!("{member}: {e}"))?);
+                        all.extend(
+                            bmecat(&text, &hint_name, run.etim.as_ref(), &mut extras)
+                                .map_err(|e| format!("{member}: {e}"))?,
+                        );
                     }
                 }
                 if all.is_empty() {
@@ -463,6 +534,15 @@ fn read_file(inbox: &Path, file: &Path, opts: &InboxOptions, run: &mut Run) {
             return;
         }
     };
+    for n in extras.notes {
+        run.report.warnings.push(format!("{label}: {n}"));
+    }
+    if !extras.unread.is_empty() {
+        run.report.notes.push(format!(
+            "{label}: {}",
+            crate::etim::unread_note(&extras.unread, run.etim.as_ref())
+        ));
+    }
     if parts.is_empty() {
         run.report.rejected.push(format!("{label}: no parts"));
         return;
@@ -530,9 +610,25 @@ fn recipe_by_name_in(file_name: &str) -> Option<&'static MakerRecipe> {
     })
 }
 
-fn bmecat(text: &str, default_maker: &str) -> Result<Vec<(CatalogPart, &'static str)>, String> {
-    import_bmecat(text, default_maker)
-        .map(|v| v.into_iter().map(|p| (p, "import:bmecat")).collect())
+/// What reading BMEcat files adds to the report.
+#[derive(Default)]
+struct Extras {
+    notes: Vec<String>,
+    unread: std::collections::BTreeSet<String>,
+}
+
+fn bmecat(
+    text: &str,
+    default_maker: &str,
+    etim: Option<&EtimModel>,
+    extras: &mut Extras,
+) -> Result<Vec<(CatalogPart, &'static str)>, String> {
+    read_bmecat(text, default_maker, etim)
+        .map(|r: BmecatRead| {
+            extras.notes.extend(r.notes);
+            extras.unread.extend(r.etim_unread);
+            r.parts.into_iter().map(|p| (p, "import:bmecat")).collect()
+        })
         .map_err(|e| e.to_string())
 }
 
@@ -559,6 +655,26 @@ fn check(p: &CatalogPart) -> Vec<String> {
             f.push(format!(
                 "a dimension is over {MAX_DIMENSION_MM} mm (unit mix-up?)"
             ));
+        }
+    } else {
+        // A file that gives only some of the three sizes keeps them as data.
+        for (axis, key) in [
+            ("width", crate::catalog::keys::WIDTH_MM),
+            ("height", crate::catalog::keys::HEIGHT_MM),
+            ("depth", crate::catalog::keys::DEPTH_MM),
+        ] {
+            let v = match p.data.get(key) {
+                Some(novo_core::Value::Float(v)) => *v,
+                Some(novo_core::Value::Int(i)) => *i as f64,
+                _ => continue,
+            };
+            if !v.is_finite() || v <= 0.0 {
+                f.push(format!("{axis} {v} mm is zero or negative"));
+            } else if v > MAX_DIMENSION_MM {
+                f.push(format!(
+                    "{axis} {v} mm is over {MAX_DIMENSION_MM} mm (unit mix-up?)"
+                ));
+            }
         }
     }
     if let Some(e) = &p.class.etim
@@ -731,5 +847,166 @@ mod tests {
                 .any(|l| l.starts_with("WAGO (files found; LOGIN NEEDED)"))
         );
         assert!(g.iter().any(|l| l.starts_with("Rittal")));
+    }
+
+    /// A BMEcat 1.2 file the way a maker with ETIM codes would write it. The
+    /// codes are made up for the test.
+    fn old_file(order: &str, price: &str, per: u32, markup: &str) -> String {
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<BMECAT version="1.2"><HEADER><CATALOG><CURRENCY>EUR</CURRENCY></CATALOG>
+<SUPPLIER><SUPPLIER_NAME>WAGO GmbH &amp; Co. KG</SUPPLIER_NAME></SUPPLIER></HEADER>
+<T_NEW_CATALOG><ARTICLE><SUPPLIER_AID>{order}</SUPPLIER_AID>
+<ARTICLE_DETAILS><DESCRIPTION_SHORT>{markup}</DESCRIPTION_SHORT></ARTICLE_DETAILS>
+<ARTICLE_FEATURES><REFERENCE_FEATURE_SYSTEM_NAME>ETIM-9.0</REFERENCE_FEATURE_SYSTEM_NAME>
+<REFERENCE_FEATURE_GROUP_ID>EC000897</REFERENCE_FEATURE_GROUP_ID>
+<FEATURE><FNAME>EF900001</FNAME><FVALUE>5.2</FVALUE><FUNIT>EU900001</FUNIT></FEATURE>
+</ARTICLE_FEATURES>
+<ARTICLE_ORDER_DETAILS><ORDER_UNIT>C62</ORDER_UNIT><PRICE_QUANTITY>{per}</PRICE_QUANTITY></ARTICLE_ORDER_DETAILS>
+<ARTICLE_PRICE_DETAILS><ARTICLE_PRICE price_type="net_list"><PRICE_AMOUNT>{price}</PRICE_AMOUNT></ARTICLE_PRICE></ARTICLE_PRICE_DETAILS>
+</ARTICLE></T_NEW_CATALOG></BMECAT>"#
+        )
+    }
+
+    fn release() -> Vec<(String, Vec<u8>)> {
+        vec![
+            (
+                "f.csv".into(),
+                b"Code;Desc EN\nEF900001;Width\nEF900002;x\nEF900003;y\n".to_vec(),
+            ),
+            (
+                "u.csv".into(),
+                b"Code;Desc EN;Abbreviation\nEU900001;Millimetre;mm\nEU900002;x;y\n".to_vec(),
+            ),
+        ]
+    }
+
+    #[test]
+    fn a_bmecat_1_2_file_with_etim_codes_gives_prices_and_sizes_when_the_release_is_installed() {
+        let dir = tempfile::tempdir().unwrap();
+        let catalog = dir.path().join("parts.json");
+        let inbox = dir.path().join("inbox");
+        prepare_inbox(&inbox).unwrap();
+        fs::write(
+            inbox.join("wago/old.xml"),
+            old_file(
+                "2002-1201",
+                "42.00",
+                100,
+                "Terminal <b>2.5</b> &amp; marker",
+            ),
+        )
+        .unwrap();
+
+        // Without a release: the price and 1.2 are read, the codes are named.
+        let first = import_inbox(
+            &inbox,
+            Some(&catalog),
+            &InboxOptions {
+                dry_run: true,
+                ..opts()
+            },
+        )
+        .unwrap();
+        assert_eq!(first.total_read(), 1, "{}", first.render());
+        assert_eq!(first.makers["WAGO"].no_price, 0);
+        let notes = first.notes.join("\n");
+        assert!(notes.contains("no ETIM release is installed"), "{notes}");
+        assert!(notes.contains("EF900001"), "{notes}");
+
+        // With the release installed beside the catalog, the width is read.
+        let model = EtimModel::from_files("ETIM-9.0.zip", &release()).unwrap();
+        fs::create_dir_all(dir.path().join("etim")).unwrap();
+        fs::write(
+            EtimModel::installed_path(&dir.path().join("etim")),
+            serde_json::to_vec(&model).unwrap(),
+        )
+        .unwrap();
+        let second = import_inbox(&inbox, Some(&catalog), &opts()).unwrap();
+        assert!(
+            !second.notes.join("\n").contains("ETIM code"),
+            "{}",
+            second.render()
+        );
+        let saved = Catalog::load(&catalog).unwrap();
+        let part = saved.find("WAGO", "2002-1201").unwrap();
+        assert_eq!(part.description, "Terminal 2.5 & marker");
+        let price = part.price.as_ref().unwrap();
+        assert_eq!((price.amount, price.per_label()), (42.0, "per 100".into()));
+        assert!(
+            part.data.contains_key("width") || part.data.contains_key("width_mm"),
+            "{:?}",
+            part.data
+        );
+    }
+
+    #[test]
+    fn a_part_in_two_files_says_which_one_won_when_they_differ() {
+        let dir = tempfile::tempdir().unwrap();
+        let catalog = dir.path().join("parts.json");
+        let inbox = dir.path().join("inbox");
+        prepare_inbox(&inbox).unwrap();
+        fs::write(
+            inbox.join("wago/a.xml"),
+            old_file("2002-1201", "42.00", 100, "Terminal"),
+        )
+        .unwrap();
+        fs::write(
+            inbox.join("wago/b.xml"),
+            old_file("2002-1201", "0.45", 1, "Terminal"),
+        )
+        .unwrap();
+        fs::write(
+            inbox.join("wago/c.xml"),
+            old_file("2002-1202", "1.00", 1, "Same"),
+        )
+        .unwrap();
+        fs::write(
+            inbox.join("wago/d.xml"),
+            old_file("2002-1202", "1.00", 1, "Same"),
+        )
+        .unwrap();
+        let r = import_inbox(&inbox, Some(&catalog), &opts()).unwrap();
+        let w = r.warnings.join("\n");
+        assert!(w.contains("2002-1201: in a.xml and in b.xml"), "{w}");
+        assert!(
+            w.contains("42.00 EUR per 100") || w.contains("0.45 EUR"),
+            "{w}"
+        );
+        assert!(
+            !w.contains("2002-1202"),
+            "identical copies are not news: {w}"
+        );
+        let saved = Catalog::load(&catalog).unwrap();
+        let p = saved
+            .find("WAGO", "2002-1201")
+            .unwrap()
+            .price
+            .clone()
+            .unwrap();
+        assert_eq!(
+            p.amount, 0.45,
+            "the later file (b.xml sorts after a.xml) won"
+        );
+    }
+
+    #[test]
+    fn sizes_a_file_gives_only_in_part_are_checked_too() {
+        let mut p = CatalogPart::new("X", "1");
+        p.description = "d".into();
+        p.data
+            .insert("width_mm".into(), novo_core::Value::Float(-5.2));
+        p.data
+            .insert("height_mm".into(), novo_core::Value::Float(50000.0));
+        let f = check(&p);
+        assert!(
+            f.iter()
+                .any(|s| s.contains("width -5.2 mm is zero or negative")),
+            "{f:?}"
+        );
+        assert!(
+            f.iter().any(|s| s.contains("height 50000 mm is over 3000")),
+            "{f:?}"
+        );
     }
 }

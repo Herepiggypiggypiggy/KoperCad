@@ -1,0 +1,42 @@
+@title Parts: a BMEcat 1.2 file with ETIM codes imports with price, unit and size
+@area Parts
+# Made-up maker file: 1.2 element names, ETIM-style codes from a release the user installs, price per 100 and per 1000 m.
+# Before the release is installed the report says so; after it, the codes are words and the size is read.
+fresh
+key ctrl+k
+text "parts"
+wait 10
+key Return
+wait 20
+shot parts-window
+click_text "More"
+wait 10
+shot more-menu
+expect "No ETIM release installed"
+answer_dialog qa/fixtures/parts/etim-test
+click_text "Install ETIM release (folder)"
+wait 30
+expect "Installed"
+answer_dialog qa/fixtures/parts/bmecat12/example-maker-bmecat-1.2.xml
+click_text "Import catalog files"
+wait 60
+expect "Example Maker"
+expect "no price"
+shot import-report
+check_layout
+click_text "Close"
+wait 10
+click 180 130
+text "EX-1201"
+wait 20
+move 330 200
+wait 10
+click 330 200
+wait 20
+expect "42.00 EUR per 100"
+expect "Feed-through terminal 2.5 & marker"
+wait 30
+move 700 400
+wait 30
+shot part-detail
+check_layout
