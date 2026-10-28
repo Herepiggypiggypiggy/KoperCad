@@ -633,7 +633,7 @@ fn certain_parts_are_assigned_and_the_rest_proposed() {
     let orders: Vec<&str> = proposals[0]
         .candidates
         .iter()
-        .map(|p| p.order_number.as_str())
+        .map(|c| c.part.order_number.as_str())
         .collect();
     assert!(orders.contains(&"3RU2116-1JB0"));
     assert!(!orders.contains(&"3RU2116-1FB0"));

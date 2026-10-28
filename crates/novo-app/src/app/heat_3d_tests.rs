@@ -80,6 +80,9 @@ pub(super) fn place() -> Place {
     }
 }
 
+/// The opacity of the air in a slice.
+const SLICE_ALPHA_FOR_TEST: u8 = 190;
+
 const RANGE: Range = Range { lo: 20.0, hi: 30.0 };
 
 #[test]
@@ -106,15 +109,20 @@ fn a_slice_follows_the_plate_frame() {
 }
 
 #[test]
-fn a_slice_across_x_has_its_x_fixed_and_leaves_out_solids() {
+fn a_slice_across_x_has_its_x_fixed_and_draws_solids_darker() {
     let snap = snapshot();
     let m = slice_mesh(&snap, place(), RANGE, Axis::X, 0.05).unwrap();
     assert!(m.is_valid());
     // Solver x = 5 mm is plate x = -5 mm.
     assert!(m.positions.iter().all(|p| (p.x + 5.0).abs() < 1e-4));
-    // The device fills y < 20, z < 20 there: no quad starts inside it.
+    // The device fills y < 20, z < 20 there: its cells are drawn (no hole),
+    // darker and more opaque than the air around it.
     let full = slice_mesh(&snap, place(), RANGE, Axis::X, 0.95).unwrap();
-    assert!(m.indices.len() < full.indices.len());
+    assert_eq!(m.indices.len(), full.indices.len());
+    let alpha = |m: &novo_view3d::OverlayMesh| m.colors.iter().map(|c| c[3]).collect::<Vec<_>>();
+    let (a, b) = (alpha(&m), alpha(&full));
+    assert!(a.iter().any(|v| *v > SLICE_ALPHA_FOR_TEST));
+    assert!(b.iter().all(|v| *v <= SLICE_ALPHA_FOR_TEST));
 }
 
 #[test]
@@ -240,15 +248,28 @@ fn lopsided() -> Place {
 #[test]
 fn solver_corners_land_where_the_plate_frame_puts_them() {
     // The device stands at solver x < 20, y < 20, z < 20, so a slice at
-    // z = 10 has a hole there: world x -10 to 10, y 60 to 80 on this plate.
+    // z = 10 cuts it there: world x -10 to 10, y 60 to 80 on this plate. Its
+    // cells are drawn (darker, more opaque), not left as a hole.
     let m = slice_mesh(&snapshot(), lopsided(), RANGE, Axis::Z, 10.0 / 60.0).unwrap();
     let has = |x: f32, y: f32| {
         m.positions
             .iter()
             .any(|p| (p.x - x).abs() < 1e-3 && (p.y - y).abs() < 1e-3)
     };
-    assert!(!has(-2.0, 72.0), "the hole is where the device is");
+    assert!(has(-2.0, 72.0), "the device is drawn, not a hole");
     assert!(has(-2.0, 8.0) && has(78.0, 72.0), "the rest is there");
+    let alpha_at = |x: f32, y: f32| {
+        let i = m
+            .positions
+            .iter()
+            .position(|p| (p.x - x).abs() < 1e-3 && (p.y - y).abs() < 1e-3)
+            .unwrap();
+        m.colors[i][3]
+    };
+    assert!(
+        alpha_at(-2.0, 72.0) > alpha_at(78.0, 72.0),
+        "solid reads denser"
+    );
     // The extent is the solver box: plate x -10 to 90, world y 0 to 80.
     let ys = m.positions.iter().map(|p| p.y);
     assert!((ys.clone().fold(f32::MIN, f32::max) - 80.0).abs() < 1e-3);

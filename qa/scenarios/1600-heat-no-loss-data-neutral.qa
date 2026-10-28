@@ -1,0 +1,18 @@
+@title Heat with no loss data on any device draws no field, no numbers and says why
+@area Cabinet
+@sizes 1366x768 1920x1080
+# Laptop test finding 7: before any part data the Heat map showed a 35 to 50 degree gradient and a "Plate by Q1 46 C, +4 K" card while the legend said devices had no loss data. The fixture (qa/fixtures/make_no_loss_fixture.py) is the hot cabinet with no device loss. The hot-spot cards, badges and the field are painted, so the picture (heat-no-data) is the evidence; the legend text is checked.
+open qa/fixtures/cabinet-no-loss-data.novo
+wait 20
+click_text Cabinet #1
+wait 20
+key ctrl+k
+wait 4
+text show or hide heat
+wait 6
+key Enter
+wait 20
+shot heat-no-data
+expect "No heat picture yet"
+expect_not "Plate by"
+check_layout
