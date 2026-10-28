@@ -428,6 +428,26 @@ pub fn tabs_with_rects(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> (bo
     let strong = FontId::new(body.size, fonts::strong_family());
     let mut changed = false;
     let start = ui.cursor().min;
+    // Tabs that do not fit the row give up some of their side padding instead
+    // of widening everything below them (a narrow side panel).
+    let text_width: f32 = labels
+        .iter()
+        .enumerate()
+        .map(|(i, label)| {
+            let font = if *current == i { &strong } else { &body };
+            ui.painter()
+                .layout_no_wrap(
+                    (*label).to_owned(),
+                    font.clone(),
+                    egui::Color32::PLACEHOLDER,
+                )
+                .size()
+                .x
+        })
+        .sum();
+    let count = labels.len() as f32;
+    let spare = ui.available_width() - text_width - 2.0 * count - space::XS * (count - 1.0);
+    let pad = (spare / (2.0 * count)).clamp(2.0, space::M);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = space::XS;
         for (i, label) in labels.iter().enumerate() {
@@ -438,7 +458,7 @@ pub fn tabs_with_rects(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> (bo
                 font.clone(),
                 egui::Color32::PLACEHOLDER,
             );
-            let width = galley.size().x + 2.0 * space::M + 2.0;
+            let width = galley.size().x + 2.0 * pad + 2.0;
             let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::click());
             rects.push(rect);
             // The tab is painted, so name it for screen readers and the
@@ -872,6 +892,22 @@ mod tests {
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ")
+    }
+
+    #[test]
+    fn tabs_shrink_their_padding_to_fit_a_narrow_row() {
+        let ctx = egui::Context::default();
+        crate::apply(&ctx);
+        let mut right = 0.0_f32;
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ui.set_max_width(232.0);
+            let mut current = 0;
+            let (_, rects) =
+                tabs_with_rects(ui, &mut current, &["Checks", "Punch", "Redlines", "Test"]);
+            right = rects.last().map_or(0.0, |r| r.right()) - ui.min_rect().left();
+        });
+        out.textures_delta.clear();
+        assert!(right <= 232.5, "the last tab ends at {right}, past the row");
     }
 
     #[test]
