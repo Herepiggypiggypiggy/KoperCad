@@ -577,6 +577,15 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             out,
         ),
         Cmd::Export(Export::Eplan { file, output }) => {
+            if novo_storage::reserved_device_name(&output) {
+                return Err(Failure::new(
+                    exit::WRITE,
+                    format!(
+                        "cannot write {}: the name is reserved by Windows for a device; pick another file name",
+                        output.display()
+                    ),
+                ));
+            }
             if output.exists() {
                 return Err(Failure::new(
                     exit::WRITE,
@@ -1238,7 +1247,7 @@ fn calc(
     use novo_checks::calc::tables::TableSet;
 
     let usage = |m: String| Failure::new(exit::USAGE, m);
-    let text = std::fs::read_to_string(file)
+    let text = read_text(file)
         .map_err(|e| Failure::new(exit::READ, format!("cannot read {}: {e}", file.display())))?;
     let root: Value = serde_json::from_str(&text)
         .map_err(|e| usage(format!("{} is not valid JSON: {e}", file.display())))?;
@@ -1246,7 +1255,7 @@ fn calc(
     let set = match tables {
         None => TableSet::builtin(),
         Some(path) => {
-            let csv = std::fs::read_to_string(path).map_err(|e| {
+            let csv = read_text(path).map_err(|e| {
                 Failure::new(exit::READ, format!("cannot read {}: {e}", path.display()))
             })?;
             let name = path.file_name().map_or_else(
@@ -1261,7 +1270,7 @@ fn calc(
     let pair_table = match pairs {
         None => None,
         Some(path) => {
-            let csv = std::fs::read_to_string(path).map_err(|e| {
+            let csv = read_text(path).map_err(|e| {
                 Failure::new(exit::READ, format!("cannot read {}: {e}", path.display()))
             })?;
             let name = path
@@ -1303,6 +1312,16 @@ fn calc(
         exit::PROBLEMS
     } else {
         exit::OK
+    })
+}
+
+/// A text file as UTF-8 without a leading byte-order mark, which Windows
+/// editors add and neither JSON nor CSV parsers expect.
+fn read_text(path: &Path) -> std::io::Result<String> {
+    let text = std::fs::read_to_string(path)?;
+    Ok(match text.strip_prefix('\u{feff}') {
+        Some(rest) => rest.to_owned(),
+        None => text,
     })
 }
 

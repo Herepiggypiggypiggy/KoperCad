@@ -87,6 +87,11 @@ pub enum ScriptError {
     NothingCreated(String),
     #[error("refusing to write an export over {}: it is a project file", .0.display())]
     ProjectFileTarget(PathBuf),
+    #[error(
+        "{} uses a name Windows reserves for devices (CON, PRN, AUX, NUL, COM1 to COM9, LPT1 to LPT9); pick another file name",
+        .0.display()
+    )]
+    ReservedName(PathBuf),
     #[error("cannot write {}: {source}", path.display())]
     Io {
         path: PathBuf,

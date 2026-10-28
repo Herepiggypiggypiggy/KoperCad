@@ -36,6 +36,7 @@
 
 mod error;
 mod file;
+mod paths;
 pub mod profile;
 mod salvage;
 pub mod schema;
@@ -46,6 +47,7 @@ pub use file::{
     LEGACY_PROJECT_EXTENSION, PROJECT_EXTENSION, PROJECT_EXTENSIONS, ProjectFile,
     is_project_extension,
 };
+pub use paths::{reserved_device_name, too_long_for_windows};
 pub use salvage::{Salvage, salvage};
 pub use session::{
     AUTOSAVE_SUFFIX, DEFAULT_AUTOSAVE_INTERVAL, Opened, Recovered, Session, SetAside,

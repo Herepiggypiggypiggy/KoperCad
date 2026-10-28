@@ -8,7 +8,7 @@ use novo_core::{
 };
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Transaction, params};
 
-use crate::error::{Result, StorageError, is_busy, is_not_a_database, is_read_only};
+use crate::error::{DAMAGED_PAGES, Result, StorageError, is_busy, is_not_a_database, is_read_only};
 use crate::schema::{self, APPLICATION_ID, MIGRATIONS, Migration};
 use crate::session::AUTOSAVE_SUFFIX;
 
@@ -106,7 +106,8 @@ impl ProjectFile {
     fn read_only_inner(path: &Path) -> Result<ProjectFile> {
         ensure_exists(path)?;
         let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
-        let conn = Connection::open_with_flags(path, flags)?;
+        let conn = Connection::open_with_flags(path, flags)
+            .map_err(|e| blocked_by_other(&e, path).unwrap_or(e.into()))?;
         let version = check_existing(&conn, path, schema::SCHEMA_VERSION)?;
         let conn = if version < schema::SCHEMA_VERSION || !schema::has_side_tables(&conn)? {
             let mut memory = Connection::open_in_memory()?;
@@ -141,13 +142,41 @@ impl ProjectFile {
         role: Role,
         extra: impl FnOnce(&Transaction<'_>) -> Result<()>,
     ) -> Result<ProjectFile> {
+        let cannot = |why| StorageError::CannotSave {
+            path: path.to_owned(),
+            why,
+        };
+        if crate::reserved_device_name(path) {
+            return Err(StorageError::ReservedName(path.to_owned()));
+        }
+        let temp = sibling(path, ".saving");
+        if crate::too_long_for_windows(&temp, 0) {
+            return Err(cannot(
+                "the path is too long for Windows. Pick a shorter folder or name",
+            ));
+        }
+        if !path
+            .parent()
+            .is_none_or(|dir| dir.as_os_str().is_empty() || dir.is_dir())
+        {
+            return Err(cannot("the folder does not exist"));
+        }
         // Hold the target's lock while preparing, so a file open in another
         // window is never replaced and its recovery file never touched.
         let lock = lock_existing(path)?;
-        let temp = sibling(path, ".saving");
-        remove_if_exists(&temp)?;
+        remove_if_exists(&temp).map_err(|_| cannot(UNWRITABLE))?;
         let written = (|| {
-            let mut file = Self::connect(&temp, true, MIGRATIONS)?;
+            // The temporary file is an internal detail: whatever stops it
+            // being made is a problem with the place the person chose.
+            let mut file = Self::connect(&temp, true, MIGRATIONS).map_err(|e| match e {
+                StorageError::ReadOnly(_) => cannot(UNWRITABLE),
+                StorageError::Sqlite(ref s)
+                    if s.sqlite_error_code() == Some(rusqlite::ErrorCode::CannotOpen) =>
+                {
+                    cannot(UNWRITABLE)
+                }
+                other => other,
+            })?;
             let tx = file.conn.transaction()?;
             set_meta(&tx, "role", role.as_str())?;
             set_meta(&tx, "created_at", &now_millis().to_string())?;
@@ -158,7 +187,12 @@ impl ProjectFile {
             tx.commit()?;
             // Close before moving: Windows cannot rename an open file.
             file.close()?;
-            replace(&temp, path, lock)
+            replace(&temp, path, lock).map_err(|e| match e {
+                StorageError::Io(ref io) if io.kind() == std::io::ErrorKind::PermissionDenied => {
+                    cannot("the file is write-protected or in use by another program. Pick another name")
+                }
+                other => other,
+            })
         })();
         if let Err(err) = written {
             let _ = std::fs::remove_file(&temp);
@@ -296,7 +330,14 @@ impl ProjectFile {
             }
             records.push(record);
         }
-        Ok(Project::from_records(info, next_id, records)?)
+        // Objects that refer to ones the file no longer holds are damage like
+        // any other: Open and Recover send the file to salvage, which drops
+        // the orphans and keeps the rest.
+        Project::from_records(info, next_id, records).map_err(|e| {
+            corrupt(format!(
+                "some objects refer to others that are missing from the file ({e})"
+            ))
+        })
     }
 
     /// Replaces the file's contents with `project`.
@@ -548,6 +589,15 @@ fn writable(path: &Path) -> Result<bool> {
 }
 
 fn ensure_exists(path: &Path) -> Result<()> {
+    // Before anything touches it: opening a device name such as CON can wait
+    // for input forever, and an empty file is no project (SQLite would turn
+    // it into an empty database, changing the file).
+    if crate::reserved_device_name(path) {
+        return Err(StorageError::ReservedName(path.to_owned()));
+    }
+    if std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() == 0) {
+        return Err(StorageError::NotAProject(path.to_owned()));
+    }
     if path.exists() {
         return Ok(());
     }
@@ -594,9 +644,11 @@ fn check_existing(conn: &Connection, path: &Path, supported: u32) -> Result<u32>
     }
     let check: String = conn.query_row("PRAGMA quick_check", [], |r| r.get(0))?;
     if check != "ok" {
+        // SQLite's own report ("Tree 4 page 4: btreeInitPage() returns error
+        // code 11") means nothing to the person; say what it amounts to.
         return Err(StorageError::Corrupt {
             path: path.to_owned(),
-            reason: check,
+            reason: DAMAGED_PAGES.into(),
         });
     }
     Ok(version)
@@ -662,8 +714,30 @@ fn replace(temp: &Path, path: &Path, lock: Option<Connection>) -> Result<()> {
     Ok(())
 }
 
+/// What to tell the person when a save target cannot be written.
+const UNWRITABLE: &str =
+    "the folder is write-protected or not allowed to be written. Pick another location";
+
+/// A file that exists but cannot even be opened for reading is held by
+/// another program (a Windows sharing violation) or denies this account; say
+/// so instead of calling it write-protected.
+fn blocked_by_other(err: &rusqlite::Error, path: &Path) -> Option<StorageError> {
+    if err.sqlite_error_code() != Some(rusqlite::ErrorCode::CannotOpen) || !path.is_file() {
+        return None;
+    }
+    match std::fs::File::open(path) {
+        Ok(_) => None,
+        Err(e) if matches!(e.raw_os_error(), Some(32 | 33)) && cfg!(windows) => {
+            Some(StorageError::Locked(path.to_owned()))
+        }
+        Err(e) => Some(StorageError::Io(e)),
+    }
+}
+
 fn classify(err: rusqlite::Error, path: &Path) -> StorageError {
-    if is_busy(&err) {
+    if let Some(blocked) = blocked_by_other(&err, path) {
+        blocked
+    } else if is_busy(&err) {
         StorageError::Locked(path.to_owned())
     } else if is_not_a_database(&err) {
         StorageError::NotAProject(path.to_owned())
