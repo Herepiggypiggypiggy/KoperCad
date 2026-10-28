@@ -211,7 +211,7 @@ impl super::NovoApp {
             state.motor = motors.first().copied();
         }
         let mut open = true;
-        super::panel::dialog(ctx, "Motor at variable frequency", [620.0, 0.0])
+        super::panel::dialog(ctx, "Motor at variable frequency", [620.0, 600.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 let Some(symbol) = state.motor else {
@@ -389,7 +389,7 @@ fn chart(ui: &mut egui::Ui, v: &View, continuous: bool, cooling_percent: f64) {
         p.text(
             egui::pos2(plot.left() - 4.0, y),
             egui::Align2::RIGHT_CENTER,
-            format!("{t:.0}"),
+            format!("{:.0}", if t.abs() < 0.5 { 0.0 } else { t }),
             font.clone(),
             pal.text_secondary,
         );
@@ -418,8 +418,8 @@ fn chart(ui: &mut egui::Ui, v: &View, continuous: bool, cooling_percent: f64) {
         egui::Stroke::new(1.0, pal.text_tertiary),
     );
     p.text(
-        egui::pos2(plot.left() + 4.0, rated_y - 2.0),
-        egui::Align2::LEFT_BOTTOM,
+        egui::pos2(plot.right() - 4.0, rated_y - 2.0),
+        egui::Align2::RIGHT_BOTTOM,
         "rated torque",
         font.clone(),
         pal.text_tertiary,
@@ -454,8 +454,8 @@ fn chart(ui: &mut egui::Ui, v: &View, continuous: bool, cooling_percent: f64) {
             egui::Stroke::new(1.0, pal.text_secondary),
         ));
         p.text(
-            egui::pos2(plot.right() - 4.0, rated_y + 2.0),
-            egui::Align2::RIGHT_TOP,
+            at(0.0, v.motor.continuous_torque_nm(0.0, &cool)) + egui::vec2(4.0, 2.0),
+            egui::Align2::LEFT_TOP,
             "continuous (self-ventilated)",
             font,
             pal.text_secondary,
