@@ -407,7 +407,7 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
             basis: basis_kind,
         });
     }
-    let (mut feeds, mut field, mut unplaced) = (0, 0, 0);
+    let (mut feeds, mut field, mut unplaced, mut surfaced) = (0, 0, 0, 0);
     let mut need_entry: BTreeSet<novo_core::StructureId> = BTreeSet::new();
     for job in jobs.iter().filter(|j| is_estimate(&j.basis)) {
         let (a, b) = (&job.end_a.designation, &job.end_b.designation);
@@ -422,6 +422,11 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
             }
         } else if location_of(a) != location_of(b) {
             field += 1;
+        } else if [job.end_a.pin, job.end_b.pin]
+            .into_iter()
+            .any(|pin| on_other_surface(project, pin))
+        {
+            surfaced += 1;
         } else {
             unplaced += 1;
         }
@@ -435,6 +440,10 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
     left(
         unplaced,
         "a device is not placed on the mounting plate, or its two ends are on different plates. Use Cabinet > Place all; the lengths of placed devices are routed.",
+    );
+    left(
+        surfaced,
+        "a device is on the door or another surface of the cabinet and no wiring opening joins that surface to the plate, so the wire is the page distance plus service loops (an opening is the structure property `opening.<name>`; there is no editor for it yet).",
     );
     left(
         field,
@@ -550,6 +559,31 @@ fn placed_plate(project: &Project, pin: novo_core::PinRef) -> Option<novo_core::
         .all::<novo_core::CabinetPlacement>()
         .find(|p| p.device == device)
         .map(|p| p.structure)
+}
+
+/// True when the device at `pin` is placed on a surface other than the
+/// main plate (the door, a wall).
+fn on_other_surface(project: &Project, pin: novo_core::PinRef) -> bool {
+    let Some(symbol) = project.symbol(pin.symbol) else {
+        return false;
+    };
+    let SymbolRole::Device { device, .. } = &symbol.role else {
+        return false;
+    };
+    project
+        .all::<novo_core::CabinetPlacement>()
+        .filter(|p| p.device == *device)
+        .any(
+            |p| match p.properties.get(novo_layout::surfaces::SURFACE_PROPERTY) {
+                Some(novo_core::Value::Text(t)) => {
+                    !t.trim().is_empty()
+                        && !t
+                            .trim()
+                            .eq_ignore_ascii_case(novo_layout::surfaces::MAIN_PLATE)
+                }
+                _ => false,
+            },
+        )
 }
 
 /// The `+LOCATION` of a designation (`=A1+CAB-X1:1` gives `CAB`).

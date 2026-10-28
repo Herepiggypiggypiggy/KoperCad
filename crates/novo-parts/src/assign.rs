@@ -12,7 +12,8 @@ use novo_core::{
 };
 
 use crate::catalog::{Catalog, CatalogPart, PartKey};
-use crate::fit::{DeviceNeed, Fit, fit};
+use crate::fit::{DeviceNeed, Fit, PartFacts, Role, fit};
+use std::collections::HashMap;
 
 /// How a part is assigned to a device that may already have parts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -584,13 +585,109 @@ fn is_protective(name: &str) -> bool {
     )
 }
 
+/// How sure a proposal is that a part is the right one for a device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Confidence {
+    /// The kind of device and the kind of part are both stated and the
+    /// same, and nothing that can be compared disagrees.
+    Certain,
+    /// Nothing disagrees, but the kind could not be confirmed on both
+    /// sides (a catalog that only has letter codes).
+    Likely,
+    /// A guess: a related kind, or the part or the device does not say what
+    /// it is. Never taken without a person looking at it.
+    Unsure,
+}
+
+impl Confidence {
+    pub fn label(self) -> &'static str {
+        match self {
+            Confidence::Certain => "Certain",
+            Confidence::Likely => "Likely",
+            Confidence::Unsure => "Unsure",
+        }
+    }
+}
+
+/// One catalog part that could be a device's part, with how sure that is
+/// and why.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartCandidate<'c> {
+    pub part: &'c CatalogPart,
+    pub confidence: Confidence,
+    /// One short sentence: what agrees, or what is unconfirmed.
+    pub reason: String,
+}
+
 /// Catalog parts that could be a device's part, for a proposal.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PartProposal<'c> {
     pub device: DeviceId,
-    /// Every fitting part, best first. One candidate means the answer is
-    /// certain and [`auto_assign_parts`] takes it without asking.
-    pub candidates: Vec<&'c CatalogPart>,
+    /// Every part that is not ruled out, most sure first, then in catalog
+    /// order. A part of the wrong kind, with a coil for another voltage or
+    /// another number of poles is not in the list.
+    pub candidates: Vec<PartCandidate<'c>>,
+}
+
+impl<'c> PartProposal<'c> {
+    /// The part to take without asking, when the answer is clear: the only
+    /// [`Confidence::Certain`] candidate, or with none of those the only
+    /// [`Confidence::Likely`] one. Unsure parts are never taken.
+    pub fn default_choice(&self) -> Option<&PartCandidate<'c>> {
+        for level in [Confidence::Certain, Confidence::Likely] {
+            let mut at_level = self.candidates.iter().filter(|c| c.confidence == level);
+            match (at_level.next(), at_level.next()) {
+                (Some(only), None) => return Some(only),
+                (None, _) => continue,
+                _ => return None,
+            }
+        }
+        None
+    }
+}
+
+/// How `part` stands for a device, or `None` when something rules it out.
+fn judge(part: &PartFacts, need: &DeviceNeed) -> Option<(Confidence, String)> {
+    use crate::fit::{KindCheck, check_kind_with, conflict_with};
+    if conflict_with(part, need).is_some() {
+        return None;
+    }
+    Some(match check_kind_with(part, need) {
+        KindCheck::Right => {
+            let what = need
+                .role
+                .map_or_else(|| "a part".to_owned(), Role::with_article);
+            (Confidence::Certain, format!("{what}, as the device is"))
+        }
+        KindCheck::Similar { part, device } => (
+            Confidence::Unsure,
+            format!(
+                "the part is {}, the device {}: related, not the same",
+                part.with_article(),
+                device.with_article()
+            ),
+        ),
+        KindCheck::PartSilent { device } => (
+            Confidence::Unsure,
+            format!(
+                "the device is {}, the part does not say what it is",
+                device.with_article()
+            ),
+        ),
+        KindCheck::DeviceSilent { part } => (
+            Confidence::Unsure,
+            format!(
+                "the part is {}, the symbol does not say what the device is",
+                part.with_article()
+            ),
+        ),
+        KindCheck::BothSilent => (
+            Confidence::Likely,
+            "only the letter code fits, neither says its kind".to_owned(),
+        ),
+        // `conflict_with` has already removed it.
+        KindCheck::Wrong { .. } => return None,
+    })
 }
 
 /// `rated_power_kw` and `power_kw` name the same quantity.
@@ -649,6 +746,7 @@ pub fn propose_parts<'c>(
         None => project.devices().collect(),
     };
     list.retain(|d| d.parts.is_empty() && d.kind != DeviceKind::TerminalStrip);
+    let mut facts: HashMap<usize, PartFacts> = HashMap::new();
     list.sort_by(|a, b| novo_core::natural_cmp(&a.tag.to_string(), &b.tag.to_string()));
     list.into_iter()
         .filter_map(|device| {
@@ -656,11 +754,27 @@ pub fn propose_parts<'c>(
             if code.is_empty() {
                 return None;
             }
-            let candidates: Vec<&CatalogPart> = catalog
+            let need = DeviceNeed::of(project, device);
+            let mut candidates: Vec<PartCandidate> = catalog
                 .suggest(code, "", usize::MAX)
                 .into_iter()
                 .filter(|p| sized_for(p, device))
+                .filter_map(|part| {
+                    // Read once per part for the whole batch: a catalog of
+                    // tens of thousands of parts meets hundreds of devices.
+                    let facts = facts
+                        .entry(std::ptr::from_ref(part) as usize)
+                        .or_insert_with(|| PartFacts::of(part));
+                    let (confidence, reason) = judge(facts, &need)?;
+                    Some(PartCandidate {
+                        part,
+                        confidence,
+                        reason,
+                    })
+                })
                 .collect();
+            // Stable: parts that are equally sure keep the catalog's order.
+            candidates.sort_by_key(|c| c.confidence);
             (!candidates.is_empty()).then_some(PartProposal {
                 device: device.id,
                 candidates,
@@ -669,21 +783,33 @@ pub fn propose_parts<'c>(
         .collect()
 }
 
-/// Assigns the part to every device without one where exactly one catalog
-/// part fits (DESIGN.md §2: one correct answer happens on its own), as one
-/// command. The rest stay proposals.
+/// Assigns the part to every device without one where the answer is clear
+/// ([`PartProposal::default_choice`], DESIGN.md §2: one correct answer
+/// happens on its own), as one command. The rest stay proposals.
 pub fn auto_assign_parts(catalog: &Catalog, project: &Project) -> Option<Command> {
+    let choices: Vec<(DeviceId, &CatalogPart)> = propose_parts(catalog, project, None)
+        .iter()
+        .filter_map(|p| Some((p.device, p.default_choice()?.part)))
+        .collect();
+    assign_choices(project, &choices)
+}
+
+/// Assigns the chosen part to each listed device (each device's own
+/// choice, a person's or [`PartProposal::default_choice`]), as one command
+/// and one undo step. Devices that already have exactly that part are left
+/// alone; `None` when nothing changes.
+pub fn assign_choices(project: &Project, choices: &[(DeviceId, &CatalogPart)]) -> Option<Command> {
     let mut commands = Vec::new();
     let mut parts = PartAllocator::new(project);
     let mut assigned = 0;
-    for proposal in propose_parts(catalog, project, None) {
-        let [part] = proposal.candidates[..] else {
-            continue;
-        };
-        let Some(device) = project.device(proposal.device) else {
+    for &(device, part) in choices {
+        let Some(device) = project.device(device) else {
             continue;
         };
         let id = parts.part_id(part, &mut commands);
+        if device.parts == [id] {
+            continue;
+        }
         commands.push(Command::Replace {
             record: Record::Device(Device {
                 parts: vec![id],

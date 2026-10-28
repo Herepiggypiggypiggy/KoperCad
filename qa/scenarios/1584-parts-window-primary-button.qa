@@ -1,0 +1,58 @@
+@title Parts window: Use for selected device is primary only with a device selected
+@sizes 1366x768 1920x1080
+@area Parts
+# Hardware test finding 23: the primary button had nothing to act on. Esc and Library > Parts also close the window.
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Motor starter DOL"
+wait 10
+key Return
+wait 20
+click_text Place #2
+wait 20
+key Escape
+key ctrl+k
+text Parts
+wait 10
+key Return
+wait 20
+expect "Parts"
+text 3RT2016
+wait 12
+key Down
+wait 8
+expect "Use for selected device"
+shot no-device-selected
+key Escape
+wait 5
+key Escape
+wait 8
+key ctrl+a
+wait 5
+key ctrl+k
+text Parts
+wait 10
+key Return
+wait 20
+text 3RT2016
+wait 12
+key Down
+wait 8
+shot device-selected
+key Escape
+wait 5
+key Escape
+wait 8
+key ctrl+k
+text Parts
+wait 10
+key Return
+wait 15
+key ctrl+k
+text Parts
+wait 10
+key Return
+wait 15
+shot toggled-closed

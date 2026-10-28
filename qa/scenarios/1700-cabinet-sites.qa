@@ -1,0 +1,66 @@
+@title Cabinet: field, door and plate (Mounted row, Size enclosure note, Issues, Place all)
+@area Cabinet
+# qa/fixtures/cabinet-sites.novo (built by write_sites_fixture): cabinet +CP1 with a door, a contactor -K1, a 4 kW drive -T1, a push button -S1 and a lamp -H1 not placed yet, and a motor -M1 that was put on the plate by hand. The motor is a field device: it is not placed by Place all, is not counted by Size enclosure and raises a warning while it sits on the plate. -S1 and -H1 go to the door.
+open qa/fixtures/cabinet-sites.novo
+wait 20
+click_text Cabinet #1
+wait 20
+shot cabinet-before
+# The Mounted row of the Inspector, with the choice open.
+# The motor sits at a different spot at each window size; the click that misses lands on bare plate.
+click 969 192
+try click 1470 218
+wait 10
+shot inspector-mounted
+expect "Mounted"
+expect "In the field"
+click_text "In the field"
+wait 6
+shot inspector-mounted-choice
+key Escape
+wait 4
+# Size enclosure says what it did not count.
+key ctrl+k
+wait 4
+text size enclosure
+wait 6
+key Enter
+wait 20
+expect "Not counted"
+shot size-enclosure-not-counted
+check_layout
+key Escape
+wait 4
+# The warning in the Issues list.
+key ctrl+k
+wait 4
+text issues
+wait 6
+key Enter
+wait 20
+expect "mounted outside the cabinet"
+shot issues-field-device
+key Escape
+wait 4
+# Place all leaves the motor out and sends the button and the lamp to the door.
+key ctrl+k
+wait 4
+text place all
+wait 6
+key Enter
+wait 30
+shot place-all-preview
+check_layout
+key Enter
+wait 20
+shot placed
+expect_not "M1 is not placed"
+# The button and the lamp are on the door surface.
+click_text "plate" #1
+wait 6
+shot surface-choice
+expect "2 devices"
+click_text door
+wait 10
+shot door-surface
+check_layout

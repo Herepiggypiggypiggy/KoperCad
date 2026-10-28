@@ -17,6 +17,7 @@ pub mod openings;
 pub mod plan;
 pub mod plate_drawing;
 pub mod rules;
+pub mod site;
 pub mod sizing;
 pub mod sizing_model;
 pub mod state;
