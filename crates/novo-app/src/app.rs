@@ -2788,6 +2788,11 @@ impl NovoApp {
                 if let Some(gpu) = crate::diag::gpu() {
                     ui.weak(format!("Graphics: {gpu}"));
                 }
+                if let Some(avoided) = crate::startup::avoided_for_report() {
+                    ui.weak(format!(
+                        "Graphics adapters tried last (a start stopped while using them): {avoided}"
+                    ));
+                }
                 ui.add_space(novo_theme::space::M);
                 ui.label("Made by KoperVonk");
                 ui.weak("Free software, MIT or Apache-2.0, at your choice");
