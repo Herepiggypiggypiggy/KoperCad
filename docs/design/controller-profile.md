@@ -18,7 +18,7 @@ Example: `crates/novo-controller/tests/data/generic-radio-3x2.controller.toml`.
 | `[controller]` | `id`, `name`, `kind` (radio, pendant, joystick, plc-panel, custom), `supply`, `common`, `step2_includes_step1`, `shared`, `generic`, `gate` |
 | `[effects]` | `self_test_ms`: every signal stays low this long after power-up (0 = off) |
 | `[[control]]` | `id`, `kind`, `positions` (rest first, or `rest`), `spring`, `needs_link`, `requires`, `drops_when` |
-| `[[signal]]` | `name`, `control`, `kind` (contact, voltage, analog), `when` or `group` + `step` or `levels`, `requires`, `ungated`, `needs_link`, `pin` |
+| `[[signal]]` | `name`, `control`, `kind` (contact, voltage, analog), `when` or `group` + `step` or `levels`, `requires`, `ungated`, `needs_link`, `combine`, `pin` |
 | `[[interlock]]` | `between = [controls]`, `mode` = `first_wins` or `both_off` |
 
 Control kinds and defaults: `button` (off/on, spring), `latch` (off/on, press toggles), `rocker2`/`rocker3` (positions
@@ -40,10 +40,10 @@ Semantics, all covered by `tests/engine.rs`:
 - `ControllerSet`: several instances per project (id, label, colour, target group, own state). The same profile may back
   any number of instances. `to_records`/`from_records` plus `ProjectControllers` serialize with serde (TOML or JSON).
 - `BindingTable`: bindings keyed `controller/signal` to a pin, symbol, PLC address or module-instance path. `check` finds
-  unbound signals, bindings to missing signals, duplicates and two controllers on one target unless `shared`. `resolve`
-  gives each target its level (largest magnitude wins), `owners` says who drives a target now.
+  unbound signals, bindings to missing signals, duplicates, two signals of one controller on one target, two controllers on one target unless `shared`, and a shared target with an ungated signal that is not `combine = "and"`. `resolve`
+  gives each target its level (largest magnitude wins; if any signal on the target says `combine = "and"`, smallest magnitude, which is what a shared normally-closed E-stop chain needs), `owners` says who drives a target now.
 - `Sequence` (`.sequence.toml`): timed actions in integer milliseconds. `ControllerSet::start_recording`/`stop_recording`
-  record; `Sequence::replay` and `Player::advance_to` replay with no clock or randomness, so two replays give equal traces.
+  record; `Sequence::replay` and `Player::advance_to` replay with no clock or randomness, so two replays give equal traces. A replay refuses more than 1,000,000 samples and `Sequence::check` flags events later than 24 hours.
 
 ## Packaging
 

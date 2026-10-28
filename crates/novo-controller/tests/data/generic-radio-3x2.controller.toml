@@ -67,6 +67,7 @@ label = "E-stop chain (NC)"
 control = "estop"
 when = ["released"]
 ungated = true
+combine = "and"
 
 [[signal]]
 name = "H_UP_SLOW"

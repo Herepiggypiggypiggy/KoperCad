@@ -586,6 +586,24 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "file.import_controller",
+            "Controller profile from I/O table",
+            "Project",
+            &[
+                "controller",
+                "radio",
+                "pendant",
+                "afstandsbediening",
+                "io page",
+                "wizard",
+                "crane",
+            ],
+            Needs::Nothing,
+        ),
+        &["import controller"],
+    ),
+    verb(
+        cmd(
             "file.import_crane",
             "Import crane configurator project",
             "Project",

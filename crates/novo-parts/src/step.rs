@@ -1,11 +1,15 @@
 //! Size of a part from its STEP file (ISO 10303-21 text).
 //!
-//! Reads the model's `CARTESIAN_POINT` entities and returns the box that
-//! holds them, in millimetres. This is a quick estimate, not geometry
-//! processing: it ignores placement transforms of assemblies and treats all
-//! points alike, so the result is [`StepBox::approximate`] and the axes are
-//! those of the model, which may not be width, height and depth as a user
-//! sees the part. Binary STEP and zipped STEP are not read.
+//! [`step_box`] reads every `CARTESIAN_POINT` and returns the box that holds
+//! them, in millimetres. That is only a rough estimate: it ignores placement
+//! transforms of assemblies and counts construction geometry (axes, sketch
+//! points, far-away reference points), which can make the size several times
+//! too large. The result is then [`StepBox::approximate`]. The import uses a
+//! [`StepMeasurer`] that measures the real solid instead (the app supplies
+//! one built on the B-rep reader of `novo-interop`) and falls back to
+//! [`step_box`] with a warning. The axes are those of the model, which may
+//! not be width, height and depth as a user sees the part. Binary STEP and
+//! zipped STEP are not read.
 
 use thiserror::Error;
 
@@ -16,13 +20,20 @@ use crate::catalog::Dimensions;
 pub struct StepBox {
     /// Size along the model's X, Y and Z axes, in mm.
     pub size_mm: [f64; 3],
+    /// Points counted (all points), or vertices of the solid's mesh.
     pub points: usize,
+    /// True when measured from the solid's own geometry, not from all points.
+    pub from_solid: bool,
 }
 
+/// Measures the real solid geometry of STEP text, respecting units and
+/// placements. `Err` is the reason it could not (shown to the user).
+pub type StepMeasurer = fn(&str) -> Result<StepBox, String>;
+
 impl StepBox {
-    /// Always true for now: see the module comment.
+    /// True for the all-points estimate of [`step_box`]; see the module comment.
     pub fn approximate(&self) -> bool {
-        true
+        !self.from_solid
     }
 
     /// As catalog dimensions, with the smallest extent as depth and the
@@ -99,6 +110,7 @@ pub fn step_box(text: &str) -> Result<StepBox, StepError> {
             (max[2] - min[2]) * scale,
         ],
         points,
+        from_solid: false,
     })
 }
 

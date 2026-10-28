@@ -1,0 +1,25 @@
+Terminal;Function;Step
+COM;Common;
+1;Hoist up;1
+2;Hoist up;2
+3;Hoist down;1
+4;Hoist down;2
+5;Bridge forward;1
+6;Bridge forward;2
+7;Bridge back;1
+8;Bridge back;2
+9;Trolley left;1
+10;Trolley left;2
+11;Trolley right;1
+12;Trolley right;2
+13;Emergency stop;
+14;Main start;
+15;Stop;
+16;Aux hoist up;1
+17;Aux hoist up;2
+18;Aux hoist down;1
+19;Aux hoist down;2
+20;Slew left;1
+21;Slew left;2
+22;Slew right;1
+23;Slew right;2

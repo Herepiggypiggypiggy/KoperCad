@@ -271,6 +271,14 @@ fn zip_of(files: &[(&str, &[u8])]) -> Vec<u8> {
     buf.into_inner()
 }
 
+/// Stands in for the solid measurement of the app: the points of the test
+/// file are its solid.
+fn point_box_as_solid(text: &str) -> Result<StepBox, String> {
+    let mut b = step_box(text).map_err(|e| e.to_string())?;
+    b.from_solid = true;
+    Ok(b)
+}
+
 #[test]
 fn imports_a_portal_zip_with_one_step_file_and_keeps_the_terms_link() {
     let lib_dir = tempfile::tempdir().unwrap();
@@ -300,7 +308,8 @@ fn imports_a_portal_zip_with_one_step_file_and_keeps_the_terms_link() {
 
     let f = ScriptedFetcher::default();
     let src = SourceTable::default();
-    let mut job = ImportJob::new(&lib, &src, &f, "WAGO", "2002-1201", "2026-10-15");
+    let mut job = ImportJob::new(&lib, &src, &f, "WAGO", "2002-1201", "2026-10-15")
+        .with_step_measurer(point_box_as_solid);
     let ImportState::Done(out) = job.import_file(&path, ImportFlow::Downloads).clone() else {
         panic!()
     };
@@ -551,4 +560,28 @@ fn a_file_saved_right_at_the_click_is_not_missed_to_rounded_file_times() {
     let got = w.poll();
     assert_eq!(got.len(), 1);
     assert!(got[0].path.ends_with("9000-0001.stp"));
+}
+
+#[test]
+fn a_job_without_a_solid_measurer_says_the_size_is_only_an_estimate() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(dir.path().join("lib"));
+    let path = dir.path().join("part.stp");
+    fs::write(
+        &path,
+        "ISO-10303-21;\nDATA;\n#1=CARTESIAN_POINT('',(0.,0.,0.));\n#2=CARTESIAN_POINT('',(10.,20.,30.));\nENDSEC;\nEND-ISO-10303-21;\n",
+    )
+    .unwrap();
+    let f = ScriptedFetcher::default();
+    let src = SourceTable::default();
+    let mut job = ImportJob::new(&lib, &src, &f, "Maker", "1", "2026-10-15");
+    let ImportState::Done(out) = job.import_file(&path, ImportFlow::Downloads).clone() else {
+        panic!()
+    };
+    assert!(out.dimensions.is_some());
+    assert!(
+        out.notes.iter().any(|n| n.contains("only an estimate")),
+        "{:?}",
+        out.notes
+    );
 }

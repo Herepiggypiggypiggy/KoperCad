@@ -1,0 +1,33 @@
+# Word list for the controller import wizard, English.
+# One line per category: `category: word, word, phrase with spaces, stem*`.
+# A trailing * matches any word that starts with the stem. Lines starting with # are comments.
+# Categories: motion.<name>, dir.<up|down|forward|back|left|right>, combo.<motion>.<dir>,
+#             speed.<slow|fast>, role.<estop|main|stop|common|horn|light|selector>,
+#             kind.<radio|pendant|joystick|plc-panel>
+motion.hoist: hoist, hoisting, lift
+motion.aux: auxiliary, aux, auxiliary hoist, aux hoist
+motion.bridge: bridge, gantry, long travel
+motion.trolley: trolley, crab, cross travel, cross
+motion.slew: slew, slewing, rotate, rotation, swing
+motion.tilt: tilt
+dir.up: up, raise, raising, upward, upwards
+dir.down: down, lower, lowering, downward, downwards
+dir.forward: forward, forwards, fwd, ahead
+dir.back: back, backward, backwards, reverse, rev, bwd
+dir.left: left
+dir.right: right
+combo.hoist.up: hoist up, lift up
+combo.hoist.down: hoist down, lift down
+speed.slow: slow, low, creep, fine, crawl, 1st speed, first speed
+speed.fast: fast, high, rapid, coarse, 2nd speed, second speed
+role.estop: emergency stop, e-stop, estop, emergency*, e stop, mushroom
+role.main: main, start, power on, contactor on, master
+role.stop: stop, power off
+role.common: com, common, supply, c, 0v
+role.horn: horn, hooter, siren, warning
+role.light: light, lamp, work light
+role.selector: selector, select, selection, changeover, key switch
+kind.radio: radio, transmitter, receiver, remote
+kind.pendant: pendant, push button station, pushbutton station, control station
+kind.joystick: joystick, master switch
+kind.plc-panel: plc, test panel

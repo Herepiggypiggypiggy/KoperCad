@@ -201,15 +201,22 @@ Revision fields come from the project's revisions, which also drive
 Changes mode and the pinned-flow freeze (§8). Owners: WS-03 draws the frame (`PageScene::frame`), WS-10 owns
 the reference format, and the frame choice is a rule like any other.
 
-**Saving.** There are no save prompts and no Save step to remember. A named
-project is written into its own `.novo` file continuously, about half a
-second after each change and on close, so reopening shows exactly what was
-left. An untitled project closed with work in it is kept in
+**Saving.** The project file changes only when you save (Ctrl+S). (This reverses the earlier "no save prompts, written continuously" rule; hardware finding KC-02 showed that it made experiments permanent.) While
+you work, a recovery copy of the unsaved changes is written to
+`%LOCALAPPDATA%\KoperCAD\recovery` every autosave interval (10 s by
+default; Preferences), never to the project file, so an experiment can
+always be thrown away. The status bar (bottom right) says "Unsaved changes" while the file and
+the screen differ. Closing the project, opening another, starting a new
+one or quitting (menu, Ctrl+Q or the window's close button) with unsaved
+changes asks "Save changes?": Save, Don't save (drops the changes and their
+recovery copy) or Cancel. After a crash or a kill the recovery copy is offered
+back the next time the project is opened ("Restore unsaved work?": Restore
+or Discard). An untitled project closed with work in it (without an answer) is kept in
 `%LOCALAPPDATA%\NovoElectric\Unsaved` and offered back (under Unsaved with
 Recent, and reopened at start-up if it was the last one open); naming it
 moves it to `<Documents>\NovoElectric\<name>.novo`. The
-deliberate checkpoints are revisions (§7, §8), not Save. Ctrl+S
-names an untitled project and otherwise only confirms Saved; Ctrl+Shift+S
+deliberate checkpoints are revisions (§7, §8). Ctrl+S
+names an untitled project; Ctrl+Shift+S
 saves a copy under a new name and keeps working in the original.
 
 **Start-up.** The app opens the last project where it was left: same page
@@ -1175,7 +1182,7 @@ Changes mode, WS-09 the PDF.
 | Where a project starts | Page-first; structure-first; intent-first | **Structure-first**, with the empty page offering "type what you are building" |
 | Window | A Workbench; B Focus; C Split | **A**, with B as Focus mode and C as the drawer docked right |
 | Top-level places | Five lenses; two canvases plus drawers; workspaces | **Five workspaces (Schematic, Cabinet, 3D, Reports, Commissioning)** with a drawer whose tabs depend on the workspace (`docs/design/workspaces.md`); reports are also commands |
-| Menu | Menu bar; empty command surface | **Both, one registry:** the menu bar is generated from the command registry, so it is the same index drawn where a new person looks first (`docs/design/workspaces.md` §5; reversed from "no menu bar" on 2026-10-15) |
+| Menu | Menu bar; empty command surface | **Both, one registry:** the menu bar is generated from the command registry, so it is the same index drawn where a new person looks first (`docs/design/workspaces.md` §5; reversed from "no menu bar" on 2026-10-15). Drawn as one app menu behind the mark, with the eight names as a setting (`docs/design/visual-redesign.md` §5) |
 | Command line | Permanent; on demand | **On demand**, at the top or at the pointer |
 | Tab | Orientation; next proposal | **Next proposal**; R and X orient |
 | Facing pins at a distance | Connect on placement; propose; ignore | **Propose**, in the placement preview; touching pins connect |
@@ -1193,7 +1200,7 @@ Changes mode, WS-09 the PDF.
 | The page as the source of truth | EPLAN, AutoCAD Electrical | Root cause of navigators, manual linking and update steps |
 | A navigator per object type | EPLAN | One outline with a structure filter and one inspector |
 | Separate editors for terminals and cables | EPLAN | They hide the schematic when you need it; the drawer keeps them beside it |
-| Insert centre, symbol trees, ribbon | EPLAN, AutoCAD Electrical | Spatial hunting; the command surface finds by name |
+| Insert centre, symbol trees, ribbon | EPLAN, AutoCAD Electrical | Spatial hunting; the command surface finds by name. Amended 2026-10-28 (`docs/design/visual-redesign.md`): a per-workspace tool rail drawn from the registry is not a ribbon |
 | Frozen macros | Most CAD | Go stale on placement; blocks stay linked |
 | Corner and T-piece symbols | EPLAN | Drawing artefacts of connectivity, not intent. The corners of a wire are bend points of its route, not objects |
 | Linking cross references by hand | EPLAN | References follow ownership |
@@ -1208,7 +1215,7 @@ Changes mode, WS-09 the PDF.
 | A status bar of unrelated readouts | Most CAD | Returns as a 22 px bar with five defined slots (`docs/design/workspaces.md` §7); the HUD moves into it |
 | Page tab strip | Most CAD | Fails at 500 pages; the outline's filter and groups do its job |
 | Infinite canvas | Figma, Miro | IEC documentation is printed and referenced by page and column |
-| Floating panels everywhere | Figma-style tools | Weak spatial memory; only the dock and inspector float |
+| Floating panels everywhere | Figma-style tools | Weak spatial memory; panels dock by default. Amended 2026-10-28 (`docs/design/visual-redesign.md` section 8): every panel can be dragged, docked and resized; floating is the person's choice |
 | New-project wizards | Most CAD | A name and Enter; the rest is defaults and rules |
 
 ## 10. What the model needs, and what Gate 1 needs
@@ -1250,7 +1257,7 @@ Principles:
 6. Every command is in the command surface and pickable without syntax.
 7. Problems and proposals are marked where they are, before they become
    problems.
-8. One gesture, one undo step; no save prompts.
+8. One gesture, one undo step; the file changes only at Save and a close with unsaved changes asks first.
 9. Plain names; no family of navigators.
 10. Live everywhere: a 50-page project opens in under 2 seconds and
     generated pages update within a second.

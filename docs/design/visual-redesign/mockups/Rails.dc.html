@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rails per workspace</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="@@KC@@">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.rl{width:228px;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--bd2);border-radius:8px;overflow:hidden}
+.rl .h{height:40px;display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--raised);border-bottom:1px solid var(--bd);font-weight:600}
+.rl .g{padding:6px;display:flex;flex-direction:column;gap:1px;border-bottom:1px solid var(--bd)}
+.rl .g:last-child{border-bottom:0}
+.rl .mrow{height:30px}
+.rl .mrow .fy{margin-left:auto;width:0;height:0;border:3px solid transparent;border-right-color:var(--tx3);border-bottom-color:var(--tx3)}
+</style>
+</helmet>
+<div class="kc {{theme}}" style="width:1330px;height:760px;background:var(--ground);padding:36px 40px;display:flex;flex-direction:column;gap:22px">
+  <div class="col" style="gap:6px"><span class="lbl">The rail, expanded · one tool surface for every workspace</span>
+    <span style="font-size:24px;font-weight:600;letter-spacing:-.01em">Same place, same order, different tools. Collapsed it is 48 pt of icons; expanded it names them.</span></div>
+
+  <div class="row" style="align-items:flex-start;gap:16px">
+
+    <div class="rl"><div class="h"><i class="i ki-schematic i18" style="color:var(--ac)"></i>Schematic</div>
+      <div class="g"><div class="mrow on"><i class="i i-cursor"></i>Select</div><div class="mrow"><i class="i ki-place"></i>Place symbol<span class="kbd">Q</span></div><div class="mrow"><i class="i i-line-segment"></i>Connect<span class="fy"></span></div><div class="mrow"><i class="i ki-cable"></i>Cable</div><div class="mrow"><i class="i i-text-t"></i>Text</div></div>
+      <div class="g"><div class="mrow"><i class="i i-magic-wand"></i>Autopilot</div><div class="mrow"><i class="i i-lightbulb"></i>Accept proposals<span class="badge" style="position:static;margin-left:auto">3</span></div><div class="mrow"><i class="i i-broom"></i>Tidy routes</div><div class="mrow"><i class="i ki-xref"></i>Link reference</div><div class="mrow"><i class="i ki-macro"></i>Macros</div></div>
+      <div class="g"><div class="mrow on"><i class="i i-files"></i>Pages</div><div class="mrow"><i class="i i-warning-diamond"></i>Issues<span class="badge warn" style="position:static;margin-left:auto">1</span></div><div class="mrow"><i class="i ki-terminal-strip"></i>Terminals</div><div class="mrow"><i class="i i-plugs"></i>Cables</div><div class="mrow"><i class="i i-package"></i>Devices</div></div>
+    </div>
+
+    <div class="rl"><div class="h"><i class="i ki-cabinet i18" style="color:var(--ac)"></i>Cabinet</div>
+      <div class="g"><div class="mrow on"><i class="i i-cursor"></i>Select</div><div class="mrow"><i class="i ki-place"></i>Place devices<span class="fy"></span></div><div class="mrow"><i class="i ki-din-rail"></i>Rails<span class="fy"></span></div><div class="mrow"><i class="i ki-duct"></i>Ducts</div><div class="mrow"><i class="i ki-plate"></i>Plate setup</div></div>
+      <div class="g"><div class="mrow"><i class="i ki-enclosure"></i>Size enclosure</div><div class="mrow"><i class="i ki-net"></i>Route wires</div><div class="mrow"><i class="i i-seal-check"></i>Placement rules</div><div class="mrow"><i class="i ki-emc"></i>EMC on the plate</div><div class="mrow"><i class="i i-scissors"></i>Cut list</div></div>
+      <div class="g"><div class="mrow"><i class="i i-thermometer-hot"></i>Heat<span class="fy"></span></div><div class="mrow"><i class="i i-fan"></i>Vents and fans</div><div class="mrow"><i class="i i-files"></i>Pages</div><div class="mrow"><i class="i i-table"></i>Cabinet table</div><div class="mrow"><i class="i i-info"></i>Inspector</div></div>
+    </div>
+
+    <div class="rl"><div class="h"><i class="i i-cube i18" style="color:var(--ac)"></i>3D</div>
+      <div class="g"><div class="mrow on"><i class="i i-cursor"></i>Select</div><div class="mrow"><i class="i i-arrows-out-cardinal"></i>Move</div><div class="mrow"><i class="i ki-place"></i>Place a device</div><div class="mrow"><i class="i i-align-left"></i>Align and spread<span class="fy"></span></div></div>
+      <div class="g"><div class="mrow"><i class="i i-ruler"></i>Measure</div><div class="mrow"><i class="i i-rows"></i>Section plane</div><div class="mrow"><i class="i i-eye"></i>Hide and isolate<span class="fy"></span></div><div class="mrow"><i class="i i-camera"></i>Saved views</div></div>
+      <div class="g"><div class="mrow on"><i class="i i-stack"></i>Layers<span class="fy"></span></div><div class="mrow"><i class="i i-thermometer-hot"></i>Heat</div><div class="mrow"><i class="i ki-net"></i>Wire runs</div><div class="mrow"><i class="i ki-emc"></i>EMC view</div><div class="mrow"><i class="i i-list-checks"></i>Build order</div></div>
+    </div>
+
+    <div class="rl"><div class="h"><i class="i ki-report i18" style="color:var(--ac)"></i>Reports</div>
+      <div class="g"><div class="mrow"><i class="i i-plus"></i>Add as drawing page</div><div class="mrow"><i class="i i-textbox"></i>Report designer</div><div class="mrow"><i class="i i-tag"></i>Labels and ferrules</div></div>
+      <div class="g"><div class="mrow"><i class="i ki-bench"></i>Bench output</div><div class="mrow"><i class="i i-list-checks"></i>Build mode</div></div>
+      <div class="g"><div class="mrow"><i class="i i-upload-simple"></i>Export<span class="fy"></span></div><div class="mrow"><i class="i i-printer"></i>Print</div></div>
+    </div>
+
+    <div class="rl"><div class="h"><i class="i i-clipboard-text i18" style="color:var(--ac)"></i>Commissioning</div>
+      <div class="g"><div class="mrow on"><i class="i i-check-circle"></i>Check</div><div class="mrow"><i class="i i-flag"></i>Punch item</div><div class="mrow"><i class="i i-camera"></i>Photo</div><div class="mrow"><i class="i i-note-pencil"></i>Note</div></div>
+      <div class="g"><div class="mrow"><i class="i i-list-checks"></i>Walk the list</div><div class="mrow"><i class="i i-pencil-simple"></i>Mark done</div></div>
+      <div class="g"><div class="mrow"><i class="i i-file-pdf"></i>Report</div><div class="mrow"><i class="i i-files"></i>Pages</div></div>
+    </div>
+  </div>
+  <div class="row gap12" style="padding:12px 16px;border-radius:6px;background:var(--control);border:1px solid var(--bd)">
+    <i class="i i-info i18" style="color:var(--info)"></i>
+    <span class="cap" style="color:var(--tx);line-height:1.5">A corner notch opens a flyout beside the rail with the options of that tool. The rail expands with a button at its foot, or stays expanded in Preferences. Each rail is data: a list of command ids per workspace, so a new feature adds one row.</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>

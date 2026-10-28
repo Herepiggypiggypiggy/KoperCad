@@ -1,0 +1,19 @@
+@title Parts folder import report names rows left out, bad sizes and an odd order number
+@area Parts
+@sizes 1366x768 1920x1080
+# Hardware test KC-09: the report said nothing about a row without order number, a 50,000 mm width, a negative width or a cut-off order number.
+click_text "Open example"
+wait 20
+answer_dialog qa/fixtures/parts-inbox-odd
+click_text File
+wait 4
+click_text "Import parts"
+wait 4
+click_text "Import parts from a folder"
+wait 15
+shot import-report
+expect "left out"
+expect "built differently"
+expect "over 3000"
+expect "zero or negative"
+check_layout

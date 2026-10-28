@@ -215,6 +215,8 @@ pub fn validate(profile: &Profile) -> Vec<Issue> {
         }
     }
 
+    check_requires_cycles(profile, &mut out);
+
     if matches!(meta.kind, ControllerKind::Radio | ControllerKind::Pendant)
         && !profile
             .controls
@@ -354,5 +356,35 @@ fn check_control(profile: &Profile, control: &ControlDef, path: &str, out: &mut 
         && (!control.requires.is_empty() || !control.drops_when.is_empty() || control.needs_link)
     {
         out.warn(path, "`requires`, `drops_when` and `needs_link` are meant for latches; here the control is forced back to rest");
+    }
+}
+
+/// Controls whose `requires` or `drops_when` refer to each other in a ring: whichever is set
+/// first decides, which is rarely what the profile means.
+fn check_requires_cycles(profile: &Profile, out: &mut Sink) {
+    let edges = |c: &ControlDef| -> Vec<String> {
+        c.requires
+            .iter()
+            .chain(&c.drops_when)
+            .filter_map(|t| t.parse::<Condition>().ok().map(|c| c.control))
+            .collect()
+    };
+    for start in &profile.controls {
+        let mut seen = BTreeSet::new();
+        let mut stack = edges(start);
+        while let Some(id) = stack.pop() {
+            if id == start.id {
+                out.warn(
+                    format!("control[{}]", start.id),
+                    "its conditions lead back to itself through other controls",
+                );
+                break;
+            }
+            if seen.insert(id.clone())
+                && let Some(c) = profile.control(&id)
+            {
+                stack.extend(edges(c));
+            }
+        }
     }
 }

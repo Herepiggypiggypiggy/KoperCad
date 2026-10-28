@@ -106,6 +106,9 @@ pub struct Reader<'a> {
     pub file: &'a StepFile<'a>,
     /// Millimetres per model unit.
     pub scale: f64,
+    /// A length unit is declared but none could be read (unknown prefix or
+    /// garbage), so `scale` is a guess of 1.
+    pub unit_unknown: bool,
     /// Chord tolerance for curved edges, in millimetres.
     pub tol: f64,
     edges: HashMap<u32, Rc<Vec<V3>>>,
@@ -136,10 +139,12 @@ impl<'a> Reader<'a> {
         let mut r = Reader {
             file,
             scale: 1.0,
+            unit_unknown: false,
             tol,
             edges: HashMap::new(),
         };
         r.scale = r.find_scale();
+        r.unit_unknown = r.scale == 1.0 && !r.has_readable_unit();
         r
     }
 
@@ -172,6 +177,12 @@ impl<'a> Reader<'a> {
             }
         }
         1.0
+    }
+
+    /// False when a length unit is declared but none of them reads.
+    fn has_readable_unit(&self) -> bool {
+        let ids = self.file.ids_of("LENGTH_UNIT");
+        ids.is_empty() || ids.iter().any(|&id| self.unit_mm(id, 0).is_some())
     }
 
     fn unit_mm(&self, id: u32, depth: u8) -> Option<f64> {

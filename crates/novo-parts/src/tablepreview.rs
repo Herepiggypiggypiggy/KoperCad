@@ -980,14 +980,14 @@ pub(crate) fn parse_price_date(raw: &str) -> Result<(String, Option<String>), St
     }
 }
 
-enum PriceBasis {
+pub(crate) enum PriceBasis {
     /// A unit that is not pieces (metre, kilogram ...).
     Other,
     Unreadable,
 }
 
 /// The pieces a price is for: `100`, `per 100`, `100 pcs`, `1000 Stk.`.
-fn price_basis(raw: &str) -> Result<u32, PriceBasis> {
+pub(crate) fn price_basis(raw: &str) -> Result<u32, PriceBasis> {
     const PIECES: &[&str] = &[
         "piece", "pieces", "pcs", "pc", "stk", "st", "stuk", "stuks", "stck", "stuck", "stück",
         "e", "ea", "each", "x",

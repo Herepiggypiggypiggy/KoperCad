@@ -6,6 +6,11 @@ use serde::{Deserialize, Serialize};
 use crate::binding::SignalKey;
 use crate::set::{ControllerSet, SetError};
 
+/// A replay may take at most this many samples.
+pub const MAX_SAMPLES: u64 = 1_000_000;
+/// Events later than this (24 hours) are taken for typing mistakes.
+pub const MAX_EVENT_MS: u64 = 86_400_000;
+
 /// One thing a person or a script does to a controller.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
@@ -44,8 +49,8 @@ impl Sequence {
         Ok(seq)
     }
 
-    pub fn to_toml(&self) -> String {
-        toml::to_string_pretty(self).unwrap_or_default()
+    pub fn to_toml(&self) -> Result<String, String> {
+        toml::to_string_pretty(self).map_err(|e| e.to_string())
     }
 
     pub fn duration_ms(&self) -> u64 {
@@ -56,6 +61,9 @@ impl Sequence {
     pub fn check(&self, set: &ControllerSet) -> Vec<String> {
         let mut problems = Vec::new();
         for (i, e) in self.events.iter().enumerate() {
+            if e.t_ms > MAX_EVENT_MS {
+                problems.push(format!("event {i}: t_ms {} is later than 24 hours", e.t_ms));
+            }
             let Some(inst) = set.instance(&e.instance) else {
                 problems.push(format!(
                     "event {i}: no controller instance `{}`",
@@ -192,12 +200,18 @@ impl Sequence {
         sample_ms: u64,
         settle_ms: u64,
     ) -> Result<Trace, SetError> {
+        let end = self.duration_ms().saturating_add(settle_ms);
+        let periodic = end
+            .checked_div(sample_ms)
+            .map_or(0, |n| n.saturating_add(1));
+        if (self.events.len() as u64).saturating_add(periodic) > MAX_SAMPLES {
+            return Err(SetError::TooManySamples);
+        }
         let mut player = Player::new(self, set);
-        let end = self.duration_ms() + settle_ms;
         let mut trace = Trace::default();
         let mut times: Vec<u64> = self.events.iter().map(|e| e.t_ms).collect();
         if sample_ms > 0 {
-            times.extend((0..=end).step_by(sample_ms as usize));
+            times.extend((0..=end).step_by(usize::try_from(sample_ms).unwrap_or(usize::MAX)));
         }
         times.push(end);
         times.sort_unstable();

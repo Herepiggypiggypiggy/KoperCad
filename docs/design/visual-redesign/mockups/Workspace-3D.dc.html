@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>3D workspace</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="@@KC@@">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0}</style>
+</helmet>
+<div class="kc {{theme}} win">
+  <div class="top">
+    <button class="mark" aria-label="App menu"><span class="logo"><i class="brand"></i></span><i class="i i-caret-down i14" style="color:var(--tx3)"></i></button>
+    <button class="btn" aria-label="Undo"><i class="i i-arrow-counter-clockwise i18"></i></button>
+    <button class="btn dim" aria-label="Redo"><i class="i i-arrow-clockwise i18"></i></button>
+    <span class="vsep"></span>
+    <div class="seg">
+      <button class="btn" aria-label="Schematic"><i class="i ki-schematic i18"></i></button>
+      <button class="btn" aria-label="Cabinet"><i class="i ki-cabinet i18"></i></button>
+      <button class="btn on" aria-label="3D view"><i class="i i-cube i18"></i><span>3D view</span></button>
+      <button class="btn" aria-label="Reports"><i class="i ki-report i18"></i></button>
+      <button class="btn" aria-label="Commissioning"><i class="i i-clipboard-text i18"></i></button>
+    </div>
+    <span class="vsep"></span>
+    <button class="crumb" aria-label="Cabinet"><i class="i ki-cabinet i14"></i><span>Motor starter (example)</span><span style="color:var(--tx3)">/</span><b>+CAB · 600 × 800 × 230</b></button>
+    <span class="grow"></span>
+    <button class="search" aria-label="Search or run"><i class="i i-magnifying-glass i14"></i><span style="min-width:96px;text-align:left">Search or run</span><span class="kbd">Ctrl K</span></button>
+    <span class="pill warn"><i class="i i-warning i14"></i>1</span>
+    <button class="btn" aria-label="Help"><i class="i i-question i18"></i></button>
+  </div>
+
+  <div class="stage">
+    <!-- 3D rail: the nine groups that were a row of text buttons, as icons. Corner notch = opens a flyout -->
+    <div class="rail">
+      <button class="btn on" aria-label="Select"><i class="i i-cursor"></i></button>
+      <button class="btn" aria-label="Move"><i class="i i-arrows-out-cardinal"></i></button>
+      <button class="btn" aria-label="Place a device"><i class="i ki-place"></i></button>
+      <button class="btn flyout" aria-label="Align and spread"><i class="i i-align-left"></i></button>
+      <div class="hsep"></div>
+      <button class="btn" aria-label="Measure"><i class="i i-ruler"></i></button>
+      <button class="btn" aria-label="Section plane"><i class="i i-rows"></i></button>
+      <button class="btn flyout" aria-label="Hide and isolate"><i class="i i-eye"></i></button>
+      <button class="btn" aria-label="Saved views"><i class="i i-camera"></i></button>
+      <div class="hsep"></div>
+      <button class="btn on flyout" aria-label="Layers"><i class="i i-stack"></i><span class="badge" style="background:var(--control);color:var(--tx)">5</span></button>
+      <button class="btn" aria-label="Heat"><i class="i i-thermometer-hot"></i></button>
+      <button class="btn" aria-label="Wire runs"><i class="i ki-net"></i></button>
+      <button class="btn" aria-label="EMC view"><i class="i ki-emc"></i></button>
+      <button class="btn" aria-label="Build order"><i class="i i-list-checks"></i></button>
+      <div class="spacer"></div>
+      <div class="hsep"></div>
+      <button class="btn" aria-label="Pages"><i class="i i-files"></i></button>
+      <button class="btn" aria-label="Devices"><i class="i i-package"></i></button>
+      <button class="btn" aria-label="Inspector"><i class="i i-info"></i></button>
+    </div>
+
+    <div class="cv" style="background:radial-gradient(ellipse at 50% 40%,var(--paper) 0,var(--ground) 80%)">
+      <div class="abs art-iso-{{theme}}" style="inset:0;background-position:center 6px;background-size:auto 700px"></div>
+
+      <!-- Layers flyout, anchored to its rail button: switches, not a menu of sentences -->
+      <div class="float" style="left:8px;top:300px;width:236px;padding:6px">
+        <div class="row gap8" style="padding:6px 8px 4px"><i class="i i-stack" style="color:var(--ac2)"></i><b>Layers</b><span class="grow"></span><button class="btn" style="height:22px;min-width:22px;padding:0 3px"><i class="i i-x i14"></i></button></div>
+        <div class="mrow"><i class="i i-eye" style="color:var(--ac2)"></i>Enclosure</div>
+        <div class="mrow"><i class="i i-eye" style="color:var(--ac2)"></i>Door<span class="cap" style="margin-left:auto">0°</span></div>
+        <div class="mrow"><i class="i i-eye" style="color:var(--ac2)"></i>Wires</div>
+        <div class="mrow"><i class="i i-eye" style="color:var(--ac2)"></i>Ducts</div>
+        <div class="mrow off"><i class="i i-eye-slash"></i>Shadows</div>
+        <div class="mrow off"><i class="i i-eye-slash"></i>Ambient occlusion</div>
+        <div class="mrow"><i class="i i-eye" style="color:var(--ac2)"></i>Dimensions</div>
+        <div class="hsep"></div>
+        <div class="mrow"><i class="i i-sliders-horizontal"></i>Quality and frame statistics…</div>
+      </div>
+      <div class="abs" style="left:-2px;top:318px;width:10px;height:10px;background:var(--raised);border-left:1px solid var(--bd2);border-bottom:1px solid var(--bd2);transform:rotate(45deg) translate(2px,3px);z-index:2"></div>
+
+      <!-- view cube -->
+      <svg class="abs" style="right:20px;top:16px" width="84" height="84" viewBox="0 0 84 84" role="img" aria-label="View cube">
+        <g stroke="currentColor" stroke-width="1" stroke-linejoin="round">
+          <polygon points="42,8 74,26 42,44 10,26" fill="var(--control)"/>
+          <polygon points="10,26 42,44 42,78 10,60" fill="var(--hover)"/>
+          <polygon points="74,26 42,44 42,78 74,60" fill="var(--raised)"/>
+        </g>
+        <g font-size="10" fill="currentColor" text-anchor="middle" font-family="Inter,sans-serif"><text x="42" y="30">Top</text><text x="26" y="60" transform="rotate(30 26 60)">Front</text><text x="58" y="60" transform="rotate(-30 58 60)">Right</text></g>
+      </svg>
+
+      <!-- floating, draggable panels: Position of the selection, and the door -->
+      <div class="float" style="right:16px;top:116px;width:228px">
+        <div class="wt"><i class="i i-arrows-out-cardinal i14"></i><span class="t">-K1 position</span><button class="btn"><i class="i i-x i14"></i></button></div>
+        <div class="col gap8" style="padding:10px 12px">
+          <div class="row" style="justify-content:space-between"><span class="cap">X</span><span class="field mono" style="height:24px;width:110px;justify-content:flex-end">60.0 mm</span></div>
+          <div class="row" style="justify-content:space-between"><span class="cap">Y</span><span class="field mono" style="height:24px;width:110px;justify-content:flex-end">360.0 mm</span></div>
+          <div class="row" style="justify-content:space-between"><span class="cap">Rail</span><span>Rail 2</span></div>
+          <div class="row gap8"><span class="chip on"><i class="i i-check i14"></i>Clearance 18 mm</span></div>
+        </div>
+        <div class="grip" style="right:0;bottom:0"></div>
+      </div>
+
+      <div class="float row gap8" style="left:50%;bottom:14px;transform:translateX(-50%);padding:6px 12px;border-radius:18px">
+        <i class="i i-door i18"></i><span class="cap" style="color:var(--tx)">Door</span>
+        <span style="width:150px;height:4px;border-radius:2px;background:var(--bd2);position:relative"><span style="position:absolute;left:0;top:-4px;width:12px;height:12px;border-radius:6px;background:var(--ac)"></span></span>
+        <span class="mono" style="color:var(--tx2)">0°</span>
+      </div>
+      <div class="abs cap" style="right:16px;bottom:14px">Mouse and keys <span class="kbd">?</span></div>
+    </div>
+  </div>
+
+  <div class="tip" style="left:54px;top:274px"><span class="row gap8"><b>Measure</b><span class="kbd">M</span></span><span class="cap">Click two points. Esc clears the measurement</span></div>
+  <div class="status"><span>Select: click a device, Shift adds to the selection · Move is off until you switch it on</span><span class="grow"></span><span class="mono">8 devices</span><span><i class="i i-check-circle i14" style="color:var(--ok);vertical-align:-2px"></i> Saved</span></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>
