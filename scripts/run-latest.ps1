@@ -3,18 +3,22 @@
 # Downloads the `experimental` pre-release (main plus every open pull
 # request, built by .github/workflows/experimental.yml) when it is newer than
 # the local copy, then starts it. Offline or on any download error it starts
-# the last copy it has. Needs the GitHub CLI (`gh`) signed in, because the
-# repository is private.
+# the last copy it has. The repository is public: nothing to sign in to and no
+# GitHub CLI needed, only a normal internet connection.
 #
 # A build made on this PC by build-local.ps1 carries a newer `built` time than
 # a stale release, so it is kept until the release catches up.
 
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue' # Invoke-WebRequest is very slow with it
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = 'Herepiggypiggypiggy/kopercad'
+$ReleaseUrl = "https://github.com/$Repo/releases/download/experimental"
 $Root = Join-Path $env:LOCALAPPDATA 'NovoElectric\experimental'
 $Current = Join-Path $Root 'current'
 $Stamp = Join-Path $Root 'build-info.json'
-# Builds from before the rename only have novoelectric.exe.
+# Builds from before the rename (and a copy made by build-local.ps1 of that
+# time) only have novoelectric.exe.
 function Get-Exe {
     foreach ($name in 'kopercad.exe', 'novoelectric.exe') {
         $path = Join-Path $Current $name
@@ -24,11 +28,6 @@ function Get-Exe {
 }
 
 New-Item -ItemType Directory -Force -Path $Root | Out-Null
-# The portable gh that scripts/setup-new-pc.ps1 unpacks, in case the
-# shortcut starts before Explorer has picked up the new user PATH.
-$PortableGh = Join-Path $env:LOCALAPPDATA 'NovoElectric\gh\bin'
-if (Test-Path (Join-Path $PortableGh 'gh.exe')) { $env:Path += ";$PortableGh" }
-
 function Show-Error($text) {
     Add-Type -AssemblyName PresentationFramework
     [System.Windows.MessageBox]::Show($text, 'KoperCAD') | Out-Null
@@ -39,10 +38,9 @@ try {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 
-    gh release download experimental --repo $Repo --pattern 'build-info.json' --dir $tmp --clobber
-    if ($LASTEXITCODE -ne 0) { throw 'gh could not reach the experimental release' }
-
-    $remote = Get-Content -Raw (Join-Path $tmp 'build-info.json')
+    $infoFile = Join-Path $tmp 'build-info.json'
+    Invoke-WebRequest "$ReleaseUrl/build-info.json" -OutFile $infoFile -UseBasicParsing
+    $remote = Get-Content -Raw $infoFile
     $local = if (Test-Path $Stamp) { Get-Content -Raw $Stamp } else { '' }
     # Only a release built after the local copy replaces it (ISO times compare as text).
     $remoteBuilt = try { ($remote | ConvertFrom-Json).built } catch { '' }
@@ -50,8 +48,7 @@ try {
     $newer = ($remote -ne $local) -and ((-not $localBuilt) -or ($remoteBuilt -gt $localBuilt))
 
     if ($newer -or -not (Test-Path (Get-Exe))) {
-        gh release download experimental --repo $Repo --pattern 'novoelectric-experimental-windows.zip' --dir $tmp --clobber
-        if ($LASTEXITCODE -ne 0) { throw 'download failed' }
+        Invoke-WebRequest "$ReleaseUrl/novoelectric-experimental-windows.zip" -OutFile (Join-Path $tmp 'novoelectric-experimental-windows.zip') -UseBasicParsing
         $next = Join-Path $Root 'next'
         Remove-Item -Recurse -Force $next -ErrorAction SilentlyContinue
         Expand-Archive -Path (Join-Path $tmp 'novoelectric-experimental-windows.zip') -DestinationPath $next
@@ -65,7 +62,7 @@ try {
 }
 catch {
     if (-not (Test-Path (Get-Exe))) {
-        Show-Error "Could not download the experimental build and no earlier copy exists.`n`n$($_.Exception.Message)`n`nCheck that 'gh auth status' works."
+        Show-Error "Could not download the experimental build and no earlier copy exists.`n`n$($_.Exception.Message)`n`nCheck the internet connection (a proxy or firewall may block github.com)."
         exit 1
     }
 }

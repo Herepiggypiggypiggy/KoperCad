@@ -240,6 +240,11 @@ fn take_pending_in(dir: &Path) -> Option<PathBuf> {
     report.is_file().then_some(report)
 }
 
+/// The time now, in the form the log uses.
+pub(crate) fn utc_now() -> String {
+    utc_stamp(SystemTime::now())
+}
+
 fn write_header(out: &mut String) {
     let _ = writeln!(
         out,
@@ -270,6 +275,12 @@ fn write_header(out: &mut String) {
     );
     if let Some((count, first)) = graphics_errors() {
         let _ = writeln!(out, "Graphics errors survived: {count}, first: {first}");
+    }
+    if let Some(avoided) = crate::startup::avoided_for_report() {
+        let _ = writeln!(
+            out,
+            "Graphics adapters tried last (a start stopped while using them): {avoided}"
+        );
     }
     if let Ok(d) = DISPLAY.try_lock()
         && !d.is_empty()

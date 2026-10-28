@@ -173,6 +173,9 @@ struct Cache {
     diff: Option<Diff>,
     mean: f32,
     streams: Vec<Streamline>,
+    /// The preview's estimate for each device (at its centre), by device id;
+    /// empty for a solver result.
+    preview: std::collections::HashMap<u64, f64>,
 }
 
 impl HeatState {
@@ -599,14 +602,22 @@ fn build(input: &Input) -> Cache {
     };
     let smooth = scene.temperature_field(CELL_MM).filled();
     let velocity: Vector = scene.velocity_field(CELL_MM);
-    assemble(
+    let mut cache = assemble(
         input,
         smooth,
         velocity,
         input.ambient,
         &|x, y| scene.solid(x, y),
         Source::Synthetic,
-    )
+    );
+    // The map under a device is filled in from the air around it; the device's own reading
+    // comes from the model at its centre, so a hot neighbour does not lend it its temperature.
+    cache.preview = scene
+        .devices
+        .iter()
+        .map(|d| (d.id, scene.temperature(d.x + d.w / 2.0, d.y + d.h / 2.0)))
+        .collect();
+    cache
 }
 
 /// The picture of a solver result: the slice at the device front plane over
@@ -654,18 +665,20 @@ fn assemble(
         }
     }
     let mean = smooth.values.iter().sum::<f32>() / smooth.values.len().max(1) as f32;
-    let peaks = hotspot::peaks(&smooth, 3, 60.0, 2.0)
-        .into_iter()
-        .map(|p| {
-            let tag = input
-                .items
-                .iter()
-                .min_by(|a, b| distance(a, &p).total_cmp(&distance(b, &p)))
-                .map(|i| i.tag.clone())
-                .unwrap_or_default();
-            (p, tag)
-        })
-        .collect();
+    // One card per device: a big hot device makes several peaks on its own body.
+    let mut peaks: Vec<(Peak, String)> = Vec::new();
+    for p in hotspot::peaks(&smooth, 6, 60.0, 2.0) {
+        let tag = input
+            .items
+            .iter()
+            .min_by(|a, b| distance(a, &p).total_cmp(&distance(b, &p)))
+            .map(|i| i.tag.clone())
+            .unwrap_or_default();
+        if tag.is_empty() || !peaks.iter().any(|(_, t)| *t == tag) {
+            peaks.push((p, tag));
+        }
+    }
+    peaks.truncate(3);
     let mut seeds: Vec<(f64, f64)> = Vec::new();
     let (w, h) = input.plate;
     seeds.extend((0..6).map(|i| (2.0, h - 20.0 - i as f64 * 30.0)));
@@ -688,6 +701,7 @@ fn assemble(
         peaks,
         diff: None,
         streams,
+        preview: std::collections::HashMap::new(),
     }
 }
 
@@ -1509,6 +1523,20 @@ fn paint_rims(
     }
 }
 
+/// The badge temperature of every device of `input` in the picture the view
+/// draws, in item order. For the scene dump of the visual test user and the
+/// tests, which check the preview against the physics and against the 2D
+/// solver without a window.
+pub(super) fn drawn_temps(input: &Input) -> Vec<f64> {
+    let cache = build(input);
+    input.items.iter().map(|i| device_temp(&cache, i)).collect()
+}
+
+/// The tags the hot-spot cards name, hottest first.
+pub(super) fn drawn_peak_tags(input: &Input) -> Vec<String> {
+    build(input).peaks.into_iter().map(|(_, tag)| tag).collect()
+}
+
 /// What a badge says about one device.
 struct Reading {
     temp: f64,
@@ -1525,11 +1553,14 @@ fn solved(cache: &Cache, id: u64) -> Option<&novo_thermal::DeviceResult> {
     }
 }
 
-/// The hottest air cell around the device, degrees C; a solver result gives
+/// The preview's estimate for the device, degrees C; a solver result gives
 /// the housing surface temperature instead.
 fn device_temp(cache: &Cache, i: &Item) -> f64 {
     if let Some(d) = solved(cache, i.id) {
         return d.surface_c;
+    }
+    if let Some(&t) = cache.preview.get(&i.id) {
+        return t;
     }
     let g = cache.smooth.grid;
     let (c0, r0) = g.cell_at(i.x - CELL_MM, i.y - CELL_MM);
@@ -1961,7 +1992,14 @@ fn legend(
                 PREVIEW_NOTE,
                 crate::theme::ui_palette().text_secondary,
             ))
-            .on_hover_text("Worked out from the part losses alone. Simulate runs the solver.");
+            .on_hover_text(
+                "Worked out from the part losses and sizes alone: each device's rise is its loss \
+             over a surface conductance, fitted to the 2D thermal model on one sample cabinet. \
+             Within 10 K of that model at the lesson cabinet's 35 W; at twice that load it can \
+             be 20 K too hot and at four times over 40 K too hot (the safe side). Larger or \
+             other layouts are not checked. The airflow lines only show where warm air rises. \
+             Simulate runs the solver.",
+            );
         }
         let (total_w, with_data, unknown) = totals(input);
         if with_data > 0 {
