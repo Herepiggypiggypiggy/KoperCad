@@ -769,7 +769,7 @@ ENDSEC;\nEND-ISO-10303-21;"
     }
 
     /// Construction points far from the solid (axes, sketch and reference
-    /// geometry) must not count: this is the Schneider LC1D09BD failure
+    /// geometry) must not count: this was the failure on a real contactor model
     /// (543 x 823 x 490 mm instead of about 45 x 77 x 95 mm).
     #[test]
     fn measured_size_ignores_points_that_are_not_part_of_the_solid() {
