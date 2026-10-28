@@ -22,7 +22,7 @@ wait 6
 key Enter
 wait 20
 expect "PLC overview"
-expect "-K1"
+expect "-A1"
 shot overview-below-menu
 check_layout
 # The Pages panel hint is painted text (not in the widget tree); the picture shows it wrapped, not cut at the left edge.

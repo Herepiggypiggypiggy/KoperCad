@@ -25,7 +25,7 @@ key Enter
 wait 40
 shot wire-runs-list
 expect "Wire runs"
-click_text "4   554 mm"
+click_text "4   549 mm"
 wait 60
 shot run-card-entry
 expect "Run 4"
@@ -35,7 +35,7 @@ click_text "Select all cores of the cable"
 wait 60
 shot cable-cores
 expect "runs"
-click_text "2   466 mm"
+click_text "2   462 mm"
 wait 60
 shot run-card-routed
 expect "routed"

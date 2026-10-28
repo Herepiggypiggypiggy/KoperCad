@@ -10,6 +10,9 @@ wait 5
 key Enter
 wait 10
 expect "Scheme"
+# The scheme fields are collapsed: open them to see the sample.
+click_text "Scheme and mode"
+wait 6
 expect "1, 2, 3"
 expect_not "101, 102"
 shot numbering-sample

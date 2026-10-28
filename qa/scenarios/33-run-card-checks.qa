@@ -11,7 +11,7 @@ text wire runs
 wait 4
 key Enter
 wait 40
-click_text "2   466 mm"
+click_text "2   462 mm"
 wait 60
 shot card-top-whole-card-at-1920
 scroll 1250 580 -600

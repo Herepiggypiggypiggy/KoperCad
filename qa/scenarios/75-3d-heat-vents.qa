@@ -49,7 +49,9 @@ wait 10
 click_text Quick
 wait 10
 click_text Simulate #2
-wait_s 45
+wait_s 150
+# Undo and the cooling card wait for the finished run: no "Preliminary" left.
+expect_not "Preliminary"
 shot airflow-result
 expect "Airflow: lines and arrows are coloured by air speed"
 check_blank airflow-result
