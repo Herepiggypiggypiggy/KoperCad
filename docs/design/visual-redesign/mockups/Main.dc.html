@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Schematic workspace</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="@@KC@@">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0}</style>
+</helmet>
+<div class="kc {{theme}} win">
+
+  <!-- TOP BAR: 40 pt. mark = app menu, history, workspace segment, breadcrumb, search, issues, help -->
+  <div class="top">
+    <button class="mark" aria-label="App menu"><span class="logo"><i class="brand"></i></span><i class="i i-caret-down i14" style="color:var(--tx3)"></i></button>
+    <button class="btn" aria-label="Undo"><i class="i i-arrow-counter-clockwise i18"></i></button>
+    <button class="btn dim" aria-label="Redo"><i class="i i-arrow-clockwise i18"></i></button>
+    <span class="vsep"></span>
+    <div class="seg">
+      <button class="btn on" aria-label="Schematic"><i class="i ki-schematic i18"></i><span>Schematic</span></button>
+      <button class="btn" aria-label="Cabinet"><i class="i ki-cabinet i18"></i></button>
+      <button class="btn" aria-label="3D view"><i class="i i-cube i18"></i></button>
+      <button class="btn" aria-label="Reports"><i class="i ki-report i18"></i></button>
+      <button class="btn" aria-label="Commissioning"><i class="i i-clipboard-text i18"></i></button>
+    </div>
+    <span class="vsep"></span>
+    <button class="crumb" aria-label="Pages"><i class="i i-files i14"></i><span>Motor starter (example)</span><span style="color:var(--tx3)">/</span><b>1 Main circuit</b><i class="i i-caret-down i14" style="color:var(--tx3)"></i></button>
+    <span class="grow"></span>
+    <button class="search" aria-label="Search or run"><i class="i i-magnifying-glass i14"></i><span style="min-width:96px;text-align:left">Search or run</span><span class="kbd">Ctrl K</span></button>
+    <span class="pill warn"><i class="i i-warning i14"></i>1</span>
+    <button class="btn" aria-label="What is new"><i class="i i-sparkle i18"></i></button>
+    <button class="btn" aria-label="Help"><i class="i i-question i18"></i></button>
+  </div>
+
+  <div class="stage">
+
+    <!-- RAIL: tools of the workspace on top, assists, then the panels -->
+    <div class="rail">
+      <button class="btn on" aria-label="Select"><i class="i i-cursor"></i></button>
+      <button class="btn flyout" aria-label="Place symbol"><i class="i ki-place"></i></button>
+      <button class="btn flyout" aria-label="Connect"><i class="i i-line-segment"></i></button>
+      <button class="btn" aria-label="Cable"><i class="i ki-cable"></i></button>
+      <button class="btn" aria-label="Text"><i class="i i-text-t"></i></button>
+      <div class="hsep"></div>
+      <button class="btn" aria-label="Autopilot"><i class="i i-magic-wand"></i></button>
+      <button class="btn" aria-label="Accept proposals"><i class="i i-lightbulb"></i><span class="badge">3</span></button>
+      <button class="btn" aria-label="Tidy routes"><i class="i i-broom"></i></button>
+      <button class="btn" aria-label="Link cross reference"><i class="i ki-xref"></i></button>
+      <button class="btn" aria-label="Macros"><i class="i ki-macro"></i></button>
+      <div class="spacer"></div>
+      <div class="hsep"></div>
+      <button class="btn on" aria-label="Pages"><i class="i i-files"></i></button>
+      <button class="btn" aria-label="Issues"><i class="i i-warning-diamond"></i><span class="badge warn">1</span></button>
+      <button class="btn" aria-label="Terminals"><i class="i ki-terminal-strip"></i></button>
+      <button class="btn" aria-label="Cables"><i class="i i-plugs"></i></button>
+      <button class="btn" aria-label="Devices"><i class="i i-package"></i></button>
+      <button class="btn" aria-label="Inspector"><i class="i i-info"></i></button>
+    </div>
+
+    <!-- PAGES panel: docked here, but it can float, dock right, or close; the edge is a splitter -->
+    <div class="dock">
+      <div class="dock-h">
+        <i class="i i-files"></i><span class="t">Pages</span><span class="grow"></span>
+        <button class="btn" aria-label="Float this panel" style="height:24px;min-width:24px"><i class="i i-picture-in-picture i14"></i></button>
+        <button class="btn" aria-label="Dock right" style="height:24px;min-width:24px"><i class="i i-sidebar-simple i14"></i></button>
+        <button class="btn" aria-label="Close" style="height:24px;min-width:24px"><i class="i i-x i14"></i></button>
+      </div>
+      <div class="col gap8" style="padding:10px 8px">
+        <div class="row gap8">
+          <button class="sec" style="padding:0 10px"><i class="i i-plus i14"></i>New</button>
+          <div class="seg" style="padding:2px"><button class="btn on" style="height:22px;font-size:12px">Groups</button><button class="btn" style="height:22px;font-size:12px">Cabinets</button></div>
+        </div>
+        <div class="field"><i class="i i-magnifying-glass i14" style="color:var(--tx3)"></i><span style="color:var(--tx3)">Filter pages</span></div>
+      </div>
+      <div class="col" style="padding:0 6px;gap:1px">
+        <div class="item"><i class="i i-caret-down i14" style="color:var(--tx3)"></i><i class="i i-folder-open i14" style="color:var(--tx2)"></i><b>=A1</b><span class="m">2 pages</span></div>
+        <div class="item" style="padding-left:20px"><i class="i i-caret-down i14" style="color:var(--tx3)"></i><i class="i i-package i14" style="color:var(--ac)"></i><b>+CAB</b><span class="m">2 pages</span></div>
+        <div class="item sel" style="padding-left:34px"><i class="i i-file-text i14" style="color:var(--tx2)"></i><span class="n">1</span>Main circuit</div>
+        <div class="item" style="padding-left:34px"><i class="i i-file-text i14" style="color:var(--tx2)"></i><span class="n">2</span>Control circuit</div>
+        <div class="item" style="margin-top:4px"><i class="i i-caret-down i14" style="color:var(--tx3)"></i><i class="i i-list-bullets i14" style="color:var(--tx2)"></i><b>Reports</b><span class="m">6 pages</span></div>
+        <div class="item" style="padding-left:34px"><i class="i ki-report i14" style="color:var(--tx2)"></i><span class="n">0a</span>Table of contents</div>
+        <div class="item" style="padding-left:34px"><i class="i ki-report i14" style="color:var(--tx2)"></i><span class="n">10</span>Bill of materials</div>
+        <div class="item" style="padding-left:34px"><i class="i ki-report i14" style="color:var(--tx2)"></i><span class="n">20</span>Device list</div>
+        <div class="item" style="padding-left:34px"><i class="i ki-report i14" style="color:var(--tx2)"></i><span class="n">30</span>Wire list</div>
+        <div class="item" style="padding-left:34px"><i class="i ki-terminal-strip i14" style="color:var(--tx2)"></i><span class="n">40</span>Terminal diagram</div>
+        <div class="item" style="padding-left:34px"><i class="i ki-cable-section i14" style="color:var(--tx2)"></i><span class="n">50</span>Cable diagram</div>
+        <div class="item" style="margin-top:4px"><i class="i i-caret-right i14" style="color:var(--tx3)"></i><i class="i i-line-segment i14" style="color:var(--tx2)"></i>Wires<span class="m">27</span></div>
+        <div class="item"><i class="i i-caret-right i14" style="color:var(--tx3)"></i><i class="i ki-cable-section i14" style="color:var(--tx2)"></i>Cables<span class="m">1</span></div>
+      </div>
+      <div class="grab hot"></div>
+    </div>
+
+    <!-- CANVAS -->
+    <div class="cv art-canvas-{{theme}}">
+      <!-- view controls -->
+      <div class="float row gap4" style="right:12px;bottom:12px;padding:3px;border-radius:6px">
+        <button class="btn" aria-label="Zoom out" style="height:26px"><i class="i i-magnifying-glass-minus i18"></i></button>
+        <span class="mono" style="min-width:44px;text-align:center;color:var(--tx2)">124 %</span>
+        <button class="btn" aria-label="Zoom in" style="height:26px"><i class="i i-magnifying-glass-plus i18"></i></button>
+        <span class="vsep"></span>
+        <button class="btn" aria-label="Zoom to fit" style="height:26px"><i class="i i-corners-out i18"></i></button>
+        <button class="btn on" aria-label="Snap to grid" style="height:26px"><i class="i i-magnet i18"></i></button>
+        <button class="btn" aria-label="Layers" style="height:26px"><i class="i i-stack i18"></i></button>
+      </div>
+
+      <!-- proposals hint: lives beside the work, not in a bar -->
+      <div class="float row gap8" style="left:12px;bottom:12px;padding:6px 10px;border-radius:16px">
+        <i class="i i-lightbulb" style="color:var(--warn)"></i><span>3 proposals on this page</span><span class="kbd">Tab</span><span class="cap">accepts the next one</span>
+      </div>
+
+      <!-- inspector: a floating panel, dragged by its title, resized from any edge -->
+      <div class="float" style="right:12px;top:12px;width:272px;height:392px">
+        <div class="wt"><i class="i ki-contactor"></i><span class="t">-K1</span>
+          <button class="btn" aria-label="Pin"><i class="i i-push-pin i14"></i></button>
+          <button class="btn" aria-label="Close"><i class="i i-x i14"></i></button></div>
+        <div class="col gap12" style="padding:12px">
+          <div class="col gap4"><span class="lbl">Device</span>
+            <div class="row" style="justify-content:space-between"><span class="cap">Kind</span><span>Contactor, 3 pole</span></div>
+            <div class="row" style="justify-content:space-between"><span class="cap">Tag</span><span class="mono">=A1+CAB-K1</span></div>
+            <div class="row" style="justify-content:space-between"><span class="cap">Part</span><span style="color:var(--tx3)">None assigned</span></div>
+          </div>
+          <div class="col gap4"><span class="lbl">Relations</span>
+            <div class="item"><i class="sym sy-coils-contactor" style="width:16px;height:20px;color:var(--tx)"></i><span>Coil</span><span class="m">p. 2 · col 5</span></div>
+            <div class="item"><i class="sym sy-contactors-main-3p" style="width:22px;height:20px;color:var(--tx)"></i><span>Main contacts</span><span class="m">p. 1 · col 1</span></div>
+            <div class="item"><i class="sym sy-contacts-no" style="width:12px;height:20px;color:var(--tx)"></i><span>Make contact</span><span class="m">p. 2 · col 4</span></div>
+          </div>
+          <div class="row gap8"><button class="sec"><i class="i i-package i14"></i>Assign part</button><button class="btn fr" aria-label="More"><i class="i i-dots-three i18"></i></button></div>
+        </div>
+        <div class="grip" style="right:0;bottom:0"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- tooltip of the hovered rail button: name, key, one line -->
+  <div class="tip" style="left:54px;top:88px"><span class="row gap8"><b>Place symbol</b><span class="kbd">Q</span></span><span class="cap">Search the library, or hold Q for the wheel</span></div>
+
+  <div class="status"><span>Q or Space to place · Ctrl+K to search</span><span class="grow"></span><span class="mono">X 156.0 mm</span><span class="mono">Y 92.0 mm</span><span><i class="i i-check-circle i14" style="color:var(--ok);vertical-align:-2px"></i> Saved</span></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>

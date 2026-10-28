@@ -1175,7 +1175,7 @@ Changes mode, WS-09 the PDF.
 | Where a project starts | Page-first; structure-first; intent-first | **Structure-first**, with the empty page offering "type what you are building" |
 | Window | A Workbench; B Focus; C Split | **A**, with B as Focus mode and C as the drawer docked right |
 | Top-level places | Five lenses; two canvases plus drawers; workspaces | **Five workspaces (Schematic, Cabinet, 3D, Reports, Commissioning)** with a drawer whose tabs depend on the workspace (`docs/design/workspaces.md`); reports are also commands |
-| Menu | Menu bar; empty command surface | **Both, one registry:** the menu bar is generated from the command registry, so it is the same index drawn where a new person looks first (`docs/design/workspaces.md` §5; reversed from "no menu bar" on 2026-10-15) |
+| Menu | Menu bar; empty command surface | **Both, one registry:** the menu bar is generated from the command registry, so it is the same index drawn where a new person looks first (`docs/design/workspaces.md` §5; reversed from "no menu bar" on 2026-10-15). Drawn as one app menu behind the mark, with the eight names as a setting (`docs/design/visual-redesign.md` §5) |
 | Command line | Permanent; on demand | **On demand**, at the top or at the pointer |
 | Tab | Orientation; next proposal | **Next proposal**; R and X orient |
 | Facing pins at a distance | Connect on placement; propose; ignore | **Propose**, in the placement preview; touching pins connect |
@@ -1193,7 +1193,7 @@ Changes mode, WS-09 the PDF.
 | The page as the source of truth | EPLAN, AutoCAD Electrical | Root cause of navigators, manual linking and update steps |
 | A navigator per object type | EPLAN | One outline with a structure filter and one inspector |
 | Separate editors for terminals and cables | EPLAN | They hide the schematic when you need it; the drawer keeps them beside it |
-| Insert centre, symbol trees, ribbon | EPLAN, AutoCAD Electrical | Spatial hunting; the command surface finds by name |
+| Insert centre, symbol trees, ribbon | EPLAN, AutoCAD Electrical | Spatial hunting; the command surface finds by name. Amended 2026-10-28 (`docs/design/visual-redesign.md`): a per-workspace tool rail drawn from the registry is not a ribbon |
 | Frozen macros | Most CAD | Go stale on placement; blocks stay linked |
 | Corner and T-piece symbols | EPLAN | Drawing artefacts of connectivity, not intent. The corners of a wire are bend points of its route, not objects |
 | Linking cross references by hand | EPLAN | References follow ownership |
@@ -1208,7 +1208,7 @@ Changes mode, WS-09 the PDF.
 | A status bar of unrelated readouts | Most CAD | Returns as a 22 px bar with five defined slots (`docs/design/workspaces.md` §7); the HUD moves into it |
 | Page tab strip | Most CAD | Fails at 500 pages; the outline's filter and groups do its job |
 | Infinite canvas | Figma, Miro | IEC documentation is printed and referenced by page and column |
-| Floating panels everywhere | Figma-style tools | Weak spatial memory; only the dock and inspector float |
+| Floating panels everywhere | Figma-style tools | Weak spatial memory; panels dock by default. Amended 2026-10-28 (`docs/design/visual-redesign.md` section 8): every panel can be dragged, docked and resized; floating is the person's choice |
 | New-project wizards | Most CAD | A name and Enter; the rest is defaults and rules |
 
 ## 10. What the model needs, and what Gate 1 needs

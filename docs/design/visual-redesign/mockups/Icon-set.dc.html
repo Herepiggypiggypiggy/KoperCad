@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Icon set</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="@@KC@@">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.ic{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 4px 10px;border-radius:6px;background:var(--control);border:1px solid var(--bd);color:var(--tx)}
+.ic span{font-size:11px;color:var(--tx2)}
+.grid8{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
+.grid6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+</style>
+</helmet>
+<div class="kc {{theme}}" style="width:1280px;height:1360px;background:var(--panel);padding:40px 48px;display:flex;flex-direction:column;gap:30px">
+
+  <div class="row" style="align-items:flex-start;gap:28px">
+    <div class="col grow" style="gap:8px">
+      <span class="lbl">KoperCAD icon set · version 1</span>
+      <span style="font-size:26px;font-weight:600;letter-spacing:-.01em">Phosphor for actions. Drawn icons for electrics.</span>
+      <span style="color:var(--tx2);max-width:560px;line-height:1.5">Generic actions (save, open, undo, search) keep Phosphor Regular, which the app already ships. Everything electrical gets a drawn icon from the same grid and stroke, so a contactor, a cable or a terminal strip reads as that at 16 pt and never as a generic glyph.</span>
+    </div>
+    <div class="row gap8" style="padding:14px 18px;background:var(--raised);border:1px solid var(--bd2);border-radius:8px;gap:18px">
+      <span class="col" style="align-items:center;gap:6px"><i class="i ki-contactor" style="width:12px;height:12px"></i><span class="cap">12</span></span>
+      <span class="col" style="align-items:center;gap:6px"><i class="i ki-contactor i16"></i><span class="cap">16</span></span>
+      <span class="col" style="align-items:center;gap:6px"><i class="i ki-contactor i20"></i><span class="cap">20</span></span>
+      <span class="col" style="align-items:center;gap:6px"><i class="i ki-contactor i24"></i><span class="cap">24</span></span>
+      <span class="col" style="align-items:center;gap:6px"><i class="i ki-contactor i32"></i><span class="cap">32</span></span>
+      <span class="col" style="align-items:center;gap:6px"><i class="i ki-contactor i48"></i><span class="cap">48</span></span>
+    </div>
+  </div>
+
+  <!-- construction + states -->
+  <div class="row" style="align-items:flex-start;gap:32px">
+    <figure style="margin:0;display:flex;flex-direction:column;gap:8px">
+      <svg width="312" height="312" viewBox="0 0 24 24" role="img" aria-label="Icon construction on a 24 unit grid: 2 unit safe margin, 1.5 stroke, round caps" style="background:var(--sunken);border:1px solid var(--bd2);border-radius:6px;color:var(--tx)">
+        <defs><pattern id="g1" width="1" height="1" patternUnits="userSpaceOnUse"><path d="M1 0H0V1" fill="none" stroke="var(--bd)" stroke-width=".04"/></pattern></defs>
+        <rect width="24" height="24" fill="url(#g1)"/>
+        <rect x="0" y="0" width="24" height="24" fill="none" stroke="var(--bd2)" stroke-width=".08"/>
+        <rect x="2" y="2" width="20" height="20" fill="none" stroke="var(--ac)" stroke-width=".1" stroke-dasharray=".5 .4"/>
+        <circle cx="12" cy="12" r="10" fill="none" stroke="var(--info)" stroke-width=".07"/>
+        <rect x="3" y="3" width="18" height="18" fill="none" stroke="var(--info)" stroke-width=".07"/>
+        <rect x="4" y="2.5" width="16" height="19" fill="none" stroke="var(--info)" stroke-width=".07"/>
+        <path d="M12 0v24M0 12h24" stroke="var(--bd2)" stroke-width=".06"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5v5M12 21.5v-8.5l-4.5-5.5M10.2 5.7l3.6 3.6M13.8 5.7l-3.6 3.6"/></g>
+      </svg>
+      <figcaption class="cap" style="max-width:312px;line-height:1.5">24 unit grid. Live area 2 to 22 (dashed). Round caps and joins. Keylines: circle 20, square 18, portrait 16 × 19 (shown). Strokes snap to half units.</figcaption>
+    </figure>
+
+    <div class="col grow" style="gap:18px">
+      <div class="col gap8"><span class="lbl">Rules</span>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 28px;font-size:12.5px;line-height:1.45">
+          <span><b>Stroke 1.5 on 24</b> (6.25 %), the same ratio as Phosphor Regular, so the two families sit together.</span>
+          <span><b>Outline only.</b> A filled dot marks a junction or node, nothing else is filled.</span>
+          <span><b>One idea per icon.</b> It is the IEC symbol itself or its simplest cut-out, never a pictogram of a product.</span>
+          <span><b>Orientation as in a schematic:</b> current runs top to bottom, supply at the top.</span>
+          <span><b>Dashes</b> only for a mechanical link (contactor), a boundary (macro) or a field (EMC).</span>
+          <span><b>No colour in the icon.</b> It takes the text colour; copper marks the active tool.</span>
+        </div>
+      </div>
+      <div class="col gap8"><span class="lbl">States, as a rail button</span>
+        <div class="row" style="gap:18px">
+          <span class="col" style="align-items:center;gap:6px"><span class="btn" style="width:36px;height:36px;padding:0"><i class="i ki-contactor i20"></i></span><span class="cap">Rest</span></span>
+          <span class="col" style="align-items:center;gap:6px"><span class="btn hv" style="width:36px;height:36px;padding:0"><i class="i ki-contactor i20"></i></span><span class="cap">Hover</span></span>
+          <span class="col" style="align-items:center;gap:6px"><span class="btn on" style="width:36px;height:36px;padding:0"><i class="i ki-contactor i20"></i></span><span class="cap">Active tool</span></span>
+          <span class="col" style="align-items:center;gap:6px"><span class="btn dim" style="width:36px;height:36px;padding:0"><i class="i ki-contactor i20"></i></span><span class="cap">Disabled</span></span>
+          <span class="col" style="align-items:center;gap:6px"><span class="btn" style="width:36px;height:36px;padding:0"><i class="i ki-contactor i20"></i><span class="badge">3</span></span><span class="cap">Count</span></span>
+          <span class="col" style="align-items:center;gap:6px"><span class="btn flyout" style="width:36px;height:36px;padding:0;position:relative"><i class="i ki-contactor i20"></i><span style="position:absolute;right:3px;bottom:3px;border:3px solid transparent;border-right-color:var(--tx3);border-bottom-color:var(--tx3)"></span></span><span class="cap">Has a flyout</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col gap8"><span class="lbl">Workspaces and tools</span>
+    <div class="grid8">
+      <div class="ic"><i class="i ki-schematic i32"></i><span>schematic</span></div>
+      <div class="ic"><i class="i ki-cabinet i32"></i><span>cabinet</span></div>
+      <div class="ic"><i class="i ki-report i32"></i><span>report</span></div>
+      <div class="ic"><i class="i ki-place i32"></i><span>place</span></div>
+      <div class="ic"><i class="i ki-macro i32"></i><span>macro</span></div>
+      <div class="ic"><i class="i ki-cable i32"></i><span>cable</span></div>
+      <div class="ic"><i class="i ki-xref i32"></i><span>xref</span></div>
+      <div class="ic"><i class="i ki-wire-number i32"></i><span>wire-number</span></div>
+    </div>
+  </div>
+
+  <div class="col gap8"><span class="lbl">Components · the palette categories</span>
+    <div class="grid8">
+      <div class="ic"><i class="i ki-coil i32"></i><span>coil</span></div>
+      <div class="ic"><i class="i ki-contact-no i32"></i><span>contact-no</span></div>
+      <div class="ic"><i class="i ki-contact-nc i32"></i><span>contact-nc</span></div>
+      <div class="ic"><i class="i ki-contactor i32"></i><span>contactor</span></div>
+      <div class="ic"><i class="i ki-motor i32"></i><span>motor</span></div>
+      <div class="ic"><i class="i ki-fuse i32"></i><span>fuse</span></div>
+      <div class="ic"><i class="i ki-breaker i32"></i><span>breaker</span></div>
+      <div class="ic"><i class="i ki-overload i32"></i><span>overload</span></div>
+      <div class="ic"><i class="i ki-pushbutton i32"></i><span>pushbutton</span></div>
+      <div class="ic"><i class="i ki-estop i32"></i><span>estop</span></div>
+      <div class="ic"><i class="i ki-lamp i32"></i><span>lamp</span></div>
+      <div class="ic"><i class="i ki-terminal i32"></i><span>terminal</span></div>
+      <div class="ic"><i class="i ki-terminal-strip i32"></i><span>terminal-strip</span></div>
+      <div class="ic"><i class="i ki-transformer i32"></i><span>transformer</span></div>
+      <div class="ic"><i class="i ki-psu i32"></i><span>psu</span></div>
+      <div class="ic"><i class="i ki-drive i32"></i><span>drive</span></div>
+      <div class="ic"><i class="i ki-sensor i32"></i><span>sensor</span></div>
+      <div class="ic"><i class="i ki-plc i32"></i><span>plc</span></div>
+      <div class="ic"><i class="i ki-ground i32"></i><span>ground</span></div>
+      <div class="ic"><i class="i ki-potential i32"></i><span>potential</span></div>
+    </div>
+  </div>
+
+  <div class="col gap8"><span class="lbl">Wiring, cabinet, production, analysis</span>
+    <div class="grid8">
+      <div class="ic"><i class="i ki-cable-section i32"></i><span>cable-section</span></div>
+      <div class="ic"><i class="i ki-bridge i32"></i><span>bridge</span></div>
+      <div class="ic"><i class="i ki-net i32"></i><span>net</span></div>
+      <div class="ic"><i class="i ki-din-rail i32"></i><span>din-rail</span></div>
+      <div class="ic"><i class="i ki-duct i32"></i><span>duct</span></div>
+      <div class="ic"><i class="i ki-plate i32"></i><span>plate</span></div>
+      <div class="ic"><i class="i ki-enclosure i32"></i><span>enclosure</span></div>
+      <div class="ic"><i class="i ki-ferrule i32"></i><span>ferrule</span></div>
+      <div class="ic"><i class="i ki-bench i32"></i><span>bench</span></div>
+      <div class="ic"><i class="i ki-live i32"></i><span>live</span></div>
+      <div class="ic"><i class="i ki-fault i32"></i><span>fault</span></div>
+      <div class="ic"><i class="i ki-emc i32"></i><span>emc</span></div>
+    </div>
+  </div>
+
+  <div class="col gap8"><span class="lbl">Stays Phosphor Regular · generic actions, one icon per meaning everywhere</span>
+    <div class="row" style="gap:10px;flex-wrap:wrap">
+      <span class="chip"><i class="i i-floppy-disk i16"></i>Save</span><span class="chip"><i class="i i-folder-open i16"></i>Open</span><span class="chip"><i class="i i-arrow-counter-clockwise i16"></i>Undo</span><span class="chip"><i class="i i-magnifying-glass i16"></i>Search</span><span class="chip"><i class="i i-trash i16"></i>Delete</span><span class="chip"><i class="i i-copy i16"></i>Copy</span><span class="chip"><i class="i i-eye i16"></i>Show</span><span class="chip"><i class="i i-upload-simple i16"></i>Export</span><span class="chip"><i class="i i-download-simple i16"></i>Import</span><span class="chip"><i class="i i-printer i16"></i>Print</span><span class="chip"><i class="i i-seal-check i16"></i>Check</span><span class="chip"><i class="i i-thermometer-hot i16"></i>Heat</span><span class="chip"><i class="i i-cube i16"></i>3D</span><span class="chip"><i class="i i-ruler i16"></i>Measure</span><span class="chip"><i class="i i-magic-wand i16"></i>Autopilot</span><span class="chip"><i class="i i-lightbulb i16"></i>Proposal</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>

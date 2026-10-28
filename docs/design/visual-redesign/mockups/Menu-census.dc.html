@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Menu census</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="@@KC@@">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.bar{height:14px;border-radius:2px;position:relative}
+.bb{background:var(--bd2)}
+.ba{background:var(--ac)}
+.fl{display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border-radius:5px;background:var(--control);border:1px solid var(--bd);white-space:nowrap}
+</style>
+</helmet>
+<div class="kc {{theme}}" style="width:1280px;height:790px;background:var(--panel);padding:40px 48px;display:flex;flex-direction:column;gap:26px">
+  <div class="col" style="gap:6px"><span class="lbl">Menu census · counted from the command registry on main</span>
+    <span style="font-size:24px;font-weight:600;letter-spacing:-.01em">318 menu entries today. The target is half, and every label short.</span></div>
+
+  <div class="row" style="align-items:flex-start;gap:44px">
+    <!-- entries per menu, before and after -->
+    <figure style="margin:0;width:640px;display:flex;flex-direction:column;gap:12px">
+      <div class="row gap12"><span class="row gap8"><span class="bar bb" style="width:26px"></span><span class="cap">Today</span></span><span class="row gap8"><span class="bar ba" style="width:26px"></span><span class="cap">Target</span></span><span class="grow"></span><span class="cap">commands reachable in each menu tree</span></div>
+      <div style="display:grid;grid-template-columns:70px 1fr 64px;row-gap:12px;column-gap:12px;align-items:center">
+        <b>View</b><span class="col" style="gap:3px"><span class="bar bb" style="width:100%"></span><span class="bar ba" style="width:38.2%"></span></span><span class="mono"><span style="color:var(--tx2)">102</span> → 39</span>
+        <b>File</b><span class="col" style="gap:3px"><span class="bar bb" style="width:78.4%"></span><span class="bar ba" style="width:19.6%"></span></span><span class="mono"><span style="color:var(--tx2)">80</span> → 20</span>
+        <b>Draw</b><span class="col" style="gap:3px"><span class="bar bb" style="width:38.2%"></span><span class="bar ba" style="width:22.5%"></span></span><span class="mono"><span style="color:var(--tx2)">39</span> → 23</span>
+        <b>Reports</b><span class="col" style="gap:3px"><span class="bar bb" style="width:29.4%"></span><span class="bar ba" style="width:17.6%"></span></span><span class="mono"><span style="color:var(--tx2)">30</span> → 18</span>
+        <b>Edit</b><span class="col" style="gap:3px"><span class="bar bb" style="width:28.4%"></span><span class="bar ba" style="width:20.6%"></span></span><span class="mono"><span style="color:var(--tx2)">29</span> → 21</span>
+        <b>Help</b><span class="col" style="gap:3px"><span class="bar bb" style="width:18.6%"></span><span class="bar ba" style="width:14.7%"></span></span><span class="mono"><span style="color:var(--tx2)">19</span> → 15</span>
+        <b>Check</b><span class="col" style="gap:3px"><span class="bar bb" style="width:10.8%"></span><span class="bar ba" style="width:10.8%"></span></span><span class="mono"><span style="color:var(--tx2)">11</span> → 11</span>
+        <b>Simulate</b><span class="col" style="gap:3px"><span class="bar bb" style="width:7.8%"></span><span class="bar ba" style="width:10.8%"></span></span><span class="mono"><span style="color:var(--tx2)">8</span> → 11</span>
+      </div>
+      <figcaption class="cap" style="line-height:1.5">View carries the most because it holds the whole 3D toolbar (43 rows) and the Cabinet tools (12). Simulate grows by three: the heat tools move there from View.</figcaption>
+    </figure>
+
+    <div class="col grow" style="gap:16px">
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+        <div class="tile"><span style="font-size:28px;font-weight:600;letter-spacing:-.02em;white-space:nowrap">318 <span style="color:var(--ac)">→ 158</span></span><span class="cap">entries in the menus</span></div>
+        <div class="tile"><span style="font-size:28px;font-weight:600;letter-spacing:-.02em;white-space:nowrap">68 <span style="color:var(--ac)">→ 0</span></span><span class="cap">labels over 28 characters</span></div>
+        <div class="tile"><span style="font-size:28px;font-weight:600;letter-spacing:-.02em;white-space:nowrap">89 <span style="color:var(--ac)">→ 28</span></span><span class="cap">longest label, in characters</span></div>
+      </div>
+      <span class="cap" style="line-height:1.5">The long text is not lost: the full sentence becomes the tooltip and the palette description. The menu row says "EMC colours", the palette says what it does.</span>
+    </div>
+  </div>
+
+  <!-- where the entries went -->
+  <div class="col" style="gap:10px"><span class="lbl">Where the rest goes · every command keeps a home and stays findable with Ctrl K</span>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 40px">
+      <div class="fl"><span class="chip" style="background:var(--raised)">View › 3D · 43</span><i class="i i-arrow-line-right i14" style="color:var(--ac)"></i><i class="i i-cube i16"></i><span>3D rail and its flyouts</span></div>
+      <div class="fl"><span class="chip" style="background:var(--raised)">File › Export · 31 + Reports › Export · 13</span><i class="i i-arrow-line-right i14" style="color:var(--ac)"></i><i class="i i-upload-simple i16"></i><span>Export centre</span></div>
+      <div class="fl"><span class="chip" style="background:var(--raised)">View › Cabinet · 12</span><i class="i i-arrow-line-right i14" style="color:var(--ac)"></i><i class="i ki-cabinet i16"></i><span>Cabinet rail</span></div>
+      <div class="fl"><span class="chip" style="background:var(--raised)">File › Import · 13</span><i class="i i-arrow-line-right i14" style="color:var(--ac)"></i><i class="i i-download-simple i16"></i><span>Import centre</span></div>
+      <div class="fl"><span class="chip" style="background:var(--raised)">Draw › Terminals, strips, cables · 22</span><i class="i i-arrow-line-right i14" style="color:var(--ac)"></i><i class="i ki-terminal-strip i16"></i><span>Drawer toolbars</span></div>
+      <div class="fl"><span class="chip" style="background:var(--raised)">File › Project, Pages · 14</span><i class="i i-arrow-line-right i14" style="color:var(--ac)"></i><i class="i i-sliders-horizontal i16"></i><span>Project settings, Pages panel</span></div>
+      <div class="fl"><span class="chip" style="background:var(--raised)">View › heat and fan rows · 10</span><i class="i i-arrow-line-right i14" style="color:var(--ac)"></i><i class="i i-thermometer-hot i16"></i><span>Simulate › Heat and the Heat rail flyout</span></div>
+      <div class="fl"><span class="chip" style="background:var(--raised)">Help › Lesson · 4</span><i class="i i-arrow-line-right i14" style="color:var(--ac)"></i><i class="i i-graduation-cap i16"></i><span>The lesson card's own buttons</span></div>
+    </div>
+  </div>
+
+  <div class="row gap8" style="padding:12px 16px;border-radius:6px;background:var(--control);border:1px solid var(--bd)">
+    <i class="i i-info i18" style="color:var(--info)"></i>
+    <span class="cap" style="color:var(--tx);line-height:1.5">Counts are the design target. The "today" figures come from the registry on main (<span class="mono">menus::drawn</span>, 2026-10-28); the build lane for menus ends with a test that holds the "after" numbers.</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>
