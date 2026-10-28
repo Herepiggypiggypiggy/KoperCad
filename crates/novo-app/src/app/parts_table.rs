@@ -305,29 +305,34 @@ impl NovoApp {
         let body_height = (screen.y - 330.0).clamp(150.0, 560.0);
         let (mut go, mut cancel) = (false, false);
         let mut changed = false;
-        let modal = egui::Modal::new(egui::Id::new("parts_table_import")).show(ctx, |ui| {
-            ui.set_width(width);
-            super::dialog_ui::title(
-                ui,
-                &format!("Import parts from {}", import.file),
-                "Say what each column is. Nothing is added until you choose Add; what the file does not say stays unknown.",
-            );
-            changed |= settings_ui(ui, import);
-            ui.add_space(6.0);
-            let mut tab = import.tab;
-            widgets::tabs(ui, &mut tab, &["Columns", "Rows"]);
-            import.tab = tab;
-            ui.add_space(6.0);
-            if import.tab == 0 {
-                changed |= columns_ui(ui, import, body_height);
-            } else {
-                rows_ui(ui, import, body_height);
-            }
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(4.0);
-            go = footer_ui(ui, import, &mut cancel);
-        });
+        let title = format!("Import parts from {}", import.file);
+        let modal = super::panel::modal(
+            ctx,
+            "parts_table_import",
+            title,
+            [width, body_height + 280.0],
+            |ui| {
+                super::dialog_ui::hint(
+                    ui,
+                    "Say what each column is. Nothing is added until you choose Add; what the file does not say stays unknown.",
+                );
+                changed |= settings_ui(ui, import);
+                ui.add_space(6.0);
+                let mut tab = import.tab;
+                widgets::tabs(ui, &mut tab, &["Columns", "Rows"]);
+                import.tab = tab;
+                ui.add_space(6.0);
+                if import.tab == 0 {
+                    changed |= columns_ui(ui, import, body_height);
+                } else {
+                    rows_ui(ui, import, body_height);
+                }
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(4.0);
+                go = footer_ui(ui, import, &mut cancel);
+            },
+        );
         if changed {
             import.refresh();
         }

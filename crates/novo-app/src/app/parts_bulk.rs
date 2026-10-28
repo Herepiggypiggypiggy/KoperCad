@@ -206,9 +206,7 @@ impl NovoApp {
         };
         let mut close = false;
         let mut open_inbox = false;
-        let modal = egui::Modal::new(egui::Id::new("parts_bulk")).show(ctx, |ui| {
-            ui.set_width(640.0);
-            super::dialog_ui::title(ui, "Parts import", "");
+        let modal = super::panel::modal(ctx, "parts_bulk", "Parts import", [640.0, 540.0], |ui| {
             ui.weak(format!("Folder: {}", report.folder.display()));
             if report.rejected > 0 {
                 ui.colored_label(
@@ -327,31 +325,37 @@ impl NovoApp {
             return;
         };
         let (mut go, mut cancel) = (false, false);
-        let modal = egui::Modal::new(egui::Id::new("auto_assign")).show(ctx, |ui| {
-            ui.set_width(460.0);
-            super::dialog_ui::title(ui, "Assign parts to all devices", "");
-            ui.label(format!(
-                "{} device(s) have exactly one fitting catalog part:",
-                preview.rows.len()
-            ));
-            egui::ScrollArea::vertical().max_height(280.0).show(ui, |ui| {
-                for row in &preview.rows {
-                    ui.monospace(row);
-                }
-            });
-            if preview.several + preview.none > 0 {
-                ui.add_space(4.0);
-                ui.weak(format!(
+        let modal = super::panel::modal(
+            ctx,
+            "auto_assign",
+            "Assign parts to all devices",
+            [460.0, 440.0],
+            |ui| {
+                ui.label(format!(
+                    "{} device(s) have exactly one fitting catalog part:",
+                    preview.rows.len()
+                ));
+                egui::ScrollArea::vertical()
+                    .max_height(280.0)
+                    .show(ui, |ui| {
+                        for row in &preview.rows {
+                            ui.monospace(row);
+                        }
+                    });
+                if preview.several + preview.none > 0 {
+                    ui.add_space(4.0);
+                    ui.weak(format!(
                     "Left alone: {} with several fitting parts (pick one in the inspector), {} with none in the catalog.",
                     preview.several, preview.none
                 ));
-            }
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                go = novo_theme::widgets::primary_button(ui, "Accept all").clicked();
-                cancel = novo_theme::widgets::ghost_button(ui, "Cancel").clicked();
-            });
-        });
+                }
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    go = novo_theme::widgets::primary_button(ui, "Accept all").clicked();
+                    cancel = novo_theme::widgets::ghost_button(ui, "Cancel").clicked();
+                });
+            },
+        );
         if go {
             self.confirm_auto_assign();
         } else if cancel || modal.should_close() {

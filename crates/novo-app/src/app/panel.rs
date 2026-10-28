@@ -67,6 +67,9 @@ pub(super) struct Panel {
     scroll: bool,
     title_bar: bool,
     above_card: bool,
+    flyout: bool,
+    low: bool,
+    own_scroll: bool,
 }
 
 impl Panel {
@@ -92,6 +95,9 @@ impl Panel {
             scroll: false,
             title_bar: true,
             above_card: false,
+            flyout: false,
+            low: false,
+            own_scroll: false,
         }
     }
 
@@ -139,6 +145,26 @@ impl Panel {
     /// instead of under it: for the panels that open on every selection.
     pub(super) fn above_card(mut self) -> Self {
         self.above_card = true;
+        self
+    }
+
+    /// This panel is the outline flyout itself: it does not start beside it.
+    pub(super) fn flyout(mut self) -> Self {
+        self.flyout = true;
+        self
+    }
+
+    /// May reach down to the canvas's bottom edge instead of stopping above
+    /// the status bar's room: for a tall list (the navigator).
+    pub(super) fn reach_bottom(mut self) -> Self {
+        self.low = true;
+        self
+    }
+
+    /// The content scrolls itself (a list with its own scroll area), so the
+    /// window does not add one around it.
+    pub(super) fn own_scroll(mut self) -> Self {
+        self.own_scroll = true;
         self
     }
 
@@ -196,7 +222,11 @@ impl Panel {
         let moved = is_moved(ctx, id);
         // The outline flyout (Pages, Issues) hangs over the left edge of the
         // canvas; a panel on that side starts beside it, not under it.
-        let flyout = if moved { 0.0 } else { reserved_left(ctx) };
+        let flyout = if moved || self.flyout {
+            0.0
+        } else {
+            reserved_left(ctx)
+        };
         let (pivot, start) = self.start(flyout);
         // A panel hanging from the right edge stays clear of a card in the
         // bottom right corner, unless the person has moved it.
@@ -205,8 +235,9 @@ impl Panel {
         } else {
             0.0
         };
+        let below = if self.low { MARGIN } else { BOTTOM };
         let max_height =
-            (self.canvas.height() - self.top - BOTTOM - self.bottom - corner).max(MIN_HEIGHT);
+            (self.canvas.height() - self.top - below - self.bottom - corner).max(MIN_HEIGHT);
         let mut window = egui::Window::new(&self.title)
             .id(id)
             .order(egui::Order::Middle)
@@ -217,13 +248,17 @@ impl Panel {
             .min_width(MIN_WIDTH.min(self.width))
             .min_height(MIN_HEIGHT.min(max_height))
             .max_height(max_height)
-            .scroll([false, !self.fit]);
+            .scroll([false, !self.fit && !self.own_scroll]);
         if self.fit {
             // Without resizing the width is the content's; wrapped rows wrap here.
             window = window.max_width(self.width);
         }
         if let Some(h) = self.height {
             window = window.default_height(h.min(max_height));
+        }
+        if !self.fit && size_reset_due(ctx, id) {
+            let h = self.height.unwrap_or(420.0).min(max_height);
+            window = window.fixed_size([self.width, h]);
         }
         // Placed by us until the first drag (egui would shift a tall window
         // up while it is still sizing); kept on the canvas once it is dragged.
@@ -305,6 +340,113 @@ impl Panel {
     }
 }
 
+/// A card without a title bar (the tool dock, the 3D tool cards): it sits at
+/// `at` until the person drags it by its background, then stays where they
+/// put it, kept on the canvas. Like [`Panel`], View > Reset panel layout
+/// and the layout presets know it by `name`.
+pub(super) struct Float {
+    name: &'static str,
+    canvas: egui::Rect,
+    pivot: egui::Align2,
+    at: egui::Pos2,
+    order: egui::Order,
+}
+
+impl Float {
+    /// `pivot` is the corner of the card that sits at `at`.
+    pub(super) fn new(
+        name: &'static str,
+        canvas: egui::Rect,
+        pivot: egui::Align2,
+        at: egui::Pos2,
+    ) -> Self {
+        Self {
+            name,
+            canvas,
+            pivot,
+            at,
+            order: egui::Order::Middle,
+        }
+    }
+
+    /// Above the other cards, for a strip that must stay in reach.
+    pub(super) fn foreground(mut self) -> Self {
+        self.order = egui::Order::Foreground;
+        self
+    }
+
+    pub(super) fn show<R>(
+        self,
+        ctx: &egui::Context,
+        add: impl FnOnce(&mut egui::Ui) -> R,
+    ) -> egui::InnerResponse<R> {
+        let id = id(self.name);
+        note_seen(ctx, self.name);
+        match take_place(ctx, id) {
+            Some(Some(at)) => {
+                mark_moved(ctx, id);
+                set_float_pos(ctx, id, egui::pos2(at[0] as f32, at[1] as f32));
+            }
+            Some(None) => clear_moved(ctx, id),
+            None => {}
+        }
+        let last = ctx.memory(|m| m.area_rect(id));
+        // Where the card is drawn: its place at the side until it has been
+        // dragged, then wherever it was dropped, kept on the canvas. Every
+        // frame says where, so the card never drifts.
+        let (pivot, at) = match float_pos(ctx, id).filter(|_| is_moved(ctx, id)) {
+            Some(pos) => {
+                let size = last.map_or(egui::Vec2::ZERO, |r| r.size());
+                let max = (self.canvas.max - size).max(self.canvas.min);
+                (egui::Align2::LEFT_TOP, pos.clamp(self.canvas.min, max))
+            }
+            None => (self.pivot, self.at),
+        };
+        let shown = egui::Area::new(id)
+            .order(self.order)
+            .pivot(pivot)
+            .fixed_pos(at)
+            .show(ctx, |ui| {
+                // The card's background is the handle. It is made before the
+                // content, which comes on top of it, so buttons and fields
+                // inside still answer the pointer.
+                let grip = last.map(|r| ui.interact(r, id.with("grip"), egui::Sense::drag()));
+                let inner = add(ui);
+                (inner, grip)
+            });
+        let (inner, grip) = shown.inner;
+        // A press on the card is "dragged" from the first moment; it moves
+        // the card only once the pointer moves.
+        let delta = ctx.input(|i| i.pointer.delta());
+        if let Some(grip) = grip
+            && grip.dragged()
+            && delta != egui::Vec2::ZERO
+            && let Some(rect) = last
+        {
+            let base = float_pos(ctx, id)
+                .filter(|_| is_moved(ctx, id))
+                .unwrap_or(rect.min);
+            let max = (self.canvas.max - rect.size()).max(self.canvas.min);
+            set_float_pos(ctx, id, (base + delta).clamp(self.canvas.min, max));
+            mark_moved(ctx, id);
+        }
+        egui::InnerResponse::new(inner, shown.response)
+    }
+}
+
+fn float_pos_id(id: egui::Id) -> egui::Id {
+    id.with("float_pos")
+}
+
+fn float_pos(ctx: &egui::Context, id: egui::Id) -> Option<egui::Pos2> {
+    ctx.data_mut(|d| d.get_persisted::<[f32; 2]>(float_pos_id(id)))
+        .map(|p| egui::pos2(p[0], p[1]))
+}
+
+fn set_float_pos(ctx: &egui::Context, id: egui::Id, pos: egui::Pos2) {
+    ctx.data_mut(|d| d.insert_persisted(float_pos_id(id), [pos.x, pos.y]));
+}
+
 /// The point of `rect` that `pivot` names: the corner a panel hangs from.
 fn corner_of(rect: egui::Rect, pivot: egui::Align2) -> egui::Pos2 {
     egui::pos2(
@@ -347,6 +489,7 @@ pub(super) fn dialog<'a>(
     screen.min.x = (screen.min.x + reserved_left(ctx) + reserved_dock(ctx))
         .min(screen.max.x - DIALOG_MIN_WIDTH);
     let width = size[0].max(DIALOG_MIN_WIDTH).min(screen.width());
+    let window_title = title.text().to_owned();
     let window = egui::Window::new(title)
         .resizable(true)
         .collapsible(true)
@@ -354,9 +497,18 @@ pub(super) fn dialog<'a>(
         .max_height((screen.height() - TOP - BOTTOM).max(MIN_HEIGHT))
         .constrain_to(screen)
         .scroll([false, true]);
-    // A height of 0 means "as tall as the content", up to the screen.
-    if size[1] > 0.0 {
-        window.default_size([width, size[1].min((screen.height() - TOP).max(MIN_HEIGHT))])
+    // A height of 0 means "as tall as the content", up to the screen (egui
+    // starts a window at 420 and grows it to fit what is inside).
+    let reset = size_reset_due(ctx, egui::Id::new(Some(window_title)));
+    let height = if size[1] > 0.0 {
+        size[1].min((screen.height() - TOP).max(MIN_HEIGHT))
+    } else {
+        420.0_f32.min((screen.height() - TOP).max(MIN_HEIGHT))
+    };
+    if reset {
+        window.fixed_size([width, height])
+    } else if size[1] > 0.0 {
+        window.default_size([width, height])
     } else {
         window.default_width(width)
     }
@@ -426,10 +578,182 @@ pub(super) fn esc<'a>(ctx: &egui::Context, open: &'a mut bool) -> &'a mut bool {
     open
 }
 
+/// The side and bottom panels whose edge can be dragged (the navigator, the
+/// report list, the drawer, the detail columns). Reset panel layout gives
+/// them their usual size back.
+const EDGE_PANELS: &[&str] = &[
+    "outline",
+    "reports_list",
+    "drawer",
+    "cabinet_unplaced",
+    "cabinet_routes",
+    "parts_detail",
+    "parts_duplicates_detail",
+    "parts_review_detail",
+    "parts_quality_detail",
+];
+
+/// True once for each Reset panel layout, per window: that frame the window
+/// is given its default size, which egui keeps for the frames after it (the
+/// size a window was dragged to is egui's own state, out of reach otherwise).
+fn size_reset_due(ctx: &egui::Context, window: egui::Id) -> bool {
+    let key = window.with("size_epoch");
+    ctx.data_mut(|d| {
+        let epoch: u32 = d.get_persisted(epoch_id()).unwrap_or(0);
+        let seen: u32 = d.get_persisted(key).unwrap_or(0);
+        d.insert_persisted(key, epoch);
+        seen != epoch
+    })
+}
+
+/// What [`modal`] hands back: what the content returned, and whether the
+/// person asked to close the window.
+pub(super) struct ModalOut<R> {
+    pub inner: R,
+    ctx: egui::Context,
+    clicked_outside: bool,
+    escape_ok: bool,
+}
+
+impl<R> ModalOut<R> {
+    /// A click outside the window, or Escape while it is on top and no menu
+    /// is open. Call it only when Escape should close the window: it takes
+    /// the key.
+    pub(super) fn should_close(&self) -> bool {
+        self.clicked_outside
+            || (self.escape_ok
+                && self
+                    .ctx
+                    .input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)))
+    }
+}
+
+/// A window that asks something and blocks the rest of the program until it
+/// is answered (what `egui::Modal` was), but that can be dragged by its
+/// title bar and resized from its edges like every other window. It opens
+/// centered; once moved or resized it stays where it was left, and View >
+/// Reset panel layout centers it again. `size` is the default: a height of 0
+/// fits the content.
+pub(super) fn modal<R: Default>(
+    ctx: &egui::Context,
+    name: &'static str,
+    title: impl Into<egui::WidgetText>,
+    size: [f32; 2],
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> ModalOut<R> {
+    let id = egui::Id::new(("modal", name));
+    let layer = egui::LayerId::new(egui::Order::Foreground, id);
+    let screen = ctx.content_rect();
+    let full = screen.shrink(MARGIN);
+    let (top_modal, any_popup) = {
+        let top = ctx.memory_mut(|m| {
+            m.set_modal_layer(layer);
+            m.top_modal_layer() == Some(layer)
+        });
+        (top, egui::Popup::is_any_open(ctx))
+    };
+    // The dimmed ground. It only paints: the window's layer is the modal
+    // layer, so nothing underneath answers the pointer.
+    egui::Area::new(id.with("backdrop"))
+        .order(egui::Order::Foreground)
+        .interactable(false)
+        .fixed_pos(screen.min)
+        .show(ctx, |ui| {
+            ui.painter()
+                .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(100));
+        });
+    let moved = is_moved(ctx, id);
+    let last = ctx.memory(|m| m.area_rect(id));
+    let width = size[0].min(full.width()).max(MIN_WIDTH.min(full.width()));
+    let mut window = egui::Window::new(title)
+        .id(id)
+        .order(egui::Order::Foreground)
+        .collapsible(false)
+        .min_width(MIN_WIDTH.min(width))
+        .max_height((full.height() - 2.0 * MARGIN).max(MIN_HEIGHT))
+        .constrain_to(full)
+        // A window with a size of its own scrolls and resizes both ways. One
+        // that fits its content is only made wider or narrower: it starts too
+        // short for a scroll area to show anything, and taller would be empty.
+        .scroll([false, size[1] > 0.0])
+        .resizable([true, size[1] > 0.0]);
+    let height = if size[1] > 0.0 {
+        size[1].min(full.height() - 2.0 * MARGIN)
+    } else {
+        0.0
+    };
+    // A height of 0 starts as short as the content.
+    window = window.default_size([width, height]);
+    if size_reset_due(ctx, id) {
+        window = window.fixed_size([width, height]);
+    }
+    // Centered by us until the person moves it: the window's size is only
+    // known after its first frame (that frame is not drawn).
+    if !moved {
+        let half = last.map_or(egui::vec2(width / 2.0, 0.0), |r| r.size() / 2.0);
+        let target = full.center() - half;
+        // A window moved by its title bar ignores the position given while it
+        // is only sized; for the frame that recenters it may be moved from
+        // anywhere, which makes ours count (not while a button is down: that
+        // may be the person dragging it).
+        let drifted = last.is_some_and(|r| (r.min - target).length() > 1.0)
+            && !ctx.input(|i| i.pointer.any_down());
+        window = window.current_pos(target);
+        if drifted {
+            window = window.drag_area(egui::containers::WindowDrag::Anywhere);
+        }
+    }
+    let shown = window.show(ctx, add);
+    let rect = shown.as_ref().map(|r| r.response.rect);
+    let grabbed = ctx
+        .read_response(id.with("__title_click"))
+        .is_some_and(|r| r.dragged());
+    // A resize shows as a change of size while the pointer is down.
+    let resized = last
+        .zip(rect)
+        .is_some_and(|(a, b)| (a.size() - b.size()).abs().max_elem() > 0.5)
+        && ctx.input(|i| i.pointer.any_down());
+    if (grabbed || resized)
+        && ctx.input(|i| {
+            i.pointer
+                .press_origin()
+                .zip(i.pointer.latest_pos())
+                .is_some_and(|(from, to)| from.distance(to) > 1.0)
+        })
+    {
+        mark_moved(ctx, id);
+    }
+    // Only a window that was already up counts: the click that opened it is
+    // still in this frame's input.
+    let clicked_outside = last.zip(rect).is_some_and(|(_, rect)| {
+        top_modal
+            && !any_popup
+            && ctx.input(|i| {
+                i.pointer.primary_clicked()
+                    && i.pointer
+                        .interact_pos()
+                        .is_some_and(|p| !rect.expand(8.0).contains(p))
+            })
+    });
+    ModalOut {
+        inner: shown.and_then(|r| r.inner).unwrap_or_default(),
+        ctx: ctx.clone(),
+        clicked_outside,
+        escape_ok: top_modal && !any_popup,
+    }
+}
+
 /// "Reset panel layout": every panel goes back to its default place and
 /// size.
 pub(super) fn reset_layout(ctx: &egui::Context) {
     ctx.memory_mut(|m| m.reset_areas());
+    // The columns and drawers that are dragged by their edge keep their size
+    // apart from the floating windows.
+    ctx.data_mut(|d| {
+        for name in EDGE_PANELS {
+            d.remove::<egui::containers::panel::PanelState>(egui::Id::new(*name));
+        }
+    });
     ctx.data_mut(|d| {
         let epoch: u32 = d.get_persisted(epoch_id()).unwrap_or(0);
         d.insert_persisted(epoch_id(), epoch.wrapping_add(1));
@@ -1012,5 +1336,269 @@ mod tests {
         let _ = named(&ctx, "later");
         let r = named(&ctx, "later");
         assert!((r.min - egui::pos2(120.0, 140.0)).length() < 1.5, "{r:?}");
+    }
+
+    // --- modal windows and floating cards -------------------------------
+
+    fn screen_1366() -> egui::Rect {
+        egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1366.0, 768.0))
+    }
+
+    fn click_at(pos: egui::Pos2, pressed: bool) -> egui::Event {
+        button(pos, pressed)
+    }
+
+    /// One frame of a modal named "ask"; returns its rectangle and whether it
+    /// asked to close.
+    fn modal_frame(
+        ctx: &egui::Context,
+        screen: egui::Rect,
+        events: Vec<egui::Event>,
+        close_on_request: bool,
+    ) -> (egui::Rect, bool) {
+        modal_frame_sized(ctx, screen, events, close_on_request, 0.0)
+    }
+
+    fn modal_frame_sized(
+        ctx: &egui::Context,
+        screen: egui::Rect,
+        events: Vec<egui::Event>,
+        close_on_request: bool,
+        height: f32,
+    ) -> (egui::Rect, bool) {
+        let mut rect = egui::Rect::NOTHING;
+        let mut close = false;
+        let mut out = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(screen),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                let shown = modal(ctx, "ask", "Ask", [460.0, height], |ui| {
+                    ui.label("Are you sure?");
+                    ui.add_space(8.0);
+                    let _ = ui.button("Yes");
+                });
+                if close_on_request {
+                    close = shown.should_close();
+                }
+                rect = ctx
+                    .memory(|m| m.area_rect(egui::Id::new(("modal", "ask"))))
+                    .unwrap_or(egui::Rect::NOTHING);
+            },
+        );
+        out.textures_delta.clear();
+        (rect, close)
+    }
+
+    fn settle(ctx: &egui::Context, screen: egui::Rect) -> egui::Rect {
+        let mut rect = egui::Rect::NOTHING;
+        for _ in 0..4 {
+            rect = modal_frame(ctx, screen, vec![], false).0;
+        }
+        rect
+    }
+
+    /// Drags from `from` to `to` in a few steps and lets go.
+    fn drag_modal(ctx: &egui::Context, screen: egui::Rect, from: egui::Pos2, to: egui::Pos2) {
+        modal_frame(
+            ctx,
+            screen,
+            vec![egui::Event::PointerMoved(from), click_at(from, true)],
+            false,
+        );
+        for step in 1..=4 {
+            let at = from + (to - from) * (step as f32 / 4.0);
+            modal_frame(ctx, screen, vec![egui::Event::PointerMoved(at)], false);
+        }
+        modal_frame(ctx, screen, vec![click_at(to, false)], false);
+    }
+
+    #[test]
+    fn a_modal_opens_centered_inside_the_window_at_1366() {
+        let ctx = egui::Context::default();
+        let rect = settle(&ctx, screen_1366());
+        assert!(screen_1366().contains_rect(rect), "{rect:?}");
+        assert!((rect.center().x - 683.0).abs() < 2.0, "{rect:?}");
+        assert!((rect.center().y - 384.0).abs() < 2.0, "{rect:?}");
+    }
+
+    #[test]
+    fn a_modal_keeps_inside_a_small_window() {
+        let small = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(480.0, 320.0));
+        let ctx = egui::Context::default();
+        let rect = settle(&ctx, small);
+        assert!(small.contains_rect(rect), "{rect:?} in {small:?}");
+    }
+
+    #[test]
+    fn a_modal_is_dragged_by_its_title_and_stays_until_reset() {
+        let screen = screen_1366();
+        let ctx = egui::Context::default();
+        let home = settle(&ctx, screen);
+        let grab = home.center_top() + egui::vec2(0.0, 10.0);
+        drag_modal(&ctx, screen, grab, grab + egui::vec2(-300.0, -120.0));
+        let moved = settle(&ctx, screen);
+        assert!(
+            (moved.min - home.min - egui::vec2(-300.0, -120.0)).length() < 8.0,
+            "dragged: {home:?} -> {moved:?}"
+        );
+        assert_eq!(settle(&ctx, screen).min, moved.min, "it stays");
+        reset_layout(&ctx);
+        let back = settle(&ctx, screen);
+        assert!((back.min - home.min).length() < 2.0, "{home:?} {back:?}");
+    }
+
+    #[test]
+    fn a_modal_is_resized_from_its_corner() {
+        let screen = screen_1366();
+        // One with a size of its own grows both ways; one that fits its
+        // content grows wider but not taller.
+        for (height, taller) in [(300.0, true), (0.0, false)] {
+            let ctx = egui::Context::default();
+            let settle = |ctx: &egui::Context| {
+                let mut rect = egui::Rect::NOTHING;
+                for _ in 0..4 {
+                    rect = modal_frame_sized(ctx, screen, vec![], false, height).0;
+                }
+                rect
+            };
+            let home = settle(&ctx);
+            let from = home.right_bottom() - egui::vec2(2.0, 2.0);
+            let to = from + egui::vec2(160.0, 90.0);
+            let step = |events| modal_frame_sized(&ctx, screen, events, false, height);
+            step(vec![egui::Event::PointerMoved(from), click_at(from, true)]);
+            for n in 1..=4 {
+                step(vec![egui::Event::PointerMoved(
+                    from + (to - from) * (n as f32 / 4.0),
+                )]);
+            }
+            step(vec![click_at(to, false)]);
+            let bigger = settle(&ctx);
+            assert!(bigger.width() > home.width() + 100.0, "{home:?} {bigger:?}");
+            assert_eq!(
+                bigger.height() > home.height() + 50.0,
+                taller,
+                "{home:?} {bigger:?}"
+            );
+            assert!(screen.contains_rect(bigger), "{bigger:?}");
+        }
+    }
+
+    #[test]
+    fn a_click_outside_or_escape_closes_a_modal_and_a_click_inside_does_not() {
+        let screen = screen_1366();
+        let ctx = egui::Context::default();
+        let home = settle(&ctx, screen);
+        let inside = home.center();
+        modal_frame(
+            &ctx,
+            screen,
+            vec![egui::Event::PointerMoved(inside), click_at(inside, true)],
+            true,
+        );
+        let (_, closed) = modal_frame(&ctx, screen, vec![click_at(inside, false)], true);
+        assert!(!closed, "a click on the window itself is not outside");
+        let outside = egui::pos2(30.0, 30.0);
+        modal_frame(
+            &ctx,
+            screen,
+            vec![egui::Event::PointerMoved(outside), click_at(outside, true)],
+            true,
+        );
+        let (_, closed) = modal_frame(&ctx, screen, vec![click_at(outside, false)], true);
+        assert!(closed, "a click on the dimmed ground closes it");
+        let (_, closed) = modal_frame(
+            &ctx,
+            screen,
+            vec![egui::Event::Key {
+                key: egui::Key::Escape,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            true,
+        );
+        assert!(closed, "Escape closes it");
+    }
+
+    fn float_frame(
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+        canvas: egui::Rect,
+    ) -> egui::Rect {
+        let mut rect = egui::Rect::NOTHING;
+        let mut out = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(canvas),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                let at = egui::pos2(canvas.center().x, canvas.bottom() - MARGIN);
+                let shown =
+                    Float::new("strip", canvas, egui::Align2::CENTER_BOTTOM, at).show(ctx, |ui| {
+                        egui::Frame::popup(ui.style()).show(ui, |ui| {
+                            ui.label("A strip of tools, wide enough to grab by its edge");
+                        });
+                    });
+                rect = shown.response.rect;
+            },
+        );
+        out.textures_delta.clear();
+        rect
+    }
+
+    #[test]
+    fn a_floating_card_follows_its_side_until_dragged_and_resets() {
+        let canvas = screen_1366();
+        let ctx = egui::Context::default();
+        for _ in 0..3 {
+            float_frame(&ctx, vec![], canvas);
+        }
+        let home = float_frame(&ctx, vec![], canvas);
+        assert!(canvas.contains_rect(home), "{home:?}");
+        assert!(
+            (home.center().x - canvas.center().x).abs() < 1.5,
+            "{home:?}"
+        );
+        // Grabbed by the frame's margin, not by the label.
+        let grab = home.left_center() + egui::vec2(3.0, 0.0);
+        let to = grab + egui::vec2(-200.0, -300.0);
+        float_frame(
+            &ctx,
+            vec![egui::Event::PointerMoved(grab), click_at(grab, true)],
+            canvas,
+        );
+        for step in 1..=4 {
+            let at = grab + (to - grab) * (step as f32 / 4.0);
+            float_frame(&ctx, vec![egui::Event::PointerMoved(at)], canvas);
+        }
+        float_frame(&ctx, vec![click_at(to, false)], canvas);
+        let moved = float_frame(&ctx, vec![], canvas);
+        assert!(
+            (moved.min - home.min).length() > 150.0,
+            "dragged: {home:?} -> {moved:?}"
+        );
+        assert_eq!(float_frame(&ctx, vec![], canvas).min, moved.min, "it stays");
+        reset_layout(&ctx);
+        float_frame(&ctx, vec![], canvas);
+        let back = float_frame(&ctx, vec![], canvas);
+        assert!((back.min - home.min).length() < 2.0, "{home:?} {back:?}");
+    }
+
+    #[test]
+    fn a_moved_card_comes_back_inside_a_smaller_canvas() {
+        let canvas = screen_1366();
+        let ctx = egui::Context::default();
+        let home = float_frame(&ctx, vec![], canvas);
+        mark_moved(&ctx, id("strip"));
+        place_all(&ctx, &BTreeMap::from([("strip".to_owned(), [1300, 740])]));
+        float_frame(&ctx, vec![], canvas);
+        let far = float_frame(&ctx, vec![], canvas);
+        assert!(canvas.contains_rect(far), "{far:?} stays on the canvas");
+        let _ = home;
     }
 }

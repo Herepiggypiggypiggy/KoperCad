@@ -103,29 +103,33 @@ impl NovoApp {
         }
         let all = entries();
         let fresh = unseen(&all, &self.settings.whats_new_seen).len();
-        let modal = egui::Modal::new(egui::Id::new("whats_new")).show(ctx, |ui| {
-            ui.set_width(novo_theme::dialog_width::MEDIUM);
-            super::dialog_ui::title(ui, "What's new", "");
-            egui::ScrollArea::vertical()
-                .max_height(ctx.content_rect().height() * 0.6)
-                .show(ui, |ui| {
-                    for (n, entry) in all.iter().enumerate() {
-                        ui.add_space(6.0);
-                        ui.horizontal(|ui| {
-                            ui.strong(&entry.title);
-                            if n < fresh {
-                                ui.weak("new");
+        let modal = super::panel::modal(
+            ctx,
+            "whats_new",
+            "What's new",
+            [novo_theme::dialog_width::MEDIUM, 480.0],
+            |ui| {
+                egui::ScrollArea::vertical()
+                    .max_height(ctx.content_rect().height() * 0.6)
+                    .show(ui, |ui| {
+                        for (n, entry) in all.iter().enumerate() {
+                            ui.add_space(6.0);
+                            ui.horizontal(|ui| {
+                                ui.strong(&entry.title);
+                                if n < fresh {
+                                    ui.weak("new");
+                                }
+                            });
+                            ui.label(&entry.text);
+                            if !entry.whence.is_empty() {
+                                ui.weak(format!("Where: {}", entry.whence));
                             }
-                        });
-                        ui.label(&entry.text);
-                        if !entry.whence.is_empty() {
-                            ui.weak(format!("Where: {}", entry.whence));
                         }
-                    }
-                });
-            ui.add_space(8.0);
-            super::dialog_ui::done(ui)
-        });
+                    });
+                ui.add_space(8.0);
+                super::dialog_ui::done(ui)
+            },
+        );
         if modal.inner || modal.should_close() {
             self.show_whats_new = false;
             if let Some(newest) = all.first() {

@@ -90,9 +90,7 @@ impl NovoApp {
             review.options.keep_addresses,
             review.options.digital_per_card,
         );
-        let modal = egui::Modal::new(egui::Id::new("plc_list")).show(ctx, |ui| {
-            ui.set_width(620.0);
-            ui.heading("Import I/O list");
+        let modal = super::panel::modal(ctx, "plc_list", "Import I/O list", [620.0, 540.0], |ui| {
             ui.label(egui::RichText::new(&review.name).weak());
             ui.add_space(4.0);
             ui.label(review.plan.summary());

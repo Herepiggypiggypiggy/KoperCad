@@ -26,18 +26,8 @@ impl NovoApp {
         let mut autosave = self.settings.autosave_interval().as_secs() as u32;
         let mut dock_labels = self.settings.dock_labels();
         let mut ui_scale = self.settings.ui_scale_factor().to_bits();
-        let modal = egui::Modal::new(egui::Id::new("preferences")).show(ctx, |ui| {
-            ui.set_width(
-                novo_theme::dialog_width::MEDIUM
-                    .min(ctx.content_rect().width() - 48.0)
-                    .max(240.0),
-            );
-            ui.label(
-                egui::RichText::new("Preferences")
-                    .size(15.0)
-                    .family(novo_theme::fonts::strong_family()),
-            );
-            ui.add_space(4.0);
+        let width = novo_theme::dialog_width::MEDIUM;
+        let modal = super::panel::modal(ctx, "preferences", "Preferences", [width, 560.0], |ui| {
             egui::ScrollArea::vertical()
                 .max_height((ctx.content_rect().height() - 180.0).max(200.0))
                 .show(ui, |ui| {

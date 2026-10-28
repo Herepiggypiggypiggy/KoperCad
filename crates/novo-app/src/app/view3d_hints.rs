@@ -44,40 +44,42 @@ impl Hints {
 
     /// The legend at the view's bottom right corner.
     pub(super) fn show(&mut self, ctx: &egui::Context, view: egui::Rect) {
-        egui::Area::new(egui::Id::new("view3d_hints"))
-            .order(egui::Order::Middle)
-            .pivot(egui::Align2::RIGHT_BOTTOM)
-            .fixed_pos(view.right_bottom() + egui::vec2(-MARGIN, -MARGIN))
-            .show(ctx, |ui| {
-                if !self.open {
-                    if ui
-                        .button("? Mouse and keys")
-                        .on_hover_text("Show how to move around and select in 3D")
-                        .clicked()
-                    {
-                        self.open = true;
-                    }
-                    return;
+        super::panel::Float::new(
+            "view3d_hints",
+            view,
+            egui::Align2::RIGHT_BOTTOM,
+            view.right_bottom() + egui::vec2(-MARGIN, -MARGIN),
+        )
+        .show(ctx, |ui| {
+            if !self.open {
+                if ui
+                    .button("? Mouse and keys")
+                    .on_hover_text("Show how to move around and select in 3D")
+                    .clicked()
+                {
+                    self.open = true;
                 }
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.strong("Mouse and keys");
-                        if ui.small_button("✕").on_hover_text("Fold away").clicked() {
-                            self.open = false;
+                return;
+            }
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.strong("Mouse and keys");
+                    if ui.small_button("✕").on_hover_text("Fold away").clicked() {
+                        self.open = false;
+                    }
+                });
+                egui::Grid::new("view3d_hints_grid")
+                    .num_columns(2)
+                    .spacing([12.0, 2.0])
+                    .show(ui, |ui| {
+                        for (what, how) in ROWS {
+                            ui.label(egui::RichText::new(*what).small().strong());
+                            ui.label(egui::RichText::new(*how).small());
+                            ui.end_row();
                         }
                     });
-                    egui::Grid::new("view3d_hints_grid")
-                        .num_columns(2)
-                        .spacing([12.0, 2.0])
-                        .show(ui, |ui| {
-                            for (what, how) in ROWS {
-                                ui.label(egui::RichText::new(*what).small().strong());
-                                ui.label(egui::RichText::new(*how).small());
-                                ui.end_row();
-                            }
-                        });
-                });
             });
+        });
     }
 }
 

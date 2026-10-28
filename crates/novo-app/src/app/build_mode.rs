@@ -1183,23 +1183,25 @@ fn ranges(numbers: &[usize]) -> String {
 /// person asked to go back.
 fn away_bar(ctx: &egui::Context, rect: egui::Rect, step: &str) -> bool {
     let mut back = false;
-    egui::Area::new(egui::Id::new("build_mode_away"))
-        .order(egui::Order::Middle)
-        // Bottom left: the Cabinet's lowest device and the 3D view's
-        // controls sit towards the middle and the right.
-        .pivot(egui::Align2::LEFT_BOTTOM)
-        .fixed_pos(egui::pos2(rect.left() + 14.0, rect.bottom() - 14.0))
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    if widgets::primary_button(ui, "Back to Build mode").clicked() {
-                        back = true;
-                    }
-                    if !step.is_empty() {
-                        ui.add(egui::Label::new(step).truncate());
-                    }
-                });
+    // Bottom left: the Cabinet's lowest device and the 3D view's controls sit
+    // towards the middle and the right.
+    super::panel::Float::new(
+        "build_mode_away",
+        rect,
+        egui::Align2::LEFT_BOTTOM,
+        egui::pos2(rect.left() + 14.0, rect.bottom() - 14.0),
+    )
+    .show(ctx, |ui| {
+        egui::Frame::popup(ui.style()).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if widgets::primary_button(ui, "Back to Build mode").clicked() {
+                    back = true;
+                }
+                if !step.is_empty() {
+                    ui.add(egui::Label::new(step).truncate());
+                }
             });
         });
+    });
     back
 }

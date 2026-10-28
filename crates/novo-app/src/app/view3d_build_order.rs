@@ -17,7 +17,7 @@ const MARGIN: f32 = 12.0;
 const TEXT_WIDTH: f32 = 520.0;
 
 fn id() -> egui::Id {
-    egui::Id::new("view3d_build_order")
+    super::panel::id("view3d_build_order")
 }
 
 /// How much of the view's height the strip covers at the bottom, as a
@@ -101,24 +101,27 @@ pub(super) fn strip(
         // and the strip says why there is nothing to step through.
         let p = crate::theme::ui_palette();
         let mut leave = false;
-        egui::Area::new(id())
-            .order(egui::Order::Foreground)
-            .pivot(egui::Align2::CENTER_BOTTOM)
-            .fixed_pos(egui::pos2(view.center().x, view.bottom() - MARGIN))
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new(
-                                "Build order: this cabinet has no layout to read an order from. \
+        super::panel::Float::new(
+            "view3d_build_order",
+            view,
+            egui::Align2::CENTER_BOTTOM,
+            egui::pos2(view.center().x, view.bottom() - MARGIN),
+        )
+        .foreground()
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(
+                            "Build order: this cabinet has no layout to read an order from. \
                                  Place devices on its plate first.",
-                            )
-                            .color(p.text_secondary),
-                        );
-                        leave = ui.button("Show all").clicked();
-                    });
+                        )
+                        .color(p.text_secondary),
+                    );
+                    leave = ui.button("Show all").clicked();
                 });
             });
+        });
         if leave {
             *position = None;
         }
@@ -127,10 +130,8 @@ pub(super) fn strip(
     at = at.min(steps.len());
     let p = crate::theme::ui_palette();
     let mut leave = false;
-    egui::Area::new(id())
-        .order(egui::Order::Foreground)
-        .pivot(egui::Align2::CENTER_BOTTOM)
-        .fixed_pos(egui::pos2(view.center().x, view.bottom() - MARGIN))
+    super::panel::Float::new("view3d_build_order", view, egui::Align2::CENTER_BOTTOM, egui::pos2(view.center().x, view.bottom() - MARGIN))
+        .foreground()
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_max_width(TEXT_WIDTH.min(view.width() - 2.0 * MARGIN));

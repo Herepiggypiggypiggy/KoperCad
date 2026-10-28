@@ -384,8 +384,9 @@ fn fits(area: egui::Rect, label: &str) -> bool {
 pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Option<Ask> {
     let mut ask = None;
     let panel = egui::Panel::right("cabinet_routes")
-        .exact_size(340.0)
-        .resizable(false)
+        .default_size(340.0)
+        .size_range(260.0..=ui.available_width() * 0.6)
+        .resizable(true)
         .show(ui, |ui| {
             ui.add_space(6.0);
             ui.strong("Routes");

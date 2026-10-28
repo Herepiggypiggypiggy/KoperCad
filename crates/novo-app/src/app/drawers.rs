@@ -99,8 +99,9 @@ impl NovoApp {
         // Controls for lessons to point at, registered after the panel.
         let mut spots: Vec<(String, egui::Rect, bool, String)> = Vec::new();
         let panel = egui::Panel::bottom("drawer")
-            .exact_size(height)
-            .resizable(false)
+            .default_size(height)
+            .size_range(120.0..=ui.ctx().content_rect().height() * 0.7)
+            .resizable(true)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     for (t, label) in [

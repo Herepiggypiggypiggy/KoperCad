@@ -224,15 +224,21 @@ impl NovoApp {
         self.ol.rect = Some(ui.max_rect());
         self.anchor("outline.pages", ui.max_rect(), "Pages list");
         self.toolbar(ui);
-        ui.horizontal(|ui| {
-            let width = ui.available_width() - 36.0;
-            ui.add(
-                egui::TextEdit::singleline(&mut self.page_filter)
-                    .hint_text("Filter pages")
-                    .desired_width(width),
-            );
-            self.outline_more_menu(ui);
-        });
+        // The menu button first, so the filter takes what is left and never
+        // pushes a resizable window wider.
+        let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+        ui.allocate_ui_with_layout(
+            row,
+            egui::Layout::right_to_left(egui::Align::Center),
+            |ui| {
+                self.outline_more_menu(ui);
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.page_filter)
+                        .hint_text("Filter pages")
+                        .desired_width(ui.available_width()),
+                );
+            },
+        );
         ui.add_space(4.0);
         self.filing_banner(ui);
 
@@ -1909,19 +1915,18 @@ impl NovoApp {
         let Some(confirm) = self.ol.confirm.clone() else {
             return;
         };
-        let modal = egui::Modal::new(egui::Id::new("outline_confirm")).show(ctx, |ui| {
-            ui.set_width(360.0);
-            ui.heading(&confirm.title);
-            ui.add_space(4.0);
-            ui.label(&confirm.body);
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                let yes = ui.button(format!("{} (Enter)", confirm.yes)).clicked();
-                let no = ui.button("Cancel (Esc)").clicked();
-                (yes, no)
-            })
-            .inner
-        });
+        let modal =
+            super::panel::modal(ctx, "outline_confirm", &confirm.title, [360.0, 0.0], |ui| {
+                ui.add_space(4.0);
+                ui.label(&confirm.body);
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    let yes = ui.button(format!("{} (Enter)", confirm.yes)).clicked();
+                    let no = ui.button("Cancel (Esc)").clicked();
+                    (yes, no)
+                })
+                .inner
+            });
         let (yes, no) = modal.inner;
         let enter = ctx.input(|i| i.key_pressed(egui::Key::Enter));
         if no || modal.should_close() {
@@ -1951,9 +1956,7 @@ impl NovoApp {
         let exists = tree::level_exists(project, Aspect::Location, &[form.name.trim().to_owned()]);
         let valid = super::pages::clean_level(&form.name, Aspect::Location);
         let mut open_list = false;
-        let modal = egui::Modal::new(egui::Id::new("cabinet_form")).show(ctx, |ui| {
-            ui.set_width(380.0);
-            ui.heading("New cabinet");
+        let modal = super::panel::modal(ctx, "cabinet_form", "New cabinet", [380.0, 0.0], |ui| {
             ui.add_space(6.0);
             egui::Grid::new("cabinet_form_grid")
                 .num_columns(2)
@@ -2147,9 +2150,7 @@ impl NovoApp {
             } => "Page group properties",
             PropsForm::Level { .. } => "Cabinet properties",
         };
-        let modal = egui::Modal::new(egui::Id::new("outline_props")).show(ctx, |ui| {
-            ui.set_width(380.0);
-            ui.heading(heading);
+        let modal = super::panel::modal(ctx, "outline_props", heading, [380.0, 0.0], |ui| {
             ui.add_space(6.0);
             egui::Grid::new("outline_props_grid")
                 .num_columns(2)
