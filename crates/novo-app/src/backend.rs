@@ -737,7 +737,7 @@ impl ProjectBackend for StorageBackend {
         // current, so a crash loses little and Save stays the one way the
         // file changes.
         session.autosave_if_due(document.project())?;
-        Ok(Some(session.autosave_interval()))
+        Ok(Some(session.autosave_wait()))
     }
 
     fn file(&self) -> Option<PathBuf> {
