@@ -508,7 +508,10 @@ mod tests {
         begin_in(&dir, false, false, never_asked);
         assert!(dir.join(MARKER_FILE).is_file());
         adapter(&intel_vulkan(), STAGE_OPEN);
-        let text = std::fs::read_to_string(dir.join(MARKER_FILE)).unwrap();
+        // The running start holds a lock on the file, and on Windows that stops
+        // other handles from reading it: look at what it holds in memory, and at
+        // the file once the lock is gone (step 2).
+        let text = tracker().as_ref().unwrap().marker.render();
         assert!(
             text.contains("adapter=Intel(R) UHD Graphics\tVulkan"),
             "{text}"
@@ -518,8 +521,10 @@ mod tests {
             "{text}"
         );
 
-        // 2. The process dies there (no first_frames_done).
+        // 2. The process dies there (no first_frames_done). The file says the same.
         die(&dir);
+        let on_disk = std::fs::read_to_string(dir.join(MARKER_FILE)).unwrap();
+        assert_eq!(on_disk, text);
 
         // 3. The next start finds it, asks once, and avoids the adapter.
         let mut asked = None;
@@ -534,8 +539,7 @@ mod tests {
         assert!(out.safe, "the answer was safe graphics");
         assert_eq!(read_avoid(&dir), vec![intel_vulkan().key()]);
         // The new marker records the mode that is now used.
-        let text = std::fs::read_to_string(dir.join(MARKER_FILE)).unwrap();
-        assert!(text.contains("mode=safe"), "{text}");
+        assert!(tracker().as_ref().unwrap().marker.safe);
 
         // 4. That safe start worked: the marker is gone, the avoid list stays.
         first_frames_done();
