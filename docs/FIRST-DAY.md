@@ -9,23 +9,28 @@ at any point; if something asks for them, stop and say so.
   the build. A newer build opens older files and writes `<file>.v<old>.bak` beside it before the first change; an older
   build refuses a newer file without touching it.
 - A release candidate is a test build: never let it be the only place a customer project lives.
+- **Work on a local disk** (for example Documents on the PC), not on a network drive or a synced folder. A project is a SQLite file and a share may not honour its locks; this was not tested. Copy to the share at the end of the day.
 
 ## 2. Install (two ways, pick one)
 
 **Where the files are.** The work build is a draft release on GitHub, so it is visible only when you are signed in to the
-KoperCAD repository: open Releases and pick the version you were told (for example `v0.1.0-rc9`). Its files are
+KoperCAD repository: open Releases and pick the version you were told (for example `v0.1.0-rc9`). Download them **at home, the evening before**: a company proxy may block them. Its files are
 `KoperCAD-<version>-setup.exe`, `KoperCAD-<version>-portable.zip` and `SHA256SUMS`. If you cannot see the draft, ask for
 the three files to be sent to you another way. The public `experimental` pre-release holds a different, single zip
 (`kopercad.exe` only): do not use it for work.
 
 **Installer (recommended).** Download the setup and `SHA256SUMS`. In
 PowerShell: `Get-FileHash .\KoperCAD-<version>-setup.exe -Algorithm SHA256` and compare with the line in `SHA256SUMS`.
-Run the setup. Windows may say "Windows protected your PC" because the file is not code-signed: choose **More info**,
+Every release candidate's installer has the same name (`KoperCAD-0.1.0-setup.exe`), so tell them apart by the hash
+and by Help > About after installing. Run the setup. Windows may say "Windows protected your PC" because the file is not code-signed: choose **More info**,
 then **Run anyway**. No admin prompt should appear. It installs under `%LOCALAPPDATA%\Programs\KoperCAD`.
 Tick the desktop icon if you want one.
 
-**Portable zip (no installer at all).** Download `KoperCAD-<version>-portable.zip`, unzip it anywhere you may write
+**Portable zip (no installer at all).** Download `KoperCAD-<version>-portable.zip`, right-click it, Properties, tick **Unblock**, OK (or `Unblock-File` in PowerShell), then unzip it anywhere you may write
 (for example `Documents`), double-click `run.cmd`. Settings and logs stay in the `data` folder beside it.
+
+To update later, **close KoperCAD first** (save your work), then run the newer setup. If a company policy blocks the installer, try the
+portable zip.
 
 If the window stays black or the program does not start, use the Start menu entry **KoperCAD (safe graphics)**
 (portable: `run-safe-graphics.cmd`).
