@@ -8,6 +8,7 @@ use std::io::{Cursor, Read};
 
 use crate::error::{AddonError, Result};
 use crate::icons::{self, IconDef};
+use crate::layout::PanelLayout;
 use crate::manifest::{ICONS_FILE, MAX_MANIFEST_BYTES, Manifest, check_path};
 use crate::trust::{Trust, TrustStore, judge, sha256_hex};
 
@@ -130,7 +131,10 @@ impl Package {
                 .map_err(|e| AddonError::NotAPackage(format!("{name}: {e}")))?;
             let actual = data.len() as u64;
             if actual > cap {
-                return Err(AddonError::TooLarge(format!("{name} expands beyond {} MiB", cap / (1024 * 1024))));
+                return Err(AddonError::TooLarge(format!(
+                    "{name} expands beyond {} MiB",
+                    cap / (1024 * 1024)
+                )));
             }
             if actual > 1024 * 1024 && actual / compressed > limits.max_ratio {
                 return Err(AddonError::TooLarge(format!(
@@ -178,6 +182,12 @@ impl Package {
             Some(data) => icons::parse(&manifest.addon.id, data)?,
             None => Vec::new(),
         };
+        for panel in &manifest.panels {
+            if let Some(data) = entries.get(&panel.file) {
+                PanelLayout::parse(data)
+                    .map_err(|e| AddonError::Manifest(format!("{}: {e}", panel.file)))?;
+            }
+        }
         Ok(Package {
             fingerprint: sha256_hex(&manifest_bytes),
             file_sha256: sha256_hex(bytes),

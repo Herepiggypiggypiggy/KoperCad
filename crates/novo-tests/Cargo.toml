@@ -15,6 +15,7 @@ novo-symbols.workspace = true
 novo-xref.workspace = true
 
 [dev-dependencies]
+novo-addons.workspace = true
 novo-app = { path = "../novo-app" }
 egui.workspace = true
 novo-theme.workspace = true

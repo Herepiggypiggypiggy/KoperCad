@@ -28,7 +28,9 @@ impl Version {
             match parts.next() {
                 None if required => None,
                 None => Some(0),
-                Some(p) if !p.is_empty() && p.len() <= 9 && p.bytes().all(|b| b.is_ascii_digit()) => {
+                Some(p)
+                    if !p.is_empty() && p.len() <= 9 && p.bytes().all(|b| b.is_ascii_digit()) =>
+                {
                     p.parse().ok()
                 }
                 Some(_) => None,
@@ -37,7 +39,10 @@ impl Version {
         let major = next(true)?;
         let minor = next(false)?;
         let patch = next(false)?;
-        parts.next().is_none().then_some(Version::new(major, minor, patch))
+        parts
+            .next()
+            .is_none()
+            .then_some(Version::new(major, minor, patch))
     }
 }
 
@@ -135,7 +140,16 @@ mod tests {
         assert_eq!(Version::parse("1.2.3"), Some(Version::new(1, 2, 3)));
         assert_eq!(Version::parse("2"), Some(Version::new(2, 0, 0)));
         assert_eq!(Version::parse("0.10"), Some(Version::new(0, 10, 0)));
-        for bad in ["", "a", "1.2.3.4", "1..2", "-1", "1.2.3-rc1", "+1", "99999999999"] {
+        for bad in [
+            "",
+            "a",
+            "1.2.3.4",
+            "1..2",
+            "-1",
+            "1.2.3-rc1",
+            "+1",
+            "99999999999",
+        ] {
             assert_eq!(Version::parse(bad), None, "{bad:?}");
         }
         assert!(Version::new(0, 10, 0) > Version::new(0, 9, 9));
@@ -149,9 +163,21 @@ mod tests {
         assert!(!r.matches(Version::new(0, 3, 0)));
         assert!(!r.matches(Version::new(0, 0, 9)));
         assert_eq!(r.lower_bound(), Some(Version::new(0, 1, 0)));
-        assert!(Requirement::parse("*").unwrap().matches(Version::new(9, 9, 9)));
-        assert!(Requirement::parse("1.2.3").unwrap().matches(Version::new(1, 2, 3)));
-        assert!(!Requirement::parse("1.2.3").unwrap().matches(Version::new(1, 2, 4)));
+        assert!(
+            Requirement::parse("*")
+                .unwrap()
+                .matches(Version::new(9, 9, 9))
+        );
+        assert!(
+            Requirement::parse("1.2.3")
+                .unwrap()
+                .matches(Version::new(1, 2, 3))
+        );
+        assert!(
+            !Requirement::parse("1.2.3")
+                .unwrap()
+                .matches(Version::new(1, 2, 4))
+        );
         assert!(Requirement::parse(">=x").is_none());
         assert!(Requirement::parse(">=1,").is_none());
     }

@@ -808,6 +808,11 @@ pub const DUTCH: &[Aliases] = &[
         &["afstandsbediening", "zender", "hangkast", "klemmenlijst"],
     ),
     nl(
+        "addons.manage",
+        &["add-ons beheren"],
+        &["invoegtoepassing", "uitbreiding", "plugin", "installeren"],
+    ),
+    nl(
         "file.import_aml",
         &["importeer aml"],
         &["automationml", "installatie", "overnemen", "migreren"],

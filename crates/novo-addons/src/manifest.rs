@@ -346,7 +346,10 @@ impl Manifest {
             return bad("addon.description is longer than 600 characters".into());
         }
         if Version::parse(&a.version).is_none() {
-            return bad(format!("addon.version {:?} must look like 1.2.3", a.version));
+            return bad(format!(
+                "addon.version {:?} must look like 1.2.3",
+                a.version
+            ));
         }
         if Requirement::parse(&a.requires_app).is_none() {
             return bad(format!(
@@ -371,7 +374,9 @@ impl Manifest {
                     .bytes()
                     .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
             {
-                return bad(format!("the hash of {path} must be 64 lower-case hex digits"));
+                return bad(format!(
+                    "the hash of {path} must be 64 lower-case hex digits"
+                ));
             }
         }
         let listed = |p: &str, what: &str| -> Result<()> {
@@ -407,7 +412,10 @@ impl Manifest {
                 return bad(format!("panel {} is declared twice", p.id));
             }
             if p.title.trim().is_empty() || p.title.chars().count() > 40 {
-                return bad(format!("panel {} needs a title of 1 to 40 characters", p.id));
+                return bad(format!(
+                    "panel {} needs a title of 1 to 40 characters",
+                    p.id
+                ));
             }
             if !self.allows(p.slot.permission()) {
                 return bad(format!(
@@ -451,8 +459,14 @@ impl Manifest {
                     c.icon, c.id
                 ));
             }
-            if c.key.as_deref().is_some_and(|k| k.len() > 24 || k.chars().any(char::is_control)) {
-                return bad(format!("the key of command {} is not a plain key name", c.id));
+            if c.key
+                .as_deref()
+                .is_some_and(|k| k.len() > 24 || k.chars().any(char::is_control))
+            {
+                return bad(format!(
+                    "the key of command {} is not a plain key name",
+                    c.id
+                ));
             }
             match c.home {
                 HomeKind::Menu => {
@@ -483,7 +497,9 @@ impl Manifest {
                         ));
                     }
                     if c.workspaces.is_empty()
-                        || c.workspaces.iter().any(|w| !WORKSPACES.contains(&w.as_str()))
+                        || c.workspaces
+                            .iter()
+                            .any(|w| !WORKSPACES.contains(&w.as_str()))
                     {
                         return bad(format!(
                             "command {}: a rail row needs workspaces from {}",
@@ -531,7 +547,10 @@ impl Manifest {
 
         for c in &self.contributions {
             if !valid_id(&c.kind, 1, 40) {
-                return bad(format!("contribution kind {:?} is not a plain name", c.kind));
+                return bad(format!(
+                    "contribution kind {:?} is not a plain name",
+                    c.kind
+                ));
             }
             listed(&c.file, "the contributed file")?;
         }
@@ -544,8 +563,7 @@ pub fn valid_id(s: &str, min: usize, max: usize) -> bool {
     let b = s.as_bytes();
     (min..=max).contains(&b.len())
         && b[0].is_ascii_lowercase()
-        && b
-            .iter()
+        && b.iter()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
         && !s.ends_with('-')
         && !s.contains("--")
@@ -642,7 +660,10 @@ opens = "main"
 
     fn rejected(from: &str, to: &str) -> String {
         let text = good();
-        assert!(text.contains(from), "test bug: {from:?} not in the manifest");
+        assert!(
+            text.contains(from),
+            "test bug: {from:?} not in the manifest"
+        );
         match Manifest::parse(text.replace(from, to).as_bytes()) {
             Ok(_) => panic!("accepted a manifest with {from:?} -> {to:?}"),
             Err(e) => e.to_string(),
@@ -661,7 +682,9 @@ opens = "main"
             )
             .contains("28")
         );
-        assert!(rejected("menu = \"Simulate\"", "menu = \"Nowhere\"").contains("menu must be one of"));
+        assert!(
+            rejected("menu = \"Simulate\"", "menu = \"Nowhere\"").contains("menu must be one of")
+        );
         assert!(
             rejected(
                 "permissions = [\"menu\", \"floating-panel\"]",
@@ -679,10 +702,15 @@ opens = "main"
         assert!(rejected("opens = \"main\"", "opens = \"gone\"").contains("not declared"));
         assert!(rejected("opens = \"main\"\n", "").contains("no engine"));
         assert!(
-            rejected("file = \"data/main.panel.toml\"", "file = \"data/other.toml\"")
-                .contains("not listed")
+            rejected(
+                "file = \"data/main.panel.toml\"",
+                "file = \"data/other.toml\""
+            )
+            .contains("not listed")
         );
-        assert!(rejected("\"data/main.panel.toml\" =", "\"../evil\" =").contains("unsafe file name"));
+        assert!(
+            rejected("\"data/main.panel.toml\" =", "\"../evil\" =").contains("unsafe file name")
+        );
         assert!(rejected(ZERO, "xyz").contains("hex"));
         assert!(
             rejected(
@@ -698,7 +726,10 @@ opens = "main"
     fn another_api_generation_is_named_before_anything_else() {
         let text = good()
             .replace("api_version = 1", "api_version = 2")
-            .replace("[files]", "[files]\nnew_field = 3\n[brand_new_table]\nx = 1\n");
+            .replace(
+                "[files]",
+                "[files]\nnew_field = 3\n[brand_new_table]\nx = 1\n",
+            );
         match Manifest::parse(text.as_bytes()) {
             Err(AddonError::Incompatible(m)) => assert!(m.contains("API 2"), "{m}"),
             other => panic!("{other:?}"),
@@ -728,7 +759,12 @@ opens = "main"
         ] {
             assert!(check_path(p).is_err(), "{p:?}");
         }
-        for p in ["manifest.toml", "data/a-b_c.d.toml", "LICENSE", "x/y/z.wasm"] {
+        for p in [
+            "manifest.toml",
+            "data/a-b_c.d.toml",
+            "LICENSE",
+            "x/y/z.wasm",
+        ] {
             assert!(check_path(p).is_ok(), "{p:?}");
         }
     }
@@ -767,7 +803,12 @@ opens = "main"
             ));
         }
         // 1 + 4 rows in Simulate
-        assert!(Manifest::parse(text.as_bytes()).unwrap_err().to_string().contains("at most 4"));
+        assert!(
+            Manifest::parse(text.as_bytes())
+                .unwrap_err()
+                .to_string()
+                .contains("at most 4")
+        );
     }
 
     #[test]

@@ -120,7 +120,7 @@ fn parse_public(hex: &str) -> Option<VerifyingKey> {
 
 /// Decodes lower- or upper-case hex.
 pub fn from_hex(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 || !s.is_ascii() {
+    if !s.len().is_multiple_of(2) || !s.is_ascii() {
         return None;
     }
     (0..s.len() / 2)
@@ -131,15 +131,25 @@ pub fn from_hex(s: &str) -> Option<Vec<u8>> {
 /// Lower-case hex.
 pub fn to_hex(bytes: &[u8]) -> String {
     use std::fmt::Write;
-    bytes.iter().fold(String::with_capacity(bytes.len() * 2), |mut s, b| {
-        let _ = write!(s, "{b:02x}");
-        s
-    })
+    bytes
+        .iter()
+        .fold(String::with_capacity(bytes.len() * 2), |mut s, b| {
+            let _ = write!(s, "{b:02x}");
+            s
+        })
 }
 
 /// SHA-256 as 64 lower-case hex digits.
 pub fn sha256_hex(bytes: &[u8]) -> String {
     to_hex(&Sha256::digest(bytes))
+}
+
+/// The public key (32 bytes) for an Ed25519 seed. For tools that sign (`kopercad-cli addons pack`
+/// and CI) and tests; the program itself only ever verifies.
+pub fn public_key_for_seed(seed: &[u8; 32]) -> [u8; 32] {
+    ed25519_dalek::SigningKey::from_bytes(seed)
+        .verifying_key()
+        .to_bytes()
 }
 
 /// The message a signature covers.
@@ -151,7 +161,10 @@ pub fn signed_message(manifest: &[u8]) -> Vec<u8> {
 
 /// Builds the text of a `signature` file.
 pub fn signature_file(key_id: &str, signature: &[u8; 64]) -> String {
-    format!("{SIGNATURE_MAGIC}\nkey: {key_id}\nsig: {}\n", to_hex(signature))
+    format!(
+        "{SIGNATURE_MAGIC}\nkey: {key_id}\nsig: {}\n",
+        to_hex(signature)
+    )
 }
 
 /// Judges a package's `signature` file (if any) against `trust`. A signature that names a
@@ -197,8 +210,13 @@ pub fn judge(manifest: &[u8], signature: Option<&[u8]>, trust: &TrustStore) -> R
     let Some(sig_bytes) = sig_bytes else {
         return bad("the signature is not 128 hex digits");
     };
-    key.verify(&signed_message(manifest), &Signature::from_bytes(&sig_bytes))
-        .map_err(|_| AddonError::BadSignature(format!("it does not match the manifest for key {key_id}")))?;
+    key.verify(
+        &signed_message(manifest),
+        &Signature::from_bytes(&sig_bytes),
+    )
+    .map_err(|_| {
+        AddonError::BadSignature(format!("it does not match the manifest for key {key_id}"))
+    })?;
     Ok(Trust::Signed {
         key_id: key_id.to_owned(),
         owner: trusted.owner.clone(),
@@ -259,9 +277,17 @@ mod tests {
         let unknown = judge(manifest, Some(sig.as_bytes()), &TrustStore::default()).unwrap();
         assert!(matches!(unknown, Trust::Unsigned { ref note } if note.contains("test-key")));
         // garbage
-        for junk in ["", "hello", "kopercad-addon-signature 1\nkey: test-key\n", "kopercad-addon-signature 1\nkey: test-key\nsig: 12\n"] {
+        for junk in [
+            "",
+            "hello",
+            "kopercad-addon-signature 1\nkey: test-key\n",
+            "kopercad-addon-signature 1\nkey: test-key\nsig: 12\n",
+        ] {
             assert!(
-                matches!(judge(manifest, Some(junk.as_bytes()), &store), Err(AddonError::BadSignature(_))),
+                matches!(
+                    judge(manifest, Some(junk.as_bytes()), &store),
+                    Err(AddonError::BadSignature(_))
+                ),
                 "{junk:?}"
             );
         }

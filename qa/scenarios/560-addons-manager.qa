@@ -1,0 +1,70 @@
+@title Add-on manager: empty, install from file with trust tick, update, refused future version, command search
+@area Add-ons
+# Lane C0b-1. Fixtures are packed from qa/fixtures/addons/src (KOPERCAD_REGENERATE=1 cargo test -p novo-tests --test addons_fixtures).
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text add-ons
+wait 8
+shot search-addons
+expect "Add-ons..."
+key Enter
+wait 10
+expect "No add-ons installed"
+shot empty
+check_layout
+# An unsigned file needs the tick.
+answer_dialog qa/fixtures/addons/demo-tools-0.1.0.kcaddon
+click_text "Install from file..."
+wait 10
+expect "Demo tools"
+expect "I trust this file"
+shot install-prompt
+check_layout
+click_text "I trust this file"
+wait 4
+click_text "Install" Button
+wait 12
+expect "Demo tools"
+expect "What it may do"
+shot installed
+check_layout
+# Its command is found in the command search, with the add-on named.
+key Escape
+wait 4
+key ctrl+k
+wait 6
+text demo status
+wait 8
+expect "Demo status panel"
+shot search-demo
+key Enter
+wait 10
+shot panel
+check_layout
+# An update keeps it on.
+key Escape
+key ctrl+k
+wait 6
+text add-ons
+wait 8
+key Enter
+wait 10
+answer_dialog qa/fixtures/addons/demo-tools-0.2.0.kcaddon
+click_text "Update from file..."
+wait 10
+click_text "I trust this file"
+wait 4
+click_text "Install" Button
+wait 12
+expect "0.2.0"
+shot updated
+check_layout
+# A file for a newer program is refused in words.
+answer_dialog qa/fixtures/addons/future-addon-1.0.0.kcaddon
+click_text "Install from file..."
+wait 10
+expect "Needs another version"
+shot needs-newer
+check_layout

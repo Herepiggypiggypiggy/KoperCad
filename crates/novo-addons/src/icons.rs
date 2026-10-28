@@ -89,7 +89,12 @@ struct File {
 
 /// Parses and validates `data/icons.toml` of add-on `addon_id`.
 pub fn parse(addon_id: &str, bytes: &[u8]) -> Result<Vec<IconDef>> {
-    let bad = |m: String| Err(AddonError::Manifest(format!("{}: {m}", crate::manifest::ICONS_FILE)));
+    let bad = |m: String| {
+        Err(AddonError::Manifest(format!(
+            "{}: {m}",
+            crate::manifest::ICONS_FILE
+        )))
+    };
     if bytes.len() > MAX_BYTES {
         return bad("larger than 128 KiB".into());
     }
@@ -111,7 +116,10 @@ pub fn parse(addon_id: &str, bytes: &[u8]) -> Result<Vec<IconDef>> {
             return bad(format!("icon {} is defined twice", icon.name));
         }
         if icon.tooltip.chars().count() > 40 {
-            return bad(format!("the tooltip of {} is longer than 40 characters", icon.name));
+            return bad(format!(
+                "the tooltip of {} is longer than 40 characters",
+                icon.name
+            ));
         }
         if icon.shape.is_empty() || icon.shape.len() > MAX_SHAPES {
             return bad(format!("{} needs 1 to {MAX_SHAPES} shapes", icon.name));
@@ -157,7 +165,13 @@ fn check_shape(shape: &Shape) -> std::result::Result<(), String> {
                 && on_grid(cy + r)
                 && (!*filled || *r <= MAX_DOT_RADIUS)
         }
-        Shape::Arc { cx, cy, r, from, to } => {
+        Shape::Arc {
+            cx,
+            cy,
+            r,
+            from,
+            to,
+        } => {
             on_grid(*cx)
                 && on_grid(*cy)
                 && *r > 0.0
@@ -217,13 +231,24 @@ shape = [
         assert!(rejected("cy = 7, r = 1,", "cy = 7, r = -1,").contains("grid"));
         assert!(rejected("y1 = 2.5", "y1 = 25").contains("grid"));
         assert!(rejected("kind = \"line\"", "kind = \"image\"").contains("image"));
-        assert!(rejected("tooltip = \"Radio\"", "tooltip = \"Radio\"\ncolor = \"red\"").contains("color"));
+        assert!(
+            rejected(
+                "tooltip = \"Radio\"",
+                "tooltip = \"Radio\"\ncolor = \"red\""
+            )
+            .contains("color")
+        );
         assert!(rejected("[9.5, 16.2], [14.5, 16.2]", "[9.5, 16.2]").contains("2 to 64"));
         let many = format!(
             "[[icon]]\nname = \"demo.x\"\nshape = [{}]",
             vec!["{ kind = \"line\", x1 = 1, y1 = 1, x2 = 2, y2 = 2 }"; 49].join(",")
         );
-        assert!(parse("demo", many.as_bytes()).unwrap_err().to_string().contains("shapes"));
+        assert!(
+            parse("demo", many.as_bytes())
+                .unwrap_err()
+                .to_string()
+                .contains("shapes")
+        );
         let nan = "[[icon]]\nname = \"demo.x\"\nshape = [{ kind = \"line\", x1 = nan, y1 = 1, x2 = 2, y2 = 2 }]";
         assert!(parse("demo", nan.as_bytes()).is_err());
     }

@@ -38,7 +38,8 @@ pub fn pack_dir(folder: &Path, signer: Option<&Signer32<'_>>) -> Result<Vec<u8>>
             _ => data.push((rel.clone(), bytes)),
         }
     }
-    let manifest = manifest.ok_or_else(|| AddonError::Manifest("the folder has no manifest.toml".into()))?;
+    let manifest =
+        manifest.ok_or_else(|| AddonError::Manifest("the folder has no manifest.toml".into()))?;
     pack_parts(&manifest, &data, signer)
 }
 
@@ -85,7 +86,10 @@ pub fn pack_parts(
         if let Some(s) = signer {
             let sk = SigningKey::from_bytes(&s.seed);
             let sig = sk.sign(&signed_message(&manifest_bytes));
-            put("signature", signature_file(s.key_id, &sig.to_bytes()).as_bytes())?;
+            put(
+                "signature",
+                signature_file(s.key_id, &sig.to_bytes()).as_bytes(),
+            )?;
         }
         for (name, bytes) in sorted {
             put(name, bytes)?;
@@ -97,14 +101,19 @@ pub fn pack_parts(
 
 fn collect(root: &Path, dir: &Path, out: &mut Vec<String>, depth: usize) -> Result<()> {
     if depth > 8 {
-        return Err(AddonError::UnsafePath("the folder nests deeper than 8 levels".into()));
+        return Err(AddonError::UnsafePath(
+            "the folder nests deeper than 8 levels".into(),
+        ));
     }
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
         let meta = std::fs::symlink_metadata(&path)?;
         if meta.file_type().is_symlink() {
-            return Err(AddonError::UnsafePath(format!("{}: a symbolic link", path.display())));
+            return Err(AddonError::UnsafePath(format!(
+                "{}: a symbolic link",
+                path.display()
+            )));
         }
         if meta.is_dir() {
             collect(root, &path, out, depth + 1)?;

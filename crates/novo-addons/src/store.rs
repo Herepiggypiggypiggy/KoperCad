@@ -202,7 +202,9 @@ pub struct Entry {
 impl Entry {
     /// The name to show, even for a failed one.
     pub fn display_name(&self) -> &str {
-        self.manifest.as_ref().map_or(self.id.as_str(), |m| m.addon.name.as_str())
+        self.manifest
+            .as_ref()
+            .map_or(self.id.as_str(), |m| m.addon.name.as_str())
     }
 }
 
@@ -244,7 +246,10 @@ impl AddonSet {
             .get(id)
             .filter(|e| e.status.is_enabled())
             .ok_or_else(|| AddonError::Unknown(id.to_owned()))?;
-        let manifest = entry.manifest.as_ref().ok_or_else(|| AddonError::Unknown(id.to_owned()))?;
+        let manifest = entry
+            .manifest
+            .as_ref()
+            .ok_or_else(|| AddonError::Unknown(id.to_owned()))?;
         let want = manifest
             .files
             .get(path)
@@ -309,7 +314,9 @@ impl Store {
             Ok(t) => t,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Registry::default(),
             Err(e) => {
-                warnings.push(format!("The add-on list could not be read ({e}); no add-ons are loaded."));
+                warnings.push(format!(
+                    "The add-on list could not be read ({e}); no add-ons are loaded."
+                ));
                 return Registry::default();
             }
         };
@@ -318,7 +325,10 @@ impl Store {
                 let before = r.addons.len();
                 r.addons.retain(|rec| valid_id(&rec.id, 2, 48));
                 if r.addons.len() != before {
-                    warnings.push("The add-on list had entries with unusable names; they were ignored.".into());
+                    warnings.push(
+                        "The add-on list had entries with unusable names; they were ignored."
+                            .into(),
+                    );
                 }
                 r
             }
@@ -384,29 +394,52 @@ impl Store {
             e
         };
         if Version::parse(&rec.active).is_none() {
-            return fail(entry, format!("the installed version {:?} is not a version number", rec.active));
+            return fail(
+                entry,
+                format!(
+                    "the installed version {:?} is not a version number",
+                    rec.active
+                ),
+            );
         }
         let manifest_bytes = match std::fs::read(dir.join("manifest.toml")) {
             Ok(b) => b,
-            Err(e) => return fail(entry, format!("its files are missing or unreadable ({e}); install it again from its file")),
+            Err(e) => {
+                return fail(
+                    entry,
+                    format!(
+                        "its files are missing or unreadable ({e}); install it again from its file"
+                    ),
+                );
+            }
         };
         if sha256_hex(&manifest_bytes) != rec.fingerprint {
-            return fail(entry, "its manifest changed after it was installed; install it again from its file".into());
+            return fail(
+                entry,
+                "its manifest changed after it was installed; install it again from its file"
+                    .into(),
+            );
         }
         let manifest = match Manifest::parse(&manifest_bytes) {
             Ok(m) => m,
             Err(e) => return fail(entry, e.to_string()),
         };
         if manifest.addon.id != rec.id || manifest.version() != active {
-            return fail(entry, "its manifest names a different add-on or version than the one installed".into());
+            return fail(
+                entry,
+                "its manifest names a different add-on or version than the one installed".into(),
+            );
         }
         // Every listed file must exist with the right hash; nothing else may sit beside them.
         for (path, want) in &manifest.files {
-            let ok = std::fs::read(dir.join(path)).map(|b| &sha256_hex(&b) == want).unwrap_or(false);
+            let ok = std::fs::read(dir.join(path))
+                .map(|b| &sha256_hex(&b) == want)
+                .unwrap_or(false);
             entry.verified.insert(path.clone(), ok);
         }
         if let Some((bad, _)) = entry.verified.iter().find(|(_, ok)| !**ok) {
-            let why = format!("{bad} is missing or has been changed; install it again from its file");
+            let why =
+                format!("{bad} is missing or has been changed; install it again from its file");
             entry.manifest = Some(manifest);
             return fail(entry, why);
         }
@@ -420,7 +453,10 @@ impl Store {
         };
         if !entry.trust.is_signed() && !rec.accepted_unsigned {
             entry.manifest = Some(manifest);
-            return fail(entry, "it is not signed by a trusted publisher and was not accepted".into());
+            return fail(
+                entry,
+                "it is not signed by a trusted publisher and was not accepted".into(),
+            );
         }
         if manifest.files.contains_key(ICONS_FILE)
             && let Ok(bytes) = std::fs::read(dir.join(ICONS_FILE))
@@ -448,7 +484,11 @@ impl Store {
         let compat = check_compat(&package.manifest, &self.app);
         let mut warnings = Vec::new();
         let registry = self.load_registry(&mut warnings);
-        let change = match registry.addons.iter().find(|r| r.id == package.manifest.addon.id) {
+        let change = match registry
+            .addons
+            .iter()
+            .find(|r| r.id == package.manifest.addon.id)
+        {
             None => Change::New,
             Some(rec) => {
                 let installed = Version::parse(&rec.active).unwrap_or_default();
@@ -532,7 +572,11 @@ impl Store {
                 let old = registry.addons[i].clone();
                 let upgrading = matches!(inspection.change, Change::Update { .. });
                 // Keep one previous version for Roll back; remove the one before it.
-                let previous = if upgrading { Some(old.active.clone()) } else { old.previous.clone() };
+                let previous = if upgrading {
+                    Some(old.active.clone())
+                } else {
+                    old.previous.clone()
+                };
                 if upgrading
                     && let Some(older) = &old.previous
                     && Some(older) != previous.as_ref()
@@ -636,7 +680,9 @@ impl Store {
                 .map_err(|e| AddonError::Io(format!("the earlier version is gone ({e})")))?;
             let manifest = Manifest::parse(&manifest_bytes)?;
             if manifest.addon.id != id {
-                return Err(AddonError::Manifest("the earlier version belongs to another add-on".into()));
+                return Err(AddonError::Manifest(
+                    "the earlier version belongs to another add-on".into(),
+                ));
             }
             let sig = std::fs::read(dir.join("signature")).ok();
             let trust = judge(&manifest_bytes, sig.as_deref(), &self.trust)?;

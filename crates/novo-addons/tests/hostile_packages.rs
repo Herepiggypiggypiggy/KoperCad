@@ -82,9 +82,15 @@ fn a_symbolic_link_entry_is_refused() {
     let mut out = Vec::new();
     {
         let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut out));
-        zip.start_file("manifest.toml", zip::write::SimpleFileOptions::default()).unwrap();
+        zip.start_file("manifest.toml", zip::write::SimpleFileOptions::default())
+            .unwrap();
         std::io::Write::write_all(&mut zip, WITH_ENGINE.as_bytes()).unwrap();
-        zip.add_symlink("data/link", "../../outside", zip::write::SimpleFileOptions::default()).unwrap();
+        zip.add_symlink(
+            "data/link",
+            "../../outside",
+            zip::write::SimpleFileOptions::default(),
+        )
+        .unwrap();
         zip.finish().unwrap();
     }
     assert!(refused(&out).contains("symbolic link"));
@@ -113,14 +119,20 @@ fn a_file_the_manifest_does_not_list_is_refused() {
         entries.push((f.name().to_owned(), b));
     }
     entries.push(("data/extra.dll".into(), b"MZ".to_vec()));
-    let refs: Vec<(&str, &[u8])> = entries.iter().map(|(n, b)| (n.as_str(), b.as_slice())).collect();
+    let refs: Vec<(&str, &[u8])> = entries
+        .iter()
+        .map(|(n, b)| (n.as_str(), b.as_slice()))
+        .collect();
     assert!(refused(&raw_zip(&refs)).contains("not listed in the manifest"));
 }
 
 #[test]
 fn a_listed_file_that_is_missing_is_refused() {
     let mut text = WITH_ENGINE.to_owned();
-    text.push_str(&format!("\n[files]\n\"engine.wasm\" = \"{}\"\n", novo_addons::trust::sha256_hex(b"x")));
+    text.push_str(&format!(
+        "\n[files]\n\"engine.wasm\" = \"{}\"\n",
+        novo_addons::trust::sha256_hex(b"x")
+    ));
     let zip = raw_zip(&[("manifest.toml", text.as_bytes())]);
     assert!(refused(&zip).contains("missing from the package"));
 }
@@ -142,7 +154,10 @@ fn an_oversized_manifest_is_refused() {
     big.push_str(&"# padding\n".repeat(40_000));
     let zip = raw_zip(&[("manifest.toml", big.as_bytes())]);
     let why = refused(&zip);
-    assert!(why.contains("too large") || why.contains("256 KiB"), "{why}");
+    assert!(
+        why.contains("too large") || why.contains("256 KiB"),
+        "{why}"
+    );
 }
 
 #[test]
@@ -163,14 +178,18 @@ fn the_expansion_ratio_and_total_limits_hold_with_smaller_files() {
         max_ratio: 50,
         ..Limits::DEFAULT
     };
-    let err = Package::read_with(&zip, &empty_trust(), limits).unwrap_err().to_string();
+    let err = Package::read_with(&zip, &empty_trust(), limits)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("fold"), "{err}");
     let limits = Limits {
         max_total_bytes: 1024 * 1024,
         max_ratio: u64::MAX,
         ..Limits::DEFAULT
     };
-    let err = Package::read_with(&zip, &empty_trust(), limits).unwrap_err().to_string();
+    let err = Package::read_with(&zip, &empty_trust(), limits)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("add up to more"), "{err}");
     let limits = Limits {
         max_file_bytes: 1024 * 1024,
@@ -182,18 +201,31 @@ fn the_expansion_ratio_and_total_limits_hold_with_smaller_files() {
 #[test]
 fn too_many_entries_and_a_too_large_file() {
     let names: Vec<String> = (0..30).map(|i| format!("data/f{i}.toml")).collect();
-    let entries: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), b"x".as_slice())).collect();
+    let entries: Vec<(&str, &[u8])> = names
+        .iter()
+        .map(|n| (n.as_str(), b"x".as_slice()))
+        .collect();
     let zip = raw_zip(&entries);
     let limits = Limits {
         max_entries: 10,
         ..Limits::DEFAULT
     };
-    assert!(Package::read_with(&zip, &empty_trust(), limits).unwrap_err().to_string().contains("entries"));
+    assert!(
+        Package::read_with(&zip, &empty_trust(), limits)
+            .unwrap_err()
+            .to_string()
+            .contains("entries")
+    );
     let limits = Limits {
         max_package_bytes: 10,
         ..Limits::DEFAULT
     };
-    assert!(Package::read_with(&zip, &empty_trust(), limits).unwrap_err().to_string().contains("MiB"));
+    assert!(
+        Package::read_with(&zip, &empty_trust(), limits)
+            .unwrap_err()
+            .to_string()
+            .contains("MiB")
+    );
 }
 
 #[test]
@@ -212,7 +244,13 @@ fn rule_breaking_manifests_are_refused() {
     // hostile icon data
     let m = format!("{WITH_ENGINE}\n[[contribute]]\nkind = \"x\"\nfile = \"data/icons.toml\"\n");
     let icons = "[[icon]]\nname = \"evil.a\"\nshape = [{ kind = \"line\", x1 = 0, y1 = 0, x2 = 900, y2 = 0 }]\n";
-    assert!(refused(&raw_package(&m, &[("engine.wasm", b"x"), ("data/icons.toml", icons.as_bytes())])).contains("grid"));
+    assert!(
+        refused(&raw_package(
+            &m,
+            &[("engine.wasm", b"x"), ("data/icons.toml", icons.as_bytes())]
+        ))
+        .contains("grid")
+    );
 }
 
 #[test]
@@ -231,13 +269,50 @@ fn a_broken_signature_is_refused_even_though_unsigned_would_pass() {
     }
     for (n, b) in &mut entries {
         if n == "manifest.toml" {
-            let t = String::from_utf8(b.clone()).unwrap().replace("A demo add-on.", "A changed add-on.");
+            let t = String::from_utf8(b.clone())
+                .unwrap()
+                .replace("A demo add-on.", "A changed add-on.");
             *b = t.into_bytes();
         }
     }
-    let refs: Vec<(&str, &[u8])> = entries.iter().map(|(n, b)| (n.as_str(), b.as_slice())).collect();
+    let refs: Vec<(&str, &[u8])> = entries
+        .iter()
+        .map(|(n, b)| (n.as_str(), b.as_slice()))
+        .collect();
     let tampered = raw_zip(&refs);
-    let err = store.install_bytes(&tampered, Default::default()).unwrap_err();
+    let err = store
+        .install_bytes(&tampered, Default::default())
+        .unwrap_err();
     assert!(matches!(err, AddonError::BadSignature(_)), "{err}");
-    assert!(listing(&store_dir.path().join("addons")).iter().all(|f| f == "trusted-keys.toml"));
+    assert!(
+        listing(&store_dir.path().join("addons"))
+            .iter()
+            .all(|f| f == "trusted-keys.toml")
+    );
+}
+
+#[test]
+fn a_panel_layout_with_a_colour_or_an_unknown_widget_is_refused() {
+    const M: &str = r#"[addon]
+id = "evil"
+name = "Evil"
+version = "1.0.0"
+publisher = "Nobody"
+api_version = 1
+permissions = ["floating-panel"]
+
+[[panel]]
+id = "p"
+title = "P"
+slot = "floating"
+file = "data/p.panel.toml"
+"#;
+    for bad in [
+        "[[widget]]\nkind = \"label\"\ntext = \"hi\"\ncolor = \"#ff0000\"\n",
+        "[[widget]]\nkind = \"webview\"\nurl = \"http://example.com\"\n",
+    ] {
+        let bytes = raw_package(M, &[("data/p.panel.toml", bad.as_bytes())]);
+        let why = refused(&bytes);
+        assert!(why.contains("p.panel.toml"), "{why}");
+    }
 }

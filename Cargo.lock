@@ -2039,6 +2039,7 @@ version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
  "serde",
+ "serde_json",
  "sha2 0.11.1",
  "tempfile",
  "thiserror 2.0.21",
@@ -2079,6 +2080,7 @@ dependencies = [
  "image",
  "log",
  "lopdf",
+ "novo-addons",
  "novo-ai",
  "novo-cables",
  "novo-canvas",
@@ -2186,6 +2188,7 @@ dependencies = [
  "calamine",
  "clap",
  "image",
+ "novo-addons",
  "novo-ai",
  "novo-canvas",
  "novo-checks",
@@ -2393,6 +2396,7 @@ name = "novo-py"
 version = "0.1.0"
 dependencies = [
  "calamine",
+ "novo-addons",
  "novo-checks",
  "novo-core",
  "novo-reports",
@@ -2502,6 +2506,7 @@ name = "novo-tests"
 version = "0.1.0"
 dependencies = [
  "egui",
+ "novo-addons",
  "novo-app",
  "novo-cables",
  "novo-canvas",

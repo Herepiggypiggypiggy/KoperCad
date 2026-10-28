@@ -1,0 +1,174 @@
+//! The add-on manager through the whole window, headless: the command opens a window that fits
+//! the screen at both sizes, an installed add-on adds its rows to the command search and takes
+//! them away when turned off, and a refused file shows why.
+
+use std::path::{Path, PathBuf};
+
+use eframe::egui;
+use novo_workflow::palette::{Mode, Target};
+
+use super::gate1_tests::Drive;
+
+fn fixture(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../qa/fixtures/addons")
+        .join(name)
+}
+
+fn drive() -> (Drive, tempfile::TempDir) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.init_addons_at(dir.path().join("addons"));
+    (d, dir)
+}
+
+fn rows(d: &mut Drive, query: &str) -> Vec<novo_workflow::palette::Row> {
+    d.app.wb.field.open(Mode::All, None);
+    d.app.wb.field.type_text(query);
+    let rows = d.app.with_field(|field, sources| field.rows(sources));
+    d.app.wb.field.close();
+    rows
+}
+
+#[test]
+fn nothing_is_installed_at_first_and_the_command_opens_the_manager() {
+    let (mut d, _dir) = drive();
+    assert!(!d.app.addon_enabled("demo-tools"));
+    assert!(d.app.wb.addons.ext.commands.is_empty());
+    let found = rows(&mut d, "add-ons");
+    assert!(
+        found
+            .iter()
+            .any(|r| r.target == Target::Command("addons.manage")),
+        "Ctrl+K finds Add-ons"
+    );
+    let ctx = d.ctx.clone();
+    assert!(d.app.type_command(&ctx, Mode::All, "add-ons"));
+    d.frame();
+    assert!(d.app.wb.addons.manager.is_some());
+}
+
+#[test]
+fn the_manager_fits_the_screen_at_both_sizes() {
+    for (w, h) in [(1366.0, 768.0), (1920.0, 1080.0)] {
+        let (mut d, _dir) = drive();
+        d.app.open_addons();
+        d.frame_sized(egui::vec2(w, h), Vec::new());
+        d.frame_sized(egui::vec2(w, h), Vec::new());
+        let rect = d
+            .ctx
+            .memory(|m| m.area_rect(super::panel::id("addons")))
+            .expect("the manager is on screen");
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h));
+        assert!(screen.contains_rect(rect), "{rect:?} inside {screen:?}");
+        assert!(rect.width() >= 600.0 && rect.height() >= 400.0, "{rect:?}");
+    }
+}
+
+#[test]
+fn installing_adds_rows_and_turning_off_takes_them_away() {
+    let (mut d, dir) = drive();
+    d.app.begin_install(fixture("demo-tools-0.1.0.kcaddon"));
+    d.frame();
+    let prompt = d
+        .app
+        .wb
+        .addons
+        .manager
+        .as_ref()
+        .and_then(|m| m.prompt.as_ref());
+    assert!(prompt.is_some(), "the install prompt is shown");
+    assert!(prompt.unwrap().inspection.needs_trust_tick());
+    // an unsigned file needs the tick: the store itself refuses without it
+    let store = d.app.wb.addons.store.clone().unwrap();
+    assert!(
+        store
+            .install_file(&fixture("demo-tools-0.1.0.kcaddon"), Default::default())
+            .is_err()
+    );
+    store
+        .install_file(
+            &fixture("demo-tools-0.1.0.kcaddon"),
+            novo_addons::InstallOptions {
+                accept_unsigned: true,
+                enable: true,
+            },
+        )
+        .unwrap();
+    d.app.refresh_addons();
+    d.frame();
+
+    assert!(d.app.addon_enabled("demo-tools"));
+    let found = rows(&mut d, "demo status");
+    let hit = found
+        .iter()
+        .find(|r| r.target == Target::Addon("addon.demo-tools.status".into()))
+        .expect("the command search finds the add-on's command");
+    assert!(hit.detail.contains("Add-on: Demo tools"), "{}", hit.detail);
+    // the palette-only command is found too; the rail one is not a menu row
+    assert!(
+        rows(&mut d, "search-only")
+            .iter()
+            .any(|r| r.target == Target::Addon("addon.demo-tools.search-only".into()))
+    );
+    assert_eq!(d.app.wb.addons.ext.menu_rows("Simulate").len(), 1);
+
+    // running it opens its panel
+    let ctx = d.ctx.clone();
+    assert!(d.app.type_command(&ctx, Mode::All, "demo status panel"));
+    assert!(
+        d.app
+            .wb
+            .addons
+            .open_panels
+            .contains("addon.demo-tools.status")
+    );
+    d.frame();
+    assert!(
+        d.ctx
+            .memory(|m| m.area_rect(super::panel::id("addon.demo-tools.status")))
+            .is_some(),
+        "the panel is drawn"
+    );
+
+    // off: the rows and the panel go
+    store.set_enabled("demo-tools", false).unwrap();
+    d.app.refresh_addons();
+    d.frame();
+    assert!(!d.app.addon_enabled("demo-tools"));
+    assert!(
+        !rows(&mut d, "demo status")
+            .iter()
+            .any(|r| matches!(&r.target, Target::Addon(_)))
+    );
+    assert!(d.app.wb.addons.ext.commands.is_empty());
+    assert!(d.app.wb.addons.open_panels.is_empty());
+    drop(dir);
+}
+
+#[test]
+fn a_file_that_needs_a_newer_program_is_refused_in_words() {
+    let (mut d, _dir) = drive();
+    d.app.begin_install(fixture("future-addon-1.0.0.kcaddon"));
+    let m = d.app.wb.addons.manager.as_ref().unwrap();
+    assert!(m.prompt.is_none());
+    let (_, text) = m.notice.as_ref().expect("a notice says why");
+    assert!(text.contains("needs KoperCAD 9.0.0 or newer"), "{text}");
+}
+
+#[test]
+fn a_file_that_is_not_an_add_on_is_refused_in_words() {
+    let (mut d, dir) = drive();
+    let junk = dir.path().join("junk.kcaddon");
+    std::fs::write(&junk, b"this is not a zip").unwrap();
+    d.app.begin_install(junk);
+    let m = d.app.wb.addons.manager.as_ref().unwrap();
+    assert!(m.prompt.is_none());
+    assert!(
+        m.notice
+            .as_ref()
+            .unwrap()
+            .1
+            .contains("not a readable add-on")
+    );
+}

@@ -28,7 +28,9 @@ pub enum AddonError {
     #[error("{0}")]
     Incompatible(String),
     /// An unsigned or untrusted add-on was not explicitly accepted.
-    #[error("this add-on is not signed by a publisher you trust; tick the box to install it anyway")]
+    #[error(
+        "this add-on is not signed by a publisher you trust; tick the box to install it anyway"
+    )]
     NotAccepted,
     /// The same version is installed, or the file is older than the installed one.
     #[error("{0}")]

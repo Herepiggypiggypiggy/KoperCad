@@ -102,7 +102,10 @@ pub fn icons(id: &str) -> String {
 
 pub fn files(id: &str, payload: &str) -> Vec<(String, Vec<u8>)> {
     vec![
-        ("data/main.panel.toml".into(), b"title = \"Main\"\n".to_vec()),
+        (
+            "data/main.panel.toml".into(),
+            b"[[widget]]\nkind = \"label\"\ntext = \"Hello\"\n".to_vec(),
+        ),
         ("data/profile.toml".into(), payload.as_bytes().to_vec()),
         ("data/icons.toml".into(), icons(id).into_bytes()),
         ("LICENSE".into(), b"MIT\n".to_vec()),
@@ -162,10 +165,17 @@ pub fn empty_trust() -> TrustStore {
 /// Everything under `dir`, relative, for "nothing was written" checks.
 pub fn listing(dir: &std::path::Path) -> Vec<String> {
     fn walk(root: &std::path::Path, dir: &std::path::Path, out: &mut Vec<String>) {
-        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
         for e in rd.flatten() {
             let p = e.path();
-            out.push(p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"));
+            out.push(
+                p.strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+            );
             if p.is_dir() {
                 walk(root, &p, out);
             }

@@ -14,17 +14,27 @@
 pub mod error;
 pub mod extensions;
 pub mod icons;
+pub mod layout;
 pub mod manifest;
 pub mod pack;
 pub mod package;
+pub mod report;
 pub mod store;
 pub mod trust;
 pub mod version;
 
 pub use error::{AddonError, Result};
-pub use manifest::{API_VERSION, Manifest, Permission};
+
+/// The folder add-ons live in, under the per-user local data folder
+/// (`%LOCALAPPDATA%` on Windows): `<local>/KoperCAD/addons`.
+pub fn default_root(local_data: &std::path::Path) -> std::path::PathBuf {
+    local_data.join("KoperCAD").join("addons")
+}
 pub use extensions::{ExtCommand, ExtPanel, Extensions, Home};
+pub use manifest::{API_VERSION, Manifest, Permission};
 pub use package::{Limits, Package};
-pub use store::{AddonSet, AppInfo, Change, Compat, Entry, InstallOptions, Inspection, Status, Store};
+pub use store::{
+    AddonSet, AppInfo, Change, Compat, Entry, Inspection, InstallOptions, Status, Store,
+};
 pub use trust::{Trust, TrustStore};
 pub use version::{Requirement, Version};
