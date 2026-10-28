@@ -130,7 +130,6 @@ fn the_cabinet_says_what_it_estimated_and_what_leaves_the_cabinet() {
 #[test]
 #[ignore = "writes qa/fixtures/route-no-duct-path.novo"]
 fn write_no_duct_path_fixture() {
-    use crate::backend::ProjectBackend;
     let (_dir, mut d) = placed_example();
     let trunk: Vec<_> = d
         .doc()
