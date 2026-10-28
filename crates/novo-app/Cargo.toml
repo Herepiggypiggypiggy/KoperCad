@@ -70,3 +70,7 @@ FileDescription = "KoperCAD electrical CAD"
 
 [lints]
 workspace = true
+
+# Windows only: the main window as the owner of file dialogs (KC-11).
+[target.'cfg(windows)'.dependencies]
+raw-window-handle = "0.6"

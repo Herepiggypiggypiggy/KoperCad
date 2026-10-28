@@ -1,0 +1,19 @@
+@title Window sizes a rotated or mirrored monitor can report do not crash
+@area Display
+@sizes 1366x768
+# KC-01 / KC-04: a 3378 x 32711 pixel surface panicked wgpu. The window is
+# corrected to a usable size and the panels keep reacting to the mouse.
+resize 1100 9000
+wait 6
+shot tall-and-thin
+check_layout
+resize 9000 600
+wait 6
+shot wide-and-flat
+check_layout
+resize 1366 768
+wait 6
+click_text "Search"
+wait 4
+shot search-opens-after-resize
+key Escape
