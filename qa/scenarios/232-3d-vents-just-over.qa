@@ -14,7 +14,7 @@ click_text Quick
 wait 10
 click_text Simulate #2
 wait_s 170
-expect_not "Locked while the run goes"
+expect_not "A run is going on the openings"
 shot 01-at-its-limit
 check_layout
 check_blank 01-at-its-limit

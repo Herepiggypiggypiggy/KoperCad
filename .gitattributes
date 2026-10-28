@@ -25,3 +25,10 @@ handoff/**/PROGRESS.md merge=union
 
 # Files written by the release candidates: byte for byte, never converted.
 crates/novo-tests/tests/golden/releases/** -text
+
+# Add-on fixtures: the packed .kcaddon files must equal what the packer makes from the source
+# folders byte for byte (a CRLF checkout on Windows would change every hash).
+qa/fixtures/addons/src/** text eol=lf
+qa/fixtures/addons/engine-src/** text eol=lf
+qa/fixtures/addons/src/**/*.wasm binary
+qa/fixtures/addons/*.kcaddon binary

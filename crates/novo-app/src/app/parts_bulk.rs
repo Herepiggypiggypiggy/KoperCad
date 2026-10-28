@@ -10,10 +10,10 @@
 use std::path::{Path, PathBuf};
 
 use eframe::egui;
-use novo_core::{Command, DeviceId};
+use novo_core::DeviceId;
 use novo_parts::{
-    Catalog, InboxOptions, InboxReport, auto_assign_parts, clear_parts, default_inbox,
-    import_inbox, prepare_inbox, propose_parts, remove_unused_parts, unused_parts,
+    Catalog, CatalogPart, Confidence, InboxOptions, InboxReport, assign_choices, clear_parts,
+    default_inbox, import_inbox, prepare_inbox, propose_parts, remove_unused_parts, unused_parts,
 };
 
 use super::part_picker::selected_devices;
@@ -27,15 +27,45 @@ pub(crate) struct BulkReport {
     pub(super) rejected: usize,
 }
 
-/// Proposals waiting for Accept all or Cancel.
+/// One part a device could get, as the dialog lists it.
+struct AssignOption {
+    part: CatalogPart,
+    confidence: Confidence,
+    reason: String,
+}
+
+/// One device in the "Assign parts to all devices" dialog.
+struct AssignRow {
+    device: DeviceId,
+    tag: String,
+    /// Best first (see `propose_parts`), at most [`MAX_OPTIONS`].
+    options: Vec<AssignOption>,
+    /// The option that will be assigned; `None` skips the device.
+    chosen: Option<usize>,
+}
+
+/// Most parts one device's list offers; the Parts window has the rest.
+const MAX_OPTIONS: usize = 25;
+
+/// Proposals waiting for the person's choices.
 pub(crate) struct AutoAssignPreview {
-    /// `-K1  ->  Siemens 3RT2015` per device that gets a part.
-    rows: Vec<String>,
-    /// Devices with several fitting parts: left for the person to pick.
-    several: usize,
-    /// Devices with no fitting catalog part at all.
-    none: usize,
-    command: Command,
+    rows: Vec<AssignRow>,
+    /// Tags of devices for which no catalog part fits at all.
+    none: Vec<String>,
+}
+
+impl AutoAssignPreview {
+    fn chosen_count(&self) -> usize {
+        self.rows.iter().filter(|r| r.chosen.is_some()).count()
+    }
+
+    /// What the dialog will do: the part chosen for each device.
+    fn choices(&self) -> Vec<(DeviceId, &CatalogPart)> {
+        self.rows
+            .iter()
+            .filter_map(|r| Some((r.device, &r.options[r.chosen?].part)))
+            .collect()
+    }
 }
 
 /// Opens a folder in the system file manager (per user, no elevation).
@@ -53,6 +83,42 @@ pub(crate) fn open_folder(path: &Path) -> Result<(), String> {
         .spawn()
         .map(|_| ())
         .map_err(|e| format!("could not open {}: {e}", path.display()))
+}
+
+/// The option a row takes when its tick is set: the sure one, else the first.
+fn best_sure(row: &AssignRow) -> Option<usize> {
+    let sure = |c: Confidence| c != Confidence::Unsure;
+    let mut sure_options = row
+        .options
+        .iter()
+        .enumerate()
+        .filter(|(_, o)| sure(o.confidence));
+    match (sure_options.next(), sure_options.next()) {
+        (Some((at, _)), None) => Some(at),
+        _ => None,
+    }
+}
+
+fn confidence_colour(p: &novo_theme::Palette, c: Confidence) -> egui::Color32 {
+    match c {
+        Confidence::Certain => p.success,
+        Confidence::Likely => p.text_secondary,
+        Confidence::Unsure => p.warning,
+    }
+}
+
+/// `-T1, -T2 and 4 more`.
+fn tag_list(tags: &[String]) -> String {
+    const SHOWN: usize = 8;
+    if tags.len() <= SHOWN {
+        tags.join(", ")
+    } else {
+        format!(
+            "{} and {} more",
+            tags[..SHOWN].join(", "),
+            tags.len() - SHOWN
+        )
+    }
 }
 
 /// `dir/name`, or `dir/stem (2).ext`, `(3)`... when that file exists.
@@ -261,55 +327,68 @@ impl NovoApp {
             return;
         };
         let proposals = propose_parts(catalog, project, None);
-        let mut rows = Vec::new();
-        let mut several = 0;
-        for p in &proposals {
-            match (&p.candidates[..], project.device(p.device)) {
-                ([part], Some(device)) => rows.push(format!(
-                    "{}  ->  {} {}",
-                    device.tag, part.manufacturer, part.order_number
-                )),
-                ([], _) | (_, None) => {}
-                _ => several += 1,
-            }
-        }
+        let rows: Vec<AssignRow> = proposals
+            .iter()
+            .filter_map(|p| {
+                let device = project.device(p.device)?;
+                let chosen = p
+                    .default_choice()
+                    .and_then(|best| {
+                        p.candidates
+                            .iter()
+                            .position(|c| std::ptr::eq(c.part, best.part))
+                    })
+                    .filter(|&at| at < MAX_OPTIONS);
+                Some(AssignRow {
+                    device: p.device,
+                    tag: device.tag.to_string(),
+                    options: p
+                        .candidates
+                        .iter()
+                        .take(MAX_OPTIONS)
+                        .map(|c| AssignOption {
+                            part: c.part.clone(),
+                            confidence: c.confidence,
+                            reason: c.reason.clone(),
+                        })
+                        .collect(),
+                    chosen,
+                })
+            })
+            .collect();
         // `propose_parts` never returns a proposal with no candidates, so a
         // device without a proposal is one with no fitting catalog part.
-        let none = project
+        let mut none: Vec<&novo_core::Device> = project
             .devices()
             .filter(|d| {
                 d.parts.is_empty()
                     && d.kind != novo_core::DeviceKind::TerminalStrip
                     && !proposals.iter().any(|p| p.device == d.id)
             })
-            .count();
-        let Some(command) = auto_assign_parts(catalog, project) else {
-            let why = if several + none == 0 {
-                "Every device already has a part".to_owned()
-            } else {
-                format!(
-                    "No part is certain: {several} device(s) have several fitting parts \
-                     (pick in the inspector), {none} have none in the catalog"
-                )
-            };
-            self.message(Level::Info, why);
+            .collect();
+        none.sort_by(|a, b| novo_core::natural_cmp(&a.tag.to_string(), &b.tag.to_string()));
+        let none: Vec<String> = none.iter().map(|d| d.tag.to_string()).collect();
+        if rows.is_empty() && none.is_empty() {
+            self.message(Level::Info, "Every device already has a part");
             return;
-        };
-        self.wb.auto_assign = Some(AutoAssignPreview {
-            rows,
-            several,
-            none,
-            command,
-        });
+        }
+        self.wb.auto_assign = Some(AutoAssignPreview { rows, none });
     }
 
-    /// Applies the previewed assignment as one undo step.
+    /// Applies the previewed choices as one undo step.
     pub(crate) fn confirm_auto_assign(&mut self) -> bool {
         let Some(preview) = self.wb.auto_assign.take() else {
             return false;
         };
-        let count = preview.rows.len();
-        match self.execute(preview.command) {
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return false;
+        };
+        let count = preview.chosen_count();
+        let Some(command) = assign_choices(project, &preview.choices()) else {
+            self.message(Level::Info, "No part chosen, nothing changed");
+            return false;
+        };
+        match self.execute(command) {
             Some(Ok(_)) => {
                 self.message(Level::Info, format!("Assigned parts to {count} device(s)"));
                 true
@@ -323,33 +402,116 @@ impl NovoApp {
     }
 
     pub(super) fn auto_assign_dialog(&mut self, ctx: &egui::Context) {
-        let Some(preview) = &self.wb.auto_assign else {
+        let Some(preview) = &mut self.wb.auto_assign else {
             return;
         };
+        let palette = crate::theme::ui_palette();
         let (mut go, mut cancel) = (false, false);
         let modal = egui::Modal::new(egui::Id::new("auto_assign")).show(ctx, |ui| {
-            ui.set_width(460.0);
+            ui.set_width(780.0);
             super::dialog_ui::title(ui, "Assign parts to all devices", "");
-            ui.label(format!(
-                "{} device(s) have exactly one fitting catalog part:",
-                preview.rows.len()
-            ));
-            egui::ScrollArea::vertical().max_height(280.0).show(ui, |ui| {
-                for row in &preview.rows {
-                    ui.monospace(row);
+            ui.weak(
+                "Tick the devices that get a part and pick the part. Only parts that are \
+                 sure are ticked; a part of another kind is never offered.",
+            );
+            ui.add_space(4.0);
+            if preview.rows.is_empty() {
+                ui.label("No part in the catalog fits any of the devices without a part.");
+            }
+            ui.horizontal(|ui| {
+                if !preview.rows.is_empty() && ui.small_button("Tick sure parts").clicked() {
+                    for row in &mut preview.rows {
+                        row.chosen = best_sure(row);
+                    }
+                }
+                if !preview.rows.is_empty() && ui.small_button("Untick all").clicked() {
+                    for row in &mut preview.rows {
+                        row.chosen = None;
+                    }
                 }
             });
-            if preview.several + preview.none > 0 {
+            egui::ScrollArea::vertical()
+                .max_height(340.0)
+                .show(ui, |ui| {
+                    egui::Grid::new("auto_assign_rows")
+                        .num_columns(5)
+                        .spacing([10.0, 6.0])
+                        .striped(true)
+                        .show(ui, |ui| {
+                            if !preview.rows.is_empty() {
+                                for h in ["", "Device", "Part", "Match", "Why"] {
+                                    ui.label(egui::RichText::new(h).strong());
+                                }
+                                ui.end_row();
+                            }
+                            for row in &mut preview.rows {
+                                let mut on = row.chosen.is_some();
+                                if ui.checkbox(&mut on, "").changed() {
+                                    row.chosen = on.then(|| best_sure(row).unwrap_or(0));
+                                }
+                                ui.monospace(&row.tag);
+                                let shown = row.chosen.unwrap_or(0);
+                                let label = |o: &AssignOption| {
+                                    format!("{} {}", o.part.manufacturer, o.part.order_number)
+                                };
+                                egui::ComboBox::from_id_salt(("auto_assign_part", row.device))
+                                    .width(230.0)
+                                    .selected_text(label(&row.options[shown]))
+                                    .show_ui(ui, |ui| {
+                                        for (at, o) in row.options.iter().enumerate() {
+                                            let text = format!(
+                                                "{}  ({}) {}",
+                                                label(o),
+                                                o.confidence.label(),
+                                                o.part.description
+                                            );
+                                            if ui
+                                                .selectable_label(row.chosen == Some(at), text)
+                                                .clicked()
+                                            {
+                                                row.chosen = Some(at);
+                                            }
+                                        }
+                                    });
+                                let o = &row.options[shown];
+                                ui.colored_label(
+                                    confidence_colour(palette, o.confidence),
+                                    o.confidence.label(),
+                                );
+                                ui.add(
+                                    egui::Label::new(egui::RichText::new(&o.reason).weak()).wrap(),
+                                );
+                                ui.end_row();
+                            }
+                        });
+                });
+            if !preview.none.is_empty() {
                 ui.add_space(4.0);
-                ui.weak(format!(
-                    "Left alone: {} with several fitting parts (pick one in the inspector), {} with none in the catalog.",
-                    preview.several, preview.none
-                ));
+                ui.colored_label(
+                    palette.warning,
+                    format!(
+                        "No part in the catalog fits {}: {}. Add one in the Parts window.",
+                        preview.none.len(),
+                        tag_list(&preview.none)
+                    ),
+                );
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                go = novo_theme::widgets::primary_button(ui, "Accept all").clicked();
-                cancel = novo_theme::widgets::ghost_button(ui, "Cancel").clicked();
+                let n = preview.chosen_count();
+                ui.add_enabled_ui(n > 0, |ui| {
+                    let text = format!("Assign {n} part{}", if n == 1 { "" } else { "s" });
+                    go = novo_theme::widgets::primary_button(ui, &text).clicked();
+                });
+                cancel = novo_theme::widgets::ghost_button(
+                    ui,
+                    if preview.rows.is_empty() {
+                        "Close"
+                    } else {
+                        "Cancel"
+                    },
+                )
+                .clicked();
             });
         });
         if go {
@@ -447,6 +609,118 @@ mod tests {
         d.app.backend.document_mut().unwrap().undo().unwrap();
         let project = d.app.backend.document().unwrap().project();
         assert!(project.devices().all(|dev| dev.parts.is_empty()));
+    }
+
+    #[test]
+    fn a_skipped_row_is_left_alone_and_a_chosen_part_is_taken() {
+        let (_dir, mut d) = drive_with_devices();
+        let mut catalog = contactor_catalog();
+        let mut other = CatalogPart::new("Acme", "C-2");
+        other.letter_codes = vec!["K".into()];
+        catalog.upsert(other);
+        d.app.start_auto_assign_with(&catalog);
+        let preview = d.app.wb.auto_assign.as_mut().expect("a preview");
+        // Two letter-only parts fit each contactor: nothing is ticked.
+        assert_eq!(preview.chosen_count(), 0);
+        assert_eq!(preview.rows[0].options.len(), 2);
+        // The person picks the second part for -K1 and skips -K2.
+        preview.rows[0].chosen = Some(1);
+        assert!(d.app.confirm_auto_assign());
+        let project = d.app.backend.document().unwrap().project();
+        let part_of = |tag: &str| {
+            let dev = project
+                .devices()
+                .find(|x| x.tag.to_string() == tag)
+                .unwrap();
+            dev.parts
+                .first()
+                .map(|p| project.part(*p).unwrap().order_number.clone())
+        };
+        assert_eq!(part_of("-K1").as_deref(), Some("C-2"));
+        assert_eq!(part_of("-K2"), None);
+    }
+
+    #[test]
+    fn a_catalog_with_nothing_of_the_right_kind_says_so_and_changes_nothing() {
+        use novo_core::{Pin, Placement, Point, SymbolRole};
+        let (_dir, mut d) = drive_with_devices();
+        let page = d
+            .app
+            .backend
+            .document()
+            .unwrap()
+            .project()
+            .pages()
+            .next()
+            .unwrap()
+            .id;
+        d.app
+            .backend
+            .document_mut()
+            .unwrap()
+            .transact("Drive", |tx| {
+                let t1 = tx.add_device(DeviceTag::parse("-T1").unwrap(), "")?;
+                tx.place_symbol(
+                    page,
+                    "iec/drives/frequency_converter",
+                    Placement::at(Point::new(100.0, 100.0)),
+                    vec![Pin::new("1", 0.0, 0.0)],
+                    SymbolRole::Device {
+                        device: t1,
+                        main: true,
+                    },
+                )
+            })
+            .unwrap();
+        // Only a power supply, which also carries the letter T.
+        let mut catalog = Catalog::new();
+        let mut psu = CatalogPart::new("Acme", "PSU-24");
+        psu.letter_codes = vec!["T".into()];
+        psu.description = "Power supply 24 V DC, 5 A".into();
+        catalog.upsert(psu);
+        d.app.start_auto_assign_with(&catalog);
+        // The dialog opens with no rows and names the devices that fit nothing.
+        let preview = d.app.wb.auto_assign.as_ref().expect("the dialog explains");
+        assert!(preview.rows.is_empty());
+        assert!(
+            preview.none.iter().any(|t| t == "-T1"),
+            "{:?}",
+            preview.none
+        );
+        let project = d.app.backend.document().unwrap().project();
+        assert!(project.devices().all(|dev| dev.parts.is_empty()));
+    }
+
+    #[test]
+    fn escape_closes_the_parts_window() {
+        let (_dir, mut d) = drive_with_devices();
+        d.app.open_parts_browser();
+        d.frame();
+        d.frame();
+        assert!(d.app.wb.parts.is_some());
+        d.key(egui::Key::Escape, egui::Modifiers::NONE);
+        d.frame();
+        assert!(d.app.wb.parts.is_none(), "Esc closes the Parts window");
+    }
+
+    #[test]
+    fn library_parts_opens_and_closes_the_window() {
+        let (_dir, mut d) = drive_with_devices();
+        d.app.wb.queued.push("parts.browser");
+        d.frame();
+        assert!(d.app.wb.parts.is_some());
+        d.app.wb.queued.push("parts.browser");
+        d.frame();
+        assert!(d.app.wb.parts.is_none());
+    }
+
+    #[test]
+    fn use_for_selected_device_is_not_primary_without_a_selection() {
+        let (_dir, mut d) = drive_with_devices();
+        d.app.open_parts_browser();
+        d.frame();
+        d.frame();
+        assert!(!d.app.wb.parts.as_ref().unwrap().device_selected);
     }
 
     #[test]

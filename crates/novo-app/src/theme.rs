@@ -142,6 +142,9 @@ fn model_style_from(p: &CanvasPalette) -> ModelStyle {
         sheet_text_color: color(p.sheet_text),
         note_color: color(p.cross_reference),
         note_warning_color: color(p.warning),
+        // A spare contact: the cross-reference colour at 45 percent over
+        // the sheet, so it reads as present but unused.
+        note_dim_color: color(mix(p.cross_reference, p.sheet, 0.45)),
         ..defaults
     }
 }

@@ -31,6 +31,8 @@ pub(crate) struct Heat3d {
     pub cloud: bool,
     /// Opacity of the cloud, 0 to 1.
     pub cloud_opacity: f32,
+    /// How fast the cloud's opacity rises with the air temperature, 0 to 1.
+    pub cloud_contrast: f32,
     /// Slices in the cloud: more is smoother and costs more to draw.
     pub cloud_layers: u8,
     /// Which way the cloud is cut, following the camera (not a user choice).
@@ -68,7 +70,8 @@ impl Default for Heat3d {
             devices: false,
             labels: true,
             cloud: false,
-            cloud_opacity: 0.6,
+            cloud_opacity: 0.7,
+            cloud_contrast: super::heat_cloud::CONTRAST,
             cloud_layers: super::heat_cloud::LAYERS as u8,
             cloud_view: super::heat_cloud::CloudView::default(),
             carry: false,
@@ -99,6 +102,11 @@ const SLICE_ALPHA: u8 = 190;
 /// The slice's opacity while the airflow lines are on.
 const SLICE_ALPHA_WITH_LINES: u8 = 105;
 const SHELL_ALPHA: u8 = 110;
+/// A slice cell inside a device body: its colour is the air's ramp colour
+/// times this, and its opacity is the air's plus the extra, capped.
+const SOLID_DARKEN: f32 = 0.65;
+const SOLID_EXTRA_ALPHA: u8 = 90;
+const SOLID_MAX_ALPHA: u8 = 235;
 /// Most cells across a slice.
 const SLICE_CELLS: f64 = 120.0;
 
@@ -182,6 +190,7 @@ pub(crate) fn overlays(
             settings.cloud_view,
             settings.cloud_opacity,
             usize::from(settings.cloud_layers),
+            settings.cloud_contrast,
         )
     {
         out.push(Overlay::Mesh(m));
@@ -281,8 +290,10 @@ pub(crate) fn slice_offset(snap: &CfdSnapshot, axis: Axis, at: f32) -> f64 {
     lo + f64::from(at.clamp(0.0, 1.0)) * (hi - lo)
 }
 
-/// The plane at `at` (0 to 1 along `axis`) as coloured quads; cells inside
-/// solids are left out so devices stay visible.
+/// The plane at `at` (0 to 1 along `axis`) as coloured quads. Cells inside a
+/// solid (a device the plane cuts through) are drawn too, at the solid's own
+/// temperature, darker and more opaque than the air, so no hole is left where
+/// a device stands and the cut face reads as a body, not as air.
 #[cfg(test)]
 pub(crate) fn slice_mesh(
     snap: &CfdSnapshot,
@@ -329,11 +340,18 @@ pub(crate) fn slice_mesh_with(
     };
     for r in 0..g.rows {
         for c in 0..g.cols {
-            if s.solid[r * g.cols + c] {
-                continue;
-            }
             let rgb = heat::ramp(range.t(f64::from(s.temperature.values[r * g.cols + c])));
-            let colour = [rgb[0], rgb[1], rgb[2], alpha];
+            let colour = if s.solid[r * g.cols + c] {
+                let dark = |v: u8| (f32::from(v) * SOLID_DARKEN) as u8;
+                [
+                    dark(rgb[0]),
+                    dark(rgb[1]),
+                    dark(rgb[2]),
+                    alpha.saturating_add(SOLID_EXTRA_ALPHA).min(SOLID_MAX_ALPHA),
+                ]
+            } else {
+                [rgb[0], rgb[1], rgb[2], alpha]
+            };
             let (u0, v0) = (
                 window.u0 + c as f64 * g.cell_w,
                 window.v0 + r as f64 * g.cell_h,

@@ -279,7 +279,7 @@ impl NovoApp {
         let names: Vec<String> = hoists.iter().map(|h| h.id.clone()).collect();
         // The Live card sits at the left edge and takes the buttons of the drawing: the window
         // opens at the right edge (the constraint pulls it inside) so neither covers the other.
-        super::panel::dialog(ctx, "Hoist run", [560.0, 0.0])
+        super::panel::dialog(ctx, "Hoist run", [560.0, 440.0])
             .default_pos([ctx.content_rect().max.x, 60.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
@@ -339,6 +339,11 @@ impl NovoApp {
                     "\u{2022} Brake delays and torque are the numbers you enter; \
                      speeds follow the nameplate fit, not a measured curve.",
                 );
+                ui.weak(
+                    "\u{2022} Assumed from the drawing: motor speed 0 is the fine winding, any \
+                     other is coarse, and forward is up.",
+                );
+                ui.weak("\u{2022} Limit heights are measured from where the hook starts.");
                 ui.weak("\u{2022} Not a safety or compliance statement.");
             });
         if !open {

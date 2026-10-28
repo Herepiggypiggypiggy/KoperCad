@@ -228,7 +228,7 @@ fn openings_that_move_no_air_say_so() {
     let t = through(&specs, &[Some(0.0)], 200.0).unwrap();
     assert_eq!(t.verdict, Verdict::None);
     assert!(t.warming_k.is_none());
-    assert!(t.text().contains("walls only"));
+    assert!(t.text().contains("mostly through the walls") && t.text().contains("(model)"));
 }
 
 #[test]

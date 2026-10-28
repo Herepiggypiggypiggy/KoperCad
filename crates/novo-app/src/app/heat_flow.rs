@@ -8,7 +8,9 @@
 //! planning-level turbulence model, not measured); the m³/h of an opening is
 //! read from the speed one cell inside its face; the air warming is an energy
 //! balance (`loss / (rho cp flow)`) that ignores the heat the walls and the
-//! plate give off, so it is on the high side. The words and the verdict
+//! plate give off, so it is on the high side. The factor is `FAN_FACTOR` (3.1
+//! m³·K per W·h: air at sea level, density 1.2 kg/m³, with about 4 % margin).
+//! The words and the verdict
 //! thresholds are planning values, not a standard.
 
 use eframe::egui;
@@ -207,6 +209,7 @@ pub(crate) fn paint_key(painter: &egui::Painter, scale_top: f32) {
                 egui::vec2(step + 0.5, bar.height()),
             ),
             0.0,
+            // Speed ramp: data colour, not a theme colour.
             egui::Color32::from_rgb(r, g, b),
         );
     }
@@ -496,14 +499,14 @@ impl Through {
         );
         match (self.verdict, self.warming_k) {
             (Verdict::None, _) => format!(
-                "{head}: none. No air moves through the openings, so the heat leaves through the walls only"
+                "{head}: negligible (under {NO_FLOW_M3H:.0} m³/h, below the solver's reading limit), so the heat leaves mostly through the walls (model)"
             ),
             (v, Some(k)) => format!(
-                "{head} for {:.0} W of device loss: the air warms about {k:.0} K passing through, {} cooling",
+                "{head} for {:.0} W of device loss: the air warms about {k:.0} K passing through, {} cooling (model)",
                 self.loss_w,
                 v.word()
             ),
-            (v, None) => format!("{head}: {} cooling", v.word()),
+            (v, None) => format!("{head}: {} cooling (model)", v.word()),
         }
     }
 
@@ -558,7 +561,9 @@ pub(crate) fn through_row(ui: &mut egui::Ui, t: &Through) {
     let colour = match t.verdict {
         Verdict::Adequate => pal.success,
         Verdict::Low => pal.warning,
-        Verdict::VeryLow | Verdict::None => pal.error,
+        Verdict::VeryLow => pal.error,
+        // Too little to read is not proof of no air: warning, not error.
+        Verdict::None => pal.warning,
     };
     let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
     ui.painter().circle_filled(rect.center(), 4.0, colour);
@@ -570,7 +575,8 @@ const BAR_LEN: f32 = 190.0;
 const BAR_H: f32 = 10.0;
 const STEPS: usize = 48;
 
-/// The key of the flow: a bar from still air to the top of the scale in m/s,
+/// The key of the flow (the `Color32`s of the bar are the speed ramp, data and
+/// not theme colours): a bar from still air to the top of the scale in m/s,
 /// the word for each stretch of it, and what is drawn from where.
 pub(crate) fn legend(ui: &mut egui::Ui, view: &FlowView, scale_top: f32) {
     let pal = crate::theme::ui_palette();
@@ -593,6 +599,7 @@ pub(crate) fn legend(ui: &mut egui::Ui, view: &FlowView, scale_top: f32) {
                 egui::vec2(step + 0.5, BAR_H),
             ),
             0.0,
+            // Speed ramp: data colour, not a theme colour.
             egui::Color32::from_rgb(r, g, b),
         );
     }

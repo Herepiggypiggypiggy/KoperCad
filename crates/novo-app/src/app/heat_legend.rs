@@ -21,6 +21,11 @@ const TICK_GAP: f32 = 26.0;
 /// The lines of text under the scale, one per layer that needs explaining.
 pub(crate) fn notes(h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) -> Vec<String> {
     let mut out = Vec::new();
+    if h.slice && h.flow.mode != FlowMode::SpeedMap {
+        out.push(String::from(
+            "Slice: darker squares are device bodies the plane cuts, at their own temperature",
+        ));
+    }
     if h.iso {
         let level = range.lo + f64::from(h.iso_at) * (range.hi - range.lo);
         out.push(format!("Shell: air at {level:.0} °C"));
@@ -30,7 +35,7 @@ pub(crate) fn notes(h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) -> 
     }
     if h.cloud {
         out.push(String::from(
-            "Cloud: air near ambient is clear, hotter is more opaque",
+            "Cloud: air at ambient is clear; colour and opacity run from ambient to the hot end of the air (its own scale, above)",
         ));
     }
     if h.carry {
@@ -52,7 +57,14 @@ pub(crate) fn wanted(h: &Heat3d) -> bool {
 /// Draws the key inside the Heat strip above the view: a colour bar with
 /// degree ticks, then one note per active layer. It sits in the strip's own
 /// row (wrapping with it), so it can never cover a panel.
-pub(crate) fn strip(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) {
+pub(crate) fn strip(
+    ui: &mut egui::Ui,
+    h: &Heat3d,
+    range: Range,
+    cloud_range: Range,
+    top_speed: f32,
+    top_flux: f32,
+) {
     let notes = notes(h, range, top_speed, top_flux);
     if !wanted(h) && notes.is_empty() && h.flow.mode == FlowMode::Off {
         return;
@@ -62,13 +74,18 @@ pub(crate) fn strip(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32,
     ui.end_row();
     // The two colour bars share a row when the strip is wide enough (it wraps
     // them when not): the strip takes less of a small window.
-    if wanted(h) {
-        scale(ui, range);
+    // The cloud has its own key, so it alone does not need the shared one.
+    if (h.slice && h.flow.mode != FlowMode::SpeedMap) || h.iso || h.devices {
+        scale(ui, range, "°C  Temperature");
+    }
+    if h.cloud {
+        // The cloud's own scale: ambient to the hot end of the air.
+        scale(ui, cloud_range, "°C  Cloud (air)");
     }
     if h.flow.mode != FlowMode::Off {
         super::heat_flow::legend(ui, &h.flow, top_speed);
     }
-    if wanted(h) || h.flow.mode != FlowMode::Off {
+    if wanted(h) || h.flow.mode != FlowMode::Off || h.cloud {
         ui.end_row();
     }
     if !notes.is_empty() {
@@ -77,7 +94,7 @@ pub(crate) fn strip(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32,
 }
 
 /// The colour bar with degree ticks.
-fn scale(ui: &mut egui::Ui, range: Range) {
+fn scale(ui: &mut egui::Ui, range: Range, title: &str) {
     let (rect, response) = ui.allocate_exact_size(
         egui::vec2(BAR_LEN + 2.0 * TICK_PAD, BAR_H + LABEL_H),
         egui::Sense::hover(),
@@ -115,7 +132,7 @@ fn scale(ui: &mut egui::Ui, range: Range) {
             crate::theme::ui_palette().text_secondary,
         );
     }
-    ui.label(egui::RichText::new("°C  Temperature").small());
+    ui.label(egui::RichText::new(title).small());
 }
 
 /// The ticks of the scale as (position 0 to 1 along the bar, degrees), only
@@ -149,7 +166,7 @@ mod tests {
     fn only_layers_on_screen_get_a_note() {
         let range = Range { lo: 20.0, hi: 60.0 };
         let off = Heat3d {
-            slice: true,
+            slice: false,
             iso: false,
             lines: false,
             devices: false,
@@ -157,6 +174,7 @@ mod tests {
         };
         assert!(notes(&off, range, 0.4, 0.0).is_empty());
         let mut all = Heat3d {
+            slice: true,
             iso: true,
             iso_at: 0.5,
             devices: true,
@@ -164,9 +182,10 @@ mod tests {
         };
         all.set_flow(FlowMode::Streamlines);
         let n = notes(&all, range, 0.5, 0.0);
-        assert_eq!(n.len(), 3);
-        assert!(n[0].contains("40 °C"));
-        assert!(n[1].contains("0.5 m/s") && n[1].contains("model"));
+        assert_eq!(n.len(), 4);
+        assert!(n[0].contains("Slice") && n[0].contains("device bodies"));
+        assert!(n[1].contains("40 °C"));
+        assert!(n[2].contains("0.5 m/s") && n[2].contains("model"));
     }
 
     #[test]

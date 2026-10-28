@@ -20,6 +20,7 @@ impl NovoApp {
         let mut symbols = self.settings.symbol_folder.clone();
         let mut reload_symbols = false;
         let mut density = self.settings.xref_density();
+        let mut show_spare = !self.settings.xref_hide_spare;
         let mut theme = self.settings.theme_choice();
         let mut ui_density = self.settings.density_choice();
         let mut high_contrast = self.settings.high_contrast();
@@ -132,6 +133,13 @@ impl NovoApp {
                         &mut density,
                         &[(NoteDensity::Full, "Full"), (NoteDensity::Compact, "Compact")],
                     );
+                    choice(
+                        ui,
+                        "Spare contacts in the table",
+                        "Contacts the device has (its contacts.* properties) that no symbol draws, dim at the end of the table. Their numbers continue the EN 50005 sequence of the drawn ones; they are not read from the part.",
+                        &mut show_spare,
+                        &[(true, "Show"), (false, "Hide")],
+                    );
                     section(ui, "Macros", false);
                     row_title(
                         ui,
@@ -222,6 +230,7 @@ impl NovoApp {
         self.settings.appearance_contrast = if high_contrast { "high" } else { "" }.into();
         self.settings.set_dock_labels(dock_labels);
         self.settings.ui_scale = (f32::from_bits(ui_scale) * 100.0).round() as u32;
+        self.settings.xref_hide_spare = !show_spare;
         if density != self.settings.xref_density() {
             self.settings.xref_density = density.id().into();
         }

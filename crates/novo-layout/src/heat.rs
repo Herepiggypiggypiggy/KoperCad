@@ -679,6 +679,7 @@ mod tests {
             gaps: Default::default(),
             loss_w: Some(loss),
             limit_c: limit,
+            surface: None,
         }
     }
 

@@ -1,0 +1,49 @@
+@title Assign parts to all devices says plainly when no catalog part fits
+@sizes 1366x768 1920x1080
+@area Parts
+# Network ports have no part of their own. With only ports on the page nothing fits: the dialog has no rows and names the devices. With other devices as well, the dialog lists them and names the ports underneath.
+click_text "New project"
+wait 20
+key ctrl+k
+text "ethernet port"
+wait 5
+key Enter
+wait 10
+click 330 150
+wait 10
+key Escape
+key ctrl+k
+text "ethernet port"
+wait 5
+key Enter
+wait 10
+click 600 150
+wait 10
+key Escape
+key ctrl+k
+text "Assign parts to all"
+wait 10
+key Return
+wait 20
+expect "Assign parts to all devices"
+expect "No part in the catalog fits any of the devices"
+expect "Close"
+shot nothing-fits
+key Escape
+wait 8
+key ctrl+k
+text "ethernet switch"
+wait 5
+key Enter
+wait 10
+click 640 380
+wait 10
+key Escape
+key ctrl+k
+text "Assign parts to all"
+wait 10
+key Return
+wait 20
+expect "Assign parts to all devices"
+expect "No part in the catalog fits"
+shot dialog-with-unfit-note

@@ -1,0 +1,50 @@
+# A small add-on for tests and screenshots (docs/design/addons.md). It adds one menu row, one
+# command-search-only command, a floating panel and a data file; it carries no engine.
+
+[addon]
+id = "demo-tools"
+name = "Demo tools"
+version = "0.2.0"
+publisher = "KoperVonk (test fixture)"
+description = "A demonstration add-on: a status panel, a menu entry and a data file. It does nothing to your project."
+requires_app = ">=0.1.0"
+api_version = 1
+license = "MIT OR Apache-2.0"
+permissions = ["menu", "floating-panel", "rail-item"]
+
+[[command]]
+id = "status"
+label = "Demo status panel"
+description = "Open the demo add-on's status panel."
+icon = "demo-tools.badge"
+keywords = ["demo", "status", "example add-on"]
+key = "Ctrl+Alt+D"
+home = "menu"
+menu = "Simulate"
+opens = "status"
+
+[[command]]
+id = "status-rail"
+label = "Demo status (rail)"
+description = "The same panel from the 3D rail's add-on flyout."
+icon = "demo-tools.badge"
+home = "rail"
+workspaces = ["3d"]
+opens = "status"
+
+[[command]]
+id = "search-only"
+label = "Demo search-only command"
+description = "Found by the command search only."
+home = "palette-only"
+opens = "status"
+
+[[panel]]
+id = "status"
+title = "Demo status"
+slot = "floating"
+file = "data/status.panel.toml"
+
+[[contribute]]
+kind = "demo-note"
+file = "data/note.toml"

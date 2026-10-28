@@ -20,7 +20,7 @@ use novo_plc::link::LinkFormat;
 use novo_symbols::Library;
 use novo_workflow::commands::Context;
 use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
-use novo_workflow::palette::{LessonEntry, MacroEntry, Mode, Sources, Target};
+use novo_workflow::palette::{AddonEntry, LessonEntry, MacroEntry, Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
 use novo_view3d::camera::ViewPreset;
@@ -145,6 +145,10 @@ pub(crate) struct Workbench {
     pub(super) nav: Navigator,
     /// Where to select and centre once the canvas shows its page.
     pub(super) pending: Option<Place>,
+    /// A jump a double click on a cross reference asked for while the
+    /// canvas was still showing the old page; made after it, so the new
+    /// page selects its target (see `follow_note_jump`).
+    pub(super) deferred_jump: Option<Place>,
     /// An item to select and centre once its page is shown (a row of the
     /// Changes list).
     pub(super) pending_item: Option<(PageId, AnyId)>,
@@ -287,6 +291,8 @@ pub(crate) struct Workbench {
     pub(super) eplan_guide: Option<super::interop::EplanGuide>,
     /// The controller profile import wizard, while open.
     pub(super) controller_wizard: Option<Box<super::controller_import::ControllerWizard>>,
+    /// Installed add-ons, what they add to the tables, and the manager window.
+    pub(super) addons: super::addons::AddonsState,
     /// A DWG being converted in the background.
     pub(super) dwg_job: Option<super::interop::DwgJob>,
 }
@@ -356,6 +362,7 @@ impl Default for Workbench {
             generate: None,
             nav: Navigator::default(),
             pending: None,
+            deferred_jump: None,
             pending_item: None,
             custom_symbols: Default::default(),
             pending_items: None,
@@ -422,6 +429,7 @@ impl Default for Workbench {
             plc_overview: false,
             eplan_guide: None,
             controller_wizard: None,
+            addons: Default::default(),
             dwg_job: None,
         }
     }
@@ -634,6 +642,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.eplan",
     "file.import_aml",
     "file.import_controller",
+    "addons.manage",
     "file.import_crane",
     "file.import_eplan",
     "file.import_dwg",
@@ -1600,6 +1609,7 @@ impl NovoApp {
             }
             "file.import_aml" => self.import_aml(),
             "file.import_controller" => self.open_controller_import(),
+            "addons.manage" => self.open_addons(),
             "file.import_crane" => self.import_crane(),
             "file.import_eplan" => self.import_eplan(),
             "file.import_dwg" => self.import_dwg(),
@@ -1642,7 +1652,7 @@ impl NovoApp {
             | "layout.reset" | "layout.reset_all" => {
                 self.run_layout_command(id);
             }
-            "parts.browser" => self.open_parts_browser(),
+            "parts.browser" => self.toggle_parts_browser(),
             "parts.import_step" => self.import_part_model(),
             "parts.import_eplan" => self.import_eplan_parts(),
             "parts.import_table" => self.import_parts_table(),
@@ -1753,6 +1763,7 @@ impl NovoApp {
             Target::Lesson(id) => self.learn_run_command_lesson(&id),
             // The place window opens on the macro, to be confirmed there.
             Target::Macro(name) => self.open_macro_place(Some(&name)),
+            Target::Addon(id) => self.run_addon_command(&id),
             Target::Cable(cable) => self.show_cable(cable),
             Target::Wire(wire) => self.go_to_wire(wire),
             Target::Symbol(symbol) => self.begin_place(&symbol, None),
@@ -1851,8 +1862,9 @@ impl NovoApp {
         let mut field = std::mem::take(&mut self.wb.field);
         let lessons = self.learn.palette_entries();
         let macros = self.wb.macro_place.palette_entries();
+        let addons = self.wb.addons.palette_entries();
         let result = {
-            let sources = sources(self, &lessons, &macros);
+            let sources = sources(self, &lessons, &macros, &addons);
             f(&mut field, &sources)
         };
         self.wb.field = field;
@@ -2029,10 +2041,12 @@ fn sources<'a>(
     app: &'a NovoApp,
     lessons: &'a [LessonEntry],
     macros: &'a [MacroEntry],
+    addons: &'a [AddonEntry],
 ) -> Sources<'a> {
     Sources {
         lessons,
         macros,
+        addons,
         project: app.backend.document().map(Document::project),
         library: app.library(),
         keymap: &app.wb.keymap,
