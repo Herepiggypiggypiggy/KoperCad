@@ -1450,12 +1450,30 @@ fn paint_airflow(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64,
         .iter()
         .flat_map(|s| s.speeds.iter())
         .copied()
-        .fold(0.0, f32::max)
-        .max(1e-6);
-    for s in &cache.streams {
+        .fold(0.0, f32::max);
+    // The same scale as the 3D view: colour and width are the speed in m/s,
+    // not a share of the fastest line, so a lot of air looks like a lot.
+    let scale_top = super::heat_flow::nice_top(top);
+    let mut shown: Vec<(&Streamline, f32)> = cache
+        .streams
+        .iter()
+        .map(|s| {
+            (
+                s,
+                s.speeds.iter().sum::<f32>() / s.speeds.len().max(1) as f32,
+            )
+        })
+        .filter(|(_, mean)| *mean >= super::heat_flow::QUIET_SHARE * scale_top)
+        .collect();
+    // Calm: the main streams only, the strongest first.
+    shown.sort_by(|a, b| b.1.total_cmp(&a.1));
+    shown.truncate(super::heat_flow::calm_count(shown.len()));
+    for (s, mean) in shown {
         let pts: Vec<Pos2> = s.points.iter().map(|p| to_screen(p.0, p.1)).collect();
-        let mean = s.speeds.iter().sum::<f32>() / s.speeds.len().max(1) as f32;
-        let width = 1.0 + 1.4 * (mean / top).clamp(0.0, 1.0);
+        let share = (mean / scale_top).clamp(0.0, 1.0);
+        let width = 1.6 + 2.8 * share;
+        let [r, g, b] = super::heat_flow::colour(mean, scale_top);
+        let line = Color32::from_rgb(r, g, b);
         painter.add(Shape::line(
             pts.clone(),
             // The halo is the surface colour, so the line keeps its edge on
@@ -1465,25 +1483,23 @@ fn paint_airflow(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64,
                 with_alpha(crate::theme::ui_palette().sunken, 0.5),
             ),
         ));
-        painter.add(Shape::line(
-            pts.clone(),
-            Stroke::new(width, crate::theme::ui_palette().info),
-        ));
-        // An arrowhead about every 70 points of screen length.
+        painter.add(Shape::line(pts.clone(), Stroke::new(width, line)));
+        // An arrowhead about every 110 points of screen length.
         let mut run = 0.0;
         for w in pts.windows(2) {
             run += (w[1] - w[0]).length();
-            if run >= 70.0 {
+            if run >= 110.0 {
                 run = 0.0;
                 let d = (w[1] - w[0]).normalized();
                 let n = Vec2::new(-d.y, d.x);
                 painter.add(Shape::line(
-                    vec![w[1] - d * 6.0 + n * 3.5, w[1], w[1] - d * 6.0 - n * 3.5],
-                    Stroke::new(width, crate::theme::ui_palette().info),
+                    vec![w[1] - d * 7.0 + n * 4.0, w[1], w[1] - d * 7.0 - n * 4.0],
+                    Stroke::new(width, line),
                 ));
             }
         }
     }
+    super::heat_flow::paint_key(painter, scale_top);
 }
 
 fn paint_rims(

@@ -40,6 +40,19 @@ pub(crate) struct Heat3d {
     /// The temperature scale the person set, °C (from, to); `None` is the
     /// automatic scale, ambient to the hottest cell.
     pub scale: Option<(f64, f64)>,
+    /// The Flow control: how the airflow is drawn and how much of it. `lines`
+    /// and `arrows` follow it (see [`Heat3d::set_flow`]).
+    pub flow: super::heat_flow::FlowView,
+}
+
+impl Heat3d {
+    /// Sets the Flow mode and the switches that draw it.
+    pub(crate) fn set_flow(&mut self, mode: super::heat_flow::FlowMode) {
+        use super::heat_flow::FlowMode;
+        self.flow.mode = mode;
+        self.lines = mode == FlowMode::Streamlines;
+        self.arrows = mode == FlowMode::Arrows;
+    }
 }
 
 impl Default for Heat3d {
@@ -60,6 +73,7 @@ impl Default for Heat3d {
             cloud_view: super::heat_cloud::CloudView::default(),
             carry: false,
             scale: None,
+            flow: super::heat_flow::FlowView::default(),
         }
     }
 }
@@ -172,7 +186,22 @@ pub(crate) fn overlays(
     {
         out.push(Overlay::Mesh(m));
     }
+    let scale_top = super::heat_flow::speed_scale(snap);
+    let speed_map = settings.flow.mode == super::heat_flow::FlowMode::SpeedMap;
+    if speed_map
+        && let Some(m) = super::heat_flow::speed_map(
+            snap,
+            place,
+            settings.axis,
+            settings.slice_at,
+            scale_top,
+            SLICE_ALPHA,
+        )
+    {
+        out.push(Overlay::Mesh(m));
+    }
     if settings.slice
+        && !speed_map
         && let Some(m) = slice_mesh_with(
             snap,
             place,
@@ -196,13 +225,22 @@ pub(crate) fn overlays(
         }
     }
     if settings.lines {
-        let l = stream_lines(flow);
-        if !l.positions.is_empty() {
-            out.push(Overlay::Lines(l));
-        }
+        out.extend(super::heat_flow::stream_overlays(
+            flow,
+            &settings.flow,
+            scale_top,
+            2,
+        ));
     }
     if settings.arrows {
-        let l = super::heat_arrows::arrows(snap, place, settings.axis, settings.slice_at);
+        let l = super::heat_arrows::arrows(
+            snap,
+            place,
+            settings.axis,
+            settings.slice_at,
+            &settings.flow,
+            scale_top,
+        );
         if !l.positions.is_empty() {
             out.push(Overlay::Lines(l));
         }
@@ -430,13 +468,17 @@ pub(crate) fn speed_rgb(t: f32) -> [u8; 3] {
 }
 
 /// Distance between arrowheads on a line, mm, and the size of one.
+#[cfg(test)]
 const ARROW_EVERY_MM: f32 = 130.0;
+#[cfg(test)]
 const ARROW_LEN_MM: f32 = 15.0;
 /// Air slower than this share of the fastest gets no arrowheads.
+#[cfg(test)]
 const ARROW_MIN_SHARE: f32 = 0.04;
 
 /// The streamlines as polylines coloured by air speed, with an arrowhead
 /// every so often showing the way the air goes.
+#[cfg(test)]
 pub(crate) fn stream_lines(flow: &Flow) -> OverlayLines {
     let top = flow.top.max(1e-9);
     let mut out = OverlayLines {
