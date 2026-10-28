@@ -993,11 +993,16 @@ impl Ctx<'_> {
             }
             "click" | "move" => {
                 let mut args = json!({"x": num(1, "x")?, "y": num(2, "y")?});
-                // `click X Y right` (or `middle`) presses that button.
+                // `click X Y right` (or `middle`) presses that button; `click X Y double`
+                // presses twice fast enough to count as a double click.
                 if words[0] == "click"
                     && let Some(button) = words.get(3)
                 {
-                    args["button"] = json!(button);
+                    if button == "double" {
+                        args["count"] = json!(2);
+                    } else {
+                        args["button"] = json!(button);
+                    }
                 }
                 self.srv.tool(&words[0], &args).map(|_| ())
             }

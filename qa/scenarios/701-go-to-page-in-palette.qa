@@ -1,0 +1,11 @@
+@title Ctrl+K "go to page 1a" finds the page
+@area Schematic
+@sizes 1366x768
+# Test report 29: "go to page 1a" gave No match while "1a" worked.
+click_text "New project"
+wait 20
+key ctrl+k
+text "go to page 1"
+wait 5
+shot palette
+expect_not "No match"

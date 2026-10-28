@@ -388,6 +388,40 @@ fn escape_mid_wire_drops_only_the_unfinished_wire() {
 }
 
 #[test]
+fn the_tip_of_an_interruption_arrow_picks_its_only_pin() {
+    let (mut doc, page, mut editor) = setup();
+    let jump = doc
+        .transact("Place", |tx| {
+            let jump = tx.place_symbol(
+                page,
+                "iec/connectivity/interruption",
+                novo_core::Placement::at(p(100.0, 100.0)),
+                vec![novo_core::Pin::new("1", 0.0, 0.0)],
+                SymbolRole::Interruption { name: "5".into() },
+            )?;
+            Ok(jump)
+        })
+        .unwrap()
+        .0;
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(100.0, 140.0), TOL);
+    let other = symbol_at(&doc, page, p(100.0, 140.0));
+    let other_pin = pin_pos(&doc, other, "13");
+    let pick = |at: Point| novo_editor::geometry::target_at(doc.project(), page, at, TOL);
+    // On the pin, halfway down the arrow and at its tip: the one pin.
+    for y in [100.0, 103.5, 107.0] {
+        assert!(
+            matches!(pick(p(100.0, y)), Some(Target::Endpoint(e, at)) if e == Endpoint::pin(jump, 0) && at == p(100.0, 100.0)),
+            "y = {y}"
+        );
+    }
+    // Past the tip, or beside the arrow, nothing; another symbol's pin still wins.
+    assert!(pick(p(100.0, 112.0)).is_none());
+    assert!(pick(p(106.0, 103.0)).is_none());
+    assert!(matches!(pick(other_pin), Some(Target::Endpoint(e, _)) if e == pin(&doc, other, "13")));
+}
+
+#[test]
 fn a_wire_never_starts_on_nothing() {
     let (mut doc, page, mut editor) = setup();
     editor.begin_wire();
@@ -999,10 +1033,10 @@ fn turning_a_moved_coil_connects_where_it_lands_not_where_it_was() {
     editor.auto_connect = false;
     editor.begin_place("iec/terminals/terminal", None);
     editor.click(&mut doc, page, p(0.0, 100.0), TOL);
-    editor.click(&mut doc, page, p(200.0, 100.0), TOL);
+    editor.click(&mut doc, page, p(200.0, 140.0), TOL);
     editor.leave_tool();
     let t1 = symbol_at(&doc, page, p(0.0, 100.0));
-    let t2 = symbol_at(&doc, page, p(200.0, 100.0));
+    let t2 = symbol_at(&doc, page, p(200.0, 140.0));
     editor.begin_wire();
     click_pin(&mut editor, &mut doc, page, t1, "2");
     click_pin(&mut editor, &mut doc, page, t2, "1");
@@ -3232,4 +3266,59 @@ fn power_contacts_dropped_on_the_feed_land_on_all_three_wires() {
             "{feed} bypasses the contacts"
         );
     }
+}
+
+#[test]
+fn a_feed_dropped_with_its_pin_on_a_breakers_output_pin_is_connected_in_either_mode() {
+    for mode in [
+        novo_editor::tool::ConnectMode::Draw,
+        novo_editor::tool::ConnectMode::Ask,
+    ] {
+        feed_on_a_pin(mode);
+    }
+}
+
+fn feed_on_a_pin(mode: novo_editor::tool::ConnectMode) {
+    for gap in [0.0, 5.0] {
+        feed_below_a_pin(mode, gap);
+    }
+}
+
+/// A potential feed turned to face up and dropped below a fuse's output pin,
+/// `gap` mm from it (0: the pins touch).
+fn feed_below_a_pin(mode: novo_editor::tool::ConnectMode, gap: f64) {
+    let (mut doc, page, mut editor) = setup();
+    editor.set_connect_mode(mode);
+    editor.begin_place("iec/protection/fuse", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.leave_tool();
+    let fuse = symbol_at(&doc, page, p(40.0, 40.0));
+    let at = pin_pos(&doc, fuse, "2");
+    editor.begin_place(potential::FEED_SYMBOL, None);
+    editor.key(&mut doc, EditorKey::Rotate, &[]);
+    editor.key(&mut doc, EditorKey::Rotate, &[]);
+    let hover = p(at.x, at.y + 30.0);
+    editor.hover(&doc, page, hover, TOL);
+    let ghost = editor.preview(&doc, page).symbols[0].clone();
+    let offset = at - ghost.pin_position(0).unwrap();
+    let origin = p(hover.x + offset.x, hover.y + gap + offset.y);
+    editor.hover(&doc, page, origin, TOL);
+    editor.click(&mut doc, page, origin, TOL);
+    let feed = doc
+        .project()
+        .page_contents(page)
+        .symbols
+        .into_iter()
+        .find(|&s| s != fuse)
+        .expect("the feed");
+    if mode == novo_editor::tool::ConnectMode::Ask && gap > 0.0 {
+        // Proposed, and Enter takes it.
+        assert_eq!(editor.proposals().len(), 1, "gap {gap}");
+        editor.accept_proposal(&mut doc);
+    }
+    editor.leave_tool();
+    assert!(
+        connected(&doc, pin(&doc, fuse, "2"), Endpoint::pin(feed, 0)),
+        "{mode:?} gap {gap}: the feed's pin faces the fuse's output pin and is joined to it"
+    );
 }

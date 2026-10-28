@@ -1,0 +1,13 @@
+@title The empty-page hint does not draw over a symbol being placed
+@area Schematic
+@sizes 1366x768
+# Test report 22: "Press Q to place a symbol" drew through the Parts window and over the ghost symbol.
+click_text "New project"
+wait 20
+shot empty
+key q
+text fuse
+key Return
+move 600 300
+wait 5
+shot placing

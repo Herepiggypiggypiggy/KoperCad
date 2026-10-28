@@ -1,7 +1,8 @@
 //! The tool dock (DESIGN.md §3), floating at the bottom centre of the
 //! canvas: Select, Place, Connect and Text, the hint for the current step,
 //! and the proposals count. It moves aside while a gesture is in progress
-//! near it rather than fading.
+//! near it rather than fading, and parks in the corner while a wire is
+//! under way.
 
 use eframe::egui;
 use novo_editor::Tool;
@@ -249,17 +250,26 @@ impl NovoApp {
         let dragging = ctx.input(|i| {
             i.pointer.any_down() && i.pointer.press_origin().is_some_and(|o| !home.contains(o))
         });
+        // A wire or cable under way parks the dock in the corner for as long
+        // as it lasts, where Select and the rest stay put and can be clicked.
+        // Moving aside only when the pointer came near made the dock run away
+        // from the person trying to click it, and the click then landed on
+        // the drawing under it.
+        let parked = match view.editor.tool() {
+            Tool::Wire(w) => w.start.is_some(),
+            Tool::Cable(c) => !c.points.is_empty(),
+            _ => false,
+        };
         let busy = dragging
-            || match view.editor.tool() {
-                Tool::Wire(w) => w.start.is_some(),
-                Tool::Move(_) | Tool::Paste(_) | Tool::Text => true,
-                Tool::Cable(c) => !c.points.is_empty(),
-                Tool::Select | Tool::Place(_) => false,
-            };
-        let aside = busy
-            && ctx
-                .pointer_hover_pos()
-                .is_some_and(|p| canvas.contains(p) && home.expand(NEAR).contains(p));
+            || matches!(
+                view.editor.tool(),
+                Tool::Move(_) | Tool::Paste(_) | Tool::Text
+            );
+        let aside = parked
+            || (busy
+                && ctx
+                    .pointer_hover_pos()
+                    .is_some_and(|p| canvas.contains(p) && home.expand(NEAR).contains(p)));
         let (pivot, at) = if aside {
             (
                 egui::Align2::RIGHT_BOTTOM,

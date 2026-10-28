@@ -996,3 +996,26 @@ fn the_selection_property_sheet_is_findable_in_both_languages() {
         );
     }
 }
+
+#[test]
+fn go_to_a_page_by_name() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let palette = Palette::default();
+    let src = sources(doc.project(), &library, &keymap);
+    for query in [
+        "go to page 2",
+        "go to 2",
+        "open page 2",
+        "goto 2",
+        "ga naar pagina 2",
+    ] {
+        assert_eq!(
+            palette.search(query, &src)[0].target,
+            Target::Page(gate.control_page),
+            "{query}"
+        );
+    }
+}

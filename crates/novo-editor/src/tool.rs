@@ -593,6 +593,16 @@ impl Editor {
         !matches!(self.tool, Tool::Select)
     }
 
+    /// A wire or cable has been started and not finished: the step Esc and a
+    /// right click take back.
+    pub fn line_in_progress(&self) -> bool {
+        match &self.tool {
+            Tool::Wire(w) => w.start.is_some(),
+            Tool::Cable(c) => !c.points.is_empty(),
+            _ => false,
+        }
+    }
+
     /// What repeat-last-tool (the first context menu row on empty canvas)
     /// would bring back.
     pub fn repeat_label(&self) -> Option<String> {
@@ -2922,19 +2932,19 @@ impl Editor {
                 if blocked {
                     "Overlaps another wire · Backspace takes back the last line".into()
                 } else {
-                    "Lines: click a pin to finish, empty space to draw a line · Backspace undo · Esc cancels · Shift+W corners"
+                    "Lines: click a pin to finish, empty space to draw a line · Backspace undo · Esc or right-click cancels · Shift+W corners"
                         .into()
                 }
             }
             Tool::Wire(_) => {
-                "Corners: click a pin or wire to finish, empty space for a corner · R flips the bend · Backspace undo · Esc cancels · Shift+W lines"
+                "Corners: click a pin or wire to finish, empty space for a corner · R flips the bend · Backspace undo · Esc or right-click cancels · Shift+W lines"
                     .into()
             }
             Tool::Cable(c) if c.points.is_empty() => {
                 "Cable: click along the wires that belong to it · Esc to stop".into()
             }
             Tool::Cable(_) => {
-                "Click the next point · Enter or click the last point again to finish · Esc cancels"
+                "Click the next point · Enter or click the last point again to finish · Esc or right-click cancels"
                     .into()
             }
             Tool::Text => "Text: click where it goes, then type · Esc cancels".into(),
