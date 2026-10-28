@@ -113,7 +113,7 @@ Turn on **Airflow** to follow the air, and **Hot spots** to see where it is warm
 """
 text_nl = """
 Elk component draagt een label met zijn temperatuur en de marge tot zijn grens, bijvoorbeeld "2 K under limit". De Heat-strook boven de 3D-weergave schakelt lagen in: Slice, Shell, Airflow, Cloud, Heat flow, Arrows, Devices, Labels, Probe, Hot spots en Scale.
-Zet **Airflow** aan om de lucht te volgen en **Hot spots** om te zien waar het het warmst is. **Cloud** toont warme lucht als doorzichtige lagen op een eigen schaal; de twee schuifjes bepalen hoe zichtbaar (beweeg erover: Strength, Contrast).
+Zet **Airflow** aan om de lucht te volgen en **Hot spots** om te zien waar het het warmst is. **Cloud** toont warme lucht als doorzichtige lagen op een eigen schaal; de twee schuifjes bepalen hoe zichtbaar (beweeg erover).
 """
 point = { ui = "workspace.view3d" }
 manual = "reading step: the layer strip is not anchored; QA 209 shows the result"
