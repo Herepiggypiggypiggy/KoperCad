@@ -367,6 +367,8 @@ mod learn_replay;
 #[cfg(test)]
 mod learn_tests;
 #[cfg(test)]
+mod lesson_claims_bench_tests;
+#[cfg(test)]
 mod lesson_claims_tests;
 #[cfg(test)]
 mod lesson_verify_cables;
