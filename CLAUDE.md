@@ -72,6 +72,7 @@ coordinator in its own small PR first.
 | `novo-drive` | Drive and motor | Frequency drive, motor at frequency, mechanics, holding brake (pure, averaged model; plan `docs/design/drive-crane-simulation.md`) |
 | `novo-machine` | Machine and crane | Crane kinematics, schematic bindings, fixed-step co-simulation loop (pure, depends on novo-drive) |
 | `novo-controller` | Controller | Virtual operator controller for the live view: controls, signals, interlocks from plain-data profiles (pure) |
+| `novo-addons` | Add-ons | Add-on manager core: `.kcaddon` packages, per-user install registry, compatibility, permissions, sandboxed add-on host (pure; plan `plans/controller-live-view.md` section 5b) |
 | `novo-tests` | Tester | Cross-crate tests and the Gate 1 fixture |
 | `novo-app` | WS-01 | Application shell, wiring crates together |
 
