@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kopercad/schema/controller-profile.schema.json",
+  "title": "KoperCAD controller profile (*.controller.toml)",
+  "description": "Structure of a controller profile. The validator in novo-controller checks what a schema cannot: references between controls, positions and signals.",
+  "type": "object",
+  "required": ["controller"],
+  "additionalProperties": false,
+  "properties": {
+    "controller": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" },
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["radio", "pendant", "joystick", "plc-panel", "custom"], "default": "custom" },
+        "supply": {
+          "type": "object",
+          "required": ["kind", "volts"],
+          "additionalProperties": false,
+          "properties": { "kind": { "enum": ["ac", "dc"] }, "volts": { "type": "number", "exclusiveMinimum": 0 } }
+        },
+        "common": { "type": "string" },
+        "step2_includes_step1": { "type": "boolean", "default": true },
+        "shared": { "type": "boolean", "default": false },
+        "generic": { "type": "boolean", "default": false },
+        "gate": { "type": "array", "items": { "$ref": "#/$defs/condition" } }
+      }
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "self_test_ms": { "type": "integer", "minimum": 0, "default": 0 } }
+    },
+    "control": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" },
+          "label": { "type": "string" },
+          "kind": { "enum": ["button", "latch", "rocker2", "rocker3", "axis", "selector", "estop", "deadman", "key"] },
+          "positions": { "type": "array", "items": { "type": "string" }, "minItems": 2, "uniqueItems": true },
+          "rest": { "type": "string" },
+          "spring": { "type": "boolean" },
+          "needs_link": { "type": "boolean", "default": false },
+          "requires": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
+          "drops_when": { "type": "array", "items": { "$ref": "#/$defs/condition" } }
+        }
+      }
+    },
+    "signal": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "control"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" },
+          "label": { "type": "string" },
+          "kind": { "enum": ["contact", "voltage", "analog"], "default": "contact" },
+          "control": { "type": "string" },
+          "when": { "type": "array", "items": { "type": "string" } },
+          "group": { "type": "string" },
+          "step": { "type": "integer", "minimum": 1, "maximum": 3 },
+          "levels": { "type": "object", "additionalProperties": { "type": "number" } },
+          "unit": { "type": "string" },
+          "requires": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
+          "ungated": { "type": "boolean", "default": false },
+          "needs_link": { "type": "boolean" },
+          "pin": { "type": "string" }
+        }
+      }
+    },
+    "interlock": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["between"],
+        "additionalProperties": false,
+        "properties": {
+          "between": { "type": "array", "items": { "type": "string" }, "minItems": 2, "uniqueItems": true },
+          "mode": { "enum": ["first_wins", "both_off"], "default": "first_wins" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "condition": { "type": "string", "pattern": "^[^=!]+!?=[^=!]+$", "description": "control=position or control!=position" }
+  }
+}
