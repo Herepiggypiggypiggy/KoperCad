@@ -10,5 +10,5 @@ wait 4
 key Enter
 wait 20
 shot rename-page
-expect "Page title"
+expect "Main circuit"
 check_layout

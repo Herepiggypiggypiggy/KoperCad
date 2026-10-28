@@ -89,7 +89,7 @@ pub enum BridgeError {
     #[error("the enclosure interior (width, height, depth) is not set")]
     NoInterior,
     #[error(
-        "{tag} has a loss of {loss} W; no single device in a cabinet loses more than {max} W, so the loss is probably mistyped"
+        "{tag} loses {loss} W (over {max} W): check its loss value"
     )]
     ImplausibleLoss {
         tag: String,
@@ -97,7 +97,7 @@ pub enum BridgeError {
         max: String,
     },
     #[error(
-        "{outside} of {placed} devices lie outside the enclosure interior; the enclosure size and the layout do not match"
+        "{outside} of {placed} devices lie outside the enclosure: check its size"
     )]
     MostlyOutside { outside: usize, placed: usize },
 }
