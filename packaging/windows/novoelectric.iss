@@ -89,55 +89,32 @@ Type: files; Name: "{userprograms}\{#AppName} (safe graphics).lnk"
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-{ Runs one PowerShell line on this user's kopercad.exe that sits in the install folder; the
-  result is true when it exited with 0. A portable copy elsewhere is left alone. }
-function OwnProcess(const Action: String): Boolean;
-var
-  Code: Integer;
-  Cmd, Path: String;
-begin
-  { A single quote in the path (a user called O'Brien) must be doubled inside a PowerShell '...' string. }
-  Path := ExpandConstant('{app}\{#AppExe}');
-  StringChangeEx(Path, '''', '''''', True);
-  Cmd := '-NoProfile -NonInteractive -Command "$p = Get-Process kopercad -ErrorAction SilentlyContinue | ' +
-    'Where-Object { $_.Path -eq ''' + Path + ''' }; ' + Action + '"';
-  Result := Exec('powershell.exe', Cmd, '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
-end;
-
-{ True while a kopercad.exe of this install is running. }
-function AppIsRunning: Boolean;
-begin
-  Result := OwnProcess('if ($p) { exit 0 } else { exit 1 }');
-end;
-
-{ The Restart Manager cannot close the program's window, so ask it ourselves: first a normal
-  close, and only after the wait below end it (the recovery copy is offered at the next start).
-  If company policy blocks PowerShell, this does nothing and the old locked-file message returns. Only
-  the copy in the install folder; per-user process, no admin rights needed. }
+{ Closes the kopercad.exe that sits in the install folder, in ONE PowerShell call that bounds its own
+  wait (Wait-Process -Timeout), so no loop of ours can run long and a hung step cannot block an
+  install: ask the window to close, wait up to the given seconds for the answer to "Save changes?",
+  then end what is left. A portable copy elsewhere is left alone. Per-user process, no admin rights.
+  If company policy blocks PowerShell this does nothing and the old locked-file message returns.
+  The recovery copy is offered at the next start. }
 procedure CloseRunningApp(Silent: Boolean);
 var
-  Waited, Limit: Integer;
+  Code, Seconds: Integer;
+  Cmd, Path: String;
 begin
-  if not AppIsRunning then
-    exit;
-  OwnProcess('$p | ForEach-Object { [void]$_.CloseMainWindow() }; exit 0');
   { KoperCAD asks "Save changes?" on close: an interactive install waits a minute for the answer,
     a silent one ten seconds. }
   if Silent then
-    Limit := 10000
+    Seconds := 10
   else
-    Limit := 60000;
-  Waited := 0;
-  while AppIsRunning and (Waited < Limit) do
-  begin
-    Sleep(500);
-    Waited := Waited + 500;
-  end;
-  if AppIsRunning then
-  begin
-    OwnProcess('$p | Stop-Process -Force; exit 0');
-    Sleep(500);
-  end;
+    Seconds := 60;
+  { A single quote in the path (a user called O'Brien) must be doubled inside a PowerShell '...' string. }
+  Path := ExpandConstant('{app}\{#AppExe}');
+  StringChangeEx(Path, '''', '''''', True);
+  Cmd := '-NoProfile -NonInteractive -Command "$p = @(Get-Process kopercad -ErrorAction SilentlyContinue | ' +
+    'Where-Object { $_.Path -eq ''' + Path + ''' }); ' +
+    'if ($p.Count -gt 0) { $p | ForEach-Object { [void]$_.CloseMainWindow() }; ' +
+    '$p | Wait-Process -Timeout ' + IntToStr(Seconds) + ' -ErrorAction SilentlyContinue; ' +
+    '$p | Where-Object { -not $_.HasExited } | Stop-Process -Force -ErrorAction SilentlyContinue }; exit 0"';
+  Exec('powershell.exe', Cmd, '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
