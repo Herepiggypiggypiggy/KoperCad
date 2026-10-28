@@ -1,0 +1,46 @@
+# An add-on with an engine, for tests and screenshots (docs/design/addons.md). The engine
+# answers by fixed replies: a Start/Stop panel with lamps, a ping command and a crash command
+# that shows a broken engine stopping alone. Its source is engine-src/demo-engine.wat.
+
+[addon]
+id = "demo-engine"
+name = "Demo engine"
+version = "0.1.0"
+publisher = "KoperVonk (test fixture)"
+description = "A demonstration add-on with a small sandboxed engine: Start and Stop buttons drive its lamps."
+requires_app = ">=0.1.0"
+api_version = 1
+license = "MIT OR Apache-2.0"
+permissions = ["menu", "floating-panel"]
+
+[[command]]
+id = "panel"
+label = "Demo engine panel"
+description = "Open the demo engine's panel with Start and Stop."
+home = "menu"
+menu = "Simulate"
+opens = "panel"
+
+[[command]]
+id = "ping"
+label = "Demo engine ping"
+description = "Ask the demo engine for a reply."
+keywords = ["demo", "engine", "ping"]
+home = "palette-only"
+
+[[command]]
+id = "crash"
+label = "Demo engine crash"
+description = "Make the demo engine fail, to see that it stops alone and the program goes on."
+keywords = ["demo", "engine", "crash"]
+home = "palette-only"
+
+[[panel]]
+id = "panel"
+title = "Demo engine"
+slot = "floating"
+file = "data/panel.panel.toml"
+
+[engine]
+file = "engine.wasm"
+host_api = 1

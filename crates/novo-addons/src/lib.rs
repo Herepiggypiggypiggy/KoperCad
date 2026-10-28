@@ -13,6 +13,7 @@
 
 pub mod error;
 pub mod extensions;
+pub mod host;
 pub mod icons;
 pub mod layout;
 pub mod manifest;
@@ -31,6 +32,7 @@ pub fn default_root(local_data: &std::path::Path) -> std::path::PathBuf {
     local_data.join("KoperCAD").join("addons")
 }
 pub use extensions::{ExtCommand, ExtPanel, Extensions, Home};
+pub use host::{CallError, EngineHost, HostLimits};
 pub use manifest::{API_VERSION, Manifest, Permission};
 pub use package::{Limits, Package};
 pub use store::{
