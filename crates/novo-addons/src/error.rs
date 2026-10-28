@@ -41,6 +41,9 @@ pub enum AddonError {
     /// Nothing older to go back to.
     #[error("{0} has no earlier version to go back to")]
     NoPrevious(String),
+    /// The engine of an add-on could not be loaded or refused to start.
+    #[error("the add-on's engine could not be started: {0}")]
+    Engine(String),
     /// The per-user folder could not be read or written.
     #[error("the add-on folder could not be used: {0}")]
     Io(String),
