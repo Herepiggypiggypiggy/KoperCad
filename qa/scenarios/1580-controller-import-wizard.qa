@@ -1,6 +1,7 @@
-@title Controller import wizard: library table, preview and warnings before anything is saved
+@title Controller import wizard: library table, then a bad pasted table shows what is left out and what to check
 @area Import
-# Lane C4. File > Import > Controller profile from I/O table. The preview names what would be created.
+# Lane C4. File > Import > Controller profile from I/O table. The preview names what would be created
+# and every row it is unsure about; Save, Copy and Close stay on screen.
 click_text "New project"
 wait 20
 key ctrl+k
@@ -19,15 +20,34 @@ expect "Would create the radio controller"
 expect "HOIST_UP_SLOW"
 expect "common COM"
 expect_enabled "Save profile"
+expect_enabled "Close"
 shot library-radio
-# Another library table replaces the first.
-click_text "Generic library"
-wait 5
-click_text "Wired pendant, 3 motions, 2-step"
-wait 10
-expect "Would create the pendant controller"
-shot library-pendant
 check_layout
+# A pasted table with a row that names both directions and a repeated terminal: the table box has the keyboard.
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text import controller
+wait 5
+key Enter
+wait 10
+text Terminal;Function;Step
+key Enter
+text 1;Hoist up/down;1
+key Enter
+text 2;Hoist up;1
+key Enter
+text 2;Hoist down;1
+key Enter
+text 3;Frobnicate
+wait 10
+expect "to check"
+expect "left out: names both directions"
+expect "Terminal 2 is used for"
+shot bad-table
+check_layout
+expect_enabled "Close"
 key Escape
 wait 5
 expect_not "Controller profile from an I/O table"

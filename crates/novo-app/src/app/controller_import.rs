@@ -38,6 +38,8 @@ pub(super) struct ControllerWizard {
     /// An EPLAN export that was read, with the page to take rows from.
     pxf: Option<(String, PxfFile, usize)>,
     saved: Option<String>,
+    /// The table box takes the keyboard when the wizard opens, so a paste goes straight in.
+    focus_table: bool,
 }
 
 /// The folder generic and personal controller profiles live in.
@@ -77,6 +79,7 @@ impl ControllerWizard {
             source: "Pasted table".to_owned(),
             pxf: None,
             saved: None,
+            focus_table: true,
         };
         w.refresh();
         w
@@ -257,6 +260,10 @@ impl NovoApp {
             .document()
             .is_some_and(|d| selected_device(d.project(), &self.selection()).is_some());
         let palette = crate::theme::ui_palette();
+        // Small windows (1366x768) keep Save, Copy and Close on screen: the boxes shrink.
+        let screen_h = ctx.content_rect().height();
+        let compact = screen_h < 900.0;
+        let preview_height = (screen_h - 560.0).clamp(90.0, 230.0);
         let mut action = Action::None;
         let w = self.wb.controller_wizard.as_mut().expect("checked above");
         let mut changed = false;
@@ -314,17 +321,19 @@ impl NovoApp {
             ui.add_space(4.0);
             egui::ScrollArea::vertical()
                 .id_salt("controller_text")
-                .max_height(150.0)
+                .max_height(if compact { 90.0 } else { 150.0 })
                 .show(ui, |ui| {
-                    changed |= ui
-                        .add(
+                    let table_box = ui.add(
                             egui::TextEdit::multiline(&mut w.text)
                                 .font(egui::TextStyle::Monospace)
-                                .desired_rows(7)
+                                .desired_rows(if compact { 4 } else { 7 })
                                 .desired_width(f32::INFINITY)
                                 .hint_text("Terminal\tFunction\tStep\nCOM\tCommon\t\n1\tHoist up\t1"),
-                        )
-                        .changed();
+                        );
+                    if std::mem::take(&mut w.focus_table) {
+                        table_box.request_focus();
+                    }
+                    changed |= table_box.changed();
                 });
             ui.add_space(6.0);
             ui.horizontal(|ui| {
@@ -358,7 +367,7 @@ impl NovoApp {
                 )
                 .changed();
             ui.separator();
-            preview(ui, w, palette);
+            preview(ui, w, palette, preview_height);
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 let can_save = !w.proposal.profile.controls.is_empty() && !w.id.trim().is_empty();
@@ -506,7 +515,7 @@ enum Action {
     Copy,
 }
 
-fn preview(ui: &mut egui::Ui, w: &ControllerWizard, palette: &novo_theme::Palette) {
+fn preview(ui: &mut egui::Ui, w: &ControllerWizard, palette: &novo_theme::Palette, height: f32) {
     let p = &w.proposal;
     ui.strong(format!("Preview: {}", w.source));
     for n in &p.notes {
@@ -521,7 +530,7 @@ fn preview(ui: &mut egui::Ui, w: &ControllerWizard, palette: &novo_theme::Palett
         ui.label("Nothing would be created yet.");
     } else {
         ui.label(format!(
-            "Would create the {} controller `{}` with {} controls and {} signals{}{}.",
+            "Would create the {} controller \u{201c}{}\u{201d} with {} controls and {} signals{}{}.",
             profile.kind,
             profile.name,
             profile.controls.len(),
@@ -539,7 +548,7 @@ fn preview(ui: &mut egui::Ui, w: &ControllerWizard, palette: &novo_theme::Palett
     }
     egui::ScrollArea::vertical()
         .id_salt("controller_preview")
-        .max_height(230.0)
+        .max_height(height)
         .show(ui, |ui| {
             for c in &profile.controls {
                 ui.label(format!(
