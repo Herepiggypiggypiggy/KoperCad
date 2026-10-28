@@ -1,7 +1,8 @@
 # Electromechanical loop (lane L5a): design
 
-Status: design only, written 2026-10-28 while #1556 (L2a hoist engine) and #1557 (L1 drive
-engine) are open. Code starts when both are merged (no stacked PRs).
+Status: part 1 (loop core, PR #1561) and part 2 (hoist run in the live view) are built. The
+drive module in the loop (travel drive with motor current feedback) is part 3 and waits for the
+motor-at-frequency lane (L2b).
 
 ## Goal
 
@@ -17,15 +18,16 @@ small trait owned by the loop crate:
 
 ```
 novo-machine::port::CircuitPort
-    fn coil_energised(&self, binding: &Binding) -> bool          // read
-    fn terminal_level(&self, binding: &Binding) -> Level         // read (drive DI, brake rectifier feed)
-    fn set_sensor(&mut self, binding: &Binding, closed: bool)    // write (limit switch, photocell)
-    fn settle(&mut self, dt: f64)                                 // advance logic by one tick
+    fn motor_feed(&self, motor: &str) -> MotorFeed       // read: which windings and brake feed are live
+    fn is_energised(&self, device: &str) -> bool          // read: a coil or contact device is on
+    fn knows_device(&self, device: &str) -> bool          // read: the tag exists in the project
+    fn set_contact(&mut self, device: &str, closed: bool) // write: limit switch contact at its height
+    fn settle(&mut self, dt_s: f64)                       // advance the logic by one tick
 ```
 
 - `novo-machine` depends only on `novo-drive` (as today). It contains the loop (`Loop::step`),
   the per-instance binding table and a `FakeCircuit` used by its own tests.
-- The real `CircuitPort` is implemented in `novo-app` (`app/machine_port.rs`) on top of
+- The real `CircuitPort` is `LiveCircuit` in `novo-app` (`app/hoist_run.rs`) on top of
   `novo_sim::{settle_timed, PoleState, Clock}`: reading coil and pole state is already public;
   writing a sensor means forcing a pole (the limit switch's contact group) in the `PoleState`
   before the next settle. No new public API in `novo-sim` is expected. If a hook is missing, it
@@ -46,20 +48,24 @@ novo-machine::port::CircuitPort
 Every module instance has its own bindings, so identical hoists on one crab bind to different
 contactor groups. Cost is linear in module count.
 
-## Bindings
+## Bindings and mechanical data
 
-`Binding { device: DeviceTag, pin_or_group: .., kind }` stored in the project through the WS-02
-model change (to be requested from WS-02, described in the PR). Until then the table lives in
-`novo-machine` and in a sidecar settings blob.
+The motor's data lives in its device properties (`novo_machine::spec`, keys `mech_*`; setting
+`mech_mass_kg` turns a motor into a hoist). The limit switch is bound by the tag of its drawn device
+(`mech_upper_limit`, `mech_lower_limit`) and the height it acts at. `HoistLoop::check_bindings`
+reports a tag the project does not have and a separate brake feed that is not bound, before the run
+starts. A dedicated binding table in the project model needs a WS-02 change and is not part of this
+work.
 
-## UI entries (an engine without UI is not done)
+## UI entries
 
 | Place | Content |
 | --- | --- |
-| Property sheet of a motor, "Mechanical load" | gear ratio, drum radius, falls, payload, brake delays; model vs exact labels |
-| Property sheet of a drive, "Drive" | macro, presets, ramps, limits; `drive::FIDELITY` and `LEAVES_OUT` panel |
-| Simulate > Drive run... | start the loop, scope of frequency, rpm, brake, hook height |
-| Live view (Shift+L) badges | rpm, fine/coarse, brake open/closed, drive frequency and fault code |
+| Property sheet of a motor, "Mechanical load" | hook load, drum, gearbox, windings, brake delays, limit tags and heights |
+| Simulate > Hoist run | window with Start/Stop, readings per hoist, notes from the binding check, the model-versus-exact list |
+| Live view (Shift+L) badges | next to the motor: rpm, winding, brake state, hook height |
+
+Not yet built: Property sheet of a drive ("Drive") and Simulate > Drive run (part 3).
 
 ## Tests (written first)
 

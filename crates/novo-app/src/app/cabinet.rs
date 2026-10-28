@@ -212,6 +212,8 @@ pub(super) enum Ask {
     Cancel,
     ToggleTable,
     TogglePlateCard,
+    /// The inspector's close button: no plate card, nothing selected.
+    CloseInspector,
     ToggleRoutes,
     ToggleEmc,
     ExportWireCut,
@@ -2733,6 +2735,10 @@ impl NovoApp {
             }
             Ask::ToggleTable => self.cabinet.table ^= true,
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
+            Ask::CloseInspector => {
+                self.cabinet.plate_card = false;
+                self.cabinet.view.selection.clear();
+            }
             Ask::ExportPlate => {
                 self.learn_command("export.plate");
                 self.export_plate_pdf();

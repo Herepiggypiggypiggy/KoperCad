@@ -186,8 +186,8 @@ impl NovoApp {
         let (sized, coloured) = counts;
         let text = match (sized, coloured) {
             (0, 0) => "No wire needed a size or a colour".to_owned(),
-            (s, 0) => format!("Set the size of {s} wires"),
-            (0, c) => format!("Set the colour of {c} wires"),
+            (s, 0) => format!("Set the size of {}", super::count_words::wires(s)),
+            (0, c) => format!("Set the colour of {}", super::count_words::wires(c)),
             (s, c) => format!("Set the size of {s} wires and the colour of {c}"),
         };
         self.message(Level::Info, text);
@@ -781,8 +781,8 @@ fn cut_tab(
         .count()
         + 1;
     ui.label(format!(
-        "{} wires in {groups} groups, {metres:.1} m of hookup wire to pull",
-        jobs.len()
+        "{} in {groups} groups, {metres:.1} m of hookup wire to pull",
+        super::count_words::wires(jobs.len())
     ));
     for run in &cache.cables {
         ui.label(format!(

@@ -1939,6 +1939,31 @@ fn a_cooler_layout_asked_before_the_plate_exists_is_dropped_not_kept() {
     );
 }
 
+#[test]
+fn the_inspector_close_button_hides_the_plate_card_and_clears_the_selection() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.app
+        .cabinet_ask(Ask::TogglePlateCard, Some(cab), None, &[]);
+    d.frame();
+    d.frame();
+    assert!(d.app.cabinet.plate_card);
+    assert!(d.app.learn_anchor("cabinet.inspector").is_some());
+    d.app.cabinet_ask(Ask::CloseInspector, Some(cab), None, &[]);
+    d.frame();
+    d.frame();
+    assert!(!d.app.cabinet.plate_card);
+    assert!(d.app.learn_anchor("cabinet.inspector").is_none());
+}
+
 /// The cooling tower report: a contactor, a motor and a push button with no
 /// location in their tags, in the project's only cabinet, which has a door.
 fn cabinet_with_motor_and_button(d: &mut Drive) -> novo_core::StructureId {

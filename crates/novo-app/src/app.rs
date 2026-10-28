@@ -60,6 +60,7 @@ mod commissioning_viewer;
 mod commissioning_viewer_tests;
 mod compare;
 mod controller_import;
+mod count_words;
 mod designer;
 mod device_renumber;
 mod diagnostics;
@@ -109,6 +110,8 @@ mod heat_live;
 mod heat_live_tests;
 mod heat_openings;
 mod heat_openings_store;
+#[cfg(test)]
+mod heat_preview_tests;
 mod heat_probe;
 mod heat_progress;
 #[cfg(test)]
@@ -131,6 +134,7 @@ mod heat_whatif_tests;
 mod heat_wires;
 #[cfg(test)]
 mod heat_wires_tests;
+mod hoist_run;
 mod inspector;
 mod interop;
 mod kitting;
@@ -362,6 +366,8 @@ mod kitting_tests;
 mod learn_replay;
 #[cfg(test)]
 mod learn_tests;
+#[cfg(test)]
+mod lesson_claims_tests;
 #[cfg(test)]
 mod lesson_verify_cables;
 #[cfg(test)]
@@ -1808,6 +1814,7 @@ impl NovoApp {
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
+        self.hoist_window(&ctx);
         self.add_fault_window(&ctx);
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);

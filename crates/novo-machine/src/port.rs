@@ -31,6 +31,8 @@ pub trait CircuitPort {
     fn is_energised(&self, device: &str) -> bool;
     /// Drives a machine sensor contact (limit switch): `closed` is its conducting state.
     fn set_contact(&mut self, device: &str, closed: bool);
+    /// Whether a device with this tag exists in the circuit (for binding checks).
+    fn knows_device(&self, device: &str) -> bool;
 }
 
 type Rule = Box<dyn FnMut(&mut FakeState)>;
@@ -43,6 +45,8 @@ pub struct FakeCircuit {
     pub energised: BTreeSet<String>,
     /// Sensor contacts as last written by the loop (`true` = closed).
     pub contacts: BTreeMap<String, bool>,
+    /// Extra device tags the circuit knows (limit switches are known once written).
+    pub known: BTreeSet<String>,
     pub settles: u64,
     rule: Option<Rule>,
 }
@@ -88,5 +92,12 @@ impl CircuitPort for FakeCircuit {
 
     fn set_contact(&mut self, device: &str, closed: bool) {
         self.contacts.insert(device.to_owned(), closed);
+    }
+
+    fn knows_device(&self, device: &str) -> bool {
+        self.known.contains(device)
+            || self.feeds.contains_key(device)
+            || self.energised.contains(device)
+            || self.contacts.contains_key(device)
     }
 }

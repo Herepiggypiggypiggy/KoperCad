@@ -101,6 +101,7 @@ fn prices_compare_per_piece_and_currency() {
         currency: cur.into(),
         per,
         date: String::new(),
+        unit: String::new(),
     };
     let mut a = part("X", "ABCD1");
     a.price = Some(price(12.0, 100, "EUR"));

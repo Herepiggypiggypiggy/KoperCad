@@ -1,0 +1,28 @@
+@title Lesson walk: heat-and-sizing says what the preview shows (hottest place, total loss)
+@area Learn
+# After the Do it for me and Next clicks the card shows the step that says the hottest place is -T1 (a ticked step auto-advances, so a further Next would skip it).
+# The lesson says "The hottest place sits on the transformer -T1" and quotes "Total loss 34 W". The scene dump reports what the Heat view draws (the badges and the first hot-spot card), so the walk checks the words against the values at both sizes. Do it for me only carries out commands.
+key ctrl+k
+wait 4
+text where it gets hot
+wait 6
+click_text "Where it gets hot, and how big the cabinet must be"
+wait 40
+shot 01-open-cabinet
+check_layout
+try click_text "Do it for me"
+wait 40
+try click_text "Next"
+wait 20
+shot 02-heat-on-step
+check_layout
+try click_text "Do it for me"
+wait 40
+try click_text "Next"
+wait 20
+shot 03-hottest-place
+expect "Total loss 34 W"
+expect "Preview, not a solver result"
+expect_scene "heat preview: hottest =A1+CAB-T1 first card =A1+CAB-T1 total 34 W"
+expect "The hottest place sits on the transformer"
+check_layout
