@@ -169,6 +169,18 @@ impl SignalKind {
     pub const ALL: [SignalKind; 3] = [SignalKind::Contact, SignalKind::Voltage, SignalKind::Analog];
 }
 
+/// How several signals bound to one target combine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Combine {
+    /// Any high signal drives the target (largest magnitude wins). Right for motion commands.
+    #[default]
+    Or,
+    /// The target is only high while every signal bound to it is (smallest magnitude wins).
+    /// Right for a normally-closed chain such as the E-stop, where one pressed button must open it.
+    And,
+}
+
 /// Effects the engine can inject. All off by default; the UI shows them when on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -324,6 +336,10 @@ pub struct SignalDef {
     /// Low while the link is lost. Default: true for a radio, false otherwise.
     #[serde(default)]
     pub needs_link: Option<bool>,
+    /// How this signal combines with others on the same target. If any signal on a target says
+    /// `and`, the whole target is an AND.
+    #[serde(default)]
+    pub combine: Combine,
     /// Terminal label the real device wires this signal to (for auto-binding by name).
     #[serde(default)]
     pub pin: Option<String>,
@@ -393,8 +409,8 @@ impl Profile {
         }
     }
 
-    pub fn to_toml(&self) -> String {
-        toml::to_string_pretty(self).unwrap_or_default()
+    pub fn to_toml(&self) -> Result<String, String> {
+        toml::to_string_pretty(self).map_err(|e| e.to_string())
     }
 
     pub fn control(&self, id: &str) -> Option<&ControlDef> {

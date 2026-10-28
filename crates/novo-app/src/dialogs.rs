@@ -185,6 +185,31 @@ impl FileDialog {
     }
 }
 
+/// The program is closing and the unsaved work could not be kept in its
+/// recovery file. Says so and offers to save a copy somewhere else: the
+/// chosen file, or `None` when the person declines. In control mode the next
+/// queued answer is the file.
+pub fn save_elsewhere_after_failure(why: &str, suggested_name: &str) -> Option<PathBuf> {
+    if let Some(answer) = harness("message", why, &None, &None, &[]) {
+        return answer.into_iter().next();
+    }
+    let yes = rfd::MessageDialog::new()
+        .set_level(rfd::MessageLevel::Warning)
+        .set_title("KoperCAD could not keep your unsaved work")
+        .set_description(format!("{why}\n\nSave a copy somewhere else now?"))
+        .set_buttons(rfd::MessageButtons::YesNo)
+        .show()
+        == rfd::MessageDialogResult::Yes;
+    if !yes {
+        return None;
+    }
+    FileDialog::new()
+        .set_title("Save a copy of your unsaved work")
+        .add_filter("KoperCAD project", &[novo_storage::PROJECT_EXTENSION])
+        .set_file_name(suggested_name)
+        .save_file()
+}
+
 #[cfg(test)]
 mod tests {
     use super::FileDialog;

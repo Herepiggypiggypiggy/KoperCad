@@ -188,6 +188,14 @@ impl EtimModel {
             let mut total = 0u64;
             collect(path, &mut files, &mut total, 0)?;
         } else {
+            let size = fs::metadata(path).map_err(io)?.len();
+            if size > MAX_TOTAL_BYTES {
+                return Err(EtimError::Unreadable(format!(
+                    "{source} is {} MB, more than the {} MB read from one release",
+                    size / (1024 * 1024),
+                    MAX_TOTAL_BYTES / (1024 * 1024)
+                )));
+            }
             let bytes = fs::read(path).map_err(io)?;
             if bytes.starts_with(b"PK") {
                 files = read_zip(&bytes)?;

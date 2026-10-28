@@ -15,7 +15,7 @@ pub(super) const ROWS: &[(&str, &str)] = &[
     ("Box select", "Drag on empty space (Move off: anywhere)"),
     (
         "Move a part",
-        "Drag it (Move on); R turns it, Del removes it",
+        "Turn Move on, then drag it; R turns it, Del removes it",
     ),
     (
         "Zoom to selection",

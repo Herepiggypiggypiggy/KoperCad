@@ -528,6 +528,11 @@ enum Action {
     Copy,
 }
 
+/// `1 control`, `2 controls`.
+fn plural(n: usize, word: &str) -> String {
+    format!("{n} {word}{}", if n == 1 { "" } else { "s" })
+}
+
 fn preview(ui: &mut egui::Ui, w: &ControllerWizard, palette: &novo_theme::Palette, height: f32) {
     let p = &w.proposal;
     ui.strong(format!("Preview: {}", w.source));
@@ -543,11 +548,11 @@ fn preview(ui: &mut egui::Ui, w: &ControllerWizard, palette: &novo_theme::Palett
         ui.label("Nothing would be created yet.");
     } else {
         ui.label(format!(
-            "Would create the {} controller \u{201c}{}\u{201d} with {} controls and {} signals{}{}.",
+            "Would create the {} controller \u{201c}{}\u{201d} with {} and {}{}{}.",
             profile.kind,
             profile.name,
-            profile.controls.len(),
-            profile.signals.len(),
+            plural(profile.controls.len(), "control"),
+            plural(profile.signals.len(), "signal"),
             profile
                 .common
                 .as_ref()
@@ -563,6 +568,22 @@ fn preview(ui: &mut egui::Ui, w: &ControllerWizard, palette: &novo_theme::Palett
         .id_salt("controller_preview")
         .max_height(height)
         .show(ui, |ui| {
+            if !p.warnings.is_empty() {
+                ui.strong(format!("{} to check", p.warnings.len()));
+                for wn in &p.warnings {
+                    let line = if wn.line == 0 {
+                        String::new()
+                    } else {
+                        format!("line {}: ", wn.line)
+                    };
+                    let text = format!("{line}{}", wn.message);
+                    match wn.severity {
+                        Severity::Warning => ui.colored_label(palette.warning, text),
+                        Severity::Info => ui.weak(text),
+                    };
+                }
+            }
+            ui.add_space(6.0);
             for c in &profile.controls {
                 ui.label(format!(
                     "{}: {}, positions {}",
@@ -596,22 +617,6 @@ fn preview(ui: &mut egui::Ui, w: &ControllerWizard, palette: &novo_theme::Palett
                             ui.end_row();
                         }
                     });
-            }
-            if !p.warnings.is_empty() {
-                ui.add_space(6.0);
-                ui.strong(format!("{} to check", p.warnings.len()));
-                for wn in &p.warnings {
-                    let line = if wn.line == 0 {
-                        String::new()
-                    } else {
-                        format!("line {}: ", wn.line)
-                    };
-                    let text = format!("{line}{}", wn.message);
-                    match wn.severity {
-                        Severity::Warning => ui.colored_label(palette.warning, text),
-                        Severity::Info => ui.weak(text),
-                    };
-                }
             }
         });
 }
@@ -733,5 +738,15 @@ mod tests {
         std::fs::write(&path, b"klem;functie\n1;Hijsen omhoog caf\xe9\n").unwrap();
         assert!(read_table_file(&path).unwrap().contains("caf\u{e9}"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod plural_tests {
+    #[test]
+    fn counts_say_one_control_and_two_controls() {
+        assert_eq!(super::plural(1, "control"), "1 control");
+        assert_eq!(super::plural(2, "signal"), "2 signals");
+        assert_eq!(super::plural(0, "signal"), "0 signals");
     }
 }

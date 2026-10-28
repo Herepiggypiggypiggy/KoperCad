@@ -30,6 +30,8 @@ use crate::search::normalize_code;
 
 /// Largest plausible outer size of a part, in mm (a cabinet is ~2200).
 const MAX_DIMENSION_MM: f64 = 3000.0;
+/// Most per-file lines of one kind in the report.
+const MAX_DROPPED_LINES: usize = 5;
 
 #[derive(Debug, Error)]
 pub enum InboxError {
@@ -487,6 +489,8 @@ fn read_file(inbox: &Path, file: &Path, opts: &InboxOptions, run: &mut Run) {
     };
 
     let kind = FileKind::of_file_name(&name);
+    // Rows and articles the reader left out; each one is reported by line.
+    let mut dropped: Vec<String> = Vec::new();
     let lower = name.to_ascii_lowercase();
     let mut extras = Extras::default();
     let parts: Result<Vec<(CatalogPart, &'static str)>, String> = match kind {
@@ -500,7 +504,7 @@ fn read_file(inbox: &Path, file: &Path, opts: &InboxOptions, run: &mut Run) {
         }),
         FileKind::Csv => fs::read(file)
             .map_err(|e| e.to_string())
-            .and_then(|b| csv(&decode_text(&b), &hint_name)),
+            .and_then(|b| csv(&decode_text(&b), &hint_name, &mut dropped)),
         FileKind::Zip | FileKind::Edz => fs::read(file)
             .map_err(|e| e.to_string())
             .and_then(|b| read_zip(&b))
@@ -552,6 +556,21 @@ fn read_file(inbox: &Path, file: &Path, opts: &InboxOptions, run: &mut Run) {
             "{label}: {}",
             crate::etim::unread_note(&extras.unread, run.etim.as_ref())
         ));
+    }
+    for d in dropped.iter().take(MAX_DROPPED_LINES) {
+        run.report.warnings.push(format!("{label}: {d}"));
+    }
+    if dropped.len() > MAX_DROPPED_LINES {
+        run.report.warnings.push(format!(
+            "{label}: and {} more left out",
+            dropped.len() - MAX_DROPPED_LINES
+        ));
+    }
+    for w in odd_order_numbers(&parts)
+        .into_iter()
+        .take(MAX_DROPPED_LINES)
+    {
+        run.report.warnings.push(format!("{label}: {w}"));
     }
     if parts.is_empty() {
         run.report.rejected.push(format!("{label}: no parts"));
@@ -642,10 +661,77 @@ fn bmecat(
         .map_err(|e| e.to_string())
 }
 
-fn csv(text: &str, default_maker: &str) -> Result<Vec<(CatalogPart, &'static str)>, String> {
-    import_catalog(text, default_maker)
-        .map(|r| r.parts.into_iter().map(|p| (p, "import:csv")).collect())
-        .map_err(|e| e.to_string())
+fn csv(
+    text: &str,
+    default_maker: &str,
+    dropped: &mut Vec<String>,
+) -> Result<Vec<(CatalogPart, &'static str)>, String> {
+    let r = import_catalog(text, default_maker).map_err(|e| e.to_string())?;
+    dropped.extend(
+        r.skipped
+            .iter()
+            .map(|(line, why)| format!("line {line} left out: {why}")),
+    );
+    Ok(r.parts.into_iter().map(|p| (p, "import:csv")).collect())
+}
+
+/// How an order number is built: the length of each run of digits, letters
+/// and separators (`2002-1201` is 4 1 4 digits and a dash).
+fn shape(order: &str) -> String {
+    let mut out = String::new();
+    let mut last = ' ';
+    let mut n = 0;
+    for c in order.trim().chars() {
+        let class = if c.is_ascii_digit() {
+            'd'
+        } else if c.is_alphabetic() {
+            'a'
+        } else {
+            c
+        };
+        if class == last {
+            n += 1;
+        } else {
+            if n > 0 {
+                out.push_str(&format!("{last}{n}"));
+            }
+            last = class;
+            n = 1;
+        }
+    }
+    if n > 0 {
+        out.push_str(&format!("{last}{n}"));
+    }
+    out
+}
+
+/// Order numbers that are built differently from nearly all the others in
+/// the same file (a cut-off `2002-12` among `2002-1201`).
+fn odd_order_numbers(parts: &[(CatalogPart, &'static str)]) -> Vec<String> {
+    if parts.len() < 5 {
+        return Vec::new();
+    }
+    let mut count: BTreeMap<String, usize> = BTreeMap::new();
+    for (p, _) in parts {
+        *count.entry(shape(&p.order_number)).or_default() += 1;
+    }
+    let Some((common, n)) = count.iter().max_by_key(|(_, n)| **n) else {
+        return Vec::new();
+    };
+    // Only when the file is clearly uniform (four in five alike); a mixed range proves nothing.
+    if *n * 5 < parts.len() * 4 {
+        return Vec::new();
+    }
+    parts
+        .iter()
+        .filter(|(p, _)| shape(&p.order_number) != *common)
+        .map(|(p, _)| {
+            format!(
+                "order number \"{}\" is built differently from the other {} (cut off or mistyped?)",
+                p.order_number, n
+            )
+        })
+        .collect()
 }
 
 /// Problems with one part. Returned as text; none stops the import.
@@ -738,7 +824,7 @@ mod tests {
 <T_NEW_CATALOG><PRODUCT><SUPPLIER_PID>{pid}</SUPPLIER_PID>
 <PRODUCT_DETAILS><DESCRIPTION_SHORT>Terminal block</DESCRIPTION_SHORT></PRODUCT_DETAILS>
 <PRODUCT_FEATURES><REFERENCE_FEATURE_SYSTEM_NAME>ETIM-8.0</REFERENCE_FEATURE_SYSTEM_NAME>
-<REFERENCE_FEATURE_GROUP_ID>EC000897</REFERENCE_FEATURE_GROUP_ID>
+<REFERENCE_FEATURE_GROUP_ID>EC900001</REFERENCE_FEATURE_GROUP_ID>
 <FEATURE><FNAME>Poles</FNAME><FVALUE>{poles}</FVALUE></FEATURE></PRODUCT_FEATURES>
 </PRODUCT></T_NEW_CATALOG></BMECAT>"#
         )
@@ -881,7 +967,7 @@ mod tests {
 <T_NEW_CATALOG><ARTICLE><SUPPLIER_AID>{order}</SUPPLIER_AID>
 <ARTICLE_DETAILS><DESCRIPTION_SHORT>{markup}</DESCRIPTION_SHORT></ARTICLE_DETAILS>
 <ARTICLE_FEATURES><REFERENCE_FEATURE_SYSTEM_NAME>ETIM-9.0</REFERENCE_FEATURE_SYSTEM_NAME>
-<REFERENCE_FEATURE_GROUP_ID>EC000897</REFERENCE_FEATURE_GROUP_ID>
+<REFERENCE_FEATURE_GROUP_ID>EC900001</REFERENCE_FEATURE_GROUP_ID>
 <FEATURE><FNAME>EF900001</FNAME><FVALUE>5.2</FVALUE><FUNIT>EU900001</FUNIT></FEATURE>
 </ARTICLE_FEATURES>
 <ARTICLE_ORDER_DETAILS><ORDER_UNIT>C62</ORDER_UNIT><PRICE_QUANTITY>{per}</PRICE_QUANTITY></ARTICLE_ORDER_DETAILS>
@@ -1030,5 +1116,36 @@ mod tests {
             f.iter().any(|s| s.contains("height 50000 mm is over 3000")),
             "{f:?}"
         );
+    }
+
+    #[test]
+    fn dropped_rows_odd_numbers_and_bad_sizes_are_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let inbox = dir.path().join("inbox");
+        let maker = inbox.join("Acme");
+        fs::create_dir_all(&maker).unwrap();
+        let mut csv = String::from("Order number;Description;Width;Height;Depth\n");
+        for n in 1201..1207 {
+            csv.push_str(&format!("2002-{n};Terminal;5;60;40\n"));
+        }
+        csv.push_str("2002-12;Cut off;5;60;40\n");
+        csv.push_str(";No number;5;60;40\n");
+        csv.push_str("2002-1300;Huge;50000;60;40\n");
+        csv.push_str("2002-1301;Negative;-5;60;40\n");
+        fs::write(maker.join("p.csv"), csv).unwrap();
+        let r = import_inbox(
+            &inbox,
+            Some(&dir.path().join("cat.json")),
+            &InboxOptions {
+                dry_run: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let all = r.warnings.join("\n");
+        assert!(all.contains("left out"), "{all}");
+        assert!(all.contains("2002-12\" is built differently"), "{all}");
+        assert!(all.contains("over 3000"), "{all}");
+        assert!(all.contains("zero or negative"), "{all}");
     }
 }

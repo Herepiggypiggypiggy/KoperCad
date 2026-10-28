@@ -1,0 +1,11 @@
+Order number;Description;Width;Height;Depth
+2002-1201;Terminal block;5;60;40
+2002-1202;Terminal block;5;60;40
+2002-1203;Terminal block;5;60;40
+2002-1204;Terminal block;5;60;40
+2002-1205;Terminal block;5;60;40
+2002-1206;Terminal block;5;60;40
+2002-12;Cut-off order number;5;60;40
+;Row without an order number;5;60;40
+2002-1300;Fifty metres wide;50000;60;40
+2002-1301;Negative width;-5;60;40

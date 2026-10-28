@@ -280,7 +280,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                 line,
                 Severity::Warning,
                 format!(
-                    "Step column `{}` is not a step number or a slow/fast word",
+                    "Step column “{}” is not a step number or a slow/fast word",
                     row.step.trim()
                 ),
             );
@@ -301,7 +301,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                 line,
                 Severity::Warning,
                 format!(
-                    "`{}` names both directions: skipped. Put one direction per row",
+                    "“{}” names both directions: skipped. Put one direction per row",
                     row.function.trim()
                 ),
             );
@@ -314,7 +314,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                 line,
                 Severity::Warning,
                 format!(
-                    "`{}` names several directions: skipped",
+                    "“{}” names several directions: skipped",
                     row.function.trim()
                 ),
             );
@@ -327,7 +327,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                 line,
                 Severity::Warning,
                 format!(
-                    "`{}` names several motions ({}): skipped",
+                    "“{}” names several motions ({}): skipped",
                     row.function.trim(),
                     r.motions.join(", ")
                 ),
@@ -343,7 +343,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                         &mut warnings,
                         line,
                         Severity::Info,
-                        "No motion word in the table: filed under `motion`".to_owned(),
+                        "No motion word in the table: filed under “motion”".to_owned(),
                     );
                     Some("motion".to_owned())
                 }
@@ -352,7 +352,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                         &mut warnings,
                         line,
                         Severity::Info,
-                        format!("No motion word: assumed `{m}`, the only motion in the table"),
+                        format!("No motion word: assumed “{m}”, the only motion in the table"),
                     );
                 }),
             };
@@ -362,7 +362,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                     line,
                     Severity::Warning,
                     format!(
-                        "`{}` has a direction but no motion and the table names several: skipped",
+                        "“{}” has a direction but no motion and the table names several: skipped",
                         row.function.trim()
                     ),
                 );
@@ -384,7 +384,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                     line,
                     Severity::Warning,
                     format!(
-                        "Step {step}: the profile format has rockers with up to 3 steps, so `{}` is left out",
+                        "Step {step}: the profile format has rockers with up to 3 steps, so “{}” is left out",
                         row.function.trim()
                     ),
                 );
@@ -397,7 +397,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                     line,
                     Severity::Warning,
                     format!(
-                        "The number {n} in `{}` could be a step or a unit number: not used as a step",
+                        "The number {n} in “{}” could be a step or a unit number: not used as a step",
                         row.function.trim()
                     ),
                 );
@@ -432,7 +432,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                             &mut warnings,
                             line,
                             Severity::Warning,
-                            format!("A second common pin; `{c}` was kept"),
+                            format!("A second common pin; “{c}” was kept"),
                         );
                         skip(i, &mut outcomes, "second common");
                     }
@@ -443,7 +443,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                     line,
                     Severity::Warning,
                     format!(
-                        "`{}` looks like a selector switch. Selectors are not guessed: add it in the profile editor",
+                        "“{}” looks like a selector switch. Selectors are not guessed: add it in the profile editor",
                         row.function.trim()
                     ),
                 );
@@ -459,7 +459,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                 line,
                 Severity::Warning,
                 format!(
-                    "`{}` names a motion but no direction: skipped",
+                    "“{}” names a motion but no direction: skipped",
                     row.function.trim()
                 ),
             );
@@ -470,7 +470,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                 line,
                 Severity::Warning,
                 format!(
-                    "`{}` was not recognised: skipped. Add its words to a word list or write the control by hand",
+                    "“{}” was not recognised: skipped. Add its words to a word list or write the control by hand",
                     row.function.trim()
                 ),
             );
@@ -771,7 +771,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
             &mut warnings,
             0,
             Severity::Info,
-            "Controller kind not stated in the table: `custom`".to_owned(),
+            "Controller kind not stated in the table: “custom”".to_owned(),
         );
         "custom".to_owned()
     });

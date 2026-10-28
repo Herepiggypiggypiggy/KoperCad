@@ -469,3 +469,18 @@ fn state_round_trips_and_an_edited_profile_still_restores() {
     assert_eq!(r.position("hoist"), Some("off"));
     assert_eq!(r.position("trolley"), Some("off"));
 }
+
+// ---- review follow-ups ----
+
+#[test]
+fn restore_settles_a_state_that_breaks_a_rule_the_profile_gained() {
+    // saved with E-stop pressed and main on (possible when `requires` was added later)
+    let mut c = radio_on();
+    set(&mut c, "hoist", "up2");
+    let mut stale = c.state().clone();
+    stale.positions.insert("estop".into(), "pressed".into());
+    let r = Controller::restore(c.profile().clone(), stale).unwrap();
+    assert_eq!(r.position("start"), Some("off"), "main drops on load");
+    assert!(!r.is_high("MAIN") && !r.is_high("H_UP_FAST"));
+    assert!(!r.is_high("ESTOP_OK"));
+}

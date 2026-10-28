@@ -249,9 +249,19 @@ fn is_block(name: &str) -> bool {
 /// and white space collapsed.
 fn plain_text(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
-    let mut chars = raw.char_indices().peekable();
-    while let Some((i, c)) = chars.next() {
-        if c == '<' {
+    // Byte index of the `>` that closes the tag being skipped.
+    let mut skip_to: Option<usize> = None;
+    // Once no `>` is left in the text, no later `<` has a tag to close, so the
+    // rest is not searched again (a long run of `<a` stayed quadratic).
+    let mut no_more_tags = false;
+    for (i, c) in raw.char_indices() {
+        if let Some(end) = skip_to {
+            if i <= end {
+                continue;
+            }
+            skip_to = None;
+        }
+        if c == '<' && !no_more_tags {
             let rest = &raw[i + 1..];
             let tag = rest
                 .strip_prefix('/')
@@ -259,13 +269,16 @@ fn plain_text(raw: &str) -> String {
                 .chars()
                 .next()
                 .is_some_and(|n| n.is_ascii_alphabetic());
-            if tag && let Some(end) = rest.find('>') {
-                // `<br>`, `</b>`: skip to the closing bracket, keep a space.
-                out.push(' ');
-                for _ in 0..=end {
-                    chars.next();
+            if tag {
+                match rest.find('>') {
+                    Some(end) => {
+                        // `<br>`, `</b>`: skip to the closing bracket, keep a space.
+                        out.push(' ');
+                        skip_to = Some(i + 1 + end);
+                        continue;
+                    }
+                    None => no_more_tags = true,
                 }
-                continue;
             }
         }
         out.push(c);
@@ -800,7 +813,7 @@ mod tests {
    </PRODUCT_DETAILS>
    <PRODUCT_FEATURES>
     <REFERENCE_FEATURE_SYSTEM_NAME>ETIM-8.0</REFERENCE_FEATURE_SYSTEM_NAME>
-    <REFERENCE_FEATURE_GROUP_ID>EC000897</REFERENCE_FEATURE_GROUP_ID>
+    <REFERENCE_FEATURE_GROUP_ID>EC900001</REFERENCE_FEATURE_GROUP_ID>
     <FEATURE><FNAME>Rated current</FNAME><FVALUE>24</FVALUE><FUNIT>A</FUNIT></FEATURE>
     <FEATURE><FNAME>Poles</FNAME><FVALUE>2</FVALUE></FEATURE>
    </PRODUCT_FEATURES>
@@ -825,7 +838,7 @@ mod tests {
         assert_eq!(a.keywords, vec!["terminal"]);
         assert_eq!(
             a.data.get(ETIM_CLASS_KEY),
-            Some(&Value::Text("EC000897".into()))
+            Some(&Value::Text("EC900001".into()))
         );
         assert_eq!(
             a.data.get("rated_current"),
@@ -876,6 +889,40 @@ mod tests {
             "<PRODUCT><SUPPLIER_PID>{order}</SUPPLIER_PID>{order_details}\
              <PRODUCT_PRICE_DETAILS>{price}</PRODUCT_PRICE_DETAILS></PRODUCT>"
         )
+    }
+
+    #[test]
+    fn a_tag_with_non_ascii_text_in_it_does_not_eat_the_words_after_it() {
+        assert_eq!(
+            plain_text(r#"<a title="éééé ä">Hello world</a> end"#),
+            "Hello world end"
+        );
+        assert_eq!(plain_text("<b>ä</b>ö<i>ü</i>"), "ä ö ü");
+    }
+
+    #[test]
+    fn many_unclosed_tags_are_read_in_linear_time() {
+        let text = "<a ".repeat(200_000);
+        let started = std::time::Instant::now();
+        let out = plain_text(&text);
+        assert_eq!(out, text.trim_end());
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            started.elapsed()
+        );
+        // A closed tag after the unclosed ones is still taken out.
+        assert_eq!(plain_text("1 < 2 <b>x</b>"), "1 < 2 x");
+    }
+
+    #[test]
+    fn markup_inside_a_description_keeps_all_the_text() {
+        let xml = r#"<BMECAT><HEADER><SUPPLIER><SUPPLIER_NAME>M</SUPPLIER_NAME></SUPPLIER></HEADER>
+<T_NEW_CATALOG><PRODUCT><SUPPLIER_PID>1</SUPPLIER_PID><PRODUCT_DETAILS>
+<DESCRIPTION_SHORT>UT 2,5 <b>bold</b> &amp; more<br/>end</DESCRIPTION_SHORT>
+</PRODUCT_DETAILS></PRODUCT></T_NEW_CATALOG></BMECAT>"#;
+        let parts = import_bmecat(xml, "M").unwrap();
+        assert_eq!(parts[0].description, "UT 2,5 bold & more end");
     }
 
     #[test]
