@@ -417,6 +417,8 @@ mod review_notes_tests;
 #[cfg(test)]
 mod route_all_tests;
 #[cfg(test)]
+mod route_through_ducts_tests;
+#[cfg(test)]
 mod scale_tests;
 #[cfg(test)]
 mod shortcuts_sheet_tests;
