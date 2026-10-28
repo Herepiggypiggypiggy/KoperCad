@@ -1,0 +1,31 @@
+@title Hostile: new empty project, every workspace and report
+@area Hostile
+fresh
+key ctrl+n
+wait 20
+shot empty
+click_text Cabinet #1
+wait 20
+shot empty-cabinet
+expect_disabled "3D"
+try click_text "3D" #1
+wait 25
+shot empty-3d
+click_text Reports #1
+wait 20
+shot empty-reports
+click_text Commissioning #1
+wait 20
+shot empty-commissioning
+click_text Schematic #1
+wait 20
+key ctrl+a
+key Delete
+key ctrl+z
+key ctrl+y
+key ctrl+s
+wait 10
+shot empty-save-prompt
+key Escape
+check_layout
+check_blank empty

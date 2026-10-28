@@ -1,0 +1,47 @@
+@title Hostile: switch workspaces while placing, wiring and with menus open
+@area Hostile
+click_text "Open example"
+wait 20
+key q
+wait 4
+text contactor
+wait 6
+click_text Cabinet #1
+wait 20
+shot cabinet-while-armed
+click_text Schematic #1
+wait 20
+click 600 400
+wait 6
+shot schematic-after-armed
+key Escape
+key w
+click 500 300
+click_text "3D" #1
+wait 25
+shot 3d-while-wiring
+click_text Schematic #1
+wait 20
+click_text Reports #1
+wait 20
+shot reports
+click_text Commissioning #1
+wait 20
+click_text Cabinet #1
+wait 10
+click_text "3D" #1
+wait 10
+click_text Reports #1
+wait 10
+click_text Schematic #1
+wait 10
+click_text Cabinet #1
+click_text "3D" #1
+click_text Reports #1
+click_text Commissioning #1
+click_text Schematic #1
+wait 30
+shot after-rapid-switch
+check_layout
+check_blank after-rapid-switch
+expect_scene K1

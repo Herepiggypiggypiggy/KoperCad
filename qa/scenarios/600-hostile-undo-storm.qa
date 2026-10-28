@@ -1,0 +1,36 @@
+@title Hostile: undo and redo storms, select all and delete, then undo back
+@area Hostile
+click_text "Open example"
+wait 20
+shot start
+# Undo past the beginning, many times: nothing to undo must not break anything.
+key ctrl+z ctrl+z ctrl+z ctrl+z ctrl+z ctrl+z ctrl+z ctrl+z ctrl+z ctrl+z
+wait 4
+key ctrl+y ctrl+y ctrl+y ctrl+y ctrl+y ctrl+y
+wait 4
+shot after-empty-undo-redo
+expect_scene K1
+# Select everything on the page and delete it, twice.
+key ctrl+a
+wait 4
+key Delete
+wait 6
+shot all-deleted
+key ctrl+a
+key Delete
+wait 4
+key ctrl+z
+wait 6
+shot undo-one
+key ctrl+z
+key ctrl+z
+key ctrl+z
+wait 6
+key ctrl+y ctrl+y ctrl+y ctrl+y
+wait 6
+key ctrl+z ctrl+z ctrl+z ctrl+z ctrl+z ctrl+z ctrl+z ctrl+z
+wait 10
+shot undone-everything
+expect_scene K1
+check_layout
+check_blank undone-everything

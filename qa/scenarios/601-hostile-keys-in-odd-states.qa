@@ -1,0 +1,41 @@
+@title Hostile: every kind of key while a tool is half-finished
+@area Hostile
+click_text "Open example"
+wait 20
+# Wire tool started, then delete, undo, escape, enter, tab, space.
+key w
+click 500 300
+move 600 380
+key Delete
+key ctrl+z
+key Enter
+key Tab
+key space
+key Escape
+wait 6
+shot wire-half
+# Place tool armed, then switch pages by keyboard, undo, rotate, mirror.
+key q
+wait 4
+text contactor
+wait 6
+key Down Down Up Up
+key Escape
+key Escape
+key r r r x x
+key Delete
+key Home End
+wait 6
+shot keys-no-selection
+# Rapid fire of every function key and letter.
+key F1 Escape F2 Escape F3 Escape F4 Escape F5 Escape F6 Escape F7 Escape F8 Escape F9 Escape F10 Escape F11 Escape F12 Escape
+wait 10
+shot function-keys
+key a b c d e f g h i j k l m n o p q Escape r s t u v w x y z Escape
+wait 10
+shot letters
+key ctrl+shift+z ctrl+shift+a ctrl+shift+d ctrl+d ctrl+c ctrl+v ctrl+x ctrl+z
+wait 10
+shot ctrl-combos
+check_layout
+check_blank ctrl-combos

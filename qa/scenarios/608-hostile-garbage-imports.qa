@@ -1,0 +1,41 @@
+@title Hostile: import a PNG, a damaged project and an empty file as parts tables
+@area Hostile
+click_text "Open example"
+wait 20
+import_table qa/fixtures/loose-terminal.png
+wait 15
+shot png-as-table
+key Escape
+wait 6
+import_table qa/fixtures/damaged-cut-short.novo
+wait 15
+shot novo-as-table
+key Escape
+wait 6
+import_table crates/novo-tests/tests/golden/v0.1-motor-starter.json
+wait 15
+shot json-as-table
+key Escape
+wait 6
+import_table Cargo.lock
+wait 15
+shot cargo-lock-as-table
+key Escape
+wait 6
+import_table qa/fixtures/parts/unicode-text.txt
+wait 20
+shot unicode-text-txt
+key Escape
+wait 6
+import_table qa/fixtures/parts/not-text.csv
+wait 20
+shot not-text-csv
+key Escape
+wait 6
+import_table qa/fixtures/parts/odd-list.xlsx
+wait 20
+shot odd-list-xlsx
+key Escape
+wait 6
+check_layout
+check_blank missing-as-table
