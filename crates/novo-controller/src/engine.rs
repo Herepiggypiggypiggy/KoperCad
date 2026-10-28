@@ -155,6 +155,8 @@ impl Controller {
             last: BTreeMap::new(),
             history: Vec::new(),
         };
+        // A saved state can break a rule the profile gained since (a new `requires`).
+        ctl.settle();
         ctl.last = ctl.levels();
         Ok(ctl)
     }

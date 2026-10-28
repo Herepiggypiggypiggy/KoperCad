@@ -381,7 +381,7 @@ fn recording_then_replaying_reproduces_the_signals() {
     assert!(!live.is_recording());
 
     // text round trip, then replay on a fresh set
-    let seq = Sequence::parse(&seq.to_toml()).unwrap();
+    let seq = Sequence::parse(&seq.to_toml().unwrap()).unwrap();
     let mut fresh = two_radios();
     seq.replay(&mut fresh, 0, 50).unwrap();
     assert_eq!(fresh.signals(), live.signals());
@@ -698,7 +698,7 @@ fn load_rejects_unknown_fields_and_bad_values() {
 #[test]
 fn profile_round_trips_through_toml() {
     let p = radio_profile();
-    let again = Profile::load(&p.to_toml()).unwrap();
+    let again = Profile::load(&p.to_toml().unwrap()).unwrap();
     assert_eq!(p, again);
 }
 
@@ -848,4 +848,190 @@ mode = "both_off"
         "interlock",
         &s["properties"]["interlock"]["items"]["properties"],
     );
+}
+
+// ---- review follow-ups ----
+
+fn radio_pendant_set(radio_shared: bool) -> ControllerSet {
+    let mut radio_text = RADIO.to_string();
+    if radio_shared {
+        radio_text = radio_text.replace("generic = true", "generic = true\nshared = true");
+    }
+    let radio = Profile::load(&radio_text).unwrap();
+    let pendant = Profile::load(
+        &radio_text
+            .replace("id = \"generic-radio-3x2\"", "id = \"pendant\"")
+            .replace("kind = \"radio\"", "kind = \"pendant\""),
+    )
+    .unwrap();
+    let mut set = ControllerSet::new();
+    set.add_instance("radio", "Radio", &radio).unwrap();
+    set.add_instance("pendant", "Pendant", &pendant).unwrap();
+    set
+}
+
+#[test]
+fn shared_estop_chain_is_an_and_so_a_pressed_pendant_estop_opens_it() {
+    let set_up = || {
+        let mut set = radio_pendant_set(true);
+        for who in ["radio", "pendant"] {
+            act(&mut set, who, press("start"));
+        }
+        set
+    };
+    let chain = Target::Pin("-K1:chain".into());
+    let mut t = BindingTable::new();
+    t.bind(SignalKey::new("radio", "ESTOP_OK"), chain.clone());
+    t.bind(SignalKey::new("pendant", "ESTOP_OK"), chain.clone());
+
+    let mut set = set_up();
+    assert_eq!(t.resolve(&set)[&chain], 1.0);
+    act(&mut set, "pendant", press("estop"));
+    assert_eq!(set.level(&SignalKey::new("radio", "ESTOP_OK")), Some(1.0));
+    assert_eq!(
+        t.resolve(&set)[&chain],
+        0.0,
+        "radio E-stop released must not hide the pendant E-stop"
+    );
+    assert!(
+        t.check(&set)
+            .iter()
+            .all(|f| f.problem != BindingProblem::SharedChainNotAnd)
+    );
+
+    // a profile that forgot `combine = "and"` on its chain signal gets a warning
+    let text = RADIO
+        .replace("combine = \"and\"", "")
+        .replace("generic = true", "generic = true\nshared = true");
+    let lax = Profile::load(&text).unwrap();
+    let mut set = ControllerSet::new();
+    set.add_instance("radio", "Radio", &lax).unwrap();
+    set.add_instance("other", "Other", &lax).unwrap();
+    let mut t = BindingTable::new();
+    t.bind(SignalKey::new("radio", "ESTOP_OK"), chain.clone());
+    t.bind(SignalKey::new("other", "ESTOP_OK"), chain);
+    let findings = t.check(&set);
+    assert_eq!(
+        findings
+            .iter()
+            .filter(|f| f.problem == BindingProblem::SharedChainNotAnd)
+            .count(),
+        1
+    );
+    assert!(
+        findings
+            .iter()
+            .all(|f| f.problem != BindingProblem::TargetConflict)
+    );
+}
+
+#[test]
+fn two_signals_of_one_controller_on_one_target_are_reported() {
+    let set = two_radios();
+    let mut t = BindingTable::new();
+    let coil = Target::Pin("-K5:A1".into());
+    t.bind(SignalKey::new("radio-crane1", "B_FWD_SLOW"), coil.clone());
+    t.bind(SignalKey::new("radio-crane1", "B_FWD_FAST"), coil);
+    let n = t
+        .check(&set)
+        .iter()
+        .filter(|f| f.problem == BindingProblem::SameControllerTwice)
+        .count();
+    assert_eq!(n, 1);
+}
+
+#[test]
+fn absurd_replays_are_refused_instead_of_allocating_billions_of_samples() {
+    let typo = Sequence::parse(
+        "[[event]]\nt_ms = 3600000000\ninstance = \"radio-crane1\"\naction = \"press\"\ncontrol = \"start\"\n",
+    )
+    .unwrap();
+    assert!(
+        typo.check(&two_radios())
+            .iter()
+            .any(|p| p.contains("24 hours"))
+    );
+    assert_eq!(
+        typo.replay(&mut two_radios(), 1, 0).err(),
+        Some(SetError::TooManySamples)
+    );
+    // without periodic samples it is only one event and cheap
+    assert!(typo.replay(&mut two_radios(), 0, 0).is_ok());
+
+    let huge = Sequence {
+        name: String::new(),
+        events: vec![TimedAction {
+            t_ms: u64::MAX,
+            instance: "radio-crane1".into(),
+            action: press("start"),
+        }],
+    };
+    // adding the settle time must not overflow
+    assert_eq!(
+        huge.replay(&mut two_radios(), 1, 10).err(),
+        Some(SetError::TooManySamples)
+    );
+    assert!(huge.replay(&mut two_radios(), 0, 10).is_ok());
+}
+
+#[test]
+fn sampling_period_does_not_change_the_signals_at_common_times() {
+    let seq = script();
+    let run = |step| seq.replay(&mut two_radios(), step, 500).unwrap();
+    let (fine, coarse) = (run(10), run(100));
+    for c in &coarse.samples {
+        let f = fine
+            .samples
+            .iter()
+            .find(|s| s.t_ms == c.t_ms)
+            .expect("fine run has every coarse time");
+        assert_eq!(f.signals, c.signals, "at {} ms", c.t_ms);
+    }
+}
+
+#[test]
+fn instance_ids_must_be_usable_in_keys() {
+    let p = radio_profile();
+    let mut set = ControllerSet::new();
+    for bad in ["", "a/b", "has space"] {
+        assert_eq!(
+            set.add_instance(bad, "x", &p),
+            Err(SetError::InvalidId(bad.into()))
+        );
+    }
+    assert!(set.instances().is_empty());
+}
+
+#[test]
+fn from_records_brings_lagging_instances_to_the_set_clock() {
+    let mut set = two_radios();
+    set.advance(1000);
+    set.add_instance("late", "Late", &radio_profile()).unwrap();
+    let mut records = set.to_records();
+    // a record saved while its instance was behind the others
+    records[0].state.time_ms = 0;
+    let mut lib = ProfileLibrary::new();
+    lib.insert(radio_profile());
+    let back = ControllerSet::from_records(&records, &lib).unwrap();
+    assert_eq!(back.time_ms(), 1000);
+    assert!(
+        back.instances()
+            .iter()
+            .all(|i| i.controller.time_ms() == 1000)
+    );
+}
+
+#[test]
+fn requires_cycle_is_a_warning() {
+    let text = format!(
+        "{HEAD}[[control]]\nid = \"a\"\nkind = \"latch\"\nrequires = [\"b=on\"]\n[[control]]\nid = \"b\"\nkind = \"latch\"\nrequires = [\"a=on\"]\n"
+    );
+    let issues = validate(&Profile::parse(&text).unwrap());
+    assert!(
+        issues
+            .iter()
+            .any(|i| i.severity == Severity::Warning && i.message.contains("lead back to itself")),
+        "{issues:?}"
+    );
+    assert!(validate(&radio_profile()).is_empty());
 }

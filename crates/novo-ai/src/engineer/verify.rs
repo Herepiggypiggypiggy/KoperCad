@@ -307,8 +307,8 @@ impl Diff {
         }
         if self.wire_numbers_set > 0 {
             out.push(format!(
-                "{} set or changed",
-                count(self.wire_numbers_set, "wire number", "wire numbers")
+                "{} given or changed a number (wires of one net share it)",
+                count(self.wire_numbers_set, "wire", "wires")
             ));
         }
         if self.properties_changed > 0 {

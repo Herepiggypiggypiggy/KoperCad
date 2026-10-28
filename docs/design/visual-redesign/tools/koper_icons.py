@@ -100,6 +100,19 @@ ICONS = {
         '<circle cx="12" cy="12" r="9" stroke-dasharray="2.5 2.2"/><path d="M6 12c1.2-3.5 2.4-3.5 3.6 0s2.4 3.5 3.6 0 2.4-3.5 3.6 0"/>'),
 }
 
+# Worked example for docs/design/visual-redesign-addons.md: the icons the Controllers add-on ships in its
+# own data/icons.toml. Same grid, stroke and shape rules; they are NOT part of the 40 of the base set.
+ADDON_ICONS = {
+    "controllers.radio": ("add-on", "Radio transmitter",
+        '<rect x="6" y="11.5" width="12" height="9.5" rx="2"/><circle cx="12" cy="7" r="1" class="dot"/><path d="M8.6 4.4a4.6 4.6 0 0 0 0 5.2M15.4 4.4a4.6 4.6 0 0 1 0 5.2M10.6 5.9a2.3 2.3 0 0 0 0 2.2M13.4 5.9a2.3 2.3 0 0 1 0 2.2M9.5 16.2h5"/>'),
+    "controllers.pendant": ("add-on", "Pendant",
+        '<path d="M12 2.5v5"/><rect x="6" y="7.5" width="12" height="14" rx="2"/><circle cx="12" cy="12.5" r="2.3"/><path d="M9 17.5h6"/>'),
+    "controllers.joystick": ("add-on", "Joystick",
+        '<rect x="5" y="16" width="14" height="5" rx="1.5"/><path d="M12 16V8.8"/><circle cx="12" cy="6" r="2.8"/>'),
+    "controllers.rocker": ("add-on", "Rocker, two steps",
+        '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M7 12h10M10 8.5l2-2.5 2 2.5M10 15.5l2 2.5 2-2.5"/>'),
+}
+
 HEAD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
 
 
@@ -118,6 +131,11 @@ def main(out):
             f'<symbol id="ki-{name}" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
             f'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">{body(b)}</symbol>')
     sprite.append("</svg>")
+    ex = os.path.join(out, "addon-example")
+    os.makedirs(ex, exist_ok=True)
+    for name, (_, _, b) in ADDON_ICONS.items():
+        with open(os.path.join(ex, name + ".svg"), "w") as f:
+            f.write(HEAD + body(b) + "</svg>\n")
     with open(os.path.join(out, "sprite.svg"), "w") as f:
         f.write("\n".join(sprite) + "\n")
 

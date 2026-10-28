@@ -1074,6 +1074,7 @@ fn a_new_project_forgets_the_last_print_of_the_old_one() {
     assert!(d.app.wb.workpack_print.is_some());
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::NewProject);
+    d.app.answer_save_changes(&ctx, Some(false));
     d.frame();
     assert!(d.app.wb.workpack_print.is_none(), "the old print is kept");
     assert!(d.app.wb.workpack_stale.is_none());

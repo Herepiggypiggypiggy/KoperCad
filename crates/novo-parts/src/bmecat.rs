@@ -38,6 +38,15 @@ pub fn import_bmecat(
     xml: &str,
     default_manufacturer: &str,
 ) -> Result<Vec<CatalogPart>, BmecatError> {
+    import_bmecat_report(xml, default_manufacturer).map(|(parts, _)| parts)
+}
+
+/// Like [`import_bmecat`], also counting the articles left out because they
+/// have no order number.
+pub fn import_bmecat_report(
+    xml: &str,
+    default_manufacturer: &str,
+) -> Result<(Vec<CatalogPart>, usize), BmecatError> {
     let mut reader = Reader::from_str(xml);
 
     let mut path: Vec<String> = Vec::new();
@@ -49,6 +58,7 @@ pub fn import_bmecat(
     let mut fvalues: Vec<String> = Vec::new();
     let mut funit = String::new();
     let mut buf = String::new();
+    let mut skipped = 0usize;
 
     loop {
         match reader
@@ -57,6 +67,14 @@ pub fn import_bmecat(
         {
             Event::Start(e) => {
                 let name = local(e.name().as_ref());
+                if is_inline(&name) {
+                    // Markup inside a description is formatting, not structure;
+                    // a line break or paragraph is still a gap between words.
+                    if is_break(&name) && !buf.ends_with(' ') {
+                        buf.push(' ');
+                    }
+                    continue;
+                }
                 buf.clear();
                 if name == "PRODUCT" && cur.is_none() {
                     cur = Some(Draft::default());
@@ -73,6 +91,12 @@ pub fn import_bmecat(
             }
             Event::End(e) => {
                 let name = local(e.name().as_ref());
+                if is_inline(&name) {
+                    if is_break(&name) && !buf.ends_with(' ') {
+                        buf.push(' ');
+                    }
+                    continue;
+                }
                 path.pop();
                 let text = std::mem::take(&mut buf).trim().to_owned();
                 if !text.is_empty() {
@@ -105,13 +129,20 @@ pub fn import_bmecat(
                         }
                     }
                     "PRODUCT" => {
-                        if let Some(d) = cur.take()
-                            && let Some(p) = d.finish(&supplier, default_manufacturer)
-                        {
-                            parts.push(p);
+                        if let Some(d) = cur.take() {
+                            if let Some(p) = d.finish(&supplier, default_manufacturer) {
+                                parts.push(p);
+                            } else {
+                                skipped += 1;
+                            }
                         }
                     }
                     _ => {}
+                }
+            }
+            Event::Empty(e) => {
+                if is_break(&local(e.name().as_ref())) && !buf.ends_with(' ') {
+                    buf.push(' ');
                 }
             }
             Event::Text(t) => {
@@ -145,13 +176,26 @@ pub fn import_bmecat(
     if parts.is_empty() {
         return Err(BmecatError::NotBmecat);
     }
-    Ok(parts)
+    Ok((parts, skipped))
 }
 
 /// An element name without namespace prefix.
 fn local(name: &[u8]) -> String {
     let s = String::from_utf8_lossy(name);
     s.rsplit(':').next().unwrap_or("").to_owned()
+}
+
+/// Formatting tags makers put inside a description; they keep the text around
+/// them in one piece.
+fn is_inline(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "b" | "i" | "u" | "br" | "em" | "strong" | "sub" | "sup" | "span" | "p" | "font"
+    )
+}
+
+fn is_break(name: &str) -> bool {
+    matches!(name.to_ascii_lowercase().as_str(), "br" | "p")
 }
 
 #[derive(Default)]
@@ -248,6 +292,16 @@ mod tests {
   <PRODUCT><PRODUCT_DETAILS><DESCRIPTION_SHORT>no id</DESCRIPTION_SHORT></PRODUCT_DETAILS></PRODUCT>
  </T_NEW_CATALOG>
 </BMECAT>"#;
+
+    #[test]
+    fn markup_inside_a_description_keeps_all_the_text() {
+        let xml = r#"<BMECAT><HEADER><SUPPLIER><SUPPLIER_NAME>M</SUPPLIER_NAME></SUPPLIER></HEADER>
+<T_NEW_CATALOG><PRODUCT><SUPPLIER_PID>1</SUPPLIER_PID><PRODUCT_DETAILS>
+<DESCRIPTION_SHORT>UT 2,5 <b>bold</b> &amp; more<br/>end</DESCRIPTION_SHORT>
+</PRODUCT_DETAILS></PRODUCT></T_NEW_CATALOG></BMECAT>"#;
+        let parts = import_bmecat(xml, "M").unwrap();
+        assert_eq!(parts[0].description, "UT 2,5 bold & more end");
+    }
 
     #[test]
     fn reads_articles_with_class_and_features() {

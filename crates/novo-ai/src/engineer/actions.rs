@@ -675,7 +675,10 @@ fn set_wire_number(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
 
 fn number_wires(tx: &mut Tx<'_>) -> Result<String, String> {
     let n = novo_numbering::number_new_wires(tx).map_err(|e| e.to_string())?;
-    Ok(format!("Number {n} wires that had no number"))
+    Ok(format!(
+        "Number the {} that had no number",
+        plural(n, "wire")
+    ))
 }
 
 fn device_symbols(project: &Project, device: novo_core::DeviceId) -> Vec<AnyId> {

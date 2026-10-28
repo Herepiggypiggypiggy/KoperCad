@@ -27,6 +27,7 @@ use novo_core::Project;
 use serde_json::Value;
 
 mod datasheet;
+mod markdown;
 
 use super::{Level, NovoApp};
 use crate::theme::ui_palette;
@@ -1337,7 +1338,7 @@ impl NovoApp {
                                     ui.ctx().copy_text(t.clone());
                                 }
                             });
-                            ui.label(t);
+                            markdown::show(ui, ("claude_answer", i), t);
                         }
                         Entry::Tool(t) => {
                             ui.weak(format!("· {t}"));
@@ -1377,7 +1378,7 @@ impl NovoApp {
                     if !st.live.is_empty() {
                         ui.add_space(4.0);
                         ui.label(egui::RichText::new("Claude").strong());
-                        ui.label(&st.live);
+                        markdown::show(ui, "claude_live", &st.live);
                     }
                     ui.horizontal(|ui| {
                         ui.spinner();

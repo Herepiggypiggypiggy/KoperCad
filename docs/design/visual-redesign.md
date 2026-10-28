@@ -65,7 +65,7 @@ Not copied from anyone: EPLAN's ribbon and Insert centre stay out. The rail is n
 
 ## 3. The frame
 
-One picture: top bar (40 pt), tool rail on the left (48 pt, 228 pt expanded), the canvas, panels docked left or right, the status bar. At 1366 x 768 the canvas gets about 92 percent of the window, more than today: the bottom dock is gone and the bar is 2 pt lower.
+One picture: top bar (40 pt), tool rail on the left (48 pt, 228 pt expanded), the canvas, panels docked left or right, the status bar. At 1366 x 768 the canvas gets about 92 percent of the window, more than today: the bottom dock is gone and the bar is 2 pt shorter (42 to 40). The 92 percent canvas share is an unmeasured estimate from the board geometry; lane V3a measures it in a screenshot.
 
 ### 3.1 Top bar, 40 pt
 
@@ -101,10 +101,10 @@ The rail replaces the bottom dock and the text toolbars. It has three zones sepa
 | Workspace | Tools | Assists | Panels |
 | --- | --- | --- | --- |
 | Schematic | Select, Place symbol (Q), Connect (flyout: Corners, Lines, Autowire), Cable, Text | Autopilot, Accept proposals (badge: count), Tidy routes, Link reference, Macros | Pages, Issues (badge), Terminals, Cables, Devices |
-| Cabinet | Select, Place devices (flyout), Rails (flyout), Ducts, Plate setup | Size enclosure, Route wires, Placement rules, EMC on the plate | Heat (flyout), Vents and fans, Cut list, then Pages, Cabinet table, Inspector |
+| Cabinet | Select, Place devices (flyout), Rails (flyout), Ducts, Plate setup | Size enclosure, Route wires, Placement rules, EMC on the plate, Cut list | Heat (flyout), Vents and fans, Pages, Cabinet table, Inspector |
 | 3D | Select, Move, Place a device, Align and spread (flyout) | Measure, Section plane, Hide and isolate (flyout), Saved views | Layers (flyout), Heat, Wire runs, EMC view, Build order |
 | Reports | Add as drawing page, Report designer, Labels and ferrules | Bench output, Build mode | Export (flyout), Print |
-| Commissioning | Check, Punch item, Photo, Note | Walk the list, Sign off | Report, Pages |
+| Commissioning | Check, Punch item, Photo, Note | Walk the list, Mark done (tooltip: "a working mark, not a compliance record") | Report, Pages |
 
 Behaviour:
 
@@ -114,6 +114,7 @@ Behaviour:
 - **Tooltips** carry the full name, the key and the one-line description from the command (the long sentence that used to be the menu label).
 - Active tool: accent wash plus a 2 pt copper bar on the rail's outer edge (the squint test: one copper thing).
 - The status bar hosts what the dock's hint line did (for example "Q or Space to place").
+- **Add-ons** get one slot in the last zone and a flyout, not a zone of their own: see `visual-redesign-addons.md` (the Live entry of the Schematic assists zone is added there too).
 - The 3D toolbar and the Cabinet toolbar become the 3D and Cabinet rails. The cabinet toolbar's captioned groups survive as the expanded form and in the flyouts.
 
 ## 4. Status bar
@@ -138,13 +139,13 @@ The targets below are design targets for the whole tree of each menu, not measur
 | --- | --- | --- | --- |
 | File | 80 | 20 | About 44 format rows go to the **Import centre** (13 rows) and the **Export centre** (31); Project and Pages commands (14) go to Project settings and the Pages panel |
 | Edit | 29 | 21 | Duplicates of rail tools; the palette keeps them |
-| Draw | 39 | 23 | Terminals, terminal strips and cables (22) go to **drawer toolbars** (the toolbar of the terminals and cables drawers) |
+| Draw | 39 | 17 | Terminals, terminal strips and cables (22) go to **drawer toolbars** (the toolbar of the terminals and cables drawers) |
 | View | 102 | 39 | View > 3D (43) goes to the **3D rail** and its flyouts; View > Cabinet (12) to the **Cabinet rail**; heat and fan rows (10) to Simulate > Heat and the Heat flyout |
 | Check | 11 | 11 | none |
 | Reports | 30 | 18 | Reports > Export (13) goes to the Export centre |
 | Simulate | 8 | 11 | grows by three: the heat tools arrive from View |
 | Help | 19 | 15 | Help > Lesson (4) goes to the lesson card's own buttons |
-| **Total** | **318** | **158** | |
+| **Total** | **318** | **152** | |
 
 Label policy: at most 28 characters in a menu row (today 68 labels exceed it). The 89-character label becomes "EMC colours"; its sentence is the tooltip.
 
@@ -232,7 +233,7 @@ pub enum Shape {
     Circle { cx: f32, cy: f32, r: f32, filled: bool },
     Arc { cx: f32, cy: f32, r: f32, from: f32, to: f32 },
 }
-pub struct Icon { pub name: &'static str, pub shapes: &'static [Shape] }
+pub struct Icon { pub name: Cow<'static, str>, pub shapes: Cow<'static, [Shape]> } // owned data lets add-on icons load at runtime (visual-redesign-addons.md)
 ```
 
 A small converter (`tools/`, run by hand, output committed) emits the Rust table from the Python source so the two never drift, and a test compares the shape count of every icon with its SVG. `icons::paint(painter, rect, icon, color)` scales the 24 grid to the rect and strokes with the stroke rule above. No image loader, no SVG parser in the app (consistent with `brand::paint_mark`). The theme crate's existing groups (`action`, `tool`, `canvas`, `panel`, `mark`, `status`) are unchanged.
@@ -309,4 +310,4 @@ Sizes are guides. Each lane is one pull request (or a few small ones) in the cra
 | **V6 Start screen** | Tiles, recent project cards with thumbnails, capability cards | `novo-app` | V0 | Launch with no project |
 | **V7 Lessons, anchors, QA sweep** | Update every lesson anchor and lesson text that names a menu or a dock tool; QA scenarios for every board at both sizes in dark and light; fix list | `novo-learn`, `novo-tests`, QA harness | V2 to V6 | Lessons, QA report |
 
-Acceptance for the redesign as a whole: each board is reproduced in the app at 1366 x 768 and 1920 x 1080, dark and light, with no text longer than the label policy in a menu, no permanently non-resizable work surface, and the tests of section 11 green. The reproduction is shown to the owner side by side with the boards.
+Acceptance for the redesign as a whole: each board is reproduced in the app at 1366 x 768 and 1920 x 1080, dark and light, with no text longer than the label policy in a menu, no permanently non-resizable work surface, and the tests of section 11 green. Every rail tool, flyout and the app menu is reachable and operable from the keyboard alone (Tab order, arrow keys, Enter, Esc), and rails and flyouts honour High contrast (a visible border and a focus ring that does not depend on colour) and Reduce motion (flyouts and expand appear without animation). The reproduction is shown to the owner side by side with the boards.

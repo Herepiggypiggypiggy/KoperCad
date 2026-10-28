@@ -1,4 +1,4 @@
-@title Hostile: close, new and quit with unsaved changes, cancel every prompt
+@title Hostile: close and new with unsaved changes ask, and Cancel keeps the edit
 @area Hostile
 click_text "Open example"
 wait 20
@@ -20,14 +20,20 @@ key Enter
 wait 15
 shot close-prompt
 tree closeprompt
-# The draft is kept under UNSAVED on the start screen and reopens with the edit.
-click_text "Untitled, less than a minute ago"
-wait 25
-shot draft-reopened
+# Closing asks; Cancel keeps the edit on screen.
+expect "Save changes?"
+click_text Cancel
+wait 10
+expect_not "Save changes?"
 expect_scene K2
+shot cancelled-close
 key ctrl+n
 wait 15
 shot new-prompt
+expect "Save changes?"
+click_text Cancel
+wait 10
+expect_scene K2
 key ctrl+o
 wait 10
 shot open-prompt
