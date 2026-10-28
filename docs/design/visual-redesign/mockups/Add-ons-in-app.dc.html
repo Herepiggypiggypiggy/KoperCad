@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Add-ons in the app</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="@@KC@@">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.nn{position:absolute;width:20px;height:20px;border-radius:10px;background:var(--ac);color:var(--onac);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:12;box-shadow:0 0 0 2px var(--ground)}
+.hdl{position:absolute;background:var(--ac);border-radius:2px;z-index:6}
+</style>
+</helmet>
+<div class="kc {{theme}} win">
+  <div class="top">
+    <button class="mark" aria-label="App menu"><span class="logo"><i class="brand"></i></span><i class="i i-caret-down i14" style="color:var(--tx3)"></i></button>
+    <button class="btn"><i class="i i-arrow-counter-clockwise i18"></i></button>
+    <button class="btn dim"><i class="i i-arrow-clockwise i18"></i></button>
+    <span class="vsep"></span>
+    <div class="seg">
+      <button class="btn on"><i class="i ki-schematic i18"></i><span>Schematic</span></button>
+      <button class="btn"><i class="i ki-cabinet i18"></i></button>
+      <button class="btn"><i class="i i-cube i18"></i></button>
+      <button class="btn"><i class="i ki-report i18"></i></button>
+      <button class="btn"><i class="i i-clipboard-text i18"></i></button>
+    </div>
+    <span class="vsep"></span>
+    <button class="crumb"><i class="i i-files i14"></i><span>Motor starter (example)</span><span style="color:var(--tx3)">/</span><b>1 Main circuit</b></button>
+    <span class="grow"></span>
+    <button class="search"><i class="i i-magnifying-glass i14"></i><span style="min-width:96px;text-align:left">Search or run</span><span class="kbd">Ctrl K</span></button>
+    <span class="pill warn"><i class="i i-warning i14"></i>1</span>
+    <button class="btn"><i class="i i-question i18"></i></button>
+  </div>
+
+  <div class="stage">
+    <div class="rail">
+      <button class="btn on"><i class="i i-cursor"></i></button>
+      <button class="btn"><i class="i ki-place"></i></button>
+      <button class="btn flyout"><i class="i i-line-segment"></i></button>
+      <button class="btn"><i class="i ki-cable"></i></button>
+      <button class="btn"><i class="i i-text-t"></i></button>
+      <div class="spacer"></div>
+      <button class="btn"><i class="i i-files"></i></button>
+      <button class="btn"><i class="i i-warning-diamond"></i></button>
+      <button class="btn"><i class="i ki-terminal-strip"></i></button>
+      <button class="btn"><i class="i i-package"></i></button>
+      <div class="hsep"></div>
+      <!-- the one add-on slot of the panels zone: shows the add-on's own icon while one add-on contributes -->
+      <button class="btn on flyout" aria-label="Controllers"><i class="i ki-controllers-radio"></i></button>
+    </div>
+    <div class="cv art-canvas-{{theme}}">
+
+      <!-- rail flyout of the add-on -->
+      <div class="float" style="left:8px;bottom:8px;width:252px;padding:6px;z-index:6">
+        <div class="row gap8" style="padding:6px 8px 4px"><i class="i ki-controllers-radio" style="color:var(--ac2)"></i><b>Controllers</b><span class="chip" style="height:18px;font-size:10.5px">Add-on</span><span class="grow"></span><button class="btn" style="height:22px;min-width:22px;padding:0 3px"><i class="i i-x i14"></i></button></div>
+        <div class="mrow on"><i class="i ki-controllers-radio"></i>Controller panel</div>
+        <div class="mrow"><i class="i i-link"></i>Bind controls</div>
+        <div class="mrow"><i class="i i-record"></i>Record a sequence</div>
+        <div class="mrow"><i class="i i-sliders-horizontal"></i>Add-on settings</div>
+        <div class="hsep"></div>
+        <div class="mrow"><i class="i i-puzzle-piece"></i>Manage add-ons…</div>
+      </div>
+      <div class="abs" style="left:-2px;top:auto;bottom:34px;width:10px;height:10px;background:var(--raised);border-left:1px solid var(--bd2);border-bottom:1px solid var(--bd2);transform:rotate(45deg) translate(2px,3px);z-index:7"></div>
+
+      <!-- THE ADD-ON'S PANEL: declared as data, drawn by the host, a docked panel like any other -->
+      <div class="float" style="right:0;top:0;bottom:0;width:300px;border-radius:0;display:flex;flex-direction:column;z-index:4">
+        <div class="wt"><i class="i ki-controllers-radio i14" style="color:var(--ac2)"></i><span class="t">Controller · Radio</span>
+          <button class="btn" aria-label="Dock left"><i class="i i-sidebar-simple i14"></i></button>
+          <button class="btn on" aria-label="Dock right"><i class="i i-sidebar-simple i14" style="transform:scaleX(-1)"></i></button>
+          <button class="btn" aria-label="Close"><i class="i i-x i14"></i></button></div>
+        <div class="col" style="padding:10px;gap:12px;flex:1;min-height:0">
+          <div class="seg" style="align-self:stretch"><button class="btn on" style="flex:1"><i class="i ki-controllers-radio i14"></i>Radio</button><button class="btn" style="flex:1"><i class="i ki-controllers-pendant i14"></i>Pendant</button><button class="btn" style="flex:1"><i class="i ki-controllers-joystick i14"></i>Joystick</button></div>
+          <div class="row gap8"><span class="pill ok"><i class="i i-broadcast i14"></i>Link on</span><span class="pill">Step 2</span><span class="grow"></span><span class="cap">Live view</span></div>
+
+          <div class="lbl">Hoist</div>
+          <div class="row gap12" style="align-items:center">
+            <span class="col" style="width:64px;height:112px;border-radius:12px;background:var(--sunken);border:1px solid var(--bd2);align-items:center;justify-content:space-between;padding:6px 0">
+              <span class="col" style="align-items:center;gap:2px;color:var(--tx3)"><i class="i i-caret-up i14"></i><span class="cap">2</span></span>
+              <span style="width:44px;height:34px;border-radius:8px;background:var(--ac);box-shadow:0 2px 0 rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:var(--onac)"><i class="i i-caret-up i18"></i></span>
+              <span class="col" style="align-items:center;gap:2px;color:var(--tx3)"><span class="cap">1</span><i class="i i-caret-down i14"></i></span>
+            </span>
+            <span class="col" style="gap:6px;flex:1">
+              <span class="row gap8"><i class="i i-circle" style="color:var(--ok)"></i><span>Contactor -K1 closed</span></span>
+              <span class="row gap8"><i class="i i-circle" style="color:var(--ok)"></i><span>Brake released</span></span>
+              <span class="row gap8"><i class="i i-circle" style="color:var(--tx3)"></i><span style="color:var(--tx2)">Fine speed</span></span>
+            </span>
+          </div>
+
+          <div class="lbl">Bridge and trolley</div>
+          <div class="row gap12" style="align-items:center">
+            <span style="width:84px;height:84px;border-radius:42px;background:var(--sunken);border:1px solid var(--bd2);position:relative;flex:none"><span style="position:absolute;left:50%;top:50%;width:1px;height:76px;margin:-38px 0 0 0;background:var(--bd)"></span><span style="position:absolute;top:50%;left:50%;height:1px;width:76px;margin:0 0 0 -38px;background:var(--bd)"></span><span style="position:absolute;left:46px;top:14px;width:26px;height:26px;border-radius:13px;background:var(--raised);border:2px solid var(--ac)"></span></span>
+            <span class="col" style="gap:4px"><span class="mono">Bridge  →</span><span class="mono">Trolley ↑</span><span class="cap">Step 1</span></span>
+          </div>
+
+          <div class="grow"></div>
+          <div class="row gap8"><span title="Simulation only, not a safety function" style="flex:1;height:40px;border-radius:20px;background:color-mix(in srgb,var(--err) 85%,#000);color:#fff;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600"><i class="i ki-estop i18"></i>E-stop</span><button class="sec" style="height:40px">Reset</button></div>
+          <span class="cap" style="text-align:center">E-stop here is simulation only, not a safety function</span>
+        </div>
+        <div class="grip" style="left:0;bottom:0;transform:scaleX(-1)"></div>
+      </div>
+
+      <!-- Ctrl K: add-on commands are ordinary rows with the add-on's name as a chip -->
+      <div class="float" style="left:290px;top:60px;width:470px;padding:8px;z-index:5">
+        <div class="field" style="height:34px"><i class="i i-magnifying-glass i16" style="color:var(--tx3)"></i><span>controller</span><span class="grow"></span><span class="kbd">Esc</span></div>
+        <div class="mrow on" style="height:34px"><i class="i ki-controllers-radio i18"></i>Controller panel<span class="chip" style="height:18px;font-size:10.5px;margin-left:6px"><i class="i i-puzzle-piece i14"></i>Controllers</span></div>
+        <div class="mrow" style="height:34px"><i class="i i-link i18"></i>Bind controls<span class="chip" style="height:18px;font-size:10.5px;margin-left:6px"><i class="i i-puzzle-piece i14"></i>Controllers</span></div>
+        <div class="mrow" style="height:34px"><i class="i i-puzzle-piece i18"></i>Manage add-ons<span class="cap" style="margin-left:auto">Command</span></div>
+      </div>
+
+      <!-- callouts -->
+      <div class="float" style="left:290px;bottom:16px;width:500px;padding:14px 16px;z-index:5">
+        <div class="lbl" style="margin-bottom:8px">Where an add-on lives</div>
+        <div style="display:grid;grid-template-columns:20px 1fr;row-gap:6px;align-items:start;font-size:12.5px">
+          <i class="i i-puzzle-piece i14" style="color:var(--ac2);margin-top:2px"></i><span><b>One rail slot</b> in the panels zone: the add-on's own icon, or a puzzle piece when several add-ons contribute.</span>
+          <i class="i i-puzzle-piece i14" style="color:var(--ac2);margin-top:2px"></i><span><b>Same palette table.</b> Ctrl K rows carry the add-on's name as a chip.</span>
+          <i class="i i-puzzle-piece i14" style="color:var(--ac2);margin-top:2px"></i><span><b>Same window rules.</b> Its panel docks, floats and resizes like Pages.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="status"><span>Controllers add-on: panel is docked right and follows the live view (Shift L).</span></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>

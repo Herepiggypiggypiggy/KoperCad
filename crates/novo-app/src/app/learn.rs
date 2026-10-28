@@ -23,6 +23,7 @@ use novo_learn::{
 };
 use novo_workflow::commands::COMMANDS;
 
+use super::Leaving;
 use super::workspace::Workspace;
 use super::{Level, NovoApp};
 
@@ -1092,12 +1093,20 @@ impl NovoApp {
     /// Opens a lesson's sample project and starts the lesson at its first
     /// step.
     pub(super) fn start_lesson(&mut self, id: &str) {
+        // The sample project replaces the open one: ask about unsaved
+        // changes first.
+        if !self.leave_later(Leaving::Lesson(id.to_owned())) {
+            self.start_lesson_now(id);
+        }
+    }
+
+    pub(super) fn start_lesson_now(&mut self, id: &str) {
         let Some(entry) = self.learn.catalog.get(id).cloned() else {
             self.message(Level::Error, format!("There is no lesson `{id}`."));
             return;
         };
-        // Opening a lesson replaces the open project; the backend keeps its
-        // work, and the notice below says where to find it.
+        // Opening a lesson replaces the open project (after the question
+        // about unsaved changes); the notice below says where to find it.
         let left = self.left_behind();
         self.learn.opening = true;
         let opened = self.open_lesson_project(&entry);

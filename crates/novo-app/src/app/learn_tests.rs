@@ -90,7 +90,7 @@ fn said(d: &Drive, words: &str) -> bool {
 }
 
 #[test]
-fn opening_a_lesson_over_edited_work_says_where_that_work_went() {
+fn opening_a_lesson_over_edited_work_asks_first() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::NewProject);
@@ -99,12 +99,37 @@ fn opening_a_lesson_over_edited_work_says_where_that_work_went() {
     d.frame();
     assert!(d.app.is_dirty());
     d.app.start_lesson("tiny");
+    assert!(d.app.modal_open(), "the question comes before the lesson");
+    assert!(!d.app.learn_active());
+    d.app.answer_save_changes(&ctx, None);
+    assert!(d.app.is_dirty() && !d.app.learn_active(), "Cancel stays");
+
+    d.app.start_lesson("tiny");
+    d.app.answer_save_changes(&ctx, Some(false));
     d.frame();
-    assert!(
-        said(&d, "Your unsaved project is kept"),
-        "{:?}",
-        d.app.messages()
-    );
+    assert!(d.app.learn_active());
+    assert_eq!(d.doc().project().info().name, "Lesson: Tiny lesson");
+}
+
+#[test]
+fn a_saved_project_with_changes_is_saved_before_a_lesson_replaces_it() {
+    let (dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let file = dir.path().join("plant.kopercad");
+    assert!(d.app.save_to(&file));
+    d.place("mcb3", 60.0, 60.0);
+    d.frame();
+    let saved = std::fs::read(&file).unwrap();
+    d.app.start_lesson("tiny");
+    assert!(d.app.modal_open());
+    assert_eq!(std::fs::read(&file).unwrap(), saved, "nothing written yet");
+    d.app.answer_save_changes(&ctx, Some(true));
+    d.frame();
+    assert!(d.app.learn_active());
+    assert_ne!(std::fs::read(&file).unwrap(), saved, "Save wrote the edit");
+    assert!(said(&d, "is saved"), "{:?}", d.app.messages());
 }
 
 #[test]
