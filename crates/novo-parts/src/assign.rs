@@ -12,7 +12,8 @@ use novo_core::{
 };
 
 use crate::catalog::{Catalog, CatalogPart, PartKey};
-use crate::fit::{DeviceNeed, Fit, Role, fit};
+use crate::fit::{DeviceNeed, Fit, PartFacts, Role, fit};
+use std::collections::HashMap;
 
 /// How a part is assigned to a device that may already have parts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -611,7 +612,7 @@ impl Confidence {
 /// One catalog part that could be a device's part, with how sure that is
 /// and why.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Candidate<'c> {
+pub struct PartCandidate<'c> {
     pub part: &'c CatalogPart,
     pub confidence: Confidence,
     /// One short sentence: what agrees, or what is unconfirmed.
@@ -625,14 +626,14 @@ pub struct PartProposal<'c> {
     /// Every part that is not ruled out, most sure first, then in catalog
     /// order. A part of the wrong kind, with a coil for another voltage or
     /// another number of poles is not in the list.
-    pub candidates: Vec<Candidate<'c>>,
+    pub candidates: Vec<PartCandidate<'c>>,
 }
 
 impl<'c> PartProposal<'c> {
     /// The part to take without asking, when the answer is clear: the only
     /// [`Confidence::Certain`] candidate, or with none of those the only
     /// [`Confidence::Likely`] one. Unsure parts are never taken.
-    pub fn default_choice(&self) -> Option<&Candidate<'c>> {
+    pub fn default_choice(&self) -> Option<&PartCandidate<'c>> {
         for level in [Confidence::Certain, Confidence::Likely] {
             let mut at_level = self.candidates.iter().filter(|c| c.confidence == level);
             match (at_level.next(), at_level.next()) {
@@ -645,13 +646,13 @@ impl<'c> PartProposal<'c> {
     }
 }
 
-/// How `part` stands for `device`, or `None` when something rules it out.
-fn judge(part: &CatalogPart, need: &DeviceNeed) -> Option<(Confidence, String)> {
-    use crate::fit::{KindCheck, check_kind, conflict};
-    if conflict(part, need).is_some() {
+/// How `part` stands for a device, or `None` when something rules it out.
+fn judge(part: &PartFacts, need: &DeviceNeed) -> Option<(Confidence, String)> {
+    use crate::fit::{KindCheck, check_kind_with, conflict_with};
+    if conflict_with(part, need).is_some() {
         return None;
     }
-    Some(match check_kind(part, need) {
+    Some(match check_kind_with(part, need) {
         KindCheck::Right => {
             let what = need.role.map_or("part", Role::label);
             (Confidence::Certain, format!("a {what}, as the device is"))
@@ -682,7 +683,7 @@ fn judge(part: &CatalogPart, need: &DeviceNeed) -> Option<(Confidence, String)> 
             Confidence::Likely,
             "only the letter code fits, neither says its kind".to_owned(),
         ),
-        // `conflict` has already removed it.
+        // `conflict_with` has already removed it.
         KindCheck::Wrong { .. } => return None,
     })
 }
@@ -743,6 +744,7 @@ pub fn propose_parts<'c>(
         None => project.devices().collect(),
     };
     list.retain(|d| d.parts.is_empty() && d.kind != DeviceKind::TerminalStrip);
+    let mut facts: HashMap<usize, PartFacts> = HashMap::new();
     list.sort_by(|a, b| novo_core::natural_cmp(&a.tag.to_string(), &b.tag.to_string()));
     list.into_iter()
         .filter_map(|device| {
@@ -751,13 +753,18 @@ pub fn propose_parts<'c>(
                 return None;
             }
             let need = DeviceNeed::of(project, device);
-            let mut candidates: Vec<Candidate> = catalog
+            let mut candidates: Vec<PartCandidate> = catalog
                 .suggest(code, "", usize::MAX)
                 .into_iter()
                 .filter(|p| sized_for(p, device))
                 .filter_map(|part| {
-                    let (confidence, reason) = judge(part, &need)?;
-                    Some(Candidate {
+                    // Read once per part for the whole batch: a catalog of
+                    // tens of thousands of parts meets hundreds of devices.
+                    let facts = facts
+                        .entry(std::ptr::from_ref(part) as usize)
+                        .or_insert_with(|| PartFacts::of(part));
+                    let (confidence, reason) = judge(facts, &need)?;
+                    Some(PartCandidate {
                         part,
                         confidence,
                         reason,

@@ -133,8 +133,7 @@
       "manufacturer": "Siemens", "order_number": "1LE1003-0EB42-2AA4", "type_number": "1LE1003",
       "description": "Three phase induction motor SIMOTICS GP, 2.2 kW, 4 pole, IE3",
       "letter_codes": ["M"], "keywords": ["m3", "motor", "three phase motor"],
-      "data": { "rated_power_kw": 2.2, "rated_voltage": "400 V", "poles": 4, "rated_current_a": 4.6, "efficiency_percent": 86.7 },
-      "sources": { "rated_current_a": "estimated" }
+      "data": { "rated_power_kw": 2.2, "rated_voltage": "400 V", "poles": 4 }
     },
     {
       "manufacturer": "Phoenix Contact", "order_number": "3044076", "type_number": "UT 2,5",

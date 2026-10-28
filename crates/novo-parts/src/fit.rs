@@ -120,7 +120,9 @@ fn role_of_text(text: &str) -> Option<Role> {
     let has = |w: &str| text.contains(w);
     let word = |w: &str| words(&text).any(|t| t == w);
     // The kinds a letter code cannot tell apart come first, and the
-    // narrow phrases before the broad ones ("PLC I/O module" is a module).
+    // narrow phrases before the broad ones: a part is named by what it is
+    // ("Ethernet switch for PLC panels" is a switch, "PLC I/O module" a
+    // module), so the PLC words are tried after the others.
     if has("frequency converter")
         || has("frequency inverter")
         || has("variable frequency")
@@ -134,6 +136,15 @@ fn role_of_text(text: &str) -> Option<Role> {
         Some(Role::SoftStarter)
     } else if has("power supply") || has("switch mode") || has("switched-mode") || word("psu") {
         Some(Role::PowerSupply)
+    } else if has("ethernet switch") || has("network switch") || has("managed switch") {
+        Some(Role::NetSwitch)
+    } else if has("pilot lamp")
+        || has("pilot light")
+        || has("indicator light")
+        || has("signal lamp")
+        || has("signalling lamp")
+    {
+        Some(Role::Lamp)
     } else if has("i/o module")
         || has("io module")
         || has("input module")
@@ -144,15 +155,6 @@ fn role_of_text(text: &str) -> Option<Role> {
         Some(Role::PlcIo)
     } else if word("plc") || has("programmable logic") || has("plc cpu") || word("cpu") {
         Some(Role::PlcCpu)
-    } else if has("ethernet switch") || has("network switch") || has("managed switch") {
-        Some(Role::NetSwitch)
-    } else if has("pilot lamp")
-        || has("pilot light")
-        || has("indicator light")
-        || has("signal lamp")
-        || has("signalling lamp")
-    {
-        Some(Role::Lamp)
     } else if has("enclosure") || has("control cabinet") || has("switchgear cabinet") {
         Some(Role::Enclosure)
     } else if has("louvre")
@@ -163,7 +165,7 @@ fn role_of_text(text: &str) -> Option<Role> {
         || word("vent")
     {
         Some(Role::Vent)
-    } else if word("fan") && !has("motor protection") && !has("induction motor") {
+    } else if word("fan") && !word("motor") {
         Some(Role::Fan)
     } else if has("motor protection") || has("motor circuit breaker") || has("mpcb") {
         Some(Role::Mpcb)
@@ -637,9 +639,37 @@ pub enum KindCheck {
     BothSilent,
 }
 
+/// What a proposal reads from a part: its kind, pole count and coil
+/// voltage. Each takes a text scan, so a batch of proposals computes them
+/// once per part ([`PartFacts::of`]), not once per device.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PartFacts {
+    pub role: Option<Role>,
+    pub poles: Option<u32>,
+    pub coil: Option<Supply>,
+}
+
+impl PartFacts {
+    pub fn of(part: &CatalogPart) -> Self {
+        PartFacts {
+            role: part_role(part),
+            poles: part_poles(part),
+            coil: part.data.get("coil_voltage").and_then(|v| match v {
+                Value::Text(t) => parse_supply(t),
+                _ => None,
+            }),
+        }
+    }
+}
+
 /// Compares the kinds of a part and a device.
 pub fn check_kind(part: &CatalogPart, need: &DeviceNeed) -> KindCheck {
-    match (need.role, part_role(part)) {
+    check_kind_with(&PartFacts::of(part), need)
+}
+
+/// [`check_kind`] with the part's facts already read.
+pub fn check_kind_with(part: &PartFacts, need: &DeviceNeed) -> KindCheck {
+    match (need.role, part.role) {
         (Some(device), Some(have)) => match have.score_for(device) {
             60 => KindCheck::Right,
             0 => KindCheck::Wrong { part: have, device },
@@ -655,18 +685,19 @@ pub fn check_kind(part: &CatalogPart, need: &DeviceNeed) -> KindCheck {
 /// different kind of device, a coil for another voltage or another number
 /// of poles. A value the part does not state never rules it out.
 pub fn conflict(part: &CatalogPart, need: &DeviceNeed) -> Option<String> {
-    if let KindCheck::Wrong { part: have, device } = check_kind(part, need) {
+    conflict_with(&PartFacts::of(part), need)
+}
+
+/// [`conflict`] with the part's facts already read.
+pub fn conflict_with(part: &PartFacts, need: &DeviceNeed) -> Option<String> {
+    if let KindCheck::Wrong { part: have, device } = check_kind_with(part, need) {
         return Some(format!(
             "the part is a {}, the device is a {}",
             have.label(),
             device.label()
         ));
     }
-    if let Some(want) = need.coil
-        && let Some(have) = part.data.get("coil_voltage").and_then(|v| match v {
-            Value::Text(t) => parse_supply(t),
-            _ => None,
-        })
+    if let (Some(want), Some(have)) = (need.coil, part.coil)
         && !have.runs_on(want)
     {
         return Some(format!(
@@ -674,7 +705,7 @@ pub fn conflict(part: &CatalogPart, need: &DeviceNeed) -> Option<String> {
             have.volts, want.volts
         ));
     }
-    if let (Some(want), Some(have)) = (need.poles, part_poles(part))
+    if let (Some(want), Some(have)) = (need.poles, part.poles)
         && want != have
     {
         return Some(format!("it has {have} poles, the device draws {want}"));

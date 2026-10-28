@@ -279,8 +279,79 @@ fn the_generic_parts_cover_a_cooling_tower_cell() {
             assert_ne!(*source, novo_parts::DataSource::MakerDatasheet, "{p} {key}");
         }
     }
-    // The motor of the sample catalogue now states current and efficiency.
+    // Typical values are labelled as such: the efficiency is the IE3 class
+    // minimum, and the enclosure ambient is a convention.
+    for p in catalog
+        .parts()
+        .iter()
+        .filter(|p| p.manufacturer == "Generic")
+    {
+        for key in ["efficiency_percent", "max_ambient_c"] {
+            if p.data.contains_key(key) && part_role(p) != Some(Role::Vent) {
+                assert_eq!(
+                    p.sources.get(key),
+                    Some(&novo_parts::DataSource::Estimated),
+                    "{p} {key}"
+                );
+            }
+        }
+    }
+    // The named Siemens motor carries no values that are not from Siemens.
     let motor = catalog.find("Siemens", "1LE1003-0EB42-2AA4").unwrap();
-    assert!(motor.data.contains_key("rated_current_a"));
-    assert!(motor.data.contains_key("efficiency_percent"));
+    assert!(!motor.data.contains_key("efficiency_percent"));
+    assert!(!motor.data.contains_key("rated_current_a"));
+}
+
+fn role_of(description: &str) -> Option<Role> {
+    let mut p = CatalogPart::new("Acme", "R-1");
+    p.description = description.into();
+    part_role(&p)
+}
+
+#[test]
+fn a_part_is_named_by_what_it_is_not_by_the_words_around_it() {
+    assert_eq!(
+        role_of("Ethernet switch for PLC panels, 5 ports"),
+        Some(Role::NetSwitch)
+    );
+    assert_eq!(
+        role_of("Signal lamp for PLC outputs, 24 V"),
+        Some(Role::Lamp)
+    );
+    assert_eq!(role_of("PLC I/O module, 16 inputs"), Some(Role::PlcIo));
+    assert_eq!(role_of("PLC CPU compact"), Some(Role::PlcCpu));
+    assert_eq!(
+        role_of("Three phase motor, fan-cooled, 4 kW"),
+        Some(Role::Motor)
+    );
+    assert_eq!(role_of("Induction motor with fan cover"), Some(Role::Motor));
+    assert_eq!(role_of("Axial fan 230 V AC"), Some(Role::Fan));
+}
+
+#[test]
+fn proposals_for_a_big_catalog_stay_fast() {
+    use std::time::Instant;
+    let (mut doc, gate) = project();
+    doc.transact("Many devices", |tx| {
+        for i in 0..100 {
+            tx.add_device(DeviceTag::parse(&format!("-K{}", 100 + i)).unwrap(), "")?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let _ = gate;
+    let mut catalog = Catalog::new();
+    for i in 0..3000 {
+        let mut p = CatalogPart::new("Acme", format!("C-{i}"));
+        p.letter_codes = vec!["K".into()];
+        p.description = format!("Contactor {i}, 3 pole, coil 24 V DC");
+        catalog.upsert(p);
+    }
+    let start = Instant::now();
+    let proposals = propose_parts(&catalog, doc.project(), None);
+    let took = start.elapsed();
+    assert!(proposals.len() >= 100);
+    // The part facts are read once per part, not once per device and part
+    // (that was 30 s for 20,000 parts and 300 devices).
+    assert!(took.as_secs_f64() < 3.0, "{took:?}");
 }
