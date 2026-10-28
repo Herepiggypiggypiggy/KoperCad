@@ -321,7 +321,7 @@ pub struct StorageBackend {
     /// Tests: writes to the project file fail, as for a locked file or a
     /// drive that went away.
     #[cfg(test)]
-    fail_writes: bool,
+    pub(crate) fail_writes: bool,
 }
 
 /// Prefix of untitled projects closed with work in them.
@@ -385,10 +385,15 @@ impl StorageBackend {
             // shutting down, or another project replaces this one): the
             // recovery file keeps the work and is offered at the next open.
             // Only "don't save" ([`ProjectBackend::discard_unsaved`]) drops it.
-            if let (Some(session), Some(document)) = (self.session.as_mut(), &self.document)
-                && let Err(e) = session.autosave(document.project())
-            {
-                return Err(BackendError::NotWritten(e));
+            if let (Some(session), Some(document)) = (self.session.as_mut(), &self.document) {
+                let kept = if fail {
+                    Err(std::io::Error::other("the recovery file cannot be written").into())
+                } else {
+                    session.autosave(document.project())
+                };
+                if let Err(e) = kept {
+                    return Err(BackendError::NotWritten(e));
+                }
             }
             self.session = None;
         }

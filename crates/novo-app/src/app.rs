@@ -2918,8 +2918,43 @@ impl eframe::App for NovoApp {
         // An answered close ("Don't save") deletes the recovery file; one
         // nobody answered (a shutdown) keeps it, so the next start offers
         // the work back.
-        if let Err(e) = self.backend.close() {
+        self.close_for_exit(&mut crate::dialogs::save_elsewhere_after_failure);
+    }
+}
+
+impl NovoApp {
+    /// Closes the project as the program exits. If the unsaved work cannot
+    /// be kept in the recovery file (a full or vanished disk), the person is
+    /// told and offered a Save as to somewhere else, until it is kept or
+    /// they decline. `ask` shows the message and returns the file chosen.
+    fn close_for_exit(&mut self, ask: &mut dyn FnMut(&str, &str) -> Option<PathBuf>) {
+        let mut earlier: Option<String> = None;
+        loop {
+            let Err(e) = self.backend.close() else {
+                return;
+            };
             log::warn!("The project did not close cleanly: {e}");
+            let name = self.project_name().unwrap_or_else(|| "Untitled".into());
+            let reason = match &e {
+                BackendError::NotWritten(inner) => inner.to_string(),
+                other => other.to_string(),
+            };
+            let mut why = format!(
+                "\"{name}\" has changes that are not saved, and KoperCAD could not keep them for the next start ({reason})."
+            );
+            if let Some(earlier) = &earlier {
+                why = format!("{earlier}\n\n{why}");
+            }
+            let Some(path) = ask(&why, &project_file_name(&name)) else {
+                return;
+            };
+            earlier = match self.backend.save(&path) {
+                Ok(()) => None,
+                Err(e) => {
+                    log::warn!("Saving a copy to {} failed: {e}", path.display());
+                    Some(format!("Saving to {} failed: {e}.", path.display()))
+                }
+            };
         }
     }
 }
@@ -3589,6 +3624,99 @@ mod tests {
         assert_eq!(last.level, Level::Error);
         assert!(!locked.join("plant.kopercad").exists());
         std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[test]
+    fn a_recovery_write_that_fails_at_shutdown_is_shown_and_saves_elsewhere() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.kopercad");
+        let copy = dir.path().join("rescued.kopercad");
+        let ctx = themed_ctx();
+        let mut backend = StorageBackend::default();
+        backend.fail_writes = true;
+        let mut app = app_with(backend);
+        app.run(&ctx, Action::NewProject);
+        assert!(app.save_to(&path));
+        let page = app.current_page.unwrap();
+        let mut open = OpenPage::new(&mut *app.backend, page).unwrap();
+        open.transact("Add page", |tx| tx.add_page("2")).unwrap();
+        assert!(app.is_dirty());
+
+        let mut asked = Vec::new();
+        let rescue = copy.clone();
+        app.close_for_exit(&mut |why, name| {
+            asked.push((why.to_owned(), name.to_owned()));
+            Some(rescue.clone())
+        });
+        assert_eq!(asked.len(), 1, "the person is told once");
+        assert!(asked[0].0.contains("plant"), "{}", asked[0].0);
+        assert!(
+            asked[0]
+                .0
+                .contains("could not keep them for the next start ("),
+            "{}",
+            asked[0].0
+        );
+        assert!(
+            asked[0].0.contains("recovery file cannot be written"),
+            "{}",
+            asked[0].0
+        );
+        assert!(!asked[0].0.contains("stays open"), "{}", asked[0].0);
+        assert!(copy.exists(), "the work was saved to the chosen file");
+        assert!(!app.is_open() || !app.is_dirty());
+    }
+
+    #[test]
+    fn a_failed_save_elsewhere_names_the_file_and_asks_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.kopercad");
+        let bad = dir.path().join("no-such-folder").join("copy.kopercad");
+        let good = dir.path().join("rescued.kopercad");
+        let ctx = themed_ctx();
+        let mut backend = StorageBackend::default();
+        backend.fail_writes = true;
+        let mut app = app_with(backend);
+        app.run(&ctx, Action::NewProject);
+        assert!(app.save_to(&path));
+        let page = app.current_page.unwrap();
+        let mut open = OpenPage::new(&mut *app.backend, page).unwrap();
+        open.transact("Add page", |tx| tx.add_page("2")).unwrap();
+
+        let mut questions = Vec::new();
+        let mut answers = vec![good.clone(), bad.clone()];
+        app.close_for_exit(&mut |why, _| {
+            questions.push(why.to_owned());
+            answers.pop()
+        });
+        assert_eq!(questions.len(), 2, "{questions:?}");
+        assert!(
+            questions[1].contains("Saving to") && questions[1].contains("copy.kopercad failed"),
+            "{}",
+            questions[1]
+        );
+        assert!(good.exists());
+    }
+
+    #[test]
+    fn declining_the_save_elsewhere_still_lets_the_program_exit() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.kopercad");
+        let ctx = themed_ctx();
+        let mut backend = StorageBackend::default();
+        backend.fail_writes = true;
+        let mut app = app_with(backend);
+        app.run(&ctx, Action::NewProject);
+        assert!(app.save_to(&path));
+        let page = app.current_page.unwrap();
+        let mut open = OpenPage::new(&mut *app.backend, page).unwrap();
+        open.transact("Add page", |tx| tx.add_page("2")).unwrap();
+        let mut asked = 0;
+        app.close_for_exit(&mut |_, _| {
+            asked += 1;
+            None
+        });
+        assert_eq!(asked, 1);
     }
 
     #[test]
