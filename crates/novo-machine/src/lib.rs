@@ -10,7 +10,14 @@ pub mod crane;
 mod tests {
     #[test]
     fn pendulum_four_metres_is_about_four_seconds() {
-        let t = super::crane::pendulum_period_s(4.0);
+        let t = super::crane::pendulum_period_s(4.0).unwrap();
         assert!((t - 4.01).abs() < 0.01, "{t}");
+    }
+
+    #[test]
+    fn pendulum_rejects_bad_length() {
+        assert!(super::crane::pendulum_period_s(-1.0).is_err());
+        assert!(super::crane::pendulum_period_s(0.0).is_err());
+        assert!(super::crane::pendulum_period_s(f64::NAN).is_err());
     }
 }

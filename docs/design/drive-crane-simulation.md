@@ -45,7 +45,7 @@ layer, the commissioning engine, the Python layer.
 ### Principles
 
 1. Model, not magic. Every number in the UI is labelled *model* or *exact by definition*
-   (for example `n_sync = 60 f / p` is exact; slip at load, current at current limit, DC bus
+   (for example `n_sync = 120 f / p` is exact; slip at load, current at current limit, DC bus
    ripple, thermal state are models). A visible "What this model leaves out" panel per
    device, same style as the motor start estimate.
 2. No manufacturer content. No manufacturer manual text, parameter tables, parameter codes or
@@ -228,3 +228,22 @@ and no manufacturer behaviour is assumed.
   without it the program is a physics check, not a replica.
 - Hook swing and rope stretch are simplified models.
 - Nothing here is a safety or compliance verdict.
+
+### Lane L2a as built (motor and load)
+
+`novo-drive` now holds the two-speed hoist engine: `motor` (Kloss torque-speed curve fitted to the
+nameplate, pole-change motor with fine and coarse winding), `sequencer` (contactor sequencing with
+dead times), `brake` (rectifier-fed spring-applied brake, AC-side versus DC-side apply delay),
+`mechanics` (hoist gravity, direction-dependent losses, stiction, reflected inertia) and
+`hoist_unit` (all of it stepped as one unit for the co-simulation loop).
+
+Efficiency convention: `eta` is the loss in the drivetrain and acts per direction. Raising at
+constant speed needs `m g r / (i eta)`; lowering at constant speed the motor still holds back
+`m g r eta / i`; at standstill the weight itself is `m g r / i` (the figure a holding brake is
+checked against) and the losses only decide whether the load starts to move.
+
+Exact by definition: `n_sync = 120 f / p`, the arithmetic of gravity and reduction. Model: the
+torque-speed curve (Kloss fit), one efficiency constant per direction, brake delays entered by the
+user, contactor dead times. Not modelled: stator current, saturation, winding heating, changeover
+torque spikes, rope stretch. Inputs that cannot describe a machine (zero poles, zero ratio or
+efficiency, negative length, NaN) return `InputError`.

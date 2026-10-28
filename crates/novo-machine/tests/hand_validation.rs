@@ -23,12 +23,17 @@ fn close(a: f64, b: f64, tol: f64, what: &str) {
 #[test]
 fn case11_pendulum_small_angle_period() {
     // T = 2 pi sqrt(l / g). l = 1 m: 2.00641 s; l = 4 m: 4.01282 s; l = g: exactly 2 pi.
-    close(pendulum_period_s(1.0), 2.006_409, 1e-6, "1 m");
-    close(pendulum_period_s(4.0), 4.012_819, 1e-6, "4 m");
-    close(pendulum_period_s(GRAVITY), 2.0 * PI, 1e-12, "l = g");
+    close(pendulum_period_s(1.0).unwrap(), 2.006_409, 1e-6, "1 m");
+    close(pendulum_period_s(4.0).unwrap(), 4.012_819, 1e-6, "4 m");
+    close(
+        pendulum_period_s(GRAVITY).unwrap(),
+        2.0 * PI,
+        1e-12,
+        "l = g",
+    );
     // Period scales with the square root of length: four times the length, twice the period.
     close(
-        pendulum_period_s(16.0) / pendulum_period_s(4.0),
+        pendulum_period_s(16.0).unwrap() / pendulum_period_s(4.0).unwrap(),
         2.0,
         1e-12,
         "sqrt scaling",
@@ -40,7 +45,7 @@ fn oracle_case11_large_amplitude_correction() {
     // Series T = T0 (1 + th^2/16 + 11 th^4/3072). 30 degrees (0.5236 rad), l = 4 m: 4.0827 s,
     // 1.74 % above the small-angle value.
     let th: f64 = 30f64.to_radians();
-    let t = pendulum_period_s(4.0) * (1.0 + th * th / 16.0 + 11.0 * th.powi(4) / 3072.0);
+    let t = pendulum_period_s(4.0).unwrap() * (1.0 + th * th / 16.0 + 11.0 * th.powi(4) / 3072.0);
     close(t, 4.082_657, 1e-6, "30 degree period");
 }
 

@@ -18,7 +18,7 @@ use novo_drive::{
         BrakingDuty, BrakingResistor, BusConfig, DcBus, I2tOverload, Ramp, ResistorFlag, SRamp,
         VfCurve, check_braking_resistor,
     },
-    mechanics::hoist_holding_torque_nm,
+    mechanics::hoist_raising_torque_nm,
     motor::{SYNC_RPM_FIDELITY, sync_rpm},
 };
 use std::f64::consts::PI;
@@ -73,7 +73,7 @@ fn case01_sync_rpm_table() {
     for (poles, row) in table {
         for (f, expected) in hz.iter().zip(row) {
             close(
-                sync_rpm(*f, poles),
+                sync_rpm(*f, poles).unwrap(),
                 expected,
                 1e-9,
                 &format!("{poles} poles at {f} Hz"),
@@ -86,8 +86,8 @@ fn case01_sync_rpm_table() {
 #[test]
 fn case01_pole_change_pair_speeds() {
     // 12 pole (fine) and 2 pole (coarse) windings on 50 Hz: 500 and 3000 rpm.
-    close(sync_rpm(50.0, 12), 500.0, 1e-9, "fine");
-    close(sync_rpm(50.0, 2), 3000.0, 1e-9, "coarse");
+    close(sync_rpm(50.0, 12).unwrap(), 500.0, 1e-9, "fine");
+    close(sync_rpm(50.0, 2).unwrap(), 3000.0, 1e-9, "coarse");
 }
 
 #[test]
@@ -358,7 +358,7 @@ fn case04_engine_breakdown_matches_thevenin() {
 #[test]
 fn case05_hoisting_torque_by_hand() {
     // T = m g r / (i eta) = 5000 * 9.80665 * 0.2 / (31.5 * 0.9) = 9806.65 / 28.35 = 345.9136 N m
-    let t = hoist_holding_torque_nm(5000.0, 0.2, 31.5, 0.9);
+    let t = hoist_raising_torque_nm(5000.0, 0.2, 31.5, 0.9).unwrap();
     close(t, 345.913_580, 1e-5, "hoisting torque");
 }
 
