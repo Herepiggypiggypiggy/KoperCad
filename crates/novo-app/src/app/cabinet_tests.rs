@@ -2181,3 +2181,32 @@ fn the_committed_sites_fixture_has_a_motor_on_the_plate_and_four_devices_to_plac
             .any(|p| p.kind == novo_checks::ProblemKind::FieldDeviceInCabinet)
     );
 }
+
+#[test]
+fn the_devices_left_out_of_the_sizing_are_listed_in_natural_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Field motors", |tx| {
+            for tag in ["=A1+CAB1-M10", "=A1+CAB1-M2", "=A1+CAB1-M1"] {
+                let device = tx.add_device(DeviceTag::parse(tag).unwrap(), "")?;
+                tx.set_property(
+                    device,
+                    novo_layout::site::SITE_KEY,
+                    Some(Value::Text("field".to_owned())),
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    let left = novo_layout::sizing_model::left_out(project(&d), cab);
+    assert_eq!(left.field, ["-M1", "-M2", "-M10"], "-M2 before -M10");
+}

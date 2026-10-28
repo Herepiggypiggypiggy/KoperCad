@@ -109,7 +109,7 @@ pub fn left_out(project: &Project, id: StructureId) -> LeftOut {
             .map(tag)
             .collect(),
     };
-    out.field.sort();
-    out.door.sort();
+    out.field.sort_by(|a, b| novo_core::natural_cmp(a, b));
+    out.door.sort_by(|a, b| novo_core::natural_cmp(a, b));
     out
 }
