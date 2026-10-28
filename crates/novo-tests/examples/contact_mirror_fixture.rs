@@ -4,7 +4,7 @@
 //!
 //!   cargo run -p novo-tests --example contact_mirror_fixture -- qa/fixtures
 //!
-//! Writes `OUT_DIR/contact-mirror.novo`.
+//! Writes `OUT_DIR/contact-mirror.kopercad`.
 
 use novo_core::{DeviceTag, Document, Rotation};
 use novo_editor::catalog::Catalog;
@@ -89,7 +89,7 @@ fn main() {
         Ok(())
     })
     .expect("limits");
-    let path = out.join("contact-mirror.novo");
+    let path = out.join("contact-mirror.kopercad");
     let _ = std::fs::remove_file(&path);
     Session::create(&path, doc.project()).expect("project file");
     println!("wrote {}", path.display());

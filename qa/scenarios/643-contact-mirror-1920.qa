@@ -2,7 +2,7 @@
 @area Schematic
 @sizes 1920x1080
 # The coil -K1 on page 2 shows its contacts as a mirror: `1 [symbol] 2` per pole for the three-pole main contact, `13 [symbol] 14`, `21 [symbol] 22`, a changeover with its two throws stacked, then the spare contacts the device has (contacts.* properties) dimmed. -K2 has a four-pole main contact. A double click on a row jumps to that contact; Alt+Left comes back.
-open qa/fixtures/contact-mirror.novo
+open qa/fixtures/contact-mirror.kopercad
 wait 30
 key PageDown
 wait 10
