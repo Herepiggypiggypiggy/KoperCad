@@ -59,7 +59,9 @@ pub use assign::{
     missing_parts, missing_parts_summary, propose_parts, remove_unused_parts, suggest_for_device,
     suggest_for_terminal, suggestions_for_device, terminal_kind_of, terminal_part, unused_parts,
 };
-pub use bmecat::{BmecatError, ECLASS_CLASS_KEY, ETIM_CLASS_KEY, import_bmecat};
+pub use bmecat::{
+    BmecatError, ECLASS_CLASS_KEY, ETIM_CLASS_KEY, import_bmecat, import_bmecat_report,
+};
 pub use browser::{BrowserRow, RowAction, browser_rows};
 pub use bulk::{
     InboxError, InboxOptions, InboxReport, MakerSummary, default_inbox, import_inbox, maker_guide,
