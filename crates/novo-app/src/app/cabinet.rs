@@ -1641,8 +1641,8 @@ impl NovoApp {
                             ui.weak("Every device is placed");
                         }
                     });
-                cabinet_bar::note_rect(
-                    ui.ctx(),
+                cabinet_bar::note_rect_in(
+                    ui,
                     "cabinet.unplaced",
                     "Unplaced",
                     unplaced_panel.response.rect,
@@ -1803,7 +1803,10 @@ impl NovoApp {
                     let now_key = structure.map_or(0, |s| {
                         super::heat_sweep::key_of(project, s, ambient, &h.settings, &fans)
                     });
-                    let at = ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0);
+                    let at = super::panel::right_of_left_card(
+                        ui.ctx(),
+                        ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                    );
                     match self.cabinet.heat.advice.show(ui.ctx(), 1, now_key, at) {
                         Some(super::heat_sweep::Ask::Again) => self.cabinet.heat.advice.request(),
                         Some(super::heat_sweep::Ask::Add(c)) => ask = Some(Ask::CoolingPair(c)),
@@ -1815,7 +1818,10 @@ impl NovoApp {
                     self.cabinet.heat.layout.show(
                         ui.ctx(),
                         now_key,
-                        ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                        super::panel::right_of_left_card(
+                            ui.ctx(),
+                            ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                        ),
                     )
                 {
                     ask = Some(Ask::CoolerLayout(s, moves));
@@ -1855,13 +1861,7 @@ impl NovoApp {
                 self.cabinet.view.glide_secs =
                     super::motion::glide_secs(self.settings.reduce_motion);
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
-                cabinet_bar::note_rect(
-                    ui.ctx(),
-                    "cabinet.canvas",
-                    "Plate",
-                    out.response.rect,
-                    false,
-                );
+                cabinet_bar::note_rect_in(ui, "cabinet.canvas", "Plate", out.response.rect, false);
                 self.cabinet.heat.layout.paint(
                     &ui.painter_at(out.response.rect),
                     out.response.rect,

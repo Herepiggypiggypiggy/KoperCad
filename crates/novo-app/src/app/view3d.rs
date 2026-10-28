@@ -1371,7 +1371,7 @@ impl NovoApp {
             &Look::for_theme(theme),
             options,
         );
-        super::cabinet_bar::note_rect(ui.ctx(), "workspace.view3d", "3D canvas", out.rect, false);
+        super::cabinet_bar::note_rect_in(ui, "workspace.view3d", "3D canvas", out.rect, false);
         // A save asked for from another workspace waits for the first shown
         // (and fitted) camera.
         if mode.save_view && mode.view.is_fitted() {
