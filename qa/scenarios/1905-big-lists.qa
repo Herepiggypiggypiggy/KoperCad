@@ -1,0 +1,31 @@
+@title Big lists: Commissioning checks and the Pages list show only what is in view
+@area Scale
+@slow
+@sizes 1366x768
+# HPR-04 and HPR-05. Needs the generated files (not committed):
+#   cargo run --release -p novo-tests --example dense_page -- target/dense5000.novo 5000
+#   cargo run --release -p novo-tests --example dense_page -- target/p1000.novo 50000 1000
+open target/dense5000.novo
+wait 100
+click_text Commissioning #1
+wait 60
+shot commissioning-5000-top
+frame_stats none 30
+scroll 120 500 -6000
+wait 10
+shot commissioning-5000-scrolled
+click 100 600
+wait 10
+shot commissioning-5000-row-selected
+open target/p1000.novo
+wait 200
+click_text Pages
+wait 40
+shot pages-1000-top
+frame_stats none 30
+scroll 120 400 -4000
+wait 10
+shot pages-1000-scrolled
+click 107 397
+wait 20
+shot pages-1000-row-opened

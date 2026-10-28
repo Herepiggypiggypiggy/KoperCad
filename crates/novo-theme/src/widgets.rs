@@ -370,7 +370,18 @@ pub fn segment(ui: &mut Ui, text: &str, current: bool) -> Response {
             .fill(p.control)
             .stroke(Stroke::new(1.0, p.border_strong));
     }
-    ui.add(button)
+    let response = ui.add(button);
+    // A segment without a frame has no outline of its own to turn copper, so
+    // the keyboard focus gets a ring drawn here.
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            response.rect,
+            radius::CONTROL,
+            Stroke::new(if p.high_contrast { 2.5 } else { 2.0 }, p.accent),
+            egui::StrokeKind::Inside,
+        );
+    }
+    response
 }
 
 /// Two to four exclusive options in a pill track. Returns whether the
