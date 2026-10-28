@@ -46,6 +46,7 @@ thread_local! {
 static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static GPU: OnceLock<String> = OnceLock::new();
 static OS: OnceLock<String> = OnceLock::new();
+static DISPLAY: Mutex<String> = Mutex::new(String::new());
 
 /// `%LOCALAPPDATA%\KoperCAD\logs`, or the platform's per-user data folder.
 /// With a profile folder (`--profile-dir`) it is `<profile>/local/KoperCAD/logs`.
@@ -139,6 +140,13 @@ pub fn set_gpu(description: String) {
     let _ = GPU.set(description);
 }
 
+/// Remembers the window and monitor geometry, for the reports.
+pub fn set_display(description: String) {
+    if let Ok(mut d) = DISPLAY.lock() {
+        *d = description;
+    }
+}
+
 /// The graphics adapter in use, once the window has opened.
 pub fn gpu() -> Option<String> {
     GPU.get().cloned()
@@ -214,6 +222,11 @@ fn write_header(out: &mut String) {
         "Graphics: {}",
         GPU.get().map_or("not known yet", String::as_str)
     );
+    if let Ok(d) = DISPLAY.try_lock()
+        && !d.is_empty()
+    {
+        let _ = writeln!(out, "Display: {d}");
+    }
     let _ = writeln!(out, "Time: {}", utc_stamp(SystemTime::now()));
 }
 

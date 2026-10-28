@@ -1689,7 +1689,9 @@ impl PageScene {
             item.labels.insert(0, label);
             if matches!(
                 sym.role,
-                SymbolRole::Device { .. } | SymbolRole::PotentialFeed { .. }
+                SymbolRole::Device { .. }
+                    | SymbolRole::PotentialFeed { .. }
+                    | SymbolRole::Interruption { .. }
             ) {
                 tag_slot = Some((pos, anchor));
             }
@@ -4969,6 +4971,44 @@ mod tests {
         };
         assert_eq!(kind(feed), Some(LabelKind::Potential));
         assert_eq!(kind(int), Some(LabelKind::InterruptionName));
+    }
+
+    #[test]
+    fn interruption_names_five_millimetres_apart_do_not_overlap() {
+        let mut doc = Document::default();
+        let ((page, ips), _) = doc
+            .transact("ips", |tx| {
+                let page = tx.add_page("1")?;
+                let mut ips = Vec::new();
+                for (i, name) in ["IP1", "IP2", "IP3"].into_iter().enumerate() {
+                    ips.push(tx.place_symbol(
+                        page,
+                        "iec/interruption",
+                        MPlacement::at(Point::new(80.0 + 5.0 * i as f64, 50.0)),
+                        vec![Pin::new("1", 0.0, 2.5)],
+                        SymbolRole::Interruption { name: name.into() },
+                    )?);
+                }
+                Ok((page, ips))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let names: Vec<Label> = ips
+            .iter()
+            .map(|s| ps.scene().get(item_id(*s)).unwrap().labels[0].clone())
+            .collect();
+        for (i, a) in names.iter().enumerate() {
+            for b in &names[i + 1..] {
+                assert!(
+                    !a.bounds().intersects(&b.bounds()),
+                    "{} and {} overlap: {:?} {:?}",
+                    a.text,
+                    b.text,
+                    a.bounds(),
+                    b.bounds()
+                );
+            }
+        }
     }
 
     #[test]

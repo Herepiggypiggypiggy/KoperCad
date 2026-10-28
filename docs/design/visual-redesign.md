@@ -102,7 +102,7 @@ The rail replaces the bottom dock and the text toolbars. It has three zones sepa
 | --- | --- | --- | --- |
 | Schematic | Select, Place symbol (Q), Connect (flyout: Corners, Lines, Autowire), Cable, Text | Autopilot, Accept proposals (badge: count), Tidy routes, Link reference, Macros | Pages, Issues (badge), Terminals, Cables, Devices |
 | Cabinet | Select, Place devices (flyout), Rails (flyout), Ducts, Plate setup | Size enclosure, Route wires, Placement rules, EMC on the plate, Cut list | Heat (flyout), Vents and fans, Pages, Cabinet table, Inspector |
-| 3D | Select, Move, Place a device, Align and spread (flyout) | Measure, Section plane, Hide and isolate (flyout), Saved views | Layers (flyout), Heat, Wire runs, EMC view, Build order |
+| 3D | Select, Move, Place a device, Align and spread (flyout) | Measure, Section plane, Hide and isolate (flyout), Saved views, Build order | Side panel, Layers, Heat, EMC (the last three open the side panel and unfold their section; see `visual-redesign-3d.md`) |
 | Reports | Add as drawing page, Report designer, Labels and ferrules | Bench output, Build mode | Export (flyout), Print |
 | Commissioning | Check, Punch item, Photo, Note | Walk the list, Mark done (tooltip: "a working mark, not a compliance record") | Report, Pages |
 
@@ -302,7 +302,7 @@ Sizes are guides. Each lane is one pull request (or a few small ones) in the cra
 | **V2b App menu** | Two-pane app menu from the registry, `F10`, search inside the menu, the "show menu names" setting, About and Preferences footer, lesson anchors for `menu.<name>` | `novo-app`, `novo-workflow` | V2a | The mark in the top bar |
 | **V2c Menu trimming** | Registry changes: label policy (28), relocation per the table in 5.2, the budget test; long text moves to tooltip and palette description | `novo-workflow` | V0 | Menus and palette |
 | **V3a Rail core and schematic rail** | Rail widget (zones, flyouts, badges, expanded form), per-workspace data tables, the schematic rail replacing the dock, hints to the status bar | `novo-app`, `novo-workflow` | V0, V2a | Schematic |
-| **V3b 3D rail** | 3D rail and its flyouts (Layers, Heat, Align, Hide), the 43 View > 3D rows leave the menu | `novo-app`, `novo-view3d` | V3a | 3D workspace |
+| **V3b 3D rail** | 3D rail with its flyouts (Align, Hide) and the side panel of `visual-redesign-3d.md`, the 43 View > 3D rows leave the menu | `novo-app`, `novo-view3d` | V3a | 3D workspace |
 | **V3c Cabinet rail** | Cabinet rail with the content and grouping of `cabinet-toolbar.md` in expanded form and flyouts | `novo-app` | V3a | Cabinet workspace |
 | **V3d Reports and Commissioning rails** | The two small rails, Export flyout | `novo-app` | V3a | Reports, Commissioning |
 | **V4 Import and Export centres** | Centre window, format tiles, options, preview; Print; File > Import and both Export menus reduce to one entry each | `novo-app`, `novo-interop`, `novo-pdf` | V1, V2c | File menu, Reports |

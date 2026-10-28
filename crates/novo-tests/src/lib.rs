@@ -9,6 +9,7 @@
 pub mod big;
 pub mod distribution;
 pub mod heat_cabinet;
+pub mod hoist;
 pub mod motor_starter;
 pub mod radio_hoist;
 pub mod stress;

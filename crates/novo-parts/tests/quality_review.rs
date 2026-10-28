@@ -116,6 +116,7 @@ fn the_queue_lists_thin_parts_first_and_approve_all_clears_it() {
         currency: "EUR".into(),
         per: 1,
         date: "2026-10-01".into(),
+        unit: String::new(),
     });
     c.upsert(rich);
     c.upsert(imported("B", "BBBB1", "b.xml"));

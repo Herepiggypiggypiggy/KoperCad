@@ -29,6 +29,7 @@ fn rich() -> CatalogPart {
             currency: "EUR".into(),
             per: 100,
             date: "2026-10-15".into(),
+            unit: String::new(),
         }),
         lifecycle: Lifecycle::PhasingOut,
         replaced_by: Some(PartRef {
