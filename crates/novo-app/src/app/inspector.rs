@@ -1227,6 +1227,7 @@ fn mech_load_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<Ins
         &summary,
         set > 0,
         |ui| {
+            ui.weak("A comma is a decimal comma: 1,5 means 1.5, and 1,500 also means 1.5.");
             for k in novo_machine::spec::KEYS {
                 let shown = value_of(k.key);
                 let id = egui::Id::new(("inspector_mech", k.key));
