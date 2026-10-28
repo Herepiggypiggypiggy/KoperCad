@@ -131,6 +131,7 @@ mod heat_whatif_tests;
 mod heat_wires;
 #[cfg(test)]
 mod heat_wires_tests;
+mod hoist_run;
 mod inspector;
 mod interop;
 mod kitting;
@@ -1714,6 +1715,7 @@ impl NovoApp {
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
+        self.hoist_window(&ctx);
         self.add_fault_window(&ctx);
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);

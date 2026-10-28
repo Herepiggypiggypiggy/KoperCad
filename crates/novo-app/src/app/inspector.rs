@@ -193,6 +193,8 @@ enum InspectorAction {
     AssignPart(novo_parts::PartKey),
     /// A calculation input edited: property key and the text typed.
     SetInput(&'static str, String),
+    /// A mechanical load entry (`mech_*`): property key and the text typed.
+    SetMech(&'static str, String),
 }
 
 /// The one device the selection draws, if it draws exactly one.
@@ -524,6 +526,7 @@ impl NovoApp {
                 InspectorAction::Pin(on) => self.wb.inspector.pinned = on,
                 InspectorAction::AssignPart(key) => self.assign_device_part(device, &key),
                 InspectorAction::SetInput(key, text) => self.set_device_input(device, key, &text),
+                InspectorAction::SetMech(key, text) => self.set_mech_input(device, key, &text),
             }
         }
     }
@@ -613,6 +616,38 @@ impl NovoApp {
             Err(why) => {
                 self.message(Level::Warning, why);
                 return;
+            }
+        };
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let Some(old) = doc.project().device(device) else {
+            return;
+        };
+        let label = format!("Set {key} of {}", old.tag);
+        match doc.transact(label, |tx| tx.set_property(device, key, value)) {
+            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
+        }
+    }
+
+    /// Writes a mechanical load entry (`mech_*`) on the motor: one undo step. Empty clears it.
+    pub(super) fn set_mech_input(&mut self, device: DeviceId, key: &str, text: &str) {
+        let text = text.trim();
+        let is_text = novo_machine::spec::KEYS
+            .iter()
+            .any(|k| k.key == key && k.text);
+        let value = if text.is_empty() {
+            None
+        } else if is_text {
+            Some(Value::Text(text.to_owned()))
+        } else {
+            match text.replace(',', ".").parse::<f64>() {
+                Ok(v) if v.is_finite() => Some(Value::Float(v)),
+                _ => {
+                    self.message(Level::Warning, format!("\"{text}\" is not a number"));
+                    return;
+                }
             }
         };
         let Some(doc) = self.backend.document_mut() else {
@@ -931,6 +966,7 @@ fn inspector_body(
     );
 
     calc_inputs_section(ui, info, actions);
+    mech_load_section(ui, info, actions);
 
     // The rest of the device's properties are the advanced part: closed
     // until opened, and absent when there are none.
@@ -1148,6 +1184,86 @@ pub(super) fn committed(ui: &egui::Ui, response: &egui::Response) -> bool {
 /// The "Calculation inputs" rows: the numbers the cable, short-circuit and
 /// starter calculations read from the device. A value the part supplies is
 /// shown dimmed with a hint; typing overrides it on this device only.
+/// The "Mechanical load" section of a motor: the numbers of a hoist (hook load, gearbox,
+/// two-speed winding, brake, limit switches) for the Simulate > Hoist run. Setting the hook load
+/// makes the motor a hoist; blank rows use the generic values shown as hints.
+fn mech_load_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<InspectorAction>) {
+    let motor = DeviceTag::parse(&info.tag).is_ok_and(|t| t.letter_code() == "M");
+    if !motor {
+        return;
+    }
+    let value_of = |key: &str| {
+        info.properties
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.clone())
+            .unwrap_or_default()
+    };
+    let set = novo_machine::spec::KEYS
+        .iter()
+        .filter(|k| !value_of(k.key).is_empty())
+        .count();
+    let summary = if value_of(novo_machine::spec::HOIST_KEY).is_empty() {
+        String::new()
+    } else {
+        "hoist".to_owned()
+    };
+    widgets::collapsing_section(
+        ui,
+        "inspector_mech_load",
+        "Mechanical load",
+        &summary,
+        set > 0,
+        |ui| {
+            for k in novo_machine::spec::KEYS {
+                let shown = value_of(k.key);
+                let id = egui::Id::new(("inspector_mech", k.key));
+                let focused = ui.memory(|m| m.has_focus(id));
+                let mut text = if focused {
+                    ui.data(|d| d.get_temp::<String>(id))
+                        .unwrap_or_else(|| shown.clone())
+                } else {
+                    shown.clone()
+                };
+                let hint = if k.default.is_empty() {
+                    String::new()
+                } else {
+                    format!("generic {}", k.default)
+                };
+                let r = labelled_edit(ui, k.label, k.unit, |ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut text)
+                            .id(id)
+                            .hint_text(hint)
+                            .desired_width(f32::INFINITY),
+                    )
+                    .on_hover_text(k.key)
+                });
+                if r.has_focus() {
+                    ui.data_mut(|d| d.insert_temp(id, text.clone()));
+                }
+                if r.lost_focus() {
+                    ui.data_mut(|d| d.remove::<String>(id));
+                    if text.trim() != shown.trim() {
+                        actions.push(InspectorAction::SetMech(k.key, text.clone()));
+                    }
+                }
+            }
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(
+                        "Hook load turns the motor into a hoist. Blank rows use generic values, \
+                         not a manufacturer's data. Run it: Simulate > Hoist run.",
+                    )
+                    .small()
+                    .weak(),
+                )
+                .wrap(),
+            );
+        },
+    );
+}
+
 fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<InspectorAction>) {
     let letter = DeviceTag::parse(&info.tag)
         .map(|t| t.letter_code().to_owned())
