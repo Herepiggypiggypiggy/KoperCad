@@ -181,14 +181,21 @@ impl NovoApp {
                     {
                         continue;
                     }
+                    // A long submenu (View > 3D has dozens of rows) scrolls
+                    // inside the window instead of running off its edge.
+                    let room = (ui.ctx().content_rect().height() - 80.0).max(200.0);
                     ui.menu_button(*name, |ui| {
-                        for info in items {
-                            self.command_row(ui, info);
-                        }
-                        // File > Open > Recent is not a command of its own.
-                        if *name == "Open" {
-                            self.recent_menu(ui);
-                        }
+                        egui::ScrollArea::vertical()
+                            .max_height(room)
+                            .show(ui, |ui| {
+                                for info in items {
+                                    self.command_row(ui, info);
+                                }
+                                // File > Open > Recent is not a command of its own.
+                                if *name == "Open" {
+                                    self.recent_menu(ui);
+                                }
+                            });
                     });
                 }
             }

@@ -1,0 +1,34 @@
+@title Preferences and start screen at 200 % interface size
+@area Layout
+# Windows hardware test UWL-01 (empty Preferences at 200 %), UWL-05 (small
+# window), HPR-03 (recent list cut off on the start screen).
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+shot preferences-100
+click_text "200%"
+wait 12
+shot preferences-200
+expect "Interface size"
+expect "Theme"
+check_layout
+check_blank preferences-200-blank
+click_text Done
+wait 10
+shot schematic-200
+check_layout
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text "100%"
+wait 10
+click_text Done
+wait 6
