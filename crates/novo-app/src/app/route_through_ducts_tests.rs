@@ -122,3 +122,38 @@ fn the_cabinet_says_what_it_estimated_and_what_leaves_the_cabinet() {
         o.notes
     );
 }
+
+/// Rewrites the QA fixture: the example cabinet after Place all with the
+/// vertical trunk duct cut short, so it joins only the first two row ducts and
+/// the wires below them have no duct path:
+/// `cargo test -p novo-app write_no_duct_path_fixture -- --ignored`.
+#[test]
+#[ignore = "writes qa/fixtures/route-no-duct-path.novo"]
+fn write_no_duct_path_fixture() {
+    use crate::backend::ProjectBackend;
+    let (_dir, mut d) = placed_example();
+    let trunk: Vec<_> = d
+        .doc()
+        .project()
+        .all::<Rail>()
+        .filter(|r| r.kind == RailKind::Duct && r.vertical)
+        .map(|r| r.id)
+        .collect();
+    assert_eq!(trunk.len(), 1);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Shorten trunk", |tx| {
+            tx.update::<Rail>(trunk[0], |r| r.length = 200.0)
+                .map(|_| ())
+        })
+        .unwrap();
+    let routed = route_project(d.doc().project());
+    assert!(routed.routes.values().any(|r| r.kind == Kind::FreeAir));
+    assert!(routed.routes.values().any(|r| r.kind == Kind::Ducted));
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../qa/fixtures/route-no-duct-path.novo");
+    let _ = std::fs::remove_file(&path);
+    d.app.backend.save(&path).unwrap();
+}

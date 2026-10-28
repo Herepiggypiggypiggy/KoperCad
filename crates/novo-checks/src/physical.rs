@@ -66,10 +66,22 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
             match problem {
                 RoutingProblem::FreeAir { job } => {
                     let Some(w) = wire(*job) else { continue };
+                    let ends = project
+                        .wires()
+                        .find(|x| x.id == w)
+                        .and_then(|x| Some((x.from.as_pin()?, x.to.as_pin()?)))
+                        .map(|(a, b)| {
+                            format!(
+                                "{} > {}: ",
+                                project.pin_designation(a).unwrap_or_default(),
+                                project.pin_designation(b).unwrap_or_default()
+                            )
+                        })
+                        .unwrap_or_default();
                     out.push(Problem::new(
                         ProblemKind::WireWithoutDuct,
                         vec![AnyId::Wire(w)],
-                        "No duct path joins the two ends of this wire, so it is not routed and its length is only an estimate: add a duct that reaches both ends".to_owned(),
+                        format!("{ends}no duct path joins the two ends of this wire, so it is not routed and its length is only an estimate: add a duct that reaches both ends"),
                     ));
                 }
                 RoutingProblem::OverfullDuct { ratio, jobs, .. } => {
