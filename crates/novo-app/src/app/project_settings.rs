@@ -181,7 +181,7 @@ already has. These letters only start a project that has none yet. Yours, for ev
                     ui.label(egui::RichText::new("Cabinet starts with").weak());
                     ui.add(
                         egui::TextEdit::singleline(&mut cabinet_prefix)
-                            .hint_text("A")
+                            .hint_text("CAB")
                             .desired_width(80.0),
                     );
                     ui.end_row();

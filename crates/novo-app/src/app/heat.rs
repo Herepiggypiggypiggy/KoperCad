@@ -129,7 +129,7 @@ pub(super) struct HeatState {
     history: Vec<f64>,
     pub(super) solution: Option<Arc<Solution>>,
     /// Result kept as A for comparison.
-    kept: Option<Arc<Solution>>,
+    pub(super) kept: Option<Arc<Solution>>,
     pub(super) pending: Option<Meta>,
     runs: u64,
     /// The last run's outcome in words: failed, cancelled or the bridge's
@@ -274,6 +274,30 @@ impl HeatState {
             self.side = on;
             self.fit_wanted = true;
         }
+    }
+
+    /// A different project was opened: a result, a kept comparison, a run in flight and the
+    /// heat-up frames belong to the old cabinet. Left in place they are drawn over the new
+    /// cabinet's plate (a result of the previous lesson's transformer shows as a hot spot where
+    /// the new project has no device), so the picture starts from the preview again. What the
+    /// person chose to see (map, contours, airflow, badges, quality) stays.
+    pub(super) fn forget_results(&mut self) {
+        self.cancel();
+        self.run = None;
+        self.pending = None;
+        self.solution = None;
+        self.clear_kept();
+        self.progress = None;
+        self.history.clear();
+        self.notice = None;
+        self.requested = false;
+        self.transient_wanted = false;
+        let minutes = self.time.minutes;
+        self.time = super::heat_time::TimeLine::new();
+        self.time.minutes = minutes;
+        self.live = super::heat_live::Live::default();
+        self.cache = None;
+        self.layout.close();
     }
 
     pub(super) fn clear_kept(&mut self) {

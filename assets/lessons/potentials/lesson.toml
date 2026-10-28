@@ -97,19 +97,21 @@ id = "earth-feed"
 title = "Add one more feed above the motor earth"
 title_nl = "Voeg nog een feed toe boven de motoraarde"
 text = """
-The motor casing has to be earthed, and that is a fourth supply. You place it like the others, and name it in the next step.
+The motor casing has to be earthed, and that is a fourth supply. You place it like the others, on the motor's **PE** pin, and the pin tells the feed what it is: it is named **PE** and drawn with the earth symbol.
+A feed placed on a pin that says nothing keeps a fresh name (such as **L4**) until you give it a potential: right-click it and pick a chip.
 """
 text_nl = """
-De motorbehuizing moet geaard worden, en dat is een vierde voeding. Je plaatst hem zoals de andere en geeft hem in de volgende stap zijn naam.
+De motorbehuizing moet geaard worden, en dat is een vierde voeding. Je plaatst hem zoals de andere, op de **PE**-pen van de motor, en de pen vertelt de feed wat hij is: hij heet **PE** en krijgt het aardsymbool.
+Een feed op een pen die niets zegt houdt een verse naam (zoals **L4**) tot je hem een potentiaal geeft: klik met de rechtermuisknop en kies een chip.
 """
 how = [
   "Hold {key:tool.place}, choose **Points**, then **Feed**, and release the key.",
-  "Click just to the right of the motor, above the **PE** pin of **-M1**. The feed is named **L4** because the next free line number is 4.",
+  "Click just to the right of the motor, above the **PE** pin of **-M1**. The feed reads the pin and is named **PE**, with the earth symbol.",
   "Press {key:edit.escape} to put the feed down.",
 ]
 how_nl = [
   "Houd {key:tool.place} ingedrukt, kies **Points** en dan **Feed**, en laat de toets los.",
-  "Klik net rechts van de motor, boven de **PE**-pen van **-M1**. De feed heet **L4** omdat het eerstvolgende vrije lijnnummer 4 is.",
+  "Klik net rechts van de motor, boven de **PE**-pen van **-M1**. De feed leest de pen en heet **PE**, met het aardsymbool.",
   "Druk op {key:edit.escape} om de feed los te laten.",
 ]
 demo = [
@@ -117,39 +119,12 @@ demo = [
   { say = "Choose Points, then Feed.", say_nl = "Kies Points en dan Feed." },
   { move = { at = { page = "Motor feeder", x = 104, y = 92 } } },
   { click = true },
-  { say = "The feed is named L4 for now.", say_nl = "De feed heet voorlopig L4." },
+  { say = "The pin says PE, so the feed is the earth.", say_nl = "De pen zegt PE, dus de feed is de aarde." },
   { press = "edit.escape" },
 ]
 point = { at = { device = "-M1", pin = "PE" } }
-expect = { count = { kind = "feed", page = "Motor feeder", at_least = 4 } }
-solve = [ { place = { symbol = "iec/connectivity/potential_feed", page = "Motor feeder", x = 104, y = 92 } } ]
-
-[[step]]
-id = "make-earth"
-title = "Make it the earth"
-title_nl = "Maak er de aarde van"
-text = """
-A feed takes the name and kind of the potential you give it. The **PE** chip turns it into the protective earth, with the earth symbol.
-"""
-text_nl = """
-Een feed neemt de naam en soort over van de potentiaal die je hem geeft. De **PE**-chip maakt er de beschermende aarde van, met het aardsymbool.
-"""
-how = [
-  "Right-click the new feed (the one named L4). A menu opens with the potentials as chips.",
-  "Click the **PE** chip. The feed changes to the earth symbol and the name PE.",
-]
-how_nl = [
-  "Klik met de rechtermuisknop op de nieuwe feed (die met de naam L4). Er opent een menu met de potentialen als chips.",
-  "Klik op de chip **PE**. De feed verandert in het aardsymbool met de naam PE.",
-]
-demo = [
-  { move = { at = { feed = "L4" } } },
-  { right_click = true },
-  { say = "Click the PE chip in the menu.", say_nl = "Klik op de chip PE in het menu." },
-]
-point = { at = { feed = "L4" } }
 expect = { potential_kind = { kind = "protective_earth", page = "Motor feeder" } }
-solve = [ { set_potential = { feed_at = [104, 92], page = "Motor feeder", chip = "PE" } } ]
+solve = [ { place = { symbol = "iec/connectivity/potential_feed", page = "Motor feeder", x = 104, y = 92 } } ]
 
 [[step]]
 id = "where-it-goes"

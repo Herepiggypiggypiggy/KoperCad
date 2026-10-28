@@ -920,8 +920,8 @@ fn a_row_of_three_feeds_reads_l1_l2_l3_and_a_fourth_becomes_pe_by_its_chip() {
         names,
         ["feed L1@80,20:1", "feed L2@88,20:1", "feed L3@96,20:1"]
     );
-    // One feed above the motor's PE pin is called L4 until it is told what
-    // it is: right-click, the PE chip.
+    // One feed above the motor's PE pin reads the pin: it is PE at once,
+    // drawn as earth, and the chips still change it.
     r.place(feed, None, 104.0, 92.0);
     let fourth = r
         .project()
@@ -931,21 +931,19 @@ fn a_row_of_three_feeds_reads_l1_l2_l3_and_a_fourth_becomes_pe_by_its_chip() {
         .id;
     let menu =
         novo_editor::potential_menu::feed_menu(r.project(), &[AnyId::Symbol(fourth)]).unwrap();
-    assert_eq!(menu.current.as_deref(), Some("L4"));
-    let pe = menu.chips.iter().find(|c| c.name == "PE").unwrap().clone();
-    assert!(r.editor.set_feed_potential(&mut r.doc, &[fourth], &pe));
+    assert_eq!(menu.current.as_deref(), Some("PE"));
     // The lesson promises "the symbol changes to the protective earth".
     let key = |r: &Replay| r.project().symbol(fourth).unwrap().symbol.0.clone();
     assert_eq!(key(&r), "iec/connectivity/potential_feed_pe");
-    // Taking PE away again restores the plain feed, and undo walks back.
+    // Taking PE away restores the plain feed, and undo walks back.
     let l1 = menu.chips.iter().find(|c| c.name == "L1").unwrap().clone();
     assert!(r.editor.set_feed_potential(&mut r.doc, &[fourth], &l1));
     assert_eq!(key(&r), "iec/connectivity/potential_feed");
     r.doc.undo().unwrap();
     assert_eq!(key(&r), "iec/connectivity/potential_feed_pe");
-    r.doc.undo().unwrap();
-    assert_eq!(key(&r), "iec/connectivity/potential_feed");
     r.doc.redo().unwrap();
+    assert_eq!(key(&r), "iec/connectivity/potential_feed");
+    r.doc.undo().unwrap();
     assert_eq!(key(&r), "iec/connectivity/potential_feed_pe");
     assert_eq!(
         nets_of(r.project()),

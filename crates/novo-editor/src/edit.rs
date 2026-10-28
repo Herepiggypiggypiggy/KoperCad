@@ -15,6 +15,7 @@ use novo_core::{
 use novo_symbols::Symbol;
 
 use crate::catalog::{SymbolClass, classify, model_groups, model_pins};
+use crate::feed_name;
 use crate::geometry::{
     self, EPS, Target, arc_position, endpoint_direction, locate_on_polyline, route, simplify,
     wire_points, wires_through,
@@ -78,7 +79,7 @@ pub fn place(
 ) -> Result<SymbolId> {
     let mut pins = model_pins(symbol);
     let (bridges, pass_through) = model_groups(symbol);
-    let mut defaulted_line_feed = false;
+    let mut provisional_feed: Option<String> = None;
     let role = match classify(symbol) {
         SymbolClass::Main { letter } => {
             let device = match &options.parent {
@@ -154,10 +155,13 @@ pub fn place(
                 _ if symbol.id.ends_with("/potential_feed_pe") => {
                     find_or_add_potential(tx, "PE", PotentialKind::ProtectiveEarth, None)?
                 }
+                // A fresh name for now; what the feed is attached to decides
+                // later (see `feed_name`).
                 _ => {
-                    defaulted_line_feed = true;
                     let name = next_feed_name(tx.project(), page);
-                    find_or_add_potential(tx, &name, PotentialKind::Line, None)?
+                    let id = find_or_add_potential(tx, &name, PotentialKind::Line, None)?;
+                    provisional_feed = Some(name);
+                    id
                 }
             };
             SymbolRole::PotentialFeed { potential }
@@ -185,56 +189,24 @@ pub fn place(
     })?;
     if options.auto_connect {
         auto_connect(tx, id)?;
-        if defaulted_line_feed {
-            neutral_if_on_coil_low_side(tx, id)?;
-        }
     } else {
         // Whatever the preference, a pin on an open wire end is that wire's end.
         join_coincident(tx, page)?;
     }
+    if let Some(name) = provisional_feed {
+        feed_name::mark(tx, id, &name)?;
+        feed_name::retarget(tx, page)?;
+    }
     Ok(id)
 }
 
-/// A feed that was just named by default and landed on a coil's A2 pin is
-/// the return side of the control circuit: it becomes `N`, not the next
-/// line conductor.
-fn neutral_if_on_coil_low_side(tx: &mut Tx<'_>, feed: SymbolId) -> Result<()> {
-    let project = tx.project();
-    let netlist = project.netlist();
-    let Some(net) = netlist.net_of(Endpoint::pin(feed, 0)) else {
-        return Ok(());
-    };
-    let on_coil_low_side = netlist.net(net).endpoints.iter().any(|e| match *e {
-        Endpoint::Pin { symbol, pin } if symbol != feed => {
-            project.symbol(symbol).is_some_and(|s| {
-                matches!(s.role, SymbolRole::Device { .. })
-                    && s.symbol.0.contains("/coils/")
-                    && s.pins.get(usize::from(pin)).is_some_and(|p| p.name == "A2")
-            })
-        }
-        _ => false,
-    });
-    if on_coil_low_side {
-        let neutral = find_or_add_potential(tx, "N", PotentialKind::Neutral, None)?;
-        tx.set_role(feed, SymbolRole::PotentialFeed { potential: neutral })?;
-    }
-    Ok(())
-}
-
 /// The name a new potential feed gets: the first of `L1`, `L2`, `L3`, ...
-/// that no feed on `page` carries yet, so a row of feeds reads L1, L2, L3.
+/// that no potential in the project carries yet, so a row of feeds reads
+/// L1, L2, L3 and a new feed never joins an existing conductor by its name.
+/// (`page` is kept for the callers; the rule is the project's.)
 /// (Same rule as `novo_workflow::insert::next_feed_name`.)
-pub fn next_feed_name(project: &Project, page: PageId) -> String {
-    let taken: Vec<&str> = project
-        .symbols()
-        .filter(|s| s.page == page)
-        .filter_map(|s| match s.role {
-            SymbolRole::PotentialFeed { potential } => {
-                project.potential(potential).map(|p| p.name.as_str())
-            }
-            _ => None,
-        })
-        .collect();
+pub fn next_feed_name(project: &Project, _page: PageId) -> String {
+    let taken: Vec<&str> = project.potentials().map(|p| p.name.as_str()).collect();
     (1u32..)
         .map(|n| format!("L{n}"))
         .find(|name| !taken.iter().any(|t| t.eq_ignore_ascii_case(name)))
@@ -463,6 +435,7 @@ pub fn settle(tx: &mut Tx<'_>, symbols: &[SymbolId]) -> Result<()> {
         .collect::<BTreeSet<_>>()
     {
         join_coincident(tx, page)?;
+        feed_name::retarget(tx, page)?;
     }
     Ok(())
 }
@@ -556,13 +529,19 @@ fn connect_touching(tx: &mut Tx<'_>, symbol: SymbolId) -> Result<()> {
     let Some(page) = tx.project().symbol(symbol).map(|s| s.page) else {
         return Ok(());
     };
+    // A potential feed defines the potential of the pin it stands on, whether
+    // or not a wire already leaves that pin (a fuse output that is wired on).
+    let is_feed = tx
+        .project()
+        .symbol(symbol)
+        .is_some_and(|s| matches!(s.role, SymbolRole::PotentialFeed { .. }));
     for (pin, p) in pin_positions(tx.project(), symbol) {
         let from = Endpoint::pin(symbol, pin);
         let project = tx.project();
         if !is_free(project, from) {
             continue;
         }
-        let other = project
+        let mut candidates: Vec<(Endpoint, bool)> = project
             .page_contents(page)
             .symbols
             .into_iter()
@@ -572,7 +551,15 @@ fn connect_touching(tx: &mut Tx<'_>, symbol: SymbolId) -> Result<()> {
                     .into_iter()
                     .map(move |(opin, q)| (Endpoint::pin(o, opin), q))
             })
-            .find(|&(e, q)| q.approx_eq(p, EPS) && is_free(project, e));
+            .filter(|&(_, q)| q.approx_eq(p, EPS))
+            .map(|(e, _)| (e, is_free(project, e)))
+            .collect();
+        // Of several pins on one point prefer one nothing is on.
+        candidates.sort_by_key(|&(_, free)| !free);
+        let other = candidates
+            .into_iter()
+            .find(|&(_, free)| free || is_feed)
+            .map(|(e, _)| (e, p));
         if let Some((to, _)) = other {
             tx.connect(from, to)?;
         }
@@ -614,7 +601,11 @@ pub fn accept(tx: &mut Tx<'_>, proposal: &FacingWire) -> Result<Option<WireId>> 
     {
         return Err(refused(refusal));
     }
-    tx.connect(proposal.from, proposal.to).map(Some)
+    let wire = tx.connect(proposal.from, proposal.to)?;
+    if let Some(page) = page {
+        feed_name::retarget(tx, page)?;
+    }
+    Ok(Some(wire))
 }
 
 fn pin_positions(project: &Project, symbol: SymbolId) -> Vec<(u16, Point)> {
@@ -1172,6 +1163,7 @@ pub fn draw_wire(
         tx.update::<Wire>(wire, |w| w.route = bends)?;
     }
     join_coincident(tx, page)?;
+    feed_name::retarget(tx, page)?;
     Ok(wire)
 }
 
