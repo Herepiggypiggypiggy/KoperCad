@@ -58,3 +58,30 @@ wait 20
 expect_scene F1
 shot reopened-as-saved
 check_layout
+# Save in the question writes the file, then closes.
+key q
+wait 4
+text contactor
+wait 6
+click_text "Contactor main contacts, 3-pole" Button
+wait 6
+click 450 350
+wait 6
+key Escape
+expect_scene K1
+key ctrl+k
+wait 6
+text close project
+wait 8
+key Enter
+wait 20
+expect "Save changes?"
+shot save-in-the-question
+click_text Save Button
+wait 30
+expect_not "Save changes?"
+open ~/Documents/KoperCAD/unsaved-edits.kopercad
+wait 20
+expect_scene K1
+shot reopened-after-save
+check_layout

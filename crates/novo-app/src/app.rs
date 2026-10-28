@@ -1066,7 +1066,11 @@ impl NovoApp {
             ui.set_width(400.0);
             ui.heading("Save changes?");
             ui.label(format!("\"{name}\" has changes that are not saved."));
-            ui.label("The file on disk stays as it is until you save.");
+            if self.project_path.is_some() {
+                ui.label("The file on disk stays as it is until you save.");
+            } else {
+                ui.label("Nothing is saved yet.");
+            }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 if primary_button(ui, "Save").clicked() {

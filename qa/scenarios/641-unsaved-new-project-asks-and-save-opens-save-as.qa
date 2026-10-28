@@ -1,0 +1,33 @@
+@title Unsaved new project: closing asks "Nothing is saved yet", Save opens Save as
+@area Journeys
+# Critical hardware finding KC-02, untitled case.
+fresh
+key ctrl+n
+wait 20
+key q
+wait 4
+text circuit breaker
+wait 6
+click_text "Miniature circuit breaker, 3-pole" Button
+wait 6
+click 450 200
+wait 6
+key Escape
+expect "Not saved yet"
+key ctrl+k
+wait 6
+text close project
+wait 8
+key Enter
+wait 20
+expect "Save changes?"
+expect "Nothing is saved yet."
+shot untitled-asks
+check_layout
+answer_dialog ~/Documents/KoperCAD/unsaved-untitled.kopercad
+click_text Save Button
+wait 30
+expect_file ~/Documents/KoperCAD/unsaved-untitled.kopercad 4000
+expect_not "Save changes?"
+shot untitled-saved-then-closed
+check_layout
