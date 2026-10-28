@@ -1,0 +1,11 @@
+@title Terminals drawer: the toolbar is one row, so the strip keeps its rows
+@area Terminals
+@sizes 1366x768 1920x1080
+# Regression (TCN-04): wrapped tool buttons took two rows of the drawer at 1366x768.
+open qa/fixtures/strip-grouping.novo
+wait 20
+key ctrl+3
+wait 10
+expect "Terminals"
+shot terminals-toolbar-one-row
+check_layout
