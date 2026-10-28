@@ -1,6 +1,5 @@
 @title Keyboard focus ring on a segment and a long submenu that scrolls
 @area Layout
-@sizes 1366x768
 # UWL-02: the selected segment shows where the keyboard focus is.
 # UWL-04: View > 3D has dozens of rows and scrolls inside the window.
 click_text "Open example"
