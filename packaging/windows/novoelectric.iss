@@ -89,51 +89,6 @@ Type: files; Name: "{userprograms}\{#AppName} (safe graphics).lnk"
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-{ True while a kopercad.exe of this user is running. }
-function AppIsRunning: Boolean;
-var
-  Code: Integer;
-begin
-  Result := Exec(ExpandConstant('{cmd}'),
-    '/C tasklist /FI "IMAGENAME eq {#AppExe}" /NH | find /I "{#AppExe}" >nul',
-    '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
-end;
-
-{ The Restart Manager cannot close the program's window, so ask it ourselves:
-  first a normal close (the program keeps its recovery copy), and only after
-  about ten seconds end it. Per-user process, no admin rights needed. }
-procedure CloseRunningApp;
-var
-  Code, Waited: Integer;
-begin
-  if not AppIsRunning then
-    exit;
-  Exec('taskkill.exe', '/IM {#AppExe}', '', SW_HIDE, ewWaitUntilTerminated, Code);
-  Waited := 0;
-  while AppIsRunning and (Waited < 10000) do
-  begin
-    Sleep(500);
-    Waited := Waited + 500;
-  end;
-  if AppIsRunning then
-  begin
-    Exec('taskkill.exe', '/F /IM {#AppExe}', '', SW_HIDE, ewWaitUntilTerminated, Code);
-    Sleep(500);
-  end;
-end;
-
-function PrepareToInstall(var NeedsRestart: Boolean): String;
-begin
-  CloseRunningApp;
-  Result := '';
-end;
-
-function InitializeUninstall: Boolean;
-begin
-  CloseRunningApp;
-  Result := True;
-end;
-
 { The program is removed; projects are never touched. Settings, logs and the
   recovery files stay unless the user asks for them to go too, so a later
   reinstall finds the same preferences. }

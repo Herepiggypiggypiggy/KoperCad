@@ -68,7 +68,11 @@ pub fn import_bmecat_report(
             Event::Start(e) => {
                 let name = local(e.name().as_ref());
                 if is_inline(&name) {
-                    // Markup inside a description is formatting, not structure.
+                    // Markup inside a description is formatting, not structure;
+                    // a line break or paragraph is still a gap between words.
+                    if is_break(&name) && !buf.ends_with(' ') {
+                        buf.push(' ');
+                    }
                     continue;
                 }
                 buf.clear();
@@ -88,6 +92,9 @@ pub fn import_bmecat_report(
             Event::End(e) => {
                 let name = local(e.name().as_ref());
                 if is_inline(&name) {
+                    if is_break(&name) && !buf.ends_with(' ') {
+                        buf.push(' ');
+                    }
                     continue;
                 }
                 path.pop();
@@ -122,15 +129,20 @@ pub fn import_bmecat_report(
                         }
                     }
                     "PRODUCT" => {
-                        if let Some(d) = cur.take()
-                            && let Some(p) = d.finish(&supplier, default_manufacturer)
-                        {
-                            parts.push(p);
-                        } else {
-                            skipped += 1;
+                        if let Some(d) = cur.take() {
+                            if let Some(p) = d.finish(&supplier, default_manufacturer) {
+                                parts.push(p);
+                            } else {
+                                skipped += 1;
+                            }
                         }
                     }
                     _ => {}
+                }
+            }
+            Event::Empty(e) => {
+                if is_break(&local(e.name().as_ref())) && !buf.ends_with(' ') {
+                    buf.push(' ');
                 }
             }
             Event::Text(t) => {
@@ -180,6 +192,10 @@ fn is_inline(name: &str) -> bool {
         name.to_ascii_lowercase().as_str(),
         "b" | "i" | "u" | "br" | "em" | "strong" | "sub" | "sup" | "span" | "p" | "font"
     )
+}
+
+fn is_break(name: &str) -> bool {
+    matches!(name.to_ascii_lowercase().as_str(), "br" | "p")
 }
 
 #[derive(Default)]
@@ -284,7 +300,7 @@ mod tests {
 <DESCRIPTION_SHORT>UT 2,5 <b>bold</b> &amp; more<br/>end</DESCRIPTION_SHORT>
 </PRODUCT_DETAILS></PRODUCT></T_NEW_CATALOG></BMECAT>"#;
         let parts = import_bmecat(xml, "M").unwrap();
-        assert_eq!(parts[0].description, "UT 2,5 bold & moreend");
+        assert_eq!(parts[0].description, "UT 2,5 bold & more end");
     }
 
     #[test]
