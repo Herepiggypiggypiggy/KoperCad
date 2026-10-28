@@ -12,9 +12,12 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// The folder KoperCAD keeps its Claude integration files in.
+/// The folder KoperCAD keeps its Claude integration files in. It follows the
+/// profile override (`--profile-dir`, `KOPERCAD_PROFILE_DIR`, or a portable
+/// install), so a test or portable run never sees, replaces or deletes the
+/// key in the real profile.
 pub fn default_dir() -> Option<PathBuf> {
-    dirs::data_local_dir().map(|d| d.join("KoperCAD").join("ai"))
+    novo_storage::profile::data_local_dir().map(|d| d.join("KoperCAD").join("ai"))
 }
 
 /// Where a key came from, for the settings screen.
@@ -149,6 +152,18 @@ fn write_private(path: &Path, text: &str) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_store_follows_the_profile_folder() {
+        // The profile root is process-wide and first-set-wins, so this is the
+        // only test that sets it.
+        let dir = tempfile::tempdir().unwrap();
+        novo_storage::profile::set_root(dir.path());
+        let root = novo_storage::profile::root().unwrap();
+        let store = KeyStore::in_profile().unwrap();
+        assert!(store.path().starts_with(&root), "{:?}", store.path());
+        assert!(default_dir().unwrap().starts_with(&root));
+    }
 
     const KEY: &str = "sk-ant-api03-abcdefghijklmnop1234";
 
