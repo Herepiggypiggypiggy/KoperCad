@@ -47,7 +47,7 @@ One panel on the right (280 to 300 wide by default, resizable, dockable left or 
 Behaviour of each section header (left to right: fold chevron, icon, title, switch where it has one, undock button):
 
 - **Fold.** Click the header or press Enter. Several sections can be open at once; the column scrolls and the headers of open sections stick to the top while their body scrolls. Alt+click folds all the others (solo). Fold state is remembered.
-- **Undock.** The undock button, or dragging the header out of the panel, turns the section into a floating window with the standard host header (icon, title, switch, dock back, close), resizable, remembered. The row stays in the list as a dimmed "Floating" row with a dock-back button, so nothing disappears from the panel. Dragging the floating window to the panel's edge docks it back; the dock-back button returns it to its place in the order.
+- **Undock.** The undock button, or dragging the header out of the panel, turns the section into a floating window with the standard host header (icon, title, switch, dock back, close), resizable, remembered. The row stays in the list as a dimmed "Floating" row with a dock-back button, so nothing disappears from the panel. A floating section has no fold chevron to use: lane V1 disables it, because folding applies to the panel column. Dragging the floating window to the panel's edge docks it back; the dock-back button returns it to its place in the order.
 - **Close.** Closing a section hides it. The dots menu in the panel header ("Sections") lists every section with its state, and Ctrl K has "Show <section>" for each, so a closed section is one click away. Closing a section never changes its On or Off value.
 - **Esc** closes the topmost floating section; the panel itself closes with its X, the rail "Side panel" button, or Ctrl K.
 
@@ -69,8 +69,9 @@ Owner, 2026-10-28: in the 3D view it is very hard to see whether the simulation 
 | Failed | warning-octagon, "Heat failed" | The reason in plain words | Details, Run again |
 | Not set | prohibit, "Interior is not set" | What is missing | Set interior |
 
+- The chip reports the **analysis**, not the overlay: EMC done with its switch Off still shows as done, and a stale result is never hidden by switching the overlay Off.
 - The same states apply to **EMC** ("EMC check is out of date") and any other analysis the 3D view shows; "Interior is not set" and similar missing inputs are states of the analysis that needs them.
-- **Priority** when several apply: Failed, Running, Out of date or Not set, Not run, Done. When everything is Done the chip stays, quiet, with the age ("Heat done 3 min ago"), so the answer to "was it run?" is always on screen.
+- **Priority** when several apply: Failed, Running, Not set, Out of date, Not run, Done. Not set comes before Out of date because nothing can run until the input exists. When everything is Done the chip stays, quiet, with the age ("Heat done 3 min ago"), so the answer to "was it run?" is always on screen.
 - **One owner:** each analysis has one status value (state, started, finished, the model revision it ran on, progress, error). "Out of date" is computed by comparing the model revision at the run with the current one, in one place. The chip, the Heat section header and Ctrl K read that value; nothing keeps its own copy.
 - States are words and an icon, never colour alone (warning and error colours support them). The chip is keyboard reachable and the action runs with Enter.
 - On a narrow canvas the chip shrinks to icon and the state word; the detail line moves to the tooltip.
@@ -94,7 +95,7 @@ Lane V3b (the 3D rail) is **built together with the 3D rework**, as one thread. 
 
 1. **Registry, status and top bar** (needs nothing from the redesign): the view-option registry, rule 4's test, the top-bar heat button removed, EMC fixed, and the simulation status chip with its single status value (section 4). This ships on today's UI.
 2. **Side panel** (today's panel helper; docking arrives with lane V1): the section column with fold, undock, close and the Sections menu; Inspector, Layers, Heat, Vents and fans, EMC, Door and Sizing as sections.
-3. **3D rail** (needs lane V3a, the rail core): the rail of the board, with the panels zone of section 4.
+3. **3D rail** (needs lane V3a, the rail core): the rail of the board, with the panels zone of section 5.
 
 ## 8. Honest limits
 
