@@ -43,9 +43,17 @@ const PARTS: &str = "parts.json";
 const SOURCES: &str = "sources.json";
 
 /// Largest of the three JSON members that is read, in bytes.
-const MAX_JSON_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_JSON_BYTES: u64 = 64 * 1024 * 1024;
 /// Largest single file that is read from a bundle.
 const MAX_FILE_BYTES: u64 = 512 * 1024 * 1024;
+/// Most that all the files of a bundle may add up to, in bytes.
+const MAX_TOTAL_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+/// Largest ratio of a member's size to its size in the ZIP that is accepted
+/// (members under 1 MiB are not checked). STEP and DXF text packs to a
+/// tenth or less; a member that packs far more than that is a bomb.
+const MAX_RATIO: u64 = 250;
+/// Members smaller than this are not checked for their ratio.
+const MIN_RATIO_SIZE: u64 = 1024 * 1024;
 /// Most entries a bundle may hold.
 const MAX_ENTRIES: usize = 100_000;
 
@@ -252,79 +260,85 @@ pub fn export_bundle(
     let mut zip = zip::ZipWriter::new(file);
     let json = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     // Files are mostly STEP text, which compresses well.
-    let stored = json;
-
-    let mut entries = Vec::new();
-    let mut kept_records = Vec::new();
-    let mut members: Vec<(usize, Vec<u8>)> = Vec::new();
-    if let Some(lib) = library {
-        for r in records {
-            let path = lib.path_of(&r);
-            match std::fs::read(&path) {
-                Ok(bytes) => {
-                    let index = entries.len() + 1;
-                    entries.push(FileEntry {
-                        index,
-                        sha256: hex(&Sha256::digest(&bytes)),
-                        bytes: bytes.len() as u64,
-                    });
-                    report.bytes += bytes.len() as u64;
-                    members.push((index, bytes));
-                    kept_records.push(r);
-                }
-                Err(e) => report.notes.push(format!(
-                    "{} of {} {} was left out: {}",
-                    r.file_name,
-                    r.manufacturer,
-                    r.order_number,
-                    crate::plain::plain_io_error(&e)
-                )),
-            }
-        }
-    }
-    report.parts = parts.len();
-    report.files = entries.len();
+    let stored = json.large_file(true);
 
     let files_shareable = opts.mode == BundleMode::Backup || opts.files_are_shareable;
-    let manifest = Manifest {
-        format: BUNDLE_FORMAT,
-        mode: opts.mode,
-        created: opts.today.clone(),
-        app: opts.app_version.clone(),
-        parts: parts.len(),
-        files_shareable,
-        files: entries,
-        needs,
-        notice: notice_for(opts.mode, !kept_records.is_empty()),
-    };
     let catalog_json = {
         let sub: Catalog = parts.iter().map(|p| (*p).clone()).collect();
         sub.to_json()
     };
+    let part_count = parts.len();
+    // One file at a time, so a backup never needs memory for the whole
+    // library: the file is read to check it and read again to write it, and
+    // the manifest, which needs every checksum, goes last.
     let write = |zip: &mut zip::ZipWriter<File>| -> Result<(), BundleError> {
-        let mut put = |name: &str, bytes: &[u8], opts: SimpleFileOptions| {
-            zip.start_file(name, opts).map_err(zip_err)?;
+        let mut entries = Vec::new();
+        let mut kept_records = Vec::new();
+        if let Some(lib) = library {
+            for r in records {
+                let path = lib.path_of(&r);
+                let (sha256, bytes) = match hash_file(&path) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        report.notes.push(format!(
+                            "{} of {} {} was left out: {}",
+                            r.file_name,
+                            r.manufacturer,
+                            r.order_number,
+                            crate::plain::plain_io_error(&e)
+                        ));
+                        continue;
+                    }
+                };
+                let index = entries.len() + 1;
+                zip.start_file(format!("files/{index:05}.bin"), stored)
+                    .map_err(zip_err)?;
+                let (again, copied) = copy_hashed(&path, zip).map_err(io_err(&path))?;
+                if again != sha256 || copied != bytes {
+                    return Err(BundleError::Library(format!(
+                        "{} changed while the bundle was being written; try again",
+                        path.display()
+                    )));
+                }
+                entries.push(FileEntry {
+                    index,
+                    sha256,
+                    bytes,
+                });
+                report.bytes += bytes;
+                kept_records.push(r);
+            }
+        }
+        report.parts = part_count;
+        report.files = entries.len();
+        let manifest = Manifest {
+            format: BUNDLE_FORMAT,
+            mode: opts.mode,
+            created: opts.today.clone(),
+            app: opts.app_version.clone(),
+            parts: part_count,
+            files_shareable,
+            files: entries,
+            needs,
+            notice: notice_for(opts.mode, !kept_records.is_empty()),
+        };
+        let mut put = |name: &str, bytes: &[u8]| {
+            zip.start_file(name, json).map_err(zip_err)?;
             zip.write_all(bytes).map_err(io_err(&tmp))
         };
-        put(
-            MANIFEST,
-            serde_json::to_string_pretty(&manifest)
-                .expect("manifest serializes")
-                .as_bytes(),
-            json,
-        )?;
-        put(PARTS, catalog_json.as_bytes(), json)?;
+        put(PARTS, catalog_json.as_bytes())?;
         put(
             SOURCES,
             serde_json::to_string_pretty(&kept_records)
                 .expect("records serialize")
                 .as_bytes(),
-            json,
         )?;
-        for (index, bytes) in &members {
-            put(&format!("files/{index:05}.bin"), bytes, stored)?;
-        }
-        Ok(())
+        put(
+            MANIFEST,
+            serde_json::to_string_pretty(&manifest)
+                .expect("manifest serializes")
+                .as_bytes(),
+        )
     };
     let written = write(&mut zip).and_then(|()| zip.finish().map(drop).map_err(zip_err));
     if let Err(e) = written {
@@ -336,6 +350,41 @@ pub fn export_bundle(
         return Err(io_err(out)(e));
     }
     Ok(report)
+}
+
+/// The SHA-256 and size of the file at `path`, read in chunks.
+fn hash_file(path: &Path) -> std::io::Result<(String, u64)> {
+    let mut file = File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 1 << 16];
+    let mut total = 0u64;
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+        total += n as u64;
+    }
+    Ok((hex(&hasher.finalize()), total))
+}
+
+/// Copies the file at `path` into `out` in chunks; returns its SHA-256 and size.
+fn copy_hashed(path: &Path, out: &mut impl Write) -> std::io::Result<(String, u64)> {
+    let mut file = File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 1 << 16];
+    let mut total = 0u64;
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+        out.write_all(&buf[..n])?;
+        total += n as u64;
+    }
+    Ok((hex(&hasher.finalize()), total))
 }
 
 /// A bundle opened for reading. Parts and records are in memory; files are
@@ -421,6 +470,29 @@ impl Bundle {
                 archive.len()
             )));
         }
+        // What the ZIP says it holds is checked before anything is read: a
+        // small file must not be able to unpack to gigabytes.
+        let mut total = 0u64;
+        for i in 0..archive.len() {
+            let entry = archive
+                .by_index_raw(i)
+                .map_err(|e| BundleError::Damaged(format!("entry {i}: {e}")))?;
+            let (size, packed) = (entry.size(), entry.compressed_size());
+            if size >= MIN_RATIO_SIZE && size / packed.max(1) > MAX_RATIO {
+                return Err(BundleError::Damaged(format!(
+                    "{} unpacks to {size} bytes from {packed}, which is not a real CAD file or list",
+                    entry.name()
+                )));
+            }
+            total = total.saturating_add(size);
+        }
+        if total > MAX_TOTAL_BYTES {
+            return Err(BundleError::Damaged(format!(
+                "the bundle unpacks to {} MB, more than the {} MB that are accepted",
+                total / (1024 * 1024),
+                MAX_TOTAL_BYTES / (1024 * 1024)
+            )));
+        }
         let manifest: Manifest =
             serde_json::from_slice(&read_member(&mut archive, MANIFEST, MAX_JSON_BYTES)?)
                 .map_err(|e| BundleError::NotBundle(format!("manifest.json: {e}")))?;
@@ -435,6 +507,17 @@ impl Bundle {
         let records: Vec<SourceRecord> =
             serde_json::from_slice(&read_member(&mut archive, SOURCES, MAX_JSON_BYTES)?)
                 .map_err(|e| BundleError::Damaged(format!("sources.json: {e}")))?;
+        let declared = manifest
+            .files
+            .iter()
+            .fold(0u64, |sum, f| sum.saturating_add(f.bytes));
+        if declared > MAX_TOTAL_BYTES {
+            return Err(BundleError::Damaged(format!(
+                "the manifest lists {} MB of files, more than the {} MB that are accepted",
+                declared / (1024 * 1024),
+                MAX_TOTAL_BYTES / (1024 * 1024)
+            )));
+        }
         if records.len() != manifest.files.len() {
             return Err(BundleError::Damaged(format!(
                 "{} file records but {} files listed",
@@ -964,6 +1047,110 @@ mod tests {
             "a file was written outside the library: {found:?}"
         );
         assert!(!dir2.path().join("evil.stp").exists());
+    }
+
+    fn add_member(path: &Path, name: &str, bytes: &[u8]) {
+        let mut z = zip::ZipArchive::new(File::open(path).unwrap()).unwrap();
+        let mut members = Vec::new();
+        for i in 0..z.len() {
+            let mut f = z.by_index(i).unwrap();
+            let mut data = Vec::new();
+            f.read_to_end(&mut data).unwrap();
+            members.push((f.name().to_owned(), data));
+        }
+        members.push((name.to_owned(), bytes.to_vec()));
+        let mut w = zip::ZipWriter::new(File::create(path).unwrap());
+        for (name, data) in members {
+            w.start_file(name, SimpleFileOptions::default()).unwrap();
+            w.write_all(&data).unwrap();
+        }
+        w.finish().unwrap();
+    }
+
+    #[test]
+    fn a_member_that_unpacks_to_far_more_than_it_weighs_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let b = bench();
+        let out = dir.path().join("bomb.kcpl");
+        export_bundle(
+            &b.catalog,
+            Some(&b.library),
+            &options(BundleMode::Backup, true, false),
+            &out,
+        )
+        .unwrap();
+        assert!(Bundle::open(&out).is_ok());
+        // 16 MiB of zeros packs to a few kilobytes.
+        add_member(&out, "files/00099.bin", &vec![0u8; 16 * 1024 * 1024]);
+        let Err(BundleError::Damaged(why)) = Bundle::open(&out) else {
+            panic!("a bomb was opened");
+        };
+        assert!(why.contains("files/00099.bin"), "{why}");
+    }
+
+    #[test]
+    fn a_manifest_that_lists_more_than_the_total_cap_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let b = bench();
+        let out = dir.path().join("big.kcpl");
+        export_bundle(
+            &b.catalog,
+            Some(&b.library),
+            &options(BundleMode::Backup, true, false),
+            &out,
+        )
+        .unwrap();
+        rewrite(&out, |name, bytes| {
+            if name != MANIFEST {
+                return bytes;
+            }
+            let mut v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            for f in v["files"].as_array_mut().unwrap() {
+                f["bytes"] = serde_json::json!(MAX_TOTAL_BYTES);
+            }
+            serde_json::to_vec(&v).unwrap()
+        });
+        let Err(BundleError::Damaged(why)) = Bundle::open(&out) else {
+            panic!("an oversized manifest was opened");
+        };
+        assert!(why.contains("more than"), "{why}");
+    }
+
+    #[test]
+    fn a_backup_is_written_one_file_at_a_time_and_a_vanished_file_is_noted() {
+        let dir = tempfile::tempdir().unwrap();
+        let b = bench();
+        let out = dir.path().join("b.kcpl");
+        let full = export_bundle(
+            &b.catalog,
+            Some(&b.library),
+            &options(BundleMode::Backup, true, false),
+            &out,
+        )
+        .unwrap();
+        assert!(full.files >= 1);
+        // The manifest is the last member, after every file.
+        let z = zip::ZipArchive::new(File::open(&out).unwrap()).unwrap();
+        let names: Vec<&str> = z.file_names().collect();
+        assert_eq!(names.last().copied(), Some(MANIFEST), "{names:?}");
+        // A file taken out of the library is left out with a note.
+        for r in b.library.records().unwrap() {
+            std::fs::remove_file(b.library.path_of(&r)).unwrap();
+        }
+        let again = export_bundle(
+            &b.catalog,
+            Some(&b.library),
+            &options(BundleMode::Backup, true, false),
+            &out,
+        )
+        .unwrap();
+        assert_eq!(again.files, 0);
+        assert!(
+            again.notes.iter().any(|n| n.contains("was left out")),
+            "{:?}",
+            again.notes
+        );
+        assert!(Bundle::open(&out).is_ok());
     }
 
     #[test]

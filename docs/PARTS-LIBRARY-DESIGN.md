@@ -518,10 +518,13 @@ and `import-library` do the same without the window.
   yours is kept as yours unless you choose to replace it.
 - Safety: a file is stored under a number, never under a path from the bundle,
   through `LocalLibrary::store`, which builds the path itself. Every file is
-  checked against its SHA-256; entry count, member sizes and the format number
-  are limited. Export and import run on a worker thread; a failed export leaves
+  checked against its SHA-256. Limits, checked when the bundle is opened and
+  before anything is stored: 100,000 entries, 512 MB per file, 64 MB per JSON
+  member, 8 GB for everything it unpacks to (also summed from the manifest),
+  and a member over 1 MB that unpacks to more than 250 times its size in the ZIP
+  is refused as not a real CAD file or list. The format number must not be newer. Export writes one file at a time (read to check it, read again to write it, the manifest last), so a backup needs no memory for the whole library. Export and import run on a worker thread; a failed export leaves
   no half-written file.
-- Not done: no merge of two edited versions of one part (the preview lists the
+- Not done: restoring many files rewrites the records file per file (slow for thousands of files; a `store_many` would fix it); no merge of two edited versions of one part (the preview lists the
   difference and you pick one), no signing of bundles.
 
 ## 4. Offline and no admin rights
