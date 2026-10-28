@@ -60,6 +60,7 @@ mod commissioning_viewer;
 mod commissioning_viewer_tests;
 mod compare;
 mod controller_import;
+mod count_words;
 mod designer;
 mod device_renumber;
 mod diagnostics;
@@ -109,6 +110,8 @@ mod heat_live;
 mod heat_live_tests;
 mod heat_openings;
 mod heat_openings_store;
+#[cfg(test)]
+mod heat_preview_tests;
 mod heat_probe;
 mod heat_progress;
 #[cfg(test)]
@@ -131,6 +134,7 @@ mod heat_whatif_tests;
 mod heat_wires;
 #[cfg(test)]
 mod heat_wires_tests;
+mod hoist_run;
 mod inspector;
 mod interop;
 mod kitting;
@@ -363,6 +367,8 @@ mod kitting_tests;
 mod learn_replay;
 #[cfg(test)]
 mod learn_tests;
+#[cfg(test)]
+mod lesson_claims_tests;
 #[cfg(test)]
 mod lesson_verify_cables;
 #[cfg(test)]
@@ -1809,6 +1815,7 @@ impl NovoApp {
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
+        self.hoist_window(&ctx);
         self.add_fault_window(&ctx);
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);
@@ -2888,8 +2895,16 @@ const ABOUT_NOTICES_URL: &str =
     "https://github.com/Herepiggypiggypiggy/kopercad/blob/main/THIRD_PARTY_NOTICES.txt";
 
 impl eframe::App for NovoApp {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        fit_window_to_screen(ui.ctx());
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        crate::dialogs::remember_owner(&*frame);
+        if crate::dialogs::take_native_dialog_ran() {
+            let ctx = ui.ctx();
+            ctx.request_repaint();
+            for ms in [50, 150, 400] {
+                ctx.request_repaint_after(std::time::Duration::from_millis(ms));
+            }
+        }
+        crate::display::track(ui.ctx());
         // The window's close button asks like File > Quit does.
         let ctx = ui.ctx().clone();
         if !self.quitting
@@ -4198,63 +4213,9 @@ fn elide_path(text: &str, file: &Path, keep: usize) -> String {
     text.replace(&full, &short)
 }
 
-/// Room the system keeps for the taskbar and the window's title bar, in
-/// points, when a window is made to fit the screen.
-const SCREEN_MARGIN: egui::Vec2 = egui::vec2(0.0, 80.0);
-
-/// The size a window of `inner` gets on a screen of `monitor`, or `None`
-/// when it already fits.
-fn fitted_size(inner: egui::Vec2, monitor: egui::Vec2) -> Option<egui::Vec2> {
-    let room = (monitor - SCREEN_MARGIN).max(egui::Vec2::from(crate::MIN_WINDOW));
-    let fitted = inner.min(room);
-    (fitted != inner).then_some(fitted)
-}
-
-/// Whether the window was left maximized or full screen by the user.
-fn user_sized(maximized: Option<bool>, fullscreen: Option<bool>) -> bool {
-    maximized == Some(true) || fullscreen == Some(true)
-}
-
-/// Once, on the first frame: the default window is 1280 x 800, which on a
-/// 1366 x 768 screen puts the status bar below the edge. A window larger
-/// than the screen is made to fit; one that fits is left alone.
-fn fit_window_to_screen(ctx: &egui::Context) {
-    let id = egui::Id::new("window_fitted");
-    if ctx.data(|d| d.get_temp::<bool>(id)).unwrap_or(false) {
-        return;
-    }
-    let (inner, monitor, maximized, fullscreen) = ctx.input(|i| {
-        let v = i.viewport();
-        (
-            v.inner_rect.map(|r| r.size()),
-            v.monitor_size,
-            v.maximized,
-            v.fullscreen,
-        )
-    });
-    let (Some(inner), Some(monitor)) = (inner, monitor) else {
-        return;
-    };
-    ctx.data_mut(|d| d.insert_temp(id, true));
-    // A restored maximized or full screen window already fills the screen;
-    // resizing it would undo that on every launch.
-    if user_sized(maximized, fullscreen) {
-        return;
-    }
-    if let Some(size) = fitted_size(inner, monitor) {
-        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
-    }
-}
-
 #[cfg(test)]
 mod fit_tests {
     use super::*;
-
-    #[test]
-    fn a_window_taller_than_a_small_screen_shrinks_to_it() {
-        let got = fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(1366.0, 768.0));
-        assert_eq!(got, Some(egui::vec2(1280.0, 688.0)));
-    }
 
     #[test]
     fn a_long_path_in_a_toast_is_cut_to_folder_and_name() {
@@ -4271,37 +4232,5 @@ mod fit_tests {
             "Saved /tmp/a.pdf"
         );
         assert_eq!(elide_path("Saved", file, 36), "Saved");
-    }
-
-    #[test]
-    fn a_window_that_fits_is_left_alone() {
-        assert_eq!(
-            fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(1920.0, 1080.0)),
-            None
-        );
-    }
-
-    #[test]
-    fn a_maximized_or_full_screen_window_is_never_resized() {
-        assert!(user_sized(Some(true), Some(false)));
-        assert!(user_sized(Some(false), Some(true)));
-        assert!(!user_sized(Some(false), Some(false)));
-        assert!(!user_sized(None, None));
-    }
-
-    #[test]
-    fn a_tiny_screen_never_goes_below_the_minimum() {
-        let got = fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(500.0, 400.0));
-        assert_eq!(got, Some(egui::vec2(680.0, 320.0)));
-    }
-
-    #[test]
-    fn a_1366_by_768_laptop_at_every_scale_keeps_the_window_on_the_screen() {
-        // Points offered at 100, 125, 150 and 200 %.
-        for scale in [1.0_f32, 1.25, 1.5, 2.0] {
-            let monitor = egui::vec2(1366.0, 768.0) / scale;
-            let got = fitted_size(egui::vec2(1280.0, 800.0), monitor).unwrap();
-            assert!(got.x <= monitor.x && got.y <= monitor.y, "{scale}: {got:?}");
-        }
     }
 }

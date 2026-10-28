@@ -448,6 +448,12 @@ pub(crate) fn save_parts_to_user_catalog(path: &Path, parts: &[CatalogPart]) -> 
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
+/// The ETIM release the user installed, if any, for codes in BMEcat files.
+pub(crate) fn installed_etim() -> Option<std::sync::Arc<novo_parts::EtimModel>> {
+    let dir = novo_parts::EtimModel::dir_for(None)?;
+    novo_parts::EtimModel::load_installed(&dir).map(std::sync::Arc::new)
+}
+
 /// What was checked about a file before it was imported for a part.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Checked {
@@ -518,6 +524,9 @@ pub(crate) fn import_path(
         today,
     )
     .with_step_measurer(novo_interop::part3d::measure_step);
+    if let Some(model) = installed_etim() {
+        job = job.with_etim(model);
+    }
     let outcome = match job.import_file(path, flow).clone() {
         ImportState::Done(outcome) => outcome,
         ImportState::Failed(e) => return Err(e),

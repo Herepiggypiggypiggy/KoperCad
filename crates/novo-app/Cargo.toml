@@ -25,6 +25,8 @@ novo-heatview.workspace = true
 novo-cfd.workspace = true
 novo-thermal.workspace = true
 novo-symbols.workspace = true
+novo-drive.workspace = true
+novo-machine.workspace = true
 novo-editor.workspace = true
 novo-emc.workspace = true
 novo-workflow.workspace = true
@@ -72,3 +74,7 @@ FileDescription = "KoperCAD electrical CAD"
 
 [lints]
 workspace = true
+
+# Windows only: the main window as the owner of file dialogs (KC-11).
+[target.'cfg(windows)'.dependencies]
+raw-window-handle = "0.6"
