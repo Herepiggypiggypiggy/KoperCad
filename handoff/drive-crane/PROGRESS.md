@@ -1,1 +1,2 @@
 2026-10-28 08:40 UTC L0: registered novo-drive and novo-machine, skeletons and tests, CLAUDE.md table, plan copied to docs/design.
+2026-10-28 L2a: two-speed pole-change motor (Kloss fit), contactor sequencer, rectifier-fed spring brake, hoist gravity with direction-dependent losses, stiction shaft, `TwoSpeedHoistUnit`, `InputError` validation (poles 0, ratio or efficiency 0, negative length). 23 hand-calculated tests in `crates/novo-drive/tests/motor_and_load.rs`. Not in this PR: travel friction and inertia (L2a part 2), current and thermal (L2b), UI.
