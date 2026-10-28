@@ -83,6 +83,8 @@ For each of 100%, 125%, 150%, 200% (and 175% if offered):
 - K3 Reports > Export work cards (PDF): print at 100% to "Microsoft Print to PDF" (and the real printer only if allowed). Measure the printed 100 mm ruler on the card with a real ruler if printed on paper (Tadjiro measures); on PDF compare in the reader at 100%.
 - K4 Save a file with spaces and a non-ASCII character in the name (for example `Tést ø 1.pdf`): exports without error.
 
+**K5. Unsaved work and a failing recovery folder**: open a saved project, change something, do not save. Fill the disk or lock the recovery folder (`%LOCALAPPDATA%\KoperCAD\recovery`), then close the window and answer nothing. Expected: a message "has changes that are not saved, and KoperCAD could not keep them for the next start (reason)" with "Save a copy somewhere else now?"; Yes opens a Save dialog; a failing save names the file and reason and asks again. 📷 the message. Restore the disk or folder afterwards.
+
 **L. Ask Claude with a real key** (OPTIONAL; Tadjiro decides)
 - L1 Tadjiro types his own key into Ask Claude settings himself. You look away: no screenshots until the field is closed.
 - L2 Ask a plain question, then an action ("number the wires on page 1"). 📷 the plan/question cards. Every action must be undoable (Ctrl+Z). Try offline-like failure only if Tadjiro allows (wrong key text). Record readable messages. This and "Check for updates" are the only network uses.
