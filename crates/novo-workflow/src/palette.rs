@@ -59,6 +59,8 @@ pub enum Target {
     Lesson(String),
     /// Place a macro (a ready-made circuit), by its name.
     Macro(String),
+    /// Run a command an add-on added, by its full id (`addon.<add-on>.<name>`).
+    Addon(String),
 }
 
 /// What kind of thing a row is, shown as a label in front of it.
@@ -134,6 +136,23 @@ pub struct Sources<'a> {
     pub lessons: &'a [LessonEntry],
     /// The macros (ready-made circuits) on offer.
     pub macros: &'a [MacroEntry],
+    /// The commands of running add-ons. They are runtime rows, not part of [`COMMANDS`].
+    pub addons: &'a [AddonEntry],
+}
+
+/// A command from an add-on as the field searches it. The app builds these from its add-on
+/// registry, so this crate needs no add-on engine.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddonEntry {
+    /// `addon.<add-on id>.<name>`.
+    pub id: String,
+    /// The add-on's name, shown after the label.
+    pub addon: String,
+    pub label: String,
+    /// The long sentence, shown in the row when the add-on gave one.
+    pub description: String,
+    /// Keywords, lower case.
+    pub words: String,
 }
 
 /// A macro as the field searches it. The app builds these from its macro
@@ -211,6 +230,8 @@ const RECENT_MIN_MATCH: i32 = 250;
 
 /// Group heading of the recent rows of an empty field.
 pub const RECENT_GROUP: &str = "Recent";
+/// Group heading of the add-on commands in the empty field.
+pub const ADDONS_GROUP: &str = "Add-ons";
 /// Group heading of the favourites in place mode.
 pub const FAVOURITES_GROUP: &str = "Favourites";
 
@@ -312,6 +333,7 @@ impl Palette {
                 }
             }
             macro_rows(query, sources.macros, MACRO_BONUS, &mut rows);
+            addon_rows(query, sources.addons, &mut rows);
         }
         if let Some(library) = sources.library {
             for hit in self.symbols.search(library, query).into_iter().take(10) {
@@ -428,6 +450,9 @@ impl Palette {
             if menus::place(info).is_none() && info.id != "tool.repeat" {
                 menu_row(&mut rows, info, KEYS_GROUP, "", sources);
             }
+        }
+        for a in sources.addons {
+            rows.push(addon_row(a, ADDONS_GROUP, 0));
         }
         rows
     }
@@ -756,6 +781,51 @@ fn macro_rows(query: &str, macros: &[MacroEntry], bonus: i32, rows: &mut Vec<Row
             disabled: None,
             score,
         });
+    }
+}
+
+/// Commands of add-ons by label, keyword or add-on name. Only running add-ons are passed in, so
+/// a disabled or removed add-on is never found.
+fn addon_rows(query: &str, addons: &[AddonEntry], rows: &mut Vec<Row>) {
+    let lower = query.to_lowercase();
+    if lower.chars().count() < 2 {
+        return;
+    }
+    for a in addons {
+        let by_label = fuzzy::score(&lower, &a.label).filter(|s| *s >= RECENT_MIN_MATCH);
+        let by_addon = fuzzy::score(&lower, &a.addon)
+            .filter(|s| *s >= RECENT_MIN_MATCH)
+            .map(|s| s - 100);
+        let words: Vec<&str> = lower.split_whitespace().collect();
+        let by_words = (!words.is_empty()
+            && words.iter().all(|w| {
+                a.words.contains(w)
+                    || a.label.to_lowercase().contains(w)
+                    || a.addon.to_lowercase().contains(w)
+            }))
+        .then_some(RECENT_MIN_MATCH);
+        let Some(score) = by_label.or(by_addon).or(by_words) else {
+            continue;
+        };
+        rows.push(addon_row(a, "", score));
+    }
+}
+
+fn addon_row(a: &AddonEntry, group: &'static str, score: i32) -> Row {
+    Row {
+        target: Target::Addon(a.id.clone()),
+        kind: Kind::Command,
+        label: a.label.clone(),
+        detail: if a.description.is_empty() {
+            format!("Add-on: {}", a.addon)
+        } else {
+            format!("Add-on: {} · {}", a.addon, a.description)
+        },
+        group,
+        completion: None,
+        shortcut: None,
+        disabled: None,
+        score,
     }
 }
 

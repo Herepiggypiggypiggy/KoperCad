@@ -42,11 +42,13 @@ use novo_symbols::Library;
 use serde_json::{Value, json};
 use thiserror::Error;
 
+mod addons;
 mod export;
 #[cfg(feature = "python")]
 mod python;
 mod revisions;
 
+pub use addons::{addons_install, addons_json, addons_remove, addons_set_enabled};
 pub use export::{
     ReportFormat, generate, is_project_path, report_bytes, report_bytes_in, report_ids,
     report_json, report_translator, write_export,
@@ -87,6 +89,11 @@ pub enum ScriptError {
     NothingCreated(String),
     #[error("refusing to write an export over {}: it is a project file", .0.display())]
     ProjectFileTarget(PathBuf),
+    #[error(
+        "{} uses a name Windows reserves for devices (CON, PRN, AUX, NUL, COM1 to COM9, LPT1 to LPT9); pick another file name",
+        .0.display()
+    )]
+    ReservedName(PathBuf),
     #[error("cannot write {}: {source}", path.display())]
     Io {
         path: PathBuf,
@@ -94,6 +101,9 @@ pub enum ScriptError {
     },
     #[error("export failed: {0}")]
     Export(String),
+    /// The add-on manager refused (the text says why, in the program's words).
+    #[error("{0}")]
+    Addons(String),
     #[error("the symbol library did not load: {0}")]
     Library(String),
     #[error("no revision `{0}` (use an index from `revisions()`, or `now`)")]

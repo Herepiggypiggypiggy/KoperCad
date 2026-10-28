@@ -279,7 +279,7 @@ impl NovoApp {
         let names: Vec<String> = hoists.iter().map(|h| h.id.clone()).collect();
         // The Live card sits at the left edge and takes the buttons of the drawing: the window
         // opens at the right edge (the constraint pulls it inside) so neither covers the other.
-        super::panel::dialog(ctx, "Hoist run", [560.0, 0.0])
+        super::panel::dialog(ctx, "Hoist run", [560.0, 440.0])
             .default_pos([ctx.content_rect().max.x, 60.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {

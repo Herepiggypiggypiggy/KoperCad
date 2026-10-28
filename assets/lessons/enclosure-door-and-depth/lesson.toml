@@ -96,14 +96,14 @@ title = "Apply the starting values"
 title_nl = "Pas de beginwaarden toe"
 text = """
 Leave the numbers as they are and click **Apply**. The section now says "Every placed device fits behind the door (230 mm usable depth)", and the {tip:door-swing} line "The open door needs 600 mm in front".
-Below it a top view draws the plate, the devices as deep as their parts and the open door. Apply is greyed out when nothing has changed.
+Below it a top view draws the plate, the devices as deep as their parts and the open door. Apply is greyed out when nothing has changed; if you already applied these values the step is ticked for you.
 """
 text_nl = """
 Laat de getallen staan en klik op **Apply**. Het onderdeel zegt nu "Every placed device fits behind the door (230 mm usable depth)" en bij de {tip:door-swing}-regel "The open door needs 600 mm in front".
-Eronder tekent een bovenaanzicht de plaat, de componenten zo diep als hun artikelen en de open deur. Apply is grijs als er niets is veranderd.
+Eronder tekent een bovenaanzicht de plaat, de componenten zo diep als hun artikelen en de open deur. Apply is grijs als er niets is veranderd; heb je deze waarden al toegepast, dan is de stap voor je afgevinkt.
 """
 point = { ui = "cabinet.door.apply" }
-expect = { clicked = "cabinet.door.apply" }
+expect = { any = [ { clicked = "cabinet.door.apply" }, { enclosure_depth = 250.0 } ] }
 solve = [ { ui_click = "cabinet.door.apply" } ]
 
 [[step]]
@@ -121,7 +121,7 @@ Dubbelklik op {ui:cabinet.door.depth}, typ **100** en druk op Enter en klik dan 
 De contactor **-K1**, de zekering **-F2** (beide 90 mm diep) en de transformator **-T1** (85 mm) zijn dieper dan dat.
 """
 point = { ui = "cabinet.door.apply" }
-expect = { clicked = "cabinet.door.apply" }
+expect = { any = [ { clicked = "cabinet.door.apply" }, { enclosure_depth = 100.0 } ] }
 solve = [
   { ui_click = "cabinet.door.depth" },
   { type_text = "100" },

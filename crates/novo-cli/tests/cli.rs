@@ -445,6 +445,15 @@ fn export_reports_as_excel_and_csv() {
     assert!(!run.out.starts_with('\u{feff}'), "no BOM on stdout");
     assert!(run.out.contains("'-K1"), "{}", run.out);
 
+    // `--plain-text` leaves tags as they are, for programs that read the CSV.
+    let run = novo(&["export", "devices", s(&path), "--plain-text"]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(
+        run.out.contains("\n-K1,") && !run.out.contains("'-K1"),
+        "{}",
+        run.out
+    );
+
     let csv = dir.path().join("bom.csv");
     let run = novo(&["export", "bom", s(&path), "-o", s(&csv), "--delimiter", ";"]);
     assert_eq!(run.code, exit::OK, "{}", run.err);
@@ -1164,4 +1173,56 @@ fn manual_writes_the_site_with_the_pictures_it_is_given() {
     // A missing image folder is a read error, not a half-written manual.
     let bad = novo(&["manual", out_arg, "--images", "/no/such/folder"]);
     assert_eq!(bad.code, exit::READ);
+}
+
+#[test]
+fn calc_accepts_a_file_with_a_byte_order_mark() {
+    let dir = tempfile::tempdir().unwrap();
+    let sample =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/protection-sample.json");
+    let mut bytes = vec![0xEF, 0xBB, 0xBF];
+    bytes.extend(std::fs::read(&sample).unwrap());
+    let with_bom = dir.path().join("bom.json");
+    std::fs::write(&with_bom, bytes).unwrap();
+    let plain = novo(&["calc", s(&sample)]);
+    let r = novo(&["calc", s(&with_bom)]);
+    assert!(!r.err.contains("not valid JSON"), "{}", r.err);
+    assert_eq!((r.code, r.out), (plain.code, plain.out));
+}
+
+#[test]
+fn export_to_a_device_name_is_refused_at_once_for_every_spelling() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    for name in ["CON", "con", "CON.pdf", "NUL", "CON.csv", "COM1.csv"] {
+        let out = dir.path().join(name);
+        for kind in ["pdf", "toc", "json"] {
+            // A report file type is checked before the name.
+            if kind == "toc" && !name.ends_with(".csv") {
+                continue;
+            }
+            let r = novo(&["export", kind, s(&path), "-o", s(&out)]);
+            assert_eq!(r.code, exit::WRITE, "{kind} {name}: {}", r.err);
+            assert!(r.err.contains("reserves for devices"), "{}", r.err);
+        }
+    }
+    assert!(!dir.path().join("CON").exists());
+}
+
+#[test]
+fn a_damaged_page_is_described_in_words_not_by_sqlite() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    // Make quick_check fail while the file still opens: point an index at
+    // a page that is not an index.
+    let mut bytes = std::fs::read(&path).unwrap();
+    let pages = bytes.len() / 4096;
+    for page in 1..pages {
+        bytes[page * 4096] = 0xFF;
+    }
+    std::fs::write(&path, bytes).unwrap();
+    let r = novo(&["info", s(&path)]);
+    assert_eq!(r.code, exit::READ, "{}", r.err);
+    assert!(!r.err.contains("btree"), "{}", r.err);
+    assert!(!r.err.contains("***"), "{}", r.err);
 }

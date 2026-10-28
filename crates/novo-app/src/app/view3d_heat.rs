@@ -8,6 +8,7 @@ use novo_theme::tokens as t;
 
 use super::heat::{self, HeatState};
 use super::heat_settings::{LEVELS, MODELS};
+use super::heat_status::SimStatus;
 
 /// Margin from the view's corner, in points.
 const MARGIN: f32 = 12.0;
@@ -118,6 +119,15 @@ pub(super) fn show(
     .above_card()
     .scroll_bar_always()
     .show(ctx, |ui| {
+        // The same state the Cabinet strip reads: progress, stage, failure.
+        let status = state.sim_status();
+        ui.label(egui::RichText::new(status.text()).small().strong().color(
+            if matches!(status, SimStatus::Failed(_) | SimStatus::OutOfDate) {
+                t::WARNING
+            } else {
+                t::TEXT_MUTED
+            },
+        ));
         let (text, warn) = phase_line(state.running(), state.solution().is_some(), stale);
         ui.label(egui::RichText::new(text).small().color(if warn {
             t::WARNING

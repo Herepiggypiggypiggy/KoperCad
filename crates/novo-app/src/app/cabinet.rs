@@ -239,6 +239,8 @@ pub(super) enum Ask {
     SetPanelValue(super::cabinet_panel::PanelEdit),
     /// Put a placed device on another surface of the cabinet (plate, door, ...).
     SetSurface(u64, String),
+    /// Say where a device is mounted: the cabinet, its door or the field.
+    SetSite(u64, novo_layout::site::Site),
     /// The size of a surface other than the plate (`None`: planning values).
     SetSurfaceSize(
         StructureId,
@@ -1640,8 +1642,8 @@ impl NovoApp {
                             ui.weak("Every device is placed");
                         }
                     });
-                cabinet_bar::note_rect(
-                    ui.ctx(),
+                cabinet_bar::note_rect_in(
+                    ui,
                     "cabinet.unplaced",
                     "Unplaced",
                     unplaced_panel.response.rect,
@@ -1802,7 +1804,10 @@ impl NovoApp {
                     let now_key = structure.map_or(0, |s| {
                         super::heat_sweep::key_of(project, s, ambient, &h.settings, &fans)
                     });
-                    let at = ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0);
+                    let at = super::panel::right_of_left_card(
+                        ui.ctx(),
+                        ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                    );
                     match self.cabinet.heat.advice.show(ui.ctx(), 1, now_key, at) {
                         Some(super::heat_sweep::Ask::Again) => self.cabinet.heat.advice.request(),
                         Some(super::heat_sweep::Ask::Add(c)) => ask = Some(Ask::CoolingPair(c)),
@@ -1814,7 +1819,10 @@ impl NovoApp {
                     self.cabinet.heat.layout.show(
                         ui.ctx(),
                         now_key,
-                        ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                        super::panel::right_of_left_card(
+                            ui.ctx(),
+                            ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                        ),
                     )
                 {
                     ask = Some(Ask::CoolerLayout(s, moves));
@@ -1854,13 +1862,7 @@ impl NovoApp {
                 self.cabinet.view.glide_secs =
                     super::motion::glide_secs(self.settings.reduce_motion);
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
-                cabinet_bar::note_rect(
-                    ui.ctx(),
-                    "cabinet.canvas",
-                    "Plate",
-                    out.response.rect,
-                    false,
-                );
+                cabinet_bar::note_rect_in(ui, "cabinet.canvas", "Plate", out.response.rect, false);
                 self.cabinet.heat.layout.paint(
                     &ui.painter_at(out.response.rect),
                     out.response.rect,
@@ -2616,6 +2618,9 @@ impl NovoApp {
             }
         }
 
+        self.sizing.left_out = structure
+            .map(|s| novo_layout::sizing_model::left_out(project, s))
+            .unwrap_or_default();
         let sizing_chip = self.learn.chip("sizing");
         let rails_chip = self.learn.chip("rails");
         let sizing_lesson = super::sizing::show_window(
@@ -3047,7 +3052,7 @@ impl NovoApp {
                 super::heat_sweep::add_pair(&mut self.cabinet.heat.settings, &c);
                 self.sync_openings_now();
                 // The 3D view opens with the list showing the pair.
-                self.view3d.controls.heat_panel = true;
+                self.cabinet.heat.on = true;
                 self.cabinet
                     .heat
                     .advice
@@ -3130,6 +3135,11 @@ impl NovoApp {
                     Ok(None) => {}
                     Err(e) => self.message(Level::Warning, e.to_string()),
                 }
+            }
+            Ask::SetSite(device, site) => {
+                self.cabinet_edit("Set mounting site", move |tx| {
+                    super::cabinet_surface_move::set_site(tx, device, site)
+                });
             }
             Ask::SetSurface(device, surface) => {
                 let Some(structure) = structure else {

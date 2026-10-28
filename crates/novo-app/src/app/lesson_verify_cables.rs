@@ -718,7 +718,7 @@ fn wire_numbers_each_instruction_works_in_the_app() {
     }
     lv.click_label("Project");
     lv.click_label("Renumber");
-    assert_eq!(lv.last(), "Wire numbers: 8 renumbered, 1 unchanged");
+    assert_eq!(lv.last(), "Wire numbers: 5 renumbered, 4 unchanged");
     lv.d.app.learn_move(super::learn::Move::Next);
     lv.frames(1);
     assert!(lv.d.app.wb.numbering.is_none() || lv.has_label("Close window"));

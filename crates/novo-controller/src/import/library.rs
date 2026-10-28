@@ -76,6 +76,9 @@ pub fn finish(id: &str, proposal: &mut Proposal) {
         return;
     };
     proposal.profile.kind = e.kind.to_owned();
+    proposal
+        .warnings
+        .retain(|w| !w.message.starts_with("Controller kind not stated"));
     if e.kind == "radio" {
         for c in proposal
             .profile

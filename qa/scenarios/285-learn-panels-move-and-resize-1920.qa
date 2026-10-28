@@ -1,0 +1,41 @@
+@title Learn panels at 1920x1080: the window resizes and moves, the card moves, both stay usable
+@area Learn
+@sizes 1920x1080
+# Same walk as 283 at the large size: resize from the bottom right corner, move by the title bar, move the card by its body.
+click_text "Learn…"
+wait 15
+drag 1634 978 1400 800
+wait 10
+shot 01-window-smaller
+check_layout
+drag 600 118 500 158
+wait 10
+shot 02-window-moved
+check_layout
+click_text "Start" #1
+wait 30
+mouse_down 1750 850
+move 1685 805
+wait 2
+move 1620 760
+wait 2
+move 1555 715
+wait 2
+move 1490 670
+wait 2
+move 1425 625
+wait 2
+move 1360 580
+wait 2
+move 1295 535
+wait 2
+move 1230 490
+wait 2
+move 1165 445
+wait 2
+move 1100 400
+wait 2
+mouse_up 1100 400
+wait 10
+shot 03-card-moved
+check_layout

@@ -122,6 +122,9 @@ pub fn xlsx_bytes(reports: &[&ReportOutput]) -> Result<Vec<u8>, ExportError> {
             }
             row += 1;
         }
+        if let Some(note) = trailing_note(report) {
+            sheet.write_string(row, 0, excel_text(note))?;
+        }
         for (c, chars) in widths.into_iter().enumerate() {
             sheet.set_column_width(col(c)?, (chars + 2).clamp(6, 60) as f64)?;
         }
@@ -148,19 +151,42 @@ pub fn save_xlsx(reports: &[&ReportOutput], path: impl AsRef<Path>) -> Result<()
     Ok(written?)
 }
 
+/// The sentence a one-section report keeps under its table in a file
+/// export. Several sections carry their titles above each table; a single
+/// table starts with its header row (spreadsheets and import filters want
+/// that), so a title that says something the columns do not, such as the
+/// wire list's "supply and PE leads: see Wire production", goes below it.
+fn trailing_note(report: &ReportOutput) -> Option<&str> {
+    match report.sections.as_slice() {
+        [only] if !only.title.is_empty() && only.title != report.title => Some(&only.title),
+        _ => None,
+    }
+}
+
 /// Excel's limit on the characters in one cell.
 const EXCEL_CELL_CHARS: usize = 32_767;
 
-/// Text as Excel takes it: cut to the cell limit with a trailing `…`, so
-/// an oversized cell never blocks the export.
+/// Text as Excel takes it: cut to the cell limit so an oversized cell never
+/// blocks the export, and the cut says so at its end, with how much is
+/// missing (the CSV export keeps everything).
 fn excel_text(text: &str) -> String {
-    if text.chars().count() <= EXCEL_CELL_CHARS {
-        text.to_owned()
-    } else {
-        let mut cut: String = text.chars().take(EXCEL_CELL_CHARS - 1).collect();
-        cut.push('…');
-        cut
+    let total = text.chars().count();
+    if total <= EXCEL_CELL_CHARS {
+        return text.to_owned();
     }
+    // The notice counts the missing characters, which depend on its own
+    // length: reserve room for the longest form (a ten digit count).
+    let reserve = cut_notice(usize::MAX).chars().count();
+    let keep = EXCEL_CELL_CHARS - reserve;
+    let mut cut: String = text.chars().take(keep).collect();
+    cut.push_str(&cut_notice(total - keep));
+    cut
+}
+
+fn cut_notice(missing: usize) -> String {
+    format!(
+        "… [cut: {missing} more characters, Excel cells hold {EXCEL_CELL_CHARS}; export CSV for all]"
+    )
 }
 
 fn col(index: usize) -> Result<u16, XlsxError> {
@@ -249,7 +275,8 @@ fn csv_section(section: &Section, options: &CsvOptions, out: &mut String) {
 }
 
 /// One report as CSV (RFC 4180, CRLF line ends). With several sections each
-/// starts with its title on a line of its own, after a blank line.
+/// starts with its title on a line of its own, after a blank line. A single
+/// table with an explanatory title gets it on a line after the table.
 pub fn to_csv(report: &ReportOutput, options: &CsvOptions) -> String {
     let mut out = String::new();
     if options.bom {
@@ -270,12 +297,36 @@ pub fn to_csv(report: &ReportOutput, options: &CsvOptions) -> String {
         }
         csv_section(section, options, &mut out);
     }
+    if let Some(note) = trailing_note(report) {
+        out.push_str("\r\n");
+        csv_line([csv_text(note, options)], options, &mut out);
+    }
     out
 }
 
 #[cfg(test)]
 mod tests {
-    use super::sheet_name;
+    use super::{EXCEL_CELL_CHARS, excel_text, sheet_name};
+
+    #[test]
+    fn an_oversized_cell_is_cut_and_says_how_much_is_missing() {
+        let fits = "a".repeat(EXCEL_CELL_CHARS);
+        assert_eq!(excel_text(&fits), fits);
+
+        let long = "b".repeat(EXCEL_CELL_CHARS + 1000);
+        let cut = excel_text(&long);
+        assert!(cut.chars().count() <= EXCEL_CELL_CHARS);
+        let tail = cut.trim_start_matches('b');
+        assert!(tail.starts_with("… [cut: "), "{tail}");
+        let kept = cut.len() - tail.len();
+        let missing: usize = tail["… [cut: ".len()..]
+            .split(' ')
+            .next()
+            .and_then(|n| n.parse().ok())
+            .expect("a count");
+        assert_eq!(kept + missing, long.len());
+        assert!(tail.contains("export CSV for all"));
+    }
 
     #[test]
     fn sheet_names_excel_accepts() {

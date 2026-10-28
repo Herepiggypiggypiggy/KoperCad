@@ -43,9 +43,14 @@ pub(super) fn label(p: &Progress, secs: f64) -> String {
     format!("{} · it {} · {secs:.0} s", p.fidelity.label(), p.iteration)
 }
 
-/// Before the first iteration reports: the mesh and flow model are being built.
-pub(super) fn preparing_label(secs: f64) -> String {
-    format!("meshing and setting up · {secs:.0} s")
+/// Before the first iteration reports: the solver names the stage it is in
+/// (planning the grid, meshing, building the flow model).
+pub(super) fn preparing_label(phase: &str, secs: f64) -> String {
+    if phase.is_empty() {
+        format!("setting up · {secs:.0} s")
+    } else {
+        format!("{} · {secs:.0} s", phase.to_lowercase())
+    }
 }
 
 /// Points of the sparkline in a `w` by `h` box: oldest left, lowest
