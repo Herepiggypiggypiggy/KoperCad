@@ -393,6 +393,7 @@ fn draw_card(
         }
     });
     effects_row(ui, ctl, &id);
+    ui.weak("Scroll for the signals, bindings and checks");
     ui.separator();
     signals_block(ui, ctl, &id, project);
     ui.separator();
