@@ -368,17 +368,8 @@ impl NovoApp {
             .collect();
         none.sort_by(|a, b| novo_core::natural_cmp(&a.tag.to_string(), &b.tag.to_string()));
         let none: Vec<String> = none.iter().map(|d| d.tag.to_string()).collect();
-        if rows.is_empty() {
-            let why = if none.is_empty() {
-                "Every device already has a part".to_owned()
-            } else {
-                format!(
-                    "No catalog part fits {} device(s): {}",
-                    none.len(),
-                    tag_list(&none)
-                )
-            };
-            self.message(Level::Info, why);
+        if rows.is_empty() && none.is_empty() {
+            self.message(Level::Info, "Every device already has a part");
             return;
         }
         self.wb.auto_assign = Some(AutoAssignPreview { rows, none });
@@ -424,13 +415,16 @@ impl NovoApp {
                  sure are ticked; a part of another kind is never offered.",
             );
             ui.add_space(4.0);
+            if preview.rows.is_empty() {
+                ui.label("No part in the catalog fits any of the devices without a part.");
+            }
             ui.horizontal(|ui| {
-                if ui.small_button("Tick sure parts").clicked() {
+                if !preview.rows.is_empty() && ui.small_button("Tick sure parts").clicked() {
                     for row in &mut preview.rows {
                         row.chosen = best_sure(row);
                     }
                 }
-                if ui.small_button("Untick all").clicked() {
+                if !preview.rows.is_empty() && ui.small_button("Untick all").clicked() {
                     for row in &mut preview.rows {
                         row.chosen = None;
                     }
@@ -507,7 +501,15 @@ impl NovoApp {
                     let text = format!("Assign {n} part{}", if n == 1 { "" } else { "s" });
                     go = novo_theme::widgets::primary_button(ui, &text).clicked();
                 });
-                cancel = novo_theme::widgets::ghost_button(ui, "Cancel").clicked();
+                cancel = novo_theme::widgets::ghost_button(
+                    ui,
+                    if preview.rows.is_empty() {
+                        "Close"
+                    } else {
+                        "Cancel"
+                    },
+                )
+                .clicked();
             });
         });
         if go {
@@ -637,7 +639,7 @@ mod tests {
     }
 
     #[test]
-    fn a_catalog_with_nothing_of_the_right_kind_opens_no_dialog() {
+    fn a_catalog_with_nothing_of_the_right_kind_says_so_and_changes_nothing() {
         use novo_core::{Pin, Placement, Point, SymbolRole};
         let (_dir, mut d) = drive_with_devices();
         let page = d
@@ -675,7 +677,14 @@ mod tests {
         psu.description = "Power supply 24 V DC, 5 A".into();
         catalog.upsert(psu);
         d.app.start_auto_assign_with(&catalog);
-        assert!(d.app.wb.auto_assign.is_none());
+        // The dialog opens with no rows and names the devices that fit nothing.
+        let preview = d.app.wb.auto_assign.as_ref().expect("the dialog explains");
+        assert!(preview.rows.is_empty());
+        assert!(
+            preview.none.iter().any(|t| t == "-T1"),
+            "{:?}",
+            preview.none
+        );
         let project = d.app.backend.document().unwrap().project();
         assert!(project.devices().all(|dev| dev.parts.is_empty()));
     }
