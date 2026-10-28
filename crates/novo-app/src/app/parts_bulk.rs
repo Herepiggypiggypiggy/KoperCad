@@ -438,10 +438,12 @@ impl NovoApp {
                         .spacing([10.0, 6.0])
                         .striped(true)
                         .show(ui, |ui| {
-                            for h in ["", "Device", "Part", "Match", "Why"] {
-                                ui.label(egui::RichText::new(h).strong());
+                            if !preview.rows.is_empty() {
+                                for h in ["", "Device", "Part", "Match", "Why"] {
+                                    ui.label(egui::RichText::new(h).strong());
+                                }
+                                ui.end_row();
                             }
-                            ui.end_row();
                             for row in &mut preview.rows {
                                 let mut on = row.chosen.is_some();
                                 if ui.checkbox(&mut on, "").changed() {

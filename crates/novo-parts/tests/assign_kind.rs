@@ -355,3 +355,19 @@ fn proposals_for_a_big_catalog_stay_fast() {
     // (that was 30 s for 20,000 parts and 300 devices).
     assert!(took.as_secs_f64() < 3.0, "{took:?}");
 }
+
+#[test]
+fn a_real_maker_part_ranks_before_a_generic_one_at_equal_fit() {
+    let mut cat = Catalog::new();
+    for (maker, order) in [("Generic", "A-1"), ("Siemens", "B-1"), ("Acme", "C-1")] {
+        let mut part = CatalogPart::new(maker, order);
+        part.letter_codes = vec!["B".into()];
+        cat.upsert(part);
+    }
+    let order: Vec<&str> = cat
+        .suggest("B", "", 10)
+        .into_iter()
+        .map(|p| p.manufacturer.as_str())
+        .collect();
+    assert_eq!(order, ["Acme", "Siemens", "Generic"]);
+}

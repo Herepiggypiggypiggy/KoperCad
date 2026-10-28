@@ -58,6 +58,13 @@ pub enum Role {
 }
 
 impl Role {
+    /// The label with its article: "an overload relay", "a fan".
+    pub fn with_article(self) -> String {
+        let label = self.label();
+        let an = label.starts_with(['a', 'e', 'i', 'o', 'u']);
+        format!("{} {label}", if an { "an" } else { "a" })
+    }
+
     /// Words for the kind, for reasons shown to people.
     pub fn label(self) -> &'static str {
         match self {
@@ -692,9 +699,9 @@ pub fn conflict(part: &CatalogPart, need: &DeviceNeed) -> Option<String> {
 pub fn conflict_with(part: &PartFacts, need: &DeviceNeed) -> Option<String> {
     if let KindCheck::Wrong { part: have, device } = check_kind_with(part, need) {
         return Some(format!(
-            "the part is a {}, the device is a {}",
-            have.label(),
-            device.label()
+            "the part is {}, the device is {}",
+            have.with_article(),
+            device.with_article()
         ));
     }
     if let (Some(want), Some(have)) = (need.coil, part.coil)

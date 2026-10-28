@@ -29,6 +29,9 @@ use crate::search::{Matcher, SearchDoc, normalize_code};
 /// renamed, mounting text normalized) when read.
 pub const CATALOG_FORMAT_VERSION: u32 = 2;
 
+/// Maker name of the generic sample parts. They rank after real maker parts at equal fit.
+const GENERIC_MAKER: &str = "Generic";
+
 /// Property keys this crate writes into `novo_core::Part::properties`. Other
 /// workstreams read them (cabinet layout reads the dimensions, cables read
 /// the cores), so they are stable.
@@ -537,6 +540,9 @@ impl Catalog {
             .collect();
         hits.sort_by(|a, b| {
             b.0.cmp(&a.0)
+                .then_with(|| {
+                    (a.1.manufacturer == GENERIC_MAKER).cmp(&(b.1.manufacturer == GENERIC_MAKER))
+                })
                 .then_with(|| a.1.manufacturer.cmp(&b.1.manufacturer))
                 .then_with(|| novo_core::natural_cmp(&a.1.order_number, &b.1.order_number))
         });
@@ -572,6 +578,9 @@ impl Catalog {
             .collect();
         hits.sort_by(|a, b| {
             b.0.cmp(&a.0)
+                .then_with(|| {
+                    (a.1.manufacturer == GENERIC_MAKER).cmp(&(b.1.manufacturer == GENERIC_MAKER))
+                })
                 .then_with(|| a.1.manufacturer.cmp(&b.1.manufacturer))
                 .then_with(|| novo_core::natural_cmp(&a.1.order_number, &b.1.order_number))
         });

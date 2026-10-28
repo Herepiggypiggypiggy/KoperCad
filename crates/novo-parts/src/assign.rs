@@ -654,29 +654,31 @@ fn judge(part: &PartFacts, need: &DeviceNeed) -> Option<(Confidence, String)> {
     }
     Some(match check_kind_with(part, need) {
         KindCheck::Right => {
-            let what = need.role.map_or("part", Role::label);
-            (Confidence::Certain, format!("a {what}, as the device is"))
+            let what = need
+                .role
+                .map_or_else(|| "a part".to_owned(), Role::with_article);
+            (Confidence::Certain, format!("{what}, as the device is"))
         }
         KindCheck::Similar { part, device } => (
             Confidence::Unsure,
             format!(
-                "the part is a {}, the device a {}: related, not the same",
-                part.label(),
-                device.label()
+                "the part is {}, the device {}: related, not the same",
+                part.with_article(),
+                device.with_article()
             ),
         ),
         KindCheck::PartSilent { device } => (
             Confidence::Unsure,
             format!(
-                "the device is a {}, the part does not say what it is",
-                device.label()
+                "the device is {}, the part does not say what it is",
+                device.with_article()
             ),
         ),
         KindCheck::DeviceSilent { part } => (
             Confidence::Unsure,
             format!(
-                "the part is a {}, the symbol does not say what the device is",
-                part.label()
+                "the part is {}, the symbol does not say what the device is",
+                part.with_article()
             ),
         ),
         KindCheck::BothSilent => (
