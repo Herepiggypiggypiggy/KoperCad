@@ -480,8 +480,7 @@ pub(super) fn dialog<'a>(
     // egui derives the window's id from `Some(title text)`; `esc` reads it
     // back. The test `escape_closes_the_dialog_on_top` catches a change.
     ctx.data_mut(|d| d.insert_temp(pending_id(), egui::Id::new(Some(title.text()))));
-    let mut full = ctx.content_rect().shrink(MARGIN);
-    full.max.y = (full.max.y - STATUS_BAR).max(full.min.y + DIALOG_MIN_HEIGHT);
+    let full = ctx.content_rect().shrink(MARGIN);
     let size = [size[0] * grow(full.width()), size[1] * grow(full.width())];
     let mut screen = full;
     // A dialog stays left of the parked corner card, so it does not open over
@@ -502,7 +501,15 @@ pub(super) fn dialog<'a>(
         .min_width(DIALOG_MIN_WIDTH.min(width))
         .min_height(DIALOG_MIN_HEIGHT.min((screen.height() - TOP - BOTTOM).max(MIN_HEIGHT)))
         .max_height((screen.height() - TOP - BOTTOM).max(MIN_HEIGHT))
-        .constrain_to(screen)
+        // Kept above the status bar (BOTTOM already leaves its room in the
+        // height of a window that starts at the top).
+        .constrain_to(egui::Rect::from_min_max(
+            screen.min,
+            egui::pos2(
+                screen.max.x,
+                (screen.max.y - STATUS_BAR).max(screen.min.y + DIALOG_MIN_HEIGHT),
+            ),
+        ))
         .scroll([false, true]);
     // A height of 0 means "as tall as the content", up to the screen (egui
     // starts a window at 420 and grows it to fit what is inside).
