@@ -299,7 +299,9 @@ fn idle(coil: bool) -> HoistInput {
 }
 
 #[test]
-fn brake_drop_before_torque_is_half_g_t_squared() {
+fn brake_drop_without_rotor_inertia_is_the_half_g_t_squared_bound() {
+    // This is the upper bound only (zero rotor inertia, lossless): see the next tests for
+    // the real figure with inertia reflected through the gearbox.
     // Coil fed for 0.15 s, release delay 20 ms, no motor torque: the load falls for
     // t = 0.15 - 0.02 = 0.13 s. Lossless drum, no rotor inertia: a = g.
     // drop = 0.5 * 9.80665 * 0.13^2 = 0.082862 m
@@ -336,6 +338,33 @@ fn brake_drop_with_losses_and_rotor_inertia() {
         snap = Some(u.step(idle(true), 0.001));
     }
     close(snap.unwrap().hook_height_m, -0.017757, 2e-5);
+}
+
+#[test]
+fn brake_drop_150_ms_matches_the_l7_hand_value() {
+    // 5000 kg, r 0.2 m, i 31.5, rotor 0.5 kg m2, lossless; fall for 150 ms (release delay 20 ms).
+    // Reflected mass J (i/r)^2 = 0.5 * 157.5^2 = 12403.1 kg; a = g m / (m + 12403.1) = 2.8175;
+    // drop = 0.5 * 2.8175 * 0.15^2 = 0.031697 m (the 0.5 g t^2 bound would be 0.1103 m).
+    let m = PoleChangeMotor::new(
+        *pole_change().winding(WindingSel::Fine),
+        *pole_change().winding(WindingSel::Coarse),
+        0.5,
+    )
+    .unwrap();
+    let hoist = Hoist::new(5000.0, 0.2, 31.5, 1, 1.0).unwrap();
+    let mut u = TwoSpeedHoistUnit::new(
+        m,
+        hoist,
+        sequencer(),
+        brake(400.0, Switching::AcSide),
+        BrakeFeed::Separate,
+    )
+    .unwrap();
+    let mut snap = None;
+    for _ in 0..170 {
+        snap = Some(u.step(idle(true), 0.001));
+    }
+    close(snap.unwrap().hook_height_m, -0.031697, 5e-5);
 }
 
 #[test]
