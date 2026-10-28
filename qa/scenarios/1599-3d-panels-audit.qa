@@ -1,0 +1,51 @@
+@title 3D: heat and EMC switch off from the toolbar and stay off, one switch each
+@area 3D
+@sizes 1366x768 1920x1080
+# The 3D toolbar's Heat and EMC are the only switches of those views: Heat off takes the strip, a finished result with its overlay and legend, and both panels with it; EMC off takes its panel and legend; neither comes back by itself. The Layers list reads in full (docs/design/3d-panels-audit.md).
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+shot 3d-start
+click_text Heat #1
+wait 20
+expect "fills this strip"
+expect "Vents and fans"
+shot heat-on
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 100
+wait 60
+wait_s 100
+wait 60
+expect "Result for this layout"
+shot heat-result
+check_layout
+click_text "✔ Heat"
+wait 20
+expect_not "fills this strip"
+expect_not "Vents and fans"
+expect_not "Result for this layout"
+shot heat-off
+click_text EMC #1
+wait 30
+expect "Indicative model"
+shot emc-on
+click_text "✔ EMC"
+wait 30
+expect_not "Indicative model"
+shot emc-off
+wait 30
+expect_not "Indicative model"
+check_layout
+click_text Layers #1
+wait 20
+expect "Walk through"
+expect "Slotted ducts"
+expect "Connection points"
+expect "Missing data"
+shot layers
+check_layout

@@ -2,7 +2,7 @@
 
 Thread "Rework 3D view panels and layer toggles", 2026-10-28. The owner's complaints: EMC cannot be turned off in the 3D view; the 3D configuration panel is frustrating; Inspector, Temperature, Door, Sizing and the others are separate popups that are hard to find, cannot be closed and are hard to open again; buttons are doubled (heat off in the 3D panel stays on elsewhere). Design target: `visual-redesign-3d.md` (side panel of foldable sections, rail lanes V3a/V3b, window rules lane V1). This page is the audit that the first PR (the option registry) answers.
 
-Evidence: harness scenario `qa/scenarios/600-3d-panels-audit.qa` at 1366x768 and 1920x1080, and the code.
+Evidence: harness scenario `qa/scenarios/1599-3d-panels-audit.qa` at 1366x768 and 1920x1080, and the code.
 
 ## 1. Causes found in the code
 

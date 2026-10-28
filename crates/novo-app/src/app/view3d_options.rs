@@ -560,6 +560,21 @@ mod tests {
     }
 
     #[test]
+    fn a_new_project_or_lesson_starts_with_heat_off() {
+        // The lesson `simulate-3d` clicks the Heat button: with Heat left on by a
+        // lesson before it, that click would switch it off and the next steps would
+        // point at a panel that is gone.
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = drive_with_cabinet(dir.path());
+        d.app.set_view3d_option(ViewOption::Heat, true);
+        d.frame();
+        assert!(d.app.view3d_option(ViewOption::Heat));
+        d.app.document_replaced();
+        d.frame();
+        assert!(!d.app.view3d_option(ViewOption::Heat));
+    }
+
+    #[test]
     fn the_layers_popover_and_the_toolbar_do_not_both_carry_an_option() {
         // The Layers popover shows layers and preferences; the toolbar shows
         // overlays and modes. An option has one home.
