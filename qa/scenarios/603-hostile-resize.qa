@@ -1,0 +1,43 @@
+@title Hostile: resize to tiny and huge windows with dialogs and menus open
+@area Hostile
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text standards check
+wait 8
+key Enter
+wait 15
+resize 800 500
+wait 10
+shot standards-800
+resize 480 320
+wait 10
+shot standards-480
+resize 300 200
+wait 10
+shot standards-300
+resize 1000 700
+wait 10
+key Escape
+try click_text Cabinet #1
+try click_text Cab #1
+wait 20
+resize 400 300
+wait 10
+shot cabinet-400
+try click_text "3D" #1
+wait 20
+resize 3000 1800
+wait 20
+shot 3d-3000
+resize 640 360
+wait 10
+shot 3d-640
+try click_text Reports #1
+try click_text Rpt #1
+wait 10
+resize 1366 768
+wait 20
+shot back
+check_blank back

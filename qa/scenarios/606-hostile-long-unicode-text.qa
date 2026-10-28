@@ -1,0 +1,12 @@
+@title Hostile: very long, unicode, emoji and right-to-left text in project fields
+@area Hostile
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text project info
+wait 8
+key Enter
+wait 15
+shot info-open
+tree info

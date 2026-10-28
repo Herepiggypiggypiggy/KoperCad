@@ -1,0 +1,64 @@
+@title Hostile: heat, airflow, EMC and cooling advice on a cabinet with nothing in it
+@area Hostile
+fresh
+key ctrl+n
+wait 20
+click_text Cabinet #1
+wait 20
+click_text "New cabinet..."
+wait 15
+shot new-cabinet-dialog
+key Enter
+wait 20
+shot new-cabinet-made
+key ctrl+k
+wait 6
+text simulate heat
+wait 8
+key Enter
+wait 40
+shot heat-empty
+key Escape
+key ctrl+k
+wait 6
+text emc
+wait 8
+key Enter
+wait 20
+shot emc-empty
+key Escape
+key ctrl+k
+wait 6
+text cooling
+wait 8
+key Enter
+wait 20
+shot cooling-empty
+key Escape
+try click_text "3D" #1
+wait 25
+shot 3d-empty
+key ctrl+k
+wait 6
+text simulate heat
+wait 8
+key Enter
+wait 40
+shot 3d-heat-empty
+key ctrl+k
+wait 6
+text workpack
+wait 8
+key Enter
+wait 20
+shot workpack-empty
+key Escape
+key ctrl+k
+wait 6
+text cooler layout
+wait 8
+key Enter
+wait 20
+shot cooler-empty
+check_layout
+check_blank cooler-empty

@@ -170,6 +170,11 @@ fn validate(s: &Scenario) -> Result<(), Error> {
     if !(finite(e.width_mm) && finite(e.height_mm) && finite(e.depth_mm) && finite(e.wall_mm)) {
         return bad("enclosure size is not a number");
     }
+    // A negative wall or a size over 20 m (typed by mistake) would grow the
+    // grid until the run seems to hang; refuse it plainly instead.
+    if e.wall_mm < 0.0 || e.width_mm > 20_000.0 || e.height_mm > 20_000.0 || e.depth_mm > 20_000.0 {
+        return bad("enclosure size or wall thickness is out of range");
+    }
     if e.interior_width_mm() < 50.0 || e.interior_height_mm() < 50.0 || e.interior_depth_mm() < 20.0
     {
         return bad("enclosure interior is too small");

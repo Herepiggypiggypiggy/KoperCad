@@ -1,0 +1,36 @@
+@title Hostile: close, new and quit with unsaved changes, cancel every prompt
+@area Hostile
+click_text "Open example"
+wait 20
+key q
+wait 4
+text contactor
+wait 6
+key Enter
+wait 6
+click 700 300
+wait 6
+key Escape
+shot edited
+key ctrl+k
+wait 6
+text close project
+wait 8
+key Enter
+wait 15
+shot close-prompt
+tree closeprompt
+# The draft is kept under UNSAVED on the start screen and reopens with the edit.
+click_text "Untitled, less than a minute ago"
+wait 25
+shot draft-reopened
+expect_scene K2
+key ctrl+n
+wait 15
+shot new-prompt
+key ctrl+o
+wait 10
+shot open-prompt
+key Escape
+wait 8
+check_layout
