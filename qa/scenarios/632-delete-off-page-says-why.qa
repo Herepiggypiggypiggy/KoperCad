@@ -1,0 +1,15 @@
+@title Delete with the pointer on a workspace tab says where it acts
+@area Schematic
+# Click test C-02: after a click on a workspace tab, Ctrl+A selected everything but Delete did nothing and said nothing (the editor reads Delete only with the pointer over the drawing). The status line now says to move the pointer over the page or use Edit > Delete.
+click_text "Open example"
+wait 20
+click_text Cabinet #1
+wait 20
+click_text Schematic #1
+wait 20
+key ctrl+a
+wait 8
+key Delete
+wait 10
+shot delete-hint
+expect "Delete acts on the drawing"

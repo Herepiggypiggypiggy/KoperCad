@@ -1125,6 +1125,8 @@ impl NovoApp {
         );
         if !edit.has_focus() && !edit.lost_focus() {
             edit.request_focus();
+            // The old name is selected: typing replaces it.
+            super::inspector::select_all(ui.ctx(), edit.id, &rename.text);
         }
         // Group and cabinet names are plain codes, shown without = or +.
         let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
@@ -1966,6 +1968,7 @@ impl NovoApp {
                         );
                         if !form.focused {
                             name.request_focus();
+                            super::inspector::select_all(ui.ctx(), name.id, &form.name);
                             form.focused = true;
                         }
                         if valid.is_empty() {
@@ -2166,6 +2169,7 @@ impl NovoApp {
                         let t = ui.add(egui::TextEdit::singleline(title).desired_width(260.0));
                         if !t.has_focus() && ui.memory(|m| m.focused().is_none()) {
                             t.request_focus();
+                            super::inspector::select_all(ui.ctx(), t.id, title);
                         }
                         ui.end_row();
                         ui.label("Page group");

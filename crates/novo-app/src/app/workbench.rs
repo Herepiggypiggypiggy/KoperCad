@@ -1450,7 +1450,10 @@ impl NovoApp {
                     .document()
                     .and_then(|d| super::inspector::selected_device(d.project(), &selection));
                 if device.is_some() {
-                    ctx.memory_mut(|m| m.request_focus(egui::Id::new("inspector_tag")));
+                    let tag = egui::Id::new("inspector_tag");
+                    ctx.memory_mut(|m| m.request_focus(tag));
+                    // Typing the new tag replaces the old one.
+                    super::inspector::select_all_when_focused(ctx, tag);
                 }
             }
             "tool.place_wheel" => self.open_wheel(ctx, Vec::new()),

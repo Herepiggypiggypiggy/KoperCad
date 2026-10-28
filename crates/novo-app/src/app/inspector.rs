@@ -803,6 +803,7 @@ fn inspector_body(
                     .id(tag_id)
                     .font(egui::TextStyle::Heading),
             );
+            select_all_if_asked(ui, &tag, &state.tag);
             if committed(ui, &tag) && state.tag.trim() != info.tag {
                 rename = Some(state.tag.trim().to_owned());
             }
@@ -1097,6 +1098,38 @@ fn relation_card(ui: &mut egui::Ui, relation: &Relation) -> egui::Response {
         room,
     );
     response
+}
+
+/// Puts the cursor range over the whole of `text` in the edit `id`, so typing
+/// replaces it (a field that opens focused with a name in it: rename, new
+/// cabinet). Call after the edit was added this frame.
+pub(super) fn select_all(ctx: &egui::Context, id: egui::Id, text: &str) {
+    if let Some(mut state) = egui::TextEdit::load_state(ctx, id) {
+        let all = egui::text::CCursorRange::two(
+            egui::text::CCursor::new(0),
+            egui::text::CCursor::new(text.chars().count()),
+        );
+        state.cursor.set_char_range(Some(all));
+        state.store(ctx, id);
+    }
+}
+
+/// Asks the edit `id` to select all of its text when it next has focus
+/// (focus requested from outside, as F2 does for the inspector's tag).
+pub(super) fn select_all_when_focused(ctx: &egui::Context, id: egui::Id) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(("select_all_when_focused", id)), true));
+}
+
+/// Completes [`select_all_when_focused`] once the edit has the focus.
+pub(super) fn select_all_if_asked(ui: &egui::Ui, response: &egui::Response, text: &str) {
+    let flag = egui::Id::new(("select_all_when_focused", response.id));
+    if response.has_focus()
+        && ui
+            .data_mut(|d| d.remove_temp::<bool>(flag))
+            .unwrap_or(false)
+    {
+        select_all(ui.ctx(), response.id, text);
+    }
 }
 
 /// Enter, or leaving the field after a change, commits it.

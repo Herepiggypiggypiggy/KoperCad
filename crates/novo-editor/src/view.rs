@@ -1938,6 +1938,16 @@ impl SchematicView {
                     if rename.focus {
                         edit.request_focus();
                         rename.focus = false;
+                        // The old text is selected: typing replaces it instead
+                        // of appending to it.
+                        if let Some(mut state) = egui::TextEdit::load_state(ctx, edit.id) {
+                            let all = egui::text::CCursorRange::two(
+                                egui::text::CCursor::new(0),
+                                egui::text::CCursor::new(rename.text.chars().count()),
+                            );
+                            state.cursor.set_char_range(Some(all));
+                            state.store(ctx, edit.id);
+                        }
                     }
                     if edit.changed()
                         && let RenameTarget::Device(device) = rename.target

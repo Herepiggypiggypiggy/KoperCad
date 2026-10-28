@@ -1469,6 +1469,21 @@ impl NovoApp {
         } else {
             self.key_commands(&ctx)
         };
+        // The editor reads Delete only while the pointer is on the drawing; with
+        // it on a tab or a panel the key would be dropped without a word.
+        if self.workspace() == workspace::Workspace::Schematic
+            && !self.modal_open()
+            && self.wb.pointer_world.is_none()
+            && !ctx.text_edit_focused()
+            && self.wb.field.focus().is_none()
+            && ctx.input(|i| i.key_pressed(egui::Key::Delete))
+            && !self.selection().is_empty()
+        {
+            self.message(
+                Level::Info,
+                "Delete acts on the drawing: move the pointer over the page, or use Edit > Delete",
+            );
+        }
         // Shift+D swings the 3D door; elsewhere it is not a command.
         let in_3d = self.workspace() == workspace::Workspace::View3d;
         commands.retain(|id| {
