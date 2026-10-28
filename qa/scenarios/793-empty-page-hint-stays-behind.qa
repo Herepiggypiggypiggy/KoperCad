@@ -11,3 +11,9 @@ key Return
 move 600 300
 wait 5
 shot placing
+click 600 300
+wait 5
+key Escape
+wait 5
+shot after-first-symbol
+expect_not "Press Q to place a symbol"

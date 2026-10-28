@@ -1,4 +1,4 @@
-@title A wire in progress is cancelled by right click, and the hint says so
+@title A wire in progress is cancelled by Esc or right click, and the hint says so
 @area Schematic
 @sizes 1366x768
 # Test report 13: Backspace was the only cancel and it was shown only in the status line. Esc and right click cancel now and the hint says it.
@@ -23,3 +23,13 @@ click 700 500 right
 wait 5
 shot wire-cancelled
 expect_not "Esc or right-click cancels"
+click_text Corners
+wait 3
+click 337 150
+wait 5
+shot wire-started-again
+expect "Esc or right-click cancels"
+key Escape
+wait 5
+shot esc-cancelled
+expect_not "click a pin or wire to finish"
