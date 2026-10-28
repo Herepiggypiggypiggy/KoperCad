@@ -73,7 +73,7 @@ calamine = { version = "0.36", default-features = false }
 dirs = "6"
 # WebAssembly interpreter for the sandboxed add-on engine (novo-addons). Pure Rust; the `wat` feature stays off so
 # an add-on can only hand over binary wasm, never text.
-wasmi = { version = "2.0", default-features = false, features = ["std", "validate"] }
+wasmi = { version = "2.0", default-features = false, features = ["std", "validate", "portable-dispatch"] }
 # Builds the hostile and test engines from text in the novo-addons tests only.
 wat = "1"
 # Reads the ZIP a maker portal serves a STEP file in (novo-parts).

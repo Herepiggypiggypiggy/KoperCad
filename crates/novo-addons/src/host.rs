@@ -168,9 +168,7 @@ impl EngineHost {
         };
         let mut store = Store::new(&engine, state);
         store.limiter(|s| &mut s.limits);
-        store
-            .set_fuel(limits.fuel_per_call)
-            .map_err(engine_error)?;
+        store.set_fuel(limits.fuel_per_call).map_err(engine_error)?;
         let mut linker = <Linker<State>>::new(&engine);
         linker
             .func_wrap(
@@ -201,7 +199,12 @@ impl EngineHost {
             .map_err(engine_error)?;
         let instance = linker
             .instantiate_and_start(&mut store, &module)
-            .map_err(|e| engine_error(format!("the engine could not start: {}", why_stopped(&e, &limits))))?;
+            .map_err(|e| {
+                engine_error(format!(
+                    "the engine could not start: {}",
+                    why_stopped(&e, &limits)
+                ))
+            })?;
         let memory = instance
             .get_memory(&store, "memory")
             .ok_or_else(|| engine_error("the engine does not export `memory`"))?;
@@ -231,10 +234,15 @@ impl EngineHost {
             }
             Ok(data) => Err(engine_error(format!(
                 "the engine speaks another host API ({}); this program speaks {HOST_API}",
-                data.get("api").map_or("none".to_owned(), ToString::to_string)
+                data.get("api")
+                    .map_or("none".to_owned(), ToString::to_string)
             ))),
-            Err(CallError::Refused(why)) => Err(engine_error(format!("the engine refused to start: {why}"))),
-            Err(CallError::Stopped(why)) => Err(engine_error(format!("the engine failed at start: {why}"))),
+            Err(CallError::Refused(why)) => {
+                Err(engine_error(format!("the engine refused to start: {why}")))
+            }
+            Err(CallError::Stopped(why)) => {
+                Err(engine_error(format!("the engine failed at start: {why}")))
+            }
         }
     }
 
@@ -278,7 +286,8 @@ impl EngineHost {
         self.store
             .set_fuel(limits.fuel_per_call)
             .map_err(|e| e.to_string())?;
-        let len = i32::try_from(request.len()).map_err(|_| "the request is too large".to_owned())?;
+        let len =
+            i32::try_from(request.len()).map_err(|_| "the request is too large".to_owned())?;
         let ptr = self.alloc.call(&mut self.store, len).map_err(fail)?;
         self.memory
             .write(&mut self.store, ptr as u32 as usize, request)
@@ -287,13 +296,16 @@ impl EngineHost {
         let reply_ptr = (packed >> 32) as u32;
         let reply_len = (packed & 0xffff_ffff) as u32;
         if reply_len as usize > limits.max_message {
-            return Err(format!("its reply is larger than {} bytes", limits.max_message));
+            return Err(format!(
+                "its reply is larger than {} bytes",
+                limits.max_message
+            ));
         }
         let mut reply = vec![0u8; reply_len as usize];
         self.memory
             .read(&self.store, reply_ptr as usize, &mut reply)
             .map_err(|_| "its reply lies outside its memory".to_owned())?;
-        if let Some(free) = self.free.clone() {
+        if let Some(free) = self.free {
             free.call(&mut self.store, (ptr, len)).map_err(fail)?;
             free.call(&mut self.store, (reply_ptr as i32, reply_len as i32))
                 .map_err(fail)?;

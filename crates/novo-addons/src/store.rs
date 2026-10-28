@@ -264,6 +264,32 @@ impl AddonSet {
         Ok(bytes)
     }
 
+    /// Starts the engine of a running add-on: `engine.wasm` (hash checked again) in the sandboxed
+    /// host. `Ok(None)` when the add-on declares no engine. The caller keeps the host for the
+    /// session; if it stops, the add-on stays stopped until it is loaded again.
+    pub fn load_engine(
+        &self,
+        id: &str,
+        limits: crate::host::HostLimits,
+    ) -> Result<Option<crate::host::EngineHost>> {
+        let entry = self
+            .get(id)
+            .filter(|e| e.status.is_enabled())
+            .ok_or_else(|| AddonError::Unknown(id.to_owned()))?;
+        let Some(decl) = entry.manifest.as_ref().and_then(|m| m.engine.as_ref()) else {
+            return Ok(None);
+        };
+        if decl.host_api != crate::host::HOST_API {
+            return Err(AddonError::Incompatible(format!(
+                "{id}'s engine needs host API {}; this program speaks {}",
+                decl.host_api,
+                crate::host::HOST_API
+            )));
+        }
+        let wasm = self.read_file(id, &decl.file)?;
+        crate::host::EngineHost::load(&wasm, limits).map(Some)
+    }
+
     /// Data files of one `kind` from running add-ons, as `(add-on id, path)`.
     pub fn contributions(&self, kind: &str) -> Vec<(String, String)> {
         let mut out = Vec::new();
