@@ -347,7 +347,7 @@ pub fn scenario_from_project(
         if loss_w > MAX_PLAUSIBLE_DEVICE_LOSS_W {
             return Err(BridgeError::ImplausibleLoss {
                 tag: who.tag,
-                loss: format!("{loss_w:.3e}"),
+                loss: format!("{loss_w:.0}"),
                 max: format!("{MAX_PLAUSIBLE_DEVICE_LOSS_W:.0}"),
             });
         }

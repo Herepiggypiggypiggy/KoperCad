@@ -371,7 +371,7 @@ fn accumulate_voltage_drop(plant: &Plant, reports: &mut [CircuitReport]) {
         }
         row.value = Some(total);
         row.text = format!(
-            "{} % in total: {} % in this cable plus {} % above it ({}), limit {} %",
+            "{} % in total (sum of the percentages): {} % in this cable plus {} % above it ({}), limit {} %",
             num(total),
             num(own_drop),
             num(upstream),

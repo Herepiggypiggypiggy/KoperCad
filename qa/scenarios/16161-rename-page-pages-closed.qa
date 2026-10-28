@@ -1,0 +1,14 @@
+@title Ctrl+K Rename page opens the Pages panel to show the title box
+@area Schematic
+# SB-05: with the Pages panel closed the title box was invisible.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 3
+text rename page
+wait 4
+key Enter
+wait 20
+shot rename-page
+expect "Page title"
+check_layout

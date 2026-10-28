@@ -138,7 +138,7 @@ pub fn parse_tag_input(input: &str, old: &DeviceTag) -> Result<DeviceTag, String
     let len = tag.to_string().chars().count();
     if len > MAX_TAG_CHARS {
         return Err(format!(
-            "A tag can have at most {MAX_TAG_CHARS} characters ({len} typed)"
+            "A tag can have at most {MAX_TAG_CHARS} characters ({len} typed): shorten the name or drop the function and location parts"
         ));
     }
     Ok(tag)
