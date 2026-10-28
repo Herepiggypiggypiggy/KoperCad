@@ -1,7 +1,7 @@
 # conflicts per cause on the text stress matrix: count<TAB>cause
 5	device tag / device tag (neighbour)
 2	device tag / device tag (neighbour) [tight]
-258	device tag / symbol line (neighbour)
+259	device tag / symbol line (neighbour)
 16	device tag / text inside symbol art (neighbour)
 2	device tag / text inside symbol art (neighbour) [tight]
 1	free text / free text (neighbour)

@@ -43,7 +43,6 @@ novo-sim.workspace = true
 novo-thermal.workspace = true
 novo-cfd.workspace = true
 novo-routing.workspace = true
-novo-sim.workspace = true
 
 [lints]
 workspace = true

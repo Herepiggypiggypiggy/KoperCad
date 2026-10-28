@@ -166,6 +166,8 @@ fn build(tx: &mut Tx<'_>) -> Result<RadioHoist> {
     let h0 = device(tx, "-H0", "Main on")?;
     let h1 = device(tx, "-H1", "Brake released")?;
     let m1 = device(tx, "-M1", "Hoist motor, two speeds")?;
+    // A hook load makes the motor a hoist for Simulate > Hoist run; the other numbers default.
+    tx.set_property(m1, "mech_mass_kg", Some(100.0.into()))?;
     for (d, color) in [(h0, "green"), (h1, "amber")] {
         tx.update::<novo_core::Device>(d, |dev| {
             dev.properties

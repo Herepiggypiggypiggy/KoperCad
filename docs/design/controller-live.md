@@ -16,7 +16,7 @@ as on the crane. It simulates wiring and logic only: no radio protocol, no recei
   and the checks. **Keyboard** turns the keyboard into the radio (keys are listed next to each control); it is off
   until asked so the canvas keys stay free.
 - The fixture is `qa/fixtures/radio-hoist.novo` (a generic radio, a receiver, two reversing and two speed
-  contactors, a two-speed motor). QA scenarios `1581` (1366x768) and `1581b` (1920x1080) drive it.
+  contactors, a two-speed motor). QA scenarios `1581` (1366x768) and `1581b` (1920x1080) drive it; `1582` opens it from the menu and the command field; `1583` runs it together with Simulate > Hoist run (the motor carries a 100 kg hook load, so the radio lifts the hook through the drawn circuit).
 
 ## How a signal reaches the drawing
 
@@ -35,8 +35,10 @@ letter for them is A (IEC 81346 class A).
 
 Per frame the live view calls `ControllerLive::drive` before it solves, so everything that solves sees the
 controller (lessons and tests too). A pole that was bound last frame and is not now goes back to its rest state.
-The pole forcing (`novo_sim::pins`) is the same `PoleState` mechanism the electromechanical loop uses; if the
-`CircuitPort` of the loop lane lands, `controller_live.rs` is the one place that swaps over.
+The hoist run (lane L5a) steps the circuit through `LiveView::solved` too, so the controller composes with it with no
+extra code: its clock advances by each fixed tick, the radio closes the receiver contacts, the drawn contactors settle,
+and the loop reads the motor feed. The pole forcing (`novo_sim::pins`) is the same `PoleState` mechanism the loop's
+`set_contact` uses.
 
 ## Storage
 
