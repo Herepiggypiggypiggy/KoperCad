@@ -1,0 +1,27 @@
+@title Assign parts to all devices never gives a drive a power supply
+@sizes 1366x768
+@area Parts
+# Hardware test 2026-10-28 finding 4: -T1 (frequency converter) was proposed a 24 V power supply and the dialog only offered Accept all. Now every row has a tick, a part to choose, a match and a reason.
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Frequency converter drive"
+wait 10
+key Return
+wait 20
+click_text Place #2
+wait 20
+key Escape
+key ctrl+k
+text "Assign parts to all"
+wait 10
+key Return
+wait 20
+expect "Assign parts to all devices"
+expect "Generic"
+expect_not "Phoenix"
+shot assign-all-rows
+key Escape
+wait 8
+expect_not "Assign parts to all devices"

@@ -32,9 +32,58 @@ pub enum Role {
     /// Push button with both kinds of contact.
     PushBoth,
     Motor,
+    /// Frequency converter (variable frequency drive).
+    Drive,
+    SoftStarter,
+    /// Power supply or converter that makes a control voltage.
+    PowerSupply,
+    /// PLC central unit.
+    PlcCpu,
+    /// PLC input, output or remote I/O module.
+    PlcIo,
+    /// Ethernet switch.
+    NetSwitch,
+    /// A network or fieldbus port of a device. Never a part of its own.
+    NetPort,
+    /// Axial or radial fan.
+    Fan,
+    /// Cabinet vent, louvre or filter.
+    Vent,
+    /// Switchgear cabinet or enclosure.
+    Enclosure,
+    /// Main switch, switch-disconnector or isolator.
+    Disconnector,
+    /// Pilot lamp or indicator light.
+    Lamp,
 }
 
 impl Role {
+    /// Words for the kind, for reasons shown to people.
+    pub fn label(self) -> &'static str {
+        match self {
+            Role::Contactor => "contactor",
+            Role::Relay => "relay",
+            Role::Mcb => "miniature circuit breaker",
+            Role::Mpcb => "motor protection breaker",
+            Role::Overload => "overload relay",
+            Role::FuseHolder => "fuse holder",
+            Role::PushNo | Role::PushNc | Role::PushBoth => "push button",
+            Role::Motor => "motor",
+            Role::Drive => "frequency converter",
+            Role::SoftStarter => "soft starter",
+            Role::PowerSupply => "power supply",
+            Role::PlcCpu => "PLC CPU",
+            Role::PlcIo => "PLC I/O module",
+            Role::NetSwitch => "Ethernet switch",
+            Role::NetPort => "network port",
+            Role::Fan => "fan",
+            Role::Vent => "vent",
+            Role::Enclosure => "enclosure",
+            Role::Disconnector => "main switch",
+            Role::Lamp => "pilot lamp",
+        }
+    }
+
     /// How well a part of this role fills a device that needs `need`, from
     /// 0 (wrong kind) to 60.
     fn score_for(self, need: Role) -> u32 {
@@ -48,6 +97,8 @@ impl Role {
             (Contactor, Relay) | (Relay, Contactor) => 15,
             // A motor protection breaker also protects, but is not an MCB.
             (Mcb, Mpcb) | (Mpcb, Mcb) => 10,
+            // A soft starter also starts a motor, but is not a converter.
+            (Drive, SoftStarter) | (SoftStarter, Drive) => 10,
             _ => 0,
         }
     }
@@ -67,7 +118,54 @@ pub fn part_role(part: &CatalogPart) -> Option<Role> {
 fn role_of_text(text: &str) -> Option<Role> {
     let text = text.to_lowercase();
     let has = |w: &str| text.contains(w);
-    if has("motor protection") || has("motor circuit breaker") || has("mpcb") {
+    let word = |w: &str| words(&text).any(|t| t == w);
+    // The kinds a letter code cannot tell apart come first, and the
+    // narrow phrases before the broad ones ("PLC I/O module" is a module).
+    if has("frequency converter")
+        || has("frequency inverter")
+        || has("variable frequency")
+        || has("variable speed")
+        || has("ac drive")
+        || word("vfd")
+        || word("vsd")
+    {
+        Some(Role::Drive)
+    } else if has("soft starter") || has("soft-starter") || has("softstarter") {
+        Some(Role::SoftStarter)
+    } else if has("power supply") || has("switch mode") || has("switched-mode") || word("psu") {
+        Some(Role::PowerSupply)
+    } else if has("i/o module")
+        || has("io module")
+        || has("input module")
+        || has("output module")
+        || has("signal module")
+        || has("remote i/o")
+    {
+        Some(Role::PlcIo)
+    } else if word("plc") || has("programmable logic") || has("plc cpu") || word("cpu") {
+        Some(Role::PlcCpu)
+    } else if has("ethernet switch") || has("network switch") || has("managed switch") {
+        Some(Role::NetSwitch)
+    } else if has("pilot lamp")
+        || has("pilot light")
+        || has("indicator light")
+        || has("signal lamp")
+        || has("signalling lamp")
+    {
+        Some(Role::Lamp)
+    } else if has("enclosure") || has("control cabinet") || has("switchgear cabinet") {
+        Some(Role::Enclosure)
+    } else if has("louvre")
+        || has("louver")
+        || has("ventilation grille")
+        || has("exhaust filter")
+        || has("filter mat")
+        || word("vent")
+    {
+        Some(Role::Vent)
+    } else if word("fan") && !has("motor protection") && !has("induction motor") {
+        Some(Role::Fan)
+    } else if has("motor protection") || has("motor circuit breaker") || has("mpcb") {
         Some(Role::Mpcb)
     } else if has("miniature circuit") || has("mcb") {
         Some(Role::Mcb)
@@ -75,6 +173,13 @@ fn role_of_text(text: &str) -> Option<Role> {
         Some(Role::Overload)
     } else if has("fuse holder") || has("fuse-holder") || has("fuse switch") {
         Some(Role::FuseHolder)
+    } else if has("main switch")
+        || has("switch-disconnector")
+        || has("switch disconnector")
+        || has("disconnector")
+        || has("isolator")
+    {
+        Some(Role::Disconnector)
     } else if has("contactor relay") || has("relay") {
         Some(Role::Relay)
     } else if has("contactor") {
@@ -92,6 +197,11 @@ fn role_of_text(text: &str) -> Option<Role> {
     } else {
         None
     }
+}
+
+fn words(text: &str) -> impl Iterator<Item = &str> {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
 }
 
 /// The kind of a device, from the function of the symbol that draws it.
@@ -125,6 +235,28 @@ fn role_of_function(function: &str) -> Option<Role> {
     let parts: Vec<&str> = function.split('.').collect();
     let has = |p: &str| parts.contains(&p);
     match parts[0] {
+        "converter" => match parts.get(1).copied() {
+            Some("vfd") => Some(Role::Drive),
+            Some("soft_starter") => Some(Role::SoftStarter),
+            Some("ac_dc" | "dc_dc") => Some(Role::PowerSupply),
+            _ => None,
+        },
+        "plc" => match parts.get(1).copied() {
+            Some("cpu") => Some(Role::PlcCpu),
+            Some("supply") => Some(Role::PowerSupply),
+            Some("remote_io" | "input" | "output") => Some(Role::PlcIo),
+            _ => None,
+        },
+        "network" => match parts.get(1).copied() {
+            Some("switch") => Some(Role::NetSwitch),
+            Some("port") => Some(Role::NetPort),
+            _ => None,
+        },
+        "switch" if has("main") || has("disconnector") || has("switch_disconnector") => {
+            Some(Role::Disconnector)
+        }
+        "signal" if has("lamp") => Some(Role::Lamp),
+        "motor" if has("fan") => Some(Role::Fan),
         "protection" => match parts.get(1).copied() {
             Some("mcb" | "rcbo") => Some(Role::Mcb),
             Some("mpcb" | "mcp") => Some(Role::Mpcb),
@@ -486,6 +618,68 @@ pub fn fit(part: &CatalogPart, need: &DeviceNeed, device: &Device) -> Fit {
         checks,
         reasons,
     }
+}
+
+/// What the kinds of a device and a part say about each other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KindCheck {
+    /// Both state a kind and it is the same.
+    Right,
+    /// Both state a kind; the kinds are related but not the same.
+    Similar { part: Role, device: Role },
+    /// Both state a kind and they cannot stand in for each other.
+    Wrong { part: Role, device: Role },
+    /// The device states a kind, the part does not say what it is.
+    PartSilent { device: Role },
+    /// The part states a kind, the device's symbol does not.
+    DeviceSilent { part: Role },
+    /// Neither says; only the letter code and the sizing can be compared.
+    BothSilent,
+}
+
+/// Compares the kinds of a part and a device.
+pub fn check_kind(part: &CatalogPart, need: &DeviceNeed) -> KindCheck {
+    match (need.role, part_role(part)) {
+        (Some(device), Some(have)) => match have.score_for(device) {
+            60 => KindCheck::Right,
+            0 => KindCheck::Wrong { part: have, device },
+            _ => KindCheck::Similar { part: have, device },
+        },
+        (Some(device), None) => KindCheck::PartSilent { device },
+        (None, Some(part)) => KindCheck::DeviceSilent { part },
+        (None, None) => KindCheck::BothSilent,
+    }
+}
+
+/// The first thing that rules `part` out for a device, in words: a
+/// different kind of device, a coil for another voltage or another number
+/// of poles. A value the part does not state never rules it out.
+pub fn conflict(part: &CatalogPart, need: &DeviceNeed) -> Option<String> {
+    if let KindCheck::Wrong { part: have, device } = check_kind(part, need) {
+        return Some(format!(
+            "the part is a {}, the device is a {}",
+            have.label(),
+            device.label()
+        ));
+    }
+    if let Some(want) = need.coil
+        && let Some(have) = part.data.get("coil_voltage").and_then(|v| match v {
+            Value::Text(t) => parse_supply(t),
+            _ => None,
+        })
+        && !have.runs_on(want)
+    {
+        return Some(format!(
+            "its coil takes {} V, the circuit has {} V",
+            have.volts, want.volts
+        ));
+    }
+    if let (Some(want), Some(have)) = (need.poles, part_poles(part))
+        && want != have
+    {
+        return Some(format!("it has {have} poles, the device draws {want}"));
+    }
+    None
 }
 
 #[cfg(test)]

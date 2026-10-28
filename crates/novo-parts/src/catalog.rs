@@ -368,14 +368,23 @@ impl Catalog {
 
     /// The starter catalog shipped with the program: common IEC parts for
     /// motor starters and control circuits (contactors, breakers, overload
-    /// relays, push buttons, terminals, cables). Example data to check
+    /// relays, push buttons, terminals, cables), and a set of generic parts
+    /// (manufacturer `Generic`: frequency converters, power supplies, PLC,
+    /// Ethernet switches, main switches, pilot lamps, fans, vents,
+    /// enclosures, motors) with typical sizes and losses so a whole machine
+    /// can be assigned and its heat estimated. Example data to check
     /// against the manufacturer's current catalogue before ordering.
     pub fn starter() -> Self {
-        let file: CatalogFile = serde_json::from_str(include_str!("../catalog/starter.json"))
-            .expect("the built-in starter catalog is valid");
         let mut catalog = Catalog::new();
-        for part in file.parts {
-            catalog.upsert(part);
+        for json in [
+            include_str!("../catalog/starter.json"),
+            include_str!("../catalog/generic.json"),
+        ] {
+            let file: CatalogFile =
+                serde_json::from_str(json).expect("the built-in starter catalog is valid");
+            for part in file.parts {
+                catalog.upsert(part);
+            }
         }
         catalog
     }

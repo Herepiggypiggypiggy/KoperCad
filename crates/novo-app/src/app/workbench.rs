@@ -1637,7 +1637,7 @@ impl NovoApp {
             | "layout.reset" | "layout.reset_all" => {
                 self.run_layout_command(id);
             }
-            "parts.browser" => self.open_parts_browser(),
+            "parts.browser" => self.toggle_parts_browser(),
             "parts.import_step" => self.import_part_model(),
             "parts.import_eplan" => self.import_eplan_parts(),
             "parts.import_table" => self.import_parts_table(),
