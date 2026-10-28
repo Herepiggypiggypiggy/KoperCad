@@ -185,7 +185,6 @@ pub(crate) fn draws_plc_channels(definition: &BlockDefinition) -> bool {
     })
 }
 
-/// The preview line: what a placement will do.
 /// How many of the placed symbols have their origin outside the sheet.
 fn off_sheet_count(project: &novo_core::Project, page: novo_core::PageId, ids: &[AnyId]) -> usize {
     let Some(page) = project.page(page) else {
@@ -204,6 +203,7 @@ fn off_sheet_count(project: &novo_core::Project, page: novo_core::PageId, ids: &
         .count()
 }
 
+/// The preview line: what a placement will do.
 pub(crate) fn describe(report: &Report) -> String {
     let tags: Vec<String> = report.tags.iter().map(|t| t.to_string()).collect();
     let mut text = if tags.is_empty() {

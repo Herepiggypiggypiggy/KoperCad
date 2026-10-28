@@ -346,7 +346,15 @@ fn accumulate_voltage_drop(plant: &Plant, reports: &mut [CircuitReport]) {
         let mut names = Vec::new();
         let (mut at, mut steps) = (c.parent, 0);
         // The step count stops a loop of circuits fed from each other.
+        let mut stopped = false;
         while let Some(p) = at.filter(|_| steps < plant.circuits.len()) {
+            // A drop in percent of another voltage level (a transformer between
+            // the two) says nothing about this circuit's voltage: stop there.
+            let (up, here) = (plant.circuits[p].design.voltage, c.design.voltage);
+            if (up - here).abs() > 0.1 * here {
+                stopped = true;
+                break;
+            }
             if let Some(v) = own[p] {
                 upstream += v;
                 names.push(plant.circuits[p].design.name.clone());
@@ -371,12 +379,17 @@ fn accumulate_voltage_drop(plant: &Plant, reports: &mut [CircuitReport]) {
         }
         row.value = Some(total);
         row.text = format!(
-            "{} % in total (sum of the percentages): {} % in this cable plus {} % above it ({}), limit {} %",
+            "{} % in total (sum of the percentages): {} % in this cable plus {} % above it ({}), limit {} %{}",
             num(total),
             num(own_drop),
             num(upstream),
             names.join(", "),
-            num(limit)
+            num(limit),
+            if stopped {
+                "; the drop above a change of voltage is not added"
+            } else {
+                ""
+            }
         );
     }
 }
@@ -531,6 +544,21 @@ mod tests {
         );
         assert!((m1.value.unwrap() - (alone(1) + alone(0))).abs() < 1e-9);
         assert!(m1.text.contains("above it (Q1)"), "{}", m1.text);
+    }
+
+    #[test]
+    fn a_drop_above_a_voltage_change_is_not_added() {
+        let mut v = sample();
+        // A 24 V circuit fed through a transformer from the 400 V feeder.
+        v["circuits"][1]["voltage"] = json!(24);
+        let plant = parse(&v).unwrap();
+        let reports = evaluate_all(&plant, &TableSet::builtin(), None);
+        let row = reports[1]
+            .rows
+            .iter()
+            .find(|r| r.rule == Rule::VoltageDrop)
+            .unwrap();
+        assert!(!row.text.contains("above it"), "{}", row.text);
     }
 
     #[test]
