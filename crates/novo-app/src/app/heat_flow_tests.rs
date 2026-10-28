@@ -189,9 +189,9 @@ fn the_speed_map_replaces_the_temperature_slice_in_the_overlays() {
     let snap = snapshot();
     let flow = Flow::default();
     let mut h = Heat3d::default();
-    let temp = super::heat_3d::overlays(&snap, 20.0, place(), &h, &flow);
+    let temp = super::heat_3d::overlays(&snap, 20.0, place(), &h, &flow, 1.0);
     h.set_flow(FlowMode::SpeedMap);
-    let map = super::heat_3d::overlays(&snap, 20.0, place(), &h, &flow);
+    let map = super::heat_3d::overlays(&snap, 20.0, place(), &h, &flow, 1.0);
     assert_eq!(temp.len(), 1);
     assert_eq!(map.len(), 1);
     assert_ne!(temp, map);
@@ -201,12 +201,13 @@ fn the_speed_map_replaces_the_temperature_slice_in_the_overlays() {
 fn enough_air_is_adequate_and_says_how_much_the_air_warms() {
     // 600 m3/h through for 300 W: 3.1 * 300 / 600 = 1.55 K.
     let specs = [fan(Wall::Left, false), fan(Wall::Right, true)];
-    let t = through(&specs, &[Some(600.0), Some(-600.0)], 300.0).unwrap();
+    let t = through(&specs, &[Some(600.0), Some(-600.0)], 300.0, Some(240.0)).unwrap();
     assert_eq!(t.verdict, Verdict::Adequate);
     assert!((t.warming_k.unwrap() - 1.55).abs() < 0.01);
     assert!((t.total_m3h() - 600.0).abs() < 1e-9);
     let text = t.text();
     assert!(text.contains("600 m³/h") && text.contains("300 W") && text.contains("adequate"));
+    assert!(text.contains("carries out about 240 W (80 %)"), "{text}");
     assert!(t.hover().contains("Fan") && t.hover().contains("not a standard"));
 }
 
@@ -214,10 +215,10 @@ fn enough_air_is_adequate_and_says_how_much_the_air_warms() {
 fn less_air_is_low_then_very_low() {
     let specs = [fan(Wall::Left, false), fan(Wall::Right, true)];
     // 3.1 * 500 / 200 = 7.75 K.
-    let low = through(&specs, &[Some(200.0), Some(-200.0)], 500.0).unwrap();
+    let low = through(&specs, &[Some(200.0), Some(-200.0)], 500.0, None).unwrap();
     assert_eq!(low.verdict, Verdict::Low);
     // 3.1 * 500 / 60 = 25.8 K.
-    let very = through(&specs, &[Some(60.0), Some(-60.0)], 500.0).unwrap();
+    let very = through(&specs, &[Some(60.0), Some(-60.0)], 500.0, None).unwrap();
     assert_eq!(very.verdict, Verdict::VeryLow);
     assert!(very.text().contains("very low"));
 }
@@ -225,7 +226,7 @@ fn less_air_is_low_then_very_low() {
 #[test]
 fn openings_that_move_no_air_say_so() {
     let specs = [fan(Wall::Left, false)];
-    let t = through(&specs, &[Some(0.0)], 200.0).unwrap();
+    let t = through(&specs, &[Some(0.0)], 200.0, None).unwrap();
     assert_eq!(t.verdict, Verdict::None);
     assert!(t.warming_k.is_none());
     assert!(t.text().contains("mostly through the walls") && t.text().contains("(model)"));
@@ -233,8 +234,8 @@ fn openings_that_move_no_air_say_so() {
 
 #[test]
 fn no_openings_or_no_reading_gives_no_summary() {
-    assert!(through(&[], &[], 100.0).is_none());
-    assert!(through(&[fan(Wall::Left, false)], &[None], 100.0).is_none());
+    assert!(through(&[], &[], 100.0, None).is_none());
+    assert!(through(&[fan(Wall::Left, false)], &[None], 100.0, None).is_none());
 }
 
 #[test]
@@ -249,9 +250,18 @@ fn the_note_names_the_mode_and_the_scale() {
 }
 
 #[test]
-fn the_flat_view_keeps_the_main_streams_only() {
-    assert_eq!(calm_count(100), 40);
-    assert_eq!(calm_count(10), 6);
-    assert_eq!(calm_count(3), 3);
-    assert_eq!(calm_count(0), 0);
+fn strength_sets_how_many_lines_the_flat_view_keeps() {
+    assert_eq!(kept_count(100, 0.25), 40);
+    assert_eq!(kept_count(100, 1.0), 100);
+    assert_eq!(kept_count(100, 0.0), 20);
+    assert_eq!(kept_count(10, 0.0), 6);
+    assert_eq!(kept_count(3, 0.5), 3);
+    assert_eq!(kept_count(0, 0.5), 0);
+}
+
+#[test]
+fn the_scale_of_plain_speeds_is_the_same_rule() {
+    assert_eq!(speed_scale_of(&[]), 0.1);
+    assert_eq!(speed_scale_of(&[0.3; 50]), 0.5);
+    assert_eq!(speed_scale_of(&[f32::NAN, 0.05]), 0.1);
 }

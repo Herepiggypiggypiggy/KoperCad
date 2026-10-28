@@ -546,6 +546,29 @@ pub(super) fn dragged_to(
 /// usable. A model value: it follows the solver's openings, not a
 /// measurement.
 pub(super) fn measured_m3h(snap: &CfdSnapshot, f: &Footprint) -> Option<f64> {
+    let (mean, area_m2) = opening_mean(snap, f, |inward_speed, _| inward_speed)?;
+    Some(mean * area_m2 * 3600.0)
+}
+
+/// The heat the air carries out through the opening, W (negative: heat taken
+/// in), `rho cp (T - ambient) u` over the opening one cell inside its face.
+/// A model value from the same samples as [`measured_m3h`]; it leaves out
+/// radiation and conduction through the opening.
+pub(super) fn carried_out_w(snap: &CfdSnapshot, f: &Footprint, ambient_c: f64) -> Option<f64> {
+    use novo_heatview::flux::{AIR_CP, AIR_DENSITY};
+    let (mean, area_m2) = opening_mean(snap, f, |inward_speed, temp_c| {
+        -AIR_DENSITY * AIR_CP * (temp_c - ambient_c) * inward_speed
+    })?;
+    Some(mean * area_m2)
+}
+
+/// The mean over a lattice of samples one cell inside the opening's face of
+/// `value(speed into the cabinet m/s, air temperature C)`, and the area, m2.
+fn opening_mean(
+    snap: &CfdSnapshot,
+    f: &Footprint,
+    value: impl Fn(f64, f64) -> f64,
+) -> Option<(f64, f64)> {
     if !snap.is_consistent() {
         return None;
     }
@@ -575,12 +598,13 @@ pub(super) fn measured_m3h(snap: &CfdSnapshot, f: &Footprint) -> Option<f64> {
                 p[*a] = f.lo[*a] + t * (f.hi[*a] - f.lo[*a]);
             }
             let v = cfd::velocity_at(snap, p);
-            sum += f64::from(v[normal]) * inward[normal];
+            let t = cfd::temperature_at(snap, p);
+            sum += value(f64::from(v[normal]) * inward[normal], f64::from(t));
         }
     }
     let area_m2 =
         (f.hi[varying[0]] - f.lo[varying[0]]) * (f.hi[varying[1]] - f.lo[varying[1]]) / 1.0e6;
-    Some(sum / (N * N) as f64 * area_m2 * 3600.0)
+    Some((sum / (N * N) as f64, area_m2))
 }
 
 /// Seeds for streamlines that start at the air entering: a small lattice just

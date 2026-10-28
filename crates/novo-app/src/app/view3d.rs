@@ -186,6 +186,19 @@ pub(super) enum Pending {
     Preset(ViewPreset),
 }
 
+/// The top of the air speed scale for a result, worked out once per result
+/// and kept in `cache`.
+fn flow_scale_cached(cache: &mut Option<(u64, f32)>, sol: &super::heat_run::Solution) -> f32 {
+    match *cache {
+        Some((id, top)) if id == sol.id => top,
+        _ => {
+            let top = heat_flow::speed_scale(&sol.snapshot);
+            *cache = Some((sol.id, top));
+            top
+        }
+    }
+}
+
 impl Default for View3dMode {
     fn default() -> Self {
         View3dMode {
@@ -617,14 +630,7 @@ impl NovoApp {
                     .and_then(|d| d.tag.device_code().map(str::to_owned))
                     .unwrap_or_else(|| format!("device {raw}"))
             };
-            let scale_top = match mode.flow_scale {
-                Some((id, top)) if id == sol.id => top,
-                _ => {
-                    let top = heat_flow::speed_scale(&sol.snapshot);
-                    mode.flow_scale = Some((sol.id, top));
-                    top
-                }
-            };
+            let scale_top = flow_scale_cached(&mut mode.flow_scale, sol);
             // The openings of the run on screen: the air through each and the
             // verdict, from the flows read for this very result.
             let through = mode
@@ -633,7 +639,24 @@ impl NovoApp {
                 .filter(|(id, _, _)| *id == sol.id)
                 .and_then(|(_, specs, flows)| {
                     let loss: f64 = sol.snapshot.devices.iter().map(|d| d.loss_w).sum();
-                    heat_flow::through(specs, flows, loss)
+                    // The heat the air carries out, from the same openings.
+                    let carried = mode
+                        .vent_enclosure
+                        .as_ref()
+                        .and_then(|(_, e)| e.as_ref())
+                        .and_then(|e| {
+                            specs
+                                .iter()
+                                .map(|v| {
+                                    heat_openings::carried_out_w(
+                                        &sol.snapshot,
+                                        &v.footprint(e),
+                                        sol.ambient,
+                                    )
+                                })
+                                .sum::<Option<f64>>()
+                        });
+                    heat_flow::through(specs, flows, loss, carried)
                 });
             if let Some(raw) = heat_controls(
                 ui,
@@ -994,6 +1017,9 @@ impl NovoApp {
                 }
                 _ => heat_carry::Carry::default(),
             };
+            let flow_top = solution
+                .as_ref()
+                .map_or(0.1, |sol| flow_scale_cached(&mut mode.flow_scale, sol));
             mode.heat_base = solution.as_ref().map_or_else(Vec::new, |sol| {
                 heat_3d::overlays(
                     &sol.snapshot,
@@ -1001,6 +1027,7 @@ impl NovoApp {
                     place(sol),
                     &mode.heat,
                     &mode.heat_flow,
+                    flow_top,
                 )
             });
             if mode.heat.carry {
