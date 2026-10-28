@@ -538,6 +538,8 @@ enum Leaving {
     Example,
     EmcExample,
     Practice,
+    /// Open this lesson's sample project and start the lesson.
+    Lesson(String),
     Close,
     Quit,
 }
@@ -636,7 +638,6 @@ pub struct NovoApp {
 
 /// Most messages remembered; older ones are forgotten.
 const MESSAGE_HISTORY: usize = 200;
-/// How soon after a change a saved project is written to its file.
 /// How long to wait before retrying a failed autosave.
 const AUTOSAVE_RETRY: Duration = Duration::from_secs(30);
 
@@ -1017,11 +1018,22 @@ impl NovoApp {
             }
             other => other,
         };
-        if self.is_open() && self.is_dirty() {
-            self.leaving = Some(next);
+        if self.leave_later(next.clone()) {
             return;
         }
         self.do_leave(ctx, next);
+    }
+
+    /// Whether `next` has to wait for "Save changes?": true when it would
+    /// drop unsaved work, in which case it is remembered and done after the
+    /// answer. False: go ahead now.
+    fn leave_later(&mut self, next: Leaving) -> bool {
+        if self.is_open() && self.is_dirty() {
+            self.leaving = Some(next);
+            true
+        } else {
+            false
+        }
     }
 
     fn pick_project(&self, title: &str) -> Option<PathBuf> {
@@ -1045,6 +1057,7 @@ impl NovoApp {
             Leaving::Example => self.open_example(),
             Leaving::EmcExample => self.open_emc_example(),
             Leaving::Practice => self.start_practice(),
+            Leaving::Lesson(id) => self.start_lesson_now(&id),
             Leaving::Close => self.close_project(),
             Leaving::Quit => {
                 self.quitting = true;
@@ -2900,8 +2913,9 @@ impl eframe::App for NovoApp {
         // Only a process that died leaves a crash marker; a panic the program
         // survived (a failed solver run) is not offered as a crash.
         crate::diag::clear_pending_crash();
-        // A clean close deletes the recovery file, so the next start does
-        // not offer to restore work that was deliberately not saved.
+        // An answered close ("Don't save") deletes the recovery file; one
+        // nobody answered (a shutdown) keeps it, so the next start offers
+        // the work back.
         if let Err(e) = self.backend.close() {
             log::warn!("The project did not close cleanly: {e}");
         }

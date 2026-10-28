@@ -201,11 +201,11 @@ Revision fields come from the project's revisions, which also drive
 Changes mode and the pinned-flow freeze (§8). Owners: WS-03 draws the frame (`PageScene::frame`), WS-10 owns
 the reference format, and the frame choice is a rule like any other.
 
-**Saving.** The project file changes only when you save (Ctrl+S). While
+**Saving.** The project file changes only when you save (Ctrl+S). (This reverses the earlier "no save prompts, written continuously" rule; hardware finding KC-02 showed that it made experiments permanent.) While
 you work, a recovery copy of the unsaved changes is written to
-`%LOCALAPPDATA%\KoperCAD\recovery` every autosave interval (30 s by
+`%LOCALAPPDATA%\KoperCAD\recovery` every autosave interval (10 s by
 default; Preferences), never to the project file, so an experiment can
-always be thrown away. The top bar says "Unsaved changes" while the file and
+always be thrown away. The status bar (bottom right) says "Unsaved changes" while the file and
 the screen differ. Closing the project, opening another, starting a new
 one or quitting (menu, Ctrl+Q or the window's close button) with unsaved
 changes asks "Save changes?": Save, Don't save (drops the changes and their
