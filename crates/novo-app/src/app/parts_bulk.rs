@@ -99,6 +99,15 @@ fn best_sure(row: &AssignRow) -> Option<usize> {
     }
 }
 
+/// More than one sure part fits, so nothing is ticked on the user's behalf.
+fn several_sure(row: &AssignRow) -> bool {
+    row.options
+        .iter()
+        .filter(|o| o.confidence != Confidence::Unsure)
+        .count()
+        > 1
+}
+
 fn confidence_colour(p: &novo_theme::Palette, c: Confidence) -> egui::Color32 {
     match c {
         Confidence::Certain => p.success,
@@ -478,9 +487,12 @@ impl NovoApp {
                                     confidence_colour(palette, o.confidence),
                                     o.confidence.label(),
                                 );
-                                ui.add(
-                                    egui::Label::new(egui::RichText::new(&o.reason).weak()).wrap(),
-                                );
+                                let why = if row.chosen.is_none() && several_sure(row) {
+                                    format!("{} Several parts fit: pick one to tick.", o.reason)
+                                } else {
+                                    o.reason.clone()
+                                };
+                                ui.add(egui::Label::new(egui::RichText::new(why).weak()).wrap());
                                 ui.end_row();
                             }
                         });
@@ -623,6 +635,8 @@ mod tests {
         // Two letter-only parts fit each contactor: nothing is ticked.
         assert_eq!(preview.chosen_count(), 0);
         assert_eq!(preview.rows[0].options.len(), 2);
+        // The dialog says why, instead of leaving the tick blank without a word.
+        assert!(several_sure(&preview.rows[0]));
         // The person picks the second part for -K1 and skips -K2.
         preview.rows[0].chosen = Some(1);
         assert!(d.app.confirm_auto_assign());
