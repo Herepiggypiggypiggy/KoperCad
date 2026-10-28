@@ -265,3 +265,15 @@ fn the_scale_of_plain_speeds_is_the_same_rule() {
     assert_eq!(speed_scale_of(&[0.3; 50]), 0.5);
     assert_eq!(speed_scale_of(&[f32::NAN, 0.05]), 0.1);
 }
+
+#[test]
+fn the_carried_watts_are_printed_only_with_a_value_and_a_loss() {
+    let specs = [fan(Wall::Left, false), fan(Wall::Right, true)];
+    let flows = [Some(600.0), Some(-600.0)];
+    let with = through(&specs, &flows, 300.0, Some(150.0)).unwrap();
+    assert!(with.text().contains("carries out about 150 W (50 %)"));
+    let none = through(&specs, &flows, 300.0, None).unwrap();
+    assert!(!none.text().contains("carries out"));
+    let no_loss = through(&specs, &flows, 0.0, Some(150.0)).unwrap();
+    assert!(!no_loss.text().contains("carries out"));
+}

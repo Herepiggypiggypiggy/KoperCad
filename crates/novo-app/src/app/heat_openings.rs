@@ -921,4 +921,36 @@ mod tests {
             "{seeds:?}"
         );
     }
+
+    /// A grille on the left face (x = 0) of the synthetic 100 x 80 x 60 mm box.
+    fn grille() -> Footprint {
+        Footprint {
+            wall: Wall::Left,
+            lo: [0.0, 20.0, 10.0],
+            hi: [0.0, 60.0, 50.0],
+        }
+    }
+
+    #[test]
+    fn air_leaving_warm_carries_rho_cp_dt_u_area_out() {
+        use novo_heatview::flux::{AIR_CP, AIR_DENSITY};
+        let mut snap = super::super::heat_3d_tests::snapshot();
+        // 0.5 m/s out of the cabinet, 8 K above a 20 C room, everywhere.
+        snap.velocity.iter_mut().for_each(|v| *v = [-0.5, 0.0, 0.0]);
+        snap.temperature_c.iter_mut().for_each(|t| *t = 28.0);
+        let w = carried_out_w(&snap, &grille(), 20.0).unwrap();
+        let want = AIR_DENSITY * AIR_CP * 8.0 * 0.5 * (40.0 * 40.0 / 1.0e6);
+        assert!(w > 0.0 && (w - want).abs() < 0.01 * want, "{w} vs {want}");
+        // The same opening reads as air leaving.
+        assert!(measured_m3h(&snap, &grille()).unwrap() < 0.0);
+    }
+
+    #[test]
+    fn air_coming_in_at_room_temperature_carries_nothing() {
+        let mut snap = super::super::heat_3d_tests::snapshot();
+        snap.velocity.iter_mut().for_each(|v| *v = [0.5, 0.0, 0.0]);
+        snap.temperature_c.iter_mut().for_each(|t| *t = 20.0);
+        let w = carried_out_w(&snap, &grille(), 20.0).unwrap();
+        assert!(w.abs() < 1e-3, "{w}");
+    }
 }
