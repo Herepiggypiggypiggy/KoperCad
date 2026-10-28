@@ -48,6 +48,24 @@ static GPU: OnceLock<String> = OnceLock::new();
 static OS: OnceLock<String> = OnceLock::new();
 static DISPLAY: Mutex<String> = Mutex::new(String::new());
 
+/// Graphics errors the device reported and the program carried on from: how
+/// many, the first message, and when one was last written to the log.
+struct GraphicsErrors {
+    count: u64,
+    first: String,
+    last: String,
+    last_logged: Option<std::time::Instant>,
+}
+static GRAPHICS_ERRORS: Mutex<GraphicsErrors> = Mutex::new(GraphicsErrors {
+    count: 0,
+    first: String::new(),
+    last: String::new(),
+    last_logged: None,
+});
+
+/// Seconds between two log lines for the same graphics error.
+const GRAPHICS_ERROR_LOG_GAP: u64 = 10;
+
 /// `%LOCALAPPDATA%\KoperCAD\logs`, or the platform's per-user data folder.
 /// With a profile folder (`--profile-dir`) it is `<profile>/local/KoperCAD/logs`.
 pub fn default_log_dir() -> Option<PathBuf> {
@@ -147,6 +165,34 @@ pub fn set_display(description: String) {
     }
 }
 
+/// Counts a graphics error the program carried on from. The log gets the first
+/// message, a new message at once, and a repeat at most every few seconds with
+/// the running count, so a driver that fails every frame cannot flood it.
+pub fn note_graphics_error(message: &str) {
+    let Ok(mut e) = GRAPHICS_ERRORS.lock() else {
+        return;
+    };
+    e.count += 1;
+    if e.count == 1 {
+        e.first = message.to_owned();
+    }
+    let repeat = e.last == message;
+    let due = e
+        .last_logged
+        .is_none_or(|t| t.elapsed().as_secs() >= GRAPHICS_ERROR_LOG_GAP);
+    if !repeat || due {
+        log::error!("Graphics error, continuing (#{}): {message}", e.count);
+        e.last = message.to_owned();
+        e.last_logged = Some(std::time::Instant::now());
+    }
+}
+
+/// How many graphics errors there were and the first message, if any.
+pub fn graphics_errors() -> Option<(u64, String)> {
+    let e = GRAPHICS_ERRORS.lock().ok()?;
+    (e.count > 0).then(|| (e.count, e.first.clone()))
+}
+
 /// The graphics adapter in use, once the window has opened.
 pub fn gpu() -> Option<String> {
     GPU.get().cloned()
@@ -227,6 +273,9 @@ fn write_header(out: &mut String) {
         "Graphics: {}",
         GPU.get().map_or("not known yet", String::as_str)
     );
+    if let Some((count, first)) = graphics_errors() {
+        let _ = writeln!(out, "Graphics errors survived: {count}, first: {first}");
+    }
     if let Some(avoided) = crate::startup::avoided_for_report() {
         let _ = writeln!(
             out,
@@ -566,6 +615,20 @@ fn civil(t: SystemTime) -> (i64, u32, u32, u32, u32, u32) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn graphics_errors_are_counted_and_the_report_names_the_first() {
+        let before = graphics_errors().map_or(0, |(n, _)| n);
+        note_graphics_error("Surface::configure: too big");
+        note_graphics_error("Surface::configure: too big");
+        note_graphics_error("Surface::configure: too big");
+        let (count, first) = graphics_errors().unwrap();
+        assert_eq!(count, before + 3);
+        assert!(!first.is_empty());
+        let mut out = String::new();
+        write_header(&mut out);
+        assert!(out.contains("Graphics errors survived:"), "{out}");
+    }
+
     use super::*;
     use std::time::Duration;
 
