@@ -22,7 +22,8 @@ State is now one `ViewOption` in `crates/novo-app/src/app/view3d_options.rs`. Th
 | --- | --- | --- | --- |
 | Enclosure, Door, Wires, Device shapes, Slotted ducts | `controls.layers` | Layers popover | `view.3d_shell`, `view.3d_door_layer`*, `view.3d_wires`, `view.3d_device_shapes`*, `view.3d_slotted_ducts` |
 | Surfaces, Duct fill, Connection points | `controls` | Layers popover | `view.3d_surfaces`*, `view.3d_duct_fill`*, `view.3d_pins`* |
-| Shadows, Metal finish, Occlusion, Missing data, Dimensions | `controls` | Layers popover | `view.3d_shadows`, `view.3d_finish`, `view.3d_ssao`, `view.3d_missing_data`*, `view.3d_dimensions` |
+| Shadows, Metal finish, Occlusion, Missing data | `controls` | Layers popover | `view.3d_shadows`, `view.3d_finish`, `view.3d_ssao`, `view.3d_missing_data`* |
+| Dimensions (measuring aid, next to Measure) | `controls.dimensions` | Dimensions | `view.3d_dimensions` |
 | Trackpad pans (preference) | `settings.trackpad_pans` | Layers popover | `view.3d_trackpad_pans`* |
 | Build order, Wire-it (walk through) | `controls.assembly`, `controls.wire_it` | Layers popover, "Walk through" | `view.3d_assembly`, `view.3d_wire_it` |
 | Heat | `cabinet.heat.on` (shared with the Cabinet) | Heat | `heat.toggle` (in 3D it flips the switch in place; elsewhere it opens the Cabinet heat view) |
