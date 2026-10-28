@@ -86,6 +86,8 @@ pub(crate) struct PartsWindow {
     etim_line: Option<Option<String>>,
     /// Add CAD files: matching of downloaded files to parts, while open.
     cad: Option<CadPanel>,
+    /// Export and import of a library bundle.
+    bundles: super::parts_bundle::BundleUi,
     /// Files dropped or picked that are still being read in the background.
     waiting: Vec<Waiting>,
     /// Repaints the window when a background read finishes; set on the first
@@ -182,6 +184,7 @@ impl PartsWindow {
             guide: false,
             etim_line: None,
             cad: None,
+            bundles: Default::default(),
             waiting: Vec::new(),
             wake: None,
         }
@@ -445,6 +448,18 @@ impl PartsWindow {
         if let Some(panel) = self.cad.as_mut() {
             for p in panel.poll() {
                 self.catalog.upsert(p);
+            }
+        }
+        let added = self.bundles.poll();
+        if !added.is_empty() {
+            for p in &added {
+                self.catalog.upsert(p.clone());
+            }
+            if let Some(path) = self.catalog_path.as_deref()
+                && let Err(e) = super::parts_import::save_parts_to_user_catalog(path, &added)
+            {
+                self.bundles
+                    .note(format!("The parts could not be saved to your catalog: {e}"));
             }
         }
     }
@@ -816,6 +831,10 @@ fn side_label(side: Side) -> Option<&'static str> {
 enum PartsAction {
     /// Open the table import with its mapping step.
     ImportTable,
+    /// Open the export form of Export library.
+    ExportLibrary,
+    /// Ask for a library bundle and open it.
+    ImportLibrary,
     Select(PartKey),
     Import(PartKey),
     OpenPage(String),
@@ -957,6 +976,19 @@ impl NovoApp {
         if !picked_cad.is_empty() {
             win.add_cad_files(&picked_cad);
         }
+        // A library bundle dropped on the window opens in the bundle dialog.
+        let (bundle_files, dropped): (Vec<PathBuf>, Vec<PathBuf>) = dropped
+            .into_iter()
+            .partition(|p| matches!(classify(p), Dropped::Bundle));
+        if let Some(path) = bundle_files.into_iter().next() {
+            let env = super::parts_bundle::Env {
+                catalog: &win.catalog,
+                library: win.library.as_ref(),
+                wake: win.wake.as_ref(),
+                today: today(),
+            };
+            win.bundles.open_path(path, &env);
+        }
         let mut catalog_files = Vec::new();
         let mut table_file = None;
         let mut no_part_for = None;
@@ -985,7 +1017,7 @@ impl NovoApp {
                 match kind {
                     Dropped::Table => table_file = Some(path.clone()),
                     Dropped::Catalog => catalog_files.push(path.clone()),
-                    Dropped::Cad => {}
+                    Dropped::Cad | Dropped::Bundle => {}
                     Dropped::Other => {
                         no_part_for = path.file_name().map(|n| n.to_string_lossy().into_owned());
                     }
@@ -1019,6 +1051,16 @@ impl NovoApp {
                     {
                         table_file = Some(path);
                     }
+                }
+                PartsAction::ExportLibrary => win.bundles.start_export(),
+                PartsAction::ImportLibrary => {
+                    let env = super::parts_bundle::Env {
+                        catalog: &win.catalog,
+                        library: win.library.as_ref(),
+                        wake: win.wake.as_ref(),
+                        today: today(),
+                    };
+                    win.bundles.start_import(&env);
                 }
                 PartsAction::AddCadFiles => {
                     if let Some(files) = crate::dialogs::FileDialog::new()
@@ -1396,6 +1438,23 @@ fn parts_ui(
                     }
                 }
                 ui.separator();
+                for (label, hint, action) in [
+                    (
+                        "Export library\u{2026}",
+                        "Write your parts, and optionally their CAD files, into one file to move to another computer or to share.",
+                        PartsAction::ExportLibrary,
+                    ),
+                    (
+                        "Import library\u{2026}",
+                        "Read a library file written by Export library. You can also drop it on this window.",
+                        PartsAction::ImportLibrary,
+                    ),
+                ] {
+                    if ui.button(label).on_hover_text(hint).clicked() {
+                        actions.push(action);
+                        ui.close();
+                    }
+                }
                 if ui
                     .button("Maker guide")
                     .on_hover_text("What to download from each maker and where to save it.")
@@ -1445,6 +1504,15 @@ fn parts_ui(
     }
     if win.new_part.is_some() {
         new_part_ui(ui, win);
+    }
+    if win.bundles.visible() {
+        let env = super::parts_bundle::Env {
+            catalog: &win.catalog,
+            library: win.library.as_ref(),
+            wake: win.wake.as_ref(),
+            today: today(),
+        };
+        win.bundles.show(ui, &env);
     }
     if let Some(text) = super::parts_identity::reading_text().filter(|_| !win.waiting.is_empty()) {
         ui.horizontal(|ui| {
