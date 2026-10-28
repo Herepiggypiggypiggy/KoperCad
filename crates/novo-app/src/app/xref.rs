@@ -41,10 +41,10 @@ impl NovoApp {
 
     /// The cross-reference labels of a page, as notes for the page scene.
     pub(super) fn xref_notes(&mut self, page: PageId) -> Vec<SymbolNote> {
-        let density = self.settings.xref_density();
+        let (density, spare) = (self.settings.xref_density(), !self.settings.xref_hide_spare);
         self.xref_labels(page)
             .into_iter()
-            .map(|l| note(l, density))
+            .map(|l| note(l, density, spare))
             .collect()
     }
 
@@ -55,7 +55,7 @@ impl NovoApp {
             .document()
             .map(|d| d.project().pages().map(|p| p.id).collect())
             .unwrap_or_default();
-        let density = self.settings.xref_density();
+        let (density, spare) = (self.settings.xref_density(), !self.settings.xref_hide_spare);
         let Some(index) = self.xref() else {
             return BTreeMap::new();
         };
@@ -65,7 +65,7 @@ impl NovoApp {
                 let notes = index
                     .labels_on_page(p)
                     .into_iter()
-                    .map(|l| note(l, density))
+                    .map(|l| note(l, density, spare))
                     .collect();
                 (p, notes)
             })
@@ -107,6 +107,28 @@ impl NovoApp {
                 self.show_page(go.to.page);
                 self.wb.pending = Some(go.to);
             }
+            None => self.message(Level::Info, "Nothing to jump to from here"),
+        }
+    }
+
+    /// A double click on a cross reference: a row of a coil's contact table
+    /// jumps to that contact, a contact's reference to its coil. Alt+Left
+    /// comes back.
+    pub(super) fn follow_note_jump(&mut self) {
+        let Some(jump) = self.canvas.schematic().and_then(|v| v.take_note_jump()) else {
+            return;
+        };
+        let place = {
+            let Some(index) = self.xref() else {
+                return;
+            };
+            match jump.to {
+                Some(to) => index.reference(to).map(Place::of),
+                None => index.partners(jump.from).first().map(|r| Place::of(r)),
+            }
+        };
+        match place {
+            Some(place) => self.wb.deferred_jump = Some(place),
             None => self.message(Level::Info, "Nothing to jump to from here"),
         }
     }
@@ -207,22 +229,29 @@ pub(super) fn xref_of<'a>(
 }
 
 /// A cross-reference label as a note drawn next to its symbol: a coil's
-/// contact image becomes the contact table, its warnings stay text below.
-pub(crate) fn note(label: Label, density: NoteDensity) -> SymbolNote {
-    let rows: Vec<NoteRow> = label
+/// contact image becomes the contact table (its warnings stay text below),
+/// followed by the spare contacts when `spare` is set.
+pub(crate) fn note(label: Label, density: NoteDensity, spare: bool) -> SymbolNote {
+    let mut rows: Vec<NoteRow> = label
         .rows
         .iter()
         .map(|r| NoteRow {
-            glyph: glyph_of(r.kind),
-            pins: r.pins.clone(),
-            location: r.location.clone(),
+            target: Some(r.symbol),
+            ..NoteRow::new(glyph_of(r.kind), &r.pins, &r.location)
         })
         .collect();
-    let lines = if rows.is_empty() {
-        label.lines
+    let mut lines = if rows.is_empty() {
+        label.lines.clone()
     } else {
         label.extra_lines().to_vec()
     };
+    if !rows.is_empty() && spare {
+        lines.extend(label.spare_more_line());
+        rows.extend(label.spare.iter().map(|r| NoteRow {
+            spare: true,
+            ..NoteRow::new(glyph_of(r.kind), &r.pins, "spare")
+        }));
+    }
     SymbolNote {
         symbol: label.symbol,
         lines,

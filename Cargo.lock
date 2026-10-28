@@ -1951,12 +1951,14 @@ dependencies = [
  "novo-commissioning",
  "novo-controller",
  "novo-core",
+ "novo-drive",
  "novo-editor",
  "novo-emc",
  "novo-heatview",
  "novo-interop",
  "novo-layout",
  "novo-learn",
+ "novo-machine",
  "novo-numbering",
  "novo-parts",
  "novo-pdf",
@@ -1977,6 +1979,7 @@ dependencies = [
  "novo-workflow",
  "novo-xref",
  "pollster 0.4.0",
+ "raw-window-handle",
  "rfd",
  "ron",
  "serde",
@@ -1984,6 +1987,7 @@ dependencies = [
  "tempfile",
  "ureq",
  "winresource",
+ "zip",
 ]
 
 [[package]]
@@ -2384,6 +2388,7 @@ dependencies = [
  "novo-py",
  "novo-reports",
  "novo-routing",
+ "novo-sim",
  "novo-storage",
  "novo-symbols",
  "novo-terminals",

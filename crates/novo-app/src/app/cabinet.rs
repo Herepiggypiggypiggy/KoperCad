@@ -212,6 +212,8 @@ pub(super) enum Ask {
     Cancel,
     ToggleTable,
     TogglePlateCard,
+    /// The inspector's close button: no plate card, nothing selected.
+    CloseInspector,
     ToggleRoutes,
     ToggleEmc,
     ExportWireCut,
@@ -2388,7 +2390,7 @@ impl NovoApp {
                 // Ctrl+T and the command field switch the table on without
                 // asking the bar, so the plate is checked here: there is no
                 // table without a plate, and silence reads as a dead key.
-                if structure.is_some() && std::mem::take(&mut self.cabinet.table) {
+                if structure.is_some() && ask.is_none() && std::mem::take(&mut self.cabinet.table) {
                     ask = Some(Ask::ToggleTable);
                 }
                 let search_asked = self.cabinet.heat.layout.needs_plate();
@@ -2742,6 +2744,10 @@ impl NovoApp {
             }
             Ask::ToggleTable => self.cabinet.table ^= true,
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
+            Ask::CloseInspector => {
+                self.cabinet.plate_card = false;
+                self.cabinet.view.selection.clear();
+            }
             Ask::ExportPlate => {
                 self.learn_command("export.plate");
                 self.export_plate_pdf();

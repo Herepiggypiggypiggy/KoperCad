@@ -363,6 +363,70 @@ watch imports the DXF, DWG or STEP the user saves. Notes:
   use, the first-use notice stays in place and the question list (section 2a)
   asks Schneider about CAD use in commercial projects.
 
+## 3d-2. CAD file matching (Add CAD files)
+
+Why: the hardware test of 2026-10-28 showed that real CAD downloads are not
+named after the article. Schneider's LC1D09 model arrives as
+`MCADPP0003371_3D-simplified.stp` and its drawing as
+`MCADPP0003371_2D-front.dxf` (a document id, no order number), and the model
+inside calls itself `LC1D09-18-DC`, a family of contactors. The old window
+filed a dropped file under the selected part without a check, took only the
+first of several dropped files, and the Downloads watch passed over any file
+whose name did not hold the order number.
+
+What happens now (`novo-parts::cadmatch`, window code `parts_cad.rs`):
+
+- **Reading.** For a STEP file: `FILE_NAME`, the maker named in its header, the
+  `PRODUCT` names (not `PRODUCT_DEFINITION`), and a size. For a DXF: the
+  comment lines (the source path of a CAD export). For a ZIP or EDZ: member
+  names and the STEP and DXF inside. Generic names (`NOT SPECIFIED`, `Part1`)
+  are dropped.
+- **Names against a part.** The order number in any name is the strongest
+  evidence (`Verified`), counting the digits-only spelling WAGO uses and the
+  stems a maker's recipe leaves out; a name that holds a longer article number
+  starting with this part's (`LC1D09BD` vs `LC1D09`) belongs to the longer
+  one. A type number is next, then a family range (`LC1D09-18` covers
+  `LC1D09BD` to `LC1D18BD`; the letters after the range are noted when the
+  part's description repeats them). A family, type or download set is only
+  `Likely`, never `Verified`.
+- **Download sets.** Files that share a document id (the first `_` segment
+  of the name, eight characters or more with five digits or more) belong
+  together. Once one is matched, the others in the same batch, and later ones
+  through `cad-links.json` in the library folder, follow without naming the
+  part. A link is saved only for files the matcher stood behind.
+- **Size.** Compared with the part's dimensions with the axes sorted. A size
+  from the solid fits within 15 %, is "a bit different" within 30 %, and
+  speaks against the part beyond that. The box around all points of a STEP
+  file can be 6 to 12 times too large (construction geometry), so such a size
+  can only speak against a part (smaller than the part by 30 % or more along
+  an axis), never for it.
+- **What the user sees.** `Parts > Add CAD files...` (or drop one or more
+  files on the window): a row per file, the parts it may be for with a verdict
+  (Checked, Probably this part, Please check) and the evidence in words,
+  tick boxes, and Import ticked. A family file can be stored for several
+  parts. A single file dropped on a selected part is checked first; if it
+  looks like another part's the panel opens with the reasons and a better
+  home ticked, and nothing is stored until Import. A file that names nothing
+  at all is imported and the result says that nothing was checked. The
+  Downloads watch reads files whose names do not mention the part and imports
+  one whose own names say it is for the part; the others are listed with
+  the reason.
+- **Accounts.** `MakerRecipe::account_note`: one sentence per maker saying
+  whether an account is needed; KoperCAD never signs in, never asks for or keeps
+  a password. Shown while the Parts window waits for a download and in the
+  maker guide.
+
+Verified against a real source: Schneider LC1D09 STEP and DXF (downloaded by
+hand from se.com, 2026-10-28; kept out of the repository): the identity is
+read in 8 ms, the family range and document id are found, the DXF follows its
+STEP (`tests/cadmatch_real.rs`, run with `KOPERCAD_REAL_CAD_DIR`, which CI
+does not set: it was run by hand). The size check uses the measured solid
+(`measure_step`): the real LC1D09 model reads 45 x 77 x 95 mm and fits the
+catalog part. Not verified: any WAGO, Siemens or Phoenix file (they need an
+account the project does not have), and file names other than the ones above.
+A file for a variant (`LC1D09BD`) can be taken as "Checked" for the base
+article when the longer article is not in the catalog.
+
 ## 3e. Maker recipes (parts: maker packs)
 
 One recipe per maker (`crates/novo-parts/src/recipes/`): WAGO, Phoenix
@@ -397,6 +461,36 @@ never copies EPLAN's library; the user's download stays the only way in.
 - **Tests.** `tests/golden/<maker>/sample.*` with a recorded
   `sample.expected.json`, one per recipe. The samples are synthetic (see the
   README there); a real file replaces one with one command.
+
+## 3e-2. BMEcat 1.2, prices and ETIM codes (2026-10-28)
+
+Hardware reports (KC-06, KC-07, KC-08) showed that a real maker file would lose
+its technical data and every price. What changed, and the rules behind it:
+
+- **BMEcat 1.2 and 2005** are read by one reader (`novo-parts::bmecat`); the 1.2
+  element names are mapped to the 2005 names.
+- **A price says what it is for.** `Price` gained `unit` (empty means pieces):
+  `per 100`, `per 1000 m`, `per pair`. It is stored in the catalog as an optional
+  field, so older catalog files load unchanged. The quantity comes from
+  `PRICE_QUANTITY` and `NO_CU_PER_OU`; the list price (`net_list`, smallest
+  quantity) wins; a customer price is used only when it is the only one, with a
+  note. Nothing is invented: a price with no currency, a zero or negative amount,
+  an unreadable number or a quantity that is not whole is left out and listed.
+- **ETIM codes are read through a release the user installs.** KoperCAD carries no
+  ETIM codes and does not bundle the release (ETIM International publishes it; the
+  download may ask for a sign-in, which happens in the user's own browser, so
+  the "never store or ask for a password" rule holds). `EtimModel` reads the
+  release's CSV tables by the codes in their columns, keeps a compact copy in the
+  profile (`etim\etim-model.json`) and every import translates feature, unit and
+  value codes through it. A code it does not know is left as it is and counted in
+  the report with what to do. The reader has been tested on made-up tables in the
+  layouts it documents, not on an actual release file.
+- **Checks** the docs promised now run: sizes a file gives only in part, articles
+  without an order number (listed), the table import's order-number check, and a
+  part found in two files with different price or description (both files named).
+
+How the user does it: `PARTS-BULK-IMPORT.md` (Parts window > More > Install ETIM
+release, or `kopercad-cli parts etim <file>`).
 
 ## 4. Offline and no admin rights
 

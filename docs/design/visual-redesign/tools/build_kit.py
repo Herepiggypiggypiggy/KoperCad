@@ -38,7 +38,7 @@ shield-check circle push-pin-simple arrow-square-out frame-corners cursor-click 
 arrows-clockwise tray archive file-arrow-up image selection-all bounding-box toggle-left wave-sine flag note-pencil table  printer
 git-commit circle-notch sun moon palette rows-plus-bottom open-ai-logo hard-drives map-trifold  list-checks list-bullets textbox
 resize arrows-horizontal dock-simple monitor app-window picture-in-picture arrow-line-right arrow-line-left dots-six  cpu plug-charging
-wall power battery-charging lightning-a gear toolbox target fast-forward rewind pause stop timer clock puzzle-piece shield-warning toggle-right lock-key game-controller broadcast certificate fingerprint prohibit seal-warning plug record""".split()
+wall power battery-charging lightning-a gear toolbox target fast-forward rewind pause stop timer clock puzzle-piece shield-warning toggle-right lock-key game-controller broadcast certificate fingerprint prohibit seal-warning plug record arrow-square-in""".split()
 
 # the schematic and palette use these library symbols
 SUBSET = json.load(open(os.path.join(HERE, "symbols-subset.json")))

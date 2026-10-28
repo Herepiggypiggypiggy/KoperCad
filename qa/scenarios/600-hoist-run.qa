@@ -1,0 +1,49 @@
+@title Hoist run: the pendant lifts the hook, the drawn limit stops coarse
+@area Simulate
+@sizes 1366x768
+# Opens the two-speed hoist fixture, starts Simulate > Hoist run, switches Live on.
+open qa/fixtures/hoist-two-speed.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate hoist run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+shot hoist-started
+key ctrl+k
+wait 3
+text Simulate hoist run
+wait 4
+key Enter
+wait 20
+key Home
+wait 30
+shot live-at-rest
+# Hold up step 2 (coarse): the hook rises fast until the drawn upper limit opens its contact.
+mouse_down 75 343
+wait 40
+shot coarse-rising
+wait 400
+shot limit-reached
+mouse_up 75 343
+wait 10
+# Up step 1 (fine) is not cut by the coarse-only limit: the hook keeps rising slowly.
+mouse_down 75 273
+wait 150
+shot fine-above-the-limit
+mouse_up 75 273
+wait 100
+key ctrl+k
+wait 3
+text Simulate hoist run
+wait 4
+key Enter
+wait 30
+expect "rpm"
+shot readings
+check_layout

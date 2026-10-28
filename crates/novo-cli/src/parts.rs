@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 
 use clap::{Args, Subcommand};
 use novo_parts::{
-    InboxOptions, default_inbox, import_inbox, maker_guide, prepare_inbox, user_catalog_path,
+    EtimModel, InboxOptions, default_inbox, import_inbox, maker_guide, prepare_inbox,
+    user_catalog_path,
 };
 
 use crate::{Failure, exit, print};
@@ -39,6 +40,17 @@ pub(crate) enum Parts {
         #[command(flatten)]
         at: Where,
     },
+    /// Install the ETIM release you downloaded from ETIM International, so
+    /// ETIM codes in BMEcat files (feature EF..., unit EU..., value EV...)
+    /// are read as words. Name its ZIP, its folder or a CSV file; without a
+    /// name, show which release is installed. KoperCAD does not ship ETIM.
+    Etim {
+        /// The release: a ZIP, a folder of CSV files, or one CSV file.
+        path: Option<PathBuf>,
+        /// The catalog the release is kept beside. Default: the user's.
+        #[arg(long, value_name = "FILE")]
+        catalog: Option<PathBuf>,
+    },
     /// Which file to download from which maker, and what needs a login.
     Guide {
         #[command(flatten)]
@@ -64,6 +76,28 @@ pub(crate) fn run(cmd: Parts, out: &mut dyn Write) -> Result<i32, Failure> {
             let made = prepare_inbox(&dir).map_err(|e| fail(exit::WRITE, e))?;
             print(out, &format!("Inbox: {}", dir.display()))?;
             print(out, &format!("{} new folders.", made.len()))?;
+            Ok(exit::OK)
+        }
+        Parts::Etim { path, catalog } => {
+            let dir = EtimModel::dir_for(catalog.as_deref()).ok_or_else(|| {
+                Failure::new(
+                    exit::READ,
+                    "no profile folder; name a catalog with --catalog",
+                )
+            })?;
+            let Some(path) = path else {
+                match EtimModel::load_installed(&dir) {
+                    Some(m) => print(out, &format!("Installed: {}", m.summary()))?,
+                    None => print(
+                        out,
+                        "No ETIM release is installed. Download one from ETIM International and run `kopercad-cli parts etim <file or folder>`.",
+                    )?,
+                }
+                return Ok(exit::OK);
+            };
+            let model = EtimModel::install(&path, &dir).map_err(|e| fail(exit::READ, e))?;
+            print(out, &format!("Installed: {}", model.summary()))?;
+            print(out, &format!("Kept in {}", dir.display()))?;
             Ok(exit::OK)
         }
         Parts::Guide { at } => {

@@ -139,6 +139,24 @@ Check that it is the order number and not a type name.",
         }
     }
 
+    /// What the user needs to know about an account, in plain words. The
+    /// same text everywhere (Parts window, maker guide) so it never differs:
+    /// KoperCAD does not sign in, ask for or keep a password.
+    pub fn account_note(&self) -> String {
+        let portal = self.route.portal;
+        let never = "You sign in in your own browser; KoperCAD never asks for or keeps your password and never signs in for you.";
+        match self.route.login {
+            Login::None => format!(
+                "No account is needed for this download ({portal}). KoperCAD does not sign in anywhere."
+            ),
+            Login::Free => format!("A free account is needed at {portal}. {never}"),
+            Login::Required => format!("An account is needed at {portal}. {never}"),
+            Login::Unknown => format!(
+                "It is not known whether {portal} asks you to sign in. If it does, do it in your own browser: KoperCAD never asks for or keeps your password."
+            ),
+        }
+    }
+
     /// The steps with `{order}` filled in.
     pub fn steps_for(&self, order: &str) -> Vec<String> {
         self.steps

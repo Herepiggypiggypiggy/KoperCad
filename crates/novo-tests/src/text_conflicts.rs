@@ -447,14 +447,17 @@ pub fn note_of(label: novo_xref::Label) -> SymbolNote {
         .rows
         .iter()
         .map(|r| NoteRow {
-            glyph: match r.kind {
-                ContactKind::Power => NoteGlyph::Power,
-                ContactKind::NormallyClosed => NoteGlyph::NormallyClosed,
-                ContactKind::Changeover => NoteGlyph::Changeover,
-                ContactKind::NormallyOpen | ContactKind::Other => NoteGlyph::NormallyOpen,
-            },
-            pins: r.pins.clone(),
-            location: r.location.clone(),
+            target: Some(r.symbol),
+            ..NoteRow::new(
+                match r.kind {
+                    ContactKind::Power => NoteGlyph::Power,
+                    ContactKind::NormallyClosed => NoteGlyph::NormallyClosed,
+                    ContactKind::Changeover => NoteGlyph::Changeover,
+                    ContactKind::NormallyOpen | ContactKind::Other => NoteGlyph::NormallyOpen,
+                },
+                &r.pins,
+                &r.location,
+            )
         })
         .collect();
     let lines = if rows.is_empty() {

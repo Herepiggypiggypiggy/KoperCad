@@ -81,6 +81,77 @@ fn harness(
     Some(answer.unwrap_or_default())
 }
 
+/// The main window as the owner of native file dialogs (KC-11). Without an
+/// owner Windows opens a dialog on the primary monitor, not where the window
+/// is. Windows only; elsewhere the toolkit picks the owner itself.
+#[cfg(windows)]
+mod owner {
+    use raw_window_handle::{
+        DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
+        WindowHandle,
+    };
+    use std::cell::Cell;
+
+    thread_local! {
+        /// Set every frame on the window thread, where dialogs are opened.
+        static MAIN: Cell<Option<RawWindowHandle>> = const { Cell::new(None) };
+    }
+
+    pub fn remember(window: &impl HasWindowHandle) {
+        MAIN.with(|m| m.set(window.window_handle().ok().map(|h| h.as_raw())));
+    }
+
+    pub struct Owner(RawWindowHandle);
+
+    pub fn current() -> Option<Owner> {
+        MAIN.with(|m| m.get()).map(Owner)
+    }
+
+    impl HasWindowHandle for Owner {
+        fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+            // SAFETY: the handle comes from the live main window in `remember`,
+            // on this thread, and is only read while a dialog is being built.
+            // rfd copies the raw handle at once and does not keep the borrow.
+            // If the window were gone anyway, the handle would be stale and the
+            // operating system would refuse it with an error; nothing in this
+            // program dereferences it, so that is an error, not undefined
+            // behaviour.
+            #[allow(unsafe_code)]
+            Ok(unsafe { WindowHandle::borrow_raw(self.0) })
+        }
+    }
+
+    impl HasDisplayHandle for Owner {
+        fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+            Ok(DisplayHandle::windows())
+        }
+    }
+}
+
+/// Remembers the main window so file dialogs open on its monitor.
+#[cfg(windows)]
+pub fn remember_owner(window: &impl raw_window_handle::HasWindowHandle) {
+    owner::remember(window);
+}
+
+/// Not needed away from Windows.
+#[cfg(not(windows))]
+pub fn remember_owner<W>(_window: &W) {}
+
+static NATIVE_DIALOG_RAN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn native_done<T>(answer: T) -> T {
+    NATIVE_DIALOG_RAN.store(true, std::sync::atomic::Ordering::Relaxed);
+    answer
+}
+
+/// True once after a native dialog closed. The window under a dialog is not
+/// redrawn while it is open, and with the software renderer (`--safe-graphics`)
+/// the first repaint came late (KC-13): the caller asks for a few repaints.
+pub fn take_native_dialog_ran() -> bool {
+    NATIVE_DIALOG_RAN.swap(false, std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Same builder as `rfd::FileDialog`, for the calls this app makes.
 pub struct FileDialog {
     inner: rfd::FileDialog,
@@ -92,8 +163,14 @@ pub struct FileDialog {
 
 impl FileDialog {
     pub fn new() -> Self {
+        let inner = rfd::FileDialog::new();
+        #[cfg(windows)]
+        let inner = match owner::current() {
+            Some(o) => inner.set_parent(&o),
+            None => inner,
+        };
         FileDialog {
-            inner: rfd::FileDialog::new(),
+            inner,
             title: String::new(),
             dir: None,
             name: None,
@@ -141,7 +218,7 @@ impl FileDialog {
             &self.filters,
         ) {
             Some(a) => a.into_iter().next(),
-            None => self.inner.pick_file(),
+            None => native_done(self.inner.pick_file()),
         }
     }
 
@@ -154,7 +231,7 @@ impl FileDialog {
             &self.filters,
         ) {
             Some(a) => Some(a).filter(|a| !a.is_empty()),
-            None => self.inner.pick_files(),
+            None => native_done(self.inner.pick_files()),
         }
     }
 
@@ -167,7 +244,7 @@ impl FileDialog {
             &self.filters,
         ) {
             Some(a) => a.into_iter().next(),
-            None => self.inner.pick_folder(),
+            None => native_done(self.inner.pick_folder()),
         }
     }
 
@@ -180,7 +257,7 @@ impl FileDialog {
             &self.filters,
         ) {
             Some(a) => a.into_iter().next(),
-            None => self.inner.save_file(),
+            None => native_done(self.inner.save_file()),
         }
     }
 }

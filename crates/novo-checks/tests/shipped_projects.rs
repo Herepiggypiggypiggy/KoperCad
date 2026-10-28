@@ -27,6 +27,8 @@ fn shipped_projects_have_no_eplan_style_problems() {
     json_files(&root.join("assets/lessons"), &mut files);
     json_files(&root.join("docs/examples"), &mut files);
     let watched = [
+        // The shipped projects are drawn right: no short of any kind.
+        ProblemKind::PotentialConflict,
         ProblemKind::AmbiguousInterruption,
         ProblemKind::WireNumber,
         ProblemKind::UntaggedDevice,

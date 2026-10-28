@@ -10,9 +10,12 @@ use std::sync::mpsc::{Receiver, TryRecvError, channel};
 use std::time::SystemTime;
 
 use novo_parts::{
-    Arrival, Catalog, CatalogPart, DownloadsWatcher, FetchError, Fetcher, ImportFlow, ImportJob,
-    ImportState, LocalLibrary, PartKey, RemoteFile, SourceTable, recipe_for,
+    Arrival, CadLinks, Catalog, CatalogPart, DownloadsWatcher, DropDecision, FetchError, Fetcher,
+    ImportFlow, ImportJob, ImportState, LocalLibrary, PartKey, RemoteFile, SourceTable,
+    decide_drop, recipe_for,
 };
+
+use super::parts_cad::identity_of;
 
 /// Seconds between looks at the Downloads folder.
 pub(crate) const POLL_SECONDS: f64 = 1.0;
@@ -72,10 +75,17 @@ pub(crate) struct Import {
     pub steps: Vec<String>,
     /// Set when the order number does not look like the maker's.
     pub order_warning: Option<String>,
+    /// Whether an account is needed and what KoperCAD does and does not do
+    /// about it, from the maker's recipe.
+    pub account: Option<String>,
     pub phase: Phase,
     watcher: Option<DownloadsWatcher>,
     /// Files the user said no to, so the watch does not ask again.
     declined: Vec<PathBuf>,
+    /// New downloads already looked at (their names do not mention the
+    /// part, so the file itself was read), and why the ones left alone were.
+    judged: Vec<PathBuf>,
+    left_alone: Vec<(String, String)>,
     pub last_poll: f64,
     /// When the wait began, in the window's clock; set by the first frame.
     waiting_since: Option<f64>,
@@ -154,8 +164,11 @@ impl Import {
             page_verified,
             steps: recipe.map_or_else(Vec::new, |r| r.steps_for(&part.order_number)),
             order_warning: recipe.and_then(|r| r.check_order(&part.order_number)),
+            account: recipe.map(|r| r.account_note()),
             phase,
             declined: Vec::new(),
+            judged: Vec::new(),
+            left_alone: Vec::new(),
             watcher: downloads.map(|d| {
                 DownloadsWatcher::for_maker(
                     d,
@@ -184,6 +197,7 @@ impl Import {
         sources: SourceTable,
         catalog_path: Option<PathBuf>,
         today: String,
+        checked: Checked,
         wake: impl Fn() + Send + 'static,
     ) {
         let (tx, rx) = channel();
@@ -194,7 +208,7 @@ impl Import {
                 // A panic in a reader must end as an error on screen, not
                 // as a spinner that never stops.
                 let result = catch_unwind(AssertUnwindSafe(|| {
-                    import_path(
+                    import_checked(
                         &part,
                         &file,
                         flow,
@@ -202,6 +216,7 @@ impl Import {
                         &sources,
                         catalog_path.as_deref(),
                         &today,
+                        &checked,
                     )
                 }))
                 .unwrap_or_else(|_| Err("the file reader stopped unexpectedly".into()));
@@ -349,10 +364,55 @@ waiting. Try a smaller file, or the STEP file alone.",
         self.watcher.as_ref().map_or_else(Vec::new, |w| {
             w.skipped()
                 .iter()
+                .filter(|p| !self.judged.contains(p))
                 .take(3)
                 .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
                 .collect()
         })
+    }
+
+    /// Reads the new downloads whose names do not mention the part (Schneider
+    /// names its CAD files after a document number) and asks the matcher
+    /// whether the file itself says it is for this part. The first one that
+    /// does is returned to be imported; the others are kept with the reason
+    /// they were left alone. Each file is read once.
+    pub(crate) fn judge_passed_over(
+        &mut self,
+        part: &CatalogPart,
+        catalog: &Catalog,
+        links: &CadLinks,
+    ) -> Option<(PathBuf, Checked)> {
+        let new: Vec<PathBuf> = self
+            .watcher
+            .as_ref()?
+            .skipped()
+            .iter()
+            .filter(|p| !self.judged.contains(p) && !self.declined.contains(p))
+            .cloned()
+            .collect();
+        for path in new {
+            self.judged.push(path.clone());
+            let id = identity_of(&path);
+            match decide_drop(&id, part, catalog, links) {
+                DropDecision::Import { notes } => {
+                    return Some((path, Checked { notes, link: true }));
+                }
+                DropDecision::ImportUnchecked { why } => {
+                    let name = id.file_name.clone();
+                    self.left_alone.push((name, why));
+                }
+                DropDecision::Ask { reasons, .. } => {
+                    self.left_alone
+                        .push((id.file_name.clone(), reasons.join(" ")));
+                }
+            }
+        }
+        None
+    }
+
+    /// Downloads that were read and left alone, with the reason in words.
+    pub(crate) fn left_alone(&self) -> &[(String, String)] {
+        &self.left_alone
     }
 
     pub(crate) fn watching(&self) -> bool {
@@ -380,6 +440,60 @@ pub(crate) fn save_parts_to_user_catalog(path: &Path, parts: &[CatalogPart]) -> 
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
+/// The ETIM release the user installed, if any, for codes in BMEcat files.
+pub(crate) fn installed_etim() -> Option<std::sync::Arc<novo_parts::EtimModel>> {
+    let dir = novo_parts::EtimModel::dir_for(None)?;
+    novo_parts::EtimModel::load_installed(&dir).map(std::sync::Arc::new)
+}
+
+/// What was checked about a file before it was imported for a part.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Checked {
+    /// Reasons the file belongs to the part, shown first in the result.
+    pub notes: Vec<String>,
+    /// Whether to remember the file's download set (document id) as this
+    /// part's, so the next file of the set finds it. Only for files the
+    /// matcher stood behind, so a wrong guess never teaches the next match.
+    pub link: bool,
+}
+
+/// [`import_path`] plus what was checked: the notes go first in the summary,
+/// and the download set is remembered when `checked.link` says so.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn import_checked(
+    part: &CatalogPart,
+    path: &Path,
+    flow: ImportFlow,
+    library: &LocalLibrary,
+    sources: &SourceTable,
+    catalog_path: Option<&Path>,
+    today: &str,
+    checked: &Checked,
+) -> Result<(Summary, Vec<CatalogPart>), String> {
+    let (mut summary, changed) =
+        import_path(part, path, flow, library, sources, catalog_path, today)?;
+    let mut lines: Vec<String> = checked
+        .notes
+        .iter()
+        .map(|n| format!("Checked: {n}"))
+        .collect();
+    if checked.link
+        && let Some(doc) = identity_of(path).doc_id
+    {
+        let mut links = CadLinks::load(library.root());
+        links.add(&doc, &part.key());
+        match links.save(library.root()) {
+            Ok(()) => lines.push(format!(
+                "The download set {doc} is remembered for {part}, so its other files find this part."
+            )),
+            Err(e) => lines.push(format!("Could not remember the download set {doc}: {e}")),
+        }
+    }
+    lines.append(&mut summary.lines);
+    summary.lines = lines;
+    Ok((summary, changed))
+}
+
 /// Stores the file in the library and reads it. What the file adds to the
 /// part (parts from a BMEcat file, a size read from STEP) goes into the
 /// user's catalog at `catalog_path`; the changed parts come back so the
@@ -402,6 +516,9 @@ pub(crate) fn import_path(
         today,
     )
     .with_step_measurer(novo_interop::part3d::measure_step);
+    if let Some(model) = installed_etim() {
+        job = job.with_etim(model);
+    }
     let outcome = match job.import_file(path, flow).clone() {
         ImportState::Done(outcome) => outcome,
         ImportState::Failed(e) => return Err(e),
