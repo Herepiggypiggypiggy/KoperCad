@@ -283,6 +283,8 @@ pub(crate) struct Workbench {
     /// The "Get the EPLAN export script" guide, open after the files are
     /// written.
     pub(super) eplan_guide: Option<super::interop::EplanGuide>,
+    /// The controller profile import wizard, while open.
+    pub(super) controller_wizard: Option<Box<super::controller_import::ControllerWizard>>,
     /// A DWG being converted in the background.
     pub(super) dwg_job: Option<super::interop::DwgJob>,
 }
@@ -416,6 +418,7 @@ impl Default for Workbench {
             plc_card: None,
             plc_overview: false,
             eplan_guide: None,
+            controller_wizard: None,
             dwg_job: None,
         }
     }
@@ -626,6 +629,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.aml",
     "export.eplan",
     "file.import_aml",
+    "file.import_controller",
     "file.import_crane",
     "file.import_eplan",
     "file.import_dwg",
@@ -1590,6 +1594,7 @@ impl NovoApp {
                 self.export_aml();
             }
             "file.import_aml" => self.import_aml(),
+            "file.import_controller" => self.open_controller_import(),
             "file.import_crane" => self.import_crane(),
             "file.import_eplan" => self.import_eplan(),
             "file.import_dwg" => self.import_dwg(),

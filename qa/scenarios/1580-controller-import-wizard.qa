@@ -1,0 +1,33 @@
+@title Controller import wizard: library table, preview and warnings before anything is saved
+@area Import
+# Lane C4. File > Import > Controller profile from I/O table. The preview names what would be created.
+click_text "New project"
+wait 20
+key ctrl+k
+text import controller
+wait 5
+key Enter
+wait 10
+expect "Controller profile from an I/O table"
+expect "Nothing would be created yet"
+shot wizard-empty
+click_text "Generic library"
+wait 5
+click_text "Radio, 3 motions, 2-step"
+wait 10
+expect "Would create the radio controller"
+expect "HOIST_UP_SLOW"
+expect "common COM"
+expect_enabled "Save profile"
+shot library-radio
+# Another library table replaces the first.
+click_text "Generic library"
+wait 5
+click_text "Wired pendant, 3 motions, 2-step"
+wait 10
+expect "Would create the pendant controller"
+shot library-pendant
+check_layout
+key Escape
+wait 5
+expect_not "Controller profile from an I/O table"

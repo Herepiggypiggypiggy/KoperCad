@@ -4,3 +4,5 @@ Crate `novo-controller` (pure engine). Lanes: C1 engine (profile format, control
 
 - Done: C0 crate registration with skeleton and a two-step truth-table test.
 - Next: C1, C4 and C7 in parallel, then C2, then C3, C5, C6.
+
+- C4 done in PR: import wizard (paste, from device, table/EPLAN file, generic library). Next for C4: use `Profile` and `validate` directly once C1 is on main; real-page tuning of the word lists with the user's own pages.

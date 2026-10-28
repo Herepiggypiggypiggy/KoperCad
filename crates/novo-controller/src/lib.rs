@@ -5,6 +5,8 @@
 //! protocol, receiver firmware, contact bounce or compliance claim. Profiles are generic and
 //! neutral; vendor profiles are made by the user from their own data.
 
+pub mod import;
+
 /// Kind of operator control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ControlKind {
