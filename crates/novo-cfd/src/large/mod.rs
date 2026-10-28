@@ -39,7 +39,7 @@ mod build;
 mod expand;
 mod report;
 
-pub use build::{ReduceSettings, Reduction, reduce};
+pub use build::{ReduceSettings, Reduction, reduce, reduce_with};
 pub use expand::expand;
 pub use report::{
     Convergence, LargeReport, REDUCED_SUMMARY_PREFIX, Verdict, convergence, reduced_summary,

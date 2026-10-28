@@ -118,6 +118,9 @@ mod heat_run;
 mod heat_run_tests;
 mod heat_settings;
 mod heat_spots;
+mod heat_status;
+#[cfg(test)]
+mod heat_status_tests;
 mod heat_sweep;
 #[cfg(test)]
 mod heat_sweep_tests;

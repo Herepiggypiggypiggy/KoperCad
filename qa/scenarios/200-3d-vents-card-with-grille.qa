@@ -21,7 +21,7 @@ wait 10
 click_text "Grille, high on the right wall"
 wait 20
 wait_s 200
-expect_not "Locked while the run goes"
+expect_not "A run is going on the openings"
 expect "Grille, in the right wall"
 expect "Cooling selection proposes"
 expect_not "too small for this flow"

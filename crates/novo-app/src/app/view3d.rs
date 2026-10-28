@@ -2117,14 +2117,15 @@ fn heat_controls(
             .arrows
             .then(|| super::heat_arrows::top_speed(&sol.snapshot, h.axis, h.slice_at));
         ui.checkbox(&mut h.cloud, "Cloud").on_hover_text(
-            "The whole cabinet volume as see-through layers coloured by air temperature; air near ambient is invisible, hotter air is more opaque. Layers are cut across the direction you look along, so turning the view across the cabinet re-cuts them",
+            "The whole cabinet volume as see-through layers coloured by air temperature; air at ambient is invisible, and opacity rises from ambient to the hot end of the air (not the devices), so a few kelvin of difference show. Strength and Contrast are the two sliders. Layers are cut across the direction you look along, so turning the view across the cabinet re-cuts them",
         );
         if h.cloud {
-            ui.add(
-                egui::Slider::new(&mut h.cloud_opacity, 0.1..=1.0)
-                    .show_value(false),
-            )
-            .on_hover_text("How solid the cloud looks");
+            ui.add(egui::Slider::new(&mut h.cloud_opacity, 0.1..=1.0).show_value(false))
+                .on_hover_text("Strength: how solid the cloud looks. The right end is the strongest it gets");
+            ui.add(egui::Slider::new(&mut h.cloud_contrast, 0.0..=1.0).show_value(false))
+                .on_hover_text(
+                    "Contrast: higher lifts slightly warm air so small differences show; lower keeps only the hottest air visible. Colours still follow the scale",
+                );
             ui.add(
                 egui::DragValue::new(&mut h.cloud_layers)
                     .range(heat_cloud::LAYERS_RANGE)
@@ -2164,7 +2165,11 @@ fn heat_controls(
             };
             ui.label(egui::RichText::new(text).small());
         }
-        heat_legend::strip(ui, h, range, top_speed, top_flux);
+        let cloud_range = novo_heatview::range::Range {
+            lo: range.lo,
+            hi: heat_cloud::air_hot_end(&sol.snapshot, range.lo),
+        };
+        heat_legend::strip(ui, h, range, cloud_range, top_speed, top_flux);
             });
         });
     jump
