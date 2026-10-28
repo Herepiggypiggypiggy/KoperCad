@@ -81,8 +81,24 @@ body{margin:0}
         <div class="grip" style="left:0;bottom:0;transform:scaleX(-1)"></div>
       </div>
 
+      <!-- simulation status: always visible in the 3D workspace, no section needs to be open -->
+      <div class="float" style="left:16px;top:14px;width:400px;padding:0;z-index:7;overflow:hidden">
+        <div class="row gap8" style="height:40px;padding:0 8px 0 12px">
+          <i class="i i-warning i18" style="color:var(--warn)"></i>
+          <span class="col" style="gap:0;min-width:0;white-space:nowrap"><b>Heat is out of date</b><span class="cap">Model changed 3 min ago · run 12 min ago</span></span>
+          <span class="grow"></span>
+          <button class="prim" style="height:26px;padding:0 10px;white-space:nowrap">Run again</button>
+          <span class="chip" style="height:20px" aria-label="2 more">+2</span>
+        </div>
+        <div style="border-top:1px solid var(--bd)">
+          <div class="row gap8" style="height:30px;padding:0 12px"><i class="i i-check-circle i14" style="color:var(--ok)"></i><span>EMC</span><span class="grow"></span><span class="cap">Done · 12 min ago</span></div>
+          <div class="row gap8" style="height:30px;padding:0 12px"><i class="i i-prohibit i14" style="color:var(--tx2)"></i><span>Interior</span><span class="grow"></span><span class="cap">Not set</span><button class="sec" style="height:22px;padding:0 8px">Set interior</button></div>
+        </div>
+      </div>
+      <span class="nn" style="left:420px;top:22px">5</span>
+
       <!-- an undocked section: Heat as its own window, same host header -->
-      <div class="float" style="left:30px;top:70px;width:250px;z-index:6;box-shadow:0 18px 44px rgba(0,0,0,.5),0 0 0 2px var(--ac)">
+      <div class="float" style="left:30px;top:250px;width:250px;z-index:6;box-shadow:0 18px 44px rgba(0,0,0,.5),0 0 0 2px var(--ac)">
         <div class="wt"><i class="i i-thermometer-hot i14" style="color:var(--ac2)"></i><span class="t">Heat</span><span class="sw on"><i class="k"></i>On</span>
           <button class="btn" aria-label="Dock back"><i class="i i-arrow-square-in i14"></i></button><button class="btn" aria-label="Close"><i class="i i-x i14"></i></button></div>
         <div class="col gap8" style="padding:10px 12px">
@@ -96,16 +112,17 @@ body{margin:0}
 
       <span class="nn" style="right:306px;top:39px">1</span>
       <span class="nn" style="right:306px;top:192px">2</span>
-      <span class="nn" style="left:262px;top:56px">3</span>
+      <span class="nn" style="left:262px;top:236px">3</span>
       <span class="nn" style="right:306px;top:446px">4</span>
 
-      <div class="float" style="left:30px;bottom:16px;width:420px;padding:14px 16px;z-index:9">
+      <div class="float" style="left:30px;bottom:16px;width:440px;padding:14px 16px;z-index:9">
         <div class="lbl" style="margin-bottom:8px">One panel, foldable sections</div>
         <div style="display:grid;grid-template-columns:22px 1fr;row-gap:6px;align-items:start;font-size:12.5px">
           <span class="nn" style="position:static;box-shadow:none">1</span><span><b>Fold each section on its own.</b> Several can be open; the column scrolls.</span>
           <span class="nn" style="position:static;box-shadow:none">2</span><span><b>The switch in the header is the one On/Off</b> of Heat, EMC and Vents and fans, written as words.</span>
           <span class="nn" style="position:static;box-shadow:none">3</span><span><b>Undock any section</b> into its own window; the row stays in the list and docks it back.</span>
           <span class="nn" style="position:static;box-shadow:none">4</span><span><b>Door and Sizing</b> appear when there is an enclosure; sections you close come back from the dots menu or Ctrl K.</span>
+          <span class="nn" style="position:static;box-shadow:none">5</span><span><b>Simulation status is always on screen.</b> The chip shows the worst state and one action; +2 lists the rest.</span>
         </div>
       </div>
     </div>
