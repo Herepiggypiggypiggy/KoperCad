@@ -562,11 +562,21 @@ impl Manifest {
 pub fn valid_id(s: &str, min: usize, max: usize) -> bool {
     let b = s.as_bytes();
     (min..=max).contains(&b.len())
+        && !is_device_name(s)
         && b[0].is_ascii_lowercase()
         && b.iter()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
         && !s.ends_with('-')
         && !s.contains("--")
+}
+
+/// Names Windows keeps for devices; an add-on id becomes a folder name, so these are refused.
+fn is_device_name(s: &str) -> bool {
+    matches!(s, "con" | "prn" | "aux" | "nul")
+        || ["com", "lpt"].iter().any(|p| {
+            s.strip_prefix(p)
+                .is_some_and(|n| matches!(n.as_bytes(), [b'1'..=b'9']))
+        })
 }
 
 /// An icon name: a plain id, or `<add-on id>.<name>`.

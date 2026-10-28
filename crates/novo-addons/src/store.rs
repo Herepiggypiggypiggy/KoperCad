@@ -155,6 +155,9 @@ struct Record {
     /// The person ticked "I trust this file" for the active version.
     #[serde(default)]
     accepted_unsigned: bool,
+    /// The same for the previous version (it keeps its own answer through Roll back).
+    #[serde(default)]
+    previous_accepted: bool,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -346,7 +349,9 @@ impl Store {
     fn save_registry(&self, registry: &Registry) -> Result<()> {
         std::fs::create_dir_all(&self.root)?;
         let text = toml::to_string_pretty(registry).map_err(|e| AddonError::Io(e.to_string()))?;
-        let tmp = self.root.join("registry.toml.new");
+        let tmp = self
+            .root
+            .join(format!("registry.toml.new-{}", std::process::id()));
         std::fs::write(&tmp, text)?;
         std::fs::rename(&tmp, self.root.join(REGISTRY))?;
         Ok(())
@@ -443,6 +448,13 @@ impl Store {
             entry.manifest = Some(manifest);
             return fail(entry, why);
         }
+        if let Some(extra) = unlisted_file(&dir, &manifest.files) {
+            let why = format!(
+                "{extra} sits in its folder but the manifest does not list it; install it again from its file"
+            );
+            entry.manifest = Some(manifest);
+            return fail(entry, why);
+        }
         let signature = std::fs::read(dir.join("signature")).ok();
         entry.trust = match judge(&manifest_bytes, signature.as_deref(), &self.trust) {
             Ok(t) => t,
@@ -529,6 +541,7 @@ impl Store {
         if inspection.needs_trust_tick() && !options.accept_unsigned {
             return Err(AddonError::NotAccepted);
         }
+        let _lock = Lock::take(&self.root)?;
         let package = &inspection.package;
         let id = &package.manifest.addon.id;
         let version = package.manifest.addon.version.clone();
@@ -538,6 +551,20 @@ impl Store {
         let staging = addon_dir.join(format!(".staging-{}", std::process::id()));
         let target = addon_dir.join(&version);
         let result = (|| -> Result<()> {
+            // Leftovers of an install that crashed (another process id, over an hour old).
+            if let Ok(entries) = std::fs::read_dir(&addon_dir) {
+                for e in entries.flatten() {
+                    let stale = e.file_name().to_string_lossy().starts_with(".staging-")
+                        && e.metadata()
+                            .and_then(|m| m.modified())
+                            .ok()
+                            .and_then(|t| t.elapsed().ok())
+                            .is_some_and(|age| age > std::time::Duration::from_secs(3600));
+                    if stale {
+                        let _ = std::fs::remove_dir_all(e.path());
+                    }
+                }
+            }
             if staging.exists() {
                 std::fs::remove_dir_all(&staging)?;
             }
@@ -567,6 +594,16 @@ impl Store {
         let mut warnings = Vec::new();
         let mut registry = self.load_registry(&mut warnings);
         let existing = registry.addons.iter().position(|r| &r.id == id);
+        let mut drop_after_save: Option<PathBuf> = None;
+        // Versions the registry already points at must survive a failed save.
+        let referenced: Vec<String> = existing
+            .map(|i| {
+                let r = &registry.addons[i];
+                std::iter::once(r.active.clone())
+                    .chain(r.previous.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
         let record = match existing {
             Some(i) => {
                 let old = registry.addons[i].clone();
@@ -577,11 +614,14 @@ impl Store {
                 } else {
                     old.previous.clone()
                 };
+                // The version before the previous one goes, unless it is the one just installed
+                // or the one that stays; removed only once the registry is saved.
                 if upgrading
                     && let Some(older) = &old.previous
                     && Some(older) != previous.as_ref()
+                    && older != &version
                 {
-                    let _ = std::fs::remove_dir_all(addon_dir.join(older));
+                    drop_after_save = Some(addon_dir.join(older));
                 }
                 Record {
                     id: id.clone(),
@@ -590,6 +630,11 @@ impl Store {
                     previous,
                     fingerprint: package.fingerprint.clone(),
                     accepted_unsigned: options.accept_unsigned && !package.trust.is_signed(),
+                    previous_accepted: if upgrading {
+                        old.accepted_unsigned
+                    } else {
+                        old.previous_accepted
+                    },
                 }
             }
             None => Record {
@@ -599,6 +644,7 @@ impl Store {
                 previous: None,
                 fingerprint: package.fingerprint.clone(),
                 accepted_unsigned: options.accept_unsigned && !package.trust.is_signed(),
+                previous_accepted: false,
             },
         };
         match existing {
@@ -610,10 +656,13 @@ impl Store {
             // Do not leave a version folder the registry does not know about.
             if existing.is_none() {
                 let _ = std::fs::remove_dir_all(&addon_dir);
-            } else {
+            } else if !referenced.contains(&version) {
                 let _ = std::fs::remove_dir_all(&target);
             }
             return Err(e);
+        }
+        if let Some(dir) = drop_after_save {
+            let _ = std::fs::remove_dir_all(dir);
         }
         Ok(inspection)
     }
@@ -630,6 +679,7 @@ impl Store {
     }
 
     fn modify(&self, id: &str, f: impl FnOnce(&mut Registry, usize) -> Result<()>) -> Result<()> {
+        let _lock = Lock::take(&self.root)?;
         let mut warnings = Vec::new();
         let mut registry = self.load_registry(&mut warnings);
         let i = registry
@@ -686,17 +736,102 @@ impl Store {
             }
             let sig = std::fs::read(dir.join("signature")).ok();
             let trust = judge(&manifest_bytes, sig.as_deref(), &self.trust)?;
-            if !trust.is_signed() && !rec.accepted_unsigned {
+            if !trust.is_signed() && !rec.previous_accepted {
                 return Err(AddonError::NotAccepted);
             }
             let left = std::mem::replace(&mut rec.active, prev.clone());
             rec.previous = Some(left);
+            std::mem::swap(&mut rec.accepted_unsigned, &mut rec.previous_accepted);
             rec.fingerprint = sha256_hex(&manifest_bytes);
             now = Version::parse(&prev);
             Ok(())
         })?;
         now.ok_or_else(|| AddonError::NoPrevious(id.to_owned()))
     }
+}
+
+/// A lock file beside the registry, so two program windows cannot rewrite it at the same time.
+/// A lock older than a minute belongs to a crashed program and is broken.
+struct Lock(PathBuf);
+
+impl Lock {
+    fn take(root: &Path) -> Result<Lock> {
+        std::fs::create_dir_all(root)?;
+        let path = root.join("registry.lock");
+        for _ in 0..200 {
+            match std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+            {
+                Ok(_) => return Ok(Lock(path)),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                    let stale = std::fs::metadata(&path)
+                        .and_then(|m| m.modified())
+                        .ok()
+                        .and_then(|t| t.elapsed().ok())
+                        .is_some_and(|age| age > std::time::Duration::from_secs(60));
+                    if stale {
+                        let _ = std::fs::remove_file(&path);
+                    } else {
+                        std::thread::sleep(std::time::Duration::from_millis(25));
+                    }
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Err(AddonError::Io(
+            "another KoperCAD window is changing the add-ons; try again in a moment".into(),
+        ))
+    }
+}
+
+impl Drop for Lock {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// The first file under `dir` that the manifest does not list (or a symbolic link), as a
+/// package path. `manifest.toml` and `signature` are not listed by design.
+fn unlisted_file(dir: &Path, listed: &BTreeMap<String, String>) -> Option<String> {
+    fn walk(
+        base: &Path,
+        dir: &Path,
+        listed: &BTreeMap<String, String>,
+        seen: &mut usize,
+        depth: usize,
+    ) -> Option<String> {
+        let entries = std::fs::read_dir(dir).ok()?;
+        for entry in entries.flatten() {
+            *seen += 1;
+            if *seen > 5000 || depth > 8 {
+                return Some("too many files".to_owned());
+            }
+            let path = entry.path();
+            let rel = path
+                .strip_prefix(base)
+                .ok()?
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/");
+            let kind = entry.file_type().ok()?;
+            if kind.is_symlink() {
+                return Some(rel);
+            }
+            if kind.is_dir() {
+                if let Some(found) = walk(base, &path, listed, seen, depth + 1) {
+                    return Some(found);
+                }
+            } else if rel != "manifest.toml" && rel != "signature" && !listed.contains_key(&rel) {
+                return Some(rel);
+            }
+        }
+        None
+    }
+    let mut seen = 0;
+    walk(dir, dir, listed, &mut seen, 0)
 }
 
 fn read_package_file(path: &Path) -> Result<Vec<u8>> {

@@ -408,3 +408,129 @@ fn packing_is_deterministic_and_a_folder_round_trips() {
             .contains("[files]")
     );
 }
+
+#[test]
+fn installing_the_version_that_a_roll_back_left_behind_keeps_it() {
+    // 1.0.0, 2.0.0, Roll back (active 1.0.0, previous 2.0.0), then the 2.0.0 file again.
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    let v1 = package("demo", "1.0.0", "one", false);
+    let v2 = package("demo", "2.0.0", "two", false);
+    store.install_bytes(&v1, tick()).unwrap();
+    store.install_bytes(&v2, tick()).unwrap();
+    assert_eq!(store.roll_back("demo").unwrap(), Version::new(1, 0, 0));
+    store.install_bytes(&v2, tick()).unwrap();
+    let set = store.scan();
+    let e = set.get("demo").unwrap();
+    assert_eq!(e.active, Version::new(2, 0, 0));
+    assert_eq!(e.status, Status::Enabled, "{:?}", e.status);
+    assert_eq!(e.previous, Some(Version::new(1, 0, 0)));
+    assert!(
+        dir.path()
+            .join("addons")
+            .join("demo")
+            .join("2.0.0")
+            .join("manifest.toml")
+            .exists()
+    );
+    assert!(
+        dir.path()
+            .join("addons")
+            .join("demo")
+            .join("1.0.0")
+            .join("manifest.toml")
+            .exists()
+    );
+}
+
+#[test]
+fn roll_back_keeps_the_answer_for_each_version() {
+    // 1.0.0 signed (no tick), 2.0.0 unsigned (ticked): rolling back to the signed one needs no
+    // tick and rolling forward again still has the earlier answer for 2.0.0.
+    let dir = tempfile::tempdir().unwrap();
+    let store = trusting_store(dir.path());
+    store
+        .install_bytes(
+            &package("demo", "1.0.0", "one", true),
+            InstallOptions::default(),
+        )
+        .unwrap();
+    store
+        .install_bytes(&package("demo", "2.0.0", "two", false), tick())
+        .unwrap();
+    assert_eq!(store.roll_back("demo").unwrap(), Version::new(1, 0, 0));
+    assert_eq!(store.roll_back("demo").unwrap(), Version::new(2, 0, 0));
+    assert!(store.scan().is_enabled("demo"));
+
+    // An unsigned 1.0.0 that was never ticked cannot come back by Roll back: the answer
+    // belonged to 2.0.0 only.
+    let dir = tempfile::tempdir().unwrap();
+    let store = trusting_store(dir.path());
+    store
+        .install_bytes(&package("demo", "1.0.0", "one", false), tick())
+        .unwrap();
+    store
+        .install_bytes(
+            &package("demo", "2.0.0", "two", true),
+            InstallOptions::default(),
+        )
+        .unwrap();
+    assert_eq!(store.roll_back("demo").unwrap(), Version::new(1, 0, 0));
+}
+
+#[test]
+fn a_file_the_manifest_does_not_list_fails_the_add_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    store
+        .install_bytes(&package("demo", "1.0.0", "x", false), tick())
+        .unwrap();
+    std::fs::write(
+        dir.path()
+            .join("addons")
+            .join("demo")
+            .join("1.0.0")
+            .join("data")
+            .join("extra.toml"),
+        "x",
+    )
+    .unwrap();
+    let set = store.scan();
+    match &set.get("demo").unwrap().status {
+        Status::Failed(why) => assert!(why.contains("extra.toml"), "{why}"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn ids_windows_keeps_for_devices_are_refused() {
+    for id in ["con", "nul", "aux", "prn", "com1", "lpt9"] {
+        let bytes = package(id, "1.0.0", "x", false);
+        assert!(
+            store(tempfile::tempdir().unwrap().path())
+                .inspect(&bytes)
+                .is_err(),
+            "{id}"
+        );
+    }
+}
+
+#[test]
+fn a_stale_lock_from_a_crashed_program_does_not_block() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    store
+        .install_bytes(&package("demo", "1.0.0", "x", false), tick())
+        .unwrap();
+    let lock = dir.path().join("addons").join("registry.lock");
+    std::fs::write(&lock, "").unwrap();
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(600);
+    std::fs::File::options()
+        .write(true)
+        .open(&lock)
+        .unwrap()
+        .set_modified(old)
+        .unwrap();
+    store.set_enabled("demo", false).unwrap();
+    assert!(!lock.exists());
+}

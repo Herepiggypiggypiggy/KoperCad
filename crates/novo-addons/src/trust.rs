@@ -7,7 +7,7 @@
 //! Because an add-on runs sandboxed and cannot touch files or the network, the worst an
 //! unsigned add-on can do is give wrong results inside what its permissions allow.
 
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -210,7 +210,7 @@ pub fn judge(manifest: &[u8], signature: Option<&[u8]>, trust: &TrustStore) -> R
     let Some(sig_bytes) = sig_bytes else {
         return bad("the signature is not 128 hex digits");
     };
-    key.verify(
+    key.verify_strict(
         &signed_message(manifest),
         &Signature::from_bytes(&sig_bytes),
     )
