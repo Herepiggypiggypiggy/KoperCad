@@ -7,3 +7,5 @@
 2026-10-28 10:30 UTC C1: engine, validator, schema, instances, bindings, sequences; tests written first against real two-step/E-stop/deadman behaviour; wasm32 build checked.
 
 2026-10-28 C4 follow-up: preview counts say "1 control", the "to check" list comes first in the preview (visible at 1366x768), warning texts use quotes instead of backticks.
+
+2026-10-28 C4: preview shows "N rows: scroll this preview to see every row" and an always-visible scrollbar (R3 note from #1615).
