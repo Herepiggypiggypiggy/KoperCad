@@ -32,16 +32,17 @@ pub(crate) struct Reading {
 impl Reading {
     /// One line for the readout.
     pub(crate) fn text(&self) -> String {
+        let word = super::heat_flow::speed_word(self.speed as f32);
         let dir = if self.speed < 0.005 {
             String::from("still")
         } else if self.up.abs() > 0.5 * self.speed {
             format!(
-                "{} {:.2} m/s",
+                "{} {:.2} m/s ({word})",
                 if self.up > 0.0 { "rising" } else { "falling" },
                 self.speed
             )
         } else {
-            format!("{:.2} m/s", self.speed)
+            format!("{:.2} m/s ({word})", self.speed)
         };
         let heat = if self.heat_w_m2 < 1.0 {
             String::from("air carries no heat")

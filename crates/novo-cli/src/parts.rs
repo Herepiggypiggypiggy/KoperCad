@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 
 use clap::{Args, Subcommand};
 use novo_parts::{
-    EtimModel, InboxOptions, default_inbox, import_inbox, maker_guide, prepare_inbox,
+    Bundle, BundleMode, Catalog, Choices, EtimModel, ExportOptions, InboxOptions, LocalLibrary,
+    default_inbox, default_library_root, export_bundle, import_inbox, maker_guide, prepare_inbox,
     user_catalog_path,
 };
 
@@ -55,6 +56,52 @@ pub(crate) enum Parts {
     Guide {
         #[command(flatten)]
         at: Where,
+    },
+    /// Write your parts, and optionally their CAD files, into one bundle file
+    /// to move to another computer (`--backup`) or to give to a colleague.
+    /// A shared bundle holds only the parts you wrote yourself.
+    ExportLibrary {
+        /// The bundle file to write (`.kcpl`).
+        out: PathBuf,
+        /// Everything, including the files from makers' sites, for your own
+        /// use on another computer. Without it only your own parts go in.
+        #[arg(long)]
+        backup: bool,
+        /// Put CAD files in the bundle. A shared bundle also needs
+        /// `--files-are-mine`.
+        #[arg(long)]
+        files: bool,
+        /// Confirm that the CAD files are yours to share: you made them, or
+        /// the maker allows passing them on.
+        #[arg(long)]
+        files_are_mine: bool,
+        /// The catalog file to read. Default: the user's parts catalog.
+        #[arg(long, value_name = "FILE")]
+        catalog: Option<PathBuf>,
+        /// The parts library folder. Default: the user's library.
+        #[arg(long, value_name = "DIR")]
+        library: Option<PathBuf>,
+    },
+    /// Read a bundle written by `export-library` into your catalog and library.
+    ImportLibrary {
+        /// The bundle file.
+        bundle: PathBuf,
+        /// Say what would change; change nothing.
+        #[arg(long)]
+        dry_run: bool,
+        /// Replace a part that exists with different data (default: keep yours).
+        #[arg(long)]
+        replace: bool,
+        /// Confirm that a backup bundle is your own. Needed before its files
+        /// from makers' sites are stored.
+        #[arg(long)]
+        confirm_own_backup: bool,
+        /// The catalog file to update. Default: the user's parts catalog.
+        #[arg(long, value_name = "FILE")]
+        catalog: Option<PathBuf>,
+        /// The parts library folder. Default: the user's library.
+        #[arg(long, value_name = "DIR")]
+        library: Option<PathBuf>,
     },
 }
 
@@ -113,6 +160,125 @@ pub(crate) fn run(cmd: Parts, out: &mut dyn Write) -> Result<i32, Failure> {
             }
             Ok(exit::OK)
         }
+        Parts::ExportLibrary {
+            out: target,
+            backup,
+            files,
+            files_are_mine,
+            catalog,
+            library,
+        } => {
+            let (catalog_path, cat) = load_catalog(catalog)?;
+            let lib = open_library(library);
+            let mode = if backup {
+                BundleMode::Backup
+            } else {
+                BundleMode::Share
+            };
+            let opts = ExportOptions {
+                mode,
+                include_files: files || backup,
+                files_are_shareable: files_are_mine,
+                today: today(),
+                app_version: env!("CARGO_PKG_VERSION").to_owned(),
+            };
+            let r = export_bundle(&cat, lib.as_ref(), &opts, &target)
+                .map_err(|e| fail(exit::WRITE, e))?;
+            print(
+                out,
+                &format!(
+                    "Wrote {} ({} parts, {} files) from {}.",
+                    target.display(),
+                    r.parts,
+                    r.files,
+                    catalog_path.display()
+                ),
+            )?;
+            if r.listed_only > 0 {
+                print(
+                    out,
+                    &format!(
+                        "{} parts from makers' catalogs are listed by order number only.",
+                        r.listed_only
+                    ),
+                )?;
+            }
+            for n in &r.notes {
+                print(out, n)?;
+            }
+            Ok(exit::OK)
+        }
+        Parts::ImportLibrary {
+            bundle,
+            dry_run,
+            replace,
+            confirm_own_backup,
+            catalog,
+            library,
+        } => {
+            let (catalog_path, mut cat) = load_catalog(catalog)?;
+            let lib = open_library(library);
+            let mut b = Bundle::open(&bundle).map_err(|e| fail(exit::READ, e))?;
+            print(
+                out,
+                &format!(
+                    "{} bundle from {}: {}",
+                    match b.manifest.mode {
+                        BundleMode::Share => "Shared",
+                        BundleMode::Backup => "Backup",
+                    },
+                    b.manifest.created,
+                    b.manifest.notice
+                ),
+            )?;
+            let p = b.preview(&cat, lib.as_ref());
+            print(
+                out,
+                &format!(
+                    "{} new parts, {} the same, {} different from yours; {} files ({} new).",
+                    p.new_parts.len(),
+                    p.same,
+                    p.different.len(),
+                    p.files,
+                    p.files_new
+                ),
+            )?;
+            if !b.manifest.needs.is_empty() {
+                print(
+                    out,
+                    &format!(
+                        "{} parts the sender used are not included; import them from the maker.",
+                        b.manifest.needs.len()
+                    ),
+                )?;
+            }
+            if dry_run {
+                return Ok(exit::OK);
+            }
+            let choices = Choices {
+                replace_different: replace,
+                confirmed_own_backup: confirm_own_backup,
+            };
+            let done = b
+                .apply(&mut cat, lib.as_ref(), &choices)
+                .map_err(|e| fail(exit::PROBLEMS, e))?;
+            cat.save(&catalog_path).map_err(|e| fail(exit::WRITE, e))?;
+            print(
+                out,
+                &format!(
+                    "Added {}, replaced {}, kept {} of yours that differ, {} files stored.",
+                    done.added, done.replaced, done.kept, done.files_stored
+                ),
+            )?;
+            for n in &done.notes {
+                print(out, n)?;
+            }
+            Ok(if done.notes.is_empty() {
+                exit::OK
+            } else {
+                exit::PROBLEMS
+            })
+        }
         Parts::Import {
             at,
             catalog,
@@ -148,6 +314,26 @@ pub(crate) fn run(cmd: Parts, out: &mut dyn Write) -> Result<i32, Failure> {
             Ok(exit::OK)
         }
     }
+}
+
+/// The catalog file and its parts; a catalog that does not exist yet is empty.
+fn load_catalog(path: Option<PathBuf>) -> Result<(PathBuf, Catalog), Failure> {
+    let path = path.or_else(user_catalog_path).ok_or_else(|| {
+        Failure::new(
+            exit::READ,
+            "no profile folder; name a catalog with --catalog",
+        )
+    })?;
+    let catalog = if path.exists() {
+        Catalog::load(&path).map_err(|e| fail(exit::READ, e))?
+    } else {
+        Catalog::new()
+    };
+    Ok((path, catalog))
+}
+
+fn open_library(path: Option<PathBuf>) -> Option<LocalLibrary> {
+    path.or_else(default_library_root).map(LocalLibrary::at)
 }
 
 fn has_files(inbox: &Path, maker: &str) -> bool {

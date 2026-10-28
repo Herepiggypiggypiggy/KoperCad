@@ -155,6 +155,8 @@ pub struct SchematicView {
     goto: Option<PageId>,
     /// Commands the context menu asked the shell to run, by workflow id.
     commands: Vec<&'static str>,
+    /// A double click on a cross-reference note the shell should follow.
+    note_jump: Option<NoteJump>,
     /// Where on the page the right click that opened the context menu was
     /// (page coordinates, mm), for commands that act at that spot.
     pub menu_world: Option<novo_core::Point>,
@@ -255,6 +257,16 @@ impl EscapeTarget for Ladder<'_> {
     }
 }
 
+/// A double click on a cross-reference note: on a row of a coil's contact
+/// table, `to` is the contact it stands for; on any other note (a
+/// contact's reference to its coil) it is `None` and the jump goes from
+/// `from` to its partner.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NoteJump {
+    pub from: SymbolId,
+    pub to: Option<SymbolId>,
+}
+
 fn part_kind(kind: WirePartKind) -> crate::edit::PartKind {
     match kind {
         WirePartKind::Corner(i) => crate::edit::PartKind::Corner(i),
@@ -342,6 +354,7 @@ impl SchematicView {
             status: None,
             goto: None,
             commands: Vec::new(),
+            note_jump: None,
             menu_world: None,
             shortcuts: HashMap::new(),
             band_count: None,
@@ -529,6 +542,12 @@ impl SchematicView {
     /// (Place component, Go to partner, Zoom to fit), by workflow id.
     pub fn take_commands(&mut self) -> Vec<&'static str> {
         std::mem::take(&mut self.commands)
+    }
+
+    /// The cross-reference note the last double click landed on, for the
+    /// shell to jump along (see [`NoteJump`]).
+    pub fn take_note_jump(&mut self) -> Option<NoteJump> {
+        self.note_jump.take()
     }
 
     /// How many items releasing the selection box being dragged would
@@ -1280,9 +1299,43 @@ impl SchematicView {
             self.handle_keys(&ctx, document, page, &out, rect);
         }
 
+        // Double click on a cross reference follows it: a row of a coil's
+        // contact table jumps to that contact, a contact's reference to its
+        // coil. The first click of the pair has selected the symbol.
+        let mut followed = false;
+        if response.double_clicked_by(egui::PointerButton::Primary)
+            && !self.editor.tool_active()
+            && !self.popup_open()
+            && let (Some(at), Some(scene)) = (out.cursor_raw, &self.scene)
+        {
+            let row = scene.note_row_at(at);
+            let note = out
+                .hit
+                .as_ref()
+                .and_then(|hit| {
+                    Some((
+                        scene.model_id(hit.id)?,
+                        scene.label_hit(document.project(), hit)?,
+                    ))
+                })
+                .filter(|(_, l)| l.kind == LabelKind::Note)
+                .and_then(|(id, _)| match id {
+                    AnyId::Symbol(s) => Some(s),
+                    _ => None,
+                });
+            if let Some((from, to)) = row {
+                self.note_jump = Some(NoteJump { from, to: Some(to) });
+                followed = true;
+            } else if let Some(from) = note {
+                self.note_jump = Some(NoteJump { from, to: None });
+                followed = true;
+            }
+        }
+
         // Double click on text renames it: a device tag in place, a wire
         // number in place. Other text and bare devices fall through.
         if response.double_clicked_by(egui::PointerButton::Primary)
+            && !followed
             && !self.editor.tool_active()
             && !self.popup_open()
             && let (Some(hit), Some(scene)) = (&out.hit, &self.scene)
@@ -1339,6 +1392,7 @@ impl SchematicView {
         // properties, the cursor in the tag (DESIGN.md §4); the first click
         // of the pair has selected it. The shell owns the properties.
         if response.double_clicked_by(egui::PointerButton::Primary)
+            && !followed
             && !self.editor.tool_active()
             && !self.popup_open()
             && let (Some(hovered), Some(scene)) = (out.hovered, &self.scene)
@@ -1926,7 +1980,8 @@ impl SchematicView {
             )
         });
         let mut close = escape;
-        egui::Area::new(egui::Id::new("novo-editor-rename"))
+        let opened_now = rename.focus;
+        let area = egui::Area::new(egui::Id::new("novo-editor-rename"))
             .order(egui::Order::Foreground)
             .fixed_pos(rename.anchor)
             .show(ctx, |ui| {
@@ -1960,6 +2015,7 @@ impl SchematicView {
                     match &rename.error {
                         Some(e) => {
                             ui.colored_label(ui.visuals().error_fg_color, e);
+                            ui.weak("Esc cancels");
                         }
                         None => {
                             let feed = matches!(
@@ -1985,6 +2041,17 @@ impl SchematicView {
                     }
                 });
             });
+        // A click anywhere else on the drawing closes the box, as for any popup.
+        let clicked_outside = !opened_now
+            && ctx.input(|i| {
+                i.pointer.any_pressed()
+                    && i.pointer
+                        .interact_pos()
+                        .is_some_and(|p| !area.response.rect.contains(p))
+            });
+        if clicked_outside {
+            close = true;
+        }
         if enter {
             let done = match rename.target {
                 RenameTarget::Device(device) => self.editor.rename(document, device, &rename.text),
@@ -2022,7 +2089,12 @@ impl SchematicView {
             };
             match done {
                 Ok(()) => close = true,
-                Err(e) => rename.error = Some(e),
+                Err(e) => {
+                    rename.error = Some(e);
+                    // Enter took the focus out of the box: give it back so
+                    // the text can be corrected without a click.
+                    rename.focus = true;
+                }
             }
         }
         if close {

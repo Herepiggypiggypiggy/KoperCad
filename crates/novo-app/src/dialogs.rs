@@ -110,8 +110,12 @@ mod owner {
     impl HasWindowHandle for Owner {
         fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
             // SAFETY: the handle comes from the live main window in `remember`,
-            // on this thread. A dialog is modal and runs on that thread, so the
-            // window cannot be destroyed while the borrow is in use.
+            // on this thread, and is only read while a dialog is being built.
+            // rfd copies the raw handle at once and does not keep the borrow.
+            // If the window were gone anyway, the handle would be stale and the
+            // operating system would refuse it with an error; nothing in this
+            // program dereferences it, so that is an error, not undefined
+            // behaviour.
             #[allow(unsafe_code)]
             Ok(unsafe { WindowHandle::borrow_raw(self.0) })
         }

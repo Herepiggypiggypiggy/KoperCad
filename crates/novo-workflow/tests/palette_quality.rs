@@ -31,6 +31,7 @@ fn search(palette: &Palette, keymap: &Keymap, query: &str) -> Vec<Row> {
         context: context(),
         lessons: &[],
         macros: &[],
+        addons: &[],
     };
     palette.search(query, &sources)
 }
@@ -162,6 +163,7 @@ fn search_lessons(query: &str) -> Vec<Row> {
         context: context(),
         lessons: &lessons,
         macros: &[],
+        addons: &[],
     };
     Palette::default().search(query, &sources)
 }
@@ -252,6 +254,7 @@ fn a_command_that_cannot_run_now_scores_below_the_same_command_that_can() {
             },
             lessons: &[],
             macros: &[],
+            addons: &[],
         };
         let rows = palette.search("undo", &sources);
         let at = position(&rows, "edit.undo").expect("Undo is found");
@@ -301,6 +304,7 @@ fn search_macros(query: &str) -> Vec<Row> {
         context: context(),
         lessons: &[],
         macros: &macros,
+        addons: &[],
     };
     Palette::default().search(query, &sources)
 }
@@ -333,6 +337,7 @@ fn q_finds_a_circuit_too() {
         context: context(),
         lessons: &[],
         macros: &macros,
+        addons: &[],
     };
     let rows = Palette::default().search_in(Mode::Place, "motor starter", &sources);
     assert!(

@@ -424,7 +424,11 @@ does not set: it was run by hand). The size check uses the measured solid
 (`measure_step`): the real LC1D09 model reads 45 x 77 x 95 mm and fits the
 catalog part. Not verified: any WAGO, Siemens or Phoenix file (they need an
 account the project does not have), and file names other than the ones above.
-A file for a variant (`LC1D09BD`) can be taken as "Checked" for the base
+Files are read on a worker thread (`parts_identity.rs`), one after the other,
+and the answer is kept for the file's size and modification time; the window
+shows "Reading the files..." and handles dropped or picked files once they are
+read, so a batch of large STEP files never stops it. A file for a variant
+(`LC1D09BD`) can be taken as "Checked" for the base
 article when the longer article is not in the catalog.
 
 ## 3e. Maker recipes (parts: maker packs)
@@ -491,6 +495,41 @@ its technical data and every price. What changed, and the rules behind it:
 
 How the user does it: `PARTS-BULK-IMPORT.md` (Parts window > More > Install ETIM
 release, or `kopercad-cli parts etim <file>`).
+
+## 3f. Library bundles (Export library, Import library)
+
+Moving a library to another computer, or giving your own parts to a colleague,
+is one file: a `.kcpl` bundle (`crates/novo-parts/src/bundle.rs`). Where: Parts
+window, More, **Export library\u2026** and **Import library\u2026**; a `.kcpl` dropped on the
+Parts window opens the same import dialog; `kopercad-cli parts export-library`
+and `import-library` do the same without the window.
+
+- A bundle is a ZIP: `manifest.json` (format, who made it, a notice, the parts
+  the sender used but did not include), `parts.json` (the catalog format, read
+  with the same migrations as a catalog file), `sources.json` (the file
+  records) and `files/00001.bin` and so on.
+- **Share** writes only parts you wrote yourself (`provenance.source` is
+  `authored`). A part that came from a maker's catalog is not included; only its
+  maker and order number go into the "used but not included" list, so the
+  receiver can import it from the maker. CAD files are left out unless you
+  confirm that they are yours to share; the confirmation is written into the
+  bundle.
+- **Backup** writes everything, with the maker files, for your own use on
+  another computer. The bundle says it is a backup and the import asks for "It
+  is my own backup" before any file is stored.
+- Opening a bundle shows a preview (new parts, the same, different from yours,
+  files) and changes nothing until you press Import. A part that differs from
+  yours is kept as yours unless you choose to replace it.
+- Safety: a file is stored under a number, never under a path from the bundle,
+  through `LocalLibrary::store`, which builds the path itself. Every file is
+  checked against its SHA-256. Limits, checked when the bundle is opened and
+  before anything is stored: 100,000 entries, 512 MB per file, 64 MB per JSON
+  member, 8 GB for everything it unpacks to (also summed from the manifest),
+  and a member over 1 MB that unpacks to more than 250 times its size in the ZIP
+  is refused as not a real CAD file or list. The format number must not be newer. Export writes one file at a time (read to check it, read again to write it, the manifest last), so a backup needs no memory for the whole library. Export and import run on a worker thread; a failed export leaves
+  no half-written file.
+- Not done: restoring many files rewrites the records file per file (slow for thousands of files; a `store_many` would fix it); no merge of two edited versions of one part (the preview lists the
+  difference and you pick one), no signing of bundles.
 
 ## 4. Offline and no admin rights
 

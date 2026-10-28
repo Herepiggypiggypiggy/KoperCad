@@ -177,7 +177,7 @@ fn new_group_page_and_cabinet_name_themselves() {
     d.frame();
     d.frame();
     let form = d.app.ol.cabinet_form.as_ref().expect("the window is open");
-    assert_eq!(d.app.naming().next_cabinet(d.doc().project()), "A1");
+    assert_eq!(d.app.naming().next_cabinet(d.doc().project()), "CAB1");
     let _ = form;
     key(&mut d, egui::Key::Enter, egui::Modifiers::NONE);
     d.frame();
@@ -185,26 +185,26 @@ fn new_group_page_and_cabinet_name_themselves() {
     let cab = d
         .doc()
         .project()
-        .structure_by_tag(&DeviceTag::parse("+A1").unwrap())
-        .expect("cabinet +A1");
+        .structure_by_tag(&DeviceTag::parse("+CAB1").unwrap())
+        .expect("cabinet +CAB1");
     assert!(cab.enclosure);
     assert!(cab.plate.is_some());
     let page = d
         .doc()
         .project()
         .pages()
-        .find(|p| p.structure.to_string() == "=G1+A1")
+        .find(|p| p.structure.to_string() == "=G1+CAB1")
         .expect("its first page sits in the group");
     assert_eq!(page.name, "1");
-    // The next cabinet is +A2 without typing anything.
-    assert_eq!(d.app.naming().next_cabinet(d.doc().project()), "A2");
+    // The next cabinet is +CAB2 without typing anything.
+    assert_eq!(d.app.naming().next_cabinet(d.doc().project()), "CAB2");
     // One undo takes the cabinet back, plate and page together.
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::Undo);
     assert!(
         d.doc()
             .project()
-            .structure_by_tag(&DeviceTag::parse("+A1").unwrap())
+            .structure_by_tag(&DeviceTag::parse("+CAB1").unwrap())
             .is_none()
     );
 }
@@ -376,7 +376,7 @@ fn a_page_dragged_onto_a_cabinet_is_filed_there() {
     key(&mut d, egui::Key::Enter, egui::Modifiers::NONE);
     d.frame();
     d.frame();
-    // The new page sits in +A1; make a loose page and drag it there.
+    // The new page sits in +CAB1; make a loose page and drag it there.
     let here = DeviceTag::default();
     d.app.perform(Act::NewPage {
         structure: here,
@@ -391,7 +391,7 @@ fn a_page_dragged_onto_a_cabinet_is_filed_there() {
     d.frame();
     let loose = page_named(&d, "Loose");
     let from = row_pos(&d, &format!("p:{}:0", loose.0));
-    let to = row_pos(&d, "c:A1");
+    let to = row_pos(&d, "c:CAB1");
     let m = egui::Modifiers::NONE;
     d.frame_with(vec![egui::Event::PointerMoved(from)]);
     d.frame_with(vec![egui::Event::PointerButton {
@@ -414,7 +414,7 @@ fn a_page_dragged_onto_a_cabinet_is_filed_there() {
     d.frame();
     assert_eq!(
         d.doc().project().page(loose).unwrap().structure.to_string(),
-        "+A1",
+        "+CAB1",
         "dropped on the cabinet row"
     );
 }
@@ -633,4 +633,242 @@ fn a_cable_row_selects_all_its_wired_cores_on_the_page() {
         );
     }
     assert_eq!(view.canvas.selection.len(), 2);
+}
+
+// ---------------------------------------------------------------------
+// Several pages at once
+
+/// A click with `held` down.
+fn click_held(d: &mut Drive, pos: egui::Pos2, held: egui::Modifiers) {
+    let button = egui::PointerButton::Primary;
+    d.frame_held(held, vec![egui::Event::PointerMoved(pos)]);
+    d.frame_held(
+        held,
+        vec![egui::Event::PointerButton {
+            pos,
+            button,
+            pressed: true,
+            modifiers: held,
+        }],
+    );
+    d.frame_held(
+        held,
+        vec![egui::Event::PointerButton {
+            pos,
+            button,
+            pressed: false,
+            modifiers: held,
+        }],
+    );
+    d.frame_held(egui::Modifiers::NONE, Vec::new());
+}
+
+fn click_page(d: &mut Drive, page: PageId, held: egui::Modifiers) {
+    // Rows that moved leave old rectangles behind: look at this frame's.
+    d.app.ol.rects.clear();
+    d.frame();
+    let pos = row_of(d, page);
+    click_held(d, pos, held);
+}
+
+/// Five pages in one group, numbered 1 to 5 in the tree.
+fn five_pages() -> (tempfile::TempDir, Drive, Vec<PageId>) {
+    let (dir, mut d) = drive();
+    for _ in 0..4 {
+        d.app.perform(Act::NewPage {
+            structure: DeviceTag::default(),
+            after: None,
+        });
+        d.app.ol.rename = None;
+        d.frame();
+        d.frame();
+    }
+    let ids: Vec<PageId> = d
+        .doc()
+        .project()
+        .pages_in_order()
+        .into_iter()
+        .map(|p| p.id)
+        .collect();
+    assert_eq!(ids.len(), 5, "{:?}", pages(&d));
+    (dir, d, ids)
+}
+
+fn row_of(d: &Drive, page: PageId) -> egui::Pos2 {
+    row_pos(d, &format!("p:{}:0", page.0))
+}
+
+fn picked(d: &Drive) -> Vec<PageId> {
+    d.app.ol.chosen_pages()
+}
+
+#[test]
+fn ctrl_and_shift_click_select_several_pages_without_opening_them() {
+    let (_dir, mut d, ids) = five_pages();
+    let ctrl = egui::Modifiers::COMMAND;
+    let shift = egui::Modifiers::SHIFT;
+    click_page(&mut d, ids[0], egui::Modifiers::NONE);
+    assert_eq!(d.app.current_page, Some(ids[0]));
+    // Ctrl+click adds, and keeps the page that was selected.
+    click_page(&mut d, ids[2], ctrl);
+    assert_eq!(picked(&d), [ids[0], ids[2]]);
+    assert_eq!(
+        d.app.current_page,
+        Some(ids[0]),
+        "a Ctrl click opens nothing"
+    );
+    // Ctrl+click on a picked page takes it out.
+    click_page(&mut d, ids[0], ctrl);
+    assert_eq!(picked(&d), [ids[2]]);
+    // Shift+click takes the range from the last plain or Ctrl click.
+    click_page(&mut d, ids[4], shift);
+    assert_eq!(
+        picked(&d),
+        ids,
+        "from the last click, even one that took a page out"
+    );
+    click_page(&mut d, ids[1], shift);
+    assert_eq!(picked(&d), [ids[0], ids[1]]);
+    // A plain click goes back to one page.
+    click_page(&mut d, ids[3], egui::Modifiers::NONE);
+    assert_eq!(picked(&d), [ids[3]]);
+    assert!(d.app.ol.picked.is_empty());
+}
+
+#[test]
+fn ctrl_a_selects_every_page_and_escape_clears_it() {
+    let (_dir, mut d, ids) = five_pages();
+    click_page(&mut d, ids[1], egui::Modifiers::NONE);
+    key(&mut d, egui::Key::A, egui::Modifiers::COMMAND);
+    assert_eq!(picked(&d), ids);
+    key(&mut d, egui::Key::Escape, egui::Modifiers::NONE);
+    assert!(d.app.ol.picked.is_empty());
+}
+
+/// Drags `from` to `to` with the pointer, in steps.
+fn drag(d: &mut Drive, from: egui::Pos2, to: egui::Pos2) {
+    let m = egui::Modifiers::NONE;
+    d.frame_with(vec![egui::Event::PointerMoved(from)]);
+    d.frame_with(vec![egui::Event::PointerButton {
+        pos: from,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: m,
+    }]);
+    for step in 1..=8 {
+        let t = step as f32 / 8.0;
+        d.frame_with(vec![egui::Event::PointerMoved(from.lerp(to, t))]);
+    }
+    d.frame_with(vec![egui::Event::PointerButton {
+        pos: to,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: m,
+    }]);
+    d.frame();
+    d.frame();
+}
+
+fn order(d: &Drive) -> Vec<PageId> {
+    d.doc()
+        .project()
+        .pages_in_order()
+        .into_iter()
+        .map(|p| p.id)
+        .collect()
+}
+
+#[test]
+fn dragging_one_selected_page_drags_them_all_as_one_undo_step() {
+    let (_dir, mut d, ids) = five_pages();
+    click_page(&mut d, ids[0], egui::Modifiers::NONE);
+    click_page(&mut d, ids[1], egui::Modifiers::COMMAND);
+    assert_eq!(picked(&d), [ids[0], ids[1]]);
+    let from = row_of(&d, ids[1]);
+    let mut to = row_of(&d, ids[3]);
+    to.y += 8.0; // the lower half: after page 4
+    drag(&mut d, from, to);
+    assert_eq!(order(&d), [ids[2], ids[3], ids[0], ids[1], ids[4]]);
+    // The pages keep their names, so references that print them stay right.
+    let names: Vec<String> = ids
+        .iter()
+        .map(|id| d.doc().project().page(*id).unwrap().name.clone())
+        .collect();
+    assert_eq!(names, ["1", "2", "3", "4", "5"]);
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(order(&d), ids, "one undo puts the whole block back");
+}
+
+#[test]
+fn a_dragged_page_outside_the_selection_moves_alone() {
+    let (_dir, mut d, ids) = five_pages();
+    click_page(&mut d, ids[0], egui::Modifiers::NONE);
+    click_page(&mut d, ids[1], egui::Modifiers::COMMAND);
+    let from = row_of(&d, ids[4]);
+    let mut to = row_of(&d, ids[2]);
+    to.y -= 8.0;
+    drag(&mut d, from, to);
+    assert_eq!(order(&d), [ids[0], ids[1], ids[4], ids[2], ids[3]]);
+}
+
+#[test]
+fn selected_pages_are_filed_duplicated_and_deleted_together() {
+    let (_dir, mut d, ids) = five_pages();
+    d.app.perform(Act::NewCabinet { in_group: None });
+    d.frame();
+    d.frame();
+    key(&mut d, egui::Key::Enter, egui::Modifiers::NONE);
+    d.frame();
+    d.frame();
+    click_page(&mut d, ids[1], egui::Modifiers::NONE);
+    click_page(&mut d, ids[3], egui::Modifiers::COMMAND);
+    // Dropped on the cabinet row: both are filed there, in one step.
+    let from = row_of(&d, ids[3]);
+    let to = row_pos(&d, "c:CAB1");
+    drag(&mut d, from, to);
+    for id in [ids[1], ids[3]] {
+        assert_eq!(
+            d.doc().project().page(id).unwrap().structure.to_string(),
+            "+CAB1"
+        );
+    }
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    for id in [ids[1], ids[3]] {
+        assert_eq!(
+            d.doc().project().page(id).unwrap().structure.to_string(),
+            ""
+        );
+    }
+
+    let before = d.doc().project().pages().count();
+    key(&mut d, egui::Key::D, egui::Modifiers::COMMAND);
+    assert_eq!(d.doc().project().pages().count(), before + 2, "two copies");
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(d.doc().project().pages().count(), before);
+
+    d.app.ol.focused = true;
+    click_page(&mut d, ids[1], egui::Modifiers::NONE);
+    click_page(&mut d, ids[3], egui::Modifiers::COMMAND);
+    key(&mut d, egui::Key::Delete, egui::Modifiers::NONE);
+    assert_eq!(d.doc().project().pages().count(), before - 2);
+    assert!(d.doc().project().page(ids[1]).is_none());
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(
+        d.doc().project().pages().count(),
+        before,
+        "one undo brings both back"
+    );
+}
+
+#[test]
+fn ctrl_arrow_moves_the_selected_block_one_place() {
+    let (_dir, mut d, ids) = five_pages();
+    click_page(&mut d, ids[2], egui::Modifiers::NONE);
+    click_page(&mut d, ids[3], egui::Modifiers::COMMAND);
+    key(&mut d, egui::Key::ArrowUp, egui::Modifiers::COMMAND);
+    assert_eq!(order(&d), [ids[0], ids[2], ids[3], ids[1], ids[4]]);
+    key(&mut d, egui::Key::ArrowDown, egui::Modifiers::COMMAND);
+    assert_eq!(order(&d), ids);
 }

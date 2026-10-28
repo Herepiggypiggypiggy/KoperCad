@@ -343,6 +343,14 @@ const REGROUPED: &[(&str, MenuPlace)] = &[
 
 /// Commands that are a key or a pointer gesture and have no menu row.
 const PALETTE_ONLY: &[(&str, &str)] = &[
+    ("view.3d_door_layer", "a switch of the 3D toolbar"),
+    ("view.3d_device_shapes", "a switch of the 3D toolbar"),
+    ("view.3d_surfaces", "a switch of the 3D toolbar"),
+    ("view.3d_duct_fill", "a switch of the 3D toolbar"),
+    ("view.3d_pins", "a switch of the 3D toolbar"),
+    ("view.3d_missing_data", "a switch of the 3D toolbar"),
+    ("view.3d_trackpad_pans", "a switch of the 3D toolbar"),
+    ("view.3d_move", "a switch of the 3D toolbar"),
     ("tool.repeat", "the key that repeats the last tool"),
     ("edit.escape", "Esc"),
     (

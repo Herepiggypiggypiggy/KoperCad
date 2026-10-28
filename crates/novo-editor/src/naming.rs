@@ -98,12 +98,15 @@ pub fn child_pin_names(
         .iter()
         .flat_map(|s| s.pins.iter())
         .filter_map(|p| split_contact(&p.name))
-        .filter(|&(seq, f)| (1..=9).contains(&seq) && ('1'..='4').contains(&f))
+        .filter(|&(_, f)| ('1'..='4').contains(&f))
         .map(|(seq, _)| seq)
         .collect();
     let seq = (1..).find(|s| !used.contains(s))?;
     Some(parsed.iter().map(|&(_, f)| format!("{seq}{f}")).collect())
 }
+
+/// The longest device tag, in characters, that is taken.
+pub const MAX_TAG_CHARS: usize = 60;
 
 /// Parses what the user typed as a new tag for a device. Aspects that are
 /// not typed are kept from the old tag, so typing `-K5` (or just `K5`) on
@@ -130,6 +133,14 @@ pub fn parse_tag_input(input: &str, old: &DeviceTag) -> Result<DeviceTag, String
         tag.product = typed.product;
     }
     tag.validate().map_err(|e| e.to_string())?;
+    // A tag that long cannot be drawn beside its symbol; the label would
+    // be dropped without a word.
+    let len = tag.to_string().chars().count();
+    if len > MAX_TAG_CHARS {
+        return Err(format!(
+            "A tag can have at most {MAX_TAG_CHARS} characters ({len} typed): shorten the name or drop the function and location parts"
+        ));
+    }
     Ok(tag)
 }
 
@@ -165,6 +176,12 @@ mod tests {
             "=B2+CAB1-K5"
         );
         assert!(parse_tag_input("", &old).is_err());
+        let long = format!("-K{}", "1".repeat(218));
+        assert!(
+            parse_tag_input(&long, &old)
+                .unwrap_err()
+                .contains("at most 60")
+        );
         assert!(parse_tag_input("-K 5!", &old).is_err());
     }
 

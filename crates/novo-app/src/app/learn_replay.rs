@@ -322,6 +322,9 @@ impl Drive {
         self.app.wb.macro_save = None;
         self.app.wb.project_settings = false;
         self.app.cabinet.plate_card = false;
+        // The sizing window opens where the Cabinet's free area starts, which
+        // is right of a card parked at the left: it would sit over the heat strip.
+        self.app.sizing.panel_open = false;
         self.app.wb.numbering = None;
         self.app.wb.wheel = None;
         // The windows the outputs and checks lessons open (standards, calculations,

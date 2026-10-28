@@ -6,6 +6,7 @@ use novo_heatview::range::{self, Range};
 use novo_theme::heat;
 
 use super::heat_3d::Heat3d;
+use super::heat_flow::FlowMode;
 
 const BAR_LEN: f32 = 150.0;
 const BAR_H: f32 = 10.0;
@@ -20,18 +21,21 @@ const TICK_GAP: f32 = 26.0;
 /// The lines of text under the scale, one per layer that needs explaining.
 pub(crate) fn notes(h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) -> Vec<String> {
     let mut out = Vec::new();
+    if h.slice && h.flow.mode != FlowMode::SpeedMap {
+        out.push(String::from(
+            "Slice: darker squares are device bodies the plane cuts, at their own temperature",
+        ));
+    }
     if h.iso {
         let level = range.lo + f64::from(h.iso_at) * (range.hi - range.lo);
         out.push(format!("Shell: air at {level:.0} °C"));
     }
-    if h.lines {
-        out.push(format!(
-            "Airflow: lines and arrows are coloured by air speed, up to {top_speed:.2} m/s"
-        ));
+    if let Some(note) = super::heat_flow::note(&h.flow, top_speed) {
+        out.push(note);
     }
     if h.cloud {
         out.push(String::from(
-            "Cloud: air near ambient is clear, hotter is more opaque",
+            "Cloud: air at ambient is clear; colour and opacity run from ambient to the hot end of the air (its own scale, above)",
         ));
     }
     if h.carry {
@@ -47,15 +51,22 @@ pub(crate) fn notes(h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) -> 
 
 /// Is there anything coloured by temperature on screen.
 pub(crate) fn wanted(h: &Heat3d) -> bool {
-    h.slice || h.iso || h.devices || h.cloud
+    (h.slice && h.flow.mode != FlowMode::SpeedMap) || h.iso || h.devices || h.cloud
 }
 
 /// Draws the key inside the Heat strip above the view: a colour bar with
 /// degree ticks, then one note per active layer. It sits in the strip's own
 /// row (wrapping with it), so it can never cover a panel.
-pub(crate) fn strip(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) {
+pub(crate) fn strip(
+    ui: &mut egui::Ui,
+    h: &Heat3d,
+    range: Range,
+    cloud_range: Range,
+    top_speed: f32,
+    top_flux: f32,
+) {
     let notes = notes(h, range, top_speed, top_flux);
-    if !wanted(h) && notes.is_empty() && !h.lines {
+    if !wanted(h) && notes.is_empty() && h.flow.mode == FlowMode::Off {
         return;
     }
     // Own rows under the controls: a note that wrapped beside the bar broke
@@ -63,13 +74,18 @@ pub(crate) fn strip(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32,
     ui.end_row();
     // The two colour bars share a row when the strip is wide enough (it wraps
     // them when not): the strip takes less of a small window.
-    if wanted(h) {
-        scale(ui, range);
+    // The cloud has its own key, so it alone does not need the shared one.
+    if (h.slice && h.flow.mode != FlowMode::SpeedMap) || h.iso || h.devices {
+        scale(ui, range, "°C  Temperature");
     }
-    if h.lines {
-        speed_scale(ui, top_speed);
+    if h.cloud {
+        // The cloud's own scale: ambient to the hot end of the air.
+        scale(ui, cloud_range, "°C  Cloud (air)");
     }
-    if wanted(h) || h.lines {
+    if h.flow.mode != FlowMode::Off {
+        super::heat_flow::legend(ui, &h.flow, top_speed);
+    }
+    if wanted(h) || h.flow.mode != FlowMode::Off || h.cloud {
         ui.end_row();
     }
     if !notes.is_empty() {
@@ -77,53 +93,8 @@ pub(crate) fn strip(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32,
     }
 }
 
-/// The colour bar of the airflow lines: still air at the left, the fastest at
-/// the right, in m/s.
-fn speed_scale(ui: &mut egui::Ui, top_speed: f32) {
-    let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(BAR_LEN + 2.0 * TICK_PAD + 24.0, BAR_H + LABEL_H),
-        egui::Sense::hover(),
-    );
-    response.on_hover_text(
-        "Air speed in m/s along the streamlines and their arrows; the temperature scale is a different colour ramp",
-    );
-    let bar = egui::Rect::from_min_size(
-        egui::pos2(rect.min.x + TICK_PAD, rect.min.y),
-        egui::vec2(BAR_LEN, BAR_H),
-    );
-    let painter = ui.painter();
-    let step = BAR_LEN / STEPS as f32;
-    for i in 0..STEPS {
-        let [r, g, b] = super::heat_3d::speed_rgb((i as f32 + 0.5) / STEPS as f32);
-        painter.rect_filled(
-            egui::Rect::from_min_size(
-                egui::pos2(bar.min.x + i as f32 * step, bar.min.y),
-                egui::vec2(step + 0.5, BAR_H),
-            ),
-            0.0,
-            egui::Color32::from_rgb(r, g, b),
-        );
-    }
-    let pal = crate::theme::ui_palette();
-    for frac in [0.0_f32, 0.5, 1.0] {
-        let x = bar.min.x + frac * BAR_LEN;
-        painter.line_segment(
-            [egui::pos2(x, bar.max.y), egui::pos2(x, bar.max.y + 3.0)],
-            egui::Stroke::new(1.0, pal.text_secondary),
-        );
-        painter.text(
-            egui::pos2(x, bar.max.y + 4.0),
-            egui::Align2::CENTER_TOP,
-            format!("{:.2}", top_speed * frac),
-            egui::FontId::proportional(10.0),
-            pal.text_secondary,
-        );
-    }
-    ui.label(egui::RichText::new("m/s  Air speed").small());
-}
-
 /// The colour bar with degree ticks.
-fn scale(ui: &mut egui::Ui, range: Range) {
+fn scale(ui: &mut egui::Ui, range: Range, title: &str) {
     let (rect, response) = ui.allocate_exact_size(
         egui::vec2(BAR_LEN + 2.0 * TICK_PAD, BAR_H + LABEL_H),
         egui::Sense::hover(),
@@ -161,7 +132,7 @@ fn scale(ui: &mut egui::Ui, range: Range) {
             crate::theme::ui_palette().text_secondary,
         );
     }
-    ui.label(egui::RichText::new("°C  Temperature").small());
+    ui.label(egui::RichText::new(title).small());
 }
 
 /// The ticks of the scale as (position 0 to 1 along the bar, degrees), only
@@ -195,24 +166,26 @@ mod tests {
     fn only_layers_on_screen_get_a_note() {
         let range = Range { lo: 20.0, hi: 60.0 };
         let off = Heat3d {
-            slice: true,
+            slice: false,
             iso: false,
             lines: false,
             devices: false,
             ..Heat3d::default()
         };
         assert!(notes(&off, range, 0.4, 0.0).is_empty());
-        let all = Heat3d {
+        let mut all = Heat3d {
+            slice: true,
             iso: true,
             iso_at: 0.5,
-            lines: true,
             devices: true,
             ..off
         };
-        let n = notes(&all, range, 0.4, 0.0);
-        assert_eq!(n.len(), 3);
-        assert!(n[0].contains("40 °C"));
-        assert!(n[1].contains("0.40 m/s"));
+        all.set_flow(FlowMode::Streamlines);
+        let n = notes(&all, range, 0.5, 0.0);
+        assert_eq!(n.len(), 4);
+        assert!(n[0].contains("Slice") && n[0].contains("device bodies"));
+        assert!(n[1].contains("40 °C"));
+        assert!(n[2].contains("0.5 m/s") && n[2].contains("model"));
     }
 
     #[test]
@@ -253,13 +226,18 @@ mod tests {
 
     #[test]
     fn nothing_coloured_means_no_key() {
-        let h = Heat3d {
+        let mut h = Heat3d {
             slice: false,
             iso: false,
             devices: false,
-            lines: true,
             ..Heat3d::default()
         };
+        h.set_flow(FlowMode::Streamlines);
         assert!(!wanted(&h));
+        // A speed map replaces the temperature slice, so no temperature key.
+        let mut map = Heat3d::default();
+        assert!(wanted(&map));
+        map.set_flow(FlowMode::SpeedMap);
+        assert!(!wanted(&map));
     }
 }

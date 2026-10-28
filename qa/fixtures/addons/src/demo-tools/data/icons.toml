@@ -1,0 +1,9 @@
+[[icon]]
+name = "demo-tools.badge"
+tooltip = "Demo badge"
+shape = [
+  { kind = "rect", x = 5, y = 4, w = 14, h = 16, r = 2 },
+  { kind = "line", x1 = 8.5, y1 = 9, x2 = 15.5, y2 = 9 },
+  { kind = "line", x1 = 8.5, y1 = 13, x2 = 13, y2 = 13 },
+  { kind = "circle", cx = 15, cy = 16, r = 1, filled = true },
+]

@@ -101,3 +101,21 @@ pub mod status {
     pub const ERROR: &str = p::WARNING_OCTAGON;
     pub const OK: &str = p::CHECK_CIRCLE;
 }
+
+/// The mark of the add-on manager and of everything that comes from an add-on: the puzzle piece.
+/// An add-on without an icon of its own, or whose icon fails, shows this one
+/// (docs/design/visual-redesign-addons.md, section 4).
+pub const ADDON_ICON: &str = egui_phosphor::regular::PUZZLE_PIECE;
+
+/// Marks in the add-on manager. Each travels with text; colour is never the only carrier.
+pub mod addon {
+    use egui_phosphor::regular as p;
+
+    pub const ON: &str = p::CHECK_CIRCLE;
+    pub const OFF: &str = p::TOGGLE_LEFT;
+    pub const SIGNED: &str = p::SEAL_CHECK;
+    pub const UNSIGNED: &str = p::SHIELD_WARNING;
+    pub const BLOCKED: &str = p::PROHIBIT;
+    pub const FAILED: &str = p::WARNING_OCTAGON;
+    pub const INSTALL: &str = p::DOWNLOAD_SIMPLE;
+}

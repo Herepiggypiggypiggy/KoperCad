@@ -67,6 +67,9 @@ pub(crate) struct PartsWindow {
     /// The part whose Remove from library awaits a second click.
     confirm_remove: Option<PartKey>,
     focus_search: bool,
+    /// Whether a device is selected on the drawing, so "Use for selected
+    /// device" has something to act on. Set every frame.
+    pub(super) device_selected: bool,
     /// Builds the 3D models of imported STEP files in the background;
     /// created on the first frame, when the repaint handle is known.
     geometry: Option<GeometryService>,
@@ -83,6 +86,10 @@ pub(crate) struct PartsWindow {
     etim_line: Option<Option<String>>,
     /// Add CAD files: matching of downloaded files to parts, while open.
     cad: Option<CadPanel>,
+    /// Export and import of a library bundle.
+    bundles: super::parts_bundle::BundleUi,
+    /// Files dropped or picked that are still being read in the background.
+    waiting: Vec<Waiting>,
     /// Repaints the window when a background read finishes; set on the first
     /// frame.
     wake: Option<egui::Context>,
@@ -169,6 +176,7 @@ impl PartsWindow {
             catalog_path: user_catalog_path(),
             confirm_remove: None,
             focus_search: true,
+            device_selected: false,
             geometry: None,
             quality: Default::default(),
             pins: Default::default(),
@@ -176,6 +184,8 @@ impl PartsWindow {
             guide: false,
             etim_line: None,
             cad: None,
+            bundles: Default::default(),
+            waiting: Vec::new(),
             wake: None,
         }
     }
@@ -333,6 +343,9 @@ impl PartsWindow {
             .map_or_else(CadLinks::default, |l| CadLinks::load(l.root()));
         let found = match self.import.as_mut() {
             Some(i) if i.phase == Phase::Waiting => {
+                // Read in the background; a file not read yet is judged on a
+                // later frame.
+                super::parts_identity::prefetch(&i.unjudged(), self.wake.clone());
                 i.judge_passed_over(&part, &self.catalog, &links)
             }
             _ => None,
@@ -387,6 +400,33 @@ impl PartsWindow {
         }
     }
 
+    /// Starts reading dropped or picked files in the background; the window
+    /// goes on painting and handles them once they are read.
+    fn wait_for(&mut self, files: Waiting) {
+        super::parts_identity::prefetch(files.paths(), self.wake.clone());
+        // A second drop while the first is read joins it (or follows it when it
+        // is a different kind), so no file is lost.
+        match (self.waiting.last_mut(), files) {
+            (Some(Waiting::Dropped(have)), Waiting::Dropped(more))
+            | (Some(Waiting::AddCad(have)), Waiting::AddCad(more)) => have.extend(more),
+            (_, files) => self.waiting.push(files),
+        }
+        if let Some(ctx) = &self.wake {
+            ctx.request_repaint();
+        }
+    }
+
+    /// The files waiting to be read, once every one has been.
+    fn take_read(&mut self) -> Option<Waiting> {
+        for files in &self.waiting {
+            super::parts_identity::prefetch(files.paths(), self.wake.clone());
+        }
+        if !super::parts_identity::ready(self.waiting.first()?.paths()) {
+            return None;
+        }
+        Some(self.waiting.remove(0))
+    }
+
     /// Opens Add CAD files for these files.
     fn add_cad_files(&mut self, paths: &[PathBuf]) {
         self.cad = Some(CadPanel::new(
@@ -408,6 +448,18 @@ impl PartsWindow {
         if let Some(panel) = self.cad.as_mut() {
             for p in panel.poll() {
                 self.catalog.upsert(p);
+            }
+        }
+        let added = self.bundles.poll();
+        if !added.is_empty() {
+            for p in &added {
+                self.catalog.upsert(p.clone());
+            }
+            if let Some(path) = self.catalog_path.as_deref()
+                && let Err(e) = super::parts_import::save_parts_to_user_catalog(path, &added)
+            {
+                self.bundles
+                    .note(format!("The parts could not be saved to your catalog: {e}"));
             }
         }
     }
@@ -779,6 +831,10 @@ fn side_label(side: Side) -> Option<&'static str> {
 enum PartsAction {
     /// Open the table import with its mapping step.
     ImportTable,
+    /// Open the export form of Export library.
+    ExportLibrary,
+    /// Ask for a library bundle and open it.
+    ImportLibrary,
     Select(PartKey),
     Import(PartKey),
     OpenPage(String),
@@ -853,10 +909,25 @@ impl NovoApp {
         }
     }
 
+    /// The command `parts.browser` (Library > Parts): opens the Parts
+    /// window, or closes it when it is open.
+    pub(super) fn toggle_parts_browser(&mut self) {
+        if self.wb.parts.take().is_none() {
+            self.open_parts_browser();
+        }
+    }
+
     pub(super) fn parts_window(&mut self, ctx: &egui::Context) {
+        if self.wb.parts.is_none() {
+            return;
+        }
+        let device_selected = self.backend.document().is_some_and(|d| {
+            !super::part_picker::selected_devices(d.project(), &self.selection()).is_empty()
+        });
         let Some(win) = self.wb.parts.as_mut() else {
             return;
         };
+        win.device_selected = device_selected;
         let mut open = true;
         let mut actions = Vec::new();
         win.wake.get_or_insert_with(|| ctx.clone());
@@ -881,7 +952,7 @@ impl NovoApp {
             .as_ref()
             .zip(ctx.input(|i| i.pointer.latest_pos()))
             .is_some_and(|(r, pos)| r.response.rect.contains(pos));
-        let dropped: Vec<PathBuf> = ctx.input(|i| {
+        let dropped_now: Vec<PathBuf> = ctx.input(|i| {
             if !over {
                 return Vec::new();
             }
@@ -892,6 +963,32 @@ impl NovoApp {
                 .filter(|p| !p.as_os_str().is_empty())
                 .collect()
         });
+        if !dropped_now.is_empty() {
+            win.wait_for(Waiting::Dropped(dropped_now));
+        }
+        // Files are read on a worker thread first, so a batch of large STEP
+        // files never stops the window; what was read is handled here.
+        let (dropped, picked_cad) = match win.take_read() {
+            Some(Waiting::Dropped(files)) => (files, Vec::new()),
+            Some(Waiting::AddCad(files)) => (Vec::new(), files),
+            None => (Vec::new(), Vec::new()),
+        };
+        if !picked_cad.is_empty() {
+            win.add_cad_files(&picked_cad);
+        }
+        // A library bundle dropped on the window opens in the bundle dialog.
+        let (bundle_files, dropped): (Vec<PathBuf>, Vec<PathBuf>) = dropped
+            .into_iter()
+            .partition(|p| matches!(classify(p), Dropped::Bundle));
+        if let Some(path) = bundle_files.into_iter().next() {
+            let env = super::parts_bundle::Env {
+                catalog: &win.catalog,
+                library: win.library.as_ref(),
+                wake: win.wake.as_ref(),
+                today: today(),
+            };
+            win.bundles.open_path(path, &env);
+        }
         let mut catalog_files = Vec::new();
         let mut table_file = None;
         let mut no_part_for = None;
@@ -920,7 +1017,7 @@ impl NovoApp {
                 match kind {
                     Dropped::Table => table_file = Some(path.clone()),
                     Dropped::Catalog => catalog_files.push(path.clone()),
-                    Dropped::Cad => {}
+                    Dropped::Cad | Dropped::Bundle => {}
                     Dropped::Other => {
                         no_part_for = path.file_name().map(|n| n.to_string_lossy().into_owned());
                     }
@@ -955,13 +1052,23 @@ impl NovoApp {
                         table_file = Some(path);
                     }
                 }
+                PartsAction::ExportLibrary => win.bundles.start_export(),
+                PartsAction::ImportLibrary => {
+                    let env = super::parts_bundle::Env {
+                        catalog: &win.catalog,
+                        library: win.library.as_ref(),
+                        wake: win.wake.as_ref(),
+                        today: today(),
+                    };
+                    win.bundles.start_import(&env);
+                }
                 PartsAction::AddCadFiles => {
                     if let Some(files) = crate::dialogs::FileDialog::new()
                         .set_title("CAD files (STEP, DXF, ZIP, EDZ)")
                         .add_filter("CAD files", &["stp", "step", "p21", "dxf", "zip", "edz"])
                         .pick_files()
                     {
-                        win.add_cad_files(&files);
+                        win.wait_for(Waiting::AddCad(files));
                     }
                 }
                 PartsAction::CadImport => {
@@ -1040,7 +1147,7 @@ impl NovoApp {
                         .set_title("Choose the downloaded file")
                         .pick_file()
                     {
-                        win.drop_on_target(&path);
+                        win.wait_for(Waiting::Dropped(vec![path]));
                     }
                 }
                 PartsAction::ChooseModel => win.choose_model(),
@@ -1126,6 +1233,23 @@ impl NovoApp {
         }
         if close {
             self.wb.parts = None;
+        }
+    }
+}
+
+/// Files dropped or picked that are read in the background before they are
+/// handled.
+enum Waiting {
+    /// Dropped on the window, or chosen for the selected part.
+    Dropped(Vec<PathBuf>),
+    /// Chosen for Add CAD files.
+    AddCad(Vec<PathBuf>),
+}
+
+impl Waiting {
+    fn paths(&self) -> &[PathBuf] {
+        match self {
+            Waiting::Dropped(p) | Waiting::AddCad(p) => p,
         }
     }
 }
@@ -1314,6 +1438,23 @@ fn parts_ui(
                     }
                 }
                 ui.separator();
+                for (label, hint, action) in [
+                    (
+                        "Export library\u{2026}",
+                        "Write your parts, and optionally their CAD files, into one file to move to another computer or to share.",
+                        PartsAction::ExportLibrary,
+                    ),
+                    (
+                        "Import library\u{2026}",
+                        "Read a library file written by Export library. You can also drop it on this window.",
+                        PartsAction::ImportLibrary,
+                    ),
+                ] {
+                    if ui.button(label).on_hover_text(hint).clicked() {
+                        actions.push(action);
+                        ui.close();
+                    }
+                }
                 if ui
                     .button("Maker guide")
                     .on_hover_text("What to download from each maker and where to save it.")
@@ -1364,8 +1505,23 @@ fn parts_ui(
     if win.new_part.is_some() {
         new_part_ui(ui, win);
     }
+    if win.bundles.visible() {
+        let env = super::parts_bundle::Env {
+            catalog: &win.catalog,
+            library: win.library.as_ref(),
+            wake: win.wake.as_ref(),
+            today: today(),
+        };
+        win.bundles.show(ui, &env);
+    }
+    if let Some(text) = super::parts_identity::reading_text().filter(|_| !win.waiting.is_empty()) {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.weak(text);
+        });
+    }
     if let Some(panel) = win.cad.as_mut() {
-        match cad_ui(ui, panel, &win.catalog) {
+        match cad_ui(ui, panel, &win.catalog, !win.waiting.is_empty()) {
             Some(CadAction::Import) => actions.push(PartsAction::CadImport),
             Some(CadAction::Close) => actions.push(PartsAction::CadClose),
             None => {}
@@ -1393,8 +1549,17 @@ fn parts_ui(
         actions.push(PartsAction::Select(rows[next].0.clone()));
         win.reveal = true;
     }
-    if esc && (search_focused || ui.memory(|m| m.focused()).is_none()) {
-        actions.push(PartsAction::Close);
+    if esc {
+        // Esc clears a search first, then closes the window. It is left to
+        // the other text fields (the New part form) while one has the
+        // keyboard, but any other focus (a list row, a button, the maker
+        // menu) does not keep the window open.
+        let typing_elsewhere = ui.ctx().egui_wants_keyboard_input() && !search_focused;
+        if search_focused && !win.query.is_empty() {
+            win.query.clear();
+        } else if !typing_elsewhere {
+            actions.push(PartsAction::Close);
+        }
     }
     if win.import.is_some() || dragging {
         egui::Panel::bottom("parts_status")
@@ -1667,12 +1832,18 @@ fn detail_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAc
             );
             ui.add_space(6.0);
             ui.horizontal_wrapped(|ui| {
-                if widgets::primary_button(ui, "Use for selected device")
-                    .on_hover_text(
+                // The main action only when it can act: with no device
+                // selected it is an ordinary button that says what to do.
+                let use_it = if win.device_selected {
+                    widgets::primary_button(ui, "Use for selected device").on_hover_text(
                         "Gives the devices selected on the drawing this part (one undo step)",
                     )
-                    .clicked()
-                {
+                } else {
+                    ui.button("Use for selected device").on_hover_text(
+                        "Select a device on the drawing first, then give it this part",
+                    )
+                };
+                if use_it.clicked() {
                     actions.push(PartsAction::UseForSelection(key.clone()));
                 }
                 if !win.in_library(&key) && ui.button("Import").clicked() {

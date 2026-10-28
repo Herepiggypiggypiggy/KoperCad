@@ -239,6 +239,8 @@ pub(super) enum Ask {
     SetPanelValue(super::cabinet_panel::PanelEdit),
     /// Put a placed device on another surface of the cabinet (plate, door, ...).
     SetSurface(u64, String),
+    /// Say where a device is mounted: the cabinet, its door or the field.
+    SetSite(u64, novo_layout::site::Site),
     /// The size of a surface other than the plate (`None`: planning values).
     SetSurfaceSize(
         StructureId,
@@ -513,6 +515,9 @@ pub(super) fn natural_key(tag: &str) -> String {
     key.pop();
     key
 }
+
+/// Said when the table is asked for and the cabinet has no mounting plate.
+const TABLE_NEEDS_PLATE: &str = "The table lists the devices of the mounting plate. Set the plate first (Cabinet, Plate setup).";
 
 pub(super) fn cabinet_table(
     ui: &mut egui::Ui,
@@ -1639,8 +1644,8 @@ impl NovoApp {
                             ui.weak("Every device is placed");
                         }
                     });
-                cabinet_bar::note_rect(
-                    ui.ctx(),
+                cabinet_bar::note_rect_in(
+                    ui,
                     "cabinet.unplaced",
                     "Unplaced",
                     unplaced_panel.response.rect,
@@ -1801,7 +1806,10 @@ impl NovoApp {
                     let now_key = structure.map_or(0, |s| {
                         super::heat_sweep::key_of(project, s, ambient, &h.settings, &fans)
                     });
-                    let at = ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0);
+                    let at = super::panel::right_of_left_card(
+                        ui.ctx(),
+                        ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                    );
                     match self.cabinet.heat.advice.show(ui.ctx(), 1, now_key, at) {
                         Some(super::heat_sweep::Ask::Again) => self.cabinet.heat.advice.request(),
                         Some(super::heat_sweep::Ask::Add(c)) => ask = Some(Ask::CoolingPair(c)),
@@ -1813,7 +1821,10 @@ impl NovoApp {
                     self.cabinet.heat.layout.show(
                         ui.ctx(),
                         now_key,
-                        ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                        super::panel::right_of_left_card(
+                            ui.ctx(),
+                            ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                        ),
                     )
                 {
                     ask = Some(Ask::CoolerLayout(s, moves));
@@ -1853,13 +1864,7 @@ impl NovoApp {
                 self.cabinet.view.glide_secs =
                     super::motion::glide_secs(self.settings.reduce_motion);
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
-                cabinet_bar::note_rect(
-                    ui.ctx(),
-                    "cabinet.canvas",
-                    "Plate",
-                    out.response.rect,
-                    false,
-                );
+                cabinet_bar::note_rect_in(ui, "cabinet.canvas", "Plate", out.response.rect, false);
                 self.cabinet.heat.layout.paint(
                     &ui.painter_at(out.response.rect),
                     out.response.rect,
@@ -2384,6 +2389,12 @@ impl NovoApp {
                 // nothing to run on: drop it, or the 3D view would send the
                 // person back here on every visit.
                 self.cabinet.heat.layout.drop_for_missing_plate();
+                // Ctrl+T and the command field switch the table on without
+                // asking the bar, so the plate is checked here: there is no
+                // table without a plate, and silence reads as a dead key.
+                if structure.is_some() && ask.is_none() && std::mem::take(&mut self.cabinet.table) {
+                    ask = Some(Ask::ToggleTable);
+                }
                 let search_asked = self.cabinet.heat.layout.needs_plate();
                 // The empty state names the next step and puts its button
                 // right under the sentence, not at the far end of the bar.
@@ -2453,6 +2464,9 @@ impl NovoApp {
             }
         }
 
+        self.sizing.left_out = structure
+            .map(|s| novo_layout::sizing_model::left_out(project, s))
+            .unwrap_or_default();
         let sizing_chip = self.learn.chip("sizing");
         let rails_chip = self.learn.chip("rails");
         let sizing_lesson = super::sizing::show_window(
@@ -2728,6 +2742,11 @@ impl NovoApp {
                 self.cabinet.preview = None;
                 self.cabinet.surface_preview.clear();
             }
+            Ask::ToggleTable if structure.is_some() && layout.is_none() && !self.cabinet.table => {
+                // The table lists the devices of the plate; with no plate
+                // there is nothing to show, and silence reads as a dead button.
+                self.message(Level::Info, TABLE_NEEDS_PLATE);
+            }
             Ask::ToggleTable => self.cabinet.table ^= true,
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
             Ask::CloseInspector => {
@@ -2881,7 +2900,7 @@ impl NovoApp {
                 super::heat_sweep::add_pair(&mut self.cabinet.heat.settings, &c);
                 self.sync_openings_now();
                 // The 3D view opens with the list showing the pair.
-                self.view3d.controls.heat_panel = true;
+                self.cabinet.heat.on = true;
                 self.cabinet
                     .heat
                     .advice
@@ -2965,6 +2984,11 @@ impl NovoApp {
                     Err(e) => self.message(Level::Warning, e.to_string()),
                 }
             }
+            Ask::SetSite(device, site) => {
+                self.cabinet_edit("Set mounting site", move |tx| {
+                    super::cabinet_surface_move::set_site(tx, device, site)
+                });
+            }
             Ask::SetSurface(device, surface) => {
                 let Some(structure) = structure else {
                     return;
@@ -2982,7 +3006,22 @@ impl NovoApp {
                 // A preview was made for the old plate.
                 self.cabinet.preview = None;
                 self.cabinet.surface_preview.clear();
-                self.cabinet_edit("Set plate size", move |tx| set_plate(tx, s, plate));
+                let mut resized = 0;
+                if self.cabinet_edit("Set plate size", |tx| {
+                    resized = novo_layout::model::set_plate_following(tx, s, plate)?;
+                    Ok(())
+                }) && resized > 0
+                {
+                    self.message(
+                        Level::Info,
+                        format!(
+                            "{resized} {} that ran across the old plate now {} the new size. Undo restores the plate and the {}.",
+                            if resized == 1 { "rail or duct" } else { "rails and ducts" },
+                            if resized == 1 { "follows" } else { "follow" },
+                            if resized == 1 { "rail or duct" } else { "rails and ducts" },
+                        ),
+                    );
+                }
             }
             Ask::SetPlate(s) => {
                 self.cabinet_edit("Set plate", move |tx| set_plate(tx, s, DEFAULT_PLATE));

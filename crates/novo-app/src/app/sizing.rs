@@ -117,6 +117,8 @@ pub(super) struct SizingState {
     pub(super) editor_open: bool,
     /// A plate the person asked for with Apply; the Cabinet takes it.
     pub(super) apply: Option<MountingPlate>,
+    /// Devices of the panel that take no room on the plate, set each frame.
+    pub(super) left_out: novo_layout::sizing_model::LeftOut,
     /// The list has edits not yet written to its file.
     dirty: bool,
     /// One line for the editor: what the last import or save did.
@@ -138,6 +140,7 @@ impl SizingState {
             panel_open: false,
             editor_open: false,
             apply: None,
+            left_out: Default::default(),
             dirty: false,
             notice: None,
         }
@@ -395,8 +398,15 @@ fn show_panel(
     ui.add_space(10.0);
     novo_theme::widgets::section_label(ui, "Result");
 
+    let left = left_out_text(&state.left_out);
     if devices.is_empty() {
-        ui.weak("This panel has no devices yet.");
+        ui.weak(match &left {
+            Some(_) => "No device of this panel takes room on the plate.",
+            None => "This panel has no devices yet.",
+        });
+        if let Some(text) = &left {
+            ui.weak(text);
+        }
     } else {
         let rec = recommend(devices, &state.catalog, &state.request());
         for line in result_lines(&rec) {
@@ -420,6 +430,10 @@ fn show_panel(
                 }
             }
         }
+        if let Some(text) = &left {
+            ui.add_space(4.0);
+            ui.weak(text);
+        }
         if !rec.notes.is_empty() {
             ui.add_space(4.0);
             for note in &rec.notes {
@@ -431,6 +445,23 @@ fn show_panel(
     if novo_theme::widgets::ghost_button(ui, "Enclosures...").clicked() {
         state.editor_open = true;
     }
+}
+
+/// The line that says which devices the sizing did not count, by tag.
+fn left_out_text(left: &novo_layout::sizing_model::LeftOut) -> Option<String> {
+    let mut parts = Vec::new();
+    if !left.field.is_empty() {
+        parts.push(format!("{} in the field", left.field.join(", ")));
+    }
+    if !left.door.is_empty() {
+        parts.push(format!("{} on the door", left.door.join(", ")));
+    }
+    (!parts.is_empty()).then(|| {
+        format!(
+            "Not counted, they take no room on the plate: {}.",
+            parts.join("; ")
+        )
+    })
 }
 
 /// The "Enclosures..." window: the person's list of sizes.

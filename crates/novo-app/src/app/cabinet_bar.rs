@@ -224,6 +224,22 @@ pub(super) fn note_rect(
     });
 }
 
+/// [`note_rect`] for a rectangle of a panel's content: cut to what the panel
+/// shows (`ui.clip_rect()`: its scroll area and edges), so a ring around a
+/// section that runs past the panel or under its header stays inside the
+/// panel. A rectangle wholly out of view is kept as it is.
+pub(super) fn note_rect_in(
+    ui: &egui::Ui,
+    id: &'static str,
+    label: &'static str,
+    rect: egui::Rect,
+    clicked: bool,
+) {
+    let seen = rect.intersect(ui.clip_rect());
+    let rect = if seen.is_positive() { seen } else { rect };
+    note_rect(ui.ctx(), id, label, rect, clicked);
+}
+
 /// [`note_rect`] for a response, with its click.
 pub(super) fn note_ctx(
     ctx: &egui::Context,
@@ -231,7 +247,36 @@ pub(super) fn note_ctx(
     label: &'static str,
     response: &egui::Response,
 ) {
+    mark_enabled(ctx, id, response.enabled());
     note_rect(ctx, id, label, response.rect, response.clicked());
+}
+
+fn greyed_id() -> egui::Id {
+    egui::Id::new("cabinet_lesson_greyed")
+}
+
+/// Remembers whether the control behind anchor `id` can be clicked right now,
+/// so a lesson that waits for a click on it can say when it is greyed out.
+fn mark_enabled(ctx: &egui::Context, id: &'static str, enabled: bool) {
+    let frame = ctx.cumulative_frame_nr();
+    ctx.data_mut(|d| {
+        let map =
+            d.get_temp_mut_or_default::<std::collections::BTreeMap<&'static str, u64>>(greyed_id());
+        if enabled {
+            map.remove(id);
+        } else {
+            map.insert(id, frame);
+        }
+    });
+}
+
+/// Whether the anchor `id` was drawn greyed out in the last frame.
+pub(super) fn is_greyed(ctx: &egui::Context, id: &str) -> bool {
+    let now = ctx.cumulative_frame_nr();
+    ctx.data(|d| {
+        d.get_temp::<std::collections::BTreeMap<&'static str, u64>>(greyed_id())
+            .is_some_and(|m| m.get(id).is_some_and(|f| f + 1 >= now))
+    })
 }
 
 /// The anchors noted with [`note_rect`] since the last call.
@@ -247,6 +292,7 @@ pub(super) fn note(
     label: &'static str,
     response: &egui::Response,
 ) -> egui::Response {
+    mark_enabled(&response.ctx, id, response.enabled());
     anchors.push(Anchor {
         id,
         label,

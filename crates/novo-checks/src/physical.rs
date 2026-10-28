@@ -1,8 +1,8 @@
 //! Cabinet checks: devices not placed, wires and ducts (novo-routing).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
-use novo_core::{AnyId, CabinetPlacement, DeviceId, DeviceKind, SymbolRole, WireId};
+use novo_core::{AnyId, CabinetPlacement, DeviceId, DeviceKind, PageId, SymbolRole, WireId};
 use novo_layout::DuctHit;
 use novo_layout::model::load;
 use novo_routing::Problem as RoutingProblem;
@@ -26,6 +26,10 @@ pub(crate) fn unplaced_devices(cx: &Context<'_>, out: &mut Vec<Problem>) {
         .map(|p| p.device)
         .collect();
     for device in cx.project.devices() {
+        // A motor in the field never goes on a plate.
+        if novo_layout::site::is_field(cx.project, device) {
+            continue;
+        }
         let drawn = cx.by_device.contains_key(&device.id)
             || (device.kind == DeviceKind::TerminalStrip
                 && cx.project.symbols().any(|s| {
@@ -61,16 +65,15 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
         project.wires().map(|w| (w.id.raw(), w.id)).collect();
     let wire = |job: u64| wires.get(&job).copied();
     let mut guessed: Vec<AnyId> = Vec::new();
+    let mut free_air: BTreeMap<PageId, Vec<WireId>> = BTreeMap::new();
     for (structure, plan) in &routed.plans {
         for problem in &plan.problems {
             match problem {
                 RoutingProblem::FreeAir { job } => {
                     let Some(w) = wire(*job) else { continue };
-                    out.push(Problem::new(
-                        ProblemKind::WireWithoutDuct,
-                        vec![AnyId::Wire(w)],
-                        "No duct serves this wire: it would run in free air".to_owned(),
-                    ));
+                    if let Some(page) = project.wire(w).map(|w| w.page) {
+                        free_air.entry(page).or_default().push(w);
+                    }
                 }
                 RoutingProblem::OverfullDuct { ratio, jobs, .. } => {
                     let wires: Vec<WireId> = jobs.iter().filter_map(|j| wire(*j)).collect();
@@ -120,6 +123,11 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
             }
         }
     }
+    for (page, mut wires) in free_air {
+        wires.sort();
+        wires.dedup();
+        out.push(free_air_problem(cx, page, &wires));
+    }
     if !guessed.is_empty() {
         guessed.sort();
         let n = guessed.len();
@@ -133,6 +141,57 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
             ),
         ));
     }
+}
+
+/// How many wires of a free-air problem are named in its message.
+const NAMED_WIRES: usize = 5;
+
+/// One problem for the wires of a page that no duct serves, naming them:
+/// `-F5:2 to -F6:1`, or the wire number when it has one.
+fn free_air_problem(cx: &Context<'_>, page: PageId, wires: &[WireId]) -> Problem {
+    let project = cx.project;
+    let name = project.page(page).map_or("?", |p| p.name.as_str());
+    let labels: Vec<String> = wires
+        .iter()
+        .filter_map(|&w| project.wire(w))
+        .map(|w| {
+            let ends = format!(
+                "{} to {}",
+                cx.endpoint_label(w.from),
+                cx.endpoint_label(w.to)
+            );
+            match w.number.as_deref().filter(|n| !n.is_empty()) {
+                Some(number) => format!("{number} ({ends})"),
+                None => ends,
+            }
+        })
+        .collect();
+    let shown = labels
+        .iter()
+        .take(NAMED_WIRES)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("; ");
+    let more = labels.len().saturating_sub(NAMED_WIRES);
+    let n = wires.len();
+    Problem::new(
+        ProblemKind::WireWithoutDuct,
+        wires.iter().map(|&w| AnyId::Wire(w)).collect(),
+        format!(
+            "No duct serves {} on page {name}, so {} would run in free air: {shown}{}",
+            if n == 1 {
+                "this wire".to_owned()
+            } else {
+                format!("these {n} wires")
+            },
+            if n == 1 { "it" } else { "they" },
+            if more > 0 {
+                format!(" and {more} more")
+            } else {
+                String::new()
+            }
+        ),
+    )
 }
 
 /// Collisions, devices off the plate, tight spacing and full rails on each
@@ -204,30 +263,74 @@ pub(crate) fn layout(cx: &Context<'_>, out: &mut Vec<Problem>) {
                         structure.tag
                     ),
                 ),
-                DuctHit::Rail { id: rail, by } => (
+                DuctHit::Rail { id: rail, by } => {
                     // A rail has no tag: the devices on it stand for it, a
                     // bare rail is found by its plate.
-                    {
-                        let on: Vec<AnyId> = layout
-                            .placements
-                            .iter()
-                            .filter(|p| p.rail == Some(rail))
-                            .map(|p| AnyId::Device(DeviceId::from(p.id)))
-                            .collect();
+                    let ids: Vec<u64> = layout
+                        .placements
+                        .iter()
+                        .filter(|p| p.rail == Some(rail))
+                        .map(|p| p.id)
+                        .collect();
+                    let on: Vec<AnyId> = ids
+                        .iter()
+                        .map(|&id| AnyId::Device(DeviceId::from(id)))
+                        .collect();
+                    // Two rails under ducts must not read as one problem
+                    // listed twice: say which rail, by what sits on it.
+                    let which = if on.is_empty() {
+                        let place = layout.rails.iter().find(|r| r.id == rail).map_or_else(
+                            String::new,
+                            |r| {
+                                format!(
+                                    " at {} mm from the left and {} mm from the top",
+                                    r.x.round(),
+                                    r.y.round()
+                                )
+                            },
+                        );
+                        format!("An empty DIN rail{place}")
+                    } else {
+                        let tags: Vec<String> = ids.iter().take(4).map(|&id| tag(id)).collect();
+                        format!("The DIN rail with {}", tags.join(", "))
+                    };
+                    (
                         if on.is_empty() {
                             vec![AnyId::Structure(structure.id)]
                         } else {
                             on
-                        }
-                    },
-                    format!(
-                        "A DIN rail of {} runs under a duct for {} mm",
-                        structure.tag,
-                        by.round()
-                    ),
-                ),
+                        },
+                        format!(
+                            "{which} on the plate of {} runs under a duct for {} mm",
+                            structure.tag,
+                            by.round()
+                        ),
+                    )
+                }
             };
             out.push(Problem::new(ProblemKind::DuctOverlap, at, what));
+        }
+        for p in &layout.placements {
+            let Some(device) = project.device(DeviceId::from(p.id)) else {
+                continue;
+            };
+            let (site, source) = novo_layout::site::site_of(project, device);
+            if site != novo_layout::site::Site::Field {
+                continue;
+            }
+            let why = match source {
+                novo_layout::site::SiteSource::Stated => "its mounting site is the field",
+                _ => "its letter code makes it a field device",
+            };
+            out.push(Problem::new(
+                ProblemKind::FieldDeviceInCabinet,
+                vec![AnyId::Device(device.id)],
+                format!(
+                    "{} sits on the plate of {} but is mounted outside the cabinet ({why}): \
+                     take it off the plate, or set its mounting site to plate if it really is inside",
+                    device.tag, structure.tag
+                ),
+            ));
         }
         for (device, _rail, off) in report.off_centre {
             out.push(Problem::new(

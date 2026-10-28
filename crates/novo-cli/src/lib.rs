@@ -23,6 +23,7 @@ use novo_revisions::{Comparison, FieldChange, Side, group_of};
 use novo_storage::ProjectFile;
 use serde_json::{Value, json};
 
+mod addons;
 mod eplan;
 mod macros;
 mod parts;
@@ -65,6 +66,10 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Cmd {
+    /// Add-ons: list, inspect, install, turn on and off, remove, roll back, and pack a folder
+    /// into a `.kcaddon`.
+    #[command(subcommand)]
+    Addons(addons::Addons),
     /// The macro library: list, export, import, install the starter set.
     #[command(subcommand)]
     Macros(macros::Macros),
@@ -222,6 +227,13 @@ struct ReportArgs {
     /// writes `;` like File > Export wire cut in the app.
     #[arg(long)]
     delimiter: Option<char>,
+    /// CSV only: leave tags and other text exactly as they are. By default
+    /// a field starting with `=`, `+`, `-` or `@` (every device tag, as in
+    /// `=A1+CAB-K1`) gets a leading apostrophe so Excel does not read it as
+    /// a formula; use this for CSV that other programs read. `.xlsx` files
+    /// never need it.
+    #[arg(long)]
+    plain_text: bool,
     /// Language of titles and headers (`en`, `nl`); the project's report
     /// language when left out.
     #[arg(long, value_name = "CODE")]
@@ -377,8 +389,10 @@ enum Export {
 
 #[derive(Debug, Subcommand)]
 enum Import {
-    /// Preview an edited spreadsheet (`.xlsx` or CSV from the spreadsheet
-    /// export) against a project: every cell that would change, conflicts
+    /// Preview an edited spreadsheet against a project. The sheet comes from
+    /// File > Export interchange > Export for bulk edit (.xlsx) in the app
+    /// (`kopercad-cli export reports` writes report workbooks, which this
+    /// cannot read). It takes the `.xlsx` or CSV made that way: every cell that would change, conflicts
     /// with later edits and rows that cannot be used, with line and reason.
     /// Nothing is written unless `--output` names a new project file; the
     /// project given is never changed. Exits with 1 when rows were rejected.
@@ -535,6 +549,7 @@ fn manual(dir: &Path, images: Option<&Path>, out: &mut dyn Write) -> Result<i32,
 
 fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
     match command {
+        Cmd::Addons(cmd) => addons::run(cmd, out),
         Cmd::Macros(cmd) => macros::run(cmd, out),
         Cmd::Eplan(cmd) => eplan::run(cmd, out),
         Cmd::TestUser(opts) => testuser::run(opts, out),
@@ -545,7 +560,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
         Cmd::Compare { before, after } => {
             let (a, b) = (read(&before)?, read(&after)?);
             let c = novo_interop::compare::compare_projects(&a, &b);
-            print(out, &c.report.text())?;
+            print(out, &c.text())?;
             Ok(if c.is_equal() {
                 exit::OK
             } else {
@@ -577,6 +592,15 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             out,
         ),
         Cmd::Export(Export::Eplan { file, output }) => {
+            if novo_storage::reserved_device_name(&output) {
+                return Err(Failure::new(
+                    exit::WRITE,
+                    format!(
+                        "cannot write {}: the name is reserved by Windows for a device; pick another file name",
+                        output.display()
+                    ),
+                ));
+            }
             if output.exists() {
                 return Err(Failure::new(
                     exit::WRITE,
@@ -631,6 +655,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
                 file,
                 output: Some(output),
                 delimiter: Some(','),
+                plain_text: false,
                 language: None,
             };
             if !matches!(
@@ -1238,7 +1263,7 @@ fn calc(
     use novo_checks::calc::tables::TableSet;
 
     let usage = |m: String| Failure::new(exit::USAGE, m);
-    let text = std::fs::read_to_string(file)
+    let text = read_text(file)
         .map_err(|e| Failure::new(exit::READ, format!("cannot read {}: {e}", file.display())))?;
     let root: Value = serde_json::from_str(&text)
         .map_err(|e| usage(format!("{} is not valid JSON: {e}", file.display())))?;
@@ -1246,7 +1271,7 @@ fn calc(
     let set = match tables {
         None => TableSet::builtin(),
         Some(path) => {
-            let csv = std::fs::read_to_string(path).map_err(|e| {
+            let csv = read_text(path).map_err(|e| {
                 Failure::new(exit::READ, format!("cannot read {}: {e}", path.display()))
             })?;
             let name = path.file_name().map_or_else(
@@ -1261,7 +1286,7 @@ fn calc(
     let pair_table = match pairs {
         None => None,
         Some(path) => {
-            let csv = std::fs::read_to_string(path).map_err(|e| {
+            let csv = read_text(path).map_err(|e| {
                 Failure::new(exit::READ, format!("cannot read {}: {e}", path.display()))
             })?;
             let name = path
@@ -1303,6 +1328,16 @@ fn calc(
         exit::PROBLEMS
     } else {
         exit::OK
+    })
+}
+
+/// A text file as UTF-8 without a leading byte-order mark, which Windows
+/// editors add and neither JSON nor CSV parsers expect.
+fn read_text(path: &Path) -> std::io::Result<String> {
+    let text = std::fs::read_to_string(path)?;
+    Ok(match text.strip_prefix('\u{feff}') {
+        Some(rest) => rest.to_owned(),
+        None => text,
     })
 }
 
@@ -1438,6 +1473,7 @@ fn export_reports(
     let usage = |e: novo_py::ScriptError| Failure::new(exit::USAGE, e.to_string());
     let csv = CsvOptions {
         delimiter: args.delimiter.unwrap_or(','),
+        excel_safe: !args.plain_text,
         ..CsvOptions::default()
     };
     match &args.output {
@@ -1453,6 +1489,11 @@ fn export_reports(
             let bytes = novo_py::report_bytes_in(&project, ids, format, args.language.as_deref())
                 .map_err(usage)?;
             write_output(file, path, &bytes)?;
+            // A CSV of nothing is only the byte order mark: say so, so an
+            // empty file is not taken for a failed export.
+            if matches!(format, ReportFormat::Csv(_)) && bytes.len() <= 3 {
+                print(out, "Nothing to list in this project: the file has no rows")?;
+            }
         }
         None => {
             // On a terminal or in a pipe a byte order mark is only noise.
@@ -1645,25 +1686,32 @@ fn pdf(project: &Project, pages: &[String]) -> Result<Vec<u8>, Failure> {
 /// contact table, its warnings stay text below it.
 fn note_of(l: novo_xref::Label) -> SymbolNote {
     use novo_xref::ContactKind;
+    let glyph_of = |kind| match kind {
+        ContactKind::Power => NoteGlyph::Power,
+        ContactKind::NormallyClosed => NoteGlyph::NormallyClosed,
+        ContactKind::Changeover => NoteGlyph::Changeover,
+        ContactKind::NormallyOpen | ContactKind::Other => NoteGlyph::NormallyOpen,
+    };
     let rows: Vec<NoteRow> = l
         .rows
         .iter()
         .map(|r| NoteRow {
-            glyph: match r.kind {
-                ContactKind::Power => NoteGlyph::Power,
-                ContactKind::NormallyClosed => NoteGlyph::NormallyClosed,
-                ContactKind::Changeover => NoteGlyph::Changeover,
-                ContactKind::NormallyOpen | ContactKind::Other => NoteGlyph::NormallyOpen,
-            },
-            pins: r.pins.clone(),
-            location: r.location.clone(),
+            target: Some(r.symbol),
+            ..NoteRow::new(glyph_of(r.kind), &r.pins, &r.location)
         })
+        .chain(l.spare.iter().map(|r| NoteRow {
+            spare: true,
+            ..NoteRow::new(glyph_of(r.kind), &r.pins, "spare")
+        }))
         .collect();
-    let lines = if rows.is_empty() {
-        l.lines
+    let mut lines = if rows.is_empty() {
+        l.lines.clone()
     } else {
         l.extra_lines().to_vec()
     };
+    if !rows.is_empty() {
+        lines.extend(l.spare_more_line());
+    }
     SymbolNote {
         symbol: l.symbol,
         lines,

@@ -31,6 +31,28 @@ impl Comparison {
     pub fn is_equal(&self) -> bool {
         self.report.lossy.is_empty()
     }
+
+    /// The answer in words: that nothing differs, or the kinds of difference
+    /// with a count first and then each with examples. (The report's own
+    /// summary is for imports and exports, where "left out" means lost; here
+    /// it read "Nothing found. Left out: 8 devices ...".)
+    pub fn text(&self) -> String {
+        if self.is_equal() {
+            return "Nothing differs in what is compared.".to_owned();
+        }
+        let kinds: Vec<String> = self
+            .report
+            .lossy
+            .iter()
+            .map(|l| crate::report::counted(l.count, &l.what))
+            .collect();
+        let mut out = format!("The projects differ: {}.", kinds.join(", "));
+        for l in &self.report.lossy {
+            out.push_str("\n- ");
+            out.push_str(&l.line());
+        }
+        out
+    }
 }
 
 /// How many examples a difference line names.

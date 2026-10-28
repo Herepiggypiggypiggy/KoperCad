@@ -744,7 +744,7 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
     d.app.run_command(&ctx, "heat.simulate", None);
     assert_eq!(d.app.workspace(), Workspace::View3d, "Simulate stays here");
     assert!(
-        d.app.view3d.controls.heat_panel,
+        d.app.cabinet.heat.on,
         "the panel with progress and stop opens with the run"
     );
     for _ in super::test_wait::patient() {
@@ -769,7 +769,7 @@ fn an_open_heat_panel_follows_the_view_cube_down_when_the_heat_strip_appears() {
     let mut d = drive_with_cabinet(dir.path());
     let ctx = d.ctx.clone();
     d.app.run_command(&ctx, "view.3d", None);
-    d.app.view3d.controls.heat_panel = true;
+    d.app.cabinet.heat.on = true;
     let size = egui::vec2(1366.0, 768.0);
     for _ in 0..4 {
         d.frame_sized(size, Vec::new());

@@ -9,3 +9,5 @@
 2026-10-28 C4 follow-up: preview counts say "1 control", the "to check" list comes first in the preview (visible at 1366x768), warning texts use quotes instead of backticks.
 2026-10-28 C2: controller device in the live circuit. `novo_sim::pins` (pin to pole), `Bench::override_input`, `ControllerLive` (state, per-frame drive, storage, checks, auto-bind), Controller card, `sim.controller`, receiver symbols `iec/controllers/*`, fixture and tests (novo-app 12, novo-sim 8, novo-symbols 2, novo-workflow 1, novo-tests 3), QA 1581/1581b/1582 at both sizes. Found by QA: the card crashed in debug builds until its lesson anchor `live.controller` was registered.
 2026-10-28 C2: merged main (hoist run, L5a) into #1615; QA 1583 shows the radio lifting the hook through the drawn circuit (the controller drives the loop through LiveView::solved, no extra code).
+
+2026-10-28 C4: preview shows "N rows: scroll the preview below to see every row and note" and an always-visible scrollbar (R3 note from #1615).

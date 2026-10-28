@@ -283,3 +283,76 @@ fn a_device_without_a_location_goes_to_the_only_enclosure() {
     assert_eq!(novo_layout::model::without_enclosure(&p, cab), vec![id]);
     assert_eq!(novo_layout::model::without_enclosure(&p, second), vec![id]);
 }
+
+#[test]
+fn rails_and_ducts_that_ran_across_the_plate_follow_a_new_plate_size() {
+    use novo_core::{Command, MountingPlate, RailKind};
+    use novo_layout::model::{set_plate, set_plate_following};
+    let mut p = Project::new("t");
+    let (cab, _) = p
+        .transact("setup", |tx| {
+            let cab = tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+            let plate = MountingPlate {
+                width: 600.0,
+                height: 800.0,
+                margin: 10.0,
+            };
+            set_plate(tx, cab, plate)?;
+            // Full width rail, full height duct, a short rail.
+            for (x, y, len, vertical, kind) in [
+                (10.0, 100.0, 580.0, false, RailKind::DinRail),
+                (300.0, 10.0, 780.0, true, RailKind::Duct),
+                (10.0, 300.0, 200.0, false, RailKind::DinRail),
+            ] {
+                tx.execute(Command::AddRail {
+                    structure: cab,
+                    x,
+                    y,
+                    length: len,
+                    kind,
+                    vertical,
+                    width: 25.0,
+                    height: 60.0,
+                })?;
+            }
+            Ok(cab)
+        })
+        .unwrap();
+    let resized = p
+        .transact("grow", |tx| {
+            set_plate_following(
+                tx,
+                cab,
+                MountingPlate {
+                    width: 750.0,
+                    height: 950.0,
+                    margin: 10.0,
+                },
+            )
+        })
+        .unwrap()
+        .0;
+    assert_eq!(resized, 2);
+    let mut lengths: Vec<f64> = p.all::<novo_core::Rail>().map(|r| r.length).collect();
+    lengths.sort_by(f64::total_cmp);
+    assert_eq!(lengths, vec![200.0, 730.0, 930.0]);
+    // Back to a smaller plate: the full ones shrink, nothing sticks out.
+    p.transact("shrink", |tx| {
+        set_plate_following(
+            tx,
+            cab,
+            MountingPlate {
+                width: 400.0,
+                height: 800.0,
+                margin: 10.0,
+            },
+        )
+    })
+    .unwrap();
+    let longest_across = p
+        .all::<novo_core::Rail>()
+        .filter(|r| !r.vertical)
+        .map(|r| r.x + r.length)
+        .fold(0.0, f64::max);
+    assert!(longest_across <= 390.0 + 1e-6, "{longest_across}");
+}

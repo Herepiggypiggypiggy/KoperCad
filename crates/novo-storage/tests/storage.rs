@@ -360,7 +360,7 @@ fn damaged_records_are_reported_not_loaded() {
 }
 
 #[test]
-fn dangling_references_are_refused_by_the_model() {
+fn dangling_references_are_damage_and_salvage_drops_them() {
     let (_dir, path) = temp();
     let mut doc = Document::default();
     build_starter(&mut doc);
@@ -374,10 +374,18 @@ fn dangling_references_are_refused_by_the_model() {
     conn.execute("DELETE FROM records WHERE kind = 'page'", [])
         .unwrap();
     drop(conn);
-    assert!(matches!(
-        ProjectFile::read(&path),
-        Err(StorageError::Model(ModelError::NotFound(_)))
-    ));
+    // Reported as damage in plain words (so Open and Recover salvage it),
+    // not as the model's internal error.
+    match ProjectFile::read(&path) {
+        Err(StorageError::Corrupt { reason, .. }) => {
+            assert!(reason.contains("missing from the file"), "{reason}");
+        }
+        other => panic!("expected a damaged-file error, got {other:?}"),
+    }
+    // Salvage drops the orphans and keeps the rest in a copy that opens.
+    let salvaged = novo_storage::salvage(&path).unwrap();
+    assert!(salvaged.skipped > 0);
+    assert!(ProjectFile::read(&salvaged.copy).is_ok());
 }
 
 /// Simulates a crash: the session goes away without `close`, so the
@@ -883,4 +891,25 @@ fn sidecar_documents_survive_save_save_as_and_reopen() {
     opened.session.close().unwrap();
     let old = Session::open(&a).unwrap();
     assert!(old.session.sidecar("commissioning").unwrap().is_some());
+}
+
+#[test]
+fn autosave_waits_only_for_the_time_left_not_a_second_interval() {
+    use std::time::Duration;
+    let (_dir, path) = temp();
+    let mut doc = Document::default();
+    let mut session = Session::create(&path, doc.project()).unwrap();
+    session.set_autosave_interval(Duration::from_secs(10));
+    // Nothing to write: look again after a whole interval.
+    assert_eq!(session.autosave_wait(), Duration::from_secs(10));
+    let (_, changes) = doc.transact("Draw", |tx| tx.add_page("1")).unwrap();
+    session.record(&changes);
+    // Changes that are not due yet: wake for the time left, so a call that
+    // arrives a hair early cannot push the write a whole interval out.
+    let wait = session.autosave_wait();
+    assert!(wait <= Duration::from_secs(10), "{wait:?}");
+    session.set_autosave_interval(Duration::ZERO);
+    assert_eq!(session.autosave_wait(), Duration::from_millis(50));
+    assert!(session.autosave_if_due(doc.project()).unwrap());
+    assert_eq!(session.autosave_wait(), Duration::ZERO);
 }

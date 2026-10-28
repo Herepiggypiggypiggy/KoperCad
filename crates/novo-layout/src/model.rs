@@ -64,7 +64,65 @@ pub fn device_size(project: &Project, device: &Device) -> Size {
             }
         }
     }
-    Size::from_part(None, None)
+    power_class_size(project, device).unwrap_or_else(|| Size::from_part(None, None))
+}
+
+/// Planning footprints of a drive or soft starter by motor power, (largest
+/// kW, width, height) in mm: wall-mount frequency converters of the common
+/// makers fall in these bands. A planning value, not a part: the result is
+/// marked as guessed so every list says so.
+const DRIVE_FOOTPRINTS: [(f64, f64, f64); 7] = [
+    (1.5, 105.0, 145.0),
+    (4.0, 140.0, 185.0),
+    (7.5, 180.0, 235.0),
+    (15.0, 215.0, 300.0),
+    (30.0, 245.0, 400.0),
+    (55.0, 300.0, 500.0),
+    (f64::INFINITY, 350.0, 650.0),
+];
+
+/// Letter codes of devices sized by their power: drives and soft starters
+/// (`T`) carry the motor power on the starter macros.
+const POWER_SIZED_CODES: [&str; 1] = ["T"];
+
+/// The power of a device in kW from `power_kw` or `rated_power_kw`, on the
+/// device first, then its parts. Text such as `4` or `4,0` is read.
+pub fn device_power_kw(project: &Project, device: &Device) -> Option<f64> {
+    let read = |value: &Value| match value {
+        Value::Float(v) => Some(*v),
+        Value::Int(v) => Some(*v as f64),
+        Value::Text(t) => t.trim().replace(',', ".").parse::<f64>().ok(),
+        _ => None,
+    };
+    let find = |props: &novo_core::Properties| {
+        ["power_kw", "rated_power_kw"]
+            .iter()
+            .find_map(|k| props.get(*k).and_then(read))
+    };
+    find(&device.properties)
+        .or_else(|| {
+            device.parts.iter().find_map(|p| {
+                project
+                    .get::<novo_core::Part>(*p)
+                    .and_then(|p| find(&p.properties))
+            })
+        })
+        .filter(|v| v.is_finite() && *v > 0.0)
+}
+
+/// A drive's footprint from its power, when the part gives none.
+fn power_class_size(project: &Project, device: &Device) -> Option<Size> {
+    let code = device.tag.letter_code().to_ascii_uppercase();
+    if !POWER_SIZED_CODES.contains(&code.as_str()) {
+        return None;
+    }
+    let kw = device_power_kw(project, device)?;
+    let (_, w, h) = DRIVE_FOOTPRINTS.iter().find(|(max, ..)| kw <= *max)?;
+    Some(Size {
+        width: *w,
+        height: *h,
+        guessed: true,
+    })
 }
 
 /// The free space a device asks for on each side, from its own properties
@@ -254,8 +312,43 @@ fn only_enclosure(project: &Project, id: StructureId) -> bool {
 /// location as the enclosure, whatever their function (page group), and,
 /// when it is the only enclosure of the project, those whose tag has no
 /// location at all (a terminal strip made as `-X1` on the terminal screen).
+/// Devices in the field (motors, valves: see [`crate::site`]) are not
+/// candidates: they are not mounted in any enclosure.
 /// Sorted by letter code, then device number.
 pub fn candidates(project: &Project, id: StructureId) -> Vec<Candidate> {
+    belonging(project, id)
+        .into_iter()
+        .map(|d| Candidate {
+            id: d.id.raw(),
+            size: device_size(project, d),
+            sort_key: format!("{}{:06}", d.tag.letter_code(), d.tag.number().unwrap_or(0)),
+        })
+        .collect()
+}
+
+/// The devices that are mounted in an enclosure, whatever the surface:
+/// the same location (or no location in the only enclosure), and not in the
+/// field. One place decides this for `Place all`, the enclosure sizing and
+/// the checks, so the three never disagree on how many devices there are.
+pub fn belonging(project: &Project, id: StructureId) -> Vec<&Device> {
+    at_location(project, id)
+        .into_iter()
+        .filter(|d| !crate::site::is_field(project, d))
+        .collect()
+}
+
+/// The devices of the project that are in the field but would be this
+/// enclosure's by their tag: motors and valves the cabinet feeds.
+pub fn in_the_field(project: &Project, id: StructureId) -> Vec<&Device> {
+    at_location(project, id)
+        .into_iter()
+        .filter(|d| crate::site::is_field(project, d))
+        .collect()
+}
+
+/// Devices whose tag has the enclosure's location (or none, in the only
+/// enclosure), whatever their site.
+fn at_location(project: &Project, id: StructureId) -> Vec<&Device> {
     let Some(s) = structure(project, id) else {
         return Vec::new();
     };
@@ -269,12 +362,62 @@ pub fn candidates(project: &Project, id: StructureId) -> Vec<Candidate> {
                 d.tag.location == s.tag.location
             }
         })
-        .map(|d| Candidate {
-            id: d.id.raw(),
-            size: device_size(project, d),
-            sort_key: format!("{}{:06}", d.tag.letter_code(), d.tag.number().unwrap_or(0)),
-        })
         .collect()
+}
+
+/// The devices of an enclosure that are mounted on a surface other than the
+/// main plate: placed there (the placement's `surface`), or, not placed yet,
+/// meant for it by the device itself or the surface rules. A surface the
+/// enclosure does not have counts as the plate, like in `Place all`.
+pub fn off_plate_devices(project: &Project, id: StructureId) -> std::collections::HashSet<u64> {
+    let mut out = std::collections::HashSet::new();
+    let (Some(s), Some(enclosure)) = (structure(project, id), enclosure_of(project, id)) else {
+        return out;
+    };
+    let plate = s.plate.map_or(
+        Plate {
+            width: 600.0,
+            height: 800.0,
+            margin: 0.0,
+        },
+        |p| Plate {
+            width: p.width,
+            height: p.height,
+            margin: p.margin,
+        },
+    );
+    let (surfaces, _) =
+        crate::surfaces::Surfaces::from_enclosure(&enclosure, &plate, &extra_surfaces(project, id));
+    let known = |name: &str| {
+        let name = name.trim().to_ascii_lowercase();
+        name != MAIN_PLATE && surfaces.find(Some(&name)).is_some()
+    };
+    let mut placed = std::collections::HashSet::new();
+    for p in project
+        .all::<CabinetPlacement>()
+        .filter(|p| p.structure == id)
+    {
+        placed.insert(p.device.raw());
+        if let Some(Value::Text(name)) = p.properties.get(SURFACE_PROPERTY)
+            && known(name)
+        {
+            out.insert(p.device.raw());
+        }
+    }
+    let (rules, _) = crate::rules::model::surface_rules(project, id);
+    for spec in crate::rules::model::specs(project, id) {
+        if placed.contains(&spec.id) {
+            continue;
+        }
+        let wanted = spec
+            .surface
+            .as_deref()
+            .or_else(|| rules.surface_for(&spec.kind));
+        if wanted.is_some_and(known) {
+            out.insert(spec.id);
+        }
+    }
+    out
 }
 
 /// Devices whose tag has no location while the project has several
@@ -287,6 +430,7 @@ pub fn without_enclosure(project: &Project, id: StructureId) -> Vec<u64> {
     project
         .all::<Device>()
         .filter(|d| d.tag.location.is_empty())
+        .filter(|d| !crate::site::is_field(project, d))
         .map(|d| d.id.raw())
         .collect()
 }
@@ -298,6 +442,82 @@ pub fn set_plate(tx: &mut Tx<'_>, id: StructureId, plate: MountingPlate) -> Resu
         plate: Some(plate),
     })
     .map(|_| ())
+}
+
+/// How close to the old edge of the plate a rail or duct is to count as
+/// running the whole way across it, mm.
+const SPAN_TOLERANCE_MM: f64 = 2.0;
+
+/// The rails and ducts that follow a plate change from `old` to `new`, as
+/// (rail, new length). A rail or duct that ran the whole way across the old
+/// usable area keeps doing so; a shorter one is only shortened when the
+/// smaller plate would leave it sticking out. Nothing is lengthened except
+/// a full-width one, and nothing moves.
+pub fn rails_following(
+    project: &Project,
+    id: StructureId,
+    old: Plate,
+    new: Plate,
+) -> Vec<(RailId, f64)> {
+    let (old_use, new_use) = (old.usable(), new.usable());
+    let mut out = Vec::new();
+    for r in project.all::<ModelRail>().filter(|r| r.structure == id) {
+        // Along the run: its start, the old usable start and end, the new end.
+        let (start, old_lo, old_hi, new_hi) = if r.vertical {
+            (r.y, old_use.y, old_use.y + old_use.h, new_use.y + new_use.h)
+        } else {
+            (r.x, old_use.x, old_use.x + old_use.w, new_use.x + new_use.w)
+        };
+        let end = start + r.length;
+        let spans = (start - old_lo).abs() <= SPAN_TOLERANCE_MM
+            && (end - old_hi).abs() <= SPAN_TOLERANCE_MM;
+        let wanted = if spans {
+            // Same start, new end; a changed margin moves the start, which
+            // is left to the person (the rail stays where devices sit).
+            (new_hi - start).max(1.0)
+        } else if end > new_hi + SPAN_TOLERANCE_MM {
+            (new_hi - start).max(1.0)
+        } else {
+            continue;
+        };
+        if (wanted - r.length).abs() > 1e-6 {
+            out.push((r.id, wanted));
+        }
+    }
+    out
+}
+
+/// Sets the plate and lets the rails and ducts that ran across the old one
+/// follow it. Returns how many were resized.
+pub fn set_plate_following(
+    tx: &mut Tx<'_>,
+    id: StructureId,
+    plate: MountingPlate,
+) -> Result<usize> {
+    let old = structure(tx.project(), id).and_then(|s| s.plate);
+    set_plate(tx, id, plate)?;
+    let Some(old) = old else {
+        return Ok(0);
+    };
+    let to_plate = |p: MountingPlate| Plate {
+        width: p.width,
+        height: p.height,
+        margin: p.margin,
+    };
+    let follow = rails_following(tx.project(), id, to_plate(old), to_plate(plate));
+    for (rail, length) in &follow {
+        let (width, height) = tx
+            .project()
+            .get::<ModelRail>(*rail)
+            .map_or((0.0, 0.0), |r| (r.width, r.height));
+        tx.execute(Command::SetRailSize {
+            rail: *rail,
+            length: *length,
+            width,
+            height,
+        })?;
+    }
+    Ok(follow.len())
 }
 
 /// Applies a plan inside one edit, so `place all` is one undo step: adds the

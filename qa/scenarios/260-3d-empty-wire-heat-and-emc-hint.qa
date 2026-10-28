@@ -14,7 +14,7 @@ click_text Quick
 wait 10
 click_text Simulate #2
 wait_s 150
-expect_not "Locked while the run goes"
+expect_not "A run is going on the openings"
 expect "Wire heat in the ducts"
 click_text "Wire heat in the ducts"
 wait 10

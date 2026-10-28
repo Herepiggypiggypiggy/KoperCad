@@ -1963,3 +1963,390 @@ fn the_inspector_close_button_hides_the_plate_card_and_clears_the_selection() {
     assert!(!d.app.cabinet.plate_card);
     assert!(d.app.learn_anchor("cabinet.inspector").is_none());
 }
+
+/// The cooling tower report: a contactor, a motor and a push button with no
+/// location in their tags, in the project's only cabinet, which has a door.
+fn cabinet_with_motor_and_button(d: &mut Drive) -> novo_core::StructureId {
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Cabinet", |tx| {
+            let cab = tx.add_structure(DeviceTag::parse("+CP1").unwrap(), "Cabinet", true)?;
+            let part = tx.add_part("ACME", "C1")?;
+            tx.set_property(part, "width_mm", Some(Value::Float(45.0)))?;
+            tx.set_property(part, "height_mm", Some(Value::Float(90.0)))?;
+            for tag in ["-K1", "-M1", "-S1"] {
+                let device = tx.add_device(DeviceTag::parse(tag).unwrap(), "")?;
+                tx.assign_part(device, part)?;
+            }
+            novo_layout::model::set_plate(
+                tx,
+                cab,
+                novo_core::MountingPlate {
+                    width: 600.0,
+                    height: 800.0,
+                    margin: 10.0,
+                },
+            )?;
+            novo_layout::model::set_enclosure(
+                tx,
+                cab,
+                &novo_layout::enclosure::Enclosure {
+                    width: 650.0,
+                    height: 850.0,
+                    depth: 300.0,
+                    plate_setback: 20.0,
+                    door: Some(novo_layout::enclosure::Door::default()),
+                    front_clearance: None,
+                    hinge_side_clearance: None,
+                },
+            )?;
+            Ok(cab)
+        })
+        .unwrap()
+        .0
+}
+
+fn device_named(d: &Drive, code: &str) -> u64 {
+    project(d)
+        .all::<novo_core::Device>()
+        .find(|dev| dev.tag.device_code() == Some(code))
+        .unwrap()
+        .id
+        .raw()
+}
+
+#[test]
+fn place_all_keeps_the_motor_out_puts_the_button_on_the_door_and_the_sizing_agrees() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let cab = cabinet_with_motor_and_button(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let (k1, m1, s1) = (
+        device_named(&d, "K1"),
+        device_named(&d, "M1"),
+        device_named(&d, "S1"),
+    );
+
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    assert_eq!(cands.len(), 2, "the motor is not a candidate");
+    d.app
+        .cabinet_ask(Ask::PlaceAll, Some(cab), layout_of(&d, cab), &cands);
+    d.frame();
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    d.frame();
+
+    let placed: Vec<u64> = project(&d)
+        .all::<CabinetPlacement>()
+        .map(|p| p.device.raw())
+        .collect();
+    assert!(placed.contains(&k1) && placed.contains(&s1), "{placed:?}");
+    assert!(!placed.contains(&m1), "the motor never goes on the plate");
+    assert_eq!(
+        super::cabinet_surface_move::surface_of(project(&d), cab, s1),
+        "door"
+    );
+    assert_eq!(
+        super::cabinet_surface_move::surface_of(project(&d), cab, k1),
+        "plate"
+    );
+
+    // The sizing counts what is on the plate (the contactor) and says what
+    // it left out, instead of "no devices yet" next to "3 placed".
+    assert_eq!(
+        novo_layout::sizing_model::sizing_devices(project(&d), cab).len(),
+        1
+    );
+    let left = novo_layout::sizing_model::left_out(project(&d), cab);
+    assert_eq!(
+        (left.field, left.door),
+        (vec!["-M1".to_owned()], vec!["-S1".to_owned()])
+    );
+
+    // Saying the motor is in the cabinet makes it a candidate again.
+    d.app.cabinet_ask(
+        Ask::SetSite(m1, novo_layout::site::Site::Plate),
+        Some(cab),
+        None,
+        &[],
+    );
+    d.frame();
+    assert_eq!(novo_layout::model::candidates(project(&d), cab).len(), 3);
+    // And In the field takes a placed device off the plate.
+    d.app.cabinet_ask(
+        Ask::SetSite(k1, novo_layout::site::Site::Field),
+        Some(cab),
+        None,
+        &[],
+    );
+    d.frame();
+    assert!(
+        !project(&d)
+            .all::<CabinetPlacement>()
+            .any(|p| p.device.raw() == k1)
+    );
+}
+
+/// Where the QA fixture of the cabinet sites scenarios lives.
+fn sites_fixture_path() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../qa/fixtures/cabinet-sites.novo")
+}
+
+/// A cooling tower style cabinet: contactor, 4 kW drive, push button and
+/// lamp not placed yet; a motor already (wrongly) on the plate.
+fn build_sites_fixture(doc: &mut novo_core::Document) {
+    doc.transact("Cabinet sites", |tx| {
+        let cab = tx.add_structure(DeviceTag::parse("+CP1").unwrap(), "Cabinet", true)?;
+        let part = tx.add_part("ACME", "C1")?;
+        tx.set_property(part, "width_mm", Some(Value::Float(45.0)))?;
+        tx.set_property(part, "height_mm", Some(Value::Float(90.0)))?;
+        tx.set_property(part, "depth_mm", Some(Value::Float(70.0)))?;
+        let mut ids = Vec::new();
+        for tag in ["-K1", "-T1", "-S1", "-H1", "-M1"] {
+            let device = tx.add_device(DeviceTag::parse(tag).unwrap(), "")?;
+            if tag != "-T1" {
+                tx.assign_part(device, part)?;
+            } else {
+                tx.set_property(device, "power_kw", Some(Value::Float(4.0)))?;
+            }
+            ids.push(device);
+        }
+        novo_layout::model::set_plate(
+            tx,
+            cab,
+            novo_core::MountingPlate {
+                width: 750.0,
+                height: 950.0,
+                margin: 10.0,
+            },
+        )?;
+        novo_layout::model::set_enclosure(
+            tx,
+            cab,
+            &novo_layout::enclosure::Enclosure {
+                width: 800.0,
+                height: 1000.0,
+                depth: 300.0,
+                plate_setback: 20.0,
+                door: Some(novo_layout::enclosure::Door::default()),
+                front_clearance: None,
+                hinge_side_clearance: None,
+            },
+        )?;
+        // The motor was put on the plate by hand, before it was a field device.
+        let motor = ids[4];
+        tx.place_device(motor, cab, novo_core::Point::new(660.0, 30.0), false, None)?;
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// Rewrites the fixture: `cargo test -p novo-app write_sites_fixture -- --ignored`.
+#[test]
+#[ignore = "writes qa/fixtures/cabinet-sites.novo"]
+fn write_sites_fixture() {
+    use crate::backend::ProjectBackend;
+    let mut backend = crate::backend::StorageBackend::default();
+    backend.new_project("Cabinet sites (QA)").unwrap();
+    build_sites_fixture(backend.document_mut().unwrap());
+    let path = sites_fixture_path();
+    let _ = std::fs::remove_file(&path);
+    backend.save(&path).unwrap();
+}
+
+#[test]
+fn the_committed_sites_fixture_has_a_motor_on_the_plate_and_four_devices_to_place() {
+    use crate::backend::ProjectBackend;
+    let path = sites_fixture_path();
+    assert!(path.exists(), "run write_sites_fixture");
+    let dir = tempfile::tempdir().unwrap();
+    let copy = dir.path().join("fixture.novo");
+    std::fs::copy(&path, &copy).unwrap();
+    let mut backend = crate::backend::StorageBackend::default();
+    backend.open(&copy).unwrap();
+    let project = backend.document().unwrap().project();
+    let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+    assert_eq!(novo_layout::model::candidates(project, cab).len(), 4);
+    let layout = novo_layout::model::load(project, cab).unwrap();
+    assert_eq!(layout.placements.len(), 1);
+    let problems = novo_checks::check(project);
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.kind == novo_checks::ProblemKind::FieldDeviceInCabinet)
+    );
+}
+
+#[test]
+fn the_table_toggle_without_a_plate_stays_on_the_plate_view_and_the_toggle_works_with_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::ToggleTable, Some(cab), None, &[]);
+    assert!(!d.app.cabinet.table, "no plate, no table");
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    d.app
+        .cabinet_ask(Ask::ToggleTable, Some(cab), layout_of(&d, cab), &[]);
+    assert!(d.app.cabinet.table);
+}
+
+#[test]
+fn ctrl_t_without_a_plate_says_why_and_leaves_the_table_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    d.app.run_command(&ctx, "view.cabinet_table", None);
+    d.frame();
+    d.frame();
+    assert!(!d.app.cabinet.table, "no plate, no table");
+    assert!(
+        d.app
+            .messages()
+            .iter()
+            .any(|m| m.text.contains("Set the plate first")),
+        "{:?}",
+        d.app.messages()
+    );
+}
+
+/// Where the QA fixtures of the plate follow scenario live.
+fn plate_follow_fixture_path(name: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../qa/fixtures")
+        .join(name)
+}
+
+/// A cabinet with devices and no mounting plate, and one with a 600 x 800
+/// plate that has two full width rails and a full height duct.
+fn build_plate_follow_fixture(doc: &mut novo_core::Document, with_plate: bool) {
+    doc.transact("Plate follow", |tx| {
+        let cab = tx.add_structure(DeviceTag::parse("+CP1").unwrap(), "Cabinet", true)?;
+        let part = tx.add_part("ACME", "C1")?;
+        tx.set_property(part, "width_mm", Some(Value::Float(45.0)))?;
+        tx.set_property(part, "height_mm", Some(Value::Float(90.0)))?;
+        for tag in ["-K1", "-K2", "-Q1"] {
+            let device = tx.add_device(DeviceTag::parse(tag).unwrap(), "")?;
+            tx.assign_part(device, part)?;
+        }
+        if with_plate {
+            novo_layout::model::set_plate(
+                tx,
+                cab,
+                novo_core::MountingPlate {
+                    width: 600.0,
+                    height: 800.0,
+                    margin: 10.0,
+                },
+            )?;
+            for (x, y, length, vertical, kind, width, height) in [
+                (
+                    10.0,
+                    300.0,
+                    580.0,
+                    false,
+                    novo_core::RailKind::DinRail,
+                    0.0,
+                    0.0,
+                ),
+                (
+                    10.0,
+                    550.0,
+                    580.0,
+                    false,
+                    novo_core::RailKind::DinRail,
+                    0.0,
+                    0.0,
+                ),
+                (
+                    300.0,
+                    10.0,
+                    780.0,
+                    true,
+                    novo_core::RailKind::Duct,
+                    25.0,
+                    60.0,
+                ),
+            ] {
+                tx.execute(novo_core::Command::AddRail {
+                    structure: cab,
+                    x,
+                    y,
+                    length,
+                    kind,
+                    vertical,
+                    width,
+                    height,
+                })?;
+            }
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// Rewrites the fixtures: `cargo test -p novo-app write_plate_follow_fixtures -- --ignored`.
+#[test]
+#[ignore = "writes qa/fixtures/plate-follow-*.novo"]
+fn write_plate_follow_fixtures() {
+    use crate::backend::ProjectBackend;
+    for (name, title, with_plate) in [
+        (
+            "plate-follow-none.novo",
+            "Cabinet without plate (QA)",
+            false,
+        ),
+        (
+            "plate-follow-rail.novo",
+            "Cabinet with rail and duct (QA)",
+            true,
+        ),
+    ] {
+        let mut backend = crate::backend::StorageBackend::default();
+        backend.new_project(title).unwrap();
+        build_plate_follow_fixture(backend.document_mut().unwrap(), with_plate);
+        let path = plate_follow_fixture_path(name);
+        let _ = std::fs::remove_file(&path);
+        backend.save(&path).unwrap();
+    }
+}
+
+#[test]
+fn the_committed_plate_follow_fixtures_have_no_plate_and_a_full_width_rail() {
+    use crate::backend::ProjectBackend;
+    for (name, with_plate) in [
+        ("plate-follow-none.novo", false),
+        ("plate-follow-rail.novo", true),
+    ] {
+        let path = plate_follow_fixture_path(name);
+        assert!(path.exists(), "run write_plate_follow_fixtures");
+        let dir = tempfile::tempdir().unwrap();
+        let copy = dir.path().join("fixture.novo");
+        std::fs::copy(&path, &copy).unwrap();
+        let mut backend = crate::backend::StorageBackend::default();
+        backend.open(&copy).unwrap();
+        let project = backend.document().unwrap().project();
+        let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+        let layout = novo_layout::model::load(project, cab);
+        assert_eq!(layout.is_some(), with_plate, "{name}");
+        if let Some(layout) = layout {
+            assert!(layout.rails.iter().any(|r| (r.length - 580.0).abs() < 0.5));
+        }
+    }
+}

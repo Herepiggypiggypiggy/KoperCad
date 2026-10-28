@@ -42,6 +42,9 @@ below. Do not try to run it as administrator; it will not help.
 If the window never appears or the graphics driver is the problem, start
 "KoperCAD (safe graphics)" from the Start menu (portable: run-safe-graphics.cmd).
 It uses the software renderer: slower, but it needs no graphics driver.
+If KoperCAD dies before its window appears (a crash inside the graphics driver), it notices at the next
+start, asks whether to use safe graphics, and from then on tries the graphics adapter that stopped it last.
+On Windows it tries DirectX 12 before Vulkan.
 To see which adapter was used, open Help > About (Graphics line) or the newest log
 file (Help > Open log folder). If the PC lists no software adapter, the normal order is used.
 

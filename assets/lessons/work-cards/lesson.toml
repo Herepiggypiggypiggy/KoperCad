@@ -21,11 +21,11 @@ title = "One card per step, ticked with a pencil"
 title_nl = "Eén kaart per stap, afgevinkt met een potlood"
 text = """
 The workshop cuts wires and drills holes **by hand**. The work cards turn the build order into paper for that: one half page per step, on an ordinary office printer.
-Every card says what to do, with which tools, and has tick boxes such as Cut, Drilled, Fitted and Checked (they differ a little per card) and a 100 mm ruler.
+Every card says what to do, with which tools, and has tick boxes such as Cut, Holes drilled, Fitted and Checked by (they differ per card) and a 100 mm ruler.
 """
 text_nl = """
 De werkplaats kort draden af en boort gaten **met de hand**. De werkkaarten maken van de bouwvolgorde papier daarvoor: een halve pagina per stap, op een gewone kantoorprinter.
-Elke kaart zegt wat te doen, met welk gereedschap, en heeft vakjes om af te vinken zoals Cut, Drilled, Fitted en Checked (ze verschillen per kaart een beetje) en een liniaal van 100 mm.
+Elke kaart zegt wat te doen, met welk gereedschap, en heeft vakjes om af te vinken zoals Cut, Holes drilled, Fitted en Checked by (ze verschillen per kaart) en een liniaal van 100 mm.
 """
 
 [[step]]
@@ -125,12 +125,12 @@ id = "drilling"
 title = "Read a rail card"
 title_nl = "Lees een raikaart"
 text = """
-A **rail card** shows the rail strip with its holes (numbered where the scale allows) and lists them in mm from the rail start: "Holes, mm from the rail start", the repeated pitch ("Pitch between holes, mm: 196 x 5") and "Last hole to the rail end".
-A note names the devices clipped on the rail, in mm from its start (the first six; all are drawn on the strip).
+A **rail card** shows the rail strip with its holes (numbered where the scale allows) and lists them in mm from the rail start: "Holes, mm from the rail start", the repeated pitch ("Pitch between holes, mm: 182.5 x 2") and "Last hole to the rail end".
+A note names the devices clipped on the rail, in mm from its start (the first six; all are drawn on the strip). A long rail is drawn at a stated smaller scale ("Rail strip, scale 1:2.5, NOT true size"): measure from the list.
 """
 text_nl = """
-Een **raikaart** toont de railstrook met zijn gaten (genummerd waar de schaal het toelaat) en noemt ze in mm vanaf het railbegin: "Holes, mm from the rail start", de herhaalde steek ("Pitch between holes, mm: 196 x 5") en "Last hole to the rail end".
-Een notitie noemt de apparaten op de rail, in mm vanaf het railbegin (de eerste zes; alle staan getekend op de strook).
+Een **raikaart** toont de railstrook met zijn gaten (genummerd waar de schaal het toelaat) en noemt ze in mm vanaf het railbegin: "Holes, mm from the rail start", de herhaalde steek ("Pitch between holes, mm: 182.5 x 2") en "Last hole to the rail end".
+Een notitie noemt de apparaten op de rail, in mm vanaf het railbegin (de eerste zes; alle staan getekend op de strook). Een lange rail wordt op een vermelde kleinere schaal getekend ("Rail strip, scale 1:2.5, NOT true size"): meet van de lijst.
 """
 
 [[step]]
@@ -138,12 +138,12 @@ id = "device-card"
 title = "Read a device card"
 title_nl = "Lees een apparaatkaart"
 text = """
-A **device card** shows the footprint with its screw holes and any cut-out, each hole as distances from the nearest plate edges, such as "65 mm from the left edge, 225 mm from the bottom edge".
-A template is drawn 1:1 where it fits its area. Otherwise the card says **NOT true size: measure from the list, not the drawing**.
+A **device card** lists the tools and what to mark and drill. A device clipped on a rail says "Nothing to drill: the rail holds it" and names the wires that end there. A device screwed to the plate lists each hole and cut-out as distances from the nearest plate edges, such as "65 mm from the left edge, 225 mm from the bottom edge".
+A template is drawn 1:1 where it fits its area. Otherwise the card says **scale 1:5, NOT true size** and "Measure from the list; the ruler below is true size".
 """
 text_nl = """
-Een **apparaatkaart** toont de voetafdruk met zijn schroefgaten en eventuele uitsnijding, elk gat als afstanden tot de dichtstbijzijnde plaatranden, zoals "65 mm from the left edge, 225 mm from the bottom edge".
-Een sjabloon wordt 1:1 getekend waar het in zijn gebied past. Anders zegt de kaart **NOT true size: measure from the list, not the drawing**.
+Een **apparaatkaart** noemt het gereedschap en wat te markeren en te boren. Een apparaat dat op een rail klikt zegt "Nothing to drill: the rail holds it" en noemt de draden die er eindigen. Een apparaat dat op de plaat geschroefd wordt noemt elk gat en elke uitsnijding als afstanden tot de dichtstbijzijnde plaatranden, zoals "65 mm from the left edge, 225 mm from the bottom edge".
+Een sjabloon wordt 1:1 getekend waar het in zijn gebied past. Anders zegt de kaart **scale 1:5, NOT true size** en "Measure from the list; the ruler below is true size".
 """
 
 [[step]]
@@ -164,12 +164,12 @@ id = "wire-cards"
 title = "Read a wire cut card"
 title_nl = "Lees een draadafkortkaart"
 text = """
-Wire cards come per circuit group (Power, Control, PE), nine wires to a card: from, to, size and colour, the cut length, and a Cut and a Run box.
-A length with **~** is an estimate, not a routed length. The **Per end** column shows what each end adds for a ferrule or a lug, already inside the cut length. The group of a wire is the model of the usual practice, not a reading of your schematic.
+Wire cards come per circuit group (Power, Control, PE), nine wires to a card: from, to, size and colour, the cut length, and a Cut and a Run box. At the end come **cut strip** cards (NOT A STEP): a group's wires longest first, to cut out and wrap.
+A length with **~** is an estimate, not a routed length. **Per end** is what each end adds for a ferrule or lug, already inside the cut length. The group comes from the wire's colour and size, not from your schematic.
 """
 text_nl = """
-Draadkaarten komen per stroomkringgroep (Power, Control, PE), negen draden per kaart: van, naar, maat en kleur, de afkortlengte en een vakje Cut en Run.
-Een lengte met **~** is een schatting, geen gerouteerde lengte. De kolom **Per end** toont wat elk einde toevoegt voor een adereindhuls of een kabelschoen, al binnen de afkortlengte. De groep van een draad is het model van de gebruikelijke praktijk, geen lezing van je schema.
+Draadkaarten komen per stroomkringgroep (Power, Control, PE), negen draden per kaart: van, naar, maat en kleur, de afkortlengte en een vakje Cut en Run. Aan het eind komen **afkortstrookkaarten** (NOT A STEP): de draden van een groep, langste eerst, om uit te knippen en om te wikkelen.
+Een lengte met **~** is een schatting, geen gerouteerde lengte. **Per end** is wat elk einde toevoegt voor een adereindhuls of kabelschoen, al binnen de afkortlengte. De groep volgt uit kleur en maat van de draad, niet uit je schema.
 """
 
 [[step]]

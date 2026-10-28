@@ -71,6 +71,11 @@ calamine = { version = "0.36", default-features = false }
 # Known-folder lookup for Documents (SHGetKnownFolderPath on Windows), so
 # redirected or OneDrive Documents folders resolve without our own unsafe.
 dirs = "6"
+# WebAssembly interpreter for the sandboxed add-on engine (novo-addons). Pure Rust; the `wat` feature stays off so
+# an add-on can only hand over binary wasm, never text.
+wasmi = { version = "2.0", default-features = false, features = ["std", "validate", "portable-dispatch"] }
+# Builds the hostile and test engines from text in the novo-addons tests only.
+wat = "1"
 # Reads the ZIP a maker portal serves a STEP file in (novo-parts).
 zip = { version = "8", default-features = false, features = ["deflate"] }
 # Reads BMEcat catalogs (novo-parts).
@@ -79,6 +84,8 @@ quick-xml = "0.41"
 ureq = "3"
 # Hashes imported maker files for their source record (novo-parts).
 sha2 = "0.11"
+# Verifies the publisher signature of add-on packages (novo-addons); verify-only, no randomness needed.
+ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
 # Decodes punch item photos for the viewer (novo-app): PNG and JPEG only.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }

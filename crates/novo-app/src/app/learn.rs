@@ -819,6 +819,7 @@ impl NovoApp {
         if matches!(self.workspace(), Workspace::Cabinet | Workspace::View3d) {
             facts.selection = plate;
         }
+        facts.enclosure_depth = self.learn_enclosure_depth(project);
         if facts.live {
             let (coils, pins, closed) = self.wb.live.learn_facts(project);
             facts.live_coils = coils;
@@ -826,6 +827,16 @@ impl NovoApp {
             facts.live_closed = closed;
         }
         facts
+    }
+
+    /// The inside depth of the stored enclosure of the first cabinet that has
+    /// one: what the Inside and door lessons read (`enclosure_depth`).
+    fn learn_enclosure_depth(&self, project: &Project) -> Option<f64> {
+        project
+            .structures()
+            .filter(|s| s.enclosure)
+            .find_map(|s| novo_layout::model::load(project, s.id))
+            .and_then(|layout| layout.enclosure.map(|e| e.depth))
     }
 
     /// The zoom that fits the page, so `zoom_at_least` reads 1.0 at fit.
@@ -1203,6 +1214,10 @@ impl NovoApp {
         self.project_path = None;
         self.current_page = None;
         self.document_replaced();
+        // Heat is one switch shared by the Cabinet and the 3D view (it used to be a
+        // separate 3D panel that started off): a lesson that points at the Heat
+        // button starts with it off.
+        self.cabinet.heat.on = false;
         self.fix_current_page();
         if let Some(doc) = self.backend.document_mut() {
             doc.mark_saved();
