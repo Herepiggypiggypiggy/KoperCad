@@ -14,7 +14,7 @@ at any point; if something asks for them, stop and say so.
 ## 2. Install (two ways, pick one)
 
 **Where the files are.** The work build is a draft release on GitHub, so it is visible only when you are signed in to the
-KoperCAD repository: open Releases and pick the version you were told (for example `v0.1.0-rc9`). Download them **at home, the evening before**: a company proxy may block them. Its files are
+KoperCAD repository: open Releases and pick the version you were told (for example `v0.1.0-rc11`). Download them **at home, the evening before**: a company proxy may block them. Its files are
 `KoperCAD-<version>-setup.exe`, `KoperCAD-<version>-portable.zip` and `SHA256SUMS`. If you cannot see the draft, ask for
 the three files to be sent to you another way. The public `experimental` pre-release holds a different, single zip
 (`kopercad.exe` only): do not use it for work.
@@ -44,7 +44,7 @@ If the window stays black or the program does not start, use the Start menu entr
 2. **Open one of your projects** (a copy): File > Open (with the installer you can also double-click the `.kopercad` or older `.novo` file).
    Look through the pages. Press **Ctrl+Z** a few times and **Ctrl+Shift+Z** to see undo works on your project.
 3. **Save as** a new name (File > Save as). Close and reopen it: it should look the same.
-4. **Print**: File > Export, the PDF of the whole set (use Print preview first). Open the PDF and check the title block and a page you know well.
+4. **Print**: File > Export print > Print preview and plot sets first, then Export PDF with options for the whole set. Open the PDF and check the title block and a page you know well.
 5. **Parts import** (if you have a price list or catalogue): File > Import parts > Import parts from a table (CSV or
    Excel). Read the mapping step and the import report before accepting it.
 6. Press **Ctrl+K** and type what you want to do ("wire list", "bench", "kitting", "commissioning"; the wire test is the fourth tab of Commissioning). Letter keys work
@@ -68,7 +68,8 @@ Your work is in `Documents\KoperCAD`, settings in `%APPDATA%\KoperCAD`, recovery
 - Unnumbered wires show as "Wire wire" in the Commissioning Test tab.
 - In the New cabinet dialog, Ctrl+K and typed words go into the Name field.
 - A price written "1.500" or "1,500" is read as 1.5 with a warning.
-- Also in rc9, fixed in the later rc10 draft: Delete with the pointer off the page is ignored without a message; F2 rename appends to the old tag instead of replacing it; Ctrl+N from 3D stays on the greyed 3D tab; Ctrl+K "wire numbers" opens a lesson first; the Commissioning side panel clips its counters; an empty cabinet shows hot-spot cards.
+- rc9 had a few more small problems (Delete off the page ignored without a message, F2 rename appending to the old tag, Ctrl+N from 3D, Ctrl+K "wire numbers" opening a lesson, clipped Commissioning counters, hot-spot cards on an empty cabinet); they are fixed in rc10 and later. Edits now reach the file only at Save, and KoperCAD asks "Save changes?" before closing.
+- Two crashes found on your own PCs are fixed but unproven: moving the window between a mirrored portrait monitor and another, and the Intel laptop start-up. Use **KoperCAD (safe graphics)** if the window does not appear, and tell us.
 
 ## 5. What to treat as a model, not a fact
 
