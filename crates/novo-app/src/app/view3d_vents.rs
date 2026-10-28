@@ -18,6 +18,8 @@ pub(super) struct Shown<'a> {
     pub running: bool,
     /// There is a result and it is from before the last change.
     pub stale: bool,
+    /// The Cooling what-if window is open at the left edge.
+    pub whatif_open: bool,
     pub suggestion: Option<&'a Suggestion>,
 }
 
@@ -32,6 +34,20 @@ pub(super) fn show(
 ) {
     let flows = shown.flows;
     let (running, stale, suggestion) = (shown.running, shown.stale, shown.suggestion);
+    // The Cooling what-if window hangs at the left edge: the panel starts
+    // beside it until the person moves the panel.
+    // The window's own width (it grows past its nominal one with a scroll bar).
+    let whatif_right = super::heat_whatif::drawn_rect(ctx)
+        .map_or(super::heat_whatif::WINDOW_WIDTH, |r| r.max.x - view.min.x)
+        .max(super::heat_whatif::WINDOW_WIDTH);
+    let view = if shown.whatif_open {
+        egui::Rect::from_min_max(
+            egui::pos2(view.min.x + whatif_right + super::panel::MARGIN, view.min.y),
+            view.max,
+        )
+    } else {
+        view
+    };
     super::panel::Panel::new(
         "view3d_vents",
         "Vents and fans",

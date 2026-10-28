@@ -366,7 +366,7 @@ impl CabinetScene {
             // box is a few dozen points wide, so a horizontal tag meets the
             // neighbour's and is hidden, a vertical one has the room.
             let tall = b.height > b.width * 1.2;
-            let label = Label::new((min + max) * 0.5, b.tag.clone(), tag_height)
+            let label = Label::new((min + max) * 0.5, fit_tag(&b.tag), tag_height)
                 .anchored(Anchor::Center)
                 .colored(color);
             item.labels.push(if tall {
@@ -655,6 +655,21 @@ pub fn view_bounds(view: &CabinetView) -> Aabb {
     b
 }
 
+/// Tags up to this many characters are drawn whole; a longer one is cut.
+const TAG_MAX_CHARS: usize = 24;
+
+/// The tag as drawn: a tag over [`TAG_MAX_CHARS`] keeps its end (the device
+/// code) after an ellipsis, so a 220 character tag cannot stripe across the
+/// plate.
+fn fit_tag(tag: &str) -> String {
+    let len = tag.chars().count();
+    if len <= TAG_MAX_CHARS {
+        return tag.to_owned();
+    }
+    let tail: String = tag.chars().skip(len - (TAG_MAX_CHARS - 1)).collect();
+    format!("\u{2026}{tail}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -930,5 +945,14 @@ mod tests {
         let mut c = CabinetScene::new(CabinetStyle::default());
         c.set(&v);
         assert!(c.scene().get(rail_item(1)).is_some());
+    }
+
+    #[test]
+    fn a_very_long_tag_is_shortened_to_its_end() {
+        assert_eq!(fit_tag("=A1+CAB1-K10"), "=A1+CAB1-K10");
+        let long = format!("=A1+CAB1-{}", "L".repeat(220));
+        let shown = fit_tag(&long);
+        assert_eq!(shown.chars().count(), TAG_MAX_CHARS);
+        assert!(shown.starts_with('\u{2026}') && shown.ends_with('L'));
     }
 }

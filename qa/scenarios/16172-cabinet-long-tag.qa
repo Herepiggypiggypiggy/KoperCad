@@ -1,0 +1,16 @@
+@title A 220 character device tag is cut on the plate and shown whole in the Inspector
+@area Cabinet
+@sizes 1366x768
+# CH-03: the tag ran as a vertical stripe over the plate and the rails. Fixture: qa/fixtures/make_long_tag_fixture.py.
+open qa/fixtures/cabinet-long-tag.novo
+wait 20
+click_text Cabinet #1
+wait 30
+shot long-tag
+click 628 505
+wait 10
+shot selected-inspector
+scroll 628 505 10
+wait 10
+shot zoomed-label
+check_layout

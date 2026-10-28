@@ -1,0 +1,22 @@
+@title Route all: wires run through the ducts and end on their terminals
+@area Cabinet
+# Example project, Cabinet > Place all > Route all wires. Every wire leaves a terminal, runs in the ducts and arrives at a terminal; wires no duct reaches are listed, not drawn straight across the plate.
+click_text "Open example"
+wait 20
+click_text Cabinet #1
+wait 20
+key ctrl+k
+wait 4
+text place all
+wait 6
+key Enter
+wait 30
+key ctrl+k
+wait 4
+text Route all wires
+wait 6
+key Enter
+wait 40
+shot routed
+check_layout
+check_blank routed
