@@ -17,11 +17,13 @@ answer_dialog qa/fixtures/parts/etim-test
 click_text "Install ETIM release (folder)"
 wait 30
 expect "Installed"
+shot etim-installed
 answer_dialog qa/fixtures/parts/bmecat12/example-maker-bmecat-1.2.xml
 click_text "Import catalog files"
 wait 60
 expect "Example Maker"
 expect "no price"
+expect "flags: parts with a warning"
 shot import-report
 check_layout
 click_text "Close"

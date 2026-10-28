@@ -105,7 +105,7 @@ impl InboxReport {
             t.push_str("No parts were read.\n");
         } else {
             t.push_str(&format!(
-                "{:<22}{:>6}{:>8}{:>8}{:>8}{:>9}{:>8}{:>8}{:>9}{:>7}\n",
+                "{:<18}{:>6}{:>6}{:>5}{:>8}{:>6}{:>8}{:>8}{:>9}{:>6}\n",
                 "Maker",
                 "files",
                 "parts",
@@ -119,8 +119,8 @@ impl InboxReport {
             ));
             for (maker, m) in &self.makers {
                 t.push_str(&format!(
-                    "{:<22}{:>6}{:>8}{:>8}{:>8}{:>9}{:>8}{:>8}{:>9}{:>7}\n",
-                    truncate(maker, 21),
+                    "{:<18}{:>6}{:>6}{:>5}{:>8}{:>6}{:>8}{:>8}{:>9}{:>6}\n",
+                    truncate(maker, 17),
                     m.files,
                     m.read,
                     m.added,
@@ -132,6 +132,10 @@ impl InboxReport {
                     m.flagged
                 ));
             }
+            t.push_str(
+                "\nno size: no width, height or depth. no ETIM: no ETIM class. no price: no usable\n\
+                 price. flags: parts with a warning (listed under Parts to check).\n",
+            );
             t.push_str(&format!(
                 "\nTotal: {} parts read, {} new. Catalog now holds {} parts{}.\n",
                 self.total_read(),
