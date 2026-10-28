@@ -14,7 +14,7 @@
 //! api_version = 1
 //! permissions = ["menu", "live-view-card"]
 //!
-//! [engine]                 # optional: a sandboxed WebAssembly module (C0b-2)
+//! [engine]                 # optional: a WebAssembly module (the host is lane C0b-2)
 //! file = "engine.wasm"
 //! host_api = 1
 //!
@@ -51,7 +51,7 @@ use crate::version::{Requirement, Version};
 /// The add-on API generation this program speaks. A package for another one is refused with a
 /// message that says so.
 pub const API_VERSION: u32 = 1;
-/// The host API generation of the sandboxed engine (C0b-2).
+/// The host API generation of the engine (the host is lane C0b-2).
 pub const HOST_API_VERSION: u32 = 1;
 /// A menu row, rail row or palette result is at most this long (visual redesign, 5.2).
 pub const MAX_LABEL: usize = 28;
@@ -167,7 +167,7 @@ fn any_version() -> String {
     "*".to_owned()
 }
 
-/// `[engine]`: the sandboxed WebAssembly module.
+/// `[engine]`: the WebAssembly module.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EngineDecl {

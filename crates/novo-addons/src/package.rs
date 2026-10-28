@@ -104,7 +104,7 @@ impl Package {
             if file.unix_mode().is_some_and(|m| m & 0o170_000 == 0o120_000) {
                 return Err(AddonError::UnsafePath(format!("{name:?}: a symbolic link")));
             }
-            if !lowered.insert(name.trim_end_matches('/').to_ascii_lowercase()) {
+            if !lowered.insert(name.trim_end_matches('/').to_lowercase()) {
                 return Err(AddonError::UnsafePath(format!(
                     "{name:?}: the name appears twice (names are compared without case)"
                 )));

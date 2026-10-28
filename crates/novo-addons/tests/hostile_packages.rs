@@ -316,3 +316,14 @@ file = "data/p.panel.toml"
         assert!(why.contains("p.panel.toml"), "{why}");
     }
 }
+
+#[test]
+fn names_that_differ_only_in_unicode_case_are_refused() {
+    let bytes = raw_zip(&[
+        ("manifest.toml", WITH_ENGINE.as_bytes()),
+        ("data/\u{c9}.toml", b"a"),
+        ("data/\u{e9}.toml", b"b"),
+    ]);
+    // refused for the clash or for the name itself; never accepted
+    assert!(read(&bytes).is_err());
+}

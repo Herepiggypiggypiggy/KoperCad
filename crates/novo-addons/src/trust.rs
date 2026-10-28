@@ -4,8 +4,9 @@
 //!
 //! Anything else is *unsigned, from file*: it can still be installed, but only after the person
 //! has read the publisher, the permissions and the fingerprint and ticked a box (plan 5b).
-//! Because an add-on runs sandboxed and cannot touch files or the network, the worst an
-//! unsigned add-on can do is give wrong results inside what its permissions allow.
+//! The engine host (lane C0b-2) is meant to run engines without file, network or clock access;
+//! until it lands no add-on code runs at all, so the worst an unsigned package can do today is
+//! add rows, panels, icons and data files inside what its permissions allow.
 
 use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};

@@ -1,5 +1,5 @@
 //! Add-on manager core (lane C0b): `.kcaddon` packages, the per-user install registry, version
-//! compatibility, permissions and the sandboxed add-on host. Plan:
+//! compatibility, permissions and (lane C0b-2) the add-on engine host. Plan:
 //! `plans/controller-live-view.md` section 5b; where add-ons appear in the program:
 //! `docs/design/visual-redesign-addons.md`; user and author guide: `docs/design/addons.md`.
 //!
