@@ -1074,6 +1074,46 @@ pub const DUTCH: &[Aliases] = &[
         &["zicht opslaan", "camera opslaan"],
     ),
     nl(
+        "view.3d_door_layer",
+        &["deur tonen in 3d"],
+        &["deur", "kastdeur"],
+    ),
+    nl(
+        "view.3d_device_shapes",
+        &["apparaatvormen tonen in 3d"],
+        &["apparaatvorm", "vorm van apparaten"],
+    ),
+    nl(
+        "view.3d_surfaces",
+        &["kastvlakken tonen in 3d"],
+        &["vlakken", "wanden", "kastvlak"],
+    ),
+    nl(
+        "view.3d_duct_fill",
+        &["kanaalvulling tonen in 3d"],
+        &["vulling", "kanaal vol", "vulgraad"],
+    ),
+    nl(
+        "view.3d_pins",
+        &["aansluitpunten tonen in 3d"],
+        &["aansluitpunt", "pennen", "klemmen"],
+    ),
+    nl(
+        "view.3d_missing_data",
+        &["ontbrekende gegevens tonen in 3d"],
+        &["ontbrekend", "vraagteken", "geen artikelgegevens"],
+    ),
+    nl(
+        "view.3d_trackpad_pans",
+        &["touchpad laten pannen in 3d"],
+        &["touchpad", "trackpad", "pannen"],
+    ),
+    nl(
+        "view.3d_move",
+        &["verplaatsmodus in 3d"],
+        &["verplaatsen", "slepen", "apparaten slepen"],
+    ),
+    nl(
         "view.3d_hints",
         &["3d hulp tonen"],
         &["muis en toetsen", "bediening"],
