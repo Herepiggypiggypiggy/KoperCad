@@ -1,0 +1,14 @@
+@title Shorts in a drawn cooling tower are listed in Issues: PE on a phase, two phases bridged at a breaker
+@area Checks
+# The fixture is the cooling tower drawing with the two mistakes of the laptop report (finding 3):
+# a feed named L1 on the drive's PE pin, and a stray wire between two poles of the group breaker -F4.
+# Before the checks looked at nets, both showed "No issues".
+open qa/fixtures/cooling-tower-shorts.novo
+wait 20
+shot schematic
+click_text "2 errors"
+wait 10
+expect "Protective earth pin of"
+expect "joined by the poles of"
+shot issues
+check_layout
