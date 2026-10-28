@@ -1353,6 +1353,7 @@ impl MakerRecipe {
                         currency,
                         per: draft.per.or(draft.per_in_text).unwrap_or(1).max(1),
                         date: draft.price_date.unwrap_or_default(),
+                        unit: String::new(),
                     });
                 }
                 None => report.skipped.push(Skipped {

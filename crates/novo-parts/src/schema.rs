@@ -101,12 +101,44 @@ pub struct Price {
     /// Date of the price list, `2026-10-15`.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub date: String,
+    /// What the quantity counts when it is not pieces: `m` for a cable
+    /// priced per 1000 m, `pair`, `kg`. Empty means pieces.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub unit: String,
 }
 
 impl Price {
-    /// Price of a single piece.
+    /// A price for `per` pieces.
+    pub fn new(
+        amount: f64,
+        currency: impl Into<String>,
+        per: u32,
+        date: impl Into<String>,
+    ) -> Self {
+        Self {
+            amount,
+            currency: currency.into(),
+            per: per.max(1),
+            date: date.into(),
+            unit: String::new(),
+        }
+    }
+
+    /// Price of a single piece, or of a single metre (or other unit) when
+    /// the price is not for pieces.
     pub fn each(&self) -> f64 {
         self.amount / f64::from(self.per.max(1))
+    }
+
+    /// What the amount is for, as shown after it: empty for one piece,
+    /// `per 100`, `per m`, `per 1000 m`.
+    pub fn per_label(&self) -> String {
+        match (self.per > 1, self.unit.is_empty()) {
+            (false, true) => String::new(),
+            (true, true) => format!("per {}", self.per),
+            (false, false) => format!("per {}", self.unit),
+            (true, false) => format!("per {} {}", self.per, self.unit),
+        }
     }
 }
 
