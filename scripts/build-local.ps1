@@ -6,8 +6,8 @@
 # No admin rights: everything lives under %LOCALAPPDATA%\NovoElectric\local-build
 # and the process environment. It uses the GNU Rust target with a portable
 # MinGW-w64 (WinLibs) because the MSVC target needs the Visual Studio Build
-# Tools, whose installer asks for elevation. Needs the GitHub CLI signed in
-# (the repository is private); scripts\setup-new-pc.ps1 sets that up.
+# Tools, whose installer asks for elevation. The repository is public, so the
+# source is fetched without a GitHub sign-in or the GitHub CLI.
 #
 # First run downloads rustup (about 15 MB, then about 300 MB of Rust) and
 # WinLibs (about 250 MB) and compiles every dependency; later runs reuse
@@ -37,12 +37,6 @@ $Work = Join-Path $Base 'local-build'
 $Target = 'x86_64-pc-windows-gnu'
 $Experimental = Join-Path $Base 'experimental'
 New-Item -ItemType Directory -Force -Path $Work, $Experimental | Out-Null
-
-$portableGh = Join-Path $Base 'gh\bin'
-if (Test-Path (Join-Path $portableGh 'gh.exe')) { $env:Path += ";$portableGh" }
-if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    throw 'The GitHub CLI (gh) is missing. Run scripts\setup-new-pc.ps1 first.'
-}
 
 function Invoke-Checked([string]$what, [scriptblock]$run) {
     & $run
@@ -108,17 +102,14 @@ if (-not (Test-Path (Join-Path $mingw 'bin\gcc.exe'))) {
 }
 $env:Path = "$(Join-Path $mingw 'bin');$env:Path"
 
-# 3. The source: a tarball of the ref through gh (works for the private repo;
+# 3. The source: a tarball of the ref from the public repository (no sign-in,
 # no git needed). tar.exe ships with Windows 10 and later.
 Write-Host "Fetching $Ref..."
 $src = Join-Path $Work 'src'
 $archive = Join-Path $Work 'source.tar.gz'
 Remove-Item -Recurse -Force $src -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $src | Out-Null
-# Not `gh api ... > file`: Windows PowerShell 5.1 would re-encode the bytes.
-$token = (gh auth token).Trim()
-if (-not $token) { throw 'gh is not signed in. Run: gh auth login --web' }
-Invoke-WebRequest "https://api.github.com/repos/$Repo/tarball/$Ref" -Headers @{ Authorization = "Bearer $token" } -OutFile $archive -UseBasicParsing
+Invoke-WebRequest "https://api.github.com/repos/$Repo/tarball/$Ref" -OutFile $archive -UseBasicParsing
 Invoke-Checked 'unpack' { tar -xzf $archive -C $src --strip-components=1 }
 Remove-Item -Force $archive
 # The tarball keeps commit times. Cargo skips a file that is older than its
@@ -126,7 +117,7 @@ Remove-Item -Force $archive
 # Stamp everything now; only the workspace crates recompile, not dependencies.
 $now = Get-Date
 Get-ChildItem -Recurse -Force -File $src | ForEach-Object { $_.LastWriteTime = $now }
-$commit = (gh api "repos/$Repo/commits/$Ref" --jq '.sha').Trim()
+$commit = (Invoke-RestMethod "https://api.github.com/repos/$Repo/commits/$Ref").sha
 
 # 4. Build. The target folder is kept between runs so only changes recompile.
 # No LTO and 16 codegen units, as in the experimental release: the build is
@@ -148,8 +139,6 @@ $next = Join-Path $Experimental 'next'
 Remove-Item -Recurse -Force $next -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $next | Out-Null
 Copy-Item $built (Join-Path $next 'kopercad.exe')
-# A launcher installed before the rename still starts novoelectric.exe.
-Copy-Item $built (Join-Path $next 'novoelectric.exe')
 Set-Content -Path (Join-Path $next 'BUILD_INFO.txt') -Value "KoperCAD local build $stamp`nSource: $Ref at $commit`nBuilt on this PC with the GNU toolchain."
 $current = Join-Path $Experimental 'current'
 Remove-Item -Recurse -Force $current -ErrorAction SilentlyContinue

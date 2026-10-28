@@ -29,6 +29,7 @@ mod model_canvas;
 #[cfg(test)]
 mod packaging_tests;
 mod settings;
+pub mod startup;
 mod theme;
 mod update_check;
 
@@ -173,10 +174,27 @@ pub fn run() -> eframe::Result {
     };
     // The first argument names eframe's settings folder; move the old one first.
     migrate::migrate_roaming_data();
+    startup::stage("opening the window and the graphics device");
     eframe::run_native(
         DATA_DIR_NAME,
         options,
         Box::new(move |cc| {
+            startup::stage("setting up the first screen");
+            // The start counts as done once a few frames have been drawn; the
+            // marker that tracks it is described in `startup`.
+            let frames = std::sync::atomic::AtomicU32::new(0);
+            cc.egui_ctx.on_end_pass(
+                "kopercad-start-tracking",
+                std::sync::Arc::new(move |ui: &mut egui::Ui| {
+                    let n = frames.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                    if n < startup::FRAMES_FOR_DONE {
+                        // An idle window would otherwise stop after one frame.
+                        ui.ctx().request_repaint();
+                    } else if n == startup::FRAMES_FOR_DONE {
+                        startup::first_frames_done();
+                    }
+                }),
+            );
             if let Some(port) = control::requested_port() {
                 control::install(&cc.egui_ctx, port);
             }
