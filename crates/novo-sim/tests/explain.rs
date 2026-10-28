@@ -395,3 +395,41 @@ fn a_drawing_with_no_supply_says_so_for_every_question() {
     let l = latch();
     assert!(has_supply(&l.doc.project().netlist()));
 }
+
+#[test]
+fn a_coil_with_its_return_pin_unwired_says_so() {
+    use novo_sim::explain::answer_symbol;
+    // L1 - coil K1 pin 1; pin 2 (the return) is not wired. A feed exists, so
+    // the answer is not the "no supply" one.
+    let mut doc = Document::default();
+    let (coil, _) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+            let k1 = tx.add_device(DeviceTag::product("K1"), "")?;
+            let f1 = put(
+                tx,
+                page,
+                "t/feed",
+                0.0,
+                SymbolRole::PotentialFeed { potential: l1 },
+            );
+            let coil = put(tx, page, COIL, 20.0, dev(k1, true));
+            tx.connect(Endpoint::pin(f1, 1), Endpoint::pin(coil, 0))?;
+            Ok(coil)
+        })
+        .unwrap();
+    let project = doc.project();
+    let netlist = project.netlist();
+    let none = BTreeSet::new();
+    let settled = settle(project, &netlist, &rest_state(project), &none, &none);
+    let a = answer_symbol(project, &netlist, &settled, &none, coil, &names);
+    assert!(a.dead);
+    assert!(
+        a.lines
+            .iter()
+            .any(|l| l.text.contains("Nothing connects pin 2 to a supply")),
+        "{:?}",
+        a.lines
+    );
+}

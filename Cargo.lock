@@ -1914,7 +1914,6 @@ version = "0.1.0"
 name = "novo-ai"
 version = "0.1.0"
 dependencies = [
- "dirs",
  "novo-cables",
  "novo-checks",
  "novo-core",
@@ -1923,6 +1922,7 @@ dependencies = [
  "novo-parts",
  "novo-py",
  "novo-reports",
+ "novo-storage",
  "novo-symbols",
  "novo-workflow",
  "serde",

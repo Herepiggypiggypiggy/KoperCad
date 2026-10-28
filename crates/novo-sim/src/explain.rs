@@ -661,7 +661,15 @@ pub fn answer_symbol(
     for p in &pins {
         let pin_name = &s.pins[usize::from(p.pin)].name;
         lines.push(Line::plain(format!("Pin {pin_name}:")));
-        lines.extend(p.explanation.lines(project, name).into_iter().map(|mut l| {
+        let mut about = p.explanation.lines(project, name);
+        if is_coil_symbol && !on && p.explanation.verdict == Verdict::Isolated {
+            // The other side of a coil that is off for want of a return: the
+            // generic "dead" line names no cause.
+            about = vec![Line::plain(format!(
+                "Nothing connects pin {pin_name} to a supply: the return is open. Wire it to the return (N or L2), or check the wire that should reach it."
+            ))];
+        }
+        lines.extend(about.into_iter().map(|mut l| {
             l.text = format!("  {}", l.text);
             l
         }));
