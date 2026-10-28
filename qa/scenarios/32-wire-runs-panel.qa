@@ -12,7 +12,7 @@ wait 4
 key Enter
 wait 40
 shot list-open
-click_text "2   466 mm"
+click_text "2   462 mm"
 wait 30
 shot wire-picked
 click_text "Select and hide"
