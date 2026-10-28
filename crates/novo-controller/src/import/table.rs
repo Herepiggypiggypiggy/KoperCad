@@ -183,7 +183,7 @@ impl Table {
         let delim = detect_delimiter(&lines);
         notes.push(match delim {
             Delim::Char('\t') => "Columns separated by tabs (pasted from a spreadsheet)".to_owned(),
-            Delim::Char(c) => format!("Columns separated by `{c}`"),
+            Delim::Char(c) => format!("Columns separated by “{c}”"),
             Delim::Wide => "Columns separated by two or more spaces".to_owned(),
             Delim::First => {
                 "No column separator found: the first word is the terminal, the rest the function"
