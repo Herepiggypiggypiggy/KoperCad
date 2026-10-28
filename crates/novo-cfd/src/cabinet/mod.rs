@@ -35,7 +35,7 @@ use std::time::Instant;
 
 use novo_thermal::Scenario;
 
-use crate::large::{AUTO_RATIO, LargeMode, ReduceSettings, expand, reduce};
+use crate::large::{AUTO_RATIO, LargeMode, ReduceSettings, expand, reduce_with};
 use crate::mesh::{MeshSettings, plan_grid_report};
 use crate::result::{CfdSnapshot, CfdSnapshot as Snap, Fidelity};
 use crate::solids::{DuctModel, FlowSetup, SolidsSettings};
@@ -159,6 +159,7 @@ impl CabinetSolver {
             .level(fidelity)
             .ok_or(CfdError::Unsupported(fidelity))?;
         let t0 = Instant::now();
+        control.set_phase("Meshing");
         let mesh = self.mesh_for(fidelity)?;
         let st = SolidsSettings {
             mesh,
@@ -168,15 +169,27 @@ impl CabinetSolver {
         };
         let mut setup =
             FlowSetup::new(scenario, &st).map_err(|e| CfdError::Setup(e.to_string()))?;
+        if control.is_cancelled() {
+            return Err(CfdError::Cancelled);
+        }
         if self.radiation.at(fidelity) {
+            control.set_phase("Radiation view factors");
             setup.enable_radiation(scenario, &crate::rad::RadSettings::default());
         }
         if control.is_cancelled() {
             return Err(CfdError::Cancelled);
         }
+        control.set_phase("Building the flow model");
         let mut flow = setup.solver();
         flow.cfg.pressure_tol = lvl.pressure_tol;
+        if lvl.warm_start {
+            control.set_phase("Starting from the 2D estimate");
+        }
         let warm = lvl.warm_start && warm::warm_start(&setup, scenario, &mut flow);
+        if control.is_cancelled() {
+            return Err(CfdError::Cancelled);
+        }
+        control.set_phase("Iterating");
         let view = snapshot::View::new(&setup, scenario, fidelity);
         // A level flagged `turbulent` marches; otherwise the steady iteration
         // drives the turbulence model (if any) itself. k-epsilon marches: in
@@ -288,6 +301,7 @@ impl Solver for CabinetSolver {
         control: &Control,
         publish: &mut dyn FnMut(&CfdSnapshot),
     ) -> Result<CfdSnapshot, CfdError> {
+        control.set_phase("Planning the grid");
         let mesh = self.mesh_for(fidelity)?;
         let reduce_it = match self.large {
             LargeMode::Off => false,
@@ -298,13 +312,17 @@ impl Solver for CabinetSolver {
         if !reduce_it {
             return self.solve_scenario(scenario, fidelity, control, publish);
         }
-        let red = reduce(
+        control.set_phase("Reducing the cabinet");
+        let Some(red) = reduce_with(
             scenario,
             &ReduceSettings {
                 mesh,
                 ..ReduceSettings::for_cells(mesh.target_cells)
             },
-        );
+            &|| control.is_cancelled(),
+        ) else {
+            return Err(CfdError::Cancelled);
+        };
         let mut inner = |s: &CfdSnapshot| publish(&expand(s, &red, scenario));
         let done = self.solve_scenario(&red.scenario, fidelity, control, &mut inner)?;
         Ok(expand(&done, &red, scenario))

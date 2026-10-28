@@ -70,8 +70,10 @@ fn history_is_capped_and_ignores_bad_values() {
 
 #[test]
 fn before_the_first_iteration_the_bar_says_what_it_is_doing() {
-    let text = preparing_label(29.4);
+    let text = preparing_label("Meshing", 29.4);
     assert!(text.contains("meshing"), "{text}");
     assert!(text.contains("29 s"), "{text}");
     assert!(!text.contains("starting"), "{text}");
+    // No stage named yet: it still says it is working, not that it is meshing.
+    assert!(preparing_label("", 3.0).starts_with("setting up"));
 }

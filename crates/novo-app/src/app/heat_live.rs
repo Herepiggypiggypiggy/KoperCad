@@ -186,7 +186,10 @@ impl HeatState {
             self.live.stale = false;
             return;
         }
+        // The enclosure was sized (or whatever else was missing was given):
+        // the "Cannot simulate" line is out of date before Simulate is pressed.
         let now_key = cur.scenario_key;
+        self.clear_cannot_simulate();
         let stale = self.solution().is_some_and(|s| s.scenario_key != now_key);
         let run_old = self
             .pending
