@@ -53,8 +53,12 @@ that is not known is kept as written, so a price is never shown for the wrong
 unit. With several price lines the list price (`net_list`) with the smallest
 quantity wins; a customer price (`net_customer`) is used only when it is the
 only one, and the report says so. A price with no currency, a zero or negative
-amount, a text that is not a number or a quantity that is not a whole number
-is left out and listed under "parts to check", never guessed.
+amount, a text that is not a number, a price factor that is not a positive
+number, a quantity that is not a whole number, or an order unit that differs
+from the content unit without `NO_CU_PER_OU` (a drum of metres: how many?) is
+left out and listed under "parts to check", never guessed. A price written
+with one separator and three digits after it (`1,500`, `1.500`) is read as
+1.5, as BMEcat means it, and the report says so, in case 1500 was meant.
 
 **Text.** Markup inside a description (`<b>`, `<br/>`, escaped `&lt;b&gt;`) is
 removed and its words are kept.

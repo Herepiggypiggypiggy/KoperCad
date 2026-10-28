@@ -402,9 +402,15 @@ fn file_of(p: &CatalogPart) -> String {
 /// replaces the other, or `None` when the later adds nothing different.
 fn differs(old: &CatalogPart, new: &CatalogPart) -> Option<String> {
     let show = |p: &CatalogPart| match &p.price {
-        Some(pr) => format!("{:.2} {} {}", pr.amount, pr.currency, pr.per_label())
-            .trim_end()
-            .to_owned(),
+        Some(pr) => format!(
+            "{:.*} {} {}",
+            if pr.amount < 1.0 { 4 } else { 2 },
+            pr.amount,
+            pr.currency,
+            pr.per_label()
+        )
+        .trim_end()
+        .to_owned(),
         None => "no price".to_owned(),
     };
     if show(old) != show(new) {
@@ -712,6 +718,18 @@ fn is_etim_class(s: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_price_under_one_is_compared_to_four_digits() {
+        let at = |amount: f64| {
+            let mut p = CatalogPart::new("M", "X-1");
+            p.price = Some(crate::Price::new(amount, "EUR", 1, ""));
+            p
+        };
+        let d = differs(&at(0.0040), &at(0.0041)).expect("a different price");
+        assert!(d.contains("0.0040 EUR") && d.contains("0.0041 EUR"), "{d}");
+        assert!(differs(&at(12.341), &at(12.344)).is_none());
+    }
 
     fn bmecat_file(supplier: &str, pid: &str, poles: i32) -> String {
         format!(

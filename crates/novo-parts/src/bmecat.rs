@@ -580,10 +580,12 @@ impl Draft {
         };
         let amount =
             number(&t.amount).ok_or_else(|| format!("price \"{}\" is not a number", t.amount))?;
-        let factor = if t.factor.is_empty() {
+        let factor = if t.factor.trim().is_empty() {
             1.0
         } else {
-            number(&t.factor).filter(|f| *f > 0.0).unwrap_or(1.0)
+            number(&t.factor)
+                .filter(|f| *f > 0.0)
+                .ok_or_else(|| format!("price factor \"{}\" is not a positive number", t.factor))?
         };
         let amount = amount * factor;
         if !amount.is_finite() || amount <= 0.0 {
@@ -613,7 +615,16 @@ impl Draft {
         let (count, unit) = if self.content_unit.trim().is_empty() {
             (quantity, unit_label(&self.order_unit))
         } else {
-            let per_ou = if self.no_cu_per_ou.is_empty() {
+            let per_ou = if self.no_cu_per_ou.trim().is_empty() {
+                // One order unit holds one content unit only when they are
+                // the same unit; "a drum of metres" holds an unknown number.
+                if unit_label(&self.order_unit) != unit_label(&self.content_unit) {
+                    return Err(format!(
+                        "order unit {} holds an unknown number of {}; price left out",
+                        unit_name(&self.order_unit),
+                        unit_name(&self.content_unit)
+                    ));
+                }
                 1.0
             } else {
                 number(&self.no_cu_per_ou).ok_or_else(|| {
@@ -638,17 +649,28 @@ impl Draft {
             self.price_date.clone(),
         );
         price.unit = unit;
-        let note = match t.kind.as_str() {
-            "net_customer" => Some(
+        let mut notes = Vec::new();
+        match t.kind.as_str() {
+            "net_customer" => notes.push(
                 "the file holds only a customer price (net_customer); check that it is the list price"
                     .to_owned(),
             ),
-            "gros_list" => Some("the price is a gross list price and may include VAT".to_owned()),
-            _ if (factor - 1.0).abs() > f64::EPSILON => {
-                Some(format!("price multiplied by the file's price factor {factor}"))
-            }
-            _ => None,
-        };
+            "gros_list" => notes.push("the price is a gross list price and may include VAT".to_owned()),
+            _ => {}
+        }
+        if (factor - 1.0).abs() > f64::EPSILON {
+            notes.push(format!(
+                "price multiplied by the file's price factor {factor}"
+            ));
+        }
+        if let Some(read) = thousands_or_decimal(&t.amount) {
+            notes.push(format!(
+                "\"{}\" read as {read}; check it is not {}",
+                t.amount.trim(),
+                t.amount.trim().replace(['.', ','], "")
+            ));
+        }
+        let note = (!notes.is_empty()).then(|| notes.join("; "));
         Ok(Some((price, note)))
     }
 
@@ -693,6 +715,35 @@ impl Draft {
         part.data = self.data;
         part.price = price;
         Some(part)
+    }
+}
+
+/// The value of a price written with one separator and exactly three digits
+/// after it (`1,500`, `1.500`): BMEcat means a decimal point, but a reader
+/// from a country that groups thousands that way may mean 1500. The value
+/// read, or `None` when the text is not of that shape.
+fn thousands_or_decimal(text: &str) -> Option<f64> {
+    let t = text.trim();
+    let (whole, frac) = t.split_once(['.', ','])?;
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    (digits(whole)
+        && whole.len() <= 3
+        && !whole.starts_with('0')
+        && frac.len() == 3
+        && digits(frac))
+    .then(|| number(t))
+    .flatten()
+}
+
+/// A unit code for a message: its label, or "piece" when it is the default.
+fn unit_name(code: &str) -> String {
+    let c = code.trim();
+    if c.is_empty() {
+        return "pieces".into();
+    }
+    match unit_label(c) {
+        l if l.is_empty() => "pieces".into(),
+        l => l,
     }
 }
 
@@ -905,6 +956,86 @@ mod tests {
         assert_eq!(price("S-1"), (7.0, "per pair".into()));
         assert!(r.notes.is_empty(), "{:?}", r.notes);
         // The currency came from the catalog header, not from the lines.
+    }
+
+    #[test]
+    fn a_price_that_cannot_be_read_with_certainty_is_left_out_or_noted() {
+        let tier = |kind: &str, amount: &str, extra: &str| {
+            format!(
+                "<PRODUCT_PRICE price_type=\"{kind}\"><PRICE_AMOUNT>{amount}</PRICE_AMOUNT>\
+                 <PRICE_CURRENCY>EUR</PRICE_CURRENCY>{extra}</PRODUCT_PRICE>"
+            )
+        };
+        let body = [
+            // A drum of metres without the number of metres in it.
+            priced("D-1", &tier("net_list", "900", ""), "<PRODUCT_ORDER_DETAILS><ORDER_UNIT>DR</ORDER_UNIT><CONTENT_UNIT>MTR</CONTENT_UNIT></PRODUCT_ORDER_DETAILS>"),
+            // Same unit twice needs no count.
+            priced("D-2", &tier("net_list", "2", ""), "<PRODUCT_ORDER_DETAILS><ORDER_UNIT>MTR</ORDER_UNIT><CONTENT_UNIT>MTR</CONTENT_UNIT></PRODUCT_ORDER_DETAILS>"),
+            // Factors that are not a positive number.
+            priced("F-1", &tier("net_list", "10", "<PRICE_FACTOR>abc</PRICE_FACTOR>"), ""),
+            priced("F-2", &tier("net_list", "10", "<PRICE_FACTOR>0</PRICE_FACTOR>"), ""),
+            priced("F-3", &tier("net_list", "10", "<PRICE_FACTOR>-2</PRICE_FACTOR>"), ""),
+            // A gross price and a factor give both notes.
+            priced("F-4", &tier("gros_list", "10", "<PRICE_FACTOR>0.5</PRICE_FACTOR>"), ""),
+            // Three digits after one separator may be a thousands group.
+            priced("T-1", &tier("net_list", "1,500", ""), ""),
+            priced("T-2", &tier("net_list", "1.500", ""), ""),
+            priced("T-3", &tier("net_list", "0.500", ""), ""),
+            priced("T-4", &tier("net_list", "1.50", ""), ""),
+            priced("T-5", &tier("net_list", "1,234.500", ""), ""),
+        ]
+        .concat();
+        let r = one(&body);
+        let part = |order: &str| r.parts.iter().find(|p| p.order_number == order).unwrap();
+        let notes_for = |order: &str| -> Vec<&String> {
+            r.notes
+                .iter()
+                .filter(|n| n.contains(&format!(" {order}:")))
+                .collect()
+        };
+
+        assert!(part("D-1").price.is_none());
+        let n = notes_for("D-1");
+        assert!(
+            n.len() == 1 && n[0].contains("order unit DR holds an unknown number of m"),
+            "{n:?}"
+        );
+        assert_eq!(part("D-2").price.as_ref().unwrap().per_label(), "per m");
+        assert!(notes_for("D-2").is_empty());
+
+        for order in ["F-1", "F-2", "F-3"] {
+            assert!(part(order).price.is_none(), "{order}");
+            let n = notes_for(order);
+            assert!(
+                n.len() == 1 && n[0].contains("price factor"),
+                "{order}: {n:?}"
+            );
+        }
+        let n = notes_for("F-4");
+        assert!(
+            n.len() == 1 && n[0].contains("gross list price") && n[0].contains("price factor 0.5"),
+            "{n:?}"
+        );
+        assert_eq!(part("F-4").price.as_ref().unwrap().amount, 5.0);
+
+        for order in ["T-1", "T-2"] {
+            let n = notes_for(order);
+            assert!(
+                n.len() == 1 && n[0].contains("read as 1.5; check it is not 1500"),
+                "{order}: {n:?}"
+            );
+            assert_eq!(part(order).price.as_ref().unwrap().amount, 1.5);
+        }
+        for order in ["T-3", "T-4"] {
+            assert!(
+                notes_for(order).is_empty(),
+                "{order}: {:?}",
+                notes_for(order)
+            );
+            // A number with both separators is not guessed at.
+            assert!(part("T-5").price.is_none());
+            assert!(notes_for("T-5")[0].contains("not a number"));
+        }
     }
 
     #[test]
