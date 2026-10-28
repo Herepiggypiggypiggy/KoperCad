@@ -73,6 +73,18 @@ fn retarget_one(tx: &mut Tx<'_>, feed: SymbolId, name: &str) -> Result<()> {
     if project.potential(potential).is_none_or(|p| p.name != name) {
         return tx.set_property(feed, PROVISIONAL, None);
     }
+    // Alone on its own net there is nothing to go by: leave it untouched
+    // (no role writes, no second netlist).
+    let alone = {
+        let netlist = project.netlist();
+        netlist
+            .net_of(Endpoint::pin(feed, 0))
+            .map(|n| netlist.net(n))
+            .is_none_or(|net| net.endpoints.len() <= 1 && net.wires.is_empty())
+    };
+    if alone {
+        return Ok(());
+    }
     // The net as the rest of the drawing makes it, without this feed's own
     // provisional definition.
     tx.set_role(feed, SymbolRole::Unassigned)?;

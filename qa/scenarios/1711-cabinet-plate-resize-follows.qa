@@ -1,0 +1,42 @@
+@title Cabinet: a new plate size resizes the rails and ducts (plate follow)
+@area Cabinet
+# qa/fixtures/plate-follow-rail.novo (built by write_plate_follow_fixtures): a 600 x 800 mm plate with two rails across its whole width and a duct down its whole height. Plate setup to 750 x 950 mm: the rails and the duct follow, with a message, and one undo restores both.
+open qa/fixtures/plate-follow-rail.novo
+wait 20
+click_text Cabinet #1
+wait 20
+shot plate-600x800
+click_text "Plate setup"
+wait 10
+shot plate-setup-card
+# The width in the inspector: the rail follows, the message says so.
+click_text "600" SpinButton
+wait 4
+key ctrl+a
+text 750
+key Enter
+wait 6
+expect "that ran across the old plate"
+shot width-750-message
+check_layout
+# The height: the duct follows.
+wait 120
+click_text "800" SpinButton
+wait 4
+key ctrl+a
+text 950
+key Enter
+wait 6
+expect "that ran across the old plate"
+shot height-950-message
+check_layout
+wait 30
+# Close the inspector card to see the rails and the duct spanning the new plate.
+click_text "Plate setup"
+wait 10
+shot plate-750x950
+check_layout
+# One undo puts the plate and the rail back.
+key ctrl+z
+wait 10
+shot undo-height

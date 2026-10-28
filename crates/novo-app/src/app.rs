@@ -102,6 +102,9 @@ mod heat_compare_tests;
 mod heat_cooling;
 #[cfg(test)]
 mod heat_duct_slice_tests;
+mod heat_flow;
+#[cfg(test)]
+mod heat_flow_tests;
 mod heat_layout;
 #[cfg(test)]
 mod heat_layout_tests;
@@ -186,6 +189,7 @@ mod panel;
 mod part_picker;
 mod parts;
 mod parts_bulk;
+mod parts_bundle;
 mod parts_cad;
 mod parts_identity;
 mod parts_import;
@@ -412,6 +416,8 @@ mod reopen_fit_tests;
 mod review_notes_tests;
 #[cfg(test)]
 mod route_all_tests;
+#[cfg(test)]
+mod route_through_ducts_tests;
 #[cfg(test)]
 mod scale_tests;
 #[cfg(test)]

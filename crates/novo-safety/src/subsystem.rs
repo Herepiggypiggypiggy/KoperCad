@@ -199,12 +199,15 @@ impl Subsystem {
             });
         }
 
+        // At most one dangerous failure per hour: an MTTFd of 0 would
+        // otherwise print a rate of 1e7 per hour (hardware test LSC-11).
         let pfhd = pfhd_model(
             self.category,
             m,
             (self.dc_avg_percent / 100.0).clamp(0.0, 0.999),
             ccf_ok,
-        );
+        )
+        .min(1.0);
         let pl_from_pfhd = PerformanceLevel::from_pfhd(pfhd);
         let mut pl = pl_from_pfhd.min(self.category.max_pl());
         if !problems.is_empty() {

@@ -212,16 +212,124 @@ fn terminal_in_part(
     })
 }
 
+/// The edge of its device a pin leaves through: the library direction, else
+/// read from where the pin sits among the other pins of its symbol (a pin on
+/// the upper half of a symbol that is taller than wide leaves through the top,
+/// and so on). `Any` for a symbol with one pin or pins in a point.
+fn pin_side(symbol: &novo_core::SymbolInstance, ix: usize) -> Facing {
+    let Some(pin) = symbol.pins.get(ix) else {
+        return Facing::Any;
+    };
+    if pin.direction.is_some() {
+        return facing(pin.direction);
+    }
+    if symbol.pins.len() < 2 {
+        return Facing::Any;
+    }
+    let span = |f: fn(&novo_core::Pin) -> f64| {
+        symbol
+            .pins
+            .iter()
+            .map(f)
+            .fold((f64::MAX, f64::MIN), |(lo, hi), v| (lo.min(v), hi.max(v)))
+    };
+    let ((x0, x1), (y0, y1)) = (span(|p| p.offset.x), span(|p| p.offset.y));
+    let (w, h) = (x1 - x0, y1 - y0);
+    let (at, mid, low, high) = if h >= w {
+        (pin.offset.y, (y0 + y1) / 2.0, Facing::Up, Facing::Down)
+    } else {
+        (pin.offset.x, (x0 + x1) / 2.0, Facing::Left, Facing::Right)
+    };
+    if w.max(h) < 1e-6 || (at - mid).abs() < 1e-6 {
+        Facing::Any
+    } else if at < mid {
+        low
+    } else {
+        high
+    }
+}
+
+/// Order of markings along an edge: letters first (`A1`, `A2`), then numbers
+/// as numbers (`1`, `3`, `5`, `13`).
+fn marking_order(a: &str, b: &str) -> std::cmp::Ordering {
+    let numeric = |m: &str| !m.is_empty() && m.chars().all(|c| c.is_ascii_digit());
+    numeric(a)
+        .cmp(&numeric(b))
+        .then_with(|| novo_core::natural_cmp(a, b))
+}
+
+/// Where a pin without a position from its part is estimated to be: the
+/// edge it leaves through and its slot among the pins of that edge, from
+/// the markings in their order (`index` of `count`). `None` for pins that
+/// are not on a device symbol.
+fn edge_slot(project: &Project, device: DeviceId, pin: PinRef) -> Option<(Facing, usize, usize)> {
+    let symbol = project.symbol(pin.symbol)?;
+    let side = pin_side(symbol, usize::from(pin.pin));
+    if side == Facing::Any {
+        return Some((side, 0, 1));
+    }
+    let mine = &symbol.pins.get(usize::from(pin.pin))?.name;
+    let mut names: Vec<&str> = Vec::new();
+    for s in project.symbols_of_device(device) {
+        for (ix, p) in s.pins.iter().enumerate() {
+            if pin_side(s, ix) == side && !names.contains(&p.name.as_str()) {
+                names.push(&p.name);
+            }
+        }
+    }
+    names.sort_by(|a, b| marking_order(a, b));
+    let index = names.iter().position(|n| *n == mine.as_str())?;
+    Some((side, index, names.len().max(1)))
+}
+
+/// A terminal of a strip: its slot along the strip's long side.
+fn strip_slot(project: &Project, strip: DeviceId, pin: PinRef) -> Option<(usize, usize)> {
+    let terminal = project.symbol(pin.symbol)?.terminal_of_pin(pin.pin)?;
+    let all = project.terminals_of_strip(strip);
+    let index = all.iter().position(|t| t.id == terminal)?;
+    Some((index, all.len().max(1)))
+}
+
+/// Turns an edge a quarter turn clockwise, seen from the door.
+fn turned(side: Facing) -> Facing {
+    match side {
+        Facing::Up => Facing::Right,
+        Facing::Right => Facing::Down,
+        Facing::Down => Facing::Left,
+        Facing::Left => Facing::Up,
+        Facing::Any => Facing::Any,
+    }
+}
+
+/// Whether the part of a placed pin's device gives no position for it, so
+/// the anchor is an estimate (see [`anchor_of`]).
+fn is_estimated(project: &Project, pin: PinRef) -> bool {
+    let Some(device) = device_of_pin(project, pin).and_then(|d| project.device(d)) else {
+        return false;
+    };
+    let Some(marking) = project
+        .symbol(pin.symbol)
+        .and_then(|s| s.pins.get(usize::from(pin.pin)))
+        .map(|p| p.name.as_str())
+    else {
+        return false;
+    };
+    terminal_in_part(project, device, marking).is_none()
+}
+
 /// Where a pin is on the mounting plate, or `None` when its device is not
-/// placed on one. The model does not know where a terminal sits inside its
-/// device, so the anchor is the middle of the footprint edge the pin leaves
-/// through, from the pin's direction in the symbol library, not its page
-/// direction (the centre when the pin has no direction or the device is
-/// turned): good to within the device size, which is what a cut length
-/// needs. When the device's part has the position of the terminal (the Parts
-/// window's "Detect connection points", or the maker's data) the anchor is
-/// the terminal itself: x and y on the plate, turned with the device, and
-/// the height off the plate from the part.
+/// placed on one. When the device's part has the position of the terminal
+/// (the Parts window's "Detect connection points", or the maker's data) the
+/// anchor is the terminal itself: x and y on the plate, turned with the
+/// device, and the height off the plate from the part.
+///
+/// Without it the position is an estimate (see [`Routed::estimated`]): the pin
+/// is put on the edge of the footprint it leaves through (the library's
+/// direction, else read from where it sits in its symbol) at its slot among
+/// the pins of that edge in marking order, so the wires of one device do not
+/// all start from one point. A terminal strip spreads its terminals along
+/// its long side in strip order. A pin with no side is the middle of the
+/// footprint. Good to within the device size, which a cut length needs.
 fn anchor_of(
     project: &Project,
     placements: &HashMap<DeviceId, &CabinetPlacement>,
@@ -235,11 +343,16 @@ fn anchor_of(
     } else {
         (size.width, size.height)
     };
-    let facing = if placed.rotated {
-        Facing::Any
+    let strip = matches!(
+        project.symbol(pin.symbol)?.role,
+        SymbolRole::Terminal { .. }
+    );
+    let slot = if strip {
+        None
     } else {
-        // The library's own direction (before the symbol is turned on the
-        // page): a contactor drawn sideways is still mounted upright.
+        edge_slot(project, device.id, pin)
+    };
+    let library_side = if strip {
         facing(
             project
                 .symbol(pin.symbol)?
@@ -247,6 +360,16 @@ fn anchor_of(
                 .get(usize::from(pin.pin))?
                 .direction,
         )
+    } else {
+        slot.map_or(Facing::Any, |(side, ..)| side)
+    };
+    // The library's own direction (before the symbol is turned on the
+    // page): a contactor drawn sideways is still mounted upright. A turned
+    // device (R) turns its edges with it.
+    let facing = if placed.rotated {
+        turned(library_side)
+    } else {
+        library_side
     };
     let z_mm = device_height(project, device);
     let (cx, cy) = (placed.x + w / 2.0, placed.y + h / 2.0);
@@ -267,17 +390,31 @@ fn anchor_of(
             placed.structure,
             Anchor {
                 pos,
-                facing,
+                facing: if placed.rotated { Facing::Any } else { facing },
                 z_mm: Some(pz),
             },
         ));
     }
-    let pos = match facing {
-        Facing::Up => Point::new(cx, placed.y),
-        Facing::Down => Point::new(cx, placed.y + h),
-        Facing::Left => Point::new(placed.x, cy),
-        Facing::Right => Point::new(placed.x + w, cy),
-        Facing::Any => Point::new(cx, cy),
+    // The fraction along an edge of the pin's slot: even steps with half a
+    // step to each end.
+    let along = |(index, count): (usize, usize)| (index as f64 + 0.5) / count as f64;
+    let pos = if strip {
+        let (index, count) = strip_slot(project, device.id, pin).unwrap_or((0, 1));
+        let t = along((index, count));
+        if w >= h {
+            Point::new(placed.x + w * t, cy)
+        } else {
+            Point::new(cx, placed.y + h * t)
+        }
+    } else {
+        let t = slot.map_or(0.5, |(_, i, n)| along((i, n)));
+        match facing {
+            Facing::Up => Point::new(placed.x + w * t, placed.y),
+            Facing::Down => Point::new(placed.x + w * t, placed.y + h),
+            Facing::Left => Point::new(placed.x, placed.y + h * t),
+            Facing::Right => Point::new(placed.x + w, placed.y + h * t),
+            Facing::Any => Point::new(cx, cy),
+        }
     };
     Some((placed.structure, Anchor { pos, facing, z_mm }))
 }
@@ -300,6 +437,13 @@ pub struct Routed {
     /// length is flat (as if the terminals sat on the plate) and too short
     /// by the rise to the duct. The parts need a `depth_mm`.
     pub unknown_height: Vec<u64>,
+    /// Routed connections with an end whose terminal position is an
+    /// estimate: its part gives no position for the terminal, so the end is
+    /// put on the device's edge by the pin's side and marking order (see
+    /// `anchor_of`). Good to within the device size; the cut list should
+    /// say so, and "Detect connection points" in the Parts window or the
+    /// maker's data makes it exact.
+    pub estimated: Vec<u64>,
     /// Connections with an end on a surface other than the plate (the door,
     /// a side wall), by connection id: how they get there.
     pub surface_legs: BTreeMap<u64, SurfaceLeg>,
@@ -424,6 +568,12 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
             });
             out.entry_legs.insert(c.id, plate);
             continue;
+        }
+        let est = |anchor: &Option<(StructureId, Anchor)>, pin: PinRef| {
+            anchor.is_some() && is_estimated(project, pin)
+        };
+        if est(&a, c.from) || est(&b, c.to) {
+            out.estimated.push(c.id);
         }
         let ends = a.zip(b);
         let Some(((s1, from), (s2, to))) = ends else {
@@ -604,6 +754,14 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
         }
         out.plans.push((structure, p));
     }
+    // Only a wire that got a route can have an estimated end.
+    let routed_ids: std::collections::HashSet<u64> = out
+        .routes
+        .keys()
+        .copied()
+        .chain(out.cross_routes.keys().map(|(id, _)| *id))
+        .collect();
+    out.estimated.retain(|id| routed_ids.contains(id));
     for (id, mm) in extra {
         match out.routes.get_mut(&id) {
             Some(route) => route.length_mm += mm,

@@ -122,11 +122,11 @@ title = "Kind, level and jumper"
 title_nl = "Soort, niveau en brug"
 text = """
 Tick terminals in the table, then **Set terminal kind**: feed-through, PE, N, fuse or disconnect. The kind decides the symbol and how the checks treat the terminal.
-**Set terminal level** (1 to 4) puts a terminal on a deck of a multi-level block, and **Set terminal jumper** numbers the bridge between terminals. Without a tick the commands say **Tick terminals in the table first**.
+**Set terminal level** (1 to 8) puts a terminal on a deck of a multi-level block, and **Set terminal jumper** numbers the bridge between terminals. With nothing ticked or selected the commands say **Tick terminals in the table (or select them) first**.
 """
 text_nl = """
 Vink klemmen aan in de tabel en kies **Set terminal kind**: doorgang, PE, N, zekering of scheider. De soort bepaalt het symbool en hoe de controles de klem behandelen.
-**Set terminal level** (1 tot 4) zet een klem op een niveau van een meerlagig blok en **Set terminal jumper** nummert de brug tussen klemmen. Zonder vinkje zeggen de commando's **Tick terminals in the table first**.
+**Set terminal level** (1 tot 8) zet een klem op een niveau van een meerlagig blok en **Set terminal jumper** nummert de brug tussen klemmen. Is niets aangevinkt of geselecteerd, dan zeggen de commando's **Tick terminals in the table (or select them) first**.
 """
 
 [[step]]

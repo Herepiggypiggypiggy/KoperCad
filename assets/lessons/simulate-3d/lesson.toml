@@ -61,12 +61,12 @@ id = "settings"
 title = "Choose the quality"
 title_nl = "Kies de kwaliteit"
 text = """
-Open **Settings for the next run**. **Quality** trades time for detail: Quick takes seconds and is good for trying a layout, Balanced about a minute, Thorough the longest, and it shows each result as it arrives. **Turbulence** is Laminar by default.
-Choose **Quick** for this lesson. The settings apply to the next run only. In a small window the Heat panel is short: scroll it.
+**Quality**, under the Simulate buttons in the Heat panel, trades time for detail: Quick takes seconds and is good for trying a layout, Balanced about a minute, Thorough the longest, and it shows each result as it arrives. **Turbulence** (in **Settings for the next run**) is Laminar by default.
+Choose **Quick** for this lesson. The settings apply to the next run only.
 """
 text_nl = """
-Open **Settings for the next run**. **Quality** ruilt tijd tegen detail: Quick duurt seconden en is goed om een indeling te proberen, Balanced ongeveer een minuut, Thorough het langst, en toont elk resultaat zodra het er is. **Turbulence** staat standaard op Laminar.
-Kies **Quick** voor deze les. De instellingen gelden alleen voor de volgende run. In een klein venster is het Heat-paneel kort: scroll erin.
+**Quality**, onder de Simulate-knoppen in het Heat-paneel, ruilt tijd tegen detail: Quick duurt seconden en is goed om een indeling te proberen, Balanced ongeveer een minuut, Thorough het langst, en toont elk resultaat zodra het er is. **Turbulence** (in **Settings for the next run**) staat standaard op Laminar.
+Kies **Quick** voor deze les. De instellingen gelden alleen voor de volgende run.
 """
 point = { ui = "heat.simulate" }
 manual = "reading step: the settings fold and its choices are not anchored; QA 209 clicks Quick"

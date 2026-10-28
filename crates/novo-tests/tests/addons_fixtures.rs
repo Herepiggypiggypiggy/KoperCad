@@ -9,10 +9,11 @@ use std::path::{Path, PathBuf};
 
 use novo_addons::pack::pack_dir;
 
-const FIXTURES: [(&str, &str); 3] = [
+const FIXTURES: [(&str, &str); 4] = [
     ("demo-tools", "demo-tools-0.1.0.kcaddon"),
     ("demo-tools-2", "demo-tools-0.2.0.kcaddon"),
     ("future-addon", "future-addon-1.0.0.kcaddon"),
+    ("demo-engine", "demo-engine-0.1.0.kcaddon"),
 ];
 
 fn root() -> PathBuf {
@@ -34,6 +35,18 @@ fn cli(args: &[&str]) -> (i32, String, String) {
 #[test]
 fn committed_packages_are_what_the_packer_makes() {
     let regenerate = std::env::var_os("KOPERCAD_REGENERATE").is_some();
+    // The binary engine of `demo-engine` comes from its text source, before the packing.
+    let wasm = ::wat::parse_file(root().join("engine-src/demo-engine.wat"))
+        .expect("the demo engine source is valid");
+    let engine_path = root().join("src/demo-engine/engine.wasm");
+    if regenerate {
+        std::fs::write(&engine_path, &wasm).unwrap();
+    } else {
+        assert!(
+            std::fs::read(&engine_path).unwrap_or_default() == wasm,
+            "engine.wasm is out of date with engine-src/demo-engine.wat; rebuild it with KOPERCAD_REGENERATE=1 cargo test -p novo-tests --test addons_fixtures"
+        );
+    }
     for (src, file) in FIXTURES {
         let made = pack_dir(&root().join("src").join(src), None).unwrap();
         let path = root().join(file);
@@ -186,4 +199,51 @@ fn ed25519_public_hex() -> String {
     // Sign a message with the seed through the packer's path and read the key off the
     // package: simplest is to derive it through ed25519-dalek via novo-addons' dev helper.
     to_hex(&novo_addons::trust::public_key_for_seed(&[7u8; 32]))
+}
+
+#[test]
+fn the_demo_engine_runs_from_its_file_and_a_broken_one_stops_alone() {
+    use novo_addons::{AppInfo, CallError, HostLimits, InstallOptions, Store, Version};
+    use serde_json::json;
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::new(
+        dir.path().join("addons"),
+        AppInfo {
+            version: Version::new(0, 1, 0),
+            api_version: 1,
+        },
+    );
+    store
+        .install_file(
+            &root().join("demo-engine-0.1.0.kcaddon"),
+            InstallOptions {
+                accept_unsigned: true,
+                enable: true,
+            },
+        )
+        .unwrap();
+    let set = store.scan();
+    let mut host = set
+        .load_engine("demo-engine", HostLimits::default())
+        .unwrap()
+        .expect("the add-on has an engine");
+    let started = host
+        .call("button", &json!({"panel": "panel", "id": "start"}))
+        .unwrap();
+    assert_eq!(
+        started["lamps"]["power"],
+        json!({"state": "ok", "lit": true})
+    );
+    let stopped = host
+        .call("button", &json!({"panel": "panel", "id": "stop"}))
+        .unwrap();
+    assert_eq!(stopped["lamps"]["power"]["lit"], json!(false));
+    let pong = host.call("command", &json!({"id": "ping"})).unwrap();
+    assert_eq!(pong["notice"], json!("Pong from the demo engine"));
+    assert!(matches!(
+        host.call("command", &json!({"id": "crash"})),
+        Err(CallError::Stopped(_))
+    ));
+    assert!(host.stopped().is_some());
 }

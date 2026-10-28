@@ -183,6 +183,10 @@ impl NovoApp {
                 };
                 self.message(Level::Info, text);
             }
+            // A refusal already starts with "Wire number: ".
+            Err(e @ novo_core::ModelError::Refused { .. }) => {
+                self.message(Level::Warning, e.to_string());
+            }
             Err(e) => self.message(Level::Warning, format!("Wire number: {e}")),
         }
     }

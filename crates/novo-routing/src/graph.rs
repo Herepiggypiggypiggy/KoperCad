@@ -8,6 +8,18 @@ use crate::{Anchor, Duct, Facing, Job, Kind, Point, Point3, Route, Rules, polyli
 const EPS: f64 = 1e-6;
 /// How many nearest ducts per anchor are tried as the entry.
 const CANDIDATES: usize = 3;
+/// How far a wire leaves a terminal that faces away from its duct before it
+/// turns round, mm. A terminal on top of a device with the duct below it
+/// does not send its wire all the way up and back: it leaves a short way and
+/// runs down beside the device. The detour is twice this (up and back), not
+/// twice the whole distance to the duct.
+const TURN_MM: f64 = 40.0;
+/// Added to the rank of an entry a wire reaches by running sideways along
+/// its device row (a terminal on the top or bottom edge going to a vertical
+/// duct, or on a side edge going to a horizontal one): that stub passes the
+/// neighbouring devices, so a duct on the terminal's own side is preferred
+/// unless it is much farther.
+const SIDEWAYS_MM: f64 = 150.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Orient {
@@ -106,6 +118,10 @@ struct Entry {
     /// Stub length plus the detour for a terminal facing away.
     stub: f64,
     detour: f64,
+    /// What the entry is ranked by: the stub plus [`SIDEWAYS_MM`] when the
+    /// wire has to run along its device row to reach a duct that stands
+    /// across its direction. Only steers the choice; lengths use `stub`.
+    rank: f64,
 }
 
 impl Network {
@@ -214,17 +230,25 @@ impl Network {
                     Facing::Right => (a.pos.x - p.x).max(0.0),
                     Facing::Any => 0.0,
                 };
+                let sideways = matches!(
+                    (a.facing, r.orient),
+                    (Facing::Up | Facing::Down, Orient::V)
+                        | (Facing::Left | Facing::Right, Orient::H)
+                );
+                let detour = 2.0 * back.min(TURN_MM);
+                let stub = a.pos.manhattan(&p) + detour;
                 Entry {
                     run: i,
                     t,
-                    stub: a.pos.manhattan(&p) + 2.0 * back,
-                    detour: 2.0 * back,
+                    stub,
+                    detour,
+                    rank: stub + if sideways { SIDEWAYS_MM } else { 0.0 },
                 }
             })
             .collect();
         out.sort_by(|x, y| {
-            x.stub
-                .total_cmp(&y.stub)
+            x.rank
+                .total_cmp(&y.rank)
                 .then(self.runs[x.run].id.cmp(&self.runs[y.run].id))
         });
         // A stub that would run across another duct is not a real way in;
@@ -301,7 +325,7 @@ impl Network {
                 let Some((cost, path)) = self.shortest(&ea, &eb, rules, load) else {
                     continue;
                 };
-                let total = ea.stub + eb.stub + cost;
+                let total = ea.rank + eb.rank + cost;
                 if best.as_ref().is_none_or(|b| total < b.0 - EPS) {
                     best = Some((total, ea, eb, path));
                 }
