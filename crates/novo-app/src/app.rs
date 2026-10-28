@@ -25,6 +25,7 @@ mod cabinet_door;
 mod cabinet_inspector;
 mod cabinet_menu;
 mod cabinet_panel;
+mod cabinet_rail_ends;
 mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;

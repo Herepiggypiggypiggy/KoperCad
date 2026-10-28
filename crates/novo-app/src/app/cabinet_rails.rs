@@ -34,6 +34,21 @@ pub(super) enum RailAsk {
     Turn(u64),
     /// Dragged on the plate: the rail's new start.
     MoveTo(u64, f64, f64),
+    /// An end dragged: the new start and length (the other end stays).
+    Resize(u64, novo_layout::railedit::Edit),
+    /// Cut back to the nearest rail or duct that crosses this end.
+    Trim {
+        id: u64,
+        end: novo_layout::railedit::End,
+    },
+    /// Cut at a point along the run, the `end` side coming off.
+    TrimAt {
+        id: u64,
+        end: novo_layout::railedit::End,
+        at: f64,
+    },
+    /// A typed or stock length, the start staying.
+    SetLength(u64, f64),
     Delete(u64),
     /// Put every DIN rail's line on the middle of its devices, which stay put.
     CentreRails,
@@ -63,6 +78,10 @@ pub(super) struct RailsState {
     pub(super) drag: Option<RailDrag>,
     /// The rail or duct under the pointer, set by the canvas each frame.
     pub(super) hover: Option<u64>,
+    /// An end of the selected rail or duct being dragged.
+    pub(super) resize: Option<super::cabinet_rail_ends::ResizeDrag>,
+    /// "Trim at point" is on: a click on a rail or duct cuts it there.
+    pub(super) trim: bool,
 }
 
 /// A rail or duct being dragged: where its start would land.
@@ -72,6 +91,8 @@ pub(super) struct RailDrag {
     /// The pointer's offset from the start of the rail, in mm.
     pub(super) grab: (f64, f64),
     pub(super) at: (f64, f64),
+    /// What the move was pushed back from (it would have lain over it).
+    pub(super) stop: Option<novo_layout::railedit::Stop>,
 }
 
 /// The duct or rail under a point of the plate (mm), ducts first as they
@@ -200,7 +221,7 @@ pub(super) fn draw_grips(
 }
 
 /// How wide a rail or duct lies on the plate, across its run.
-fn across_of(r: &Rail) -> f64 {
+pub(super) fn across_of(r: &Rail) -> f64 {
     match r.kind {
         RailKind::Duct if r.width > 0.0 => r.width,
         RailKind::Duct => novo_layout::DEFAULT_DUCT_MM,
@@ -354,8 +375,9 @@ pub(super) fn show_window(
                 }
             });
             ui.weak(
-                "Edit a value to move or resize. Delete removes the selected row. \
-                 Ctrl+Z undoes each step.",
+                "Edit a value to move or resize, or drag the selected one on the plate: \
+                 its body to move, either end handle to cut it shorter or longer. \
+                 Delete removes it. Ctrl+Z undoes each step.",
             );
             let mut rails: Vec<&Rail> = project
                 .all::<Rail>()
@@ -446,6 +468,10 @@ pub(super) fn show_window(
                         ui.end_row();
                     }
                 });
+            if let Some(a) = super::cabinet_rail_ends::selected_card(ui, state, project, structure)
+            {
+                ask = Some(a);
+            }
         });
     if let Some(w) = window {
         super::cabinet_bar::note_rect(
@@ -458,45 +484,6 @@ pub(super) fn show_window(
     }
     state.open = open;
     ask
-}
-
-/// Outlines the selected rail or duct over the canvas.
-pub(super) fn draw_selected(
-    painter: &egui::Painter,
-    rect: egui::Rect,
-    view: &Viewport,
-    project: &novo_core::Project,
-    selected: u64,
-    start: Option<(f64, f64)>,
-    palette: &novo_theme::Palette,
-) {
-    let Some(r) = project.get::<Rail>(RailId::from(selected)) else {
-        return;
-    };
-    let across = across_of(r);
-    let (w, h) = if r.vertical {
-        (across, r.length)
-    } else {
-        (r.length, across)
-    };
-    let (sx, sy) = start.unwrap_or((r.x, r.y));
-    let (x, y) = if r.vertical {
-        (sx - across / 2.0, sy)
-    } else {
-        (sx, sy - across / 2.0)
-    };
-    let to_screen = |x: f64, y: f64| {
-        let s = view.world_to_screen(novo_canvas::vec2(x as f32, y as f32));
-        egui::pos2(rect.min.x + s.x, rect.min.y + s.y)
-    };
-    let area = egui::Rect::from_two_pos(to_screen(x, y), to_screen(x + w, y + h)).expand(2.0);
-    let colour = palette.accent;
-    painter.rect_stroke(
-        area,
-        0.0,
-        egui::Stroke::new(2.0, colour),
-        egui::StrokeKind::Outside,
-    );
 }
 
 impl super::NovoApp {
@@ -573,6 +560,24 @@ impl super::NovoApp {
                 if let Some(id) = created {
                     self.cabinet.rails.selected = Some(id);
                 }
+            }
+            RailAsk::Resize(id, edit) => self.cabinet_rail_resize(structure, id, edit),
+            RailAsk::Trim { .. } | RailAsk::TrimAt { .. } | RailAsk::SetLength(..) => {
+                self.cabinet_rail_cut(structure, &ask)
+            }
+            // Only the length typed: the same limits as a drag, so the
+            // number typed is the number cut and ducts do not overlap.
+            RailAsk::Set(e)
+                if self.backend.document().is_some_and(|d| {
+                    d.project()
+                        .get::<Rail>(RailId::from(e.id))
+                        .is_some_and(|r| {
+                            (r.x, r.y, r.width, r.height) == (e.x, e.y, e.width, e.height)
+                                && r.length != e.length
+                        })
+                }) =>
+            {
+                self.cabinet_rail_cut(structure, &RailAsk::SetLength(e.id, e.length))
             }
             RailAsk::Set(e) => {
                 let rail = RailId::from(e.id);
