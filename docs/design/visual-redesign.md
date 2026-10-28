@@ -114,6 +114,7 @@ Behaviour:
 - **Tooltips** carry the full name, the key and the one-line description from the command (the long sentence that used to be the menu label).
 - Active tool: accent wash plus a 2 pt copper bar on the rail's outer edge (the squint test: one copper thing).
 - The status bar hosts what the dock's hint line did (for example "Q or Space to place").
+- **Add-ons** get one slot in the last zone and a flyout, not a zone of their own: see `visual-redesign-addons.md` (the Live entry of the Schematic assists zone is added there too).
 - The 3D toolbar and the Cabinet toolbar become the 3D and Cabinet rails. The cabinet toolbar's captioned groups survive as the expanded form and in the flyouts.
 
 ## 4. Status bar
@@ -232,7 +233,7 @@ pub enum Shape {
     Circle { cx: f32, cy: f32, r: f32, filled: bool },
     Arc { cx: f32, cy: f32, r: f32, from: f32, to: f32 },
 }
-pub struct Icon { pub name: &'static str, pub shapes: &'static [Shape] }
+pub struct Icon { pub name: Cow<'static, str>, pub shapes: Cow<'static, [Shape]> } // owned data lets add-on icons load at runtime (visual-redesign-addons.md)
 ```
 
 A small converter (`tools/`, run by hand, output committed) emits the Rust table from the Python source so the two never drift, and a test compares the shape count of every icon with its SVG. `icons::paint(painter, rect, icon, color)` scales the 24 grid to the rect and strokes with the stroke rule above. No image loader, no SVG parser in the app (consistent with `brand::paint_mark`). The theme crate's existing groups (`action`, `tool`, `canvas`, `panel`, `mark`, `status`) are unchanged.
