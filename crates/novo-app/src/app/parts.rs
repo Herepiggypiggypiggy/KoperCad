@@ -84,6 +84,9 @@ pub(crate) struct PartsWindow {
     /// The installed ETIM release as one line (`None` until the menu first
     /// asks; `Some(None)` when there is none).
     etim_line: Option<Option<String>>,
+    /// An ETIM release being installed on a worker thread (a release can be
+    /// hundreds of megabytes): its answer when it is done.
+    etim_job: Option<std::sync::mpsc::Receiver<Result<String, String>>>,
     /// Add CAD files: matching of downloaded files to parts, while open.
     cad: Option<CadPanel>,
     /// Export and import of a library bundle.
@@ -183,6 +186,7 @@ impl PartsWindow {
             new_part: None,
             guide: false,
             etim_line: None,
+            etim_job: None,
             cad: None,
             bundles: Default::default(),
             waiting: Vec::new(),
@@ -425,6 +429,49 @@ impl PartsWindow {
             return None;
         }
         Some(self.waiting.remove(0))
+    }
+
+    /// Installs the ETIM release at `path` on a worker thread; the window
+    /// goes on painting and [`PartsWindow::poll_etim`] picks the answer up.
+    fn start_etim_install(&mut self, path: PathBuf, dir: Option<PathBuf>) {
+        if self.etim_job.is_some() {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let wake = self.wake.clone();
+        let spawned = std::thread::Builder::new()
+            .name("etim-install".into())
+            .spawn(move || {
+                slow_for_qa();
+                let done = std::panic::catch_unwind(|| install_etim(&path, dir.as_deref()))
+                    .unwrap_or_else(|_| Err("ETIM release: the file could not be read".into()));
+                let _ = tx.send(done);
+                if let Some(ctx) = wake {
+                    ctx.request_repaint();
+                }
+            });
+        if spawned.is_ok() {
+            self.etim_job = Some(rx);
+        } else {
+            self.etim_job = None;
+        }
+    }
+
+    /// The answer of a finished ETIM install, once.
+    fn poll_etim(&mut self) -> Option<Result<String, String>> {
+        use std::sync::mpsc::TryRecvError;
+        let answer = match self.etim_job.as_ref()?.try_recv() {
+            Ok(done) => done,
+            Err(TryRecvError::Empty) => return None,
+            Err(TryRecvError::Disconnected) => {
+                Err("ETIM release: the install stopped unexpectedly".into())
+            }
+        };
+        self.etim_job = None;
+        if let Ok(line) = &answer {
+            self.etim_line = Some(Some(line.clone()));
+        }
+        Some(answer)
     }
 
     /// Opens Add CAD files for these files.
@@ -1039,6 +1086,13 @@ impl NovoApp {
         let mut close = !open;
         let mut error = None;
         let mut info = None;
+        match win.poll_etim() {
+            Some(Ok(line)) => {
+                info = Some(format!("Installed {line}. Import the maker file again."));
+            }
+            Some(Err(e)) => error = Some(e),
+            None => {}
+        }
         let mut assign = None;
         let mut open_dir = None;
         for action in actions {
@@ -1123,14 +1177,7 @@ impl NovoApp {
                             .pick_file()
                     };
                     if let Some(path) = picked {
-                        match install_etim(&path) {
-                            Ok(line) => {
-                                info =
-                                    Some(format!("Installed {line}. Import the maker file again."));
-                                win.etim_line = Some(Some(line));
-                            }
-                            Err(e) => error = Some(e),
-                        }
+                        win.start_etim_install(path, novo_parts::EtimModel::dir_for(None));
                     }
                 }
                 PartsAction::NewPart => win.new_part = Some(NewPartForm::default()),
@@ -1254,12 +1301,25 @@ impl Waiting {
     }
 }
 
+/// Holds the ETIM install for `KOPERCAD_QA_SLOW_ETIM_MS` milliseconds (at
+/// most a minute) so a QA scenario can photograph the window while it runs.
+/// Unset, it does nothing.
+fn slow_for_qa() {
+    let ms = std::env::var("KOPERCAD_QA_SLOW_ETIM_MS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .map_or(0, |ms| ms.min(60_000));
+    if ms > 0 {
+        std::thread::sleep(std::time::Duration::from_millis(ms));
+    }
+}
+
 /// Installs the ETIM release at `path` into the user's profile; returns the
 /// one-line summary, or the reason in words.
-fn install_etim(path: &Path) -> Result<String, String> {
-    let dir = novo_parts::EtimModel::dir_for(None)
-        .ok_or("No profile folder is known, so there is nowhere to keep the ETIM release.")?;
-    novo_parts::EtimModel::install(path, &dir)
+fn install_etim(path: &Path, dir: Option<&Path>) -> Result<String, String> {
+    let dir =
+        dir.ok_or("No profile folder is known, so there is nowhere to keep the ETIM release.")?;
+    novo_parts::EtimModel::install(path, dir)
         .map(|m| m.summary())
         .map_err(|e| format!("ETIM release: {e}"))
 }
@@ -1416,7 +1476,9 @@ fn parts_ui(
                         .and_then(|d| novo_parts::EtimModel::load_installed(&d))
                         .map(|m| m.summary())
                 });
+                let installing = win.etim_job.is_some();
                 ui.weak(match line {
+                    _ if installing => "Installing the ETIM release\u{2026}",
                     Some(l) => l.as_str(),
                     None => "No ETIM release installed",
                 });
@@ -1432,7 +1494,11 @@ fn parts_ui(
                         true,
                     ),
                 ] {
-                    if ui.button(label).on_hover_text(hint).clicked() {
+                    if ui
+                        .add_enabled(!installing, egui::Button::new(label))
+                        .on_hover_text(hint)
+                        .clicked()
+                    {
                         actions.push(PartsAction::InstallEtim { folder });
                         ui.close();
                     }
@@ -1513,6 +1579,12 @@ fn parts_ui(
             today: today(),
         };
         win.bundles.show(ui, &env);
+    }
+    if win.etim_job.is_some() {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.weak("Installing the ETIM release\u{2026} import maker files when it is done.");
+        });
     }
     if let Some(text) = super::parts_identity::reading_text().filter(|_| !win.waiting.is_empty()) {
         ui.horizontal(|ui| {
