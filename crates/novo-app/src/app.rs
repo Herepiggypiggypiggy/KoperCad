@@ -3,6 +3,7 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod addons;
 mod appearance;
 mod assembly;
 mod assistant;
@@ -303,6 +304,8 @@ mod workshop;
 mod workspace;
 mod xref;
 
+#[cfg(test)]
+mod addons_tests;
 #[cfg(test)]
 mod assembly_pack_tests;
 #[cfg(test)]
@@ -669,6 +672,7 @@ impl NovoApp {
         );
         let mut app = Self::with_settings(backend, canvas, settings);
         app.load_user_keymap();
+        app.init_addons();
         app.learn_init_paths();
         app.crash_report = crate::diag::take_pending_crash();
         if std::env::var_os("KOPERCAD_FORCE_PANIC").is_some() {
@@ -1816,6 +1820,7 @@ impl NovoApp {
         self.eplan_import_dialog(&ctx);
         self.eplan_guide_dialog(&ctx);
         self.controller_import_dialog(&ctx);
+        self.addons_windows(&ctx);
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);

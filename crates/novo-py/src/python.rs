@@ -419,6 +419,44 @@ fn symbols(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     to_py(py, &Value::Array(list))
 }
 
+/// The installed add-ons and their state: ``{"addons": [...], "warnings": [...]}``.
+/// ``root`` names another add-on folder (default: the per-user one).
+#[pyfunction]
+#[pyo3(signature = (root = None))]
+fn addons_list(py: Python<'_>, root: Option<PathBuf>) -> PyResult<Bound<'_, PyAny>> {
+    to_py(py, &crate::addons_json(root.as_deref()).map_err(err)?)
+}
+
+/// Installs a ``.kcaddon`` file. A file not signed by a trusted publisher needs
+/// ``trust_unsigned=True``, the same tick as in the program. Returns what was installed.
+#[pyfunction]
+#[pyo3(signature = (path, *, trust_unsigned = false, enable = true, root = None))]
+fn addons_install(
+    py: Python<'_>,
+    path: PathBuf,
+    trust_unsigned: bool,
+    enable: bool,
+    root: Option<PathBuf>,
+) -> PyResult<Bound<'_, PyAny>> {
+    let done =
+        crate::addons_install(&path, trust_unsigned, enable, root.as_deref()).map_err(err)?;
+    to_py(py, &done)
+}
+
+/// Turns an add-on on or off.
+#[pyfunction]
+#[pyo3(signature = (id, on = true, *, root = None))]
+fn addons_set_enabled(id: &str, on: bool, root: Option<PathBuf>) -> PyResult<()> {
+    crate::addons_set_enabled(id, on, root.as_deref()).map_err(err)
+}
+
+/// Removes an add-on and all its versions.
+#[pyfunction]
+#[pyo3(signature = (id, *, root = None))]
+fn addons_remove(id: &str, root: Option<PathBuf>) -> PyResult<()> {
+    crate::addons_remove(id, root.as_deref()).map_err(err)
+}
+
 #[pymodule]
 fn kopercad(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyProject>()?;
@@ -426,6 +464,10 @@ fn kopercad(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // The name from before the rename, so old scripts keep catching errors.
     m.add("NovoError", m.py().get_type::<KoperError>())?;
     m.add_function(wrap_pyfunction!(symbols, m)?)?;
+    m.add_function(wrap_pyfunction!(addons_list, m)?)?;
+    m.add_function(wrap_pyfunction!(addons_install, m)?)?;
+    m.add_function(wrap_pyfunction!(addons_set_enabled, m)?)?;
+    m.add_function(wrap_pyfunction!(addons_remove, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }
