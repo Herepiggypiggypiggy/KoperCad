@@ -1,0 +1,16 @@
+@title Motor at variable frequency at 1920: torque curves, breakdown and the current limit
+@area Simulate
+@sizes 1920x1080
+# Opens the two-speed hoist fixture (it has a motor) and the Simulate > Motor at variable
+# frequency window.
+open qa/fixtures/hoist-two-speed.novo
+wait 20
+key ctrl+k
+wait 3
+text Motor at variable frequency
+wait 4
+key Enter
+wait 30
+expect "What this model leaves out"
+shot motor-curves
+check_layout

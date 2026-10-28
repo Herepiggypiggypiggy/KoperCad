@@ -169,6 +169,7 @@ mod manual;
 mod menu_bar;
 mod model_labels;
 mod motion;
+mod motor_freq;
 mod net_trace;
 mod numbering;
 mod onboarding;
@@ -1811,6 +1812,7 @@ impl NovoApp {
         self.protection_window(&ctx);
         self.faults_window(&ctx);
         self.hoist_window(&ctx);
+        self.motor_freq_window(&ctx);
         self.add_fault_window(&ctx);
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);
