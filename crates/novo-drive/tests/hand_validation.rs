@@ -14,7 +14,10 @@
 
 use novo_drive::{
     Fidelity, GRAVITY,
-    drive::Ramp,
+    drive::{
+        BrakingDuty, BrakingResistor, BusConfig, DcBus, I2tOverload, Ramp, ResistorFlag, SRamp,
+        VfCurve, check_braking_resistor,
+    },
     mechanics::hoist_holding_torque_nm,
     motor::{SYNC_RPM_FIDELITY, sync_rpm},
 };
@@ -170,34 +173,55 @@ fn case02_ramp_does_not_overshoot_with_a_coarse_step() {
 }
 
 #[test]
-#[ignore = "L1 finding F-1: Ramp::step uses the accel rate for a reversal through zero (see docs/design/drive-crane-validation.md)"]
 fn case02_reversal_decelerates_then_accelerates() {
     // +20 Hz -> -20 Hz with accel 5 s and decel 3 s on a 50 Hz reference.
     // Stage 1 decelerates 20 -> 0 at 50/3 Hz/s: 20 / 16.667 = 1.2 s.
     // Stage 2 accelerates 0 -> -20 at 10 Hz/s: 2.0 s. Total 3.2 s.
-    // Using the accel rate for both stages gives 4.0 s (the merged engine does this).
     let mut r = Ramp {
         frequency_hz: 20.0,
         accel_time_s: 5.0,
         decel_time_s: 3.0,
         reference_hz: 50.0,
     };
-    for _ in 0..320 {
+    for _ in 0..120 {
         r.step(-20.0, 0.01);
     }
-    close(r.frequency_hz, -20.0, 1e-9, "reaches -20 Hz after 3.2 s");
+    close(r.frequency_hz, 0.0, 1e-9, "zero after 1.2 s");
+    for _ in 0..200 {
+        r.step(-20.0, 0.01);
+    }
+    close(r.frequency_hz, -20.0, 1e-9, "-20 Hz after 3.2 s");
 }
 
 #[test]
-#[ignore = "L1: S-ramp (jerk limited) must exist in drive.rs"]
 fn case02_s_ramp_end_points_and_jerk_limit() {
-    // Jerk-limited ramp 0 -> 50 Hz in 5 s with the acceleration rising and falling over 1 s each.
-    // The area under the trapezoid of acceleration is the frequency step: a_max (T - t_r) = f,
-    // so a_max = 50 / (5 - 1) = 12.5 Hz/s and the jerk is a_max / t_r = 12.5 Hz/s^2.
-    // Frequency at 2.5 s (symmetric midpoint) is 25 Hz; the slope is 0 at 0 s and at 5 s.
-    todo!(
-        "L1: sample the S-ramp every 1 ms and compare end slope 0, midpoint 25 Hz, max jerk 12.5"
-    );
+    // Jerk-limited ramp 0 -> 50 Hz in 5 s with the acceleration rising and falling over 1 s each
+    // (jerk fraction 0.2 of the 5 s). The area under the trapezoid of acceleration is the
+    // frequency step: a_max (T - t_r) = f, so a_max = 50 / (5 - 1) = 12.5 Hz/s and the jerk is
+    // a_max / t_r = 12.5 Hz/s^2. Frequency at 2.5 s (symmetric midpoint) is 25 Hz; the slope is
+    // 0 at 0 s and at 5 s.
+    let mut r = SRamp::new(5.0, 5.0, 50.0, 0.2);
+    let dt = 0.001;
+    let (mut prev_a, mut max_jerk, mut max_a) = (0.0_f64, 0.0_f64, 0.0_f64);
+    for n in 1..=5000 {
+        r.step(50.0, dt);
+        max_jerk = max_jerk.max(((r.accel_hz_s - prev_a) / dt).abs());
+        max_a = max_a.max(r.accel_hz_s.abs());
+        prev_a = r.accel_hz_s;
+        if n == 1 {
+            assert!(
+                r.accel_hz_s.abs() <= 12.5 * dt * 1.001,
+                "starts with zero slope"
+            );
+        }
+        if n == 2500 {
+            close(r.frequency_hz, 25.0, 0.01, "midpoint 2.5 s");
+        }
+    }
+    close(r.frequency_hz, 50.0, 0.01, "end point at 5 s");
+    close(r.accel_hz_s, 0.0, 1e-9, "zero slope at the end");
+    close(max_a, 12.5, 0.01, "plateau acceleration");
+    assert!(max_jerk <= 12.5 * 1.01, "jerk {max_jerk} above 12.5 Hz/s^2");
 }
 
 // ---------------------------------------------------------------- case 3: V/f
@@ -222,10 +246,36 @@ fn oracle_case03_vf_values() {
 }
 
 #[test]
-#[ignore = "L1: drive V/f law (volts_for_frequency) not in the engine yet"]
 fn case03_vf_law_in_the_drive() {
-    todo!(
-        "L1: volts at 10, 25, 50, 87 Hz must equal 80, 200, 400, 400 V; boost adds the entered volts at 0 Hz only"
+    let vf = VfCurve::new(400.0, 50.0);
+    close(vf.volts_for_frequency(10.0), 80.0, 1e-9, "10 Hz");
+    close(vf.volts_for_frequency(25.0), 200.0, 1e-9, "25 Hz");
+    close(vf.volts_for_frequency(50.0), 400.0, 1e-9, "50 Hz");
+    close(vf.volts_for_frequency(87.0), 400.0, 1e-9, "87 Hz");
+    close(vf.flux_ratio(87.0), 0.574_712_643, 1e-8, "flux 87 Hz");
+    close(
+        vf.torque_capability_ratio(87.0),
+        0.330_294_6,
+        1e-6,
+        "torque capability 87 Hz",
+    );
+    // Boost: 20 V entered adds exactly 20 V at 0 Hz and nothing from the boost end (25 Hz) up.
+    let boosted = VfCurve {
+        boost_v: 20.0,
+        boost_end_hz: 25.0,
+        ..vf
+    };
+    close(
+        boosted.volts_for_frequency(0.0),
+        20.0,
+        1e-9,
+        "boost at 0 Hz",
+    );
+    close(
+        boosted.volts_for_frequency(25.0),
+        200.0,
+        1e-9,
+        "no boost at the boost end",
     );
 }
 
@@ -394,11 +444,32 @@ fn oracle_case07_braking_energy_and_power() {
 }
 
 #[test]
-#[ignore = "L1: braking chopper and resistor check not in the engine yet"]
 fn case07_resistor_flags() {
-    todo!(
-        "L1: 47 ohm / 1000 W continuous / 60 s cycle passes peak, fails nothing at 411 W; 100 ohm flags peak > V^2/R; 47 ohm with 300 W continuous flags duty"
-    );
+    // 2.0 kg m2 from 1500 rpm stopped in 4 s, one stop per 60 s, chopper level 780 V.
+    let duty = BrakingDuty {
+        inertia_kg_m2: 2.0,
+        speed_rpm: 1500.0,
+        stop_time_s: 4.0,
+        cycle_time_s: 60.0,
+    };
+    let r = |ohm, w| BrakingResistor {
+        ohm,
+        continuous_w: w,
+        thermal_capacity_j: 0.0,
+    };
+    // 47 ohm, 1000 W: capacity 12944.7 W covers the 12337.0 W peak, 411.2 W average is below 1000 W.
+    let ok = check_braking_resistor(&duty, &r(47.0, 1000.0), 780.0, 0.0);
+    close(ok.energy_j, 24_674.011, 1e-3, "energy");
+    close(ok.peak_w, 12_337.006, 1e-3, "peak");
+    close(ok.duty_average_w, 411.234, 1e-3, "duty average");
+    close(ok.capacity_w, 12_944.681, 1e-3, "capacity");
+    assert!(ok.flags.is_empty(), "{:?}", ok.flags);
+    // 100 ohm: capacity 6084 W is below the peak.
+    let low = check_braking_resistor(&duty, &r(100.0, 1000.0), 780.0, 0.0);
+    assert_eq!(low.flags, vec![ResistorFlag::PeakExceedsCapacity]);
+    // 47 ohm with 300 W continuous: 411 W average is above the rating.
+    let hot = check_braking_resistor(&duty, &r(47.0, 300.0), 780.0, 0.0);
+    assert_eq!(hot.flags, vec![ResistorFlag::DutyExceedsContinuous]);
 }
 
 // ---------------------------------------------------------------- case 8: DC bus energy
@@ -415,11 +486,34 @@ fn oracle_case08_capacitor_energy() {
 }
 
 #[test]
-#[ignore = "L1: DC bus model not in the engine yet"]
 fn case08_energy_balance_property() {
-    todo!(
-        "L1: for 200 random runs (inertia, ramp, load) E_in - E_loss == E_mech + dE_bus within 1e-6 relative"
-    );
+    // 200 runs of random load power (motoring and regenerating), with and without a resistor.
+    // Input minus losses minus delivered energy must equal the change of stored energy.
+    let mut seed: u64 = 0x2545_F491_4F6C_DD1D;
+    let mut rnd = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 11) as f64 / (1u64 << 53) as f64
+    };
+    for run in 0..200 {
+        let mut cfg = BusConfig::generic_400v();
+        cfg.capacitance_f = 0.5e-3 + 2.0e-3 * rnd();
+        cfg.resistor_ohm = (run % 2 == 0).then(|| 30.0 + 70.0 * rnd());
+        let mut bus = DcBus::new(cfg);
+        let e0 = bus.stored_j();
+        let mut moved = 0.0_f64;
+        for _ in 0..2000 {
+            let p = (rnd() - 0.5) * 30_000.0;
+            moved += p.abs() * 0.001;
+            bus.step(p, true, 0.001);
+        }
+        let resid = bus.balance_residual_j(e0);
+        assert!(
+            resid.abs() <= 1e-6 * moved.max(1.0),
+            "run {run}: residual {resid} J of {moved} J"
+        );
+    }
 }
 
 // ---------------------------------------------------------------- case 9: current limit
@@ -456,10 +550,31 @@ fn oracle_case10_i2t_times() {
 }
 
 #[test]
-#[ignore = "L1: motor thermal I2t trip not in the engine yet"]
 fn case10_i2t_trip_time() {
-    todo!(
-        "L1: constant 150 % trips at 60.0 s within one sample; 200 % at 25.0 s; 100 % never; recovery model separately"
+    // The one entered point (150 % in 60 s) is exact; 200 % is 25 s by the model constant K = 75.
+    let first_trip = |ratio: f64, limit_s: f64| {
+        let mut o = I2tOverload::new(10.0, 1.5, 60.0);
+        let dt = 0.01;
+        let mut t = 0.0;
+        while t < limit_s {
+            t += dt;
+            if o.step(10.0 * ratio, dt) {
+                return Some(t);
+            }
+        }
+        None
+    };
+    close(first_trip(1.5, 200.0).expect("trips"), 60.0, 0.011, "150 %");
+    close(first_trip(2.0, 200.0).expect("trips"), 25.0, 0.011, "200 %");
+    close(
+        first_trip(1.2, 400.0).expect("trips"),
+        170.454_545,
+        0.011,
+        "120 %",
+    );
+    assert!(
+        first_trip(1.0, 1000.0).is_none(),
+        "rated current never trips"
     );
 }
 

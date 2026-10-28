@@ -20,6 +20,7 @@ novo-cfd = { path = "crates/novo-cfd" }
 novo-checks = { path = "crates/novo-checks" }
 novo-cli = { path = "crates/novo-cli" }
 novo-commissioning = { path = "crates/novo-commissioning" }
+novo-controller = { path = "crates/novo-controller" }
 novo-core = { path = "crates/novo-core" }
 novo-drive = { path = "crates/novo-drive" }
 novo-editor = { path = "crates/novo-editor" }

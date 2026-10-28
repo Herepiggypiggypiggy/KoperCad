@@ -1,0 +1,11 @@
+[package]
+name = "novo-controller"
+description = "Virtual operator controller for the live view: controls, signals and interlocks from plain-data profiles (pure engine)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

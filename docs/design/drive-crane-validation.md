@@ -24,15 +24,15 @@ Plan: `docs/design/drive-crane-simulation.md`, validation cases 1-21. Tests:
 | Case | What | Runs now | Waits for |
 | --- | --- | --- | --- |
 | 1 | Synchronous speed table, pole-change pair | yes | slip speed: L2b |
-| 2 | Linear ramp points, own decel time, no overshoot | yes | reversal (finding F-1) and S-ramp: L1 |
-| 3 | V/f law and flux ratio | hand values only | L1 |
+| 2 | Linear ramp points, reversal through zero, S-ramp end points and jerk | yes (L1 landed) | |
+| 3 | V/f law and flux ratio | yes (L1 landed) | |
 | 4 | Breakdown torque against closed-form Thevenin, `(V/f)^2` scaling | hand values only | L2b |
 | 5 | Hoisting torque 345.91 N m | yes | lowering sign and brake hold ratio: L2a |
 | 6 | Brake opens before torque: 110.32 mm bound, 31.70 mm with inertia | hand values only | L2a |
-| 7 | Braking energy 24.67 kJ, peak 12.34 kW, resistor limits | hand values only | L1 |
-| 8 | DC bus energy balance | hand values only | L1 |
-| 9 | Current limit acceleration time 2.618 s | hand values only | L1, L2b |
-| 10 | I2t trip times 60 s, 170.5 s, 25 s | hand values only | L1 |
+| 7 | Braking energy 24.67 kJ, peak 12.34 kW, resistor limits | yes (L1 landed) | |
+| 8 | DC bus energy balance (200 random runs) | yes (L1 landed) | |
+| 9 | Current limit acceleration time 2.618 s | hand values only | L2b (torque from the motor model) |
+| 10 | I2t trip times 60 s, 170.5 s, 25 s | yes (L1 landed) | |
 | 11 | Pendulum period, 30 degree correction 4.0827 s | small angle yes | nonlinear option: L4b |
 | 12 | Raise button stops at the entered limit within one sample | tolerance only | L5a |
 | 13 | Two-speed run-up 0.2384 s + dead time + 0.5676 s | hand values only | L2a |
@@ -47,16 +47,13 @@ Plan: `docs/design/drive-crane-simulation.md`, validation cases 1-21. Tests:
 
 ## Findings so far
 
-- **F-1 (L1), reversal through zero.** `Ramp::step` picks the accel or decel rate by comparing
-  `|target|` with `|frequency|`. For +20 Hz to -20 Hz the magnitudes are equal, so it uses the
-  accel rate for the whole move: after 3.2 s it is at -12 Hz, the hand value (decel 20 to 0 at
-  50/3 Hz/s = 1.2 s, then accel 0 to -20 at 10 Hz/s = 2.0 s) says it should have arrived. Test
-  `case02_reversal_decelerates_then_accelerates` shows it and is ignored until L1 fixes it.
+- **F-1 (L1), reversal through zero. Fixed by L1 (#1557).** `Ramp::step` used the accel rate for
+  the whole move from +20 to -20 Hz (-12 Hz after 3.2 s). Hand value: decel 20 to 0 at 50/3 Hz/s
+  = 1.2 s, then accel 0 to -20 at 10 Hz/s = 2.0 s. The test now passes against the fixed engine.
 - **F-2 (plan wording, case 6).** The plan's drop `0.5 g t^2` is only an upper bound. With the
   motor inertia reflected through a 31.5:1 gearbox on a 0.2 m drum the same 150 ms gives 31.7 mm
   instead of 110.3 mm. The engine must include the inertia; the bound is kept as a sanity limit.
-- **F-3 (edge, case 2).** `Ramp::step` with an accel time of 0 and a step of 0 s computes
-  `inf * 0 = NaN` and `clamp` then panics. L1 should treat a zero time as "jump to target".
+- **F-3 (edge, case 2). Fixed by L1 (#1557).** `Ramp::step` with an accel time of 0 and a step of 0 s gave `inf * 0 = NaN` and `clamp` panicked.
 
 ## Hand calculations, short form
 
