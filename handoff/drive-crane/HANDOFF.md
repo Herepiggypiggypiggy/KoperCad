@@ -6,3 +6,5 @@ Brake torque of a tick is the value at its start (one tick of latency, determini
 Conventions: positive shaft speed raises the hook; see `mechanics.rs` header for the efficiency convention.
 Resume: `cargo test -p novo-drive -p novo-machine`.
 No UI entry yet: the "Mechanical load" section of the motor property sheet (L3/L6) and the loop (L5a) consume it.
+
+L7 validation: `docs/design/drive-crane-validation.md` lists every case, what runs now and which lane un-ignores which test. A lane that lands engine code replaces the `todo!` in its tests and keeps the hand value; disagreements go to the doc, not to a changed hand value.
