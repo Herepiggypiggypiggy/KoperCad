@@ -75,7 +75,10 @@ pub fn pack_parts(
     {
         let mut zip = zip::ZipWriter::new(Cursor::new(&mut out));
         let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
+            .compression_method(zip::CompressionMethod::Deflated)
+            // the zip crate writes "made on MS-DOS" on Windows and "Unix" elsewhere; fixed so the
+            // same folder packs to the same bytes on every system
+            .system(zip::System::Unix);
         let mut put = |name: &str, bytes: &[u8]| -> Result<()> {
             zip.start_file(name, options)
                 .map_err(|e| AddonError::Io(e.to_string()))?;
