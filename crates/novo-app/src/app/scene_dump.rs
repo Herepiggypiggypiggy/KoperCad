@@ -8,6 +8,58 @@ use serde_json::{Value, json};
 use super::NovoApp;
 
 impl NovoApp {
+    /// What the Heat view of the Cabinet shows for this layout while it is on, as the same
+    /// readings the badges and the hot-spot cards print, so a scenario can check what a lesson
+    /// says ("the hottest place sits on -T1") against the picture. `null` while Heat is off.
+    fn heat_summary(
+        &self,
+        project: &novo_core::Project,
+        layout: &novo_layout::state::CabinetLayout,
+        tag: &dyn Fn(u64) -> String,
+    ) -> Value {
+        if !self.cabinet.heat.on {
+            return Value::Null;
+        }
+        let items = super::heat::items_of(project, layout, tag);
+        let input = super::heat::Input {
+            plate: (layout.plate.width, layout.plate.height),
+            ambient: self.sizing.request().ambient_max,
+            items,
+            solution: self.cabinet.heat.solution(),
+            kept: None,
+        };
+        let temps = super::heat::drawn_temps(&input);
+        let hottest = input
+            .items
+            .iter()
+            .zip(&temps)
+            .filter(|(i, _)| i.loss_known && i.loss_w > 0.0)
+            .max_by(|a, b| a.1.total_cmp(b.1));
+        let total: f64 = input
+            .items
+            .iter()
+            .filter(|i| i.loss_known)
+            .map(|i| i.loss_w)
+            .sum();
+        let cards = super::heat::drawn_peak_tags(&input);
+        json!({
+            "source": if input.solution.is_some() { "solver" } else { "preview" },
+            "total_loss_w": total,
+            "devices": input.items.iter().zip(&temps)
+                .map(|(i, t)| json!({"device": i.tag, "loss_w": i.loss_w, "temp_c": (t * 10.0).round() / 10.0}))
+                .collect::<Vec<_>>(),
+            "hot_spot_cards": cards,
+            // One token a scenario can look for with `expect_scene`.
+            "summary": format!(
+                "heat {}: hottest {} first card {} total {:.0} W",
+                if input.solution.is_some() { "solver" } else { "preview" },
+                hottest.map_or("none", |(i, _)| i.tag.as_str()),
+                cards.first().map_or("none", String::as_str),
+                total,
+            ),
+        })
+    }
+
     pub(crate) fn scene_json(&self) -> Value {
         let Some(doc) = self.document() else {
             return json!({"project": null, "workspace": format!("{:?}", self.workspace)});
@@ -76,6 +128,7 @@ impl NovoApp {
                     .map_or_else(|| id.to_string(), |d| d.tag.to_string())
             };
             let report = layout.report();
+            let heat = self.heat_summary(p, &layout, &tag);
             cabinets.push(json!({
                 "location": s.tag.to_string(),
                 "enclosure": s.enclosure,
@@ -86,6 +139,7 @@ impl NovoApp {
                 "ducts": layout.ducts.iter().map(|d| json!({
                     "id": d.id, "at_mm": [d.x, d.y], "length_mm": d.length,
                     "width_mm": d.width, "vertical": d.vertical})).collect::<Vec<_>>(),
+                "heat": heat,
                 "placed": layout.placements.iter().map(|pl| json!({
                     "device": tag(pl.id), "at_mm": [pl.x, pl.y],
                     "size_mm": [pl.size.width, pl.size.height],
