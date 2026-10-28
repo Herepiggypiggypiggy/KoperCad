@@ -227,6 +227,9 @@ mod selection_sheet_tests;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
+mod sim_chip;
+#[cfg(test)]
+mod sim_chip_tests;
 mod simulate;
 mod single_line_view;
 #[cfg(test)]

@@ -1287,6 +1287,7 @@ impl NovoApp {
             // A closed panel marks nothing in the cabinet.
             self.cabinet.heat.settings.hovered = None;
         }
+        let no_cabinet = empty_hint.is_some();
         if let Some(text) = empty_hint {
             ui.painter().text(
                 view_rect.center_bottom() - egui::vec2(0.0, 40.0),
@@ -1294,6 +1295,17 @@ impl NovoApp {
                 text,
                 egui::FontId::proportional(14.0),
                 ui.visuals().weak_text_color(),
+            );
+        }
+        // The status of the heat simulation, whether or not its panel is open.
+        if !no_cabinet {
+            let shown = self.cabinet.heat.on;
+            super::sim_chip::show(
+                ui.ctx(),
+                view_rect,
+                &mut self.cabinet.heat,
+                shown,
+                options.reduced_motion,
             );
         }
         mode.stats.frame(ui.ctx(), view_rect, &mut mode.view);

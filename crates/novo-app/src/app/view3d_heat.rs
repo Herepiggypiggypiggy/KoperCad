@@ -113,7 +113,7 @@ pub(super) fn show(
     .top(if super::panel::reserved_bottom_right(ctx) > 0.0 {
         CUBE_MARGIN
     } else {
-        CUBE_MARGIN + CUBE_SIZE + GAP
+        CUBE_MARGIN + CUBE_SIZE + GAP + super::view3d_controls::CHIP_SHIFT
     })
     .height(420.0)
     .above_card()

@@ -148,14 +148,18 @@ fn short_window(ctx: &egui::Context) -> bool {
 }
 
 /// Where a panel under the toolbar starts, from the top of the view.
-pub(super) const BELOW: f32 = 140.0;
+pub(super) const BELOW: f32 = 140.0 + CHIP_SHIFT;
+
+/// The toolbar starts below the simulation status chip: this much lower than
+/// at the corner.
+pub(super) const CHIP_SHIFT: f32 = super::sim_chip::TOP_ROOM - MARGIN;
 
 /// What the toolbar is assumed to cover before it has been drawn once, which
 /// is when the first fit of the camera happens.
 fn first_inset(ctx: &egui::Context) -> f32 {
     if short_window(ctx) {
         // One row of buttons, no title bar.
-        56.0
+        56.0 + CHIP_SHIFT
     } else {
         BELOW
     }
@@ -201,7 +205,7 @@ pub(super) fn toolbar(
         super::panel::Side::Left,
         width,
     )
-    .top(MARGIN)
+    .top(super::sim_chip::TOP_ROOM)
     .fit();
     let panel = if short_window(ctx) {
         panel.bare()
