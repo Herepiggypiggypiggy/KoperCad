@@ -224,14 +224,37 @@ impl Panel {
         }
         if let Some(h) = self.height {
             window = window.default_height(h.min(max_height));
+            // A card in the corner changes height from step to step. A panel
+            // that was squeezed above a tall card keeps that small size in
+            // egui's memory; when the room changes it is brought back to the
+            // height it was made for, as far as the room allows. A person's
+            // own resizing stays until then.
+            let key = id.with("corner_seen");
+            let seen: Option<f32> = ctx.data(|d| d.get_temp(key));
+            ctx.data_mut(|d| d.insert_temp(key, corner));
+            if seen.is_some_and(|c| (c - corner).abs() > 0.5) && !self.fit {
+                window = window.min_height(h.min(max_height));
+            }
         }
         // Placed by us until the first drag (egui would shift a tall window
         // up while it is still sizing); kept on the canvas once it is dragged.
         window = if moved {
             let window = window.constrain_to(self.canvas);
-            match placed {
-                Some(at) => window.current_pos(at),
-                None => window,
+            // egui keeps the position of the corner the window hangs from. A
+            // panel at the right or bottom edge hung from that corner until
+            // the person dragged it; from then on it hangs from its top left.
+            // The kept point is turned into that corner once the drag is over
+            // (switching in the middle of it made the panel jump by its own
+            // size).
+            let state = egui::AreaState::load(ctx, id);
+            let dragging = ctx.input(|i| i.pointer.any_down());
+            match (placed, state) {
+                (Some(at), _) => window.pivot(egui::Align2::LEFT_TOP).current_pos(at),
+                (None, Some(state)) if dragging => window.pivot(state.pivot),
+                (None, Some(state)) if state.pivot != egui::Align2::LEFT_TOP => window
+                    .pivot(egui::Align2::LEFT_TOP)
+                    .current_pos(state.left_top_pos()),
+                (None, _) => window.pivot(egui::Align2::LEFT_TOP),
             }
         } else {
             window.constrain(false).pivot(pivot).current_pos(start)
@@ -262,7 +285,13 @@ impl Panel {
             // shrinks it back to its content.
             window = window.default_height(max_height);
         }
+        let bare = !self.title_bar;
         let shown = window.show(ctx, |ui| {
+            if bare {
+                // Dragged by its body: a label that can be selected would take
+                // the drag for itself and the card would not move from its text.
+                ui.style_mut().interaction.selectable_labels = false;
+            }
             if scrolls {
                 // The card is as tall as its content up to the canvas, then scrolls
                 // (the window's own scroll area would start at egui's 420 default).
@@ -941,6 +970,61 @@ mod tests {
         let _ = step(&ctx, vec![]);
         let back = step(&ctx, vec![]);
         assert!((back.min - start.min).length() < 1.0, "{start:?} {back:?}");
+    }
+
+    /// One frame of a bare card (no title bar) in the bottom right corner,
+    /// holding a line of text and a button, like the lesson card.
+    fn card_frame(ctx: &egui::Context, events: Vec<egui::Event>) -> egui::Rect {
+        let mut rect = egui::Rect::NOTHING;
+        let mut out = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(canvas()),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                let panel = Panel::new("text_card", "Card", canvas(), Side::BottomRight, 300.0)
+                    .fixed_open()
+                    .fit()
+                    .bare();
+                if let Some(r) = panel.show(ctx, |ui| {
+                    ui.label("A line of the lesson text the learner reads.");
+                    ui.add_space(40.0);
+                    let _ = ui.button("Next");
+                }) {
+                    rect = r.response.rect;
+                }
+            },
+        );
+        out.textures_delta.clear();
+        rect
+    }
+
+    #[test]
+    fn a_bare_card_is_dragged_by_its_text() {
+        let ctx = egui::Context::default();
+        let _ = card_frame(&ctx, vec![]);
+        let start = card_frame(&ctx, vec![]);
+        // The first line of text is the top of the card.
+        let grab = start.min + egui::vec2(60.0, 14.0);
+        let _ = card_frame(
+            &ctx,
+            vec![egui::Event::PointerMoved(grab), button(grab, true)],
+        );
+        let mut at = grab;
+        for _ in 0..8 {
+            at += egui::vec2(-40.0, -20.0);
+            let _ = card_frame(&ctx, vec![egui::Event::PointerMoved(at)]);
+        }
+        let _ = card_frame(&ctx, vec![button(at, false)]);
+        let moved = card_frame(&ctx, vec![]);
+        let wanted = start.min + (at - grab);
+        assert!(
+            (moved.min - wanted).length() < 3.0,
+            "dragged from {start:?} by {:?}: wanted {wanted:?}, got {moved:?}",
+            at - grab
+        );
+        assert_eq!(card_frame(&ctx, vec![]).min, moved.min, "it stays");
     }
 
     #[test]

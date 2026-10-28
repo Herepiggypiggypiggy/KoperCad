@@ -519,6 +519,7 @@ impl NovoApp {
                 super::panel::Side::Right,
                 330.0,
             )
+            .above_card()
             .height(460.0)
             .show(ctx, |ui| {
                 notes_body(ui, project, notes, page, &author, &mut acts, &mut close);

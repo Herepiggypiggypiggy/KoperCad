@@ -28,7 +28,7 @@ use novo_reports::CsvOptions;
 use novo_theme::{Density, Palette, icons, space, widgets};
 use novo_xref::Place;
 
-use super::cabinet_bar::{note_ctx, note_rect};
+use super::cabinet_bar::{note_ctx, note_rect_in};
 use super::commissioning_viewer::{self as viewer, PhotoViewer};
 
 use super::changes::shown_on;
@@ -672,22 +672,22 @@ impl NovoApp {
                         egui::pos2(r.left() + third * (i + 1.0), r.bottom()),
                     )
                 };
-                note_rect(
-                    ui.ctx(),
+                note_rect_in(
+                    ui,
                     "commissioning.punch",
                     "Punch tab",
                     part(1.0),
                     row.inner && tab == 1,
                 );
-                note_rect(
-                    ui.ctx(),
+                note_rect_in(
+                    ui,
                     "commissioning.redlines",
                     "Redlines tab",
                     part(2.0),
                     row.inner && tab == 2,
                 );
-                note_rect(
-                    ui.ctx(),
+                note_rect_in(
+                    ui,
                     "commissioning.test",
                     "Test tab",
                     part(3.0),

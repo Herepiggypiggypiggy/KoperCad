@@ -359,6 +359,8 @@ mod handover_tests;
 #[cfg(test)]
 mod kitting_tests;
 #[cfg(test)]
+mod learn_nav_tests;
+#[cfg(test)]
 mod learn_replay;
 #[cfg(test)]
 mod learn_tests;

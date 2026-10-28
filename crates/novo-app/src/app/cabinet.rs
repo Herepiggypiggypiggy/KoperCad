@@ -1637,8 +1637,8 @@ impl NovoApp {
                             ui.weak("Every device is placed");
                         }
                     });
-                cabinet_bar::note_rect(
-                    ui.ctx(),
+                cabinet_bar::note_rect_in(
+                    ui,
                     "cabinet.unplaced",
                     "Unplaced",
                     unplaced_panel.response.rect,
@@ -1851,13 +1851,7 @@ impl NovoApp {
                 self.cabinet.view.glide_secs =
                     super::motion::glide_secs(self.settings.reduce_motion);
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
-                cabinet_bar::note_rect(
-                    ui.ctx(),
-                    "cabinet.canvas",
-                    "Plate",
-                    out.response.rect,
-                    false,
-                );
+                cabinet_bar::note_rect_in(ui, "cabinet.canvas", "Plate", out.response.rect, false);
                 self.cabinet.heat.layout.paint(
                     &ui.painter_at(out.response.rect),
                     out.response.rect,

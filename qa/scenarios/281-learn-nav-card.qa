@@ -1,0 +1,36 @@
+@title Lesson card: one close, one list button, Back and Next in one row, Continue after closing
+@area Learn
+# Start a lesson from the Learn window. The card header has the grip, the title with "n of N", the all-lessons list and the cross. Closing hides the card and the lesson waits; Help > Continue brings it back.
+click_text "Learn…"
+wait 15
+click_text "Start" #1
+wait 30
+shot 01-card
+check_layout
+expect "All lessons"
+expect_not "Back to Home"
+click_text "All lessons"
+wait 15
+shot 02-list-opens-topic
+check_layout
+expect "Topic"
+key Escape
+wait 6
+shot 03-card-still-there
+check_layout
+click_text "Close" #1
+wait 10
+shot 04-card-hidden
+check_layout
+click_text Help #1
+wait 6
+click_text "Learn…"
+wait 15
+shot 05-window-offers-continue
+check_layout
+expect "Continue"
+click_text "Continue" #1
+wait 15
+shot 06-card-back
+check_layout
+expect "All lessons"

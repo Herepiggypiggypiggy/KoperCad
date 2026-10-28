@@ -92,6 +92,22 @@ text_nl = "Annuleren"
 text = "Close"
 text_nl = "Sluiten"
 
+[close_tip]
+text = "Hide the lesson. It waits: Continue picks it up again."
+text_nl = "Les verbergen. Ze wacht: Doorgaan pakt haar weer op."
+
+[greyed_note]
+text = "That control is greyed out for now: it needs a change first, or the work is already done. Hover over it to see why."
+text_nl = "Dat bedieningselement is nu grijs: er moet eerst iets veranderen, of het werk is al gedaan. Beweeg erover om te zien waarom."
+
+[drag_tip]
+text = "Drag the card to move it"
+text_nl = "Sleep de kaart om haar te verplaatsen"
+
+[contents]
+text = "All lessons"
+text_nl = "Alle lessen"
+
 [done]
 text = "Done"
 text_nl = "Klaar"
@@ -316,9 +332,13 @@ text_nl = "Leerpaden"
 text = "Topics"
 text_nl = "Onderwerpen"
 
-[back_home]
-text = "Back to Home"
-text_nl = "Terug naar start"
+[eyebrow_path]
+text = "Learning path"
+text_nl = "Leerpad"
+
+[eyebrow_topic]
+text = "Topic"
+text_nl = "Onderwerp"
 
 [open_topic]
 text = "Show lessons"
