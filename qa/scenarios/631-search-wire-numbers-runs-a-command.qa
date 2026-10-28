@@ -1,0 +1,16 @@
+@title Command search: "wire numbers" runs a command, not the lesson of that name
+@area Command search
+# Click test C-03: Ctrl+K "wire numbers" plus Enter opened the lesson "Wire Numbers and the Wire List" and replaced the project view. A lesson now leads only when asked for ("lesson ..."); the command comes first and the lesson stays in the list.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text wire numbers
+wait 8
+shot search-rows
+expect "Wire Numbers and the Wire List"
+key Enter
+wait 20
+shot after-enter
+expect_not "Wire Numbers and the Wire List"
+check_layout

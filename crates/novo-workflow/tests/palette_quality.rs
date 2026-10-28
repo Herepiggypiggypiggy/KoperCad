@@ -196,6 +196,29 @@ fn a_lesson_is_found_by_title_topic_or_the_word_lesson() {
 }
 
 #[test]
+fn a_lesson_does_not_lead_a_query_that_names_a_command() {
+    // `wire numbers` is the lesson title and also words of commands: Enter on
+    // the first row must run a command, not replace the view with a lesson.
+    let rows = search_lessons("wire numbers");
+    assert_ne!(
+        rows[0].kind,
+        novo_workflow::palette::Kind::Lesson,
+        "{rows:?}"
+    );
+    assert!(
+        rows.iter()
+            .any(|r| r.target == Target::Lesson("wire-numbers".into())),
+        "the lesson is still listed: {rows:?}"
+    );
+    // Asked for by name, it is among the first rows (the `lesson` verb runs first).
+    let rows = search_lessons("lesson wire numbers");
+    let at = rows
+        .iter()
+        .position(|r| r.target == Target::Lesson("wire-numbers".into()));
+    assert!(at.is_some_and(|i| i < 3), "{rows:?}");
+}
+
+#[test]
 fn a_command_with_the_word_in_its_label_beats_a_part_that_only_starts_with_it() {
     let (palette, keymap) = (Palette::default(), Keymap::workflow());
     let rows = search(&palette, &keymap, "heat");

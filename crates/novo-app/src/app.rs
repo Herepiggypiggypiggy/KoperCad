@@ -1309,8 +1309,9 @@ impl NovoApp {
         self.emc = emc::EmcState::default();
         self.cabinet.result = None;
         self.add_generated_pages();
-        // Nothing to commission in a closed project.
-        if !self.is_open() && self.workspace() == workspace::Workspace::Commissioning {
+        // A workspace the new project cannot show (nothing open, or 3D without a
+        // plate) is not left on screen, greyed: the schematic is.
+        if self.workspace_unavailable(self.workspace()).is_some() {
             self.switch_workspace(workspace::Workspace::Schematic);
         }
     }
