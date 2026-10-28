@@ -104,6 +104,9 @@ fn a_running_program_is_closed_before_install_and_uninstall() {
     assert!(s.contains("function PrepareToInstall"));
     assert!(s.contains("function InitializeUninstall"));
     assert!(s.contains("CloseMainWindow"));
+    // WizardSilent is Setup-only: the uninstaller must read UninstallSilent.
+    assert!(s.contains("CloseRunningApp(WizardSilent)"));
+    assert!(s.contains("CloseRunningApp(UninstallSilent)"));
     assert!(s.contains("{app}"));
     assert!(
         !s.contains("taskkill"),

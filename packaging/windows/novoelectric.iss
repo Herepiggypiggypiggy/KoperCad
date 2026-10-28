@@ -114,7 +114,7 @@ end;
   close, and only after the wait below end it (the recovery copy is offered at the next start).
   If company policy blocks PowerShell, this does nothing and the old locked-file message returns. Only
   the copy in the install folder; per-user process, no admin rights needed. }
-procedure CloseRunningApp;
+procedure CloseRunningApp(Silent: Boolean);
 var
   Waited, Limit: Integer;
 begin
@@ -123,7 +123,7 @@ begin
   OwnProcess('$p | ForEach-Object { [void]$_.CloseMainWindow() }; exit 0');
   { KoperCAD asks "Save changes?" on close: an interactive install waits a minute for the answer,
     a silent one ten seconds. }
-  if WizardSilent then
+  if Silent then
     Limit := 10000
   else
     Limit := 60000;
@@ -142,13 +142,14 @@ end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
-  CloseRunningApp;
+  CloseRunningApp(WizardSilent);
   Result := '';
 end;
 
 function InitializeUninstall: Boolean;
 begin
-  CloseRunningApp;
+  { WizardSilent exists only in Setup; the uninstaller has UninstallSilent. }
+  CloseRunningApp(UninstallSilent);
   Result := True;
 end;
 
