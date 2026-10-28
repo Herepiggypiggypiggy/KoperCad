@@ -1994,9 +1994,11 @@ fn legend(
             ))
             .on_hover_text(
                 "Worked out from the part losses and sizes alone: each device's rise is its loss \
-             over a surface conductance, fitted to the 2D thermal model on one sample cabinet \
-             and within 10 K of it there; other layouts are not checked. The airflow lines \
-             only show where warm air rises. Simulate runs the solver.",
+             over a surface conductance, fitted to the 2D thermal model on one sample cabinet. \
+             Within 10 K of that model at the lesson cabinet's 35 W; at twice that load it can \
+             be 20 K too hot and at four times over 40 K too hot (the safe side). Larger or \
+             other layouts are not checked. The airflow lines only show where warm air rises. \
+             Simulate runs the solver.",
             );
         }
         let (total_w, with_data, unknown) = totals(input);

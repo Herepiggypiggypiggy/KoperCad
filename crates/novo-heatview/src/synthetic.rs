@@ -17,7 +17,13 @@ const NEIGHBOUR_SHARE: f64 = 0.2;
 /// footprint. Fitted to the 2D thermal model on one sample cabinet (the lesson
 /// cabinet): 20 W on 90 x 110 mm runs about 38 K over its air, 1.5 W on
 /// 18 x 90 mm about 10 K, and every device there is within 10 K of the 2D
-/// result. Other layouts are not checked.
+/// result at the lesson load (34.5 W). The preview is linear in the loss, the
+/// solver cools better when hotter, so the error grows with load: measured
+/// against `novo_thermal::simulate_steady` the hottest device was always the
+/// same, but at twice the load the preview is up to 20 K too hot and at four
+/// times over 40 K too hot (the safe side). Larger or other layouts are not
+/// checked, and only the hottest device was compared at other loads, not the
+/// whole order.
 const SURFACE_G0_W_PER_K: f64 = 0.07;
 const SURFACE_G_W_PER_K_M2: f64 = 47.0;
 
