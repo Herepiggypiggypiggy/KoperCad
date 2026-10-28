@@ -1374,10 +1374,6 @@ impl NovoApp {
         self.cabinet.heat.whatif.close();
         // The same for the vent and fan sweep: its answer is for the old cabinet.
         self.cabinet.heat.advice.close();
-        // Heat is one switch shared by the Cabinet and the 3D view (it used to be a
-        // separate 3D panel that started off): a project, and a lesson that points
-        // at the Heat button, starts with it off.
-        self.cabinet.heat.on = false;
         // And for the heat result itself: it would be drawn over the new plate.
         self.cabinet.heat.forget_results();
         // The live view, an open drawer and a preview belong to the project

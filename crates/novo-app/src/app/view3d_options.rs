@@ -560,7 +560,7 @@ mod tests {
     }
 
     #[test]
-    fn a_new_project_or_lesson_starts_with_heat_off() {
+    fn a_lesson_starts_with_heat_off() {
         // The lesson `simulate-3d` clicks the Heat button: with Heat left on by a
         // lesson before it, that click would switch it off and the next steps would
         // point at a panel that is gone.
@@ -569,7 +569,7 @@ mod tests {
         d.app.set_view3d_option(ViewOption::Heat, true);
         d.frame();
         assert!(d.app.view3d_option(ViewOption::Heat));
-        d.app.document_replaced();
+        d.app.start_lesson_now("simulate-3d");
         d.frame();
         assert!(!d.app.view3d_option(ViewOption::Heat));
     }

@@ -1202,6 +1202,10 @@ impl NovoApp {
         self.project_path = None;
         self.current_page = None;
         self.document_replaced();
+        // Heat is one switch shared by the Cabinet and the 3D view (it used to be a
+        // separate 3D panel that started off): a lesson that points at the Heat
+        // button starts with it off.
+        self.cabinet.heat.on = false;
         self.fix_current_page();
         if let Some(doc) = self.backend.document_mut() {
             doc.mark_saved();
