@@ -21,6 +21,7 @@ mod command_field;
 mod control;
 pub mod diag;
 mod dialogs;
+mod display;
 mod editor_canvas;
 mod gpu;
 mod keys;
@@ -187,6 +188,7 @@ pub fn run() -> eframe::Result {
                         "{} ({:?}, driver {} {})",
                         info.name, info.backend, info.driver, info.driver_info
                     ));
+                    display::install_error_guard(&rs.device);
                     EditorCanvas::install(rs);
                     novo_view3d::widget::install(rs, 1);
                     Box::new(EditorCanvas::default())

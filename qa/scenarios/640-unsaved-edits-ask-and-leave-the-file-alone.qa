@@ -1,0 +1,87 @@
+@title Unsaved edits: closing asks, Cancel keeps them, Don't save leaves the saved file as it was
+@area Journeys
+# Critical hardware finding KC-02: edits were written to the project file, Quit never asked.
+fresh
+key ctrl+n
+wait 20
+key q
+wait 4
+text circuit breaker
+wait 6
+click_text "Miniature circuit breaker, 3-pole" Button
+wait 6
+click 450 200
+wait 6
+key Escape
+answer_dialog ~/Documents/KoperCAD/unsaved-edits.kopercad
+key ctrl+s
+wait 20
+expect_file ~/Documents/KoperCAD/unsaved-edits.kopercad 4000
+expect "Saved"
+key q
+wait 4
+text contactor
+wait 6
+click_text "Contactor main contacts, 3-pole" Button
+wait 6
+click 450 350
+wait 6
+key Escape
+expect_scene K1
+expect "Unsaved changes"
+shot edited-not-saved
+key ctrl+k
+wait 6
+text close project
+wait 8
+key Enter
+wait 20
+expect "Save changes?"
+expect "Don't save"
+shot asks-before-closing
+check_layout
+click_text Cancel
+wait 10
+expect_not "Save changes?"
+expect_scene K1
+key ctrl+k
+wait 6
+text close project
+wait 8
+key Enter
+wait 20
+click_text "Don't save"
+wait 20
+expect_not "Save changes?"
+open ~/Documents/KoperCAD/unsaved-edits.kopercad
+wait 20
+expect_scene F1
+shot reopened-as-saved
+check_layout
+# Save in the question writes the file, then closes.
+key q
+wait 4
+text contactor
+wait 6
+click_text "Contactor main contacts, 3-pole" Button
+wait 6
+click 450 350
+wait 6
+key Escape
+expect_scene K1
+key ctrl+k
+wait 6
+text close project
+wait 8
+key Enter
+wait 20
+expect "Save changes?"
+shot save-in-the-question
+click_text Save Button
+wait 30
+expect_not "Save changes?"
+open ~/Documents/KoperCAD/unsaved-edits.kopercad
+wait 20
+expect_scene K1
+shot reopened-after-save
+check_layout

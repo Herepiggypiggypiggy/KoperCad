@@ -10,7 +10,7 @@ use novo_editor::edit::{PlaceOptions, place};
 use novo_editor::{Tool, naming::Numbering};
 use novo_symbols::Library;
 
-use super::{Level, NovoApp};
+use super::{Leaving, Level, NovoApp};
 
 /// What the practice project is called.
 pub(crate) const PRACTICE_NAME: &str = "Practice";
@@ -293,7 +293,7 @@ impl NovoApp {
         if close {
             self.settings.onboarding.dismissed = true;
         }
-        if example {
+        if example && !self.leave_later(Leaving::Example) {
             self.open_example();
         }
     }

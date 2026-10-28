@@ -32,6 +32,7 @@ mod assign;
 mod bmecat;
 mod browser;
 mod bulk;
+mod cadmatch;
 mod catalog;
 mod csv;
 mod fit;
@@ -67,6 +68,10 @@ pub use browser::{BrowserRow, RowAction, browser_rows};
 pub use bulk::{
     InboxError, InboxOptions, InboxReport, MakerSummary, default_inbox, import_inbox, maker_guide,
     prepare_inbox,
+};
+pub use cadmatch::{
+    CadIdentity, CadLinks, CadName, Candidate, DropDecision, FileMatch, NameFrom, SizeMeasure,
+    Verdict, assess_part, decide_drop, doc_id_of, match_batch, rank,
 };
 pub use catalog::{
     CATALOG_FORMAT_VERSION, Catalog, CatalogError, CatalogPart, Dimensions, MergePreview, PartKey,
