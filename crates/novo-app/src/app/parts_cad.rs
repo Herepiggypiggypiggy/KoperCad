@@ -69,14 +69,19 @@ pub(crate) fn identity_of(path: &Path) -> CadIdentity {
         return CadIdentity::from_file_name(&name);
     };
     let mut id = CadIdentity::read(&name, &bytes);
-    if id.kind == FileKind::Step
-        && let Ok(b) = step_box(&String::from_utf8_lossy(&bytes))
-    {
-        // The box around all points: exact only when the solid was measured.
-        id = id.with_size(SizeMeasure {
-            size_mm: b.size_mm,
-            exact: !b.approximate(),
-        });
+    if id.kind == FileKind::Step {
+        let text = String::from_utf8_lossy(&bytes);
+        // The real solid when it can be measured; else the box around all
+        // points, which can only contradict a part, never confirm it.
+        let measured = novo_interop::part3d::measure_step(&text)
+            .ok()
+            .or_else(|| step_box(&text).ok());
+        if let Some(b) = measured {
+            id = id.with_size(SizeMeasure {
+                size_mm: b.size_mm,
+                exact: !b.approximate(),
+            });
+        }
     }
     id
 }
@@ -686,6 +691,35 @@ mod tests {
         assert!(!c[0].2, "the part it was dropped on is not ticked");
         assert!(c[1].2, "the better home is");
         assert!(!dir.path().join("lib").exists());
+    }
+
+    /// With `KOPERCAD_REAL_CAD_DIR` pointing at the real Schneider LC1D09
+    /// download, the solid's own size is measured and confirms the part.
+    #[test]
+    fn the_real_schneider_model_is_measured_as_a_solid_and_its_size_fits() {
+        let Some(dir) = std::env::var_os("KOPERCAD_REAL_CAD_DIR").map(PathBuf::from) else {
+            return;
+        };
+        let step = dir.join("MCADPP0003371_3D-simplified.stp");
+        if !step.exists() {
+            return;
+        }
+        let id = identity_of(&step);
+        let size = id.size.expect("a size was measured");
+        assert!(
+            size.exact,
+            "the solid, not the box around all points: {size:?}"
+        );
+        let mut cat = catalog();
+        cat.upsert(part("LC1D09BD"));
+        let p = cat.find("Schneider Electric", "LC1D09BD").unwrap();
+        let c = assess_part(&id, p, Some(&cat), &CadLinks::default());
+        eprintln!("{:?} {:?}", c.verdict, c.evidence);
+        assert!(
+            c.evidence.iter().any(|e| e.contains("the size fits")),
+            "{:#?}",
+            c.evidence
+        );
     }
 
     #[test]
