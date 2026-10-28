@@ -366,9 +366,14 @@ impl CabinetScene {
             // box is a few dozen points wide, so a horizontal tag meets the
             // neighbour's and is hidden, a vertical one has the room.
             let tall = b.height > b.width * 1.2;
-            let label = Label::new((min + max) * 0.5, b.tag.clone(), tag_height)
-                .anchored(Anchor::Center)
-                .colored(color);
+            let along = if tall { b.height } else { b.width };
+            let label = Label::new(
+                (min + max) * 0.5,
+                fit_tag(&b.tag, along, tag_height),
+                tag_height,
+            )
+            .anchored(Anchor::Center)
+            .colored(color);
             item.labels.push(if tall {
                 label.rotated(-std::f32::consts::FRAC_PI_2)
             } else {
@@ -655,6 +660,23 @@ pub fn view_bounds(view: &CabinetView) -> Aabb {
     b
 }
 
+/// Tags up to this many characters are drawn whole whatever the box size.
+const TAG_FREE_CHARS: usize = 24;
+
+/// The tag as drawn along a box `along` long: a tag too long for the box and
+/// longer than [`TAG_FREE_CHARS`] keeps its end (the device code) after an
+/// ellipsis, so a 220 character tag cannot stripe across the plate.
+fn fit_tag(tag: &str, along: f32, tag_height: f32) -> String {
+    let fits = (along / (tag_height * 0.6).max(f32::EPSILON)).floor() as usize;
+    let keep = fits.max(TAG_FREE_CHARS);
+    let len = tag.chars().count();
+    if len <= keep {
+        return tag.to_owned();
+    }
+    let tail: String = tag.chars().skip(len - (keep - 1)).collect();
+    format!("\u{2026}{tail}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -930,5 +952,14 @@ mod tests {
         let mut c = CabinetScene::new(CabinetStyle::default());
         c.set(&v);
         assert!(c.scene().get(rail_item(1)).is_some());
+    }
+
+    #[test]
+    fn a_very_long_tag_is_shortened_to_its_end() {
+        assert_eq!(fit_tag("=A1+CAB1-K10", 10.0, 3.0), "=A1+CAB1-K10");
+        let long = format!("=A1+CAB1-{}", "L".repeat(220));
+        let shown = fit_tag(&long, 45.0, 3.0);
+        assert_eq!(shown.chars().count(), TAG_FREE_CHARS);
+        assert!(shown.starts_with('\u{2026}') && shown.ends_with('L'));
     }
 }

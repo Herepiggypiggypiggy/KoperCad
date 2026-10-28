@@ -470,7 +470,7 @@ pub(super) fn show_editor(ctx: &egui::Context, state: &mut SizingState) {
                             &mut e.margin,
                         ] {
                             changed |= ui
-                                .add(egui::DragValue::new(value).range(0.0..=5000.0).speed(1.0))
+                                .add(egui::DragValue::new(value).range(0.0..=novo_layout::sizing::MAX_SIZE_MM).speed(1.0))
                                 .changed();
                         }
                         egui::ComboBox::from_id_salt(("enclosure_material", i))
@@ -583,6 +583,9 @@ mod tests {
         let notice = state.import("A;400;500;210;350;450;10;steel\nB;x\n");
         assert!(notice.starts_with("Imported 1 enclosure."), "{notice}");
         assert!(notice.contains("1 row skipped"), "{notice}");
+        let notice = state.import("Big;20000;500;210;350;450;10;steel\n");
+        assert!(notice.contains("over 5000 mm"), "{notice}");
+        assert!(state.catalog.items.iter().all(|i| i.name != "Big"));
         let (back, errors) = load_catalog(&path);
         assert!(errors.is_empty());
         assert_eq!(back, state.catalog);

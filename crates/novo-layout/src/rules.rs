@@ -839,9 +839,22 @@ pub(crate) fn plan_around(
         why.separation_relaxed |= w.separation_relaxed;
         why.trunk |= w.trunk;
         why.trunk_dropped |= w.trunk_dropped;
-        // Only what no region takes is unplaced (and why, from the last try).
+        // Only what no region takes is unplaced. A device that fitted a region
+        // by size but found it full is "no room", never "too large": the
+        // smallest region tried last must not name the reason.
         left.retain(|s| unplaced.contains(&s.id));
-        why.unplaced = w.unplaced;
+        let mut merged: Vec<(u64, UnplacedWhy)> = Vec::new();
+        for (id, reason) in why.unplaced.drain(..).chain(w.unplaced) {
+            match merged.iter_mut().find(|(m, _)| *m == id) {
+                Some((_, kept)) => {
+                    if reason == UnplacedWhy::NoRoom {
+                        *kept = UnplacedWhy::NoRoom;
+                    }
+                }
+                None => merged.push((id, reason)),
+            }
+        }
+        why.unplaced = merged;
     }
     plan.unplaced = left.iter().map(|s| s.id).collect();
     if regions.is_empty() {

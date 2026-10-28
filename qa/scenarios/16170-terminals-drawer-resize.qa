@@ -1,0 +1,13 @@
+@title The Terminals drawer can be dragged taller
+@area Terminals
+@sizes 1366x768
+# TCN-04: the drawer was a fixed 30% of the window and showed three rows of a long strip at 1366x768.
+open qa/fixtures/text-stress-cabinet.novo
+wait 20
+key ctrl+3
+wait 20
+shot drawer-before
+drag 683 514 683 250
+wait 10
+shot drawer-after
+check_layout
