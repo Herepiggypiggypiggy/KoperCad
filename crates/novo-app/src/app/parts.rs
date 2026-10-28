@@ -67,6 +67,9 @@ pub(crate) struct PartsWindow {
     /// The part whose Remove from library awaits a second click.
     confirm_remove: Option<PartKey>,
     focus_search: bool,
+    /// Whether a device is selected on the drawing, so "Use for selected
+    /// device" has something to act on. Set every frame.
+    pub(super) device_selected: bool,
     /// Builds the 3D models of imported STEP files in the background;
     /// created on the first frame, when the repaint handle is known.
     geometry: Option<GeometryService>,
@@ -78,8 +81,13 @@ pub(crate) struct PartsWindow {
     new_part: Option<NewPartForm>,
     /// The maker guide (what to download, where to save), while open.
     guide: bool,
+    /// The installed ETIM release as one line (`None` until the menu first
+    /// asks; `Some(None)` when there is none).
+    etim_line: Option<Option<String>>,
     /// Add CAD files: matching of downloaded files to parts, while open.
     cad: Option<CadPanel>,
+    /// Files dropped or picked that are still being read in the background.
+    waiting: Vec<Waiting>,
     /// Repaints the window when a background read finishes; set on the first
     /// frame.
     wake: Option<egui::Context>,
@@ -166,12 +174,15 @@ impl PartsWindow {
             catalog_path: user_catalog_path(),
             confirm_remove: None,
             focus_search: true,
+            device_selected: false,
             geometry: None,
             quality: Default::default(),
             pins: Default::default(),
             new_part: None,
             guide: false,
+            etim_line: None,
             cad: None,
+            waiting: Vec::new(),
             wake: None,
         }
     }
@@ -329,6 +340,9 @@ impl PartsWindow {
             .map_or_else(CadLinks::default, |l| CadLinks::load(l.root()));
         let found = match self.import.as_mut() {
             Some(i) if i.phase == Phase::Waiting => {
+                // Read in the background; a file not read yet is judged on a
+                // later frame.
+                super::parts_identity::prefetch(&i.unjudged(), self.wake.clone());
                 i.judge_passed_over(&part, &self.catalog, &links)
             }
             _ => None,
@@ -381,6 +395,33 @@ impl PartsWindow {
                 ));
             }
         }
+    }
+
+    /// Starts reading dropped or picked files in the background; the window
+    /// goes on painting and handles them once they are read.
+    fn wait_for(&mut self, files: Waiting) {
+        super::parts_identity::prefetch(files.paths(), self.wake.clone());
+        // A second drop while the first is read joins it (or follows it when it
+        // is a different kind), so no file is lost.
+        match (self.waiting.last_mut(), files) {
+            (Some(Waiting::Dropped(have)), Waiting::Dropped(more))
+            | (Some(Waiting::AddCad(have)), Waiting::AddCad(more)) => have.extend(more),
+            (_, files) => self.waiting.push(files),
+        }
+        if let Some(ctx) = &self.wake {
+            ctx.request_repaint();
+        }
+    }
+
+    /// The files waiting to be read, once every one has been.
+    fn take_read(&mut self) -> Option<Waiting> {
+        for files in &self.waiting {
+            super::parts_identity::prefetch(files.paths(), self.wake.clone());
+        }
+        if !super::parts_identity::ready(self.waiting.first()?.paths()) {
+            return None;
+        }
+        Some(self.waiting.remove(0))
     }
 
     /// Opens Add CAD files for these files.
@@ -691,10 +732,9 @@ fn push_v2_rows(part: &CatalogPart, blocks: &mut [DetailSection]) {
         add(CLASSIFICATION, "Alternatives", list.join(", "));
     }
     if let Some(price) = &part.price {
-        let per = if price.per > 1 {
-            format!(" per {}", price.per)
-        } else {
-            String::new()
+        let per = match price.per_label() {
+            l if l.is_empty() => String::new(),
+            l => format!(" {l}"),
         };
         let date = if price.date.is_empty() {
             String::new()
@@ -807,6 +847,11 @@ enum PartsAction {
     ImportInbox,
     OpenInbox,
     OpenLibrary,
+    /// Pick the ETIM release the user downloaded (a ZIP or CSV file, or a
+    /// folder) and install it.
+    InstallEtim {
+        folder: bool,
+    },
     NewPart,
     Close,
 }
@@ -845,10 +890,25 @@ impl NovoApp {
         }
     }
 
+    /// The command `parts.browser` (Library > Parts): opens the Parts
+    /// window, or closes it when it is open.
+    pub(super) fn toggle_parts_browser(&mut self) {
+        if self.wb.parts.take().is_none() {
+            self.open_parts_browser();
+        }
+    }
+
     pub(super) fn parts_window(&mut self, ctx: &egui::Context) {
+        if self.wb.parts.is_none() {
+            return;
+        }
+        let device_selected = self.backend.document().is_some_and(|d| {
+            !super::part_picker::selected_devices(d.project(), &self.selection()).is_empty()
+        });
         let Some(win) = self.wb.parts.as_mut() else {
             return;
         };
+        win.device_selected = device_selected;
         let mut open = true;
         let mut actions = Vec::new();
         win.wake.get_or_insert_with(|| ctx.clone());
@@ -873,7 +933,7 @@ impl NovoApp {
             .as_ref()
             .zip(ctx.input(|i| i.pointer.latest_pos()))
             .is_some_and(|(r, pos)| r.response.rect.contains(pos));
-        let dropped: Vec<PathBuf> = ctx.input(|i| {
+        let dropped_now: Vec<PathBuf> = ctx.input(|i| {
             if !over {
                 return Vec::new();
             }
@@ -884,6 +944,19 @@ impl NovoApp {
                 .filter(|p| !p.as_os_str().is_empty())
                 .collect()
         });
+        if !dropped_now.is_empty() {
+            win.wait_for(Waiting::Dropped(dropped_now));
+        }
+        // Files are read on a worker thread first, so a batch of large STEP
+        // files never stops the window; what was read is handled here.
+        let (dropped, picked_cad) = match win.take_read() {
+            Some(Waiting::Dropped(files)) => (files, Vec::new()),
+            Some(Waiting::AddCad(files)) => (Vec::new(), files),
+            None => (Vec::new(), Vec::new()),
+        };
+        if !picked_cad.is_empty() {
+            win.add_cad_files(&picked_cad);
+        }
         let mut catalog_files = Vec::new();
         let mut table_file = None;
         let mut no_part_for = None;
@@ -933,6 +1006,7 @@ impl NovoApp {
         }
         let mut close = !open;
         let mut error = None;
+        let mut info = None;
         let mut assign = None;
         let mut open_dir = None;
         for action in actions {
@@ -952,7 +1026,7 @@ impl NovoApp {
                         .add_filter("CAD files", &["stp", "step", "p21", "dxf", "zip", "edz"])
                         .pick_files()
                     {
-                        win.add_cad_files(&files);
+                        win.wait_for(Waiting::AddCad(files));
                     }
                 }
                 PartsAction::CadImport => {
@@ -995,6 +1069,28 @@ impl NovoApp {
                 PartsAction::OpenLibrary => {
                     open_dir = default_library_root().map(|d| (d, false));
                 }
+                PartsAction::InstallEtim { folder } => {
+                    let dialog = crate::dialogs::FileDialog::new().set_title(
+                        "ETIM release (ZIP, CSV file or folder) from ETIM International",
+                    );
+                    let picked = if folder {
+                        dialog.pick_folder()
+                    } else {
+                        dialog
+                            .add_filter("ETIM release", &["zip", "csv", "txt"])
+                            .pick_file()
+                    };
+                    if let Some(path) = picked {
+                        match install_etim(&path) {
+                            Ok(line) => {
+                                info =
+                                    Some(format!("Installed {line}. Import the maker file again."));
+                                win.etim_line = Some(Some(line));
+                            }
+                            Err(e) => error = Some(e),
+                        }
+                    }
+                }
                 PartsAction::NewPart => win.new_part = Some(NewPartForm::default()),
                 PartsAction::Select(key) => win.select(key),
                 PartsAction::Import(key) => {
@@ -1009,7 +1105,7 @@ impl NovoApp {
                         .set_title("Choose the downloaded file")
                         .pick_file()
                     {
-                        win.drop_on_target(&path);
+                        win.wait_for(Waiting::Dropped(vec![path]));
                     }
                 }
                 PartsAction::ChooseModel => win.choose_model(),
@@ -1060,6 +1156,9 @@ impl NovoApp {
         if let Some(text) = error {
             self.message(Level::Error, text);
         }
+        if let Some(text) = info {
+            self.message(Level::Info, text);
+        }
         if !catalog_files.is_empty() {
             self.import_catalog_files(&catalog_files);
         }
@@ -1094,6 +1193,33 @@ impl NovoApp {
             self.wb.parts = None;
         }
     }
+}
+
+/// Files dropped or picked that are read in the background before they are
+/// handled.
+enum Waiting {
+    /// Dropped on the window, or chosen for the selected part.
+    Dropped(Vec<PathBuf>),
+    /// Chosen for Add CAD files.
+    AddCad(Vec<PathBuf>),
+}
+
+impl Waiting {
+    fn paths(&self) -> &[PathBuf] {
+        match self {
+            Waiting::Dropped(p) | Waiting::AddCad(p) => p,
+        }
+    }
+}
+
+/// Installs the ETIM release at `path` into the user's profile; returns the
+/// one-line summary, or the reason in words.
+fn install_etim(path: &Path) -> Result<String, String> {
+    let dir = novo_parts::EtimModel::dir_for(None)
+        .ok_or("No profile folder is known, so there is nowhere to keep the ETIM release.")?;
+    novo_parts::EtimModel::install(path, &dir)
+        .map(|m| m.summary())
+        .map_err(|e| format!("ETIM release: {e}"))
 }
 
 /// The maker guide: per maker the page to use, whether it needs a login and
@@ -1242,6 +1368,34 @@ fn parts_ui(
                         ui.close();
                     }
                 }
+                ui.separator();
+                let line = win.etim_line.get_or_insert_with(|| {
+                    novo_parts::EtimModel::dir_for(None)
+                        .and_then(|d| novo_parts::EtimModel::load_installed(&d))
+                        .map(|m| m.summary())
+                });
+                ui.weak(match line {
+                    Some(l) => l.as_str(),
+                    None => "No ETIM release installed",
+                });
+                for (label, hint, folder) in [
+                    (
+                        "Install ETIM release (ZIP or CSV)\u{2026}",
+                        "ETIM codes in maker files (EF000008, EU570448) are read with the ETIM release you downloaded from ETIM International. KoperCAD does not ship it. Pick its ZIP or a CSV file.",
+                        false,
+                    ),
+                    (
+                        "Install ETIM release (folder)\u{2026}",
+                        "Pick the folder the ETIM release was unpacked to.",
+                        true,
+                    ),
+                ] {
+                    if ui.button(label).on_hover_text(hint).clicked() {
+                        actions.push(PartsAction::InstallEtim { folder });
+                        ui.close();
+                    }
+                }
+                ui.separator();
                 if ui
                     .button("Maker guide")
                     .on_hover_text("What to download from each maker and where to save it.")
@@ -1292,8 +1446,14 @@ fn parts_ui(
     if win.new_part.is_some() {
         new_part_ui(ui, win);
     }
+    if let Some(text) = super::parts_identity::reading_text().filter(|_| !win.waiting.is_empty()) {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.weak(text);
+        });
+    }
     if let Some(panel) = win.cad.as_mut() {
-        match cad_ui(ui, panel, &win.catalog) {
+        match cad_ui(ui, panel, &win.catalog, !win.waiting.is_empty()) {
             Some(CadAction::Import) => actions.push(PartsAction::CadImport),
             Some(CadAction::Close) => actions.push(PartsAction::CadClose),
             None => {}
@@ -1321,8 +1481,17 @@ fn parts_ui(
         actions.push(PartsAction::Select(rows[next].0.clone()));
         win.reveal = true;
     }
-    if esc && (search_focused || ui.memory(|m| m.focused()).is_none()) {
-        actions.push(PartsAction::Close);
+    if esc {
+        // Esc clears a search first, then closes the window. It is left to
+        // the other text fields (the New part form) while one has the
+        // keyboard, but any other focus (a list row, a button, the maker
+        // menu) does not keep the window open.
+        let typing_elsewhere = ui.ctx().egui_wants_keyboard_input() && !search_focused;
+        if search_focused && !win.query.is_empty() {
+            win.query.clear();
+        } else if !typing_elsewhere {
+            actions.push(PartsAction::Close);
+        }
     }
     if win.import.is_some() || dragging {
         egui::Panel::bottom("parts_status")
@@ -1595,12 +1764,18 @@ fn detail_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAc
             );
             ui.add_space(6.0);
             ui.horizontal_wrapped(|ui| {
-                if widgets::primary_button(ui, "Use for selected device")
-                    .on_hover_text(
+                // The main action only when it can act: with no device
+                // selected it is an ordinary button that says what to do.
+                let use_it = if win.device_selected {
+                    widgets::primary_button(ui, "Use for selected device").on_hover_text(
                         "Gives the devices selected on the drawing this part (one undo step)",
                     )
-                    .clicked()
-                {
+                } else {
+                    ui.button("Use for selected device").on_hover_text(
+                        "Select a device on the drawing first, then give it this part",
+                    )
+                };
+                if use_it.clicked() {
                     actions.push(PartsAction::UseForSelection(key.clone()));
                 }
                 if !win.in_library(&key) && ui.button("Import").clicked() {
@@ -1821,6 +1996,7 @@ mod tests {
             currency: "EUR".into(),
             per: 10,
             date: "2026-10-15".into(),
+            unit: String::new(),
         });
         p.terminals = vec![PartTerminal {
             name: "1".into(),

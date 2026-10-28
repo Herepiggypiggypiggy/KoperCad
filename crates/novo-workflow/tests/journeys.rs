@@ -25,6 +25,7 @@ fn sources<'a>(project: &'a Project, library: &'a Library, keymap: &'a Keymap) -
         },
         lessons: &[],
         macros: &[],
+        addons: &[],
     }
 }
 

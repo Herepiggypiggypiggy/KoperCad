@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 eframe = { workspace = true, features = ["persistence"] }
+novo-addons.workspace = true
 novo-controller.workspace = true
 novo-core.workspace = true
 novo-storage.workspace = true
@@ -25,6 +26,8 @@ novo-heatview.workspace = true
 novo-cfd.workspace = true
 novo-thermal.workspace = true
 novo-symbols.workspace = true
+novo-drive.workspace = true
+novo-machine.workspace = true
 novo-editor.workspace = true
 novo-emc.workspace = true
 novo-workflow.workspace = true

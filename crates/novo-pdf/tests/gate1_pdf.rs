@@ -147,16 +147,8 @@ fn coil_contact_table_is_printed_with_its_symbols() {
             warning: false,
             anchor: novo_pdf::NoteAnchor::Below,
             rows: vec![
-                NoteRow {
-                    glyph: NoteGlyph::Power,
-                    pins: "1-2 3-4 5-6".into(),
-                    location: "1.3".into(),
-                },
-                NoteRow {
-                    glyph: NoteGlyph::NormallyOpen,
-                    pins: "13-14".into(),
-                    location: "2.4".into(),
-                },
+                NoteRow::new(NoteGlyph::Power, "1-2 3-4 5-6", "1.3"),
+                NoteRow::new(NoteGlyph::NormallyOpen, "13-14", "2.4"),
             ],
             density: Default::default(),
         }],
@@ -165,7 +157,8 @@ fn coil_contact_table_is_printed_with_its_symbols() {
     let pdf = parse(&with);
     let ids = pages(&pdf);
     let control = content(&pdf, ids[1]);
-    for t in ["1-2 3-4 5-6", "1.3", "13-14", "2.4"] {
+    // The terminals stand either side of each symbol, one pole to a line.
+    for t in ["1", "2", "3", "4", "5", "6", "1.3", "13", "14", "2.4"] {
         assert!(control.contains(&format!("({t}) Tj")), "{t}");
     }
     // The contact symbols are vector strokes on top of the text.

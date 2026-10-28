@@ -40,6 +40,7 @@
 
 pub mod catalog;
 pub mod edit;
+pub mod feed_name;
 pub mod geometry;
 pub mod lines;
 pub mod naming;

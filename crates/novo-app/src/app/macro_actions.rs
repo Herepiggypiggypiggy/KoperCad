@@ -17,7 +17,7 @@ use novo_core::{AnyId, BlockDefinition, Record, Value};
 use novo_parts::{MacroEntry, MacroFile, MacroLibrary};
 use novo_workflow::macro_place::{self, PartRef, PlaceOptions, Report, WireNumbers};
 
-use super::{Level, NovoApp, supply_feeds};
+use super::{Level, NovoApp, count_words, supply_feeds};
 
 /// Gap between the drawing and a placed macro, in mm.
 const PLACE_GAP: f64 = 20.0;
@@ -742,7 +742,8 @@ impl NovoApp {
                     )
                 } else if fed > 0 && joined > 0 {
                     format!(
-                        "Placed {name}, L1 L2 L3 N PE fed · {joined} wires joined to the starter's open entries · {}",
+                        "Placed {name}, L1 L2 L3 N PE fed · {} joined to the starter's open entries · {}",
+                        count_words::wires(joined),
                         describe(&placed.report)
                     )
                 } else if fed > 0 {
@@ -752,7 +753,8 @@ impl NovoApp {
                     )
                 } else if joined > 0 {
                     format!(
-                        "Placed {name}, {joined} wires joined to the Three-phase supply · {}",
+                        "Placed {name}, {} joined to the Three-phase supply · {}",
+                        count_words::wires(joined),
                         describe(&placed.report)
                     )
                 } else {

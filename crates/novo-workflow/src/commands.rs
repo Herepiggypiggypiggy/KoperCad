@@ -586,6 +586,24 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "addons.manage",
+            "Add-ons",
+            "Project",
+            &[
+                "add-on",
+                "addon",
+                "plugin",
+                "extension",
+                "install",
+                "kcaddon",
+                "manage add-ons",
+            ],
+            Needs::Nothing,
+        ),
+        &["add-ons", "addons", "manage add-ons"],
+    ),
+    verb(
+        cmd(
             "file.import_controller",
             "Controller profile from I/O table",
             "Project",
@@ -2068,6 +2086,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             "waveform",
             "timing",
             "overload",
+        ],
+        Needs::Project,
+    ),
+    cmd(
+        "sim.hoist",
+        "Simulate hoist run",
+        "View",
+        &[
+            "hoist",
+            "crane",
+            "hook",
+            "lift",
+            "brake",
+            "limit switch",
+            "two speed",
+            "fine coarse",
+            "pole change",
         ],
         Needs::Project,
     ),

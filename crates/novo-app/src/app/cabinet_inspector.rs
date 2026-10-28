@@ -38,6 +38,8 @@ pub(super) struct DeviceFacts {
     pub why: Option<String>,
     /// The surfaces the device can be put on; `None` for a plate-only cabinet.
     pub surface: Option<super::cabinet_surface_move::SurfaceChoice>,
+    /// Where the device is mounted: the cabinet, its door or the field.
+    pub site: novo_layout::site::Site,
 }
 
 /// What the inspector shows: the selected devices, or the plate.
@@ -103,6 +105,9 @@ pub(super) fn gather(
                 rule: None,
                 why: None,
                 surface: None,
+                site: device.map_or(novo_layout::site::Site::Plate, |d| {
+                    novo_layout::site::site_of(project, d).0
+                }),
             }
         })
         .collect();
@@ -168,10 +173,18 @@ pub(super) fn overlay(
         .scroll_bar_always()
         .height(HEIGHT)
         .bottom_room(room.bottom);
+    // The surface card belongs to the shown surface and goes with it; the
+    // plate card and a device's card have the window's close button.
+    if !matches!(facts, Facts::Surface(_)) {
+        panel = panel.closable();
+    }
     if let Some(top) = room.top {
         panel = panel.top(top);
     }
     let shown = panel.show(ctx, |ui| show(ui, facts, project, fields, door));
+    if super::panel::take_closed(ctx, "cabinet_inspector") {
+        return Some(Ask::CloseInspector);
+    }
     super::cabinet_bar::note_rect(
         ctx,
         "cabinet.inspector",
@@ -219,6 +232,9 @@ fn show(
                     },
                 );
                 widgets::field(ui, "Position", &d.position);
+                if let Some(site) = super::cabinet_surface_move::show_site(ui, d) {
+                    ask = Some(Ask::SetSite(d.id, site));
+                }
                 if let Some(name) = super::cabinet_surface_move::show(ui, d) {
                     ask = Some(Ask::SetSurface(d.id, name));
                 }

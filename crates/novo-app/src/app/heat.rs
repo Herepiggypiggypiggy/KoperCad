@@ -123,18 +123,24 @@ pub(super) struct HeatState {
     /// next frame, when it has the project.
     requested: bool,
     pub(super) run: Option<Runner>,
+    /// When Cancel was pressed on the run in flight. A worker that does not
+    /// end within [`CANCEL_GRACE`] is let go: the controls come back at once
+    /// and the worker ends by itself.
+    cancel_at: Option<std::time::Instant>,
+    /// [`CANCEL_GRACE`]; tests shorten it.
+    cancel_grace: std::time::Duration,
     /// Latest iteration report of the running level, with the residuals seen
     /// so far in this level for the sparkline.
-    progress: Option<Progress>,
+    pub(super) progress: Option<Progress>,
     history: Vec<f64>,
     pub(super) solution: Option<Arc<Solution>>,
     /// Result kept as A for comparison.
-    kept: Option<Arc<Solution>>,
+    pub(super) kept: Option<Arc<Solution>>,
     pub(super) pending: Option<Meta>,
     runs: u64,
     /// The last run's outcome in words: failed, cancelled or the bridge's
     /// complaint.
-    notice: Option<String>,
+    pub(super) notice: Option<String>,
     /// Quality level, turbulence model and vents of the next run.
     pub settings: HeatSettings,
     /// Target and product lists of the cooling selection.
@@ -150,6 +156,15 @@ pub(super) struct HeatState {
     /// The cooling what-if wizard (`heat.cooling_whatif`).
     pub(super) whatif: super::heat_whatif::Wizard,
 }
+
+/// See [`HeatState::no_data`].
+fn no_loss_data(cache: &Cache, input: &Input) -> bool {
+    matches!(cache.source, Source::Synthetic)
+        && !input.items.iter().any(|i| i.loss_known && i.loss_w > 0.0)
+}
+
+/// How long a cancelled run may take to end before the Heat view lets go of it.
+const CANCEL_GRACE: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// Where a cached picture came from.
 enum Source {
@@ -173,6 +188,9 @@ struct Cache {
     diff: Option<Diff>,
     mean: f32,
     streams: Vec<Streamline>,
+    /// The preview's estimate for each device (at its centre), by device id;
+    /// empty for a solver result.
+    preview: std::collections::HashMap<u64, f64>,
 }
 
 impl HeatState {
@@ -199,6 +217,8 @@ impl HeatState {
             cache: None,
             requested: false,
             run: None,
+            cancel_at: None,
+            cancel_grace: CANCEL_GRACE,
             progress: None,
             history: Vec::new(),
             solution: None,
@@ -271,6 +291,30 @@ impl HeatState {
             self.side = on;
             self.fit_wanted = true;
         }
+    }
+
+    /// A different project was opened: a result, a kept comparison, a run in flight and the
+    /// heat-up frames belong to the old cabinet. Left in place they are drawn over the new
+    /// cabinet's plate (a result of the previous lesson's transformer shows as a hot spot where
+    /// the new project has no device), so the picture starts from the preview again. What the
+    /// person chose to see (map, contours, airflow, badges, quality) stays.
+    pub(super) fn forget_results(&mut self) {
+        self.cancel();
+        self.run = None;
+        self.pending = None;
+        self.solution = None;
+        self.clear_kept();
+        self.progress = None;
+        self.history.clear();
+        self.notice = None;
+        self.requested = false;
+        self.transient_wanted = false;
+        let minutes = self.time.minutes;
+        self.time = super::heat_time::TimeLine::new();
+        self.time.minutes = minutes;
+        self.live = super::heat_live::Live::default();
+        self.cache = None;
+        self.layout.close();
     }
 
     pub(super) fn clear_kept(&mut self) {
@@ -347,6 +391,7 @@ impl HeatState {
         #[cfg(not(test))]
         let solver = self.settings.solver();
         self.run = Some(Runner::start(solver, scenario, top));
+        self.cancel_at = None;
         self.progress = None;
         self.history.clear();
     }
@@ -361,6 +406,13 @@ impl HeatState {
         self.notice = Some(text);
     }
 
+    /// The picture would be built on no loss data at all: no device with a
+    /// known loss and no solver result. It then draws no field, no contours,
+    /// no badges and no hot spots, only the layout and a line saying why.
+    fn no_data(&self, cache: &Cache, input: &Input) -> bool {
+        no_loss_data(cache, input)
+    }
+
     /// The run could not start and nothing was solved, so the picture is the
     /// preview: its numbers would pass for a result.
     fn preview_cannot_simulate(&self, cache: &Cache) -> bool {
@@ -371,12 +423,30 @@ impl HeatState {
                 .is_some_and(|n| n.starts_with("Cannot simulate"))
     }
 
+    /// The cabinet can be simulated now: drops a "Cannot simulate" line left
+    /// from before it was sized.
+    pub(super) fn clear_cannot_simulate(&mut self) {
+        if self
+            .notice
+            .as_deref()
+            .is_some_and(|n| n.starts_with("Cannot simulate"))
+        {
+            self.notice = None;
+        }
+    }
+
     /// Stops the run and keeps the latest result, labelled not converged.
     pub(super) fn cancel(&mut self) {
         if let Some(r) = &self.run {
             r.cancel();
+            self.cancel_at.get_or_insert_with(std::time::Instant::now);
         }
         self.time.cancel();
+    }
+
+    /// Cancel was pressed and the run is still ending.
+    pub(super) fn stopping(&self) -> bool {
+        self.run.is_some() && self.cancel_at.is_some()
     }
 
     /// Takes in what the worker has published. Called every frame.
@@ -435,8 +505,20 @@ impl HeatState {
                 }
             }
         }
+        if !done
+            && self
+                .cancel_at
+                .is_some_and(|t| t.elapsed() >= self.cancel_grace)
+        {
+            // The worker is deep in a step that does not look at the cancel
+            // flag: let it go (dropping the run cancels it once more) so the
+            // person is not left with a Cancel that does nothing.
+            done = true;
+            self.notice = Some("Stopped: the last result is not converged".into());
+        }
         if done {
             self.run = None;
+            self.cancel_at = None;
             self.pending = None;
             self.progress = None;
         } else {
@@ -593,20 +675,30 @@ fn build(input: &Input) -> Cache {
                 y: i.y,
                 w: i.w,
                 h: i.h,
-                loss_w: i.loss_w,
+                // A device with no loss data makes no heat here: its planning
+                // figure is not data, and a picture built on it reads as one.
+                loss_w: if i.loss_known { i.loss_w } else { 0.0 },
             })
             .collect(),
     };
     let smooth = scene.temperature_field(CELL_MM).filled();
     let velocity: Vector = scene.velocity_field(CELL_MM);
-    assemble(
+    let mut cache = assemble(
         input,
         smooth,
         velocity,
         input.ambient,
         &|x, y| scene.solid(x, y),
         Source::Synthetic,
-    )
+    );
+    // The map under a device is filled in from the air around it; the device's own reading
+    // comes from the model at its centre, so a hot neighbour does not lend it its temperature.
+    cache.preview = scene
+        .devices
+        .iter()
+        .map(|d| (d.id, scene.temperature(d.x + d.w / 2.0, d.y + d.h / 2.0)))
+        .collect();
+    cache
 }
 
 /// The picture of a solver result: the slice at the device front plane over
@@ -654,18 +746,20 @@ fn assemble(
         }
     }
     let mean = smooth.values.iter().sum::<f32>() / smooth.values.len().max(1) as f32;
-    let peaks = hotspot::peaks(&smooth, 3, 60.0, 2.0)
-        .into_iter()
-        .map(|p| {
-            let tag = input
-                .items
-                .iter()
-                .min_by(|a, b| distance(a, &p).total_cmp(&distance(b, &p)))
-                .map(|i| i.tag.clone())
-                .unwrap_or_default();
-            (p, tag)
-        })
-        .collect();
+    // One card per device: a big hot device makes several peaks on its own body.
+    let mut peaks: Vec<(Peak, String)> = Vec::new();
+    for p in hotspot::peaks(&smooth, 6, 60.0, 2.0) {
+        let tag = input
+            .items
+            .iter()
+            .min_by(|a, b| distance(a, &p).total_cmp(&distance(b, &p)))
+            .map(|i| i.tag.clone())
+            .unwrap_or_default();
+        if tag.is_empty() || !peaks.iter().any(|(_, t)| *t == tag) {
+            peaks.push((p, tag));
+        }
+    }
+    peaks.truncate(3);
     let mut seeds: Vec<(f64, f64)> = Vec::new();
     let (w, h) = input.plate;
     seeds.extend((0..6).map(|i| (2.0, h - 20.0 - i as f64 * 30.0)));
@@ -688,6 +782,7 @@ fn assemble(
         peaks,
         diff: None,
         streams,
+        preview: std::collections::HashMap::new(),
     }
 }
 
@@ -827,7 +922,7 @@ fn without_level_name(headline: &str, label: &str) -> String {
     }
 }
 
-fn status_label(p: &novo_cfd::Progress, validated: bool) -> String {
+pub(super) fn status_label(p: &novo_cfd::Progress, validated: bool) -> String {
     let state = if !validated {
         "not validated"
     } else if p.converged {
@@ -898,8 +993,12 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
                 ),
         );
     } else if state.running() {
+        let stopping = state.stopping();
         if ui
-            .button("Cancel")
+            .add_enabled(
+                state.can_cancel(),
+                egui::Button::new(if stopping { "Stopping…" } else { "Cancel" }),
+            )
             .on_hover_text("Stop the simulation and keep the latest result")
             .clicked()
         {
@@ -941,9 +1040,12 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
                         .animate(true),
                 );
                 ui.label(
-                    egui::RichText::new(heat_progress::preparing_label(secs))
-                        .small()
-                        .color(crate::theme::ui_palette().text_secondary),
+                    egui::RichText::new(heat_progress::preparing_label(
+                        state.run.as_ref().map_or("", Runner::phase),
+                        secs,
+                    ))
+                    .small()
+                    .color(crate::theme::ui_palette().text_secondary),
                 );
             }
         }
@@ -1146,7 +1248,7 @@ pub(super) fn paint_under(
     }
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, backdrop);
-    if let Some(cache) = state.cache.as_ref() {
+    if let Some(cache) = state.cache.as_ref().filter(|c| !state.no_data(c, input)) {
         let to_screen = screen_fn(rect, viewport);
         let delta = state.delta_diff(cache);
         paint_map(&painter, cache, &to_screen, delta);
@@ -1193,13 +1295,14 @@ pub(super) fn paint_over(
     let painter = ui.painter_at(rect);
     let to_screen = screen_fn(rect, viewport);
     let delta = state.delta_diff(cache);
-    if state.airflow {
+    let empty = state.no_data(cache, input);
+    if state.airflow && !empty {
         paint_airflow(&painter, cache, &to_screen);
     }
     // No hot-spot cards or contour labels on an empty plate or beside
     // "Cannot simulate": the colours stay as a preview, but "46 °C, +5 K"
     // would read as a result.
-    let numbers = !input.items.is_empty() && !state.preview_cannot_simulate(cache);
+    let numbers = !input.items.is_empty() && !state.preview_cannot_simulate(cache) && !empty;
     if state.contours && delta.is_none() && numbers {
         paint_contours(&painter, cache, &to_screen);
     }
@@ -1509,6 +1612,20 @@ fn paint_rims(
     }
 }
 
+/// The badge temperature of every device of `input` in the picture the view
+/// draws, in item order. For the scene dump of the visual test user and the
+/// tests, which check the preview against the physics and against the 2D
+/// solver without a window.
+pub(super) fn drawn_temps(input: &Input) -> Vec<f64> {
+    let cache = build(input);
+    input.items.iter().map(|i| device_temp(&cache, i)).collect()
+}
+
+/// The tags the hot-spot cards name, hottest first.
+pub(super) fn drawn_peak_tags(input: &Input) -> Vec<String> {
+    build(input).peaks.into_iter().map(|(_, tag)| tag).collect()
+}
+
 /// What a badge says about one device.
 struct Reading {
     temp: f64,
@@ -1525,11 +1642,14 @@ fn solved(cache: &Cache, id: u64) -> Option<&novo_thermal::DeviceResult> {
     }
 }
 
-/// The hottest air cell around the device, degrees C; a solver result gives
+/// The preview's estimate for the device, degrees C; a solver result gives
 /// the housing surface temperature instead.
 fn device_temp(cache: &Cache, i: &Item) -> f64 {
     if let Some(d) = solved(cache, i.id) {
         return d.surface_c;
+    }
+    if let Some(&t) = cache.preview.get(&i.id) {
+        return t;
     }
     let g = cache.smooth.grid;
     let (c0, r0) = g.cell_at(i.x - CELL_MM, i.y - CELL_MM);
@@ -1866,6 +1986,32 @@ fn legend(
     .scroll_bar_always()
     .show(ctx, |ui| {
         ui.set_width(180.0);
+        if no_loss_data(cache, input) {
+            // No scale: there is no field to read it against.
+            let n = input.items.len();
+            let text = if n == 0 {
+                "No devices on the plate yet.".to_owned()
+            } else {
+                format!(
+                    "None of the {n} devices has loss data, so there is nothing to colour. \
+                     Assign parts or type a power loss; the devices are drawn dashed until then."
+                )
+            };
+            ui.label(
+                egui::RichText::new("No heat picture yet")
+                    .small()
+                    .color(crate::theme::ui_palette().text_primary),
+            );
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(text)
+                        .small()
+                        .color(crate::theme::ui_palette().warning),
+                )
+                .wrap(),
+            );
+            return;
+        }
         // A short canvas gets a shorter colour bar, so the notes below stay in view.
         // With a lesson card in the corner the legend has only the room above it.
         let room = rect.height() - super::panel::reserved_bottom_right(ui.ctx());
@@ -1961,7 +2107,14 @@ fn legend(
                 PREVIEW_NOTE,
                 crate::theme::ui_palette().text_secondary,
             ))
-            .on_hover_text("Worked out from the part losses alone. Simulate runs the solver.");
+            .on_hover_text(
+                "Worked out from the part losses and sizes alone: each device's rise is its loss \
+             over a surface conductance, fitted to the 2D thermal model on one sample cabinet. \
+             Within 10 K of that model at the lesson cabinet's 35 W; at twice that load it can \
+             be 20 K too hot and at four times over 40 K too hot (the safe side). Larger or \
+             other layouts are not checked. The airflow lines only show where warm air rises. \
+             Simulate runs the solver.",
+            );
         }
         let (total_w, with_data, unknown) = totals(input);
         if with_data > 0 {
@@ -2403,6 +2556,80 @@ mod tests {
         assert!(reading(&c, &i.items[0]).margin_k.is_some());
         // The drive is hotter than the relay in the solved picture too.
         assert!(device_temp(&c, &i.items[0]) > device_temp(&c, &i.items[1]));
+    }
+
+    /// A solver that never looks at the cancel flag, as one stuck in a step.
+    struct Deaf;
+
+    impl novo_cfd::Solver for Deaf {
+        fn solve(
+            &self,
+            _: &novo_thermal::Scenario,
+            _: novo_cfd::Fidelity,
+            _: &novo_cfd::Control,
+            _: &mut dyn FnMut(&novo_cfd::CfdSnapshot),
+        ) -> Result<novo_cfd::CfdSnapshot, novo_cfd::CfdError> {
+            std::thread::sleep(std::time::Duration::from_secs(20));
+            Err(novo_cfd::CfdError::Cancelled)
+        }
+    }
+
+    #[test]
+    fn cancel_gives_the_controls_back_even_when_the_worker_does_not_stop() {
+        let mut state = HeatState::new();
+        state.set_solver_for_test(Arc::new(Deaf));
+        state.cancel_grace = std::time::Duration::from_millis(100);
+        let i = input();
+        state.start(scenario(), meta(&i));
+        let ctx = egui::Context::default();
+        state.poll(&ctx);
+        assert!(state.running() && !state.stopping());
+        state.cancel();
+        assert!(state.stopping(), "Cancel was pressed: it says so at once");
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        state.poll(&ctx);
+        assert!(!state.running(), "the run was let go");
+        assert!(!state.stopping());
+        assert!(
+            state
+                .notice
+                .as_deref()
+                .is_some_and(|n| n.starts_with("Stopped")),
+            "{:?}",
+            state.notice
+        );
+    }
+
+    #[test]
+    fn no_loss_data_means_no_field_and_a_known_loss_brings_it_back() {
+        let mut i = input();
+        for item in &mut i.items {
+            item.loss_known = false;
+        }
+        let state = HeatState::new();
+        let c = build(&i);
+        assert!(state.no_data(&c, &i), "nothing known: no picture");
+        // The planning figures of unknown devices do not heat the preview.
+        let hottest = |c: &Cache| c.smooth.values.iter().cloned().fold(f32::MIN, f32::max);
+        let unknown_peak = hottest(&c);
+        i.items[0].loss_known = true;
+        let c = build(&i);
+        assert!(!state.no_data(&c, &i));
+        assert!(hottest(&c) > unknown_peak + 1.0);
+    }
+
+    #[test]
+    fn a_cannot_simulate_line_goes_once_the_cabinet_can_be_simulated() {
+        let mut state = HeatState::new();
+        state.fail(
+            "Cannot simulate: the enclosure interior (width, height, depth) is not set".into(),
+        );
+        state.clear_cannot_simulate();
+        assert!(state.notice.is_none());
+        // Other lines stay.
+        state.fail("The simulation failed: x".into());
+        state.clear_cannot_simulate();
+        assert!(state.notice.is_some());
     }
 
     #[test]

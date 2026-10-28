@@ -102,6 +102,10 @@ pub struct Device {
     pub filter: FilterState,
     /// For a filter: the tag of the drive it serves, when stated.
     pub filter_for: Option<String>,
+    /// For a filter: it is drawn and wired in the circuit (at least two of
+    /// its pins have a wire). A filter that is only in the device list does
+    /// not filter anything.
+    pub wired: bool,
     /// Mounted on bare metal that bonds to the plate (`emc.bonded`), when stated.
     pub bonded: Option<bool>,
     /// How far the device stands off the plate, mm, from its depth property

@@ -702,6 +702,11 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl(
+        "sim.hoist",
+        &["hijsen"],
+        &["kraan", "haak", "rem", "eindschakelaar", "tweesnelheden"],
+    ),
+    nl(
         "view.toggle_marks",
         &[],
         &["markeringen tonen of verbergen"],
@@ -806,6 +811,11 @@ pub const DUTCH: &[Aliases] = &[
         "file.import_controller",
         &["importeer bediening"],
         &["afstandsbediening", "zender", "hangkast", "klemmenlijst"],
+    ),
+    nl(
+        "addons.manage",
+        &["add-ons beheren"],
+        &["invoegtoepassing", "uitbreiding", "plugin", "installeren"],
     ),
     nl(
         "file.import_aml",

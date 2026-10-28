@@ -85,18 +85,19 @@ fn body(
     ));
     if running {
         ui.label(
-            egui::RichText::new("Locked while the run goes: Cancel it to edit.")
+            egui::RichText::new(
+                "A run is going on the openings as they were. A change here marks its result out of date; with auto re-solve on it restarts.",
+            )
                 .small()
                 .color(pal.warning),
         );
     }
     if let Some(k) = settings.requested.take()
-        && !running
         && let Some(p) = VentSpec::presets(e).get(k)
     {
         settings.add(p.spec);
     }
-    ui.add_enabled_ui(!running, |ui| {
+    ui.scope(|ui| {
         ui.horizontal_wrapped(|ui| {
             ui.menu_button("Add opening", |ui| {
                 ui.set_min_width(250.0);
@@ -169,7 +170,7 @@ fn body(
         });
         if open {
             let mut edited = spec;
-            ui.add_enabled_ui(!running, |ui| {
+            ui.scope(|ui| {
                 egui::Frame::group(ui.style()).show(ui, |ui| {
                     editor(ui, &mut edited, i, e);
                     if ui.button("Remove").clicked() {
@@ -231,7 +232,7 @@ fn body(
             }
             let held = settings.vents.iter().filter(|v| v.kind == sg.kind).count();
             let added = held >= specs.len();
-            ui.add_enabled_ui(!running && !added, |ui| {
+            ui.add_enabled_ui(!added, |ui| {
                 let label = if added {
                     "Already added".to_owned()
                 } else {
