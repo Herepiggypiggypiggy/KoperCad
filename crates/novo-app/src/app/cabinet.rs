@@ -2886,7 +2886,7 @@ impl NovoApp {
                 super::heat_sweep::add_pair(&mut self.cabinet.heat.settings, &c);
                 self.sync_openings_now();
                 // The 3D view opens with the list showing the pair.
-                self.view3d.controls.heat_panel = true;
+                self.cabinet.heat.on = true;
                 self.cabinet
                     .heat
                     .advice
