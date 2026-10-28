@@ -564,6 +564,12 @@ fn preview(ui: &mut egui::Ui, w: &ControllerWizard, palette: &novo_theme::Palett
             )),
         ));
     }
+    if !p.rows.is_empty() {
+        ui.weak(format!(
+            "{}: scroll the preview below to see every row and note",
+            plural(p.rows.len(), "row")
+        ));
+    }
     egui::ScrollArea::vertical()
         .id_salt("controller_preview")
         .max_height(height)
@@ -595,10 +601,6 @@ fn preview(ui: &mut egui::Ui, w: &ControllerWizard, palette: &novo_theme::Palett
             }
             if !p.rows.is_empty() {
                 ui.add_space(4.0);
-                ui.weak(format!(
-                    "{}: scroll this preview to see every row",
-                    plural(p.rows.len(), "row")
-                ));
                 egui::Grid::new("controller_rows")
                     .num_columns(4)
                     .striped(true)

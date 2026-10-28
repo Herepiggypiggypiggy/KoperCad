@@ -8,4 +8,4 @@
 
 2026-10-28 C4 follow-up: preview counts say "1 control", the "to check" list comes first in the preview (visible at 1366x768), warning texts use quotes instead of backticks.
 
-2026-10-28 C4: preview shows "N rows: scroll this preview to see every row" and an always-visible scrollbar (R3 note from #1615).
+2026-10-28 C4: preview shows "N rows: scroll the preview below to see every row and note" and an always-visible scrollbar (R3 note from #1615).

@@ -19,7 +19,7 @@ wait 10
 expect "Would create the radio controller"
 expect "HOIST_UP_SLOW"
 expect "common COM"
-expect "16 rows: scroll this preview to see every row"
+expect "16 rows: scroll the preview below"
 expect_enabled "Save profile"
 expect_enabled "Close"
 shot library-radio
