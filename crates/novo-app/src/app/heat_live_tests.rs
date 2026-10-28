@@ -250,3 +250,34 @@ fn a_move_during_a_run_cancels_it_and_starts_the_next() {
     );
     assert!(!state.live.is_stale());
 }
+
+#[test]
+fn opening_another_project_drops_the_result_of_the_old_cabinet() {
+    use crate::actions::Action;
+    let (p, cab, _) = fixture();
+    let ctx = egui::Context::default();
+    let mut state = HeatState::new();
+    frame(&mut state, &ctx, &p, cab, 0.0);
+    state.start_current();
+    settle(&mut state, &ctx, &p, cab, 0.0);
+    let result = state.solution().expect("a result of the old cabinet");
+    state.contours = false;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = super::gate1_tests::Drive::new(&dir.path().join("untitled"));
+    let app_ctx = d.ctx.clone();
+    d.app.cabinet.heat.solution = Some(result.clone());
+    d.app.cabinet.heat.kept = Some(result);
+    d.app.cabinet.heat.contours = false;
+    d.app.cabinet.heat.on = true;
+    d.app.run(&app_ctx, Action::NewProject);
+    d.frame();
+    // A leftover result would be drawn on the new plate as a hot spot where no device is.
+    let heat = &d.app.cabinet.heat;
+    assert!(heat.solution().is_none(), "the old result is gone");
+    assert!(heat.kept().is_none(), "the kept comparison is gone");
+    assert!(!heat.running());
+    // What the person chose to see stays.
+    assert!(heat.on);
+    assert!(!heat.contours);
+}

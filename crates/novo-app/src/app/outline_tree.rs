@@ -435,7 +435,7 @@ impl Default for Naming {
     fn default() -> Self {
         Self {
             group_prefix: "G".into(),
-            cabinet_prefix: "A".into(),
+            cabinet_prefix: "CAB".into(),
         }
     }
 }

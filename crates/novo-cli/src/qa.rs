@@ -221,6 +221,7 @@ const KNOWN_VERBS: &[&str] = &[
     "resize",
     "click_text",
     "click",
+    "double_click",
     "move",
     "mouse_down",
     "mouse_up",
@@ -991,6 +992,10 @@ impl Ctx<'_> {
                 let args = json!({"x": (r[0] + r[2]) / 2.0, "y": (r[1] + r[3]) / 2.0});
                 self.srv.tool("click", &args).map(|_| ())
             }
+            "double_click" => {
+                let args = json!({"x": num(1, "x")?, "y": num(2, "y")?, "count": 2});
+                self.srv.tool("click", &args).map(|_| ())
+            }
             "click" | "move" => {
                 let mut args = json!({"x": num(1, "x")?, "y": num(2, "y")?});
                 // `click X Y right` (or `middle`) presses that button; `ctrl`
@@ -1000,7 +1005,12 @@ impl Ctx<'_> {
                     for word in &words[3.min(words.len())..] {
                         match word.as_str() {
                             "ctrl" | "shift" => held.push(json!(word)),
-                            button => args["button"] = json!(button),
+                            "right" | "middle" => args["button"] = json!(word),
+                            other => {
+                                return Err(format!(
+                                    "click: `{other}` is not right, middle, ctrl or shift"
+                                ));
+                            }
                         }
                     }
                     if !held.is_empty() {

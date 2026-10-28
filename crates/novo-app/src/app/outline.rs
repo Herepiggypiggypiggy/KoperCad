@@ -2379,7 +2379,7 @@ impl NovoApp {
                         let name = ui.add(
                             egui::TextEdit::singleline(&mut form.name)
                                 .desired_width(200.0)
-                                .hint_text("A1"),
+                                .hint_text("CAB1"),
                         );
                         if !form.focused {
                             name.request_focus();
