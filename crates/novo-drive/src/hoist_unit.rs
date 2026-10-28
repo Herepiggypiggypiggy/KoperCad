@@ -44,6 +44,8 @@ pub struct TwoSpeedHoistUnit {
     brake: SpringBrake,
     brake_feed: BrakeFeed,
     shaft: Shaft,
+    /// What was fed on the last step (from the sequencer or from the circuit).
+    last_energised: Option<Energised>,
 }
 
 impl TwoSpeedHoistUnit {
@@ -62,6 +64,7 @@ impl TwoSpeedHoistUnit {
             brake,
             brake_feed,
             shaft: Shaft::new(inertia)?,
+            last_energised: None,
         })
     }
 
@@ -94,6 +97,7 @@ impl TwoSpeedHoistUnit {
         dt_s: f64,
     ) -> HoistSnapshot {
         let energised = if mains_on { energised } else { None };
+        self.last_energised = energised;
         let coil_fed = match self.brake_feed {
             BrakeFeed::MotorTerminals => energised.is_some(),
             BrakeFeed::Separate => mains_on && brake_coil_fed,
@@ -124,8 +128,14 @@ impl TwoSpeedHoistUnit {
         }
     }
 
-    /// Which winding is fed now.
+    /// Which winding was fed on the last step, whether the internal sequencer or the circuit
+    /// decided it.
     pub fn winding(&self) -> Option<WindingSel> {
-        self.sequencer.energised().map(|e| e.winding)
+        self.last_energised.map(|e| e.winding)
+    }
+
+    /// Where the brake rectifier gets its supply.
+    pub fn brake_feed(&self) -> BrakeFeed {
+        self.brake_feed
     }
 }

@@ -2786,7 +2786,11 @@ fn strip_heads(project: &Project, page: PageId) -> HashMap<SymbolId, String> {
         for i in 0..syms.len() {
             let (cx, cy) = cell(syms[i].0);
             for (dx, dy) in (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy))) {
-                for &j in grid.get(&(cx + dx, cy + dy)).into_iter().flatten() {
+                for &j in grid
+                    .get(&(cx.saturating_add(dx), cy.saturating_add(dy)))
+                    .into_iter()
+                    .flatten()
+                {
                     if j > i && near(syms[i].0, syms[j].0) {
                         let (a, b) = (root(&mut run, i), root(&mut run, j));
                         // The earlier terminal stays the root, so it heads the run.
