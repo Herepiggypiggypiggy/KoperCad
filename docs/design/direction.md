@@ -1,5 +1,7 @@
 # KoperCAD design direction
 
+> Amended 2026-10-28 by `visual-redesign.md` (section 2 lists what changes): the left rail replaces the dock and the text toolbars, the mark opens the app menu, tools are icons with tooltips, dialogs gain a resizable 960 centre class.
+
 Design lead thread, 2026-10-16. Companion to the audit (`design/visual-audit-2026-10-16.md`). The token and widget spec stays `docs/design/design-system.md` (do not fork it); this page decides **what the product should feel like, what is visible by default, and how the work is cut into pull requests**. Where it amends the spec, section 10 says so and the spec is edited in the same PR.
 
 ## 1. One sentence

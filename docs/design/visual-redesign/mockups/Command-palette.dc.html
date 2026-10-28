@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Command palette</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="@@KC@@">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0}</style>
+</helmet>
+<div class="kc {{theme}}" style="width:1380px;height:640px;background:var(--ground)">
+  <div class="scrim"></div>
+
+  <!-- LEFT: Ctrl+K before typing. Pinned commands are icons, recents are rows -->
+  <div class="float dlg" style="left:30px;top:30px;width:640px;height:580px;display:flex;flex-direction:column">
+    <div class="row gap8" style="padding:12px 14px 8px">
+      <div class="field focus grow" style="height:36px"><i class="i i-magnifying-glass i18" style="color:var(--tx2)"></i><span style="color:var(--tx3)">Search or run</span><span class="grow"></span><span class="kbd">Esc</span></div>
+    </div>
+    <div class="row gap4" style="padding:0 14px 10px"><span class="chip on">All</span><span class="chip"><i class="i i-terminal-window i14"></i>Commands</span><span class="chip"><i class="i ki-place i14"></i>Symbols</span><span class="chip"><i class="i i-files i14"></i>Pages</span><span class="chip"><i class="i i-package i14"></i>Parts</span><span class="chip"><i class="i i-graduation-cap i14"></i>Lessons</span></div>
+
+    <div class="col" style="padding:6px 14px 10px;gap:8px;border-top:1px solid var(--bd)">
+      <span class="lbl" style="margin-top:6px">Pinned</span>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">
+        <div class="tile"><span class="ico"><i class="i ki-place i20"></i></span><span class="name">Place symbol</span><span class="cap"><span class="kbd">Q</span></span></div>
+        <div class="tile"><span class="ico"><i class="i i-line-segment i20"></i></span><span class="name">Connect</span><span class="cap"><span class="kbd">W</span></span></div>
+        <div class="tile"><span class="ico"><i class="i i-magic-wand i20"></i></span><span class="name">Autopilot</span><span class="cap">Complete wires</span></div>
+        <div class="tile"><span class="ico"><i class="i i-upload-simple i20"></i></span><span class="name">Export…</span><span class="cap">PDF, DXF, Excel</span></div>
+        <div class="tile"><span class="ico"><i class="i i-seal-check i20"></i></span><span class="name">Problems</span><span class="cap">1 warning</span></div>
+        <div class="tile"><span class="ico"><i class="i ki-cabinet i20"></i></span><span class="name">Cabinet</span><span class="cap"><span class="kbd">Ctrl 2</span></span></div>
+        <div class="tile"><span class="ico"><i class="i i-cube i20"></i></span><span class="name">3D view</span><span class="cap"><span class="kbd">Ctrl 6</span></span></div>
+        <div class="tile"><span class="ico"><i class="i i-thermometer-hot i20"></i></span><span class="name">Heat</span><span class="cap"><span class="kbd">Shift H</span></span></div>
+      </div>
+    </div>
+
+    <div class="col" style="padding:6px 8px;gap:1px;border-top:1px solid var(--bd);flex:1">
+      <span class="lbl" style="padding:8px 8px 4px">Recent</span>
+      <div class="mrow"><span class="ico" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center"><i class="i i-broom"></i></span>Tidy routes<span class="cap" style="margin-left:auto">Draw</span></div>
+      <div class="mrow"><span style="width:24px;display:flex;justify-content:center"><i class="i ki-xref"></i></span>Link cross reference<span class="cap" style="margin-left:auto">Draw</span></div>
+      <div class="mrow"><span style="width:24px;display:flex;justify-content:center"><i class="i ki-wire-number"></i></span>Number wires<span class="cap" style="margin-left:auto">Edit › Wire numbers</span></div>
+      <div class="mrow"><span style="width:24px;display:flex;justify-content:center"><i class="i ki-report"></i></span>Bill of materials<span class="cap" style="margin-left:auto">Reports</span></div>
+    </div>
+    <div class="row gap12" style="height:34px;padding:0 14px;border-top:1px solid var(--bd);background:var(--panel)"><span class="cap">Try <span class="mono">renumber page</span>, <span class="mono">export pdf</span> or <span class="mono">go -K1</span></span></div>
+  </div>
+
+  <!-- RIGHT: after typing "export". Every row has its icon; the path says where the menu has it -->
+  <div class="float dlg" style="left:710px;top:30px;width:640px;height:580px;display:flex;flex-direction:column">
+    <div class="row gap8" style="padding:12px 14px 8px">
+      <div class="field focus grow" style="height:36px"><i class="i i-magnifying-glass i18" style="color:var(--tx2)"></i><span>export</span><span style="width:1px;height:16px;background:var(--tx)"></span><span class="grow"></span><span class="cap">7 results</span></div>
+    </div>
+    <div class="row gap4" style="padding:0 14px 10px"><span class="chip on">All</span><span class="chip"><i class="i i-terminal-window i14"></i>Commands</span><span class="chip"><i class="i ki-place i14"></i>Symbols</span><span class="chip"><i class="i i-files i14"></i>Pages</span><span class="chip"><i class="i i-package i14"></i>Parts</span><span class="chip"><i class="i i-graduation-cap i14"></i>Lessons</span></div>
+
+    <div class="col" style="padding:6px 8px;gap:1px;border-top:1px solid var(--bd);flex:1">
+      <span class="lbl" style="padding:8px 8px 4px">Best match</span>
+      <div class="mrow on" style="height:44px"><span class="ico" style="width:30px;height:30px;border-radius:5px;background:var(--sunken);display:flex;align-items:center;justify-content:center"><i class="i i-upload-simple i18"></i></span><span class="col" style="gap:0;line-height:1.25"><b>Export…</b><span class="cap">Opens the Export centre: every format in one place</span></span><span class="chip" style="margin-left:auto">File</span></div>
+      <span class="lbl" style="padding:12px 8px 4px">Commands</span>
+      <div class="mrow" style="height:36px"><span style="width:30px;display:flex;justify-content:center"><i class="i i-file-pdf i18"></i></span>Export this page as PDF<span class="chip" style="margin-left:auto">File › Drawings</span></div>
+      <div class="mrow" style="height:36px"><span style="width:30px;display:flex;justify-content:center"><i class="i i-file-pdf i18"></i></span>Export PDF with options…<span class="chip" style="margin-left:auto">File › Print</span></div>
+      <div class="mrow" style="height:36px"><span style="width:30px;display:flex;justify-content:center"><i class="i i-file-xls i18"></i></span>Export bill of materials<span class="chip" style="margin-left:auto">Reports</span></div>
+      <div class="mrow" style="height:36px"><span style="width:30px;display:flex;justify-content:center"><i class="i ki-bench i18"></i></span>Export workshop pack (folder)<span class="chip" style="margin-left:auto">Reports › Workshop</span></div>
+      <div class="mrow" style="height:36px"><span style="width:30px;display:flex;justify-content:center"><i class="i ki-plc i18"></i></span>Export PLC tags for TIA Portal<span class="chip" style="margin-left:auto">File › PLC</span></div>
+      <div class="mrow" style="height:36px"><span style="width:30px;display:flex;justify-content:center"><i class="i i-file-csv i18"></i></span>Export wire cut list (CSV)<span class="chip" style="margin-left:auto">File › Workshop</span></div>
+    </div>
+    <div class="row gap12" style="height:34px;padding:0 14px;border-top:1px solid var(--bd);background:var(--panel)"><span class="cap"><span class="kbd">↑</span> <span class="kbd">↓</span> choose · <span class="kbd">Enter</span> run · <span class="kbd">Tab</span> narrow to a type · <span class="kbd">Esc</span> close</span></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>

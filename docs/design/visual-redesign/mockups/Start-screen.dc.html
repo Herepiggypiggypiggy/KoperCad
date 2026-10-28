@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Start screen</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="@@KC@@">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0}</style>
+</helmet>
+<div class="kc {{theme}} win">
+  <div class="top">
+    <button class="mark" aria-label="App menu"><span class="logo"><i class="brand"></i></span><i class="i i-caret-down i14" style="color:var(--tx3)"></i></button>
+    <span class="vsep"></span>
+    <div class="seg" style="opacity:.55">
+      <button class="btn on" aria-label="Schematic"><i class="i ki-schematic i18"></i><span>Schematic</span></button>
+      <button class="btn" aria-label="Cabinet"><i class="i ki-cabinet i18"></i></button>
+      <button class="btn" aria-label="3D view"><i class="i i-cube i18"></i></button>
+      <button class="btn" aria-label="Reports"><i class="i ki-report i18"></i></button>
+      <button class="btn" aria-label="Commissioning"><i class="i i-clipboard-text i18"></i></button>
+    </div>
+    <span class="vsep"></span>
+    <span class="crumb" style="color:var(--tx3)">No project open</span>
+    <span class="grow"></span>
+    <button class="search" aria-label="Search or run"><i class="i i-magnifying-glass i14"></i><span style="min-width:96px;text-align:left">Search or run</span><span class="kbd">Ctrl K</span></button>
+    <button class="btn" aria-label="What is new"><i class="i i-sparkle i18"></i></button>
+    <button class="btn" aria-label="Help"><i class="i i-question i18"></i></button>
+  </div>
+
+  <div class="stage" style="background:var(--ground)">
+    <div class="col" style="width:380px;flex:none;padding:56px 40px 32px 56px;gap:28px">
+      <div class="col" style="gap:10px">
+        <span class="logo" style="width:56px;height:56px;border-radius:14px"><i class="brand" style="width:44px;height:44px"></i></span>
+        <div class="col" style="gap:2px"><span style="font-size:26px;font-weight:600;letter-spacing:-.01em">Koper<span style="color:var(--ac)">CAD</span></span><span class="lbl">By KoperVonk</span></div>
+      </div>
+
+      <div class="col" style="gap:8px">
+        <div class="tile on" style="flex-direction:row;align-items:center;gap:12px;padding:14px"><span class="ico" style="width:40px;height:40px"><i class="i i-file-plus i24"></i></span><span class="col" style="gap:0"><span class="name" style="font-size:15px">New project</span><span class="cap">A name and Enter</span></span><span class="kbd" style="margin-left:auto">Ctrl N</span></div>
+        <div class="tile" style="flex-direction:row;align-items:center;gap:12px;padding:10px 14px"><span class="ico"><i class="i i-folder-open i20"></i></span><span class="name">Open…</span><span class="kbd" style="margin-left:auto">Ctrl O</span></div>
+        <div class="tile" style="flex-direction:row;align-items:center;gap:12px;padding:10px 14px"><span class="ico"><i class="i i-graduation-cap i20"></i></span><span class="col" style="gap:0"><span class="name">Open example</span><span class="cap">The Gate 1 motor starter</span></span></div>
+        <div class="tile" style="flex-direction:row;align-items:center;gap:12px;padding:10px 14px"><span class="ico"><i class="i i-keyboard i20"></i></span><span class="col" style="gap:0"><span class="name">Try the fast keys</span><span class="cap">Two minutes: place, wire, cable, live view</span></span></div>
+      </div>
+      <span class="grow"></span>
+      <span class="cap">Ctrl K finds every command · F10 opens the menu</span>
+    </div>
+
+    <div class="col grow" style="padding:56px 56px 32px 16px;gap:22px;min-width:0">
+      <div class="col" style="gap:10px">
+        <div class="row"><span class="lbl">Recent projects</span><span class="grow"></span><button class="btn" style="height:24px;color:var(--tx2)"><i class="i i-folder-open i14"></i>Browse</button></div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+          <div class="col" style="gap:8px"><div class="cv art-canvas-{{theme}}" style="flex:none;height:196px;border-radius:6px;border:1px solid var(--bd2);background-size:296px auto;background-position:0 0"></div>
+            <div class="col" style="gap:0"><b>Motor starter (example)</b><span class="cap">Today · 2 pages · 1 warning</span></div></div>
+          <div class="col" style="gap:8px"><div class="cv art-canvas-{{theme}}" style="flex:none;height:196px;border-radius:6px;border:1px solid var(--bd2);background-size:640px auto;background-position:-170px -20px"></div>
+            <div class="col" style="gap:0"><b>Pump station 2</b><span class="cap">Yesterday · 14 pages</span></div></div>
+          <div class="col" style="gap:8px"><div class="cv art-canvas-{{theme}}" style="flex:none;height:196px;border-radius:6px;border:1px solid var(--bd2);background-size:640px auto;background-position:-20px -20px"></div>
+            <div class="col" style="gap:0"><b>Crane hoist panel</b><span class="cap">3 days ago · 31 pages</span></div></div>
+        </div>
+      </div>
+
+      <div class="col" style="gap:10px">
+        <span class="lbl">What else is in here</span>
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+          <div class="tile"><span class="ico"><i class="i ki-cabinet i24"></i></span><span class="name">Cabinet</span><span class="cap">Size the enclosure, place devices, cut lists</span></div>
+          <div class="tile"><span class="ico"><i class="i i-cube i24"></i></span><span class="name">3D</span><span class="cap">Look inside the cabinet. Needs a mounting plate</span></div>
+          <div class="tile"><span class="ico"><i class="i i-thermometer-hot i24"></i></span><span class="name">Heat</span><span class="cap">Temperatures and airflow, under Simulate</span></div>
+          <div class="tile"><span class="ico"><i class="i i-clipboard-text i24"></i></span><span class="name">Commissioning</span><span class="cap">Checks and a punch list</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="status"><span>Everything works offline. Your projects stay on this computer.</span></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>
