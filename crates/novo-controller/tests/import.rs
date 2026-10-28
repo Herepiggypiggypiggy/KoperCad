@@ -387,3 +387,44 @@ fn proposals_parse_and_validate_with_the_engine() {
         assert!(issues.iter().all(|i| i.severity != Sev::Error));
     }
 }
+
+#[test]
+fn a_huge_paste_is_cut_at_the_row_cap_and_stays_fast() {
+    use novo_controller::import::MAX_ROWS;
+    let mut text = String::from("Terminal;Function;Step\n");
+    for i in 0..50_000 {
+        text.push_str(&format!("{i};Hoist up;1\n"));
+    }
+    let started = std::time::Instant::now();
+    let table = Table::from_text(&text);
+    assert_eq!(table.rows.len(), MAX_ROWS);
+    assert!(table.notes.iter().any(|n| n.contains("first 2000 rows")));
+    let p = propose(&table, &WordList::builtin(), &Options::default());
+    assert!(p.rows.len() <= MAX_ROWS);
+    assert!(
+        started.elapsed().as_secs() < 5,
+        "took {:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
+fn slugs_are_never_empty_or_reserved_windows_names() {
+    use novo_controller::import::slug;
+    assert_eq!(slug("!!!"), "controller");
+    assert_eq!(slug("é"), "controller");
+    assert_eq!(slug(""), "controller");
+    for name in [
+        "con", "CON", "nul", "aux", "prn", "com1", "COM9", "lpt1", "lpt9",
+    ] {
+        assert_eq!(
+            slug(name),
+            format!("controller-{}", name.to_lowercase()),
+            "{name}"
+        );
+    }
+    assert_eq!(slug("com"), "com");
+    assert_eq!(slug("com10"), "com10");
+    assert_eq!(slug("con.txt"), "con-txt");
+    assert_eq!(slug("Radio, 3 motions"), "radio-3-motions");
+}

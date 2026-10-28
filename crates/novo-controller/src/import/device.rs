@@ -20,6 +20,7 @@ impl Table {
     pub fn from_pins(pins: &[DevicePin]) -> Table {
         let rows: Vec<Row> = pins
             .iter()
+            .take(super::table::MAX_ROWS)
             .enumerate()
             .map(|(i, p)| Row {
                 line: i + 1,

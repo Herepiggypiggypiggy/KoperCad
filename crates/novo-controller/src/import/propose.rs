@@ -164,7 +164,8 @@ impl Proposal {
     }
 }
 
-/// A profile id: lower-case letters, digits and hyphens.
+/// A profile id and file name: lower-case letters, digits and hyphens. Never empty (`controller`
+/// when the text has no letter or digit) and never a name Windows reserves for a device.
 pub fn slug(text: &str) -> String {
     let mut out = String::new();
     for c in text.to_lowercase().chars() {
@@ -174,7 +175,20 @@ pub fn slug(text: &str) -> String {
             out.push('-');
         }
     }
-    out.trim_end_matches('-').to_owned()
+    let out = out.trim_end_matches('-').to_owned();
+    let numbered = |prefix: &str| {
+        out.strip_prefix(prefix)
+            .is_some_and(|n| n.len() == 1 && n != "0" && n.chars().all(|c| c.is_ascii_digit()))
+    };
+    let reserved =
+        matches!(out.as_str(), "con" | "prn" | "aux" | "nul") || numbered("com") || numbered("lpt");
+    if out.is_empty() {
+        "controller".to_owned()
+    } else if reserved {
+        format!("controller-{out}")
+    } else {
+        out
+    }
 }
 
 fn upper_ident(text: &str) -> String {

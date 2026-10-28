@@ -23,5 +23,5 @@ pub use propose::{
     Supply, Warning, propose, slug,
 };
 pub use read::{Reading, Voltage, read_row};
-pub use table::{Columns, Row, Table, parse_step_cell, rows_to_text};
+pub use table::{Columns, MAX_ROWS, Row, Table, parse_step_cell, rows_to_text};
 pub use words::{Dir, Hit, Role, Tag, WordList, tokenize};

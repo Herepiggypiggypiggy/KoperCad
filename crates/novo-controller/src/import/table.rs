@@ -1,5 +1,9 @@
 //! Reading a pasted or typed I/O table: terminal label, function text and an optional step.
 
+/// Most rows one table keeps. An I/O page has tens of rows; a paste of a whole workbook must
+/// not freeze the window (the proposal grows faster than linearly with the row count).
+pub const MAX_ROWS: usize = 2000;
+
 /// One row of the table, as the person wrote it.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Row {
@@ -273,6 +277,12 @@ impl Table {
                 step: cell(cells, table.columns.step),
                 target: cell(cells, table.columns.target),
             });
+        }
+        if table.rows.len() > MAX_ROWS {
+            table.rows.truncate(MAX_ROWS);
+            table.notes.push(format!(
+                "Only the first {MAX_ROWS} rows were read: a controller page is much shorter than that"
+            ));
         }
         let name = |c: Option<usize>| c.map_or("none".to_owned(), |c| format!("{}", c + 1));
         table.notes.push(format!(

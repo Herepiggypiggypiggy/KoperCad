@@ -92,7 +92,7 @@ impl ControllerWizard {
     fn refresh(&mut self) {
         let table = Table::from_text(&self.text);
         let options = Options {
-            id: self.id.clone(),
+            id: import::slug(&self.id),
             name: self.name.clone(),
             step2_includes_step1: self.step2_includes_step1,
             gate_on_main: self.gate_on_main,
@@ -381,7 +381,7 @@ impl NovoApp {
             preview(ui, w, palette, preview_height);
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                let can_save = !w.proposal.profile.controls.is_empty() && !w.id.trim().is_empty();
+                let can_save = !w.proposal.profile.controls.is_empty();
                 if ui
                     .add_enabled(can_save, egui::Button::new("Save profile"))
                     .on_hover_text("Writes the profile and its binding table to your controller folder")
