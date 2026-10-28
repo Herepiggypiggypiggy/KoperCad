@@ -349,6 +349,7 @@ fn dev(id: u64, tag: &str, role: Role, rect: (f64, f64, f64, f64)) -> Device {
         rect: Some(rect),
         filter: FilterState::Unknown,
         filter_for: None,
+        wired: true,
         bonded: None,
         height_mm: None,
         on_door: false,
@@ -371,6 +372,14 @@ fn drive_filter_rules() {
     let r = analyse(&i);
     let f = r.of_rule("EMC-07").next().unwrap();
     assert!(f.message.contains("400 mm"), "{}", f.message);
+    // A filter that is only in the device list (not wired) is not a filter.
+    i.devices[1].rect = Some((250.0, 0.0, 80.0, 100.0));
+    i.devices[1].wired = false;
+    let r = analyse(&i);
+    let f = r.of_rule("EMC-07").next().unwrap();
+    assert!(f.message.contains("not drawn and wired"), "{}", f.message);
+    assert!(f.fixes.is_empty());
+    assert_eq!(r.score_of(Subject::Device(1)).unwrap().points, 30);
     // Built in, or stated: nothing to find.
     i.devices.truncate(1);
     i.devices[0].filter = FilterState::Built;

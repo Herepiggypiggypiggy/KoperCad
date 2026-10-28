@@ -189,6 +189,8 @@ enum InspectorAction {
     /// The reset arrow of an overridden property: back to the part's value.
     ResetProperty(String),
     Pin(bool),
+    /// The close button: unpin and clear the selection, so the panel slides away.
+    Close,
     /// A part picked in the Part row.
     AssignPart(novo_parts::PartKey),
     /// A calculation input edited: property key and the text typed.
@@ -522,6 +524,12 @@ impl NovoApp {
                 InspectorAction::SetMate(tag) => self.set_mate(device, &tag),
                 InspectorAction::ResetProperty(key) => self.reset_property(device, &key),
                 InspectorAction::Pin(on) => self.wb.inspector.pinned = on,
+                InspectorAction::Close => {
+                    self.wb.inspector.pinned = false;
+                    if let Some(view) = self.canvas.schematic() {
+                        view.select_ids(&[]);
+                    }
+                }
                 InspectorAction::AssignPart(key) => self.assign_device_part(device, &key),
                 InspectorAction::SetInput(key, text) => self.set_device_input(device, key, &text),
             }
@@ -550,10 +558,14 @@ impl NovoApp {
         super::panel::Panel::new("inspector", "Inspector", canvas, side, INSPECTOR_WIDTH)
             .above_card()
             .fixed_open()
+            .closable()
             .height(560.0)
             .show(ctx, |ui| {
                 inspector_body(ui, info, candidates, state, tag_id, description_id, actions);
             });
+        if super::panel::take_closed(ctx, "inspector") {
+            actions.push(InspectorAction::Close);
+        }
     }
 
     /// The pinned inspector with nothing selected: it shows the page.

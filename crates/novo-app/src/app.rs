@@ -60,6 +60,7 @@ mod commissioning_viewer;
 mod commissioning_viewer_tests;
 mod compare;
 mod controller_import;
+mod count_words;
 mod designer;
 mod device_renumber;
 mod diagnostics;

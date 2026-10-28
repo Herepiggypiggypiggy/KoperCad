@@ -191,13 +191,21 @@ fn fixes_apply_as_commands_and_clear_their_findings() {
         .transact("shield", |tx| apply(tx, &fixes[0]).map(|_| ()))
         .unwrap();
     let mid = analyse_project(&c.project);
-    // Shielded but its ends are not stated: an info, with the all-round fix.
-    let f = mid.of_rule("EMC-04").next().unwrap();
-    assert_eq!(f.severity, novo_emc::Severity::Info);
-    c.project
-        .transact("ends", |tx| apply(tx, &f.fixes[0].clone()).map(|_| ()))
-        .unwrap();
-    assert_eq!(analyse_project(&c.project).of_rule("EMC-04").count(), 0);
+    // One complete fix: the shield and its ends in one step, nothing left to ask.
+    assert_eq!(
+        mid.of_rule("EMC-04").count(),
+        0,
+        "{:#?}",
+        mid.of_rule("EMC-04").collect::<Vec<_>>()
+    );
+    let cable_after = c.project.cable(cable).unwrap();
+    for key in ["emc.shield_a", "emc.shield_b"] {
+        assert_eq!(
+            cable_after.properties.get(key),
+            Some(&Value::Text("360".into())),
+            "{key}"
+        );
+    }
 
     // A filter for the drive: the device is created with its role and target.
     let add = Fix::AddFilter {
@@ -219,6 +227,68 @@ fn fixes_apply_as_commands_and_clear_their_findings() {
         filter.properties.get("emc.role"),
         Some(&Value::Text("filter".into()))
     );
+    let filter_id = filter.id;
+
+    // A filter that is only in the device list filters nothing: the finding
+    // stays, says why, and offers no fix that would pretend otherwise.
+    let listed = analyse_project(&c.project);
+    let f = listed.of_rule("EMC-07").next().expect("finding stays");
+    assert!(f.message.contains("not drawn and wired"), "{}", f.message);
+    assert!(f.fixes.is_empty());
+    assert!(
+        listed
+            .score_of(Subject::Device(c.drive.raw()))
+            .unwrap()
+            .points
+            >= 30,
+        "the risk stays"
+    );
+
+    // Drawn and wired in series (line side and load side): it counts.
+    let page = c.project.pages().next().unwrap().id;
+    let drive_sym = c
+        .project
+        .symbols()
+        .find(|s| matches!(&s.role, SymbolRole::Device { device, .. } if *device == c.drive))
+        .unwrap()
+        .id;
+    c.project
+        .transact("draw filter", |tx| {
+            let s = tx.place_symbol(
+                page,
+                "iec/transformers/emc_filter",
+                Placement::at(Point::new(20.0, 10.0)),
+                vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 8.0, 0.0)],
+                SymbolRole::Device {
+                    device: filter_id,
+                    main: true,
+                },
+            )?;
+            tx.connect(Endpoint::pin(s, 1), Endpoint::pin(drive_sym, 0))?;
+            Ok(())
+        })
+        .unwrap();
+    // One wired pin is a stub, not a filter in series.
+    assert_eq!(analyse_project(&c.project).of_rule("EMC-07").count(), 1);
+    let free_sym = c
+        .project
+        .symbols()
+        .find(|s| matches!(&s.role, SymbolRole::Device { device, .. } if *device == filter_id))
+        .unwrap()
+        .id;
+    let supply = c
+        .project
+        .symbols()
+        .find(|s| matches!(&s.role, SymbolRole::Device { device, .. } if *device == c.plc))
+        .unwrap()
+        .id;
+    c.project
+        .transact("wire line side", |tx| {
+            tx.connect(Endpoint::pin(free_sym, 0), Endpoint::pin(supply, 0))?;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(analyse_project(&c.project).of_rule("EMC-07").count(), 0);
 
     // Fixes done by hand are refused rather than faked.
     let hand = Fix::MoveDevice {
