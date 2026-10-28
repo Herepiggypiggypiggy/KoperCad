@@ -846,3 +846,18 @@ fn a_title_line_is_still_skipped_when_a_row_has_extra_cells() {
     );
     assert_eq!(guess_header_row(&sheet), 1);
 }
+
+#[test]
+fn an_absurd_or_tiny_price_is_not_taken_silently() {
+    let sheet = csv_sheet(
+        "Maker,Order number,Price\nAcme,P-1,99999999999999\nAcme,P-2,\"0,001\"\nAcme,P-3,\"12,50\"\n",
+    );
+    let p = preview(&sheet, &Mapping::suggest(&sheet, 0));
+    let text = p.render("parts.csv");
+    let part = |o: &str| p.parts.iter().find(|x| x.order_number == o).unwrap();
+    assert!(part("P-1").price.is_none(), "{text}");
+    assert!(text.contains("too large to be a price"), "{text}");
+    assert!(part("P-2").price.is_some());
+    assert!(text.contains("unusually low"), "{text}");
+    assert_eq!(part("P-3").price.as_ref().unwrap().amount, 12.5);
+}
