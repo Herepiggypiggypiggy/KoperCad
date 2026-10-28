@@ -198,6 +198,7 @@ pub fn run() -> eframe::Result {
             if let Some(port) = control::requested_port() {
                 control::install(&cc.egui_ctx, port);
             }
+            startup::stage(startup::STAGE_PIPELINES);
             let canvas: Box<dyn CanvasView> = match cc.wgpu_render_state.as_ref() {
                 Some(rs) => {
                     let info = rs.adapter.get_info();
@@ -214,6 +215,7 @@ pub fn run() -> eframe::Result {
                     Box::new(PlaceholderCanvas::default())
                 }
             };
+            startup::stage("setting up the first screen");
             let mut backend = match data_dir() {
                 Some(dir) => StorageBackend::with_untitled_dir(dir.join("untitled")),
                 None => StorageBackend::default(),
@@ -226,6 +228,8 @@ pub fn run() -> eframe::Result {
                 app.open_on_start(path);
             }
             diag::startup_done();
+            // From here the driver draws the first frames.
+            startup::stage(startup::STAGE_FRAMES);
             Ok(Box::new(app))
         }),
     )

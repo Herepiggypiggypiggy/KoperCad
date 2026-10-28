@@ -1,2 +1,3 @@
-2026-10-28 13:20 UTC thread started from the laptop test report (findings 1 and 21); read gpu.rs, diag.rs, main.rs, packaging, scripts.
-2026-10-28 14:00 UTC wrote gpu order (DX12 first, avoid list), startup.rs (marker, lock, question), packaging and script changes; 26 unit tests pass locally.
+2026-10-28 13:11 UTC thread started from the laptop test report (findings 1 and 21); read gpu.rs, diag.rs, main.rs, packaging, scripts. Wrote gpu order (DX12 first, avoid list), startup.rs (marker, lock, question), packaging and script changes; unit tests pass; PR #1580 opened (head 663ca56).
+2026-10-28 13:45 UTC review round (R3 NOT READY on evidence, R1 nit): About line, QA scenario 1590 with test hook, release note, hardware checklist D3 and D4, QA evidence in /mnt/project-files/qa/pr1580-start/, head 9ba6fe9.
+2026-10-28 13:55 UTC R1 nit: the adapter is blamed only when the start died in a graphics-driver step (check, open, pipelines, first frames), not in other start-up code.

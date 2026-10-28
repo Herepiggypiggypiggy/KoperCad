@@ -36,6 +36,15 @@ const AVOID_KEEP: usize = 8;
 /// driver crash is most likely to kill; a few more show that presenting works.
 pub(crate) const FRAMES_FOR_DONE: u32 = 3;
 
+/// The steps in which the graphics driver is being called. A start that died
+/// in one of these blames the adapter; one that died in another step (loading
+/// the project, building the first screen) does not.
+pub(crate) const STAGE_CHECK: &str = "checking that it can draw to the window";
+pub(crate) const STAGE_OPEN: &str = "opening the graphics device";
+pub(crate) const STAGE_PIPELINES: &str = "building the graphics pipelines";
+pub(crate) const STAGE_FRAMES: &str = "drawing the first frames";
+const ADAPTER_STAGES: [&str; 4] = [STAGE_CHECK, STAGE_OPEN, STAGE_PIPELINES, STAGE_FRAMES];
+
 /// A graphics adapter, as the log and the marker name it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Adapter {
@@ -275,7 +284,10 @@ fn begin_in(
         );
         // Safe graphics is the way out of a bad adapter, so a safe start that
         // died says nothing against the adapters.
+        // A crash in other code (the project, the first screen) says nothing
+        // about the adapter either.
         if !prev.safe
+            && ADAPTER_STAGES.contains(&prev.stage.as_str())
             && let Some(a) = &prev.adapter
         {
             remember_avoid(dir, a);
@@ -495,14 +507,14 @@ mod tests {
         // 1. A clean first start: no question, a marker while it runs.
         begin_in(&dir, false, false, never_asked);
         assert!(dir.join(MARKER_FILE).is_file());
-        adapter(&intel_vulkan(), "opening the graphics adapter");
+        adapter(&intel_vulkan(), STAGE_OPEN);
         let text = std::fs::read_to_string(dir.join(MARKER_FILE)).unwrap();
         assert!(
             text.contains("adapter=Intel(R) UHD Graphics\tVulkan"),
             "{text}"
         );
         assert!(
-            text.contains("stage=opening the graphics adapter\n"),
+            text.contains("stage=opening the graphics device\n"),
             "{text}"
         );
 
@@ -518,7 +530,7 @@ mod tests {
         let f = asked.expect("the question was asked");
         assert!(!f.was_safe_graphics);
         assert_eq!(f.adapter.as_deref(), Some("Intel(R) UHD Graphics (Vulkan)"));
-        assert!(f.stage.starts_with("opening the graphics adapter"));
+        assert_eq!(f.stage, STAGE_OPEN);
         assert!(out.safe, "the answer was safe graphics");
         assert_eq!(read_avoid(&dir), vec![intel_vulkan().key()]);
         // The new marker records the mode that is now used.
@@ -542,6 +554,19 @@ mod tests {
         begin_in(&dir, false, false, never_asked);
         ended();
         begin_in(&dir, false, false, never_asked);
+        first_frames_done();
+
+        // 6b. A start that died in non-GPU code after the adapter was chosen does
+        // not blame it; the adapter is still known for the forgiveness step.
+        begin_in(&dir, false, false, never_asked);
+        adapter(&intel_vulkan(), STAGE_FRAMES);
+        stage("setting up the first screen");
+        die(&dir);
+        begin_in(&dir, false, false, |_| Answer::Normal);
+        assert!(
+            read_avoid(&dir).is_empty(),
+            "blamed the adapter for other code"
+        );
         first_frames_done();
 
         // 7. The test harness is never asked, and a safe start that died

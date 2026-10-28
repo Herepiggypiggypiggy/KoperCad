@@ -201,7 +201,7 @@ pub(crate) fn select(
         // crashes the process there leaves no panic and no message, so say
         // what is about to happen first (log and start marker).
         if let Some(s) = surface {
-            crate::startup::adapter(&start_adapter, "checking that it can draw to the window");
+            crate::startup::adapter(&start_adapter, crate::startup::STAGE_CHECK);
             if !adapter.is_surface_supported(s) {
                 log::warn!(
                     "Skipping {}: cannot draw to the window",
@@ -212,7 +212,7 @@ pub(crate) fn select(
         }
         // The driver can list an adapter and still refuse to open it (old
         // drivers, hybrid laptops); try the next one instead of giving up.
-        crate::startup::adapter(&start_adapter, "opening the graphics device");
+        crate::startup::adapter(&start_adapter, crate::startup::STAGE_OPEN);
         if let Err(e) = pollster::block_on(adapter.request_device(&device_descriptor(adapter))) {
             log::warn!("Skipping {}: cannot open it: {e}", describe(&infos[i]));
             continue;
@@ -222,7 +222,7 @@ pub(crate) fn select(
             describe(&infos[i]),
             why(&entries[i].name, entries[i].kind, &wish)
         );
-        crate::startup::adapter(&start_adapter, "drawing the first frames");
+        crate::startup::adapter(&start_adapter, crate::startup::STAGE_FRAMES);
         return Ok(adapter.clone());
     }
     Err(if infos.is_empty() {
