@@ -306,7 +306,9 @@ fn one_bad_value_in_a_sound_cabinet_never_panics_or_hangs() {
             10 => scn.fans[0].max_pressure_pa = bad,
             11 => scn.obstacles[0].blockage = Some(bad),
             12 => scn.obstacles[0].rect.h = bad,
-            13 => scn.params.cell_mm = bad,
+            // A tiny cell size is a legal fine grid (cells are capped at max_cells), just
+            // slow in a debug build, so the fuzz hurts the cell cap instead.
+            13 => scn.params.max_cells = [0usize, 1, 10, 100][(round / 16) % 4],
             14 => {
                 scn.params.max_iterations = if (0.0..1e6).contains(&bad) {
                     bad as usize
