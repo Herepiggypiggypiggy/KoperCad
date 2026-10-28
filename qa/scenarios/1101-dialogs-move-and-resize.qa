@@ -10,7 +10,7 @@ wait 20
 shot preferences-home
 check_layout
 # Title bar to the lower right.
-drag 683 80 900 200
+drag 683 125 900 250
 wait 10
 shot preferences-moved
 check_layout

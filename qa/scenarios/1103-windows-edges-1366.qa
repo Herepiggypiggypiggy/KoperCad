@@ -9,15 +9,15 @@ wait 5
 click_text Preferences
 wait 20
 shot preferences-home
-# Title bar far past the bottom right corner: it is kept on screen.
-drag 683 80 1500 900
-wait 10
-shot preferences-at-edge
-check_layout
 # Bottom right corner dragged far in: the smallest size it keeps.
-drag 1362 764 100 100
+drag 918 660 100 100
 wait 10
 shot preferences-minimum
+check_layout
+# Title bar far past the bottom right corner: it is kept on screen.
+drag 500 125 1500 900
+wait 10
+shot preferences-at-edge
 check_layout
 key Escape
 wait 10
