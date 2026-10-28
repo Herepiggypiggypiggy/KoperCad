@@ -1,8 +1,9 @@
 # Controller (virtual operator panel for the live view): roadmap
 
-Crate `novo-controller` (pure engine). Lanes: C1 engine (profile format, controls, signals, interlocks, radio effects), C2 schematic device and live wiring, C3 panel UI, C4 import wizard, C5 gamepad adapter, C6 commissioning and checks, C7 validation.
+Crate `novo-controller` (pure engine). Lanes: C1 engine (profile format and validator, controls, signals, interlocks, link-loss and signal effects without any radio protocol, sequences, instances, bindings), C2 schematic device and live wiring, C3 panel UI, C4 import wizard, C5 gamepad adapter, C6 commissioning and checks, C7 validation.
 
 - Done: C0 crate registration with skeleton and a two-step truth-table test.
-- Next: C1, C4 and C7 in parallel, then C2, then C3, C5, C6.
-
-- C4 done in PR: import wizard (paste, from device, table/EPLAN file, generic library). Next for C4: use `Profile` and `validate` directly once C1 is on main; real-page tuning of the word lists with the user's own pages.
+- Done (PR open): C1 engine, see `docs/design/controller-profile.md`.
+- Next: C4 and C7 in parallel, then C2 (needs C0b wasm host to run in-app; tests run natively until then), then C3, C5, C6.
+- Open: host JSON API for the wasm module (C0b); profile structure agreed with C4 (import produces `Profile` values).
+- C4 done in PR: import wizard (paste, from device, table/EPLAN file, generic library). Next for C4: real-page tuning of the word lists with the user's own pages.

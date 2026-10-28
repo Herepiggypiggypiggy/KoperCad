@@ -369,3 +369,21 @@ fn a_single_direction_single_step_is_a_button() {
     assert_eq!(p.profile.controls[0].kind, "button");
     assert_eq!(signal(&p, "BRIDGE_FWD_1").when, ["on"]);
 }
+
+#[test]
+fn proposals_parse_and_validate_with_the_engine() {
+    use novo_controller::{Profile, Severity as Sev, validate};
+    let mixed = run(
+        "COM;Common 48 VAC\n1;Main start\n2;Stop\n3;Emergency stop\n4;Hijsen;1\n5;Hijsen;2\n6;Zakken;1\n7;Zakken;2\n8;Horn\n9;Bridge forward\n10;Bridge back",
+    );
+    let mut texts = vec![("mixed".to_owned(), mixed.profile.to_toml())];
+    for (id, _) in library::list() {
+        texts.push((id.to_owned(), library::build(id).unwrap().profile.to_toml()));
+    }
+    for (id, text) in texts {
+        let profile = Profile::parse(&text).unwrap_or_else(|e| panic!("{id}: {e}\n{text}"));
+        let issues = validate(&profile);
+        assert!(issues.is_empty(), "{id}: {issues:?}\n{text}");
+        assert!(issues.iter().all(|i| i.severity != Sev::Error));
+    }
+}
