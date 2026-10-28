@@ -68,7 +68,7 @@ impl Default for Controls {
         Controls {
             layers: Layers::default(),
             door_deg: 0.0,
-            move_items: true,
+            move_items: false,
             shadows: true,
             assembly: None,
             wire_it: None,
@@ -625,7 +625,7 @@ mod tests {
         let c = Controls::default();
         assert!(!c.missing_data);
         assert!(!c.heat_panel);
-        assert!(c.move_items);
+        assert!(!c.move_items, "a plain drag must not move parts (KC-15)");
     }
 
     #[test]
