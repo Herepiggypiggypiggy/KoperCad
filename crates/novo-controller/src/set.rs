@@ -43,6 +43,10 @@ impl ProfileLibrary {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SetError {
     DuplicateId(String),
+    /// Ids are used in `controller/signal` keys and in files: not empty, no `/`, no whitespace.
+    InvalidId(String),
+    /// A replay would take more samples than [`crate::sequence::MAX_SAMPLES`].
+    TooManySamples,
     UnknownInstance(String),
     UnknownProfile(String),
     InvalidProfile(Vec<Issue>),
@@ -53,6 +57,11 @@ impl fmt::Display for SetError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SetError::DuplicateId(id) => write!(f, "controller instance `{id}` already exists"),
+            SetError::InvalidId(id) => write!(f, "`{id}` is not a usable controller instance id"),
+            SetError::TooManySamples => write!(
+                f,
+                "replay would take too many samples; raise sample_ms or shorten it"
+            ),
             SetError::UnknownInstance(id) => write!(f, "no controller instance `{id}`"),
             SetError::UnknownProfile(id) => write!(f, "no controller profile `{id}`"),
             SetError::InvalidProfile(issues) => {
@@ -134,6 +143,9 @@ impl ControllerSet {
         label: &str,
         profile: &Profile,
     ) -> Result<(), SetError> {
+        if id.is_empty() || id.contains('/') || id.contains(char::is_whitespace) {
+            return Err(SetError::InvalidId(id.to_string()));
+        }
         if self.instance(id).is_some() {
             return Err(SetError::DuplicateId(id.to_string()));
         }
@@ -315,6 +327,14 @@ impl ControllerSet {
                 target_group: r.target_group.clone(),
                 controller,
             });
+        }
+        // Instances saved at different moments catch up to the newest clock.
+        let now = set.time_ms;
+        for i in &mut set.instances {
+            let behind = now - i.controller.time_ms();
+            if behind > 0 {
+                i.controller.advance(behind);
+            }
         }
         Ok(set)
     }

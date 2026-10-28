@@ -1,7 +1,7 @@
 # Controller: handoff
 
-State (2026-10-28 UTC): lane C1 engine written and tested in `crates/novo-controller` (profile + schema + validator, control kinds,
-signals with step semantics, interlocks, link-loss/self-test effects, instances, bindings and checks, sequence record/replay). One PR open
+State (2026-10-28 UTC): lane C1 engine merged in #1558; follow-up fixes PR open. Engine written and tested in `crates/novo-controller` (profile + schema + validator, control kinds,
+signals with step semantics, interlocks, link-loss/self-test effects, instances, bindings and checks, sequence record/replay). Follow-up PR open
 from branch `claude/project-thread-z6unbc`; no UI yet by design (C3 owns the panel, C0b the add-on host).
 Docs: `docs/design/controller-profile.md`. Fixture profile: `crates/novo-controller/tests/data/`.
 Resume: `cargo test -p novo-controller`, `cargo clippy -p novo-controller --all-targets -- -D warnings`,

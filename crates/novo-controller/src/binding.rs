@@ -9,6 +9,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use crate::profile::Combine;
 use crate::set::ControllerSet;
 use crate::validate::Severity;
 
@@ -75,6 +76,11 @@ pub enum BindingProblem {
     Duplicate,
     /// Two controllers drive one target and the profile does not mark them `shared`.
     TargetConflict,
+    /// Two signals of one controller drive the same target.
+    SameControllerTwice,
+    /// Several controllers share a target that carries an ungated signal (an E-stop chain)
+    /// which does not combine as `and`: a pressed E-stop on one could be hidden by another.
+    SharedChainNotAnd,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -192,21 +198,90 @@ impl BindingTable {
                 }
             }
         }
-        out
-    }
 
-    /// The level each target gets now. Several signals on one target combine as the value of
-    /// largest magnitude (any high contact wins), so a service pendant overriding a radio shows.
-    pub fn resolve(&self, set: &ControllerSet) -> BTreeMap<Target, f64> {
-        let mut out: BTreeMap<Target, f64> = BTreeMap::new();
+        let mut pairs: BTreeMap<(&str, &Target), Vec<&SignalKey>> = BTreeMap::new();
         for b in &self.bindings {
-            let level = set.level(&b.key).unwrap_or(0.0);
-            let slot = out.entry(b.target.clone()).or_insert(0.0);
-            if level.abs() > slot.abs() {
-                *slot = level;
+            pairs
+                .entry((b.key.controller.as_str(), &b.target))
+                .or_default()
+                .push(&b.key);
+        }
+        for ((controller, target), keys) in pairs {
+            let distinct: BTreeSet<&&SignalKey> = keys.iter().collect();
+            if distinct.len() > 1 {
+                let names: Vec<&str> = distinct.iter().map(|k| k.signal.as_str()).collect();
+                finding(
+                    BindingProblem::SameControllerTwice,
+                    Severity::Warning,
+                    keys[0],
+                    format!(
+                        "signals {} of {controller} all drive {target}",
+                        names.join(", ")
+                    ),
+                );
+            }
+        }
+
+        let mut chain_targets: BTreeSet<&Target> = BTreeSet::new();
+        for (target, controllers) in &controllers_by_target(&self.bindings) {
+            if controllers.len() < 2 {
+                continue;
+            }
+            for b in self.bindings.iter().filter(|b| &b.target == *target) {
+                let def = set
+                    .instance(&b.key.controller)
+                    .and_then(|i| i.controller.profile().signal(&b.key.signal));
+                if def.is_some_and(|s| s.ungated && s.combine != Combine::And)
+                    && chain_targets.insert(target)
+                {
+                    finding(
+                        BindingProblem::SharedChainNotAnd,
+                        Severity::Warning,
+                        &b.key,
+                        format!(
+                            "{target} is shared and carries ungated signal {}: set `combine = \"and\"` so one pressed E-stop opens it",
+                            b.key
+                        ),
+                    );
+                }
             }
         }
         out
+    }
+
+    /// The level each target gets now. By default several signals combine as the value of
+    /// largest magnitude (any high contact wins), so a service pendant overriding a radio shows.
+    /// If any signal on a target says `combine = "and"` the target takes the smallest magnitude
+    /// instead (a normally-closed chain is open as soon as one controller opens it).
+    pub fn resolve(&self, set: &ControllerSet) -> BTreeMap<Target, f64> {
+        let mut levels: BTreeMap<Target, Vec<f64>> = BTreeMap::new();
+        let mut and: BTreeSet<Target> = BTreeSet::new();
+        for b in &self.bindings {
+            levels
+                .entry(b.target.clone())
+                .or_default()
+                .push(set.level(&b.key).unwrap_or(0.0));
+            let combine = set
+                .instance(&b.key.controller)
+                .and_then(|i| i.controller.profile().signal(&b.key.signal))
+                .map(|s| s.combine);
+            if combine == Some(Combine::And) {
+                and.insert(b.target.clone());
+            }
+        }
+        levels
+            .into_iter()
+            .map(|(t, v)| {
+                let pick = if and.contains(&t) {
+                    v.into_iter()
+                        .reduce(|a, b| if b.abs() < a.abs() { b } else { a })
+                } else {
+                    v.into_iter()
+                        .reduce(|a, b| if b.abs() > a.abs() { b } else { a })
+                };
+                (t, pick.unwrap_or(0.0))
+            })
+            .collect()
     }
 
     /// Who drives a target right now: the signals bound to it that are not low.
@@ -216,4 +291,14 @@ impl BindingTable {
             .cloned()
             .collect()
     }
+}
+
+fn controllers_by_target(bindings: &[Binding]) -> BTreeMap<&Target, BTreeSet<&str>> {
+    let mut m: BTreeMap<&Target, BTreeSet<&str>> = BTreeMap::new();
+    for b in bindings {
+        m.entry(&b.target)
+            .or_default()
+            .insert(b.key.controller.as_str());
+    }
+    m
 }

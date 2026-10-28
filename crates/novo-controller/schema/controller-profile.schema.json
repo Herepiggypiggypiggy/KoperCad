@@ -71,6 +71,7 @@
           "requires": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
           "ungated": { "type": "boolean", "default": false },
           "needs_link": { "type": "boolean" },
+          "combine": { "enum": ["or", "and"], "default": "or" },
           "pin": { "type": "string" }
         }
       }

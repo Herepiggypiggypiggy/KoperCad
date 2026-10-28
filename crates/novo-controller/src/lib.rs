@@ -26,8 +26,8 @@ pub mod validate;
 pub use binding::{Binding, BindingFinding, BindingProblem, BindingTable, SignalKey, Target};
 pub use engine::{Applied, Block, ControlError, Controller, SignalChange, SignalState, State};
 pub use profile::{
-    Condition, ControlDef, ControlKind, ControllerKind, ControllerMeta, Effects, InterlockDef,
-    InterlockMode, Profile, ProfileError, SignalDef, SignalKind, Supply, SupplyKind,
+    Combine, Condition, ControlDef, ControlKind, ControllerKind, ControllerMeta, Effects,
+    InterlockDef, InterlockMode, Profile, ProfileError, SignalDef, SignalKind, Supply, SupplyKind,
 };
 pub use sequence::{Action, Player, Recorder, Sequence, TimedAction, Trace, TraceSample};
 pub use set::{ControllerSet, InstanceRecord, ProfileLibrary, ProjectControllers, SetError};
