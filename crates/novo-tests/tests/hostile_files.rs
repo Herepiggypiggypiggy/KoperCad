@@ -105,7 +105,7 @@ fn truncated_and_corrupted_project_files_never_panic() {
 #[test]
 fn mutated_project_json_never_panics() {
     let json = std::fs::read_to_string(GOLDEN_JSON).unwrap();
-    let mut rng = Rng(0xfeed_beef_1);
+    let mut rng = Rng(0x000f_eedb_eef1);
     let tokens: [&str; 14] = [
         "null",
         "-1",
@@ -140,7 +140,7 @@ fn mutated_project_json_never_panics() {
     for round in 0..400 {
         let at = bytes[rng.below(bytes.len())];
         let end = json[at..]
-            .find(|c: char| matches!(c, ',' | '}' | ']' | '\n'))
+            .find([',', '}', ']', '\n'])
             .map(|n| at + n)
             .unwrap_or(json.len());
         let tok = tokens[rng.below(tokens.len())];
