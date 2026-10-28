@@ -1,6 +1,7 @@
 @title A device tag over 60 characters is refused and the box keeps focus
 @area Schematic
 @sizes 1366x768
+
 # SB-04 / SB-02: the long tag used to be taken (its label then vanished); the refusal now shows in the rename box.
 click_text "Open example"
 wait 20
