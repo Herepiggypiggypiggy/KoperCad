@@ -1,6 +1,6 @@
 # Drives, motors and a crane in 3D: audit and plan
 
-Date 2026-10-28. Thread: "Plan electromechanical drive and crane simulation".
+Date 2026-10-28.
 Status: audit done against `main` at commit 64b31c2 (v0.1.0-rc10 line). Plan not started.
 
 ## Part 1. Audit: what KoperCAD can check today
@@ -23,14 +23,14 @@ rewrite.
 | Frequency drive (VFD) | **No behaviour.** The symbol `iec/drives/frequency_converter` exists (L1 L2 L3 PE in, U V W out, `behavior kind = "converter"`) and the starter macro "Frequency converter drive" places it. The simulator has no converter model: it does not know frequency, ramps, V/f, current limit, overload, DC bus, braking, control terminals or parameters. EMC rules use it as a noise source tag only. | symbols in `novo-symbols/symbols/*/drives/`, `novo-parts/src/macros/starter/more.rs` |
 | Motor speed in rpm under a drive | **No.** `Motor` knows `sync_rpm()` and rated rpm at fixed 50/60 Hz only. | `motor.rs` |
 | Hoist, gravity load, brake logic, overhauling load, regeneration | **No.** `Load` has no sign, no gravity, no four-quadrant operation. | `motor.rs` |
-| Drive/motor data in the parts catalog | Partly. Parts carry free key/value technical data with SI units (`rated_current_a` and others) and Schneider part-number checks exist. No drive or motor schema (rated power, rated rpm, poles, inertia, drive output current, overload class, braking resistor minimum ohm). Real data must be entered or imported by the user. | `novo-parts/src/schema.rs`, `recipes/makers.rs` |
+| Drive/motor data in the parts catalog | Partly. Parts carry free key/value technical data with SI units (`rated_current_a` and others) and maker part-number checks exist. No drive or motor schema (rated power, rated rpm, poles, inertia, drive output current, overload class, braking resistor minimum ohm). Real data must be entered or imported by the user. | `novo-parts/src/schema.rs`, `recipes/makers.rs` |
 | 3D | The 3D view is the **cabinet** (plates, rails, ducts, devices, wires, heat/EMC overlays). Only ambient motion: fan blades and air pulses. No machine or crane scene, no kinematics, no scene driven by the simulator. | `novo-view3d` (`motion.rs`, `scene.rs`) |
 | Commissioning | A pure engine for checks, progress and punch list. It has a `Torque` check kind (a terminal torque check), nothing about drive parameters or motor direction/speed tests. | `novo-commissioning` |
 | Python/CLI access to simulation | Not for drives. | `novo-py`, `novo-cli` |
 
-What this means in practice for Tadjiro's questions:
+What this means in practice:
 
-- "Can I check motor speed and rpm with an Altivar?" Not yet. You can see the drive drawn, and
+- "Can I check motor speed and rpm under a drive?" Not yet. You can see the drive drawn, and
   a motor shown as running if it is fed, but no frequency, no rpm, no ramp.
 - "Can I see the crane move?" Not yet. There is no machine in 3D, and nothing links a simulated
   motor to a moving part.
@@ -48,14 +48,14 @@ layer, the commissioning engine, the Python layer.
    (for example `n_sync = 60 f / p` is exact; slip at load, current at current limit, DC bus
    ripple, thermal state are models). A visible "What this model leaves out" panel per
    device, same style as the motor start estimate.
-2. No manufacturer content. No Schneider manual text, parameter tables, parameter codes or
+2. No manufacturer content. No manufacturer manual text, parameter tables, parameter codes or
    macro tables are copied. Only publicly known general behaviour (V/f, ramps, current
    limit, DC bus, braking chopper, I2t overload). A **drive profile** is a data file the user
    enters or imports (CSV/JSON/XLSX from their own documents or from a configuration export
    they own). Generic neutral names inside the program (`frequency_reference`,
    `acceleration_time_s`), with a per-profile alias column so the user can map their own
    parameter codes. Starter profiles are generic ("Generic VFD, 400 V, 7.5 kW"), never
-   pretending to be an Altivar.
+   pretending to be a specific manufacturer's drive.
 3. Driven by the drawing. The drive is controlled by what is actually wired: run
    command from a terminal fed by a contact, a PLC output, or an analog output word; the
    motor is the one connected to U V W; the brake coil, limit switches and E-stop are the
@@ -111,7 +111,7 @@ Layer B, motor and load.
 
 Layer C, crane kinematics (3D).
 - Crane kinds, in this order of delivery: single-girder overhead bridge crane with hoist,
-  trolley and bridge (the likely case, to be confirmed); then double girder; gantry; jib.
+  trolley and bridge; then double girder; gantry; jib.
 - Axes: bridge position, trolley position, hoist height, optional hook swing as a
   pendulum with a stated model (length `l`, small-angle plus nonlinear option).
 - End limits and slow-down limits as virtual limit switches whose positions the user sets
@@ -203,7 +203,7 @@ lane L5.
 | L0 Crate PR | Coordinator | Register `novo-drive` and `novo-machine` in the workspace list | none |
 | L1 Drive engine | "Drive engine" | Reference sources, ramps, V/f, boost, field weakening, current limit, I2t, DC bus, braking chopper, trips, terminal/macro model, generic profile format, tests 2,3,7,8,9,10 | L0 |
 | L2 Motor at frequency and mechanics | "Motor and load" | Variable-frequency torque-speed (extend existing equivalent circuit, vector steady state, closed-loop speed loop), derating, inertia/gear/friction, hoist gravity, brake, tests 1,4,5,6 | L0 |
-| L3 Drive profile and parts data | "Drive data" | Drive/motor schema in the catalog, profile import/export, alias mapping to the user's own parameter codes, Schneider part-number helper reuse, property sheet sections, no vendor tables copied | L1 format draft |
+| L3 Drive profile and parts data | "Drive data" | Drive/motor schema in the catalog, profile import/export, alias mapping to the user's own parameter codes, part-number helper reuse, property sheet sections, no vendor tables copied | L1 format draft |
 | L4 Crane kinematics and 3D | "Crane 3D" | Machine workspace, crane templates, axes, limits, pendulum, rendering and camera in `novo-view3d`, bindings table, QA screenshots | L0, L2 for motion input |
 | L5 Co-simulation integration | "Electromechanical loop" | Fixed-step loop joining schematic settle, PLC bench, drive, motor, mechanics, sensors; hooks in `novo-sim` (a drive treated as a controlled source with U V W instead of an inert symbol; analog outputs as drive reference); determinism and the end-to-end test 12 | L1, L2 |
 | L6 Scope, checks, commissioning, reports | "Drive scope and checks" | Plot panel, findings in `novo-checks` (brake sequence, resistor sizing, ramp versus DC bus, cable length versus drive), commissioning drive sheet, report page, Python/CLI | L1, L2, L5 |
@@ -213,25 +213,18 @@ Order: L0 first, L1, L2 and L7 in parallel, then L3 and L5, then L4 and L6. A fi
 demonstrable slice (single hoist: PLC or pushbutton -> drive -> motor -> brake -> hook rises
 and lowers in 3D, end limit stops it) needs L1, L2, L4 (hoist only) and L5.
 
-### Questions that really matter (to Tadjiro, via the coordinator)
+### Open questions
 
-1. Which Altivar series do you use (for example the small machine series, the process
-   series, or the lifting/crane-oriented series)? This sets which generic macros and I/O
-   layouts we ship first.
-2. What crane: single-girder or double-girder overhead, gantry, jib? How many motors/drives
-   (hoist, trolley, bridge) and are the travel drives on one drive each?
-3. Is the hoist drive closed-loop with an encoder, and does it have a motor brake driven
-   from the drive relay?
-4. Other Schneider parts to include in the loop: TeSys contactors and thermal relays,
-   Easy Harmony pendants, or a Schneider PLC? (We keep model-neutral behaviour.)
-5. Can you export or send drive configurations you own, so profile import can be tested?
-   Customer files stay out of the public repository.
+Which drive families, crane types and drive-to-motor layouts ship first is decided with the
+users' own project data, which is kept outside this repository. Until then the plan stays
+generic: a drive profile is user data, templates start with a single-girder overhead crane,
+and no manufacturer behaviour is assumed.
 
 ### Honest limits stated up front
 
 - The first version is an averaged drive model: no PWM, no harmonics, no motor
   saturation unless the user enters it, no real firmware behaviour.
-- Matching a real Altivar's exact behaviour requires the user's own parameter data;
+- Matching a real drive's exact behaviour requires the user's own parameter data;
   without it the program is a physics check, not a replica.
 - Hook swing and rope stretch are simplified models.
 - Nothing here is a safety or compliance verdict.
