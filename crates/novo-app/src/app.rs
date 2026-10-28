@@ -59,6 +59,7 @@ mod commissioning_viewer;
 #[cfg(test)]
 mod commissioning_viewer_tests;
 mod compare;
+mod controller_import;
 mod designer;
 mod device_renumber;
 mod diagnostics;
@@ -1709,6 +1710,7 @@ impl NovoApp {
         self.aml_import_dialog(&ctx);
         self.eplan_import_dialog(&ctx);
         self.eplan_guide_dialog(&ctx);
+        self.controller_import_dialog(&ctx);
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);

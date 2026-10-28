@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Export centre</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="@@KC@@">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0}</style>
+</helmet>
+<div class="kc {{theme}}" style="width:1060px;height:700px;background:var(--ground)">
+  <div class="scrim"></div>
+
+  <!-- EXPORT CENTRE: replaces File > Export drawings / reports / production / PLC / interchange / print (six submenus, 31 rows) -->
+  <div class="float dlg" style="left:60px;top:40px;width:940px;height:620px;display:flex;flex-direction:column">
+    <div class="wt" style="height:44px;padding-left:16px;border-radius:10px 10px 0 0"><i class="i i-upload-simple i20" style="color:var(--ac)"></i><span class="t" style="font-size:15px">Export</span>
+      <span class="cap">Motor starter (example)</span>
+      <button class="btn" aria-label="Close"><i class="i i-x i18"></i></button></div>
+
+    <div class="row" style="flex:1;min-height:0;align-items:stretch">
+      <!-- what is it for -->
+      <div class="col" style="width:210px;background:var(--panel);border-right:1px solid var(--bd);padding:10px 8px;gap:1px">
+        <div class="mrow on" style="height:36px"><i class="i i-files i18"></i><b>Drawings</b><span class="cap" style="margin-left:auto">8</span></div>
+        <div class="mrow" style="height:36px"><i class="i ki-report i18"></i>Reports<span class="cap" style="margin-left:auto">7</span></div>
+        <div class="mrow" style="height:36px"><i class="i ki-bench i18"></i>Workshop<span class="cap" style="margin-left:auto">11</span></div>
+        <div class="mrow" style="height:36px"><i class="i ki-plc i18"></i>PLC<span class="cap" style="margin-left:auto">5</span></div>
+        <div class="mrow" style="height:36px"><i class="i i-arrows-left-right i18"></i>Interchange<span class="cap" style="margin-left:auto">5</span></div>
+        <div class="mrow" style="height:36px"><i class="i i-printer i18"></i>Print and plot<span class="cap" style="margin-left:auto">2</span></div>
+        <div class="grow"></div>
+        <div class="field" style="height:30px"><i class="i i-magnifying-glass i14" style="color:var(--tx3)"></i><span style="color:var(--tx3)">Find a format</span></div>
+      </div>
+
+      <!-- formats as tiles; pick several, one click exports them all -->
+      <div class="col grow" style="padding:16px 18px;gap:12px">
+        <div class="row gap8"><span class="lbl">Drawings</span><span class="grow"></span><span class="chip on"><i class="i i-check i14"></i>This page</span><span class="chip">All pages</span><span class="chip">A variant</span></div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+          <div class="tile on"><div class="row"><span class="ico"><i class="i i-file-pdf i20"></i></span><span class="grow"></span><i class="i i-check-circle i20" style="color:var(--ac)"></i></div><span class="name">PDF</span><span class="cap">Vector pages with title block, bookmarks and links</span></div>
+          <div class="tile"><div class="row"><span class="ico"><i class="i i-file-code i20"></i></span></div><span class="name">DXF</span><span class="cap">The page as layered DXF for other CAD</span></div>
+          <div class="tile"><div class="row"><span class="ico"><i class="i i-cube i20"></i></span></div><span class="name">STEP</span><span class="cap">The cabinet as a 3D model</span></div>
+          <div class="tile on"><div class="row"><span class="ico"><i class="i ki-plate i20"></i></span><span class="grow"></span><i class="i i-check-circle i20" style="color:var(--ac)"></i></div><span class="name">Plate drawing</span><span class="cap">Mounting plate, to scale. PDF or DXF</span></div>
+          <div class="tile"><div class="row"><span class="ico"><i class="i ki-xref i20"></i></span></div><span class="name">Wiring plan</span><span class="cap">Routes through the ducts, as DXF</span></div>
+          <div class="tile"><div class="row"><span class="ico"><i class="i i-git-branch i20"></i></span></div><span class="name">Variant PDF</span><span class="cap">The drawing as one machine option shows it</span></div>
+        </div>
+        <div class="col gap8" style="margin-top:2px">
+          <span class="lbl">Options</span>
+          <div class="row gap12"><div class="seg"><button class="btn on" style="height:24px;font-size:12px">A3</button><button class="btn" style="height:24px;font-size:12px">A4</button></div>
+            <div class="seg"><button class="btn on" style="height:24px;font-size:12px">Colour</button><button class="btn" style="height:24px;font-size:12px">Black and white</button></div>
+            <span class="chip"><i class="i i-bookmark i14"></i>Bookmarks</span><span class="chip on"><i class="i i-check i14"></i>Links</span></div>
+        </div>
+        <div class="col gap8"><span class="lbl">Preview · page 1 of 12, A3 colour</span>
+          <div class="cv art-canvas-{{theme}}" style="flex:none;height:150px;border-radius:5px;border:1px solid var(--bd);background-size:560px auto;background-position:60px -14px"></div></div>
+      </div>
+    </div>
+
+    <div class="row gap12" style="height:56px;padding:0 16px;border-top:1px solid var(--bd);background:var(--panel)">
+      <i class="i i-folder i18" style="color:var(--tx2)"></i><span class="mono" style="color:var(--tx2)">Documents / KoperCAD / Exports</span><button class="sec" style="height:26px">Change…</button>
+      <span class="grow"></span><span class="cap">2 formats · 3 files</span>
+      <button class="prim"><i class="i i-download-simple i18"></i>Export</button>
+    </div>
+    <div class="grip" style="right:0;bottom:0"></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>

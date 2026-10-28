@@ -1,0 +1,6 @@
+Terminal;Function;Step
+C;Common;
+1;Hoist up;1
+2;Hoist down;1
+3;Bridge forward;1
+4;Bridge back;1

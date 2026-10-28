@@ -1,0 +1,227 @@
+{
+"iec/contacts/no": {
+"name": "Make contact (NO)",
+"cat": "contacts",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 8 20\" width=\"32\" height=\"80\"><title>Make contact (NO)</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"-4\" y2=\"4\" fill=\"none\"/></g></svg>"
+},
+"iec/contacts/nc": {
+"name": "Break contact (NC)",
+"cat": "contacts",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-2 -2 8 20\" width=\"32\" height=\"80\"><title>Break contact (NC)</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"0\" y1=\"5\" x2=\"3.5\" y2=\"5\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"4\" y2=\"4\" fill=\"none\"/></g></svg>"
+},
+"iec/contacts/changeover": {
+"name": "Changeover contact",
+"cat": "contacts",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 12 20\" width=\"48\" height=\"80\"><title>Changeover contact</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"3.4\" y2=\"4.5\" fill=\"none\"/><polyline points=\"-4,0 -4,5 -1.5,5\" fill=\"none\"/><polyline points=\"4,0 4,5 1.5,5\" fill=\"none\"/></g></svg>"
+},
+"iec/contacts/thermal_nc": {
+"name": "Thermal overload contact, break",
+"cat": "contacts",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-14 -2 20 20\" width=\"80\" height=\"80\"><title>Thermal overload contact, break</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"0\" y1=\"5\" x2=\"3.5\" y2=\"5\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"4\" y2=\"4\" fill=\"none\"/><line x1=\"1.714\" y1=\"8\" x2=\"-8\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><polyline points=\"-8,8 -8,6 -10,6 -10,10 -12,10 -12,8\" fill=\"none\"/></g></svg>"
+},
+"iec/coils/contactor": {
+"name": "Contactor coil",
+"cat": "coils",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 12 20\" width=\"48\" height=\"80\"><title>Contactor coil</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><rect x=\"-4\" y=\"5\" width=\"8\" height=\"6\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"0\" y2=\"16\" fill=\"none\"/></g></svg>"
+},
+"iec/coils/relay": {
+"name": "Relay coil",
+"cat": "coils",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 12 20\" width=\"48\" height=\"80\"><title>Relay coil</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><rect x=\"-4\" y=\"5\" width=\"8\" height=\"6\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"0\" y2=\"16\" fill=\"none\"/></g></svg>"
+},
+"iec/coils/timer_on_delay": {
+"name": "Timer coil, on-delay",
+"cat": "coils",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 16 20\" width=\"64\" height=\"80\"><title>Timer coil, on-delay</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><rect x=\"-4\" y=\"5\" width=\"8\" height=\"6\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"0\" y2=\"16\" fill=\"none\"/><rect x=\"4\" y=\"5\" width=\"4\" height=\"6\" fill=\"none\"/><line x1=\"4\" y1=\"5\" x2=\"8\" y2=\"11\" fill=\"none\"/><line x1=\"4\" y1=\"11\" x2=\"8\" y2=\"5\" fill=\"none\"/></g></svg>"
+},
+"iec/contactors/main_3p": {
+"name": "Contactor main contacts, 3-pole",
+"cat": "contactors",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 25.5 20\" width=\"102\" height=\"80\"><title>Contactor main contacts, 3-pole</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"3.5\" fill=\"none\"/><path d=\"M -1.5,5 A 1.5 1.5 0 0 1 1.5,5\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"-4\" y2=\"4\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"3.5\" fill=\"none\"/><path d=\"M 6.5,5 A 1.5 1.5 0 0 1 9.5,5\" fill=\"none\"/><line x1=\"8\" y1=\"16\" x2=\"8\" y2=\"11\" fill=\"none\"/><line x1=\"8\" y1=\"11\" x2=\"4\" y2=\"4\" fill=\"none\"/><line x1=\"16\" y1=\"0\" x2=\"16\" y2=\"3.5\" fill=\"none\"/><path d=\"M 14.5,5 A 1.5 1.5 0 0 1 17.5,5\" fill=\"none\"/><line x1=\"16\" y1=\"16\" x2=\"16\" y2=\"11\" fill=\"none\"/><line x1=\"16\" y1=\"11\" x2=\"12\" y2=\"4\" fill=\"none\"/><line x1=\"-1.714\" y1=\"8\" x2=\"14.286\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/></g></svg>"
+},
+"iec/protection/fuse": {
+"name": "Fuse",
+"cat": "protection",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-3.5 -2 7 20\" width=\"28\" height=\"80\"><title>Fuse</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><rect x=\"-1.5\" y=\"4\" width=\"3\" height=\"8\" fill=\"none\"/><line x1=\"0\" y1=\"4\" x2=\"0\" y2=\"12\" fill=\"none\"/><line x1=\"0\" y1=\"12\" x2=\"0\" y2=\"16\" fill=\"none\"/></g></svg>"
+},
+"iec/protection/fuse_3p": {
+"name": "Fuse, 3-pole",
+"cat": "protection",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-3.5 -2 23 20\" width=\"92\" height=\"80\"><title>Fuse, 3-pole</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><rect x=\"-1.5\" y=\"4\" width=\"3\" height=\"8\" fill=\"none\"/><line x1=\"0\" y1=\"4\" x2=\"0\" y2=\"12\" fill=\"none\"/><line x1=\"0\" y1=\"12\" x2=\"0\" y2=\"16\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"4\" fill=\"none\"/><rect x=\"6.5\" y=\"4\" width=\"3\" height=\"8\" fill=\"none\"/><line x1=\"8\" y1=\"4\" x2=\"8\" y2=\"12\" fill=\"none\"/><line x1=\"8\" y1=\"12\" x2=\"8\" y2=\"16\" fill=\"none\"/><line x1=\"16\" y1=\"0\" x2=\"16\" y2=\"4\" fill=\"none\"/><rect x=\"14.5\" y=\"4\" width=\"3\" height=\"8\" fill=\"none\"/><line x1=\"16\" y1=\"4\" x2=\"16\" y2=\"12\" fill=\"none\"/><line x1=\"16\" y1=\"12\" x2=\"16\" y2=\"16\" fill=\"none\"/></g></svg>"
+},
+"iec/protection/fuse_switch_3p": {
+"name": "Fuse switch-disconnector, 3-pole",
+"cat": "protection",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6.146 -2 25.646 20\" width=\"102.584\" height=\"80\"><title>Fuse switch-disconnector, 3-pole</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"-1.5\" y1=\"5\" x2=\"1.5\" y2=\"5\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"-4\" y2=\"4\" fill=\"none\"/><polygon points=\"-1.764,10.13 -4.146,5.962 -2.236,4.87 0.146,9.038\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"5\" fill=\"none\"/><line x1=\"6.5\" y1=\"5\" x2=\"9.5\" y2=\"5\" fill=\"none\"/><line x1=\"8\" y1=\"16\" x2=\"8\" y2=\"11\" fill=\"none\"/><line x1=\"8\" y1=\"11\" x2=\"4\" y2=\"4\" fill=\"none\"/><polygon points=\"6.236,10.13 3.854,5.962 5.764,4.87 8.146,9.038\" fill=\"none\"/><line x1=\"16\" y1=\"0\" x2=\"16\" y2=\"5\" fill=\"none\"/><line x1=\"14.5\" y1=\"5\" x2=\"17.5\" y2=\"5\" fill=\"none\"/><line x1=\"16\" y1=\"16\" x2=\"16\" y2=\"11\" fill=\"none\"/><line x1=\"16\" y1=\"11\" x2=\"12\" y2=\"4\" fill=\"none\"/><polygon points=\"14.236,10.13 11.854,5.962 13.764,4.87 16.146,9.038\" fill=\"none\"/><line x1=\"-1.714\" y1=\"8\" x2=\"14.286\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/></g></svg>"
+},
+"iec/protection/mcb_1p": {
+"name": "Miniature circuit breaker, 1-pole",
+"cat": "protection",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-18.64 -2 21.84 20\" width=\"87.36\" height=\"80\"><title>Miniature circuit breaker, 1-pole</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"-1.2\" y1=\"3.8\" x2=\"1.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"-1.2\" y1=\"6.2\" x2=\"1.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"-4\" y2=\"4\" fill=\"none\"/><line x1=\"-1.714\" y1=\"8\" x2=\"-8\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><polyline points=\"-8,8 -8,6 -10,6 -10,10 -12,10 -12,8\" fill=\"none\"/><text x=\"-14\" y=\"8\" font-size=\"2.2\" text-anchor=\"end\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">I&gt;</text></g></svg>"
+},
+"iec/protection/mcb_3p": {
+"name": "Miniature circuit breaker, 3-pole",
+"cat": "protection",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-18.64 -2 37.84 20\" width=\"151.36\" height=\"80\"><title>Miniature circuit breaker, 3-pole</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"-1.2\" y1=\"3.8\" x2=\"1.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"-1.2\" y1=\"6.2\" x2=\"1.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"-4\" y2=\"4\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"5\" fill=\"none\"/><line x1=\"6.8\" y1=\"3.8\" x2=\"9.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"6.8\" y1=\"6.2\" x2=\"9.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"8\" y1=\"16\" x2=\"8\" y2=\"11\" fill=\"none\"/><line x1=\"8\" y1=\"11\" x2=\"4\" y2=\"4\" fill=\"none\"/><line x1=\"16\" y1=\"0\" x2=\"16\" y2=\"5\" fill=\"none\"/><line x1=\"14.8\" y1=\"3.8\" x2=\"17.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"14.8\" y1=\"6.2\" x2=\"17.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"16\" y1=\"16\" x2=\"16\" y2=\"11\" fill=\"none\"/><line x1=\"16\" y1=\"11\" x2=\"12\" y2=\"4\" fill=\"none\"/><line x1=\"-1.714\" y1=\"8\" x2=\"14.286\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><line x1=\"-1.714\" y1=\"8\" x2=\"-8\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><polyline points=\"-8,8 -8,6 -10,6 -10,10 -12,10 -12,8\" fill=\"none\"/><text x=\"-14\" y=\"8\" font-size=\"2.2\" text-anchor=\"end\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">I&gt;</text></g></svg>"
+},
+"iec/protection/mcb_3p_n": {
+"name": "Miniature circuit breaker, 3-pole + N",
+"cat": "protection",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-18.64 -2 45.84 20\" width=\"183.36\" height=\"80\"><title>Miniature circuit breaker, 3-pole + N</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"-1.2\" y1=\"3.8\" x2=\"1.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"-1.2\" y1=\"6.2\" x2=\"1.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"-4\" y2=\"4\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"5\" fill=\"none\"/><line x1=\"6.8\" y1=\"3.8\" x2=\"9.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"6.8\" y1=\"6.2\" x2=\"9.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"8\" y1=\"16\" x2=\"8\" y2=\"11\" fill=\"none\"/><line x1=\"8\" y1=\"11\" x2=\"4\" y2=\"4\" fill=\"none\"/><line x1=\"16\" y1=\"0\" x2=\"16\" y2=\"5\" fill=\"none\"/><line x1=\"14.8\" y1=\"3.8\" x2=\"17.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"14.8\" y1=\"6.2\" x2=\"17.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"16\" y1=\"16\" x2=\"16\" y2=\"11\" fill=\"none\"/><line x1=\"16\" y1=\"11\" x2=\"12\" y2=\"4\" fill=\"none\"/><line x1=\"24\" y1=\"0\" x2=\"24\" y2=\"5\" fill=\"none\"/><line x1=\"22.8\" y1=\"3.8\" x2=\"25.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"22.8\" y1=\"6.2\" x2=\"25.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"24\" y1=\"16\" x2=\"24\" y2=\"11\" fill=\"none\"/><line x1=\"24\" y1=\"11\" x2=\"20\" y2=\"4\" fill=\"none\"/><line x1=\"-1.714\" y1=\"8\" x2=\"22.286\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><line x1=\"-1.714\" y1=\"8\" x2=\"-8\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><polyline points=\"-8,8 -8,6 -10,6 -10,10 -12,10 -12,8\" fill=\"none\"/><text x=\"-14\" y=\"8\" font-size=\"2.2\" text-anchor=\"end\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">I&gt;</text></g></svg>"
+},
+"iec/protection/motor_protection_breaker": {
+"name": "Motor protection circuit breaker, 3-pole",
+"cat": "protection",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-18.64 -2 37.84 20\" width=\"151.36\" height=\"80\"><title>Motor protection circuit breaker, 3-pole</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"-1.2\" y1=\"3.8\" x2=\"1.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"-1.2\" y1=\"6.2\" x2=\"1.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"-4\" y2=\"4\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"5\" fill=\"none\"/><line x1=\"6.8\" y1=\"3.8\" x2=\"9.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"6.8\" y1=\"6.2\" x2=\"9.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"8\" y1=\"16\" x2=\"8\" y2=\"11\" fill=\"none\"/><line x1=\"8\" y1=\"11\" x2=\"4\" y2=\"4\" fill=\"none\"/><line x1=\"16\" y1=\"0\" x2=\"16\" y2=\"5\" fill=\"none\"/><line x1=\"14.8\" y1=\"3.8\" x2=\"17.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"14.8\" y1=\"6.2\" x2=\"17.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"16\" y1=\"16\" x2=\"16\" y2=\"11\" fill=\"none\"/><line x1=\"16\" y1=\"11\" x2=\"12\" y2=\"4\" fill=\"none\"/><line x1=\"-1.714\" y1=\"8\" x2=\"14.286\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><line x1=\"-1.714\" y1=\"8\" x2=\"-8\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><polyline points=\"-8,8 -8,6 -10,6 -10,10 -12,10 -12,8\" fill=\"none\"/><text x=\"-14\" y=\"8\" font-size=\"2.2\" text-anchor=\"end\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">I&gt;</text></g></svg>"
+},
+"iec/protection/overload_relay": {
+"name": "Thermal overload relay, 3-pole",
+"cat": "protection",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-5 -2 26 20\" width=\"104\" height=\"80\"><title>Thermal overload relay, 3-pole</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><polyline points=\"0,5 -1.5,5 -1.5,8 1.5,8 1.5,11 0,11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"0\" y2=\"16\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"5\" fill=\"none\"/><polyline points=\"8,5 6.5,5 6.5,8 9.5,8 9.5,11 8,11\" fill=\"none\"/><line x1=\"8\" y1=\"11\" x2=\"8\" y2=\"16\" fill=\"none\"/><line x1=\"16\" y1=\"0\" x2=\"16\" y2=\"5\" fill=\"none\"/><polyline points=\"16,5 14.5,5 14.5,8 17.5,8 17.5,11 16,11\" fill=\"none\"/><line x1=\"16\" y1=\"11\" x2=\"16\" y2=\"16\" fill=\"none\"/><rect x=\"-3\" y=\"3.5\" width=\"22\" height=\"9\" fill=\"none\"/></g></svg>"
+},
+"iec/protection/rcd_2p": {
+"name": "Residual current device, 2-pole",
+"cat": "protection",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-13.64 -2 26.64 28\" width=\"106.56\" height=\"112\"><title>Residual current device, 2-pole</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"-1.2\" y1=\"3.8\" x2=\"1.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"-1.2\" y1=\"6.2\" x2=\"1.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"-4\" y2=\"4\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"24\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"5\" fill=\"none\"/><line x1=\"6.8\" y1=\"3.8\" x2=\"9.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"6.8\" y1=\"6.2\" x2=\"9.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"8\" y1=\"16\" x2=\"8\" y2=\"11\" fill=\"none\"/><line x1=\"8\" y1=\"11\" x2=\"4\" y2=\"4\" fill=\"none\"/><line x1=\"8\" y1=\"16\" x2=\"8\" y2=\"24\" fill=\"none\"/><line x1=\"-1.714\" y1=\"8\" x2=\"6.286\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><ellipse cx=\"4\" cy=\"20\" rx=\"7\" ry=\"1.6\" fill=\"none\"/><polyline points=\"-3,20 -8,20 -8,8 -1.714,8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><text x=\"-9\" y=\"20\" font-size=\"2.2\" text-anchor=\"end\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">I\u0394</text></g></svg>"
+},
+"iec/protection/rcd_4p": {
+"name": "Residual current device, 4-pole",
+"cat": "protection",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-13.64 -2 42.64 28\" width=\"170.56\" height=\"112\"><title>Residual current device, 4-pole</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"-1.2\" y1=\"3.8\" x2=\"1.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"-1.2\" y1=\"6.2\" x2=\"1.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"-4\" y2=\"4\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"24\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"5\" fill=\"none\"/><line x1=\"6.8\" y1=\"3.8\" x2=\"9.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"6.8\" y1=\"6.2\" x2=\"9.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"8\" y1=\"16\" x2=\"8\" y2=\"11\" fill=\"none\"/><line x1=\"8\" y1=\"11\" x2=\"4\" y2=\"4\" fill=\"none\"/><line x1=\"8\" y1=\"16\" x2=\"8\" y2=\"24\" fill=\"none\"/><line x1=\"16\" y1=\"0\" x2=\"16\" y2=\"5\" fill=\"none\"/><line x1=\"14.8\" y1=\"3.8\" x2=\"17.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"14.8\" y1=\"6.2\" x2=\"17.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"16\" y1=\"16\" x2=\"16\" y2=\"11\" fill=\"none\"/><line x1=\"16\" y1=\"11\" x2=\"12\" y2=\"4\" fill=\"none\"/><line x1=\"16\" y1=\"16\" x2=\"16\" y2=\"24\" fill=\"none\"/><line x1=\"24\" y1=\"0\" x2=\"24\" y2=\"5\" fill=\"none\"/><line x1=\"22.8\" y1=\"3.8\" x2=\"25.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"22.8\" y1=\"6.2\" x2=\"25.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"24\" y1=\"16\" x2=\"24\" y2=\"11\" fill=\"none\"/><line x1=\"24\" y1=\"11\" x2=\"20\" y2=\"4\" fill=\"none\"/><line x1=\"24\" y1=\"16\" x2=\"24\" y2=\"24\" fill=\"none\"/><line x1=\"-1.714\" y1=\"8\" x2=\"22.286\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><ellipse cx=\"12\" cy=\"20\" rx=\"15\" ry=\"1.6\" fill=\"none\"/><polyline points=\"-3,20 -8,20 -8,8 -1.714,8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><text x=\"-9\" y=\"20\" font-size=\"2.2\" text-anchor=\"end\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">I\u0394</text></g></svg>"
+},
+"iec/protection/rcbo_2p": {
+"name": "RCBO, 1-pole + N",
+"cat": "protection",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-18.64 -2 31.64 28\" width=\"126.56\" height=\"112\"><title>RCBO, 1-pole + N</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"-1.2\" y1=\"3.8\" x2=\"1.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"-1.2\" y1=\"6.2\" x2=\"1.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"-4\" y2=\"4\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"24\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"5\" fill=\"none\"/><line x1=\"6.8\" y1=\"3.8\" x2=\"9.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"6.8\" y1=\"6.2\" x2=\"9.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"8\" y1=\"16\" x2=\"8\" y2=\"11\" fill=\"none\"/><line x1=\"8\" y1=\"11\" x2=\"4\" y2=\"4\" fill=\"none\"/><line x1=\"8\" y1=\"16\" x2=\"8\" y2=\"24\" fill=\"none\"/><line x1=\"-1.714\" y1=\"8\" x2=\"6.286\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><ellipse cx=\"4\" cy=\"20\" rx=\"7\" ry=\"1.6\" fill=\"none\"/><polyline points=\"-3,20 -8,20 -8,8 -1.714,8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><text x=\"-9\" y=\"20\" font-size=\"2.2\" text-anchor=\"end\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">I\u0394</text><polyline points=\"-8,12 -8,10 -10,10 -10,14 -12,14 -12,12\" fill=\"none\"/><text x=\"-14\" y=\"12\" font-size=\"2.2\" text-anchor=\"end\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">I&gt;</text></g></svg>"
+},
+"iec/protection/surge_arrester": {
+"name": "Surge arrester",
+"cat": "protection",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-3.5 -2 7 20\" width=\"28\" height=\"80\"><title>Surge arrester</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><rect x=\"-1.5\" y=\"4\" width=\"3\" height=\"8\" fill=\"none\"/><line x1=\"0\" y1=\"5.5\" x2=\"0\" y2=\"10\" fill=\"none\"/><polygon points=\"0,10 -0.8,8.6 0.8,8.6\" fill=\"currentColor\"/><line x1=\"0\" y1=\"12\" x2=\"0\" y2=\"16\" fill=\"none\"/></g></svg>"
+},
+"iec/protection/motor_circuit_protector": {
+"name": "Motor circuit protector, 3-pole",
+"cat": "protection",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-13.14 -2 32.34 20\" width=\"129.36\" height=\"80\"><title>Motor circuit protector, 3-pole</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"-1.2\" y1=\"3.8\" x2=\"1.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"-1.2\" y1=\"6.2\" x2=\"1.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"-4\" y2=\"4\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"5\" fill=\"none\"/><line x1=\"6.8\" y1=\"3.8\" x2=\"9.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"6.8\" y1=\"6.2\" x2=\"9.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"8\" y1=\"16\" x2=\"8\" y2=\"11\" fill=\"none\"/><line x1=\"8\" y1=\"11\" x2=\"4\" y2=\"4\" fill=\"none\"/><line x1=\"16\" y1=\"0\" x2=\"16\" y2=\"5\" fill=\"none\"/><line x1=\"14.8\" y1=\"3.8\" x2=\"17.2\" y2=\"6.2\" fill=\"none\"/><line x1=\"14.8\" y1=\"6.2\" x2=\"17.2\" y2=\"3.8\" fill=\"none\"/><line x1=\"16\" y1=\"16\" x2=\"16\" y2=\"11\" fill=\"none\"/><line x1=\"16\" y1=\"11\" x2=\"12\" y2=\"4\" fill=\"none\"/><line x1=\"-1.714\" y1=\"8\" x2=\"14.286\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><line x1=\"-1.714\" y1=\"8\" x2=\"-8\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><text x=\"-8.5\" y=\"8\" font-size=\"2.2\" text-anchor=\"end\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">I&gt;</text></g></svg>"
+},
+"iec/operators/pushbutton_no": {
+"name": "Push button, make contact",
+"cat": "operators",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-10 -2 12 20\" width=\"48\" height=\"80\"><title>Push button, make contact</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"-4\" y2=\"4\" fill=\"none\"/><line x1=\"-1.714\" y1=\"8\" x2=\"-8\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><polyline points=\"-6.5,6 -8,6 -8,10 -6.5,10\" fill=\"none\"/></g></svg>"
+},
+"iec/operators/pushbutton_nc": {
+"name": "Push button, break contact",
+"cat": "operators",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-10 -2 16 20\" width=\"64\" height=\"80\"><title>Push button, break contact</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"0\" y1=\"5\" x2=\"3.5\" y2=\"5\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"4\" y2=\"4\" fill=\"none\"/><line x1=\"1.714\" y1=\"8\" x2=\"-8\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><polyline points=\"-6.5,6 -8,6 -8,10 -6.5,10\" fill=\"none\"/></g></svg>"
+},
+"iec/operators/emergency_stop": {
+"name": "Emergency stop, break contact",
+"cat": "operators",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-12 -2 18 20\" width=\"72\" height=\"80\"><title>Emergency stop, break contact</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"0\" y1=\"5\" x2=\"3.5\" y2=\"5\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"4\" y2=\"4\" fill=\"none\"/><line x1=\"1.714\" y1=\"8\" x2=\"-8\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><polyline points=\"-6.5,6 -8,6 -8,10 -6.5,10\" fill=\"none\"/><path d=\"M -8,10 A 2 2 0 0 1 -8,6\" fill=\"none\"/></g></svg>"
+},
+"iec/operators/selector_no": {
+"name": "Selector switch, make contact",
+"cat": "operators",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-11.2 -2 13.2 20\" width=\"52.8\" height=\"80\"><title>Selector switch, make contact</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><line x1=\"0\" y1=\"16\" x2=\"0\" y2=\"11\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"-4\" y2=\"4\" fill=\"none\"/><line x1=\"-1.714\" y1=\"8\" x2=\"-8\" y2=\"8\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/><polyline points=\"-6.8,6 -8,6 -8,10 -9.2,10\" fill=\"none\"/></g></svg>"
+},
+"iec/signalling/lamp_green": {
+"name": "Indicator lamp, green",
+"cat": "signalling",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 15.64 20\" width=\"62.56\" height=\"80\"><title>Indicator lamp, green</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><circle cx=\"0\" cy=\"8\" r=\"4\" fill=\"none\"/><line x1=\"-2.828\" y1=\"5.172\" x2=\"2.828\" y2=\"10.828\" fill=\"none\"/><line x1=\"-2.828\" y1=\"10.828\" x2=\"2.828\" y2=\"5.172\" fill=\"none\"/><line x1=\"0\" y1=\"12\" x2=\"0\" y2=\"16\" fill=\"none\"/><text x=\"5\" y=\"8\" font-size=\"2.2\" text-anchor=\"start\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">GN</text></g></svg>"
+},
+"iec/signalling/lamp_red": {
+"name": "Indicator lamp, red",
+"cat": "signalling",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 15.64 20\" width=\"62.56\" height=\"80\"><title>Indicator lamp, red</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><circle cx=\"0\" cy=\"8\" r=\"4\" fill=\"none\"/><line x1=\"-2.828\" y1=\"5.172\" x2=\"2.828\" y2=\"10.828\" fill=\"none\"/><line x1=\"-2.828\" y1=\"10.828\" x2=\"2.828\" y2=\"5.172\" fill=\"none\"/><line x1=\"0\" y1=\"12\" x2=\"0\" y2=\"16\" fill=\"none\"/><text x=\"5\" y=\"8\" font-size=\"2.2\" text-anchor=\"start\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">RD</text></g></svg>"
+},
+"iec/signalling/horn": {
+"name": "Horn",
+"cat": "signalling",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-7 -2 14 20\" width=\"56\" height=\"80\"><title>Horn</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"5\" fill=\"none\"/><polygon points=\"-2,5 2,5 2,8 5,11 -5,11 -2,8\" fill=\"none\"/><line x1=\"0\" y1=\"11\" x2=\"0\" y2=\"16\" fill=\"none\"/></g></svg>"
+},
+"iec/motors/motor_3ph": {
+"name": "Three-phase motor",
+"cat": "motors",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-2 -2 28 27\" width=\"112\" height=\"108\"><title>Three-phase motor</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><line x1=\"0\" y1=\"4\" x2=\"3.6\" y2=\"10.556\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"4\" fill=\"none\"/><line x1=\"8\" y1=\"4\" x2=\"8\" y2=\"9\" fill=\"none\"/><line x1=\"16\" y1=\"0\" x2=\"16\" y2=\"4\" fill=\"none\"/><line x1=\"16\" y1=\"4\" x2=\"12.4\" y2=\"10.556\" fill=\"none\"/><circle cx=\"8\" cy=\"16\" r=\"7\" fill=\"none\"/><text x=\"8\" y=\"14.5\" font-size=\"4\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">M</text><text x=\"8\" y=\"19\" font-size=\"2.5\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">3~</text><polyline points=\"24,0 24,16 15,16\" fill=\"none\"/></g></svg>"
+},
+"iec/motors/motor_1ph": {
+"name": "Single-phase motor",
+"cat": "motors",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-5 -2 23 27\" width=\"92\" height=\"108\"><title>Single-phase motor</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><line x1=\"0\" y1=\"4\" x2=\"0.8\" y2=\"9.774\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"4\" fill=\"none\"/><line x1=\"8\" y1=\"4\" x2=\"7.2\" y2=\"9.774\" fill=\"none\"/><circle cx=\"4\" cy=\"16\" r=\"7\" fill=\"none\"/><text x=\"4\" y=\"14.5\" font-size=\"4\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">M</text><text x=\"4\" y=\"19\" font-size=\"2.5\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">1~</text><polyline points=\"16,0 16,16 11,16\" fill=\"none\"/></g></svg>"
+},
+"iec/terminals/terminal": {
+"name": "Terminal, feed-through",
+"cat": "terminals",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-3.2 -2 6.4 12\" width=\"25.6\" height=\"48\"><title>Terminal, feed-through</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"2.8\" fill=\"none\"/><circle cx=\"0\" cy=\"4\" r=\"1.2\" fill=\"none\"/><line x1=\"0\" y1=\"5.2\" x2=\"0\" y2=\"8\" fill=\"none\"/></g></svg>"
+},
+"iec/terminals/terminal_2level": {
+"name": "Double-level terminal",
+"cat": "terminals",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-4 -2 16 12\" width=\"64\" height=\"48\"><title>Double-level terminal</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"2.8\" fill=\"none\"/><circle cx=\"0\" cy=\"4\" r=\"1.2\" fill=\"none\"/><line x1=\"0\" y1=\"5.2\" x2=\"0\" y2=\"8\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"2.8\" fill=\"none\"/><circle cx=\"8\" cy=\"4\" r=\"1.2\" fill=\"none\"/><line x1=\"8\" y1=\"5.2\" x2=\"8\" y2=\"8\" fill=\"none\"/><rect x=\"-2\" y=\"1.8\" width=\"12\" height=\"4.4\" fill=\"none\" stroke-dasharray=\"1.2 0.8\"/></g></svg>"
+},
+"iec/terminals/plug": {
+"name": "Plug (male contact)",
+"cat": "terminals",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-2.8 -2 5.6 12\" width=\"22.4\" height=\"48\"><title>Plug (male contact)</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><rect x=\"-0.8\" y=\"4\" width=\"1.6\" height=\"3\" fill=\"currentColor\"/><line x1=\"0\" y1=\"7\" x2=\"0\" y2=\"8\" fill=\"none\"/></g></svg>"
+},
+"iec/earth/protective_earth": {
+"name": "Protective earth",
+"cat": "earth",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-5.8 -2 11.6 13.8\" width=\"46.4\" height=\"55.2\"><title>Protective earth</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><circle cx=\"0\" cy=\"6\" r=\"3.8\" fill=\"none\"/><line x1=\"-2.5\" y1=\"5\" x2=\"2.5\" y2=\"5\" fill=\"none\"/><line x1=\"-1.6\" y1=\"6.2\" x2=\"1.6\" y2=\"6.2\" fill=\"none\"/><line x1=\"-0.7\" y1=\"7.4\" x2=\"0.7\" y2=\"7.4\" fill=\"none\"/><line x1=\"0\" y1=\"4\" x2=\"0\" y2=\"5\" fill=\"none\"/></g></svg>"
+},
+"iec/earth/earth": {
+"name": "Earth",
+"cat": "earth",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-5 -2 10 10\" width=\"40\" height=\"40\"><title>Earth</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><line x1=\"-3\" y1=\"4\" x2=\"3\" y2=\"4\" fill=\"none\"/><line x1=\"-2\" y1=\"5\" x2=\"2\" y2=\"5\" fill=\"none\"/><line x1=\"-1\" y1=\"6\" x2=\"1\" y2=\"6\" fill=\"none\"/></g></svg>"
+},
+"iec/sensors/inductive_pnp": {
+"name": "Inductive sensor, 3-wire PNP",
+"cat": "sensors",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 28 20\" width=\"112\" height=\"80\"><title>Inductive sensor, 3-wire PNP</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><line x1=\"16\" y1=\"0\" x2=\"16\" y2=\"4\" fill=\"none\"/><line x1=\"8\" y1=\"12\" x2=\"8\" y2=\"16\" fill=\"none\"/><rect x=\"-4\" y=\"4\" width=\"24\" height=\"8\" fill=\"none\"/><polygon points=\"2,5.5 5,8 2,10.5 -1,8\" fill=\"none\"/><text x=\"13\" y=\"8\" font-size=\"2.4\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">PNP</text></g></svg>"
+},
+"iec/plc/digital_input": {
+"name": "PLC digital input",
+"cat": "plc",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 12 14\" width=\"48\" height=\"56\"><title>PLC digital input</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><rect x=\"-4\" y=\"4\" width=\"8\" height=\"6\" fill=\"none\"/><text x=\"0\" y=\"7\" font-size=\"2.2\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">DI</text></g></svg>"
+},
+"iec/plc/digital_output": {
+"name": "PLC digital output",
+"cat": "plc",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 12 12\" width=\"48\" height=\"48\"><title>PLC digital output</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"-4\" y=\"0\" width=\"8\" height=\"6\" fill=\"none\"/><text x=\"0\" y=\"3\" font-size=\"2.2\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">DO</text><line x1=\"0\" y1=\"6\" x2=\"0\" y2=\"8\" fill=\"none\"/></g></svg>"
+},
+"iec/drives/frequency_converter": {
+"name": "Frequency converter",
+"cat": "drives",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 36 28\" width=\"144\" height=\"112\"><title>Frequency converter</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"4\" fill=\"none\"/><line x1=\"16\" y1=\"0\" x2=\"16\" y2=\"4\" fill=\"none\"/><line x1=\"24\" y1=\"0\" x2=\"24\" y2=\"4\" fill=\"none\"/><line x1=\"0\" y1=\"20\" x2=\"0\" y2=\"24\" fill=\"none\"/><line x1=\"8\" y1=\"20\" x2=\"8\" y2=\"24\" fill=\"none\"/><line x1=\"16\" y1=\"20\" x2=\"16\" y2=\"24\" fill=\"none\"/><line x1=\"24\" y1=\"20\" x2=\"24\" y2=\"24\" fill=\"none\"/><rect x=\"-4\" y=\"4\" width=\"32\" height=\"16\" fill=\"none\"/><line x1=\"-4\" y1=\"20\" x2=\"28\" y2=\"4\" fill=\"none\"/><text x=\"4\" y=\"8\" font-size=\"3.5\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">~</text><text x=\"20\" y=\"16\" font-size=\"3.5\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">~</text><text x=\"18.4\" y=\"8.8\" font-size=\"3\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">f</text></g></svg>"
+},
+"iec/transformers/transformer_1ph": {
+"name": "Single-phase transformer",
+"cat": "transformers",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-3 -2 14 36\" width=\"56\" height=\"144\"><title>Single-phase transformer</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"9\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"9\" fill=\"none\"/><circle cx=\"4\" cy=\"12\" r=\"5\" fill=\"none\"/><circle cx=\"4\" cy=\"20\" r=\"5\" fill=\"none\"/><line x1=\"0\" y1=\"23\" x2=\"0\" y2=\"32\" fill=\"none\"/><line x1=\"8\" y1=\"23\" x2=\"8\" y2=\"32\" fill=\"none\"/></g></svg>"
+},
+"iec/drives/soft_starter": {
+"name": "Soft starter",
+"cat": "drives",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 28 28\" width=\"112\" height=\"112\"><title>Soft starter</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"4\" fill=\"none\"/><line x1=\"16\" y1=\"0\" x2=\"16\" y2=\"4\" fill=\"none\"/><line x1=\"0\" y1=\"20\" x2=\"0\" y2=\"24\" fill=\"none\"/><line x1=\"8\" y1=\"20\" x2=\"8\" y2=\"24\" fill=\"none\"/><line x1=\"16\" y1=\"20\" x2=\"16\" y2=\"24\" fill=\"none\"/><rect x=\"-4\" y=\"4\" width=\"24\" height=\"16\" fill=\"none\"/><text x=\"8\" y=\"12\" font-size=\"3\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">U \u2197</text></g></svg>"
+},
+"iec/connectivity/potential_feed": {
+"name": "Potential feed",
+"cat": "connectivity",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-4 -2 8 12\" width=\"32\" height=\"48\"><title>Potential feed</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"-2,0 2,0 0,3\" fill=\"currentColor\"/><line x1=\"0\" y1=\"3\" x2=\"0\" y2=\"8\" fill=\"none\"/></g></svg>"
+},
+"iec/connectivity/potential_feed_pe": {
+"name": "Potential feed, protective earth",
+"cat": "connectivity",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-5.8 -3.8 11.6 13.8\" width=\"46.4\" height=\"55.2\"><title>Potential feed, protective earth</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"8\" x2=\"0\" y2=\"4\" fill=\"none\"/><circle cx=\"0\" cy=\"2\" r=\"3.8\" fill=\"none\"/><line x1=\"-2.5\" y1=\"3\" x2=\"2.5\" y2=\"3\" fill=\"none\"/><line x1=\"-1.6\" y1=\"1.8\" x2=\"1.6\" y2=\"1.8\" fill=\"none\"/><line x1=\"-0.7\" y1=\"0.6\" x2=\"0.7\" y2=\"0.6\" fill=\"none\"/></g></svg>"
+},
+"iec/measuring/ammeter": {
+"name": "Ammeter",
+"cat": "measuring",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 12 20\" width=\"48\" height=\"80\"><title>Ammeter</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><circle cx=\"0\" cy=\"8\" r=\"4\" fill=\"none\"/><text x=\"0\" y=\"8\" font-size=\"3.5\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">A</text><line x1=\"0\" y1=\"12\" x2=\"0\" y2=\"16\" fill=\"none\"/></g></svg>"
+},
+"iec/supplies/power_supply_dc": {
+"name": "Power supply, AC/DC",
+"cat": "supplies",
+"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-6 -2 28 28\" width=\"112\" height=\"112\"><title>Power supply, AC/DC</title><g stroke=\"currentColor\" stroke-width=\"0.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"4\" fill=\"none\"/><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"4\" fill=\"none\"/><line x1=\"16\" y1=\"0\" x2=\"16\" y2=\"4\" fill=\"none\"/><line x1=\"0\" y1=\"20\" x2=\"0\" y2=\"24\" fill=\"none\"/><line x1=\"8\" y1=\"20\" x2=\"8\" y2=\"24\" fill=\"none\"/><rect x=\"-4\" y=\"4\" width=\"24\" height=\"16\" fill=\"none\"/><line x1=\"-4\" y1=\"20\" x2=\"20\" y2=\"4\" fill=\"none\"/><text x=\"2\" y=\"8\" font-size=\"3.5\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">~</text><text x=\"14\" y=\"16\" font-size=\"3.5\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"currentColor\" stroke=\"none\" font-family=\"sans-serif\">=</text></g></svg>"
+}
+}

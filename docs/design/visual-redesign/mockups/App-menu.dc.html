@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>App menu</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="@@KC@@">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0}</style>
+</helmet>
+<div class="kc {{theme}} win">
+
+  <div class="top">
+    <button class="mark hv" aria-label="App menu"><span class="logo"><i class="brand"></i></span><i class="i i-caret-up i14" style="color:var(--ac2)"></i></button>
+    <button class="btn" aria-label="Undo"><i class="i i-arrow-counter-clockwise i18"></i></button>
+    <button class="btn dim" aria-label="Redo"><i class="i i-arrow-clockwise i18"></i></button>
+    <span class="vsep"></span>
+    <div class="seg">
+      <button class="btn on" aria-label="Schematic"><i class="i ki-schematic i18"></i><span>Schematic</span></button>
+      <button class="btn" aria-label="Cabinet"><i class="i ki-cabinet i18"></i></button>
+      <button class="btn" aria-label="3D view"><i class="i i-cube i18"></i></button>
+      <button class="btn" aria-label="Reports"><i class="i ki-report i18"></i></button>
+      <button class="btn" aria-label="Commissioning"><i class="i i-clipboard-text i18"></i></button>
+    </div>
+    <span class="vsep"></span>
+    <button class="crumb" aria-label="Pages"><i class="i i-files i14"></i><span>Motor starter (example)</span><span style="color:var(--tx3)">/</span><b>1 Main circuit</b></button>
+    <span class="grow"></span>
+    <button class="search" aria-label="Search or run"><i class="i i-magnifying-glass i14"></i><span style="min-width:96px;text-align:left">Search or run</span><span class="kbd">Ctrl K</span></button>
+    <span class="pill warn"><i class="i i-warning i14"></i>1</span>
+    <button class="btn" aria-label="Help"><i class="i i-question i18"></i></button>
+  </div>
+
+  <div class="stage">
+    <div class="rail">
+      <button class="btn on"><i class="i i-cursor"></i></button>
+      <button class="btn"><i class="i ki-place"></i></button>
+      <button class="btn"><i class="i i-line-segment"></i></button>
+      <button class="btn"><i class="i ki-cable"></i></button>
+      <button class="btn"><i class="i i-text-t"></i></button>
+    </div>
+    <div class="cv art-canvas-{{theme}}"></div>
+  </div>
+  <div class="status"><span>Menu open · Esc closes · arrows move</span></div>
+  <div class="scrim" style="top:40px"></div>
+
+  <!-- THE APP MENU: two panes. Left, the eight menus as icons; right, the open menu as grouped rows and tiles -->
+  <div class="float" style="left:8px;top:46px;width:700px;height:640px;display:flex;border-radius:10px">
+    <div class="col" style="width:188px;background:var(--panel);border-right:1px solid var(--bd);padding:10px 8px;gap:1px">
+      <div class="mrow on" style="height:34px"><i class="i i-folder-open i18"></i><b>File</b><span class="ch"><i class="i i-caret-right i14"></i></span></div>
+      <div class="mrow" style="height:34px"><i class="i i-pencil-simple i18"></i>Edit<span class="ch"><i class="i i-caret-right i14"></i></span></div>
+      <div class="mrow" style="height:34px"><i class="i ki-place i18"></i>Draw<span class="ch"><i class="i i-caret-right i14"></i></span></div>
+      <div class="mrow" style="height:34px"><i class="i i-eye i18"></i>View<span class="ch"><i class="i i-caret-right i14"></i></span></div>
+      <div class="mrow" style="height:34px"><i class="i i-seal-check i18"></i>Check<span class="ch"><i class="i i-caret-right i14"></i></span></div>
+      <div class="mrow" style="height:34px"><i class="i ki-report i18"></i>Reports<span class="ch"><i class="i i-caret-right i14"></i></span></div>
+      <div class="mrow" style="height:34px"><i class="i ki-live i18"></i>Simulate<span class="ch"><i class="i i-caret-right i14"></i></span></div>
+      <div class="mrow" style="height:34px"><i class="i i-question i18"></i>Help<span class="ch"><i class="i i-caret-right i14"></i></span></div>
+      <div class="grow"></div>
+      <div class="hsep" style="margin:6px 0"></div>
+      <div class="mrow" style="height:34px"><i class="i i-gear-six i18"></i>Preferences</div>
+      <div class="mrow" style="height:34px"><i class="i i-x i18"></i>Quit<span class="kbd">Ctrl Q</span></div>
+    </div>
+
+    <div class="col grow" style="padding:14px 16px;gap:14px;overflow:hidden">
+      <div class="row gap8" style="gap:10px">
+        <div class="tile grow hv"><span class="ico"><i class="i i-file-plus i20"></i></span><span class="name">New project</span><span class="cap"><span class="kbd">Ctrl N</span></span></div>
+        <div class="tile grow"><span class="ico"><i class="i i-folder-open i20"></i></span><span class="name">Open…</span><span class="cap"><span class="kbd">Ctrl O</span></span></div>
+        <div class="tile grow"><span class="ico"><i class="i i-graduation-cap i20"></i></span><span class="name">Open example</span><span class="cap">Motor starter</span></div>
+      </div>
+
+      <div class="col" style="gap:2px">
+        <span class="lbl" style="padding:0 8px 4px">Recent</span>
+        <div class="mrow"><i class="i i-file-text"></i><span>Motor starter (example)</span><span class="cap" style="margin-left:auto">Documents / KoperCAD</span></div>
+        <div class="mrow"><i class="i i-file-text"></i><span>Pump station 2</span><span class="cap" style="margin-left:auto">Documents / KoperCAD</span></div>
+        <div class="mrow"><i class="i i-file-text"></i><span>Crane hoist panel</span><span class="cap" style="margin-left:auto">Documents / KoperCAD</span></div>
+      </div>
+
+      <div class="col" style="gap:1px">
+        <div class="mrow"><i class="i i-floppy-disk"></i>Save<span class="kbd">Ctrl S</span></div>
+        <div class="mrow"><i class="i i-copy"></i>Save as…<span class="kbd">Ctrl Shift S</span></div>
+        <div class="mrow"><i class="i i-x"></i>Close project<span class="kbd">Ctrl W</span></div>
+      </div>
+
+      <div class="col" style="gap:6px">
+        <span class="lbl" style="padding:0 8px">Move data in and out</span>
+        <div class="row" style="gap:10px">
+          <div class="tile grow"><span class="row gap8"><i class="i i-download-simple i20" style="color:var(--ac)"></i><span class="name">Import…</span></span><span class="cap">DXF, EPLAN, AutomationML, parts, spreadsheet</span></div>
+          <div class="tile grow"><span class="row gap8"><i class="i i-upload-simple i20" style="color:var(--ac)"></i><span class="name">Export…</span></span><span class="cap">PDF, DXF, Excel, PLC, workshop pack</span></div>
+          <div class="tile grow"><span class="row gap8"><i class="i i-printer i20" style="color:var(--ac)"></i><span class="name">Print…</span></span><span class="cap">Plot sets and preview</span></div>
+        </div>
+      </div>
+
+      <div class="col" style="gap:1px">
+        <div class="mrow"><i class="i i-sliders-horizontal"></i>Project rules and standard…</div>
+        <div class="mrow"><i class="i i-git-diff"></i>Revisions<span class="ch"><i class="i i-caret-right i14"></i></span></div>
+        <div class="mrow"><i class="i i-package"></i>Parts library…</div>
+        <div class="mrow"><i class="i ki-macro"></i>Macros…</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>
