@@ -21,10 +21,12 @@ novo-checks = { path = "crates/novo-checks" }
 novo-cli = { path = "crates/novo-cli" }
 novo-commissioning = { path = "crates/novo-commissioning" }
 novo-core = { path = "crates/novo-core" }
+novo-drive = { path = "crates/novo-drive" }
 novo-editor = { path = "crates/novo-editor" }
 novo-emc = { path = "crates/novo-emc" }
 novo-interop = { path = "crates/novo-interop" }
 novo-layout = { path = "crates/novo-layout" }
+novo-machine = { path = "crates/novo-machine" }
 novo-numbering = { path = "crates/novo-numbering" }
 novo-parts = { path = "crates/novo-parts" }
 novo-pdf = { path = "crates/novo-pdf" }
