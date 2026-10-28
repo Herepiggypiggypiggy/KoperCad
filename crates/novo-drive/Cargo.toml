@@ -1,0 +1,11 @@
+[package]
+name = "novo-drive"
+description = "Frequency drive, motor at variable frequency, mechanics and holding brake (pure engine, averaged model)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -1,0 +1,12 @@
+[package]
+name = "novo-machine"
+description = "Machine and crane kinematics, schematic bindings and the co-simulation loop (pure engine)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+novo-drive.workspace = true
+
+[lints]
+workspace = true

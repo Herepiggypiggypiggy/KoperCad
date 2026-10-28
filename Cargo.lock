@@ -2092,6 +2092,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-drive"
+version = "0.1.0"
+
+[[package]]
 name = "novo-editor"
 version = "0.1.0"
 dependencies = [
@@ -2163,6 +2167,13 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "toml",
+]
+
+[[package]]
+name = "novo-machine"
+version = "0.1.0"
+dependencies = [
+ "novo-drive",
 ]
 
 [[package]]
