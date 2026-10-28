@@ -1,6 +1,7 @@
-//! Airflow as arrows on the slice plane: a coarse grid of arrows whose length
-//! follows the air speed, an alternative to streamlines for reading the
-//! direction and size of the flow at the plane.
+//! Airflow as arrows on the slice plane: a coarse grid of arrows for reading
+//! the direction and size of the flow at the plane. Length, width and colour
+//! all follow the air speed on the scale shared with the other Flow modes
+//! (see `heat_flow`), so two planes can be compared by length.
 
 use glam::Vec3;
 use novo_cfd::CfdSnapshot;
@@ -8,19 +9,18 @@ use novo_heatview::cfd::{self, Axis};
 use novo_view3d::OverlayLines;
 
 use super::heat_3d::Place;
+use super::heat_flow::{self, FlowView};
 
-/// Arrows across the longer side of the plane.
-const ACROSS: f64 = 16.0;
-/// Air slower than this share of the fastest on the plane gets no arrow.
-const QUIET: f32 = 0.02;
+/// Arrows across the longer side of the plane at no strength and at full.
+const ACROSS: (f64, f64) = (7.0, 20.0);
 /// Shortest arrow, as a share of the grid spacing.
 const MIN_LEN: f64 = 0.3;
 
 type Sample = ([f64; 3], [f32; 3], f32);
 
-/// The air on the plane at a coarse grid: the samples, the grid spacing in
-/// mm and the fastest speed found, m/s.
-fn sample(snap: &CfdSnapshot, axis: Axis, at: f32) -> (Vec<Sample>, f64, f32) {
+/// The air on the plane at a coarse grid: the samples and the grid spacing in
+/// mm. `across` is how many cells span the longer side.
+fn sample(snap: &CfdSnapshot, axis: Axis, at: f32, across: f64) -> (Vec<Sample>, f64) {
     let edges = match axis {
         Axis::X => &snap.grid.x_edges_mm,
         Axis::Y => &snap.grid.y_edges_mm,
@@ -29,7 +29,7 @@ fn sample(snap: &CfdSnapshot, axis: Axis, at: f32) -> (Vec<Sample>, f64, f32) {
     let (lo, hi) = (edges[0], edges[edges.len() - 1]);
     let offset = lo + f64::from(at.clamp(0.0, 1.0)) * (hi - lo);
     let w = cfd::whole_window(snap, axis);
-    let step = (w.w.max(w.h) / ACROSS).max(1.0);
+    let step = (w.w.max(w.h) / across).max(1.0);
     let (nu, nv) = ((w.w / step).floor() as usize, (w.h / step).floor() as usize);
     let point = |u: f64, v: f64| match axis {
         Axis::Z => [u, v, offset],
@@ -51,46 +51,36 @@ fn sample(snap: &CfdSnapshot, axis: Axis, at: f32) -> (Vec<Sample>, f64, f32) {
             samples.push((p, v, speed));
         }
     }
-    let top = samples.iter().map(|s| s.2).fold(0.0f32, f32::max);
-    (samples, step, top)
-}
-
-/// The fastest air on the plane, m/s: what the longest arrow stands for.
-pub(crate) fn top_speed(snap: &CfdSnapshot, axis: Axis, at: f32) -> f32 {
-    if !snap.is_consistent() {
-        return 0.0;
-    }
-    sample(snap, axis, at).2
-}
-
-/// The Arrows checkbox hover. The speed is only known while Arrows is on.
-pub(crate) fn hover_text(top: Option<f32>) -> String {
-    let speed = top.map_or(String::new(), |t| format!(" (now {t:.2} m/s)"));
-    format!(
-        "Arrows on the slice plane point where the air goes. Length is relative to the fastest air on this plane{speed}, so two planes cannot be compared by length; air under 2 % of that is not drawn"
-    )
+    (samples, step)
 }
 
 /// Arrows at plane `at` (0 to 1 along `axis`), in the scene frame. Cells
-/// inside solids get none; air slower than 2 % of the fastest gets none.
-pub(crate) fn arrows(snap: &CfdSnapshot, place: Place, axis: Axis, at: f32) -> OverlayLines {
+/// inside solids get none; air under 3 % of `scale_top` gets none. A longer
+/// arrow is faster air in m/s, not relative to the plane: `scale_top` is the
+/// speed of an arrow one cell long. `view.strength` sets how many.
+pub(crate) fn arrows(
+    snap: &CfdSnapshot,
+    place: Place,
+    axis: Axis,
+    at: f32,
+    view: &FlowView,
+    scale_top: f32,
+) -> OverlayLines {
     let mut out = OverlayLines {
-        width_px: 1.6,
+        width_px: 2.2,
         order: 3,
         ..Default::default()
     };
     if !snap.is_consistent() {
         return out;
     }
-    let (samples, step, top) = sample(snap, axis, at);
-    if top <= 0.0 {
-        return out;
-    }
+    let across = ACROSS.0 + (ACROSS.1 - ACROSS.0) * f64::from(view.strength.clamp(0.0, 1.0));
+    let (samples, step) = sample(snap, axis, at, across);
     for (p, v, speed) in samples {
-        if speed < QUIET * top {
+        if speed < heat_flow::QUIET_SHARE * scale_top {
             continue;
         }
-        let share = f64::from(speed / top);
+        let share = f64::from((speed / scale_top).clamp(0.0, 1.0));
         let len = step * (MIN_LEN + (0.9 - MIN_LEN) * share);
         let dir = [
             f64::from(v[0] / speed),
@@ -122,7 +112,7 @@ pub(crate) fn arrows(snap: &CfdSnapshot, place: Place, axis: Axis, at: f32) -> O
         let n = norm(side);
         let side = [side[0] / n, side[1] / n, side[2] / n];
         let head = len * 0.28;
-        let rgb = shade(share);
+        let rgb = shade(speed, scale_top);
         let tip = at(0.5, [0.0; 3], 0.0);
         let tail = at(-0.5, [0.0; 3], 0.0);
         let wing = |s: f64| {
@@ -160,14 +150,11 @@ fn norm(a: [f64; 3]) -> f64 {
     (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt()
 }
 
-/// Light blue, brighter for faster air (the streamlines' colours).
-fn shade(share: f64) -> [u8; 4] {
-    [
-        110,
-        200,
-        255,
-        (90.0 + 165.0 * share).clamp(90.0, 255.0) as u8,
-    ]
+/// The colour of air at `speed` on the shared scale, fainter when slow.
+fn shade(speed: f32, scale_top: f32) -> [u8; 4] {
+    let c = heat_flow::colour(speed, scale_top);
+    let share = (speed / scale_top.max(1e-6)).clamp(0.0, 1.0);
+    [c[0], c[1], c[2], (150.0 + 105.0 * share) as u8]
 }
 
 fn push(out: &mut OverlayLines, pts: &[Vec3], rgba: [u8; 4]) {
@@ -183,47 +170,80 @@ mod tests {
     use super::*;
     use crate::app::heat_3d_tests::{place, snapshot};
 
+    fn view(strength: f32) -> FlowView {
+        FlowView {
+            strength,
+            ..Default::default()
+        }
+    }
+
+    fn lengths(o: &OverlayLines) -> Vec<f32> {
+        o.starts
+            .chunks(2)
+            .map(|c| (o.positions[c[0] as usize + 1] - o.positions[c[0] as usize]).length())
+            .collect()
+    }
+
     #[test]
     fn a_uniform_wind_gives_equal_arrows_pointing_along_it() {
-        let o = arrows(&snapshot(), place(), Axis::Z, 0.8);
+        let o = arrows(&snapshot(), place(), Axis::Z, 0.8, &view(0.5), 1.0);
         assert!(!o.starts.is_empty() && o.starts.len().is_multiple_of(2));
         // The first polyline of an arrow runs tail to tip: +x in the solver is
         // +x in the scene.
         let s = o.starts[0] as usize;
         let d = o.positions[s + 1] - o.positions[s];
         assert!(d.x > 0.0 && d.y.abs() < 1e-3 && d.z.abs() < 1e-3, "{d:?}");
-        let lens: Vec<f32> = o
-            .starts
-            .chunks(2)
-            .map(|c| (o.positions[c[0] as usize + 1] - o.positions[c[0] as usize]).length())
-            .collect();
+        let lens = lengths(&o);
         assert!(lens.iter().all(|l| (l - lens[0]).abs() < 1e-3));
     }
 
     #[test]
-    fn the_top_speed_is_the_fastest_air_on_the_plane() {
-        let snap = snapshot();
-        assert!((top_speed(&snap, Axis::Z, 0.8) - 1.0).abs() < 1e-6);
+    fn length_is_the_speed_on_the_shared_scale_not_relative_to_the_plane() {
+        let fast = arrows(&snapshot(), place(), Axis::Z, 0.8, &view(0.5), 1.0);
         let mut slow = snapshot();
-        slow.velocity.iter_mut().for_each(|v| *v = [0.0, 0.25, 0.0]);
-        assert!((top_speed(&slow, Axis::Z, 0.8) - 0.25).abs() < 1e-6);
+        slow.velocity.iter_mut().for_each(|v| *v = [0.25, 0.0, 0.0]);
+        // The same plane with a quarter of the speed: shorter arrows, not the
+        // same arrows rescaled to the plane's fastest air.
+        let calm = arrows(&slow, place(), Axis::Z, 0.8, &view(0.5), 1.0);
+        assert!(lengths(&calm)[0] < 0.7 * lengths(&fast)[0]);
+    }
+
+    #[test]
+    fn more_strength_gives_more_arrows() {
+        let few = arrows(&snapshot(), place(), Axis::Z, 0.8, &view(0.0), 1.0);
+        let many = arrows(&snapshot(), place(), Axis::Z, 0.8, &view(1.0), 1.0);
+        assert!(many.starts.len() > 2 * few.starts.len());
     }
 
     #[test]
     fn no_arrows_inside_a_device_or_without_wind() {
         let snap = snapshot();
         // z at 10 mm of 60: the 20 mm cube sits at x, y < 20 there.
-        let o = arrows(&snap, place(), Axis::Z, 0.17);
-        let all = arrows(&snap, place(), Axis::Z, 0.8);
+        let o = arrows(&snap, place(), Axis::Z, 0.17, &view(1.0), 1.0);
+        let all = arrows(&snap, place(), Axis::Z, 0.8, &view(1.0), 1.0);
         assert!(o.starts.len() < all.starts.len());
         let mut calm = snapshot();
         calm.velocity.iter_mut().for_each(|v| *v = [0.0; 3]);
-        assert!(arrows(&calm, place(), Axis::Z, 0.8).positions.is_empty());
+        assert!(
+            arrows(&calm, place(), Axis::Z, 0.8, &view(1.0), 1.0)
+                .positions
+                .is_empty()
+        );
     }
 
     #[test]
-    fn the_hover_gives_a_speed_only_while_arrows_are_on() {
-        assert!(!hover_text(None).contains("m/s"));
-        assert!(hover_text(Some(0.31)).contains("(now 0.31 m/s)"));
+    fn air_under_three_percent_of_the_scale_is_not_drawn() {
+        let mut slow = snapshot();
+        slow.velocity.iter_mut().for_each(|v| *v = [0.02, 0.0, 0.0]);
+        assert!(
+            arrows(&slow, place(), Axis::Z, 0.8, &view(1.0), 1.0)
+                .positions
+                .is_empty()
+        );
+        assert!(
+            !arrows(&slow, place(), Axis::Z, 0.8, &view(1.0), 0.1)
+                .positions
+                .is_empty()
+        );
     }
 }
