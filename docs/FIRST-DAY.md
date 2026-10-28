@@ -63,6 +63,14 @@ If the window stays black or the program does not start, use the Start menu entr
 Your work is in `Documents\KoperCAD`, settings in `%APPDATA%\KoperCAD`, recovery copies in
 `%LOCALAPPDATA%\KoperCAD\recovery`, logs in `%LOCALAPPDATA%\KoperCAD\logs` (Help > Open log folder).
 
+## 4b. Small known problems (none loses work)
+
+- Unnumbered wires show as "Wire wire" in the Commissioning Test tab.
+- In the New cabinet dialog, Ctrl+K and typed words go into the Name field.
+- Closing an edited example project gives no prompt: a draft is kept under Unsaved on the start screen (named "Untitled", without undo history).
+- A price written "1.500" or "1,500" is read as 1.5 with a warning.
+- The newest build also fixes: Delete with the pointer off the page (now says why), F2 rename appending, Ctrl+N from 3D, Ctrl+K "wire numbers" opening a lesson, clipped Commissioning counters, hot-spot cards on an empty cabinet.
+
 ## 5. What to treat as a model, not a fact
 
 - Heat, airflow and cooling results are models, not measurements. Check a critical enclosure with the maker's tool.
