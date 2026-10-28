@@ -312,17 +312,22 @@ impl NovoApp {
             self.outline_more_menu(ui);
         });
         ui.add_space(4.0);
-        if self.ol.picked.len() > 1 {
-            ui.label(
-                egui::RichText::new(format!(
+        // One fixed line, so the rows do not jump when a selection starts.
+        let many = self.ol.picked.len() > 1;
+        let pal = crate::theme::ui_palette();
+        ui.label(
+            egui::RichText::new(if many {
+                format!(
                     "{} pages selected \u{b7} drag to move, Esc clears",
                     self.ol.picked.len()
-                ))
-                .size(tokens::FONT_SMALL)
-                .color(crate::theme::ui_palette().accent),
-            );
-            ui.add_space(2.0);
-        }
+                )
+            } else {
+                "Ctrl or Shift click selects several pages".to_owned()
+            })
+            .size(tokens::FONT_SMALL)
+            .color(if many { pal.accent } else { pal.text_tertiary }),
+        );
+        ui.add_space(2.0);
         self.filing_banner(ui);
 
         let page_rows = self.page_rows();

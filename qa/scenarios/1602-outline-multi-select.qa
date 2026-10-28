@@ -4,28 +4,26 @@
 # Ctrl+click adds a page to the selection or takes it out, Shift+click selects the range from the last click, and dragging one selected page drags them all: a badge shows the count and a line shows where the block lands. The outline shows "N pages selected". The outline is pinned at this size; the 1366x768 flyout version is 1603. Pictures: Ctrl selection, Shift range, mid-drag with the drop line, the new order, undo in one step, Ctrl+A, Esc.
 click_text "Open example"
 wait 20
-click 124 213
+click 150 378 ctrl
 wait 6
-click 150 358 ctrl
-wait 6
-click 150 416 ctrl
+click 150 436 ctrl
 wait 6
 expect "2 pages selected"
 shot ctrl-selected-10-and-30
-click 100 358
+click 100 378
 wait 4
-click 100 416 shift
+click 100 436 shift
 wait 6
 expect "3 pages selected"
 shot shift-range-10-to-30
-mouse_down 120 387
-move 120 400
+mouse_down 120 407
 move 120 420
 move 120 440
-move 120 452
+move 120 460
+move 120 472
 wait 6
 shot dragging-block-with-drop-line
-mouse_up 120 452
+mouse_up 120 472
 wait 10
 shot block-moved-below-40
 key ctrl+z

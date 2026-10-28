@@ -6,26 +6,26 @@ click_text "Open example"
 wait 20
 click_text "Pages"
 wait 10
-click 150 371 ctrl
+click 150 391 ctrl
 wait 6
-click 150 429 ctrl
+click 150 449 ctrl
 wait 6
 expect "2 pages selected"
 shot ctrl-selected-10-and-30
-click 150 371 ctrl
+click 150 391 ctrl
 wait 6
-click 150 429 shift
+click 150 449 shift
 wait 6
 expect "3 pages selected"
 shot shift-range-10-to-30
-mouse_down 120 400
-move 120 415
-move 120 440
+mouse_down 120 420
+move 120 435
 move 120 460
-move 120 467
+move 120 480
+move 120 487
 wait 6
 shot dragging-block-with-drop-line
-mouse_up 120 467
+mouse_up 120 487
 wait 10
 shot block-moved-below-40
 key ctrl+z
