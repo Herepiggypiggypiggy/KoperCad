@@ -462,6 +462,36 @@ never copies EPLAN's library; the user's download stays the only way in.
   `sample.expected.json`, one per recipe. The samples are synthetic (see the
   README there); a real file replaces one with one command.
 
+## 3e-2. BMEcat 1.2, prices and ETIM codes (2026-10-28)
+
+Hardware reports (KC-06, KC-07, KC-08) showed that a real maker file would lose
+its technical data and every price. What changed, and the rules behind it:
+
+- **BMEcat 1.2 and 2005** are read by one reader (`novo-parts::bmecat`); the 1.2
+  element names are mapped to the 2005 names.
+- **A price says what it is for.** `Price` gained `unit` (empty means pieces):
+  `per 100`, `per 1000 m`, `per pair`. It is stored in the catalog as an optional
+  field, so older catalog files load unchanged. The quantity comes from
+  `PRICE_QUANTITY` and `NO_CU_PER_OU`; the list price (`net_list`, smallest
+  quantity) wins; a customer price is used only when it is the only one, with a
+  note. Nothing is invented: a price with no currency, a zero or negative amount,
+  an unreadable number or a quantity that is not whole is left out and listed.
+- **ETIM codes are read through a release the user installs.** KoperCAD carries no
+  ETIM codes and does not bundle the release (ETIM International publishes it; the
+  download may ask for a sign-in, which happens in the user's own browser, so
+  the "never store or ask for a password" rule holds). `EtimModel` reads the
+  release's CSV tables by the codes in their columns, keeps a compact copy in the
+  profile (`etim\etim-model.json`) and every import translates feature, unit and
+  value codes through it. A code it does not know is left as it is and counted in
+  the report with what to do. The reader has been tested on made-up tables in the
+  layouts it documents, not on an actual release file.
+- **Checks** the docs promised now run: sizes a file gives only in part, articles
+  without an order number (listed), the table import's order-number check, and a
+  part found in two files with different price or description (both files named).
+
+How the user does it: `PARTS-BULK-IMPORT.md` (Parts window > More > Install ETIM
+release, or `kopercad-cli parts etim <file>`).
+
 ## 3f. Library bundles (Export library, Import library)
 
 Moving a library to another computer, or giving your own parts to a colleague,

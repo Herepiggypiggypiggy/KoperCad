@@ -119,6 +119,29 @@ fn a_filter_moves_next_to_its_drive() {
         ("filter", 700.0, 100.0),
         ("drive", 10.0, 100.0),
     );
+    // A filter counts only when it is wired in series with the drive.
+    c.project
+        .transact("wire", |tx| {
+            let page = tx.add_page("1")?;
+            let mut sym = |d: DeviceId, key: &str| {
+                tx.place_symbol(
+                    page,
+                    key,
+                    Placement::at(Point::new(10.0, 10.0)),
+                    vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 8.0, 0.0)],
+                    SymbolRole::Device {
+                        device: d,
+                        main: true,
+                    },
+                )
+            };
+            let f = sym(c.a, "iec/transformers/emc_filter")?;
+            let t = sym(c.b, "iec/drives/frequency_converter")?;
+            tx.connect(Endpoint::pin(f, 0), Endpoint::pin(t, 0))?;
+            tx.connect(Endpoint::pin(f, 1), Endpoint::pin(t, 1))?;
+            Ok(())
+        })
+        .unwrap();
     assert!(has(&c.project, "EMC-07", c.b, c.a) || has(&c.project, "EMC-07", c.a, c.b));
     let fix = Fix::MoveCloser {
         device: c.a.raw(),

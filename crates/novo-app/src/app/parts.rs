@@ -78,6 +78,9 @@ pub(crate) struct PartsWindow {
     new_part: Option<NewPartForm>,
     /// The maker guide (what to download, where to save), while open.
     guide: bool,
+    /// The installed ETIM release as one line (`None` until the menu first
+    /// asks; `Some(None)` when there is none).
+    etim_line: Option<Option<String>>,
     /// Add CAD files: matching of downloaded files to parts, while open.
     cad: Option<CadPanel>,
     /// Export and import of a library bundle.
@@ -173,6 +176,7 @@ impl PartsWindow {
             pins: Default::default(),
             new_part: None,
             guide: false,
+            etim_line: None,
             cad: None,
             bundles: Default::default(),
             wake: None,
@@ -706,10 +710,9 @@ fn push_v2_rows(part: &CatalogPart, blocks: &mut [DetailSection]) {
         add(CLASSIFICATION, "Alternatives", list.join(", "));
     }
     if let Some(price) = &part.price {
-        let per = if price.per > 1 {
-            format!(" per {}", price.per)
-        } else {
-            String::new()
+        let per = match price.per_label() {
+            l if l.is_empty() => String::new(),
+            l => format!(" {l}"),
         };
         let date = if price.date.is_empty() {
             String::new()
@@ -826,6 +829,11 @@ enum PartsAction {
     ImportInbox,
     OpenInbox,
     OpenLibrary,
+    /// Pick the ETIM release the user downloaded (a ZIP or CSV file, or a
+    /// folder) and install it.
+    InstallEtim {
+        folder: bool,
+    },
     NewPart,
     Close,
 }
@@ -965,6 +973,7 @@ impl NovoApp {
         }
         let mut close = !open;
         let mut error = None;
+        let mut info = None;
         let mut assign = None;
         let mut open_dir = None;
         for action in actions {
@@ -1037,6 +1046,28 @@ impl NovoApp {
                 PartsAction::OpenLibrary => {
                     open_dir = default_library_root().map(|d| (d, false));
                 }
+                PartsAction::InstallEtim { folder } => {
+                    let dialog = crate::dialogs::FileDialog::new().set_title(
+                        "ETIM release (ZIP, CSV file or folder) from ETIM International",
+                    );
+                    let picked = if folder {
+                        dialog.pick_folder()
+                    } else {
+                        dialog
+                            .add_filter("ETIM release", &["zip", "csv", "txt"])
+                            .pick_file()
+                    };
+                    if let Some(path) = picked {
+                        match install_etim(&path) {
+                            Ok(line) => {
+                                info =
+                                    Some(format!("Installed {line}. Import the maker file again."));
+                                win.etim_line = Some(Some(line));
+                            }
+                            Err(e) => error = Some(e),
+                        }
+                    }
+                }
                 PartsAction::NewPart => win.new_part = Some(NewPartForm::default()),
                 PartsAction::Select(key) => win.select(key),
                 PartsAction::Import(key) => {
@@ -1102,6 +1133,9 @@ impl NovoApp {
         if let Some(text) = error {
             self.message(Level::Error, text);
         }
+        if let Some(text) = info {
+            self.message(Level::Info, text);
+        }
         if !catalog_files.is_empty() {
             self.import_catalog_files(&catalog_files);
         }
@@ -1136,6 +1170,16 @@ impl NovoApp {
             self.wb.parts = None;
         }
     }
+}
+
+/// Installs the ETIM release at `path` into the user's profile; returns the
+/// one-line summary, or the reason in words.
+fn install_etim(path: &Path) -> Result<String, String> {
+    let dir = novo_parts::EtimModel::dir_for(None)
+        .ok_or("No profile folder is known, so there is nowhere to keep the ETIM release.")?;
+    novo_parts::EtimModel::install(path, &dir)
+        .map(|m| m.summary())
+        .map_err(|e| format!("ETIM release: {e}"))
 }
 
 /// The maker guide: per maker the page to use, whether it needs a login and
@@ -1284,6 +1328,34 @@ fn parts_ui(
                         ui.close();
                     }
                 }
+                ui.separator();
+                let line = win.etim_line.get_or_insert_with(|| {
+                    novo_parts::EtimModel::dir_for(None)
+                        .and_then(|d| novo_parts::EtimModel::load_installed(&d))
+                        .map(|m| m.summary())
+                });
+                ui.weak(match line {
+                    Some(l) => l.as_str(),
+                    None => "No ETIM release installed",
+                });
+                for (label, hint, folder) in [
+                    (
+                        "Install ETIM release (ZIP or CSV)\u{2026}",
+                        "ETIM codes in maker files (EF000008, EU570448) are read with the ETIM release you downloaded from ETIM International. KoperCAD does not ship it. Pick its ZIP or a CSV file.",
+                        false,
+                    ),
+                    (
+                        "Install ETIM release (folder)\u{2026}",
+                        "Pick the folder the ETIM release was unpacked to.",
+                        true,
+                    ),
+                ] {
+                    if ui.button(label).on_hover_text(hint).clicked() {
+                        actions.push(PartsAction::InstallEtim { folder });
+                        ui.close();
+                    }
+                }
+                ui.separator();
                 for (label, hint, action) in [
                     (
                         "Export library\u{2026}",
@@ -1889,6 +1961,7 @@ mod tests {
             currency: "EUR".into(),
             per: 10,
             date: "2026-10-15".into(),
+            unit: String::new(),
         });
         p.terminals = vec![PartTerminal {
             name: "1".into(),

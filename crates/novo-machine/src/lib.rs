@@ -7,6 +7,7 @@ pub mod cosim;
 pub mod crane;
 pub mod hoist_loop;
 pub mod port;
+pub mod spec;
 
 #[cfg(test)]
 mod tests {

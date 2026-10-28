@@ -56,11 +56,11 @@ how_nl = ["Voer Labels uit in het opdrachtveld, of open Reports in de schakelaar
 title = "See the labels in the app"
 title_nl = "Bekijk de labels in de app"
 text = """
-Run **Labels** from the command field, or open **Reports** in the switcher at the top and click **Labels** in the list. The report has one table per kind: wires (38 rows, one per wire end), terminals (4), devices (9) and cables (1).
+Run **Labels** from the command field, or open **Reports** in the switcher at the top and click **Labels** in the list. The report has one table per kind: wires (50 rows, one per wire end), terminals (4), devices (9) and cables (1).
 Each row is one label with up to three lines, exactly the text that will be printed.
 """
 text_nl = """
-Voer **Labels** uit in het opdrachtveld, of open **Reports** in de schakelaar bovenin en klik op **Labels** in de lijst. Het rapport heeft per soort een tabel: draden (38 rijen, één per draaduiteinde), klemmen (4), componenten (9) en kabels (1).
+Voer **Labels** uit in het opdrachtveld, of open **Reports** in de schakelaar bovenin en klik op **Labels** in de lijst. Het rapport heeft per soort een tabel: draden (50 rijen, één per draaduiteinde), klemmen (4), componenten (9) en kabels (1).
 Elke rij is één label met hooguit drie regels, precies de tekst die wordt afgedrukt.
 """
 expect = { command = "report.labels" }
@@ -92,7 +92,7 @@ Open a terminal in that folder and run:
 
 `kopercad-cli export labels starter.novo --kind wires --output wire-labels.csv`
 
-The file has a header row "Line 1, Line 2, Line 3" and 38 rows: two labels for each of the 19 wires, one for each end. A row reads for example
+The file has a header row "Line 1, Line 2, Line 3" and 50 rows: two labels for each of the 25 wires, one for each end (the 19 wires of the wire list and the six supply feeds L1, L2, L3, PE, L and N). A row reads for example
 2 | =A1+CAB-K1:1 | =A1+CAB-F1:2, the number first, then where the other end goes, then this end.
 """
 text_nl = """
@@ -100,7 +100,7 @@ Open een terminal in die map en voer uit:
 
 `kopercad-cli export labels starter.novo --kind wires --output wire-labels.csv`
 
-Het bestand heeft een kopregel "Line 1, Line 2, Line 3" en 38 rijen: twee labels voor elk van de 19 draden, een voor elk uiteinde. Een rij luidt bijvoorbeeld
+Het bestand heeft een kopregel "Line 1, Line 2, Line 3" en 50 rijen: twee labels voor elk van de 25 draden, een voor elk uiteinde (de 19 draden uit de draadlijst en de zes voedingen L1, L2, L3, PE, L en N). Een rij luidt bijvoorbeeld
 2 | =A1+CAB-K1:1 | =A1+CAB-F1:2, eerst het nummer, dan waar het andere einde heen gaat en dan dit einde.
 """
 
