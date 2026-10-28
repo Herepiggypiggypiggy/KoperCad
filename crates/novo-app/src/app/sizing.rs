@@ -398,7 +398,7 @@ fn show_panel(
     ui.add_space(10.0);
     novo_theme::widgets::section_label(ui, "Result");
 
-    let left = left_out_text(state.left_out);
+    let left = left_out_text(&state.left_out);
     if devices.is_empty() {
         ui.weak(match &left {
             Some(_) => "No device of this panel takes room on the plate.",
@@ -447,19 +447,19 @@ fn show_panel(
     }
 }
 
-/// The line that says which devices the sizing did not count.
-fn left_out_text(left: novo_layout::sizing_model::LeftOut) -> Option<String> {
+/// The line that says which devices the sizing did not count, by tag.
+fn left_out_text(left: &novo_layout::sizing_model::LeftOut) -> Option<String> {
     let mut parts = Vec::new();
-    if left.field > 0 {
-        parts.push(format!("{} in the field", left.field));
+    if !left.field.is_empty() {
+        parts.push(format!("{} in the field", left.field.join(", ")));
     }
-    if left.door > 0 {
-        parts.push(format!("{} on the door", left.door));
+    if !left.door.is_empty() {
+        parts.push(format!("{} on the door", left.door.join(", ")));
     }
     (!parts.is_empty()).then(|| {
         format!(
             "Not counted, they take no room on the plate: {}.",
-            parts.join(", ")
+            parts.join("; ")
         )
     })
 }

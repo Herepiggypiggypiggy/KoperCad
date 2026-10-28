@@ -80,23 +80,36 @@ pub fn sizing_devices(project: &Project, id: StructureId) -> Vec<SizingDevice> {
         .collect()
 }
 
-/// What the sizing leaves out, for a line under the result.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// What the sizing leaves out, for a line under the result: the tags of the
+/// devices, sorted.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct LeftOut {
     /// Motors, valves and other devices outside the cabinet.
-    pub field: usize,
+    pub field: Vec<String>,
     /// Devices on the door or another surface.
-    pub door: usize,
+    pub door: Vec<String>,
 }
 
-/// How many devices of the enclosure `sizing_devices` does not count, and why.
+/// Which devices of the enclosure `sizing_devices` does not count, and why.
 pub fn left_out(project: &Project, id: StructureId) -> LeftOut {
     let off = crate::model::off_plate_devices(project, id);
-    LeftOut {
-        field: crate::model::in_the_field(project, id).len(),
+    let tag = |d: &novo_core::Device| {
+        d.tag
+            .device_code()
+            .map_or_else(|| d.tag.to_string(), |c| format!("-{c}"))
+    };
+    let mut out = LeftOut {
+        field: crate::model::in_the_field(project, id)
+            .into_iter()
+            .map(tag)
+            .collect(),
         door: crate::model::belonging(project, id)
-            .iter()
+            .into_iter()
             .filter(|d| off.contains(&d.id.raw()))
-            .count(),
-    }
+            .map(tag)
+            .collect(),
+    };
+    out.field.sort();
+    out.door.sort();
+    out
 }
