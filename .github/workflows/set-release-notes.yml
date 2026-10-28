@@ -1,0 +1,42 @@
+name: Set release notes
+
+# Started by hand only (Actions > Set release notes > Run workflow). Puts
+# docs/release-notes/<tag>.md, read from main, into the body of the DRAFT
+# release of that tag. Needed when the release notes could only be merged after
+# the tag was made (the tag sits on a commit without them). It refuses a
+# release that is already published: it never changes what the public sees.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Draft release tag, for example v0.1.0-rc11"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          sparse-checkout: docs/release-notes
+      - name: Check the inputs
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$ ]] || { echo "tag must look like v0.1.0-rc1 (release candidates only)"; exit 1; }
+          [ -s "docs/release-notes/$TAG.md" ] || { echo "docs/release-notes/$TAG.md is missing or empty on main"; exit 1; }
+      - name: Put the notes into the draft
+        run: |
+          set -euo pipefail
+          # `gh release view` and `gh release edit` do not find drafts by tag: look in the list by API.
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq "[.[] | select(.tag_name == \"$TAG\")] | first | .id // empty")
+          [ -n "$id" ] || { echo "no release for $TAG in the newest 100"; exit 1; }
+          draft=$(gh api "repos/$GITHUB_REPOSITORY/releases/$id" --jq .draft)
+          [ "$draft" = "true" ] || { echo "$TAG is published; refusing to change its notes"; exit 1; }
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -F "body=@docs/release-notes/$TAG.md" --jq '.tag_name + " draft=" + (.draft|tostring) + " body bytes: " + (.body|length|tostring)'
