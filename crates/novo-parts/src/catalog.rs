@@ -356,6 +356,14 @@ pub struct Catalog {
     by_order: HashMap<String, Vec<usize>>,
     /// Pre-lowered search text per part, same positions as `parts`.
     docs: Vec<SearchDoc>,
+    /// Changes with every edit, from a counter shared by all catalogs, so a
+    /// view can keep what it worked out and redo it only when this differs.
+    revision: u64,
+}
+
+fn next_revision() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 impl PartialEq for Catalog {
@@ -404,6 +412,12 @@ impl Catalog {
         Ok(catalog)
     }
 
+    /// A number that differs after every change of the catalog (and between
+    /// catalogs), for views that cache what they derive from it.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
     pub fn len(&self) -> usize {
         self.parts.len()
     }
@@ -435,6 +449,7 @@ impl Catalog {
     /// Adds a part, or replaces the one with the same key. Returns `true`
     /// when the part is new.
     pub fn upsert(&mut self, part: CatalogPart) -> bool {
+        self.revision = next_revision();
         let key = part.key();
         match self.index.get(&key) {
             Some(&i) => {
@@ -460,6 +475,7 @@ impl Catalog {
     /// Removes a part. Returns it if it was there.
     pub fn remove(&mut self, key: &PartKey) -> Option<CatalogPart> {
         let index = self.index.get(key).copied()?;
+        self.revision = next_revision();
         let part = self.parts.remove(index);
         self.docs.remove(index);
         self.reindex();
@@ -471,6 +487,7 @@ impl Catalog {
     /// a large catalog stays linear.
     pub fn retain(&mut self, mut keep: impl FnMut(&CatalogPart) -> bool) -> usize {
         let before = self.parts.len();
+        self.revision = next_revision();
         let mut flags = Vec::with_capacity(before);
         self.parts.retain(|p| {
             let k = keep(p);
