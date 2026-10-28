@@ -289,6 +289,8 @@ impl NovoApp {
         let Some(store) = self.wb.addons.store.clone() else {
             return;
         };
+        // The add-on a successful install should show in the details pane.
+        let mut shown: Option<String> = None;
         let result: Result<String, String> = match act {
             Act::Pick(update_of) => {
                 if let Some(path) = pick_package() {
@@ -312,6 +314,7 @@ impl NovoApp {
                     .install_file(&path, options)
                     .map(|i| {
                         let m = &i.package.manifest.addon;
+                        shown = Some(m.id.clone());
                         match i.change {
                             Change::Update { from } => {
                                 format!("{} updated from {from} to {}", m.name, m.version)
@@ -355,6 +358,9 @@ impl NovoApp {
         if let Some(m) = &mut self.wb.addons.manager {
             m.prompt = None;
             m.confirm_remove = None;
+            if shown.is_some() {
+                m.selected = shown;
+            }
             match result {
                 Ok(text) => m.notice = Some((Tone::Success, text)),
                 Err(text) => m.notice = Some((Tone::Error, text)),
