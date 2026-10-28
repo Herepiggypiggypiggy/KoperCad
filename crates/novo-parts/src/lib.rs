@@ -118,7 +118,7 @@ pub use sheet::{
     EditError, Group, INTERNAL_KEY_PREFIXES, PropertySheet, Row, RowKey, RowValue, display_value,
     is_internal_key, parse_number, parse_value, property_key, property_label, resolve_selection,
 };
-pub use step::{StepBox, StepError, step_box};
+pub use step::{StepBox, StepError, StepMeasurer, step_box};
 pub use table::{
     BulkError, BulkOutcome, BulkRow, BulkTable, TableColumn, apply_table, fill, find_device,
     set_cell,

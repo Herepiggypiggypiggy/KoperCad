@@ -118,7 +118,8 @@ impl Import {
             &part.manufacturer,
             &part.order_number,
             today,
-        );
+        )
+        .with_step_measurer(novo_interop::part3d::measure_step);
         let (phase, page_url) = match job.run().clone() {
             ImportState::Fallback { page_url, .. } => (Phase::Waiting, page_url),
             ImportState::NeedsNotice { manufacturer } => (
@@ -399,7 +400,8 @@ pub(crate) fn import_path(
         &part.manufacturer,
         &part.order_number,
         today,
-    );
+    )
+    .with_step_measurer(novo_interop::part3d::measure_step);
     let outcome = match job.import_file(path, flow).clone() {
         ImportState::Done(outcome) => outcome,
         ImportState::Failed(e) => return Err(e),
@@ -611,6 +613,12 @@ mod tests {
         assert_eq!(changed.len(), 1);
         assert!(changed[0].dimensions.is_some());
         assert!(summary.lines.iter().any(|l| l.contains("Saved")));
+        // Points only, no solid: the size is an estimate and the user is told.
+        assert!(
+            summary.lines.iter().any(|l| l.contains("only an estimate")),
+            "{:?}",
+            summary.lines
+        );
         let saved = Catalog::load(&cat).unwrap();
         assert!(saved.get(&part().key()).unwrap().dimensions.is_some());
         let rec = &lib.records_for(&part().key()).unwrap()[0];

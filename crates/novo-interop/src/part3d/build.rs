@@ -767,4 +767,40 @@ ENDSEC;\nEND-ISO-10303-21;"
         );
         assert_eq!(r.unwrap_err(), BuildError::Cancelled);
     }
+
+    /// Construction points far from the solid (axes, sketch and reference
+    /// geometry) must not count: this is the Schneider LC1D09BD failure
+    /// (543 x 823 x 490 mm instead of about 45 x 77 x 95 mm).
+    #[test]
+    fn measured_size_ignores_points_that_are_not_part_of_the_solid() {
+        let mut t = block_step(MM);
+        t = t.replace(
+            "ENDSEC;\nEND-ISO-10303-21;",
+            "#950=CARTESIAN_POINT('',(5000.,-3000.,8000.));\n#951=CARTESIAN_POINT('',(-420.,900.,-75.));\nENDSEC;\nEND-ISO-10303-21;",
+        );
+        let b = super::super::measure_step(&t).unwrap();
+        assert!(b.from_solid && !b.approximate());
+        for (got, want) in b.size_mm.iter().zip([10.0, 20.0, 30.0]) {
+            assert!((got - want).abs() < 1e-6, "{:?}", b.size_mm);
+        }
+        // The all-points estimate is what went wrong.
+        let rough = novo_parts::step_box(&t).unwrap();
+        assert!(rough.approximate() && rough.size_mm[2] > 8000.0);
+    }
+
+    #[test]
+    fn measured_size_respects_units() {
+        let m = "#90=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT($,.METRE.));";
+        let b = super::super::measure_step(&block_step(m)).unwrap();
+        assert!((b.size_mm[0] - 10_000.0).abs() < 1e-3, "{:?}", b.size_mm);
+        let inch = "#91=LENGTH_MEASURE_WITH_UNIT(LENGTH_MEASURE(25.4),#92);\n#92=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.MILLI.,.METRE.));\n#90=(CONVERSION_BASED_UNIT('INCH',#91)LENGTH_UNIT()NAMED_UNIT(*));";
+        let b = super::super::measure_step(&block_step(inch)).unwrap();
+        assert!((b.size_mm[1] - 508.0).abs() < 1e-3, "{:?}", b.size_mm);
+    }
+
+    #[test]
+    fn a_file_without_solids_is_not_measured() {
+        let t = "ISO-10303-21;\nDATA;\n#1=CARTESIAN_POINT('',(0.,0.,0.));\nENDSEC;\nEND-ISO-10303-21;\n";
+        assert!(super::super::measure_step(t).is_err());
+    }
 }

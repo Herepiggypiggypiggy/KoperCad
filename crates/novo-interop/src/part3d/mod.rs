@@ -55,6 +55,47 @@ pub const DEFAULT_BOX_MM: [f64; 3] = [18.0, 90.0, 60.0];
 /// Larger STEP files are not read for a preview (bytes).
 pub const MAX_STEP_BYTES: usize = 96 * 1024 * 1024;
 
+/// Size of a part from the geometry of its solids, for the catalog: the
+/// box around the tessellated solids in millimetres, with units and the
+/// placements of assemblies applied. Construction geometry (axes, sketch
+/// and reference points) is not part of a solid, so unlike
+/// `novo_parts::step_box` it does not inflate the size. The axes are the
+/// model's. `Err` is a reason in plain words.
+pub fn measure_step(text: &str) -> Result<novo_parts::StepBox, String> {
+    let opts = StepOptions {
+        // Only the extent matters: a coarse chord is enough and fast.
+        chord_tol_mm: 0.5,
+        deadline: Some(Instant::now() + std::time::Duration::from_secs(20)),
+        ..StepOptions::default()
+    };
+    let (soup, _) =
+        build::step_soup(text, &opts, &AtomicBool::new(false)).map_err(|e| e.to_string())?;
+    let mut used = vec![false; soup.pos.len()];
+    for t in &soup.tris {
+        for &i in t {
+            used[i as usize] = true;
+        }
+    }
+    let mut lo = [f64::INFINITY; 3];
+    let mut hi = [f64::NEG_INFINITY; 3];
+    let mut n = 0usize;
+    for (p, _) in soup.pos.iter().zip(&used).filter(|(_, u)| **u) {
+        for k in 0..3 {
+            lo[k] = lo[k].min(p[k]);
+            hi[k] = hi[k].max(p[k]);
+        }
+        n += 1;
+    }
+    if n == 0 || (0..3).any(|k| !(hi[k] - lo[k]).is_finite()) {
+        return Err("the solids have no measurable extent".into());
+    }
+    Ok(novo_parts::StepBox {
+        size_mm: [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]],
+        points: n,
+        from_solid: true,
+    })
+}
+
 /// What to draw for one part.
 #[derive(Debug, Clone, Copy)]
 pub struct MeshRequest<'a> {
