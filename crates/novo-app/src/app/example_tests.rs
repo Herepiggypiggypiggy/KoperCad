@@ -132,8 +132,11 @@ fn an_edited_example_is_kept_like_any_unsaved_project() {
     d.place("mcb3", 120.0, 48.0);
     d.frame();
     assert!(d.app.is_dirty());
+    // Closing asks; a project closed without an answer (a shutdown) is kept.
     d.app.run(&ctx, Action::CloseProject);
-    d.frame();
+    assert!(d.app.modal_open());
+    d.app.leaving = None;
+    d.app.backend.close().unwrap();
     assert_eq!(d.app.backend.unsaved_projects().len(), 1);
 }
 

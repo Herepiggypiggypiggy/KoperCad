@@ -1907,6 +1907,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-addons"
+version = "0.1.0"
+
+[[package]]
 name = "novo-ai"
 version = "0.1.0"
 dependencies = [
@@ -1973,6 +1977,7 @@ dependencies = [
  "novo-workflow",
  "novo-xref",
  "pollster 0.4.0",
+ "raw-window-handle",
  "rfd",
  "ron",
  "serde",
@@ -1980,6 +1985,7 @@ dependencies = [
  "tempfile",
  "ureq",
  "winresource",
+ "zip",
 ]
 
 [[package]]

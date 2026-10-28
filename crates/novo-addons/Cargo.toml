@@ -1,0 +1,11 @@
+[package]
+name = "novo-addons"
+description = "Add-on manager core: .kcaddon packages, install registry, compatibility, permissions and the sandboxed add-on host (pure)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -54,7 +54,7 @@ If the window stays black or the program does not start, use the Start menu entr
 
 | You see | Do this |
 | --- | --- |
-| Program closed or crashed | Start it again. It offers to restore unsaved work. Your file only changes at Ctrl+S. |
+| Program closed or crashed | Start it again. It offers to restore unsaved work. Your file only changes at Ctrl+S; closing or quitting with unsaved changes asks "Save changes?" first (Don't save throws the experiment away). |
 | A file will not open | It is salvaged into `<name>.recovered.kopercad` beside it and opened for you to check every page. Your original is untouched. |
 | Something looks wrong or is cut off | Maximise the window (1366 x 768 is the smallest size tested). |
 | Black window | Start **KoperCAD (safe graphics)**. |
@@ -67,7 +67,6 @@ Your work is in `Documents\KoperCAD`, settings in `%APPDATA%\KoperCAD`, recovery
 
 - Unnumbered wires show as "Wire wire" in the Commissioning Test tab.
 - In the New cabinet dialog, Ctrl+K and typed words go into the Name field.
-- Closing an edited example project gives no prompt: a draft is kept under Unsaved on the start screen (named "Untitled", without undo history).
 - A price written "1.500" or "1,500" is read as 1.5 with a warning.
 - Also in rc9, fixed in the later rc10 draft: Delete with the pointer off the page is ignored without a message; F2 rename appends to the old tag instead of replacing it; Ctrl+N from 3D stays on the greyed 3D tab; Ctrl+K "wire numbers" opens a lesson first; the Commissioning side panel clips its counters; an empty cabinet shows hot-spot cards.
 

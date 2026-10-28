@@ -395,7 +395,7 @@ pub static RECIPES: &[MakerRecipe] = &[
         },
         steps: &[
             "On the product page for {order}, use the CAD button and pick STEP or DXF. The page address is not confirmed; search for the number if it does not open the part.",
-            "The file arrives in Downloads and is imported by itself.",
+            "The file arrives in Downloads. Schneider names it after a document number (such as MCADPP0003371_3D-simplified.stp), not the article, so KoperCAD reads the model's own name inside it (often a range such as LC1D09-18) and checks it against the part; it asks when it is not sure.",
             "Schneider limits copying of its site content to personal, non-commercial use; check its CAD terms for commercial projects.",
         ],
         accepts: &[
@@ -627,6 +627,31 @@ mod tests {
             .map(|r| r.manufacturer)
             .collect();
         assert_eq!(verified, ["WAGO", "Phoenix Contact"]);
+    }
+
+    #[test]
+    fn the_account_note_says_the_same_everywhere_and_never_takes_a_password() {
+        for recipe in RECIPES {
+            let note = recipe.account_note();
+            assert!(!note.is_empty());
+            match recipe.route.login {
+                Login::None => assert!(note.contains("No account is needed"), "{note}"),
+                _ => assert!(
+                    note.contains("never asks for or keeps your password"),
+                    "{note}"
+                ),
+            }
+        }
+        assert!(
+            r("WAGO")
+                .account_note()
+                .contains("An account is needed at WAGO CAD models")
+        );
+        assert!(
+            r("Schneider Electric")
+                .account_note()
+                .starts_with("No account")
+        );
     }
 
     #[test]
