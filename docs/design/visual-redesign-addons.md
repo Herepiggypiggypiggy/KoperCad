@@ -33,11 +33,11 @@ Boards are HTML pictures of the target (sources in `visual-redesign/mockups/`). 
 
 The proposal of C0b appends add-on items to the assists or panels zone, at most 2 per add-on. With the base using 5 of the 6 places in most zones, that overflows at the second add-on. **Decision: one slot per workspace.**
 
-- The panels zone (the last one) has room for one add-on button in every workspace (the base uses at most 5 of 6). When exactly one add-on contributes to the open workspace, the button shows **that add-on's icon**; with two or more it shows a puzzle piece. The button has the flyout notch.
+- The panels zone (the last one) has room for one add-on button in every workspace (the base uses at most 5 of 6; Cabinet keeps to 5 because Cut list sits in its assists zone). When exactly one add-on contributes to the open workspace, the button shows **that add-on's icon**; with two or more it shows a puzzle piece. The button has the flyout notch.
 - The flyout lists each contributing add-on as a section (icon, name, "Add-on" chip) with its rail rows, then a footer row "Manage add-ons...". Up to 6 rows per add-on; the flyout scrolls beyond that.
 - Rail data stays registry-driven: the add-on's `home: rail` commands become rows of its flyout. The rail tables accept dynamic rows (section 6), so no add-on code touches the rail layout.
 - A badge on the add-on button is a plain count the host draws; status colour only for a severity the manifest declares, and always with the tooltip text.
-- The live view has no rail place today. Lane V3a adds a **Live** entry (the drawn `live` icon, `Shift+L`) as the sixth place of the Schematic assists zone, so the live-view toggle exists independently of any add-on.
+- The live view has no rail place today. Lane V3a adds a **Live** entry (the drawn `live` icon, `Shift+L`, the live-view key) as the sixth place of the Schematic assists zone, so the live-view toggle exists independently of any add-on. The Controllers panel is a card inside the live view and has **no key of its own**; the examples on the board show none.
 
 ## 4. Icons and the command presentation table
 
@@ -106,6 +106,8 @@ A centre window (960 x 640, resizable). Left: the installed add-ons, each with i
 | Failed (trap, timeout, budget) | Failed, with the reason in the details | warning-octagon, error |
 
 Installing an unsigned file opens a 480 dialog: publisher, requested permissions, hash, and a tick "I trust this file"; the primary action stays off until the tick is set. A project opened without an add-on it uses keeps the add-on's data untouched and shows the "not installed" empty state of section 2 in the place of the panel.
+
+The sandbox statement above, the "Signed by KoperVonk" state and the permission rows describe the design target of lane C0b; the pill and the file hashes on the board are example data. Nothing is signed or sandboxed until C0b builds and tests it.
 
 ## 8. Honest limits and open points
 

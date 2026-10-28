@@ -57,7 +57,7 @@ body{margin:0}
       <!-- rail flyout of the add-on -->
       <div class="float" style="left:8px;bottom:8px;width:252px;padding:6px;z-index:6">
         <div class="row gap8" style="padding:6px 8px 4px"><i class="i ki-controllers-radio" style="color:var(--ac2)"></i><b>Controllers</b><span class="chip" style="height:18px;font-size:10.5px">Add-on</span><span class="grow"></span><button class="btn" style="height:22px;min-width:22px;padding:0 3px"><i class="i i-x i14"></i></button></div>
-        <div class="mrow on"><i class="i ki-controllers-radio"></i>Controller panel<span class="kbd" style="margin-left:auto">Shift L</span></div>
+        <div class="mrow on"><i class="i ki-controllers-radio"></i>Controller panel</div>
         <div class="mrow"><i class="i i-link"></i>Bind controls</div>
         <div class="mrow"><i class="i i-record"></i>Record a sequence</div>
         <div class="mrow"><i class="i i-sliders-horizontal"></i>Add-on settings</div>
@@ -97,7 +97,8 @@ body{margin:0}
           </div>
 
           <div class="grow"></div>
-          <div class="row gap8"><span style="flex:1;height:40px;border-radius:20px;background:color-mix(in srgb,var(--err) 85%,#000);color:#fff;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600"><i class="i ki-estop i18"></i>E-stop</span><button class="sec" style="height:40px">Reset</button></div>
+          <div class="row gap8"><span title="Simulation only, not a safety function" style="flex:1;height:40px;border-radius:20px;background:color-mix(in srgb,var(--err) 85%,#000);color:#fff;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600"><i class="i ki-estop i18"></i>E-stop</span><button class="sec" style="height:40px">Reset</button></div>
+          <span class="cap" style="text-align:center">E-stop here is simulation only, not a safety function</span>
         </div>
         <div class="grip" style="left:0;bottom:0;transform:scaleX(-1)"></div>
       </div>
@@ -105,7 +106,7 @@ body{margin:0}
       <!-- Ctrl K: add-on commands are ordinary rows with the add-on's name as a chip -->
       <div class="float" style="left:290px;top:60px;width:470px;padding:8px;z-index:5">
         <div class="field" style="height:34px"><i class="i i-magnifying-glass i16" style="color:var(--tx3)"></i><span>controller</span><span class="grow"></span><span class="kbd">Esc</span></div>
-        <div class="mrow on" style="height:34px"><i class="i ki-controllers-radio i18"></i>Controller panel<span class="chip" style="height:18px;font-size:10.5px;margin-left:6px"><i class="i i-puzzle-piece i14"></i>Controllers</span><span class="kbd" style="margin-left:auto">Shift L</span></div>
+        <div class="mrow on" style="height:34px"><i class="i ki-controllers-radio i18"></i>Controller panel<span class="chip" style="height:18px;font-size:10.5px;margin-left:6px"><i class="i i-puzzle-piece i14"></i>Controllers</span></div>
         <div class="mrow" style="height:34px"><i class="i i-link i18"></i>Bind controls<span class="chip" style="height:18px;font-size:10.5px;margin-left:6px"><i class="i i-puzzle-piece i14"></i>Controllers</span></div>
         <div class="mrow" style="height:34px"><i class="i i-puzzle-piece i18"></i>Manage add-ons<span class="cap" style="margin-left:auto">Command</span></div>
       </div>
@@ -121,7 +122,7 @@ body{margin:0}
       </div>
     </div>
   </div>
-  <div class="status"><span>Controllers add-on: panel is docked right. Shift L shows or hides it.</span></div>
+  <div class="status"><span>Controllers add-on: panel is docked right and follows the live view (Shift L).</span></div>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"}}'>

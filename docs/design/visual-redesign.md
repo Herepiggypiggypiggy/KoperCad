@@ -101,7 +101,7 @@ The rail replaces the bottom dock and the text toolbars. It has three zones sepa
 | Workspace | Tools | Assists | Panels |
 | --- | --- | --- | --- |
 | Schematic | Select, Place symbol (Q), Connect (flyout: Corners, Lines, Autowire), Cable, Text | Autopilot, Accept proposals (badge: count), Tidy routes, Link reference, Macros | Pages, Issues (badge), Terminals, Cables, Devices |
-| Cabinet | Select, Place devices (flyout), Rails (flyout), Ducts, Plate setup | Size enclosure, Route wires, Placement rules, EMC on the plate | Heat (flyout), Vents and fans, Cut list, then Pages, Cabinet table, Inspector |
+| Cabinet | Select, Place devices (flyout), Rails (flyout), Ducts, Plate setup | Size enclosure, Route wires, Placement rules, EMC on the plate, Cut list | Heat (flyout), Vents and fans, Pages, Cabinet table, Inspector |
 | 3D | Select, Move, Place a device, Align and spread (flyout) | Measure, Section plane, Hide and isolate (flyout), Saved views | Layers (flyout), Heat, Wire runs, EMC view, Build order |
 | Reports | Add as drawing page, Report designer, Labels and ferrules | Bench output, Build mode | Export (flyout), Print |
 | Commissioning | Check, Punch item, Photo, Note | Walk the list, Mark done (tooltip: "a working mark, not a compliance record") | Report, Pages |
