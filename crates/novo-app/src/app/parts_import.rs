@@ -16,6 +16,7 @@ use novo_parts::{
 };
 
 use super::parts_cad::identity_of;
+use super::parts_identity::cached as cached_identity;
 
 /// Seconds between looks at the Downloads folder.
 pub(crate) const POLL_SECONDS: f64 = 1.0;
@@ -382,17 +383,13 @@ waiting. Try a smaller file, or the STEP file alone.",
         catalog: &Catalog,
         links: &CadLinks,
     ) -> Option<(PathBuf, Checked)> {
-        let new: Vec<PathBuf> = self
-            .watcher
-            .as_ref()?
-            .skipped()
-            .iter()
-            .filter(|p| !self.judged.contains(p) && !self.declined.contains(p))
-            .cloned()
-            .collect();
-        for path in new {
+        for path in self.unjudged() {
+            // A file the background reader has not finished is judged on a
+            // later frame: reading a large STEP file here would stop the window.
+            let Some(id) = cached_identity(&path) else {
+                continue;
+            };
             self.judged.push(path.clone());
-            let id = identity_of(&path);
             match decide_drop(&id, part, catalog, links) {
                 DropDecision::Import { notes } => {
                     return Some((path, Checked { notes, link: true }));
@@ -408,6 +405,17 @@ waiting. Try a smaller file, or the STEP file alone.",
             }
         }
         None
+    }
+
+    /// New downloads that were passed over by name and not judged yet.
+    pub(crate) fn unjudged(&self) -> Vec<PathBuf> {
+        self.watcher.as_ref().map_or_else(Vec::new, |w| {
+            w.skipped()
+                .iter()
+                .filter(|p| !self.judged.contains(p) && !self.declined.contains(p))
+                .cloned()
+                .collect()
+        })
     }
 
     /// Downloads that were read and left alone, with the reason in words.
