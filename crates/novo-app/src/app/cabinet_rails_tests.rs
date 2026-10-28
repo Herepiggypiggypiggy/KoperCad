@@ -386,7 +386,12 @@ mod ends {
     #[test]
     fn a_typed_length_stops_at_the_vertical_duct_instead_of_overlapping_it() {
         let (_dir, mut d, cab, ids) = setup();
-        // Duct 1 starts at 20 and the vertical duct's left edge is 185.
+        // Duct 1 starts at 20 and the vertical duct's left edge is 185. Both
+        // rows start 300 mm long, across the trunk; cut them clear of it first.
+        for id in [ids[0], ids[1]] {
+            d.app
+                .cabinet_rail_ask(Some(cab), RailAsk::SetLength(id, 100.0));
+        }
         d.app
             .cabinet_rail_ask(Some(cab), RailAsk::SetLength(ids[0], 400.0));
         let r = rails(&d)
