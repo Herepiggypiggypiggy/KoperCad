@@ -57,12 +57,16 @@ pub(super) struct PartPicker {
     /// The rows for the last `(scope, query)`, so a picker that stays open
     /// does not search a large catalog again every frame.
     cache: Option<(String, String, Vec<Candidate>)>,
+    /// The search field takes the keyboard on the first frame after opening,
+    /// so a part number typed straight away lands in it and not on the drawing.
+    focus_search: bool,
 }
 
 impl PartPicker {
     /// Opens or closes the list; each opening searches afresh.
     pub(super) fn toggle(&mut self) {
         self.open = !self.open;
+        self.focus_search = self.open;
         self.cache = None;
     }
 
@@ -225,11 +229,14 @@ pub(super) fn picker_ui(
     empty_hint: &str,
 ) -> Option<PartKey> {
     let mut chosen = None;
-    ui.add(
+    let search = ui.add(
         egui::TextEdit::singleline(&mut picker.query)
             .hint_text("Search order number, type or description")
             .desired_width(f32::INFINITY),
     );
+    if std::mem::take(&mut picker.focus_search) {
+        search.request_focus();
+    }
     if candidates.is_empty() {
         ui.weak(empty_hint);
     }

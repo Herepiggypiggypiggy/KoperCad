@@ -1,0 +1,26 @@
+@title Part picker takes a part number typed straight after Choose
+@sizes 1366x768
+@area Parts
+# Click test finding C-07: the search field was not focused, so the typed letters ran as drawing keys (R, T, X...) and the list did not filter.
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Motor starter DOL"
+wait 10
+key Return
+wait 20
+click_text Place #2
+wait 20
+key Escape
+click 700 560
+wait 5
+click 345 232
+wait 8
+click_text "Choose..."
+wait 12
+text 3RT2016
+wait 12
+expect "3RT2016-1AP01"
+expect_not "LC1D09BD"
+shot typed-after-choose

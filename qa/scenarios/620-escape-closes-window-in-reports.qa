@@ -1,0 +1,32 @@
+@title Escape closes a floating window while the Reports workspace is shown
+@area Workspaces
+# Click test finding C-01: the Reports list took Escape even with nothing to clear, so Standards check,
+# Bench output and the like stayed open and piled up over the report list.
+click_text "Open example"
+wait 20
+click_text Reports #2
+wait 20
+click_text Check #1
+wait 5
+click_text "Standards check"
+wait 15
+expect "Check against"
+key Escape
+wait 8
+expect_not "Check against"
+shot escape-closed-it
+# With a filter typed, Escape still clears the filter first and leaves the window.
+click_text Check #1
+wait 5
+click_text "Standards check"
+wait 15
+key ctrl+f
+text zzz
+wait 5
+key Escape
+wait 8
+expect "Check against"
+key Escape
+wait 8
+expect_not "Check against"
+shot escape-twice
