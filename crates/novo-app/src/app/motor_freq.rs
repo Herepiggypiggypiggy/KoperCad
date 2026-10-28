@@ -271,10 +271,11 @@ fn controls(
             });
     });
     ui.horizontal_wrapped(|ui| {
+        ui.label("Base frequency, Hz (0 = use the motor's)");
         ui.add(
             egui::DragValue::new(&mut state.base_hz)
                 .range(0.0..=400.0)
-                .suffix(" Hz base (0 = motor)"),
+                .suffix(" Hz"),
         );
         ui.add(
             egui::DragValue::new(&mut state.boost_v)
