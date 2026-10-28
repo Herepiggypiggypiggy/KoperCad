@@ -49,3 +49,6 @@ expect "Connection points"
 expect "Missing data"
 shot layers
 check_layout
+move 65 420
+wait 40
+shot layers-occlusion-hint

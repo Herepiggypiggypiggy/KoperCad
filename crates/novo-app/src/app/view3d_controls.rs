@@ -220,7 +220,11 @@ pub(super) fn toolbar(
                         match spec.option {
                             ViewOption::Surfaces => {
                                 if let Some(text) = &controls.models_text {
-                                    ui.label(egui::RichText::new(text).weak().small());
+                                    ui.label(
+                                        egui::RichText::new(text)
+                                            .small()
+                                            .color(crate::theme::ui_palette().text_secondary),
+                                    );
                                 }
                             }
                             ViewOption::Occlusion if !controls.ssao_available => {
@@ -251,7 +255,11 @@ pub(super) fn toolbar(
                         }
                     }
                     ui.separator();
-                    ui.label(egui::RichText::new("Walk through").weak().small());
+                    ui.label(
+                        egui::RichText::new("Walk through")
+                            .small()
+                            .color(crate::theme::ui_palette().text_secondary),
+                    );
                     for spec in ALL.iter().filter(|s| matches!(s.home, Home::Walk)) {
                         toggle(ui, values, spec.option);
                     }
