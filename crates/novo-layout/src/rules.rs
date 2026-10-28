@@ -541,6 +541,9 @@ pub struct Spec {
     /// Highest air temperature around the device the maker allows, in
     /// degrees C, when known (`max_ambient_c`).
     pub limit_c: Option<f64>,
+    /// The surface the device itself asks for (`mounting_site`: `plate` or
+    /// `door`); it wins over the surface rules. `None` leaves it to them.
+    pub surface: Option<String>,
 }
 
 impl Spec {
@@ -555,6 +558,7 @@ impl Spec {
             gaps: Gaps::default(),
             loss_w: None,
             limit_c: None,
+            surface: None,
         }
     }
 }
@@ -1483,6 +1487,13 @@ pub mod model {
                         right: property(project, device, RIGHT),
                     };
                     spec.limit_c = property(project, device, MAX_AMBIENT);
+                    spec.surface = match crate::site::stated_site(project, device) {
+                        Some(crate::site::Site::Door) => Some("door".to_owned()),
+                        Some(crate::site::Site::Plate) => {
+                            Some(crate::surfaces::MAIN_PLATE.to_owned())
+                        }
+                        _ => None,
+                    };
                     spec.loss_w = property(project, device, LOSS).map(|w| {
                         w * property(project, device, LOAD_FACTOR)
                             .unwrap_or(1.0)
@@ -1512,7 +1523,7 @@ pub mod model {
                     crate::surface_rules::SURFACE_RULES_KEY
                 )],
             ),
-            None => Default::default(),
+            None => (crate::surface_rules::SurfaceRules::standard(), Vec::new()),
         }
     }
 

@@ -81,6 +81,11 @@ impl Job {
         self.control.cancel();
     }
 
+    /// The stage the solver says it is in ("Meshing", "Iterating", ...).
+    pub fn phase(&self) -> &'static str {
+        self.control.phase()
+    }
+
     /// Everything that happened since the last call; never blocks.
     pub fn poll(&self) -> Vec<Event> {
         let mut out = Vec::new();

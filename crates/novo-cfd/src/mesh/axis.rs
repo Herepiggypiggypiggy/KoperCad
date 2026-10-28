@@ -199,9 +199,35 @@ fn segment_steps(l: f64, qa: f64, qb: f64, cap: f64, growth: f64) -> Vec<f64> {
     steps
 }
 
+/// Cells the halving cascade of [`enforce_ratio`] may add, per cell it starts
+/// with (plus [`CASCADE_SLACK`]), before the optimal split takes over.
+const CASCADE_PER_CELL: usize = 1;
+const CASCADE_SLACK: usize = 64;
+/// Most parts one cell is cut into by the optimal split.
+const MAX_PARTS: usize = 512;
+
 /// Split the larger cell of any pair whose ratio exceeds `max_ratio` until
 /// none does. Only adds edges, so planes stay edges.
+///
+/// Halving the larger cell is the usual cheap fix and adds a few edges. On
+/// some edge patterns (a row of cells that alternate in size, as the planes of
+/// a cabinet with rails and ducts give) the halves keep forcing their
+/// neighbours to halve and the cells shrink without end: a 1 m axis ended with
+/// thousands of 0.06 mm cells and the run never got past meshing. When the
+/// cascade has added more than it should, the cheapest valid split takes over
+/// (see [`graded_split`]).
 pub fn enforce_ratio(edges: &mut Vec<f64>, max_ratio: f64) {
+    let original = edges.clone();
+    let budget = original.len() * CASCADE_PER_CELL + CASCADE_SLACK;
+    if cascade(edges, max_ratio, original.len() + budget) {
+        return;
+    }
+    *edges = graded_split(&original, max_ratio).unwrap_or(original);
+}
+
+/// The halving cascade; `false` (edges left half done) when it would take
+/// the list past `limit` edges.
+fn cascade(edges: &mut Vec<f64>, max_ratio: f64, limit: usize) -> bool {
     loop {
         let mut changed = false;
         let mut i = 0;
@@ -217,10 +243,176 @@ pub fn enforce_ratio(edges: &mut Vec<f64>, max_ratio: f64) {
                 edges.insert(i + 2, mid);
                 changed = true;
             }
+            if edges.len() > limit {
+                return false;
+            }
             i += 1;
         }
         if !changed {
-            return;
+            return true;
         }
+    }
+}
+
+/// Cuts every cell of `edges` into equal parts so that neighbouring parts
+/// differ by at most `max_ratio` and the total number of cells is the least
+/// that allows it. Dynamic programming over the part count of each cell: the
+/// parts of the next cell that fit one choice are a contiguous range of
+/// counts, so a sliding minimum keeps it linear. `None` when no cut within
+/// [`MAX_PARTS`] works or an edge is not increasing.
+fn graded_split(edges: &[f64], max_ratio: f64) -> Option<Vec<f64>> {
+    use std::collections::VecDeque;
+    let cells = edges.len().checked_sub(1).filter(|n| *n > 0)?;
+    let h: Vec<f64> = edges.windows(2).map(|w| w[1] - w[0]).collect();
+    if h.iter().any(|v| !(*v > 0.0 && v.is_finite())) {
+        return None;
+    }
+    let min_h = h.iter().copied().fold(f64::MAX, f64::min);
+    // No part is made much smaller than the smallest cell there already is.
+    let kmax: Vec<usize> = h
+        .iter()
+        .map(|v| ((v / (0.5 * min_h)).ceil() as usize).clamp(1, MAX_PARTS))
+        .collect();
+    let r = max_ratio * (1.0 - 1e-9);
+    const INF: u32 = u32::MAX / 2;
+    // cost[i][k - 1]: fewest cells for cells 0..=i when cell i has k parts;
+    // from[i][k - 1]: the part count of cell i - 1 behind it.
+    let mut cost: Vec<Vec<u32>> = Vec::with_capacity(cells);
+    let mut from: Vec<Vec<u32>> = Vec::with_capacity(cells);
+    cost.push((1..=kmax[0] as u32).collect());
+    from.push(vec![0; kmax[0]]);
+    for i in 1..cells {
+        let prev = &cost[i - 1];
+        let mut c = vec![INF; kmax[i]];
+        let mut f = vec![0u32; kmax[i]];
+        let mut window: VecDeque<usize> = VecDeque::new();
+        let mut next = 1usize; // the next part count of cell i - 1 to add
+        let mut lo_prev = 1usize;
+        for k in 1..=kmax[i] {
+            let p = h[i] / k as f64;
+            // part counts k' of the previous cell with h' / k' in [p / r, p r]
+            let lo = ((h[i - 1] / (p * r)).ceil() as usize).clamp(1, kmax[i - 1] + 1);
+            let hi = ((h[i - 1] * r / p).floor() as usize).min(kmax[i - 1]);
+            let lo = lo.max(lo_prev);
+            lo_prev = lo;
+            while next <= hi {
+                while window
+                    .back()
+                    .is_some_and(|&b| prev[b - 1] >= prev[next - 1])
+                {
+                    window.pop_back();
+                }
+                window.push_back(next);
+                next += 1;
+            }
+            while window.front().is_some_and(|&w| w < lo) {
+                window.pop_front();
+            }
+            if let Some(&best) = window.front()
+                && prev[best - 1] < INF
+            {
+                c[k - 1] = prev[best - 1] + k as u32;
+                f[k - 1] = best as u32;
+            }
+        }
+        cost.push(c);
+        from.push(f);
+    }
+    let last = cost.last()?;
+    let (mut k, best) = last
+        .iter()
+        .enumerate()
+        .min_by_key(|(_, v)| **v)
+        .map(|(i, v)| (i + 1, *v))?;
+    if best >= INF {
+        return None;
+    }
+    let mut parts = vec![0usize; cells];
+    for i in (0..cells).rev() {
+        parts[i] = k;
+        k = from[i][k - 1] as usize;
+    }
+    let mut out = vec![edges[0]];
+    for (i, n) in parts.iter().enumerate() {
+        for j in 1..=*n {
+            out.push(if j == *n {
+                edges[i + 1]
+            } else {
+                edges[i] + h[i] * j as f64 / *n as f64
+            });
+        }
+    }
+    Some(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Cells of the given sizes, repeated, as edges from 0.
+    fn edges_of(pattern: &[f64], times: usize) -> Vec<f64> {
+        let mut e = vec![0.0];
+        for _ in 0..times {
+            for c in pattern {
+                e.push(e.last().unwrap() + c);
+            }
+        }
+        e
+    }
+
+    fn worst_ratio(e: &[f64]) -> f64 {
+        let h: Vec<f64> = e.windows(2).map(|w| w[1] - w[0]).collect();
+        h.windows(2)
+            .map(|w| (w[0] / w[1]).max(w[1] / w[0]))
+            .fold(1.0, f64::max)
+    }
+
+    #[test]
+    fn alternating_cells_no_longer_refine_without_end() {
+        // Cells that alternate 10.15 / 6.22 beside 7.8: halving the larger of
+        // a pair forced its neighbours to halve, over and over (3000 edges
+        // from 100 and still going; a 1 m axis took minutes).
+        for pattern in [
+            &[7.8, 7.8, 10.15, 6.22][..],
+            &[7.8, 7.8, 7.8, 10.15, 6.22][..],
+            &[8.0, 8.0, 10.15, 6.2, 8.0, 8.0][..],
+        ] {
+            let original = edges_of(pattern, 25);
+            let mut e = original.clone();
+            enforce_ratio(&mut e, 1.5);
+            assert!(worst_ratio(&e) <= 1.5, "{pattern:?}: {}", worst_ratio(&e));
+            assert!(
+                e.len() <= 3 * original.len(),
+                "{pattern:?}: {} edges from {}",
+                e.len(),
+                original.len()
+            );
+            // Every original edge (the planes of the bodies) is still an edge.
+            assert!(
+                original
+                    .iter()
+                    .all(|o| e.iter().any(|x| (x - o).abs() < 1e-9)),
+                "{pattern:?}: an edge moved"
+            );
+        }
+    }
+
+    #[test]
+    fn a_mild_violation_still_takes_the_cheap_cascade() {
+        // One pair too far apart: a few halvings, the usual result.
+        let mut e = edges_of(&[10.0, 10.0, 4.0, 4.0, 4.0], 1);
+        let before = e.len();
+        enforce_ratio(&mut e, 1.5);
+        assert!(worst_ratio(&e) <= 1.5);
+        assert!(e.len() <= before + 6, "{} from {before}", e.len());
+    }
+
+    #[test]
+    fn a_big_jump_ends_with_the_ratio_held() {
+        let mut e = vec![0.0, 0.5, 100.0];
+        enforce_ratio(&mut e, 1.5);
+        assert!(worst_ratio(&e) <= 1.5);
+        // Equal parts cannot grade: the big cell is cut to the small one's size.
+        assert!(e.len() < 200, "{}", e.len());
     }
 }

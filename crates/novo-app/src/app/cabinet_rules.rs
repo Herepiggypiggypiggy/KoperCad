@@ -116,11 +116,29 @@ pub(super) fn surface_split(
         .collect();
     let (rules, mut problems) = novo_layout::rules::model::surface_rules(project, structure);
     let Some(enclosure) = layout.enclosure.as_ref() else {
-        if !rules.rules.is_empty() {
+        if !rules.standard && !rules.rules.is_empty() {
             problems.push(
                 "Surface rules need the inside size of the enclosure; every device stays on the plate"
                     .to_owned(),
             );
+        } else if rules.standard {
+            let wanting = specs
+                .iter()
+                .filter(|s| {
+                    s.surface
+                        .as_deref()
+                        .or_else(|| rules.surface_for(&s.kind))
+                        .is_some_and(|name| name != novo_layout::surfaces::MAIN_PLATE)
+                })
+                .count();
+            if wanting > 0 {
+                problems.push(format!(
+                    "{wanting} pilot {} (push buttons, lamps, meters) belong on the door; \
+                     {} stay on the plate until the enclosure has an inside size and a door (Cabinet, Door)",
+                    if wanting == 1 { "device" } else { "devices" },
+                    if wanting == 1 { "it" } else { "they" },
+                ));
+            }
         }
         return Split {
             plate: specs,

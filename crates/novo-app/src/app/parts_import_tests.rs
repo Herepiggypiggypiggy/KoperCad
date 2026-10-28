@@ -5,14 +5,14 @@
 //! click" runs exactly this flow on Siemens 3RT2016-1AP01.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use eframe::egui;
 use novo_parts::{Catalog, ImportFlow, LocalLibrary, PartKey, RowAction, SourceTable};
 
 use super::super::parts_import::{Import, Phase, READ_LIMIT_SECONDS, WAIT_LIMIT_SECONDS};
-use super::{PartsWindow, parts_ui};
+use super::{PartsWindow, Waiting, parts_ui};
 
 /// A STEP file whose points span `w` x `h` x `d` millimetres.
 fn step(w: f64, h: f64, d: f64) -> String {
@@ -619,4 +619,89 @@ fn the_waiting_strip_says_whether_an_account_is_needed_and_that_no_password_is_t
         b.painted().contains("No account is needed"),
         "Schneider's CAD download needs no login"
     );
+}
+
+#[test]
+fn a_second_drop_while_the_first_is_read_loses_no_file() {
+    let mut b = bench();
+    let dir = tempfile::tempdir().unwrap();
+    let make = |name: &str| {
+        write(dir.path(), name, &family_step());
+        dir.path().join(name)
+    };
+    let (a1, a2) = (make("MCADPP0003401_3D.stp"), make("MCADPP0003402_3D.stp"));
+    let (t1, t2) = (make("MCADPP0003403_3D.stp"), make("MCADPP0003404_3D.stp"));
+    b.win.wait_for(Waiting::AddCad(vec![a1.clone()]));
+    b.win.wait_for(Waiting::AddCad(vec![a2.clone()]));
+    b.win.wait_for(Waiting::Dropped(vec![t1.clone()]));
+    b.win.wait_for(Waiting::Dropped(vec![t2.clone()]));
+    let mut got = Vec::new();
+    let started = Instant::now();
+    while got.len() < 2 {
+        if let Some(r) = b.win.take_read() {
+            got.push(r);
+        }
+        assert!(started.elapsed() < Duration::from_secs(20), "never read");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let (Waiting::AddCad(first), Waiting::Dropped(second)) = (&got[0], &got[1]) else {
+        panic!("the batches come back in the order they were asked for");
+    };
+    assert_eq!(first, &vec![a1, a2]);
+    assert_eq!(second, &vec![t1, t2]);
+    assert!(b.win.waiting.is_empty());
+}
+
+#[test]
+fn files_dropped_on_the_window_are_read_in_the_background_before_they_are_handled() {
+    let mut b = bench();
+    let dir = tempfile::tempdir().unwrap();
+    let paths: Vec<PathBuf> = (0..12)
+        .map(|i| {
+            let name = format!("MCADPP00033{i:02}_3D-simplified.stp");
+            write(dir.path(), &name, &family_step());
+            dir.path().join(name)
+        })
+        .collect();
+    b.win.wait_for(Waiting::AddCad(paths.clone()));
+    assert!(!b.win.waiting.is_empty(), "the window keeps the files");
+    assert!(
+        b.win.cad.is_none(),
+        "nothing is matched before they are read"
+    );
+    let started = Instant::now();
+    let read = loop {
+        if let Some(r) = b.win.take_read() {
+            break r;
+        }
+        assert!(started.elapsed() < Duration::from_secs(20), "never read");
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert!(b.win.waiting.is_empty());
+    let Waiting::AddCad(files) = read else {
+        panic!("the files come back the way they were asked for");
+    };
+    assert_eq!(files, paths);
+    // Now the panel is made from what was read, without reading again.
+    b.win.add_cad_files(&files);
+    let text = b.painted();
+    assert!(text.contains("Add CAD files"), "{text}");
+}
+
+#[test]
+fn a_download_that_is_not_read_yet_is_judged_on_a_later_frame() {
+    let mut b = bench();
+    let k = schneider(&mut b, "LC1D09BD");
+    b.click_import(&k);
+    write(
+        &b.downloads,
+        "MCADPP0003371_3D-simplified.stp",
+        &family_step(),
+    );
+    // The first frames only find the file and ask for it to be read; the
+    // import happens once the answer is there, never by reading in the frame.
+    let Phase::Done(summary) = b.pump_until_settled(20) else {
+        panic!("the model was not taken");
+    };
+    assert_eq!(summary.file, "MCADPP0003371_3D-simplified.stp");
 }

@@ -224,6 +224,7 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::DevicesTooClose,
         ProblemKind::RailOverflow,
         ProblemKind::DeviceOffRail,
+        ProblemKind::FieldDeviceInCabinet,
         ProblemKind::DuctOverlap,
         // Need an enclosure; see tests/door_checks.
         ProblemKind::DeviceTooDeep,

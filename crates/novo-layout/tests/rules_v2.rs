@@ -21,6 +21,7 @@ fn spec(id: u64, kind: &str, w: f64, h: f64) -> Spec {
         gaps: Gaps::default(),
         loss_w: None,
         limit_c: None,
+        surface: None,
     }
 }
 
