@@ -131,6 +131,19 @@ fn winding_rejects_bad_nameplate() {
         Err(InputError::NotPositive { .. })
     ));
     assert!(matches!(
+        Winding::new(4, 50.0, 4000.0, 1440.0, 1e200),
+        Err(InputError::OutOfRange { .. })
+    ));
+    let fine = Winding::new(12, 50.0, 800.0, 480.0, 2.0).unwrap();
+    let coarse = Winding::new(2, 50.0, 6000.0, 2880.0, 2.2).unwrap();
+    assert_eq!(
+        PoleChangeMotor::new(coarse, fine, 0.1),
+        Err(InputError::PolesNotDescending {
+            fine: 2,
+            coarse: 12
+        })
+    );
+    assert!(matches!(
         Winding::new(4, 50.0, 4000.0, 1440.0, 1.0),
         Err(InputError::OutOfRange { .. })
     ));

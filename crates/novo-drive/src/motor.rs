@@ -23,6 +23,9 @@ pub const SYNC_RPM_FIDELITY: Fidelity = Fidelity::Exact;
 /// Fidelity of the torque-speed curve ([`Winding::torque_nm`]).
 pub const TORQUE_CURVE_FIDELITY: Fidelity = Fidelity::Model;
 
+/// Upper bound accepted for breakdown torque over rated torque (real induction motors are 1.6 to 4).
+pub const MAX_BREAKDOWN_RATIO: f64 = 10.0;
+
 /// Sense of rotation. For a hoist, positive is raising.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
@@ -50,7 +53,7 @@ pub struct Winding {
 }
 
 impl Winding {
-    /// `breakdown_ratio` is breakdown torque over rated torque (greater than 1).
+    /// `breakdown_ratio` is breakdown torque over rated torque (greater than 1, at most 10).
     /// The rated speed must be below the synchronous speed (the rated slip is positive).
     pub fn new(
         poles: u32,
@@ -73,12 +76,12 @@ impl Winding {
                 max: sync,
             });
         }
-        if breakdown_ratio <= 1.0 {
+        if breakdown_ratio <= 1.0 || breakdown_ratio > MAX_BREAKDOWN_RATIO {
             return Err(InputError::OutOfRange {
                 field: "breakdown_ratio",
                 value: breakdown_ratio,
                 min: 1.0,
-                max: f64::INFINITY,
+                max: MAX_BREAKDOWN_RATIO,
             });
         }
         Ok(Self {
@@ -184,8 +187,9 @@ impl PoleChangeMotor {
     ) -> Result<Self, InputError> {
         error::non_negative("rotor_inertia_kg_m2", rotor_inertia_kg_m2)?;
         if fine.poles() <= coarse.poles() {
-            return Err(InputError::BadPoles {
-                poles: fine.poles(),
+            return Err(InputError::PolesNotDescending {
+                fine: fine.poles(),
+                coarse: coarse.poles(),
             });
         }
         Ok(Self {

@@ -21,6 +21,8 @@ pub enum InputError {
     },
     /// Pole counts are even numbers of at least 2.
     BadPoles { poles: u32 },
+    /// A pole-change motor needs a fine winding with more poles than the coarse one.
+    PolesNotDescending { fine: u32, coarse: u32 },
 }
 
 impl fmt::Display for InputError {
@@ -45,6 +47,10 @@ impl fmt::Display for InputError {
                     "pole count must be an even number of at least 2 (got {poles})"
                 )
             }
+            Self::PolesNotDescending { fine, coarse } => write!(
+                f,
+                "fine winding needs more poles than the coarse one (got {fine} and {coarse})"
+            ),
         }
     }
 }
