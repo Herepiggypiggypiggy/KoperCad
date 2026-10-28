@@ -327,6 +327,18 @@ pub fn parse(root: &Value) -> Result<Plant, String> {
     Ok(Plant { network, circuits })
 }
 
+/// Whether a drop in percent above a circuit is a drop of its own voltage:
+/// the same nominal voltage, or a single-phase circuit taken from the phases
+/// of a three-phase feeder (230 V off 400 V, no transformer between; the same
+/// line current gives the same percentage of the phase voltage).
+fn same_system(up: &CircuitDesign, here: &CircuitDesign) -> bool {
+    let near = |a: f64, b: f64| (a - b).abs() <= 0.1 * b;
+    near(up.voltage, here.voltage)
+        || (up.supply == Supply::ThreePhase
+            && here.supply == Supply::TwoWire
+            && near(up.voltage / 3.0_f64.sqrt(), here.voltage))
+}
+
 /// A circuit fed from another one sees the drop of every cable above it
 /// too: its *Voltage drop* row shows the sum along the chain (percent of
 /// each cable's own nominal voltage, a close sum when the voltage is the
@@ -350,8 +362,7 @@ fn accumulate_voltage_drop(plant: &Plant, reports: &mut [CircuitReport]) {
         while let Some(p) = at.filter(|_| steps < plant.circuits.len()) {
             // A drop in percent of another voltage level (a transformer between
             // the two) says nothing about this circuit's voltage: stop there.
-            let (up, here) = (plant.circuits[p].design.voltage, c.design.voltage);
-            if (up - here).abs() > 0.1 * here {
+            if !same_system(&plant.circuits[p].design, &c.design) {
                 stopped = true;
                 break;
             }
@@ -559,6 +570,22 @@ mod tests {
             .find(|r| r.rule == Rule::VoltageDrop)
             .unwrap();
         assert!(!row.text.contains("above it"), "{}", row.text);
+    }
+
+    #[test]
+    fn a_single_phase_branch_off_a_three_phase_feeder_gets_the_feeder_drop() {
+        let mut v = sample();
+        // 230 V between a phase and neutral, taken from the 400 V feeder.
+        v["circuits"][1]["phases"] = json!(1);
+        let plant = parse(&v).unwrap();
+        assert_eq!(plant.circuits[1].design.supply, Supply::TwoWire);
+        let reports = evaluate_all(&plant, &TableSet::builtin(), None);
+        let row = reports[1]
+            .rows
+            .iter()
+            .find(|r| r.rule == Rule::VoltageDrop)
+            .unwrap();
+        assert!(row.text.contains("above it (Q1)"), "{}", row.text);
     }
 
     #[test]
