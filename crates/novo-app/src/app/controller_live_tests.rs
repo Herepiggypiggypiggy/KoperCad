@@ -285,4 +285,16 @@ fn the_card_draws_for_the_fixture_in_the_live_view() {
         d.frame();
     }
     assert!(d.app.wb.live.ctl.set.instances().len() == 1);
+    // Working the controls is not editing the drawing: no new undo step, no new revision.
+    let revision = d.doc().project().revision();
+    d.app.wb.live.ctl.act(ID, press("start"));
+    d.app.wb.live.ctl.act(ID, press("estop"));
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert_eq!(
+        d.doc().project().revision(),
+        revision,
+        "pressing controls edits nothing"
+    );
 }
