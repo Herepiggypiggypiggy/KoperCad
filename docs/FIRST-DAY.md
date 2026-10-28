@@ -14,7 +14,7 @@ at any point; if something asks for them, stop and say so.
 ## 2. Install (two ways, pick one)
 
 **Where the files are.** The work build is a draft release on GitHub, so it is visible only when you are signed in to the
-KoperCAD repository: open Releases and pick the version you were told (for example `v0.1.0-rc11`). Download them **at home, the evening before**: a company proxy may block them. Its files are
+KoperCAD repository: open Releases and pick the version you were told (for example `v0.1.0-rc12`). Download them **at home, the evening before**: a company proxy may block them. Its files are
 `KoperCAD-<version>-setup.exe`, `KoperCAD-<version>-portable.zip` and `SHA256SUMS`. If you cannot see the draft, ask for
 the three files to be sent to you another way. The public `experimental` pre-release holds a different, single zip
 (`kopercad.exe` only): do not use it for work.
@@ -69,7 +69,7 @@ Your work is in `Documents\KoperCAD`, settings in `%APPDATA%\KoperCAD`, recovery
 - In the New cabinet dialog, Ctrl+K and typed words go into the Name field.
 - A price written "1.500" or "1,500" is read as 1.5 with a warning.
 - rc9 had a few more small problems (Delete off the page ignored without a message, F2 rename appending to the old tag, Ctrl+N from 3D, Ctrl+K "wire numbers" opening a lesson, clipped Commissioning counters, hot-spot cards on an empty cabinet); they are fixed in rc10 and later. Edits now reach the file only at Save, and KoperCAD asks "Save changes?" before closing.
-- The mirrored-monitor crash (moving the window between a mirrored portrait monitor and another) is fixed in rc11 but unproven until you try it. The Intel laptop start-up crash is **not** fixed in rc11: if the window does not appear, use **KoperCAD (safe graphics)** and tell us.
+- The mirrored-monitor crash (moving the window between a mirrored portrait monitor and another) is fixed in rc11 and the Intel laptop start-up crash in rc12, but both are unproven until you try them on those PCs. If the window does not appear, use **KoperCAD (safe graphics)** and tell us.
 
 ## 5. What to treat as a model, not a fact
 
