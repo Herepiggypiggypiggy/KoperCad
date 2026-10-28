@@ -23,6 +23,9 @@ shot 04-settings-step
 check_layout
 click_text "Settings for the next run"
 wait 10
+# At 1366x768 the Heat panel is short and Quality sits below its fold (the lesson says: scroll it); at 1920x1080 the point is on the canvas and scrolling there changes nothing the lesson checks.
+scroll 1190 330 -120
+wait 10
 click_text Quick
 wait 10
 shot 05-quick-chosen
@@ -31,6 +34,8 @@ try click_text "Next"
 wait 20
 shot 06-simulate-step
 check_layout
+scroll 1190 330 120
+wait 10
 click_text Simulate #2
 wait_s 100
 wait 60
