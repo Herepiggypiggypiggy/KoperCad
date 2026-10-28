@@ -667,7 +667,7 @@ const TAG_FREE_CHARS: usize = 24;
 /// longer than [`TAG_FREE_CHARS`] keeps its end (the device code) after an
 /// ellipsis, so a 220 character tag cannot stripe across the plate.
 fn fit_tag(tag: &str, along: f32, tag_height: f32) -> String {
-    let fits = (along / (tag_height * 0.6).max(f32::EPSILON)).floor() as usize;
+    let fits = (along / (tag_height * 0.85).max(f32::EPSILON)).floor() as usize;
     let keep = fits.max(TAG_FREE_CHARS);
     let len = tag.chars().count();
     if len <= keep {

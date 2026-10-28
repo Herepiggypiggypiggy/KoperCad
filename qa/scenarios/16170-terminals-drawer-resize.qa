@@ -7,7 +7,7 @@ wait 20
 key ctrl+3
 wait 20
 shot drawer-before
-drag 683 514 683 250
+drag 683 518 683 250
 wait 10
 shot drawer-after
 check_layout
