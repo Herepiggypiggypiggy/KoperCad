@@ -175,9 +175,7 @@ impl NovoApp {
             Some(n) => format!("%{}{n}", space.letter()),
             None => "none".to_owned(),
         };
-        let modal = egui::Modal::new(egui::Id::new("renumber_io")).show(ctx, |ui| {
-            ui.set_width(360.0);
-            ui.heading("Renumber I/O");
+        let modal = super::panel::modal(ctx, "renumber_io", "Renumber I/O", [360.0, 0.0], |ui| {
             ui.add_space(4.0);
             for plan in plans {
                 for m in &plan.moves {

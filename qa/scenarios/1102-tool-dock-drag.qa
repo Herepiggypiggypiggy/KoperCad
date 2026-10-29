@@ -1,0 +1,18 @@
+@title Tool dock: drag it by its background, it stays put; View > Reset panel layout brings it home
+@area Windows
+@sizes 1366x768
+# The dock sits at the bottom of the canvas (Select at 413,716); its empty edge at (372,716) is the grip.
+click_text "Open example"
+wait 20
+shot dock-home
+check_layout
+drag 372 716 700 450
+wait 10
+shot dock-moved
+check_layout
+click_text View #1
+wait 5
+click_text "Reset panel layout"
+wait 20
+shot dock-reset
+check_layout

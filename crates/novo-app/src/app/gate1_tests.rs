@@ -1172,7 +1172,7 @@ fn the_tool_dock_switches_tools_and_steps_aside_for_a_drag() {
     d.app.run(&ctx, Action::NewProject);
     d.frame();
     d.frame();
-    let dock = || ctx.memory(|m| m.area_rect(egui::Id::new("tool_dock")));
+    let dock = || ctx.memory(|m| m.area_rect(crate::app::panel::id("tool_dock")));
     let home = dock().expect("the dock is shown");
     let (_, canvas) = d.app.wb.canvas_area.unwrap();
     assert!(

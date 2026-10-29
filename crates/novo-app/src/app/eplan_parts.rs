@@ -214,65 +214,69 @@ impl NovoApp {
         };
         let (mut go, mut cancel, mut maker_changed) = (false, false, false);
         let can_add = !import.parts().is_empty();
-        let modal = egui::Modal::new(egui::Id::new("eplan_parts_import")).show(ctx, |ui| {
-            ui.set_width(560.0);
-            ui.heading(format!("Parts from {}", import.file));
-            ui.add_space(4.0);
-            let (added, changed, unchanged) = import.counts();
-            ui.label(format!(
+        let modal = super::panel::modal(
+            ctx,
+            "eplan_parts_import",
+            format!("Parts from {}", import.file),
+            [560.0, 540.0],
+            |ui| {
+                ui.add_space(4.0);
+                let (added, changed, unchanged) = import.counts();
+                ui.label(format!(
                 "{} part(s) read: {added} new, {changed} would replace a catalog entry, {unchanged} already there as they are.",
                 import.parts().len()
             ));
-            ui.horizontal(|ui| {
-                ui.label("Manufacturer for rows without one");
-                maker_changed = ui.text_edit_singleline(&mut import.maker).changed();
-            });
-            if let Ok(report) = &import.read {
-                if !report.data_columns.is_empty() {
-                    ui.weak(format!(
-                        "Kept as technical data: {}",
-                        report.data_columns.join(", ")
-                    ));
-                }
-                egui::ScrollArea::vertical()
-                    .max_height(220.0)
-                    .show(ui, |ui| {
-                        for p in report.parts.iter().take(200) {
-                            ui.label(format!(
-                                "{}  {}  {}",
-                                p.manufacturer, p.order_number, p.description
-                            ));
-                        }
-                        if report.parts.len() > 200 {
-                            ui.weak(format!("... and {} more", report.parts.len() - 200));
-                        }
-                    });
-                if !report.skipped.is_empty() {
-                    ui.add_space(6.0);
-                    ui.colored_label(
-                        crate::theme::ui_palette().warning,
-                        format!("{} row(s) rejected", report.skipped.len()),
-                    );
+                ui.horizontal(|ui| {
+                    ui.label("Manufacturer for rows without one");
+                    maker_changed = ui.text_edit_singleline(&mut import.maker).changed();
+                });
+                if let Ok(report) = &import.read {
+                    if !report.data_columns.is_empty() {
+                        ui.weak(format!(
+                            "Kept as technical data: {}",
+                            report.data_columns.join(", ")
+                        ));
+                    }
                     egui::ScrollArea::vertical()
-                        .id_salt("eplan_parts_rejects")
-                        .max_height(120.0)
+                        .max_height(220.0)
                         .show(ui, |ui| {
-                            for (line, why) in &report.skipped {
-                                ui.label(format!("line {line}: {why}"));
+                            for p in report.parts.iter().take(200) {
+                                ui.label(format!(
+                                    "{}  {}  {}",
+                                    p.manufacturer, p.order_number, p.description
+                                ));
+                            }
+                            if report.parts.len() > 200 {
+                                ui.weak(format!("... and {} more", report.parts.len() - 200));
                             }
                         });
+                    if !report.skipped.is_empty() {
+                        ui.add_space(6.0);
+                        ui.colored_label(
+                            crate::theme::ui_palette().warning,
+                            format!("{} row(s) rejected", report.skipped.len()),
+                        );
+                        egui::ScrollArea::vertical()
+                            .id_salt("eplan_parts_rejects")
+                            .max_height(120.0)
+                            .show(ui, |ui| {
+                                for (line, why) in &report.skipped {
+                                    ui.label(format!("line {line}: {why}"));
+                                }
+                            });
+                    }
                 }
-            }
-            ui.add_space(6.0);
-            ui.weak("Only your own export is read. Nothing is added until you choose Add.");
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                go = ui
-                    .add_enabled(can_add, egui::Button::new("Add to catalog"))
-                    .clicked();
-                cancel = ui.button("Cancel").clicked();
-            });
-        });
+                ui.add_space(6.0);
+                ui.weak("Only your own export is read. Nothing is added until you choose Add.");
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    go = ui
+                        .add_enabled(can_add, egui::Button::new("Add to catalog"))
+                        .clicked();
+                    cancel = ui.button("Cancel").clicked();
+                });
+            },
+        );
         if maker_changed {
             let existing = existing_catalog(import.catalog_path.as_deref());
             import.reread(&existing);

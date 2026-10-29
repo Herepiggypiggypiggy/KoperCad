@@ -24,6 +24,9 @@ pub struct DuctFill {
 pub enum Problem {
     /// No duct path: the wire runs in free air.
     FreeAir { job: u64 },
+    /// No way from a terminal to its duct avoids the body of a device: the
+    /// wire is drawn across it. Move the duct or the device.
+    StubThroughDevice { job: u64 },
     /// The wire has no known size; a default was used.
     GuessedWire { job: u64 },
     /// A duct without a known cross-section carries wires, so its fill
@@ -125,7 +128,7 @@ pub fn plan_constrained(
         db.total_cmp(&da).then(jobs[a].id.cmp(&jobs[b].id))
     });
 
-    let n = network.duct_count();
+    let n = network.run_count();
     let mut used = vec![0.0; n];
     let mut through: Vec<Vec<u64>> = vec![Vec::new(); n];
     let mut routes: Vec<Option<Route>> = vec![None; jobs.len()];
@@ -179,29 +182,40 @@ pub fn plan_constrained(
     }
     let routes: Vec<Route> = routes.into_iter().flatten().collect();
 
-    let fill: Vec<DuctFill> = (0..n)
+    let fill_at: Vec<(usize, DuctFill)> = (0..n)
+        .filter(|&ix| !network.is_rail(ix))
         .map(|ix| {
             let (duct, area) = network.run_info(ix);
             let capacity = area * rules.fill_limit;
-            DuctFill {
-                duct,
-                used_mm2: used[ix],
-                capacity_mm2: capacity,
-                ratio: if network.sized(ix) {
-                    used[ix] / capacity
-                } else {
-                    0.0
+            (
+                ix,
+                DuctFill {
+                    duct,
+                    used_mm2: used[ix],
+                    capacity_mm2: capacity,
+                    ratio: if network.sized(ix) {
+                        used[ix] / capacity
+                    } else {
+                        0.0
+                    },
+                    jobs: through[ix].clone(),
                 },
-                jobs: through[ix].clone(),
-            }
+            )
         })
         .collect();
+    let fill: Vec<DuctFill> = fill_at.iter().map(|(_, f)| f.clone()).collect();
 
     let mut problems: Vec<Problem> = routes
         .iter()
         .filter(|r| r.kind == Kind::FreeAir)
         .map(|r| Problem::FreeAir { job: r.job })
         .collect();
+    problems.extend(
+        routes
+            .iter()
+            .filter(|r| r.kind == Kind::Ducted && r.blocked)
+            .map(|r| Problem::StubThroughDevice { job: r.job }),
+    );
     guessed.sort();
     problems.extend(
         guessed
@@ -209,8 +223,8 @@ pub fn plan_constrained(
             .map(|i| Problem::GuessedWire { job: jobs[i].id }),
     );
     problems.extend(
-        fill.iter()
-            .enumerate()
+        fill_at
+            .iter()
             .filter(|(ix, f)| !network.sized(*ix) && !f.jobs.is_empty())
             .map(|(_, f)| Problem::UnsizedDuct {
                 duct: f.duct,

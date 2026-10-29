@@ -49,22 +49,26 @@ impl NovoApp {
         let mut open_folder = false;
         let mut copy = false;
         let mut close = false;
-        let shown = egui::Modal::new(egui::Id::new("crash_report")).show(ctx, |ui| {
-            ui.set_width(420.0);
-            ui.heading("KoperCAD stopped unexpectedly");
-            ui.label(
-                "A report was written on this computer. Nothing was sent anywhere. \
+        let shown = super::panel::modal(
+            ctx,
+            "crash_report",
+            "KoperCAD stopped unexpectedly",
+            [420.0, 0.0],
+            |ui| {
+                ui.label(
+                    "A report was written on this computer. Nothing was sent anywhere. \
                  Send it to the person who gave you this build.",
-            );
-            ui.weak(report.display().to_string());
-            ui.add_space(8.0);
-            ui.horizontal_wrapped(|ui| {
-                open_report = primary_button(ui, "Open report").clicked();
-                open_folder = ui.button("Open log folder").clicked();
-                copy = ui.button("Copy problem report").clicked();
-                close = ui.button("Dismiss").clicked();
-            });
-        });
+                );
+                ui.weak(report.display().to_string());
+                ui.add_space(8.0);
+                ui.horizontal_wrapped(|ui| {
+                    open_report = primary_button(ui, "Open report").clicked();
+                    open_folder = ui.button("Open log folder").clicked();
+                    copy = ui.button("Copy problem report").clicked();
+                    close = ui.button("Dismiss").clicked();
+                });
+            },
+        );
         // Escape or a click outside the card dismisses it, like the button.
         close |= shown.should_close();
         if open_report {

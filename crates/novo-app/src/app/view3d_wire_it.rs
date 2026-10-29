@@ -45,7 +45,7 @@ const END_A: [u8; 4] = [232, 150, 80, 255];
 const END_B: [u8; 4] = [90, 170, 235, 255];
 
 fn id() -> egui::Id {
-    egui::Id::new("view3d_wire_it")
+    super::panel::id("view3d_wire_it")
 }
 
 /// A tick the person asked for, applied between frames (the view holds the
@@ -412,243 +412,241 @@ pub(super) fn strip(
     let p = crate::theme::ui_palette();
     let progress = wire_it_progress(project, plan);
     let orphans = novo_reports::wire_it_orphaned(project, plan);
-    egui::Area::new(id())
-        .order(egui::Order::Foreground)
-        .pivot(egui::Align2::CENTER_BOTTOM)
-        .fixed_pos(egui::pos2(view.center().x, view.bottom() - MARGIN))
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.set_max_width(TEXT_WIDTH.min(view.width() - 2.0 * MARGIN));
-                if plan.steps.is_empty() {
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new(
-                                "Wire-it: no wires to run yet. Draw wires between device pins in \
-                                 the schematic.",
-                            )
-                            .color(p.text_secondary),
-                        );
-                        if ui.button("Show all").clicked() {
-                            asked.leave = true;
-                        }
-                    });
-                    return;
-                }
-                let last = plan.steps.len() - 1;
-                *at = (*at).min(last);
-                let step = &plan.steps[*at];
-                let done = wire_it_done(project, step);
+    super::panel::Float::new(
+        "view3d_wire_it",
+        view,
+        egui::Align2::CENTER_BOTTOM,
+        egui::pos2(view.center().x, view.bottom() - MARGIN),
+    )
+    .foreground()
+    .show(ctx, |ui| {
+        egui::Frame::popup(ui.style()).show(ui, |ui| {
+            ui.set_max_width(TEXT_WIDTH.min(view.width() - 2.0 * MARGIN));
+            if plan.steps.is_empty() {
                 ui.horizontal(|ui| {
-                    ui.add_enabled_ui(*at > 0, |ui| {
-                        let back = ui.button("Previous");
-                        super::cabinet_bar::note_ctx(ctx, "wire_it.previous", "Previous", &back);
-                        if back.clicked() {
-                            *at -= 1;
-                        }
-                    });
                     ui.label(
-                        egui::RichText::new(format!(
-                            "Wire {} of {}: {}",
-                            *at + 1,
-                            plan.steps.len(),
-                            step.class.name()
-                        ))
-                        .strong()
-                        .color(p.text_strong),
+                        egui::RichText::new(
+                            "Wire-it: no wires to run yet. Draw wires between device pins in \
+                                 the schematic.",
+                        )
+                        .color(p.text_secondary),
                     );
-                    ui.add_enabled_ui(*at < last, |ui| {
-                        let next = ui.button("Next");
-                        super::cabinet_bar::note_ctx(ctx, "wire_it.next", "Next", &next);
-                        if next.clicked() {
-                            *at += 1;
-                        }
-                    });
-                    let all = ui
-                        .button("Show all")
-                        .on_hover_text("Leave Wire-it and show the whole cabinet");
-                    super::cabinet_bar::note_ctx(ctx, "wire_it.show_all", "Show all", &all);
-                    if all.clicked() {
+                    if ui.button("Show all").clicked() {
                         asked.leave = true;
                     }
-                    let print = ui.button("Print list (PDF)").on_hover_text(
-                        "Every wire in this order on landscape A4, with a box to tick, the \
-                             cut, strip, ferrule, labels and the duct fill after each wire",
-                    );
-                    super::cabinet_bar::note_ctx(ctx, "wire_it.print", "Print list (PDF)", &print);
-                    if print.clicked() {
-                        asked.print = true;
+                });
+                return;
+            }
+            let last = plan.steps.len() - 1;
+            *at = (*at).min(last);
+            let step = &plan.steps[*at];
+            let done = wire_it_done(project, step);
+            ui.horizontal(|ui| {
+                ui.add_enabled_ui(*at > 0, |ui| {
+                    let back = ui.button("Previous");
+                    super::cabinet_bar::note_ctx(ctx, "wire_it.previous", "Previous", &back);
+                    if back.clicked() {
+                        *at -= 1;
                     }
                 });
-                let name = if step.wire_number.is_empty() {
-                    "(no wire number)".to_owned()
-                } else {
-                    step.wire_number.clone()
-                };
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(
-                        egui::RichText::new(name)
-                            .heading()
-                            .strong()
-                            .color(p.text_strong),
-                    );
-                    ui.label(egui::RichText::new(step.kind_text()).color(p.text_secondary));
-                    if done {
-                        ui.label(egui::RichText::new("run").strong().color(p.success));
-                    }
-                });
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(egui::RichText::new("from").small().color(rgb(END_A)));
-                    ui.label(egui::RichText::new(&step.from).color(p.text_strong));
-                    ui.label(egui::RichText::new("to").small().color(rgb(END_B)));
-                    ui.label(egui::RichText::new(&step.to).color(p.text_strong));
-                });
-                let tilde = if step.estimated() { "~" } else { "" };
-                let strip_text = step.strip_text();
-                let cut_line = if step.cable_core {
-                    format!(
-                        "{} (a core: run with its cable, not cut)   {}   {}",
-                        sentence(step.run_or_cut_text()),
-                        if strip_text.is_empty() {
-                            "strip: size not set".to_owned()
-                        } else {
-                            strip_text
-                        },
-                        step.fitting_text(),
-                    )
-                } else {
-                    format!(
-                        "Cut {tilde}{} mm (routed {} + {} each end)   {}   {}",
-                        novo_layout::drill::mm(step.cut_mm),
-                        novo_layout::drill::mm(step.length_mm),
-                        novo_layout::drill::mm(step.allowance_mm),
-                        if strip_text.is_empty() {
-                            "strip: size not set".to_owned()
-                        } else {
-                            strip_text
-                        },
-                        step.fitting_text(),
-                    )
-                };
-                ui.label(egui::RichText::new(cut_line).color(p.text_strong));
-                let labels = if step.label_from == step.label_to {
-                    format!("Label both ends: {}", step.label_from)
-                } else {
-                    format!(
-                        "Label: {}  |  other end: {}",
-                        step.label_from, step.label_to
-                    )
-                };
-                ui.label(egui::RichText::new(labels).color(p.text_secondary));
-                let route = format!("Route {}.  {}", step.track, step.fill_text());
-                ui.label(egui::RichText::new(route).color(if step.over_filled() {
-                    p.error
-                } else {
-                    p.text_secondary
-                }))
-                .on_hover_text(
-                    "Duct fill after this wire, in the planned bench order. It does not track \
-                     what is physically in the duct if wires are run in another order.",
+                ui.label(
+                    egui::RichText::new(format!(
+                        "Wire {} of {}: {}",
+                        *at + 1,
+                        plan.steps.len(),
+                        step.class.name()
+                    ))
+                    .strong()
+                    .color(p.text_strong),
                 );
-                if step.estimated() {
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "The length is a planning figure ({}), not a measurement of the \
-                             finished wire.",
-                            step.basis
-                        ))
-                        .small()
-                        .color(p.warning),
-                    );
+                ui.add_enabled_ui(*at < last, |ui| {
+                    let next = ui.button("Next");
+                    super::cabinet_bar::note_ctx(ctx, "wire_it.next", "Next", &next);
+                    if next.clicked() {
+                        *at += 1;
+                    }
+                });
+                let all = ui
+                    .button("Show all")
+                    .on_hover_text("Leave Wire-it and show the whole cabinet");
+                super::cabinet_bar::note_ctx(ctx, "wire_it.show_all", "Show all", &all);
+                if all.clicked() {
+                    asked.leave = true;
                 }
-                if let Some(note) = picture_note(step, drawn_here) {
-                    ui.label(egui::RichText::new(note).small().color(p.warning));
+                let print = ui.button("Print list (PDF)").on_hover_text(
+                    "Every wire in this order on landscape A4, with a box to tick, the \
+                             cut, strip, ferrule, labels and the duct fill after each wire",
+                );
+                super::cabinet_bar::note_ctx(ctx, "wire_it.print", "Print list (PDF)", &print);
+                if print.clicked() {
+                    asked.print = true;
                 }
-                if orphans > 0 {
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "{orphans} run mark{} kept on wires that are no connection any \
-                             more (deleted or rewired after they were run).",
-                            if orphans == 1 { " is" } else { "s are" }
-                        ))
-                        .small()
-                        .color(p.text_secondary),
-                    );
+            });
+            let name = if step.wire_number.is_empty() {
+                "(no wire number)".to_owned()
+            } else {
+                step.wire_number.clone()
+            };
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    egui::RichText::new(name)
+                        .heading()
+                        .strong()
+                        .color(p.text_strong),
+                );
+                ui.label(egui::RichText::new(step.kind_text()).color(p.text_secondary));
+                if done {
+                    ui.label(egui::RichText::new("run").strong().color(p.success));
                 }
-                ui.horizontal(|ui| {
-                    if done {
-                        let undo = ui.button("Not run yet");
-                        if undo.clicked() {
-                            asked.ticks.push(Tick {
-                                step: step.clone(),
-                                on: false,
-                            });
-                        }
+            });
+            ui.horizontal_wrapped(|ui| {
+                ui.label(egui::RichText::new("from").small().color(rgb(END_A)));
+                ui.label(egui::RichText::new(&step.from).color(p.text_strong));
+                ui.label(egui::RichText::new("to").small().color(rgb(END_B)));
+                ui.label(egui::RichText::new(&step.to).color(p.text_strong));
+            });
+            let tilde = if step.estimated() { "~" } else { "" };
+            let strip_text = step.strip_text();
+            let cut_line = if step.cable_core {
+                format!(
+                    "{} (a core: run with its cable, not cut)   {}   {}",
+                    sentence(step.run_or_cut_text()),
+                    if strip_text.is_empty() {
+                        "strip: size not set".to_owned()
                     } else {
-                        let go = ui
-                            .button(egui::RichText::new("Run, next wire").strong())
-                            .on_hover_text("Mark this wire run and go to the next one");
-                        super::cabinet_bar::note_ctx(ctx, "wire_it.run", "Run, next wire", &go);
-                        if go.clicked() {
-                            asked.ticks.push(Tick {
-                                step: step.clone(),
-                                on: true,
-                            });
-                            if *at < last {
-                                *at += 1;
-                            }
-                        }
-                        let only = ui.button("Mark run");
-                        if only.clicked() {
-                            asked.ticks.push(Tick {
-                                step: step.clone(),
-                                on: true,
-                            });
+                        strip_text
+                    },
+                    step.fitting_text(),
+                )
+            } else {
+                format!(
+                    "Cut {tilde}{} mm (routed {} + {} each end)   {}   {}",
+                    novo_layout::drill::mm(step.cut_mm),
+                    novo_layout::drill::mm(step.length_mm),
+                    novo_layout::drill::mm(step.allowance_mm),
+                    if strip_text.is_empty() {
+                        "strip: size not set".to_owned()
+                    } else {
+                        strip_text
+                    },
+                    step.fitting_text(),
+                )
+            };
+            ui.label(egui::RichText::new(cut_line).color(p.text_strong));
+            let labels = if step.label_from == step.label_to {
+                format!("Label both ends: {}", step.label_from)
+            } else {
+                format!(
+                    "Label: {}  |  other end: {}",
+                    step.label_from, step.label_to
+                )
+            };
+            ui.label(egui::RichText::new(labels).color(p.text_secondary));
+            let route = format!("Route {}.  {}", step.track, step.fill_text());
+            ui.label(egui::RichText::new(route).color(if step.over_filled() {
+                p.error
+            } else {
+                p.text_secondary
+            }))
+            .on_hover_text(
+                "Duct fill after this wire, in the planned bench order. It does not track \
+                     what is physically in the duct if wires are run in another order.",
+            );
+            if step.estimated() {
+                ui.label(
+                    egui::RichText::new(format!(
+                        "The length is a planning figure ({}), not a measurement of the \
+                             finished wire.",
+                        step.basis
+                    ))
+                    .small()
+                    .color(p.warning),
+                );
+            }
+            if let Some(note) = picture_note(step, drawn_here) {
+                ui.label(egui::RichText::new(note).small().color(p.warning));
+            }
+            if orphans > 0 {
+                ui.label(
+                    egui::RichText::new(format!(
+                        "{orphans} run mark{} kept on wires that are no connection any \
+                             more (deleted or rewired after they were run).",
+                        if orphans == 1 { " is" } else { "s are" }
+                    ))
+                    .small()
+                    .color(p.text_secondary),
+                );
+            }
+            ui.horizontal(|ui| {
+                if done {
+                    let undo = ui.button("Not run yet");
+                    if undo.clicked() {
+                        asked.ticks.push(Tick {
+                            step: step.clone(),
+                            on: false,
+                        });
+                    }
+                } else {
+                    let go = ui
+                        .button(egui::RichText::new("Run, next wire").strong())
+                        .on_hover_text("Mark this wire run and go to the next one");
+                    super::cabinet_bar::note_ctx(ctx, "wire_it.run", "Run, next wire", &go);
+                    if go.clicked() {
+                        asked.ticks.push(Tick {
+                            step: step.clone(),
+                            on: true,
+                        });
+                        if *at < last {
+                            *at += 1;
                         }
                     }
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "{} of {} run, {:.1} m of wire still to cut",
-                            progress.done,
-                            progress.total,
-                            plan.cut_m_left(project)
-                        ))
+                    let only = ui.button("Mark run");
+                    if only.clicked() {
+                        asked.ticks.push(Tick {
+                            step: step.clone(),
+                            on: true,
+                        });
+                    }
+                }
+                ui.label(
+                    egui::RichText::new(format!(
+                        "{} of {} run, {:.1} m of wire still to cut",
+                        progress.done,
+                        progress.total,
+                        plan.cut_m_left(project)
+                    ))
+                    .color(p.text_secondary),
+                );
+            });
+            ui.horizontal(|ui| {
+                let mut pos = *at;
+                ui.spacing_mut().slider_width = 240.0;
+                if ui
+                    .add(egui::Slider::new(&mut pos, 0..=last).show_value(false))
+                    .on_hover_text("Drag to any wire")
+                    .changed()
+                {
+                    *at = pos;
+                }
+                if let Some(next) = progress.next
+                    && next != *at
+                {
+                    let jump = ui
+                        .button("Next not run")
+                        .on_hover_text("Jump to the first wire not run yet");
+                    super::cabinet_bar::note_ctx(ctx, "wire_it.next_open", "Next not run", &jump);
+                    if jump.clicked() {
+                        *at = next;
+                    }
+                }
+                ui.label(
+                    egui::RichText::new("Orange: from end. Blue: to end. White: the path.")
+                        .small()
                         .color(p.text_secondary),
-                    );
-                });
-                ui.horizontal(|ui| {
-                    let mut pos = *at;
-                    ui.spacing_mut().slider_width = 240.0;
-                    if ui
-                        .add(egui::Slider::new(&mut pos, 0..=last).show_value(false))
-                        .on_hover_text("Drag to any wire")
-                        .changed()
-                    {
-                        *at = pos;
-                    }
-                    if let Some(next) = progress.next
-                        && next != *at
-                    {
-                        let jump = ui
-                            .button("Next not run")
-                            .on_hover_text("Jump to the first wire not run yet");
-                        super::cabinet_bar::note_ctx(
-                            ctx,
-                            "wire_it.next_open",
-                            "Next not run",
-                            &jump,
-                        );
-                        if jump.clicked() {
-                            *at = next;
-                        }
-                    }
-                    ui.label(
-                        egui::RichText::new("Orange: from end. Blue: to end. White: the path.")
-                            .small()
-                            .color(p.text_secondary),
-                    );
-                });
+                );
             });
         });
+    });
     asked
 }
 

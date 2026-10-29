@@ -163,3 +163,14 @@ fn an_mttfd_of_zero_gives_no_rate_above_one_per_hour() {
     assert_eq!(r.pl, PerformanceLevel::None);
     assert!(!r.problems.is_empty());
 }
+
+#[test]
+fn an_mttfd_of_zero_is_capped_in_the_two_channel_categories_too() {
+    // Hardware test LSC-11 follow-up: the cap holds for C3 and C4, not only B.
+    for cat in [Category::C3, Category::C4] {
+        let r = sub(cat, 0.0, 99.0, 70).calculate();
+        assert!(r.pfhd.is_finite() && r.pfhd <= 1.0, "{cat:?}: {}", r.pfhd);
+        assert_eq!(r.pl, PerformanceLevel::None, "{cat:?}");
+        assert!(!r.problems.is_empty(), "{cat:?}");
+    }
+}

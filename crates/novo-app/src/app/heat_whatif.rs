@@ -115,6 +115,8 @@ pub(super) struct Wizard {
     view: Option<u8>,
     /// The option choice leaves devices out (set each frame by the view).
     pub(super) left_out: bool,
+    /// A lesson step points at Apply: the list scrolls to it once it is drawn.
+    reveal: std::cell::Cell<bool>,
     #[cfg(test)]
     pub(super) settings: Option<whatif::Settings>,
 }
@@ -124,6 +126,13 @@ impl Wizard {
     pub(super) fn request(&mut self) {
         self.requested = true;
         self.open = true;
+    }
+
+    /// A lesson step points at the Apply button (or no longer does): the
+    /// list scrolls to it when it is drawn, so the ring is not around a
+    /// control cut off by a short window.
+    pub(super) fn reveal_apply(&self, on: bool) {
+        self.reveal.set(on);
     }
 
     /// Asked for and the 3D view has not taken it up.
@@ -412,19 +421,15 @@ impl Wizard {
         let mut ask = None;
         let mut open = true;
         let pal = crate::theme::ui_palette();
-        let shown = egui::Window::new("Cooling what-if")
-            .open(&mut open)
-            // Folds to its title bar, so the preview behind it can be looked
-            // at on a small screen.
-            .collapsible(true)
-            .resizable(false)
-            // Hangs from its bottom left corner, so it grows upwards.
-            .pivot(egui::Align2::LEFT_BOTTOM)
-            .default_pos(at)
-            .default_width(WIDTH)
-            .max_width(WINDOW_WIDTH)
+        // Folds to its title bar, so the preview behind it can be looked at
+        // on a small screen. It opens above `at` (its old bottom left
+        // corner) and can be dragged and resized from there.
+        let shown = super::panel::dialog(ctx, "Cooling what-if", [WINDOW_WIDTH, 0.0])
+            .open(super::panel::esc(ctx, &mut open))
+            // The list scrolls inside; the buttons below it stay in view.
+            .scroll([false, false])
+            .default_pos(Pos2::new(at.x, (at.y - MAX_BODY - 140.0).max(60.0)))
             .show(ctx, |ui| {
-                ui.set_max_width(WIDTH);
                 ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
                 super::heat_cooling::left_out_line(ui, self.left_out);
                 model_badge(ui);
@@ -704,6 +709,9 @@ fn card(
             "Apply button of the fix",
             &apply,
         );
+        if w.reveal.take() {
+            apply.scroll_to_me(Some(egui::Align::Center));
+        }
         if apply.clicked() {
             *ask = Some(match &c.fix {
                 Fix::Layout { moves } => Ask::Move(found.structure, moves.clone()),

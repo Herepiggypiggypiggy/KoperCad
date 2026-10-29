@@ -597,7 +597,13 @@ pub fn clear_duct_spot(ducts: &[Duct], duct: &Duct, within: &Rect) -> Option<Duc
                 }
             }
         }
-        length -= 10.0;
+        // 10 mm steps for ducts up to 1 m; a longer duct is shortened by a
+        // hundredth of its length per step, so the search stays bounded.
+        length -= if length > 1000.0 {
+            length / 100.0
+        } else {
+            10.0
+        };
     }
     None
 }
@@ -683,6 +689,41 @@ mod tests {
             margins: Margins::default(),
             rail: None,
         }
+    }
+
+    #[test]
+    fn a_very_long_duct_with_no_room_is_given_up_on_quickly() {
+        let wall = |id: u64, y: f64| Duct {
+            id,
+            x: 0.0,
+            y,
+            length: 100_000.0,
+            width: 50.0,
+            vertical: false,
+        };
+        // Every spot within reach is covered by a long duct.
+        let ducts: Vec<Duct> = (0..40)
+            .map(|i| wall(i + 1, 10.0 + f64::from(i as u32) * 30.0))
+            .collect();
+        let mine = Duct {
+            id: 99,
+            x: 0.0,
+            y: 600.0,
+            length: 99_000.0,
+            width: 50.0,
+            vertical: false,
+        };
+        let within = Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 100_000.0,
+            h: 1300.0,
+        };
+        let t = std::time::Instant::now();
+        let spot = clear_duct_spot(&ducts, &mine, &within);
+        assert!(spot.is_none());
+        // Generous: it only guards against the search running for minutes.
+        assert!(t.elapsed().as_secs_f64() < 30.0);
     }
 
     #[test]

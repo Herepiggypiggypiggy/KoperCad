@@ -23,7 +23,7 @@ fn shoot(size: egui::Vec2, labels: DockLabels) -> (egui::Rect, egui::Rect) {
         d.frame_sized(size, Vec::new());
     }
     let dock = ctx
-        .memory(|m| m.area_rect(egui::Id::new("tool_dock")))
+        .memory(|m| m.area_rect(crate::app::panel::id("tool_dock")))
         .expect("the dock is shown");
     let (_, canvas) = d.app.wb.canvas_area.expect("a canvas");
     (dock, canvas)

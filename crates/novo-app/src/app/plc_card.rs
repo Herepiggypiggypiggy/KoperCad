@@ -234,9 +234,7 @@ impl NovoApp {
             }),
             _ => [String::new(), String::new()],
         };
-        let modal = egui::Modal::new(egui::Id::new("plc_card")).show(ctx, |ui| {
-            ui.set_width(420.0);
-            ui.heading("Add PLC card");
+        let modal = super::panel::modal(ctx, "plc_card", "Add PLC card", [420.0, 0.0], |ui| {
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {
                 ui.label("Start from");
