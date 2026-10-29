@@ -121,7 +121,7 @@ impl NovoApp {
 
     /// Stores the company pin templates as one undo step; empty text removes
     /// them. The text was read by `parse_company_templates` before.
-    fn set_pin_templates(&mut self, text: &str) {
+    pub(super) fn set_pin_templates(&mut self, text: &str) {
         let Some(doc) = self.backend.document_mut() else {
             return;
         };
@@ -141,6 +141,57 @@ impl NovoApp {
         match result {
             Ok(((), changes)) => self.changed_outside_canvas(&changes),
             Err(e) => self.message(Level::Warning, format!("Pin templates: {e}")),
+        }
+    }
+
+    /// After File > New project: when the company file of pin names exists
+    /// and reads, offers to use it in the new project.
+    pub(super) fn offer_company_pin_names(&mut self) {
+        let Some(path) = shared_pin_templates_path() else {
+            return;
+        };
+        match read_shared_templates(&path) {
+            Ok(text) if !text.trim().is_empty() => self.wb.company_pin_offer = Some(text),
+            _ => {}
+        }
+    }
+
+    pub(super) fn company_pin_offer_dialog(&mut self, ctx: &egui::Context) {
+        if self.wb.company_pin_offer.is_none() {
+            return;
+        }
+        if self.backend.document().is_none() {
+            self.wb.company_pin_offer = None;
+            return;
+        }
+        let (mut use_it, mut not_now) = (false, false);
+        let modal = super::panel::modal(
+            ctx,
+            "company_pin_offer",
+            "Use your company pin names?",
+            [480.0, 170.0],
+            |ui| {
+                ui.label(
+                    "You have a company file of usual pin names. Use it in this project, so \
+                     Check > Issues flags devices that differ from it?",
+                );
+                ui.add_space(8.0);
+                ui.horizontal_wrapped(|ui| {
+                    use_it = novo_theme::widgets::primary_button(ui, "Use the company pin names")
+                        .clicked();
+                    not_now = novo_theme::widgets::ghost_button(ui, "Not now")
+                        .on_hover_text("Project > Rules, Usual pin names, has Load company file.")
+                        .clicked();
+                });
+            },
+        );
+        if use_it {
+            if let Some(text) = self.wb.company_pin_offer.take() {
+                self.set_pin_templates(&text);
+                self.message(Level::Info, "Using the company pin names in this project");
+            }
+        } else if not_now || modal.should_close() {
+            self.wb.company_pin_offer = None;
         }
     }
 

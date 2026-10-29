@@ -298,6 +298,8 @@ pub(crate) struct Workbench {
     pub(super) auto_assign: Option<super::parts_bulk::AutoAssignPreview>,
     /// A rename of part terminals offered after a part was assigned.
     pub(super) pin_offer: Option<super::pin_offer::PinOffer>,
+    /// The text of the company pin names file offered to a new project.
+    pub(super) company_pin_offer: Option<String>,
     /// The description recipe editor.
     pub(super) describe: Option<super::describe_recipes::DescribeDialog>,
     /// An EPLAN (PXF) import waiting for the person to confirm.
@@ -462,6 +464,7 @@ impl Default for Workbench {
             parts_bulk: None,
             auto_assign: None,
             pin_offer: None,
+            company_pin_offer: None,
             describe: None,
             eplan_import: None,
             eplan_parts: None,

@@ -1289,6 +1289,7 @@ impl NovoApp {
                 self.current_page = None;
                 self.document_replaced();
                 self.fix_current_page();
+                self.offer_company_pin_names();
             }
             Err(e) => self.message(Level::Error, format!("Could not create a project: {e}")),
         }
@@ -2062,6 +2063,7 @@ impl NovoApp {
         self.parts_bulk_dialog(&ctx);
         self.auto_assign_dialog(&ctx);
         self.pin_offer_dialog(&ctx);
+        self.company_pin_offer_dialog(&ctx);
         self.describe_recipes_dialog(&ctx);
         self.project_settings_dialog(&ctx);
         self.crane_options_dialog(&ctx);
