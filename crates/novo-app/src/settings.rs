@@ -19,6 +19,11 @@ pub enum DockLabels {
     Never,
 }
 
+/// The menu words in the top bar until a person chooses. The design
+/// (docs/design/visual-redesign.md section 13) hides them; the default
+/// flips in lane V7, with the lessons and QA scenarios that name a menu.
+pub const MENU_NAMES_DEFAULT: bool = true;
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -49,6 +54,10 @@ pub struct Settings {
     /// Whether the live view skips its animations: states switch at once
     /// and a running motor shows an arrow instead of spinning.
     pub reduce_motion: bool,
+    /// Whether the eight menu words sit in the top bar beside the mark.
+    /// `None` takes [`MENU_NAMES_DEFAULT`]; a choice made in Preferences is
+    /// kept whatever the default becomes.
+    pub menu_names: Option<bool>,
     /// How tightly the contact table under a coil is drawn, `"full"` or
     /// `"compact"` (empty: full): a per-user preference.
     pub xref_density: String,
@@ -329,6 +338,11 @@ pub struct WorkspaceLayout {
 }
 
 impl Settings {
+    /// Whether the menu words are in the top bar (see [`MENU_NAMES_DEFAULT`]).
+    pub fn show_menu_names(&self) -> bool {
+        self.menu_names.unwrap_or(MENU_NAMES_DEFAULT)
+    }
+
     /// The theme the person chose; dark by default.
     pub fn theme_choice(&self) -> novo_theme::ThemeChoice {
         novo_theme::ThemeChoice::from_id(&self.appearance_theme)

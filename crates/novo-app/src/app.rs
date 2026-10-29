@@ -7,6 +7,9 @@ mod addons;
 mod addons_look;
 #[cfg(test)]
 mod addons_look_tests;
+mod app_menu;
+#[cfg(test)]
+mod app_menu_tests;
 mod appearance;
 mod assembly;
 mod assistant;
@@ -2181,7 +2184,9 @@ impl NovoApp {
         let fit = menu_bar::TopBarFit::at(self.window_width);
         let focus = self.menu_key_pressed(ui.ctx());
         ui.horizontal_centered(|ui| {
-            if self.menu_bar_wide() {
+            // F10 opens the app menu; with the menu words in the bar it moves the
+            // focus to them instead.
+            if self.menu_names_shown() {
                 self.mark(ui, false);
                 self.menu_bar(ui, focus);
             } else {
