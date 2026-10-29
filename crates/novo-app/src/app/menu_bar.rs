@@ -317,7 +317,7 @@ impl NovoApp {
 
     /// Why a command cannot run now, from its needs and the shell's own
     /// rules for the action behind it.
-    fn command_unavailable(&self, info: &CommandInfo) -> Option<&'static str> {
+    pub(super) fn command_unavailable(&self, info: &CommandInfo) -> Option<&'static str> {
         if let Err(reason) = commands::availability(info, &self.command_context()) {
             return Some(reason);
         }

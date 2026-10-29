@@ -1,0 +1,54 @@
+@title Lesson walk after the rail: wiring-modes (every step, Do it for me or Next)
+@area Learn
+# Lane V3a: the tool dock became the tool rail; this walk finds lesson text or anchors that still point at the dock.
+key ctrl+k
+wait 4
+text Corners and Lines
+wait 6
+key Enter
+wait 40
+expect "Two branches, three wires missing"
+shot 01-start
+check_layout
+try click_text "Do it for me"
+wait 25
+try click_text "Next"
+wait 15
+shot 02-step
+check_layout
+try click_text "Do it for me"
+wait 25
+try click_text "Next"
+wait 15
+shot 03-step
+check_layout
+try click_text "Do it for me"
+wait 25
+try click_text "Next"
+wait 15
+shot 04-step
+check_layout
+try click_text "Do it for me"
+wait 25
+try click_text "Next"
+wait 15
+shot 05-step
+check_layout
+try click_text "Do it for me"
+wait 25
+try click_text "Next"
+wait 15
+shot 06-step
+check_layout
+try click_text "Do it for me"
+wait 25
+try click_text "Next"
+wait 15
+shot 07-step
+check_layout
+try click_text "Do it for me"
+wait 25
+try click_text "Next"
+wait 15
+shot 08-step
+check_layout

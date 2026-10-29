@@ -1214,7 +1214,7 @@ fn mech_load_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<Ins
             keys: novo_machine::spec::KEYS,
             marker: novo_machine::spec::HOIST_KEY,
             summary: "hoist",
-            comma_note: "A comma is a decimal comma: 1,5 means 1.5, and 1,500 also means 1.5.",
+            comma_note: "A comma is a decimal comma: 1,5 means 1.5. A comma before three digits (5,000) is refused: type 5000.",
             help: "Hook load turns the motor into a hoist. Blank rows use generic values, \
                    not a manufacturer's data. Run it: Simulate > Hoist run.",
         },
