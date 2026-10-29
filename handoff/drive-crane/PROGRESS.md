@@ -14,3 +14,5 @@
 
 2026-10-29 L5a part 3: travel drive in the loop (`novo_machine::travel_loop`, `travel_spec`), 10 loop tests with hand arithmetic, 6 spec tests, 3 app tests; UI Simulate > Drive run, property section Travel drive, fixture travel-drive.novo, QA 611 (both sizes).
 2026-10-29 L2b follow-up: `InductionMotor::from_nameplate` refuses a nameplate speed that would derive more than 24 poles (`MAX_DERIVED_POLES`) instead of overflowing (R2 finding on #1609); test `deriving_poles_from_a_tiny_rpm_is_refused_not_overflowed`.
+
+2026-10-29 L5a part 3 hardening: TravelLoad refuses derived numbers that overflow (R2 finding), a refused step stops the module with a message instead of panicking, travel_spec refuses a comma before three digits (5,000) with its own property sheet hint.

@@ -2,6 +2,11 @@
 
 use std::fmt::Write;
 
+use crate::profile::{
+    Combine, ControlDef, ControlKind, ControllerKind, ControllerMeta, Effects, Profile, SignalDef,
+    SignalKind, Supply, SupplyKind,
+};
+
 use super::propose::{Proposal, ProposedProfile};
 
 /// A TOML basic string.
@@ -29,6 +34,80 @@ fn list(items: &[String]) -> String {
 }
 
 impl ProposedProfile {
+    /// The proposal as a [`Profile`] value, without going through text. Fails only when a
+    /// control or controller kind is not one the engine knows, which `propose` never writes.
+    pub fn to_profile(&self) -> Result<Profile, String> {
+        let kind = match self.kind.as_str() {
+            "radio" => ControllerKind::Radio,
+            "pendant" => ControllerKind::Pendant,
+            "joystick" => ControllerKind::Joystick,
+            "plc-panel" => ControllerKind::PlcPanel,
+            "custom" => ControllerKind::Custom,
+            other => return Err(format!("unknown controller kind {other:?}")),
+        };
+        let mut controls = Vec::new();
+        for c in &self.controls {
+            let kind = ControlKind::ALL
+                .into_iter()
+                .find(|k| k.as_str() == c.kind)
+                .ok_or_else(|| format!("unknown control kind {:?}", c.kind))?;
+            controls.push(ControlDef {
+                id: c.id.clone(),
+                label: c.label.clone(),
+                kind,
+                positions: c.positions.clone(),
+                rest: None,
+                spring: None,
+                needs_link: c.needs_link,
+                requires: c.requires.clone(),
+                drops_when: c.drops_when.clone(),
+            });
+        }
+        let signals = self
+            .signals
+            .iter()
+            .map(|s| {
+                let grouped = s.group.is_some() && s.step.is_some();
+                SignalDef {
+                    name: s.name.clone(),
+                    label: String::new(),
+                    kind: SignalKind::Contact,
+                    control: s.control.clone(),
+                    when: if grouped { Vec::new() } else { s.when.clone() },
+                    group: if grouped { s.group.clone() } else { None },
+                    step: if grouped { s.step } else { None },
+                    levels: Default::default(),
+                    unit: None,
+                    requires: Vec::new(),
+                    ungated: s.ungated,
+                    needs_link: None,
+                    combine: Combine::Or,
+                    pin: (!s.pin.is_empty()).then(|| s.pin.clone()),
+                }
+            })
+            .collect();
+        Ok(Profile {
+            controller: ControllerMeta {
+                id: self.id.clone(),
+                name: self.name.clone(),
+                kind,
+                supply: self.supply.map(|s| Supply {
+                    kind: if s.ac { SupplyKind::Ac } else { SupplyKind::Dc },
+                    volts: s.volts,
+                }),
+                common: self.common.clone(),
+                step2_includes_step1: self.step2_includes_step1,
+                shared: false,
+                generic: self.generic,
+                gate: self.gate.clone(),
+            },
+            effects: Effects::default(),
+            controls,
+            signals,
+            interlocks: Vec::new(),
+        })
+    }
+
     /// The profile in the controller profile format (`docs/design/controller-profile.md`). The bindings are not part of it: see [`Proposal::bindings_csv`].
     pub fn to_toml(&self) -> String {
         let mut out = String::new();

@@ -89,6 +89,17 @@ fn load_arithmetic_is_the_closed_form() {
 }
 
 #[test]
+fn products_that_overflow_are_refused_not_run() {
+    // Each value is finite, the derived inertia or torque is not.
+    assert!(TravelLoad::new(5000.0, 1e300, 30.0, 0.9, 0.01, 0.0, 0.0).is_err());
+    assert!(TravelLoad::new(5000.0, 0.15, 1e-300, 0.9, 0.01, 0.0, 0.0).is_err());
+    assert!(TravelLoad::new(5000.0, 0.15, 30.0, 1e-300, 0.01, 0.0, 0.0).is_err());
+    assert!(TravelLoad::new(5000.0, 0.15, 30.0, 0.9, 1e300, 0.0, 0.0).is_err());
+    assert!(TravelLoad::new(5000.0, 0.15, 30.0, 0.9, 0.01, 1e300, 0.0).is_err());
+    assert!(TravelLoad::new(1e300, 0.15, 1e-30, 0.9, 0.01, 0.0, 0.0).is_err());
+}
+
+#[test]
 fn bad_load_data_is_refused() {
     assert!(TravelLoad::new(0.0, 0.15, 30.0, 0.9, 0.01, 0.0, 0.0).is_err());
     assert!(TravelLoad::new(10.0, 0.15, 30.0, 1.2, 0.01, 0.0, 0.0).is_err());
@@ -223,4 +234,17 @@ fn missing_bindings_are_reported_before_the_run() {
     assert!(findings.iter().any(|f| f.message.contains("=K-REV")));
     assert!(findings.iter().any(|f| f.message.contains("=K-HI")));
     assert!(!findings.iter().any(|f| f.message.contains("=K-FWD")));
+}
+
+#[test]
+fn a_refused_motor_step_stops_that_module_with_a_message() {
+    // A negative step time is refused by the motor model: the module stops and says why.
+    let mut l = the_loop(vec![]);
+    l.config.dt_s = -1.0;
+    let mut c = circuit(&["=K-MAIN", "=K-EN", "=K-FWD"]);
+    l.run(&mut c, 3);
+    let m = l.module("=A-TRAVEL").unwrap();
+    let why = m.fault().expect("the module has stopped");
+    assert!(why.starts_with("the run stopped:"), "{why}");
+    assert!(m.snapshot().is_none());
 }

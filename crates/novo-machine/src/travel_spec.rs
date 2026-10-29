@@ -118,10 +118,7 @@ pub fn travel_from_properties(
     let number = |key: &'static str| -> Result<f64, SpecError> {
         let default = KEYS.iter().find(|k| k.key == key).map_or("", |k| k.default);
         let raw = text(key).unwrap_or_else(|| default.to_owned());
-        // A comma is a decimal comma: "1,500" reads as 1.5, not 1500 (the property sheet says so).
-        raw.replace(',', ".")
-            .parse::<f64>()
-            .map_err(|_| SpecError::NotANumber { key, text: raw })
+        crate::spec::decimal(key, raw)
     };
     let np = MotorNameplate {
         voltage_v: number("trav_motor_v")?,
@@ -263,6 +260,45 @@ mod tests {
         assert!(matches!(build(&p), Err(SpecError::NotANumber { .. })));
         let p = props(&[(TRAVEL_KEY, "-5")]);
         assert!(matches!(build(&p), Err(SpecError::Value(_))));
+    }
+
+    #[test]
+    fn a_comma_before_three_digits_is_refused_not_read_as_a_decimal() {
+        for text in ["5,000", "1,500", "12,345.6"] {
+            let p = props(&[(TRAVEL_KEY, text)]);
+            assert!(
+                matches!(build(&p), Err(SpecError::NotANumber { .. })),
+                "{text}"
+            );
+        }
+        let p = props(&[(TRAVEL_KEY, "5000,5")]);
+        assert!(build(&p).unwrap().is_some());
+    }
+
+    #[test]
+    fn zero_before_the_comma_is_a_decimal() {
+        // An integer part of 0 cannot be a thousands group.
+        for text in ["0,500", "0,5"] {
+            let p = props(&[(TRAVEL_KEY, "5000"), ("trav_rolling", text)]);
+            assert!(build(&p).is_ok(), "{text}");
+        }
+        assert_eq!(crate::spec::decimal("k", "-0,125".into()).unwrap(), -0.125);
+        let p = props(&[(TRAVEL_KEY, "5000"), ("trav_rolling", "10,500")]);
+        assert!(matches!(build(&p), Err(SpecError::NotANumber { .. })));
+    }
+
+    #[test]
+    fn extreme_numbers_are_refused_before_the_run() {
+        for (key, value) in [
+            ("trav_gear_ratio", "1e-300"),
+            ("trav_wheel_radius_m", "1e300"),
+            ("trav_wind_n", "1e300"),
+            ("trav_rolling", "1e300"),
+            ("trav_efficiency", "1e-300"),
+        ] {
+            let p = props(&[(TRAVEL_KEY, "5000"), (key, value)]);
+            assert!(matches!(build(&p), Err(SpecError::Value(_))), "{key}");
+        }
     }
 
     #[test]

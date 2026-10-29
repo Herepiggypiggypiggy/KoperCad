@@ -37,10 +37,15 @@ A control per motion and direction pair (`rocker2` up to two steps, `rocker3` fo
 the profile gates the motions on `start=on` (a checkbox turns that off). Step 2 keeping step 1 closed is the default
 (checkbox).
 
+The importer builds a `novo_controller::Profile` value (`ProposedProfile::to_profile`), the same value the TOML text reads back
+as; the wizard runs the engine's `validate` on it, shows the issues in the preview and refuses to save on an error.
+A bare direction word (RIGHT, FORWARD, UP) is read with the usual crane convention (trolley, bridge, hoist) unless the
+table names a different motion, and the preview says so.
+
 ## Warnings the preview gives
 
 A row that names both directions (`Hoist up/down`), several motions, a motion without direction, a direction without a
-motion when the table names several, an unreadable step cell, step column and text that disagree, a bare number that
+motion when the table names several (bare directions follow the crane convention, with a note), a step with no motion or direction, an unreadable step cell, step column and text that disagree, a bare number that
 could be a step or a unit number, more than three steps, a step with no lower pin, a direction with no opposite, the
 same terminal used for two signals, a second common, a missing common, an AC/DC unknown supply, selector switches
 (never guessed), and every row that was not recognised at all.

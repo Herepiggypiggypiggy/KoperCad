@@ -184,11 +184,14 @@ pub(crate) struct Workbench {
     pub(super) space_down: Option<egui::Pos2>,
     /// The pointer on the drawing (mm), when it is over the canvas.
     pub(super) pointer_world: Option<novo_core::Point>,
+    /// The page and place where the pointer was last over the drawing; kept
+    /// after it leaves, for a circuit placed from a panel to land there.
+    pub(super) last_pointer: Option<(novo_core::PageId, novo_core::Point)>,
     /// Where a Space-held pan last moved the drawing from, once the
     /// pointer has gone more than 4 px from `space_down`.
     pub(super) space_pan: Option<egui::Pos2>,
-    /// The tool dock's size last frame, to tell where it would sit.
-    pub(super) dock_size: egui::Vec2,
+    /// Where the tool rail was drawn this frame (None: no rail).
+    pub(super) rail_rect: Option<egui::Rect>,
     /// The width the pinned navigator column has now (it is dragged wider
     /// or narrower), for the dialogs that open beside it.
     pub(super) outline_shown: Option<f32>,
@@ -390,8 +393,9 @@ impl Default for Workbench {
             proposal: 0,
             space_down: None,
             pointer_world: None,
+            last_pointer: None,
             space_pan: None,
-            dock_size: egui::Vec2::ZERO,
+            rail_rect: None,
             outline_shown: None,
             inspector: Default::default(),
             wire_panel: Default::default(),
@@ -920,6 +924,9 @@ impl NovoApp {
             }
             _ => None,
         };
+        if let (Some(at), Some(page)) = (self.wb.pointer_world, self.current_page) {
+            self.wb.last_pointer = Some((page, at));
+        }
     }
 
     /// Whether the shell runs `command` from a key press itself.

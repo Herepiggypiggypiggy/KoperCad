@@ -81,6 +81,8 @@ pub struct Settings {
     /// Words beside the dock icons: `""` (auto: when the canvas has room),
     /// `"always"` or `"never"` (icons only, names stay in the tooltips).
     pub dock_labels: String,
+    /// Whether the tool rail shows icon, name and key (the button at its foot).
+    pub rail_expanded: bool,
     /// The interface size in percent: 100 (empty or 0), 125, 150 or 200,
     /// on top of the system's own scaling.
     pub ui_scale: u32,

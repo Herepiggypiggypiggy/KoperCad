@@ -1,0 +1,38 @@
+@title Double click on a title bar maximises a window and a second one restores it (Pages flyout, Preferences)
+@area Windows
+@sizes 1366x768
+click_text "Open example"
+wait 20
+click_text Pages
+wait 20
+expect "Navigator"
+shot navigator-home
+# The flyout's title bar is at y 72.
+double_click 135 72
+wait 20
+expect "Navigator"
+shot navigator-maximised
+check_layout
+double_click 683 76
+wait 20
+expect "Navigator"
+shot navigator-restored
+check_layout
+key Escape
+wait 10
+click_text File #1
+wait 5
+click_text Preferences
+wait 20
+shot preferences-home
+# Centered at 1366x768: the title bar is at y 125 (at 1920x1080 see 1111: y 269).
+double_click 683 125
+wait 20
+expect "Preferences"
+shot preferences-maximised
+check_layout
+double_click 683 33
+wait 20
+expect "Preferences"
+shot preferences-restored
+check_layout

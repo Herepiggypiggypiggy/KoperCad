@@ -17,3 +17,7 @@
 | `terminal_edit.rs`, `learn_suite.rs`, `panel.rs` `modal` `collapsible(false)` | stay: question dialogs and the lesson window do not roll up; they move and resize |
 
 Not in this PR (lane V1b): dock slots with snap zones, double click maximise, dock left/right buttons in the header, corner grip, splitter double click reset.
+
+## V1b-1 (maximise and splitter reset)
+
+- 2026-10-29: double click on a window's title bar maximises it (a `Panel` to its canvas, a `dialog` or `modal` to the window) and a second one restores it. `panel::maximise_step` reads egui's `__title_click` response, keeps the restore rect per window and per Reset-layout epoch, undoes egui's own fold-on-double-click for collapsible windows (the arrow still folds), and lifts the window's `constrain_to` and `max_height` for the maximised state. Double click on the edge of an `EDGE_PANELS` panel removes its `PanelState` (`panel::splitters_reset`, called once per frame from `app.rs`). Tests in `panel_windows_tests.rs`; QA scenarios 1110, 1111, 1112. Next: V1b-2 dock slots, snap zones and dock buttons; V1b-3 Pages and Reports as docked panels and the sim chip corner.
