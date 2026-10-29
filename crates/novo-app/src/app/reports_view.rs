@@ -189,7 +189,14 @@ impl NovoApp {
         ui.horizontal(|ui| {
             section_label(ui, "Reports");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                super::panel_dock::navigator_side_button(ui);
+                if super::panel_dock::reports_docked(ui.ctx()).is_none() {
+                    super::panel_dock::navigator_dock_button(
+                        ui,
+                        super::panel_dock::REPORTS,
+                        "the Reports list",
+                    );
+                    super::panel_dock::navigator_side_button(ui);
+                }
             });
         });
         let mut chosen = None;
