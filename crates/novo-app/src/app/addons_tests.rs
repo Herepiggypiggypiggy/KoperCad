@@ -188,6 +188,19 @@ fn install_engine_fixture(d: &mut Drive) {
     d.frame();
 }
 
+/// Runs frames until every request to an engine has been answered and applied. Engines answer
+/// from their own threads, so one frame is not enough under load.
+fn settle(d: &mut Drive) {
+    for _ in 0..500 {
+        d.frame();
+        if d.app.wb.addons.in_flight.is_empty() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("an engine did not answer within five seconds");
+}
+
 #[test]
 fn an_engine_answers_buttons_and_commands() {
     let (mut d, _dir) = drive();
@@ -212,6 +225,7 @@ fn an_engine_answers_buttons_and_commands() {
     );
     // a command without a panel goes to the engine too
     d.app.run_addon_command("addon.demo-engine.ping");
+    settle(&mut d);
     assert!(d.app.wb.addons.stopped.is_empty());
     // a request the engine does not know is a refusal in its words, not a stop
     let refused = d
@@ -293,7 +307,7 @@ fn a_broken_engine_stops_alone_and_takes_its_rows_with_it() {
             .any(|c| c.addon_id == "demo-engine")
     );
     d.app.run_addon_command("addon.demo-engine.crash");
-    d.frame();
+    settle(&mut d);
     let why = d
         .app
         .wb

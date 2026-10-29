@@ -46,7 +46,7 @@ pub(super) struct AddonsState {
     /// Engines that are running, by add-on id (started when first needed).
     engines: BTreeMap<String, EngineWorker>,
     /// What each request in flight was for, by add-on id and ticket.
-    in_flight: BTreeMap<(String, u64), Origin>,
+    pub(super) in_flight: BTreeMap<(String, u64), Origin>,
     /// The window, so an engine thread can ask for a frame when it has answered.
     wake: Option<egui::Context>,
     /// Add-ons whose engine stopped or would not start this run, with the reason in words. They
