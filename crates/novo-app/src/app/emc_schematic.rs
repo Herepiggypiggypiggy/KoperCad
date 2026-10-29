@@ -463,6 +463,7 @@ impl NovoApp {
         )
         .above_card()
         .fit()
+        .dockable()
         .scrolls()
         .show(ctx, |ui| {
             // The panel stays this wide when a fix preview opens (its long

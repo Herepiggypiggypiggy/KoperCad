@@ -92,6 +92,20 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["nieuw kraan", "kraan sjabloon", "kraanproject"],
     ),
+    nl(
+        "file.new_pump",
+        &[],
+        &["nieuw pomp", "pomp sjabloon", "pompproject"],
+    ),
+    nl(
+        "file.new_mcc",
+        &[],
+        &[
+            "nieuw mcc",
+            "motorverdeler sjabloon",
+            "motorverdelerproject",
+        ],
+    ),
     nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
     nl(
         "help.walkthrough",

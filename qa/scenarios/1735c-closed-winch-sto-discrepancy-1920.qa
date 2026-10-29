@@ -1,0 +1,35 @@
+@title Closed-loop winch: an open coil on one STO channel is found and trips the drive after the discrepancy time
+@area Simulate
+@sizes 1920x1080
+# Lane L2c. Simulate > Defects and walk-throughs (which switches Live on) opens the coil of STO channel 1,
+# then Simulate > Drive run starts the winch. The two channels disagree, the drive latches the
+# discrepancy after its time (1 s) and the run lists it.
+open qa/fixtures/closed-winch.novo
+wait 20
+click_text Simulate
+wait 5
+click_text "Defects and walk-throughs"
+wait 20
+click_text "Contact welded closed"
+wait 5
+click_text "Coil open (never operates)"
+wait 5
+click_text "choose..."
+wait 5
+click_text "=A1+CAB-STOA"
+wait 5
+click_text "Inject defect"
+wait 20
+expect "DEFECT INJECTED"
+shot defect-injected
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Start"
+wait 400
+expect "Safe torque off channels disagree"
+shot sto-discrepancy-found
+check_layout

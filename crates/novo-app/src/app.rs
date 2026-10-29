@@ -288,6 +288,8 @@ mod symbol_folder;
 mod symbol_preview;
 mod template_crane;
 mod template_crane_window;
+mod template_plants;
+mod template_plants_window;
 mod terminal_edit;
 mod terminals;
 #[cfg(test)]
@@ -485,6 +487,8 @@ mod small_window_tests;
 #[cfg(test)]
 mod template_crane_tests;
 #[cfg(test)]
+mod template_plants_tests;
+#[cfg(test)]
 mod tips_tests;
 #[cfg(test)]
 mod ui_gaps_tests;
@@ -633,6 +637,8 @@ enum Leaving {
     PlcExample,
     PumpExample,
     CraneTemplate,
+    PumpTemplate,
+    MccTemplate,
     Practice,
     /// Open this lesson's sample project and start the lesson.
     Lesson(String),
@@ -1030,6 +1036,8 @@ impl NovoApp {
             Action::OpenPlcExample => self.leave_then(ctx, Leaving::PlcExample),
             Action::OpenPumpExample => self.leave_then(ctx, Leaving::PumpExample),
             Action::NewCraneProject => self.leave_then(ctx, Leaving::CraneTemplate),
+            Action::NewPumpProject => self.leave_then(ctx, Leaving::PumpTemplate),
+            Action::NewMccProject => self.leave_then(ctx, Leaving::MccTemplate),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
             Action::Learn => self.learn_run_command("help.learn", None),
@@ -1206,6 +1214,8 @@ impl NovoApp {
             Leaving::PlcExample => self.open_plc_example(),
             Leaving::PumpExample => self.open_pump_example(),
             Leaving::CraneTemplate => self.open_crane_options(),
+            Leaving::PumpTemplate => self.open_plant_options(template_plants::Plant::PumpStation),
+            Leaving::MccTemplate => self.open_plant_options(template_plants::Plant::ControlCentre),
             Leaving::Practice => self.start_practice(),
             Leaving::Lesson(id) => self.start_lesson_now(&id),
             Leaving::Close => self.close_project(),
@@ -1856,7 +1866,10 @@ impl NovoApp {
             self.wb.rail_rect = None;
             rail::close_flyout(&ctx);
         }
-        if reports {
+        let reports_docked = reports && panel_dock::reports_docked(&ctx).is_some();
+        if reports_docked {
+            // A pane of a strip, drawn below with the strips.
+        } else if reports {
             let right = panel_dock::navigator_right(&ctx);
             let panel = if right {
                 egui::Panel::right("reports_list_right")
@@ -1918,6 +1931,21 @@ impl NovoApp {
             if let Some(shown) = shown {
                 self.wb.outline_shown = Some(shown.response.rect.width().round());
             }
+        }
+        if reports_docked && let Some(slot) = panel_dock::reports_docked(&ctx) {
+            panel_dock::show_docked(
+                &ctx,
+                egui::Id::new("reports_pane"),
+                panel_dock::REPORTS,
+                "Reports",
+                slot,
+                panel_dock::PaneOptions {
+                    closable: false,
+                    float_tip: "Back to the Reports column",
+                    scrolls: true,
+                },
+                |ui| self.reports_list(ui),
+            );
         }
         // The canvases paint their own ground; the Reports tables and the
         // Cabinet toolbar sit on the theme's surfaces, not on the bare window.
@@ -2041,6 +2069,7 @@ impl NovoApp {
         self.project_settings_dialog(&ctx);
         self.crane_options_dialog(&ctx);
         self.export_centre_window(&ctx);
+        self.plant_options_dialog(&ctx);
         self.project_rules_dialog(&ctx);
         self.device_renumber_dialog(&ctx);
         self.selection_sheet_window(&ctx);
@@ -2552,7 +2581,7 @@ impl NovoApp {
                     picked.push(Action::PinOutline);
                 }
                 if pinned && panel_dock::pages_docked(ui.ctx()).is_none() {
-                    panel_dock::pages_dock_button(ui);
+                    panel_dock::navigator_dock_button(ui, panel_dock::PAGES, "Pages");
                     panel_dock::navigator_side_button(ui);
                 }
             });

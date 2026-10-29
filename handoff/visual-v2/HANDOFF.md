@@ -39,7 +39,7 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 - `novo-app/src/app/export_centre.rs` is the window (`modal_fill`, 960 by 640, `dialog_width::CENTRE`): search on top, tiles by group on the left, the picked format on the right, Export button at the foot. A tile click picks, a double click runs, Enter runs the picked one; the search keeps the keyboard so typing keeps narrowing. Each tile carries the lesson anchor `cmd.<id>`; while the centre is shut the anchor falls back to `cmd.file.export_centre` and then to the File menu.
 - `file.export_centre` ("Export...") is the one File row. The 44 other export rows left File and Reports (File 88 to 58, Reports 30 to 17). `export.print_preview` keeps its File row as the print entry and is also a tile. All stay in the command field.
 - Lessons that walked File > Export submenus now say "open Export... and pick the format"; the manual lines too. Scenarios 09, 184 and 723 changed for it; 726 is new.
-- Budget ceilings now: File 58, Edit 30, Draw 39, View 65, Check 11, Reports 17, Simulate 25, Help 19 = 264 (Simulate 25 because `sim.hoist3d` landed after V2c and left main's own budget test red).
+- Budget ceilings now: File 60, Edit 30, Draw 39, View 65, Check 11, Reports 17, Simulate 25, Help 19 = 266 (Simulate 25 because `sim.hoist3d` landed after V2c and left main's own budget test red).
 
 ## V4 what is left
 - **Options and preview on the right of the centre** (design section 6): the right side now shows the sentence, the key and the reason a format is grey, not the options of the format or a preview. Formats with options (PDF options, print sets, DXF) still open their own window after Export.

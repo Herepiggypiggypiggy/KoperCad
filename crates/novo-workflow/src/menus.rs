@@ -58,6 +58,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.recover", under("File", "Open")),
     ("file.example", under("File", "Open")),
     ("file.new_crane", under("File", "New from template")),
+    ("file.new_pump", under("File", "New from template")),
+    ("file.new_mcc", under("File", "New from template")),
     ("file.example_mcc", under("File", "Examples")),
     ("file.example_crane", under("File", "Examples")),
     ("file.example_plc", under("File", "Examples")),
@@ -897,7 +899,7 @@ mod tests {
     #[test]
     fn menu_rows_stay_inside_the_budget() {
         let ceilings: &[(&str, usize)] = &[
-            ("File", 58),
+            ("File", 60),
             ("Edit", 30),
             ("Draw", 39),
             ("View", 65),
@@ -921,7 +923,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 264, "the menus hold {total} rows");
+        assert!(total <= 266, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File

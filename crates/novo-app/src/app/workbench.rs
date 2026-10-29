@@ -110,6 +110,8 @@ pub(crate) struct Workbench {
     pub(super) export_centre: Option<super::export_centre::ExportCentre>,
     /// The New crane project window, with the choices so far.
     pub(super) crane_new: Option<super::template_crane::CraneOptions>,
+    /// The New pump station / motor control centre window.
+    pub(super) plant_new: Option<super::template_plants::PlantOptions>,
     /// The Issue revision window, while it is open.
     pub(super) issue: Option<super::revisions::IssueDraft>,
     pub(super) restore_ask: Option<super::revisions::RestoreAsk>,
@@ -372,6 +374,7 @@ impl Default for Workbench {
             project_info: None,
             export_centre: None,
             crane_new: None,
+            plant_new: None,
             issue: None,
             restore_ask: None,
             handover_ask: None,

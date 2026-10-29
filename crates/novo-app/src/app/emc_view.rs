@@ -472,6 +472,7 @@ pub(super) fn legend(ctx: &egui::Context, view: egui::Rect, state: &EmcState, da
         250.0,
     )
     .fit()
+    .dockable()
     .show(ctx, |ui| {
         let layers = &state.layers;
         if layers.classes {

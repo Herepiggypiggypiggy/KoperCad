@@ -1,0 +1,325 @@
+//! Loop checks for the closed-loop winch driven by a scripted circuit: the operator inputs, the
+//! two STO channels, the encoder signal device and the brake contactor are devices of the
+//! drawing, so a defect injected on any of them reaches the winch. Expected values are worked
+//! out on paper in the comments.
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use novo_drive::closed_loop::ClFault;
+use novo_machine::cl_winch_loop::{ClFindingKind, ClWinchLoop, ClWinchModule};
+use novo_machine::cl_winch_spec::{CLOSED_WINCH_KEY, closed_winch_from_properties};
+use novo_machine::cosim::StepConfig;
+use novo_machine::port::{CircuitPort, FakeCircuit};
+
+const DT: f64 = 0.005;
+
+/// What the operator and the defects do; the scripted circuit reads it every tick.
+#[derive(Clone, Copy)]
+struct Cmd {
+    up: bool,
+    down: bool,
+    fast: bool,
+    sto_a: bool,
+    sto_b: bool,
+    encoder: bool,
+    /// The brake contactor pulls in when the drive's relay contact is closed.
+    contactor_follows_relay: bool,
+    /// A welded brake contactor: the coil is fed whatever the relay says.
+    contactor_welded: bool,
+}
+
+impl Default for Cmd {
+    fn default() -> Self {
+        Self {
+            up: false,
+            down: false,
+            fast: false,
+            sto_a: true,
+            sto_b: true,
+            encoder: true,
+            contactor_follows_relay: true,
+            contactor_welded: false,
+        }
+    }
+}
+
+type Shared = Rc<RefCell<Cmd>>;
+
+/// 2500 kg on a 0.2 m drum, ratio 31.5: 0.2 / 31.5 = 6.349 mm of hook per rad of motor shaft,
+/// so 0.15 m/s is 23.6 rad/s = 225.6 rpm. Weight torque 2500 x 9.80665 x 0.006349 = 155.7 N m
+/// (80 % of the 193.6 N m rated torque of the 30 kW motor).
+fn winch(extra: &[(&str, &str)]) -> ClWinchModule {
+    let mut p = vec![
+        (CLOSED_WINCH_KEY, "2500"),
+        ("cw_in_up", "KU"),
+        ("cw_in_down", "KD"),
+        ("cw_in_fast", "KF"),
+        ("cw_sto_a", "STOA"),
+        ("cw_sto_b", "STOB"),
+        ("cw_encoder", "ENC"),
+        ("cw_brake_relay", "KR"),
+        ("cw_brake_feed", "KB"),
+    ];
+    p.extend_from_slice(extra);
+    let map: std::collections::BTreeMap<String, String> = p
+        .into_iter()
+        .map(|(k, v)| (k.to_owned(), v.to_owned()))
+        .collect();
+    closed_winch_from_properties("=M1", &|k| map.get(k).cloned())
+        .unwrap()
+        .unwrap()
+        .0
+}
+
+fn rig(extra: &[(&str, &str)]) -> (ClWinchLoop, FakeCircuit, Shared) {
+    let cmd: Shared = Rc::new(RefCell::new(Cmd::default()));
+    let c = cmd.clone();
+    let circuit = FakeCircuit::new().with_rule(move |s| {
+        let cmd = *c.borrow();
+        let relay_closed = s.contacts.get("KR").copied().unwrap_or(false);
+        for (tag, on) in [
+            ("KU", cmd.up),
+            ("KD", cmd.down),
+            ("KF", cmd.fast),
+            ("STOA", cmd.sto_a),
+            ("STOB", cmd.sto_b),
+            ("ENC", cmd.encoder),
+            (
+                "KB",
+                cmd.contactor_welded || (cmd.contactor_follows_relay && relay_closed),
+            ),
+        ] {
+            if on {
+                s.energised.insert(tag.to_owned());
+            } else {
+                s.energised.remove(tag);
+            }
+        }
+    });
+    let mut circuit = circuit;
+    circuit
+        .known
+        .extend(["KU", "KD", "KF", "STOA", "STOB", "ENC", "KR", "KB"].map(str::to_owned));
+    let mut l = ClWinchLoop::new(StepConfig::new(DT).unwrap()).unwrap();
+    l.modules.push(winch(extra));
+    (l, circuit, cmd)
+}
+
+fn seconds(l: &mut ClWinchLoop, c: &mut FakeCircuit, s: f64) {
+    l.run(c, (s / DT).round() as usize);
+}
+
+fn has(m: &ClWinchModule, f: impl Fn(&ClFindingKind) -> bool) -> bool {
+    m.findings().iter().any(|x| f(&x.kind))
+}
+
+#[test]
+fn up_command_proves_torque_opens_the_brake_and_lifts_at_the_step_speed() {
+    let (mut l, mut c, cmd) = rig(&[]);
+    cmd.borrow_mut().up = true;
+    seconds(&mut l, &mut c, 6.0);
+    let m = l.module("=M1").unwrap();
+    let s = m.snapshot().unwrap();
+    // Step 1 is 0.15 m/s; the encoder drive holds it within the speed resolution.
+    assert!(
+        (s.hook_speed_m_s - 0.15).abs() < 0.01,
+        "{}",
+        s.hook_speed_m_s
+    );
+    assert!(s.hook_height_m > 0.4, "{}", s.hook_height_m);
+    // The brake opened only after the drive built its torque: nothing sank.
+    assert!(!has(m, |k| matches!(
+        k,
+        ClFindingKind::StartRollback { .. }
+    )));
+    assert!(
+        m.findings()
+            .iter()
+            .all(|f| !matches!(f.kind, ClFindingKind::Trip(_)))
+    );
+}
+
+#[test]
+fn step_two_is_faster_and_down_reverses() {
+    let (mut l, mut c, cmd) = rig(&[]);
+    *cmd.borrow_mut() = Cmd {
+        up: true,
+        fast: true,
+        ..Cmd::default()
+    };
+    seconds(&mut l, &mut c, 7.0);
+    let v = l.module("=M1").unwrap().snapshot().unwrap().hook_speed_m_s;
+    assert!((v - 0.8).abs() < 0.03, "{v}");
+    *cmd.borrow_mut() = Cmd {
+        down: true,
+        ..Cmd::default()
+    };
+    seconds(&mut l, &mut c, 12.0);
+    let m = l.module("=M1").unwrap();
+    assert!(m.snapshot().unwrap().hook_speed_m_s < -0.1);
+    assert!(
+        m.findings()
+            .iter()
+            .all(|f| !matches!(f.kind, ClFindingKind::Trip(_))),
+        "{:?}",
+        m.findings()
+    );
+}
+
+#[test]
+fn stopping_holds_the_load_until_the_brake_has_it() {
+    let (mut l, mut c, cmd) = rig(&[]);
+    cmd.borrow_mut().up = true;
+    seconds(&mut l, &mut c, 5.0);
+    cmd.borrow_mut().up = false;
+    seconds(&mut l, &mut c, 4.0);
+    let m = l.module("=M1").unwrap();
+    let s = m.snapshot().unwrap();
+    assert!(s.shaft_rpm.abs() < 0.01);
+    assert!(!has(m, |k| matches!(k, ClFindingKind::BrakeSlip { .. })));
+    // The hook carries on a little while the ramp comes down: a few centimetres, never metres.
+    let travel = m
+        .findings()
+        .iter()
+        .find_map(|f| match f.kind {
+            ClFindingKind::StopTravel { metres } => Some(metres),
+            _ => None,
+        })
+        .unwrap_or(0.0);
+    assert!((0.0..0.5).contains(&travel), "{travel}");
+}
+
+#[test]
+fn a_brake_contactor_that_does_not_pull_in_trips_the_feedback_and_the_hook_stays() {
+    let (mut l, mut c, cmd) = rig(&[("cw_brake_feedback", "KB")]);
+    *cmd.borrow_mut() = Cmd {
+        up: true,
+        contactor_follows_relay: false,
+        ..Cmd::default()
+    };
+    seconds(&mut l, &mut c, 4.0);
+    let m = l.module("=M1").unwrap();
+    assert!(has(m, |k| matches!(
+        k,
+        ClFindingKind::Trip(ClFault::BrakeFeedback)
+    )));
+    assert!(m.height_m().abs() < 0.002, "{}", m.height_m());
+}
+
+#[test]
+fn a_welded_brake_contactor_lets_the_load_run_with_the_drive_off() {
+    let (mut l, mut c, cmd) = rig(&[]);
+    cmd.borrow_mut().contactor_welded = true;
+    seconds(&mut l, &mut c, 3.0);
+    let m = l.module("=M1").unwrap();
+    assert!(m.height_m() < -0.5, "{}", m.height_m());
+    assert!(has(m, |k| matches!(k, ClFindingKind::BrakeSlip { .. })));
+}
+
+#[test]
+fn one_sto_channel_lost_trips_after_the_discrepancy_time_and_both_lost_stop_at_once() {
+    let (mut l, mut c, cmd) = rig(&[]);
+    cmd.borrow_mut().up = true;
+    seconds(&mut l, &mut c, 3.0);
+    // Channel 1 loses its wire. Nothing happens until the discrepancy time (1 s) is over.
+    cmd.borrow_mut().sto_a = false;
+    seconds(&mut l, &mut c, 0.5);
+    let m = l.module("=M1").unwrap();
+    assert!(!has(m, |k| matches!(k, ClFindingKind::Trip(_))));
+    seconds(&mut l, &mut c, 1.0);
+    let m = l.module("=M1").unwrap();
+    assert!(has(m, |k| matches!(
+        k,
+        ClFindingKind::Trip(ClFault::StoDiscrepancy)
+    )));
+
+    // Both channels low on a fresh run: STO at once, the brake closes, the load stays held.
+    let (mut l, mut c, cmd) = rig(&[]);
+    cmd.borrow_mut().up = true;
+    seconds(&mut l, &mut c, 3.0);
+    {
+        let mut k = cmd.borrow_mut();
+        k.sto_a = false;
+        k.sto_b = false;
+    }
+    seconds(&mut l, &mut c, 2.0);
+    let m = l.module("=M1").unwrap();
+    assert!(has(m, |k| matches!(k, ClFindingKind::StoRequested)));
+    assert!(m.snapshot().unwrap().shaft_rpm.abs() < 0.5);
+    assert!(!has(m, |k| matches!(k, ClFindingKind::Trip(_))));
+}
+
+#[test]
+fn a_lost_encoder_signal_trips_the_drive_and_the_brake_catches_the_load() {
+    let (mut l, mut c, cmd) = rig(&[]);
+    cmd.borrow_mut().up = true;
+    seconds(&mut l, &mut c, 3.0);
+    cmd.borrow_mut().encoder = false;
+    seconds(&mut l, &mut c, 3.0);
+    let m = l.module("=M1").unwrap();
+    assert!(has(m, |k| matches!(k, ClFindingKind::EncoderSignalLost)));
+    assert!(
+        m.findings()
+            .iter()
+            .any(|f| matches!(f.kind, ClFindingKind::Trip(_)))
+    );
+    assert!(m.snapshot().unwrap().shaft_rpm.abs() < 0.5);
+    // The signal comes back and the trip is reset through the drive's reset edge.
+    cmd.borrow_mut().encoder = true;
+    seconds(&mut l, &mut c, 0.5);
+    assert!(has(l.module("=M1").unwrap(), |k| matches!(
+        k,
+        ClFindingKind::EncoderSignalBack
+    )));
+}
+
+#[test]
+fn binding_problems_are_named() {
+    let (l, c, _) = rig(&[]);
+    assert!(
+        l.check_bindings(&c)
+            .iter()
+            .all(|f| !f.message.contains("not in the circuit"))
+    );
+    let mut bare = ClWinchLoop::new(StepConfig::new(DT).unwrap()).unwrap();
+    bare.modules.push(winch(&[("cw_in_up", "NOPE")]));
+    let f = bare.check_bindings(&FakeCircuit::new());
+    assert!(
+        f.iter()
+            .any(|x| x.message.contains("NOPE is not in the circuit"))
+    );
+    let mut none = ClWinchLoop::new(StepConfig::new(DT).unwrap()).unwrap();
+    let m = closed_winch_from_properties("=M2", &|k| {
+        (k == CLOSED_WINCH_KEY).then(|| "1000".to_owned())
+    })
+    .unwrap()
+    .unwrap()
+    .0;
+    none.modules.push(m);
+    let f = none.check_bindings(&FakeCircuit::new());
+    let text: String = f
+        .iter()
+        .map(|x| x.message.as_str())
+        .collect::<Vec<_>>()
+        .join("|");
+    assert!(text.contains("cannot be commanded"), "{text}");
+    assert!(text.contains("STO"), "{text}");
+    assert!(text.contains("encoder"), "{text}");
+}
+
+#[test]
+fn the_run_is_deterministic() {
+    let run = || {
+        let (mut l, mut c, cmd) = rig(&[]);
+        cmd.borrow_mut().up = true;
+        seconds(&mut l, &mut c, 4.0);
+        l.module("=M1").unwrap().snapshot().unwrap().hook_height_m
+    };
+    assert_eq!(run(), run());
+}
+
+#[allow(dead_code)]
+fn _port_is_used(c: &impl CircuitPort) -> bool {
+    c.knows_device("x")
+}

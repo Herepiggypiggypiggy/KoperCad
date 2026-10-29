@@ -7,12 +7,47 @@
 //! device class, `novo_symbols::parse_company_templates`) as TOML text in the
 //! project property `pin.templates`, which the Pin names check reads.
 //!
+//! The company file `%APPDATA%\KoperCAD\pin-templates.toml` (the platform's
+//! data folder elsewhere) is the same text shared by all of a person's
+//! projects: "Load company file" fills the box from it, "Save as company file"
+//! writes the box to it. The project keeps its own copy, so it travels with
+//! the project file and the check stays a pure function of the project.
+//!
 //! Where the user finds it: Project > Rules, Ctrl+K "rules".
 
 use eframe::egui;
 use novo_core::{JoinLink, ProjectRules, SameName, Value};
 
 use super::{Level, NovoApp};
+
+/// File name of the shared company pin templates in the KoperCAD data folder.
+pub const PIN_TEMPLATES_FILE: &str = "pin-templates.toml";
+
+/// `%APPDATA%\KoperCAD\pin-templates.toml`.
+pub fn shared_pin_templates_path() -> Option<std::path::PathBuf> {
+    Some(
+        novo_storage::profile::data_dir()?
+            .join(crate::DATA_DIR_NAME)
+            .join(PIN_TEMPLATES_FILE),
+    )
+}
+
+/// The text of the company file, or what is wrong with it in plain words.
+fn read_shared_templates(path: &std::path::Path) -> Result<String, String> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| format!("No company file to load ({}): {e}", path.display()))?;
+    novo_symbols::parse_company_templates(&text)
+        .map_err(|e| format!("The company file is not readable: {e}"))?;
+    Ok(text)
+}
+
+/// Writes `text` (already checked to read) as the company file.
+fn write_shared_templates(path: &std::path::Path, text: &str) -> Result<(), String> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(path, text).map_err(|e| e.to_string())
+}
 
 /// The report kinds a project can switch off, as (generator id, title).
 fn generated_kinds() -> Vec<(String, String)> {
@@ -126,6 +161,7 @@ impl NovoApp {
             .take()
             .unwrap_or_else(|| stored_templates.clone());
         let mut save_templates = false;
+        let (mut load_shared, mut save_shared) = (false, false);
         let kinds = generated_kinds();
         let width = novo_theme::dialog_width::MEDIUM;
         // The body scrolls and the Done button stays in view at every window
@@ -238,12 +274,49 @@ impl NovoApp {
                     {
                         save_templates = true;
                     }
+                    ui.horizontal(|ui| {
+                        load_shared = ui
+                            .button("Load company file")
+                            .on_hover_text(
+                                "Fills the box from the pin names file shared by all your projects \
+                                 (in the KoperCAD data folder). Save pin names keeps it in this project.",
+                            )
+                            .clicked();
+                        save_shared = ui
+                            .add_enabled(parsed.is_ok(), egui::Button::new("Save as company file"))
+                            .on_hover_text("Makes the text above the pin names of all your projects.")
+                            .clicked();
+                    });
                 });
                 super::dialog_ui::done(ui)
             },
         );
         if save_templates {
             self.set_pin_templates(&templates);
+        }
+        if load_shared {
+            match shared_pin_templates_path()
+                .ok_or_else(|| "No data folder for the company file".to_owned())
+                .and_then(|p| read_shared_templates(&p))
+            {
+                Ok(text) => {
+                    templates = text;
+                    self.message(
+                        Level::Info,
+                        "Loaded the company pin names; Save pin names keeps them in this project",
+                    );
+                }
+                Err(e) => self.message(Level::Warning, e),
+            }
+        }
+        if save_shared {
+            match shared_pin_templates_path()
+                .ok_or_else(|| "No data folder for the company file".to_owned())
+                .and_then(|p| write_shared_templates(&p, &templates))
+            {
+                Ok(()) => self.message(Level::Info, "Saved as the company pin names file"),
+                Err(e) => self.message(Level::Error, format!("Could not save the file: {e}")),
+            }
         }
         if !(modal.inner || modal.should_close()) {
             self.wb.pin_templates_text = Some(templates);
@@ -252,5 +325,37 @@ impl NovoApp {
         if modal.inner || modal.should_close() {
             self.wb.project_rules = false;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const GOOD: &str = "[[class]]\nid = 'motor.brake'\nfunctions = ['motor.ac3']\n[[class.set]]\nname = 'with brake'\nrequired = ['U1', 'V1', 'W1', 'BD1', 'BD2']\n";
+
+    #[test]
+    fn the_company_file_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("KoperCAD").join(PIN_TEMPLATES_FILE);
+        write_shared_templates(&path, GOOD).unwrap();
+        assert_eq!(read_shared_templates(&path).unwrap(), GOOD);
+    }
+
+    #[test]
+    fn a_missing_or_unreadable_company_file_says_so() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(PIN_TEMPLATES_FILE);
+        assert!(
+            read_shared_templates(&path)
+                .unwrap_err()
+                .contains("No company file")
+        );
+        std::fs::write(&path, "[[class]]\nid = ").unwrap();
+        assert!(
+            read_shared_templates(&path)
+                .unwrap_err()
+                .contains("not readable")
+        );
     }
 }
