@@ -187,6 +187,9 @@ pub(crate) struct Workbench {
     pub(super) space_pan: Option<egui::Pos2>,
     /// The tool dock's size last frame, to tell where it would sit.
     pub(super) dock_size: egui::Vec2,
+    /// The width the pinned navigator column has now (it is dragged wider
+    /// or narrower), for the dialogs that open beside it.
+    pub(super) outline_shown: Option<f32>,
     /// The inspector's fields while they are edited.
     pub(super) inspector: super::inspector::InspectorState,
     /// The wire panel's text fields while they are edited.
@@ -385,6 +388,7 @@ impl Default for Workbench {
             pointer_world: None,
             space_pan: None,
             dock_size: egui::Vec2::ZERO,
+            outline_shown: None,
             inspector: Default::default(),
             wire_panel: Default::default(),
             marks: true,

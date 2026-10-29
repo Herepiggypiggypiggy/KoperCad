@@ -1,0 +1,44 @@
+@title Windows at 1920x1080: dragged to the screen edge, resized to the minimum, Reset panel layout recovers them, the dock stays on screen
+@area Windows
+@sizes 1920x1080
+# At 1920 the navigator is pinned: its right edge (x 247) is dragged to the 520 pt cap and back to the 200 pt minimum.
+click_text "Open example"
+wait 20
+click_text File #1
+wait 5
+click_text Preferences
+wait 20
+shot preferences-home
+drag 1196 816 100 100
+wait 10
+shot preferences-minimum
+check_layout
+drag 800 281 2500 1500
+wait 10
+shot preferences-at-edge
+check_layout
+key Escape
+wait 10
+drag 772 1027 2500 1500
+wait 10
+shot dock-at-edge
+check_layout
+drag 246 300 900 300
+wait 10
+shot navigator-widest
+check_layout
+drag 518 300 0 300
+wait 10
+shot navigator-narrowest
+check_layout
+click_text View #1
+wait 5
+click_text "Reset panel layout"
+wait 20
+shot reset-dock-and-navigator
+click_text File #1
+wait 5
+click_text Preferences
+wait 20
+shot reset-preferences
+check_layout

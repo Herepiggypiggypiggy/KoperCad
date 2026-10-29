@@ -179,17 +179,20 @@ impl NovoApp {
         let (mut fix, mut anyway) = (false, false);
         let mut go: Option<Option<Place>> = None;
         let mut marks: Vec<(&'static str, egui::Rect, &'static str, bool)> = Vec::new();
-        let modal = egui::Modal::new(egui::Id::new("handover_ask")).show(ctx, |ui| {
-            ui.set_width(460.0);
-            let problems = !ask.lines.is_empty();
-            ui.heading(if problems {
-                "The design still has open problems"
-            } else {
-                "Hand over the project"
-            });
+        let problems = !ask.lines.is_empty();
+        let title = if problems {
+            "The design still has open problems"
+        } else {
+            "Hand over the project"
+        };
+        let modal = super::panel::modal(ctx, "handover_ask", title, [460.0, 420.0], |ui| {
             ui.add_space(4.0);
             if problems {
-                let verb = if ask.lines.len() == 1 { "remains" } else { "remain" };
+                let verb = if ask.lines.len() == 1 {
+                    "remains"
+                } else {
+                    "remain"
+                };
                 ui.label(format!(
                     "{} {verb}. Handing over anyway lists them on the contents page and in the drawing set, so the customer would see them.",
                     ask.summary.pill_text()
@@ -228,7 +231,11 @@ impl NovoApp {
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                let first = ui.button(if ask.lines.is_empty() { "Cancel" } else { "Fix these first" });
+                let first = ui.button(if ask.lines.is_empty() {
+                    "Cancel"
+                } else {
+                    "Fix these first"
+                });
                 marks.push(("handover.fix", first.rect, "Fix these first", false));
                 if first.clicked() {
                     fix = true;

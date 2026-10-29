@@ -222,6 +222,8 @@ mod tests {
             kind: Kind::Ducted,
             points3: points.iter().map(|p| Point3::new(p.x, p.y, 0.0)).collect(),
             points,
+            rails: Vec::new(),
+            blocked: false,
             ducts: ducts.to_vec(),
             detour_mm: 0.0,
             rise_mm: 0.0,

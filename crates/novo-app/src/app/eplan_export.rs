@@ -95,83 +95,87 @@ impl NovoApp {
             return;
         };
         let (mut go, mut cancel, mut pick, mut clear) = (false, false, false, false);
-        let modal = egui::Modal::new(egui::Id::new("eplan_export")).show(ctx, |ui| {
-            ui.set_width(460.0);
-            ui.heading("Export EPLAN project (PXF)");
-            ui.add_space(6.0);
-            egui::Grid::new("eplan_export_grid")
-                .num_columns(2)
-                .spacing([10.0, 6.0])
-                .show(ui, |ui| {
-                    ui.label("EPLAN release");
-                    egui::ComboBox::from_id_salt("eplan_export_dialect")
-                        .selected_text(DIALECTS[form.dialect.min(DIALECTS.len() - 1)].release)
-                        .show_ui(ui, |ui| {
-                            for (i, d) in DIALECTS.iter().enumerate() {
-                                ui.selectable_value(&mut form.dialect, i, d.release);
-                            }
-                        });
-                    ui.end_row();
-                    ui.label("Language of texts");
-                    ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(&mut form.lang).desired_width(80.0));
-                        egui::ComboBox::from_id_salt("eplan_export_lang")
-                            .selected_text("common")
+        let modal = super::panel::modal(
+            ctx,
+            "eplan_export",
+            "Export EPLAN project (PXF)",
+            [460.0, 0.0],
+            |ui| {
+                ui.add_space(6.0);
+                egui::Grid::new("eplan_export_grid")
+                    .num_columns(2)
+                    .spacing([10.0, 6.0])
+                    .show(ui, |ui| {
+                        ui.label("EPLAN release");
+                        egui::ComboBox::from_id_salt("eplan_export_dialect")
+                            .selected_text(DIALECTS[form.dialect.min(DIALECTS.len() - 1)].release)
                             .show_ui(ui, |ui| {
-                                for l in LANGUAGES {
-                                    ui.selectable_value(&mut form.lang, (*l).to_owned(), *l);
+                                for (i, d) in DIALECTS.iter().enumerate() {
+                                    ui.selectable_value(&mut form.dialect, i, d.release);
                                 }
                             });
-                    });
-                    ui.end_row();
-                    ui.label("Symbol table");
-                    ui.horizontal(|ui| {
-                        match &form.symbols {
-                            Some((path, table)) => {
-                                ui.label(format!(
-                                    "{} ({} symbol(s))",
-                                    path.file_name()
-                                        .map(|n| n.to_string_lossy().into_owned())
-                                        .unwrap_or_default(),
-                                    table.len()
-                                ));
-                                clear = ui.small_button("Clear").clicked();
+                        ui.end_row();
+                        ui.label("Language of texts");
+                        ui.horizontal(|ui| {
+                            ui.add(egui::TextEdit::singleline(&mut form.lang).desired_width(80.0));
+                            egui::ComboBox::from_id_salt("eplan_export_lang")
+                                .selected_text("common")
+                                .show_ui(ui, |ui| {
+                                    for l in LANGUAGES {
+                                        ui.selectable_value(&mut form.lang, (*l).to_owned(), *l);
+                                    }
+                                });
+                        });
+                        ui.end_row();
+                        ui.label("Symbol table");
+                        ui.horizontal(|ui| {
+                            match &form.symbols {
+                                Some((path, table)) => {
+                                    ui.label(format!(
+                                        "{} ({} symbol(s))",
+                                        path.file_name()
+                                            .map(|n| n.to_string_lossy().into_owned())
+                                            .unwrap_or_default(),
+                                        table.len()
+                                    ));
+                                    clear = ui.small_button("Clear").clicked();
+                                }
+                                None => {
+                                    ui.weak("none: devices are written without a symbol");
+                                }
                             }
-                            None => {
-                                ui.weak("none: devices are written without a symbol");
-                            }
-                        }
-                        pick = ui.button("Choose file...").clicked();
+                            pick = ui.button("Choose file...").clicked();
+                        });
+                        ui.end_row();
                     });
-                    ui.end_row();
-                });
-            if let Some(problem) = &form.problem {
-                ui.colored_label(crate::theme::ui_palette().warning, problem);
-            }
-            ui.add_space(4.0);
-            egui::CollapsingHeader::new("About the symbol table file")
-                .id_salt("eplan_export_table_help")
-                .show(ui, |ui| {
-                    ui.weak(
-                        "A text (TOML) file you write from your own EPLAN symbol keys: one row \
+                if let Some(problem) = &form.problem {
+                    ui.colored_label(crate::theme::ui_palette().warning, problem);
+                }
+                ui.add_space(4.0);
+                egui::CollapsingHeader::new("About the symbol table file")
+                    .id_salt("eplan_export_table_help")
+                    .show(ui, |ui| {
+                        ui.weak(
+                            "A text (TOML) file you write from your own EPLAN symbol keys: one row \
                          per KoperCAD symbol. Without it the devices still export, but EPLAN \
                          has no symbol to draw them with.",
-                    );
-                    ui.add(egui::Label::new(
-                        egui::RichText::new(TABLE_HINT).monospace().small(),
-                    ));
-                });
-            ui.add_space(6.0);
-            ui.weak(
-                "No real EPLAN has opened a KoperCAD file yet; the report after the export \
+                        );
+                        ui.add(egui::Label::new(
+                            egui::RichText::new(TABLE_HINT).monospace().small(),
+                        ));
+                    });
+                ui.add_space(6.0);
+                ui.weak(
+                    "No real EPLAN has opened a KoperCAD file yet; the report after the export \
                  lists what was left out.",
-            );
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                go = ui.button("Export").clicked();
-                cancel = ui.button("Cancel").clicked();
-            });
-        });
+                );
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    go = ui.button("Export").clicked();
+                    cancel = ui.button("Cancel").clicked();
+                });
+            },
+        );
         if clear {
             form.symbols = None;
         }

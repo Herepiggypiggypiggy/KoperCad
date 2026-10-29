@@ -50,6 +50,9 @@ pub(super) enum RailAsk {
     /// A typed or stock length, the start staying.
     SetLength(u64, f64),
     Delete(u64),
+    /// The slots of a duct, as typed: empty for anywhere along it, a pitch
+    /// in mm, or `closed` for a duct a wire enters only at its ends.
+    Slots(u64, String),
     /// Put every DIN rail's line on the middle of its devices, which stay put.
     CentreRails,
     /// The lesson chip: start or continue this lesson.
@@ -74,6 +77,8 @@ pub(super) struct RailsState {
     pub(super) selected: Option<u64>,
     /// Values being dragged or typed, not yet committed.
     pending: HashMap<(u64, Field), f64>,
+    /// Slot texts being typed, not yet committed.
+    slots_pending: HashMap<u64, String>,
     /// A rail or duct being dragged across the plate.
     pub(super) drag: Option<RailDrag>,
     /// The rail or duct under the pointer, set by the canvas each frame.
@@ -338,6 +343,42 @@ pub(super) fn new_rail_at(
     Some((x, y, length, width, height))
 }
 
+/// How a duct's slots read in the list: empty for anywhere, `closed`, or the
+/// pitch in mm.
+fn slots_text(r: &Rail) -> String {
+    use novo_core::Value;
+    if matches!(
+        r.properties.get(novo_routing::model::SLOTS),
+        Some(Value::Text(t)) if t.trim().eq_ignore_ascii_case("closed")
+    ) {
+        return "closed".into();
+    }
+    match r.properties.get(novo_routing::model::SLOT_PITCH) {
+        Some(Value::Float(p)) => format!("{p}"),
+        Some(Value::Int(p)) => format!("{p}"),
+        _ => String::new(),
+    }
+}
+
+/// What typed slots text means: `(closed, pitch)`. `None` when it is
+/// neither empty, `any`, `closed` nor a positive number of mm.
+pub(super) fn parse_slots(text: &str) -> Option<(bool, Option<f64>)> {
+    let t = text.trim().to_ascii_lowercase();
+    match t.as_str() {
+        "" | "any" => Some((false, None)),
+        "closed" => Some((true, None)),
+        _ => {
+            let pitch: f64 = t
+                .trim_end_matches("mm")
+                .trim()
+                .replace(',', ".")
+                .parse()
+                .ok()?;
+            (pitch.is_finite() && pitch > 0.0).then_some((false, Some(pitch)))
+        }
+    }
+}
+
 pub(super) fn value(
     ui: &mut egui::Ui,
     state: &mut RailsState,
@@ -451,9 +492,11 @@ pub(super) fn show_window(
             }
             egui::Grid::new("cabinet_rails_grid")
                 .striped(true)
-                .num_columns(8)
+                .num_columns(9)
                 .show(ui, |ui| {
-                    for h in ["", "Left", "Top", "Length", "Across", "Stands", "", ""] {
+                    for h in [
+                        "", "Left", "Top", "Length", "Across", "Stands", "Slots", "", "",
+                    ] {
                         ui.weak(h);
                     }
                     ui.end_row();
@@ -508,8 +551,33 @@ pub(super) fn show_window(
                                     }
                                 }
                             }
+                            let shown = state
+                                .slots_pending
+                                .entry(id)
+                                .or_insert_with(|| slots_text(r));
+                            let edit_box = ui
+                                .add(
+                                    egui::TextEdit::singleline(shown)
+                                        .desired_width(56.0)
+                                        .hint_text("any"),
+                                )
+                                .on_hover_text(
+                                    "Where a wire can enter the duct: empty for anywhere along \
+                                     it, a slot pitch in mm (the wire enters at the nearest \
+                                     slot), or closed for a duct without side slots, entered \
+                                     at its ends only.",
+                                );
+                            if edit_box.lost_focus() {
+                                let typed = state.slots_pending.remove(&id).unwrap_or_default();
+                                if typed.trim() != slots_text(r) {
+                                    ask = Some(RailAsk::Slots(id, typed));
+                                }
+                            } else if !edit_box.has_focus() {
+                                state.slots_pending.remove(&id);
+                            }
                         } else {
                             ui.weak("35 mm");
+                            ui.label("");
                             ui.label("");
                         }
                         if ui
@@ -723,6 +791,25 @@ impl super::NovoApp {
                 self.cabinet_edit("Turn rail", move |tx| {
                     tx.update::<Rail>(rail, |r| r.vertical = !r.vertical)
                         .map(|_| ())
+                });
+            }
+            RailAsk::Slots(id, text) => {
+                let Some((closed, pitch)) = parse_slots(&text) else {
+                    return;
+                };
+                let rail = RailId::from(id);
+                self.cabinet_edit("Set duct slots", move |tx| {
+                    use novo_core::Value;
+                    tx.set_property(
+                        rail,
+                        novo_routing::model::SLOTS,
+                        closed.then(|| Value::Text("closed".into())),
+                    )?;
+                    tx.set_property(
+                        rail,
+                        novo_routing::model::SLOT_PITCH,
+                        pitch.map(Value::Float),
+                    )
                 });
             }
             RailAsk::CentreRails => self.centre_cabinet_rails(structure),

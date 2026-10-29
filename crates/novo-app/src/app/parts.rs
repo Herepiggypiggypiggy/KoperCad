@@ -1687,8 +1687,9 @@ fn parts_ui(
     }
     let detail_width = (ui.available_width() * 0.38).clamp(DETAIL_MIN, DETAIL_MAX);
     egui::Panel::right("parts_detail")
-        .exact_size(detail_width)
-        .resizable(false)
+        .default_size(detail_width)
+        .size_range(DETAIL_MIN..=ui.available_width() * 0.7)
+        .resizable(true)
         .show(ui, |ui| detail_ui(ui, win, actions));
     egui::CentralPanel::default().show(ui, |ui| list_ui(ui, win, &rows, actions));
 }

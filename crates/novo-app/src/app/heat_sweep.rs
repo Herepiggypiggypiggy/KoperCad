@@ -440,15 +440,12 @@ impl CoolingAdvice {
                     .max(60.0),
             )
         };
-        egui::Window::new("Cooling advice")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
+        super::panel::dialog(ctx, "Cooling advice", [WINDOW_WIDTH, 0.0])
+            .open(super::panel::esc(ctx, &mut open))
+            // The list scrolls inside; the buttons below it stay in view.
+            .scroll([false, false])
             .default_pos(at)
-            .default_width(WIDTH)
-            .max_width(WINDOW_WIDTH)
             .show(ctx, |ui| {
-                ui.set_max_width(WIDTH);
                 ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
                 super::heat_cooling::left_out_line(ui, self.left_out);
                 if let Some(run) = &self.run {

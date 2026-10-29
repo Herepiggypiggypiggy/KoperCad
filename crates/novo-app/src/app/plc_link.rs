@@ -174,57 +174,56 @@ impl NovoApp {
         let Some((name, plan)) = &self.wb.plc_import else {
             return;
         };
-        let modal = egui::Modal::new(egui::Id::new("plc_import")).show(ctx, |ui| {
-            ui.set_width(560.0);
-            ui.heading("Import PLC tags");
-            ui.label(egui::RichText::new(name).weak());
-            ui.add_space(4.0);
-            ui.label(plan.summary());
-            ui.add_space(6.0);
-            egui::ScrollArea::vertical()
-                .max_height(320.0)
-                .show(ui, |ui| {
-                    for u in &plan.updates {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.strong(format!("{}  {}", u.channel, u.address));
-                            if let Some(s) = &u.new_signal {
-                                ui.label(format!("signal \"{}\" → \"{s}\"", u.old_signal));
-                            }
-                            if let Some(t) = &u.new_tag {
-                                ui.label(format!("tag {} → {t}", u.old_tag));
-                            }
-                        });
-                    }
-                    notes(
-                        ui,
-                        "Not found in the project",
-                        plan.unmatched.iter().map(|(l, t)| format!("line {l}: {t}")),
-                    );
-                    notes(
-                        ui,
-                        "Addresses are never changed by an import",
-                        plan.address_notes.iter().cloned(),
-                    );
-                    notes(
-                        ui,
-                        "Spare channels (nothing drawn to hold a signal)",
-                        plan.spare.iter().map(|(c, t)| format!("{c}: {t}")),
-                    );
-                    notes(ui, "Check", plan.warnings.iter().cloned());
-                });
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                let apply = ui
-                    .add_enabled_ui(!plan.is_empty(), |ui| {
-                        novo_theme::widgets::primary_button(ui, "Apply (Enter)")
-                    })
-                    .inner
-                    .clicked();
-                let cancel = ui.button("Cancel (Esc)").clicked();
-                (apply, cancel)
-            })
-            .inner
-        });
+        let modal =
+            super::panel::modal(ctx, "plc_import", "Import PLC tags", [560.0, 520.0], |ui| {
+                ui.label(egui::RichText::new(name).weak());
+                ui.add_space(4.0);
+                ui.label(plan.summary());
+                ui.add_space(6.0);
+                egui::ScrollArea::vertical()
+                    .max_height(320.0)
+                    .show(ui, |ui| {
+                        for u in &plan.updates {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.strong(format!("{}  {}", u.channel, u.address));
+                                if let Some(s) = &u.new_signal {
+                                    ui.label(format!("signal \"{}\" → \"{s}\"", u.old_signal));
+                                }
+                                if let Some(t) = &u.new_tag {
+                                    ui.label(format!("tag {} → {t}", u.old_tag));
+                                }
+                            });
+                        }
+                        notes(
+                            ui,
+                            "Not found in the project",
+                            plan.unmatched.iter().map(|(l, t)| format!("line {l}: {t}")),
+                        );
+                        notes(
+                            ui,
+                            "Addresses are never changed by an import",
+                            plan.address_notes.iter().cloned(),
+                        );
+                        notes(
+                            ui,
+                            "Spare channels (nothing drawn to hold a signal)",
+                            plan.spare.iter().map(|(c, t)| format!("{c}: {t}")),
+                        );
+                        notes(ui, "Check", plan.warnings.iter().cloned());
+                    });
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    let apply = ui
+                        .add_enabled_ui(!plan.is_empty(), |ui| {
+                            novo_theme::widgets::primary_button(ui, "Apply (Enter)")
+                        })
+                        .inner
+                        .clicked();
+                    let cancel = ui.button("Cancel (Esc)").clicked();
+                    (apply, cancel)
+                })
+                .inner
+            });
         let (apply, cancel) = modal.inner;
         let enter = ctx.input(|i| i.key_pressed(egui::Key::Enter));
         let can_apply = self
