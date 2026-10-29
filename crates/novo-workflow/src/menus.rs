@@ -252,6 +252,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("cabinet.emc", under("View", "Cabinet")),
     // Layers: what is drawn on top of the page
     ("view.toggle_marks", under("View", "Layers")),
+    ("view.toggle_references", under("View", "Layers")),
     ("view.override_marks", under("View", "Layers")),
     ("view.left_out", under("View", "Layers")),
     ("view.changes", under("View", "Layers")),
@@ -276,6 +277,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("simulate.motor-start", at("Simulate")),
     ("sim.faults", at("Simulate")),
     ("sim.hoist", at("Simulate")),
+    ("sim.motor_curves", at("Simulate")),
     ("sim.add_fault", at("Simulate")),
     ("view.protection", at("Simulate")),
     ("heat.simulate", under("Simulate", "Heat")),
@@ -564,6 +566,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
             "sim.plc_program",
             "sim.faults",
             "sim.hoist",
+            "sim.motor_curves",
             "view.protection",
         ]],
     ),

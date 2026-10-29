@@ -64,7 +64,8 @@ pub use assign::{
     suggestions_for_device, terminal_kind_of, terminal_part, unused_parts,
 };
 pub use bmecat::{
-    BmecatError, BmecatRead, ECLASS_CLASS_KEY, ETIM_CLASS_KEY, import_bmecat, read_bmecat,
+    BmecatError, BmecatRead, ECLASS_CLASS_KEY, ETIM_CLASS_KEY, ListedCadFile, import_bmecat,
+    read_bmecat,
 };
 pub use browser::{BrowserRow, RowAction, browser_rows};
 pub use bulk::{
@@ -99,7 +100,7 @@ pub use import::{
 };
 pub use library::{
     FileKind, ImportFlow, LIBRARY_FORMAT_VERSION, LibraryError, LocalLibrary, NewSource,
-    SourceRecord, default_library_root,
+    SourceRecord, StoreBatch, default_library_root,
 };
 pub use macros::{
     Imported, MACRO_BASE_VERSION, MACRO_EXTENSION, MACRO_FORMAT, MACRO_FORMAT_VERSION,

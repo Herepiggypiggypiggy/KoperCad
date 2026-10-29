@@ -37,6 +37,7 @@
 //! | [`ProtectiveConductor`](ProblemKind::ProtectiveConductor) | warning | A protective conductor thinner than its phase conductors need |
 //! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
+//! | [`WireThroughDevice`](ProblemKind::WireThroughDevice) | warning | A wire whose way from a terminal to its duct crosses a device |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
 //! | [`UnsizedDuct`](ProblemKind::UnsizedDuct) | info | A duct with wires through it but no cross-section, so its fill cannot be checked |
 //! | [`GuessedWire`](ProblemKind::GuessedWire) | info | Wires with no cross-section, routed with a default size (one problem for all of them) |
@@ -73,7 +74,7 @@
 //! | [`RailOverflow`](ProblemKind::RailOverflow) | warning | Devices needing more room than their DIN rail has |
 //! | [`FieldDeviceInCabinet`](ProblemKind::FieldDeviceInCabinet) | warning | A motor, valve or other field device placed on a mounting plate (it is outside the cabinet; its heat and size do not belong in the cabinet figures) |
 //! | [`DeviceOffRail`](ProblemKind::DeviceOffRail) | warning | A device on a DIN rail whose middle is not on the rail's line (plans made before rails ran through the device middles; Place all puts it right) |
-//! | [`DuctOverlap`](ProblemKind::DuctOverlap) | error | A wiring duct lying over a DIN rail or a device on the plate |
+//! | [`DuctOverlap`](ProblemKind::DuctOverlap) | error | A wiring duct lying over another duct, a DIN rail or a device on the plate |
 //! | [`DeviceTooDeep`](ProblemKind::DeviceTooDeep) | error | A device deeper than the room between plate and door |
 //! | [`DoorGapTight`](ProblemKind::DoorGapTight) | warning | A device that leaves less than the minimum gap to the door |
 //! | [`DepthUnknown`](ProblemKind::DepthUnknown) | info | A placed device without a depth, so the door was not checked |
@@ -292,6 +293,9 @@ pub enum ProblemKind {
     UnplacedDevice,
     /// A wire between two placed devices that no duct path serves (novo-routing).
     WireWithoutDuct,
+    /// A wire whose way from a terminal to its duct crosses the body of a
+    /// device because no way round is free (novo-routing).
+    WireThroughDevice,
     /// A duct carrying more wires than its fill limit (novo-routing).
     OverfullDuct,
     /// A duct that wires run through but that has no width and height, so
@@ -353,7 +357,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 71] = [
+    pub const ALL: [ProblemKind; 72] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -379,6 +383,7 @@ impl ProblemKind {
         ProblemKind::ProtectiveConductor,
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
+        ProblemKind::WireThroughDevice,
         ProblemKind::OverfullDuct,
         ProblemKind::UnsizedDuct,
         ProblemKind::GuessedWire,
@@ -458,6 +463,7 @@ impl ProblemKind {
             | ProblemKind::MotorStarter
             | ProblemKind::ProtectiveConductor
             | ProblemKind::WireWithoutDuct
+            | ProblemKind::WireThroughDevice
             | ProblemKind::OverfullDuct
             | ProblemKind::Standard
             | ProblemKind::DevicesTooClose
@@ -531,6 +537,7 @@ impl ProblemKind {
             ProblemKind::ProtectiveConductor => "Protective conductor",
             ProblemKind::UnplacedDevice => "Unplaced device",
             ProblemKind::WireWithoutDuct => "Wire without duct",
+            ProblemKind::WireThroughDevice => "Wire through device",
             ProblemKind::OverfullDuct => "Overfull duct",
             ProblemKind::UnsizedDuct => "Duct without size",
             ProblemKind::GuessedWire => "Wire size guessed",
@@ -542,7 +549,7 @@ impl ProblemKind {
             ProblemKind::RailOverflow => "Rail overfull",
             ProblemKind::DeviceOffRail => "Device off its rail's middle",
             ProblemKind::FieldDeviceInCabinet => "Field device in the cabinet",
-            ProblemKind::DuctOverlap => "Duct over rail or device",
+            ProblemKind::DuctOverlap => "Duct over duct, rail or device",
             ProblemKind::DeviceTooDeep => "Device too deep",
             ProblemKind::DoorGapTight => "Door gap tight",
             ProblemKind::DepthUnknown => "Depth unknown",
@@ -609,6 +616,7 @@ impl ProblemKind {
             ProblemKind::CableRating => "check.cable_rating",
             ProblemKind::UnplacedDevice => "check.unplaced_device",
             ProblemKind::WireWithoutDuct => "check.wire_without_duct",
+            ProblemKind::WireThroughDevice => "check.wire_through_device",
             ProblemKind::OverfullDuct => "check.overfull_duct",
             ProblemKind::UnsizedDuct => "check.unsized_duct",
             ProblemKind::GuessedWire => "check.guessed_wire",

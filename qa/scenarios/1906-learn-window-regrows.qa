@@ -1,0 +1,18 @@
+@title Learn window: back to its full size when the app window shrinks and grows again
+@area Learn
+@sizes 1366x768 1920x1080
+# Follow-up to #1623. The Learn window is held inside the screen; after a
+# shrink it used to stay a sliver when the window grew back.
+click_text "Learn…"
+wait 15
+shot learn-before
+check_layout
+resize 683 384
+wait 15
+shot learn-small
+check_layout
+resize 1366 768
+wait 15
+shot learn-grown-back
+check_layout
+expect "Learn KoperCAD"

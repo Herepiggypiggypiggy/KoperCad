@@ -176,6 +176,7 @@ pub(crate) fn overlays(
     place: Place,
     settings: &Heat3d,
     flow: &Flow,
+    scale_top: f32,
 ) -> Vec<Overlay> {
     if !snap.is_consistent() {
         return Vec::new();
@@ -195,7 +196,6 @@ pub(crate) fn overlays(
     {
         out.push(Overlay::Mesh(m));
     }
-    let scale_top = super::heat_flow::speed_scale(snap);
     let speed_map = settings.flow.mode == super::heat_flow::FlowMode::SpeedMap;
     if speed_map
         && let Some(m) = super::heat_flow::speed_map(

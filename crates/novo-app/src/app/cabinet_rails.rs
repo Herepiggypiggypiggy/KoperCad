@@ -50,6 +50,9 @@ pub(super) enum RailAsk {
     /// A typed or stock length, the start staying.
     SetLength(u64, f64),
     Delete(u64),
+    /// The slots of a duct, as typed: empty for anywhere along it, a pitch
+    /// in mm, or `closed` for a duct a wire enters only at its ends.
+    Slots(u64, String),
     /// Put every DIN rail's line on the middle of its devices, which stay put.
     CentreRails,
     /// The lesson chip: start or continue this lesson.
@@ -74,6 +77,8 @@ pub(super) struct RailsState {
     pub(super) selected: Option<u64>,
     /// Values being dragged or typed, not yet committed.
     pending: HashMap<(u64, Field), f64>,
+    /// Slot texts being typed, not yet committed.
+    slots_pending: HashMap<u64, String>,
     /// A rail or duct being dragged across the plate.
     pub(super) drag: Option<RailDrag>,
     /// The rail or duct under the pointer, set by the canvas each frame.
@@ -242,6 +247,45 @@ impl RailsState {
     }
 }
 
+/// Why a duct cannot stand as given: it would lie over other ducts. `None`
+/// for a rail, or when the place is clear. Ducts meet in a T or a corner by
+/// one ending against the side of the other, never by crossing.
+pub(super) fn duct_refusal(
+    project: &novo_core::Project,
+    structure: StructureId,
+    rail: RailId,
+    place: Option<(f64, f64, f64, f64, bool)>,
+) -> Option<String> {
+    let r = project
+        .get::<Rail>(rail)
+        .filter(|r| r.kind == RailKind::Duct)?;
+    let (x, y, length, width, vertical) =
+        place.unwrap_or((r.x, r.y, r.length, r.width, r.vertical));
+    let duct = novo_layout::Duct {
+        id: rail.raw(),
+        x,
+        y,
+        length,
+        width: if width > 0.0 {
+            width
+        } else {
+            novo_layout::DEFAULT_DUCT_MM
+        },
+        vertical,
+    };
+    let clash = novo_layout::model::duct_clash(project, structure, &duct);
+    (!clash.is_empty()).then(|| {
+        format!(
+            "A duct cannot lie over {}: move it clear, or end it against the side of the other duct for a T or a corner",
+            if clash.len() == 1 {
+                "another duct".to_string()
+            } else {
+                format!("{} other ducts", clash.len())
+            }
+        )
+    })
+}
+
 /// Where a new rail or duct goes: below everything on the plate for a
 /// horizontal one, along the left edge for a vertical duct, kept on the
 /// usable area. Rounded to 5 mm.
@@ -258,9 +302,25 @@ pub(super) fn new_rail_at(
         RailKind::Duct => (DUCT_WIDTH_MM, DUCT_HEIGHT_MM),
         _ => (0.0, 0.0),
     };
+    let clear = |x: f64, y: f64, length: f64| -> Option<(f64, f64, f64)> {
+        if kind != RailKind::Duct {
+            return Some((x, y, length));
+        }
+        // Never on top of another duct: the nearest free place.
+        let duct = novo_layout::Duct {
+            id: 0,
+            x,
+            y,
+            length,
+            width,
+            vertical,
+        };
+        novo_layout::clear_duct_spot(&layout.ducts, &duct, &usable).map(|d| (d.x, d.y, d.length))
+    };
     if vertical {
         let x = round(usable.x + width.max(35.0) / 2.0);
-        return Some((x, usable.y, usable.h, width, height));
+        let (x, y, length) = clear(x, usable.y, usable.h)?;
+        return Some((x, y, length, width, height));
     }
     // Under the lowest device and rail.
     let mut bottom = usable.y;
@@ -279,7 +339,44 @@ pub(super) fn new_rail_at(
     }
     let half = if kind == RailKind::Duct { width } else { 35.0 } / 2.0;
     let y = round(bottom + 10.0 + half).min(usable.y + usable.h - half);
-    Some((usable.x, y.max(usable.y + half), usable.w, width, height))
+    let (x, y, length) = clear(usable.x, y.max(usable.y + half), usable.w)?;
+    Some((x, y, length, width, height))
+}
+
+/// How a duct's slots read in the list: empty for anywhere, `closed`, or the
+/// pitch in mm.
+fn slots_text(r: &Rail) -> String {
+    use novo_core::Value;
+    if matches!(
+        r.properties.get(novo_routing::model::SLOTS),
+        Some(Value::Text(t)) if t.trim().eq_ignore_ascii_case("closed")
+    ) {
+        return "closed".into();
+    }
+    match r.properties.get(novo_routing::model::SLOT_PITCH) {
+        Some(Value::Float(p)) => format!("{p}"),
+        Some(Value::Int(p)) => format!("{p}"),
+        _ => String::new(),
+    }
+}
+
+/// What typed slots text means: `(closed, pitch)`. `None` when it is
+/// neither empty, `any`, `closed` nor a positive number of mm.
+pub(super) fn parse_slots(text: &str) -> Option<(bool, Option<f64>)> {
+    let t = text.trim().to_ascii_lowercase();
+    match t.as_str() {
+        "" | "any" => Some((false, None)),
+        "closed" => Some((true, None)),
+        _ => {
+            let pitch: f64 = t
+                .trim_end_matches("mm")
+                .trim()
+                .replace(',', ".")
+                .parse()
+                .ok()?;
+            (pitch.is_finite() && pitch > 0.0).then_some((false, Some(pitch)))
+        }
+    }
 }
 
 pub(super) fn value(
@@ -395,9 +492,11 @@ pub(super) fn show_window(
             }
             egui::Grid::new("cabinet_rails_grid")
                 .striped(true)
-                .num_columns(8)
+                .num_columns(9)
                 .show(ui, |ui| {
-                    for h in ["", "Left", "Top", "Length", "Across", "Stands", "", ""] {
+                    for h in [
+                        "", "Left", "Top", "Length", "Across", "Stands", "Slots", "", "",
+                    ] {
                         ui.weak(h);
                     }
                     ui.end_row();
@@ -452,8 +551,33 @@ pub(super) fn show_window(
                                     }
                                 }
                             }
+                            let shown = state
+                                .slots_pending
+                                .entry(id)
+                                .or_insert_with(|| slots_text(r));
+                            let edit_box = ui
+                                .add(
+                                    egui::TextEdit::singleline(shown)
+                                        .desired_width(56.0)
+                                        .hint_text("any"),
+                                )
+                                .on_hover_text(
+                                    "Where a wire can enter the duct: empty for anywhere along \
+                                     it, a slot pitch in mm (the wire enters at the nearest \
+                                     slot), or closed for a duct without side slots, entered \
+                                     at its ends only.",
+                                );
+                            if edit_box.lost_focus() {
+                                let typed = state.slots_pending.remove(&id).unwrap_or_default();
+                                if typed.trim() != slots_text(r) {
+                                    ask = Some(RailAsk::Slots(id, typed));
+                                }
+                            } else if !edit_box.has_focus() {
+                                state.slots_pending.remove(&id);
+                            }
                         } else {
                             ui.weak("35 mm");
+                            ui.label("");
                             ui.label("");
                         }
                         if ui
@@ -533,6 +657,10 @@ impl super::NovoApp {
                 let Some((x, y, length, width, height)) =
                     new_rail_at(doc.project(), structure, kind, vertical)
                 else {
+                    self.message(
+                        super::Level::Warning,
+                        "No room for another duct on the plate: ducts cannot lie over each other",
+                    );
                     return;
                 };
                 let label = if kind == RailKind::Duct {
@@ -581,6 +709,19 @@ impl super::NovoApp {
             }
             RailAsk::Set(e) => {
                 let rail = RailId::from(e.id);
+                let refused = self.backend.document().and_then(|d| {
+                    let vertical = d.project().get::<Rail>(rail)?.vertical;
+                    duct_refusal(
+                        d.project(),
+                        structure,
+                        rail,
+                        Some((e.x, e.y, e.length, e.width, vertical)),
+                    )
+                });
+                if let Some(why) = refused {
+                    self.message(super::Level::Warning, why);
+                    return;
+                }
                 self.cabinet_edit("Edit rail", move |tx| {
                     let Some(r) = tx.project().get::<Rail>(rail) else {
                         return Ok(());
@@ -612,6 +753,19 @@ impl super::NovoApp {
                     .document()
                     .and_then(|d| d.project().get::<Rail>(rail).map(|r| (r.x, r.y) == (x, y)))
                     .unwrap_or(true);
+                let refused = self.backend.document().and_then(|d| {
+                    let r = d.project().get::<Rail>(rail)?;
+                    duct_refusal(
+                        d.project(),
+                        structure,
+                        rail,
+                        Some((x, y, r.length, r.width, r.vertical)),
+                    )
+                });
+                if let Some(why) = refused.filter(|_| !unchanged) {
+                    self.message(super::Level::Warning, why);
+                    return;
+                }
                 if !unchanged {
                     self.cabinet_edit("Move rail", move |tx| {
                         tx.execute(novo_core::Command::MoveRail { rail, x, y })
@@ -621,9 +775,41 @@ impl super::NovoApp {
             }
             RailAsk::Turn(id) => {
                 let rail = RailId::from(id);
+                let refused = self.backend.document().and_then(|d| {
+                    let r = d.project().get::<Rail>(rail)?;
+                    duct_refusal(
+                        d.project(),
+                        structure,
+                        rail,
+                        Some((r.x, r.y, r.length, r.width, !r.vertical)),
+                    )
+                });
+                if let Some(why) = refused {
+                    self.message(super::Level::Warning, why);
+                    return;
+                }
                 self.cabinet_edit("Turn rail", move |tx| {
                     tx.update::<Rail>(rail, |r| r.vertical = !r.vertical)
                         .map(|_| ())
+                });
+            }
+            RailAsk::Slots(id, text) => {
+                let Some((closed, pitch)) = parse_slots(&text) else {
+                    return;
+                };
+                let rail = RailId::from(id);
+                self.cabinet_edit("Set duct slots", move |tx| {
+                    use novo_core::Value;
+                    tx.set_property(
+                        rail,
+                        novo_routing::model::SLOTS,
+                        closed.then(|| Value::Text("closed".into())),
+                    )?;
+                    tx.set_property(
+                        rail,
+                        novo_routing::model::SLOT_PITCH,
+                        pitch.map(Value::Float),
+                    )
                 });
             }
             RailAsk::CentreRails => self.centre_cabinet_rails(structure),

@@ -546,6 +546,29 @@ pub(super) fn dragged_to(
 /// usable. A model value: it follows the solver's openings, not a
 /// measurement.
 pub(super) fn measured_m3h(snap: &CfdSnapshot, f: &Footprint) -> Option<f64> {
+    let (mean, area_m2) = opening_mean(snap, f, |inward_speed, _| inward_speed)?;
+    Some(mean * area_m2 * 3600.0)
+}
+
+/// The heat the air carries out through the opening, W (negative: heat taken
+/// in), `rho cp (T - ambient) u` over the opening one cell inside its face.
+/// A model value from the same samples as [`measured_m3h`]; it leaves out
+/// radiation and conduction through the opening.
+pub(super) fn carried_out_w(snap: &CfdSnapshot, f: &Footprint, ambient_c: f64) -> Option<f64> {
+    use novo_heatview::flux::{AIR_CP, AIR_DENSITY};
+    let (mean, area_m2) = opening_mean(snap, f, |inward_speed, temp_c| {
+        -AIR_DENSITY * AIR_CP * (temp_c - ambient_c) * inward_speed
+    })?;
+    Some(mean * area_m2)
+}
+
+/// The mean over a lattice of samples one cell inside the opening's face of
+/// `value(speed into the cabinet m/s, air temperature C)`, and the area, m2.
+fn opening_mean(
+    snap: &CfdSnapshot,
+    f: &Footprint,
+    value: impl Fn(f64, f64) -> f64,
+) -> Option<(f64, f64)> {
     if !snap.is_consistent() {
         return None;
     }
@@ -575,12 +598,13 @@ pub(super) fn measured_m3h(snap: &CfdSnapshot, f: &Footprint) -> Option<f64> {
                 p[*a] = f.lo[*a] + t * (f.hi[*a] - f.lo[*a]);
             }
             let v = cfd::velocity_at(snap, p);
-            sum += f64::from(v[normal]) * inward[normal];
+            let t = cfd::temperature_at(snap, p);
+            sum += value(f64::from(v[normal]) * inward[normal], f64::from(t));
         }
     }
     let area_m2 =
         (f.hi[varying[0]] - f.lo[varying[0]]) * (f.hi[varying[1]] - f.lo[varying[1]]) / 1.0e6;
-    Some(sum / (N * N) as f64 * area_m2 * 3600.0)
+    Some((sum / (N * N) as f64, area_m2))
 }
 
 /// Seeds for streamlines that start at the air entering: a small lattice just
@@ -896,5 +920,37 @@ mod tests {
             seeds.iter().all(|p| p[2] < 296.0 && p[2] > 250.0),
             "{seeds:?}"
         );
+    }
+
+    /// A grille on the left face (x = 0) of the synthetic 100 x 80 x 60 mm box.
+    fn grille() -> Footprint {
+        Footprint {
+            wall: Wall::Left,
+            lo: [0.0, 20.0, 10.0],
+            hi: [0.0, 60.0, 50.0],
+        }
+    }
+
+    #[test]
+    fn air_leaving_warm_carries_rho_cp_dt_u_area_out() {
+        use novo_heatview::flux::{AIR_CP, AIR_DENSITY};
+        let mut snap = super::super::heat_3d_tests::snapshot();
+        // 0.5 m/s out of the cabinet, 8 K above a 20 C room, everywhere.
+        snap.velocity.iter_mut().for_each(|v| *v = [-0.5, 0.0, 0.0]);
+        snap.temperature_c.iter_mut().for_each(|t| *t = 28.0);
+        let w = carried_out_w(&snap, &grille(), 20.0).unwrap();
+        let want = AIR_DENSITY * AIR_CP * 8.0 * 0.5 * (40.0 * 40.0 / 1.0e6);
+        assert!(w > 0.0 && (w - want).abs() < 0.01 * want, "{w} vs {want}");
+        // The same opening reads as air leaving.
+        assert!(measured_m3h(&snap, &grille()).unwrap() < 0.0);
+    }
+
+    #[test]
+    fn air_coming_in_at_room_temperature_carries_nothing() {
+        let mut snap = super::super::heat_3d_tests::snapshot();
+        snap.velocity.iter_mut().for_each(|v| *v = [0.5, 0.0, 0.0]);
+        snap.temperature_c.iter_mut().for_each(|t| *t = 20.0);
+        let w = carried_out_w(&snap, &grille(), 20.0).unwrap();
+        assert!(w.abs() < 1e-3, "{w}");
     }
 }

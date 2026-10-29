@@ -119,14 +119,19 @@ pub(crate) fn speed_scale(snap: &CfdSnapshot) -> f32 {
     if !snap.is_consistent() {
         return NICE_TOPS[0];
     }
-    let mut speeds: Vec<f32> = snap
+    let speeds: Vec<f32> = snap
         .velocity
         .iter()
         .zip(&snap.material)
         .filter(|(_, m)| **m == 0)
         .map(|(v, _)| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt())
-        .filter(|s| s.is_finite())
         .collect();
+    speed_scale_of(&speeds)
+}
+
+/// [`speed_scale`] for plain speeds, m/s (the flat view's plane).
+pub(crate) fn speed_scale_of(speeds: &[f32]) -> f32 {
+    let mut speeds: Vec<f32> = speeds.iter().copied().filter(|s| s.is_finite()).collect();
     if speeds.is_empty() {
         return NICE_TOPS[0];
     }
@@ -184,22 +189,29 @@ pub(crate) fn thinned(flow: &Flow, strength: f32, scale_top: f32) -> Flow {
     Flow { lines, top }
 }
 
-/// How many of `n` lines the calm default of the flat Cabinet view keeps:
-/// about two in five, at least six.
-pub(crate) fn calm_count(n: usize) -> usize {
-    ((n as f32 * (0.2 + 0.8 * DEFAULT_STRENGTH)).round() as usize)
+/// How many of `n` lines a strength keeps: from a fifth (at least six) to all.
+pub(crate) fn kept_count(n: usize, strength: f32) -> usize {
+    ((n as f32 * (0.2 + 0.8 * strength.clamp(0.0, 1.0))).round() as usize)
         .max(6)
         .min(n)
 }
 
-/// A small key in the bottom left corner of a painter's clip rectangle: the
-/// speed bar with its end in m/s and the words, for the flat Cabinet view.
-pub(crate) fn paint_key(painter: &egui::Painter, scale_top: f32) {
+/// A small key in the bottom left corner of a painter's clip rectangle: a
+/// title, the speed bar and one line with its range in m/s and the word for
+/// its top end, for the flat Cabinet view.
+pub(crate) fn paint_key(painter: &egui::Painter, scale_top: f32, title: &str) {
     let pal = crate::theme::ui_palette();
     let clip = painter.clip_rect();
-    let origin = egui::pos2(clip.min.x + 12.0, clip.max.y - 34.0);
-    let bar = egui::Rect::from_min_size(origin, egui::vec2(120.0, 8.0));
-    painter.rect_filled(bar.expand(5.0), 4.0, pal.raised.gamma_multiply(0.85));
+    let origin = egui::pos2(clip.min.x + 12.0, clip.max.y - 38.0);
+    let bar = egui::Rect::from_min_size(origin, egui::vec2(150.0, 8.0));
+    painter.rect_filled(
+        egui::Rect::from_min_max(
+            egui::pos2(bar.min.x - 6.0, bar.min.y - 18.0),
+            egui::pos2(bar.max.x + 150.0, bar.max.y + 20.0),
+        ),
+        4.0,
+        pal.raised.gamma_multiply(0.85),
+    );
     let step = bar.width() / 32.0;
     for i in 0..32 {
         let [r, g, b] = speed_rgb((i as f32 + 0.5) / 32.0);
@@ -215,16 +227,20 @@ pub(crate) fn paint_key(painter: &egui::Painter, scale_top: f32) {
     }
     let font = egui::FontId::proportional(10.0);
     painter.text(
-        egui::pos2(bar.min.x, bar.max.y + 3.0),
-        egui::Align2::LEFT_TOP,
-        "0",
+        egui::pos2(bar.min.x, bar.min.y - 4.0),
+        egui::Align2::LEFT_BOTTOM,
+        title,
         font.clone(),
-        pal.text_secondary,
+        pal.text_primary,
     );
     painter.text(
-        egui::pos2(bar.max.x, bar.max.y + 3.0),
-        egui::Align2::RIGHT_TOP,
-        format!("{} m/s {} (model)", trim(scale_top), speed_word(scale_top)),
+        egui::pos2(bar.min.x, bar.max.y + 3.0),
+        egui::Align2::LEFT_TOP,
+        format!(
+            "0 to {} m/s, top end is {} air (model)",
+            trim(scale_top),
+            speed_word(scale_top)
+        ),
         font,
         pal.text_secondary,
     );
@@ -429,6 +445,9 @@ pub(crate) struct Through {
     pub inflow_m3h: f64,
     pub outflow_m3h: f64,
     pub loss_w: f64,
+    /// The heat the air carries out through the openings, W: a model value
+    /// from the air speed and temperature beside them.
+    pub carried_w: Option<f64>,
     pub verdict: Verdict,
     /// How much the air warms passing through, K; `None` without flow or
     /// without losses.
@@ -443,7 +462,12 @@ fn vent_name(v: &VentSpec) -> String {
 /// The summary for `specs` and the flows measured through them (same order,
 /// m3/h, positive into the cabinet) in a result with `loss_w` of device loss.
 /// `None` when there is no opening or no reading to summarise.
-pub(crate) fn through(specs: &[VentSpec], flows: &[Option<f64>], loss_w: f64) -> Option<Through> {
+pub(crate) fn through(
+    specs: &[VentSpec],
+    flows: &[Option<f64>],
+    loss_w: f64,
+    carried_w: Option<f64>,
+) -> Option<Through> {
     if specs.is_empty() || flows.is_empty() {
         return None;
     }
@@ -478,6 +502,7 @@ pub(crate) fn through(specs: &[VentSpec], flows: &[Option<f64>], loss_w: f64) ->
         inflow_m3h: inflow,
         outflow_m3h: outflow,
         loss_w,
+        carried_w,
         verdict,
         warming_k,
     })
@@ -502,11 +527,25 @@ impl Through {
                 "{head}: negligible (under {NO_FLOW_M3H:.0} m³/h, below the solver's reading limit), so the heat leaves mostly through the walls (model)"
             ),
             (v, Some(k)) => format!(
-                "{head} for {:.0} W of device loss: the air warms about {k:.0} K passing through, {} cooling (model)",
+                "{head} for {:.0} W of device loss: the air warms about {k:.0} K passing through, {} cooling{} (model)",
                 self.loss_w,
-                v.word()
+                v.word(),
+                self.carried_text()
             ),
             (v, None) => format!("{head}: {} cooling (model)", v.word()),
+        }
+    }
+
+    /// How much of the loss the air carries out, when it is known: the rest
+    /// leaves through the walls, the plate and by radiation.
+    fn carried_text(&self) -> String {
+        match self.carried_w {
+            Some(w) if self.loss_w > 0.0 && w.is_finite() => format!(
+                "; the air carries out about {:.0} W ({:.0} %)",
+                w.max(0.0),
+                (100.0 * w / self.loss_w).clamp(0.0, 999.0)
+            ),
+            _ => String::new(),
         }
     }
 
@@ -569,6 +608,70 @@ pub(crate) fn through_row(ui: &mut egui::Ui, t: &Through) {
     ui.painter().circle_filled(rect.center(), 4.0, colour);
     ui.label(egui::RichText::new(t.text()).small())
         .on_hover_text(t.hover());
+}
+
+/// The key of the heat flow layer: a bar from nothing to the strongest flux
+/// in W/m², in the colour the lines are drawn in, brighter for more.
+pub(crate) fn flux_legend(ui: &mut egui::Ui, top_flux: f32) {
+    let pal = crate::theme::ui_palette();
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(BAR_LEN + 70.0, BAR_H + 28.0),
+        egui::Sense::hover(),
+    );
+    response.on_hover_text(
+        "Heat flow: orange lines follow the heat the air carries away, brighter is more heat per area of air, in W/m² (rho cp (T - ambient) u). Derived from the solved temperature and air speed; radiation is not included. A model value, not a measurement",
+    );
+    let bar = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x + 12.0, rect.min.y),
+        egui::vec2(BAR_LEN, BAR_H),
+    );
+    let painter = ui.painter();
+    let step = BAR_LEN / STEPS as f32;
+    let [r, g, b] = super::heat_carry::RGB;
+    for i in 0..STEPS {
+        let share = (i as f32 + 0.5) / STEPS as f32;
+        // The lines go from 60 to 255 in opacity over the scale.
+        let alpha = (60.0 + 195.0 * share) as u8;
+        painter.rect_filled(
+            egui::Rect::from_min_size(
+                egui::pos2(bar.min.x + i as f32 * step, bar.min.y),
+                egui::vec2(step + 0.5, BAR_H),
+            ),
+            0.0,
+            // Heat flow line colour (data, not theme) over the sunken panel.
+            pal.sunken
+                .blend(egui::Color32::from_rgba_unmultiplied(r, g, b, alpha)),
+        );
+    }
+    let small = egui::FontId::proportional(10.0);
+    for frac in [0.0_f32, 0.5, 1.0] {
+        let x = bar.min.x + frac * BAR_LEN;
+        painter.line_segment(
+            [egui::pos2(x, bar.max.y), egui::pos2(x, bar.max.y + 3.0)],
+            egui::Stroke::new(1.0, pal.text_secondary),
+        );
+        painter.text(
+            egui::pos2(x, bar.max.y + 4.0),
+            egui::Align2::CENTER_TOP,
+            format!("{:.0}", top_flux * frac),
+            small.clone(),
+            pal.text_secondary,
+        );
+    }
+    painter.text(
+        egui::pos2(bar.max.x + 8.0, bar.min.y - 1.0),
+        egui::Align2::LEFT_TOP,
+        "W/m²",
+        small.clone(),
+        pal.text_secondary,
+    );
+    painter.text(
+        egui::pos2(bar.min.x + 0.5 * BAR_LEN, bar.max.y + 15.0),
+        egui::Align2::CENTER_TOP,
+        "heat carried by the air (model)",
+        small,
+        pal.text_tertiary,
+    );
 }
 
 const BAR_LEN: f32 = 190.0;

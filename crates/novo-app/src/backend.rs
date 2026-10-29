@@ -326,6 +326,42 @@ pub struct StorageBackend {
 
 /// Prefix of untitled projects closed with work in them.
 const KEPT: &str = "kept-";
+/// Ends the project name in the file name of a kept draft.
+const KEPT_SEP: &str = "~";
+
+/// The project name as it is written into a kept draft's file name: short,
+/// with nothing a file name cannot hold. Empty for a project that was never
+/// named.
+fn kept_slug(name: &str) -> String {
+    let name = name.trim();
+    if name.is_empty() || name == "Untitled" {
+        return String::new();
+    }
+    name.chars()
+        .map(|c| {
+            if c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '+' | '=' | '.') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(40)
+        .collect::<String>()
+        .trim()
+        .to_owned()
+}
+
+/// The name a kept draft is listed under on the start screen: the project's
+/// name when it had one, otherwise "Untitled".
+pub fn kept_label(path: &Path) -> String {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .and_then(|n| n.strip_prefix(KEPT))
+        .and_then(|n| n.split_once(KEPT_SEP))
+        .map(|(label, _)| label.to_owned())
+        .filter(|l| !l.is_empty())
+        .unwrap_or_else(|| "Untitled".to_owned())
+}
 
 impl StorageBackend {
     /// Keeps unsaved new projects in `dir`, which is created when needed.
@@ -414,7 +450,13 @@ impl StorageBackend {
             } else if let Some(name) = path.file_name().and_then(|n| n.to_str())
                 && !name.starts_with(KEPT)
             {
-                let kept = path.with_file_name(format!("{KEPT}{name}"));
+                let label = self
+                    .document
+                    .as_ref()
+                    .map(|d| kept_slug(&d.project().info().name))
+                    .unwrap_or_default();
+                let sep = if label.is_empty() { "" } else { KEPT_SEP };
+                let kept = path.with_file_name(format!("{KEPT}{label}{sep}{name}"));
                 if let Err(e) = std::fs::rename(&path, &kept) {
                     log::warn!("could not keep {}: {e}", path.display());
                 }
@@ -972,8 +1014,33 @@ pub struct PageRow {
 /// its sheets by name and what it shows (`20a  Terminal diagram · -X1`,
 /// DESIGN.md §8), so any sheet can be opened from the panel.
 pub fn page_rows(project: &Project, reports: &mut novo_reports::LiveReports) -> Vec<PageRow> {
+    page_rows_reusing(project, reports, None).0
+}
+
+/// Like [`page_rows`]. With `previous` (the rows of the project a moment
+/// ago) a generated page whose report is out of date keeps its old rows
+/// instead of waiting for the report: at a thousand pages the contents list
+/// takes over a second to build, and every edit made it stale. The flag says
+/// whether any old rows were kept.
+pub fn page_rows_reusing(
+    project: &Project,
+    reports: &mut novo_reports::LiveReports,
+    previous: Option<&[PageRow]>,
+) -> (Vec<PageRow>, bool) {
     let mut rows = Vec::new();
+    let mut kept = false;
     for p in project.pages_in_order() {
+        if let Some(previous) = previous
+            && let novo_core::PageKind::Generated { generator } = &p.kind
+            && !reports.is_current(project, generator)
+        {
+            let old: Vec<&PageRow> = previous.iter().filter(|r| r.page == p.id).collect();
+            if !old.is_empty() {
+                rows.extend(old.into_iter().cloned());
+                kept = true;
+                continue;
+            }
+        }
         let sheets = reports.sheets_of_page(project, p.id);
         if sheets.is_empty() {
             let label = if p.title.is_empty() {
@@ -1012,7 +1079,7 @@ pub fn page_rows(project: &Project, reports: &mut novo_reports::LiveReports) -> 
             });
         }
     }
-    rows
+    (rows, kept)
 }
 
 #[cfg(test)]
@@ -1253,6 +1320,7 @@ pub(crate) mod tests {
         assert!(!backend.restore_untitled().unwrap(), "not a crash");
         let kept = backend.unsaved_projects();
         assert_eq!(kept.len(), 1, "{:?}", files_in(dir.path()));
+        assert_eq!(kept_label(&kept[0].0), "Plant", "listed by project name");
 
         backend.open(&kept[0].0).unwrap();
         assert!(backend.is_untitled());

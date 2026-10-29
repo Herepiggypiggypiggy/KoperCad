@@ -9,15 +9,15 @@ use novo_core::{
 };
 
 use crate::{
-    Anchor, Clearance, Duct, Facing, Job, Kind, Network, Plan, Point, Point3, Route, Rules,
-    WireRules, plan_constrained,
+    Anchor, Body, Clearance, Duct, Facing, Job, Kind, Network, Openings, Plan, Point, Point3,
+    RailRow, Route, Rules, WireRules, plan_constrained,
 };
 
 /// The ducts on the plate of an enclosure, in model id order. DIN rails are
 /// not ducts and are left out. A duct without a cross-section keeps
 /// width and height 0, which the engine reports as unsized.
 pub fn ducts(project: &Project, structure: StructureId) -> Vec<Duct> {
-    project
+    let mut ducts: Vec<Duct> = project
         .all::<Rail>()
         .filter(|r| r.structure == structure && r.kind == RailKind::Duct)
         .map(|r| Duct {
@@ -31,12 +31,177 @@ pub fn ducts(project: &Project, structure: StructureId) -> Vec<Duct> {
             width: r.width,
             height: r.height,
         })
+        .collect();
+    join_ducts_at_sides(&mut ducts);
+    ducts
+}
+
+/// Ducts meet in a T or a corner with one ending against the side of the
+/// other (they never cross). The engine joins ducts where their centre lines
+/// meet, so an end that lies against the side of another duct is carried on
+/// to that duct's centre line: the wires turn there.
+fn join_ducts_at_sides(ducts: &mut [Duct]) {
+    const TOUCH_MM: f64 = 0.5;
+    let others: Vec<Duct> = ducts.to_vec();
+    for d in ducts.iter_mut() {
+        let horizontal = (d.a.y - d.b.y).abs() < 1e-9;
+        for end in 0..2 {
+            let p = if end == 0 { d.a } else { d.b };
+            let joined = others.iter().find_map(|o| {
+                if o.id == d.id || !o.width.is_finite() {
+                    return None;
+                }
+                let o_horizontal = (o.a.y - o.b.y).abs() < 1e-9;
+                if o_horizontal == horizontal {
+                    return None;
+                }
+                let half = o.width.max(0.0) / 2.0;
+                // `o`'s run, and how far `p` is from its centre line.
+                let (across, along, lo, hi) = if o_horizontal {
+                    ((p.y - o.a.y).abs(), p.x, o.a.x.min(o.b.x), o.a.x.max(o.b.x))
+                } else {
+                    ((p.x - o.a.x).abs(), p.y, o.a.y.min(o.b.y), o.a.y.max(o.b.y))
+                };
+                // Against the side, not on the centre line (already joined).
+                let against = half > 0.0 && (across - half).abs() <= TOUCH_MM;
+                (against && along >= lo - TOUCH_MM && along <= hi + TOUCH_MM).then(|| {
+                    if o_horizontal {
+                        Point::new(p.x, o.a.y)
+                    } else {
+                        Point::new(o.a.x, p.y)
+                    }
+                })
+            });
+            if let Some(q) = joined {
+                if end == 0 {
+                    d.a = q;
+                } else {
+                    d.b = q;
+                }
+            }
+        }
+    }
+}
+
+/// Property on a duct: the pitch of its slots in millimetres (a wire
+/// enters at the slot nearest its terminal). Without it a wire may enter
+/// anywhere along the duct.
+pub const SLOT_PITCH: &str = "duct.slot_pitch_mm";
+
+/// Property on a duct: `closed` for a duct without side slots, which a wire
+/// enters or leaves only at its ends.
+pub const SLOTS: &str = "duct.slots";
+
+/// How the wires get in and out of each duct of an enclosure, from the
+/// ducts' [`SLOT_PITCH`] and [`SLOTS`] properties. Ducts that say nothing
+/// are left out (anywhere).
+fn duct_openings(project: &Project, structure: StructureId) -> Vec<(u64, Openings)> {
+    let number = |v: &novo_core::Value| match v {
+        novo_core::Value::Float(f) => Some(*f),
+        novo_core::Value::Int(i) => Some(*i as f64),
+        novo_core::Value::Text(t) => t.trim().replace(',', ".").parse().ok(),
+        _ => None,
+    };
+    project
+        .all::<Rail>()
+        .filter(|r| r.structure == structure && r.kind == RailKind::Duct)
+        .filter_map(|r| {
+            let closed = matches!(
+                r.properties.get(SLOTS),
+                Some(novo_core::Value::Text(t)) if t.trim().eq_ignore_ascii_case("closed")
+            );
+            let pitch = r
+                .properties
+                .get(SLOT_PITCH)
+                .and_then(number)
+                .filter(|p| p.is_finite() && *p > 0.0);
+            let o = if closed {
+                Openings::Ends
+            } else {
+                Openings::Pitch {
+                    pitch: pitch?,
+                    first: pitch? / 2.0,
+                }
+            };
+            Some((r.id.raw(), o))
+        })
         .collect()
 }
 
-/// The routing network of an enclosure's ducts.
+/// The devices on the plate of an enclosure as bodies, and for each DIN
+/// rail with devices on it the extent of its row. A device on the door or
+/// another surface is not on the plate and is left out.
+fn bodies_and_rows(project: &Project, structure: StructureId) -> (Vec<Body>, Vec<RailRow>) {
+    let off_plate = surfaces_of(project, structure).off_plate;
+    let mut bodies = Vec::new();
+    let mut across: BTreeMap<u64, (f64, f64)> = BTreeMap::new();
+    let rails: HashMap<u64, &Rail> = project
+        .all::<Rail>()
+        .filter(|r| r.structure == structure && r.kind == RailKind::DinRail)
+        .map(|r| (r.id.raw(), r))
+        .collect();
+    for p in project
+        .all::<CabinetPlacement>()
+        .filter(|p| p.structure == structure)
+    {
+        let Some(device) = project.device(p.device) else {
+            continue;
+        };
+        if off_plate.contains_key(&p.device.raw()) {
+            continue;
+        }
+        let size = novo_layout::model::device_size(project, device);
+        let (w, h) = if p.rotated {
+            (size.height, size.width)
+        } else {
+            (size.width, size.height)
+        };
+        if !(w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0) {
+            continue;
+        }
+        bodies.push(Body {
+            id: p.device.raw(),
+            x0: p.x,
+            y0: p.y,
+            x1: p.x + w,
+            y1: p.y + h,
+        });
+        if let Some(rail) = p.rail.and_then(|r| rails.get(&r.raw())) {
+            let (lo, hi) = if rail.vertical {
+                (p.x, p.x + w)
+            } else {
+                (p.y, p.y + h)
+            };
+            let e = across.entry(rail.id.raw()).or_insert((lo, hi));
+            e.0 = e.0.min(lo);
+            e.1 = e.1.max(hi);
+        }
+    }
+    let rows = across
+        .into_iter()
+        .filter_map(|(id, across)| {
+            let r = rails.get(&id)?;
+            Some(RailRow {
+                id,
+                vertical: r.vertical,
+                start: Point::new(r.x, r.y),
+                length: r.length,
+                across,
+            })
+        })
+        .collect();
+    (bodies, rows)
+}
+
+/// The routing network of an enclosure: its ducts with their slots, the
+/// bodies of the devices on the plate (stubs go round them), and a wiring
+/// channel along each DIN rail that carries devices.
 pub fn network(project: &Project, structure: StructureId) -> Network {
+    let (bodies, rows) = bodies_and_rows(project, structure);
     Network::new(&ducts(project, structure))
+        .with_openings(&duct_openings(project, structure))
+        .with_bodies(bodies)
+        .with_rails(&rows)
 }
 
 /// One connection to route: the wire list's from and to pins. `id` is the
@@ -655,6 +820,8 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
                             Point3::new(to.pos.x, to.pos.y, 0.0),
                         ],
                         ducts: Vec::new(),
+                        rails: Vec::new(),
+                        blocked: false,
                         detour_mm: 0.0,
                         rise_mm: 0.0,
                         bends: 0,

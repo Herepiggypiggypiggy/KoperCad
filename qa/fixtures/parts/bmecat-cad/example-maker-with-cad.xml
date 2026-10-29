@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Made up for the QA scenario: a BMEcat 2005 catalog that lists a CAD file for an article (MIME_SOURCE),
+     under a name that does not hold the order number. -->
+<BMECAT version="2005">
+ <HEADER>
+  <CATALOG><LANGUAGE>eng</LANGUAGE><CATALOG_ID>QA</CATALOG_ID><CATALOG_VERSION>1</CATALOG_VERSION><CURRENCY>EUR</CURRENCY></CATALOG>
+  <SUPPLIER><SUPPLIER_NAME>Example Maker</SUPPLIER_NAME></SUPPLIER>
+ </HEADER>
+ <T_NEW_CATALOG>
+  <PRODUCT>
+   <SUPPLIER_PID>EX-3001</SUPPLIER_PID>
+   <PRODUCT_DETAILS>
+    <DESCRIPTION_SHORT>Mounting bracket for a 22 mm pushbutton</DESCRIPTION_SHORT>
+    <MANUFACTURER_NAME>Example Maker</MANUFACTURER_NAME>
+   </PRODUCT_DETAILS>
+   <MIME_INFO>
+    <MIME><MIME_SOURCE>https://example.invalid/cad/EXM-DRAWING-0042.stp?download=1</MIME_SOURCE><MIME_TYPE>application/step</MIME_TYPE><MIME_PURPOSE>detail</MIME_PURPOSE></MIME>
+    <MIME><MIME_SOURCE>https://example.invalid/sheets/EX-3001.pdf</MIME_SOURCE><MIME_TYPE>application/pdf</MIME_TYPE><MIME_PURPOSE>data_sheet</MIME_PURPOSE></MIME>
+   </MIME_INFO>
+  </PRODUCT>
+  <PRODUCT>
+   <SUPPLIER_PID>EX-3002</SUPPLIER_PID>
+   <PRODUCT_DETAILS>
+    <DESCRIPTION_SHORT>Cable clip 8 mm</DESCRIPTION_SHORT>
+    <MANUFACTURER_NAME>Example Maker</MANUFACTURER_NAME>
+   </PRODUCT_DETAILS>
+  </PRODUCT>
+ </T_NEW_CATALOG>
+</BMECAT>

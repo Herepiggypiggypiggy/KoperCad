@@ -182,41 +182,43 @@ impl Fields {
             self.for_device = Some((device, pos));
         }
         let mut typed: (Option<f64>, Option<f64>) = (None, None);
-        egui::Area::new(egui::Id::new("view3d_position"))
-            .order(egui::Order::Middle)
-            .pivot(egui::Align2::RIGHT_BOTTOM)
-            .fixed_pos(view.right_bottom() + egui::vec2(-MARGIN, -MARGIN))
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.strong("Position");
-                    ui.weak("Top left from the plate's left and top edge");
-                    for (label, id, text, slot) in [
-                        ("X", "view3d_pos_x", &mut self.x, &mut typed.0),
-                        ("Y", "view3d_pos_y", &mut self.y, &mut typed.1),
-                    ] {
-                        ui.horizontal(|ui| {
-                            ui.label(label);
-                            let r = ui.add(
-                                egui::TextEdit::singleline(text)
-                                    .id(egui::Id::new(id))
-                                    .desired_width(70.0),
-                            );
-                            ui.label("mm");
-                            if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                                *slot = parse_mm(text);
-                            }
-                        });
-                    }
-                    ui.weak(format!(
-                        "Free to the right {:.1} mm, to the bottom {:.1} mm",
-                        pos.to_right, pos.to_bottom
-                    ));
-                    ui.weak("Arrows nudge: grid, Ctrl 5 mm, Shift 1 mm");
-                    if let Some(row) = &self.model {
-                        model_row(ui, row, &mut self.turned);
-                    }
-                });
+        super::panel::Float::new(
+            "view3d_position",
+            view,
+            egui::Align2::RIGHT_BOTTOM,
+            view.right_bottom() + egui::vec2(-MARGIN, -MARGIN),
+        )
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.strong("Position");
+                ui.weak("Top left from the plate's left and top edge");
+                for (label, id, text, slot) in [
+                    ("X", "view3d_pos_x", &mut self.x, &mut typed.0),
+                    ("Y", "view3d_pos_y", &mut self.y, &mut typed.1),
+                ] {
+                    ui.horizontal(|ui| {
+                        ui.label(label);
+                        let r = ui.add(
+                            egui::TextEdit::singleline(text)
+                                .id(egui::Id::new(id))
+                                .desired_width(70.0),
+                        );
+                        ui.label("mm");
+                        if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                            *slot = parse_mm(text);
+                        }
+                    });
+                }
+                ui.weak(format!(
+                    "Free to the right {:.1} mm, to the bottom {:.1} mm",
+                    pos.to_right, pos.to_bottom
+                ));
+                ui.weak("Arrows nudge: grid, Ctrl 5 mm, Shift 1 mm");
+                if let Some(row) = &self.model {
+                    model_row(ui, row, &mut self.turned);
+                }
             });
+        });
         if typed == (None, None) {
             return None;
         }

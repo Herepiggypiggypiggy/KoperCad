@@ -105,6 +105,25 @@ poles. An article with no order number is listed, not dropped silently.
 The report lists per maker: parts, new, updated, same, without size, without
 ETIM, without price, completeness (Good/Fair/Poor), unmapped features and parts to check.
 
+## CAD files a catalog lists
+
+A BMEcat article can list files (`MIME_INFO`/`MIME`/`MIME_SOURCE`). Every source that
+names a STEP, DXF, EDZ or ZIP file is kept as a file name (the last part of the path
+or web address, `%20` style escapes decoded, no query), at most ten per article. PDFs,
+pictures and everything else are ignored. KoperCAD does not fetch anything from those
+addresses; it only remembers the names, in `library\cad-links.json` beside the catalog.
+
+When you later drop the downloaded file in **Parts > Add CAD files**, a file whose
+name the catalog listed for a part is a **Likely** match for that part, with the line
+"The maker's catalog lists the file ... for ...". A file of the same download set
+(the same `MCAD...` id) as a listed file is Likely with less weight. A file name that
+holds the part's order number still ranks above a listed file, and a size that does
+not fit still asks you to check.
+
+Where you see it: the import report (`kopercad-cli parts import`, or Parts > Import
+catalog files) says "N CAD file names listed by the catalogs are remembered"; a dry
+run says "would be remembered" and writes nothing.
+
 ## Limits
 
 - Mappings were written from public wording and tested on synthetic samples
@@ -113,3 +132,6 @@ ETIM, without price, completeness (Good/Fair/Poor), unmapped features and parts 
 - Duplicate parts across files: the later file name (alphabetical) wins. When the two
   differ in price or description, "parts to check" names both files.
 - Geometry (STEP/DXF) is not bulk imported; it stays one-click per part.
+- CAD file names from a catalog are tried only with made-up catalogs; the first real
+  maker catalog may write its file references differently (a file name in a media
+  folder, a web address with the name in a query). Send one such `MIME_SOURCE` line.

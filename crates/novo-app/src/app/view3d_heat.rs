@@ -19,7 +19,7 @@ pub(super) const CUBE_SIZE: f32 = 88.0;
 const CUBE_MARGIN: f32 = 12.0;
 const GAP: f32 = 8.0;
 /// What the toolbar covers from the view's top, with the strip above it.
-const TOOLBAR_CLEAR: f32 = 150.0;
+const TOOLBAR_CLEAR: f32 = 115.0;
 
 /// Top right corner of the panel: under the cube, inside the view.
 #[cfg(test)]
@@ -443,7 +443,7 @@ mod tests {
         // The Heat panel is about 330 wide at the right edge under the cube.
         const HEAT_PANEL: f32 = 340.0;
         // Strip, toolbar and gap above the free part of the view.
-        const TOOLBAR_BOTTOM: f32 = 140.0;
+        const TOOLBAR_BOTTOM: f32 = 105.0;
         for (w, h) in [(1366.0, 650.0), (900.0, 500.0), (1920.0, 1040.0)] {
             let view = egui::Rect::from_min_size(egui::pos2(0.0, 117.0), egui::vec2(w, h));
             let corner = whatif_pos(view);

@@ -112,6 +112,7 @@ pub(crate) struct Workbench {
     pub(super) faults: Option<super::faults::FaultsWindow>,
     /// The Hoist run window and the run in it.
     pub(super) hoist: super::hoist_run::HoistRun,
+    pub(super) motor_freq: super::motor_freq::MotorFreq,
     /// The Add fault window (`sim.add_fault`), while it is open.
     pub(super) add_fault: Option<super::faults::AddFault>,
     /// The Calculations window, while it is open.
@@ -185,6 +186,9 @@ pub(crate) struct Workbench {
     pub(super) space_pan: Option<egui::Pos2>,
     /// The tool dock's size last frame, to tell where it would sit.
     pub(super) dock_size: egui::Vec2,
+    /// The width the pinned navigator column has now (it is dragged wider
+    /// or narrower), for the dialogs that open beside it.
+    pub(super) outline_shown: Option<f32>,
     /// The inspector's fields while they are edited.
     pub(super) inspector: super::inspector::InspectorState,
     /// The wire panel's text fields while they are edited.
@@ -345,6 +349,7 @@ impl Default for Workbench {
             compare: None,
             faults: None,
             hoist: Default::default(),
+            motor_freq: Default::default(),
             add_fault: None,
             calculations: None,
             electrical: None,
@@ -381,6 +386,7 @@ impl Default for Workbench {
             pointer_world: None,
             space_pan: None,
             dock_size: egui::Vec2::ZERO,
+            outline_shown: None,
             inspector: Default::default(),
             wire_panel: Default::default(),
             marks: true,
@@ -517,11 +523,13 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.cables_drawer",
     "view.devices_drawer",
     "view.toggle_marks",
+    "view.toggle_references",
     "sim.live",
     "sim.why",
     "sim.plc_program",
     "sim.faults",
     "sim.hoist",
+    "sim.motor_curves",
     "sim.add_fault",
     "view.changes",
     "view.commissioning",
@@ -1232,6 +1240,7 @@ impl NovoApp {
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
+            "view.toggle_references" => self.cycle_xref_view(),
             "view.reports" => self.switch_workspace(super::workspace::Workspace::Reports),
             "view.3d" => self.switch_workspace(Workspace::View3d),
             "view.3d_assembly_next" | "view.3d_assembly_previous" => {
@@ -1388,6 +1397,7 @@ impl NovoApp {
             }
             "sim.faults" => self.toggle_faults(),
             "sim.hoist" => self.toggle_hoist_run(),
+            "sim.motor_curves" => self.toggle_motor_curves(),
             "sim.add_fault" => self.begin_add_fault(),
             "view.changes" => self.toggle_changes(argument),
             "view.commissioning" if self.workspace() == Workspace::Commissioning => {
