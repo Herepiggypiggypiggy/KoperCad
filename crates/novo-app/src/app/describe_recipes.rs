@@ -43,9 +43,15 @@ fn sample() -> Facts {
 impl NovoApp {
     /// The command `parts.describe`.
     pub(super) fn open_describe_recipes(&mut self) {
-        let set = recipes_path()
-            .map(|p| RecipeSet::load(&p))
+        let (set, warning) = recipes_path()
+            .map(|p| RecipeSet::load_checked(&p))
             .unwrap_or_default();
+        if let Some(why) = warning {
+            self.message(
+                Level::Warning,
+                format!("Using the built-in recipes: {why}. Saving replaces that file."),
+            );
+        }
         let kind = set.recipes.keys().next().cloned().unwrap_or_default();
         self.wb.describe = Some(DescribeDialog {
             set,
@@ -68,6 +74,13 @@ impl NovoApp {
         } else {
             // The selection when there is one, otherwise every device.
             let mut devices = selected_devices(project, &selection);
+            if devices.is_empty() && overwrite {
+                self.message(
+                    Level::Info,
+                    "Select the devices to rewrite first; Replace is not applied to every device at once",
+                );
+                return;
+            }
             if devices.is_empty() {
                 devices = project.devices().map(|d| d.id).collect();
             }

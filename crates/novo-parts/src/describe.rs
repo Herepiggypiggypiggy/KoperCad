@@ -211,13 +211,16 @@ pub struct Facts {
     pub switching: Option<String>,
 }
 
+/// A number a description can state: finite, positive and not absurd.
+/// Anything else (`NaN`, `-400`, `1e300`) counts as unknown.
 fn number(props: &Properties, key: &str) -> Option<f64> {
-    match props.get(key)? {
-        Value::Float(v) => Some(*v),
-        Value::Int(v) => Some(*v as f64),
-        Value::Text(t) => t.trim().parse().ok(),
-        _ => None,
-    }
+    let v = match props.get(key)? {
+        Value::Float(v) => *v,
+        Value::Int(v) => *v as f64,
+        Value::Text(t) => t.trim().parse().ok()?,
+        _ => return None,
+    };
+    (v.is_finite() && v > 0.0 && v < 1e9).then_some(v)
 }
 
 fn count(props: &Properties, key: &str) -> Option<u32> {
@@ -349,9 +352,10 @@ impl Recipe {
             "voltage" => facts.voltage_v.map(|v| self.unit(v, "V")),
             "power" => facts.power_kw.map(|v| self.unit(v, "kW")),
             "contacts" => {
-                // The main contacts default to the poles: a 3-pole
-                // contactor has three make contacts in its main path.
-                let main = facts.main_no.or(facts.poles)?;
+                // Only a 3-pole device is known to have three make contacts
+                // in its main path; a 4-pole one is often 2 make + 2 break,
+                // so it needs `main_contacts_no`.
+                let main = facts.main_no.or(facts.poles.filter(|&p| p == 3))?;
                 let m = &self.marks;
                 let mut out = format!("{main}{}", m.main);
                 for (n, mark) in [(facts.aux_no, &m.make), (facts.aux_nc, &m.brk)] {
@@ -671,13 +675,31 @@ impl RecipeSet {
     /// Reads the user's recipes, falling back to the built-in English ones.
     /// Kinds missing from the file keep their built-in recipe.
     pub fn load(path: &Path) -> Self {
+        Self::load_checked(path).0
+    }
+
+    /// Like [`RecipeSet::load`], and says why the file was not used when it
+    /// exists but cannot be read (saving then overwrites it).
+    pub fn load_checked(path: &Path) -> (Self, Option<String>) {
         let mut set = Self::english();
-        if let Ok(bytes) = std::fs::read(path)
-            && let Ok(user) = serde_json::from_slice::<RecipeSet>(&bytes)
-        {
-            set.recipes.extend(user.recipes);
+        let bytes = match std::fs::read(path) {
+            Ok(b) => b,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return (set, None),
+            Err(e) => return (set, Some(format!("could not read {}: {e}", path.display()))),
+        };
+        match serde_json::from_slice::<RecipeSet>(&bytes) {
+            Ok(user) => {
+                set.recipes.extend(user.recipes);
+                (set, None)
+            }
+            Err(e) => (
+                set,
+                Some(format!(
+                    "{} is not a valid recipe file ({e})",
+                    path.display()
+                )),
+            ),
         }
-        set
     }
 
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
@@ -893,6 +915,45 @@ mod tests {
             .insert("coil_voltage".into(), Value::Text("24 V AC/DC".into()));
         let d = RecipeSet::english().describe_catalog(&q).unwrap();
         assert!(d.text.contains("3M/1m/0b") && d.text.ends_with("Coil: 24 V AC/DC"));
+    }
+
+    #[test]
+    fn four_poles_do_not_imply_four_make_contacts() {
+        let mut p = contactor();
+        p.data.insert("poles".into(), Value::Int(4));
+        let d = RecipeSet::english().describe_catalog(&p).unwrap();
+        assert!(!d.text.contains("M/"));
+        assert!(d.missing.contains(&"contacts".to_string()));
+        p.data.insert("main_contacts_no".into(), Value::Int(2));
+        let d = RecipeSet::english().describe_catalog(&p).unwrap();
+        assert!(d.text.contains("2M/1m/1b"));
+    }
+
+    #[test]
+    fn absurd_numbers_are_unknown() {
+        let mut p = contactor();
+        p.data
+            .insert("ac3_current_a".into(), Value::Text("NaN".into()));
+        p.data.insert("rated_voltage_v".into(), Value::Int(-400));
+        p.data.insert("rated_power_kw".into(), Value::Float(1e300));
+        let d = RecipeSet::english().describe_catalog(&p).unwrap();
+        assert!(!d.text.contains("NaN") && !d.text.contains("-400") && !d.text.contains("e300"));
+        assert!(d.missing.contains(&"voltage".to_string()));
+    }
+
+    #[test]
+    fn a_broken_recipe_file_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("r.json");
+        std::fs::write(&path, "{ not json").unwrap();
+        let (set, warning) = RecipeSet::load_checked(&path);
+        assert_eq!(set, RecipeSet::english());
+        assert!(warning.unwrap().contains("not a valid recipe file"));
+        assert!(
+            RecipeSet::load_checked(&dir.path().join("none.json"))
+                .1
+                .is_none()
+        );
     }
 
     #[test]

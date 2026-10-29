@@ -3,6 +3,8 @@
 # PR 1702: Edit > Parts > Describe devices from parts writes descriptions from part data by a recipe per kind.
 click_text "Open example"
 wait 20
+key ctrl+a
+wait 5
 key ctrl+k
 wait 6
 text describe devices from parts
