@@ -87,6 +87,9 @@ pub enum FindingKind {
     /// The hook moved while the brake was commanded closed and the drive off: the brake does not
     /// hold the load.
     BrakeSlip { metres: f64 },
+    /// The hook sank below where it was when the direction changed, while the drive passed
+    /// through zero frequency with the brake open (reversal with the brake kept open).
+    ReversalSag { metres: f64 },
     /// The drive tripped.
     DriveTrip(Fault),
     /// The brake logic found something.
@@ -107,6 +110,11 @@ impl FindingKind {
                 metres.abs() * 1000.0,
                 if *metres >= 0.0 { "up" } else { "down" }
             ),
+            Self::ReversalSag { metres } => format!(
+                "The hook sank {:.0} mm while the drive passed through zero frequency with the \
+                 brake open.",
+                metres * 1000.0
+            ),
             Self::BrakeSlip { metres } => format!(
                 "The brake does not hold the load: the hook moved {:.0} mm with the drive off.",
                 metres * 1000.0
@@ -126,6 +134,9 @@ impl FindingKind {
                     ""
                 }
             ),
+            Self::Logic(LogicEvent::ReversalStarted | LogicEvent::ReversalDone) => {
+                "Reversal with the brake open.".to_owned()
+            }
             Self::Logic(LogicEvent::Fault(LogicFault::NoTorqueAtRelease)) => {
                 "The release current was not reached: the brake stays closed.".to_owned()
             }
@@ -188,6 +199,9 @@ pub struct DriveHoistModule {
     relay_was_on: bool,
     idle_baseline: Option<f64>,
     slip_reported: bool,
+    /// Hook height at the start of a reversal and the lowest height since.
+    reversal_mark: Option<(f64, f64)>,
+    base_ramp_s: (f64, f64),
 }
 
 /// The parts of a drive hoist, before they are bound to a schematic.
@@ -228,6 +242,7 @@ impl DriveHoistModule {
                 value: inertia,
             });
         }
+        let base_ramp_s = (drive.cfg.accel_time_s, drive.cfg.decel_time_s);
         let c = motor.circuit();
         let tau = ((c.xm + c.xr) / (TAU * motor.rated_hz() * c.rr)).clamp(0.02, 5.0);
         Ok(Self {
@@ -257,6 +272,8 @@ impl DriveHoistModule {
             relay_was_on: false,
             idle_baseline: Some(0.0),
             slip_reported: false,
+            reversal_mark: None,
+            base_ramp_s,
         })
     }
 
@@ -492,9 +509,33 @@ fn step_module(
     };
     let logic = m.logic.step(&logic_in, &cap, dt);
     for e in &logic.events {
-        // A fault from a drive trip is already reported as the trip itself.
-        if !matches!(e, LogicEvent::Fault(LogicFault::DriveOrMains)) {
-            m.note(time_s, FindingKind::Logic(*e));
+        match e {
+            // A fault from a drive trip is already reported as the trip itself.
+            LogicEvent::Fault(LogicFault::DriveOrMains) => {}
+            // A reversal is reported by what it did to the hook, not by its start.
+            LogicEvent::ReversalStarted => m.reversal_mark = Some((m.height_m, m.height_m)),
+            LogicEvent::ReversalDone => {
+                if let Some((h0, low)) = m.reversal_mark.take()
+                    && h0 - low > REPORT_BELOW_M
+                {
+                    m.note(time_s, FindingKind::ReversalSag { metres: h0 - low });
+                }
+            }
+            _ => m.note(time_s, FindingKind::Logic(*e)),
+        }
+    }
+    if let Some((_, low)) = m.reversal_mark.as_mut() {
+        *low = low.min(m.height_m);
+    }
+    // The fast band of a reversal uses its own ramp time.
+    match logic.ramp_time_s {
+        Some(t) => {
+            m.drive.cfg.accel_time_s = t;
+            m.drive.cfg.decel_time_s = t;
+        }
+        None => {
+            m.drive.cfg.accel_time_s = m.base_ramp_s.0;
+            m.drive.cfg.decel_time_s = m.base_ramp_s.1;
         }
     }
 
