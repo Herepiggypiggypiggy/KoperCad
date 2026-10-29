@@ -378,11 +378,10 @@ pub const BUDGET_WARN_PERCENT: u64 = 50;
 /// Plain words for how much of its step budget an engine uses: `(text, near)`. `near` is true at
 /// [`BUDGET_WARN_PERCENT`] and above, where one slightly heavier call would stop the add-on.
 pub fn budget_note(calls: u64, peak_fuel: u64, budget: u64) -> (String, bool) {
-    let percent = if budget == 0 {
-        100
-    } else {
-        peak_fuel.saturating_mul(100) / budget
-    };
+    let percent = peak_fuel
+        .saturating_mul(100)
+        .checked_div(budget)
+        .unwrap_or(100);
     let near = percent >= BUDGET_WARN_PERCENT;
     let text = if near {
         format!(
