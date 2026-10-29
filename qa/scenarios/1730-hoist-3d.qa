@@ -1,0 +1,16 @@
+@title Hoist in 3D: the crane picture opens from Ctrl+K and shows the hook of the hoist at rest
+@area Simulate
+# Opens the two-speed hoist fixture and the Hoist in 3D window without a run: the hook stands at its start.
+open qa/fixtures/hoist-two-speed.novo
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 30
+shot hook-at-start
+expect "Hoist in 3D"
+expect "Picture, not measurement"
+expect "No run: the hook stands at its start"
+check_layout

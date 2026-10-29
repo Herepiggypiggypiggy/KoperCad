@@ -248,6 +248,16 @@ user, contactor dead times. Not modelled: stator current, saturation, winding he
 torque spikes, rope stretch. Inputs that cannot describe a machine (zero poles, zero ratio or
 efficiency, negative length, NaN) return `InputError`.
 
+### Lane L4 (hoist half) as built: the hook in 3D
+
+`novo-view3d::crane` builds a scene of a generic single-girder crane from plain numbers; the
+`Hoist in 3D` window (Simulate > Hoist in 3D, `sim.hoist3d`) feeds it the hook height, the hoist's
+warnings and the heights of the bound limit switches from the Hoist run loop. Exact: the block
+stands at the start height plus the simulated height, a limit flag stands at its bound height.
+Picture only: the crane sizes, the straight rope (no sway, stretch or slack), bridge and trolley
+positions (typed in, not from the travel drives yet). Listed in the window as "Picture, not
+measurement".
+
 ### Lane L2c-open as built (open-loop drive hoist)
 
 A hoist behind a frequency drive without an encoder: `novo_drive::hoist_logic` (the brake sequence and

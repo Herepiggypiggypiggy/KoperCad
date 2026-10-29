@@ -36,6 +36,25 @@ pub(crate) struct HoistRun {
     active: Option<Active>,
     /// Why the last start did not run, or what it found.
     notice: Vec<(Level, String)>,
+    /// The Hoist in 3D window, which follows this run.
+    pub(super) three_d: super::hoist_3d::Hoist3d,
+}
+
+impl HoistRun {
+    pub(super) fn is_running(&self) -> bool {
+        self.active.is_some()
+    }
+
+    /// The ids of the hoists of the run, in order.
+    pub(super) fn hoist_ids(&self) -> Vec<String> {
+        self.active.as_ref().map_or_else(Vec::new, |a| {
+            a.lp.hoists.iter().map(|m| m.id.clone()).collect()
+        })
+    }
+
+    pub(super) fn module_at(&self, index: usize) -> Option<&HoistModule> {
+        self.active.as_ref().and_then(|a| a.lp.hoists.get(index))
+    }
 }
 
 /// What the window shows of one hoist.
@@ -780,6 +799,33 @@ mod tests {
         // And it stays there: the brake holds the load.
         let (run2, _) = run_held(&h, 12.0);
         assert!((height(&run2) - reached).abs() < 0.02);
+    }
+
+    #[test]
+    fn the_3d_picture_takes_the_hook_height_and_the_limit_flag_from_the_run() {
+        use novo_view3d::crane::{CraneLayout, LimitFlag, block_top_mm, size};
+        let h = hoist(true, 0.5);
+        let (run, _) = run_held(&h, 8.0);
+        let module = run.module_at(0).expect("a hoist in the run");
+        let state = super::super::hoist_3d::state_of(Some(module), 3.0, 2.0);
+        assert!((f64::from(state.hook_m) - height(&run)).abs() < 1e-4);
+        assert_eq!(state.limits.len(), 1);
+        assert_eq!(state.limits[0].kind, LimitFlag::Upper);
+        assert!((state.limits[0].height_m - 0.5).abs() < 1e-4);
+        assert_eq!((state.bridge_m, state.trolley_m), (3.0, 2.0));
+        // The block stands at the layout's start height plus the simulated height.
+        let layout = CraneLayout::default();
+        let (top, clamped) = block_top_mm(&layout, state.hook_m);
+        assert!(!clamped);
+        assert!((top - (layout.hook_start_m * 1000.0 + state.hook_m * 1000.0)).abs() < 1e-2);
+        assert!(top > size::BLOCK[1]);
+        // The line under the controls names the hoist and the way it moves.
+        let line = super::super::hoist_3d::hook_line(module);
+        assert!(line.starts_with(&module.id), "{line}");
+        // Without a run the hook stands at its start.
+        let idle = super::super::hoist_3d::state_of(None, 1.0, 1.0);
+        assert_eq!(idle.hook_m, 0.0);
+        assert!(idle.limits.is_empty() && !idle.warning);
     }
 
     #[test]

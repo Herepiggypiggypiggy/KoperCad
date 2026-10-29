@@ -164,6 +164,7 @@ mod heat_whatif_tests;
 mod heat_wires;
 #[cfg(test)]
 mod heat_wires_tests;
+mod hoist_3d;
 mod hoist_run;
 mod icon_gallery;
 mod inspector;
@@ -2056,6 +2057,7 @@ impl NovoApp {
         self.protection_window(&ctx);
         self.faults_window(&ctx);
         self.hoist_window(&ctx);
+        self.hoist_3d_window(&ctx);
         self.drive_run_window(&ctx);
         self.winch_scenarios_window(&ctx);
         self.motor_freq_window(&ctx);

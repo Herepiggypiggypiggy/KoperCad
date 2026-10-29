@@ -564,6 +564,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "sim.plc_program",
     "sim.faults",
     "sim.hoist",
+    "sim.hoist3d",
     "sim.drive_run",
     "sim.winches",
     "sim.motor_curves",
@@ -1446,6 +1447,7 @@ impl NovoApp {
             }
             "sim.faults" => self.toggle_faults(),
             "sim.hoist" => self.toggle_hoist_run(),
+            "sim.hoist3d" => self.toggle_hoist_3d(),
             "sim.drive_run" => self.toggle_drive_run(),
             "sim.winches" => self.toggle_winch_scenarios(),
             "sim.motor_curves" => self.toggle_motor_curves(),

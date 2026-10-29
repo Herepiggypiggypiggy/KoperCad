@@ -1,0 +1,41 @@
+@title Hoist in 3D follows a run at 1366: the hook rises while the up button is held
+@area Simulate
+@sizes 1366x768
+# Starts Simulate > Hoist run, closes it, opens Hoist in 3D and holds the up button of the live card.
+open qa/fixtures/hoist-two-speed.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate hoist run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 40
+key ctrl+k
+wait 3
+text Simulate hoist run
+wait 4
+key Enter
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 30
+mouse_down 123 341
+wait 100
+shot lifting
+expect "from its start"
+wait 600
+shot lifting-later
+mouse_up 123 341
+wait 20
+click_text "Hook"
+wait 250
+shot hook-framed
+wait 20
+check_layout

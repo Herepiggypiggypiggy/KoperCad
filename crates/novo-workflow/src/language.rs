@@ -767,6 +767,11 @@ pub const DUTCH: &[Aliases] = &[
         &["kraan", "haak", "rem", "eindschakelaar", "tweesnelheden"],
     ),
     nl(
+        "sim.hoist3d",
+        &["hijskraan in 3d"],
+        &["kraan", "haak", "loopkat", "brugkraan", "last"],
+    ),
+    nl(
         "sim.drive_run",
         &["frequentieregelaar"],
         &[

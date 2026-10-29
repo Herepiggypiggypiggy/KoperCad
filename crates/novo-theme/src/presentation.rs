@@ -1116,6 +1116,7 @@ pub const TABLE: &[Presentation] = &[
         "Move mode in 3D",
     ),
     row("sim.hoist", d(&drawn::MOTOR), "Simulate hoist run"),
+    row("sim.hoist3d", p(icons::CRANE), "Hoist in 3D"),
     row("sim.drive_run", d(&drawn::DRIVE), "Simulate drive run"),
     row("sim.winches", d(&drawn::MOTOR), "Simulate winch scenarios"),
     row(
