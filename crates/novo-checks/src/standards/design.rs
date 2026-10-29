@@ -184,6 +184,20 @@ pub static FAMILIES: &[Family] = &[
         fix: "Click the finding in the Issues list to go to the object and correct it.",
     },
     Family {
+        id: "connection-points",
+        title: "Connection points of parts",
+        what: "Each wire fits the connection point it ends on: within the conductor range the part states, no more conductors than the point takes, and a ferrule where the part asks for one.",
+        kinds: &[
+            ProblemKind::WireRange,
+            ProblemKind::PointOccupied,
+            ProblemKind::FerruleUse,
+        ],
+        source: "The wire range, conductor count and ferrule rule of each connection point in the assigned part (maker data where imported, otherwise typed in), and the cross-section of the wire or cable core.",
+        assumptions: "Only what the part states is judged: a connection point whose part gives no data, and a wire without a cross-section, are not checked and nothing is assumed for them. A finding names where the figures came from. Torque and strip length are listed on the reports, not judged.",
+        reliance: Reliance::Exact,
+        fix: "Change the wire size or move the wire to another point, or assign the right part; for a ferrule, set the wire's ferrule in the Inspector.",
+    },
+    Family {
         id: "terminals-cables-plc",
         title: "Terminals, plugs, cables and PLC",
         what: "Terminals are used as their kind allows, every terminal and plug pin is wired, plug halves agree, PLC channels can be addressed and wired as drawn.",

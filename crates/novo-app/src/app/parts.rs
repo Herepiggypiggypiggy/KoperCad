@@ -2221,6 +2221,7 @@ mod tests {
             wire_mm2: Some((0.5, 4.0)),
             side: Side::Top,
             position_mm: None,
+            ..Default::default()
         }];
         p.let_through = vec![LetThroughPoint {
             ik_ka: 6.0,

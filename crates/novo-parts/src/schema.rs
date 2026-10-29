@@ -41,6 +41,19 @@ pub enum ConnectionKind {
     Unknown,
 }
 
+/// What the maker says about a ferrule on the conductor of a connection point.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FerruleRule {
+    /// The conductor must have a ferrule (fine-stranded wire in a push-in
+    /// point, say).
+    Required,
+    /// A ferrule is allowed but not needed.
+    Optional,
+    /// A ferrule must not be used.
+    Forbidden,
+}
+
 /// Side of the part a terminal faces when it is mounted in its normal
 /// position (rail up, plate behind).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -66,6 +79,20 @@ pub struct PartTerminal {
     /// Smallest and largest conductor cross-section in mm².
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wire_mm2: Option<(f64, f64)>,
+    /// Length of insulation to strip, in mm, as the maker states it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strip_mm: Option<f64>,
+    /// Smallest and largest tightening torque in N·m (screw terminals).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub torque_nm: Option<(f64, f64)>,
+    /// How many conductors the connection point takes. `None` when the
+    /// maker's data does not say; a check then does not judge occupancy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_wires: Option<u8>,
+    /// Whether the maker wants a ferrule on the conductor. `None` when the
+    /// data does not say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ferrule: Option<FerruleRule>,
     #[serde(default, skip_serializing_if = "is_default")]
     pub side: Side,
     /// Position of the entry point in the part's own frame in mm (origin at

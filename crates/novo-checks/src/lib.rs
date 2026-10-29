@@ -67,6 +67,9 @@
 //! | [`TagRule`](ProblemKind::TagRule) | warning | A device name that breaks the page and column rule (opt-in) |
 //! | [`DisplayedTag`](ProblemKind::DisplayedTag) | warning | A tag text on a symbol that is not the device's tag |
 //! | [`StructureCode`](ProblemKind::StructureCode) | warning | A function or location code not in a structure list declared complete |
+//! | [`WireRange`](ProblemKind::WireRange) | error when too large, warning when too small | A wire outside the conductor range its part states for the connection point |
+//! | [`PointOccupied`](ProblemKind::PointOccupied) | warning | More conductors on a connection point than its part says it takes |
+//! | [`FerruleUse`](ProblemKind::FerruleUse) | warning | A ferrule missing where the part asks for one, or fitted where the part forbids it |
 //! | [`Standard`](ProblemKind::Standard) | per rule | A rule of a selected standard (IEC 60204-1, NFPA 79, UL 508A) is not met; see [`standards`] |
 //! | [`DeviceCollision`](ProblemKind::DeviceCollision) | error | Two devices overlapping on a mounting plate |
 //! | [`DeviceOutsidePlate`](ProblemKind::DeviceOutsidePlate) | error | A device beyond the usable area of its plate |
@@ -109,6 +112,7 @@ pub mod calc_basis;
 mod calc_checks;
 pub mod calc_view;
 mod checks;
+mod conn_points;
 mod connection_rules;
 mod contacts;
 mod door;
@@ -131,6 +135,7 @@ use novo_core::{
     TerminalId,
 };
 
+pub use conn_points::{PointData, point_data};
 pub use contacts::{ContactKind, contact_limit_property};
 pub use waiver::{
     Waived, check_open, report_lines, report_lines_of, split_waived, waive, waived_problems,
@@ -288,6 +293,14 @@ pub enum ProblemKind {
     DisplayedTag,
     /// A function or location code the structure list does not know (H01).
     StructureCode,
+    /// A wire larger or smaller than the connection point accepts, by the
+    /// part's own data.
+    WireRange,
+    /// More conductors on a connection point than the part says it takes.
+    PointOccupied,
+    /// A ferrule missing where the part asks for one, or used where the part
+    /// does not allow one.
+    FerruleUse,
     /// A device drawn in the schematic but not placed on any mounting plate,
     /// in a project where the cabinet layout has been started.
     UnplacedDevice,
@@ -357,7 +370,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 72] = [
+    pub const ALL: [ProblemKind; 75] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -430,6 +443,9 @@ impl ProblemKind {
         ProblemKind::TagRule,
         ProblemKind::DisplayedTag,
         ProblemKind::StructureCode,
+        ProblemKind::WireRange,
+        ProblemKind::PointOccupied,
+        ProblemKind::FerruleUse,
     ];
 
     pub fn severity(self) -> Severity {
@@ -495,6 +511,9 @@ impl ProblemKind {
             | ProblemKind::TagRule
             | ProblemKind::DisplayedTag
             | ProblemKind::StructureCode
+            | ProblemKind::WireRange
+            | ProblemKind::PointOccupied
+            | ProblemKind::FerruleUse
             | ProblemKind::SafetyBinding
             | ProblemKind::Emc
             | ProblemKind::Plc => Severity::Warning,
@@ -584,6 +603,9 @@ impl ProblemKind {
             ProblemKind::TagRule => "Tag rule",
             ProblemKind::DisplayedTag => "Displayed tag",
             ProblemKind::StructureCode => "Unknown structure code",
+            ProblemKind::WireRange => "Wire size at terminal",
+            ProblemKind::PointOccupied => "Terminal point full",
+            ProblemKind::FerruleUse => "Ferrule at terminal",
         }
     }
 
@@ -662,6 +684,9 @@ impl ProblemKind {
             ProblemKind::TagRule => "check.tag_rule",
             ProblemKind::DisplayedTag => "check.displayed_tag",
             ProblemKind::StructureCode => "check.structure_code",
+            ProblemKind::WireRange => "check.wire_range",
+            ProblemKind::PointOccupied => "check.point_occupied",
+            ProblemKind::FerruleUse => "check.ferrule_use",
         }
     }
 }
@@ -813,6 +838,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     house_rules::tag_rule(&cx, &mut problems);
     house_rules::displayed_tags(&cx, &mut problems);
     house_rules::structure_codes(&cx, &mut problems);
+    conn_points::run(&cx, &mut problems);
     calc_checks::run(&cx, netlist, &mut problems);
     physical::unplaced_devices(&cx, &mut problems);
     physical::routing(&cx, &mut problems);

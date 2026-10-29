@@ -282,8 +282,12 @@ fn end(
     standard: &FerruleStandard,
 ) -> WireEnd {
     let designation = end_designation(project, pin);
-    let from_part =
-        device_of(project, pin).and_then(|d| number_property(project, d, STRIP_LENGTH_KEY));
+    // The connection point's own strip length first, then the part's.
+    let from_part = novo_checks::point_data(project, pin)
+        .and_then(|p| p.data.strip_mm)
+        .or_else(|| {
+            device_of(project, pin).and_then(|d| number_property(project, d, STRIP_LENGTH_KEY))
+        });
     let (strip_mm, strip_basis) = match (from_part, section) {
         (Some(v), _) => (Some(v), StripBasis::Part),
         (None, Some(s)) => (
@@ -974,4 +978,19 @@ impl Report for WireCut {
             },
         }
     }
+}
+
+/// Tightening torque of a connection point as the part states it
+/// (`0.4–0.5 N·m`), or empty when the part says nothing. Never estimated.
+pub(crate) fn torque_text(project: &Project, pin: PinRef) -> String {
+    novo_checks::point_data(project, pin)
+        .and_then(|p| p.data.torque_nm)
+        .map(|(lo, hi)| {
+            if (hi - lo).abs() < 1e-9 {
+                format!("{} N\u{b7}m", number_text(lo))
+            } else {
+                format!("{}\u{2013}{} N\u{b7}m", number_text(lo), number_text(hi))
+            }
+        })
+        .unwrap_or_default()
 }

@@ -201,7 +201,7 @@ impl NovoApp {
 }
 
 /// The strip table's columns, in the order a row writes its cells.
-const STRIP_HEADS: [&str; 10] = [
+const STRIP_HEADS: [&str; 11] = [
     "Terminal",
     "Kind",
     "Jumper",
@@ -211,6 +211,7 @@ const STRIP_HEADS: [&str; 10] = [
     "External",
     "Wire out",
     "Cable",
+    "Accepts",
     "State",
 ];
 
@@ -221,6 +222,7 @@ const STRIP_HEADS: [&str; 10] = [
 /// Rows drawn by a selected symbol show as selected.
 pub(super) fn strip_table(
     ui: &mut egui::Ui,
+    project: &novo_core::Project,
     view: &novo_terminals::StripView,
     screen: &novo_terminals::Screen,
     selected: &[AnyId],
@@ -300,12 +302,54 @@ pub(super) fn strip_table(
                     ui.label(join(row.external_targets()));
                     ui.label(screen_cell(screen, i, |r| r.wires_external.join(", ")));
                     ui.label(cable_cell(screen, i));
+                    let (accepts, why) = accepts_cell(project, row);
+                    ui.label(accepts).on_hover_text(why);
                     ui.weak(row.state().label());
                     ui.end_row();
                 }
             });
     });
     go
+}
+
+/// The Accepts cell of a strip row: the conductor range and tightening
+/// torque the terminal's part states (`0.5–2.5 mm², 0.4–0.5 N·m`), or a dash
+/// when it states none, with the source of the figures as hover text. Checks
+/// in Check > Issues judge wires against the same figures.
+fn accepts_cell(project: &novo_core::Project, row: &novo_terminals::Row) -> (String, String) {
+    let unknown = || {
+        (
+            "\u{2013}".to_owned(),
+            "The part states no wire range for this terminal (nothing is assumed)".to_owned(),
+        )
+    };
+    let Some(part) = row.part.and_then(|p| project.part(p)) else {
+        return unknown();
+    };
+    let pin = row
+        .occurrences
+        .first()
+        .and_then(|o| project.symbol(o.symbol))
+        .and_then(|s| s.pins.first())
+        .map_or("1", |p| p.name.as_str());
+    let data = novo_parts::connection_data(&part.properties, pin);
+    let mut bits = Vec::new();
+    if let Some((lo, hi)) = data.wire_mm2 {
+        bits.push(format!("{lo}\u{2013}{hi} mm\u{b2}"));
+    }
+    if let Some((lo, hi)) = data.torque_nm {
+        bits.push(format!("{lo}\u{2013}{hi} N\u{b7}m"));
+    }
+    if bits.is_empty() {
+        return unknown();
+    }
+    let source = match novo_parts::connection_source(&part.properties) {
+        Some("maker") => "maker data",
+        Some("typed") => "typed-in data",
+        Some("estimated") => "estimated data",
+        _ => "part data, source not stated",
+    };
+    (bits.join(", "), format!("From the part: {source}"))
 }
 
 /// The Jumper cell of a strip row: `J1` for a connected terminal, empty

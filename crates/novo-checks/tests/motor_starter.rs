@@ -259,6 +259,9 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::TagRule,
         ProblemKind::DisplayedTag,
         ProblemKind::StructureCode,
+        ProblemKind::WireRange,
+        ProblemKind::PointOccupied,
+        ProblemKind::FerruleUse,
         ProblemKind::SafetyLevelNotMet,
         ProblemKind::SafetyBinding,
         // Only reported once the project turns the EMC check on; see tests/emc_checks.

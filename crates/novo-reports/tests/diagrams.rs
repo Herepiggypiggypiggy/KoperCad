@@ -51,6 +51,7 @@ fn terminal_diagram_has_one_section_per_strip() {
                 "1",
                 "1.1",
                 "1 clamp",
+                "",
                 ""
             ],
             &[
@@ -66,6 +67,7 @@ fn terminal_diagram_has_one_section_per_strip() {
                 "1",
                 "1.2",
                 "1 clamp",
+                "",
                 ""
             ],
             &[
@@ -81,6 +83,7 @@ fn terminal_diagram_has_one_section_per_strip() {
                 "1",
                 "1.2",
                 "1 clamp",
+                "",
                 ""
             ],
             &[
@@ -96,6 +99,7 @@ fn terminal_diagram_has_one_section_per_strip() {
                 "1",
                 "1.2",
                 "1 clamp",
+                "",
                 ""
             ],
         ])

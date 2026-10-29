@@ -52,6 +52,9 @@ fn shipped_projects_have_no_eplan_style_problems() {
         ProblemKind::TagRule,
         ProblemKind::DisplayedTag,
         ProblemKind::StructureCode,
+        ProblemKind::WireRange,
+        ProblemKind::PointOccupied,
+        ProblemKind::FerruleUse,
     ];
     let mut loaded = 0;
     let mut bad = Vec::new();
