@@ -807,7 +807,7 @@ fn footer_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, cancel: &mut bool
 
 #[cfg(test)]
 mod width_tests {
-    use super::dialog_width;
+    use super::{CHROME, body_height, dialog_width};
 
     #[test]
     fn the_dialog_fits_the_window_it_opens_in() {
