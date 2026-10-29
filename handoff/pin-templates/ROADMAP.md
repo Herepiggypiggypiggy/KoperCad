@@ -10,7 +10,10 @@ Done (first PR)
 Done (second PR)
 - `suggest_renames` (novo-symbols) and `pin_fix` (novo-checks): Issues right-click on a Pin names problem offers the rename of symbol pins, or of the part's terminals, to the class names. Only clear matches (case/spacing, prefix, single left over); never position guesses.
 
+Done (third PR)
+- Company-defined templates: TOML text in the project property `pin.templates` (`novo_symbols::parse_company_templates`, a class replaces the built-in names for the functions it lists), edited in Project > Rules > Usual pin names; the Pin names check and the Issues rename use it. QA scenarios 2410 to 2413 and the pin-names fixture are in the repo.
+
 Next
-- Let a company pack declare its own templates (TOML) next to its symbols.
+- A company templates file shared across projects (today the text lives in each project).
 - Offer the part-terminal mapping at the moment of part assignment (today it is on the Issues row).
 - Templates for PLC cards, network devices and terminals if the shop wants them.

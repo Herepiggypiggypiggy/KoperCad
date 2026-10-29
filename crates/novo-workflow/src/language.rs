@@ -87,6 +87,11 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["pomp voorbeeld", "pompen voorbeeld"],
     ),
+    nl(
+        "file.new_crane",
+        &[],
+        &["nieuw kraan", "kraan sjabloon", "kraanproject"],
+    ),
     nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
     nl(
         "help.walkthrough",
@@ -236,6 +241,11 @@ pub const DUTCH: &[Aliases] = &[
         "parts.clear",
         &["onderdeel verwijderen"],
         &["artikel wissen", "ontkoppelen"],
+    ),
+    nl(
+        "parts.describe",
+        &["omschrijving uit onderdelen"],
+        &["omschrijving", "beschrijving", "recept"],
     ),
     nl(
         "parts.remove_unused",

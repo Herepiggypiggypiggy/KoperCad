@@ -220,6 +220,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "file.new_crane",
+        "New from template: overhead crane (structure tree, cover pages)",
+        "Project",
+        &[
+            "crane",
+            "overhead",
+            "template",
+            "new project",
+            "cover",
+            "front matter",
+            "structure",
+            "girder",
+            "hoist",
+        ],
+        Needs::Nothing,
+    ),
+    cmd(
         "file.practice",
         "Try the fast keys",
         "Project",
@@ -1037,6 +1054,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Edit",
         &["clear part", "unassign", "article"],
         Needs::Selection,
+    ),
+    cmd(
+        "parts.describe",
+        "Describe devices from parts",
+        "Edit",
+        &["description", "recipe", "text", "label", "bom"],
+        Needs::Project,
     ),
     cmd(
         "parts.remove_unused",

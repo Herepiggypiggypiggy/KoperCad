@@ -103,6 +103,9 @@ pub(crate) struct Workbench {
     pub(super) macro_editor: super::macro_editor::MacroEditor,
     /// The Project settings window (drawing standard) is open.
     pub(super) project_settings: bool,
+    /// The Project information fields while the Project settings window is
+    /// open: typed text, saved when a field loses focus.
+    pub(super) project_info: Option<Vec<String>>,
     /// The Issue revision window, while it is open.
     pub(super) issue: Option<super::revisions::IssueDraft>,
     pub(super) restore_ask: Option<super::revisions::RestoreAsk>,
@@ -134,6 +137,8 @@ pub(crate) struct Workbench {
     pub(super) selection_sheet: super::selection_sheet::SelectionSheet,
     /// The Project rules window is open.
     pub(super) project_rules: bool,
+    /// The company pin templates being edited in the Project rules window.
+    pub(super) pin_templates_text: Option<String>,
     /// The Wire numbering window, while it is open.
     pub(super) numbering: Option<super::numbering::NumberingWindow>,
     /// Text of the open "Set wire number" prompt.
@@ -287,6 +292,8 @@ pub(crate) struct Workbench {
     pub(super) parts_bulk: Option<super::parts_bulk::BulkReport>,
     /// Part proposals waiting for Accept all or Cancel.
     pub(super) auto_assign: Option<super::parts_bulk::AutoAssignPreview>,
+    /// The description recipe editor.
+    pub(super) describe: Option<super::describe_recipes::DescribeDialog>,
     /// An EPLAN (PXF) import waiting for the person to confirm.
     pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
     /// Parts read from an EPLAN parts export, waiting for Add.
@@ -356,6 +363,7 @@ impl Default for Workbench {
             macro_place: Default::default(),
             macro_editor: Default::default(),
             project_settings: false,
+            project_info: None,
             issue: None,
             restore_ask: None,
             handover_ask: None,
@@ -377,6 +385,7 @@ impl Default for Workbench {
             device_renumber: None,
             selection_sheet: Default::default(),
             project_rules: false,
+            pin_templates_text: None,
             page_form: None,
             sheet_import: None,
             sheet: 0,
@@ -444,6 +453,7 @@ impl Default for Workbench {
             aml_import: None,
             parts_bulk: None,
             auto_assign: None,
+            describe: None,
             eplan_import: None,
             eplan_parts: None,
             eplan_parts_job: None,
@@ -726,6 +736,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "parts.auto_assign",
     "edit.shared_properties",
     "parts.clear",
+    "parts.describe",
     "parts.remove_unused",
     "project.standard",
     "project.rules",
@@ -1676,6 +1687,7 @@ impl NovoApp {
             "parts.auto_assign" => self.start_auto_assign(),
             "edit.shared_properties" => self.open_selection_sheet(),
             "parts.clear" => self.clear_selected_parts(),
+            "parts.describe" => self.open_describe_recipes(),
             "parts.remove_unused" => self.remove_unused_project_parts(),
             "project.standard" => self.wb.project_settings = true,
             "project.rules" => self.wb.project_rules = true,

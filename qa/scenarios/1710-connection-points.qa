@@ -1,0 +1,38 @@
+@title Wire range and torque from connection points
+@area Check
+# A terminal whose part states 0.5-2.5 mm2 and 0.4-0.5 N.m, with a 6 mm2 wire on it.
+open qa/fixtures/connection-points.novo
+wait 20
+# Check > Issues lists the too-large wire.
+key ctrl+k
+text Problems
+key enter
+wait 10
+expect "Wire 102"
+expect "larger than"
+expect "0.5–2.5"
+expect "maker data"
+shot issues-wire-range
+check_layout
+key Escape
+wait 5
+# The Terminals drawer shows what the part accepts.
+key ctrl+k
+text Terminals
+key enter
+wait 10
+expect "Accepts"
+expect "0.4–0.5 N·m"
+shot terminals-accepts
+check_layout
+key Escape
+wait 5
+# The wire list carries the torque.
+key ctrl+k
+text Wire list
+key enter
+wait 15
+expect "Torque"
+expect "0.4–0.5 N·m"
+shot wire-list-torque
+check_layout

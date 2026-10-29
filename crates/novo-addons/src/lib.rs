@@ -23,6 +23,7 @@ pub mod report;
 pub mod store;
 pub mod trust;
 pub mod version;
+pub mod worker;
 
 pub use error::{AddonError, Result};
 
@@ -40,3 +41,4 @@ pub use store::{
 };
 pub use trust::{Trust, TrustStore};
 pub use version::{Requirement, Version};
+pub use worker::{Done, EngineStats, EngineWorker};

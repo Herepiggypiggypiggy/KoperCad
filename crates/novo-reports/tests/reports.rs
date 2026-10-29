@@ -546,8 +546,12 @@ fn every_section_starts_a_page_and_empty_reports_get_one() {
     let setup = PageSetup::default();
     for output in generate_all(empty.project()) {
         let pages = paginate(&output, &setup);
-        assert_eq!(pages.len(), 1, "{}", output.title);
-        assert_eq!(pages[0].rows, 0..0);
+        // The front matter has a (filled) sheet for each of its five sections.
+        let sheets = if output.report == "front" { 5 } else { 1 };
+        assert_eq!(pages.len(), sheets, "{}", output.title);
+        if sheets == 1 {
+            assert_eq!(pages[0].rows, 0..0);
+        }
         let layout = layout_page(&output, &pages[0], &setup);
         assert!(
             layout
@@ -598,7 +602,8 @@ fn xlsx_round_trips() {
             "Cable schedule",
             "Plug connection list",
             "Labels",
-            "Single-line diagram"
+            "Single-line diagram",
+            "Front matter"
         ]
     );
     // Cell by cell for the one-table sheets (a sheet with several sections
@@ -775,7 +780,7 @@ fn wire_list_estimates_lengths_until_devices_are_placed() {
         .iter()
         .map(|c| c.header.as_str())
         .collect();
-    assert_eq!(headers, ["Route length mm", "Length basis"]);
+    assert_eq!(headers, ["Route length mm", "Length basis", "Torque"]);
     for row in rows(&wires, "wires") {
         if row[6].starts_with("=A1-W1") {
             // The motor cable states 12 m: its cores run the whole cable.
@@ -927,10 +932,10 @@ fn wire_list_csv_carries_the_cut_length() {
     let csv = to_csv(&report(&doc, "wires"), &CsvOptions::default());
     let header = csv.lines().next().expect("header");
     assert!(
-        header.ends_with("Location,Route length mm,Length basis"),
+        header.ends_with("Location,Route length mm,Length basis,Torque"),
         "{header}"
     );
-    assert!(csv.contains(",estimate\r\n"));
+    assert!(csv.contains(",estimate,\r\n"));
 }
 
 #[test]

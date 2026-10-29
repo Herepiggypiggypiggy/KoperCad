@@ -259,6 +259,9 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::TagRule,
         ProblemKind::DisplayedTag,
         ProblemKind::StructureCode,
+        ProblemKind::WireRange,
+        ProblemKind::PointOccupied,
+        ProblemKind::FerruleUse,
         // Own fixture; see tests/pin_names.
         ProblemKind::PinNames,
         ProblemKind::SafetyLevelNotMet,

@@ -28,7 +28,7 @@ key Escape
 wait 4
 key ctrl+k
 wait 6
-text controller panel
+text radio panel
 wait 8
 key Enter
 wait 10
@@ -37,16 +37,16 @@ expect "Generic stand-in"
 shot panel-idle
 check_layout
 click_text "Main / start" Button
-wait 10
+wait_s 1
 expect "● Main"
 click_text "Up 2" Button
-wait 10
+wait_s 1
 expect "● Up slow"
 expect "● Up fast"
 shot hoist-up-step-2
 check_layout
 click_text "E-stop" Button
-wait 10
+wait_s 1
 expect "○ Main"
 expect "○ Up fast"
 shot estop

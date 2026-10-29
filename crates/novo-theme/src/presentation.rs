@@ -259,6 +259,7 @@ pub const TABLE: &[Presentation] = &[
         "Open PLC cabinet example",
     ),
     row("file.example_pump", p(icons::DROP), "Open pump example"),
+    row("file.new_crane", d(&drawn::BRIDGE), "New crane project"),
     row("file.practice", p(icons::KEYBOARD), "Try the fast keys"),
     row("project.languages", p(icons::TRANSLATE), "Report languages"),
     row("file.save", p(icons::FLOPPY_DISK), "Save"),
@@ -441,6 +442,11 @@ pub const TABLE: &[Presentation] = &[
         "parts.auto_assign",
         p(icons::PACKAGE),
         "Assign parts to devices",
+    ),
+    row(
+        "parts.describe",
+        p(icons::PACKAGE),
+        "Describe devices from parts",
     ),
     row(
         "parts.clear",

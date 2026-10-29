@@ -41,6 +41,9 @@ pub(super) struct AppMenu {
     pub(super) was_open: bool,
     /// The search field takes the focus once, in the first frame.
     fresh: bool,
+    /// A button elsewhere in the bar asks for the menu at this area (an
+    /// index into [`MENUS`]); the next frame opens it.
+    pub(super) open_at: Option<usize>,
 }
 
 /// One line of the right pane.
@@ -214,6 +217,20 @@ impl NovoApp {
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| self.app_menu_ui(ui));
         button.on_hover_text(format!("Menu ({})", "F10"));
+    }
+
+    /// The Help icon button of the top bar: the app menu at its Help area. With
+    /// the menu words in the bar the Help menu is already there.
+    pub(super) fn help_button(&mut self, ui: &mut egui::Ui) {
+        if self.menu_names_shown() || !self.is_open() {
+            return;
+        }
+        let response = ui.add(egui::Button::new(icons::QUESTION).frame(false));
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Help"));
+        self.anchor_response("help.button", &response, "Help");
+        if response.on_hover_text("Help and lessons").clicked() {
+            self.wb.app_menu.open_at = MENUS.iter().position(|m| *m == "Help");
+        }
     }
 
     /// The lines of the right pane now.

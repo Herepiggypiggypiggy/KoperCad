@@ -272,6 +272,15 @@ impl AddonSet {
         id: &str,
         limits: crate::host::HostLimits,
     ) -> Result<Option<crate::host::EngineHost>> {
+        match self.engine_wasm(id)? {
+            Some(wasm) => crate::host::EngineHost::load(&wasm, limits).map(Some),
+            None => Ok(None),
+        }
+    }
+
+    /// The bytes of the engine of add-on `id`, checked for being on and speaking this program's
+    /// host API; `None` when the add-on has no engine. For [`crate::EngineWorker::start`].
+    pub fn engine_wasm(&self, id: &str) -> Result<Option<Vec<u8>>> {
         let entry = self
             .get(id)
             .filter(|e| e.status.is_enabled())
@@ -286,8 +295,7 @@ impl AddonSet {
                 crate::host::HOST_API
             )));
         }
-        let wasm = self.read_file(id, &decl.file)?;
-        crate::host::EngineHost::load(&wasm, limits).map(Some)
+        self.read_file(id, &decl.file).map(Some)
     }
 
     /// Data files of one `kind` from running add-ons, as `(add-on id, path)`.

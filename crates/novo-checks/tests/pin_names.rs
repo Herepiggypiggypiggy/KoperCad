@@ -213,3 +213,61 @@ fn no_fix_when_the_names_are_a_guess() {
     assert_eq!(found.len(), 1);
     assert!(novo_checks::pin_fix(&project, &found[0]).is_none());
 }
+
+const BRAKE_MOTOR: &str = r#"
+[[class]]
+id = "motor.brake"
+label = "brake motor"
+functions = ["motor.ac3"]
+[[class.set]]
+name = "three terminals and brake"
+required = ["U1", "V1", "W1", "BD1", "BD2"]
+optional = ["PE"]
+"#;
+
+fn with_company(mut project: Project, text: &str) -> Project {
+    project
+        .transact("company", |tx| {
+            tx.set_info(|i| {
+                i.properties.insert(
+                    novo_checks::PIN_TEMPLATES_PROPERTY.into(),
+                    Value::Text(text.into()),
+                );
+            })
+        })
+        .unwrap();
+    project
+}
+
+#[test]
+fn company_templates_change_what_is_usual() {
+    let plain = one(
+        "iec/motors/motor_3ph",
+        "-M1",
+        &["U1", "V1", "W1", "PE"],
+        &[],
+    );
+    assert!(pin_names(&plain).is_empty());
+    let company = with_company(plain, BRAKE_MOTOR);
+    let found = pin_names(&company);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert!(found[0].message.contains("brake motor"));
+    assert!(found[0].message.contains("BD1"));
+    // Other classes keep the built-in names.
+    let coil = with_company(
+        one("iec/coils/relay", "-K1", &["A1", "A2"], &[]),
+        BRAKE_MOTOR,
+    );
+    assert!(pin_names(&coil).is_empty());
+}
+
+#[test]
+fn unreadable_company_text_is_one_note_and_the_built_ins_stay() {
+    let project = with_company(
+        one("iec/motors/motor_3ph", "-M1", &["U1", "V1", "W1"], &[]),
+        "[[class]]\nid = \"x\"\nfunctions = []",
+    );
+    let found = pin_names(&project);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert!(found[0].message.contains("cannot be read"));
+}

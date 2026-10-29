@@ -258,6 +258,47 @@ Picture only: the crane sizes, the straight rope (no sway, stretch or slack), br
 positions (typed in, not from the travel drives yet). Listed in the window as "Picture, not
 measurement".
 
+### Lane L2c-open as built (open-loop drive hoist)
+
+A hoist behind a frequency drive without an encoder: `novo_drive::hoist_logic` (the brake sequence and
+load sensing, pure) and `novo_machine::drive_hoist_loop` / `drive_hoist_spec` (the loop and the `dh_*`
+property keys). It reuses the drive (`Drive`), the induction motor, `Hoist` and `SpringBrake`; nothing in
+the shared motor files changed.
+
+Sequence (generic, every number is an entered parameter): magnetise at the release frequency, open the
+brake relay only when the motor current reaches the release current, wait the release time (and the
+brake feedback if one is wired), run the chosen speed step, on stop come down to the engage frequency,
+open the relay, keep the output on for the engage time, then switch off. A trip or lost mains closes the
+relay at once. A direction change is a full stop and start. One to four speed steps; the k-th speed input
+selects step k.
+
+The drive's brake relay is a contact in the drawing (`dh_brake_relay`): the loop writes it like a limit
+switch, so the brake contactor, the rectifier and the coil are real circuit parts (`dh_brake_feed`). A
+contactor that does not pull in leaves the brake closed. The brake follows its coil through
+`SpringBrake` (AC or DC switching, delays and torque rise). Without a feed device the brake follows the
+relay directly and the window says so.
+
+Load sensing (optional, `dh_sense_boost_hz`): the torque is averaged at a probe frequency; a light load
+may run the top step above its nominal frequency, never beyond what the motor can deliver with a margin
+(breakdown torque of the fitted circuit on the V/f law). This is a generic function; the name and rule of
+a maker's function are not reproduced.
+
+What the run reports (`FindingKind`): a hook that sank at the start (reported at once when it runs away),
+the hook travel between the brake command and standstill, a brake that does not hold the load with the
+drive off, a drive trip (for example over-voltage when lowering without a braking resistor), the sensed
+load and the no-torque and brake-feedback faults of the logic.
+
+Exact by definition: the order of the states, the tick order, the hanging-load arithmetic. Model: the
+drive (averaged), the motor (quasi-static torque, no flux transient), the flux build-up (one lag with the
+rotor time constant of the fit, torque follows flux squared), stiction of the shaft against friction and
+brake torque, the brake timing, all sequence timing. Not modelled: encoder or closed-loop control,
+slack rope, rope stretch and hook swing, motor and brake heating, jump at reversal, a maker's parameter
+set. Parameters of a real drive never appear in a drawing, so the defaults are generic values for a
+5.5 kW 4 pole hoist motor and are meant to be edited.
+
+Where the user finds it: motor property sheet section "Drive hoist" (hook load turns the motor into a
+drive hoist), then Simulate > Drive run with Live on; the window lists the readings and what the run found.
+
 ### Lane L2c as built (closed-loop hoists and synchronous winches)
 
 `novo_drive::closed_loop` holds the encoder hoist drive (torque control at zero speed, torque proof

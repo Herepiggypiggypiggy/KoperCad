@@ -1,0 +1,24 @@
+@title Pin names: the Issues list offers to rename unusual pins to the class names (1920x1080)
+@area Schematic
+@sizes 1920x1080
+# The fixture has a motor with pins U V W and a relay coil with pin a1. Check > Issues lists two "Pin names" rows (info). Right-clicking the motor row offers "Rename 3 pins to the usual names"; after it that row is gone, and one undo brings it back.
+open qa/fixtures/pin-names.kopercad
+wait 30
+click_text "2 warnings"
+wait 20
+expect "is not usual"
+shot issues-listed
+click 150 228 right
+wait 10
+shot row-menu
+expect "usual names"
+click_text "Rename 3 pins to the usual names"
+wait 20
+shot after-rename
+expect_not "U, V, W is not usual"
+expect "a1 is not usual"
+key ctrl+z
+wait 20
+shot after-undo
+expect "U, V, W is not usual"
+check_layout

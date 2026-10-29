@@ -76,6 +76,7 @@ mod count_words;
 mod defects_card;
 #[cfg(test)]
 mod defects_card_tests;
+mod describe_recipes;
 mod designer;
 mod device_renumber;
 mod diagnostics;
@@ -283,6 +284,7 @@ mod strip_grouping_tests;
 mod supply_feeds;
 mod symbol_folder;
 mod symbol_preview;
+mod template_crane;
 mod terminal_edit;
 mod terminals;
 #[cfg(test)]
@@ -476,6 +478,8 @@ mod shortcuts_sheet_tests;
 #[cfg(test)]
 mod small_window_tests;
 #[cfg(test)]
+mod template_crane_tests;
+#[cfg(test)]
 mod tips_tests;
 #[cfg(test)]
 mod ui_gaps_tests;
@@ -623,6 +627,7 @@ enum Leaving {
     CraneExample,
     PlcExample,
     PumpExample,
+    CraneTemplate,
     Practice,
     /// Open this lesson's sample project and start the lesson.
     Lesson(String),
@@ -1019,6 +1024,7 @@ impl NovoApp {
             Action::OpenCraneExample => self.leave_then(ctx, Leaving::CraneExample),
             Action::OpenPlcExample => self.leave_then(ctx, Leaving::PlcExample),
             Action::OpenPumpExample => self.leave_then(ctx, Leaving::PumpExample),
+            Action::NewCraneProject => self.leave_then(ctx, Leaving::CraneTemplate),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
             Action::Learn => self.learn_run_command("help.learn", None),
@@ -1194,6 +1200,7 @@ impl NovoApp {
             Leaving::CraneExample => self.open_crane_example(),
             Leaving::PlcExample => self.open_plc_example(),
             Leaving::PumpExample => self.open_pump_example(),
+            Leaving::CraneTemplate => self.new_crane_project(),
             Leaving::Practice => self.start_practice(),
             Leaving::Lesson(id) => self.start_lesson_now(&id),
             Leaving::Close => self.close_project(),
@@ -1999,6 +2006,7 @@ impl NovoApp {
         self.parts_window(&ctx);
         self.parts_bulk_dialog(&ctx);
         self.auto_assign_dialog(&ctx);
+        self.describe_recipes_dialog(&ctx);
         self.project_settings_dialog(&ctx);
         self.project_rules_dialog(&ctx);
         self.device_renumber_dialog(&ctx);
@@ -2250,6 +2258,14 @@ impl NovoApp {
     fn top_bar(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
         let fit = menu_bar::TopBarFit::at(self.window_width);
         let focus = self.menu_key_pressed(ui.ctx());
+        // The Help button asks for the menu at the Help area.
+        let help_asked = match self.wb.app_menu.open_at.take() {
+            Some(area) => {
+                self.wb.app_menu.area = area;
+                true
+            }
+            None => false,
+        };
         ui.horizontal_centered(|ui| {
             // F10 opens the app menu; with the menu words in the bar it moves the
             // focus to them instead.
@@ -2257,7 +2273,7 @@ impl NovoApp {
                 self.mark(ui, false);
                 self.menu_bar(ui, focus);
             } else {
-                self.mark(ui, focus);
+                self.mark(ui, focus || help_asked);
             }
             ui.separator();
             // Undo and redo leave the dock for the bar; where the menu words need the
@@ -2294,6 +2310,7 @@ impl NovoApp {
                     ui.weak(self.saved_state());
                 }
                 self.issue_pill(ui);
+                self.help_button(ui);
                 if fit.whats_new_pill {
                     self.whats_new_pill(ui);
                 }

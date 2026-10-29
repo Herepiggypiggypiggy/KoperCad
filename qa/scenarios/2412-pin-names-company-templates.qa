@@ -1,0 +1,32 @@
+@title Pin names: company templates typed in Project > Rules change what Check > Issues calls usual (1366x768)
+@area Schematic
+@sizes 1366x768
+# Project rules has a "Usual pin names" box. A class typed there replaces the built-in names for its symbol functions. Here motor.ac3 must have the brake pins BD1 BD2, so the motor row of Check > Issues says "brake motor" afterwards. The text is saved in the project as one undo step.
+open qa/fixtures/pin-names.kopercad
+wait 30
+key ctrl+k
+wait 10
+text rules
+wait 10
+key Return
+wait 20
+expect "Usual pin names"
+scroll 680 400 -600
+wait 10
+shot scrolled
+click 680 540
+wait 5
+text class = [{ id = 'motor.brake', label = 'brake motor', functions = ['motor.ac3'], set = [{ name = 'with brake', required = ['U1', 'V1', 'W1', 'BD1', 'BD2'] }] }]
+wait 10
+shot typed-and-read
+expect "1 class read"
+click_text "Save pin names"
+wait 10
+shot saved
+click_text "Done"
+wait 20
+click_text "2 warnings"
+wait 20
+shot issues-with-company-names
+expect "brake motor"
+check_layout
