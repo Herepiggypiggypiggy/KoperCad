@@ -9,6 +9,7 @@ pub mod check;
 pub mod collide;
 pub mod cutout_cards;
 pub mod drill;
+pub mod drill_plan;
 pub mod enclosure;
 pub mod heat;
 pub mod model;

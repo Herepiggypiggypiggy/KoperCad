@@ -768,6 +768,18 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl(
+        "sim.winches",
+        &["lieren"],
+        &[
+            "lier",
+            "synchroon",
+            "encoder",
+            "rem",
+            "gesloten lus",
+            "veiligheidsuitschakeling",
+        ],
+    ),
+    nl(
         "sim.motor_curves",
         &["frequentie"],
         &[
@@ -1309,6 +1321,11 @@ pub const DUTCH: &[Aliases] = &[
         "export.pdf_page",
         &["exporteer pagina", "deze pagina exporteren"],
         &["huidige pagina", "een pagina"],
+    ),
+    nl(
+        "export.drill_plan",
+        &["exporteer boorplan", "boorplan exporteren"],
+        &["boorplan", "handmatig boren"],
     ),
     nl(
         "export.plate_dxf",

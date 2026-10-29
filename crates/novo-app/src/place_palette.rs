@@ -298,6 +298,8 @@ pub(crate) enum Category {
     Start,
     /// The ready-made circuits (macros).
     Circuits,
+    /// One chapter of the circuit library (the macro folder `Circuits/3 Hoists`).
+    Chapter(String),
     /// One folder of the symbol library (`contacts`, `protection`).
     Library(String),
 }
@@ -357,9 +359,23 @@ pub(crate) fn category_icon(id: &str) -> Glyph {
         )
 }
 
-/// The category column for this library: Start, Circuits, then each folder
-/// of the library with its symbol count.
-pub(crate) fn category_lines(library: &Library, circuits: usize) -> Vec<CategoryLine> {
+/// The chapters of the circuit library as the category column lists them:
+/// the macro folder and how many circuits it holds, in folder order.
+pub(crate) fn chapters(macros: &[novo_workflow::palette::MacroEntry]) -> Vec<(String, usize)> {
+    let mut out: std::collections::BTreeMap<&str, usize> = Default::default();
+    for m in macros.iter().filter(|m| m.folder.starts_with("Circuits/")) {
+        *out.entry(m.folder.as_str()).or_default() += 1;
+    }
+    out.into_iter().map(|(f, n)| (f.to_owned(), n)).collect()
+}
+
+/// The category column for this library: Start, Circuits with one line per
+/// chapter, then each folder of the library with its symbol count.
+pub(crate) fn category_lines(
+    library: &Library,
+    circuits: usize,
+    chapters: &[(String, usize)],
+) -> Vec<CategoryLine> {
     let mut folders: std::collections::BTreeMap<&str, usize> = Default::default();
     for symbol in library.iter() {
         *folders.entry(symbol.category.as_str()).or_default() += 1;
@@ -379,6 +395,17 @@ pub(crate) fn category_lines(library: &Library, circuits: usize) -> Vec<Category
             count: Some(circuits),
         },
     ];
+    lines.extend(chapters.iter().map(|(folder, n)| {
+        CategoryLine {
+            category: Category::Chapter(folder.clone()),
+            name: folder
+                .strip_prefix("Circuits/")
+                .unwrap_or(folder)
+                .to_owned(),
+            icon: Glyph::Phosphor(novo_theme::icons::DOT_OUTLINE),
+            count: Some(*n),
+        }
+    }));
     lines.extend(folders.into_iter().map(|(id, n)| CategoryLine {
         category: Category::Library(id.to_owned()),
         name: category_name(id),
@@ -419,11 +446,16 @@ pub(crate) fn rows_for(
     let disabled = (!sources.context.has_page).then_some("No page is open");
     match category {
         Category::Start => base,
-        Category::Circuits => {
+        Category::Circuits | Category::Chapter(_) => {
             let query = query.trim().to_lowercase();
+            let chapter = match category {
+                Category::Chapter(folder) => Some(folder.as_str()),
+                _ => None,
+            };
             sources
                 .macros
                 .iter()
+                .filter(|m| chapter.is_none_or(|c| m.folder == c))
                 .filter(|m| {
                     query.is_empty()
                         || m.name.to_lowercase().contains(&query)
@@ -1121,9 +1153,39 @@ mod tests {
     }
 
     #[test]
+    fn each_circuit_chapter_is_a_line_that_shows_only_its_circuits() {
+        let entry = |name: &str, folder: &str| novo_workflow::palette::MacroEntry {
+            name: name.into(),
+            folder: folder.into(),
+            detail: String::new(),
+            words: String::new(),
+        };
+        let macros = vec![
+            entry("Starter one", "Starter"),
+            entry("Hoist a", "Circuits/3 Hoists"),
+            entry("Hoist b", "Circuits/3 Hoists"),
+            entry("Horn", "Circuits/7 Sensors and signalling"),
+        ];
+        let chapters = chapters(&macros);
+        assert_eq!(
+            chapters,
+            vec![
+                ("Circuits/3 Hoists".to_owned(), 2),
+                ("Circuits/7 Sensors and signalling".to_owned(), 1)
+            ]
+        );
+        let lines = category_lines(&library(), 4, &chapters);
+        assert_eq!(lines[2].name, "3 Hoists");
+        assert_eq!(
+            lines[2].category,
+            Category::Chapter("Circuits/3 Hoists".into())
+        );
+    }
+
+    #[test]
     fn every_folder_has_a_line_and_a_picture() {
         let lib = library();
-        let lines = category_lines(&lib, 3);
+        let lines = category_lines(&lib, 3, &[]);
         assert_eq!(lines[0].category, Category::Start);
         assert_eq!(lines[1].category, Category::Circuits);
         let folders = lines.len() - 2;

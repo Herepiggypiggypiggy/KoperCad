@@ -22,6 +22,7 @@ pub mod fault;
 pub mod feeder;
 pub mod inject;
 mod loads;
+pub mod machine;
 pub mod network;
 pub mod pins;
 mod plc;

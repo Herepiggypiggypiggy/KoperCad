@@ -1,0 +1,29 @@
+@title Winch scenarios: closed-loop hoist cycle, encoder loss and two synchronous winches
+@area Simulate
+# Lane L2c (docs/design/closed-loop-winch.md): Simulate > Winch scenarios.
+fresh
+wait 20
+key ctrl+k
+wait 3
+text Simulate winch scenarios
+wait 4
+key Enter
+wait 20
+expect "Winch scenarios"
+expect "Which numbers are exact and which are a model"
+shot cycle
+check_layout
+click_text "One winch: lift and lower cycle"
+wait 6
+click_text "Two winches: a drum is a little larger"
+wait 20
+expect "Drum B larger than entered"
+shot drum-error
+check_layout
+click_text "Two winches: a drum is a little larger"
+wait 6
+click_text "Two winches: one drive trips"
+wait 20
+expect "Link between the drives"
+shot drive-trips
+check_layout

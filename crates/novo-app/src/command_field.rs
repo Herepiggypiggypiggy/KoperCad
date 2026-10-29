@@ -210,7 +210,9 @@ impl CommandField {
         }
         let query_empty = self.open.as_ref()?.query.trim().is_empty();
         let lines = match (place, sources.library) {
-            (true, Some(library)) => pp::category_lines(library, sources.macros.len()),
+            (true, Some(library)) => {
+                pp::category_lines(library, sources.macros.len(), &pp::chapters(sources.macros))
+            }
             _ => Vec::new(),
         };
         let open = self.open.as_mut()?;

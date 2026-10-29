@@ -14,6 +14,7 @@ use novo_core::{
 use crate::drill::{
     CUTOUT_KEY, DeviceFeatures, DrillTable, HOLE_PATTERN_KEY, MOUNTING_KEY, features_from_text,
 };
+use crate::drill_plan::{BASIS_KEY, Basis, DrillPlan, plan};
 use crate::enclosure::{DEFAULT_DOOR_ANGLE_DEG, DEPTH_KEY, Door, Enclosure, Hinge};
 use crate::openings::{OPENING_PREFIX, Opening};
 use crate::plan::{Candidate, Plan, PlannedDuct};
@@ -642,6 +643,30 @@ pub fn plate_documents(
         .collect();
     let title = structure(project, id)?.tag.to_string();
     Some(documents(&title, &layout, &features))
+}
+
+/// The hand drilling plan of an enclosure; `None` when it has no plate. The
+/// origin of each device's data is read from its part's
+/// [`crate::drill_plan::BASIS_KEY`].
+pub fn drill_plan(project: &Project, id: StructureId, project_name: &str) -> Option<DrillPlan> {
+    let layout = load(project, id)?;
+    let mut basis = std::collections::HashMap::new();
+    let features: Vec<DeviceFeatures> = layout
+        .placements
+        .iter()
+        .filter_map(|p| project.get::<Device>(DeviceId::from(p.id)))
+        .map(|d| {
+            let f = features(project, d);
+            basis.insert(
+                f.label.clone(),
+                Basis::from_text(text_property(project, d, BASIS_KEY).as_deref()),
+            );
+            f
+        })
+        .collect();
+    let title = structure(project, id)?.tag.to_string();
+    let table = crate::drill::drill_table(&layout, &features);
+    Some(plan(project_name, &title, &layout, &table, &basis, true))
 }
 
 /// The 1:1 drilling template sheets and drill table of an enclosure; `None`

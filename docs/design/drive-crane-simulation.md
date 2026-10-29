@@ -288,3 +288,11 @@ set. Parameters of a real drive never appear in a drawing, so the defaults are g
 
 Where the user finds it: motor property sheet section "Drive hoist" (hook load turns the motor into a
 drive hoist), then Simulate > Drive run with Live on; the window lists the readings and what the run found.
+
+### Lane L2c as built (closed-loop hoists and synchronous winches)
+
+`novo_drive::closed_loop` holds the encoder hoist drive (torque control at zero speed, torque proof
+before brake release, load held under torque while the brake closes, STO, monitoring) and
+`novo_machine::sync_winch` two winches on one load with rope stretch, tilt and the three
+synchronisation modes. Design, hand cases and limits: `docs/design/closed-loop-winch.md`. UI:
+Simulate > Winch scenarios.
