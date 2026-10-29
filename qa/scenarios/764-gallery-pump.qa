@@ -1,11 +1,11 @@
 @title Example gallery: pump station
 @area Examples
-# File > Examples > Open example: pump station. Every page (reached with Ctrl+K), the cabinet and 3D.
+# File > Examples > Open example: pump system. Every page (reached with Ctrl+K), the cabinet and 3D.
 fresh
 wait 10
 key ctrl+k
 wait 6
-text pump station
+text example pump system
 wait 8
 key Enter
 wait 40
