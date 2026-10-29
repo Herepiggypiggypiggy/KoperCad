@@ -175,7 +175,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: controllers-addon
-          path: dist/controllers-*.kcaddon
+          path: target/addons/controllers-*.kcaddon
           retention-days: 14
 
   # One required check for branch protection and the merge leads: green only

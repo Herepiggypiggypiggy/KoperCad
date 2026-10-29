@@ -1,7 +1,7 @@
 @title Controller add-on: install the pack, open the radio panel, press start and a rocker
 @area Add-ons
 # Lane C3. Needs the built package: run scripts/build-controllers-addon.sh first (it writes
-# dist/controllers-0.1.0.kcaddon). The engine is novo-controller built to WebAssembly.
+# target/addons/controllers-0.1.0.kcaddon). The engine is novo-controller built to WebAssembly.
 click_text "Open example"
 wait 20
 key ctrl+k
@@ -10,7 +10,7 @@ text add-ons
 wait 8
 key Enter
 wait 10
-answer_dialog dist/controllers-0.1.0.kcaddon
+answer_dialog target/addons/controllers-0.1.0.kcaddon
 click_text "Install from file..."
 wait 10
 expect "I trust this file"

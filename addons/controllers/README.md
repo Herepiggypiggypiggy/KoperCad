@@ -14,9 +14,9 @@ that the program draws; the generic radio profile is data too. Guide to add-ons:
 
 ```
 rustup target add wasm32-unknown-unknown
-scripts/build-controllers-addon.sh          # engine.wasm (cap 4 MiB) and dist/controllers-<version>.kcaddon
+scripts/build-controllers-addon.sh          # engine.wasm (cap 4 MiB) and target/addons/controllers-<version>.kcaddon
 cargo test -p novo-tests --test controllers_addon -- --nocapture   # the package, installed and driven through the host
-kopercad-cli addons install dist/controllers-0.1.0.kcaddon --trust-unsigned
+kopercad-cli addons install target/addons/controllers-0.1.0.kcaddon --trust-unsigned
 ```
 
 CI job `controllers add-on` does the same on every pull request that touches an add-on part and

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the controller add-on: engine.wasm (novo-controller behind host API 1) and the
-# package dist/controllers-<version>.kcaddon. Used by CI and by hand; needs the Rust target
+# package target/addons/controllers-<version>.kcaddon. Used by CI and by hand; needs the Rust target
 # wasm32-unknown-unknown (rustup target add wasm32-unknown-unknown). No admin rights needed.
 #
 #   scripts/build-controllers-addon.sh            # unsigned package
@@ -11,7 +11,7 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 engine="$root/addons/controllers/engine"
 stage="${CONTROLLERS_STAGE:-$(mktemp -d)}"
-dist="${CONTROLLERS_DIST:-$root/dist}"
+dist="${CONTROLLERS_DIST:-$root/target/addons}"
 mkdir -p "$stage" "$dist"
 
 cargo build --release --locked --target wasm32-unknown-unknown --manifest-path "$engine/Cargo.toml" --target-dir "$engine/target"

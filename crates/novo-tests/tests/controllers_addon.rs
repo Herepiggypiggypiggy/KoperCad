@@ -2,7 +2,7 @@
 //! packed by `scripts/build-controllers-addon.sh`, installed into a store and driven through the
 //! add-on host, as the program does it.
 //!
-//! The package is built by CI (job `controllers-addon`) and found in `dist/`, or at the path in
+//! The package is built by CI (job `controllers-addon`) and found in `target/addons/`, or at the path in
 //! `KOPERCAD_CONTROLLERS_PACK`. Without a package the tests pass with a note, unless
 //! `KOPERCAD_REQUIRE_CONTROLLERS_PACK` is set (CI sets it), so `cargo test --workspace` does not
 //! need the wasm32 target.
@@ -16,7 +16,7 @@ fn pack_path() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("KOPERCAD_CONTROLLERS_PACK") {
         return Some(PathBuf::from(p));
     }
-    let dist = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist");
+    let dist = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/addons");
     std::fs::read_dir(dist)
         .ok()?
         .flatten()
