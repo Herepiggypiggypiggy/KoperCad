@@ -396,8 +396,10 @@ impl NovoApp {
                 &set,
                 root.as_deref(),
                 can_store,
-                &stopped,
-                &load,
+                &Engines {
+                    stopped: &stopped,
+                    load: &load,
+                },
                 &mut actions,
             );
         });
@@ -734,14 +736,19 @@ fn trust_look(trust: &Trust, accepted: bool) -> (String, Tone, &'static str) {
 /// Per running engine: calls so far, most steps one call used, steps one call may use.
 type EngineLoad = BTreeMap<String, (u64, u64, u64)>;
 
+/// What the running engines look like to Details: why one stopped, and what each has used.
+struct Engines<'a> {
+    stopped: &'a BTreeMap<String, String>,
+    load: &'a EngineLoad,
+}
+
 fn manager_ui(
     ui: &mut egui::Ui,
     m: &mut Manager,
     set: &AddonSet,
     root: Option<&std::path::Path>,
     can_store: bool,
-    stopped: &BTreeMap<String, String>,
-    load: &EngineLoad,
+    engines: &Engines,
     actions: &mut Vec<Act>,
 ) {
     let p = crate::theme::ui_palette();
@@ -802,7 +809,7 @@ fn manager_ui(
             egui::vec2(ui.available_width(), full.y),
             egui::Layout::top_down(egui::Align::Min),
             |ui| match m.selected.as_ref().and_then(|id| set.get(id)) {
-                Some(entry) => details_ui(ui, m, entry, root, stopped.get(&entry.id).map(String::as_str), load.get(&entry.id).copied(), actions),
+                Some(entry) => details_ui(ui, m, entry, root, engines.stopped.get(&entry.id).map(String::as_str), engines.load.get(&entry.id).copied(), actions),
                 None if set.entries.is_empty() => widgets::empty_state(
                     ui,
                     EmptySize::Panel,
