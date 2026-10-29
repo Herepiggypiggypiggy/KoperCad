@@ -248,7 +248,11 @@ fn divider(
             egui::CursorIcon::ResizeVertical,
         ),
     };
-    let response = ui.interact(grip, id.with(("divider", at)), egui::Sense::click_and_drag());
+    let response = ui.interact(
+        grip,
+        id.with(("divider", at)),
+        egui::Sense::click_and_drag(),
+    );
     if response.hovered() || response.dragged() {
         ctx.set_cursor_icon(icon);
         let pal = crate::theme::ui_palette();
@@ -895,8 +899,14 @@ mod tests {
         let after = h.settle(TWO);
         let (a0, b0) = (before.panels[0].unwrap(), before.panels[1].unwrap());
         let (a1, b1) = (after.panels[0].unwrap(), after.panels[1].unwrap());
-        assert!((a1.height() - a0.height() - 80.0).abs() < 3.0, "{a0:?} {a1:?}");
-        assert!((b0.height() - b1.height() - 80.0).abs() < 3.0, "{b0:?} {b1:?}");
+        assert!(
+            (a1.height() - a0.height() - 80.0).abs() < 3.0,
+            "{a0:?} {a1:?}"
+        );
+        assert!(
+            (b0.height() - b1.height() - 80.0).abs() < 3.0,
+            "{b0:?} {b1:?}"
+        );
     }
 
     #[test]
@@ -907,7 +917,11 @@ mod tests {
         let after = h.settle(TWO);
         let b = after.panels[1].unwrap();
         assert!(b.height() >= PANE_MIN_HEIGHT - 2.0, "{b:?}");
-        h.drag(TWO, egui::pos2(at.x, after.panels[0].unwrap().bottom() - 3.0), egui::pos2(at.x, 0.0));
+        h.drag(
+            TWO,
+            egui::pos2(at.x, after.panels[0].unwrap().bottom() - 3.0),
+            egui::pos2(at.x, 0.0),
+        );
         let after = h.settle(TWO);
         assert!(after.panels[0].unwrap().height() >= PANE_MIN_HEIGHT - 2.0);
     }
@@ -932,6 +946,9 @@ mod tests {
         set_weights(&ctx, Slot::Left, vec![0.7, 0.3]);
         assert_eq!(weights(&ctx, Slot::Left, 2), vec![0.7, 0.3]);
         let three = weights(&ctx, Slot::Left, 3);
-        assert!(three.iter().all(|w| (w - 1.0 / 3.0).abs() < 1e-6), "{three:?}");
+        assert!(
+            three.iter().all(|w| (w - 1.0 / 3.0).abs() < 1e-6),
+            "{three:?}"
+        );
     }
 }
