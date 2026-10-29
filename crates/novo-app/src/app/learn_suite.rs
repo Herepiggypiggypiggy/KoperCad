@@ -67,7 +67,16 @@ impl NovoApp {
         let mut reset = false;
         let first_frame = !self.learn.window_drawn;
         self.learn.window_drawn = true;
-        super::panel::dialog(ctx, title, [980.0, 640.0])
+        let mut window = super::panel::dialog(ctx, title, [980.0, 640.0]);
+        // The window is held inside the screen, so a shrink squeezes its
+        // remembered size and a later growth leaves it a sliver. When the
+        // screen grows, it starts again at its default size for that frame.
+        if let Some(size) = super::panel::dialog_default_size(ctx, [980.0, 640.0])
+            && screen_grew(ctx)
+        {
+            window = window.fixed_size(size);
+        }
+        window
             .id(super::panel::keep_id(ctx, egui::Id::new("learn_window")))
             .open(super::panel::esc(ctx, &mut open))
             .pivot(egui::Align2::CENTER_CENTER)
@@ -1201,6 +1210,15 @@ fn status_badge(ui: &mut egui::Ui, standing: &Standing, number: Option<usize>) {
             }
         }
     }
+}
+
+/// Whether the screen is larger than last frame in either direction.
+fn screen_grew(ctx: &egui::Context) -> bool {
+    let size = ctx.content_rect().size();
+    let id = egui::Id::new("learn_screen_size_seen");
+    let seen = ctx.data(|d| d.get_temp::<egui::Vec2>(id));
+    ctx.data_mut(|d| d.insert_temp(id, size));
+    seen.is_some_and(|s| size.x > s.x + 0.5 || size.y > s.y + 0.5)
 }
 
 #[cfg(test)]
