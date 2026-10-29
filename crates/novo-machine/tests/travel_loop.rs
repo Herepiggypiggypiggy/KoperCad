@@ -89,6 +89,17 @@ fn load_arithmetic_is_the_closed_form() {
 }
 
 #[test]
+fn products_that_overflow_are_refused_not_run() {
+    // Each value is finite, the derived inertia or torque is not.
+    assert!(TravelLoad::new(5000.0, 1e300, 30.0, 0.9, 0.01, 0.0, 0.0).is_err());
+    assert!(TravelLoad::new(5000.0, 0.15, 1e-300, 0.9, 0.01, 0.0, 0.0).is_err());
+    assert!(TravelLoad::new(5000.0, 0.15, 30.0, 1e-300, 0.01, 0.0, 0.0).is_err());
+    assert!(TravelLoad::new(5000.0, 0.15, 30.0, 0.9, 1e300, 0.0, 0.0).is_err());
+    assert!(TravelLoad::new(5000.0, 0.15, 30.0, 0.9, 0.01, 1e300, 0.0).is_err());
+    assert!(TravelLoad::new(1e300, 0.15, 1e-30, 0.9, 0.01, 0.0, 0.0).is_err());
+}
+
+#[test]
 fn bad_load_data_is_refused() {
     assert!(TravelLoad::new(0.0, 0.15, 30.0, 0.9, 0.01, 0.0, 0.0).is_err());
     assert!(TravelLoad::new(10.0, 0.15, 30.0, 1.2, 0.01, 0.0, 0.0).is_err());

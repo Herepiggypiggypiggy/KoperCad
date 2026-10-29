@@ -26,6 +26,10 @@ use crate::cosim::StepConfig;
 use crate::hoist_loop::{BindingFinding, LimitSwitch};
 use crate::port::CircuitPort;
 
+/// Largest derived load number accepted (inertia, torque, speed factor): far beyond any crane,
+/// far below overflow.
+const MAX_DERIVED: f64 = 1.0e12;
+
 /// Standard gravity, m/s2.
 const G: f64 = novo_drive::GRAVITY;
 
@@ -73,7 +77,7 @@ impl TravelLoad {
                 field: "wind_force_n",
             });
         }
-        Ok(Self {
+        let load = Self {
             mass_kg,
             wheel_radius_m,
             ratio,
@@ -81,7 +85,30 @@ impl TravelLoad {
             rolling_coeff,
             wind_force_n,
             motor_inertia_kg_m2,
-        })
+        };
+        // Each value is finite, but a product of extreme ones can still overflow.
+        for (field, value) in [
+            ("metres_per_rad", load.metres_per_rad()),
+            ("inertia_kg_m2", load.inertia_kg_m2()),
+            ("rolling_torque_nm", load.rolling_torque_nm()),
+            ("wind_torque_nm", load.wind_force_n * load.metres_per_rad()),
+        ] {
+            if !value.is_finite() || value.abs() > MAX_DERIVED {
+                return Err(InputError::OutOfRange {
+                    field,
+                    value,
+                    min: -MAX_DERIVED,
+                    max: MAX_DERIVED,
+                });
+            }
+        }
+        if load.metres_per_rad() <= 0.0 || load.inertia_kg_m2() <= 0.0 {
+            return Err(InputError::NotPositive {
+                field: "inertia_kg_m2",
+                value: load.inertia_kg_m2(),
+            });
+        }
+        Ok(load)
     }
 
     /// Metres per second per rad/s of motor speed: `r / i`.
@@ -162,6 +189,7 @@ pub struct TravelModule {
     position_m: f64,
     feedback: (f64, f64),
     snapshot: Option<TravelSnapshot>,
+    fault: Option<String>,
 }
 
 impl TravelModule {
@@ -182,6 +210,7 @@ impl TravelModule {
             position_m: 0.0,
             feedback: (0.0, 0.0),
             snapshot: None,
+            fault: None,
         }
     }
 
@@ -192,6 +221,12 @@ impl TravelModule {
     /// Motor speed in rpm (signed).
     pub fn rpm(&self) -> f64 {
         self.omega * 60.0 / TAU
+    }
+
+    /// Why this module stopped, if it did: the engine refused a number in the run. A stopped
+    /// module keeps its last snapshot and no longer moves; the rest of the loop runs on.
+    pub fn fault(&self) -> Option<&str> {
+        self.fault.as_deref()
     }
 
     /// The last tick's numbers, `None` before the first tick.
@@ -289,6 +324,9 @@ impl TravelLoop {
         }
         circuit.settle(dt);
         for m in &mut self.modules {
+            if m.fault.is_some() {
+                continue;
+            }
             let di: Vec<bool> = m
                 .binding
                 .inputs
@@ -314,14 +352,20 @@ impl TravelLoop {
                 Direction::Positive
             };
             let volts = if out.running { out.voltage_v } else { 0.0 };
-            let supply = Supply::new(out.frequency_hz.abs(), volts.max(0.0), direction)
-                .expect("drive outputs are finite and not negative");
             let inertia = m.load.inertia_kg_m2();
             let load = m.load;
-            let step = m
-                .motor
-                .step_shaft(&mut m.omega, &supply, inertia, dt, |w| load.torque_nm(w))
-                .expect("inertia and step are validated positive");
+            let stepped =
+                Supply::new(out.frequency_hz.abs(), volts.max(0.0), direction).and_then(|supply| {
+                    m.motor
+                        .step_shaft(&mut m.omega, &supply, inertia, dt, |w| load.torque_nm(w))
+                });
+            let step = match stepped {
+                Ok(step) => step,
+                Err(why) => {
+                    m.fault = Some(format!("the run stopped: {why}"));
+                    continue;
+                }
+            };
             m.feedback = (step.point.stator_current_a, step.point.input_power_w);
             let v = m.omega * m.load.metres_per_rad();
             m.position_m += v * dt;

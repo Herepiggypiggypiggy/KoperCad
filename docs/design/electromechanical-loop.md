@@ -73,7 +73,7 @@ Part 3 order of a tick (`novo_machine::travel_loop`): limit contacts from the la
 circuit settles, the drive reads its inputs and mains from the circuit, `Drive::step` runs with
 the motor current and power of the previous tick, the induction motor runs the shaft under the
 drive's frequency and voltage and the wheel load. The drive replaces the contactors: its output
-terminals are not traced through the drawing. Not built: travel brake, stiction, skew, sway,
+terminals are not traced through the drawing. Not built: drivetrain efficiency only against the motion (not in the driven direction), gearbox and wheel inertia beyond the rotor and the reflected mass, wind that grows with speed, travel brake, stiction, skew, sway,
 a drawn drive symbol with parameters (the drive is configured from the motor's property sheet).
 
 ## Tests (written first)
