@@ -958,7 +958,7 @@ mod tests {
             ("View", 65),
             ("Check", 11),
             ("Reports", 30),
-            ("Simulate", 24),
+            ("Simulate", 25), // Hoist in 3D (#1724): the window opens from a running simulation, so it needs the menu row beside Hoist run
             ("Help", 19),
         ];
         let mut total = 0;
@@ -976,7 +976,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 306, "the menus hold {total} rows");
+        assert!(total <= 307, "the menus hold {total} rows");
     }
 
     #[test]
