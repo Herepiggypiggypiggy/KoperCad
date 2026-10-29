@@ -461,6 +461,99 @@ pub fn check_pins(function: &str, pins: &[&str]) -> Option<Deviation> {
     })
 }
 
+/// Pins to rename so that a pin list follows the template of its class.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Renames {
+    /// The valid set the names are renamed to.
+    pub set: String,
+    /// `(old, new)` for each pin to rename.
+    pub renames: Vec<(String, String)>,
+}
+
+fn squash(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_uppercase())
+        .collect()
+}
+
+/// The renames that bring `pins` to the closest valid set of the template
+/// of `function`, or `None` when there is nothing to rename (the pins already
+/// follow it, or the function has no template) or when the right names cannot
+/// be told with certainty.
+///
+/// A pin is renamed only where the match is clear: an unusual name that
+/// differs from a missing one only in case, spacing or punctuation (`a1`,
+/// `U 1`), a name the missing one starts with (`U` for `U1`) when that is the
+/// only candidate, or the single unusual pin against the single missing one.
+/// Several guesses by position are never made, and every missing pin must be
+/// covered, so a rename never leaves the pins half way.
+pub fn suggest_renames(function: &str, pins: &[&str]) -> Option<Renames> {
+    let dev = check_pins(function, pins)?;
+    if dev.missing.is_empty() || dev.unexpected.len() < dev.missing.len() {
+        return None;
+    }
+    let mut missing = dev.missing.clone();
+    let mut unexpected = dev.unexpected.clone();
+    let mut renames: Vec<(String, String)> = Vec::new();
+    let mut take =
+        |old: &str, new: &str, missing: &mut Vec<String>, unexpected: &mut Vec<String>| {
+            renames.push((old.to_owned(), new.to_owned()));
+            missing.retain(|m| m != new);
+            unexpected.retain(|u| u != old);
+        };
+    // Same letters and digits.
+    for m in missing.clone() {
+        let hits: Vec<String> = unexpected
+            .iter()
+            .filter(|u| squash(u) == squash(&m))
+            .cloned()
+            .collect();
+        if let [one] = hits.as_slice() {
+            take(one, &m, &mut missing, &mut unexpected);
+        }
+    }
+    // The unusual name is the start of exactly one missing name.
+    for u in unexpected.clone() {
+        let hits: Vec<String> = missing
+            .iter()
+            .filter(|m| squash(m).starts_with(&squash(&u)) && !squash(&u).is_empty())
+            .cloned()
+            .collect();
+        let rivals = unexpected
+            .iter()
+            .filter(|o| squash(&hits.first().cloned().unwrap_or_default()).starts_with(&squash(o)))
+            .count();
+        if let [one] = hits.as_slice()
+            && rivals == 1
+        {
+            take(&u, one, &mut missing, &mut unexpected);
+        }
+    }
+    // One left on each side.
+    if let ([m], [u]) = (missing.clone().as_slice(), unexpected.clone().as_slice()) {
+        take(u, m, &mut missing, &mut unexpected);
+    }
+    if !missing.is_empty() {
+        return None;
+    }
+    // The renamed list must now follow the template.
+    let renamed: Vec<String> = pins
+        .iter()
+        .map(|p| {
+            renames
+                .iter()
+                .find(|(old, _)| old == p)
+                .map_or((*p).to_owned(), |(_, new)| new.clone())
+        })
+        .collect();
+    let renamed: Vec<&str> = renamed.iter().map(String::as_str).collect();
+    check_pins(function, &renamed).is_none().then_some(Renames {
+        set: dev.closest,
+        renames,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -501,6 +594,23 @@ mod tests {
     fn longest_function_wins() {
         assert_eq!(template_for("coil.brake").unwrap().class, "coil.brake");
         assert_eq!(template_for("coil.timer.on_delay").unwrap().class, "coil");
+    }
+
+    #[test]
+    fn renames_only_where_the_match_is_clear() {
+        let r = suggest_renames("motor.ac3", &["U", "V", "W", "PE"]).unwrap();
+        assert_eq!(
+            r.renames,
+            [("U", "U1"), ("V", "V1"), ("W", "W1")].map(|(a, b)| (a.to_owned(), b.to_owned()))
+        );
+        let r = suggest_renames("coil.relay", &["a1", "A2"]).unwrap();
+        assert_eq!(r.renames, [("a1".to_owned(), "A1".to_owned())]);
+        let r = suggest_renames("coil.relay", &["A1", "B2"]).unwrap();
+        assert_eq!(r.renames, [("B2".to_owned(), "A2".to_owned())]);
+        // Following the template, no template, or a guess by position.
+        assert!(suggest_renames("coil.relay", &["A1", "A2"]).is_none());
+        assert!(suggest_renames("contact.no", &["x", "y"]).is_none());
+        assert!(suggest_renames("transformer.1ph", &["P", "Q", "R", "S"]).is_none());
     }
 
     #[test]
