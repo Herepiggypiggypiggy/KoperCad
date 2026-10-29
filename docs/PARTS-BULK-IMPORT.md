@@ -84,10 +84,11 @@ recognised by the codes in their columns, not by file or column names, because
 those differ between releases. A code the release does not know stays as it is,
 and the report says how many codes were not translated and what to do.
 
-**Not verified against a real file.** The BMEcat reader and the ETIM reader were
-written from the public format descriptions and tested on made-up files in both
-BMEcat versions and in the table layouts above. No real maker file or ETIM release
-has been read yet. Put the first real files in `inbox` and run with `--dry-run`:
+**Partly verified against real files.** The ETIM reader has read the real ETIM 10.0
+ALL-SECTORS CSV release (17195 features, 16163 values, 188 units, 5640 classes;
+its tables are UTF-16 without a byte order mark, which is now read). The BMEcat
+reader was written from the public format descriptions and tested on made-up
+files in both BMEcat versions. No real maker BMEcat file has been read yet. Put the first real files in `inbox` and run with `--dry-run`:
 what the report lists under "did not map" or "not translated" is what to fix.
 
 ## What it does
