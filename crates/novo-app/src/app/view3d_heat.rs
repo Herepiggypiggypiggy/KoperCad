@@ -117,6 +117,7 @@ pub(super) fn show(
     })
     .height(420.0)
     .above_card()
+    .dockable()
     .scroll_bar_always()
     .show(ctx, |ui| {
         // The same state the Cabinet strip reads: progress, stage, failure.

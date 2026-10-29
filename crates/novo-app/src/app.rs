@@ -203,6 +203,7 @@ mod outline_items;
 mod outline_tree;
 mod pages;
 mod panel;
+mod panel_dock;
 #[cfg(test)]
 mod panel_windows_tests;
 mod part_picker;
@@ -1814,6 +1815,9 @@ impl NovoApp {
         }
         self.sync_commissioning_workspace();
         self.drawer(ui);
+        // Panels the person docked at an edge of the canvas take their strip here, so
+        // the canvas is what is left.
+        panel_dock::spacers(ui);
         // The canvases paint their own ground; the Reports tables and the
         // Cabinet toolbar sit on the theme's surfaces, not on the bare window.
         let pal = novo_theme::Palette::of_ctx(&ctx);
