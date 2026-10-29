@@ -311,6 +311,57 @@ fn the_pinned_pages_column_moves_to_the_right_side_and_back() {
     assert!(panel_rect(&d, "outline").is_some());
 }
 
+#[test]
+fn the_pages_column_docks_as_a_pane_of_a_strip_with_other_panels() {
+    let (_dir, mut d) = open_project();
+    d.app.settings.outline_pinned = Some(true);
+    settle(&mut d);
+    assert!(panel_rect(&d, "outline").is_some());
+    // Docked: no column, a pane in the left strip, the canvas to its right.
+    super::panel_dock::set(
+        &d.ctx,
+        super::panel_dock::PAGES,
+        Some(super::panel_dock::Slot::Left),
+    );
+    settle(&mut d);
+    let strip = panel_rect(&d, "dock_left").expect("the left strip");
+    let pane = rect_of(&d, egui::Id::new("pages_pane").with("docked")).expect("the pages pane");
+    assert!(
+        strip.width() > 200.0 && pane.width() > 200.0,
+        "{strip:?} {pane:?}"
+    );
+    assert!(pane.height() > 300.0, "{pane:?}");
+    // The header buttons send it to the right strip, and back to the column.
+    super::panel_dock::set(
+        &d.ctx,
+        super::panel_dock::PAGES,
+        Some(super::panel_dock::Slot::Right),
+    );
+    settle(&mut d);
+    let strip = panel_rect(&d, "dock_right").expect("the right strip");
+    assert!(strip.right() > SIZE.x - 2.0, "{strip:?}");
+    super::panel_dock::set(&d.ctx, super::panel_dock::PAGES, None);
+    settle(&mut d);
+    assert!(
+        d.app.wb.outline_shown.is_some_and(|w| w > 100.0),
+        "back in its column"
+    );
+    // Reset panel layout floats a docked Pages again.
+    super::panel_dock::set(
+        &d.ctx,
+        super::panel_dock::PAGES,
+        Some(super::panel_dock::Slot::Bottom),
+    );
+    settle(&mut d);
+    assert_eq!(
+        super::panel_dock::pages_docked(&d.ctx),
+        Some(super::panel_dock::Slot::Bottom)
+    );
+    panel::reset_layout(&d.ctx);
+    settle(&mut d);
+    assert_eq!(super::panel_dock::pages_docked(&d.ctx), None);
+}
+
 /// The rule for new code: no window that is neither movable nor resizable.
 /// Every floating panel goes through `panel.rs`; the few raw `egui::Area`s
 /// that remain are not windows (hover tips, toasts, the radial wheel,

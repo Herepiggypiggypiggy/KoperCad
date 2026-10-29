@@ -1818,6 +1818,13 @@ impl NovoApp {
             .show(ui, |ui| self.top_bar(ui, &mut picked));
         self.status_bar(ui);
         let reports = self.workspace() == workspace::Workspace::Reports && self.is_open();
+        // Pages docked as a pane of a strip is drawn below, with the strips; not
+        // at the Commissioning tablet view, whose wide touch column stays a column.
+        let pages_docked = pinned
+            && self.is_open()
+            && !reports
+            && !self.commissioning_tablet()
+            && panel_dock::pages_docked(&ctx).is_some();
         // The tool rail: the leftmost panel of the Schematic, Cabinet, 3D,
         // Reports and Commissioning workspaces.
         let rail_workspace = self.workspace();
@@ -1855,7 +1862,7 @@ impl NovoApp {
                 .size_range(OUTLINE_MIN_WIDTH..=OUTLINE_MAX_WIDTH)
                 .resizable(true)
                 .show(ui, |ui| self.reports_list(ui));
-        } else if pinned && self.is_open() {
+        } else if pinned && self.is_open() && !pages_docked {
             // The edge is dragged to the width the person wants; the Commissioning
             // tablet view keeps its wide touch column.
             // (The tablet column has an id of its own, so the width the person
@@ -1888,6 +1895,24 @@ impl NovoApp {
         // Panels the person docked at an edge of the canvas take their strip here, so
         // the canvas is what is left.
         panel_dock::spacers(ui);
+        if pages_docked && let Some(slot) = panel_dock::pages_docked(&ctx) {
+            let shown = panel_dock::show_docked(
+                &ctx,
+                egui::Id::new("pages_pane"),
+                panel_dock::PAGES,
+                self.outline_mode.label(),
+                slot,
+                panel_dock::PaneOptions {
+                    closable: false,
+                    float_tip: "Back to the Pages column",
+                    scrolls: false,
+                },
+                |ui| self.outline(ui, &mut picked),
+            );
+            if let Some(shown) = shown {
+                self.wb.outline_shown = Some(shown.response.rect.width().round());
+            }
+        }
         // The canvases paint their own ground; the Reports tables and the
         // Cabinet toolbar sit on the theme's surfaces, not on the bare window.
         let pal = novo_theme::Palette::of_ctx(&ctx);
@@ -2516,7 +2541,8 @@ impl NovoApp {
                 {
                     picked.push(Action::PinOutline);
                 }
-                if pinned {
+                if pinned && panel_dock::pages_docked(ui.ctx()).is_none() {
+                    panel_dock::pages_dock_button(ui);
                     panel_dock::navigator_side_button(ui);
                 }
             });

@@ -655,6 +655,7 @@ pub(super) fn panel(
         .height(720.0)
         .above_card()
         .fit()
+        .dockable()
         .show(ctx, |ui| {
             // Stays clear of the lesson card in the corner, so its chips and
             // cards are never under it.
