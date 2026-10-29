@@ -546,8 +546,12 @@ fn every_section_starts_a_page_and_empty_reports_get_one() {
     let setup = PageSetup::default();
     for output in generate_all(empty.project()) {
         let pages = paginate(&output, &setup);
-        assert_eq!(pages.len(), 1, "{}", output.title);
-        assert_eq!(pages[0].rows, 0..0);
+        // The front matter has a (filled) sheet for each of its five sections.
+        let sheets = if output.report == "front" { 5 } else { 1 };
+        assert_eq!(pages.len(), sheets, "{}", output.title);
+        if sheets == 1 {
+            assert_eq!(pages[0].rows, 0..0);
+        }
         let layout = layout_page(&output, &pages[0], &setup);
         assert!(
             layout
@@ -598,7 +602,8 @@ fn xlsx_round_trips() {
             "Cable schedule",
             "Plug connection list",
             "Labels",
-            "Single-line diagram"
+            "Single-line diagram",
+            "Front matter"
         ]
     );
     // Cell by cell for the one-table sheets (a sheet with several sections

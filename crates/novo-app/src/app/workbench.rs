@@ -103,6 +103,9 @@ pub(crate) struct Workbench {
     pub(super) macro_editor: super::macro_editor::MacroEditor,
     /// The Project settings window (drawing standard) is open.
     pub(super) project_settings: bool,
+    /// The Project information fields while the Project settings window is
+    /// open: typed text, saved when a field loses focus.
+    pub(super) project_info: Option<Vec<String>>,
     /// The Issue revision window, while it is open.
     pub(super) issue: Option<super::revisions::IssueDraft>,
     pub(super) restore_ask: Option<super::revisions::RestoreAsk>,
@@ -358,6 +361,7 @@ impl Default for Workbench {
             macro_place: Default::default(),
             macro_editor: Default::default(),
             project_settings: false,
+            project_info: None,
             issue: None,
             restore_ask: None,
             handover_ask: None,
