@@ -1596,7 +1596,14 @@ impl NovoApp {
                 self.export_aml();
             }
             "file.import_aml" => self.import_aml(),
-            "file.import_controller" => self.open_controller_import(),
+            "file.import_controller" => {
+                // Also reached from Ctrl+K and scripts, not only the menu row that greys.
+                if self.addon_enabled(super::addons::CONTROLLERS_ADDON) {
+                    self.open_controller_import();
+                } else {
+                    self.message(Level::Info, super::addons::CONTROLLERS_NEEDED);
+                }
+            }
             "addons.manage" => self.open_addons(),
             "file.import_crane" => self.import_crane(),
             "file.import_eplan" => self.import_eplan(),

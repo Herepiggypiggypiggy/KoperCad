@@ -316,6 +316,9 @@ impl NovoApp {
             return Some("This page has no DXF background");
         }
         match info.id {
+            "file.import_controller" if !self.addon_enabled(super::addons::CONTROLLERS_ADDON) => {
+                return Some(super::addons::CONTROLLERS_NEEDED);
+            }
             "proposal.accept" if self.page_proposals().is_empty() => {
                 return Some("No proposal on this page");
             }
