@@ -98,6 +98,9 @@ pub(super) fn slot_of(ctx: &egui::Context, name: &str) -> Option<Slot> {
 
 /// Docks the panel in `slot` (at the end of it), or floats it with `None`.
 pub(super) fn set(ctx: &egui::Context, name: &str, slot: Option<Slot>) {
+    if slot_of(ctx, name) != slot {
+        ctx.data_mut(|d| d.insert_temp(changed_id(), SETTLE_FRAMES));
+    }
     let mut all = list(ctx);
     all.retain(|(n, _)| n != name);
     if let Some(slot) = slot {
@@ -107,8 +110,32 @@ pub(super) fn set(ctx: &egui::Context, name: &str, slot: Option<Slot>) {
     ctx.request_repaint();
 }
 
+fn changed_id() -> egui::Id {
+    egui::Id::new("dock_changed")
+}
+
+/// Frames between a dock change and the refit: the strip appears a pass or two
+/// after the panel asks for it, and the fit must see the canvas at its new size.
+const SETTLE_FRAMES: u8 = 4;
+
+/// True once, a few frames after a panel was docked, moved to another slot or
+/// floated: the canvas has a different size by then, so the app fits the view
+/// again (the sheet would otherwise sit partly under the strip).
+pub(super) fn take_changed(ctx: &egui::Context) -> bool {
+    let left = ctx.data(|d| d.get_temp::<u8>(changed_id())).unwrap_or(0);
+    if left == 0 {
+        return false;
+    }
+    ctx.data_mut(|d| d.insert_temp(changed_id(), left - 1));
+    ctx.request_repaint();
+    left == 1
+}
+
 /// Floats every panel (Reset panel layout).
 pub(super) fn reset(ctx: &egui::Context) {
+    if !list(ctx).is_empty() {
+        ctx.data_mut(|d| d.insert_temp(changed_id(), SETTLE_FRAMES));
+    }
     ctx.data_mut(|d| d.insert_persisted(list_id(), Vec::<(String, u8)>::new()));
 }
 
@@ -679,6 +706,32 @@ mod tests {
             (moved.min - home.min).length() > 100.0,
             "{home:?} {moved:?}"
         );
+    }
+
+    #[test]
+    fn a_change_of_slot_asks_for_one_refit_a_few_frames_later() {
+        let mut h = Harness::new();
+        let ctx = h.ctx.clone();
+        assert!(!take_changed(&ctx), "nothing changed yet");
+        set(&ctx, "dock_test_a", Some(Slot::Left));
+        let mut asked = Vec::new();
+        for _ in 0..8 {
+            asked.push(take_changed(&ctx));
+        }
+        assert_eq!(asked.iter().filter(|a| **a).count(), 1, "{asked:?}");
+        assert!(
+            !asked[0],
+            "not on the same frame: the strip is not there yet"
+        );
+        // The same slot again changes nothing; floating does.
+        set(&ctx, "dock_test_a", Some(Slot::Left));
+        assert!((0..8).all(|_| !take_changed(&ctx)));
+        set(&ctx, "dock_test_a", None);
+        assert!((0..8).any(|_| take_changed(&ctx)));
+        // Reset panel layout with nothing docked asks for nothing.
+        reset(&ctx);
+        assert!((0..8).all(|_| !take_changed(&ctx)));
+        let _ = &mut h;
     }
 
     #[test]

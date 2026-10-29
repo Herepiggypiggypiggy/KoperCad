@@ -1775,6 +1775,10 @@ impl NovoApp {
         self.window_width = ctx.content_rect().width();
         self.window_height = ctx.content_rect().height();
         self.sync_panels(&ctx);
+        if panel_dock::take_changed(&ctx) {
+            // The canvas got another size: fit the drawing into what is left.
+            self.canvas.zoom_to_fit();
+        }
         panel::splitters_reset(&ctx);
         self.follow_window(self.window_width, self.window_height);
         let pinned = self.outline_pinned() && !self.focus_mode;
