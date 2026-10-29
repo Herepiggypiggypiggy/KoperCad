@@ -238,6 +238,8 @@ mod project_rules;
 mod project_settings;
 mod protection;
 mod rail;
+mod rail_3d;
+mod rail_cabinet;
 mod rail_schematic;
 mod reports;
 mod reports_view;
@@ -438,6 +440,8 @@ mod print_preview_tests;
 mod protection_tests;
 #[cfg(test)]
 mod rail_tests;
+#[cfg(test)]
+mod rail_workspaces_tests;
 #[cfg(test)]
 mod read_only_tests;
 #[cfg(test)]
@@ -1789,10 +1793,23 @@ impl NovoApp {
             .show(ui, |ui| self.top_bar(ui, &mut picked));
         self.status_bar(ui);
         let reports = self.workspace() == workspace::Workspace::Reports && self.is_open();
-        // The tool rail: the leftmost panel of the Schematic workspace.
-        if !self.focus_mode && self.is_open() && self.workspace() == workspace::Workspace::Schematic
+        // The tool rail: the leftmost panel of the Schematic, Cabinet and 3D
+        // workspaces.
+        let rail_workspace = self.workspace();
+        if !self.focus_mode
+            && self.is_open()
+            && matches!(
+                rail_workspace,
+                workspace::Workspace::Schematic
+                    | workspace::Workspace::Cabinet
+                    | workspace::Workspace::View3d
+            )
         {
-            self.schematic_rail_show(ui);
+            match rail_workspace {
+                workspace::Workspace::Schematic => self.schematic_rail_show(ui),
+                workspace::Workspace::Cabinet => self.cabinet_rail_show(ui),
+                _ => self.view3d_rail_show(ui),
+            }
         } else {
             self.wb.rail_rect = None;
             rail::close_flyout(&ctx);

@@ -113,7 +113,16 @@ pub(super) fn show(
     .top(if super::panel::reserved_bottom_right(ctx) > 0.0 {
         CUBE_MARGIN
     } else {
-        CUBE_MARGIN + CUBE_SIZE + GAP
+        // A narrow window wraps the toolbar one row lower (the rail takes
+        // 48 pt of the width): the panel keeps clear of it.
+        CUBE_MARGIN
+            + CUBE_SIZE
+            + GAP
+            + if super::view3d_controls::narrow_window(ctx) {
+                10.0
+            } else {
+                0.0
+            }
     })
     .height(420.0)
     .above_card()
