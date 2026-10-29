@@ -1,0 +1,76 @@
+# Hoist up command blocked by a latched load limit relay, with reset and lamp.
+name = "Hoist load limit with latching relay"
+chapter = "hoists"
+description = "Hoist up and down commands where a load limit switch latches a relay that blocks hoisting up and lights a lamp until it is reset; lowering stays possible"
+tags = ["hoist", "load limit", "overload", "crane", "relay", "latching", "reset", "lamp", "end limit", "interlock"]
+notes = """B4 closes when the load is above the limit (load switch or the relay output of a load monitor). K5 pulls in and holds itself; its break contact opens the up command and its lamp lights, while the down command keeps working so the load can be put down. \\
+Press the reset button S3 (break contact) once the load is back under the limit. \\
+B2 is the upper end limit. K1 and K2 are the hoist up and down contactor coils; their power circuits are in the hoist circuits of this chapter. \\
+This is a wiring example of a load limit interlock; whether it meets the requirements for load limiting on your crane depends on the load monitor and the whole machine and is not validated here. \\
+You connect: the control supply above F1 and 0 V below the coils of K1, K2, K5 and the lamp."""
+
+open = ["f1s.1", "k1c.A2", "k2c.A2", "k5c.A2", "h1s.X2"]
+
+device = [
+  { id = "f1", tag = "-F1", description = "Control circuit breaker", mount = { kind = "din", size = [18, 90, 70], at = [15, 55], rail = "r1" } },
+  { id = "k5", tag = "-K5", description = "Load limit relay, latching", mount = { kind = "din", size = [15.5, 78, 66], at = [45, 61], rail = "r1" } },
+  { id = "k1", tag = "-K1", description = "Hoist up contactor", mount = { kind = "din", size = [45, 77, 86], at = [70, 61.5], rail = "r1" } },
+  { id = "k2", tag = "-K2", description = "Hoist down contactor", mount = { kind = "din", size = [45, 77, 86], at = [125, 61.5], rail = "r1" } },
+  { id = "s1", tag = "-S1", description = "Up", mount = { kind = "field", place = "operator station" } },
+  { id = "s2", tag = "-S2", description = "Down", mount = { kind = "field", place = "operator station" } },
+  { id = "s3", tag = "-S3", description = "Reset load limit", mount = { kind = "door", size = [30, 30, 60], at = [20, 20] } },
+  { id = "b2", tag = "-B2", description = "Upper end limit", mount = { kind = "field", place = "at the top of the hoist travel" } },
+  { id = "b3", tag = "-B3", description = "Lower end limit", mount = { kind = "field", place = "at the bottom of the hoist travel" } },
+  { id = "b4", tag = "-B4", description = "Load limit switch, closes at overload", mount = { kind = "field", place = "at the load cell or load monitor" } },
+  { id = "h1", tag = "-H1", description = "Overload lamp", mount = { kind = "door", size = [30, 30, 45], at = [70, 20] } },
+]
+
+symbol = [
+  { id = "f1s", key = "iec/protection/mcb_1p", at = [40, 40], device = "f1" },
+  { id = "s1s", key = "iec/operators/pushbutton_no", at = [72, 80], device = "s1" },
+  { id = "k5b", key = "iec/contacts/nc", at = [72, 112], device = "k5", main = false },
+  { id = "b2s", key = "iec/contacts/position_nc", at = [72, 144], device = "b2" },
+  { id = "k1c", key = "iec/coils/contactor", at = [72, 176], device = "k1", main = true },
+  { id = "s2s", key = "iec/operators/pushbutton_no", at = [120, 80], device = "s2" },
+  { id = "b3s", key = "iec/contacts/position_nc", at = [120, 112], device = "b3" },
+  { id = "k2c", key = "iec/coils/contactor", at = [120, 144], device = "k2", main = true },
+  { id = "b4s", key = "iec/contacts/position_no", at = [168, 80], device = "b4" },
+  { id = "k5a", key = "iec/contacts/no", at = [192, 80], device = "k5", main = false },
+  { id = "s3s", key = "iec/operators/pushbutton_nc", at = [168, 120], device = "s3" },
+  { id = "k5c", key = "iec/coils/relay", at = [168, 152], device = "k5", main = true },
+  { id = "k5d", key = "iec/contacts/no", at = [216, 80], device = "k5", main = false, numbers = ["23", "24"] },
+  { id = "h1s", key = "iec/signalling/lamp", at = [216, 112], device = "h1" },
+]
+
+junction = [
+  { id = "ja", at = [168, 104] },
+  { id = "jb", at = [192, 104] },
+]
+
+wire = [
+  { from = "s1s.14", to = "k5b.21" },
+  { from = "k5b.22", to = "b2s.21" },
+  { from = "b2s.22", to = "k1c.A1" },
+  { from = "s2s.14", to = "b3s.21" },
+  { from = "b3s.22", to = "k2c.A1" },
+  { from = "b4s.14", to = "ja" },
+  { from = "k5a.14", to = "jb" },
+  { from = "ja", to = "jb" },
+  { from = "ja", to = "s3s.11" },
+  { from = "s3s.12", to = "k5c.A1" },
+  { from = "k5d.14", to = "h1s.X1" },
+]
+
+bus = [
+  { y = 64, taps = ["f1s.2", "s1s.13", "s2s.13", "b4s.13", "k5a.13", "k5d.13"] },
+]
+
+[plate]
+width = 190
+height = 200
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 165
