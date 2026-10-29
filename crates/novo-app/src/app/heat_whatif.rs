@@ -707,12 +707,7 @@ fn card(
         let apply = ui.add_enabled(!stale, egui::Button::new(text)).on_hover_text(
             "One undo step for the moves; the openings go to the Vents and fans list of the 3D Heat panel, where Simulate checks them",
         );
-        super::cabinet_bar::note_ctx(
-            ui.ctx(),
-            "heat.whatif.apply",
-            "Apply button of the fix",
-            &apply,
-        );
+        super::cabinet_bar::note_ctx(ui.ctx(), "heat.whatif.apply", text, &apply);
         if w.reveal.take() {
             apply.scroll_to_me(Some(egui::Align::Center));
         }
