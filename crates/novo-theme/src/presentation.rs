@@ -248,6 +248,16 @@ pub const TABLE: &[Presentation] = &[
         d(&drawn::MOTOR),
         "Open motor centre example",
     ),
+    row(
+        "file.example_crane",
+        d(&drawn::BRIDGE),
+        "Open crane cabinet example",
+    ),
+    row(
+        "file.example_plc",
+        d(&drawn::PLC),
+        "Open PLC cabinet example",
+    ),
     row("file.practice", p(icons::KEYBOARD), "Try the fast keys"),
     row("project.languages", p(icons::TRANSLATE), "Report languages"),
     row("file.save", p(icons::FLOPPY_DISK), "Save"),
@@ -751,6 +761,16 @@ pub const TABLE: &[Presentation] = &[
         p(icons::EYE),
         "Show or fade cross refs",
     ),
+    row(
+        "view.hide_references_page",
+        p(icons::EYE_SLASH),
+        "Hide cross refs on this page",
+    ),
+    row(
+        "view.hide_references_device",
+        p(icons::EYE_SLASH),
+        "Hide cross refs of device",
+    ),
     row("view.changes", p(icons::GIT_DIFF), "Show changes"),
     row(
         "view.commissioning",
@@ -1088,6 +1108,11 @@ pub const TABLE: &[Presentation] = &[
         "Move mode in 3D",
     ),
     row("sim.hoist", d(&drawn::MOTOR), "Simulate hoist run"),
+    row(
+        "sim.controller",
+        p(icons::GAME_CONTROLLER),
+        "Controller panel",
+    ),
     row(
         "sim.motor_curves",
         d(&drawn::DRIVE),
