@@ -16,6 +16,7 @@ use crate::brake_system::{
     BrakeInput, BrakeSource, BrakeSystem, Rectifier, RectifierFault, RectifierKind,
 };
 use crate::error::InputError;
+use crate::hoist_thermal::{MotorThermal, OverloadRelay, WindingElectrics};
 use crate::mechanics::{Hoist, Shaft};
 use crate::motor::{Direction, PoleChangeMotor, Winding, WindingSel};
 use crate::sequencer::{Command, Energised, Sequencer};
@@ -120,6 +121,12 @@ pub struct Conditions {
     pub low_voltage: bool,
     /// The main motor and the fine-lift motor are fed at the same time.
     pub both_motors_fed: bool,
+    /// A winding is at or above its rise limit (needs the electrical model).
+    pub winding_hot: bool,
+    /// The overload relay has tripped.
+    pub overload_tripped: bool,
+    /// A phase is open and the motor draws more than 1.2 times its rated current.
+    pub two_phase_overcurrent: bool,
 }
 
 impl Conditions {
@@ -144,6 +151,15 @@ impl Conditions {
         }
         if self.both_motors_fed {
             out.push("Main motor and fine-lift motor are fed together: they fight each other");
+        }
+        if self.two_phase_overcurrent {
+            out.push("Running on two phases: the motor draws well above its rated current");
+        }
+        if self.winding_hot {
+            out.push("A winding has reached its temperature rise limit");
+        }
+        if self.overload_tripped {
+            out.push("The overload relay has tripped");
         }
         out
     }
@@ -172,6 +188,16 @@ pub struct HoistSnapshot {
     /// The supply as the motors saw it.
     pub supply: Supply,
     pub conditions: Conditions,
+    /// Main motor line current in A (0 without the electrical model or when not fed).
+    pub motor_current_a: f64,
+    /// Main motor winding rise over ambient in K.
+    pub winding_rise_k: f64,
+    /// Fine-lift motor line current in A.
+    pub fine_current_a: f64,
+    /// Fine-lift motor winding rise in K.
+    pub fine_winding_rise_k: f64,
+    /// Overload relay state over its trip point (1 = trips), 0 without a relay.
+    pub overload_load: f64,
 }
 
 /// A second, small motor on the same drum for slow, fine positioning (for example the fine-lift
@@ -227,7 +253,18 @@ impl FineLift {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// The electrical and heat model of a hoist: current and heating of each motor and an optional
+/// overload relay on the main motor ([`crate::hoist_thermal`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct HoistElectrics {
+    pub fine: WindingElectrics,
+    pub coarse: WindingElectrics,
+    pub thermal: MotorThermal,
+    pub relay: Option<OverloadRelay>,
+    pub fine_lift: Option<(WindingElectrics, MotorThermal)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct TwoSpeedHoistUnit {
     motor: PoleChangeMotor,
     hoist: Hoist,
@@ -238,6 +275,7 @@ pub struct TwoSpeedHoistUnit {
     base_inertia: f64,
     fine: Option<FineLift>,
     faults: HoistFaults,
+    electrics: Option<HoistElectrics>,
     /// What was fed on the last step (from the sequencer or from the circuit).
     last_energised: Option<Energised>,
     /// How long the main motor or the fine motor has been fed with its brake closed.
@@ -283,6 +321,7 @@ impl TwoSpeedHoistUnit {
             base_inertia: inertia,
             fine: None,
             faults: HoistFaults::NONE,
+            electrics: None,
             last_energised: None,
             fed_closed_s: 0.0,
         })
@@ -292,6 +331,44 @@ impl TwoSpeedHoistUnit {
     pub fn with_fine_lift(mut self, fine: FineLift) -> Self {
         self.fine = Some(fine);
         self
+    }
+
+    /// Adds current, heating and an optional overload relay.
+    pub fn with_electrics(mut self, electrics: HoistElectrics) -> Self {
+        self.electrics = Some(electrics);
+        self
+    }
+
+    pub fn electrics(&self) -> Option<&HoistElectrics> {
+        self.electrics.as_ref()
+    }
+
+    /// Whether the overload relay has tripped (false without a relay).
+    pub fn overload_tripped(&self) -> bool {
+        self.electrics
+            .as_ref()
+            .and_then(|e| e.relay.as_ref())
+            .is_some_and(OverloadRelay::tripped)
+    }
+
+    /// Manual reset of the overload relay.
+    pub fn reset_overload(&mut self) {
+        if let Some(r) = self.electrics.as_mut().and_then(|e| e.relay.as_mut()) {
+            r.reset();
+        }
+    }
+
+    /// Cools the motors and the relay to ambient (a long rest).
+    pub fn cool_down(&mut self) {
+        if let Some(e) = self.electrics.as_mut() {
+            e.thermal.cool_down();
+            if let Some(r) = e.relay.as_mut() {
+                r.cool_down();
+            }
+            if let Some((_, t)) = e.fine_lift.as_mut() {
+                t.cool_down();
+            }
+        }
     }
 
     pub fn fine_lift(&self) -> Option<&FineLift> {
@@ -449,6 +526,50 @@ impl TwoSpeedHoistUnit {
             self.hoist.friction_down_nm() + resist,
         );
 
+        // Current and heat, at the shaft speed of this tick.
+        let omega_now = self.shaft.omega_rad_s;
+        let (mut motor_current, mut fine_current) = (0.0, 0.0);
+        let mut over_current = false;
+        if let Some(el) = self.electrics.as_mut() {
+            let rpm = omega_now * 60.0 / std::f64::consts::TAU;
+            let (mut i, mut p, mut rated_i) = (0.0, 0.0, el.coarse.rated_current_a());
+            let mut rated_rpm = el.coarse.rated_rpm();
+            if let Some(e) = main {
+                let w = match e.winding {
+                    WindingSel::Fine => &el.fine,
+                    WindingSel::Coarse => &el.coarse,
+                };
+                if let Ok((ci, cp)) = w.current_and_losses(e.direction, omega_now, &supply) {
+                    i = ci;
+                    p = cp;
+                }
+                rated_i = w.rated_current_a();
+                rated_rpm = w.rated_rpm();
+            }
+            el.thermal.step(p, rpm / rated_rpm, dt_s);
+            if let Some(r) = el.relay.as_mut() {
+                r.step(i, dt_s);
+            }
+            motor_current = i;
+            over_current = supply.phase_lost() && i > 1.2 * rated_i;
+            if let (Some((w, t)), Some(f)) = (el.fine_lift.as_mut(), self.fine.as_ref()) {
+                let omega_f = omega_now * f.ratio;
+                let (fi, fp) = match fine_dir {
+                    Some(d) => w
+                        .current_and_losses(d, omega_f, &supply)
+                        .unwrap_or((0.0, 0.0)),
+                    None => (0.0, 0.0),
+                };
+                t.step(
+                    fp,
+                    omega_f * 60.0 / std::f64::consts::TAU / w.rated_rpm(),
+                    dt_s,
+                );
+                fine_current = fi;
+                over_current |= supply.phase_lost() && fi > 1.2 * w.rated_current_a();
+            }
+        }
+
         // Conditions.
         let fed = main.is_some() || fine_fed;
         let closed = self.brake.state() == BrakeState::Applied
@@ -469,7 +590,22 @@ impl TwoSpeedHoistUnit {
             phase_lost: supply.phase_lost(),
             low_voltage: supply.voltage_ratio() < 0.9,
             both_motors_fed: main.is_some() && fine_fed,
+            winding_hot: self.electrics.as_ref().is_some_and(|e| {
+                e.thermal.too_hot() || e.fine_lift.as_ref().is_some_and(|(_, t)| t.too_hot())
+            }),
+            overload_tripped: self.overload_tripped(),
+            two_phase_overcurrent: over_current,
         };
+        let (winding_rise_k, fine_winding_rise_k, overload_load) =
+            self.electrics.as_ref().map_or((0.0, 0.0, 0.0), |e| {
+                (
+                    e.thermal.winding_rise_k(),
+                    e.fine_lift
+                        .as_ref()
+                        .map_or(0.0, |(_, t)| t.winding_rise_k()),
+                    e.relay.as_ref().map_or(0.0, OverloadRelay::load),
+                )
+            });
 
         HoistSnapshot {
             hook_height_m: self.shaft.angle_rad * self.hoist.metres_per_rad(),
@@ -485,6 +621,11 @@ impl TwoSpeedHoistUnit {
             fine_brake_state: self.fine.as_ref().map(|f| f.brake.state()),
             supply,
             conditions,
+            motor_current_a: motor_current,
+            winding_rise_k,
+            fine_current_a: fine_current,
+            fine_winding_rise_k,
+            overload_load,
         }
     }
 

@@ -11,6 +11,7 @@ pub mod brake;
 pub mod brake_system;
 pub mod drive;
 pub mod error;
+pub mod hoist_thermal;
 pub mod hoist_unit;
 pub mod induction;
 pub mod mechanics;
