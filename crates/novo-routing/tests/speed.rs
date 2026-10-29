@@ -19,7 +19,7 @@ fn big() -> (Network, Vec<Job>) {
         });
         for col in 0..30 {
             bodies.push(Body {
-                id: (row * 30 + col) as u64,
+                id: row * 30 + col,
                 x0: 20.0 + col as f64 * 52.0,
                 y0: y,
                 x1: 65.0 + col as f64 * 52.0,
