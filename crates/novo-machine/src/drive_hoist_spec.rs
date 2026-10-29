@@ -12,7 +12,7 @@ use novo_drive::drive::terminals::DigitalInput;
 use novo_drive::drive::{
     Drive, DriveConfig, MotorNameplate, ReferenceSource, TerminalFunction, TerminalMacro,
 };
-use novo_drive::hoist_logic::{BrakeLogic, HoistLogic, HoistLogicConfig, LoadSense};
+use novo_drive::hoist_logic::{BrakeLogic, HoistLogic, HoistLogicConfig, LoadSense, ReversalJump};
 use novo_drive::induction::{FitOptions, InductionMotor};
 use novo_drive::mechanics::Hoist;
 
@@ -109,6 +109,13 @@ pub const KEYS: &[SpecKey] = &[
     num("dh_engage_hz", "Brake engage frequency", "Hz", "2"),
     num("dh_engage_s", "Brake engage time", "s", "0.4"),
     num("dh_restart_s", "Time to restart", "s", "0.5"),
+    num(
+        "dh_jump_hz",
+        "Reversal with the brake open: fast band (blank: full brake cycle)",
+        "Hz",
+        "",
+    ),
+    num("dh_jump_ramp_s", "Reversal fast-band ramp time", "s", "0.3"),
     num(
         "dh_sense_boost_hz",
         "Load sensing: highest top step (blank: off)",
@@ -246,7 +253,15 @@ pub fn drive_hoist_from_properties(
     };
     let top = steps_hz.iter().copied().fold(0.0_f64, f64::max);
     let max_hz = sense.as_ref().map_or(top, |s| top.max(s.boost_hz));
+    let jump = match text("dh_jump_hz") {
+        None => None,
+        Some(_) => Some(ReversalJump {
+            jump_hz: number("dh_jump_hz")?,
+            ramp_time_s: number("dh_jump_ramp_s")?,
+        }),
+    };
     let logic = HoistLogic::new(HoistLogicConfig {
+        jump,
         brake: brake_logic,
         steps_hz: steps_hz.clone(),
         sense,
@@ -433,6 +448,19 @@ mod tests {
         .unwrap();
         assert_eq!(m.logic.config().sense.as_ref().unwrap().boost_hz, 80.0);
         assert_eq!(m.drive.cfg.max_hz, 80.0);
+    }
+
+    #[test]
+    fn the_jump_at_reversal_is_off_unless_a_band_is_entered() {
+        let (m, _) = build(&props(&[(DRIVE_HOIST_KEY, "2000")]))
+            .unwrap()
+            .unwrap();
+        assert!(m.logic.config().jump.is_none());
+        let (m, _) = build(&props(&[(DRIVE_HOIST_KEY, "2000"), ("dh_jump_hz", "8")]))
+            .unwrap()
+            .unwrap();
+        let j = m.logic.config().jump.as_ref().unwrap();
+        assert_eq!((j.jump_hz, j.ramp_time_s), (8.0, 0.3));
     }
 
     #[test]

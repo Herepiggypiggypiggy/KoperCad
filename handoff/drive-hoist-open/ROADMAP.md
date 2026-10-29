@@ -13,7 +13,7 @@ Done
 - Design section in `docs/design/drive-crane-simulation.md` ("Lane L2c-open as built").
 
 Next, in order
-1. Jump at reversal and brake-held reversal (an option; today a reversal is a full brake cycle).
+1. (done) Jump at reversal: `dh_jump_hz`, `dh_jump_ramp_s`, finding ReversalSag.
 2. Slack rope and hook-on-load detection (a load that is picked up from the floor).
 3. Brake and motor heating over a duty cycle; restart-time and brake wear findings.
 4. Ramp-to-limit slow-down switches for the upper limit (slow step before the final limit).
