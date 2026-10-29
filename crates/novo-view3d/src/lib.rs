@@ -11,6 +11,7 @@ pub mod assembly;
 #[cfg(feature = "model")]
 pub mod build;
 pub mod camera;
+pub mod crane;
 pub mod cube;
 pub mod cull;
 pub mod demo;

@@ -22,6 +22,8 @@ pub const THERMAL_FIDELITY: Fidelity = Fidelity::Model;
 
 /// What the current and heat model leaves out, shown next to the numbers in the UI.
 pub const THERMAL_MODEL_LEAVES_OUT: &[&str] = &[
+    "A rated current left empty is derived from the power with an assumed efficiency (fine 0.6, coarse 0.85, fine-lift 0.7), not a measured one; type the nameplate value to replace it",
+    "The overload relay protects the main motor only; the fine-lift motor has current and heat but no relay of its own",
     "Current and losses come from an equivalent circuit fitted to the nameplate; the hoist torque uses its own fit, so the two agree near the rated point only",
     "Current on two phases: the lower of 1.73 times the three-phase current and 0.87 times the three-phase locked-rotor current (exact at standstill for a wye motor); a rule of thumb, not a double-field solution",
     "Heat: two lumped nodes (winding, frame) with generic resistances and capacities; no fan curve, no end-winding detail, no temperature effect on resistance",

@@ -2285,6 +2285,15 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "sim.hoist3d",
+        "Hoist in 3D",
+        "View",
+        &[
+            "hoist", "crane", "hook", "3d", "girder", "trolley", "rope", "lift",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "sim.drive_run",
         "Simulate drive run",
         "View",
