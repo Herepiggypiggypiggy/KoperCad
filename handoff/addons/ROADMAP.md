@@ -12,7 +12,7 @@ Scope: the add-on manager and package format (`novo-addons`), the manager window
 
 ## Next, in order
 1. (done in C0b-2) sandboxed engine: wasmi, host API 1, step budget, traps stop the add-on for the session.
-2. (done) Controller packaged as an add-on (C3, #1661) and the wizard gated behind `NovoApp::addon_enabled("controllers")`. Next for C3: engine calls on a worker thread, then the live-view card and binding (C2), rocker/joystick/tab widgets in panel data.
+2. (done) Controller packaged as an add-on (C3, #1661) and the wizard gated behind `NovoApp::addon_enabled("controllers")`. 3. (done) Engine calls on a worker thread (C3-3). Next for C3: the live-view card and binding (C2), rocker/joystick/tab widgets in panel data.
 3. Rail slot and flyout (V3a), app-menu footer (V2b), Ctrl K add-on chip (V5), drawn add-on icons (V0).
 4. Project data blocks tagged with the add-on id that survive a missing add-on (needs a generic block in `novo-core`/`novo-storage`, WS-02/WS-04).
 5. Release signing key (`BUILTIN_KEYS` is empty) and `scripts/pack-addon` in CI (release thread).
