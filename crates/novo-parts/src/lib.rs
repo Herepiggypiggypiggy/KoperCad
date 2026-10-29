@@ -125,8 +125,9 @@ pub use macros::{
 pub use makers::{ALIAS_FILE_NAME, MakerAliases};
 pub use panel::{Clearances, Mounting, PanelData, is_panel_number_key, migrate_properties};
 pub use pins::{
-    POSITIONS_SOURCE_KEY, POSITIONS_SOURCE_PROPERTY, placed_terminals, positions_estimated,
-    terminal_position, write_properties as write_terminal_positions,
+    CONNECTION_SOURCE_KEY, CONNECTION_SOURCE_PROPERTY, ConnectionData, POSITIONS_SOURCE_KEY,
+    POSITIONS_SOURCE_PROPERTY, connection_data, connection_source, placed_terminals,
+    positions_estimated, terminal_position, write_properties as write_terminal_positions,
 };
 pub use plain::plain_io_error;
 pub use quality::{
@@ -142,7 +143,8 @@ pub use recipes::{
 pub use schema::eng;
 pub use schema::{
     Accessory, Asset, AssetKind, Classification, ConnectionKind, DataSource, DrillHole,
-    DrillRepeat, LetThroughPoint, Lifecycle, PartRef, PartTerminal, Price, Provenance, Side,
+    DrillRepeat, FerruleRule, LetThroughPoint, Lifecycle, PartRef, PartTerminal, Price, Provenance,
+    Side,
 };
 pub use search::{Matcher, normalize_code};
 pub use sheet::{

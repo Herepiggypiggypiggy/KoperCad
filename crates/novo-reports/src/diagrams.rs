@@ -101,6 +101,7 @@ impl Report for TerminalDiagram {
                         Column::new("location", "Location", 15.0),
                         Column::new("build", "Build", 30.0),
                         Column::new("spare", "Spare", 10.0),
+                        Column::new("torque", "Torque", 14.0),
                     ],
                 );
                 for (row, view) in screen.rows.into_iter().zip(&views.rows) {
@@ -131,6 +132,19 @@ impl Report for TerminalDiagram {
                             Cell::text(location),
                             Cell::text(row.build),
                             Cell::text(if row.spare { "spare" } else { "" }),
+                            Cell::text(join_distinct(view.occurrences.iter().flat_map(|o| {
+                                let pins = project.symbol(o.symbol).map_or(0, |s| s.pins.len());
+                                (0..pins)
+                                    .filter_map(|p| u16::try_from(p).ok())
+                                    .map(|p| {
+                                        crate::wirecut::torque_text(
+                                            project,
+                                            novo_core::PinRef::new(o.symbol, p),
+                                        )
+                                    })
+                                    .filter(|t| !t.is_empty())
+                                    .collect::<Vec<_>>()
+                            }))),
                         ],
                         vec![strip.id.into()],
                     );

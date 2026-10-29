@@ -197,6 +197,7 @@ impl NovoApp {
                                 let mut ticked = std::mem::take(&mut self.wb.terminal_edit.rows);
                                 if let Some(o) = strip_table(
                                     ui,
+                                    project,
                                     &view,
                                     &screen,
                                     &selected,
