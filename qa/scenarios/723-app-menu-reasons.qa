@@ -22,6 +22,10 @@ click_text "Export drawings"
 wait 8
 shot file-no-project
 check_layout
+key Escape
+wait 6
+key F10
+wait 10
 text pdf
 wait 8
 shot search-pdf
