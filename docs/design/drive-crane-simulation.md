@@ -319,3 +319,13 @@ before brake release, load held under torque while the brake closes, STO, monito
 `novo_machine::sync_winch` two winches on one load with rope stretch, tilt and the three
 synchronisation modes. Design, hand cases and limits: `docs/design/closed-loop-winch.md`. UI:
 Simulate > Winch scenarios.
+
+### Lane L2c circuit binding as built (closed-loop winch in the drawn circuit)
+
+`novo_machine::cl_winch_spec` (the `cw_*` property keys, marker `cw_mass_kg`) and `cl_winch_loop`
+(`ClWinchLoop`, same tick order as the drive hoist loop) bind a closed-loop winch (`novo_drive::closed_loop`,
+design `closed-loop-winch.md`) to the live circuit. The STO channels, the encoder signal, the brake
+contactor and the commands are ordinary devices of the drawing, so the fault injection lane (F1) reaches the
+winch through coils and wires. The only engine change is `ClInputs::brake_coil`, which lets the circuit
+decide whether the brake coil is fed. Where the user finds it: motor property sheet section
+"Closed-loop winch", then Simulate > Drive run with Live on.

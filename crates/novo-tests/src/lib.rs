@@ -7,6 +7,7 @@
 //! fixtures as a dev-dependency.
 
 pub mod big;
+pub mod closed_winch;
 pub mod distribution;
 pub mod heat_cabinet;
 pub mod hoist;

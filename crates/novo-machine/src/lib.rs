@@ -1,8 +1,10 @@
 //! Machine and crane engine (skeleton, plan `docs/design/drive-crane-simulation.md` lane L0).
 //!
-//! Lanes: L2c `sync_winch` (two closed-loop winches on one load), L4 kinematics (`crane`), L4/L5 schematic `bindings`, L5 co-simulation `cosim`.
+//! Lanes: L2c `sync_winch` (two closed-loop winches on one load), `cl_winch_spec` and `cl_winch_loop` (a closed-loop winch driven by the drawn circuit), L4 kinematics (`crane`), L4/L5 schematic `bindings`, L5 co-simulation `cosim`.
 
 pub mod bindings;
+pub mod cl_winch_loop;
+pub mod cl_winch_spec;
 pub mod cosim;
 pub mod crane;
 pub mod drive_hoist_loop;

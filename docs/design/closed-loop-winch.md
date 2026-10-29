@@ -66,10 +66,34 @@ check uses the true shaft speed above a threshold, generic parameters, fixed bra
 rope, vertical ropes (the snapshot flags a tilt beyond 5 degrees as outside the model). Not a
 safety or compliance statement.
 
+## The winch in the drawn circuit
+
+A motor with a hook load under **Closed-loop winch** (`cw_*` properties, `novo_machine::cl_winch_spec`)
+is a closed-loop winch in Simulate > Drive run (`novo_machine::cl_winch_loop`). The loop reads these
+devices of the drawing each tick: up, down and speed step 2, the two STO channels (energised: torque
+allowed), the encoder signal device (energised: signal present), the main contactor, the brake
+contactor that feeds the coil, an optional brake feedback contact and a reset input. It writes the
+drive's brake relay as a contact of the drawing and the end limit switches by hook height, as the
+other hoist runs do. The brake coil follows the drawn brake contactor (`ClInputs::brake_coil`), so a
+contactor that does not pull in leaves the brake closed and a welded one opens it before the drive
+has torque.
+
+Fault injection needs no machine specific hook: an open coil or a broken wire on an STO device makes
+the channels disagree (the drive latches the discrepancy after its time), both low is STO at once, a
+lost supply on the encoder device makes the counts stop, an open brake contactor coil keeps the hook
+down. The run lists what it found: start rollback, stop travel, brake slip, trips, STO and encoder
+events.
+
+Fidelity: reading the devices and the tick order are exact by definition; everything inside the
+drive is the model listed above. A channel or the encoder device that is not bound counts as always
+present, and the run says so. The encoder loss here is a lost signal (counts stop); a lost single
+channel (direction lost) is available in the engine and the scenarios window, not as a drawn device yet.
+
 ## Not yet
 
-- A closed-loop hoist from the schematic: the property sheet section and the binding of the drive's
-  brake relay and STO inputs to symbols, so the circuit drives these engines like the hoist run does.
-  The engines take plain inputs (`ClInputs`, `PairCommand`), so the loop in `novo-machine` can feed them.
+- Two winches on one beam from the schematic (two motors, one beam): the pair needs per-winch bindings
+  and a shared mechanics block. `PairCommand` already takes per-winch STO.
+- Walk-throughs (`novo_sim::walkthrough`) do not run the winch loop yet; defects are injected in the
+  live view.
 - Unconfirmed customer details: which drive maker's hoist and encoder arrangement applies. Everything
   here is generic public knowledge.

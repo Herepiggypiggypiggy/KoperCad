@@ -262,6 +262,10 @@ pub struct ClInputs {
     pub mains_ok: bool,
     pub fault_reset: bool,
     pub external_fault: bool,
+    /// Whether the brake coil is fed. `None`: the coil follows the drive's brake relay directly
+    /// (ideal wiring). `Some`: the circuit decides (a brake contactor and rectifier in the
+    /// drawing), so a contactor that does not pull in leaves the brake closed.
+    pub brake_coil: Option<bool>,
 }
 
 impl Default for ClInputs {
@@ -277,6 +281,7 @@ impl Default for ClInputs {
             mains_ok: true,
             fault_reset: false,
             external_fault: false,
+            brake_coil: None,
         }
     }
 }
