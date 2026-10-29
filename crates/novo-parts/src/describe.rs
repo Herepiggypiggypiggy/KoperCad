@@ -253,7 +253,7 @@ impl Facts {
         let coil_text = text(data, "coil_voltage");
         let supply = coil_text.as_deref().and_then(parse_supply);
         let (aux_no_t, aux_nc_t) = text(data, "auxiliary_contacts")
-            .map(|t| contact_counts(&t))
+            .and_then(|t| contact_counts(&t))
             .unzip();
         Facts {
             maker: maker.to_owned(),
@@ -320,8 +320,9 @@ fn hertz_in(text: &str) -> Option<String> {
 }
 
 /// Make and break counts of `1 NO + 1 NC`. A kind that is not named is zero:
-/// the text states the whole configuration.
-fn contact_counts(text: &str) -> (u32, u32) {
+/// the text states the whole configuration. A piece that is neither NO nor
+/// NC (`1 CO`, change-over) cannot be counted, so nothing is stated.
+fn contact_counts(text: &str) -> Option<(u32, u32)> {
     let mut no = 0;
     let mut nc = 0;
     for part in text.split(['+', ',', '/']) {
@@ -331,9 +332,11 @@ fn contact_counts(text: &str) -> (u32, u32) {
             no += n;
         } else if upper.contains("NC") {
             nc += n;
+        } else if !upper.trim().is_empty() {
+            return None;
         }
     }
-    (no, nc)
+    Some((no, nc))
 }
 
 /// `9`, `1.6`, `0.25`: no trailing zeros.
@@ -958,6 +961,14 @@ mod tests {
                 .1
                 .is_none()
         );
+    }
+
+    #[test]
+    fn change_over_contacts_are_not_counted() {
+        assert_eq!(contact_counts("1 NO + 1 NC"), Some((1, 1)));
+        assert_eq!(contact_counts("2 NO"), Some((2, 0)));
+        assert_eq!(contact_counts("1 CO"), None);
+        assert_eq!(contact_counts("1 NO + 1 CO"), None);
     }
 
     #[test]
