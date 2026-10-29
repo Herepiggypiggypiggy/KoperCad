@@ -21,6 +21,7 @@ check_blank preview
 expect "Makers in this file"
 expect "Schneider Electric"
 expect "not known"
+expect "coil_voltage_v"
 click_text "Add to catalog"
 wait 20
 shot added

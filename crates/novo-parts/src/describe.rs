@@ -294,7 +294,7 @@ impl Facts {
 }
 
 /// The first number in a text: `400 V` gives 400.
-fn first_number(text: &str) -> Option<f64> {
+pub(crate) fn first_number(text: &str) -> Option<f64> {
     let digits: String = text
         .chars()
         .skip_while(|c| !c.is_ascii_digit())
@@ -304,7 +304,7 @@ fn first_number(text: &str) -> Option<f64> {
 }
 
 /// The number written before `Hz`: `230 V AC 50/60 Hz` gives `50/60`.
-fn hertz_in(text: &str) -> Option<String> {
+pub(crate) fn hertz_in(text: &str) -> Option<String> {
     let lower = text.to_lowercase();
     let before = lower.split("hz").next().filter(|_| lower.contains("hz"))?;
     let token: String = before
@@ -322,7 +322,7 @@ fn hertz_in(text: &str) -> Option<String> {
 /// Make and break counts of `1 NO + 1 NC`. A kind that is not named is zero:
 /// the text states the whole configuration. A piece that is neither NO nor
 /// NC (`1 CO`, change-over) cannot be counted, so nothing is stated.
-fn contact_counts(text: &str) -> Option<(u32, u32)> {
+pub(crate) fn contact_counts(text: &str) -> Option<(u32, u32)> {
     let mut no = 0;
     let mut nc = 0;
     for part in text.split(['+', ',', '/']) {

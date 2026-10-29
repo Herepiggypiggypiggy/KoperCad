@@ -8,3 +8,7 @@ Where the user finds it: File > Import parts > Import parts from a CAD parts exp
 - Parts keep `provenance.source = "import:eplan"`, so they never go into shared `.kcpl` bundles.
 - Tests use invented fixtures only. Never commit a real EPLAN database or the shop CSV.
 - Format knowledge comes from notes of a read-only look at a customer database; it has not been run against the real file in CI.
+
+## Technical data from the texts (follow-up)
+
+`novo_parts::stated_data` (`crates/novo-parts/src/stated.rs`) reads what a text states outright, label and value together, into the keys the description recipes read: `poles`, `coil_voltage_v`, `coil_frequency_hz`, `coil_current_type`, `rated_voltage_v`, `main_contacts_no`, `aux_contacts_no`, `aux_contacts_nc` (Dutch and English labels). A number with no label (`230 VAC`, `2NO+2NC` without "auxiliary") states nothing. The `.eod` reader feeds it the description texts; other importers can call it too.

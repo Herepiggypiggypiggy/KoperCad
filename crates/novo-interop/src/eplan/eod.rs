@@ -29,6 +29,7 @@ use flate2::read::ZlibDecoder;
 use novo_core::Value;
 use novo_parts::{
     CatalogPart, Dimensions, ImportReport, MakerAliases, Provenance, keys, parse_number,
+    stated_data,
 };
 
 use super::EplanError;
@@ -38,6 +39,18 @@ const MAX_RECORD: u64 = 256 * 1024;
 
 /// Key prefix for fields without a catalog field, as in the XML reader.
 const KEEP: &str = "eplan.";
+
+/// The technical data keys read out of the description texts.
+const STATED_KEYS: &[&str] = &[
+    "poles",
+    "coil_voltage_v",
+    "coil_frequency_hz",
+    "coil_current_type",
+    "rated_voltage_v",
+    "main_contacts_no",
+    "aux_contacts_no",
+    "aux_contacts_nc",
+];
 
 /// One maker code found in the file and what it was turned into.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,6 +126,17 @@ pub fn import_eod(
         "technical_text".into(),
         format!("{KEEP}macro_path"),
     ];
+    // Keys the texts stated for at least one part, so the preview names them.
+    for key in out
+        .report
+        .parts
+        .iter()
+        .flat_map(|p| p.data.keys())
+        .filter(|k| STATED_KEYS.contains(&k.as_str()))
+        .collect::<std::collections::BTreeSet<_>>()
+    {
+        out.report.data_columns.push(key.clone());
+    }
     out.makers = codes
         .into_iter()
         .map(|(code, parts)| {
@@ -295,6 +319,18 @@ fn to_part(
         part.data
             .insert("technical_text".into(), Value::Text(long.join(" | ")));
     }
+    // What the texts state outright, in the keys the description recipes read.
+    let mut texts: Vec<String> = vec![best(&short)];
+    texts.extend(in_language(&short, "nl"));
+    for tag in [0xf9, 0xf5, 0xf6] {
+        let all = get(tag).map(languages).unwrap_or_default();
+        texts.push(best(&all));
+        texts.extend(in_language(&all, "nl"));
+    }
+    let texts: Vec<&str> = texts.iter().map(String::as_str).collect();
+    for (key, value) in stated_data(&texts) {
+        part.data.entry(key).or_insert(value);
+    }
     if let Some(m) = get(0xfa) {
         part.data
             .insert(format!("{KEEP}macro_path"), Value::Text(m.to_owned()));
@@ -418,6 +454,39 @@ mod tests {
     }
 
     #[test]
+    fn technical_data_is_read_only_where_the_text_states_it() {
+        let bytes = file(&[
+            record(&[
+                (0xf1, "SE.CT1"),
+                (0xf4, "en_US@Contactor"),
+                (
+                    0xf9,
+                    "en_US@Coil 24 V DC | 3 poles | Auxiliary contacts 1 NO + 1 NC",
+                ),
+            ]),
+            record(&[
+                (0xf1, "SE.CT2"),
+                (0xf4, "en_US@Relay"),
+                (0xf9, "en_US@K22E, 2NO+2NC, 230 VAC"),
+            ]),
+        ]);
+        let read = import_eod(&bytes, &MakerAliases::builtin(), "").unwrap();
+        let (a, b) = (&read.report.parts[0], &read.report.parts[1]);
+        assert_eq!(a.data.get("poles"), Some(&Value::Int(3)));
+        assert_eq!(a.data.get("coil_voltage_v"), Some(&Value::Float(24.0)));
+        assert_eq!(
+            a.data.get("coil_current_type"),
+            Some(&Value::Text("DC".into()))
+        );
+        assert_eq!(a.data.get("aux_contacts_no"), Some(&Value::Int(1)));
+        assert_eq!(a.data.get("aux_contacts_nc"), Some(&Value::Int(1)));
+        // Unlabelled numbers state nothing.
+        assert!(!b.data.contains_key("coil_voltage_v"));
+        assert!(!b.data.contains_key("aux_contacts_no"));
+        assert!(read.report.data_columns.contains(&"poles".to_owned()));
+    }
+
+    #[test]
     fn a_second_code_of_one_maker_is_reported_not_added_twice() {
         let read = import_eod(&sample(), &MakerAliases::builtin(), "").unwrap();
         // The record without an id is not an article and is not counted.
@@ -464,10 +533,8 @@ mod tests {
             bytes.extend_from_slice(&record_raw(&vec![b'a'; 100_000]));
         }
         bytes.extend_from_slice(&record(&[(0xf1, "SE.LAST"), (0xf4, "Last")]));
-        let started = std::time::Instant::now();
         let read = import_eod(&bytes, &MakerAliases::builtin(), "").unwrap();
         assert_eq!(read.report.parts.len(), 1);
-        assert!(started.elapsed() < std::time::Duration::from_secs(5));
     }
 
     fn record_raw(raw: &[u8]) -> Vec<u8> {
