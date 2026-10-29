@@ -43,6 +43,9 @@ library on each page. You can change all of it afterwards.",
                     "Each one gets its own page and, in a motor control centre, its own section.",
                 );
                 super::dialog_ui::section(ui, "Options", false);
+                if plant == Plant::PumpStation {
+                    ui.checkbox(&mut options.frequency, "Frequency drive on each pump");
+                }
                 ui.checkbox(&mut options.extra, plant.extra_label());
                 ui.add_space(8.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
