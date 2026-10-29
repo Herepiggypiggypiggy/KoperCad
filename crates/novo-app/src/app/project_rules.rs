@@ -206,7 +206,7 @@ impl NovoApp {
                     let p = crate::theme::ui_palette();
                     let parsed = novo_symbols::parse_company_templates(&templates);
                     match &parsed {
-                        Ok(classes) if templates.trim().is_empty() => {
+                        Ok(_) if templates.trim().is_empty() => {
                             ui.label(
                                 egui::RichText::new("Built-in names only").color(p.text_secondary),
                             );
