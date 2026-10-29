@@ -208,6 +208,8 @@ pub(super) enum Ask {
     /// Export the plate drawing PDF of the shown enclosure.
     ExportPlate,
     ExportPlateDxf,
+    /// Export the hand drilling plan (A4, for the bench) of the shown enclosure.
+    ExportDrillPlan,
     Accept,
     Cancel,
     ToggleTable,
@@ -1313,6 +1315,20 @@ impl NovoApp {
                                         ask = Some(Ask::ExportPlateDxf);
                                         ui.close();
                                     }
+                                    if cabinet_bar::button(
+                                        ui,
+                                        icons::EXPORT,
+                                        "Drill plan (hand, PDF)",
+                                        false,
+                                    )
+                                    .on_hover_text(
+                                        "A4 bench sheet: datum, tools and a check-off list of every hole",
+                                    )
+                                    .clicked()
+                                    {
+                                        ask = Some(Ask::ExportDrillPlan);
+                                        ui.close();
+                                    }
                                 });
                             cabinet_bar::note(&mut anchors, "cabinet.more", "More", &more.response);
                             // Lessons point at folded controls: until the menu is open
@@ -1362,6 +1378,16 @@ impl NovoApp {
                                         .clicked()
                                     {
                                         ask = Some(Ask::ExportPlateDxf);
+                                        ui.close();
+                                    }
+                                    if ui
+                                        .button("Drill plan (hand, PDF)")
+                                        .on_hover_text(
+                                            "A4 bench sheet: datum, tools and a check-off list of every hole",
+                                        )
+                                        .clicked()
+                                    {
+                                        ask = Some(Ask::ExportDrillPlan);
                                         ui.close();
                                     }
                                 });
@@ -2939,6 +2965,10 @@ impl NovoApp {
             }
             Ask::ExportPlateDxf => {
                 self.export_plate_dxf();
+            }
+            Ask::ExportDrillPlan => {
+                self.learn_command("export.drill_plan");
+                self.export_drill_plan_pdf();
             }
             Ask::ToggleRoutes => self.cabinet.routes ^= true,
             Ask::ToggleEmc => self.cabinet.emc.on ^= true,

@@ -3222,6 +3222,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.drill_plan",
+            "Export hand drilling plan",
+            "Export",
+            &[
+                "drill plan",
+                "drilling",
+                "mounting plate",
+                "bench",
+                "hand",
+                "holes",
+            ],
+            Needs::Project,
+        ),
+        &["export drill plan"],
+    ),
+    verb(
+        cmd(
             "export.plate_dxf",
             "Export plate drawing as DXF",
             "Export",

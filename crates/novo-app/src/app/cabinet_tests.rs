@@ -1527,6 +1527,58 @@ fn plate_dxf_has_a_command_and_a_cabinet_button_and_writes_the_file() {
     assert!(last.text.contains("plate"), "{}", last.text);
 }
 
+/// The hand drilling plan: says why when there is nothing to drill, and
+/// writes the A4 PDF next to the project once a device with a hole pattern
+/// stands on the plate. The Cabinet export menu asks the same as the command.
+#[test]
+fn the_drill_plan_is_exported_from_the_cabinet() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.save_to(&dir.path().join("Plant.novo")));
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    assert!(crate::app::app_runs("export.drill_plan"));
+    assert!(d.app.export_drill_plan_pdf().is_none(), "no plate yet");
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    assert!(d.app.export_drill_plan_pdf().is_none(), "nothing to drill");
+    let last = d.app.messages().last().unwrap();
+    assert!(last.text.contains("Nothing to drill"), "{}", last.text);
+
+    let part = project(&d).parts().next().unwrap().id;
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Holes", |tx| {
+            tx.set_property(
+                part,
+                "hole_pattern",
+                Some(Value::Text("4,4,4.2;41,86,4.2".into())),
+            )
+        })
+        .unwrap();
+    let device = novo_layout::model::candidates(project(&d), cab)[0].id;
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(device, 100.0, 120.0), Some(cab), l, &[]);
+    d.app
+        .cabinet_ask(Ask::ExportDrillPlan, Some(cab), None, &[]);
+    let pdf: Vec<_> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.to_string_lossy().ends_with("drill plan.pdf"))
+        .collect();
+    assert_eq!(pdf.len(), 1, "a drill plan is written next to the project");
+    let bytes = std::fs::read(&pdf[0]).unwrap();
+    assert!(bytes.starts_with(b"%PDF"));
+}
+
 /// A right-click on the plate opens a menu for what is under it; its rows
 /// run the same commands as the toolbar.
 #[test]
