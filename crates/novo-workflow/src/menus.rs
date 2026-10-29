@@ -59,6 +59,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.example", under("File", "Open")),
     ("file.example_mcc", under("File", "Examples")),
     ("file.example_crane", under("File", "Examples")),
+    ("file.example_plc", under("File", "Examples")),
     ("macro.browser", under("File", "Macros")),
     ("macro.import", under("File", "Macros")),
     ("page.new", under("File", "Pages")),
@@ -272,6 +273,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("learn.close", under("Help", "Lesson")),
     // Simulate
     ("sim.live", at("Simulate")),
+    ("sim.controller", at("Simulate")),
     ("sim.why", at("Simulate")),
     ("sim.plc_program", at("Simulate")),
     ("simulate.motor-start", at("Simulate")),
@@ -561,6 +563,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
         "Simulate",
         &[&[
             "sim.live",
+            "sim.controller",
             "sim.why",
             "simulate.motor-start",
             "sim.plc_program",

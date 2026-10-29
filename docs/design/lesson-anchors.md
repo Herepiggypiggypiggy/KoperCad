@@ -35,6 +35,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `drawer.devices`: {ui:drawer.devices} shows **Devices drawer**
 - `drawer.devices.tab`: {ui:drawer.devices.tab} shows **Devices tab**
 - `live.card`: {ui:live.card} shows **Live potentials**
+- `live.controller`: {ui:live.controller} shows **Controller card**
 - `live.pole`: {ui:live.pole} shows **Pole badge**
 - `live.coil`: {ui:live.coil} shows **Coil badge**
 - `live.output`: {ui:live.output} shows **Output badge**
@@ -81,7 +82,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `heat.cooler_layout`: {ui:heat.cooler_layout} shows **Cooler layout button**
 - `heat.advice.add`: {ui:heat.advice.add} shows **Add button of the best option**
 - `heat.whatif.go`: {ui:heat.whatif.go} shows **Try the fixes button**
-- `heat.whatif.apply`: {ui:heat.whatif.apply} shows **Apply button of the fix**
+- `heat.whatif.apply`: {ui:heat.whatif.apply} shows **Add the openings to Vents and fans**
 - `cabinet.canvas`: {ui:cabinet.canvas} shows **Cabinet canvas**
 - `workspace.view3d`: {ui:workspace.view3d} shows **3D canvas**
 - `view3d.heat`: {ui:view3d.heat} shows **Heat button**

@@ -77,6 +77,11 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["kraan voorbeeld", "kraankast voorbeeld"],
     ),
+    nl(
+        "file.example_plc",
+        &[],
+        &["plc kast voorbeeld", "plc voorbeeld"],
+    ),
     nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
     nl(
         "help.walkthrough",
@@ -679,6 +684,17 @@ pub const DUTCH: &[Aliases] = &[
             "live potentialen tonen",
             "contacten sluiten",
             "spanning",
+        ],
+    ),
+    nl(
+        "sim.controller",
+        &["bediening paneel"],
+        &[
+            "afstandsbediening",
+            "hangkast",
+            "zender",
+            "ontvanger",
+            "kraanbediening",
         ],
     ),
     nl(

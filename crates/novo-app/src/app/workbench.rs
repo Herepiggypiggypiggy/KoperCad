@@ -525,6 +525,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.toggle_marks",
     "view.toggle_references",
     "sim.live",
+    "sim.controller",
     "sim.why",
     "sim.plc_program",
     "sim.faults",
@@ -1366,7 +1367,7 @@ impl NovoApp {
             "export.reports" => {
                 self.export_all_reports();
             }
-            "sim.live" | "sim.why" | "sim.plc_program" => {
+            "sim.live" | "sim.why" | "sim.plc_program" | "sim.controller" => {
                 // The live view and the PLC window draw only over the
                 // schematic: go there first so the command is not silent.
                 if self.workspace() != Workspace::Schematic && self.is_open() {
@@ -1378,6 +1379,8 @@ impl NovoApp {
                 }
                 if id == "sim.live" {
                     self.toggle_live();
+                } else if id == "sim.controller" {
+                    self.toggle_controller_panel();
                 } else if id == "sim.why" {
                     self.ask_why();
                 } else {

@@ -1,0 +1,46 @@
+format = 1
+id = "iec/controllers/outputs_9"
+name = "Controller outputs, 9 contacts on one common"
+description = "Dry contacts of a radio receiver or pendant (9 outputs closing a common COM to each output pin). The virtual controller panel of the live view closes them; a generic block, not a vendor receiver."
+standard = "IEC 60617"
+category = "controllers"
+function = "controller.outputs"
+keywords = ["controller", "receiver", "radio", "pendant", "remote", "outputs", "dry contacts", "crane", "afstandsbediening", "ontvanger", "hangkast"]
+aliases = ["rx9"]
+
+connections = [
+  { id = "COM", at = [32, 0], dir = "up" },
+  { id = "1", at = [0, 24], dir = "down" },
+  { id = "2", at = [8, 24], dir = "down" },
+  { id = "3", at = [16, 24], dir = "down" },
+  { id = "4", at = [24, 24], dir = "down" },
+  { id = "5", at = [32, 24], dir = "down" },
+  { id = "6", at = [40, 24], dir = "down" },
+  { id = "7", at = [48, 24], dir = "down" },
+  { id = "8", at = [56, 24], dir = "down" },
+  { id = "9", at = [64, 24], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 12], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [32, 0], to = [32, 4] },
+  { kind = "rect", at = [-4, 4], size = [72, 16] },
+  { kind = "line", from = [0, 20], to = [0, 24] },
+  { kind = "line", from = [8, 20], to = [8, 24] },
+  { kind = "line", from = [16, 20], to = [16, 24] },
+  { kind = "line", from = [24, 20], to = [24, 24] },
+  { kind = "line", from = [32, 20], to = [32, 24] },
+  { kind = "line", from = [40, 20], to = [40, 24] },
+  { kind = "line", from = [48, 20], to = [48, 24] },
+  { kind = "line", from = [56, 20], to = [56, 24] },
+  { kind = "line", from = [64, 20], to = [64, 24] },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+common = "COM"
+poles = [["COM", "1"], ["COM", "2"], ["COM", "3"], ["COM", "4"], ["COM", "5"], ["COM", "6"], ["COM", "7"], ["COM", "8"], ["COM", "9"]]

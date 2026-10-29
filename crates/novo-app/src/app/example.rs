@@ -273,6 +273,14 @@ impl NovoApp {
         );
     }
 
+    /// The PLC cabinet example: CPU, I/O cards and a full cabinet.
+    pub(super) fn open_plc_example(&mut self) {
+        self.open_built_example(
+            super::example_plc::PLC_EXAMPLE_NAME,
+            super::example_plc::build_plc_example,
+        );
+    }
+
     fn open_built_example(
         &mut self,
         name: &str,
