@@ -185,3 +185,20 @@ fn the_menu_draws_in_both_themes_at_a_small_and_a_large_window() {
         }
     }
 }
+
+/// The Help button of the bar (shown when the menu words are hidden) opens
+/// the app menu at its Help area.
+#[test]
+fn the_help_button_opens_the_menu_at_the_help_area() {
+    let (_dir, mut d) = hidden_names();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::NewProject);
+    d.frame();
+    d.frame();
+    assert!(!d.app.wb.app_menu.was_open);
+    d.app.wb.app_menu.open_at = MENUS.iter().position(|m| *m == "Help");
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.app_menu.was_open, "the menu is open");
+    assert_eq!(MENUS[d.app.wb.app_menu.area], "Help");
+}

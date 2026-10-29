@@ -1,0 +1,33 @@
+@title Top bar: Help button, What's new as an icon, workspace tooltip
+@area Layout
+# Follow-up of lane V2a (docs/design/visual-redesign.md section 3.1). With the menu
+# words hidden the bar has a Help icon that opens the app menu at Help, and
+# What's new is a sparkle with its count. The pointer rests on the second
+# workspace button: at 1366 it is an icon whose name is the tooltip; at 1920
+# the names are shown and the pointer is just over the segment.
+fresh
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Hidden
+wait 6
+key Escape
+wait 8
+click_text "Open example"
+wait 40
+shot bar-help-whats-new
+expect "Help"
+check_layout
+move 691 19
+wait 30
+shot workspace-tooltip
+click_text "Help"
+wait 10
+expect "About"
+expect "Lesson"
+shot help-area
+check_layout

@@ -21,6 +21,7 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("dock.proposals", "Proposals"),
     ("issue.pill", "Issues"),
     ("whats_new.pill", "What's new"),
+    ("help.button", "Help button"),
     ("drawer.terminals", "Terminals drawer"),
     ("drawer.terminals.tab", "Terminals tab"),
     ("drawer.terminals.accept", "Accept proposed terminals"),

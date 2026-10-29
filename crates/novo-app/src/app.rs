@@ -2221,6 +2221,14 @@ impl NovoApp {
     fn top_bar(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
         let fit = menu_bar::TopBarFit::at(self.window_width);
         let focus = self.menu_key_pressed(ui.ctx());
+        // The Help button asks for the menu at the Help area.
+        let help_asked = match self.wb.app_menu.open_at.take() {
+            Some(area) => {
+                self.wb.app_menu.area = area;
+                true
+            }
+            None => false,
+        };
         ui.horizontal_centered(|ui| {
             // F10 opens the app menu; with the menu words in the bar it moves the
             // focus to them instead.
@@ -2228,7 +2236,7 @@ impl NovoApp {
                 self.mark(ui, false);
                 self.menu_bar(ui, focus);
             } else {
-                self.mark(ui, focus);
+                self.mark(ui, focus || help_asked);
             }
             ui.separator();
             // Undo and redo leave the dock for the bar; where the menu words need the
@@ -2265,6 +2273,7 @@ impl NovoApp {
                     ui.weak(self.saved_state());
                 }
                 self.issue_pill(ui);
+                self.help_button(ui);
                 if fit.whats_new_pill {
                     self.whats_new_pill(ui);
                 }
