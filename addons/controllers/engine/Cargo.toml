@@ -1,0 +1,30 @@
+# The controller add-on's engine (lane C3): `novo-controller` behind the add-on host API 1,
+# built as `engine.wasm`. A standalone project on purpose (its own workspace, its own lock file):
+# the main workspace builds for the PC, this one for `wasm32-unknown-unknown`. See
+# addons/controllers/README.md and scripts/build-controllers-addon.sh.
+[package]
+name = "controllers-engine"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+novo-controller = { path = "../../../crates/novo-controller" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[lints.rust]
+unsafe_code = "deny"

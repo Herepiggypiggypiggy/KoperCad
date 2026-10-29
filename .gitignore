@@ -5,3 +5,5 @@ tools/*/target
 __pycache__/
 .pytest_cache/
 prof/
+/addons/**/target
+/dist

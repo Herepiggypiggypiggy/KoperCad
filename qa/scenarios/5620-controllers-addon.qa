@@ -1,0 +1,53 @@
+@title Controller add-on: install the pack, open the radio panel, press start and a rocker
+@area Add-ons
+# Lane C3. Needs the built package: run scripts/build-controllers-addon.sh first (it writes
+# dist/controllers-0.1.0.kcaddon). The engine is novo-controller built to WebAssembly.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text add-ons
+wait 8
+key Enter
+wait 10
+answer_dialog dist/controllers-0.1.0.kcaddon
+click_text "Install from file..."
+wait 10
+expect "I trust this file"
+expect "runs in a sandbox"
+shot install-prompt
+check_layout
+click_text "I trust this file"
+wait 4
+click_text "Install" Button
+wait 12
+expect "Controllers"
+shot installed
+check_layout
+key Escape
+wait 4
+key ctrl+k
+wait 6
+text controller panel
+wait 8
+key Enter
+wait 10
+expect "Radio, 3 motions, 2-step"
+expect "Generic stand-in"
+shot panel-idle
+check_layout
+click_text "Main / start" Button
+wait 10
+expect "● Main"
+click_text "Up 2" Button
+wait 10
+expect "● Up slow"
+expect "● Up fast"
+shot hoist-up-step-2
+check_layout
+click_text "E-stop" Button
+wait 10
+expect "○ Main"
+expect "○ Up fast"
+shot estop
+check_layout

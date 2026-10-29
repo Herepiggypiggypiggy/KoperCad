@@ -1,0 +1,111 @@
+# The generic radio panel: drawn by KoperCAD from this data; every button asks the engine.
+
+[[widget]]
+kind = "heading"
+text = "Radio, 3 motions, 2-step"
+
+[[widget]]
+kind = "label"
+text = "Generic stand-in, not a specific product. It simulates wiring and logic only: no radio protocol, receiver firmware or contact bounce."
+weak = true
+
+[[widget]]
+kind = "row"
+widgets = [
+  { kind = "lamp", id = "main", text = "Main", state = "ok", lit = false },
+  { kind = "lamp", id = "estop-ok", text = "E-stop chain", state = "ok", lit = true },
+]
+
+[[widget]]
+kind = "row"
+widgets = [
+  { kind = "button", id = "press-estop", text = "E-stop" },
+  { kind = "button", id = "reset-estop", text = "Reset E-stop" },
+  { kind = "button", id = "tap-stop", text = "Stop" },
+  { kind = "button", id = "press-start", text = "Main / start" },
+]
+
+[[widget]]
+kind = "label"
+text = "Hoist select"
+weak = true
+
+[[widget]]
+kind = "row"
+widgets = [
+  { kind = "button", id = "set-hoist-sel-main", text = "Main hoist" },
+  { kind = "button", id = "set-hoist-sel-mast", text = "Mast hoist" },
+]
+
+[[widget]]
+kind = "label"
+text = "Hoist"
+weak = true
+
+[[widget]]
+kind = "row"
+widgets = [
+  { kind = "button", id = "set-hoist-off", text = "Off" },
+  { kind = "button", id = "set-hoist-up1", text = "Up 1" },
+  { kind = "button", id = "set-hoist-up2", text = "Up 2" },
+  { kind = "button", id = "set-hoist-down1", text = "Down 1" },
+  { kind = "button", id = "set-hoist-down2", text = "Down 2" },
+]
+
+[[widget]]
+kind = "row"
+widgets = [
+  { kind = "lamp", id = "h-up-slow", text = "Up slow", state = "ok", lit = false },
+  { kind = "lamp", id = "h-up-fast", text = "Up fast", state = "ok", lit = false },
+  { kind = "lamp", id = "h-dn-slow", text = "Down slow", state = "ok", lit = false },
+  { kind = "lamp", id = "h-dn-fast", text = "Down fast", state = "ok", lit = false },
+  { kind = "lamp", id = "m-up-slow", text = "Mast up slow", state = "ok", lit = false },
+]
+
+[[widget]]
+kind = "label"
+text = "Bridge"
+weak = true
+
+[[widget]]
+kind = "row"
+widgets = [
+  { kind = "button", id = "set-bridge-off", text = "Off" },
+  { kind = "button", id = "set-bridge-fwd1", text = "Forward 1" },
+  { kind = "button", id = "set-bridge-fwd2", text = "Forward 2" },
+  { kind = "button", id = "set-bridge-rev1", text = "Reverse 1" },
+  { kind = "button", id = "set-bridge-rev2", text = "Reverse 2" },
+]
+
+[[widget]]
+kind = "row"
+widgets = [
+  { kind = "lamp", id = "b-fwd-slow", text = "Fwd slow", state = "ok", lit = false },
+  { kind = "lamp", id = "b-fwd-fast", text = "Fwd fast", state = "ok", lit = false },
+  { kind = "lamp", id = "b-rev-slow", text = "Rev slow", state = "ok", lit = false },
+  { kind = "lamp", id = "b-rev-fast", text = "Rev fast", state = "ok", lit = false },
+]
+
+[[widget]]
+kind = "label"
+text = "Trolley"
+weak = true
+
+[[widget]]
+kind = "row"
+widgets = [
+  { kind = "button", id = "set-trolley-off", text = "Off" },
+  { kind = "button", id = "set-trolley-left1", text = "Left 1" },
+  { kind = "button", id = "set-trolley-left2", text = "Left 2" },
+  { kind = "button", id = "set-trolley-right1", text = "Right 1" },
+  { kind = "button", id = "set-trolley-right2", text = "Right 2" },
+]
+
+[[widget]]
+kind = "row"
+widgets = [
+  { kind = "lamp", id = "t-left-slow", text = "Left slow", state = "ok", lit = false },
+  { kind = "lamp", id = "t-left-fast", text = "Left fast", state = "ok", lit = false },
+  { kind = "lamp", id = "t-right-slow", text = "Right slow", state = "ok", lit = false },
+  { kind = "lamp", id = "t-right-fast", text = "Right fast", state = "ok", lit = false },
+]
