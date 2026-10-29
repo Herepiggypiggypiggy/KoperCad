@@ -1,0 +1,27 @@
+@title Tool rail at 1920x1080: tools, Connect flyout, expand, panels zone (Schematic)
+@area Layout
+@sizes 1920x1080
+# Lane V3a of the visual redesign (docs/design/visual-redesign.md section 3.2).
+# The rail replaces the floating tool dock. Left edge of the Schematic workspace.
+click_text "New project"
+wait 20
+shot rail-collapsed
+check_layout
+click 23 138
+wait 8
+shot connect-flyout
+expect "Wire shape"
+expect "Auto-connect pins that touch"
+check_layout
+key Escape
+wait 6
+expect_not "Wire shape"
+click 23 1034
+wait 8
+shot rail-expanded
+expect "Place symbol"
+expect "Autopilot"
+expect "Terminals"
+check_layout
+click 23 1034
+wait 6

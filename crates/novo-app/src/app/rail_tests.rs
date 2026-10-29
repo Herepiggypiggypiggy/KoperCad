@@ -261,3 +261,30 @@ fn only_the_schematic_has_a_rail_so_far() {
     }
     assert!(d.app.wb.rail_rect.is_none(), "V3c brings the Cabinet rail");
 }
+
+#[test]
+fn the_rail_stays_put_and_clickable_while_a_wire_is_under_way() {
+    use novo_editor::Tool;
+    // The old dock parked in the corner or moved aside while a wire was
+    // drawn (scenarios 796 and 796b). The rail is a side panel: it has no
+    // such state, and Select stays where it was and works.
+    let size = egui::vec2(1366.0, 768.0);
+    let (_dir, mut d) = open(size);
+    let before = d.app.wb.rail_rect.unwrap();
+    let select_at = d.app.learn_anchor("dock.select").unwrap();
+    d.app.canvas.schematic().unwrap().editor.begin_wire();
+    d.frame_sized(size, Vec::new());
+    let tool = |d: &Drive| d.app.canvas.schematic_ref().unwrap().editor.tool().clone();
+    assert!(matches!(tool(&d), Tool::Wire(_)));
+    // Start the wire: a click on the sheet.
+    let (_, canvas) = d.app.wb.canvas_area.unwrap();
+    click(&mut d, size, canvas.center());
+    assert_eq!(
+        d.app.wb.rail_rect.unwrap(),
+        before,
+        "the rail does not move"
+    );
+    assert_eq!(d.app.learn_anchor("dock.select").unwrap(), select_at);
+    click(&mut d, size, select_at.center());
+    assert!(matches!(tool(&d), Tool::Select), "{:?}", tool(&d));
+}
