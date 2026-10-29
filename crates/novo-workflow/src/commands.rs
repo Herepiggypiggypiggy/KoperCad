@@ -2073,6 +2073,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["problems", "proposals"],
         Needs::Page,
     ),
+    cmd(
+        "view.toggle_references",
+        "Show, fade or hide cross references",
+        "View",
+        &["contact", "table", "opacity", "mirror", "xref", "overlap"],
+        Needs::Page,
+    ),
     verb(
         cmd(
             "view.changes",

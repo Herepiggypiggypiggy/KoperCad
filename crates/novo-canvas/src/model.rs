@@ -237,6 +237,8 @@ pub struct ModelStyle {
     pub note_warning_color: Color,
     /// A spare contact of a contact table: present on the device, unused.
     pub note_dim_color: Color,
+    /// Opacity (0 to 255) of a faded note ([`SymbolNote::faded`]).
+    pub note_fade_alpha: u8,
 }
 
 impl Default for ModelStyle {
@@ -266,6 +268,7 @@ impl Default for ModelStyle {
             note_color: Color::rgb(60, 90, 140),
             note_warning_color: Color::rgb(190, 120, 20),
             note_dim_color: Color::rgb(150, 160, 175),
+            note_fade_alpha: 70,
         }
     }
 }
@@ -459,6 +462,9 @@ pub struct SymbolNote {
     pub rows: Vec<NoteRow>,
     /// How tightly the table is drawn.
     pub density: NoteDensity,
+    /// Drawn at [`ModelStyle::note_fade_alpha`] so it stays out of the way
+    /// of lines, parts and text it overlaps.
+    pub faded: bool,
 }
 
 /// The revision fields a title block prints (DESIGN §7), worked out by the
@@ -1837,6 +1843,16 @@ impl PageScene {
         Some(slot)
     }
 
+    /// `color` as `note` is drawn: at the fade opacity when it is faded.
+    fn note_tone(&self, color: Color, note: &SymbolNote) -> Color {
+        if note.faded {
+            let a = u16::from(color.0[3]) * u16::from(self.style.note_fade_alpha) / 255;
+            color.with_alpha(u8::try_from(a).unwrap_or(u8::MAX))
+        } else {
+            color
+        }
+    }
+
     /// The contact table of `note` with its top left corner at `origin`.
     fn table_layout(&self, note: &SymbolNote, origin: Vec2) -> note_table::NoteTable {
         let color = if note.warning {
@@ -1849,9 +1865,9 @@ impl PageScene {
             note.density,
             origin,
             self.style.tag_height,
-            Stroke::world(0.25, color),
-            self.style.note_color,
-            self.style.note_dim_color,
+            Stroke::world(0.25, self.note_tone(color, note)),
+            self.note_tone(self.style.note_color, note),
+            self.note_tone(self.style.note_dim_color, note),
         )
     }
 
@@ -1890,9 +1906,10 @@ impl PageScene {
             )
             .anchored(Anchor::TopLeft);
             let warn = if note.warning {
-                warn.colored(self.style.note_warning_color).keeping_color()
+                warn.colored(self.note_tone(self.style.note_warning_color, note))
+                    .keeping_color()
             } else {
-                warn.colored(self.style.note_color)
+                warn.colored(self.note_tone(self.style.note_color, note))
             };
             bounds = bounds.union(&warn.bounds());
             labels.push(warn);
@@ -2145,9 +2162,11 @@ impl PageScene {
             .anchored(anchor)
             .secondary();
         let label = if note.warning {
-            label.colored(self.style.note_warning_color).keeping_color()
+            label
+                .colored(self.note_tone(self.style.note_warning_color, note))
+                .keeping_color()
         } else {
-            label.colored(self.style.note_color)
+            label.colored(self.note_tone(self.style.note_color, note))
         };
         (ink, label)
     }
@@ -3058,6 +3077,7 @@ mod tests {
             anchor: NoteAnchor::Right,
             rows: Vec::new(),
             density: NoteDensity::default(),
+            faded: false,
         }
     }
 
@@ -3118,6 +3138,7 @@ mod tests {
                 NoteRow::new(NoteGlyph::NormallyOpen, "13-14", "2.2"),
             ],
             density: NoteDensity::default(),
+            faded: false,
         };
         ps.set_notes(doc.project(), [table], &PlaceholderArt);
         let item = |ps: &PageScene| ps.scene().get(item_id(k1)).unwrap().clone();
@@ -3288,6 +3309,7 @@ mod tests {
             anchor: NoteAnchor::Below,
             rows,
             density: NoteDensity::default(),
+            faded: false,
         };
         let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
         ps.set_notes(doc.project(), [table], &PlaceholderArt);
@@ -3362,6 +3384,7 @@ mod tests {
             anchor: NoteAnchor::TopRight,
             rows: Vec::new(),
             density: NoteDensity::default(),
+            faded: false,
         };
         let labels =
             |ps: &PageScene| -> Vec<Label> { ps.scene().get(item_id(k1)).unwrap().labels.clone() };
@@ -3431,6 +3454,7 @@ mod tests {
             anchor,
             rows: Vec::new(),
             density: NoteDensity::default(),
+            faded: false,
         };
         ps.set_notes(
             doc.project(),
@@ -3478,6 +3502,7 @@ mod tests {
             anchor: NoteAnchor::Below,
             rows: rows.clone(),
             density,
+            faded: false,
         };
         let bare = ps.scene().get(item_id(k1)).unwrap().clone();
         ps.set_notes(doc.project(), [table(NoteDensity::Full)], &PlaceholderArt);
@@ -3521,6 +3546,58 @@ mod tests {
             ps.scene().get(item_id(k1)).unwrap().primitives.len(),
             bare.primitives.len()
         );
+    }
+
+    /// A faded table keeps its layout and only loses opacity, so it can be
+    /// faded and restored without anything moving.
+    #[test]
+    fn a_faded_table_is_drawn_in_the_same_place_at_a_lower_opacity() {
+        let (doc, page, k1, _s1, _w) = doc();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let table = |faded| SymbolNote {
+            symbol: k1,
+            lines: vec!["! warning".into()],
+            warning: false,
+            anchor: NoteAnchor::Below,
+            rows: vec![NoteRow::new(NoteGlyph::NormallyOpen, "13-14", "2.3")],
+            density: NoteDensity::Full,
+            faded,
+        };
+        ps.set_notes(doc.project(), [table(false)], &PlaceholderArt);
+        let full = ps.scene().get(item_id(k1)).unwrap().clone();
+        assert!(ps.set_notes(doc.project(), [table(true)], &PlaceholderArt));
+        let faded = ps.scene().get(item_id(k1)).unwrap().clone();
+        assert_eq!(full.labels.len(), faded.labels.len());
+        assert_eq!(full.primitives.len(), faded.primitives.len());
+        let alpha = ps.style.note_fade_alpha;
+        for text in ["13", "14", "2.3", "! warning"] {
+            let of = |item: &crate::scene::Item| {
+                item.labels
+                    .iter()
+                    .find(|l| l.text == text)
+                    .cloned()
+                    .unwrap()
+            };
+            let (a, b) = (of(&full), of(&faded));
+            assert_eq!(a.pos, b.pos, "{text} does not move");
+            assert_eq!(a.color.0[3], 255, "{text}");
+            assert_eq!(b.color.0[3], alpha, "{text} faded");
+        }
+        // The table's own strokes fade too (the symbol itself does not).
+        let table_strokes = |item: &crate::scene::Item| {
+            item.primitives
+                .iter()
+                .filter_map(|p| p.stroke.map(|s| s.color.0[3]))
+                .collect::<Vec<_>>()
+        };
+        let (fa, fu) = (table_strokes(&faded), table_strokes(&full));
+        assert!(
+            fa.iter().filter(|&&a| a == alpha).count() > fu.iter().filter(|&&a| a == alpha).count()
+        );
+        // Restoring brings the full opacity back.
+        ps.set_notes(doc.project(), [table(false)], &PlaceholderArt);
+        let back = ps.scene().get(item_id(k1)).unwrap().clone();
+        assert_eq!(table_strokes(&back), table_strokes(&full));
     }
 
     /// Two rows of one strip over the same x range (supply terminals at

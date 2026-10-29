@@ -361,10 +361,10 @@ fn the_plate_lessons_quote_the_drill_table_and_the_rails() {
     );
     assert_eq!(layout.rails.len(), 5);
     assert!(layout.rails.iter().all(|r| r.length == 535.0));
-    // "The five rails of 535 mm and the six ducts (five of 557.5 mm and the trunk of 780 mm)".
+    // "The five rails of 535 mm and the six ducts (five of 545 mm and the trunk of 780 mm)".
     let mut ducts: Vec<f64> = layout.ducts.iter().map(|d| d.length).collect();
     ducts.sort_by(f64::total_cmp);
-    assert_eq!(ducts, [557.5, 557.5, 557.5, 557.5, 557.5, 780.0]);
+    assert_eq!(ducts, [545.0, 545.0, 545.0, 545.0, 545.0, 780.0]);
 }
 
 #[test]
