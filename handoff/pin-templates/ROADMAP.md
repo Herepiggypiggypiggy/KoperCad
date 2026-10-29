@@ -7,8 +7,10 @@ Done (first PR)
 - Test: every built-in symbol of both packs follows its template.
 - `novo-checks` kind `PinNames` (info, key `check.pin_names`): placed device pins and the terminal names of a single assigned part, in Check > Issues, filter chip "Pin names".
 
+Done (second PR)
+- `suggest_renames` (novo-symbols) and `pin_fix` (novo-checks): Issues right-click on a Pin names problem offers the rename of symbol pins, or of the part's terminals, to the class names. Only clear matches (case/spacing, prefix, single left over); never position guesses.
+
 Next
-- Apply a template when placing a user or imported symbol whose pins are unnamed (rename suggestion with undo).
 - Let a company pack declare its own templates (TOML) next to its symbols.
-- Compare part terminals with symbol pins and offer the mapping on part assignment.
+- Offer the part-terminal mapping at the moment of part assignment (today it is on the Issues row).
 - Templates for PLC cards, network devices and terminals if the shop wants them.

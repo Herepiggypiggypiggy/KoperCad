@@ -141,3 +141,47 @@ fn a_contactor_part_with_coil_and_main_contacts_stays_quiet() {
         .unwrap();
     assert!(pin_names(&project).is_empty(), "{:#?}", pin_names(&project));
 }
+
+fn apply(project: &mut Project, command: novo_core::Command) {
+    project.transact("fix", |tx| tx.execute(command)).unwrap();
+}
+
+#[test]
+fn the_fix_renames_symbol_pins_and_one_undo_step_covers_it() {
+    let mut project = one("iec/motors/motor_3ph", "-M1", &["U", "V", "W", "PE"], &[]);
+    let problem = pin_names(&project).remove(0);
+    let fix = novo_checks::pin_fix(&project, &problem).expect("a clear fix");
+    apply(&mut project, fix.command);
+    let names: Vec<_> = project
+        .symbols()
+        .flat_map(|s| s.pins.iter().map(|p| p.name.clone()))
+        .collect();
+    assert_eq!(names, ["U1", "V1", "W1", "PE"]);
+    assert!(pin_names(&project).is_empty());
+}
+
+#[test]
+fn the_fix_renames_part_terminals_when_the_pins_are_fine() {
+    let mut project = one("iec/coils/contactor", "-K1", &["A1", "A2"], &["a1", "A2"]);
+    let problem = pin_names(&project).remove(0);
+    let fix = novo_checks::pin_fix(&project, &problem).expect("a clear fix");
+    assert!(fix.label.contains("part terminal"));
+    apply(&mut project, fix.command);
+    assert!(pin_names(&project).is_empty());
+    let part = project.parts().next().unwrap();
+    assert!(part.properties.contains_key("pin.A1.x_mm"));
+    assert!(!part.properties.contains_key("pin.a1.x_mm"));
+}
+
+#[test]
+fn no_fix_when_the_names_are_a_guess() {
+    let project = one(
+        "iec/transformers/transformer_1ph",
+        "-T1",
+        &["P", "Q", "R", "S"],
+        &[],
+    );
+    let found = pin_names(&project);
+    assert_eq!(found.len(), 1);
+    assert!(novo_checks::pin_fix(&project, &found[0]).is_none());
+}
