@@ -187,6 +187,48 @@ pub fn panel_of(id: &str) -> Option<&'static str> {
         .map(|(panel, _)| *panel)
 }
 
+/// The commands whose menu row moved to the toolbar (or the row menu) of a
+/// drawer, by the command that opens the drawer. The Terminals drawer's
+/// toolbar and row menu carry every `terminal.*` strip edit; the Cables
+/// drawer has the cable's name field, type picker, Delete cable and
+/// Restore declined. While the drawer is shut a lesson points at the rail
+/// button that opens it.
+pub const DRAWER_TOOLBARS: &[(&str, &[&str])] = &[
+    (
+        "view.terminals_drawer",
+        &[
+            "terminal.add_spares",
+            "terminal.rename",
+            "terminal.renumber",
+            "terminal.join_duplicates",
+            "terminal.set_kind",
+            "terminal.set_level",
+            "terminal.set_jumper",
+            "terminal.order_up",
+            "terminal.order_down",
+            "terminal.style",
+            "terminal.restore_declined",
+        ],
+    ),
+    (
+        "view.cables_drawer",
+        &[
+            "cable.rename",
+            "cable.delete",
+            "cable.retype",
+            "cable.restore_proposals",
+        ],
+    ),
+];
+
+/// The command that opens the drawer whose toolbar carries `id`.
+pub fn drawer_of(id: &str) -> Option<&'static str> {
+    DRAWER_TOOLBARS
+        .iter()
+        .find(|(_, ids)| ids.contains(&id))
+        .map(|(drawer, _)| *drawer)
+}
+
 /// Every home of the command `id`, menu first. Empty only for a command that
 /// has none, which the test below does not allow.
 pub fn homes(id: &str) -> Vec<Home> {
@@ -197,6 +239,9 @@ pub fn homes(id: &str) -> Vec<Home> {
     out.extend(RELOCATED.iter().filter(|(i, _)| *i == id).map(|(_, h)| *h));
     if crate::centres::in_centre(id) {
         out.push(Home::Centre);
+    }
+    if drawer_of(id).is_some() {
+        out.push(Home::DrawerToolbar);
     }
     if let Some(panel) = panel_of(id) {
         out.push(Home::Panel(panel));
@@ -251,6 +296,21 @@ mod tests {
                 assert!(seen.insert(*id), "{id} is on two panels");
                 assert!(menus::place(info).is_none(), "{id} still has a menu row");
                 assert!(matches!(homes(id).as_slice(), [Home::Panel(_)]), "{id}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_drawer_toolbars_list_real_commands_once_and_no_menu_row_is_left() {
+        let mut seen = HashSet::new();
+        for (drawer, ids) in DRAWER_TOOLBARS {
+            assert!(crate::commands::get(drawer).is_some(), "{drawer}");
+            for id in *ids {
+                assert!(crate::commands::get(id).is_some(), "{id} is not a command");
+                assert!(seen.insert(*id), "{id} is in two drawers");
+                let info = crate::commands::get(id).unwrap();
+                assert!(menus::place(info).is_none(), "{id} still has a menu row");
+                assert!(homes(id).contains(&Home::DrawerToolbar), "{id}");
             }
         }
     }

@@ -23,6 +23,7 @@ struct Cmd {
     sto_a: bool,
     sto_b: bool,
     encoder: bool,
+    encoder_b: bool,
     /// The brake contactor pulls in when the drive's relay contact is closed.
     contactor_follows_relay: bool,
     /// A welded brake contactor: the coil is fed whatever the relay says.
@@ -38,6 +39,7 @@ impl Default for Cmd {
             sto_a: true,
             sto_b: true,
             encoder: true,
+            encoder_b: true,
             contactor_follows_relay: true,
             contactor_welded: false,
         }
@@ -58,6 +60,7 @@ fn winch(extra: &[(&str, &str)]) -> ClWinchModule {
         ("cw_sto_a", "STOA"),
         ("cw_sto_b", "STOB"),
         ("cw_encoder", "ENC"),
+        ("cw_encoder_b", "ENCB"),
         ("cw_brake_relay", "KR"),
         ("cw_brake_feed", "KB"),
     ];
@@ -85,6 +88,7 @@ fn rig(extra: &[(&str, &str)]) -> (ClWinchLoop, FakeCircuit, Shared) {
             ("STOA", cmd.sto_a),
             ("STOB", cmd.sto_b),
             ("ENC", cmd.encoder),
+            ("ENCB", cmd.encoder_b),
             (
                 "KB",
                 cmd.contactor_welded || (cmd.contactor_follows_relay && relay_closed),
@@ -100,7 +104,7 @@ fn rig(extra: &[(&str, &str)]) -> (ClWinchLoop, FakeCircuit, Shared) {
     let mut circuit = circuit;
     circuit
         .known
-        .extend(["KU", "KD", "KF", "STOA", "STOB", "ENC", "KR", "KB"].map(str::to_owned));
+        .extend(["KU", "KD", "KF", "STOA", "STOB", "ENC", "ENCB", "KR", "KB"].map(str::to_owned));
     let mut l = ClWinchLoop::new(StepConfig::new(DT).unwrap()).unwrap();
     l.modules.push(winch(extra));
     (l, circuit, cmd)
@@ -286,6 +290,40 @@ fn a_flapping_encoder_signal_keeps_a_capped_list_and_counts_the_rest() {
     let m = l.module("=M1").unwrap();
     assert_eq!(m.findings().len(), MAX_FINDINGS);
     assert!(m.findings_dropped() > 0);
+}
+
+#[test]
+fn a_lost_encoder_channel_is_found_and_lowering_trips_the_drive() {
+    let (mut l, mut c, cmd) = rig(&[]);
+    // Lifting: the counts of a one-channel encoder still run upward, the drive does not notice.
+    cmd.borrow_mut().up = true;
+    seconds(&mut l, &mut c, 3.0);
+    cmd.borrow_mut().encoder_b = false;
+    seconds(&mut l, &mut c, 2.0);
+    {
+        let m = l.module("=M1").unwrap();
+        assert!(has(m, |k| matches!(k, ClFindingKind::EncoderChannelLost)));
+        assert!(
+            !has(m, |k| matches!(k, ClFindingKind::Trip(_))),
+            "{:?}",
+            m.findings()
+        );
+    }
+    // Lowering: the shaft turns down but the counts say up, so the speed loop runs away from
+    // the reference and the drive trips on its own plausibility or deviation check.
+    {
+        let mut c2 = cmd.borrow_mut();
+        c2.up = false;
+        c2.down = true;
+    }
+    seconds(&mut l, &mut c, 4.0);
+    let m = l.module("=M1").unwrap();
+    assert!(
+        has(m, |k| matches!(k, ClFindingKind::Trip(_))),
+        "{:?}",
+        m.findings()
+    );
+    assert!(!has(m, |k| matches!(k, ClFindingKind::EncoderSignalLost)));
 }
 
 #[test]

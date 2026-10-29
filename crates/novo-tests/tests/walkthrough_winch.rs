@@ -196,6 +196,27 @@ fn a_lost_encoder_signal_is_found_and_a_wrong_statement_fails() {
 }
 
 #[test]
+fn a_lost_encoder_channel_is_found_by_name() {
+    let mut doc = Document::default();
+    novo_tests::closed_winch::closed_winch_channel(&mut doc).unwrap();
+    let w = Walkthrough::new("lost channel")
+        .at(1.0, press(BUTTON, true))
+        .at(4.0, open_coil("=A1+CAB-ENCH"))
+        .at(
+            8.0,
+            winch(
+                M1,
+                WinchIs::Found {
+                    finding: FindingName::EncoderChannelLost,
+                },
+            ),
+        );
+    let report = single(&w, &doc);
+    let last = report.steps.last().unwrap();
+    assert_eq!(last.verdict, Verdict::Pass, "{}", last.detail);
+}
+
+#[test]
 fn a_winch_that_is_not_in_the_project_is_named() {
     let mut doc = Document::default();
     closed_winch(&mut doc).unwrap();

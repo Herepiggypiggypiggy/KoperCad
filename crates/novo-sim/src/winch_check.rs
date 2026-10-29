@@ -29,6 +29,8 @@ pub enum FindingName {
     StoRequested,
     /// The encoder signal device lost its supply or its wire.
     EncoderSignalLost,
+    /// One encoder channel (the direction) lost its device's supply or wire.
+    EncoderChannelLost,
     /// The hook moved with the drive off and the brake commanded closed (single winch).
     BrakeSlip,
     /// The hook went against the command after the brake relay closed (single winch).
@@ -47,6 +49,7 @@ impl FindingName {
             Self::Trip => "a drive trip",
             Self::StoRequested => "safe torque off",
             Self::EncoderSignalLost => "a lost encoder signal",
+            Self::EncoderChannelLost => "a lost encoder channel",
             Self::BrakeSlip => "a brake slip",
             Self::StartRollback => "a start rollback",
             Self::PairStopped => "the pair stopping itself",
@@ -125,6 +128,10 @@ fn found(side: &MachineSide, id: &str, what: FindingName) -> bool {
                         ClFindingKind::EncoderSignalLost,
                         FindingName::EncoderSignalLost
                     )
+                    | (
+                        ClFindingKind::EncoderChannelLost,
+                        FindingName::EncoderChannelLost
+                    )
                     | (ClFindingKind::BrakeSlip { .. }, FindingName::BrakeSlip)
                     | (
                         ClFindingKind::StartRollback { .. },
@@ -141,6 +148,7 @@ fn found(side: &MachineSide, id: &str, what: FindingName) -> bool {
             (ClPairFindingKind::Trip { winch, .. }, FindingName::Trip)
             | (ClPairFindingKind::StoRequested { winch }, FindingName::StoRequested)
             | (ClPairFindingKind::EncoderSignalLost { winch }, FindingName::EncoderSignalLost)
+            | (ClPairFindingKind::EncoderChannelLost { winch }, FindingName::EncoderChannelLost)
             | (ClPairFindingKind::Overload { winch, .. }, FindingName::Overload)
             | (ClPairFindingKind::Slack { winch }, FindingName::Slack) => *winch == i,
             (ClPairFindingKind::Sync(_), FindingName::PairStopped) => true,

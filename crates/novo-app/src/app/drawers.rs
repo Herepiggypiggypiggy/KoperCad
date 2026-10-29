@@ -189,6 +189,7 @@ impl NovoApp {
                             &mut self.wb.terminal_edit,
                             &declined_terminals,
                             &mut toolbar,
+                            &mut spots,
                         );
                         match strip {
                             Some(strip) => {
