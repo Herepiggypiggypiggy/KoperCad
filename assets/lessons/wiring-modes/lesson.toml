@@ -62,22 +62,22 @@ id = "corners-tool"
 title = "Start a wire with the wire tool"
 title_nl = "Begin een draad met het draadgereedschap"
 text = """
-Pins that do not face each other need bends. The wire tool lets you click your way from pin to pin. The dock shows which mode it is in. In **Corners** you click only where the wire should turn, and KoperCAD draws the straight pieces between your clicks.
+Pins that do not face each other need bends. The wire tool lets you click your way from pin to pin. The Connect flyout on the rail shows which mode it is in. In **Corners** you click only where the wire should turn, and KoperCAD draws the straight pieces between your clicks.
 """
 text_nl = """
-Pennen die niet naar elkaar wijzen hebben knikken nodig. Met het draadgereedschap klik je je weg van pen naar pen. Het dock toont de modus. In **Corners** klik je alleen waar de draad moet afbuigen, en KoperCAD tekent de rechte stukken tussen je klikken.
+Pennen die niet naar elkaar wijzen hebben knikken nodig. Met het draadgereedschap klik je je weg van pen naar pen. De uitklapper van Connect in de balk toont de modus. In **Corners** klik je alleen waar de draad moet afbuigen, en KoperCAD tekent de rechte stukken tussen je klikken.
 """
 how = [
-  "Press {key:tool.connect}. The dock shows the wire tool and the mode chip **Corners**.",
+  "Press {key:tool.connect}. The rail lights Connect, and its flyout ticks **Corners**.",
   "If the chip says **Lines**, press {key:wire.mode} once to go back to Corners.",
 ]
 how_nl = [
-  "Druk op {key:tool.connect}. Het dock toont het draadgereedschap en de modus **Corners**.",
+  "Druk op {key:tool.connect}. De balk verlicht Connect en de uitklapper vinkt **Corners** aan.",
   "Staat er **Lines**, druk dan één keer op {key:wire.mode} om terug te gaan naar Corners.",
 ]
 demo = [
   { press = "tool.connect" },
-  { say = "In the dock the Corners chip is lit. If Lines is lit instead, click Corners.", say_nl = "In het dock is de chip Corners verlicht. Is Lines verlicht, klik dan op Corners." },
+  { say = "In the Connect flyout Corners is ticked. If Lines is ticked instead, click Corners.", say_nl = "In de uitklapper van Connect is Corners aangevinkt. Is Lines aangevinkt, klik dan op Corners." },
 ]
 point = { ui = "dock.corners" }
 expect = { tool = "wire" }
@@ -128,14 +128,14 @@ text_nl = """
 In **Lines** wordt elke klik een knik precies waar jij hem zet, zonder router ertussen. Het is de modus voor als een draad langs een precieze plek moet lopen.
 """
 how = [
-  "Press {key:wire.mode}. The mode chip in the dock changes from **Corners** to **Lines**.",
+  "Press {key:wire.mode}. The tick in the Connect flyout moves from **Corners** to **Lines**.",
 ]
 how_nl = [
-  "Druk op {key:wire.mode}. De modusknop in het dock wisselt van **Corners** naar **Lines**.",
+  "Druk op {key:wire.mode}. Het vinkje in de uitklapper van Connect gaat van **Corners** naar **Lines**.",
 ]
 demo = [
   { press = "wire.mode" },
-  { say = "The Lines chip in the dock lights up.", say_nl = "De chip Lines in het dock licht op." },
+  { say = "Lines is ticked in the Connect flyout.", say_nl = "Lines is aangevinkt in de uitklapper van Connect." },
 ]
 point = { ui = "dock.lines" }
 expect = { wiring_mode = "lines" }
