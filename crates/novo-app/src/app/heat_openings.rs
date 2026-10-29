@@ -424,7 +424,7 @@ pub(super) struct DragPhase {
 }
 
 /// How far down from the view's top edge the 3D view toolbar reaches.
-const TOOLBAR_CLEAR: f32 = 112.0 + super::view3d_controls::CHIP_SHIFT;
+const TOOLBAR_CLEAR: f32 = 112.0;
 
 /// Paints the labels over the 3D view and reports a click on one, or a drag
 /// of one (which slides its opening along the wall).

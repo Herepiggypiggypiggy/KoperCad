@@ -3,6 +3,7 @@
 
 use eframe::egui;
 
+use super::gate1_tests::Drive;
 use super::heat_status::SimStatus;
 use super::sim_chip::{Ask, Tone, describe};
 use super::view3d_tests::drive_with_cabinet;
@@ -73,6 +74,32 @@ fn chip_rect(ctx: &egui::Context) -> Option<egui::Rect> {
         .flatten()
 }
 
+/// Everything one frame paints as text.
+fn painted_text(d: &mut Drive, size: egui::Vec2) -> String {
+    let input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+        ..Default::default()
+    };
+    let app = &mut d.app;
+    let output = d.ctx.run_ui(input, |ui| app.show(ui));
+    let mut text = String::new();
+    for clipped in &output.shapes {
+        collect_text(&clipped.shape, &mut text);
+    }
+    text
+}
+
+fn collect_text(shape: &egui::Shape, out: &mut String) {
+    match shape {
+        egui::Shape::Text(t) => {
+            out.push_str(t.galley.text());
+            out.push('\n');
+        }
+        egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect_text(s, out)),
+        _ => {}
+    }
+}
+
 #[test]
 fn the_3d_view_shows_the_chip_with_heat_off_and_every_panel_closed() {
     let dir = tempfile::tempdir().unwrap();
@@ -84,15 +111,24 @@ fn the_3d_view_shows_the_chip_with_heat_off_and_every_panel_closed() {
     for _ in 0..4 {
         d.frame_sized(size, Vec::new());
     }
-    let chip = chip_rect(&ctx).expect("the chip is drawn with Heat off");
+    // The status is the first row of the toolbar, not a window of its own:
+    // it takes no room from the panels under the toolbar.
+    assert!(chip_rect(&ctx).is_none(), "3D has no separate chip card");
+    let text = painted_text(&mut d, size);
+    assert!(text.contains("Heat has not been run"), "{text}");
+    assert!(text.contains("Run heat"), "{text}");
     let canvas = d.app.learn_anchor("workspace.view3d").expect("canvas");
-    // Top left of the canvas, inset by the margin.
-    assert!(chip.left() - canvas.left() < 30.0 && chip.top() - canvas.top() < 30.0);
-    // The 3D toolbar starts below it, not under it.
     let toolbar = ctx
         .memory(|m| m.area_rect(super::panel::id("view3d_toolbar")))
         .expect("toolbar");
-    assert!(toolbar.top() >= chip.bottom(), "{toolbar:?} {chip:?}");
+    assert!(
+        toolbar.left() - canvas.left() < 30.0 && toolbar.top() - canvas.top() < 30.0,
+        "{toolbar:?} {canvas:?}"
+    );
+    assert!(
+        toolbar.bottom() - canvas.top() <= super::view3d_controls::BELOW,
+        "the panels under the toolbar start at BELOW: {toolbar:?} {canvas:?}"
+    );
 }
 
 #[test]
@@ -114,7 +150,8 @@ fn the_chip_follows_the_one_status_value_in_3d() {
         d.app.cabinet.heat.sim_status(),
         SimStatus::Failed(_)
     ));
-    assert!(chip_rect(&ctx).is_some());
+    let text = painted_text(&mut d, size);
+    assert!(text.contains("Heat failed"), "{text}");
 }
 
 #[test]

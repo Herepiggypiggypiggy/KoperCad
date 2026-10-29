@@ -19,7 +19,7 @@ pub(super) const CUBE_SIZE: f32 = 88.0;
 const CUBE_MARGIN: f32 = 12.0;
 const GAP: f32 = 8.0;
 /// What the toolbar covers from the view's top, with the strip above it.
-const TOOLBAR_CLEAR: f32 = 115.0 + super::view3d_controls::CHIP_SHIFT;
+const TOOLBAR_CLEAR: f32 = 115.0;
 
 /// Top right corner of the panel: under the cube, inside the view.
 #[cfg(test)]
@@ -113,7 +113,7 @@ pub(super) fn show(
     .top(if super::panel::reserved_bottom_right(ctx) > 0.0 {
         CUBE_MARGIN
     } else {
-        CUBE_MARGIN + CUBE_SIZE + GAP + super::view3d_controls::CHIP_SHIFT
+        CUBE_MARGIN + CUBE_SIZE + GAP
     })
     .height(420.0)
     .above_card()

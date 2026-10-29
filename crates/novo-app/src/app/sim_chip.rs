@@ -1,7 +1,8 @@
-//! The simulation status chip: one small card in the top left corner of the
-//! Cabinet and the 3D view that says whether the heat simulation was run,
-//! how far it is, whether the result still fits the cabinet, and offers the
-//! one action that fits (Run, Cancel, Show heat). It reads
+//! The simulation status chip: one row, in the top left corner of the Cabinet
+//! (a card of its own) and as the first row of the 3D toolbar, that says
+//! whether the heat simulation was run, how far it is, whether the result
+//! still fits the cabinet, and offers the one action that fits (Run, Cancel,
+//! Show heat). It reads
 //! [`HeatState::sim_status`], the same value as the Cabinet strip and the 3D
 //! Heat panel, so it is there with every section folded and the panel closed,
 //! and the person never has to go back to the Cabinet to find out
@@ -13,8 +14,8 @@ use super::heat::HeatState;
 use super::heat_status::SimStatus;
 use super::panel::{MARGIN, Panel, Side};
 
-/// Room the chip takes at the top left, gap included: panels that start at
-/// the top of the canvas on that side start below it.
+/// Room the Cabinet's chip card takes at the top left, gap included: panels
+/// that start at the top of the Cabinet canvas on that side start below it.
 pub(super) const TOP_ROOM: f32 = MARGIN + 48.0 + 6.0;
 
 /// Below this canvas width the detail line moves into the tooltip.
@@ -114,20 +115,20 @@ pub(super) fn describe(status: &SimStatus, heat_visible: bool) -> Chip {
     }
 }
 
-/// Draws the chip over `view` (the canvas) and applies its action to
-/// `state`. Returns what was asked when the caller has more to do (only
-/// `ShowHeat`: showing the result is the view's business, the state just
-/// switches heat on).
-pub(super) fn show(
-    ctx: &egui::Context,
-    view: egui::Rect,
+/// One row of the chip: the marker, the words, the bar of a run, the detail
+/// and the one button. It is the first row of the 3D toolbar and the content
+/// of the Cabinet's chip. The action is applied to `state`; what was asked is
+/// returned for a caller with more to do (only `ShowHeat`: showing the result
+/// is the view's business, the state just switches heat on).
+pub(super) fn row(
+    ui: &mut egui::Ui,
     state: &mut HeatState,
     heat_visible: bool,
     reduce_motion: bool,
 ) -> Option<Ask> {
     let status = state.sim_status();
     let chip = describe(&status, heat_visible);
-    let narrow = view.width() < NARROW;
+    let narrow = ui.max_rect().width() < NARROW;
     let pal = crate::theme::ui_palette();
     let colour = match chip.tone {
         Tone::Quiet | Tone::Busy => pal.text_secondary,
@@ -136,18 +137,8 @@ pub(super) fn show(
         Tone::Bad => pal.error,
     };
     let mut asked = None;
-    Panel::new(
-        "sim_status_chip",
-        "Simulation status",
-        view,
-        Side::Left,
-        520.0,
-    )
-    .bare()
-    .fit()
-    .top(MARGIN)
-    .show(ctx, |ui| {
-        ui.horizontal(|ui| {
+    let whole = ui
+        .horizontal(|ui| {
             ui.label(egui::RichText::new(chip.marker).strong().color(colour));
             ui.label(egui::RichText::new(&chip.words).strong());
             if let Some(fraction) = chip.progress {
@@ -170,24 +161,47 @@ pub(super) fn show(
                     .truncate(),
                 );
             }
-            if let Some((label, ask)) = chip.action {
-                let button = ui.button(label);
-                if button.clicked() {
-                    asked = Some(ask);
-                }
+            if let Some((label, ask)) = chip.action
+                && ui.button(label).clicked()
+            {
+                asked = Some(ask);
             }
-        });
-    })
-    .map(|r| {
-        // The whole chip says it in full on hover, also on a narrow canvas.
-        r.response
-            .on_hover_text(format!("{}\n{}", chip.words, chip.detail))
-    });
+        })
+        .response;
+    // The whole chip says it in full on hover, also on a narrow canvas.
+    whole.on_hover_text(format!("{}\n{}", chip.words, chip.detail));
     match asked {
         Some(Ask::Run) => state.request_run(),
         Some(Ask::Cancel) => state.cancel(),
         Some(Ask::ShowHeat) => state.on = true,
         None => {}
     }
+    asked
+}
+
+/// The chip as a card of its own over `view` (the Cabinet canvas): the 3D
+/// view has it as the first row of its toolbar instead, so it takes no room
+/// from the panels under it.
+pub(super) fn show(
+    ctx: &egui::Context,
+    view: egui::Rect,
+    state: &mut HeatState,
+    heat_visible: bool,
+    reduce_motion: bool,
+) -> Option<Ask> {
+    let mut asked = None;
+    Panel::new(
+        "sim_status_chip",
+        "Simulation status",
+        view,
+        Side::Left,
+        520.0,
+    )
+    .bare()
+    .fit()
+    .top(MARGIN)
+    .show(ctx, |ui| {
+        asked = row(ui, state, heat_visible, reduce_motion);
+    });
     asked
 }
