@@ -275,9 +275,15 @@ pub fn plan_route(
     if !corners.is_empty() {
         return Err(refusal);
     }
+    // A detour around the symbols runs outside the box of the two pins.
+    let room = if crate::geometry::detour(a, from, b, to, 0.0).is_some() {
+        crate::geometry::STUB + f64::from(MAX_NUDGE_STEPS) * NUDGE_STEP + 10.0
+    } else {
+        0.0
+    };
     let (lo, hi) = (
-        Point::new(a.x.min(b.x), a.y.min(b.y)),
-        Point::new(a.x.max(b.x), a.y.max(b.y)),
+        Point::new(a.x.min(b.x) - room, a.y.min(b.y) - room),
+        Point::new(a.x.max(b.x) + room, a.y.max(b.y) + room),
     );
     for step in 1..=MAX_NUDGE_STEPS {
         for sign in [1.0, -1.0] {

@@ -1,0 +1,35 @@
+@title Hide cross references of one coil or a whole page on screen, from View > Cross references (1366x768)
+@area Schematic
+@sizes 1366x768
+# View > Cross references holds the three commands. Hiding a coil's references removes its table and the coil location next to its contacts; hiding a page removes them all on that page. Both are kept in the project, undo, and show a status bar chip that brings them back. The PDF still prints them.
+open qa/fixtures/contact-mirror.kopercad
+wait 30
+key PageDown
+wait 10
+shot full
+click_text "View"
+wait 15
+click_text "Cross references"
+wait 15
+shot view-menu-cross-references
+key Escape
+key Escape
+wait 10
+click 170 345
+wait 30
+shot coil-selected
+key ctrl+k
+wait 10
+text hide cross references of the selected
+wait 10
+key Enter
+wait 30
+shot coil-references-hidden
+key ctrl+k
+wait 10
+text hide cross references on this page
+wait 10
+key Enter
+wait 30
+shot page-references-hidden
+check_layout

@@ -1602,3 +1602,11 @@ fn set_location_ignores_wires_caught_in_a_box_selection() {
     run(&mut doc, command);
     assert_eq!(location_of(&doc, "+FIELD-M1").as_deref(), Some("+FIELD"));
 }
+
+#[test]
+fn the_cross_reference_screen_choice_is_not_a_typed_property() {
+    // `xref.hide` (a page or device hides its cross references on screen)
+    // has its own command, so the property sheet and the bulk table skip it.
+    assert!(novo_parts::is_internal_key("xref.hide"));
+    assert!(!novo_parts::is_internal_key("contacts.no"));
+}

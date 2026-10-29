@@ -59,6 +59,9 @@ pub struct Settings {
     /// drawn `"full"` (empty), `"faded"` or `"hidden"` on screen: a
     /// per-user choice that never changes the printed drawing.
     pub xref_view: String,
+    /// How strongly faded cross references are faded: `"light"`, `"medium"`
+    /// (empty) or `"strong"`.
+    pub xref_fade: String,
     /// The colour theme, `"dark"` (empty), `"light"` or `"system"`.
     pub appearance_theme: String,
     /// The interface density, `"standard"` (empty), `"compact"` or `"touch"`.
@@ -356,6 +359,11 @@ impl Settings {
         XrefView::from_id(&self.xref_view)
     }
 
+    /// The opacity (0 to 255) of a faded cross reference.
+    pub fn xref_fade_alpha(&self) -> u8 {
+        XrefFade::from_id(&self.xref_fade).alpha()
+    }
+
     /// The density of the coil contact table.
     pub fn xref_density(&self) -> novo_canvas::model::NoteDensity {
         novo_canvas::model::NoteDensity::from_id(&self.xref_density)
@@ -549,6 +557,9 @@ mod tests {
 pub enum XrefView {
     #[default]
     Full,
+    /// Full, except where one overlaps a wire, a symbol or text it cannot
+    /// move away from: there it is faded.
+    Overlap,
     /// Low opacity, so they stay out of the way of lines, parts and text;
     /// the ones of the selected or hovered coil or contact stay full.
     Faded,
@@ -556,9 +567,17 @@ pub enum XrefView {
 }
 
 impl XrefView {
+    pub const ALL: [XrefView; 4] = [
+        XrefView::Full,
+        XrefView::Overlap,
+        XrefView::Faded,
+        XrefView::Hidden,
+    ];
+
     pub fn id(self) -> &'static str {
         match self {
             XrefView::Full => "full",
+            XrefView::Overlap => "overlap",
             XrefView::Faded => "faded",
             XrefView::Hidden => "hidden",
         }
@@ -566,18 +585,60 @@ impl XrefView {
 
     pub fn from_id(id: &str) -> Self {
         match id {
+            "overlap" => XrefView::Overlap,
             "faded" => XrefView::Faded,
             "hidden" => XrefView::Hidden,
             _ => XrefView::Full,
         }
     }
 
-    /// Full, then faded, then hidden, then full again.
+    /// Full, then faded where they overlap, then faded, then hidden, then
+    /// full again.
     pub fn next(self) -> Self {
         match self {
-            XrefView::Full => XrefView::Faded,
+            XrefView::Full => XrefView::Overlap,
+            XrefView::Overlap => XrefView::Faded,
             XrefView::Faded => XrefView::Hidden,
             XrefView::Hidden => XrefView::Full,
+        }
+    }
+}
+
+/// How strongly a faded cross reference is faded.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum XrefFade {
+    /// About half the opacity: still easy to read.
+    Light,
+    /// About a quarter.
+    #[default]
+    Medium,
+    /// About an eighth: only a trace.
+    Strong,
+}
+
+impl XrefFade {
+    pub fn id(self) -> &'static str {
+        match self {
+            XrefFade::Light => "light",
+            XrefFade::Medium => "medium",
+            XrefFade::Strong => "strong",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Self {
+        match id {
+            "light" => XrefFade::Light,
+            "strong" => XrefFade::Strong,
+            _ => XrefFade::Medium,
+        }
+    }
+
+    /// Opacity, 0 to 255.
+    pub fn alpha(self) -> u8 {
+        match self {
+            XrefFade::Light => 130,
+            XrefFade::Medium => 70,
+            XrefFade::Strong => 36,
         }
     }
 }

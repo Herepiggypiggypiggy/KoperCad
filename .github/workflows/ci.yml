@@ -73,6 +73,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       cfd: ${{ steps.diff.outputs.cfd }}
+      addon: ${{ steps.diff.outputs.addon }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,15 +81,22 @@ jobs:
       - id: diff
         run: |
           cfd=true
+          addon=true
           if [ "${{ github.event_name }}" = pull_request ]; then
             cfd=false
+            addon=false
+            if git diff --name-only "origin/${{ github.base_ref }}...HEAD" \
+              | grep -Eq '^(addons/|crates/(novo-controller|novo-addons|novo-cli)/|crates/novo-tests/tests/controllers_addon\.rs|scripts/build-controllers-addon\.sh|Cargo\.lock$|\.github/workflows/ci\.yml$)'; then
+              addon=true
+            fi
             if git diff --name-only "origin/${{ github.base_ref }}...HEAD" \
               | grep -Eq '^(crates/(novo-cfd|novo-layout|novo-thermal|novo-core|novo-parts|novo-terminals|novo-symbols|novo-tests)/|Cargo\.(toml|lock)$|rust-toolchain|\.github/workflows/ci\.yml$)'; then
               cfd=true
             fi
           fi
           echo "cfd=$cfd" >> "$GITHUB_OUTPUT"
-          echo "novo-cfd tests: $cfd" >> "$GITHUB_STEP_SUMMARY"
+          echo "addon=$addon" >> "$GITHUB_OUTPUT"
+          echo "novo-cfd tests: $cfd, controller add-on: $addon" >> "$GITHUB_STEP_SUMMARY"
 
   # All tests except novo-cfd: unit and integration tests under nextest, doc
   # tests under `cargo test --doc` (nextest does not run those).
@@ -136,20 +144,55 @@ jobs:
       - if: matrix.shard == 1
         run: cargo test -p novo-cfd --doc
 
+  # The controller add-on (lane C3): the engine is built to WebAssembly, packed with
+  # kopercad-cli, installed into a store and driven through the add-on host. Skipped on pull
+  # requests that touch none of its parts; main and manual runs always build it. The package is
+  # kept as an artifact for 14 days (the release thread publishes it with a signature).
+  controllers-addon:
+    name: controllers add-on
+    needs: changes
+    if: needs.changes.outputs.addon == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: linux-controllers-addon
+          workspaces: |
+            .
+            addons/controllers/engine
+      - run: cargo test --locked --manifest-path addons/controllers/engine/Cargo.toml
+      - run: cargo clippy --locked --manifest-path addons/controllers/engine/Cargo.toml --all-targets -- -D warnings
+      - run: scripts/build-controllers-addon.sh
+      - run: cargo test -p novo-tests --test controllers_addon -- --nocapture
+        env:
+          KOPERCAD_REQUIRE_CONTROLLERS_PACK: "1"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: controllers-addon
+          path: target/addons/controllers-*.kcaddon
+          retention-days: 14
+
   # One required check for branch protection and the merge leads: green only
   # when lint and every test shard passed.
   linux:
     name: ubuntu-latest
     if: always() && github.event_name != 'schedule'
-    needs: [lint, test, changes, test-cfd]
+    needs: [lint, test, changes, test-cfd, controllers-addon]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - run: |
-          echo "lint: ${{ needs.lint.result }}, test: ${{ needs.test.result }}, changes: ${{ needs.changes.result }}, cfd: ${{ needs.test-cfd.result }}"
+          echo "lint: ${{ needs.lint.result }}, test: ${{ needs.test.result }}, changes: ${{ needs.changes.result }}, cfd: ${{ needs.test-cfd.result }}, controllers add-on: ${{ needs.controllers-addon.result }}"
           [ "${{ needs.lint.result }}" = success ] && [ "${{ needs.test.result }}" = success ] \
             && [ "${{ needs.changes.result }}" = success ] \
-            && { [ "${{ needs.test-cfd.result }}" = success ] || [ "${{ needs.test-cfd.result }}" = skipped ]; }
+            && { [ "${{ needs.test-cfd.result }}" = success ] || [ "${{ needs.test-cfd.result }}" = skipped ]; } \
+            && { [ "${{ needs.controllers-addon.result }}" = success ] || [ "${{ needs.controllers-addon.result }}" = skipped ]; }
 
   # Decides whether the Windows job runs. Pull requests never get one.
   gate:

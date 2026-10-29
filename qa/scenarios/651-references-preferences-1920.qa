@@ -1,0 +1,17 @@
+@title Preferences > Cross references: how they show on screen and how strongly they fade (1920x1080)
+@area Schematic
+@sizes 1920x1080
+# The choices live in Preferences > Cross references: "Cross references on screen" (Full, Fade where they overlap, Faded, Hidden) and "How strongly they fade" (Light, Medium, Strong). The same choices are on Shift+X and View > Cross references.
+open qa/fixtures/references-overlap.kopercad
+wait 30
+key ctrl+k
+wait 10
+text preferences
+wait 10
+key Enter
+wait 30
+shot preferences
+scroll 960 500 -900
+wait 20
+shot preferences-cross-references
+check_layout

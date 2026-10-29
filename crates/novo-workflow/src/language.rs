@@ -73,6 +73,11 @@ pub const DUTCH: &[Aliases] = &[
         &["motorgroepenkast voorbeeld", "kast voorbeeld"],
     ),
     nl(
+        "file.example_crane",
+        &[],
+        &["kraan voorbeeld", "kraankast voorbeeld"],
+    ),
+    nl(
         "file.example_plc",
         &[],
         &["plc kast voorbeeld", "plc voorbeeld"],
@@ -728,6 +733,17 @@ pub const DUTCH: &[Aliases] = &[
         &["kraan", "haak", "rem", "eindschakelaar", "tweesnelheden"],
     ),
     nl(
+        "sim.drive_run",
+        &["frequentieregelaar"],
+        &[
+            "rijden",
+            "loopkat",
+            "brug",
+            "kraanbaan",
+            "afstandsbediening",
+        ],
+    ),
+    nl(
         "sim.motor_curves",
         &["frequentie"],
         &[
@@ -747,6 +763,16 @@ pub const DUTCH: &[Aliases] = &[
         "view.toggle_references",
         &[],
         &["verwijzingen tonen, vervagen of verbergen"],
+    ),
+    nl(
+        "view.hide_references_page",
+        &[],
+        &["verwijzingen van deze pagina verbergen of tonen"],
+    ),
+    nl(
+        "view.hide_references_device",
+        &[],
+        &["verwijzingen van het gekozen apparaat verbergen of tonen"],
     ),
     nl(
         "view.override_marks",

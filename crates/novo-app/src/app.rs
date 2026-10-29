@@ -74,6 +74,7 @@ mod dialog_ui;
 mod dock;
 mod drawers;
 mod drill_cue;
+mod drive_run;
 mod duplicate;
 mod dxf;
 mod electrical;
@@ -92,6 +93,7 @@ mod eplan_import;
 mod eplan_parts;
 mod error_words;
 mod example;
+mod example_crane;
 #[cfg(test)]
 mod example_gallery;
 mod example_kit;
@@ -589,6 +591,7 @@ enum Leaving {
     Example,
     EmcExample,
     MccExample,
+    CraneExample,
     PlcExample,
     Practice,
     /// Open this lesson's sample project and start the lesson.
@@ -983,6 +986,7 @@ impl NovoApp {
             Action::OpenExample => self.leave_then(ctx, Leaving::Example),
             Action::OpenEmcExample => self.leave_then(ctx, Leaving::EmcExample),
             Action::OpenMccExample => self.leave_then(ctx, Leaving::MccExample),
+            Action::OpenCraneExample => self.leave_then(ctx, Leaving::CraneExample),
             Action::OpenPlcExample => self.leave_then(ctx, Leaving::PlcExample),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
@@ -1156,6 +1160,7 @@ impl NovoApp {
             Leaving::Example => self.open_example(),
             Leaving::EmcExample => self.open_emc_example(),
             Leaving::MccExample => self.open_mcc_example(),
+            Leaving::CraneExample => self.open_crane_example(),
             Leaving::PlcExample => self.open_plc_example(),
             Leaving::Practice => self.start_practice(),
             Leaving::Lesson(id) => self.start_lesson_now(&id),
@@ -1943,6 +1948,7 @@ impl NovoApp {
         self.protection_window(&ctx);
         self.faults_window(&ctx);
         self.hoist_window(&ctx);
+        self.drive_run_window(&ctx);
         self.motor_freq_window(&ctx);
         self.add_fault_window(&ctx);
         self.calculations_window(&ctx);

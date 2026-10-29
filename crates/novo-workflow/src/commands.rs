@@ -182,6 +182,15 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "file.example_crane",
+        "Open example: overhead crane cabinet (2-speed hoist, drives, 48 V control)",
+        "Project",
+        &[
+            "crane", "hoist", "bridge", "drive", "cabinet", "demo", "example",
+        ],
+        Needs::Nothing,
+    ),
+    cmd(
         "file.example_plc",
         "Open example: PLC cabinet (CPU, I/O cards, 24 V supply, full cabinet)",
         "Project",
@@ -2095,6 +2104,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["contact", "table", "opacity", "mirror", "xref", "overlap"],
         Needs::Page,
     ),
+    cmd(
+        "view.hide_references_page",
+        "Hide or show cross references on this page",
+        "View",
+        &["contact", "table", "xref", "screen"],
+        Needs::Page,
+    ),
+    cmd(
+        "view.hide_references_device",
+        "Hide or show cross references of the selected device",
+        "View",
+        &["contact", "table", "xref", "coil", "screen"],
+        Needs::Device,
+    ),
     verb(
         cmd(
             "view.changes",
@@ -2212,6 +2235,26 @@ pub const COMMANDS: &[CommandInfo] = &[
             "two speed",
             "fine coarse",
             "pole change",
+        ],
+        Needs::Project,
+    ),
+    cmd(
+        "sim.drive_run",
+        "Simulate drive run",
+        "View",
+        &[
+            "drive",
+            "vfd",
+            "inverter",
+            "travel",
+            "trolley",
+            "bridge",
+            "crab",
+            "radio",
+            "step 1",
+            "step 2",
+            "frequency",
+            "ramp",
         ],
         Needs::Project,
     ),
