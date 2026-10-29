@@ -1160,6 +1160,12 @@ mod tests {
     }
 
     fn run_hoist(doc: &Document, button: SymbolId, seconds: f64) -> DriveRun {
+        run_hoist_pressing(doc, &[button], seconds)
+    }
+
+    /// The same, with every drawn contact of a pressed device held (a radio button is drawn once
+    /// per rung).
+    fn run_hoist_pressing(doc: &Document, buttons: &[SymbolId], seconds: f64) -> DriveRun {
         let project = doc.project();
         let (hoists, notes) = drive_hoists_of(project);
         assert!(
@@ -1181,7 +1187,9 @@ mod tests {
         let mut live = LiveView::default();
         live.on = true;
         live.reset_poles(project);
-        live.poles.set_all(project, button, true);
+        for button in buttons {
+            live.poles.set_all(project, *button, true);
+        }
         for _ in 0..(seconds / 0.016) as usize {
             advance(&mut run, &mut live, project, 0.016);
         }
@@ -1196,6 +1204,49 @@ mod tests {
         let m = &hl.modules[0];
         assert!(m.height_m() > 0.1, "{}", m.height_m());
         assert!(hoist_reading(m).contains("running"), "{}", hoist_reading(m));
+    }
+
+    #[test]
+    fn the_drawn_slow_down_switch_and_final_limit_show_in_the_findings() {
+        use novo_machine::drive_hoist_loop::FindingKind;
+        let mut doc = Document::default();
+        novo_tests::hoist_drive::drive_hoist_with_limits(&mut doc).unwrap();
+        let s2: Vec<SymbolId> = doc
+            .project()
+            .symbols()
+            .filter(|s| {
+                s.device()
+                    .and_then(|d| doc.project().device(d))
+                    .is_some_and(|d| d.tag.to_string().ends_with("RAD-S2"))
+            })
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(s2.len(), 3);
+        let run = run_hoist_pressing(&doc, &s2, 25.0);
+        let m = &run.active.as_ref().unwrap().hl.modules[0];
+        let kinds: Vec<&FindingKind> = m.findings().iter().map(|f| &f.kind).collect();
+        assert!(
+            kinds
+                .iter()
+                .any(|k| matches!(k, FindingKind::SlowDownPassed { .. })),
+            "{kinds:?}"
+        );
+        assert!(
+            kinds.iter().any(|k| matches!(
+                k,
+                FindingKind::FinalLimit {
+                    slow_speed_m_s: Some(_),
+                    ..
+                }
+            )),
+            "{kinds:?}"
+        );
+        assert!(
+            kinds
+                .iter()
+                .any(|k| matches!(k, FindingKind::LimitOvertravel { .. })),
+            "{kinds:?}"
+        );
     }
 
     #[test]
