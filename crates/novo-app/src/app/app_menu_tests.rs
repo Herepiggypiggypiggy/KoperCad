@@ -185,3 +185,31 @@ fn the_menu_draws_in_both_themes_at_a_small_and_a_large_window() {
         }
     }
 }
+
+/// Enter runs the first hit, so a command that is named by the word comes
+/// before one that only lists it as a keyword.
+#[test]
+fn a_name_match_ranks_before_a_keyword_match() {
+    let hits = search_entries("pdf");
+    let ids = ids(&hits);
+    assert!(!ids.is_empty());
+    let named = |id: &str| {
+        let Some(Entry::Command { info, .. }) = hits
+            .iter()
+            .find(|e| matches!(e, Entry::Command { info, .. } if info.id == id))
+        else {
+            panic!("{id} is not in the hits");
+        };
+        info.label.to_lowercase().contains("pdf")
+    };
+    let first_keyword_only = ids.iter().position(|id| !named(id));
+    let last_named = ids.iter().rposition(|id| named(id));
+    if let (Some(keyword), Some(name)) = (first_keyword_only, last_named) {
+        assert!(name < keyword, "a keyword match comes before a name match");
+    }
+    assert!(
+        named(ids[0]),
+        "the first hit for pdf is not named pdf: {}",
+        ids[0]
+    );
+}
