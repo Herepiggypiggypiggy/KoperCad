@@ -461,7 +461,7 @@ impl NovoApp {
             self.wb.macro_place.query.clear();
         }
         let page = self.macro_target_page();
-        let (view, grid) = self.macro_view(page);
+        let view = self.macro_view(page);
         // Recompute the preview when the pick, the options or the drawing
         // changed; the clone behind it is not paid for on every frame.
         if let (Some(project), Some(page)) = (self.backend.document().map(|d| d.project()), page) {
@@ -484,9 +484,8 @@ impl NovoApp {
                         let (origin, _) = macro_place::origin_in_view(
                             project,
                             page,
-                            macro_place::definition_extent(&definition),
-                            view,
-                            grid,
+                            macro_place::definition_bounds(&definition),
+                            &view,
                             PLACE_GAP,
                         );
                         let report = macro_place::preview(
@@ -643,28 +642,38 @@ impl NovoApp {
         }
     }
 
-    /// The part of `page` on screen and the grid step, for dropping a macro
-    /// where the person is looking; `None` when another page is shown.
-    fn macro_view(
-        &self,
-        page: Option<novo_core::PageId>,
-    ) -> (Option<(novo_core::Point, novo_core::Point)>, f64) {
+    /// Where on `page` a macro can go: the part on screen, where the pointer
+    /// last was on the drawing, the sheet and the grid step. Nothing is on
+    /// screen when another page is shown.
+    fn macro_view(&self, page: Option<novo_core::PageId>) -> macro_place::PlaceView {
         let Some(view) = self.canvas.schematic_ref() else {
-            return (None, 0.0);
+            return macro_place::PlaceView::default();
         };
-        let grid = view.editor.grid;
-        if page.is_none() || page != self.current_page {
-            return (None, grid);
-        }
+        let mut place = macro_place::PlaceView {
+            grid: view.editor.grid,
+            ..Default::default()
+        };
+        let Some(page) = page.filter(|&p| Some(p) == self.current_page) else {
+            return place;
+        };
         let viewport = &view.canvas.viewport;
         let corner = |v: novo_canvas::Vec2| {
             let w = viewport.screen_to_world(v);
             novo_core::Point::new(f64::from(w.x), f64::from(w.y))
         };
-        (
-            Some((corner(novo_canvas::Vec2::ZERO), corner(viewport.size))),
-            grid,
-        )
+        place.visible = Some((corner(novo_canvas::Vec2::ZERO), corner(viewport.size)));
+        // The pointer is on the palette or the Place button by now: where it
+        // last was on this page's drawing is where the person was aiming.
+        place.pointer = self
+            .wb
+            .last_pointer
+            .filter(|&(p, _)| p == page)
+            .map(|(_, at)| at);
+        place.sheet = self
+            .backend
+            .document()
+            .and_then(|d| d.project().page(page).map(|p| p.format.size_mm()));
+        place
     }
 
     /// The page a macro goes on: the open page, or the first drawing page
@@ -699,7 +708,7 @@ impl NovoApp {
         let Some(shown) = self.wb.macro_place.shown.take() else {
             return;
         };
-        let (view, grid) = self.macro_view(Some(page));
+        let view = self.macro_view(Some(page));
         let options = self.wb.macro_place.options();
         let name = shown.definition.name.clone();
         let plc_note = draws_plc_channels(&shown.definition);
@@ -709,9 +718,8 @@ impl NovoApp {
         let (origin, outside) = macro_place::origin_in_view(
             doc.project(),
             page,
-            macro_place::definition_extent(&shown.definition),
-            view,
-            grid,
+            macro_place::definition_bounds(&shown.definition),
+            &view,
             PLACE_GAP,
         );
         // The supply circuit in a drawing with no supply: feed its open points.
@@ -773,6 +781,24 @@ impl NovoApp {
                     )
                 } else {
                     format!("Placed {name} · {}", describe(&placed.report))
+                };
+                // What the circuit leaves for the person to connect, so the
+                // warnings it brings are no surprise.
+                let open = self
+                    .problems()
+                    .iter()
+                    .filter(|p| {
+                        p.kind == novo_checks::ProblemKind::UnconnectedPin
+                            && p.at.iter().any(|a| ids.contains(a))
+                    })
+                    .count();
+                let text = if open > 0 && !plc_note {
+                    format!(
+                        "{text} · {open} {} to connect to a supply (see the Issues list)",
+                        if open == 1 { "point" } else { "points" }
+                    )
+                } else {
+                    text
                 };
                 if off_sheet > 0 {
                     self.message(
