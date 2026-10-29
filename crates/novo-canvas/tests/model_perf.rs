@@ -95,6 +95,7 @@ fn big_page_cpu_budget() {
             anchor: NoteAnchor::default(),
             rows: Vec::new(),
             density: Default::default(),
+            faded: false,
         })
         .collect();
     let first_notes = time("set 10k notes (first)", 1, || {

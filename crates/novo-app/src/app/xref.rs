@@ -2,12 +2,14 @@
 //! and contacts, G / Shift+G, Alt+Left / Alt+Right and jumps to a device.
 
 use eframe::egui;
+use novo_canvas::ItemId;
 use novo_canvas::model::{NoteAnchor, NoteDensity, NoteGlyph, NoteRow, SymbolNote, item_id};
 use novo_core::{AnyId, DeviceId, PageId, SymbolId};
 use novo_xref::{ContactKind, Label, LabelAnchor, LiveXref, Place, Reference, XrefIndex};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use super::{Level, NovoApp};
+use crate::settings::XrefView;
 
 impl NovoApp {
     /// Lights up what the selected symbol is linked to on this page (a
@@ -39,13 +41,62 @@ impl NovoApp {
             .unwrap_or_default()
     }
 
-    /// The cross-reference labels of a page, as notes for the page scene.
+    /// The cross-reference labels of a page, as notes for the page scene,
+    /// as the View > Layers > Cross references choice shows them.
     pub(super) fn xref_notes(&mut self, page: PageId) -> Vec<SymbolNote> {
+        let view = self.settings.xref_view();
+        if view == XrefView::Hidden {
+            return Vec::new();
+        }
         let (density, spare) = (self.settings.xref_density(), !self.settings.xref_hide_spare);
+        let awake = if view == XrefView::Faded {
+            self.awake_notes()
+        } else {
+            HashSet::new()
+        };
         self.xref_labels(page)
             .into_iter()
-            .map(|l| note(l, density, spare))
+            .map(|l| {
+                let faded = view == XrefView::Faded && !awake.contains(&item_id(l.symbol));
+                SymbolNote {
+                    faded,
+                    ..note(l, density, spare)
+                }
+            })
             .collect()
+    }
+
+    /// Shift+X: cross references full, then faded, then hidden, then full.
+    pub(super) fn cycle_xref_view(&mut self) {
+        let next = self.settings.xref_view().next();
+        self.settings.xref_view = next.id().into();
+        self.message(
+            Level::Info,
+            match next {
+                XrefView::Full => "Cross references shown in full",
+                XrefView::Faded => "Cross references faded; select or hover one to read it",
+                XrefView::Hidden => {
+                    "Cross references hidden (they still print). Shift+X shows them"
+                }
+            },
+        );
+    }
+
+    /// The symbols whose cross references stay at full opacity while the
+    /// rest are faded: the selected symbol, what it is linked to on this
+    /// page, and the one under the pointer.
+    fn awake_notes(&mut self) -> HashSet<ItemId> {
+        let mut awake: HashSet<ItemId> = HashSet::new();
+        if let Some(symbol) = self.selected_symbol() {
+            awake.insert(item_id(symbol));
+            if let Some(index) = xref_of(&*self.backend, &*self.canvas, &mut self.wb.xref) {
+                awake.extend(index.highlight(symbol).on_page.into_iter().map(item_id));
+            }
+        }
+        if let Some(view) = self.canvas.schematic() {
+            awake.extend(view.canvas.hovered());
+        }
+        awake
     }
 
     /// Every page's cross-reference notes, for the PDF.
@@ -262,6 +313,7 @@ pub(crate) fn note(label: Label, density: NoteDensity, spare: bool) -> SymbolNot
         },
         rows,
         density,
+        faded: false,
     }
 }
 

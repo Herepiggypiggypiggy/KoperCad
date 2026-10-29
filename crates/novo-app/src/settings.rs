@@ -55,6 +55,10 @@ pub struct Settings {
     /// Whether the contact table under a coil leaves out the contacts the
     /// device has but the drawing does not use (shown dim by default).
     pub xref_hide_spare: bool,
+    /// Whether cross references (contact tables, contact locations) are
+    /// drawn `"full"` (empty), `"faded"` or `"hidden"` on screen: a
+    /// per-user choice that never changes the printed drawing.
+    pub xref_view: String,
     /// The colour theme, `"dark"` (empty), `"light"` or `"system"`.
     pub appearance_theme: String,
     /// The interface density, `"standard"` (empty), `"compact"` or `"touch"`.
@@ -347,6 +351,11 @@ impl Settings {
         novo_theme::Density::from_id(&self.appearance_density)
     }
 
+    /// How cross references are shown on screen.
+    pub fn xref_view(&self) -> XrefView {
+        XrefView::from_id(&self.xref_view)
+    }
+
     /// The density of the coil contact table.
     pub fn xref_density(&self) -> novo_canvas::model::NoteDensity {
         novo_canvas::model::NoteDensity::from_id(&self.xref_density)
@@ -531,5 +540,44 @@ mod tests {
         }
         assert_eq!(s.recent_projects.len(), MAX_RECENT);
         assert_eq!(s.recent_projects[0], PathBuf::from("19.novo"));
+    }
+}
+
+/// How cross references are shown on screen (View > Layers > Cross
+/// references). The PDF always prints them in full.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum XrefView {
+    #[default]
+    Full,
+    /// Low opacity, so they stay out of the way of lines, parts and text;
+    /// the ones of the selected or hovered coil or contact stay full.
+    Faded,
+    Hidden,
+}
+
+impl XrefView {
+    pub fn id(self) -> &'static str {
+        match self {
+            XrefView::Full => "full",
+            XrefView::Faded => "faded",
+            XrefView::Hidden => "hidden",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Self {
+        match id {
+            "faded" => XrefView::Faded,
+            "hidden" => XrefView::Hidden,
+            _ => XrefView::Full,
+        }
+    }
+
+    /// Full, then faded, then hidden, then full again.
+    pub fn next(self) -> Self {
+        match self {
+            XrefView::Full => XrefView::Faded,
+            XrefView::Faded => XrefView::Hidden,
+            XrefView::Hidden => XrefView::Full,
+        }
     }
 }
