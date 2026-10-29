@@ -15,6 +15,9 @@ use novo_drive::brake_system::RectifierFault;
 use novo_drive::hoist_unit::HoistFaults;
 use novo_drive::motor::{Direction, WindingSel};
 use novo_drive::supply::Phase;
+use novo_machine::cl_pair_loop::ClPairLoop;
+use novo_machine::cl_winch_loop::ClWinchLoop;
+use novo_machine::cosim::StepConfig;
 use novo_machine::hoist_loop::HoistLoop;
 use novo_machine::port::{CircuitPort, MotorFeed};
 use serde::{Deserialize, Serialize};
@@ -148,18 +151,52 @@ fn condition_on(name: ConditionName, c: &novo_drive::hoist_unit::Conditions) -> 
     }
 }
 
+/// What a walk-through can run besides the circuit: each maker gives a fresh loop for each plant
+/// (the healthy one and the faulted one). Leave out what the project does not have.
+#[derive(Default, Clone, Copy)]
+pub struct Machinery<'a> {
+    pub hoists: Option<&'a dyn Fn() -> HoistLoop>,
+    /// Closed-loop (encoder) winches, single.
+    pub winches: Option<&'a dyn Fn() -> ClWinchLoop>,
+    /// Two closed-loop winches on one beam.
+    pub pairs: Option<&'a dyn Fn() -> ClPairLoop>,
+}
+
+impl Machinery<'_> {
+    pub fn is_empty(&self) -> bool {
+        self.hoists.is_none() && self.winches.is_none() && self.pairs.is_none()
+    }
+}
+
 /// One plant's hoists and the machine defects on them.
 pub(crate) struct MachineSide {
     pub lp: HoistLoop,
+    pub cw: ClWinchLoop,
+    pub cp: ClPairLoop,
     /// Limit switch contacts the loop wrote last, by device tag (`true` = conducting).
     pub contacts: BTreeMap<String, bool>,
     defects: BTreeMap<String, Vec<HoistDefect>>,
 }
 
 impl MachineSide {
-    pub fn new(lp: HoistLoop) -> Self {
+    pub fn new(machinery: &Machinery<'_>) -> Self {
+        let step = StepConfig::default();
+        let lp = machinery.hoists.map_or_else(
+            || HoistLoop::new(step).expect("the default step is valid"),
+            |make| make(),
+        );
+        let cw = machinery.winches.map_or_else(
+            || ClWinchLoop::new(step).expect("the default step is valid"),
+            |make| make(),
+        );
+        let cp = machinery.pairs.map_or_else(
+            || ClPairLoop::new(step).expect("the default step is valid"),
+            |make| make(),
+        );
         Self {
             lp,
+            cw,
+            cp,
             contacts: BTreeMap::new(),
             defects: BTreeMap::new(),
         }
@@ -269,6 +306,7 @@ pub(crate) fn describe_hook(hoist: &str, is: &HookIs) -> String {
 /// How the faulted hoists differ from the healthy ones, as sentences. The hook position itself
 /// changes every tick, so only a clear gap and the reported conditions are listed.
 pub(crate) fn differences(clean: &MachineSide, faulty: &MachineSide, out: &mut BTreeSet<String>) {
+    crate::winch_check::differences(clean, faulty, out);
     for id in faulty.ids() {
         let (Some(a), Some(b)) = (clean.lp.hoist(&id), faulty.lp.hoist(&id)) else {
             continue;
