@@ -243,6 +243,15 @@ impl NovoApp {
         let Some(w) = &mut self.wb.controller_wizard else {
             return Err("The wizard is closed".to_owned());
         };
+        let issues = engine_issues(&w.proposal.profile);
+        if let Some(e) = issues
+            .iter()
+            .find(|i| i.severity == novo_controller::Severity::Error)
+        {
+            return Err(format!(
+                "The controller engine would not load this profile: {e}"
+            ));
+        }
         let dir = controllers_dir().ok_or("No folder for controller profiles")?;
         std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
         let path = target_path(&dir, &import::slug(&w.id));
@@ -543,6 +552,19 @@ fn plural(n: usize, word: &str) -> String {
     format!("{n} {word}{}", if n == 1 { "" } else { "s" })
 }
 
+/// What the controller engine's own validator says about the proposal, checked on the
+/// `Profile` value the importer builds (no text round trip).
+fn engine_issues(profile: &import::ProposedProfile) -> Vec<novo_controller::Issue> {
+    match profile.to_profile() {
+        Ok(p) => novo_controller::validate(&p),
+        Err(e) => vec![novo_controller::Issue {
+            severity: novo_controller::Severity::Error,
+            path: String::new(),
+            message: e,
+        }],
+    }
+}
+
 fn preview(ui: &mut egui::Ui, w: &ControllerWizard, palette: &novo_theme::Palette, height: f32) {
     let p = &w.proposal;
     ui.strong(format!("Preview: {}", w.source));
@@ -551,6 +573,9 @@ fn preview(ui: &mut egui::Ui, w: &ControllerWizard, palette: &novo_theme::Palett
     }
     for problem in &w.word_problems {
         ui.colored_label(palette.warning, problem);
+    }
+    for issue in engine_issues(&p.profile) {
+        ui.colored_label(palette.warning, format!("Engine check: {issue}"));
     }
     ui.add_space(4.0);
     let profile = &p.profile;

@@ -168,7 +168,7 @@ fn the_changes_and_live_cards_start_apart_and_reset_after_a_move() {
     let changes = rect("changes_card").expect("the changes card is shown");
     assert!(!live.intersects(changes), "{live:?} over {changes:?}");
     assert!(
-        live.left() < 40.0 && changes.left() < 40.0,
+        live.left() < 40.0 + super::rail::WIDTH && changes.left() < 40.0 + super::rail::WIDTH,
         "{live:?} {changes:?}"
     );
     // Dragged away, the card stays; the reset command brings it back.

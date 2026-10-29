@@ -71,7 +71,10 @@ fn the_navigator_flyout_is_a_window_that_moves_resizes_and_resets() {
     let id = panel::id("outline_flyout");
     let home = rect_of(&d, id).expect("the navigator is shown");
     assert!(screen().contains_rect(home), "{home:?}");
-    assert!(home.left() < 40.0, "it hangs from the left edge: {home:?}");
+    assert!(
+        home.left() < 40.0 + super::rail::WIDTH,
+        "it hangs from the left edge, beside the rail: {home:?}"
+    );
 
     // Moved by its title bar.
     let grab = home.center_top() + egui::vec2(0.0, 10.0);
@@ -113,38 +116,12 @@ fn the_pinned_navigator_column_is_dragged_wider() {
     settle(&mut d);
     let before = d.app.wb.outline_shown.expect("the column is shown");
     // Just inside the column's right edge, in the middle of the window.
-    let edge = egui::pos2(before - 2.0, 300.0);
+    let rail = d.app.wb.rail_rect.map_or(0.0, |r| r.right());
+    let edge = egui::pos2(rail + before - 2.0, 300.0);
     drag(&mut d, edge, edge + egui::vec2(110.0, 0.0));
     let after = d.app.wb.outline_shown.unwrap();
     assert!(after > before + 80.0, "{before} -> {after}");
     assert!(after <= 520.0, "capped: {after}");
-}
-
-#[test]
-fn the_tool_dock_is_dragged_stays_and_resets() {
-    let (_dir, mut d) = open_project();
-    let id = panel::id("tool_dock");
-    let home = rect_of(&d, id).expect("the dock is shown");
-    let (_, canvas) = d.app.wb.canvas_area.unwrap();
-    assert!(canvas.contains_rect(home));
-    // Grabbed by the frame's edge, left of the first button.
-    let grab = home.left_center() + egui::vec2(2.0, 0.0);
-    drag(&mut d, grab, grab + egui::vec2(-300.0, -200.0));
-    let moved = rect_of(&d, id).unwrap();
-    assert!(
-        (moved.min - home.min).length() > 200.0,
-        "{home:?} -> {moved:?}"
-    );
-    assert!(canvas.contains_rect(moved), "{moved:?} on {canvas:?}");
-    // Near the dock a drag used to push it aside; a dock the person put
-    // somewhere stays there.
-    settle(&mut d);
-    assert_eq!(rect_of(&d, id).unwrap().min, moved.min);
-    let ctx = d.ctx.clone();
-    d.app.run_command(&ctx, "view.reset_panels", None);
-    settle(&mut d);
-    let back = rect_of(&d, id).unwrap();
-    assert!((back.min - home.min).length() < 4.0, "{home:?} {back:?}");
 }
 
 #[test]
@@ -317,6 +294,10 @@ fn a_double_click_on_the_edge_of_the_pinned_navigator_gives_it_its_width_back() 
 fn no_fixed_window_is_built_outside_the_panel_helpers() {
     const AREAS: &[(&str, &str)] = &[
         ("hud", "cursor readout, not interactive"),
+        (
+            "rail_flyout_card",
+            "flyout card of the tool rail, closes on Esc or a click elsewhere",
+        ),
         ("toasts", "messages that fade away"),
         ("refusal_card_id()", "a refusal that fades away"),
         ("empty_sheet_ghost", "a hint drawn on the empty sheet"),
