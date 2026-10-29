@@ -75,7 +75,7 @@ pub const DUTCH: &[Aliases] = &[
     nl(
         "file.example_pump",
         &[],
-        &["pompstation voorbeeld", "pomp voorbeeld"],
+        &["pomp voorbeeld", "pompen voorbeeld"],
     ),
     nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
     nl(

@@ -183,11 +183,10 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "file.example_pump",
-        "Open example: pump station (2 frequency drives, pressure control, full cabinet)",
+        "Open example: pump system",
         "Project",
         &[
             "pump",
-            "pump station",
             "vfd",
             "frequency drive",
             "cabinet",
