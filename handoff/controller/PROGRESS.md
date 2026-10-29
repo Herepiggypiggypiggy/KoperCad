@@ -11,3 +11,4 @@
 2026-10-28 C2: merged main (hoist run, L5a) into #1615; QA 1583 shows the radio lifting the hook through the drawn circuit (the controller drives the loop through LiveView::solved, no extra code).
 
 2026-10-28 C4: preview shows "N rows: scroll the preview below to see every row and note" and an always-visible scrollbar (R3 note from #1615).
+2026-10-29 C2 follow-up (R1 finding on #1615): new binding check `MixedOrAnd` warns when one target mixes an `and` signal (E-stop chain) with an ordinary one, because the ordinary signal, while high, overrides an open chain. Documented in `resolve` and in docs/design/controller-live.md; test in novo-controller/tests/project.rs. The card shows it with the other findings.

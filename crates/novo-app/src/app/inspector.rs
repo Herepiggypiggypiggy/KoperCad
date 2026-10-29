@@ -648,6 +648,7 @@ impl NovoApp {
         let text = text.trim();
         let is_text = novo_machine::spec::KEYS
             .iter()
+            .chain(novo_machine::travel_spec::KEYS)
             .any(|k| k.key == key && k.text);
         let value = if text.is_empty() {
             None
@@ -979,6 +980,7 @@ fn inspector_body(
 
     calc_inputs_section(ui, info, actions);
     mech_load_section(ui, info, actions);
+    travel_drive_section(ui, info, actions);
 
     // The rest of the device's properties are the advanced part: closed
     // until opened, and absent when there are none.
@@ -1200,6 +1202,61 @@ pub(super) fn committed(ui: &egui::Ui, response: &egui::Response) -> bool {
 /// two-speed winding, brake, limit switches) for the Simulate > Hoist run. Setting the hook load
 /// makes the motor a hoist; blank rows use the generic values shown as hints.
 fn mech_load_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<InspectorAction>) {
+    spec_section(
+        ui,
+        info,
+        actions,
+        SpecSection {
+            id: "inspector_mech_load",
+            title: "Mechanical load",
+            keys: novo_machine::spec::KEYS,
+            marker: novo_machine::spec::HOIST_KEY,
+            summary: "hoist",
+            comma_note: "A comma is a decimal comma: 1,5 means 1.5, and 1,500 also means 1.5.",
+            help: "Hook load turns the motor into a hoist. Blank rows use generic values, \
+                   not a manufacturer's data. Run it: Simulate > Hoist run.",
+        },
+    );
+}
+
+/// The "Travel drive" section of a motor: the numbers of a trolley or bridge axis (moving mass,
+/// wheel and gearbox, motor plate, drive steps, input devices, end limits) for Simulate > Drive
+/// run.
+fn travel_drive_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<InspectorAction>) {
+    spec_section(
+        ui,
+        info,
+        actions,
+        SpecSection {
+            id: "inspector_travel_drive",
+            title: "Travel drive",
+            keys: novo_machine::travel_spec::KEYS,
+            marker: novo_machine::travel_spec::TRAVEL_KEY,
+            summary: "travel",
+            comma_note: "A comma is a decimal comma: 1,5 means 1.5. A comma before three digits (5,000) is refused: type 5000.",
+            help: "Moving mass turns the motor into a travel axis behind a frequency drive. \
+                   Blank rows use generic values, not a manufacturer's data. Run it: \
+                   Simulate > Drive run.",
+        },
+    );
+}
+
+struct SpecSection {
+    id: &'static str,
+    title: &'static str,
+    keys: &'static [novo_machine::spec::SpecKey],
+    marker: &'static str,
+    summary: &'static str,
+    help: &'static str,
+    comma_note: &'static str,
+}
+
+fn spec_section(
+    ui: &mut egui::Ui,
+    info: &DeviceInfo,
+    actions: &mut Vec<InspectorAction>,
+    section: SpecSection,
+) {
     let motor = DeviceTag::parse(&info.tag).is_ok_and(|t| t.letter_code() == "M");
     if !motor {
         return;
@@ -1211,70 +1268,54 @@ fn mech_load_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<Ins
             .map(|(_, v)| v.clone())
             .unwrap_or_default()
     };
-    let set = novo_machine::spec::KEYS
+    let set = section
+        .keys
         .iter()
         .filter(|k| !value_of(k.key).is_empty())
         .count();
-    let summary = if value_of(novo_machine::spec::HOIST_KEY).is_empty() {
+    let summary = if value_of(section.marker).is_empty() {
         String::new()
     } else {
-        "hoist".to_owned()
+        section.summary.to_owned()
     };
-    widgets::collapsing_section(
-        ui,
-        "inspector_mech_load",
-        "Mechanical load",
-        &summary,
-        set > 0,
-        |ui| {
-            ui.weak("A comma is a decimal comma: 1,5 means 1.5, and 1,500 also means 1.5.");
-            for k in novo_machine::spec::KEYS {
-                let shown = value_of(k.key);
-                let id = egui::Id::new(("inspector_mech", k.key));
-                let focused = ui.memory(|m| m.has_focus(id));
-                let mut text = if focused {
-                    ui.data(|d| d.get_temp::<String>(id))
-                        .unwrap_or_else(|| shown.clone())
-                } else {
-                    shown.clone()
-                };
-                let hint = if k.default.is_empty() {
-                    String::new()
-                } else {
-                    format!("generic {}", k.default)
-                };
-                let r = labelled_edit(ui, k.label, k.unit, |ui| {
-                    ui.add(
-                        egui::TextEdit::singleline(&mut text)
-                            .id(id)
-                            .hint_text(hint)
-                            .desired_width(f32::INFINITY),
-                    )
-                    .on_hover_text(k.key)
-                });
-                if r.has_focus() {
-                    ui.data_mut(|d| d.insert_temp(id, text.clone()));
-                }
-                if r.lost_focus() {
-                    ui.data_mut(|d| d.remove::<String>(id));
-                    if text.trim() != shown.trim() {
-                        actions.push(InspectorAction::SetMech(k.key, text.clone()));
-                    }
+    widgets::collapsing_section(ui, section.id, section.title, &summary, set > 0, |ui| {
+        ui.weak(section.comma_note);
+        for k in section.keys {
+            let shown = value_of(k.key);
+            let id = egui::Id::new(("inspector_mech", k.key));
+            let focused = ui.memory(|m| m.has_focus(id));
+            let mut text = if focused {
+                ui.data(|d| d.get_temp::<String>(id))
+                    .unwrap_or_else(|| shown.clone())
+            } else {
+                shown.clone()
+            };
+            let hint = if k.default.is_empty() {
+                String::new()
+            } else {
+                format!("generic {}", k.default)
+            };
+            let r = labelled_edit(ui, k.label, k.unit, |ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut text)
+                        .id(id)
+                        .hint_text(hint)
+                        .desired_width(f32::INFINITY),
+                )
+                .on_hover_text(k.key)
+            });
+            if r.has_focus() {
+                ui.data_mut(|d| d.insert_temp(id, text.clone()));
+            }
+            if r.lost_focus() {
+                ui.data_mut(|d| d.remove::<String>(id));
+                if text.trim() != shown.trim() {
+                    actions.push(InspectorAction::SetMech(k.key, text.clone()));
                 }
             }
-            ui.add(
-                egui::Label::new(
-                    egui::RichText::new(
-                        "Hook load turns the motor into a hoist. Blank rows use generic values, \
-                         not a manufacturer's data. Run it: Simulate > Hoist run.",
-                    )
-                    .small()
-                    .weak(),
-                )
-                .wrap(),
-            );
-        },
-    );
+        }
+        ui.add(egui::Label::new(egui::RichText::new(section.help).small().weak()).wrap());
+    });
 }
 
 fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<InspectorAction>) {

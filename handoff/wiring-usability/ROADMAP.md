@@ -15,7 +15,10 @@ Done in the PR from `claude/project-thread-tda1xm`:
 
 Not reproduced: 12 (symbol placed pin on pin stays not connected), 28 (Home right after placing a circuit; works headless).
 
+Follow-up PR (after #1593):
+- 11 an error or warning toast is dismissed when the person switches workspace (the message log keeps it)
+- 16 a circuit placed from the palette lands with its top-left at where the pointer last was on the drawing (snapped, on the sheet, clear of the title block); then the view corner; then beside the drawing. Placing says how many open points are left to connect (the DOL circuit's 4 warnings are its open supply entries; the 7 infos are parts not yet assigned, left as they are because no part data is invented)
+- `definition_extent` counts pins and wire bends, not only symbol origins
+
 Open:
-- 11 the error toast follows the user across workspaces
-- 16 "at the cursor" (uses the view corner, not the pointer) and the DOL circuit's 4 warnings and 7 infos
 - 12 and 28 need a recording from the laptop

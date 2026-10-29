@@ -4,6 +4,9 @@
 //! bar and no status bar.
 
 mod addons;
+mod addons_look;
+#[cfg(test)]
+mod addons_look_tests;
 mod appearance;
 mod assembly;
 mod assistant;
@@ -74,6 +77,7 @@ mod dialog_ui;
 mod dock;
 mod drawers;
 mod drill_cue;
+mod drive_run;
 mod duplicate;
 mod dxf;
 mod electrical;
@@ -92,6 +96,7 @@ mod eplan_import;
 mod eplan_parts;
 mod error_words;
 mod example;
+mod example_crane;
 #[cfg(test)]
 mod example_gallery;
 mod example_kit;
@@ -152,6 +157,7 @@ mod heat_wires;
 #[cfg(test)]
 mod heat_wires_tests;
 mod hoist_run;
+mod icon_gallery;
 mod inspector;
 mod interop;
 mod kitting;
@@ -391,6 +397,8 @@ mod greyed_commands_tests;
 #[cfg(test)]
 mod handover_tests;
 #[cfg(test)]
+mod icon_gallery_tests;
+#[cfg(test)]
 mod kitting_tests;
 #[cfg(test)]
 mod learn_nav_tests;
@@ -589,6 +597,7 @@ enum Leaving {
     Example,
     EmcExample,
     MccExample,
+    CraneExample,
     PlcExample,
     Practice,
     /// Open this lesson's sample project and start the lesson.
@@ -983,6 +992,7 @@ impl NovoApp {
             Action::OpenExample => self.leave_then(ctx, Leaving::Example),
             Action::OpenEmcExample => self.leave_then(ctx, Leaving::EmcExample),
             Action::OpenMccExample => self.leave_then(ctx, Leaving::MccExample),
+            Action::OpenCraneExample => self.leave_then(ctx, Leaving::CraneExample),
             Action::OpenPlcExample => self.leave_then(ctx, Leaving::PlcExample),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
@@ -1156,6 +1166,7 @@ impl NovoApp {
             Leaving::Example => self.open_example(),
             Leaving::EmcExample => self.open_emc_example(),
             Leaving::MccExample => self.open_mcc_example(),
+            Leaving::CraneExample => self.open_crane_example(),
             Leaving::PlcExample => self.open_plc_example(),
             Leaving::Practice => self.start_practice(),
             Leaving::Lesson(id) => self.start_lesson_now(&id),
@@ -1907,6 +1918,7 @@ impl NovoApp {
         self.plc_list_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
+        self.icon_gallery_window(&ctx);
         self.whats_new_window(&ctx);
         self.numbers_window(&ctx);
         self.background_panel(&ctx);
@@ -1942,6 +1954,7 @@ impl NovoApp {
         self.protection_window(&ctx);
         self.faults_window(&ctx);
         self.hoist_window(&ctx);
+        self.drive_run_window(&ctx);
         self.motor_freq_window(&ctx);
         self.add_fault_window(&ctx);
         self.calculations_window(&ctx);

@@ -182,6 +182,15 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "file.example_crane",
+        "Open example: overhead crane cabinet (2-speed hoist, drives, 48 V control)",
+        "Project",
+        &[
+            "crane", "hoist", "bridge", "drive", "cabinet", "demo", "example",
+        ],
+        Needs::Nothing,
+    ),
+    cmd(
         "file.example_plc",
         "Open example: PLC cabinet (CPU, I/O cards, 24 V supply, full cabinet)",
         "Project",
@@ -2230,6 +2239,26 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "sim.drive_run",
+        "Simulate drive run",
+        "View",
+        &[
+            "drive",
+            "vfd",
+            "inverter",
+            "travel",
+            "trolley",
+            "bridge",
+            "crab",
+            "radio",
+            "step 1",
+            "step 2",
+            "frequency",
+            "ramp",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "sim.motor_curves",
         "Motor at variable frequency",
         "View",
@@ -2386,6 +2415,13 @@ pub const COMMANDS: &[CommandInfo] = &[
             "validated",
             "help",
         ],
+        Needs::Nothing,
+    ),
+    cmd(
+        "view.icon_gallery",
+        "Icon gallery",
+        "View",
+        &["icons", "pictures", "symbols", "design", "glyphs", "rail"],
         Needs::Nothing,
     ),
     cmd(
