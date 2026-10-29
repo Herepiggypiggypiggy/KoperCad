@@ -1212,6 +1212,15 @@ fn status_badge(ui: &mut egui::Ui, standing: &Standing, number: Option<usize>) {
     }
 }
 
+/// Whether the screen is larger than last frame in either direction.
+fn screen_grew(ctx: &egui::Context) -> bool {
+    let size = ctx.content_rect().size();
+    let id = egui::Id::new("learn_screen_size_seen");
+    let seen = ctx.data(|d| d.get_temp::<egui::Vec2>(id));
+    ctx.data_mut(|d| d.insert_temp(id, size));
+    seen.is_some_and(|s| size.x > s.x + 0.5 || size.y > s.y + 0.5)
+}
+
 #[cfg(test)]
 mod chip_tests {
     use super::chip_enabled;
@@ -1223,13 +1232,4 @@ mod chip_tests {
         assert!(chip_enabled(3, false));
         assert!(chip_enabled(3, true));
     }
-}
-
-/// Whether the screen is larger than last frame in either direction.
-fn screen_grew(ctx: &egui::Context) -> bool {
-    let size = ctx.content_rect().size();
-    let id = egui::Id::new("learn_screen_size_seen");
-    let seen = ctx.data(|d| d.get_temp::<egui::Vec2>(id));
-    ctx.data_mut(|d| d.insert_temp(id, size));
-    seen.is_some_and(|s| size.x > s.x + 0.5 || size.y > s.y + 0.5)
 }
