@@ -130,6 +130,31 @@ trips only on the faulted plant and findings only the faulted run has. User: Sim
 walk-throughs, saved walk-throughs, `▶ Run`; the fixture `qa/fixtures/closed-winch-walk.novo` has one.
 Limits as for the hoist walk-throughs: a run with a machine in it stops at 120 s.
 
+## Rated load and the load cell (single winch)
+
+A winch with a rated load (`cw_swl_kg`, the safe working load) watches the force in its rope. The
+load cell reads the weight of the hook mass plus its inertia (`m (g + a)`, the acceleration taken
+from the hook speed of the last tick; the rope is rigid). Three things follow, all findings of
+the run:
+
+- over the rating (above 100 %): "The load cell reads N % of the rated load", once per crossing;
+- over the cut-out (`cw_overload_pct`, 110 % when blank): lifting is inhibited, lowering and holding
+  stay possible, and the cut-out lets go 2 % below its threshold so a load on the edge does not
+  chatter. The drawing can light a lamp from the optional output device (`cw_overload_out`, its
+  contact is written closed while lifting is inhibited);
+- the load cell signal (`cw_load_cell`, a drawn device, energised: present) lost: the load is unknown,
+  so lifting is inhibited (fail safe) and the run says so; back again releases it.
+
+The reading beside the winch shows "load N % of rated" (and "lifting inhibited"). Walk-through checks
+`found` with `overload_cut_out` or `load_cell_lost` ask for them.
+
+Exact by definition: the arithmetic of the reading, the order of the tick, lifting only inhibited.
+Model: the rigid rope (no rope dynamics in the reading), the load cell itself (no noise, no
+calibration error, no response time) and the cut-out threshold behaviour of a real limiter, whose
+standard (for example the dynamic factor and test loads) is not looked up here. A rated load is not
+monitored in a pair (the pair has its own rope rating). Scenarios 1765 to 1765d, fixtures
+`closed-winch-load.novo` and `closed-winch-overload.novo`.
+
 ## Not yet
 
 - Unconfirmed customer details: which drive maker's hoist and encoder arrangement applies. Everything

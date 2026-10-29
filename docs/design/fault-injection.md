@@ -58,7 +58,7 @@ way, on both plants, with one circuit settle per tick. Circuit defects reach the
 coil or broken wire on an STO channel device (the drive latches the discrepancy and trips), a lost encoder signal
 device, a brake contactor that does not pull in. `expect` gains `winch` checks (`{"what":"winch","winch":"=A1+FLD-M1","state":"tripped"}`):
 `above` / `below` a hook height, `standing`, `moving`, `tripped`, `fault` with a drive code (`std`, `enc`),
-`clear`, `sto_active`, and `found` with a finding name (`trip`, `sto_requested`, `encoder_signal_lost`, `encoder_channel_lost`, `brake_slip`,
+`clear`, `sto_active`, and `found` with a finding name (`trip`, `sto_requested`, `encoder_signal_lost`, `encoder_channel_lost`, `overload_cut_out`, `load_cell_lost`, `brake_slip`,
 `start_rollback`, and for a pair `pair_stopped`, `overload`, `slack`). For a pair the winch is named by either of its
 two motor tags. "What is different" lists a winch hook 5 cm or more away from the healthy one, a drive that trips
 where the healthy one does not, and the findings only the faulted run has. Hooks of a winch are a model (averaged

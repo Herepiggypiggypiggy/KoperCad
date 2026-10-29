@@ -367,7 +367,18 @@ pub(super) fn closed_pairs_of(project: &Project) -> (Vec<ClPairModule>, Vec<(Lev
 
 /// A one-line reading of a closed-loop winch, for the badge and the window.
 pub(super) fn winch_reading(module: &ClWinchModule) -> String {
-    winch_text(module.snapshot())
+    let text = winch_text(module.snapshot());
+    match module.load_pct() {
+        Some(pct) if module.snapshot().is_some() => {
+            let note = if module.lifting_inhibited() {
+                ", lifting inhibited"
+            } else {
+                ""
+            };
+            format!("{text} \u{b7} load {pct:.0} % of rated{note}")
+        }
+        _ => text,
+    }
 }
 
 /// The readings of a pair: a line for the beam, then one per winch.
