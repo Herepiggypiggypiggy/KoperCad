@@ -1866,6 +1866,17 @@ impl NovoApp {
                     super::motion::glide_secs(self.settings.reduce_motion);
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
                 cabinet_bar::note_rect_in(ui, "cabinet.canvas", "Plate", out.response.rect, false);
+                // The same chip as in 3D: the run's state is in sight in both views.
+                {
+                    let shown = self.cabinet.heat.on;
+                    super::sim_chip::show(
+                        ui.ctx(),
+                        out.response.rect,
+                        &mut self.cabinet.heat,
+                        shown,
+                        self.settings.reduce_motion,
+                    );
+                }
                 self.cabinet.heat.layout.paint(
                     &ui.painter_at(out.response.rect),
                     out.response.rect,
@@ -2090,6 +2101,8 @@ impl NovoApp {
                         out.response.rect,
                         cabinet_inspector::Room {
                             left: *left,
+                            // On the chip's side it starts below the simulation status chip.
+                            top: (*left).then_some(super::sim_chip::TOP_ROOM),
                             ..Default::default()
                         },
                         facts,
