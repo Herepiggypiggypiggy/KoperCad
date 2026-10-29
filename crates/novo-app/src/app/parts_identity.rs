@@ -346,20 +346,25 @@ mod tests {
             .collect();
         text = text.replace("ENDSEC;\nEND-ISO", &format!("{points}ENDSEC;\nEND-ISO"));
         std::fs::write(&path, &text).unwrap();
+        // Wall time on a loaded CI machine proves little, so asking is compared with
+        // reading the same file here: reading it in the caller's thread would cost
+        // at least that, whatever the machine's speed.
+        let read_here = {
+            let t = std::time::Instant::now();
+            let _ = read_identity(&path);
+            t.elapsed()
+        };
         let asked = std::time::Instant::now();
         prefetch(std::slice::from_ref(&path), None);
         let took = asked.elapsed();
         assert!(
-            took < std::time::Duration::from_millis(250),
-            "asking took {took:?}: the file was read in the caller's thread"
+            took < read_here,
+            "asking took {took:?} against {read_here:?} to read the file: it was read in the caller's thread"
         );
         wait_until_ready(std::slice::from_ref(&path));
-        let again = std::time::Instant::now();
-        let _ = identity_of(&path);
-        assert!(
-            again.elapsed() < std::time::Duration::from_millis(50),
-            "the answer was not in the cache"
-        );
+        // `identity_of` reads the file itself when the cache has no answer, so an
+        // answer from `cached` is the proof that it did not.
+        assert!(cached(&path).is_some(), "the answer was not in the cache");
     }
 
     #[test]
