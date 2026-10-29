@@ -167,6 +167,9 @@ impl NovoApp {
             .take()
             .unwrap_or_else(|| self.project_info_fields());
         let mut info_changed = false;
+        let crane_fields = self.backend.document().is_none_or(|d| {
+            novo_reports::front_keys::shows_crane_fields(&d.project().info().properties)
+        });
         let mut group_prefix = self.settings.group_prefix.clone();
         let mut cabinet_prefix = self.settings.cabinet_prefix.clone();
         // The preview uses what is typed now, over this project's names.
@@ -229,9 +232,14 @@ impl NovoApp {
                         .num_columns(2)
                         .spacing([12.0, 6.0])
                         .show(ui, |ui| {
-                            for ((_, label), text) in
+                            for ((key, label), text) in
                                 novo_reports::front_keys::FIELDS.iter().zip(info.iter_mut())
                             {
+                                if !crane_fields
+                                    && novo_reports::front_keys::CRANE_ONLY.contains(key)
+                                {
+                                    continue;
+                                }
                                 ui.label(egui::RichText::new(*label).weak());
                                 let response =
                                     ui.add(egui::TextEdit::singleline(text).desired_width(220.0));
