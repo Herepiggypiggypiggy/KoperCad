@@ -259,12 +259,16 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::TagRule,
         ProblemKind::DisplayedTag,
         ProblemKind::StructureCode,
+        // Own fixture; see tests/pin_names.
+        ProblemKind::PinNames,
         ProblemKind::SafetyLevelNotMet,
         ProblemKind::SafetyBinding,
         // Only reported once the project turns the EMC check on; see tests/emc_checks.
         ProblemKind::Emc,
         // Found by the application, which reads the rules; see novo-reports tests/autopilot_rules.
         ProblemKind::WireRule,
+        // Needs devices placed so close that no way round is free; see novo-routing tests/bodies_slots_rails.
+        ProblemKind::WireThroughDevice,
     ];
     let kinds: Vec<ProblemKind> = ProblemKind::ALL
         .into_iter()

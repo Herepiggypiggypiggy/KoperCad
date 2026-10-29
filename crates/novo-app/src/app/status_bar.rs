@@ -349,16 +349,30 @@ impl NovoApp {
         match self.settings.xref_view() {
             XrefView::Full => {}
             view => chips.push(ModeChip {
-                label: if view == XrefView::Faded {
-                    "References faded"
-                } else {
-                    "References hidden"
+                label: match view {
+                    XrefView::Overlap => "References fade on overlap",
+                    XrefView::Faded => "References faded",
+                    _ => "References hidden",
                 }
                 .into(),
                 command: "view.toggle_references",
-                hover: "Click to step references: full, faded, hidden. They always print in full"
+                hover: "Click to step references: full, fade on overlap, faded, hidden. They always print in full"
                     .into(),
             }),
+        }
+        if self.page_hides_references() {
+            chips.push(ModeChip {
+                label: "Page references hidden".into(),
+                command: "view.hide_references_page",
+                hover: "Show this page's cross references again. They always print".into(),
+            });
+        }
+        if let Some(tag) = self.selected_device_hiding_references() {
+            chips.push(ModeChip {
+                label: format!("{tag} references hidden"),
+                command: "view.hide_references_device",
+                hover: format!("Show the cross references of {tag} again. They always print"),
+            });
         }
         if self.wb.live.on {
             chips.push(ModeChip {
@@ -517,7 +531,7 @@ mod refusal_tests {
             .expect("the card has a place");
         let canvas = d.app.wb.canvas_area.unwrap().1;
         assert!(canvas.contains_rect(card), "{card:?} inside {canvas:?}");
-        for other in ["tool_dock", "toasts", "hud"] {
+        for other in ["toasts", "hud"] {
             if let Some(r) = rect(other) {
                 assert!(!card.intersects(r), "{other} {r:?} under the card {card:?}");
             }
@@ -526,15 +540,15 @@ mod refusal_tests {
 }
 
 #[cfg(test)]
-mod toast_dock_tests {
+mod toast_rail_tests {
     use super::super::gate1_tests::Drive;
     use crate::actions::Action;
     use eframe::egui;
 
-    /// Toasts never cover a tool dock button, at the sizes the dock and the
-    /// toast column would otherwise meet (1366 wide) and at a wide window.
+    /// Toasts stay on the canvas, clear of the tool rail, at the sizes the
+    /// toast column and the rail would otherwise meet.
     #[test]
-    fn a_toast_stands_above_the_tool_dock_not_on_it() {
+    fn a_toast_stands_on_the_canvas_not_on_the_rail() {
         for size in [egui::vec2(1366.0, 768.0), egui::vec2(1920.0, 1080.0)] {
             let dir = tempfile::tempdir().unwrap();
             let mut d = Drive::new(&dir.path().join("untitled"));
@@ -548,12 +562,13 @@ mod toast_dock_tests {
             for _ in 0..3 {
                 d.frame_sized(size, Vec::new());
             }
-            let rect = |name: &str| ctx.memory(|m| m.area_rect(egui::Id::new(name)));
-            let toasts = rect("toasts").expect("the toast is shown");
-            let dock = rect("tool_dock").expect("the dock is shown");
+            let toasts = ctx
+                .memory(|m| m.area_rect(egui::Id::new("toasts")))
+                .expect("the toast is shown");
+            let rail = d.app.wb.rail_rect.expect("the rail is shown");
             assert!(
-                !toasts.intersects(dock),
-                "{size:?}: toast {toasts:?} over dock {dock:?}"
+                !toasts.intersects(rail),
+                "{size:?}: toast {toasts:?} over rail {rail:?}"
             );
         }
     }

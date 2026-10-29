@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use super::read::{Reading, Voltage, read_row};
 use super::table::{Row, Table};
-use super::words::{Dir, Role, WordList};
+use super::words::{Dir, Role, WordList, tokenize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
@@ -23,6 +23,15 @@ pub struct Warning {
     pub line: usize,
     pub severity: Severity,
     pub message: String,
+}
+
+/// The motion a bare direction word usually means on a crane.
+fn convention_motion(dir: Dir) -> &'static str {
+    match dir {
+        Dir::Up | Dir::Down => "hoist",
+        Dir::Left | Dir::Right => "trolley",
+        Dir::Forward | Dir::Back => "bridge",
+    }
 }
 
 /// One control of the proposed profile (a rocker, a button, the E-stop...).
@@ -235,7 +244,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
     // Motions named anywhere in the table: a row without one can borrow the only one.
     let mut named: Vec<String> = Vec::new();
     for r in &readings {
-        for m in &r.motions {
+        for m in r.motions.iter().chain(&r.pair) {
             if !named.contains(m) {
                 named.push(m.clone());
             }
@@ -247,6 +256,8 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
     let mut motion_order: Vec<String> = Vec::new();
     let mut role_rows: Vec<(usize, Role)> = Vec::new();
     let mut common: Option<String> = None;
+    // 0 V / 0 Vac rows: the supply neutral. They only stand in as the common when no other row is.
+    let mut neutral_rows: Vec<usize> = Vec::new();
     let mut supply: Option<Voltage> = None;
     let mut kind: Option<String> = None;
 
@@ -264,6 +275,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                         v.volts, s.volts
                     ),
                 ),
+                Some(s) if s.ac.is_none() && v.ac.is_some() => supply = Some(v),
                 _ => {}
             }
         }
@@ -293,6 +305,65 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                 "The step column and the function text name different steps: the column was used"
                     .to_owned(),
             );
+        }
+        // One abbreviation for both directions of a motion (H/Z SNEL): the shared contact of
+        // that step, wired to one pin and closing for either direction.
+        if let Some(motion) = &r.pair {
+            let dirs = match motion.as_str() {
+                "hoist" | "aux" => Some((Dir::Up, Dir::Down)),
+                "bridge" => Some((Dir::Forward, Dir::Back)),
+                "trolley" | "slew" => Some((Dir::Left, Dir::Right)),
+                _ => None,
+            };
+            let (Some((a, b)), Some(step)) = (dirs, r.step) else {
+                warn(
+                    &mut warnings,
+                    line,
+                    Severity::Warning,
+                    format!(
+                        "“{}” names both directions: skipped. Put one direction per row",
+                        row.function.trim()
+                    ),
+                );
+                skip(i, &mut outcomes, "names both directions");
+                continue;
+            };
+            if step > 3 {
+                warn(
+                    &mut warnings,
+                    line,
+                    Severity::Warning,
+                    format!(
+                        "Step {step}: the profile format has rockers with up to 3 steps, so “{}” is left out",
+                        row.function.trim()
+                    ),
+                );
+                skip(i, &mut outcomes, "more than 3 steps");
+                continue;
+            }
+            warn(
+                &mut warnings,
+                line,
+                Severity::Info,
+                format!(
+                    "“{}” is one pin for step {step} of both {motion} directions: it feeds both signals. Confirm against the page",
+                    row.function.trim()
+                ),
+            );
+            if !motion_order.contains(motion) {
+                motion_order.push(motion.clone());
+            }
+            for dir in [a, b] {
+                motion_rows
+                    .entry((motion.clone(), dir))
+                    .or_default()
+                    .push(MotionRow {
+                        row_index: i,
+                        dir,
+                        step,
+                    });
+            }
+            continue;
         }
         // A row naming both directions of a pair is a combined label (hoist/lower), not a pin.
         if r.dirs.len() > 1 && r.dirs.iter().any(|d| r.dirs.contains(&d.opposite())) {
@@ -336,8 +407,31 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
             continue;
         }
         if let Some(dir) = r.dirs.first().copied() {
+            let by_convention = convention_motion(dir);
             let motion = match r.motions.first() {
                 Some(m) => Some(m.clone()),
+                // Bare direction words (RIGHT, FORWARD): the usual crane motion of that
+                // direction when the table does not contradict it.
+                None if named.is_empty()
+                    || named.iter().any(|n| n == by_convention)
+                    // Auxiliary hoist and slew rows (east/west, north/south) sit beside the
+                    // ordinary crane motions, so bare up/down/left/right keep their usual meaning.
+                    || (named.len() > 1 && named.iter().all(|n| matches!(n.as_str(), "aux" | "slew")))
+                    || sole_motion
+                        .as_ref()
+                        .is_some_and(|m| matches!(m.as_str(), "hoist" | "trolley" | "bridge")) =>
+                {
+                    warn(
+                        &mut warnings,
+                        line,
+                        Severity::Info,
+                        format!(
+                            "No motion word: “{}” read as the {by_convention} by the usual crane convention. Confirm against the page",
+                            row.function.trim()
+                        ),
+                    );
+                    Some(by_convention.to_owned())
+                }
                 None if named.is_empty() => {
                     warn(
                         &mut warnings,
@@ -417,6 +511,13 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
         }
         if let Some(role) = r.role {
             if role == Role::Common {
+                let neutral = tokenize(&row.function)
+                    .iter()
+                    .all(|t| matches!(t.as_str(), "0v" | "0vac" | "0vdc" | "0" | "v"));
+                if neutral && !row.function.trim().is_empty() {
+                    neutral_rows.push(i);
+                    continue;
+                }
                 match &common {
                     None => {
                         let label = if row.terminal.trim().is_empty() {
@@ -464,6 +565,20 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                 ),
             );
             skip(i, &mut outcomes, "no direction");
+        } else if r.voltage.is_some() {
+            // A supply pin of the receiver (48 Vac): the voltage is read, no signal.
+            skip(i, &mut outcomes, "supply voltage");
+        } else if r.step.is_some() {
+            warn(
+                &mut warnings,
+                line,
+                Severity::Warning,
+                format!(
+                    "“{}” gives a step but no motion or direction: skipped. Put the motion and direction in the row",
+                    row.function.trim()
+                ),
+            );
+            skip(i, &mut outcomes, "step without motion");
         } else {
             warn(
                 &mut warnings,
@@ -475,6 +590,21 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                 ),
             );
             skip(i, &mut outcomes, "not recognised");
+        }
+    }
+
+    for (n, i) in neutral_rows.iter().enumerate() {
+        let row = &table.rows[*i];
+        if n == 0 && common.is_none() {
+            let label = if row.terminal.trim().is_empty() {
+                row.function.trim()
+            } else {
+                row.terminal.trim()
+            };
+            common = Some(label.to_owned());
+            outcomes[*i] = Some(Outcome::Common);
+        } else {
+            skip(*i, &mut outcomes, "supply neutral (0 V)");
         }
     }
 
@@ -594,7 +724,12 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                             ),
                         );
                     }
-                    outcomes[m.row_index] = Some(Outcome::Signal(name.clone()));
+                    outcomes[m.row_index] =
+                        Some(Outcome::Signal(match outcomes[m.row_index].take() {
+                            // One pin for both directions: the row shows both signals.
+                            Some(Outcome::Signal(prev)) => format!("{prev} + {name}"),
+                            _ => name.clone(),
+                        }));
                     add_binding(row, &name, &mut warnings);
                     signals.push(Signal {
                         name,
@@ -720,15 +855,21 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
         );
     }
     let mut pins: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    let mut pin_lines: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
     for b in &bindings {
         if !b.pin.is_empty() {
             pins.entry(b.pin.as_str())
                 .or_default()
                 .push(b.signal.as_str());
+            pin_lines.entry(b.pin.as_str()).or_default().push(b.line);
         }
     }
     for (pin, sigs) in &pins {
-        if sigs.len() > 1 {
+        // Signals from one row (a shared H/Z SNEL pin) are meant to share their terminal.
+        let mut lines = pin_lines[pin].clone();
+        lines.sort_unstable();
+        lines.dedup();
+        if sigs.len() > 1 && lines.len() > 1 {
             warn(
                 &mut warnings,
                 0,
@@ -736,6 +877,18 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                 format!("Terminal {pin} is used for {}", sigs.join(" and ")),
             );
         }
+    }
+    if let Some(row) = table.rows.iter().find(|r| {
+        tokenize(&r.function)
+            .iter()
+            .any(|t| matches!(t.as_str(), "east" | "west" | "north" | "south"))
+    }) {
+        warn(
+            &mut warnings,
+            row.line,
+            Severity::Info,
+            "Compass words: east/west read as the auxiliary (second) hoist up/down and north/south as slew right/left. Confirm against the page".to_owned(),
+        );
     }
     if controls.is_empty() {
         warn(

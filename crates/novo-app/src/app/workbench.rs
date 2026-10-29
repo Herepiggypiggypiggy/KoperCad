@@ -84,6 +84,8 @@ pub(crate) struct Workbench {
     pub(super) preferences: bool,
     /// The shortcut sheet (`?`).
     pub(super) shortcuts: super::shortcuts_sheet::ShortcutSheet,
+    pub(super) icon_gallery: super::icon_gallery::IconGallery,
+    pub(super) app_menu: super::app_menu::AppMenu,
     /// The macro browser window.
     pub(super) macros: super::macro_browser::MacroBrowser,
     /// The Parts window (browser and one-click import), while open.
@@ -112,6 +114,7 @@ pub(crate) struct Workbench {
     pub(super) faults: Option<super::faults::FaultsWindow>,
     /// The Hoist run window and the run in it.
     pub(super) hoist: super::hoist_run::HoistRun,
+    pub(super) drive_run: super::drive_run::DriveRun,
     pub(super) motor_freq: super::motor_freq::MotorFreq,
     /// The Add fault window (`sim.add_fault`), while it is open.
     pub(super) add_fault: Option<super::faults::AddFault>,
@@ -181,11 +184,17 @@ pub(crate) struct Workbench {
     pub(super) space_down: Option<egui::Pos2>,
     /// The pointer on the drawing (mm), when it is over the canvas.
     pub(super) pointer_world: Option<novo_core::Point>,
+    /// The page and place where the pointer was last over the drawing; kept
+    /// after it leaves, for a circuit placed from a panel to land there.
+    pub(super) last_pointer: Option<(novo_core::PageId, novo_core::Point)>,
     /// Where a Space-held pan last moved the drawing from, once the
     /// pointer has gone more than 4 px from `space_down`.
     pub(super) space_pan: Option<egui::Pos2>,
-    /// The tool dock's size last frame, to tell where it would sit.
-    pub(super) dock_size: egui::Vec2,
+    /// Where the tool rail was drawn this frame (None: no rail).
+    pub(super) rail_rect: Option<egui::Rect>,
+    /// The width the pinned navigator column has now (it is dragged wider
+    /// or narrower), for the dialogs that open beside it.
+    pub(super) outline_shown: Option<f32>,
     /// The inspector's fields while they are edited.
     pub(super) inspector: super::inspector::InspectorState,
     /// The wire panel's text fields while they are edited.
@@ -333,6 +342,8 @@ impl Default for Workbench {
             plc_list: None,
             preferences: false,
             shortcuts: Default::default(),
+            icon_gallery: Default::default(),
+            app_menu: Default::default(),
             macros: Default::default(),
             parts: None,
             macro_save: None,
@@ -346,6 +357,7 @@ impl Default for Workbench {
             compare: None,
             faults: None,
             hoist: Default::default(),
+            drive_run: Default::default(),
             motor_freq: Default::default(),
             add_fault: None,
             calculations: None,
@@ -381,8 +393,10 @@ impl Default for Workbench {
             proposal: 0,
             space_down: None,
             pointer_world: None,
+            last_pointer: None,
             space_pan: None,
-            dock_size: egui::Vec2::ZERO,
+            rail_rect: None,
+            outline_shown: None,
             inspector: Default::default(),
             wire_panel: Default::default(),
             marks: true,
@@ -520,11 +534,15 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.devices_drawer",
     "view.toggle_marks",
     "view.toggle_references",
+    "view.hide_references_page",
+    "view.hide_references_device",
     "sim.live",
+    "sim.controller",
     "sim.why",
     "sim.plc_program",
     "sim.faults",
     "sim.hoist",
+    "sim.drive_run",
     "sim.motor_curves",
     "sim.add_fault",
     "view.changes",
@@ -677,6 +695,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "xref.link",
     "app.preferences",
     "view.shortcuts",
+    "view.icon_gallery",
     "help.show_hints",
     "help.next_lesson",
     "help.whats_new",
@@ -905,6 +924,9 @@ impl NovoApp {
             }
             _ => None,
         };
+        if let (Some(at), Some(page)) = (self.wb.pointer_world, self.current_page) {
+            self.wb.last_pointer = Some((page, at));
+        }
     }
 
     /// Whether the shell runs `command` from a key press itself.
@@ -1237,6 +1259,8 @@ impl NovoApp {
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
             "view.toggle_references" => self.cycle_xref_view(),
+            "view.hide_references_page" => self.toggle_page_references(),
+            "view.hide_references_device" => self.toggle_device_references(),
             "view.reports" => self.switch_workspace(super::workspace::Workspace::Reports),
             "view.3d" => self.switch_workspace(Workspace::View3d),
             "view.3d_assembly_next" | "view.3d_assembly_previous" => {
@@ -1362,7 +1386,7 @@ impl NovoApp {
             "export.reports" => {
                 self.export_all_reports();
             }
-            "sim.live" | "sim.why" | "sim.plc_program" => {
+            "sim.live" | "sim.why" | "sim.plc_program" | "sim.controller" => {
                 // The live view and the PLC window draw only over the
                 // schematic: go there first so the command is not silent.
                 if self.workspace() != Workspace::Schematic && self.is_open() {
@@ -1374,6 +1398,8 @@ impl NovoApp {
                 }
                 if id == "sim.live" {
                     self.toggle_live();
+                } else if id == "sim.controller" {
+                    self.toggle_controller_panel();
                 } else if id == "sim.why" {
                     self.ask_why();
                 } else {
@@ -1393,6 +1419,7 @@ impl NovoApp {
             }
             "sim.faults" => self.toggle_faults(),
             "sim.hoist" => self.toggle_hoist_run(),
+            "sim.drive_run" => self.toggle_drive_run(),
             "sim.motor_curves" => self.toggle_motor_curves(),
             "sim.add_fault" => self.begin_add_fault(),
             "view.changes" => self.toggle_changes(argument),
@@ -1569,7 +1596,14 @@ impl NovoApp {
                 self.export_aml();
             }
             "file.import_aml" => self.import_aml(),
-            "file.import_controller" => self.open_controller_import(),
+            "file.import_controller" => {
+                // Also reached from Ctrl+K and scripts, not only the menu row that greys.
+                if self.addon_enabled(super::addons::CONTROLLERS_ADDON) {
+                    self.open_controller_import();
+                } else {
+                    self.message(Level::Info, super::addons::CONTROLLERS_NEEDED);
+                }
+            }
             "addons.manage" => self.open_addons(),
             "file.import_crane" => self.import_crane(),
             "file.import_eplan" => self.import_eplan(),
@@ -1604,6 +1638,7 @@ impl NovoApp {
                 self.wb.preferences = true;
             }
             "view.shortcuts" => self.toggle_shortcuts(),
+            "view.icon_gallery" => self.toggle_icon_gallery(),
             "help.show_hints" => self.show_hints_again(),
             "help.whats_new" => self.show_whats_new = true,
             "help.next_lesson" => self.learn_run_command(id, None),

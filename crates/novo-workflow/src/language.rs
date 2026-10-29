@@ -72,6 +72,21 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["motorgroepenkast voorbeeld", "kast voorbeeld"],
     ),
+    nl(
+        "file.example_crane",
+        &[],
+        &["kraan voorbeeld", "kraankast voorbeeld"],
+    ),
+    nl(
+        "file.example_plc",
+        &[],
+        &["plc kast voorbeeld", "plc voorbeeld"],
+    ),
+    nl(
+        "file.example_pump",
+        &[],
+        &["pomp voorbeeld", "pompen voorbeeld"],
+    ),
     nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
     nl(
         "help.walkthrough",
@@ -136,6 +151,11 @@ pub const DUTCH: &[Aliases] = &[
         "help.numbers",
         &[],
         &["over de getallen", "schatting", "model", "rekenwaarde"],
+    ),
+    nl(
+        "view.icon_gallery",
+        &[],
+        &["pictogrammen", "iconen", "icoonbibliotheek"],
     ),
     nl(
         "help.learn",
@@ -677,6 +697,17 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl(
+        "sim.controller",
+        &["bediening paneel"],
+        &[
+            "afstandsbediening",
+            "hangkast",
+            "zender",
+            "ontvanger",
+            "kraanbediening",
+        ],
+    ),
+    nl(
         "sim.why",
         &["waarom"],
         &["waarom brandt dit", "waarom dood", "uitleg", "pad volgen"],
@@ -712,6 +743,17 @@ pub const DUTCH: &[Aliases] = &[
         &["kraan", "haak", "rem", "eindschakelaar", "tweesnelheden"],
     ),
     nl(
+        "sim.drive_run",
+        &["frequentieregelaar"],
+        &[
+            "rijden",
+            "loopkat",
+            "brug",
+            "kraanbaan",
+            "afstandsbediening",
+        ],
+    ),
+    nl(
         "sim.motor_curves",
         &["frequentie"],
         &[
@@ -731,6 +773,16 @@ pub const DUTCH: &[Aliases] = &[
         "view.toggle_references",
         &[],
         &["verwijzingen tonen, vervagen of verbergen"],
+    ),
+    nl(
+        "view.hide_references_page",
+        &[],
+        &["verwijzingen van deze pagina verbergen of tonen"],
+    ),
+    nl(
+        "view.hide_references_device",
+        &[],
+        &["verwijzingen van het gekozen apparaat verbergen of tonen"],
     ),
     nl(
         "view.override_marks",

@@ -1,0 +1,54 @@
+@title App menu: two panes, search and keys, dark and light
+@area Layout
+# Lane V2b of the visual redesign (docs/design/visual-redesign.md section 5.1).
+# The menu words are hidden in Preferences so the mark's menu is the only one;
+# F10 opens it.
+fresh
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Hidden
+wait 6
+key Escape
+wait 8
+shot bar-without-menu-names
+key F10
+wait 10
+expect "About"
+expect "Preferences"
+shot file-dark
+check_layout
+key alt+v
+wait 6
+expect "Reset panel layout"
+shot view-dark
+key alt+h
+wait 6
+shot help-dark
+text pdf
+wait 8
+shot search-dark
+check_layout
+key Escape
+wait 6
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 6
+key F10
+wait 10
+shot file-light
+key alt+v
+wait 6
+shot view-light
+check_layout

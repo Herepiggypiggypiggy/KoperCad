@@ -407,3 +407,41 @@ fn the_busiest_call_is_kept_and_put_into_words() {
         "a zero budget is as full as it gets"
     );
 }
+
+#[test]
+fn an_engine_over_four_mebibytes_is_refused_at_install_and_at_load() {
+    let limit = novo_addons::host::MAX_ENGINE_BYTES;
+    assert_eq!(limit, 4 * 1024 * 1024);
+    // At load: a valid module padded with a custom section past the cap.
+    let mut wasm = good();
+    // Noise, so the package does not trip the expansion-ratio guard before the size cap.
+    let mut x: u32 = 12345;
+    while wasm.len() <= limit {
+        x = x.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        wasm.push((x >> 24) as u8);
+    }
+    match EngineHost::load(&wasm, small()) {
+        Err(AddonError::Engine(why)) => assert!(why.contains("larger than 4 MiB"), "{why}"),
+        other => panic!("expected a refusal, got {:?}", other.map(|_| ())),
+    }
+    // At install: the package is refused before anything is written.
+    let manifest = manifest(
+        "big",
+        "1.0.0",
+        "[engine]\nfile = \"engine.wasm\"\nhost_api = 1\n",
+    );
+    let mut parts = files("big", "x");
+    parts.push(("engine.wasm".into(), wasm));
+    let bytes = novo_addons::pack::pack_parts(manifest.as_bytes(), &parts, None).expect("packs");
+    let dir = tempfile::tempdir().unwrap();
+    let err = store(dir.path())
+        .install_bytes(
+            &bytes,
+            InstallOptions {
+                accept_unsigned: true,
+                enable: true,
+            },
+        )
+        .unwrap_err();
+    assert!(err.to_string().contains("too large"), "{err}");
+}

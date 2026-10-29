@@ -80,6 +80,9 @@ pub struct Bench {
     map: IoMap,
     on: BTreeSet<SymbolId>,
     fault: Option<RuntimeError>,
+    /// Input bits held by something outside the drawing (a controller panel), whatever the
+    /// drawn channel of that address sees.
+    overrides: BTreeMap<Address, bool>,
 }
 
 impl Bench {
@@ -89,7 +92,29 @@ impl Bench {
             map,
             on: BTreeSet::new(),
             fault: None,
+            overrides: BTreeMap::new(),
         }
+    }
+
+    /// Holds the input bit at `address` to `value`, or lets go of it (`None`). The override
+    /// wins over what the drawn channel sees and works for an address with no drawn channel.
+    /// `false` when `address` is not a bit input address.
+    pub fn override_input(&mut self, address: &str, value: Option<bool>) -> bool {
+        match Address::parse(address) {
+            Some(a) if a.space == Space::Input && a.is_bit() => {
+                match value {
+                    Some(v) => self.overrides.insert(a, v),
+                    None => self.overrides.remove(&a),
+                };
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Lets go of every overridden input.
+    pub fn clear_overrides(&mut self) {
+        self.overrides.clear();
     }
 
     pub fn runtime(&self) -> &Runtime {
@@ -151,6 +176,9 @@ impl Bench {
         for (&address, symbol) in &self.map.inputs {
             self.runtime
                 .set_input(address, Value::Bool(seen.contains(symbol)));
+        }
+        for (&address, &value) in &self.overrides {
+            self.runtime.set_input(address, Value::Bool(value));
         }
         match self.runtime.scan((dt * 1e6).round() as i64) {
             Ok(()) => {

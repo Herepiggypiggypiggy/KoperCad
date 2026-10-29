@@ -861,3 +861,20 @@ fn an_absurd_or_tiny_price_is_not_taken_silently() {
     assert!(text.contains("unusually low"), "{text}");
     assert_eq!(part("P-3").price.as_ref().unwrap().amount, 12.5);
 }
+
+/// The header row of a Phoenix Contact product list export.
+const PRODUCT_LIST: &str = "Item Number,GTIN,Type,Item Description,Quantity\n\
+3209510,4046356329781,\"PT 2,5\",Feed-through terminal block,\n\
+2904600,4046356985321,QUINT4-PS/1AC/24DC/5,Power supply,\n";
+
+#[test]
+fn a_product_list_with_item_description_gets_its_description() {
+    let sheet = csv_sheet(PRODUCT_LIST);
+    let mapping = Mapping::suggest(&sheet, 0);
+    assert_eq!(*target_of(&mapping, "Item Number"), Target::OrderNumber);
+    assert_eq!(*target_of(&mapping, "Type"), Target::TypeNumber);
+    assert_eq!(
+        *target_of(&mapping, "Item Description"),
+        Target::Description
+    );
+}

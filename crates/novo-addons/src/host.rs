@@ -38,6 +38,10 @@ use crate::error::{AddonError, Result};
 /// The host API generation this program speaks (`[engine] host_api` of the manifest).
 pub const HOST_API: u32 = 1;
 
+/// Largest `engine.wasm`: 4 MiB. A real engine is a few hundred kilobytes; a bigger file is
+/// refused when the package is read and again when the engine loads.
+pub const MAX_ENGINE_BYTES: usize = 4 * 1024 * 1024;
+
 /// Fuel one `kopercad.log` call costs (a call copies up to 512 bytes and keeps a line).
 const LOG_FUEL: u64 = 2_000;
 
@@ -133,6 +137,12 @@ impl EngineHost {
     /// Loads `wasm` (binary only), checks what it imports and exports, starts it and shakes
     /// hands (`hello`). Nothing of the engine runs outside the budgets.
     pub fn load(wasm: &[u8], limits: HostLimits) -> Result<EngineHost> {
+        if wasm.len() > MAX_ENGINE_BYTES {
+            return Err(engine_error(format!(
+                "engine.wasm is larger than {} MiB",
+                MAX_ENGINE_BYTES / (1024 * 1024)
+            )));
+        }
         let mut config = Config::default();
         config
             .consume_fuel(true)

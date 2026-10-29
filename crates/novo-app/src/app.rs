@@ -4,6 +4,12 @@
 //! bar and no status bar.
 
 mod addons;
+mod addons_look;
+#[cfg(test)]
+mod addons_look_tests;
+mod app_menu;
+#[cfg(test)]
+mod app_menu_tests;
 mod appearance;
 mod assembly;
 mod assistant;
@@ -61,7 +67,11 @@ mod commissioning_viewer;
 #[cfg(test)]
 mod commissioning_viewer_tests;
 mod compare;
+mod controller_card;
 mod controller_import;
+mod controller_live;
+#[cfg(test)]
+mod controller_live_tests;
 mod count_words;
 mod designer;
 mod device_renumber;
@@ -70,6 +80,7 @@ mod dialog_ui;
 mod dock;
 mod drawers;
 mod drill_cue;
+mod drive_run;
 mod duplicate;
 mod dxf;
 mod electrical;
@@ -88,10 +99,13 @@ mod eplan_import;
 mod eplan_parts;
 mod error_words;
 mod example;
+mod example_crane;
 #[cfg(test)]
 mod example_gallery;
 mod example_kit;
 mod example_mcc;
+mod example_plc;
+mod example_pump;
 mod faults;
 mod handover;
 mod heat;
@@ -147,6 +161,7 @@ mod heat_wires;
 #[cfg(test)]
 mod heat_wires_tests;
 mod hoist_run;
+mod icon_gallery;
 mod inspector;
 mod interop;
 mod kitting;
@@ -192,6 +207,9 @@ mod outline_items;
 mod outline_tree;
 mod pages;
 mod panel;
+mod panel_dock;
+#[cfg(test)]
+mod panel_windows_tests;
 mod part_picker;
 mod parts;
 mod parts_bulk;
@@ -222,6 +240,10 @@ mod probe;
 mod project_rules;
 mod project_settings;
 mod protection;
+mod rail;
+mod rail_3d;
+mod rail_cabinet;
+mod rail_schematic;
 mod reports;
 mod reports_view;
 mod review_notes;
@@ -237,6 +259,9 @@ mod selection_sheet_tests;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
+mod sim_chip;
+#[cfg(test)]
+mod sim_chip_tests;
 mod simulate;
 mod single_line_view;
 #[cfg(test)]
@@ -361,8 +386,6 @@ mod compare_tests;
 #[cfg(test)]
 mod context_menu_tests;
 #[cfg(test)]
-mod dock_labels_tests;
-#[cfg(test)]
 mod eplan_ui_tests;
 #[cfg(test)]
 mod error_words_tests;
@@ -380,6 +403,8 @@ mod gate1_tests;
 mod greyed_commands_tests;
 #[cfg(test)]
 mod handover_tests;
+#[cfg(test)]
+mod icon_gallery_tests;
 #[cfg(test)]
 mod kitting_tests;
 #[cfg(test)]
@@ -416,6 +441,10 @@ mod pdf_options_tests;
 mod print_preview_tests;
 #[cfg(test)]
 mod protection_tests;
+#[cfg(test)]
+mod rail_tests;
+#[cfg(test)]
+mod rail_workspaces_tests;
 #[cfg(test)]
 mod read_only_tests;
 #[cfg(test)]
@@ -557,6 +586,9 @@ const MAX_TOASTS: usize = 3;
 const TOP_BAR: f32 = 42.0;
 /// Width of the outline, pinned or as a flyout.
 const OUTLINE_WIDTH: f32 = 248.0;
+/// The narrowest and widest the navigator column can be dragged to.
+const OUTLINE_MIN_WIDTH: f32 = 200.0;
+const OUTLINE_MAX_WIDTH: f32 = 520.0;
 /// Windows at least this wide pin the outline unless the user chose.
 const PIN_OUTLINE_FROM: f32 = 1700.0;
 
@@ -576,6 +608,9 @@ enum Leaving {
     Example,
     EmcExample,
     MccExample,
+    CraneExample,
+    PlcExample,
+    PumpExample,
     Practice,
     /// Open this lesson's sample project and start the lesson.
     Lesson(String),
@@ -969,6 +1004,9 @@ impl NovoApp {
             Action::OpenExample => self.leave_then(ctx, Leaving::Example),
             Action::OpenEmcExample => self.leave_then(ctx, Leaving::EmcExample),
             Action::OpenMccExample => self.leave_then(ctx, Leaving::MccExample),
+            Action::OpenCraneExample => self.leave_then(ctx, Leaving::CraneExample),
+            Action::OpenPlcExample => self.leave_then(ctx, Leaving::PlcExample),
+            Action::OpenPumpExample => self.leave_then(ctx, Leaving::PumpExample),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
             Action::Learn => self.learn_run_command("help.learn", None),
@@ -1141,6 +1179,9 @@ impl NovoApp {
             Leaving::Example => self.open_example(),
             Leaving::EmcExample => self.open_emc_example(),
             Leaving::MccExample => self.open_mcc_example(),
+            Leaving::CraneExample => self.open_crane_example(),
+            Leaving::PlcExample => self.open_plc_example(),
+            Leaving::PumpExample => self.open_pump_example(),
             Leaving::Practice => self.start_practice(),
             Leaving::Lesson(id) => self.start_lesson_now(&id),
             Leaving::Close => self.close_project(),
@@ -1160,9 +1201,7 @@ impl NovoApp {
         }
         let name = self.project_name().unwrap_or_else(|| "Untitled".into());
         let mut answer = None;
-        egui::Modal::new(egui::Id::new("save_changes")).show(ctx, |ui| {
-            ui.set_width(400.0);
-            ui.heading("Save changes?");
+        panel::modal(ctx, "save_changes", "Save changes?", [400.0, 0.0], |ui| {
             ui.label(format!("\"{name}\" has changes that are not saved."));
             if self.project_path.is_some() {
                 ui.label("The file on disk stays as it is until you save.");
@@ -1743,6 +1782,7 @@ impl NovoApp {
         self.window_width = ctx.content_rect().width();
         self.window_height = ctx.content_rect().height();
         self.sync_panels(&ctx);
+        panel::splitters_reset(&ctx);
         self.follow_window(self.window_width, self.window_height);
         let pinned = self.outline_pinned() && !self.focus_mode;
         if pinned {
@@ -1756,19 +1796,62 @@ impl NovoApp {
             .show(ui, |ui| self.top_bar(ui, &mut picked));
         self.status_bar(ui);
         let reports = self.workspace() == workspace::Workspace::Reports && self.is_open();
+        // The tool rail: the leftmost panel of the Schematic, Cabinet and 3D
+        // workspaces.
+        let rail_workspace = self.workspace();
+        if !self.focus_mode
+            && self.is_open()
+            && matches!(
+                rail_workspace,
+                workspace::Workspace::Schematic
+                    | workspace::Workspace::Cabinet
+                    | workspace::Workspace::View3d
+            )
+        {
+            match rail_workspace {
+                workspace::Workspace::Schematic => self.schematic_rail_show(ui),
+                workspace::Workspace::Cabinet => self.cabinet_rail_show(ui),
+                _ => self.view3d_rail_show(ui),
+            }
+        } else {
+            self.wb.rail_rect = None;
+            rail::close_flyout(&ctx);
+        }
         if reports {
             egui::Panel::left("reports_list")
-                .exact_size(OUTLINE_WIDTH)
-                .resizable(false)
+                .default_size(OUTLINE_WIDTH)
+                .size_range(OUTLINE_MIN_WIDTH..=OUTLINE_MAX_WIDTH)
+                .resizable(true)
                 .show(ui, |ui| self.reports_list(ui));
         } else if pinned && self.is_open() {
-            egui::Panel::left("outline")
-                .exact_size(self.outline_width())
-                .resizable(false)
-                .show(ui, |ui| self.outline(ui, &mut picked));
+            // The edge is dragged to the width the person wants; the Commissioning
+            // tablet view keeps its wide touch column.
+            // (The tablet column has an id of its own, so the width the person
+            // dragged the desktop column to is not carried into it or back.)
+            let tablet = self.commissioning_tablet();
+            let panel = if tablet {
+                egui::Panel::left("outline_tablet")
+                    .exact_size(self.outline_width())
+                    .resizable(false)
+            } else {
+                egui::Panel::left("outline")
+                    .default_size(OUTLINE_WIDTH)
+                    .size_range(OUTLINE_MIN_WIDTH..=OUTLINE_MAX_WIDTH)
+                    .resizable(true)
+            };
+            let shown = panel.show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                self.outline(ui, &mut picked)
+            });
+            if !tablet {
+                self.wb.outline_shown = Some(shown.response.rect.width().round());
+            }
         }
         self.sync_commissioning_workspace();
         self.drawer(ui);
+        // Panels the person docked at an edge of the canvas take their strip here, so
+        // the canvas is what is left.
+        panel_dock::spacers(ui);
         // The canvases paint their own ground; the Reports tables and the
         // Cabinet toolbar sit on the theme's surfaces, not on the bare window.
         let pal = novo_theme::Palette::of_ctx(&ctx);
@@ -1836,7 +1919,6 @@ impl NovoApp {
             self.sync_connect_mode();
             self.sync_menu_keys();
             self.sync_catalog();
-            self.tool_dock(&ctx, canvas_rect);
             self.empty_sheet_ghost(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
             self.live_view(&ctx, canvas_rect);
@@ -1874,6 +1956,7 @@ impl NovoApp {
         self.plc_list_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
+        self.icon_gallery_window(&ctx);
         self.whats_new_window(&ctx);
         self.numbers_window(&ctx);
         self.background_panel(&ctx);
@@ -1909,6 +1992,7 @@ impl NovoApp {
         self.protection_window(&ctx);
         self.faults_window(&ctx);
         self.hoist_window(&ctx);
+        self.drive_run_window(&ctx);
         self.motor_freq_window(&ctx);
         self.add_fault_window(&ctx);
         self.calculations_window(&ctx);
@@ -2083,7 +2167,8 @@ impl NovoApp {
         if self.commissioning_tablet() {
             commissioning::TABLET_PANEL_WIDTH
         } else {
-            OUTLINE_WIDTH
+            // What the pinned column was dragged to, else the usual width.
+            self.wb.outline_shown.unwrap_or(OUTLINE_WIDTH)
         }
     }
 
@@ -2134,7 +2219,9 @@ impl NovoApp {
         let fit = menu_bar::TopBarFit::at(self.window_width);
         let focus = self.menu_key_pressed(ui.ctx());
         ui.horizontal_centered(|ui| {
-            if self.menu_bar_wide() {
+            // F10 opens the app menu; with the menu words in the bar it moves the
+            // focus to them instead.
+            if self.menu_names_shown() {
                 self.mark(ui, false);
                 self.menu_bar(ui, focus);
             } else {
@@ -2303,7 +2390,6 @@ impl NovoApp {
     /// The outline's content: mode tabs, then the pages or the issues.
     /// Picking a page or an issue closes the flyout.
     fn outline(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
-        ui.set_min_width(ui.available_width());
         // The current tab shows icon and name, the others only the icon (the
         // name is in the tooltip), so four tabs and the pin fit the 248 pt
         // column at every density.
@@ -2476,21 +2562,38 @@ impl NovoApp {
             panel::reserve_left(ctx, 0.0);
             return;
         }
-        panel::reserve_left(ctx, self.outline_width() + 8.0);
-        let top = canvas.top() + 8.0;
-        let height = (canvas.bottom() - top - 8.0).max(120.0);
-        let area = egui::Area::new(egui::Id::new("outline_flyout"))
-            .fixed_pos(egui::pos2(canvas.left() + 8.0, top))
-            .show(ctx, |ui| {
-                let frame = egui::Frame::popup(ui.style());
-                // The frame's margins and stroke come on top of the content.
-                let chrome = frame.total_margin().sum();
-                frame.show(ui, |ui| {
-                    ui.set_width(self.outline_width() - chrome.x);
-                    ui.set_height(height - chrome.y);
-                    self.outline(ui, picked);
-                });
-            });
+        // A window of its own: the title bar drags it, the edges resize it,
+        // and it stays where it was left (View > Reset panel layout). Until
+        // it is moved it hangs from the canvas's left edge and the panels
+        // that start there keep beside it.
+        let height = (canvas.height() - 16.0).max(120.0);
+        let area = panel::Panel::new(
+            "outline_flyout",
+            "Navigator",
+            canvas,
+            panel::Side::Left,
+            OUTLINE_WIDTH,
+        )
+        .flyout()
+        .own_scroll()
+        .reach_bottom()
+        .top(8.0)
+        .height(height)
+        .fixed_open()
+        .show(ctx, |ui| self.outline(ui, picked));
+        let Some(area) = area else {
+            panel::reserve_left(ctx, 0.0);
+            return;
+        };
+        let at_edge = !panel::is_moved(ctx, panel::id("outline_flyout"));
+        panel::reserve_left(
+            ctx,
+            if at_edge {
+                area.response.rect.right() - canvas.left() + 8.0
+            } else {
+                0.0
+            },
+        );
         let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
         // The "Pages" toggle and the breadcrumb's page link open and close
         // the flyout themselves; a click on either is not a click elsewhere.
@@ -2586,8 +2689,12 @@ impl NovoApp {
                             let mut rows = |ui: &mut egui::Ui, list: &[(PathBuf, SystemTime)]| {
                                 for (path, changed) in list {
                                     let row = ui.add(
-                                        egui::Button::new(format!("Untitled, {}", ago(*changed)))
-                                            .frame(false),
+                                        egui::Button::new(format!(
+                                            "{}, {}",
+                                            crate::backend::kept_label(path),
+                                            ago(*changed)
+                                        ))
+                                        .frame(false),
                                     );
                                     if row.clicked() {
                                         open = Some(path.clone());
@@ -2715,15 +2822,7 @@ impl NovoApp {
         // Never wider than the canvas: a 683 point window has less room than
         // the usual 420.
         let width = 420.0_f32.min((canvas.width() - 24.0).max(160.0));
-        // The tool dock sits bottom centre; where the stack would reach it
-        // (1366 wide and under), the stack stands on top of the dock instead.
-        let mut bottom = canvas.bottom() - 12.0;
-        if let Some(dock) = ctx.memory(|m| m.area_rect(egui::Id::new("tool_dock")))
-            && dock.left() < canvas.left() + 12.0 + width + 8.0
-            && dock.bottom() > bottom - 8.0
-        {
-            bottom = bottom.min(dock.top() - 8.0);
-        }
+        let bottom = canvas.bottom() - 12.0;
         egui::Area::new(egui::Id::new("toasts"))
             .pivot(egui::Align2::LEFT_BOTTOM)
             .fixed_pos(egui::pos2(canvas.left() + 12.0, bottom))
@@ -2800,22 +2899,26 @@ impl NovoApp {
             .map(|t| format!(" from {}", ago(t)))
             .unwrap_or_default();
         let mut answer = None;
-        egui::Modal::new(egui::Id::new("recovery")).show(ctx, |ui| {
-            ui.set_width(380.0);
-            ui.heading("Restore unsaved work?");
-            ui.label(format!(
-                "KoperCAD did not close cleanly last time. \"{name}\" has unsaved work{when}."
-            ));
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                if primary_button(ui, "Restore").clicked() {
-                    answer = Some(true);
-                }
-                if ui.button("Discard").clicked() {
-                    answer = Some(false);
-                }
-            });
-        });
+        panel::modal(
+            ctx,
+            "recovery",
+            "Restore unsaved work?",
+            [380.0, 0.0],
+            |ui| {
+                ui.label(format!(
+                    "KoperCAD did not close cleanly last time. \"{name}\" has unsaved work{when}."
+                ));
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if primary_button(ui, "Restore").clicked() {
+                        answer = Some(true);
+                    }
+                    if ui.button("Discard").clicked() {
+                        answer = Some(false);
+                    }
+                });
+            },
+        );
         // No implicit answer on Escape or a backdrop click: either choice
         // changes what is on disk, so it takes a deliberate click.
         if let Some(restore) = answer {
@@ -2871,8 +2974,7 @@ impl NovoApp {
         let mut start_check = false;
         self.poll_update_check(ctx);
         let update_state = &self.update_check;
-        let modal = egui::Modal::new(egui::Id::new("about")).show(ctx, |ui| {
-            ui.set_width(380.0);
+        let modal = panel::modal(ctx, "about", "About KoperCAD", [380.0, 0.0], |ui| {
             ui.vertical_centered(|ui| {
                 novo_theme::brand::lockup(ui, 56.0);
                 ui.add_space(novo_theme::space::L);

@@ -67,6 +67,8 @@ pub(crate) struct LiveView {
     why: Option<Target>,
     /// The PLC program window and the program running in it.
     pub(super) plc: super::plc_run::PlcRun,
+    /// The virtual controllers (radio, pendant) that close the receiver's contacts.
+    pub(super) ctl: super::controller_live::ControllerLive,
 }
 
 /// A page and the name to show for it.
@@ -121,12 +123,12 @@ enum Target {
 }
 
 /// A solution for one project revision and one pole state.
-struct Solved {
+pub(super) struct Solved {
     revision: u64,
     poles: PoleState,
     forced: BTreeSet<SymbolId>,
-    netlist: std::sync::Arc<Netlist>,
-    settled: Settled,
+    pub(super) netlist: std::sync::Arc<Netlist>,
+    pub(super) settled: Settled,
     /// Output channels a running PLC program has on.
     plc_on: BTreeSet<SymbolId>,
 }
@@ -134,7 +136,9 @@ struct Solved {
 impl LiveView {
     /// The solution for `project` under the current poles, solved again only
     /// when the drawing or the poles changed.
-    fn solved(&mut self, project: &Project, dt: f64) -> &Solved {
+    pub(super) fn solved(&mut self, project: &Project, dt: f64) -> &Solved {
+        // Controller signals first: they set poles the solution below is worked out from.
+        self.ctl.drive(project, dt, &mut self.poles, &mut self.plc);
         if self.plc.is_running() {
             // A program is scanning: every frame is a scan, and the circuit
             // is solved again with the outputs it just set.
@@ -826,11 +830,14 @@ impl NovoApp {
         live.plc.sync(project, view.editor.catalog.library());
         let dt = f64::from(ctx.input(|i| i.stable_dt));
         // A hoist run steps the circuit itself, in small fixed ticks; the frame only reads it.
-        let running = super::hoist_run::advance(&mut self.wb.hoist, &mut self.wb.live, project, dt);
+        let running = super::hoist_run::advance(&mut self.wb.hoist, &mut self.wb.live, project, dt)
+            | super::drive_run::advance(&mut self.wb.drive_run, &mut self.wb.live, project, dt);
         let live = &mut self.wb.live;
         let solve_dt = if running { 0.0 } else { dt };
         let why_target = live.why;
         let hide_flow_marks = live.hide_flow;
+        // The symbols a controller held at the end of the last frame (they are not for clicking).
+        let controller_driven = live.ctl.driven().clone();
         let solved = live.solved(project, solve_dt);
         let timing = solved.settled.timing.then_some(solved.settled.remaining);
         let wires = lit_wires(project, page, &solved.netlist, &solved.settled.solution);
@@ -842,7 +849,8 @@ impl NovoApp {
             &solved.settled.solution,
         );
         let badges = pole_badges(project, page, &solved.settled.poles);
-        let driven = solved.settled.driven.clone();
+        let mut driven = solved.settled.driven.clone();
+        driven.extend(controller_driven);
         let energized = solved.settled.energized.clone();
         let shown: BTreeSet<SymbolId> = solved.forced.union(&solved.plc_on).copied().collect();
         let coils = coil_badges(project, page, &energized, &shown);
@@ -955,6 +963,17 @@ impl NovoApp {
                 .map(|v| v.editor.catalog.library()),
             page,
             &self.wb.hoist,
+        );
+        super::drive_run::paint_badges(
+            ctx,
+            canvas,
+            &to_screen,
+            project,
+            self.canvas
+                .schematic_ref()
+                .map(|v| v.editor.catalog.library()),
+            page,
+            &self.wb.drive_run,
         );
 
         // Wires: lit in their colour, dimmed when nothing reaches them. The
@@ -1308,6 +1327,7 @@ impl NovoApp {
         let mut open_all = false;
         let mut leave = false;
         let mut open_plc = false;
+        let mut open_controller = false;
         let plc_running = self.wb.live.plc.is_running();
         let mut open_motor: Option<SymbolId> = None;
         let mut toggle_why = false;
@@ -1461,6 +1481,15 @@ impl NovoApp {
                 {
                     open_plc = true;
                 }
+                if ui
+                    .small_button("Controller…")
+                    .on_hover_text(
+                        "A virtual radio or pendant that presses the contacts of a receiver in the drawing (Simulate > Controller panel)",
+                    )
+                    .clicked()
+                {
+                    open_controller = true;
+                }
                 if plc_running {
                     ui.colored_label(crate::theme::ui_palette().success, "running");
                 }
@@ -1574,6 +1603,9 @@ impl NovoApp {
         if open_plc {
             self.wb.live.plc.window = true;
         }
+        if open_controller {
+            self.wb.live.ctl.open ^= true;
+        }
         if leave
             || open_all
             || toggle_why
@@ -1629,6 +1661,7 @@ impl NovoApp {
             }
             self.wb.live.forced.clear();
             self.wb.live.clock.reset();
+            self.wb.live.ctl.reset_state();
         }
         if let Some((coil, output)) = coil_clicked {
             self.live_coil_clicked(coil, output);
@@ -1651,6 +1684,7 @@ impl NovoApp {
         {
             self.live_pole_clicked(symbol, group, together);
         }
+        self.controller_card(ctx, canvas);
     }
 
     /// A click on a coil or output badge: the coil is switched by hand.

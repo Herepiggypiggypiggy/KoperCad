@@ -18,9 +18,29 @@ pub(crate) struct Entry {
 }
 
 /// Every gallery example, in the order of the File > Examples menu.
-pub(crate) const GALLERY: &[Entry] = &[Entry {
-    action: Action::OpenMccExample,
-    name: super::example_mcc::MCC_EXAMPLE_NAME,
-    cabinet: "+CAB",
-    build: super::example_mcc::build_mcc_example,
-}];
+pub(crate) const GALLERY: &[Entry] = &[
+    Entry {
+        action: Action::OpenMccExample,
+        name: super::example_mcc::MCC_EXAMPLE_NAME,
+        cabinet: "+CAB",
+        build: super::example_mcc::build_mcc_example,
+    },
+    Entry {
+        action: Action::OpenCraneExample,
+        name: super::example_crane::CRANE_EXAMPLE_NAME,
+        cabinet: "+CAB",
+        build: super::example_crane::build_crane_example,
+    },
+    Entry {
+        action: Action::OpenPlcExample,
+        name: super::example_plc::PLC_EXAMPLE_NAME,
+        cabinet: "+CAB",
+        build: super::example_plc::build_plc_example,
+    },
+    Entry {
+        action: Action::OpenPumpExample,
+        name: super::example_pump::PUMP_EXAMPLE_NAME,
+        cabinet: "+CAB",
+        build: super::example_pump::build_pump_example,
+    },
+];

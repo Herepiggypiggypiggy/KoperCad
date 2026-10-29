@@ -327,3 +327,52 @@ fn a_broken_engine_stops_alone_and_takes_its_rows_with_it() {
         .unwrap();
     assert!(again.is_err());
 }
+
+/// A stand-in for the controller package: only the id matters to the gate.
+fn install_controllers_stand_in(d: &mut Drive) {
+    let manifest = "[addon]\nid = \"controllers\"\nname = \"Controllers\"\nversion = \"0.1.0\"\npublisher = \"test\"\ndescription = \"stand-in\"\nrequires_app = \">=0.1.0\"\napi_version = 1\npermissions = []\n";
+    let bytes = novo_addons::pack::pack_parts(manifest.as_bytes(), &[], None).expect("packs");
+    d.app
+        .wb
+        .addons
+        .store
+        .clone()
+        .unwrap()
+        .install_bytes(
+            &bytes,
+            novo_addons::InstallOptions {
+                accept_unsigned: true,
+                enable: true,
+            },
+        )
+        .unwrap();
+    d.app.refresh_addons();
+    d.frame();
+}
+
+#[test]
+fn the_controller_import_wizard_needs_the_controllers_add_on() {
+    let (mut d, _dir) = drive();
+    let ctx = d.ctx.clone();
+    let info = novo_workflow::commands::get("file.import_controller").unwrap();
+    // without the add-on the menu row is greyed with the reason, and the command (Ctrl+K,
+    // scripts) says so instead of opening the wizard
+    assert_eq!(
+        d.app.command_unavailable(info),
+        Some("Needs the Controllers add-on: install and turn it on in File > Add-ons...")
+    );
+    d.app.run_command(&ctx, "file.import_controller", None);
+    d.frame();
+    assert!(d.app.wb.controller_wizard.is_none());
+    // with it on, the row works and the wizard opens
+    install_controllers_stand_in(&mut d);
+    assert_eq!(d.app.command_unavailable(info), None);
+    d.app.run_command(&ctx, "file.import_controller", None);
+    d.frame();
+    assert!(d.app.wb.controller_wizard.is_some());
+    // turned off again, it is gone
+    let store = d.app.wb.addons.store.clone().unwrap();
+    store.set_enabled("controllers", false).unwrap();
+    d.app.refresh_addons();
+    assert!(d.app.command_unavailable(info).is_some());
+}

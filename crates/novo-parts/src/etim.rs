@@ -501,17 +501,16 @@ fn read_zip(bytes: &[u8]) -> Result<Vec<(String, Vec<u8>)>, EtimError> {
         let Ok(file) = archive.by_index(i) else {
             continue;
         };
-        if !file.is_file() || !is_table_name(file.name()) {
+        let full_name = String::from_utf8_lossy(file.name_raw()).into_owned();
+        if !file.is_file() || !is_table_name(&full_name) {
             continue;
         }
         if file.size() > MAX_MEMBER_BYTES || total + file.size() > MAX_TOTAL_BYTES {
             return Err(EtimError::Unreadable(format!(
-                "{} is too large to read as an ETIM table",
-                file.name()
+                "{full_name} is too large to read as an ETIM table"
             )));
         }
-        let name = file
-            .name()
+        let name = full_name
             .rsplit(['/', '\\'])
             .next()
             .unwrap_or("")
@@ -601,6 +600,16 @@ mod tests {
         bytes.extend_from_slice(b"EF900003,y\n");
         let m = EtimModel::from_files("x", &[("f.csv".into(), bytes)]).unwrap();
         assert!(m.feature("EF900001").unwrap().contains('\u{b0}'));
+    }
+
+    #[test]
+    fn utf16_tables_without_a_byte_order_mark_read_like_utf8_ones() {
+        // ETIM International writes its CSV tables as UTF-16 little endian
+        // with no byte order mark.
+        let text = "FEATUREID;FEATUREGROUPID;FEATUREDESC\nEF000001;EFG00007;Nominal current\nEF000002;EFG00007;Nominal voltage\nEF000003;EFG00013;Mounting method\n";
+        let bytes: Vec<u8> = text.encode_utf16().flat_map(u16::to_le_bytes).collect();
+        let m = EtimModel::from_files("x", &[("f.csv".into(), bytes)]).unwrap();
+        assert_eq!(m.feature("EF000001"), Some("Nominal current"));
     }
 
     #[test]

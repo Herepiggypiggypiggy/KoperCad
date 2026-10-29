@@ -609,9 +609,10 @@ impl CanvasView {
         self.show_in_rect(ui, rect, response, scene)
     }
 
-    /// Keeps the sheet clear of the card over the canvas edge: when the whole
-    /// sheet is in view and the card covers part of it, the view is fitted
-    /// into the free part beside the card (never closer than before). The
+    /// Keeps the drawing clear of the card over the canvas edge: when the whole
+    /// sheet is in view and the card covers part of what is drawn on it, the
+    /// view is fitted into the free part beside the card (never closer than
+    /// before). A card over bare paper moves nothing. The
     /// earlier view comes back when the card goes, unless the person moved
     /// the view in between.
     fn make_room_for_card(&mut self, scene: &Scene) {
@@ -644,10 +645,22 @@ impl CanvasView {
         if lo.x < 0.0 || hi.x > size.x || lo.y < 0.0 || hi.y > size.y {
             return;
         }
+        // Only drawn content that the card covers is worth moving the view
+        // for: bare paper under the card is not, and the view jumping when a
+        // click selects something (the card opens) moved the target of the
+        // second click of a double click away from under the pointer.
+        let content = scene.content_bounds();
+        if content.is_empty() {
+            return;
+        }
+        let (c_lo, c_hi) = (
+            self.viewport.world_to_screen(content.min),
+            self.viewport.world_to_screen(content.max),
+        );
         let covered = if right > 0.0 {
-            hi.x > size.x - right
+            c_hi.x > size.x - right
         } else {
-            lo.x < left
+            c_lo.x < left
         };
         if !covered {
             return;
@@ -2089,6 +2102,37 @@ mod tests {
         s
     }
 
+    /// [`page_scene`] with a second drawn item near the sheet's right edge.
+    fn page_scene_with_drawing_at_the_right() -> Scene {
+        let mut s = page_scene();
+        s.insert(
+            ItemId(3),
+            Item::new(crate::LayerId(0)).with(Primitive::stroked(
+                Shape::rect(Vec2::new(340.0, 100.0), Vec2::new(400.0, 160.0)),
+                Stroke::default(),
+            )),
+        );
+        s
+    }
+
+    #[test]
+    fn a_card_over_bare_paper_moves_nothing() {
+        // The drawing sits at the left; the card covers the sheet's empty
+        // right part. Selecting something opens the card, and the view must
+        // stay where it is: a second click of a double click lands on the
+        // same spot.
+        let scene = page_scene();
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(1000.0, 700.0);
+        view.viewport.zoom = 2.0;
+        view.viewport.center = Vec2::new(210.0, 148.5);
+        let before = (view.viewport.center, view.viewport.zoom);
+        view.card_room = [0.0, 344.0];
+        view.make_room_for_card(&scene);
+        assert_eq!((view.viewport.center, view.viewport.zoom), before);
+        assert!(view.card_shift.is_none());
+    }
+
     #[test]
     fn fit_brings_the_drawing_into_view_and_fit_sheet_the_paper() {
         let scene = page_scene();
@@ -2201,7 +2245,7 @@ mod tests {
 
     #[test]
     fn a_card_over_the_edge_gets_the_sheet_panned_clear_and_back() {
-        let scene = page_scene();
+        let scene = page_scene_with_drawing_at_the_right();
         let mut view = CanvasView::new();
         view.viewport.size = Vec2::new(1000.0, 700.0);
         view.viewport.zoom = 2.0;
@@ -2223,7 +2267,7 @@ mod tests {
 
     #[test]
     fn a_view_the_person_moved_is_not_panned_back() {
-        let scene = page_scene();
+        let scene = page_scene_with_drawing_at_the_right();
         let mut view = CanvasView::new();
         view.viewport.size = Vec2::new(1000.0, 700.0);
         view.viewport.zoom = 2.0;

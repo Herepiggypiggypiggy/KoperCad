@@ -125,6 +125,8 @@ impl NovoApp {
         };
         let stopped = &self.wb.addons.stopped;
         let ext = Extensions::build_excluding(&set, &in_use, &|id| stopped.contains_key(id));
+        // Their icons and short labels join the tables the rail, menus and Ctrl K read.
+        super::addons_look::sync(&ext);
         for warning in &set.warnings {
             log::warn!("add-ons: {warning}");
         }
@@ -560,10 +562,15 @@ impl NovoApp {
         };
         let mut cancel = false;
         let mut go = false;
-        egui::Modal::new(egui::Id::new("addon_install_prompt")).show(ctx, |ui| {
-            ui.set_width(novo_theme::dialog_width::MEDIUM);
-            install_prompt_ui(ui, prompt, &mut cancel, &mut go);
-        });
+        let title = install_prompt_title(prompt);
+        // Escape and a click outside answer nothing: only the buttons do.
+        let _ = super::panel::modal(
+            ctx,
+            "addon_install_prompt",
+            title,
+            [novo_theme::dialog_width::MEDIUM, 0.0],
+            |ui| install_prompt_ui(ui, prompt, &mut cancel, &mut go),
+        );
         if cancel {
             manager.prompt = None;
         } else if go {
@@ -741,6 +748,13 @@ struct Engines<'a> {
     stopped: &'a BTreeMap<String, String>,
     load: &'a EngineLoad,
 }
+
+/// Id of the controller add-on (`addons/controllers`): the controller import wizard needs it.
+pub(super) const CONTROLLERS_ADDON: &str = "controllers";
+
+/// Why File > Import > Controller profile is greyed while the add-on is not on.
+pub(super) const CONTROLLERS_NEEDED: &str =
+    "Needs the Controllers add-on: install and turn it on in File > Add-ons...";
 
 fn manager_ui(
     ui: &mut egui::Ui,
@@ -1071,16 +1085,20 @@ fn fingerprint_row(ui: &mut egui::Ui, label: &str, hash: &str) {
     });
 }
 
+/// The title of the install prompt: what is about to happen to which add-on.
+fn install_prompt_title(prompt: &Prompt) -> String {
+    let a = &prompt.inspection.package.manifest.addon;
+    match &prompt.inspection.change {
+        Change::Update { from } => format!("Update {} from {from} to {}", a.name, a.version),
+        Change::Repair => format!("Repair {} {}", a.name, a.version),
+        _ => format!("Install {} {}", a.name, a.version),
+    }
+}
+
 fn install_prompt_ui(ui: &mut egui::Ui, prompt: &mut Prompt, cancel: &mut bool, go: &mut bool) {
     let p = crate::theme::ui_palette();
     let package = &prompt.inspection.package;
     let a = &package.manifest.addon;
-    let verb = match &prompt.inspection.change {
-        Change::Update { from } => format!("Update {} from {from} to {}", a.name, a.version),
-        Change::Repair => format!("Repair {} {}", a.name, a.version),
-        _ => format!("Install {} {}", a.name, a.version),
-    };
-    ui.heading(verb);
     ui.label(
         egui::RichText::new(publisher_line(
             &a.publisher,

@@ -580,3 +580,81 @@ fn changeover_switch_has_an_off_position_and_strips_have_end_pieces() {
         );
     }
 }
+
+#[test]
+fn a_declared_common_may_start_every_pole() {
+    let ok = behavior_messages(
+        "[behavior]\nkind = \"contact\"\nnormally = \"open\"\ncommon = \"1\"\npoles = [[\"1\", \"2\"], [\"1\", \"3\"]]",
+    );
+    assert!(ok.is_empty(), "{ok:?}");
+    // Without the declaration the same poles share a connection and are refused.
+    let m = behavior_messages(
+        "[behavior]\nkind = \"contact\"\nnormally = \"open\"\npoles = [[\"1\", \"2\"], [\"1\", \"3\"]]",
+    );
+    assert!(m.iter().any(|s| s.contains("more than once")), "{m:?}");
+    // The common must start each pole it appears in.
+    let m = behavior_messages(
+        "[behavior]\nkind = \"contact\"\nnormally = \"open\"\ncommon = \"1\"\npoles = [[\"2\", \"1\"], [\"1\", \"3\"]]",
+    );
+    assert!(
+        m.iter().any(|s| s.contains("must start with the common")),
+        "{m:?}"
+    );
+    // And it must be a connection of the symbol; other connections still may not repeat.
+    let m = behavior_messages(
+        "[behavior]\nkind = \"contact\"\nnormally = \"open\"\ncommon = \"9\"\npoles = [[\"1\", \"2\"]]",
+    );
+    assert!(
+        m.iter().any(|s| s.contains("must name a connection")),
+        "{m:?}"
+    );
+    let m = behavior_messages(
+        "[behavior]\nkind = \"contact\"\nnormally = \"open\"\ncommon = \"1\"\npoles = [[\"1\", \"2\"], [\"1\", \"2\"]]",
+    );
+    assert!(m.iter().any(|s| s.contains("more than once")), "{m:?}");
+}
+
+#[test]
+fn receiver_blocks_switch_each_output_against_one_common() {
+    let lib = builtin();
+    for (key, outputs) in [
+        ("iec/controllers/outputs_6", 6),
+        ("iec/controllers/outputs_9", 9),
+        ("iec/controllers/outputs_12", 12),
+        ("iec/controllers/outputs_16", 16),
+    ] {
+        let s = lib.get(key).unwrap_or_else(|| panic!("{key} ships"));
+        let paths = s.pass_through().paths().to_vec();
+        assert_eq!(paths.len(), outputs, "{key}");
+        let com = s.connections.iter().position(|c| c.id == "COM").unwrap();
+        assert!(paths.iter().all(|p| p.len() == 2 && p[0] == com), "{key}");
+        assert_eq!(
+            letter(s),
+            Some("A"),
+            "{key} is an assembly (IEC 81346 class A)"
+        );
+    }
+    let dry = lib.get("iec/controllers/output_dry").unwrap();
+    assert_eq!(dry.pass_through().paths().len(), 1);
+}
+
+fn letter(s: &Symbol) -> Option<&'static str> {
+    novo_symbols::letter_code(&s.function)
+}
+
+/// The built-in symbols name their pins the way the pin template of their
+/// device class says (`pin_template`), in every pack.
+#[test]
+fn builtin_symbols_follow_pin_templates() {
+    let mut deviations = Vec::new();
+    for pack in novo_symbols::Pack::ALL {
+        let library = novo_symbols::Library::shared(pack);
+        for symbol in library.iter() {
+            let pins: Vec<&str> = symbol.connections.iter().map(|c| c.id.as_str()).collect();
+            if let Some(d) = novo_symbols::check_pins(&symbol.function, &pins) {
+                deviations.push(format!("{}: {}", symbol.id, d.message()));
+            }
+        }
+    }
+    assert!(deviations.is_empty(), "{}", deviations.join("\n"));
+}

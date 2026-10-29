@@ -13,7 +13,7 @@
 //! file's size and modification time: a file that was downloaded again is
 //! read again.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant, SystemTime};
@@ -25,6 +25,10 @@ use super::parts_cad::read_identity;
 
 /// Entries kept; the oldest go first.
 const MAX_ENTRIES: usize = 512;
+/// Entries looked at, from the oldest, when one has to go; a cache full of
+/// files that are all still wanted is not searched to the end for every file
+/// stored.
+const EVICT_SCAN: usize = 32;
 /// A file asked for in this time is not forgotten, however many entries there
 /// are: the window asks for its waiting files every frame, so a batch larger
 /// than [`MAX_ENTRIES`] is still found whole once it has been read.
@@ -50,6 +54,8 @@ struct State {
     order: VecDeque<PathBuf>,
     /// Waiting for the worker.
     queue: VecDeque<PathBuf>,
+    /// The same files as `queue`, to ask in constant time.
+    queued: HashSet<PathBuf>,
     /// The file the worker is reading now.
     running: Option<PathBuf>,
     worker: bool,
@@ -72,6 +78,34 @@ impl State {
             .is_some_and(|at| at.elapsed() < KEEP_ASKED)
     }
 
+    /// Notes that the window wants these files and queues those not read or
+    /// waiting yet. With `check`, a file in the cache is compared with the
+    /// disk (a call per file); without it a file in the cache is trusted, so
+    /// asking again every frame for thousands of files costs no disk calls.
+    fn ask(&mut self, paths: &[PathBuf], now: Instant, check: bool) {
+        self.asked
+            .retain(|_, at| now.duration_since(*at) < KEEP_ASKED);
+        for p in paths {
+            self.asked.insert(p.clone(), now);
+            let queued = self.queued.contains(p) || self.running.as_deref() == Some(p.as_path());
+            let read = if check {
+                self.fresh(p).is_some()
+            } else {
+                self.done.contains_key(p)
+            };
+            if !queued && !read {
+                self.queue.push_back(p.clone());
+                self.queued.insert(p.clone());
+                self.requested += 1;
+            }
+        }
+    }
+
+    /// Files waiting for the worker or being read.
+    fn pending(&self) -> usize {
+        self.queue.len() + usize::from(self.running.is_some())
+    }
+
     fn store(&mut self, path: &Path, stamp: Stamp, id: CadIdentity) {
         if self.done.insert(path.to_path_buf(), (stamp, id)).is_none() {
             self.order.push_back(path.to_path_buf());
@@ -82,7 +116,7 @@ impl State {
             let Some(i) = self
                 .order
                 .iter()
-                .take(last)
+                .take(last.min(EVICT_SCAN))
                 .position(|old| !self.wanted(old))
             else {
                 break;
@@ -131,18 +165,25 @@ pub(crate) fn ready(paths: &[PathBuf]) -> bool {
 /// thread. Cheap to call every frame: a file already read or waiting is not
 /// queued again. `wake` repaints the window as each file is done.
 pub(crate) fn prefetch(paths: &[PathBuf], wake: Option<egui::Context>) {
+    ask(paths, wake, true);
+}
+
+/// Asks again for files already asked for, trusting those in the cache: no
+/// call to the disk per file, so a window waiting for thousands of dropped
+/// files can do it every frame. [`still_reading`] says whether to wait on.
+pub(crate) fn keep_asking(paths: &[PathBuf], wake: Option<egui::Context>) {
+    ask(paths, wake, false);
+}
+
+/// Whether files are queued or being read.
+pub(crate) fn still_reading() -> bool {
+    lock().pending() > 0
+}
+
+fn ask(paths: &[PathBuf], wake: Option<egui::Context>, check: bool) {
     let start = {
         let mut s = lock();
-        let now = Instant::now();
-        s.asked.retain(|_, at| now.duration_since(*at) < KEEP_ASKED);
-        for p in paths {
-            s.asked.insert(p.clone(), now);
-            let queued = s.queue.contains(p) || s.running.as_deref() == Some(p.as_path());
-            if !queued && s.fresh(p).is_none() {
-                s.queue.push_back(p.clone());
-                s.requested += 1;
-            }
-        }
+        s.ask(paths, Instant::now(), check);
         let start = !s.worker && !s.queue.is_empty();
         if start {
             s.worker = true;
@@ -174,6 +215,7 @@ fn work(wake: Option<&egui::Context>) {
                 (s.requested, s.finished) = (0, 0);
                 break;
             };
+            s.queued.remove(&path);
             s.running = Some(path.clone());
             path
         };
@@ -249,6 +291,16 @@ mod tests {
         )
     }
 
+    /// The stamp of a file that does not exist, without asking the disk: the timing tests
+    /// below are about the cache, and 200 000 failed `metadata` calls take seconds on
+    /// Windows. A quadratic cache would still need minutes, so their limit stays loose.
+    fn no_stamp() -> Stamp {
+        Stamp {
+            len: None,
+            modified: None,
+        }
+    }
+
     fn wait_until_ready(paths: &[PathBuf]) {
         let started = std::time::Instant::now();
         while !ready(paths) {
@@ -304,20 +356,25 @@ mod tests {
             .collect();
         text = text.replace("ENDSEC;\nEND-ISO", &format!("{points}ENDSEC;\nEND-ISO"));
         std::fs::write(&path, &text).unwrap();
+        // Wall time on a loaded CI machine proves little, so asking is compared with
+        // reading the same file here: reading it in the caller's thread would cost
+        // at least that, whatever the machine's speed.
+        let read_here = {
+            let t = std::time::Instant::now();
+            let _ = read_identity(&path);
+            t.elapsed()
+        };
         let asked = std::time::Instant::now();
         prefetch(std::slice::from_ref(&path), None);
         let took = asked.elapsed();
         assert!(
-            took < std::time::Duration::from_millis(250),
-            "asking took {took:?}: the file was read in the caller's thread"
+            took < read_here,
+            "asking took {took:?} against {read_here:?} to read the file: it was read in the caller's thread"
         );
         wait_until_ready(std::slice::from_ref(&path));
-        let again = std::time::Instant::now();
-        let _ = identity_of(&path);
-        assert!(
-            again.elapsed() < std::time::Duration::from_millis(50),
-            "the answer was not in the cache"
-        );
+        // `identity_of` reads the file itself when the cache has no answer, so an
+        // answer from `cached` is the proof that it did not.
+        assert!(cached(&path).is_some(), "the answer was not in the cache");
     }
 
     #[test]
@@ -382,6 +439,65 @@ mod tests {
             );
             std::thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    #[test]
+    fn asking_again_for_very_many_files_costs_time_in_proportion_to_their_number() {
+        // A window waiting for a huge drop asks for all of its files every
+        // frame; with the queue searched per file that was quadratic.
+        let mut s = State::default();
+        let paths: Vec<PathBuf> = (0..100_000)
+            .map(|i| PathBuf::from(format!("/no/such/{i}.stp")))
+            .collect();
+        let started = Instant::now();
+        s.ask(&paths, Instant::now(), true);
+        for _ in 0..5 {
+            s.ask(&paths, Instant::now(), false);
+        }
+        assert_eq!(s.queue.len(), paths.len(), "each file is queued once");
+        assert_eq!(s.queued.len(), paths.len());
+        assert_eq!(s.pending(), paths.len());
+        assert!(
+            started.elapsed() < Duration::from_secs(60),
+            "asking took {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn storing_into_a_cache_of_wanted_files_does_not_search_all_of_it_each_time() {
+        let mut s = State::default();
+        let n = 200_000;
+        let now = Instant::now();
+        for i in 0..n {
+            let p = PathBuf::from(format!("/w/{i}.stp"));
+            s.asked.insert(p.clone(), now);
+            // No disk call per file (see `no_stamp`): on Windows 200,000 of them took longer
+            // than KEEP_ASKED, so the entries stopped being wanted mid-loop.
+            s.store(&p, no_stamp(), CadIdentity::from_file_name("x.stp"));
+        }
+        assert_eq!(s.done.len(), n, "wanted files are all kept");
+        assert!(
+            now.elapsed() < Duration::from_secs(60),
+            "storing took {:?}",
+            now.elapsed()
+        );
+    }
+
+    #[test]
+    fn asking_without_checking_trusts_the_cache_and_asking_with_checking_does_not() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("X-1.stp");
+        std::fs::write(&path, step_text(10.0, 20.0, 30.0)).unwrap();
+        let paths = [path.clone()];
+        let mut s = State::default();
+        s.store(&path, stamp_of(&path), read_identity(&path));
+        // A longer file, so the change shows whatever the clock's grain.
+        std::fs::write(&path, step_text(12.0, 23.0, 4444444.0)).unwrap();
+        s.ask(&paths, Instant::now(), false);
+        assert_eq!(s.pending(), 0, "a file in the cache is trusted");
+        s.ask(&paths, Instant::now(), true);
+        assert_eq!(s.pending(), 1, "a changed file is read again");
     }
 
     #[test]

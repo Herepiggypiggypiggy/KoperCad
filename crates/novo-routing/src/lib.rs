@@ -12,7 +12,7 @@ pub mod model;
 mod plan;
 pub mod project_rules;
 
-pub use graph::Network;
+pub use graph::{Body, Network, Openings, RailRow};
 pub use plan::{Clearance, DuctFill, Plan, Problem, plan, plan_avoiding, plan_constrained};
 pub use project_rules::WireRules;
 
@@ -139,6 +139,13 @@ pub struct Route {
     pub points3: Vec<Point3>,
     /// Ducts the wire lies in, in order, consecutive repeats removed.
     pub ducts: Vec<u64>,
+    /// DIN rails the wire runs along (in the channel beside the row of
+    /// devices on the rail), in order. Not ducts: no fill.
+    pub rails: Vec<u64>,
+    /// A stub from a terminal to its duct crosses a device body because no
+    /// way round was free; the drawn path and length are not trustworthy
+    /// there and the plan reports it.
+    pub blocked: bool,
     /// Extra length where a terminal faces away from its duct and the
     /// wire has to leave and come back, counted twice the backwards distance.
     pub detour_mm: f64,

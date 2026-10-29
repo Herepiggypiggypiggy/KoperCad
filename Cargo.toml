@@ -77,7 +77,7 @@ wasmi = { version = "2.0", default-features = false, features = ["std", "validat
 # Builds the hostile and test engines from text in the novo-addons tests only.
 wat = "1"
 # Reads the ZIP a maker portal serves a STEP file in (novo-parts).
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 # Reads BMEcat catalogs (novo-parts).
 quick-xml = "0.41"
 # HTTPS client for the optional Claude integration (novo-ai); rustls, no system TLS or admin rights.

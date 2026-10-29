@@ -1,0 +1,20 @@
+@title Clicking the tip of an interruption arrow wires its pin
+@area Schematic
+@sizes 1366x768
+# Test report 14: the interruption point's only pin is at the arrow tail, so a click on the tip did nothing. The whole arrow picks the pin now.
+click_text "New project"
+wait 20
+key q
+text interruption
+key Return
+click 600 300
+wait 5
+key Escape
+wait 5
+shot placed
+click_text Corners
+wait 3
+click 598 313
+wait 5
+shot wire-from-tip
+expect "click a pin or wire to finish"

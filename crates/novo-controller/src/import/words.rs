@@ -101,6 +101,8 @@ pub enum Tag {
     Dir(Dir),
     /// A word that names motion and direction at once (hoisten: hoist up).
     Combo(String, Dir),
+    /// An abbreviation that names both directions of one motion (H/Z: hoist up and down).
+    Pair(String),
     /// 1 slow, 2 fast.
     Speed(u8),
     Role(Role),
@@ -237,6 +239,7 @@ fn parse_category(s: &str) -> Option<Tag> {
     match (head, b) {
         ("motion", None) => Some(Tag::Motion(a.to_owned())),
         ("dir", None) => Dir::parse(a).map(Tag::Dir),
+        ("pair", None) => Some(Tag::Pair(a.to_owned())),
         ("combo", Some(d)) => Dir::parse(d).map(|d| Tag::Combo(a.to_owned(), d)),
         ("speed", None) => match a {
             "slow" => Some(Tag::Speed(1)),

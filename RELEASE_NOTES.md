@@ -41,7 +41,7 @@ format itself did not change, so to open a new project in an old build, copy it 
 **Cabinet**
 - Cabinet layout with mounting plate, rails and ducts, "place all", clash checks and enclosure sizing, door
   parts and drill rows.
-- Wire routing through the ducts gives wire lengths.
+- Wire routing gives wire lengths: wires start at each part's terminal (an estimate on the device edge until the part has terminal data), run in the ducts, go round devices and run along a DIN rail between devices on it. Ducts can say where wires enter them (Rails and ducts, column Slots); a wire no duct reaches is listed in Issues, not drawn straight.
 - 3D view of the cabinet with orbit, measure, align, section plane and walls, roof, floor and extra plates.
 - Heat and airflow model with hot spots, compare and move-and-solve. See "Numbers" below. Wire ducts now stand as high as their cross-section and are air in the heat slice, so heat results for projects with ducts differ from earlier builds. The heat of the power wires lying in the ducts (I²R from the load current, cross-section and routed length) now heats the duct cells in the 2D and 3D heat runs; the Temperature panel says what it rests on. It is a planning upper value (copper at the insulation's highest temperature, no diversity unless Check > Electrical inputs states one; neutral and PE current are not counted, so it holds for balanced loads).
 
@@ -66,7 +66,7 @@ KoperCAD tells you which is which. Please read the labels.
 | Number | Status |
 | --- | --- |
 | Wire lengths before routing | Placeholder, shown with `~` |
-| Wire lengths after "Route all" | Geometric, from the layout and duct model |
+| Wire lengths after "Route all" | Geometric, from the layout and duct model: wires hug devices at 10 mm and the 50 mm service loop stays at each end. Lengths changed from earlier builds (for example 756 to 696 mm for one wire in the report tests, 335 to 210 mm for a wire along a rail); recut wires from a fresh Route all |
 | Cable ampacity, derating, voltage drop | Planning values; the tables are not verified against the standard |
 | Heat, airflow, device temperatures | A physical model with a stated accuracy (`docs/thermal-validation.md`); the 3D airflow result is marked "not validated" |
 | PFHd, performance level | Closed-form estimate, "model, not exact"; not a SISTEMA replacement |
@@ -85,6 +85,8 @@ KoperCAD tells you which is which. Please read the labels.
 - 3D view: the section plane is a slider (no mouse drag), heat arrows show no value on hover. The autosave interval
   is fixed, there is no custom symbol folder, terminal jumper numbers are automatic only.
 - STEP import approximates some curved surfaces.
+- Wire routing on large plates: each terminal tries its 8 nearest ducts and 4 nearest DIN rail channels, so a farther duct that would give a slightly shorter wire can be skipped; lengths on big plates can differ a little from an exhaustive search.
+- Wire routing: slot positions are a pitch you state, not maker data; devices are footprints (depth, and gaps under 20 mm between devices, are not used); the channel along a DIN rail is a model of where the wire lies beside it.
 - Big projects (about 1,500 symbols and wires or more): the design check runs in the background, so the issue counts and the Issues list can update a moment after an edit (a small pulsing dot by the issue counts shows while they catch up). Reports and exports always wait for the current answer. Measured on one synthetic 600-page project without a graphics card, a still page took about 8 ms of program time per frame; that is a measurement on one machine, not a promise.
 - The program is not code-signed, so Windows SmartScreen warns on first start: choose "More info", "Run anyway".
 

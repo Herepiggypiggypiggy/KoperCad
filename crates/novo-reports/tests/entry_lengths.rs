@@ -197,6 +197,16 @@ fn a_cable_shorter_than_the_route_to_the_entry_stays_an_estimate() {
     let job = motor_job(&doc);
     assert_eq!(job.basis, "estimate", "{job:?}");
     assert!(is_estimate(&job.basis));
+    // The whole wire is shown, not the 0.1 m cable and not only the inside route.
+    assert!(job.length_mm > 200.0, "{job:?}");
+    let longer = {
+        set_run(&mut doc, &h, Some(0.05));
+        motor_job(&doc).length_mm
+    };
+    assert_eq!(
+        longer, job.length_mm,
+        "a cable too short for the route adds nothing"
+    );
 }
 
 #[test]

@@ -265,6 +265,30 @@ impl NovoApp {
         );
     }
 
+    /// The overhead crane example: two-speed hoist, drives and radio control.
+    pub(super) fn open_crane_example(&mut self) {
+        self.open_built_example(
+            super::example_crane::CRANE_EXAMPLE_NAME,
+            super::example_crane::build_crane_example,
+        );
+    }
+
+    /// The PLC cabinet example: CPU, I/O cards and a full cabinet.
+    pub(super) fn open_plc_example(&mut self) {
+        self.open_built_example(
+            super::example_plc::PLC_EXAMPLE_NAME,
+            super::example_plc::build_plc_example,
+        );
+    }
+
+    /// The pump station example: two frequency drives, pressure control and a full cabinet.
+    pub(super) fn open_pump_example(&mut self) {
+        self.open_built_example(
+            super::example_pump::PUMP_EXAMPLE_NAME,
+            super::example_pump::build_pump_example,
+        );
+    }
+
     fn open_built_example(
         &mut self,
         name: &str,

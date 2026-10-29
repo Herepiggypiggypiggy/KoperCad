@@ -37,6 +37,7 @@
 //! | [`ProtectiveConductor`](ProblemKind::ProtectiveConductor) | warning | A protective conductor thinner than its phase conductors need |
 //! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
+//! | [`WireThroughDevice`](ProblemKind::WireThroughDevice) | warning | A wire whose way from a terminal to its duct crosses a device |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
 //! | [`UnsizedDuct`](ProblemKind::UnsizedDuct) | info | A duct with wires through it but no cross-section, so its fill cannot be checked |
 //! | [`GuessedWire`](ProblemKind::GuessedWire) | info | Wires with no cross-section, routed with a default size (one problem for all of them) |
@@ -66,6 +67,7 @@
 //! | [`TagRule`](ProblemKind::TagRule) | warning | A device name that breaks the page and column rule (opt-in) |
 //! | [`DisplayedTag`](ProblemKind::DisplayedTag) | warning | A tag text on a symbol that is not the device's tag |
 //! | [`StructureCode`](ProblemKind::StructureCode) | warning | A function or location code not in a structure list declared complete |
+//! | [`PinNames`](ProblemKind::PinNames) | info | Pins of a device, or terminals of its part, named differently from the usual names of its class (coil `A1 A2`, motor `U1 V1 W1`, brake `BD1 BD2`) |
 //! | [`Standard`](ProblemKind::Standard) | per rule | A rule of a selected standard (IEC 60204-1, NFPA 79, UL 508A) is not met; see [`standards`] |
 //! | [`DeviceCollision`](ProblemKind::DeviceCollision) | error | Two devices overlapping on a mounting plate |
 //! | [`DeviceOutsidePlate`](ProblemKind::DeviceOutsidePlate) | error | A device beyond the usable area of its plate |
@@ -116,6 +118,7 @@ mod house_rules;
 mod more_rules;
 mod net_shorts;
 mod physical;
+mod pin_names;
 pub mod protection;
 pub mod safety;
 pub mod single_line;
@@ -287,11 +290,18 @@ pub enum ProblemKind {
     DisplayedTag,
     /// A function or location code the structure list does not know (H01).
     StructureCode,
+    /// A device whose pins, or whose assigned part's terminals, are named
+    /// differently from the pin template of its class (coil `A1 A2`, motor
+    /// `U1 V1 W1`, brake `BD1 BD2`; novo-symbols `pin_template`).
+    PinNames,
     /// A device drawn in the schematic but not placed on any mounting plate,
     /// in a project where the cabinet layout has been started.
     UnplacedDevice,
     /// A wire between two placed devices that no duct path serves (novo-routing).
     WireWithoutDuct,
+    /// A wire whose way from a terminal to its duct crosses the body of a
+    /// device because no way round is free (novo-routing).
+    WireThroughDevice,
     /// A duct carrying more wires than its fill limit (novo-routing).
     OverfullDuct,
     /// A duct that wires run through but that has no width and height, so
@@ -353,7 +363,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 71] = [
+    pub const ALL: [ProblemKind; 73] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -379,6 +389,7 @@ impl ProblemKind {
         ProblemKind::ProtectiveConductor,
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
+        ProblemKind::WireThroughDevice,
         ProblemKind::OverfullDuct,
         ProblemKind::UnsizedDuct,
         ProblemKind::GuessedWire,
@@ -425,6 +436,7 @@ impl ProblemKind {
         ProblemKind::TagRule,
         ProblemKind::DisplayedTag,
         ProblemKind::StructureCode,
+        ProblemKind::PinNames,
     ];
 
     pub fn severity(self) -> Severity {
@@ -458,6 +470,7 @@ impl ProblemKind {
             | ProblemKind::MotorStarter
             | ProblemKind::ProtectiveConductor
             | ProblemKind::WireWithoutDuct
+            | ProblemKind::WireThroughDevice
             | ProblemKind::OverfullDuct
             | ProblemKind::Standard
             | ProblemKind::DevicesTooClose
@@ -498,6 +511,7 @@ impl ProblemKind {
             | ProblemKind::GuessedWire
             | ProblemKind::DepthUnknown
             | ProblemKind::PlugPins
+            | ProblemKind::PinNames
             | ProblemKind::AmbiguousInterruption
             | ProblemKind::SameShortTag => Severity::Info,
         }
@@ -531,6 +545,7 @@ impl ProblemKind {
             ProblemKind::ProtectiveConductor => "Protective conductor",
             ProblemKind::UnplacedDevice => "Unplaced device",
             ProblemKind::WireWithoutDuct => "Wire without duct",
+            ProblemKind::WireThroughDevice => "Wire through device",
             ProblemKind::OverfullDuct => "Overfull duct",
             ProblemKind::UnsizedDuct => "Duct without size",
             ProblemKind::GuessedWire => "Wire size guessed",
@@ -577,6 +592,7 @@ impl ProblemKind {
             ProblemKind::TagRule => "Tag rule",
             ProblemKind::DisplayedTag => "Displayed tag",
             ProblemKind::StructureCode => "Unknown structure code",
+            ProblemKind::PinNames => "Pin names",
         }
     }
 
@@ -609,6 +625,7 @@ impl ProblemKind {
             ProblemKind::CableRating => "check.cable_rating",
             ProblemKind::UnplacedDevice => "check.unplaced_device",
             ProblemKind::WireWithoutDuct => "check.wire_without_duct",
+            ProblemKind::WireThroughDevice => "check.wire_through_device",
             ProblemKind::OverfullDuct => "check.overfull_duct",
             ProblemKind::UnsizedDuct => "check.unsized_duct",
             ProblemKind::GuessedWire => "check.guessed_wire",
@@ -654,6 +671,7 @@ impl ProblemKind {
             ProblemKind::TagRule => "check.tag_rule",
             ProblemKind::DisplayedTag => "check.displayed_tag",
             ProblemKind::StructureCode => "check.structure_code",
+            ProblemKind::PinNames => "check.pin_names",
         }
     }
 }
@@ -805,6 +823,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     house_rules::tag_rule(&cx, &mut problems);
     house_rules::displayed_tags(&cx, &mut problems);
     house_rules::structure_codes(&cx, &mut problems);
+    pin_names::pin_names(&cx, &mut problems);
     calc_checks::run(&cx, netlist, &mut problems);
     physical::unplaced_devices(&cx, &mut problems);
     physical::routing(&cx, &mut problems);

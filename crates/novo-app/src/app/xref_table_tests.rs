@@ -3,8 +3,11 @@
 
 use eframe::egui;
 use novo_canvas::Vec2;
-use novo_canvas::model::item_id;
-use novo_core::{AnyId, DeviceTag, PageId, Pin, Placement, Point, SymbolId, SymbolRole};
+use novo_canvas::model::{NoteFade, item_id};
+use novo_core::{
+    AnyId, DeviceTag, Endpoint, PageId, Pin, Placement, Point, SymbolId, SymbolInstance,
+    SymbolRole, Value,
+};
 
 use super::gate1_tests::Drive;
 use crate::actions::Action;
@@ -270,6 +273,12 @@ impl Table {
             })
     }
 
+    fn set_references(&mut self, view: &str) {
+        self.d.app.settings.xref_view = view.into();
+        self.d.frame();
+        self.d.frame();
+    }
+
     fn cycle_references(&mut self) {
         let ctx = self.d.ctx.clone();
         self.d.app.run_command(&ctx, "view.toggle_references", None);
@@ -294,9 +303,13 @@ impl Table {
 }
 
 #[test]
-fn references_cycle_full_faded_hidden_and_the_choice_is_kept() {
+fn references_cycle_full_overlap_faded_hidden_and_the_choice_is_kept() {
     let mut t = table();
     assert_eq!(t.alpha_of(t.coil, "13"), Some(255), "full to begin with");
+    t.cycle_references();
+    assert_eq!(t.d.app.settings.xref_view, "overlap");
+    // Nothing is in the way of the table: it stays clear.
+    assert_eq!(t.alpha_of(t.coil, "13"), Some(255));
     t.cycle_references();
     assert_eq!(t.d.app.settings.xref_view, "faded");
     let faded = t.alpha_of(t.coil, "13").expect("still drawn");
@@ -324,7 +337,7 @@ fn references_cycle_full_faded_hidden_and_the_choice_is_kept() {
 #[test]
 fn faded_references_come_back_for_the_selected_coil() {
     let mut t = table();
-    t.cycle_references();
+    t.set_references("faded");
     assert!(t.alpha_of(t.coil, "13").unwrap() < 128);
     t.select(&[t.coil]);
     assert_eq!(t.alpha_of(t.coil, "13"), Some(255), "selected: clear");
@@ -338,16 +351,14 @@ fn faded_references_come_back_for_the_selected_coil() {
 #[test]
 fn the_pdf_prints_references_in_full_whatever_the_screen_shows() {
     let mut t = table();
-    t.cycle_references();
-    t.cycle_references();
-    assert_eq!(t.d.app.settings.xref_view, "hidden");
+    t.set_references("hidden");
     let pages = t.d.app.xref_notes_by_page();
     let coil_note = pages[&t.pages[0]]
         .iter()
         .find(|n| n.symbol == t.coil)
         .expect("the coil's table is printed");
     assert!(!coil_note.rows.is_empty());
-    assert!(pages.values().flatten().all(|n| !n.faded));
+    assert!(pages.values().flatten().all(|n| n.fade == NoteFade::Clear));
 }
 
 #[test]
@@ -361,13 +372,170 @@ fn shift_x_is_the_shortcut_and_the_status_bar_offers_the_way_back() {
     );
     t.d.key(egui::Key::X, egui::Modifiers::SHIFT);
     t.d.frame();
-    assert_eq!(t.d.app.settings.xref_view, "faded");
+    assert_eq!(t.d.app.settings.xref_view, "overlap");
     let chip =
         t.d.app
             .mode_chips()
             .into_iter()
             .find(|c| c.command == "view.toggle_references")
             .expect("a chip while references are not shown in full");
-    assert!(chip.label.contains("faded"), "{}", chip.label);
+    assert!(chip.label.contains("overlap"), "{}", chip.label);
     assert!(novo_workflow::commands::is_known(chip.command));
+}
+
+impl Table {
+    /// A vertical wire at `x` under the coil, through where its table is.
+    fn wire_through_the_table(&mut self, x: f64) {
+        let page = self.pages[0];
+        let doc = self.d.app.backend.document_mut().unwrap();
+        doc.transact("wire", |tx| {
+            let mut put = |y: f64| {
+                tx.place_symbol(
+                    page,
+                    "iec/contacts/no",
+                    Placement::at(Point::new(x, y)),
+                    vec![Pin::new("1", 0.0, -8.0), Pin::new("2", 0.0, 8.0)],
+                    SymbolRole::Unassigned,
+                )
+            };
+            let (top, bottom) = (put(76.0)?, put(120.0)?);
+            tx.connect(Endpoint::pin(top, 1), Endpoint::pin(bottom, 0))
+        })
+        .unwrap();
+        self.d.frame();
+        self.d.frame();
+    }
+
+    /// Moves the coil's table by hand a little, so it stays where it is.
+    fn pin_the_table(&mut self) {
+        let coil = self.coil;
+        let doc = self.d.app.backend.document_mut().unwrap();
+        doc.transact("move the table", |tx| {
+            tx.update::<SymbolInstance>(coil, |s| {
+                s.properties.insert("note_dx".into(), Value::Float(0.5));
+                s.properties.insert("note_dy".into(), Value::Float(0.5));
+            })
+        })
+        .unwrap();
+        self.d.frame();
+        self.d.frame();
+    }
+
+    fn run(&mut self, command: &str) {
+        let ctx = self.d.ctx.clone();
+        self.d.app.run_command(&ctx, command, None);
+        self.d.frame();
+        self.d.frame();
+    }
+}
+
+#[test]
+fn fade_where_crossed_fades_the_table_that_sits_on_a_wire_and_only_that() {
+    let mut t = table();
+    t.set_references("overlap");
+    assert_eq!(t.alpha_of(t.coil, "13"), Some(255), "free: clear");
+    // A wire through the table: an unmoved table slips to a free place and
+    // stays clear.
+    t.wire_through_the_table(62.0);
+    assert_eq!(t.alpha_of(t.coil, "13"), Some(255), "moved aside: clear");
+    // Held where it is (moved by hand), it sits on the wire and fades.
+    t.pin_the_table();
+    let faded = t.alpha_of(t.coil, "13").expect("drawn");
+    assert!(faded < 128, "on the wire: {faded}");
+    // Selecting the coil brings it back.
+    t.select(&[t.coil]);
+    assert_eq!(t.alpha_of(t.coil, "13"), Some(255), "selected: clear");
+    t.select(&[]);
+    assert!(
+        t.alpha_of(t.coil, "13").unwrap() < 128,
+        "deselected: fades again"
+    );
+}
+
+#[test]
+fn the_fade_strength_is_a_setting() {
+    let mut t = table();
+    t.set_references("faded");
+    let medium = t.alpha_of(t.coil, "13").unwrap();
+    t.d.app.settings.xref_fade = "light".into();
+    t.d.frame();
+    t.d.frame();
+    let light = t.alpha_of(t.coil, "13").unwrap();
+    t.d.app.settings.xref_fade = "strong".into();
+    t.d.frame();
+    t.d.frame();
+    let strong = t.alpha_of(t.coil, "13").unwrap();
+    assert!(
+        light > medium && medium > strong,
+        "{light} {medium} {strong}"
+    );
+    assert_eq!((light, medium, strong), (130, 70, 36));
+}
+
+#[test]
+fn a_page_can_hide_its_references_on_screen_and_the_pdf_still_prints_them() {
+    let mut t = table();
+    assert!(t.labels_of(t.coil).iter().any(|l| l == "13"));
+    t.run("view.hide_references_page");
+    assert!(t.labels_of(t.coil).iter().all(|l| l != "13"), "hidden");
+    let chip =
+        t.d.app
+            .mode_chips()
+            .into_iter()
+            .find(|c| c.command == "view.hide_references_page")
+            .expect("a chip brings them back");
+    assert!(chip.label.contains("hidden"), "{}", chip.label);
+    // The PDF is not affected.
+    let pages = t.d.app.xref_notes_by_page();
+    assert!(pages[&t.pages[0]].iter().any(|n| n.symbol == t.coil));
+    // Another page is not hidden.
+    t.d.app.show_page(t.pages[1]);
+    t.d.frame();
+    t.d.frame();
+    assert!(
+        !t.labels_of(t.contacts[0]).is_empty(),
+        "page 2 keeps its references"
+    );
+    // Undo brings it back.
+    t.d.app.show_page(t.pages[0]);
+    t.run("edit.undo");
+    assert!(t.labels_of(t.coil).iter().any(|l| l == "13"), "undone");
+    // And the same command toggles.
+    t.run("view.hide_references_page");
+    t.run("view.hide_references_page");
+    assert!(t.labels_of(t.coil).iter().any(|l| l == "13"), "shown again");
+}
+
+#[test]
+fn a_device_can_hide_its_references_on_screen() {
+    let mut t = table();
+    t.select(&[t.coil]);
+    t.run("view.hide_references_device");
+    assert!(
+        t.labels_of(t.coil).iter().all(|l| l != "13"),
+        "the coil's table is hidden"
+    );
+    let chip =
+        t.d.app
+            .mode_chips()
+            .into_iter()
+            .find(|c| c.command == "view.hide_references_device")
+            .expect("a chip while the coil is selected");
+    assert!(chip.label.contains("-K1"), "{}", chip.label);
+    // Its contacts on the other page lose the coil location too.
+    t.d.app.show_page(t.pages[1]);
+    t.d.frame();
+    t.d.frame();
+    let contact = t.labels_of(t.contacts[0]);
+    assert!(!contact.iter().any(|l| l.starts_with("1.")), "{contact:?}");
+    // The PDF still prints them.
+    let pages = t.d.app.xref_notes_by_page();
+    assert!(pages[&t.pages[0]].iter().any(|n| n.symbol == t.coil));
+    // The command needs a device: the property is on the device.
+    t.d.app.show_page(t.pages[0]);
+    t.d.frame();
+    t.d.frame();
+    t.select(&[t.coil]);
+    t.run("view.hide_references_device");
+    assert!(t.labels_of(t.coil).iter().any(|l| l == "13"), "shown again");
 }

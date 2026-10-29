@@ -3,6 +3,18 @@
 The id is a date and a letter; the top entry is the newest one a person has
 seen once they open the list. Add an entry when a feature PR merges. -->
 
+## 2026-10-29-b · Dock a panel at the left, right or bottom edge
+Where: the title bar of the Inspector (schematic and cabinet), the wire card, the 3D Heat panel, the wire runs list and the Review notes.
+Two arrows in a panel's title bar dock it at the left or the right edge; drag the title bar to an edge and the edge lights up, let go and it docks. A docked panel takes a full strip beside the drawing, so nothing lies over it; drag the strip's edge to widen it, double click the edge for its usual width. In the docked title bar the arrows move it to another edge and the corner button floats it again. Two panels in one edge share it. View > Reset panel layout floats everything again.
+
+## 2026-10-29-a · Double click maximises a window, double click on an edge resets it
+Where: the title bar of any window or dialog, and the edge of the Pages column, the report list, the drawer and the detail columns.
+Double click a window's title bar and it fills the canvas (a dialog fills the window); double click again and it goes back to where it was. A window no longer folds up on a double click, use its arrow. Double click the edge you drag a column or drawer by and it gets its usual size back. View > Reset panel layout still puts everything back.
+
+## 2026-10-28-a · Every window moves and resizes
+Where: Pages (the navigator), the tool dock, every dialog, and View > Reset panel layout.
+The navigator is a window you drag by its title and resize from its edges, or a column you widen by its edge when it is pinned. The tool dock and the 3D tool cards are dragged by their background. Questions and forms (About, Preferences, Project rules, the imports) open centered, can be moved and resized, and open where you left them. View > Reset panel layout puts everything back.
+
 ## 2026-10-22-a · The single-line diagram: supply data, lamps, overload relays
 Where: Reports > Single-line diagram.
 The diagram has an "Enter supply data" button that opens the Electrical inputs, and the example project now states an illustrative 400 V, 6 kA supply (replace it with yours) so it shows figures. Lamps and sounders on a mains feeder are drawn; a load on one line conductor is taken at the phase voltage (231 V from 400 V). An overload relay in a feeder is drawn as a box on the wire. Lamps on 24 V circuits stay off and are named in a note.

@@ -19,6 +19,11 @@ pub enum DockLabels {
     Never,
 }
 
+/// The menu words in the top bar until a person chooses. The design
+/// (docs/design/visual-redesign.md section 13) hides them; the default
+/// flips in lane V7, with the lessons and QA scenarios that name a menu.
+pub const MENU_NAMES_DEFAULT: bool = true;
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -49,6 +54,10 @@ pub struct Settings {
     /// Whether the live view skips its animations: states switch at once
     /// and a running motor shows an arrow instead of spinning.
     pub reduce_motion: bool,
+    /// Whether the eight menu words sit in the top bar beside the mark.
+    /// `None` takes [`MENU_NAMES_DEFAULT`]; a choice made in Preferences is
+    /// kept whatever the default becomes.
+    pub menu_names: Option<bool>,
     /// How tightly the contact table under a coil is drawn, `"full"` or
     /// `"compact"` (empty: full): a per-user preference.
     pub xref_density: String,
@@ -59,6 +68,9 @@ pub struct Settings {
     /// drawn `"full"` (empty), `"faded"` or `"hidden"` on screen: a
     /// per-user choice that never changes the printed drawing.
     pub xref_view: String,
+    /// How strongly faded cross references are faded: `"light"`, `"medium"`
+    /// (empty) or `"strong"`.
+    pub xref_fade: String,
     /// The colour theme, `"dark"` (empty), `"light"` or `"system"`.
     pub appearance_theme: String,
     /// The interface density, `"standard"` (empty), `"compact"` or `"touch"`.
@@ -69,6 +81,8 @@ pub struct Settings {
     /// Words beside the dock icons: `""` (auto: when the canvas has room),
     /// `"always"` or `"never"` (icons only, names stay in the tooltips).
     pub dock_labels: String,
+    /// Whether the tool rail shows icon, name and key (the button at its foot).
+    pub rail_expanded: bool,
     /// The interface size in percent: 100 (empty or 0), 125, 150 or 200,
     /// on top of the system's own scaling.
     pub ui_scale: u32,
@@ -326,6 +340,11 @@ pub struct WorkspaceLayout {
 }
 
 impl Settings {
+    /// Whether the menu words are in the top bar (see [`MENU_NAMES_DEFAULT`]).
+    pub fn show_menu_names(&self) -> bool {
+        self.menu_names.unwrap_or(MENU_NAMES_DEFAULT)
+    }
+
     /// The theme the person chose; dark by default.
     pub fn theme_choice(&self) -> novo_theme::ThemeChoice {
         novo_theme::ThemeChoice::from_id(&self.appearance_theme)
@@ -354,6 +373,11 @@ impl Settings {
     /// How cross references are shown on screen.
     pub fn xref_view(&self) -> XrefView {
         XrefView::from_id(&self.xref_view)
+    }
+
+    /// The opacity (0 to 255) of a faded cross reference.
+    pub fn xref_fade_alpha(&self) -> u8 {
+        XrefFade::from_id(&self.xref_fade).alpha()
     }
 
     /// The density of the coil contact table.
@@ -549,6 +573,9 @@ mod tests {
 pub enum XrefView {
     #[default]
     Full,
+    /// Full, except where one overlaps a wire, a symbol or text it cannot
+    /// move away from: there it is faded.
+    Overlap,
     /// Low opacity, so they stay out of the way of lines, parts and text;
     /// the ones of the selected or hovered coil or contact stay full.
     Faded,
@@ -556,9 +583,17 @@ pub enum XrefView {
 }
 
 impl XrefView {
+    pub const ALL: [XrefView; 4] = [
+        XrefView::Full,
+        XrefView::Overlap,
+        XrefView::Faded,
+        XrefView::Hidden,
+    ];
+
     pub fn id(self) -> &'static str {
         match self {
             XrefView::Full => "full",
+            XrefView::Overlap => "overlap",
             XrefView::Faded => "faded",
             XrefView::Hidden => "hidden",
         }
@@ -566,18 +601,60 @@ impl XrefView {
 
     pub fn from_id(id: &str) -> Self {
         match id {
+            "overlap" => XrefView::Overlap,
             "faded" => XrefView::Faded,
             "hidden" => XrefView::Hidden,
             _ => XrefView::Full,
         }
     }
 
-    /// Full, then faded, then hidden, then full again.
+    /// Full, then faded where they overlap, then faded, then hidden, then
+    /// full again.
     pub fn next(self) -> Self {
         match self {
-            XrefView::Full => XrefView::Faded,
+            XrefView::Full => XrefView::Overlap,
+            XrefView::Overlap => XrefView::Faded,
             XrefView::Faded => XrefView::Hidden,
             XrefView::Hidden => XrefView::Full,
+        }
+    }
+}
+
+/// How strongly a faded cross reference is faded.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum XrefFade {
+    /// About half the opacity: still easy to read.
+    Light,
+    /// About a quarter.
+    #[default]
+    Medium,
+    /// About an eighth: only a trace.
+    Strong,
+}
+
+impl XrefFade {
+    pub fn id(self) -> &'static str {
+        match self {
+            XrefFade::Light => "light",
+            XrefFade::Medium => "medium",
+            XrefFade::Strong => "strong",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Self {
+        match id {
+            "light" => XrefFade::Light,
+            "strong" => XrefFade::Strong,
+            _ => XrefFade::Medium,
+        }
+    }
+
+    /// Opacity, 0 to 255.
+    pub fn alpha(self) -> u8 {
+        match self {
+            XrefFade::Light => 130,
+            XrefFade::Medium => 70,
+            XrefFade::Strong => 36,
         }
     }
 }
