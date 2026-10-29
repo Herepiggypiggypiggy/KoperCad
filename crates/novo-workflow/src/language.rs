@@ -702,6 +702,20 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl(
+        "sim.defects",
+        &["storingen en scenario's"],
+        &[
+            "storing",
+            "fout",
+            "defect",
+            "verklevend contact",
+            "draadbreuk",
+            "fasebreuk",
+            "aardsluiting",
+            "scenario",
+        ],
+    ),
+    nl(
         "sim.controller",
         &["bediening paneel"],
         &[

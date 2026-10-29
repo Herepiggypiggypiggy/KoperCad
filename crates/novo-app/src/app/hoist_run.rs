@@ -13,7 +13,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use eframe::egui;
 use novo_core::{PageId, Project, SymbolId, Value};
 use novo_drive::brake::BrakeState;
+use novo_drive::brake_system::RectifierFault;
+use novo_drive::hoist_unit::HoistFaults;
 use novo_drive::motor::{Direction, WindingSel};
+use novo_drive::supply::Phase;
 use novo_machine::cosim::StepConfig;
 use novo_machine::hoist_loop::{HoistLoop, HoistModule};
 use novo_machine::port::{CircuitPort, MotorFeed};
@@ -117,6 +120,14 @@ impl CircuitPort for LiveCircuit<'_> {
     fn knows_device(&self, device: &str) -> bool {
         self.by_tag.contains_key(device)
     }
+
+    fn motor_humming(&self, motor: &str) -> bool {
+        self.by_tag
+            .get(motor)
+            .into_iter()
+            .flatten()
+            .any(|id| matches!(self.states.motors.get(id), Some(MotorRun::PhaseLoss)))
+    }
 }
 
 fn value_text(value: &Value) -> String {
@@ -186,11 +197,108 @@ pub(super) fn reading(module: &HoistModule) -> String {
         BrakeState::Applied => "brake closed",
         BrakeState::Released => "brake open",
     };
+    let fine_lift = if s.fine_engaged {
+        " \u{b7} fine lift"
+    } else {
+        ""
+    };
+    let warn = if s.conditions.any() { " \u{b7} !" } else { "" };
     format!(
-        "{:.0} rpm \u{b7} {winding} \u{b7} {brake} \u{b7} {:.2} m",
+        "{:.0} rpm \u{b7} {winding}{fine_lift} \u{b7} {brake} \u{b7} {:.2} m{warn}",
         s.shaft_rpm.abs(),
         module.height_m()
     )
+}
+
+/// Plain-language lines about what is wrong with a hoist right now (empty when all is well).
+pub(super) fn conditions(module: &HoistModule) -> Vec<&'static str> {
+    module
+        .snapshot()
+        .map_or_else(Vec::new, |s| s.conditions.messages())
+}
+
+const PHASES: [(&str, Option<Phase>); 4] = [
+    ("none", None),
+    ("L1", Some(Phase::L1)),
+    ("L2", Some(Phase::L2)),
+    ("L3", Some(Phase::L3)),
+];
+
+const VOLTAGES: [(&str, f64); 5] = [
+    ("100 %", 1.0),
+    ("90 %", 0.9),
+    ("80 %", 0.8),
+    ("70 %", 0.7),
+    ("50 %", 0.5),
+];
+
+const DELAYS: [(&str, f64); 4] = [
+    ("normal", 1.0),
+    ("2x slower", 2.0),
+    ("5x slower", 5.0),
+    ("10x slower", 10.0),
+];
+
+const LININGS: [(&str, f64); 4] = [("100 %", 1.0), ("60 %", 0.6), ("30 %", 0.3), ("10 %", 0.1)];
+
+const RECTIFIER_FAULTS: [(&str, RectifierFault); 6] = [
+    ("none", RectifierFault::None),
+    ("one diode open", RectifierFault::OpenDiode),
+    ("diode shorted (fuse blows)", RectifierFault::ShortedDiode),
+    ("coil circuit open", RectifierFault::OpenOutput),
+    ("output at 70 %", RectifierFault::LowOutput(0.7)),
+    ("no over-excitation", RectifierFault::NoBoost),
+];
+
+fn pick<T: PartialEq + Copy>(
+    ui: &mut egui::Ui,
+    id: &str,
+    label: &str,
+    options: &[(&str, T)],
+    value: &mut T,
+) -> bool {
+    let before = *value;
+    let shown = options
+        .iter()
+        .find(|(_, v)| *v == *value)
+        .map_or("custom", |(n, _)| *n);
+    ui.label(label);
+    egui::ComboBox::from_id_salt((id, label))
+        .selected_text(shown)
+        .show_ui(ui, |ui| {
+            for (name, v) in options {
+                ui.selectable_value(value, *v, *name);
+            }
+        });
+    ui.end_row();
+    *value != before
+}
+
+/// The "Faults to try" controls of one hoist. Returns whether anything changed.
+fn faults_ui(ui: &mut egui::Ui, id: &str, f: &mut HoistFaults) -> bool {
+    let mut changed = false;
+    egui::Grid::new(("hoist_faults", id))
+        .num_columns(2)
+        .show(ui, |ui| {
+            changed |= pick(ui, id, "Open phase", &PHASES, &mut f.lost_phase);
+            changed |= pick(ui, id, "Supply voltage", &VOLTAGES, &mut f.voltage_ratio);
+            changed |= pick(ui, id, "Brake delays", &DELAYS, &mut f.brake_delay_scale);
+            changed |= pick(
+                ui,
+                id,
+                "Brake lining torque",
+                &LININGS,
+                &mut f.brake_torque_scale,
+            );
+            changed |= pick(
+                ui,
+                id,
+                "Brake rectifier",
+                &RECTIFIER_FAULTS,
+                &mut f.rectifier,
+            );
+        });
+    changed
 }
 
 /// Badges on the motors of the hoists, on the page shown.
@@ -268,12 +376,14 @@ impl NovoApp {
         let mut stop = false;
         let mut live_toggle = false;
         let hoist = &self.wb.hoist;
-        let rows: Vec<(String, String)> = hoist.active.as_ref().map_or_else(Vec::new, |a| {
-            a.lp.hoists
-                .iter()
-                .map(|m| (m.id.clone(), reading(m)))
-                .collect()
-        });
+        let rows: Vec<(String, String, Vec<&'static str>, HoistFaults)> =
+            hoist.active.as_ref().map_or_else(Vec::new, |a| {
+                a.lp.hoists
+                    .iter()
+                    .map(|m| (m.id.clone(), reading(m), conditions(m), *m.unit.faults()))
+                    .collect()
+            });
+        let mut fault_change: Option<(String, HoistFaults)> = None;
         let running = hoist.active.is_some();
         let notice = hoist.notice.clone();
         let names: Vec<String> = hoists.iter().map(|h| h.id.clone()).collect();
@@ -322,17 +432,45 @@ impl NovoApp {
                 }
                 if !rows.is_empty() {
                     ui.separator();
-                    egui::Grid::new("hoist_rows").striped(true).show(ui, |ui| {
-                        for (tag, text) in &rows {
+                    let warning = crate::theme::ui_palette().warning;
+                    for (tag, text, problems, faults) in &rows {
+                        ui.horizontal(|ui| {
                             ui.strong(tag);
                             ui.label(text);
-                            ui.end_row();
+                        });
+                        for line in problems {
+                            ui.colored_label(warning, format!("\u{2022} {line}"));
                         }
-                    });
+                        let title = if faults.is_none() {
+                            "Faults to try".to_owned()
+                        } else {
+                            "Faults to try (set)".to_owned()
+                        };
+                        egui::CollapsingHeader::new(title)
+                            .id_salt(("hoist_faults_header", tag))
+                            .show(ui, |ui| {
+                                let mut f = *faults;
+                                if faults_ui(ui, tag, &mut f) {
+                                    fault_change = Some((tag.clone(), f));
+                                }
+                                if ui
+                                    .add_enabled(
+                                        !faults.is_none(),
+                                        egui::Button::new("Clear faults"),
+                                    )
+                                    .clicked()
+                                {
+                                    fault_change = Some((tag.clone(), HoistFaults::NONE));
+                                }
+                            });
+                    }
                 }
                 ui.separator();
                 ui.label(egui::RichText::new("Model, not measurement").strong());
-                for line in novo_drive::motor::MOTOR_MODEL_LEAVES_OUT {
+                for line in novo_drive::motor::MOTOR_MODEL_LEAVES_OUT
+                    .iter()
+                    .chain(novo_drive::brake_system::FAMILY_MODEL_LEAVES_OUT)
+                {
                     ui.weak(format!("\u{2022} {line}"));
                 }
                 ui.weak(
@@ -351,6 +489,13 @@ impl NovoApp {
         }
         if live_toggle {
             self.toggle_live();
+        }
+        if let Some((id, faults)) = fault_change
+            && let Some(active) = self.wb.hoist.active.as_mut()
+            && let Some(m) = active.lp.hoists.iter_mut().find(|m| m.id == id)
+            && let Err(why) = m.unit.set_faults(faults)
+        {
+            self.wb.hoist.notice = vec![(Level::Warning, format!("{id}: {why}"))];
         }
         if stop {
             self.wb.hoist.active = None;

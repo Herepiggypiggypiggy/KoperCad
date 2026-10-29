@@ -1,0 +1,21 @@
+@title A hint on a window's title bar says a double click maximises it, and restores it (Pages flyout, 1366x768)
+@area Windows
+@sizes 1366x768
+click_text "Open example"
+wait 20
+click_text Pages
+wait 20
+expect "Navigator"
+move 700 300
+wait 5
+move 135 72
+wait 60
+shot hint-maximise
+double_click 135 72
+wait 20
+move 700 80
+wait 5
+move 683 76
+wait 60
+shot hint-restore
+check_layout

@@ -17,3 +17,16 @@ Updated 2026-10-29. Branch `claude/project-thread-up7jgz`, based on main 8c9c97e
 
 ## Resume
 `CARGO_TARGET_DIR=... cargo test -p novo-app --lib rail`; QA scenario `qa/scenarios/730-tool-rail.qa`.
+
+## V3b and V3c: 3D and Cabinet rails (2026-10-29, branch claude/project-thread-of28bw)
+- `rail_3d.rs` and `rail_cabinet.rs` hold the row tables (`TOOLS`, `ASSISTS`, `PANELS`), `view3d_rail()` / `cabinet_rail()` and the click handlers. Both draw through `rail_draw` (rail_schematic.rs), so the expand choice is the one `rail_expanded` setting. `look()` chains the three `local()` tables.
+- A row is a command id; a click queues it, so the rail owns no state. 3D `active` is read from the option registry (`ALL` spec whose `command` equals the row) or from the card that owns it. Cabinet `active` is read from `cabinet.rails.open`, `routes`, `rules.editor_open`, `rules.cut_open`, `emc.on`, `heat.on`, `table`.
+- 3D flyouts: Align (six align rows, caption Spread over two), Hide (hide, isolate, show all). Their entries only open the card (`rail::open`).
+- The 3D toolbar (with the sim status chip) and the Cabinet bar stay for now: they hold Layers, the door slider, the Plate/Table switch, Accept/Cancel of a preview and the fold-into-More logic. They start right of the rail because the rail is a real left panel. `view3d_controls::below` now also follows the drawn toolbar height, since the 48 pt of the rail can wrap the toolbar onto another row.
+- Not built, on purpose: the 3D side panel (Side panel, Layers rows; Position and Statistics stand in the panels zone), Select on the Cabinet rail (no tool in hand), the Cabinet Inspector row and a Heat flyout. Trim the toolbar/bar duplicates once the lessons are re-anchored (V7).
+- QA: `qa/scenarios/770-cabinet-rail.qa`, `771-3d-rail.qa`. Tests: `cargo test -p novo-app --lib rail_workspaces`.
+
+## V3d: Reports and Commissioning rails
+- `rail_reports.rs`: rows of both rails (`REPORTS_*`, `COMMISSIONING_*`), `local()` for `rail.*` rows, `reports_rail_show` / `commissioning_rail_show`, `workspace_rail_click`. Dispatch is in `app.rs` next to the other rails; tests in `rail_reports_tests.rs`.
+- Reports: Add as drawing page, Report designer, Labels | Bench output, Build mode | Export (flyout: Excel, report PDF, BOM, PDF), Print preview.
+- Commissioning: the four panel tabs (Checks, Punch, Redlines, Test) | Next open (moves only, never decides; Mark done stays the Space tick) | Export commissioning, Export punch list. The design's Photo and Note tools do not exist as tools.

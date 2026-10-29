@@ -16,6 +16,8 @@ pub struct Voltage {
 pub struct Reading {
     pub motions: Vec<String>,
     pub dirs: Vec<Dir>,
+    /// Both directions of this motion named by one abbreviation (H/Z, L/R).
+    pub pair: Option<String>,
     pub step: Option<u8>,
     pub role: Option<Role>,
     pub voltage: Option<Voltage>,
@@ -91,6 +93,7 @@ pub fn read_row(row: &Row, words: &WordList) -> Reading {
                 r.motions.push(m.clone());
                 r.dirs.push(*d);
             }
+            Tag::Pair(m) => r.pair = r.pair.clone().or(Some(m.clone())),
             Tag::Speed(n) => speed = speed.or(Some(*n)),
             Tag::Role(role) => r.role = r.role.or(Some(*role)),
             Tag::Kind(k) => r.kind = r.kind.clone().or(Some(k.clone())),

@@ -67,6 +67,7 @@
 //! | [`TagRule`](ProblemKind::TagRule) | warning | A device name that breaks the page and column rule (opt-in) |
 //! | [`DisplayedTag`](ProblemKind::DisplayedTag) | warning | A tag text on a symbol that is not the device's tag |
 //! | [`StructureCode`](ProblemKind::StructureCode) | warning | A function or location code not in a structure list declared complete |
+//! | [`PinNames`](ProblemKind::PinNames) | info | Pins of a device, or terminals of its part, named differently from the usual names of its class (coil `A1 A2`, motor `U1 V1 W1`, brake `BD1 BD2`) |
 //! | [`Standard`](ProblemKind::Standard) | per rule | A rule of a selected standard (IEC 60204-1, NFPA 79, UL 508A) is not met; see [`standards`] |
 //! | [`DeviceCollision`](ProblemKind::DeviceCollision) | error | Two devices overlapping on a mounting plate |
 //! | [`DeviceOutsidePlate`](ProblemKind::DeviceOutsidePlate) | error | A device beyond the usable area of its plate |
@@ -117,6 +118,7 @@ mod house_rules;
 mod more_rules;
 mod net_shorts;
 mod physical;
+mod pin_names;
 pub mod protection;
 pub mod safety;
 pub mod single_line;
@@ -288,6 +290,10 @@ pub enum ProblemKind {
     DisplayedTag,
     /// A function or location code the structure list does not know (H01).
     StructureCode,
+    /// A device whose pins, or whose assigned part's terminals, are named
+    /// differently from the pin template of its class (coil `A1 A2`, motor
+    /// `U1 V1 W1`, brake `BD1 BD2`; novo-symbols `pin_template`).
+    PinNames,
     /// A device drawn in the schematic but not placed on any mounting plate,
     /// in a project where the cabinet layout has been started.
     UnplacedDevice,
@@ -357,7 +363,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 72] = [
+    pub const ALL: [ProblemKind; 73] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -430,6 +436,7 @@ impl ProblemKind {
         ProblemKind::TagRule,
         ProblemKind::DisplayedTag,
         ProblemKind::StructureCode,
+        ProblemKind::PinNames,
     ];
 
     pub fn severity(self) -> Severity {
@@ -504,6 +511,7 @@ impl ProblemKind {
             | ProblemKind::GuessedWire
             | ProblemKind::DepthUnknown
             | ProblemKind::PlugPins
+            | ProblemKind::PinNames
             | ProblemKind::AmbiguousInterruption
             | ProblemKind::SameShortTag => Severity::Info,
         }
@@ -584,6 +592,7 @@ impl ProblemKind {
             ProblemKind::TagRule => "Tag rule",
             ProblemKind::DisplayedTag => "Displayed tag",
             ProblemKind::StructureCode => "Unknown structure code",
+            ProblemKind::PinNames => "Pin names",
         }
     }
 
@@ -662,6 +671,7 @@ impl ProblemKind {
             ProblemKind::TagRule => "check.tag_rule",
             ProblemKind::DisplayedTag => "check.displayed_tag",
             ProblemKind::StructureCode => "check.structure_code",
+            ProblemKind::PinNames => "check.pin_names",
         }
     }
 }
@@ -813,6 +823,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     house_rules::tag_rule(&cx, &mut problems);
     house_rules::displayed_tags(&cx, &mut problems);
     house_rules::structure_codes(&cx, &mut problems);
+    pin_names::pin_names(&cx, &mut problems);
     calc_checks::run(&cx, netlist, &mut problems);
     physical::unplaced_devices(&cx, &mut problems);
     physical::routing(&cx, &mut problems);

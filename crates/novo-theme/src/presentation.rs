@@ -707,11 +707,7 @@ pub const TABLE: &[Presentation] = &[
     row("view.focus", p(icons::ARROWS_IN), "Focus mode"),
     row("view.pin_outline", p(icons::PUSH_PIN), "Pin outline"),
     row("view.full_screen", p(icons::ARROWS_OUT), "Full screen"),
-    row(
-        "cabinet.place-all",
-        p(icons::SQUARES_FOUR),
-        "Place all devices",
-    ),
+    row("cabinet.place-all", p(icons::SQUARES_FOUR), "Place all"),
     row(
         "cabinet.size-enclosure",
         d(&drawn::ENCLOSURE),
@@ -1119,6 +1115,11 @@ pub const TABLE: &[Presentation] = &[
         "sim.controller",
         p(icons::GAME_CONTROLLER),
         "Controller panel",
+    ),
+    row(
+        "sim.defects",
+        p(icons::WARNING),
+        "Defects and walk-throughs",
     ),
     row(
         "sim.motor_curves",

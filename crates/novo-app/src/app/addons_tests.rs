@@ -223,6 +223,31 @@ fn an_engine_answers_buttons_and_commands() {
 }
 
 #[test]
+fn details_know_how_much_of_its_step_budget_a_running_engine_uses() {
+    let (mut d, _dir) = drive();
+    install_engine_fixture(&mut d);
+    assert!(
+        d.app.engine_load().is_empty(),
+        "no engine runs before it is needed"
+    );
+    d.app
+        .addon_engine_call(
+            "demo-engine",
+            "button",
+            &serde_json::json!({"panel": "panel", "id": "start"}),
+        )
+        .expect("it has an engine")
+        .expect("the engine answers");
+    let (calls, peak, budget) = d.app.engine_load()["demo-engine"];
+    assert_eq!(calls, 2, "hello at start and the button");
+    assert!(
+        peak > 0 && peak < budget / 100,
+        "a small engine uses a sliver: {peak} of {budget}"
+    );
+    assert_eq!(budget, novo_addons::HostLimits::default().fuel_per_call);
+}
+
+#[test]
 fn lamps_an_engine_names_but_no_panel_declares_are_not_kept() {
     let (mut d, _dir) = drive();
     install_engine_fixture(&mut d);
@@ -301,4 +326,53 @@ fn a_broken_engine_stops_alone_and_takes_its_rows_with_it() {
         .addon_engine_call("demo-engine", "hello", &serde_json::json!({}))
         .unwrap();
     assert!(again.is_err());
+}
+
+/// A stand-in for the controller package: only the id matters to the gate.
+fn install_controllers_stand_in(d: &mut Drive) {
+    let manifest = "[addon]\nid = \"controllers\"\nname = \"Controllers\"\nversion = \"0.1.0\"\npublisher = \"test\"\ndescription = \"stand-in\"\nrequires_app = \">=0.1.0\"\napi_version = 1\npermissions = []\n";
+    let bytes = novo_addons::pack::pack_parts(manifest.as_bytes(), &[], None).expect("packs");
+    d.app
+        .wb
+        .addons
+        .store
+        .clone()
+        .unwrap()
+        .install_bytes(
+            &bytes,
+            novo_addons::InstallOptions {
+                accept_unsigned: true,
+                enable: true,
+            },
+        )
+        .unwrap();
+    d.app.refresh_addons();
+    d.frame();
+}
+
+#[test]
+fn the_controller_import_wizard_needs_the_controllers_add_on() {
+    let (mut d, _dir) = drive();
+    let ctx = d.ctx.clone();
+    let info = novo_workflow::commands::get("file.import_controller").unwrap();
+    // without the add-on the menu row is greyed with the reason, and the command (Ctrl+K,
+    // scripts) says so instead of opening the wizard
+    assert_eq!(
+        d.app.command_unavailable(info),
+        Some("Needs the Controllers add-on: install and turn it on in File > Add-ons...")
+    );
+    d.app.run_command(&ctx, "file.import_controller", None);
+    d.frame();
+    assert!(d.app.wb.controller_wizard.is_none());
+    // with it on, the row works and the wizard opens
+    install_controllers_stand_in(&mut d);
+    assert_eq!(d.app.command_unavailable(info), None);
+    d.app.run_command(&ctx, "file.import_controller", None);
+    d.frame();
+    assert!(d.app.wb.controller_wizard.is_some());
+    // turned off again, it is gone
+    let store = d.app.wb.addons.store.clone().unwrap();
+    store.set_enabled("controllers", false).unwrap();
+    d.app.refresh_addons();
+    assert!(d.app.command_unavailable(info).is_some());
 }

@@ -4,9 +4,11 @@
 //! Averaged model: no PWM and no harmonics. Exact by definition: synchronous
 //! speed and ramp arithmetic. Model: slip, current, thermal state, brake
 //! behaviour. Not a replica of any manufacturer's drive and no compliance claim.
-//! Lanes: L1 drive (`drive`), L2 motor and mechanics (`motor`, `induction`, `sequencer`, `mechanics`, `brake`, `hoist_unit`).
+//! Lanes: L1 drive (`drive`), L2 motor and mechanics (`motor`, `induction`, `sequencer`, `mechanics`, `brake`, `hoist_unit`),
+//! L2d hoist families (`supply`, `brake_system`: conical-rotor and rectifier brakes, lost phase, faults).
 
 pub mod brake;
+pub mod brake_system;
 pub mod drive;
 pub mod error;
 pub mod hoist_unit;
@@ -14,6 +16,7 @@ pub mod induction;
 pub mod mechanics;
 pub mod motor;
 pub mod sequencer;
+pub mod supply;
 
 pub use error::InputError;
 

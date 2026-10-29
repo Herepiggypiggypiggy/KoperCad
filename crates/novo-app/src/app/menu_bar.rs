@@ -25,8 +25,8 @@ pub(super) struct TopBarFit {
     pub(super) search_width: f32,
     /// Longest project name shown in the breadcrumb, in characters.
     pub(super) name_chars: usize,
-    /// Workspace chips use their short names.
-    pub(super) short_switcher: bool,
+    /// Which workspace buttons show their name (section 3.1).
+    pub(super) segment_names: super::workspace::SegmentNames,
     /// The "What's new" pill is in the bar; below [`ICON_ONLY_BELOW`] it
     /// makes way, the Help menu still opens it.
     pub(super) whats_new_pill: bool,
@@ -49,10 +49,32 @@ impl TopBarFit {
             search,
             search_width,
             name_chars: if width >= 1700.0 { 32 } else { 14 },
-            short_switcher: width < 1250.0,
+            segment_names: if width >= 1500.0 {
+                super::workspace::SegmentNames::All
+            } else if width >= ICON_ONLY_BELOW {
+                super::workspace::SegmentNames::Current
+            } else {
+                super::workspace::SegmentNames::None
+            },
             whats_new_pill: width >= ICON_ONLY_BELOW,
         }
     }
+}
+
+/// The sentence a few export commands carry in their tooltip (what the
+/// output is, what it is for).
+pub(super) fn hint_for(id: &str) -> Option<&'static str> {
+    Some(match id {
+        "export.sheets" | "export.sheets_csv" => super::SHEETS_HINT,
+        "export.assembly" => super::ASSEMBLY_HINT,
+        "export.handover" => super::HANDOVER_HINT,
+        "export.workpack" => super::WORKPACK_HINT,
+        "export.workshop" => super::WORKSHOP_HINT,
+        "export.scale_check" => super::SCALE_CHECK_HINT,
+        "export.bench_packet" => super::BENCH_PACKET_HINT,
+        "export.kitting" => super::KITTING_HINT,
+        _ => return None,
+    })
 }
 
 impl NovoApp {
@@ -95,35 +117,6 @@ impl NovoApp {
                 self.menu_bar_width = measured;
                 ui.ctx().request_repaint();
             }
-        }
-    }
-
-    /// The mark. Wide, a click shows About (the bar holds every menu);
-    /// otherwise it opens the menus as submenus.
-    pub(super) fn mark(&mut self, ui: &mut egui::Ui, focus: bool) {
-        let text = egui::RichText::new(super::APP_NAME).strong();
-        if self.menu_bar_wide() {
-            let button = ui.add(egui::Button::new(text).frame(false));
-            self.anchor_response("menu.project", &button, super::APP_NAME);
-            if focus {
-                button.request_focus();
-            }
-            if button.on_hover_text("About").clicked() {
-                self.wb.queued.push("help.about");
-            }
-            return;
-        }
-        let response = ui.menu_button(text, |ui| {
-            for menu in MENUS {
-                let _ = self.menu(ui, menu, false);
-            }
-        });
-        self.anchor_response("menu.project", &response.response, super::APP_NAME);
-        if response.inner.is_some() {
-            self.learn_event(novo_learn::Event::Opened("menu.project".to_owned()));
-        }
-        if focus {
-            response.response.request_focus();
         }
     }
 
@@ -295,16 +288,9 @@ impl NovoApp {
         }
         let response = ui.add_enabled(reason.is_none(), button);
         self.anchor(&format!("cmd.{}", info.id), response.rect, info.label);
-        let response = match info.id {
-            "export.sheets" | "export.sheets_csv" => response.on_hover_text(super::SHEETS_HINT),
-            "export.assembly" => response.on_hover_text(super::ASSEMBLY_HINT),
-            "export.handover" => response.on_hover_text(super::HANDOVER_HINT),
-            "export.workpack" => response.on_hover_text(super::WORKPACK_HINT),
-            "export.workshop" => response.on_hover_text(super::WORKSHOP_HINT),
-            "export.scale_check" => response.on_hover_text(super::SCALE_CHECK_HINT),
-            "export.bench_packet" => response.on_hover_text(super::BENCH_PACKET_HINT),
-            "export.kitting" => response.on_hover_text(super::KITTING_HINT),
-            _ => response,
+        let response = match hint_for(info.id) {
+            Some(hint) => response.on_hover_text(hint),
+            None => response,
         };
         if let Some(reason) = reason {
             response.on_disabled_hover_text(reason);
@@ -336,6 +322,9 @@ impl NovoApp {
             return Some("This page has no DXF background");
         }
         match info.id {
+            "file.import_controller" if !self.addon_enabled(super::addons::CONTROLLERS_ADDON) => {
+                return Some(super::addons::CONTROLLERS_NEEDED);
+            }
             "proposal.accept" if self.page_proposals().is_empty() => {
                 return Some("No proposal on this page");
             }

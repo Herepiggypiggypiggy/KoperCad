@@ -3,6 +3,14 @@
 The id is a date and a letter; the top entry is the newest one a person has
 seen once they open the list. Add an entry when a feature PR merges. -->
 
+## 2026-10-29-c · Docked panels share their edge, and the Pages column can sit on the right
+Where: the right or left edge when two panels are docked, and the arrow beside the pin in the header of the pinned Pages column and the Reports list.
+Drag the line between two docked panels to give one more room (each keeps a minimum), double click it to make them equal again. Docking or floating a panel refits the drawing into what is left of the window. The arrow in the Pages column header moves the column, and the Reports list, to the other side of the window. A title bar tells you what a double click does: "Double click to maximise" or "Double click to restore". View > Reset panel layout puts everything back.
+
+## 2026-10-29-b · Dock a panel at the left, right or bottom edge
+Where: the title bar of the Inspector (schematic and cabinet), the wire card, the 3D Heat panel, the wire runs list and the Review notes.
+Two arrows in a panel's title bar dock it at the left or the right edge; drag the title bar to an edge and the edge lights up, let go and it docks. A docked panel takes a full strip beside the drawing, so nothing lies over it; drag the strip's edge to widen it, double click the edge for its usual width. In the docked title bar the arrows move it to another edge and the corner button floats it again. Two panels in one edge share it. View > Reset panel layout floats everything again.
+
 ## 2026-10-29-a · Double click maximises a window, double click on an edge resets it
 Where: the title bar of any window or dialog, and the edge of the Pages column, the report list, the drawer and the detail columns.
 Double click a window's title bar and it fills the canvas (a dialog fills the window); double click again and it goes back to where it was. A window no longer folds up on a double click, use its arrow. Double click the edge you drag a column or drawer by and it gets its usual size back. View > Reset panel layout still puts everything back.

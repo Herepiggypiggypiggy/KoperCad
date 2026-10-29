@@ -112,7 +112,11 @@ fn local(id: &str) -> Option<(Glyph, &'static str, &'static str)> {
 
 /// The picture, short name and sentence of any rail row.
 pub(super) fn look(id: &str) -> Option<(Glyph, String, String)> {
-    if let Some((glyph, label, sentence)) = local(id) {
+    if let Some((glyph, label, sentence)) = local(id)
+        .or_else(|| super::rail_3d::local(id))
+        .or_else(|| super::rail_cabinet::local(id))
+        .or_else(|| super::rail_reports::local(id))
+    {
         return Some((glyph, label.to_owned(), sentence.to_owned()));
     }
     let label = presentation::short_label(id)?;
@@ -131,7 +135,7 @@ impl NovoApp {
     }
 
     /// Whether the panel behind a panels-zone row is open.
-    fn rail_panel_open(&self, id: &str) -> bool {
+    pub(super) fn rail_panel_open(&self, id: &str) -> bool {
         let outline =
             |mode| self.outline_mode == mode && (self.outline_pinned() || self.outline_open);
         match id {
@@ -146,7 +150,7 @@ impl NovoApp {
 
     /// One row: its picture, name, key and tooltip, from the presentation
     /// table and the command it names.
-    fn rail_entry(&self, id: &'static str) -> Option<Entry> {
+    pub(super) fn rail_entry(&self, id: &'static str) -> Option<Entry> {
         let (glyph, label, sentence) = look(id)?;
         let key_id = if id == "rail.select" {
             "edit.escape"
@@ -284,14 +288,7 @@ impl NovoApp {
         let ctx = ui.ctx().clone();
         let super::dock::ToolHint { proposals, .. } = self.tool_hint();
         let rail = self.schematic_rail(proposals);
-        let mut expanded = self.settings.rail_expanded
-            || self.settings.dock_labels() == crate::settings::DockLabels::Always;
-        let was = expanded;
-        let shown = super::rail::show(ui, &rail, &mut expanded);
-        if expanded != was {
-            self.settings.rail_expanded = expanded;
-        }
-        self.wb.rail_rect = Some(shown.rect);
+        let shown = self.rail_draw(ui, &rail);
         let mut spots = shown.spots;
         // A lesson that points at Corners or Lines while the flyout is shut
         // points at Connect, which opens it.
@@ -321,6 +318,21 @@ impl NovoApp {
         if let Some(id) = shown.clicked {
             self.rail_click(&ctx, id);
         }
+    }
+
+    /// Draws `rail` as the leftmost panel, keeps the expanded choice in the
+    /// settings and records where it stands. Every workspace's rail goes
+    /// through here.
+    pub(super) fn rail_draw(&mut self, ui: &mut egui::Ui, rail: &Rail) -> super::rail::Shown {
+        let mut expanded = self.settings.rail_expanded
+            || self.settings.dock_labels() == crate::settings::DockLabels::Always;
+        let was = expanded;
+        let shown = super::rail::show(ui, rail, &mut expanded);
+        if expanded != was {
+            self.settings.rail_expanded = expanded;
+        }
+        self.wb.rail_rect = Some(shown.rect);
+        shown
     }
 
     /// What a click on a row does. The editor tools start as the dock's
