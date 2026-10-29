@@ -4,9 +4,11 @@
 //! to the usual names of the class, as one undo step; the same repair is on
 //! the Check > Issues "Pin names" row.
 //!
-//! Where the user finds it: assign a part to a device (inspector part list,
-//! Ctrl+K "assign part"); a small window offers the rename when the terminals
-//! of the part differ from the usual names.
+//! Where the user finds it: assign a part to a device in the Inspector part
+//! list, or to one selected device in the selection sheet; a small window
+//! offers the rename when the terminals of the part differ from the usual
+//! names. The offer is dropped when its device is gone (another project, an
+//! undo of the placement).
 
 use eframe::egui;
 use novo_core::DeviceId;
@@ -15,6 +17,7 @@ use super::{Level, NovoApp};
 
 /// A rename waiting for the person's answer.
 pub(super) struct PinOffer {
+    device: DeviceId,
     /// The device tag, for the text.
     tag: String,
     fix: novo_checks::PinFix,
@@ -35,10 +38,21 @@ impl NovoApp {
             .device(device)
             .map(|d| d.tag.to_string())
             .unwrap_or_default();
-        self.wb.pin_offer = Some(PinOffer { tag, fix });
+        self.wb.pin_offer = Some(PinOffer { device, tag, fix });
     }
 
     pub(super) fn pin_offer_dialog(&mut self, ctx: &egui::Context) {
+        let Some(offer) = &self.wb.pin_offer else {
+            return;
+        };
+        let alive = self
+            .backend
+            .document()
+            .is_some_and(|d| d.project().device(offer.device).is_some());
+        if !alive {
+            self.wb.pin_offer = None;
+            return;
+        }
         let Some(offer) = &self.wb.pin_offer else {
             return;
         };
