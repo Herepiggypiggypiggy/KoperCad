@@ -132,7 +132,7 @@ fn connection_points_carry_wire_range_torque_and_strip_length() {
     assert_eq!(t[1].torque_nm, None);
     assert_eq!(
         r.parts[0].sources.get("connection_data"),
-        Some(&novo_parts::DataSource::MakerDatasheet)
+        Some(&novo_parts::DataSource::Estimated)
     );
     assert_eq!(r.counts.terminals, 2);
     assert_eq!(r.counts.with_wire_range, 2);

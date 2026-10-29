@@ -1046,12 +1046,13 @@ impl Build {
             }
             draft.part.terminals.push(t);
         }
-        // The wire checks judge a wire against data that came from the maker.
+        // Estimated, not the maker's, until the reader has met a real maker
+        // file: the wire checks then only warn about a too-large wire.
         if draft.part.terminals.iter().any(|t| t.wire_mm2.is_some()) {
             draft
                 .part
                 .sources
-                .insert("connection_data".into(), DataSource::MakerDatasheet);
+                .insert("connection_data".into(), DataSource::Estimated);
         }
     }
 

@@ -33,6 +33,7 @@ maker's real file. So:
   (`maker_position_mm`, `DrillHole`). The corner they are measured from is not known, so
   `position_mm`, which wire routing and the 3D view trust, is left empty. Confirming the frame
   against a real file is the next step; the drill plan (Cabinet > Output) is a separate item.
+- Connection data is marked `sources["connection_data"] = Estimated` until the reader has met a real maker file, so the wire checks only warn.
 - The side a terminal faces is not worked out from its direction.
 - Reading over a part already in the catalog keeps its price, ETIM class, lifecycle and files.
 - Nothing is read from EPLAN macros, libraries or Data Portal pictures, and no maker data ships
