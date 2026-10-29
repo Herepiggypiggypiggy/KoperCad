@@ -22,7 +22,6 @@ pub const CRANE_PICTURE_LEAVES_OUT: &[&str] = &[
     "Generic crane proportions: the girder, trolley and hook block are not your crane's sizes",
     "The rope is a straight bar of fixed length: its swing is a simple pendulum model, not a measurement; stretch and slack rope are not modelled",
     "Bridge and trolley follow a travel drive if you pick one (forward is +x for the bridge, +z for the trolley) and its end limits stand as upright flags, red forward and amber reverse; otherwise they stand where you set them. Your picks and the crane size are saved with the project",
-    "The swing is one pendulum per direction on a rope that keeps its length: no turning load, no push back on the drive",
     "No building, no clearance check, no structural model",
 ];
 
