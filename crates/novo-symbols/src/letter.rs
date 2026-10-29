@@ -105,6 +105,8 @@ pub fn letter_code_with(function: &str, rules: LetterRules) -> Option<&'static s
         "converter" | "transformer" => "T",
         "meter" | "signal" => "P",
         "sensor" => "B",
+        // A radio receiver or pendant is an assembly of its own (81346-2 class A).
+        "controller" => "A",
         // Safety: a safety relay is class K, a light curtain senses (B).
         "safety" => match parts.get(1).copied() {
             Some("relay") => "K",
@@ -194,6 +196,8 @@ mod tests {
             ("contact.no.temperature", Some("B")),
             ("contact.no.thermal", Some("F")),
             ("contact.no.turn", Some("S")),
+            ("controller.output", Some("A")),
+            ("controller.outputs", Some("A")),
             ("converter.ac_dc", Some("T")),
             ("converter.dc_dc", Some("T")),
             ("converter.soft_starter", Some("T")),

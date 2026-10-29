@@ -10,6 +10,7 @@ publish = false
 novo-core.workspace = true
 novo-layout.workspace = true
 novo-canvas.workspace = true
+novo-controller.workspace = true
 novo-editor = { workspace = true, features = ["art"] }
 novo-symbols.workspace = true
 novo-xref.workspace = true

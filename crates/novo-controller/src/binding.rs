@@ -64,6 +64,11 @@ impl fmt::Display for Target {
 pub struct Binding {
     pub key: SignalKey,
     pub target: Target,
+    /// The target takes the opposite level: a signal that is high while an E-stop is released
+    /// drives an E-stop symbol (which is operated when pressed). Meant for contact and voltage
+    /// signals; an analog value is not inverted by anything meaningful.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub invert: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,11 +109,23 @@ impl BindingTable {
 
     /// Add a binding; returns false (and adds nothing) when the same pair already exists.
     pub fn bind(&mut self, key: SignalKey, target: Target) -> bool {
-        let b = Binding { key, target };
-        if self.bindings.contains(&b) {
+        self.bind_with(key, target, false)
+    }
+
+    /// [`bind`](Self::bind) with the level inverted (see [`Binding::invert`]).
+    pub fn bind_with(&mut self, key: SignalKey, target: Target, invert: bool) -> bool {
+        if self
+            .bindings
+            .iter()
+            .any(|b| b.key == key && b.target == target)
+        {
             return false;
         }
-        self.bindings.push(b);
+        self.bindings.push(Binding {
+            key,
+            target,
+            invert,
+        });
         true
     }
 
@@ -249,39 +266,62 @@ impl BindingTable {
         out
     }
 
-    /// The level each target gets now. By default several signals combine as the value of
-    /// largest magnitude (any high contact wins), so a service pendant overriding a radio shows.
-    /// If any signal on a target says `combine = "and"` the target takes the smallest magnitude
-    /// instead (a normally-closed chain is open as soon as one controller opens it).
+    /// The level each target gets now. Signals combine per signal, not per target:
+    /// - an ordinary signal (the default) adds as the value of largest magnitude, so any high
+    ///   contact wins and a service pendant overriding a radio shows;
+    /// - a signal with `combine = "and"` joins the others of its kind as the smallest magnitude (a
+    ///   normally-closed chain is open as soon as one controller opens it);
+    /// - when a target has both kinds, the two results are combined as the larger magnitude, so
+    ///   one `and` signal does not turn the other signals of the target into an AND.
+    ///
+    /// A binding whose controller or signal does not exist adds nothing (the check reports it);
+    /// a target with no known signal is absent from the result. An inverted binding contributes
+    /// the logical opposite of the signal (see [`Binding::invert`]).
     pub fn resolve(&self, set: &ControllerSet) -> BTreeMap<Target, f64> {
-        let mut levels: BTreeMap<Target, Vec<f64>> = BTreeMap::new();
-        let mut and: BTreeSet<Target> = BTreeSet::new();
+        let mut or: BTreeMap<&Target, f64> = BTreeMap::new();
+        let mut and: BTreeMap<&Target, f64> = BTreeMap::new();
         for b in &self.bindings {
-            levels
-                .entry(b.target.clone())
-                .or_default()
-                .push(set.level(&b.key).unwrap_or(0.0));
+            let Some(level) = set.level(&b.key) else {
+                continue;
+            };
+            let level = if b.invert {
+                if level != 0.0 { 0.0 } else { 1.0 }
+            } else {
+                level
+            };
             let combine = set
                 .instance(&b.key.controller)
                 .and_then(|i| i.controller.profile().signal(&b.key.signal))
                 .map(|s| s.combine);
             if combine == Some(Combine::And) {
-                and.insert(b.target.clone());
+                and.entry(&b.target)
+                    .and_modify(|v| {
+                        if level.abs() < v.abs() {
+                            *v = level;
+                        }
+                    })
+                    .or_insert(level);
+            } else {
+                or.entry(&b.target)
+                    .and_modify(|v| {
+                        if level.abs() > v.abs() {
+                            *v = level;
+                        }
+                    })
+                    .or_insert(level);
             }
         }
-        levels
-            .into_iter()
-            .map(|(t, v)| {
-                let pick = if and.contains(&t) {
-                    v.into_iter()
-                        .reduce(|a, b| if b.abs() < a.abs() { b } else { a })
-                } else {
-                    v.into_iter()
-                        .reduce(|a, b| if b.abs() > a.abs() { b } else { a })
-                };
-                (t, pick.unwrap_or(0.0))
-            })
-            .collect()
+        let mut out: BTreeMap<Target, f64> = BTreeMap::new();
+        for (t, v) in or.into_iter().chain(and) {
+            out.entry(t.clone())
+                .and_modify(|w| {
+                    if v.abs() > w.abs() {
+                        *w = v;
+                    }
+                })
+                .or_insert(v);
+        }
+        out
     }
 
     /// Who drives a target right now: the signals bound to it that are not low.

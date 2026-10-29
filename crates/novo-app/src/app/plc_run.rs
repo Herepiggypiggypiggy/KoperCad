@@ -8,7 +8,7 @@
 //! Rockwell, which has no byte addresses). The program is kept in the
 //! window and in a file you save; it is not part of the project file yet.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use eframe::egui;
@@ -53,6 +53,8 @@ pub(crate) struct PlcRun {
     notes: Vec<String>,
     /// The project revision the channel map was built for.
     map_revision: Option<u64>,
+    /// Input bits held from outside the drawing (a controller panel), by address text.
+    held: BTreeMap<String, bool>,
 }
 
 /// The channels of the I/O list by address, and what could not be mapped.
@@ -104,6 +106,15 @@ impl PlcRun {
             .map(|l| &l.clock)
     }
 
+    /// Holds the input bit at `address` to `value` for the running program, or lets go (`None`).
+    /// Nothing happens while no program runs; the bit is held again when one starts.
+    pub(super) fn override_input(&mut self, address: &str, value: Option<bool>) {
+        match value {
+            Some(v) => self.held.insert(address.to_owned(), v),
+            None => self.held.remove(address),
+        };
+    }
+
     /// The output channels the program has on.
     pub(super) fn outputs_on(&self) -> BTreeSet<SymbolId> {
         self.looped
@@ -123,6 +134,10 @@ impl PlcRun {
         dt: f64,
     ) -> Option<Settled> {
         let looped = self.looped.as_mut()?;
+        looped.bench.clear_overrides();
+        for (address, value) in &self.held {
+            looped.bench.override_input(address, Some(*value));
+        }
         Some(looped.step(project, netlist, manual, forced, dt).clone())
     }
 

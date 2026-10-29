@@ -61,7 +61,11 @@ mod commissioning_viewer;
 #[cfg(test)]
 mod commissioning_viewer_tests;
 mod compare;
+mod controller_card;
 mod controller_import;
+mod controller_live;
+#[cfg(test)]
+mod controller_live_tests;
 mod count_words;
 mod designer;
 mod device_renumber;

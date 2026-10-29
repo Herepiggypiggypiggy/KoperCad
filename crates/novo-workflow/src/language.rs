@@ -677,6 +677,17 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl(
+        "sim.controller",
+        &["bediening paneel"],
+        &[
+            "afstandsbediening",
+            "hangkast",
+            "zender",
+            "ontvanger",
+            "kraanbediening",
+        ],
+    ),
+    nl(
         "sim.why",
         &["waarom"],
         &["waarom brandt dit", "waarom dood", "uitleg", "pad volgen"],

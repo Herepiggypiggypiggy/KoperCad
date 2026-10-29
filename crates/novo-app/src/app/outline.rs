@@ -171,7 +171,7 @@ pub(super) struct OutlineState {
     /// The Pages list's rows, kept until the project, view or folds change.
     cache: Option<OutlineCache>,
     pub(super) rows_cache: Option<RowsCache>,
-    net_wires: Option<(u64, String, Rc<Vec<items::WireGroup>>)>,
+    pub(super) net_wires: Option<(u64, String, Rc<Vec<items::WireGroup>>)>,
     net_cables: Option<(u64, String, Rc<Vec<items::CableItem>>)>,
     /// Counts the rebuilds of kept rows, so the Pages list picks them up.
     pub(super) rows_epoch: u64,
