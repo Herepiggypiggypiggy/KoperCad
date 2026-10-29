@@ -509,6 +509,28 @@ fn brake_feedback_confirms_the_release_and_a_stuck_brake_trips() {
     assert_eq!(v.last().unwrap().drive.fault, Some(ClFault::BrakeFeedback));
 }
 
+#[test]
+fn a_brake_coil_that_the_circuit_does_not_feed_leaves_the_brake_closed() {
+    // The drive commands the release (relay on) but the drawing's brake contactor never feeds
+    // the coil. With feedback wired the drive trips; without it, the shaft stays at rest.
+    let mut c = cfg();
+    c.brake_feedback = true;
+    let mut w = winch_with(c, brake(0.2, 0.0));
+    let mut inp = run_input(300.0);
+    inp.brake_coil = Some(false);
+    inp.brake_feedback = Some(false);
+    let v = run(&mut w, inp, 3.0);
+    assert_eq!(v.last().unwrap().drive.fault, Some(ClFault::BrakeFeedback));
+    assert!(v.iter().all(|s| s.hook_height_m.abs() < 0.001));
+    // A coil fed from the start (a welded brake contactor) opens the brake before the drive has
+    // built its torque: the load runs down, whatever the relay says.
+    let mut w = winch();
+    let mut inp = run_input(300.0);
+    inp.brake_coil = Some(true);
+    let v = run(&mut w, inp, 3.0);
+    assert!(v.iter().any(|s| s.hook_speed_m_s < -0.01));
+}
+
 // ---- 12. regeneration: lowering a load ---------------------------------------------------------
 
 #[test]

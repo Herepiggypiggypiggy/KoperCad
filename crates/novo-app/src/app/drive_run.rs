@@ -13,9 +13,16 @@
 //! the drive's brake relay is a contact of the drawing that switches the brake contactor, the
 //! drive opens the brake only when the motor current says there is torque, and the run lists what
 //! it found (a hook that sank at the start, a brake that does not hold, a trip on over-voltage).
+//!
+//! A motor with a hook load under "Closed-loop winch" (`cw_*` properties) is a hoist behind an
+//! encoder drive: torque is held at zero speed, the brake opens only after the drive proved its
+//! torque, and the two STO channels, the encoder signal and the brake contactor are devices of the
+//! drawing, so a defect injected there (Simulate > Defects and walk-throughs) reaches the drive.
 
 use eframe::egui;
 use novo_core::{PageId, Project, Value};
+use novo_machine::cl_winch_loop::{ClWinchLoop, ClWinchModule};
+use novo_machine::cl_winch_spec;
 use novo_machine::cosim::StepConfig;
 use novo_machine::drive_hoist_loop::{DriveHoistLoop, DriveHoistModule};
 use novo_machine::drive_hoist_spec;
@@ -42,6 +49,7 @@ pub(crate) struct DriveRun {
 struct Active {
     lp: TravelLoop,
     hl: DriveHoistLoop,
+    cw: ClWinchLoop,
     acc: f64,
 }
 
@@ -72,6 +80,67 @@ pub(super) fn drive_hoists_of(project: &Project) -> (Vec<DriveHoistModule>, Vec<
         }
     }
     (modules, notes)
+}
+
+/// The closed-loop winches of a project: every motor with a hook load under "Closed-loop winch". A
+/// winch whose numbers the engine refuses is reported and left out. The notes are the design
+/// findings of its numbers.
+pub(super) fn closed_winches_of(project: &Project) -> (Vec<ClWinchModule>, Vec<(Level, String)>) {
+    let mut modules = Vec::new();
+    let mut notes = Vec::new();
+    for device in project.devices() {
+        if !device
+            .properties
+            .contains_key(cl_winch_spec::CLOSED_WINCH_KEY)
+        {
+            continue;
+        }
+        let tag = device.tag.to_string();
+        let get = |key: &str| device.properties.get(key).map(|v: &Value| v.to_string());
+        match cl_winch_spec::closed_winch_from_properties(&tag, &get) {
+            Ok(Some((module, found))) => {
+                modules.push(module);
+                notes.extend(
+                    found
+                        .into_iter()
+                        .map(|n| (Level::Info, format!("{tag}: {n}"))),
+                );
+            }
+            Ok(None) => {}
+            Err(why) => notes.push((Level::Warning, format!("{tag} is left out: {why}"))),
+        }
+    }
+    (modules, notes)
+}
+
+/// A one-line reading of a closed-loop winch, for the badge and the window.
+pub(super) fn winch_reading(module: &ClWinchModule) -> String {
+    use novo_drive::closed_loop::ClState;
+    let Some(s) = module.snapshot() else {
+        return "waiting".to_owned();
+    };
+    let state = match s.drive.fault {
+        Some(f) => format!("tripped {}", f.code()),
+        None => match s.drive.state {
+            ClState::Off => "brake closed".to_owned(),
+            ClState::Magnetising => "magnetising".to_owned(),
+            ClState::TorqueProof => "proving torque".to_owned(),
+            ClState::Releasing => "opening brake".to_owned(),
+            ClState::Running => "running".to_owned(),
+            ClState::Stopping => "slowing".to_owned(),
+            ClState::BrakeClosing => "holding, brake closing".to_owned(),
+            ClState::StoActive => "STO".to_owned(),
+            ClState::Faulted => "stopped by a fault".to_owned(),
+        },
+    };
+    format!(
+        "{state} \u{b7} {:.0} rpm \u{b7} {:.0} N m \u{b7} {:.1} A \u{b7} {:.1} m/min \u{b7} {:.2} m",
+        s.shaft_rpm,
+        s.drive.torque_nm,
+        s.drive.current_a,
+        s.hook_speed_m_s * 60.0,
+        s.hook_height_m
+    )
 }
 
 /// A one-line reading of a drive hoist, for the badge and the window.
@@ -148,6 +217,7 @@ pub(super) fn advance(
     while active.acc >= dt && ticks < MAX_TICKS {
         active.lp.step(&mut circuit);
         active.hl.step(&mut circuit);
+        active.cw.step(&mut circuit);
         active.acc -= dt;
         ticks += 1;
     }
@@ -207,6 +277,13 @@ pub(super) fn paint_badges(
                 .iter()
                 .map(|m| (m.id.as_str(), hoist_reading(m))),
         )
+        .chain(
+            active
+                .cw
+                .modules
+                .iter()
+                .map(|m| (m.id.as_str(), winch_reading(m))),
+        )
         .collect();
     for (id, text) in readings {
         for symbol in project.symbols().filter(|s| s.page == page && is_motor(s)) {
@@ -240,6 +317,7 @@ pub(super) fn paint_badges(
     }
     if active.lp.modules.iter().any(|m| m.snapshot().is_some())
         || active.hl.modules.iter().any(|m| m.snapshot().is_some())
+        || active.cw.modules.iter().any(|m| m.snapshot().is_some())
     {
         ctx.request_repaint();
     }
@@ -260,6 +338,7 @@ impl NovoApp {
         };
         let (axes, _) = axes_of(doc.project());
         let (drive_hoists, _) = drive_hoists_of(doc.project());
+        let (winches, _) = closed_winches_of(doc.project());
         let live_on = self.wb.live.on;
         let mut open = true;
         let (mut start, mut stop, mut live_toggle) = (false, false, false);
@@ -273,6 +352,11 @@ impl NovoApp {
                         .iter()
                         .map(|m| (m.id.clone(), hoist_reading(m))),
                 )
+                .chain(
+                    a.cw.modules
+                        .iter()
+                        .map(|m| (m.id.clone(), winch_reading(m))),
+                )
                 .collect()
         });
         // What the drive hoists found, newest last (the run keeps the whole list).
@@ -284,6 +368,11 @@ impl NovoApp {
                         .iter()
                         .map(|f| (format!("{} \u{b7} {:.1} s", m.id, f.time_s), f.kind.text()))
                 })
+                .chain(a.cw.modules.iter().flat_map(|m| {
+                    m.findings()
+                        .iter()
+                        .map(|f| (format!("{} \u{b7} {:.1} s", m.id, f.time_s), f.kind.text()))
+                }))
                 .collect()
         });
         let running = run.active.is_some();
@@ -292,6 +381,7 @@ impl NovoApp {
             .iter()
             .map(|a| a.id.clone())
             .chain(drive_hoists.iter().map(|h| h.id.clone()))
+            .chain(winches.iter().map(|w| w.id.clone()))
             .collect();
         // Foreground: the marks of the live view (contacts, coil rings) are painted on the Middle
         // layer and must not run through the notes.
@@ -308,13 +398,13 @@ impl NovoApp {
                 ui.add_space(4.0);
                 if names.is_empty() {
                     ui.weak(
-                        "No travel axis or drive hoist yet. Select a motor and enter its moving \
-                         mass under Travel drive, or its hook load under Drive hoist, in the \
-                         property sheet.",
+                        "No travel axis, drive hoist or closed-loop winch yet. Select a motor and \
+                         enter its moving mass under Travel drive, or its hook load under Drive \
+                         hoist or Closed-loop winch, in the property sheet.",
                     );
                 } else {
                     ui.label(format!(
-                        "Travel axes and drive hoists in this project: {}",
+                        "Travel axes, drive hoists and closed-loop winches in this project: {}",
                         names.join(", ")
                     ));
                 }
@@ -408,6 +498,14 @@ impl NovoApp {
                      time constant; a stuck or missing brake contactor shows as a brake that \
                      never opens.",
                 );
+                ui.weak(
+                    "\u{2022} Closed-loop winch: an averaged encoder drive (speed loop around a \
+                     first order torque loop, current limit, constant power above rated speed). \
+                     Torque is proven before the brake opens and held at zero speed; the STO \
+                     channels, the encoder signal and the brake contactor are read from the \
+                     drawing. Brake timing is entered, not measured; the plausibility check uses \
+                     the true shaft speed. Not a maker's firmware.",
+                );
                 ui.weak("\u{2022} Not a safety or compliance statement.");
             });
         if !open {
@@ -433,7 +531,9 @@ impl NovoApp {
         let (modules, mut notes) = axes_of(project);
         let (hoist_modules, hoist_notes) = drive_hoists_of(project);
         notes.extend(hoist_notes);
-        if modules.is_empty() && hoist_modules.is_empty() {
+        let (winch_modules, winch_notes) = closed_winches_of(project);
+        notes.extend(winch_notes);
+        if modules.is_empty() && hoist_modules.is_empty() && winch_modules.is_empty() {
             notes.push((
                 Level::Warning,
                 "No axis can run: see the notes above.".into(),
@@ -457,10 +557,19 @@ impl NovoApp {
             }
         };
         hl.modules = hoist_modules;
+        let mut cw = match ClWinchLoop::new(StepConfig::default()) {
+            Ok(cw) => cw,
+            Err(why) => {
+                self.wb.drive_run.notice = vec![(Level::Error, why.to_string())];
+                return;
+            }
+        };
+        cw.modules = winch_modules;
         let findings = {
             let circuit = LiveCircuit::new(&mut self.wb.live, project);
             let mut f = lp.check_bindings(&circuit);
             f.extend(hl.check_bindings(&circuit));
+            f.extend(cw.check_bindings(&circuit));
             f
         };
         notes.extend(
@@ -469,7 +578,12 @@ impl NovoApp {
                 .map(|f| (Level::Warning, format!("{}: {}", f.module, f.message))),
         );
         self.wb.drive_run.notice = notes;
-        self.wb.drive_run.active = Some(Active { lp, hl, acc: 0.0 });
+        self.wb.drive_run.active = Some(Active {
+            lp,
+            hl,
+            cw,
+            acc: 0.0,
+        });
     }
 }
 
@@ -572,6 +686,7 @@ mod tests {
             active: Some(Active {
                 lp,
                 hl: DriveHoistLoop::new(StepConfig::default()).unwrap(),
+                cw: ClWinchLoop::new(StepConfig::default()).unwrap(),
                 acc: 0.0,
             }),
             ..Default::default()
@@ -675,6 +790,7 @@ mod tests {
             active: Some(Active {
                 lp: TravelLoop::new(StepConfig::default()).unwrap(),
                 hl,
+                cw: ClWinchLoop::new(StepConfig::default()).unwrap(),
                 acc: 0.0,
             }),
             ..Default::default()
@@ -711,6 +827,195 @@ mod tests {
         assert!(
             found.iter().any(|f| f.message.contains("ideal wiring")),
             "{found:?}"
+        );
+    }
+
+    /// L1 -> S1 -> coil KU (up). STOA, STOB (the two STO channels) and ENC (the encoder signal
+    /// monitor) are coils fed straight from L1; L1 -> KR (the drive's brake relay contact, written
+    /// by the loop) -> coil KB (the brake contactor). M1 is a closed-loop winch on all of them.
+    fn closed_winch() -> (Document, SymbolId) {
+        let mut doc = Document::default();
+        let (button, _) = doc
+            .transact("Draw", |tx| {
+                let page = tx.add_page("1")?;
+                let dev = |d, main| SymbolRole::Device { device: d, main };
+                let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+                let n = tx.add_potential("N", PotentialKind::Neutral)?;
+                let mut devices = std::collections::BTreeMap::new();
+                for t in ["KU", "KB", "KR", "S1", "STOA", "STOB", "ENC", "M1"] {
+                    devices.insert(t, tx.add_device(DeviceTag::product(t), "")?);
+                }
+                let feed = |tx: &mut novo_core::Tx<'_>, y, p| {
+                    put(
+                        tx,
+                        page,
+                        "t/feed",
+                        y,
+                        SymbolRole::PotentialFeed { potential: p },
+                    )
+                };
+                let mut y = 0.0;
+                let mut rung =
+                    |tx: &mut novo_core::Tx<'_>, contact: Option<(&str, &str)>, coil: &str| {
+                        let top = feed(tx, y, l1);
+                        let bottom = feed(tx, y + 30.0, n);
+                        let c = put(tx, page, "t/coil", y + 100.0, dev(devices[coil], true));
+                        let first = match contact {
+                            Some((key, tag)) => {
+                                let k = put(tx, page, key, y + 80.0, dev(devices[tag], true));
+                                tx.connect(Endpoint::pin(top, 1), Endpoint::pin(k, 0))?;
+                                tx.connect(Endpoint::pin(k, 1), Endpoint::pin(c, 0))?;
+                                Some(k)
+                            }
+                            None => {
+                                tx.connect(Endpoint::pin(top, 1), Endpoint::pin(c, 0))?;
+                                None
+                            }
+                        };
+                        tx.connect(Endpoint::pin(c, 1), Endpoint::pin(bottom, 1))?;
+                        y += 200.0;
+                        Ok::<_, novo_core::ModelError>(first)
+                    };
+                let button = rung(tx, Some(("t/contact/no", "S1")), "KU")?.unwrap();
+                rung(tx, None, "STOA")?;
+                rung(tx, None, "STOB")?;
+                rung(tx, None, "ENC")?;
+                rung(tx, Some(("t/contact/no", "KR")), "KB")?;
+                let m = tx.project().device(devices["M1"]).map(|d| d.id).unwrap();
+                tx.set_property(m, "cw_mass_kg", Some(2500.0.into()))?;
+                for (key, t) in [
+                    ("cw_in_up", "KU"),
+                    ("cw_sto_a", "STOA"),
+                    ("cw_sto_b", "STOB"),
+                    ("cw_encoder", "ENC"),
+                    ("cw_brake_relay", "KR"),
+                    ("cw_brake_feed", "KB"),
+                ] {
+                    tx.set_property(m, key, Some(DeviceTag::product(t).to_string().into()))?;
+                }
+                Ok(button)
+            })
+            .unwrap();
+        (doc, button)
+    }
+
+    fn winch_run(doc: &Document) -> (DriveRun, LiveView) {
+        let project = doc.project();
+        let (winches, notes) = closed_winches_of(project);
+        assert!(
+            notes.iter().all(|(l, _)| matches!(l, Level::Info)),
+            "{notes:?}"
+        );
+        assert_eq!(winches.len(), 1);
+        let mut cw = ClWinchLoop::new(StepConfig::default()).unwrap();
+        cw.modules = winches;
+        let run = DriveRun {
+            active: Some(Active {
+                lp: TravelLoop::new(StepConfig::default()).unwrap(),
+                hl: DriveHoistLoop::new(StepConfig::default()).unwrap(),
+                cw,
+                acc: 0.0,
+            }),
+            ..Default::default()
+        };
+        let mut live = LiveView::default();
+        live.on = true;
+        live.reset_poles(project);
+        (run, live)
+    }
+
+    fn seconds(run: &mut DriveRun, live: &mut LiveView, project: &Project, s: f64) {
+        for _ in 0..(s / 0.016) as usize {
+            advance(run, live, project, 0.016);
+        }
+    }
+
+    fn winch(run: &DriveRun) -> &ClWinchModule {
+        &run.active.as_ref().unwrap().cw.modules[0]
+    }
+
+    fn tag_of(t: &str) -> String {
+        DeviceTag::product(t).to_string()
+    }
+
+    #[test]
+    fn the_button_in_the_drawing_lifts_the_closed_loop_winch_through_its_brake_contactor() {
+        let (doc, button) = closed_winch();
+        let project = doc.project();
+        let (mut run, mut live) = winch_run(&doc);
+        live.poles.set_all(project, button, true);
+        seconds(&mut run, &mut live, project, 8.0);
+        let m = winch(&run);
+        assert!(m.height_m() > 0.3, "{}", m.height_m());
+        assert!(winch_reading(m).contains("running"), "{}", winch_reading(m));
+        assert!(m.findings().is_empty(), "{:?}", m.findings());
+    }
+
+    #[test]
+    fn an_open_sto_channel_coil_trips_the_discrepancy_and_stops_the_winch() {
+        let (doc, button) = closed_winch();
+        let project = doc.project();
+        let (mut run, mut live) = winch_run(&doc);
+        live.poles.set_all(project, button, true);
+        seconds(&mut run, &mut live, project, 4.0);
+        live.defects.inject(novo_sim::inject::Defect::CoilOpen {
+            device: tag_of("STOA"),
+        });
+        seconds(&mut run, &mut live, project, 3.0);
+        let m = winch(&run);
+        assert!(
+            m.findings().iter().any(|f| matches!(
+                f.kind,
+                novo_machine::cl_winch_loop::ClFindingKind::Trip(
+                    novo_drive::closed_loop::ClFault::StoDiscrepancy
+                )
+            )),
+            "{:?}",
+            m.findings()
+        );
+        assert!(m.snapshot().unwrap().shaft_rpm.abs() < 1.0);
+    }
+
+    #[test]
+    fn a_lost_encoder_signal_device_is_found_and_trips_the_drive() {
+        let (doc, button) = closed_winch();
+        let project = doc.project();
+        let (mut run, mut live) = winch_run(&doc);
+        live.poles.set_all(project, button, true);
+        seconds(&mut run, &mut live, project, 4.0);
+        live.defects.inject(novo_sim::inject::Defect::CoilOpen {
+            device: tag_of("ENC"),
+        });
+        seconds(&mut run, &mut live, project, 3.0);
+        let f = winch(&run).findings();
+        assert!(
+            f.iter().any(|f| matches!(
+                f.kind,
+                novo_machine::cl_winch_loop::ClFindingKind::EncoderSignalLost
+            )),
+            "{f:?}"
+        );
+        assert!(
+            f.iter()
+                .any(|f| matches!(f.kind, novo_machine::cl_winch_loop::ClFindingKind::Trip(_))),
+            "{f:?}"
+        );
+    }
+
+    #[test]
+    fn a_brake_contactor_with_an_open_coil_keeps_the_hook_down() {
+        let (doc, button) = closed_winch();
+        let project = doc.project();
+        let (mut run, mut live) = winch_run(&doc);
+        live.defects.inject(novo_sim::inject::Defect::CoilOpen {
+            device: tag_of("KB"),
+        });
+        live.poles.set_all(project, button, true);
+        seconds(&mut run, &mut live, project, 6.0);
+        assert!(
+            winch(&run).height_m().abs() < 0.01,
+            "{}",
+            winch(&run).height_m()
         );
     }
 
