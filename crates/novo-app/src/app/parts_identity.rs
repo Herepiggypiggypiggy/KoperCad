@@ -291,6 +291,16 @@ mod tests {
         )
     }
 
+    /// The stamp of a file that does not exist, without asking the disk: the timing tests
+    /// below are about the cache, and 200 000 failed `metadata` calls take seconds on
+    /// Windows. A quadratic cache would still need minutes, so their limit stays loose.
+    fn no_stamp() -> Stamp {
+        Stamp {
+            len: None,
+            modified: None,
+        }
+    }
+
     fn wait_until_ready(paths: &[PathBuf]) {
         let started = std::time::Instant::now();
         while !ready(paths) {
@@ -448,7 +458,7 @@ mod tests {
         assert_eq!(s.queued.len(), paths.len());
         assert_eq!(s.pending(), paths.len());
         assert!(
-            started.elapsed() < Duration::from_secs(5),
+            started.elapsed() < Duration::from_secs(60),
             "asking took {:?}",
             started.elapsed()
         );
@@ -462,11 +472,11 @@ mod tests {
         for i in 0..n {
             let p = PathBuf::from(format!("/w/{i}.stp"));
             s.asked.insert(p.clone(), now);
-            s.store(&p, stamp_of(&p), CadIdentity::from_file_name("x.stp"));
+            s.store(&p, no_stamp(), CadIdentity::from_file_name("x.stp"));
         }
         assert_eq!(s.done.len(), n, "wanted files are all kept");
         assert!(
-            now.elapsed() < Duration::from_secs(10),
+            now.elapsed() < Duration::from_secs(60),
             "storing took {:?}",
             now.elapsed()
         );
