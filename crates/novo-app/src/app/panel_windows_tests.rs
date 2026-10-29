@@ -276,11 +276,12 @@ fn a_double_click_on_the_edge_of_the_pinned_navigator_gives_it_its_width_back() 
     d.app.settings.outline_pinned = Some(true);
     settle(&mut d);
     let home = d.app.wb.outline_shown.expect("the column is shown");
-    let edge = egui::pos2(home - 2.0, 300.0);
+    let rail = d.app.wb.rail_rect.map_or(0.0, |r| r.right());
+    let edge = egui::pos2(rail + home - 2.0, 300.0);
     drag(&mut d, edge, edge + egui::vec2(120.0, 0.0));
     let wide = d.app.wb.outline_shown.unwrap();
     assert!(wide > home + 80.0, "{home} -> {wide}");
-    let edge = egui::pos2(wide - 2.0, 300.0);
+    let edge = egui::pos2(rail + wide - 2.0, 300.0);
     double_click(&mut d, edge, 100.0);
     let back = d.app.wb.outline_shown.unwrap();
     assert!((back - home).abs() < 3.0, "{home} -> {wide} -> {back}");
