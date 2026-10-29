@@ -1,0 +1,21 @@
+@title Drive hoist duty cycle: the run lifts and lowers repeatedly and reports how the winding and the brake heat up (1920x1080)
+@area Simulate
+@sizes 1920x1080
+# Opens the drive hoist fixture, opens Simulate > Drive run and runs the duty cycle with its defaults.
+open qa/fixtures/hoist-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Duty cycle: heat over time"
+wait 10
+shot duty-form
+click_text "Run duty cycle"
+wait 600
+expect "cycles in"
+expect "Winding peak"
+check_layout
+shot duty-result
