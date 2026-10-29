@@ -27,6 +27,7 @@ wait 300
 # Step 2 (S2): preset 2 selects the high speed; the drawn end limit opens at 6 m (the 4 s stop ramp coasts it on to about 7.6 m).
 mouse_down 75 343
 wait 400
+expect "Not a safety or compliance statement"
 shot step-two
 wait 1200
 shot limit-reached

@@ -189,8 +189,11 @@ impl NovoApp {
         let running = run.active.is_some();
         let notice = run.notice.clone();
         let names: Vec<String> = axes.iter().map(|a| a.id.clone()).collect();
-        super::panel::dialog(ctx, "Drive run", [560.0, 440.0])
+        // Foreground: the marks of the live view (contacts, coil rings) are painted on the Middle
+        // layer and must not run through the notes.
+        super::panel::dialog(ctx, "Drive run", [560.0, 560.0])
             .default_pos([ctx.content_rect().max.x, 60.0])
+            .order(egui::Order::Foreground)
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.label(
@@ -223,14 +226,32 @@ impl NovoApp {
                         ui.weak("The run reads the live view (Shift+L).");
                     }
                 });
-                for (level, text) in &notice {
-                    let w = match level {
-                        Level::Error => novo_theme::widgets::Level::Error,
-                        Level::Info => novo_theme::widgets::Level::Info,
-                        _ => novo_theme::widgets::Level::Warning,
-                    };
-                    novo_theme::widgets::banner(ui, w, text, |_| {});
-                }
+                // Solid behind the notes: marks of the drawing must not run through them.
+                let palette = crate::theme::ui_palette();
+                let fit: Vec<&str> = notice
+                    .iter()
+                    .filter(|(l, _)| matches!(l, Level::Info))
+                    .map(|(_, t)| t.as_str())
+                    .collect();
+                egui::Frame::new().fill(palette.raised).show(ui, |ui| {
+                    for (level, text) in notice.iter().filter(|(l, _)| !matches!(l, Level::Info)) {
+                        let w = match level {
+                            Level::Error => novo_theme::widgets::Level::Error,
+                            _ => novo_theme::widgets::Level::Warning,
+                        };
+                        novo_theme::widgets::banner(ui, w, text, |_| {});
+                    }
+                    if !fit.is_empty() {
+                        ui.collapsing(
+                            format!("What the motor fit assumed ({})", fit.len()),
+                            |ui| {
+                                for line in &fit {
+                                    ui.weak(format!("\u{2022} {line}"));
+                                }
+                            },
+                        );
+                    }
+                });
                 if !rows.is_empty() {
                     ui.separator();
                     egui::Grid::new("drive_run_rows")
