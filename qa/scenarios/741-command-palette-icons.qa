@@ -1,0 +1,17 @@
+@title Command palette: icons, type chips, menu path chips and pinned tiles
+@area Layout
+# Lane V5 of the visual redesign (docs/design/visual-redesign.md section 7).
+fresh
+wait 20
+key ctrl+k
+wait 8
+expect "PINNED"
+shot empty
+check_layout
+text save
+wait 8
+expect "Command"
+shot search-save
+check_layout
+key Escape
+wait 6

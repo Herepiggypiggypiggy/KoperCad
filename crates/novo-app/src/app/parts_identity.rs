@@ -291,6 +291,16 @@ mod tests {
         )
     }
 
+    /// The stamp of a file that does not exist, without asking the disk: the timing tests
+    /// below are about the cache, and 200 000 failed `metadata` calls take seconds on
+    /// Windows. A quadratic cache would still need minutes, so their limit stays loose.
+    fn no_stamp() -> Stamp {
+        Stamp {
+            len: None,
+            modified: None,
+        }
+    }
+
     fn wait_until_ready(paths: &[PathBuf]) {
         let started = std::time::Instant::now();
         while !ready(paths) {
@@ -346,20 +356,25 @@ mod tests {
             .collect();
         text = text.replace("ENDSEC;\nEND-ISO", &format!("{points}ENDSEC;\nEND-ISO"));
         std::fs::write(&path, &text).unwrap();
+        // Wall time on a loaded CI machine proves little, so asking is compared with
+        // reading the same file here: reading it in the caller's thread would cost
+        // at least that, whatever the machine's speed.
+        let read_here = {
+            let t = std::time::Instant::now();
+            let _ = read_identity(&path);
+            t.elapsed()
+        };
         let asked = std::time::Instant::now();
         prefetch(std::slice::from_ref(&path), None);
         let took = asked.elapsed();
         assert!(
-            took < std::time::Duration::from_millis(250),
-            "asking took {took:?}: the file was read in the caller's thread"
+            took < read_here,
+            "asking took {took:?} against {read_here:?} to read the file: it was read in the caller's thread"
         );
         wait_until_ready(std::slice::from_ref(&path));
-        let again = std::time::Instant::now();
-        let _ = identity_of(&path);
-        assert!(
-            again.elapsed() < std::time::Duration::from_millis(50),
-            "the answer was not in the cache"
-        );
+        // `identity_of` reads the file itself when the cache has no answer, so an
+        // answer from `cached` is the proof that it did not.
+        assert!(cached(&path).is_some(), "the answer was not in the cache");
     }
 
     #[test]
@@ -443,7 +458,7 @@ mod tests {
         assert_eq!(s.queued.len(), paths.len());
         assert_eq!(s.pending(), paths.len());
         assert!(
-            started.elapsed() < Duration::from_secs(5),
+            started.elapsed() < Duration::from_secs(60),
             "asking took {:?}",
             started.elapsed()
         );
@@ -457,17 +472,13 @@ mod tests {
         for i in 0..n {
             let p = PathBuf::from(format!("/w/{i}.stp"));
             s.asked.insert(p.clone(), now);
-            // No disk call per file: on Windows 200,000 of them took longer
+            // No disk call per file (see `no_stamp`): on Windows 200,000 of them took longer
             // than KEEP_ASKED, so the entries stopped being wanted mid-loop.
-            let stamp = Stamp {
-                len: None,
-                modified: None,
-            };
-            s.store(&p, stamp, CadIdentity::from_file_name("x.stp"));
+            s.store(&p, no_stamp(), CadIdentity::from_file_name("x.stp"));
         }
         assert_eq!(s.done.len(), n, "wanted files are all kept");
         assert!(
-            now.elapsed() < Duration::from_secs(10),
+            now.elapsed() < Duration::from_secs(60),
             "storing took {:?}",
             now.elapsed()
         );

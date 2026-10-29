@@ -169,6 +169,7 @@ pub(super) fn overlay(
         super::panel::Side::Right
     };
     let mut panel = super::panel::Panel::new("cabinet_inspector", "Inspector", canvas, side, WIDTH)
+        .dockable()
         .fixed_open()
         .scroll_bar_always()
         .height(HEIGHT)

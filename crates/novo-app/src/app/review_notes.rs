@@ -520,6 +520,7 @@ impl NovoApp {
                 330.0,
             )
             .above_card()
+            .dockable()
             .height(460.0)
             .show(ctx, |ui| {
                 notes_body(ui, project, notes, page, &author, &mut acts, &mut close);

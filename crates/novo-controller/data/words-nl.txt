@@ -2,7 +2,7 @@
 # Zelfde opbouw als words-en.txt: `categorie: woord, woord, zin met spaties, stam*`.
 motion.hoist: hijs, hijswerk, hijsbeweging, takel, lier
 motion.aux: hulphijs, hulphijsen, hulp
-motion.bridge: brug, rijbrug, kraanbrug, lang rijden, langsrijden, rijden brug
+motion.bridge: brug, rijbrug, kraanbrug, lang rijden, langsrijden, rijden brug, kraanrijden, kraan rijden, kraanrijd*
 motion.trolley: kat, loopkat, dwarsrijden, kruiprijden, dwars, katrijden
 motion.slew: draaien, draai, zwenk, zwenken
 motion.tilt: kantelen, kantel
@@ -14,10 +14,13 @@ dir.left: links, linksom
 dir.right: rechts, rechtsom
 combo.hoist.up: hijsen
 combo.hoist.down: zakken, vieren, laten zakken
+pair.hoist: h/z, z/h
+pair.bridge: v/a, a/v
+pair.trolley: l/r, r/l
 speed.slow: langzaam, laag, kruip, fijn, traag, 1e snelheid, eerste snelheid
 speed.fast: snel, hoog, vlot, grof, 2e snelheid, tweede snelheid
 role.estop: noodstop, nood stop, nood-stop, noodstop*, nood*, paddestoel
-role.main: hoofd, hoofdcontactor, hoofdschakelaar, inschakelen, start
+role.main: mains, hoofd, hoofdcontactor, hoofdschakelaar, inschakelen, start
 role.stop: stop, uitschakelen
 role.common: com, gemeenschappelijk, gemeenschap, gemeen, c, 0v
 role.horn: claxon, hoorn, toeter, sirene
