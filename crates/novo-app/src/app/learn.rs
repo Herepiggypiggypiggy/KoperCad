@@ -90,6 +90,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "drawer.devices",
     "drawer.devices.tab",
     "live.card",
+    "live.controller",
     "live.pole",
     "live.coil",
     "live.output",
@@ -982,6 +983,13 @@ impl NovoApp {
                 self.cabinet.door.reveal = Some("cabinet.door");
             }
         }
+        // The what-if list is short at 1366x768: its Apply button scrolls into view.
+        self.cabinet.heat.whatif.reveal_apply(
+            target
+                .ui
+                .as_ref()
+                .is_some_and(|ui| ui.ids().contains(&"heat.whatif.apply")),
+        );
         // The EMC panel is short beside the lesson card: its Apply button and
         // class chips scroll into view.
         self.cabinet.emc.reveal = target.ui.as_ref().and_then(|ui| {

@@ -168,26 +168,26 @@ impl NovoApp {
         }
         let sections = sections(&self.wb.keymap, &self.wb.shortcuts.filter);
         let mut run: Option<&'static str> = None;
-        let modal = egui::Modal::new(egui::Id::new("shortcut_sheet")).show(ctx, |ui| {
-            ui.set_width(novo_theme::dialog_width::MEDIUM);
-            ui.horizontal(|ui| {
-                super::dialog_ui::title(ui, "Keyboard shortcuts", "");
+        let width = novo_theme::dialog_width::MEDIUM;
+        let modal = super::panel::modal_fill(
+            ctx,
+            "shortcut_sheet",
+            "Keyboard shortcuts",
+            [width, 560.0],
+            |ui| {
                 ui.weak("Ctrl+K finds every command");
-            });
-            ui.weak(
-                "Rebind a key: Help > Open keymap file, then add a line like \
+                ui.weak(
+                    "Rebind a key: Help > Open keymap file, then add a line like \
                  tool.cable = Ctrl+Shift+C",
-            );
-            let field = ui.add(
-                egui::TextEdit::singleline(&mut self.wb.shortcuts.filter)
-                    .hint_text("Type to filter (English or Dutch)")
-                    .desired_width(f32::INFINITY),
-            );
-            field.request_focus();
-            ui.add_space(4.0);
-            egui::ScrollArea::vertical()
-                .max_height(ctx.content_rect().height() * 0.6)
-                .show(ui, |ui| {
+                );
+                let field = ui.add(
+                    egui::TextEdit::singleline(&mut self.wb.shortcuts.filter)
+                        .hint_text("Type to filter (English or Dutch)")
+                        .desired_width(f32::INFINITY),
+                );
+                field.request_focus();
+                ui.add_space(4.0);
+                super::panel::fill_above(ui, 0.0, |ui| {
                     if sections.is_empty() {
                         ui.weak("Nothing matches. Ctrl+K searches every command.");
                     }
@@ -201,7 +201,8 @@ impl NovoApp {
                         }
                     }
                 });
-        });
+            },
+        );
         if let Some(id) = run {
             self.wb.shortcuts.open = false;
             self.settings.remember_action(id);

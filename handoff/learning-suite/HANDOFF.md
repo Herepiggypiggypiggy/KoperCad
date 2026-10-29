@@ -14,6 +14,7 @@ Lesson rings and greyed controls (2026-10-28):
 - In the Cabinet the card parks bottom left (Inspector on the right). Dialogs are kept right of a left card.
 - A step with `expect = clicked` on a control that greys out once its work is done needs a state check beside it: `{ any = [ { clicked = ".." }, { <state check> } ] }` (example: Apply in `enclosure-door-and-depth`, `enclosure_depth`). The card shows `greyed_note` when the awaited control is greyed. QA `284-learn-door-real-clicks.qa`.
 - Trap: never share one `CARGO_TARGET_DIR` between a worktree and the main checkout of this repo; the artifacts collide and the embedded lesson list or novo-learn comes out stale (empty catalog, missing fields).
+- A step that points at a control inside a short scrolling list (example: Apply in the Heat what-if list) needs a reveal flag set from `learn_reveal` and `scroll_to_me` on the control once it is drawn (`Wizard::reveal_apply`). Do not scroll by hand in QA walks; the walk must pass the way a user plays it.
 
 Resume with `cargo test -p novo-app learn_nav panel::` and `scripts/qa.sh --only learn-nav` / `--only learn-panels`.
 Trap: lesson ids and paths.toml are shared with the content thread; only append. A label like "All lessons" may be icon-prefixed: scenarios match without the icon glyph.

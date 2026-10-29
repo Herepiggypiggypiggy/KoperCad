@@ -37,6 +37,7 @@
 //! | [`ProtectiveConductor`](ProblemKind::ProtectiveConductor) | warning | A protective conductor thinner than its phase conductors need |
 //! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
+//! | [`WireThroughDevice`](ProblemKind::WireThroughDevice) | warning | A wire whose way from a terminal to its duct crosses a device |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
 //! | [`UnsizedDuct`](ProblemKind::UnsizedDuct) | info | A duct with wires through it but no cross-section, so its fill cannot be checked |
 //! | [`GuessedWire`](ProblemKind::GuessedWire) | info | Wires with no cross-section, routed with a default size (one problem for all of them) |
@@ -292,6 +293,9 @@ pub enum ProblemKind {
     UnplacedDevice,
     /// A wire between two placed devices that no duct path serves (novo-routing).
     WireWithoutDuct,
+    /// A wire whose way from a terminal to its duct crosses the body of a
+    /// device because no way round is free (novo-routing).
+    WireThroughDevice,
     /// A duct carrying more wires than its fill limit (novo-routing).
     OverfullDuct,
     /// A duct that wires run through but that has no width and height, so
@@ -353,7 +357,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 71] = [
+    pub const ALL: [ProblemKind; 72] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -379,6 +383,7 @@ impl ProblemKind {
         ProblemKind::ProtectiveConductor,
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
+        ProblemKind::WireThroughDevice,
         ProblemKind::OverfullDuct,
         ProblemKind::UnsizedDuct,
         ProblemKind::GuessedWire,
@@ -458,6 +463,7 @@ impl ProblemKind {
             | ProblemKind::MotorStarter
             | ProblemKind::ProtectiveConductor
             | ProblemKind::WireWithoutDuct
+            | ProblemKind::WireThroughDevice
             | ProblemKind::OverfullDuct
             | ProblemKind::Standard
             | ProblemKind::DevicesTooClose
@@ -531,6 +537,7 @@ impl ProblemKind {
             ProblemKind::ProtectiveConductor => "Protective conductor",
             ProblemKind::UnplacedDevice => "Unplaced device",
             ProblemKind::WireWithoutDuct => "Wire without duct",
+            ProblemKind::WireThroughDevice => "Wire through device",
             ProblemKind::OverfullDuct => "Overfull duct",
             ProblemKind::UnsizedDuct => "Duct without size",
             ProblemKind::GuessedWire => "Wire size guessed",
@@ -609,6 +616,7 @@ impl ProblemKind {
             ProblemKind::CableRating => "check.cable_rating",
             ProblemKind::UnplacedDevice => "check.unplaced_device",
             ProblemKind::WireWithoutDuct => "check.wire_without_duct",
+            ProblemKind::WireThroughDevice => "check.wire_through_device",
             ProblemKind::OverfullDuct => "check.overfull_duct",
             ProblemKind::UnsizedDuct => "check.unsized_duct",
             ProblemKind::GuessedWire => "check.guessed_wire",

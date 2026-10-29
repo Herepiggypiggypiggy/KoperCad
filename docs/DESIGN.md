@@ -551,7 +551,7 @@ clear the selection.
 | Alt+Left / Alt+Right | Back / forward through jumps |
 | F8 / Shift+F8 | Next / previous problem |
 | Shift+P | Hide or show marks (counters stay) |
-| Shift+X | Cross references on screen: full, faded, hidden (the PDF always prints them in full; also View > Layers) |
+| Shift+X | Cross references on screen: full, fade where they overlap, faded, hidden (the PDF always prints them in full; also View > Cross references, which hides one page or one device, and Preferences > Cross references for the fade strength) |
 | Shift+L | Live potentials: close and open contacts, see what each wire carries; a coil badge switches the coil on by hand, and the contacts of a device with a coil follow the coil (push buttons stay hand-set); on-delay and off-delay contacts wait for the coil's delay, and the card shows the seconds left |
 | Shift+O (held) | Show override marks |
 | Page Up / Page Down | Previous / next page |

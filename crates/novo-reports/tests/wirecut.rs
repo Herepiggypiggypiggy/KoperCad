@@ -66,8 +66,8 @@ fn every_connection_is_a_job_cut_with_the_cut_list_allowance() {
     }
     let routed = between(&jobs, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
     assert_eq!(routed.basis, "routed, no depth");
-    assert_eq!(routed.length_mm, 756.0);
-    assert_eq!(routed.cut_mm, 776.0);
+    assert_eq!(routed.length_mm, 696.0);
+    assert_eq!(routed.cut_mm, 716.0);
     assert!(!routed.ducts.is_empty());
 }
 
@@ -152,7 +152,7 @@ fn the_csv_has_one_row_per_wire_under_the_job_columns() {
             ..CsvOptions::default()
         },
     );
-    assert!(semi.contains("776") && semi.lines().count() == lines.len());
+    assert!(semi.contains("716") && semi.lines().count() == lines.len());
 }
 
 #[test]

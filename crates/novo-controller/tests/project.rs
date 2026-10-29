@@ -111,6 +111,7 @@ fn project_data_round_trips_through_toml_and_json() {
     let data = ProjectControllers {
         instances: set.to_records(),
         bindings: table.bindings.clone(),
+        ..ProjectControllers::default()
     };
 
     let mut lib = ProfileLibrary::new();
@@ -151,6 +152,7 @@ fn binding_checks_fire_on_each_defect() {
     t.bindings.push(Binding {
         key: k("radio-crane1", "B_FWD_SLOW"),
         target: Target::Pin("-A1:1".into()),
+        invert: false,
     });
     t.bind(k("radio-crane1", "NOPE"), Target::Pin("-A1:2".into()));
     t.bind(k("radio-crane1", "MAIN"), Target::Pin("-A1:9".into()));
@@ -926,6 +928,53 @@ fn shared_estop_chain_is_an_and_so_a_pressed_pendant_estop_opens_it() {
 }
 
 #[test]
+fn a_target_that_mixes_an_and_chain_with_an_ordinary_signal_is_reported() {
+    let mut set = ControllerSet::new();
+    set.add_instance("radio", "Radio", &radio_profile())
+        .unwrap();
+    let chain = Target::Pin("-A1:E1".into());
+    fn mixed(t: &BindingTable, set: &ControllerSet) -> Vec<BindingFinding> {
+        t.check(set)
+            .into_iter()
+            .filter(|f| f.problem == BindingProblem::MixedOrAnd)
+            .collect()
+    }
+
+    let mut t = BindingTable::new();
+    t.bind(SignalKey::new("radio", "ESTOP_OK"), chain.clone());
+    assert!(mixed(&t, &set).is_empty(), "a chain alone is fine");
+
+    // an ordinary signal on the same target hides an open chain: the check says so
+    t.bind(SignalKey::new("radio", "MAIN"), chain.clone());
+    let found = mixed(&t, &set);
+    assert_eq!(found.len(), 1, "one line per target");
+    assert_eq!(found[0].severity, Severity::Warning);
+    assert!(found[0].message.contains("radio/ESTOP_OK"));
+    assert!(found[0].message.contains("radio/MAIN"));
+
+    // the behaviour the warning is about: the ordinary signal (here MAIN, inverted so it is high
+    // while the main switch is off, as an E-stop pressed drops it) overrides the open chain
+    let mut t = BindingTable::new();
+    t.bind(SignalKey::new("radio", "ESTOP_OK"), chain.clone());
+    t.bind_with(SignalKey::new("radio", "MAIN"), chain.clone(), true);
+    assert_eq!(mixed(&t, &set).len(), 1);
+    assert_eq!(t.resolve(&set)[&chain], 1.0);
+    act(&mut set, "radio", press("estop"));
+    assert_eq!(set.level(&SignalKey::new("radio", "ESTOP_OK")), Some(0.0));
+    assert_eq!(
+        t.resolve(&set)[&chain],
+        1.0,
+        "the pressed E-stop is hidden: this is what the check warns about"
+    );
+
+    // two ordinary signals alone are not this problem
+    let mut t = BindingTable::new();
+    t.bind(SignalKey::new("radio", "MAIN"), chain.clone());
+    t.bind(SignalKey::new("radio", "H_UP_SLOW"), chain);
+    assert!(mixed(&t, &set).is_empty());
+}
+
+#[test]
 fn two_signals_of_one_controller_on_one_target_are_reported() {
     let set = two_radios();
     let mut t = BindingTable::new();
@@ -1034,4 +1083,158 @@ fn requires_cycle_is_a_warning() {
         "{issues:?}"
     );
     assert!(validate(&radio_profile()).is_empty());
+}
+
+// ---- review items of the C1 follow-up (folded into C2) ----
+
+#[test]
+fn restoring_records_applies_the_instance_id_rules() {
+    let mut lib = ProfileLibrary::new();
+    lib.insert(radio_profile());
+    let record = |id: &str| InstanceRecord {
+        id: id.into(),
+        label: "x".into(),
+        colour: None,
+        target_group: None,
+        profile: "generic-radio-3x2".into(),
+        state: Controller::new(radio_profile()).unwrap().state().clone(),
+    };
+    for bad in ["", "a/b", "has space", "tab\there"] {
+        assert_eq!(
+            ControllerSet::from_records(&[record(bad)], &lib).err(),
+            Some(SetError::InvalidId(bad.into())),
+            "{bad:?}"
+        );
+    }
+    assert!(ControllerSet::from_records(&[record("radio-1")], &lib).is_ok());
+}
+
+#[test]
+fn a_binding_to_an_unknown_instance_adds_nothing_to_a_target() {
+    let mut set = ControllerSet::new();
+    set.add_instance("radio", "Radio", &radio_profile())
+        .unwrap();
+    act(&mut set, "radio", press("start"));
+    let chain = Target::Pin("-K1:chain".into());
+    let mut t = BindingTable::new();
+    t.bind(SignalKey::new("radio", "ESTOP_OK"), chain.clone());
+    t.bind(SignalKey::new("gone", "ESTOP_OK"), chain.clone());
+    assert_eq!(
+        t.resolve(&set)[&chain],
+        1.0,
+        "the missing controller must not read as an open chain"
+    );
+    let lonely = Target::Pin("-K9:1".into());
+    t.bind(SignalKey::new("gone", "MAIN"), lonely.clone());
+    assert!(!t.resolve(&set).contains_key(&lonely));
+    assert!(
+        t.check(&set)
+            .iter()
+            .any(|f| f.problem == BindingProblem::UnknownSignal)
+    );
+}
+
+#[test]
+fn one_and_signal_does_not_turn_the_whole_target_into_an_and() {
+    // MAIN (ordinary) and ESTOP_OK (and) of two radios on one pin: the E-stop chain of the
+    // radios combine as AND among themselves, the MAIN signals as OR, and the target takes the
+    // larger of the two results.
+    let shared = RADIO.replace("generic = true", "generic = true\nshared = true");
+    let p = Profile::load(&shared).unwrap();
+    let mut set = ControllerSet::new();
+    set.add_instance("a", "A", &p).unwrap();
+    set.add_instance("b", "B", &p).unwrap();
+    let pin = Target::Pin("-K1:1".into());
+    let mut t = BindingTable::new();
+    t.bind(SignalKey::new("a", "ESTOP_OK"), pin.clone());
+    t.bind(SignalKey::new("b", "ESTOP_OK"), pin.clone());
+    t.bind(SignalKey::new("a", "MAIN"), pin.clone());
+    t.bind(SignalKey::new("b", "MAIN"), pin.clone());
+    act(&mut set, "a", press("start"));
+    // a: chain 1, main 1; b: chain 1, main 0
+    assert_eq!(t.resolve(&set)[&pin], 1.0);
+    act(&mut set, "a", press("estop"));
+    // a: chain 0, main 0; b: chain 1, main 0 -> AND group 0, OR group 0
+    assert_eq!(t.resolve(&set)[&pin], 0.0);
+    act(&mut set, "b", press("start"));
+    // b main 1 keeps the OR group high although a's chain is open: the target is not an AND
+    assert_eq!(t.resolve(&set)[&pin], 1.0);
+}
+
+#[test]
+fn an_inverted_binding_drives_the_opposite_level() {
+    let mut set = ControllerSet::new();
+    set.add_instance("radio", "Radio", &radio_profile())
+        .unwrap();
+    let estop_symbol = Target::Symbol("-S0".into());
+    let mut t = BindingTable::new();
+    assert!(t.bind_with(
+        SignalKey::new("radio", "ESTOP_OK"),
+        estop_symbol.clone(),
+        true
+    ));
+    assert!(
+        !t.bind(SignalKey::new("radio", "ESTOP_OK"), estop_symbol.clone()),
+        "same pair, whatever the flag"
+    );
+    assert_eq!(
+        t.resolve(&set)[&estop_symbol],
+        0.0,
+        "released: not operated"
+    );
+    act(&mut set, "radio", press("estop"));
+    assert_eq!(t.resolve(&set)[&estop_symbol], 1.0, "pressed: operated");
+}
+
+#[test]
+fn project_text_carries_the_profiles_and_the_project_copy_wins() {
+    let mut set = two_radios();
+    act(&mut set, "radio-crane1", press("start"));
+    let mut table = BindingTable::new();
+    table.bind(
+        SignalKey::new("radio-crane1", "MAIN"),
+        Target::Pin("-A1:1".into()),
+    );
+    table.bind_with(
+        SignalKey::new("radio-crane1", "ESTOP_OK"),
+        Target::Symbol("-S0".into()),
+        true,
+    );
+    let data = ProjectControllers::capture(&set, &table).unwrap();
+    assert_eq!(data.profiles.len(), 1, "one profile for two instances");
+    let text = data.to_text().unwrap();
+    let back = ProjectControllers::from_text(&text).unwrap();
+    assert_eq!(back, data);
+
+    // an empty library: the project still opens, with the profile it was saved with
+    let (restored, restored_table, notes) = back.restore(&ProfileLibrary::new()).unwrap();
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(restored.signals(), set.signals());
+    assert_eq!(restored_table, table);
+
+    // the library holds a different copy under the same id: the project's copy is used and a note says so
+    let mut other = radio_profile();
+    other.controller.name = "Edited since".into();
+    let mut lib = ProfileLibrary::new();
+    lib.insert(other);
+    let (again, _, notes) = back.restore(&lib).unwrap();
+    assert_eq!(again.signals(), set.signals());
+    assert_eq!(notes.len(), 1);
+    assert!(notes[0].contains("differs"), "{notes:?}");
+    assert_eq!(
+        again
+            .instance("radio-crane1")
+            .unwrap()
+            .controller
+            .profile()
+            .controller
+            .name,
+        radio_profile().controller.name
+    );
+
+    // old project data without the profile block still loads
+    let old = "[[instance]]\nid = \"a\"\nlabel = \"A\"\nprofile = \"generic-radio-3x2\"\n[instance.state]\npositions = {}\nlink_ok = true\nbattery_low = false\npowered = true\ntime_ms = 0\npowered_at_ms = 0\n";
+    let parsed = ProjectControllers::from_text(old).unwrap();
+    assert!(parsed.profiles.is_empty());
+    assert!(!parsed.is_empty());
 }

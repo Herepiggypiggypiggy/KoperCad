@@ -181,30 +181,32 @@ pub(super) fn arrange(
 /// The Align strip, bottom centre of the view; the operation clicked.
 pub(super) fn strip(ctx: &egui::Context, view: egui::Rect, devices: usize) -> Option<Op> {
     let mut picked = None;
-    egui::Area::new(egui::Id::new("view3d_align"))
-        .order(egui::Order::Middle)
-        .pivot(egui::Align2::CENTER_BOTTOM)
-        .fixed_pos(egui::pos2(view.center().x, view.bottom() - 12.0))
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("Align");
-                    for (_, label, hint, op) in OPS {
-                        let enough = devices >= op.needs();
-                        if ui
-                            .add_enabled(enough, egui::Button::new(label))
-                            .on_hover_text(hint)
-                            .clicked()
-                        {
-                            picked = Some(op);
-                        }
-                        if op == Op::Bottom {
-                            ui.separator();
-                        }
+    super::panel::Float::new(
+        "view3d_align",
+        view,
+        egui::Align2::CENTER_BOTTOM,
+        egui::pos2(view.center().x, view.bottom() - 12.0),
+    )
+    .show(ctx, |ui| {
+        egui::Frame::popup(ui.style()).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Align");
+                for (_, label, hint, op) in OPS {
+                    let enough = devices >= op.needs();
+                    if ui
+                        .add_enabled(enough, egui::Button::new(label))
+                        .on_hover_text(hint)
+                        .clicked()
+                    {
+                        picked = Some(op);
                     }
-                });
+                    if op == Op::Bottom {
+                        ui.separator();
+                    }
+                }
             });
         });
+    });
     picked
 }
 

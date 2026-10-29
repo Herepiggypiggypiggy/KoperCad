@@ -1,0 +1,153 @@
+# Generic radio: three motions with two-step rockers, E-stop, stop and main/start.
+# Neutral stand-in, not a specific product.
+
+[controller]
+id = "generic-radio-3x2"
+name = "Radio, 3 motions, 2-step"
+kind = "radio"
+supply = { kind = "ac", volts = 48 }
+common = "COM"
+generic = true
+gate = ["start=on"]
+
+[effects]
+self_test_ms = 0
+
+[[control]]
+id = "estop"
+label = "Emergency stop"
+kind = "estop"
+
+[[control]]
+id = "stop"
+label = "Stop"
+kind = "button"
+
+[[control]]
+id = "start"
+label = "Main / start"
+kind = "latch"
+needs_link = true
+requires = ["estop=released"]
+drops_when = ["stop=on"]
+
+[[control]]
+id = "hoist_sel"
+label = "Hoist select"
+kind = "selector"
+positions = ["main", "mast"]
+
+[[control]]
+id = "hoist"
+label = "Hoist"
+kind = "rocker2"
+positions = ["off", "up1", "up2", "down1", "down2"]
+
+[[control]]
+id = "bridge"
+label = "Bridge"
+kind = "rocker2"
+positions = ["off", "fwd1", "fwd2", "rev1", "rev2"]
+
+[[control]]
+id = "trolley"
+label = "Trolley"
+kind = "rocker2"
+positions = ["off", "left1", "left2", "right1", "right2"]
+
+[[signal]]
+name = "MAIN"
+control = "start"
+when = ["on"]
+ungated = true
+
+[[signal]]
+name = "ESTOP_OK"
+label = "E-stop chain (NC)"
+control = "estop"
+when = ["released"]
+ungated = true
+combine = "and"
+
+[[signal]]
+name = "H_UP_SLOW"
+control = "hoist"
+group = "up"
+step = 1
+requires = ["hoist_sel=main"]
+
+[[signal]]
+name = "H_UP_FAST"
+control = "hoist"
+group = "up"
+step = 2
+requires = ["hoist_sel=main"]
+
+[[signal]]
+name = "H_DN_SLOW"
+control = "hoist"
+group = "down"
+step = 1
+requires = ["hoist_sel=main"]
+
+[[signal]]
+name = "H_DN_FAST"
+control = "hoist"
+group = "down"
+step = 2
+requires = ["hoist_sel=main"]
+
+[[signal]]
+name = "M_UP_SLOW"
+control = "hoist"
+group = "up"
+step = 1
+requires = ["hoist_sel=mast"]
+
+[[signal]]
+name = "B_FWD_SLOW"
+control = "bridge"
+group = "fwd"
+step = 1
+
+[[signal]]
+name = "B_FWD_FAST"
+control = "bridge"
+group = "fwd"
+step = 2
+
+[[signal]]
+name = "B_REV_SLOW"
+control = "bridge"
+group = "rev"
+step = 1
+
+[[signal]]
+name = "B_REV_FAST"
+control = "bridge"
+group = "rev"
+step = 2
+
+[[signal]]
+name = "T_LEFT_SLOW"
+control = "trolley"
+group = "left"
+step = 1
+
+[[signal]]
+name = "T_LEFT_FAST"
+control = "trolley"
+group = "left"
+step = 2
+
+[[signal]]
+name = "T_RIGHT_SLOW"
+control = "trolley"
+group = "right"
+step = 1
+
+[[signal]]
+name = "T_RIGHT_FAST"
+control = "trolley"
+group = "right"
+step = 2

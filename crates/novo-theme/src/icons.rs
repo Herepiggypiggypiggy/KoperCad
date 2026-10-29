@@ -6,6 +6,11 @@
 
 pub use egui_phosphor::regular::*;
 
+/// The 40 drawn icons for what Phosphor has no picture for: the engine, the
+/// data and the painter. `icons::custom::CONTACTOR`, `icons::paint(..)`.
+pub use crate::drawn as custom;
+pub use crate::drawn::paint;
+
 /// Icon for each command, so the command field, the mark menu and the dock
 /// agree.
 pub mod action {

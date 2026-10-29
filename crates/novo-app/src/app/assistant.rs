@@ -1139,6 +1139,13 @@ impl NovoApp {
              project file; only its last four characters are ever shown). Anyone who can read \
              your profile can read it. Remove it here when you stop using Claude.",
         );
+        if crate::is_portable() {
+            ui.weak(
+                "This is a portable install: the key file sits in the data folder next to the \
+                 program and travels with a copy of that folder (a USB stick, a shared drive). \
+                 Remove the key here before you hand the folder on.",
+            );
+        }
         ui.add_space(6.0);
 
         // 2. What Claude may see.

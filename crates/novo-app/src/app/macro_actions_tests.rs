@@ -262,3 +262,54 @@ fn a_macro_never_lands_on_a_generated_page() {
         "the macro joined the breaker on the drawing page"
     );
 }
+
+#[test]
+fn a_circuit_lands_where_the_pointer_last_was_and_says_what_is_left_to_connect() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.wb.macro_place =
+        PlaceWindow::new(Some(MacroLibrary::new(dir.path().join("Macros"), "user")));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::NewProject);
+    d.frame();
+    let breaker = d.place("mcb3", 20.0, 20.0);
+    d.frame();
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .select_ids(&[AnyId::Symbol(breaker)]);
+    d.app.run_command(&ctx, "macro.save", Some("Breaker"));
+    let draft = d.app.wb.macro_save.take().unwrap();
+    d.app.submit_macro_save(draft);
+    let page = d.app.current_page.unwrap();
+    // The pointer rested on the drawing, then moved to the palette.
+    d.app.wb.last_pointer = Some((page, novo_core::Point::new(200.0, 60.0)));
+    let before = d.doc().project().symbols().count();
+    d.app.run_command(&ctx, "macro.place", Some("Breaker"));
+    d.app.wb.macro_place.select("Breaker.kcmacro");
+    d.frame();
+    d.app.place_picked_macro();
+    assert!(d.doc().project().symbols().count() > before, "placed");
+    let left = d
+        .doc()
+        .project()
+        .symbols()
+        .filter(|s| s.id != breaker)
+        .map(|s| s.placement.origin.x)
+        .fold(f64::INFINITY, f64::min);
+    assert!(
+        (190.0..=225.0).contains(&left),
+        "the circuit starts at the pointer, not the view corner: {left}"
+    );
+    let said = d
+        .app
+        .messages
+        .iter()
+        .any(|m| m.text.contains("to connect to a supply"));
+    assert!(
+        said,
+        "{:?}",
+        d.app.messages.iter().map(|m| &m.text).collect::<Vec<_>>()
+    );
+}

@@ -1,0 +1,26 @@
+@title Dialogs are windows at 1920x1080: Preferences moves by its title bar and resizes
+@area Windows
+@sizes 1920x1080
+click_text "Open example"
+wait 20
+click_text File #1
+wait 5
+click_text Preferences
+wait 20
+shot preferences-home
+drag 960 281 1200 400
+wait 10
+shot preferences-moved
+check_layout
+drag 1436 935 1600 1000
+wait 10
+shot preferences-resized
+check_layout
+key Escape
+wait 10
+click_text File #1
+wait 5
+click_text Preferences
+wait 20
+shot preferences-again
+check_layout

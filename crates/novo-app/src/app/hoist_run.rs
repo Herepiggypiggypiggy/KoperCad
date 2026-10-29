@@ -41,7 +41,7 @@ struct Active {
 }
 
 /// The live view as the loop's circuit.
-struct LiveCircuit<'a> {
+pub(super) struct LiveCircuit<'a> {
     live: &'a mut LiveView,
     project: &'a Project,
     /// Symbols by device tag.
@@ -51,7 +51,7 @@ struct LiveCircuit<'a> {
 }
 
 impl<'a> LiveCircuit<'a> {
-    fn new(live: &'a mut LiveView, project: &'a Project) -> Self {
+    pub(super) fn new(live: &'a mut LiveView, project: &'a Project) -> Self {
         let mut by_tag: BTreeMap<String, Vec<SymbolId>> = BTreeMap::new();
         for symbol in project.symbols() {
             if let Some(device) = symbol.device().and_then(|d| project.device(d)) {
