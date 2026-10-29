@@ -32,6 +32,24 @@ pub mod keys {
     /// Control voltage, e.g. `48 V AC`.
     pub const CONTROL: &str = "crane.control";
 
+    /// What kind of plant the project is: `crane`, `pump` or `mcc`. Empty
+    /// means a project that did not start from a template; it keeps every
+    /// field.
+    pub const KIND: &str = "project.kind";
+
+    /// The four fields that only describe a crane.
+    pub const CRANE_ONLY: [&str; 4] = [CRANE_SWL_T, CRANE_SPAN_M, CRANE_LIFT_M, CRANE_DUTY];
+
+    /// Whether the crane rows (load, span, lifting height, duty) belong in a
+    /// project with these properties: all but projects started as another
+    /// kind of plant.
+    pub fn shows_crane_fields(properties: &super::Properties) -> bool {
+        match properties.get(KIND) {
+            Some(super::Value::Text(kind)) => kind.is_empty() || kind == "crane",
+            _ => true,
+        }
+    }
+
     /// The fields of Project settings > Project information: (key, label).
     pub const FIELDS: &[(&str, &str)] = &[
         (CUSTOMER, "Customer"),
@@ -300,19 +318,20 @@ fn project_sheet(project: &Project) -> Section {
             format!("{v} {unit}")
         }
     };
-    fields(
-        "project",
-        "Project information",
-        vec![
-            ("Customer", prop(p, keys::CUSTOMER)),
-            ("Site", prop(p, keys::SITE)),
-            ("Order number", prop(p, keys::ORDER)),
+    let mut rows = vec![
+        ("Customer", prop(p, keys::CUSTOMER)),
+        ("Site", prop(p, keys::SITE)),
+        ("Order number", prop(p, keys::ORDER)),
+    ];
+    if keys::shows_crane_fields(p) {
+        rows.extend([
             ("Safe working load", with(keys::CRANE_SWL_T, "t")),
             ("Span", with(keys::CRANE_SPAN_M, "m")),
             ("Lifting height", with(keys::CRANE_LIFT_M, "m")),
             ("Duty classification", prop(p, keys::CRANE_DUTY)),
-        ],
-    )
+        ]);
+    }
+    fields("project", "Project information", rows)
 }
 
 #[cfg(test)]

@@ -17,6 +17,8 @@ pub enum Action {
     OpenPlcExample,
     OpenPumpExample,
     NewCraneProject,
+    NewPumpProject,
+    NewMccProject,
     TryFastKeys,
     ShowWalkthrough,
     Learn,
@@ -55,6 +57,8 @@ impl Action {
         Action::OpenPlcExample,
         Action::OpenPumpExample,
         Action::NewCraneProject,
+        Action::NewPumpProject,
+        Action::NewMccProject,
         Action::TryFastKeys,
         Action::ShowWalkthrough,
         Action::Learn,
@@ -95,6 +99,8 @@ impl Action {
             Action::OpenPlcExample => "file.example_plc",
             Action::OpenPumpExample => "file.example_pump",
             Action::NewCraneProject => "file.new_crane",
+            Action::NewPumpProject => "file.new_pump",
+            Action::NewMccProject => "file.new_mcc",
             Action::TryFastKeys => "file.practice",
             Action::ShowWalkthrough => "help.walkthrough",
             Action::Learn => "help.learn",
@@ -138,6 +144,8 @@ impl Action {
             Action::OpenPlcExample => "Open example: PLC cabinet",
             Action::OpenPumpExample => "Open example: pump station",
             Action::NewCraneProject => "New from template: overhead crane",
+            Action::NewPumpProject => "New from template: pump station",
+            Action::NewMccProject => "New from template: motor control centre",
             Action::TryFastKeys => "Try the fast keys",
             Action::ShowWalkthrough => "Fast keys card on this project",
             Action::Learn => "Learn…",
@@ -179,6 +187,8 @@ impl Action {
             | Action::OpenPlcExample
             | Action::OpenPumpExample
             | Action::NewCraneProject
+            | Action::NewPumpProject
+            | Action::NewMccProject
             | Action::TryFastKeys
             | Action::SaveProject
             | Action::SaveProjectAs
@@ -233,6 +243,8 @@ impl Action {
             | Action::OpenPlcExample
             | Action::OpenPumpExample
             | Action::NewCraneProject
+            | Action::NewPumpProject
+            | Action::NewMccProject
             | Action::TryFastKeys
             | Action::ShowWalkthrough
             | Action::Learn
