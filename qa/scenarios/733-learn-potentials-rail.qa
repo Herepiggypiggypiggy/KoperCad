@@ -5,8 +5,9 @@ key ctrl+k
 wait 4
 text Potentials and feeds
 wait 6
-click_text "Potentials and feeds"
+key Enter
 wait 40
+expect "A drawing with no supply"
 shot 01-start
 check_layout
 try click_text "Do it for me"

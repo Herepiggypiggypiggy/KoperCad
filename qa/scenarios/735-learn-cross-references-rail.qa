@@ -5,8 +5,9 @@ key ctrl+k
 wait 4
 text Cross references
 wait 6
-click_text "Cross references"
+key Enter
 wait 40
+expect "Select the coil"
 shot 01-start
 check_layout
 try click_text "Do it for me"

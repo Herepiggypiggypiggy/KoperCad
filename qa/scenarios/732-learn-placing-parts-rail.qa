@@ -5,8 +5,9 @@ key ctrl+k
 wait 4
 text Placing parts fast
 wait 6
-click_text "Placing parts fast"
+key Enter
 wait 40
+expect "What you will build"
 shot 01-start
 check_layout
 try click_text "Do it for me"

@@ -5,8 +5,9 @@ key ctrl+k
 wait 4
 text Pages KoperCAD Write
 wait 6
-click_text "Pages KoperCAD Writes For You"
+key Enter
 wait 40
+expect "What you will have"
 shot 01-start
 check_layout
 try click_text "Do it for me"

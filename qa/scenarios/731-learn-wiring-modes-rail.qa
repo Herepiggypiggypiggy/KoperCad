@@ -5,8 +5,9 @@ key ctrl+k
 wait 4
 text Corners and Lines
 wait 6
-click_text "Corners and Lines"
+key Enter
 wait 40
+expect "Two branches, three wires missing"
 shot 01-start
 check_layout
 try click_text "Do it for me"
