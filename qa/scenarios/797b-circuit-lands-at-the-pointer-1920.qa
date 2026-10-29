@@ -20,7 +20,7 @@ key Enter
 wait 10
 try click_text "Start/stop latch" Label
 wait 10
-click_text Place Button #2
+click_text Place Button
 wait 20
 expect "Placed Start/stop latch"
 move 520 160
@@ -35,7 +35,7 @@ key Enter
 wait 10
 try click_text "Start/stop latch" Label
 wait 10
-click_text Place Button #2
+click_text Place Button
 wait 20
 expect "Placed Start/stop latch"
 move 1050 160

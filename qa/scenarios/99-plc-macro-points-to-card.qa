@@ -15,7 +15,7 @@ click_text "PLC input card" Label
 wait 10
 expect "Symbols only"
 shot macro-picked
-click_text Place Button #2
+click_text Place Button
 wait 20
 expect_scene "-A2"
 expect "Symbols only"
