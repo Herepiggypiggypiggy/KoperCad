@@ -433,7 +433,7 @@ impl NovoApp {
                     let b = hook_bounds(&g.layout, &state);
                     g.view.frame_bounds(&b, now, reduced);
                 }
-                let height = (ui.available_height() - 100.0).max(160.0);
+                let height = (ui.available_height() - 170.0).max(160.0);
                 ui.allocate_ui(egui::vec2(ui.available_width(), height), |ui| {
                     g.view.show(
                         ui,
@@ -448,7 +448,7 @@ impl NovoApp {
                 ui.label(egui::RichText::new("Picture, not measurement").strong());
                 egui::ScrollArea::vertical()
                     .id_salt("hoist3d_notes")
-                    .max_height(64.0)
+                    .max_height(130.0)
                     .show(ui, |ui| {
                         for line in CRANE_PICTURE_LEAVES_OUT
                             .iter()
