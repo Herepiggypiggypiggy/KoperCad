@@ -152,6 +152,17 @@ impl HoistLogicConfig {
         }
         if let Some(j) = &self.jump {
             j.validate()?;
+            // The reversal ends when the frequency rises above the band, so the slowest step
+            // must lie above it.
+            let lowest = self.steps_hz.iter().copied().fold(f64::INFINITY, f64::min);
+            if j.jump_hz >= lowest {
+                return Err(InputError::OutOfRange {
+                    field: "jump_hz (must be below the slowest speed step)",
+                    value: j.jump_hz,
+                    min: 0.0,
+                    max: lowest,
+                });
+            }
         }
         Ok(())
     }
@@ -920,6 +931,24 @@ mod tests {
         l.step(&i, &flat, DT);
         i.down = false;
         assert_eq!(l.step(&i, &flat, DT).phase, LogicPhase::Decelerating);
+    }
+
+    #[test]
+    fn a_jump_band_that_reaches_the_slowest_step_is_refused() {
+        for jump_hz in [10.0, 12.0] {
+            let mut c = cfg();
+            c.jump = Some(ReversalJump {
+                jump_hz,
+                ramp_time_s: 0.3,
+            });
+            assert!(HoistLogic::new(c).is_err(), "{jump_hz} Hz");
+        }
+        let mut c = cfg();
+        c.jump = Some(ReversalJump {
+            jump_hz: 9.9,
+            ramp_time_s: 0.3,
+        });
+        assert!(HoistLogic::new(c).is_ok());
     }
 
     #[test]

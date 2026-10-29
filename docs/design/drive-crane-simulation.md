@@ -270,7 +270,7 @@ relay directly and the window says so.
 
 Jump at reversal (optional, `dh_jump_hz`, `dh_jump_ramp_s`): with the key set, a direction change keeps the
 brake open and only flips the run direction; inside a band of +-`dh_jump_hz` around zero the drive uses the
-short ramp `dh_jump_ramp_s` instead of its normal ramps. A slow pass through zero lets a hanging load sink,
+short ramp `dh_jump_ramp_s` instead of its normal ramps. The band must lie below the slowest speed step (refused otherwise), because the reversal ends when the frequency rises above it. A slow pass through zero lets a hanging load sink,
 so the run reports the sag as "ReversalSag" (metres below the height at the reversal).
 
 Load sensing (optional, `dh_sense_boost_hz`): the torque is averaged at a probe frequency; a light load
