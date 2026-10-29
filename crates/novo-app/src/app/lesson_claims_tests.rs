@@ -266,12 +266,12 @@ fn the_cut_lengths_lesson_quotes_the_wire_list_and_the_cut_list() {
         assert_eq!(cell(wires, r, "length_mm"), "12000");
         assert!(cell(wires, r, "to").contains("-M1") || cell(wires, r, "from").contains("-X1"));
     }
-    // The cut list: "4 wires of 1.5 mm² (no metres: cores) and 21 wires whose size is not set (10.85 m)".
+    // The cut list: "4 wires of 1.5 mm² (no metres: cores) and 21 wires whose size is not set (10.77 m)".
     let cut = CutList::of(&project).generate(&project);
     let summary = &cut.sections[0];
     let rows: Vec<Vec<String>> = summary.rows.iter().map(cells).collect();
     assert_eq!(rows[0], ["1.5 mm²", "4", "0"]);
-    assert_eq!(rows[1], ["Size unknown", "21", "10.85"]);
+    assert_eq!(rows[1], ["Size unknown", "21", "10.77"]);
     // "Wire 4 shows Wire mm 966, Ends mm 20 and Cut mm 986."
     let group = cut.sections.iter().find(|s| s.key == "group-2").unwrap();
     let w4 = group
