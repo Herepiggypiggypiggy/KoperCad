@@ -52,7 +52,9 @@ pub(crate) struct TestUser {
     /// the empty profile at every launch (a QA scenario's `library` step).
     #[arg(skip)]
     library_seed: Option<PathBuf>,
-    /// A parts catalog file (`parts.json`) every launch starts with.
+    /// A parts catalog file (`parts.json`) every launch starts with (a QA
+    /// scenario's `user_catalog` step).
+    #[arg(skip)]
     catalog_seed: Option<PathBuf>,
 }
 

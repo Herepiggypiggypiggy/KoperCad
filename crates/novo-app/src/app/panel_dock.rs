@@ -182,28 +182,35 @@ pub(super) fn navigator_side_button(ui: &mut egui::Ui) {
 /// The name the Pages column docks under.
 pub(super) const PAGES: &str = "pages";
 
+/// Whether the Reports list is a pane of a dock slot rather than a column.
+pub(super) fn reports_docked(ctx: &egui::Context) -> Option<Slot> {
+    slot_of(ctx, REPORTS)
+}
+
 /// Whether the Pages column is a pane of a dock slot rather than a column.
 pub(super) fn pages_docked(ctx: &egui::Context) -> Option<Slot> {
     slot_of(ctx, PAGES)
 }
 
-/// The button in the header of the Pages column that makes it a pane of the
-/// strip on its side, stacked with the panels already docked there.
-pub(super) fn pages_dock_button(ui: &mut egui::Ui) {
+/// The name the Reports list docks under.
+pub(super) const REPORTS: &str = "reports_list";
+
+/// The button in the header of the Pages column or the Reports list (`name`,
+/// `what` is how the tip calls it) that makes it a pane of the strip on its
+/// side, stacked with the panels already docked there.
+pub(super) fn navigator_dock_button(ui: &mut egui::Ui, name: &str, what: &str) {
     let ctx = ui.ctx().clone();
     let slot = if navigator_right(&ctx) {
         Slot::Right
     } else {
         Slot::Left
     };
-    let tip = match slot {
-        Slot::Right => "Dock Pages as a pane in the right strip, with other panels",
-        _ => "Dock Pages as a pane in the left strip, with other panels",
-    };
-    if novo_theme::widgets::icon_toggle(ui, novo_theme::icons::SQUARE_SPLIT_VERTICAL, false, tip)
+    let side = if slot == Slot::Right { "right" } else { "left" };
+    let tip = format!("Dock {what} as a pane in the {side} strip, with other panels");
+    if novo_theme::widgets::icon_toggle(ui, novo_theme::icons::SQUARE_SPLIT_VERTICAL, false, &tip)
         .clicked()
     {
-        set(&ctx, PAGES, Some(slot));
+        set(&ctx, name, Some(slot));
     }
 }
 
