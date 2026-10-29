@@ -296,6 +296,7 @@ fn a_double_click_on_the_edge_of_the_pinned_navigator_gives_it_its_width_back() 
 fn no_fixed_window_is_built_outside_the_panel_helpers() {
     const AREAS: &[(&str, &str)] = &[
         ("hud", "cursor readout, not interactive"),
+        ("\"docked\"", "a pane of a dock slot, drawn by panel_dock"),
         (
             "rail_flyout_card",
             "flyout card of the tool rail, closes on Esc or a click elsewhere",
