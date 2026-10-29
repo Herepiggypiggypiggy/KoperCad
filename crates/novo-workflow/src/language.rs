@@ -148,6 +148,11 @@ pub const DUTCH: &[Aliases] = &[
         &["over de getallen", "schatting", "model", "rekenwaarde"],
     ),
     nl(
+        "view.icon_gallery",
+        &[],
+        &["pictogrammen", "iconen", "icoonbibliotheek"],
+    ),
+    nl(
         "help.learn",
         &["leren", "les"],
         &["leren", "training", "cursus", "uitleg"],

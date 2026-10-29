@@ -84,6 +84,7 @@ pub(crate) struct Workbench {
     pub(super) preferences: bool,
     /// The shortcut sheet (`?`).
     pub(super) shortcuts: super::shortcuts_sheet::ShortcutSheet,
+    pub(super) icon_gallery: super::icon_gallery::IconGallery,
     /// The macro browser window.
     pub(super) macros: super::macro_browser::MacroBrowser,
     /// The Parts window (browser and one-click import), while open.
@@ -337,6 +338,7 @@ impl Default for Workbench {
             plc_list: None,
             preferences: false,
             shortcuts: Default::default(),
+            icon_gallery: Default::default(),
             macros: Default::default(),
             parts: None,
             macro_save: None,
@@ -687,6 +689,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "xref.link",
     "app.preferences",
     "view.shortcuts",
+    "view.icon_gallery",
     "help.show_hints",
     "help.next_lesson",
     "help.whats_new",
@@ -1619,6 +1622,7 @@ impl NovoApp {
                 self.wb.preferences = true;
             }
             "view.shortcuts" => self.toggle_shortcuts(),
+            "view.icon_gallery" => self.toggle_icon_gallery(),
             "help.show_hints" => self.show_hints_again(),
             "help.whats_new" => self.show_whats_new = true,
             "help.next_lesson" => self.learn_run_command(id, None),
