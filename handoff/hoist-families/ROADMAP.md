@@ -10,4 +10,6 @@ Done (PR from branch claude/project-thread-8de6e0):
 - spec.rs: mech_brake_kind, mech_rectifier*, mech_fl_* keys.
 - Simulate > Hoist run: Faults to try, conditions.
 
-Next: closed-loop hoist, other gear arrangements if real data is supplied, motor current and heating on stall or single-phasing, 3D hook binding.
+Done in the second PR: hoist_thermal.rs (stator current from the fitted circuit, two-phase current, two-node heat model, overload relay with trip class), mech_* heat and relay keys, Hoist run heat line with Reset overload relay and Let motors cool down.
+
+Next (3D hook binding is the next PR): closed-loop hoist, other gear arrangements if real data is supplied, 3D hook binding (hook height and speed from the loop into the 3D view).

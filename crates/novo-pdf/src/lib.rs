@@ -28,6 +28,7 @@
 //! cached.
 
 mod draw;
+pub mod drill_plan;
 mod font;
 mod inter;
 pub mod plate;

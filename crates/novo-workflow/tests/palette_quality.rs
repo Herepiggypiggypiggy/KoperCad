@@ -287,6 +287,7 @@ fn macros() -> Vec<MacroEntry> {
     .into_iter()
     .map(|(name, detail, words)| MacroEntry {
         name: name.into(),
+        folder: String::new(),
         detail: detail.into(),
         words: format!("{words} {}", detail.to_lowercase()),
     })

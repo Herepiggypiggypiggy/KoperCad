@@ -1,0 +1,21 @@
+@title Hoist run heat: current, winding rise and the overload relay buttons are shown
+@area Simulate
+# Opens the two-speed hoist fixture and starts Simulate > Hoist run: the heat line and its buttons.
+open qa/fixtures/hoist-two-speed.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate hoist run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 40
+shot heat-line
+expect "Winding +"
+expect "Let motors cool down"
+expect_disabled "Reset overload relay"
+expect "0.0 A"
+check_layout

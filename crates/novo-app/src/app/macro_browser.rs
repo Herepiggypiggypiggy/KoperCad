@@ -30,6 +30,8 @@ pub(crate) struct MacroBrowser {
     pub(super) company: bool,
     /// The picture of the selected macro, with what it was built from.
     thumb: Option<(ThumbKey, Option<Thumbnail>)>,
+    /// The mounting view of the selected macro, cached like the picture.
+    mounting: Option<(ThumbKey, Option<novo_parts::MountingView>)>,
     started: bool,
     pub(super) query: String,
     /// Library path of the selected macro.
@@ -52,6 +54,7 @@ impl Default for MacroBrowser {
             company_library: None,
             company: false,
             thumb: None,
+            mounting: None,
             started: false,
             query: String::new(),
             selected: None,
@@ -100,6 +103,7 @@ impl MacroBrowser {
         self.selected = None;
         self.renaming = None;
         self.thumb = None;
+        self.mounting = None;
     }
 
     pub(super) fn has_company(&self) -> bool {
@@ -121,6 +125,18 @@ impl MacroBrowser {
             self.thumb = Some((key, built));
         }
         self.thumb.as_ref().and_then(|(_, t)| t.as_ref())
+    }
+
+    /// The mounting view of the selected macro, if it carries one.
+    pub(super) fn mounting(&mut self) -> Option<&novo_parts::MountingView> {
+        let (lib, sel) = (self.library.as_ref()?, self.selected.as_ref()?);
+        let revision = lib.search("").iter().find(|e| &e.path == sel)?.revision;
+        let key = (lib.root().to_path_buf(), sel.clone(), revision);
+        if self.mounting.as_ref().is_none_or(|(k, _)| *k != key) {
+            let built = lib.load(sel).ok().and_then(|f| f.mounting());
+            self.mounting = Some((key, built));
+        }
+        self.mounting.as_ref().and_then(|(_, m)| m.as_ref())
     }
 
     /// Newer library revisions of the macros the project was built from,
@@ -156,7 +172,7 @@ impl MacroBrowser {
         self.open = true;
         if !self.started {
             self.started = true;
-            if let Some(Err(e)) = self.library.as_ref().map(|l| l.install_starters()) {
+            if let Some(Err(e)) = self.library.as_ref().map(|l| l.install_standard()) {
                 self.status = format!("Starter macros: {e}");
             }
         }
@@ -440,6 +456,11 @@ impl NovoApp {
                             egui::Sense::hover(),
                         );
                         super::macro_thumb::paint(ui, rect, thumb);
+                    }
+                    if let Some(view) = b.mounting() {
+                        egui::CollapsingHeader::new("Mounting view")
+                            .id_salt("macro_mounting")
+                            .show(ui, |ui| super::macro_mounting::show(ui, view, &[]));
                     }
                     ui.horizontal(|ui| {
                         if let Some(name) = &mut b.renaming {
