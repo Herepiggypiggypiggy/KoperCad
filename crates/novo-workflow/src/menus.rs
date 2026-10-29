@@ -60,6 +60,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.example_mcc", under("File", "Examples")),
     ("file.example_crane", under("File", "Examples")),
     ("file.example_plc", under("File", "Examples")),
+    ("file.example_pump", under("File", "Examples")),
     ("macro.browser", under("File", "Macros")),
     ("macro.import", under("File", "Macros")),
     ("page.new", under("File", "Pages")),
