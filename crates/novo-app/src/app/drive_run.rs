@@ -515,9 +515,10 @@ impl NovoApp {
                      Torque is proven before the brake opens and held at zero speed; the STO \
                      channels, the encoder signal and the brake contactor are read from the \
                      drawing. Brake timing is entered, not measured; the plausibility check uses \
-                     the true shaft speed. Hook movement under 5 mm is not reported; 20 mm \
-                     against the command ends the start check; 50 mm against it at the start is \
-                     reported at once. Not a maker's firmware.",
+                     the true shaft speed. Hook movement under 5 mm is not reported; the \
+                     start check ends when the hook has moved 20 mm with the command; 50 mm \
+                     against the command at the start is reported at once; 20 mm of movement \
+                     with the drive off is a brake slip. Not a maker's firmware.",
                 );
                 ui.weak("\u{2022} Not a safety or compliance statement.");
             });
