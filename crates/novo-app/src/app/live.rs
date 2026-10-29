@@ -1363,7 +1363,6 @@ impl NovoApp {
         let mut leave = false;
         let mut open_plc = false;
         let mut open_controller = false;
-        let mut open_defects = false;
         let plc_running = self.wb.live.plc.is_running();
         let mut open_motor: Option<SymbolId> = None;
         let mut toggle_why = false;
@@ -1526,15 +1525,6 @@ impl NovoApp {
                 {
                     open_controller = true;
                 }
-                if ui
-                    .small_button("Defects…")
-                    .on_hover_text(
-                        "Break the circuit on purpose and see what it does (Simulate > Defects and walk-throughs)",
-                    )
-                    .clicked()
-                {
-                    open_defects = true;
-                }
                 if plc_running {
                     ui.colored_label(crate::theme::ui_palette().success, "running");
                 }
@@ -1650,9 +1640,6 @@ impl NovoApp {
         }
         if open_controller {
             self.wb.live.ctl.open ^= true;
-        }
-        if open_defects {
-            self.wb.live.defects.open ^= true;
         }
         if leave
             || open_all

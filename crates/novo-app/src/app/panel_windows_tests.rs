@@ -320,6 +320,10 @@ fn no_fixed_window_is_built_outside_the_panel_helpers() {
         ),
         ("build_mode", "Build mode fills the canvas"),
         ("live_wire_tip", "hover tip on the sheet"),
+        (
+            "defect_banner",
+            "strip over the sheet while a defect is injected, not interactive",
+        ),
         ("live_input", "badge drawn on a symbol"),
         ("live_load", "badge drawn on a symbol"),
         ("live_pole", "badge drawn on a symbol"),

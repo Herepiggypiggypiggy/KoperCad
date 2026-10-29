@@ -1,7 +1,6 @@
 //! The Defects card of the live view (lane F1, design `docs/design/fault-injection.md`).
 //!
-//! Where the user finds it: Simulate > Defects and walk-throughs (command `sim.defects`), or the
-//! "Defects..." button on the Live potentials card. The card breaks the drawn circuit on purpose:
+//! Where the user finds it: Simulate > Defects and walk-throughs (command `sim.defects`). The card breaks the drawn circuit on purpose:
 //! a contact welds, a coil opens, a conductor breaks, a phase is lost, a pin touches earth. The
 //! live view then solves the circuit with the defect in it, and the card lists how the plant now
 //! differs from a healthy one under the same operator inputs. Walk-throughs are scripted

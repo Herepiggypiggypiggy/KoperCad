@@ -19,7 +19,6 @@ effect does not say how likely it is. The card and the printed report say so.
 
 - **Simulate > Defects and walk-throughs** (command `sim.defects`; command field: "defect", "fault", "weld",
   "inject", "scenario", "walk-through", "rehearsal").
-- The **Defects...** button on the Live potentials card (Shift+L).
 - While a defect is injected a red strip, "DEFECT INJECTED", stays over the canvas. Leaving the live view
   repairs every defect, so a faulted plant never lingers unseen.
 
