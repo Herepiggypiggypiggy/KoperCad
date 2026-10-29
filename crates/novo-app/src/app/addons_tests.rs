@@ -223,6 +223,31 @@ fn an_engine_answers_buttons_and_commands() {
 }
 
 #[test]
+fn details_know_how_much_of_its_step_budget_a_running_engine_uses() {
+    let (mut d, _dir) = drive();
+    install_engine_fixture(&mut d);
+    assert!(
+        d.app.engine_load().is_empty(),
+        "no engine runs before it is needed"
+    );
+    d.app
+        .addon_engine_call(
+            "demo-engine",
+            "button",
+            &serde_json::json!({"panel": "panel", "id": "start"}),
+        )
+        .expect("it has an engine")
+        .expect("the engine answers");
+    let (calls, peak, budget) = d.app.engine_load()["demo-engine"];
+    assert_eq!(calls, 2, "hello at start and the button");
+    assert!(
+        peak > 0 && peak < budget / 100,
+        "a small engine uses a sliver: {peak} of {budget}"
+    );
+    assert_eq!(budget, novo_addons::HostLimits::default().fuel_per_call);
+}
+
+#[test]
 fn lamps_an_engine_names_but_no_panel_declares_are_not_kept() {
     let (mut d, _dir) = drive();
     install_engine_fixture(&mut d);

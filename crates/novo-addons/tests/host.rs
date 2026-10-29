@@ -380,3 +380,30 @@ fn the_call_that_stops_counts_in_the_fuel_used() {
         host.fuel_used() - before
     );
 }
+
+#[test]
+fn the_busiest_call_is_kept_and_put_into_words() {
+    let mut h = load(&good());
+    let after_hello = h.peak_fuel();
+    assert!(after_hello > 0 && after_hello <= h.fuel_budget());
+    h.call("echo", &json!({})).unwrap();
+    assert!(h.peak_fuel() >= after_hello);
+    assert_eq!(h.fuel_budget(), 200_000);
+    // the words: quiet below half the budget, a warning from half on
+    let (text, near) = novo_addons::budget_note(12, 10_000, 200_000);
+    assert!(!near);
+    assert_eq!(
+        text,
+        "Its busiest call used 5% of its step budget (12 calls so far)."
+    );
+    let (text, near) = novo_addons::budget_note(3, 100_000, 200_000);
+    assert!(near);
+    assert!(
+        text.contains("50%") && text.contains("stops the add-on"),
+        "{text}"
+    );
+    assert!(
+        novo_addons::budget_note(1, 0, 0).1,
+        "a zero budget is as full as it gets"
+    );
+}

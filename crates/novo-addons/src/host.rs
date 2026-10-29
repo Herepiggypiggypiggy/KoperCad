@@ -108,6 +108,7 @@ pub struct EngineHost {
     stopped: Option<String>,
     calls: u64,
     fuel_used: u64,
+    peak_fuel: u64,
 }
 
 fn engine_error(why: impl std::fmt::Display) -> AddonError {
@@ -242,6 +243,7 @@ impl EngineHost {
             stopped: None,
             calls: 0,
             fuel_used: 0,
+            peak_fuel: 0,
         };
         match host.call("hello", &json!({})) {
             Ok(data) if data.get("api").and_then(Value::as_u64) == Some(u64::from(HOST_API)) => {
@@ -299,7 +301,9 @@ impl EngineHost {
         let result = self.run_inner(request);
         // the call that stops counts too
         let left = self.store.get_fuel().unwrap_or(0);
-        self.fuel_used += self.limits.fuel_per_call.saturating_sub(left);
+        let spent = self.limits.fuel_per_call.saturating_sub(left);
+        self.fuel_used += spent;
+        self.peak_fuel = self.peak_fuel.max(spent);
         result
     }
 
@@ -356,4 +360,36 @@ impl EngineHost {
     pub fn fuel_used(&self) -> u64 {
         self.fuel_used
     }
+
+    /// Steps the most expensive finished call used (the one that stops counts too).
+    pub fn peak_fuel(&self) -> u64 {
+        self.peak_fuel
+    }
+
+    /// Steps one call may use before the engine stops.
+    pub fn fuel_budget(&self) -> u64 {
+        self.limits.fuel_per_call
+    }
+}
+
+/// Share of a call's step budget at which Details starts to warn (percent).
+pub const BUDGET_WARN_PERCENT: u64 = 50;
+
+/// Plain words for how much of its step budget an engine uses: `(text, near)`. `near` is true at
+/// [`BUDGET_WARN_PERCENT`] and above, where one slightly heavier call would stop the add-on.
+pub fn budget_note(calls: u64, peak_fuel: u64, budget: u64) -> (String, bool) {
+    let percent = if budget == 0 {
+        100
+    } else {
+        peak_fuel.saturating_mul(100) / budget
+    };
+    let near = percent >= BUDGET_WARN_PERCENT;
+    let text = if near {
+        format!(
+            "Its busiest call used {percent}% of its step budget ({calls} calls so far). A call that runs out of steps stops the add-on."
+        )
+    } else {
+        format!("Its busiest call used {percent}% of its step budget ({calls} calls so far).")
+    };
+    (text, near)
 }
