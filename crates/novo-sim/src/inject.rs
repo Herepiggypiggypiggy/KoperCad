@@ -48,7 +48,8 @@ pub enum Defect {
         pin: Option<String>,
     },
     /// A protective device has tripped (overload relay, motor protection switch, drive fault
-    /// relay): all its switched contacts are open and stay open.
+    /// relay): its main and break contacts open and stay open, its make (signalling) contacts
+    /// close.
     Tripped { device: String },
     /// The winding of a coil is open: the coil never operates (a brake that does not release,
     /// a contactor that does not pull in).
@@ -103,7 +104,9 @@ impl Defect {
                 with_pin(device, pin)
             ),
             Defect::Tripped { device } => {
-                format!("{device} has tripped: its contacts stay open until it is reset.")
+                format!(
+                    "{device} has tripped: its main and break contacts open and its make (signalling) contacts close, until it is reset."
+                )
             }
             Defect::CoilOpen { device } => {
                 format!("The winding of {device} is open: it never operates.")
@@ -330,8 +333,15 @@ fn resolve(
             }
         }
         Defect::Tripped { device } => {
+            let rest = crate::rest_state(project);
             for p in contact_poles(project, device, &None)? {
-                faults.stuck_open.insert((p.symbol, p.group));
+                // Main and break contacts open; a signalling make contact (an overload relay's
+                // 97-98) closes on a trip.
+                if rest.is_closed(p.symbol, p.group) {
+                    faults.stuck_open.insert((p.symbol, p.group));
+                } else {
+                    faults.welded.insert((p.symbol, p.group));
+                }
             }
         }
         Defect::CoilOpen { device } => faults.coil_open.extend(coils_of(project, device)?),
@@ -343,7 +353,9 @@ fn resolve(
                 cut.extend(project.wires_at(end));
             }
             if cut.len() == before {
-                return Err(format!("no wire is connected at {at}"));
+                return Err(format!(
+                    "no wire is connected at {at} (or an earlier defect already cut it)"
+                ));
             }
         }
         Defect::WireBroken { number } => {

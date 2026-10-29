@@ -29,7 +29,7 @@ effect does not say how likely it is. The card and the printed report say so.
 | --- | --- |
 | Contact welded closed | Conducts whatever its coil or hand does. Without a pin: every make contact of the device (a contactor's mains and auxiliary make contacts). With a pin: that contact, also a break contact (a defeated interlock). `mirror` keeps the device's break contacts open too (positively guided contacts). |
 | Contact stuck open | Never conducts, even with the coil on. |
-| Protective device tripped | All its switched contacts open and stay open (overload relay, motor protection, drive fault relay). |
+| Protective device tripped | Its main and break contacts open and stay open, its make (signalling) contacts close, as an overload relay's 97-98 does (overload relay, motor protection, drive fault relay). |
 | Coil open | The winding is open: never operates (a brake that does not release). |
 | Coil stuck on | Operates whatever feeds it (jammed armature, failed-on driver). |
 | Conductor broken at a pin / wire broken by number | Every wire at the pin, or the wire with that number, is cut (E-stop chain, a loose terminal). |
@@ -62,6 +62,8 @@ Walk-throughs are saved in the project in one text property, `walkthroughs.proje
 "Walk-throughs". A file that cannot be read is kept untouched and reported.
 
 ## Limits
+
+- A script runs at most 3600 s (times and tail are cut, and the report says so). Between events the run steps in 0.05 s only while a timer counts, else straight to the next event.
 
 - A running PLC program solves the circuit on its own path: defects are not applied while it runs (the card
   and the banner say so).

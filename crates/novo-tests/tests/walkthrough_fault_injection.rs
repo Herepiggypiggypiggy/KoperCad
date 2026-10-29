@@ -367,3 +367,18 @@ fn naming_a_pin_that_is_not_a_contact_is_reported() {
     let report = run(doc.project(), &w);
     assert!(!report.problems.is_empty());
 }
+
+#[test]
+fn a_script_with_a_huge_time_is_cut_instead_of_freezing() {
+    let doc = starter();
+    let w = Walkthrough {
+        tail: 1e9,
+        ..Walkthrough::new("typo").at(1e6, coil(false))
+    };
+    let t0 = std::time::Instant::now();
+    let report = run(doc.project(), &w);
+    assert!(t0.elapsed().as_secs() < 5, "took {:?}", t0.elapsed());
+    assert!(!report.ok());
+    assert!(report.problems[0].contains("3600"), "{:?}", report.problems);
+    assert!(report.duration <= 7200.0 + 1.0);
+}

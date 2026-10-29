@@ -751,11 +751,20 @@ fn report_view(ui: &mut egui::Ui, report: &Report) {
         "{}: {} passed, {} failed",
         report.name, report.passed, report.failed
     );
-    ui.label(egui::RichText::new(verdict).strong().color(if report.ok() {
-        palette.success
-    } else {
+    let color = if !report.ok() {
         palette.error
-    }));
+    } else if report.passed == 0 {
+        // Nothing was checked: neither a pass nor a fail.
+        ui.visuals().weak_text_color()
+    } else {
+        palette.success
+    };
+    let verdict = if report.passed + report.failed == 0 {
+        format!("{}: no checks yet", report.name)
+    } else {
+        verdict
+    };
+    ui.label(egui::RichText::new(verdict).strong().color(color));
     for p in &report.problems {
         ui.add(
             egui::Label::new(

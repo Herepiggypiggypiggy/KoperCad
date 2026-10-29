@@ -30,8 +30,12 @@ use crate::{Clock, Direction, Live, PoleState, Settled, is_coil, rest_state, set
 /// File format revision of [`Walkthrough`].
 pub const WALKTHROUGH_FORMAT: u32 = 1;
 
-/// Seconds of simulated time per settle step between two events.
+/// Seconds of simulated time per settle step while a timer is counting.
 const TICK: f64 = 0.05;
+
+/// The longest a walk-through runs, in seconds. A typo such as `t = 1e6` in a hand-edited file
+/// must not freeze the program.
+pub const MAX_SECONDS: f64 = 3600.0;
 
 /// What a motor must be doing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -421,7 +425,13 @@ pub fn run(project: &Project, walkthrough: &Walkthrough) -> Report {
 
     let mut steps: Vec<&Step> = walkthrough.steps.iter().collect();
     steps.sort_by(|a, b| a.t.total_cmp(&b.t));
-    let end = steps.last().map_or(0.0, |s| s.t) + walkthrough.tail.max(0.0);
+    let longest = steps.last().map_or(0.0, |s| s.t);
+    if longest > MAX_SECONDS || walkthrough.tail > MAX_SECONDS {
+        problems.push(format!(
+            "the script runs longer than {MAX_SECONDS} s: times and the tail are cut to that"
+        ));
+    }
+    let end = longest.clamp(0.0, MAX_SECONDS) + walkthrough.tail.clamp(0.0, MAX_SECONDS);
 
     let mut now = 0.0_f64;
     let mut before = differences(project, &healthy_net, &clean, &prepared, &faulty);
@@ -429,9 +439,9 @@ pub fn run(project: &Project, walkthrough: &Walkthrough) -> Report {
     let (mut passed, mut failed) = (0, 0);
 
     for step in steps {
-        let target = step.t.max(0.0);
+        let target = step.t.clamp(0.0, MAX_SECONDS);
         while now < target {
-            let dt = TICK.min(target - now);
+            let dt = next_dt(&clean, &faulty, target - now);
             clean.clock.advance(dt);
             faulty.clock.advance(dt);
             now += dt;
@@ -528,7 +538,7 @@ pub fn run(project: &Project, walkthrough: &Walkthrough) -> Report {
         before = after;
     }
     while now < end {
-        let dt = TICK.min(end - now);
+        let dt = next_dt(&clean, &faulty, end - now);
         clean.clock.advance(dt);
         faulty.clock.advance(dt);
         now += dt;
@@ -547,6 +557,15 @@ pub fn run(project: &Project, walkthrough: &Walkthrough) -> Report {
         duration: now,
         end_differences,
     }
+}
+
+/// The next time step: fine while a timer counts, else straight to the next event, since
+/// nothing changes by itself.
+fn next_dt(clean: &Side, faulty: &Side, left: f64) -> f64 {
+    let counting = [clean, faulty]
+        .iter()
+        .any(|s| s.settled.as_ref().is_none_or(|x| x.timing));
+    if counting { TICK.min(left) } else { left }
 }
 
 fn describe_check(check: &Check) -> String {
