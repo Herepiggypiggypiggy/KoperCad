@@ -1,7 +1,7 @@
 # Cabinet track, lesson 4. Sample: wire-routing/project.json (placed plate, ducts joined).
 #
 # Checked against the engines by `lesson_claims_tests` (novo-app), on this sample: the wire list has
-# 19 rows, 15 "routed" (966 mm for -F2 to -X1, 490 for -F1 to -K1, 572 for -K1 to -F2, 335 between
+# 19 rows, 15 "routed" (966 mm for -F2 to -X1, 490 for -F1 to -K1, 572 for -K1 to -F2, 210 between
 # the buttons -S0 and -S1) and 4 "cable length" at 12000 mm for the motor wires, the cores of cable
 # -W1 whose 12 m length is stated. The wire cut export is Cabinet > Route all > Export wire cut
 # (wire_production.rs): a semicolon CSV next to the project. The Reports workspace has a Cut list
@@ -67,12 +67,12 @@ title = "Routed"
 title_nl = "Gerouteerd"
 text = """
 Both devices are on the plate and a duct path joins them. The length is stub, duct run and stub, plus a {tip:service-loop} at each end.
-For example wire 4, from **-F2** to **-X1**, is 966 mm, and the wire between the two push buttons on the same rail, **-S0** to **-S1**, is only 335 mm.
+For example wire 4, from **-F2** to **-X1**, is 966 mm, and the wire between the two push buttons on the same rail, **-S0** to **-S1**, is only 210 mm.
 That is the number the workshop cuts to.
 """
 text_nl = """
 Beide componenten staan op de plaat en een kanaalpad verbindt ze. De lengte is stub, kanaaldeel en stub, plus een {tip:service-loop} aan elk uiteinde.
-Draad 4 van **-F2** naar **-X1** is bijvoorbeeld 966 mm en de draad tussen de twee drukknoppen op dezelfde rail, **-S0** naar **-S1**, is maar 335 mm.
+Draad 4 van **-F2** naar **-X1** is bijvoorbeeld 966 mm en de draad tussen de twee drukknoppen op dezelfde rail, **-S0** naar **-S1**, is maar 210 mm.
 Dat is het getal waarop de werkplaats afkort.
 """
 

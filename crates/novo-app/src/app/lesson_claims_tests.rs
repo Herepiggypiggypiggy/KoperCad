@@ -236,7 +236,7 @@ fn the_cut_lengths_lesson_quotes_the_wire_list_and_the_cut_list() {
             .count()
     };
     assert_eq!((basis("routed"), basis("cable length")), (15, 4));
-    // "Wire 4, from -F2 to -X1, is 966 mm; the wire between the push buttons -S0 and -S1 only 335."
+    // "Wire 4, from -F2 to -X1, is 966 mm; the wire between the push buttons -S0 and -S1 only 210."
     let row = |no: &str| {
         wires
             .rows
@@ -256,7 +256,7 @@ fn the_cut_lengths_lesson_quotes_the_wire_list_and_the_cut_list() {
             cell(wires, r, "from").ends_with("-S0:12") && cell(wires, r, "to").ends_with("-S1:13")
         })
         .unwrap();
-    assert_eq!(cell(wires, buttons, "length_mm"), "335");
+    assert_eq!(cell(wires, buttons, "length_mm"), "210");
     // The four motor wires are the cores of cable -W1, 12 m long.
     for r in wires
         .rows

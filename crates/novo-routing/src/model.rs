@@ -9,8 +9,8 @@ use novo_core::{
 };
 
 use crate::{
-    Anchor, Clearance, Duct, Facing, Job, Kind, Network, Plan, Point, Point3, Route, Rules,
-    WireRules, plan_constrained,
+    Anchor, Body, Clearance, Duct, Facing, Job, Kind, Network, Openings, Plan, Point, Point3,
+    RailRow, Route, Rules, WireRules, plan_constrained,
 };
 
 /// The ducts on the plate of an enclosure, in model id order. DIN rails are
@@ -34,9 +34,125 @@ pub fn ducts(project: &Project, structure: StructureId) -> Vec<Duct> {
         .collect()
 }
 
-/// The routing network of an enclosure's ducts.
+/// Property on a duct: the pitch of its slots in millimetres (a wire
+/// enters at the slot nearest its terminal). Without it a wire may enter
+/// anywhere along the duct.
+pub const SLOT_PITCH: &str = "duct.slot_pitch_mm";
+
+/// Property on a duct: `closed` for a duct without side slots, which a wire
+/// enters or leaves only at its ends.
+pub const SLOTS: &str = "duct.slots";
+
+/// How the wires get in and out of each duct of an enclosure, from the
+/// ducts' [`SLOT_PITCH`] and [`SLOTS`] properties. Ducts that say nothing
+/// are left out (anywhere).
+fn duct_openings(project: &Project, structure: StructureId) -> Vec<(u64, Openings)> {
+    let number = |v: &novo_core::Value| match v {
+        novo_core::Value::Float(f) => Some(*f),
+        novo_core::Value::Int(i) => Some(*i as f64),
+        novo_core::Value::Text(t) => t.trim().replace(',', ".").parse().ok(),
+        _ => None,
+    };
+    project
+        .all::<Rail>()
+        .filter(|r| r.structure == structure && r.kind == RailKind::Duct)
+        .filter_map(|r| {
+            let closed = matches!(
+                r.properties.get(SLOTS),
+                Some(novo_core::Value::Text(t)) if t.trim().eq_ignore_ascii_case("closed")
+            );
+            let pitch = r
+                .properties
+                .get(SLOT_PITCH)
+                .and_then(number)
+                .filter(|p| p.is_finite() && *p > 0.0);
+            let o = if closed {
+                Openings::Ends
+            } else {
+                Openings::Pitch {
+                    pitch: pitch?,
+                    first: pitch? / 2.0,
+                }
+            };
+            Some((r.id.raw(), o))
+        })
+        .collect()
+}
+
+/// The devices on the plate of an enclosure as bodies, and for each DIN
+/// rail with devices on it the extent of its row. A device on the door or
+/// another surface is not on the plate and is left out.
+fn bodies_and_rows(project: &Project, structure: StructureId) -> (Vec<Body>, Vec<RailRow>) {
+    let off_plate = surfaces_of(project, structure).off_plate;
+    let mut bodies = Vec::new();
+    let mut across: BTreeMap<u64, (f64, f64)> = BTreeMap::new();
+    let rails: HashMap<u64, &Rail> = project
+        .all::<Rail>()
+        .filter(|r| r.structure == structure && r.kind == RailKind::DinRail)
+        .map(|r| (r.id.raw(), r))
+        .collect();
+    for p in project
+        .all::<CabinetPlacement>()
+        .filter(|p| p.structure == structure)
+    {
+        let Some(device) = project.device(p.device) else {
+            continue;
+        };
+        if off_plate.contains_key(&p.device.raw()) {
+            continue;
+        }
+        let size = novo_layout::model::device_size(project, device);
+        let (w, h) = if p.rotated {
+            (size.height, size.width)
+        } else {
+            (size.width, size.height)
+        };
+        if !(w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0) {
+            continue;
+        }
+        bodies.push(Body {
+            id: p.device.raw(),
+            x0: p.x,
+            y0: p.y,
+            x1: p.x + w,
+            y1: p.y + h,
+        });
+        if let Some(rail) = p.rail.and_then(|r| rails.get(&r.raw())) {
+            let (lo, hi) = if rail.vertical {
+                (p.x, p.x + w)
+            } else {
+                (p.y, p.y + h)
+            };
+            let e = across.entry(rail.id.raw()).or_insert((lo, hi));
+            e.0 = e.0.min(lo);
+            e.1 = e.1.max(hi);
+        }
+    }
+    let rows = across
+        .into_iter()
+        .filter_map(|(id, across)| {
+            let r = rails.get(&id)?;
+            Some(RailRow {
+                id,
+                vertical: r.vertical,
+                start: Point::new(r.x, r.y),
+                length: r.length,
+                across,
+            })
+        })
+        .collect();
+    (bodies, rows)
+}
+
+/// The routing network of an enclosure: its ducts with their slots, the
+/// bodies of the devices on the plate (stubs go round them), and a wiring
+/// channel along each DIN rail that carries devices.
 pub fn network(project: &Project, structure: StructureId) -> Network {
+    let (bodies, rows) = bodies_and_rows(project, structure);
     Network::new(&ducts(project, structure))
+        .with_openings(&duct_openings(project, structure))
+        .with_bodies(bodies)
+        .with_rails(&rows)
 }
 
 /// One connection to route: the wire list's from and to pins. `id` is the
@@ -655,6 +771,8 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
                             Point3::new(to.pos.x, to.pos.y, 0.0),
                         ],
                         ducts: Vec::new(),
+                        rails: Vec::new(),
+                        blocked: false,
                         detour_mm: 0.0,
                         rise_mm: 0.0,
                         bends: 0,

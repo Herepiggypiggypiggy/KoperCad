@@ -75,6 +75,14 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
                         free_air.entry(page).or_default().push(w);
                     }
                 }
+                RoutingProblem::StubThroughDevice { job } => {
+                    let Some(w) = wire(*job) else { continue };
+                    out.push(Problem::new(
+                        ProblemKind::WireThroughDevice,
+                        vec![AnyId::Wire(w)],
+                        "The way from a terminal of this wire to its duct crosses a device and no way round is free: move the duct or the device".to_owned(),
+                    ));
+                }
                 RoutingProblem::OverfullDuct { ratio, jobs, .. } => {
                     let wires: Vec<WireId> = jobs.iter().filter_map(|j| wire(*j)).collect();
                     let mut at: Vec<AnyId> = wires.into_iter().map(AnyId::Wire).collect();

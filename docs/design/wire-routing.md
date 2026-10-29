@@ -61,6 +61,32 @@ overrides the designer makes (see §6) are stored.
    so a wire never crosses the plate in free air to save duct length. The
    three nearest ducts are tried per end and the cheapest total wins; ties break on the lower duct
    id, so results are stable.
+   **Slots.** A duct says where a wire can enter it: anywhere along its length
+   (the default, when its slot pitch is not known), through slots every
+   *pitch* mm (the wire enters at the nearest slot, straight across the duct),
+   or `closed` (no side slots: the wire comes in along the duct at an end).
+   Set it in the Cabinet's "Rails and ducts" list, column "Slots" (property
+   `duct.slot_pitch_mm`, or `duct.slots = closed`). The slot positions are the
+   pitch from the start of the duct with the first half a pitch in; real ducts
+   differ by maker, so this is a model of slot spacing, not a catalogue.
+   **Device bodies.** The footprints of the devices on the plate are known. A
+   stub is the shortest of: one bend either way, or out of the terminal, round
+   its own device and on, that crosses no device. A terminal facing away from
+   its duct no longer takes the 2 x 40 mm turn-back figure: the wire is drawn
+   round the device and its real length counts. When every way crosses a
+   device the route is flagged and Issues lists the wire ("Wire through
+   device"). The device body is its footprint (width x height from the part);
+   its depth and the room between devices are not modelled, and a gap between
+   two devices narrower than 20 mm is not used to pass between them.
+   **DIN rails.** Each DIN rail with devices on it gets a wiring channel
+   above and below its row of devices, 10 mm outside the tallest device,
+   reaching 100 mm past the rail's ends so it meets a duct that stands there.
+   Wires between devices on one rail run along that channel instead of going
+   to a duct and back. A channel is not a duct: it has no cross-section, no
+   fill and no "no size" report, costs 10% more than a duct per millimetre so
+   a duct wins when equal, and the route lists it separately (`Route::rails`).
+   Where the wire really runs beside a rail (the gap above the devices) is a
+   model; the channel height above the plate is the terminals' own.
 3. **Shortest path.** Dijkstra over the duct graph between the two stub entry
    points, edge cost = length plus a **fill penalty** that rises as the duct
    passes 80% of its capacity, so wires spread to a second duct before the

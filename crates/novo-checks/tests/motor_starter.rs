@@ -265,6 +265,8 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::Emc,
         // Found by the application, which reads the rules; see novo-reports tests/autopilot_rules.
         ProblemKind::WireRule,
+        // Needs devices placed so close that no way round is free; see novo-routing tests/bodies_slots_rails.
+        ProblemKind::WireThroughDevice,
     ];
     let kinds: Vec<ProblemKind> = ProblemKind::ALL
         .into_iter()
