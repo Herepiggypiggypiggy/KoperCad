@@ -1,0 +1,60 @@
+# Radio receiver outputs through interposing relays, six commands.
+name = "Radio receiver with interposing relays"
+chapter = "control"
+description = "Radio receiver with six dry outputs on one common, each driving an interposing relay whose contact is a clean command for the crane control"
+tags = ["radio", "receiver", "remote control", "relay", "commands", "crane", "controller", "interposing"]
+notes = """The receiver block is generic: outputs 1 to 6 close to the common (COM) while the matching function is held on the transmitter. \\
+A typical crane assignment is hoist up and down in two steps (1 to 4) and one more motion (5 and 6); rename the relays to your motions. \\
+Each relay (K11 to K16) gives one make contact for the control, so the receiver never carries the crane's contactor currents. \\
+In the live view the receiver outputs follow a virtual controller (Simulate > Controller panel). \\
+You connect: the control supply above F1, the receiver supply as the maker says, 0 V below the relay coils, and the contacts K11 to K16 to your control."""
+
+parameter = [
+  { name = "supply", default = 48, description = "Control voltage in V" },
+]
+
+open = ["f1s.1", "k11c.A2", "k12c.A2", "k13c.A2", "k14c.A2", "k15c.A2", "k16c.A2", "k11a.13,14", "k12a.13,14", "k13a.13,14", "k14a.13,14", "k15a.13,14", "k16a.13,14"]
+
+device = [
+  { id = "f1", tag = "-F1", description = "Receiver circuit breaker {supply} V", mount = { kind = "din", size = [18, 90, 70], at = [15, 55], rail = "r1" } },
+  { id = "a1", tag = "-A1", description = "Radio receiver, 6 outputs", mount = { kind = "plate", size = [160, 220, 65], at = [15, 150] } },
+  { id = "k11", tag = "-K11", description = "Interposing relay: output 1", mount = { kind = "din", size = [15.5, 78, 66], at = [45, 61], rail = "r1" } },
+  { id = "k12", tag = "-K12", description = "Interposing relay: output 2", mount = { kind = "din", size = [15.5, 78, 66], at = [62, 61], rail = "r1" } },
+  { id = "k13", tag = "-K13", description = "Interposing relay: output 3", mount = { kind = "din", size = [15.5, 78, 66], at = [79, 61], rail = "r1" } },
+  { id = "k14", tag = "-K14", description = "Interposing relay: output 4", mount = { kind = "din", size = [15.5, 78, 66], at = [96, 61], rail = "r1" } },
+  { id = "k15", tag = "-K15", description = "Interposing relay: output 5", mount = { kind = "din", size = [15.5, 78, 66], at = [113, 61], rail = "r1" } },
+  { id = "k16", tag = "-K16", description = "Interposing relay: output 6", mount = { kind = "din", size = [15.5, 78, 66], at = [130, 61], rail = "r1" } },
+]
+
+symbol = [
+  { id = "f1s", key = "iec/protection/mcb_1p", at = [112, 40], device = "f1" },
+  { id = "a1s", key = "iec/controllers/outputs_6", at = [80, 64], device = "a1" },
+  { id = "k11c", key = "iec/coils/relay", at = [80, 112], device = "k11", main = true },
+  { id = "k12c", key = "iec/coils/relay", at = [88, 144], device = "k12", main = true },
+  { id = "k13c", key = "iec/coils/relay", at = [96, 112], device = "k13", main = true },
+  { id = "k14c", key = "iec/coils/relay", at = [104, 144], device = "k14", main = true },
+  { id = "k15c", key = "iec/coils/relay", at = [112, 112], device = "k15", main = true },
+  { id = "k16c", key = "iec/coils/relay", at = [120, 144], device = "k16", main = true },
+  { id = "k11a", key = "iec/contacts/no", at = [80, 184], device = "k11", main = false },
+  { id = "k12a", key = "iec/contacts/no", at = [88, 216], device = "k12", main = false },
+  { id = "k13a", key = "iec/contacts/no", at = [96, 184], device = "k13", main = false },
+  { id = "k14a", key = "iec/contacts/no", at = [104, 216], device = "k14", main = false },
+  { id = "k15a", key = "iec/contacts/no", at = [112, 184], device = "k15", main = false },
+  { id = "k16a", key = "iec/contacts/no", at = [120, 216], device = "k16", main = false },
+]
+
+wire = [
+  { from = "f1s.2", to = "a1s.COM" },
+  { from = "a1s.1", to = "k11c.A1" }, { from = "a1s.2", to = "k12c.A1" }, { from = "a1s.3", to = "k13c.A1" },
+  { from = "a1s.4", to = "k14c.A1" }, { from = "a1s.5", to = "k15c.A1" }, { from = "a1s.6", to = "k16c.A1" },
+]
+
+[plate]
+width = 200
+height = 385
+
+[[rail]]
+id = "r1"
+x = 10
+y = 100
+length = 180

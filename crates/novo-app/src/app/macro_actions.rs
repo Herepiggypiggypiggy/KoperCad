@@ -57,6 +57,8 @@ pub(crate) struct PlaceWindow {
     parts: Vec<PartRef>,
     carry_parts: bool,
     values: Vec<(String, Value)>,
+    /// Where the picked circuit's devices sit on a plate, if it says.
+    mounting: Option<novo_parts::MountingView>,
     shown: Option<Shown>,
     status: String,
 }
@@ -75,7 +77,7 @@ impl PlaceWindow {
         };
         if !self.started {
             self.started = true;
-            if let Err(e) = library.install_starters() {
+            if let Err(e) = library.install_standard() {
                 self.status = format!("Starter macros: {e}");
             }
         }
@@ -104,6 +106,7 @@ impl PlaceWindow {
             parts: Vec::new(),
             carry_parts: true,
             values: Vec::new(),
+            mounting: None,
             shown: None,
             status: String::new(),
         }
@@ -142,6 +145,7 @@ impl PlaceWindow {
             .and_then(|f| f.extra.get("parts"))
             .map(macro_place::parts_from_json)
             .unwrap_or_default();
+        self.mounting = file.as_ref().and_then(|f| f.mounting());
         self.values = file
             .map(|f| {
                 f.definition
@@ -430,7 +434,7 @@ impl NovoApp {
         }
         if !win.started {
             win.started = true;
-            if let Some(Err(e)) = win.library.as_ref().map(|l| l.install_starters()) {
+            if let Some(Err(e)) = win.library.as_ref().map(|l| l.install_standard()) {
                 win.status = format!("Starter macros: {e}");
             }
         }
@@ -526,7 +530,14 @@ impl NovoApp {
                         if entries.is_empty() {
                             ui.weak("No macros. Select a circuit and use Save as macro.");
                         }
+                        let mut folder: Option<&str> = None;
                         for entry in &entries {
+                            if folder != Some(entry.folder.as_str()) {
+                                folder = Some(entry.folder.as_str());
+                                if !entry.folder.is_empty() {
+                                    novo_theme::widgets::section_label(ui, &entry.folder);
+                                }
+                            }
                             let selected = win.selected.as_deref() == Some(entry.path.as_str());
                             let clicked = novo_theme::widgets::row(ui, selected, |ui| {
                                 ui.label(
@@ -582,6 +593,24 @@ impl NovoApp {
                                     }
                                 });
                             }
+                        }
+                        if let Some(view) = &win.mounting {
+                            let texts: Vec<(String, String)> = win
+                                .values
+                                .iter()
+                                .map(|(n, v)| {
+                                    let v = match v {
+                                        Value::Float(v) => v.to_string(),
+                                        Value::Int(v) => v.to_string(),
+                                        Value::Bool(v) => v.to_string(),
+                                        Value::Text(v) => v.clone(),
+                                    };
+                                    (n.clone(), v)
+                                })
+                                .collect();
+                            egui::CollapsingHeader::new("Mounting view")
+                                .id_salt("place_mounting")
+                                .show(ui, |ui| super::macro_mounting::show(ui, view, &texts));
                         }
                         ui.checkbox(&mut win.keep_numbers, "Keep the macro's wire numbers");
                         if !win.parts.is_empty() {

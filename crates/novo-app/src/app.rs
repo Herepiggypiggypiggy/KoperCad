@@ -190,6 +190,7 @@ mod macro_company_tests;
 mod macro_editor;
 #[cfg(test)]
 mod macro_editor_tests;
+mod macro_mounting;
 mod macro_thumb;
 mod manual;
 mod menu_bar;

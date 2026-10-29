@@ -1,0 +1,57 @@
+# 48 V AC control line and a 24 V DC supply made from it.
+name = "Control supply 48 V AC and 24 V DC"
+chapter = "supply"
+description = "Control transformer with fuses and breaker, and an AC/DC power supply that makes 24 V DC from the 48 V line"
+tags = ["transformer", "control supply", "48 V", "24 V", "dc", "power supply", "fuse"]
+notes = """Two outputs: the 48 V AC line with its 0 V, and 24 V DC with its return (M). \
+You connect: two phases above F1, PE above the PE terminal, the 48 V line from F2 and 0 V from T1 wherever the control circuits start, 24 V from F3 and M."""
+
+parameter = [
+  { name = "power", default = 250, description = "Transformer power in VA" },
+  { name = "dc_current", default = 5, description = "24 V DC output current in A" },
+]
+
+open = ["f1s.1,3", "pe1.1", "f3s.2", "g1s.M"]
+
+device = [
+  { id = "f1", tag = "-F1", description = "Primary fuses", mount = { kind = "din", size = [36, 90, 70], at = [15, 45], rail = "r1" } },
+  { id = "t1", tag = "-T1", description = "Control transformer {power} VA, 400 V to 48 V", props = { power_va = "{power}" }, mount = { kind = "plate", size = [120, 105, 105], at = [15, 145] } },
+  { id = "f2", tag = "-F2", description = "48 V circuit breaker", mount = { kind = "din", size = [18, 90, 70], at = [60, 45], rail = "r1" } },
+  { id = "g1", tag = "-G1", description = "Power supply 48 V AC to 24 V DC, {dc_current} A", props = { rated_current_a = "{dc_current}" }, mount = { kind = "din", size = [45, 125, 115], at = [15, 260], rail = "r2" } },
+  { id = "f3", tag = "-F3", description = "24 V DC circuit breaker", mount = { kind = "din", size = [18, 90, 70], at = [65, 260], rail = "r2" } },
+]
+
+symbol = [
+  { id = "f1s", key = "iec/protection/fuse_2p", at = [40, 40], device = "f1" },
+  { id = "t1s", key = "iec/transformers/transformer_1ph", at = [40, 72], device = "t1" },
+  { id = "f2s", key = "iec/protection/mcb_1p", at = [40, 120], device = "f2" },
+  { id = "pe1", key = "iec/terminals/terminal_pe", at = [112, 136] },
+  { id = "g1s", key = "iec/supplies/power_supply_dc", at = [96, 160], device = "g1" },
+  { id = "f3s", key = "iec/protection/mcb_1p", at = [96, 200], device = "f3" },
+]
+
+wire = [
+  { from = "f1s.2", to = "t1s.1.1" },
+  { from = "f1s.4", to = "t1s.1.2" },
+  { from = "t1s.2.1", to = "f2s.1" },
+  { from = "f2s.2", to = "g1s.L" },
+  { from = "t1s.2.2", to = "g1s.N" },
+  { from = "pe1.2", to = "g1s.PE" },
+  { from = "g1s.L+", to = "f3s.1" },
+]
+
+[plate]
+width = 260
+height = 410
+
+[[rail]]
+id = "r1"
+x = 10
+y = 90
+length = 240
+
+[[rail]]
+id = "r2"
+x = 10
+y = 322
+length = 240
