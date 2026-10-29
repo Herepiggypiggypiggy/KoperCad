@@ -85,6 +85,7 @@ pub(crate) struct Workbench {
     /// The shortcut sheet (`?`).
     pub(super) shortcuts: super::shortcuts_sheet::ShortcutSheet,
     pub(super) icon_gallery: super::icon_gallery::IconGallery,
+    pub(super) app_menu: super::app_menu::AppMenu,
     /// The macro browser window.
     pub(super) macros: super::macro_browser::MacroBrowser,
     /// The Parts window (browser and one-click import), while open.
@@ -344,6 +345,7 @@ impl Default for Workbench {
             preferences: false,
             shortcuts: Default::default(),
             icon_gallery: Default::default(),
+            app_menu: Default::default(),
             macros: Default::default(),
             parts: None,
             macro_save: None,

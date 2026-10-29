@@ -29,6 +29,7 @@ impl NovoApp {
         let mut high_contrast = self.settings.high_contrast();
         let mut autosave = self.settings.autosave_interval().as_secs() as u32;
         let mut dock_labels = self.settings.dock_labels();
+        let mut menu_names = self.settings.show_menu_names();
         let mut ui_scale = self.settings.ui_scale_factor().to_bits();
         let width = novo_theme::dialog_width::MEDIUM;
         let modal = super::panel::modal_fill(
@@ -64,6 +65,13 @@ impl NovoApp {
                         "Compact fits more on a small screen; Touch has large controls for a tablet.",
                         &mut ui_density,
                         &densities,
+                    );
+                    choice(
+                        ui,
+                        "Menu names in the top bar",
+                        "Shown puts File, Edit, Draw and the other menu words next to the mark. Hidden leaves only the mark: its menu holds the same commands, and F10 opens it.",
+                        &mut menu_names,
+                        &[(true, "Shown"), (false, "Hidden")],
                     );
                     choice(
                         ui,
@@ -252,6 +260,9 @@ impl NovoApp {
         self.settings.appearance_density = ui_density.id().into();
         self.settings.appearance_contrast = if high_contrast { "high" } else { "" }.into();
         self.settings.set_dock_labels(dock_labels);
+        if menu_names != self.settings.show_menu_names() {
+            self.settings.menu_names = Some(menu_names);
+        }
         self.settings.ui_scale = (f32::from_bits(ui_scale) * 100.0).round() as u32;
         self.settings.xref_hide_spare = !show_spare;
         self.settings.xref_view = xref_view.id().into();
