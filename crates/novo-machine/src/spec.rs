@@ -188,6 +188,8 @@ pub const KEYS: &[SpecKey] = &[
 pub enum SpecError {
     /// A number that is not a number.
     NotANumber { key: &'static str, text: String },
+    /// A word that is not one of the known choices.
+    UnknownWord { key: &'static str, text: String },
     /// A count that has to be a whole number (poles) is not one.
     NotWhole { key: &'static str, value: f64 },
     /// The engine refused a value.
@@ -200,6 +202,9 @@ impl fmt::Display for SpecError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NotANumber { key, text } => write!(f, "{key}: \"{text}\" is not a number"),
+            Self::UnknownWord { key, text } => {
+                write!(f, "{key}: \"{text}\" is not a known choice")
+            }
             Self::NotWhole { key, value } => {
                 write!(f, "{key}: {value} must be a whole number")
             }
@@ -255,7 +260,7 @@ fn brake_source(text: &TextFn<'_>, number: &NumFn<'_>) -> Result<BrakeSource, Sp
                     boost_s: number("mech_rectifier_boost_s")?,
                 },
                 Some(other) => {
-                    return Err(SpecError::NotANumber {
+                    return Err(SpecError::UnknownWord {
                         key: "mech_rectifier",
                         text: other.to_owned(),
                     });
@@ -263,7 +268,7 @@ fn brake_source(text: &TextFn<'_>, number: &NumFn<'_>) -> Result<BrakeSource, Sp
             };
             Ok(BrakeSource::Rectifier(Rectifier::new(kind)?))
         }
-        Some(other) => Err(SpecError::NotANumber {
+        Some(other) => Err(SpecError::UnknownWord {
             key: "mech_brake_kind",
             text: other.to_owned(),
         }),
@@ -309,7 +314,7 @@ fn fine_lift(
         Some(t) if matches!(t.as_str(), "yes" | "y" | "true" | "1") => true,
         Some(t) if matches!(t.as_str(), "no" | "n" | "false" | "0") => false,
         Some(t) => {
-            return Err(SpecError::NotANumber {
+            return Err(SpecError::UnknownWord {
                 key: "mech_fl_releases_main_brake",
                 text: t,
             });
@@ -392,7 +397,7 @@ pub fn hoist_from_properties(
         Some(t) if t == "ac" => Switching::AcSide,
         Some(t) if t == "dc" => Switching::DcSide,
         Some(t) => {
-            return Err(SpecError::NotANumber {
+            return Err(SpecError::UnknownWord {
                 key: "mech_brake_switching",
                 text: t,
             });
@@ -607,7 +612,7 @@ mod tests {
             build(&p).unwrap_err().to_string()
         };
         assert!(bad(&[("mech_brake_kind", "magnetic")]).contains("mech_brake_kind"));
-        assert!(bad(&[("mech_rectifier", "triac")]).contains("mech_rectifier"));
+        assert!(bad(&[("mech_rectifier", "triac")]).contains("not a known choice"));
         assert!(
             bad(&[
                 ("mech_brake_pull_in", "0.3"),

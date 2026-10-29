@@ -10,4 +10,4 @@ Done (PR from branch claude/project-thread-8de6e0):
 - spec.rs: mech_brake_kind, mech_rectifier*, mech_fl_* keys.
 - Simulate > Hoist run: Faults to try, conditions.
 
-Next: closed-loop hoist (answer pending from Tadjiro's EPLAN project), DH-style gear arrangements if real data is supplied, motor current and heating on stall or single-phasing, 3D hook binding.
+Next: closed-loop hoist, other gear arrangements if real data is supplied, motor current and heating on stall or single-phasing, 3D hook binding.

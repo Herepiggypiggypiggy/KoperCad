@@ -12,8 +12,9 @@ use crate::motor::{Direction, Winding};
 /// Fidelity of the single-phasing torque.
 pub const SINGLE_PHASE_FIDELITY: Fidelity = Fidelity::Model;
 
-/// Amplitude of each of the two revolving fields of a motor on two phases, relative to the
-/// three-phase field (double revolving field model). A model constant.
+/// Share of the three-phase Kloss torque that each of the two revolving fields of a motor on
+/// two phases gives at its own slip (double revolving field model). It scales torque, not field
+/// amplitude. A model constant.
 pub const SINGLE_PHASE_FIELD_FACTOR: f64 = 0.5;
 
 /// One of the three supply phases.
@@ -90,9 +91,10 @@ impl Default for Supply {
 ///
 /// Three phases: the Kloss torque times the voltage ratio squared. One phase lost: the forward
 /// and the backward revolving field each give [`SINGLE_PHASE_FIELD_FACTOR`] of the Kloss torque
-/// at their own slip, so the net is exactly zero at standstill and a third of the three-phase
-/// torque near rated speed. The motor can keep turning on two phases once it runs, but it
-/// cannot start from rest.
+/// at their own slip, so the net is exactly zero at standstill and, near rated speed, between a
+/// fifth and a half of the three-phase torque (about 0.3 for a typical hoist winding, because the
+/// backward field still pulls at a slip near 2). The motor can keep turning on two phases once it
+/// runs, but it cannot start from rest.
 pub fn torque_nm(
     winding: &Winding,
     direction: Direction,
