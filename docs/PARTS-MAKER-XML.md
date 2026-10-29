@@ -1,8 +1,8 @@
 # Maker parts XML import
 
-Where to find it: File > Import parts > Import parts from a CAD parts export (pick the
+Where to find it: File > Import... > Import CAD parts export (pick the
 part file and its companion files together), the Parts window's Import catalog files, or a
-folder in the parts inbox (`kopercad-cli parts import`, File > Import parts > Import parts from
+folder in the parts inbox (`kopercad-cli parts import`, File > Import... > Import parts from
 a folder). Ctrl+K finds it with "maker xml", "data portal", "connection points" or "drilling".
 
 ## What it reads

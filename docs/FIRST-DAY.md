@@ -45,7 +45,7 @@ If the window stays black or the program does not start, use the Start menu entr
    Look through the pages. Press **Ctrl+Z** a few times and **Ctrl+Shift+Z** to see undo works on your project.
 3. **Save as** a new name (File > Save as). Close and reopen it: it should look the same.
 4. **Print**: File > Export print > Print preview and plot sets first, then Export PDF with options for the whole set. Open the PDF and check the title block and a page you know well.
-5. **Parts import** (if you have a price list or catalogue): File > Import parts > Import parts from a table (CSV or
+5. **Parts import** (if you have a price list or catalogue): File > Import... > Import parts table (CSV or
    Excel). Read the mapping step and the import report before accepting it.
 6. Press **Ctrl+K** and type what you want to do ("wire list", "bench", "kitting", "commissioning"; the wire test is the fourth tab of Commissioning). Letter keys work
    on the drawing only; click it first. A grey command tells you why when you hover.

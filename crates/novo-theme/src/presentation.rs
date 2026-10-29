@@ -364,6 +364,7 @@ pub const TABLE: &[Presentation] = &[
         "Controller from I/O table",
     ),
     row("file.export_centre", p(icons::EXPORT), "Export"),
+    row("file.import_centre", p(icons::DOWNLOAD_SIMPLE), "Import"),
     row("file.import_crane", p(icons::CRANE), "Import crane project"),
     row(
         "file.import_eplan",

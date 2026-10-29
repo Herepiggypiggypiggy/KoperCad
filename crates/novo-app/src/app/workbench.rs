@@ -18,6 +18,7 @@ use novo_editor::EditorKey;
 use novo_editor::tool::WiringMode;
 use novo_plc::link::LinkFormat;
 use novo_symbols::Library;
+use novo_workflow::centres::Centre;
 use novo_workflow::commands::Context;
 use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
 use novo_workflow::palette::{AddonEntry, LessonEntry, MacroEntry, Mode, Sources, Target};
@@ -106,8 +107,8 @@ pub(crate) struct Workbench {
     /// The Project information fields while the Project settings window is
     /// open: typed text, saved when a field loses focus.
     pub(super) project_info: Option<Vec<String>>,
-    /// The Export centre, while it is open.
-    pub(super) export_centre: Option<super::export_centre::ExportCentre>,
+    /// The Export or Import centre, while it is open.
+    pub(super) centre: Option<super::centre::CentreWindow>,
     /// The New crane project window, with the choices so far.
     pub(super) crane_new: Option<super::template_crane::CraneOptions>,
     /// The New pump station / motor control centre window.
@@ -374,7 +375,7 @@ impl Default for Workbench {
             macro_editor: Default::default(),
             project_settings: false,
             project_info: None,
-            export_centre: None,
+            centre: None,
             crane_new: None,
             plant_new: None,
             issue: None,
@@ -713,6 +714,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "addons.manage",
     "file.import_crane",
     "file.export_centre",
+    "file.import_centre",
     "file.import_eplan",
     "file.import_dwg",
     "file.choose_dwg_converter",
@@ -1651,7 +1653,8 @@ impl NovoApp {
                 }
             }
             "addons.manage" => self.open_addons(),
-            "file.export_centre" => self.open_export_centre(),
+            "file.export_centre" => self.open_centre(Centre::Export),
+            "file.import_centre" => self.open_centre(Centre::Import),
             "file.import_crane" => self.import_crane(),
             "file.import_eplan" => self.import_eplan(),
             "file.import_dwg" => self.import_dwg(),

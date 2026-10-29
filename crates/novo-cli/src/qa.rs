@@ -1072,20 +1072,21 @@ impl Ctx<'_> {
                     .map(|_| ())
             }
             "import_table" => {
-                // `import_table FILE`: File > Import parts > Import parts from a
-                // table, with the file dialog answered, so a scenario can
+                // `import_table FILE`: File > Import... > Import parts table,
+                // with the file dialog answered, so a scenario can
                 // screenshot the mapping, rows and refusal screens.
                 let file = need(1, "a table file")?.to_owned();
                 let w = |s: &[&str]| s.iter().map(|x| (*x).to_owned()).collect::<Vec<_>>();
                 self.step(&w(&["answer_dialog", &file]))?;
                 self.step(&w(&["click_text", "File"]))?;
                 self.step(&w(&["wait", "4"]))?;
-                self.step(&w(&["click_text", "Import parts"]))?;
+                self.step(&w(&["click_text", "Import..."]))?;
                 self.step(&w(&["wait", "4"]))?;
-                self.step(&w(&[
-                    "click_text",
-                    "Import parts from a table (CSV or Excel)",
-                ]))?;
+                self.step(&w(&["text", "table"]))?;
+                self.step(&w(&["wait", "4"]))?;
+                self.step(&w(&["click_text", "Import parts table"]))?;
+                self.step(&w(&["wait", "2"]))?;
+                self.step(&w(&["click_text", "Import", "Button", "#1"]))?;
                 self.step(&w(&["wait", "20"]))
             }
             "expect" | "expect_not" => {

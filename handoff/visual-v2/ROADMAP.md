@@ -6,4 +6,4 @@ Done (PR 1, branch `claude/visual-v2-menus`): V2b, the app menu. The mark opens 
 Next: V2a top bar (40 pt bar, icon workspace segment, breadcrumb pill with page switcher, search pill, issues pill, breakpoints), then V2c (label policy 28, relocation per section 5.2, the budget test) once the destinations exist (V3 rails, V4 centres).
 Open: the design default for the menu words is hidden; this PR keeps them shown (`MENU_NAMES_DEFAULT` in `settings.rs`) because lessons and QA scenarios click the menu words. Lane V7 flips the constant together with those updates.
 
-Update 2026-10-29: V2a, V2b, V2c merged. V4a (Export centre) in review. Next: V4b options and preview pane in the Export centre; V4c Import centre (File > Import and Import parts); drawer toolbars (terminals, cables); Project and Pages moves; V7 flips the menu-words default.
+Update 2026-10-29: V2a, V2b, V2c merged. V4a (Export centre) in review. Next: V4b options and preview pane in the Export centre; V4c Import centre (built, in review); drawer toolbars (terminals, cables); Project and Pages moves; V7 flips the menu-words default.

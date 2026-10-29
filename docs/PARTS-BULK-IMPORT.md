@@ -24,7 +24,7 @@ is needed and where to save. `--dry-run` reads and reports without writing.
 
 The same import runs from the app, no command line needed:
 
-- **File > Import parts > Import parts from a folder** (command `parts.import_folder`,
+- **File > Import... > Import parts folder** (command `parts.import_folder`,
   also in the Ctrl+K palette as "import parts"): pick a folder of catalog files
   (the picker opens in the inbox); the result and the files that held no parts
   are listed afterwards.

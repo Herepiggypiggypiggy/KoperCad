@@ -375,7 +375,7 @@ const FEATURES: &[(&str, &str, &str, &str)] = &[
     (
         "Parts catalogue",
         "Assign parts, import maker data and tables",
-        "Parts panel, File > Import parts",
+        "Parts panel, File > Import...",
         "motor-starter.html#parts",
     ),
     (

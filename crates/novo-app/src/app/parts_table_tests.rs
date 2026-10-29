@@ -24,10 +24,11 @@ Example Maker;;Ohne Nummer;1;;;c\n";
 #[test]
 fn the_command_is_run_by_the_app_and_in_the_menu() {
     assert!(super::workbench::app_runs("parts.import_table"));
+    // Its row is in the Import centre, not in a File submenu.
     assert!(
-        novo_workflow::menus::entries("File")
-            .iter()
-            .any(|(info, _)| info.id == "parts.import_table")
+        novo_workflow::centres::Centre::Import
+            .ids()
+            .any(|id| id == "parts.import_table")
     );
 }
 

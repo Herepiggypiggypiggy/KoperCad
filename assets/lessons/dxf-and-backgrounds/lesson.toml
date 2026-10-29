@@ -90,12 +90,12 @@ title_nl = "Zet een DXF achter de pagina"
 text = "Use a floor plan or a machine drawing as a guide while you draw, without mixing it into the schematic."
 text_nl = "Gebruik een plattegrond of machinetekening als hulp tijdens het tekenen, zonder die met het schema te mengen."
 how = [
-  "Open **File > Import > Import DXF as background**.",
+  "Open {ui:cmd.file.import_centre}, pick {ui:cmd.file.import_dxf_background} and press Enter.",
   "Pick a DXF file. One of the files you just exported works, from the folder **<project name> DXF**.",
   "The drawing appears pale behind the page.",
 ]
 how_nl = [
-  "Open **File > Import > Import DXF as background**.",
+  "Open {ui:cmd.file.import_centre}, pick {ui:cmd.file.import_dxf_background} and press Enter.",
   "Kies een DXF-bestand. Een van de bestanden die je net exporteerde werkt, uit de map **<projectnaam> DXF**.",
   "De tekening verschijnt bleek achter de pagina.",
 ]
@@ -116,12 +116,12 @@ title_nl = "Haal hem weer weg"
 text = "When you no longer need the guide, remove it. The page keeps everything you drew."
 text_nl = "Heb je de hulp niet meer nodig, haal hem dan weg. De pagina behoudt alles wat je tekende."
 how = [
-  "Open **File > Import > Remove the DXF background**.",
+  "Open {ui:cmd.file.import_centre}, pick {ui:cmd.file.remove_background} and press Enter.",
   "It is greyed out on a page that has no background.",
   "It is one undo step, so {key:edit.undo} brings the background back.",
 ]
 how_nl = [
-  "Open **File > Import > Remove the DXF background**.",
+  "Open {ui:cmd.file.import_centre}, pick {ui:cmd.file.remove_background} and press Enter.",
   "Op een pagina zonder achtergrond is het grijs.",
   "Het is één stap, dus {key:edit.undo} brengt de achtergrond terug.",
 ]

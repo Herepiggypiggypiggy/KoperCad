@@ -8,7 +8,7 @@
 //! scripts alone.
 //!
 //! Not driven headless, and what is checked instead:
-//! - the file dialog of File > Import spreadsheet (`import_sheet_from` stands in for its answer;
+//! - the file dialog of File > Import... > Import spreadsheet (`import_sheet_from` stands in for its answer;
 //!   the preview and Enter are driven for real);
 //! - Excel (the workbook is edited with `novo_interop::sheets`);
 //! - the PDF viewer (the exported file is read: it exists and has bookmarks; bookmark texts,
@@ -580,7 +580,7 @@ fn export_via_centre(l: &mut Ox, query: &str, tile: &str) {
     menu(l, &["File", "Export..."]);
     l.d.app
         .wb
-        .export_centre
+        .centre
         .as_mut()
         .expect("the Export centre opens")
         .query = query.to_owned();
@@ -717,7 +717,7 @@ fn wire_list_and_bom_every_step_works_from_its_own_start() {
     }
     l.next();
 
-    // import-part: File > Import spreadsheet opens a file dialog (not driven headless); the
+    // import-part: File > Import... > Import spreadsheet opens a file dialog (not driven headless); the
     // dialog's answer is the saved file. Then the preview, and Enter applies it.
     l.open("import-part");
     l.d.app.import_sheet_from(&xlsx);

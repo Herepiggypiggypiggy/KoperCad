@@ -206,7 +206,7 @@ impl NovoApp {
             self.message(
                 Level::Error,
                 format!(
-                    "Parts import: {name} is a file, not a folder. To import one CSV or Excel file use File > Import parts > Import parts from a table."
+                    "Parts import: {name} is a file, not a folder. To import one CSV or Excel file use File > Import... > Import parts table."
                 ),
             );
             return false;
