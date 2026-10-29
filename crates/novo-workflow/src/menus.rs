@@ -126,20 +126,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("terminal.strip_up", under("Draw", "Terminals")),
     ("terminal.strip_down", under("Draw", "Terminals")),
     ("terminal.strip_lowest", under("Draw", "Terminals")),
-    ("terminal.add_spares", under("Draw", "Terminal strips")),
-    ("terminal.rename", under("Draw", "Terminal strips")),
-    ("terminal.renumber", under("Draw", "Terminal strips")),
-    ("terminal.join_duplicates", under("Draw", "Terminal strips")),
-    ("terminal.set_kind", under("Draw", "Terminal strips")),
-    ("terminal.set_level", under("Draw", "Terminal strips")),
-    ("terminal.set_jumper", under("Draw", "Terminal strips")),
-    ("terminal.order_up", under("Draw", "Terminal strips")),
-    ("terminal.order_down", under("Draw", "Terminal strips")),
-    ("terminal.style", under("Draw", "Terminal strips")),
-    (
-        "terminal.restore_declined",
-        under("Draw", "Terminal strips"),
-    ),
     // View
     ("layout.draw", under("View", "Layouts")),
     ("layout.cabinet", under("View", "Layouts")),
@@ -243,10 +229,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("report.devices", at("Reports")),
     ("report.wires", at("Reports")),
     ("report.terminals", at("Reports")),
-    ("cable.rename", under("Draw", "Cables")),
-    ("cable.delete", under("Draw", "Cables")),
-    ("cable.retype", under("Draw", "Cables")),
-    ("cable.restore_proposals", under("Draw", "Cables")),
     ("report.cables", at("Reports")),
     ("report.cutlist", at("Reports")),
     ("report.labels", at("Reports")),
@@ -354,10 +336,13 @@ pub const MOVED: &[&str] = &[
     "view.devices_drawer",
 ];
 
-/// Whether the menu row of `id` moved to a rail ([`MOVED`]) or to the Export
-/// centre ([`crate::centres`]).
+/// Whether the menu row of `id` moved to a rail ([`MOVED`]), to a centre
+/// ([`crate::centres`]) or to the toolbar of a drawer
+/// ([`crate::homes::DRAWER_TOOLBARS`]).
 pub fn moved_out(id: &str) -> bool {
-    MOVED.contains(&id) || crate::centres::replaces_menu_row(id)
+    MOVED.contains(&id)
+        || crate::centres::replaces_menu_row(id)
+        || crate::homes::drawer_of(id).is_some()
 }
 
 /// The command's place in the menu bar, or `None` for the commands in
@@ -597,10 +582,7 @@ const SUB_FIRST: &[(&str, &[&str])] = &[
         "Edit",
         &["Paste special", "Parts", "Wire numbers", "Renumber"],
     ),
-    (
-        "Draw",
-        &["Terminals", "Terminal strips", "Cables", "PLC", "Macros"],
-    ),
+    ("Draw", &["Terminals", "PLC", "Macros"]),
 ];
 
 /// What the menu bar draws: [`layout`] with the plain rows in their
@@ -893,7 +875,7 @@ mod tests {
             // formats are in the Export centre, the imports in the Import centre.
             ("File", 47),
             ("Edit", 30),
-            ("Draw", 39),
+            ("Draw", 24),
             ("View", 65),
             ("Check", 11),
             ("Reports", 17),
@@ -917,7 +899,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 253, "the menus hold {total} rows");
+        assert!(total <= 238, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File

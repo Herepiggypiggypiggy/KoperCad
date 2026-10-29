@@ -219,6 +219,19 @@ pub(crate) fn menu_anchors() -> &'static [MenuAnchor] {
                 });
             }
         }
+        // A drawer toolbar draws a button for a command that left Draw; while
+        // the drawer is shut a lesson points at the rail button that opens it.
+        for (drawer, ids) in novo_workflow::homes::DRAWER_TOOLBARS {
+            for id in *ids {
+                if let Some(info) = novo_workflow::commands::get(id) {
+                    all.push(MenuAnchor {
+                        id: format!("cmd.{id}"),
+                        label: info.label.to_owned(),
+                        parent: Some(format!("cmd.{drawer}")),
+                    });
+                }
+            }
+        }
         // A centre draws a tile for each command; while it is shut a lesson
         // points at the File row that opens it.
         for centre in [

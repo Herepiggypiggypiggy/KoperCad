@@ -662,6 +662,7 @@ pub(super) fn strip_toolbar(
     edit: &mut TerminalEdit,
     declined: &[WireId],
     out: &mut Vec<ToolbarAction>,
+    spots: &mut Vec<(String, egui::Rect, bool, String)>,
 ) {
     // One row that scrolls sideways instead of wrapping: at 1366x768 the
     // wrapped buttons took two rows of a drawer that only holds a few
@@ -670,7 +671,7 @@ pub(super) fn strip_toolbar(
         .id_salt("terminal_toolbar")
         .auto_shrink([false, true])
         .show(ui, |ui| {
-            ui.horizontal(|ui| strip_toolbar_row(ui, project, strip, edit, declined, out));
+            ui.horizontal(|ui| strip_toolbar_row(ui, project, strip, edit, declined, out, spots));
         });
 }
 
@@ -681,6 +682,7 @@ fn strip_toolbar_row(
     edit: &mut TerminalEdit,
     declined: &[WireId],
     out: &mut Vec<ToolbarAction>,
+    spots: &mut Vec<(String, egui::Rect, bool, String)>,
 ) {
     {
         let tag = |s: DeviceId| {
@@ -720,7 +722,15 @@ fn strip_toolbar_row(
                 continue;
             }
             let label = novo_workflow::commands::get(id).map_or(id, |c| c.label);
-            if ui.small_button(label).clicked() {
+            let response = ui.small_button(label);
+            // Lessons point at the button by its command (`cmd.<id>`).
+            spots.push((
+                format!("cmd.{id}"),
+                response.rect,
+                response.clicked(),
+                label.to_owned(),
+            ));
+            if response.clicked() {
                 out.push(ToolbarAction::Command(id));
             }
         }
@@ -762,6 +772,27 @@ pub(super) fn row_menu(ui: &mut egui::Ui, out: &mut Vec<ToolbarAction>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The Draw menu no longer lists the strip edits: the drawer's toolbar
+    /// and row menu carry every one (`homes::DRAWER_TOOLBARS`).
+    #[test]
+    fn the_drawer_carries_every_strip_edit_that_left_the_menu() {
+        let listed = novo_workflow::homes::DRAWER_TOOLBARS
+            .iter()
+            .find(|(drawer, _)| *drawer == "view.terminals_drawer")
+            .map(|(_, ids)| *ids)
+            .unwrap();
+        for id in EDIT_COMMANDS {
+            assert!(listed.contains(&id), "{id} is on the drawer but not listed");
+        }
+        for id in listed {
+            assert!(
+                EDIT_COMMANDS.contains(id),
+                "{id} is listed but not on the drawer"
+            );
+        }
+    }
+
     use crate::app::gate1_tests::Drive;
     use novo_core::DeviceTag;
 
@@ -805,15 +836,19 @@ mod tests {
     }
 
     #[test]
-    fn the_commands_are_run_by_the_app_and_sit_under_draw_terminals() {
-        let draw = novo_workflow::menus::entries("Draw");
+    fn the_commands_are_run_by_the_app_and_sit_in_the_terminals_drawer() {
         for id in EDIT_COMMANDS {
             assert!(crate::app::workbench::app_runs(id), "{id}");
-            let (_, place) = draw
-                .iter()
-                .find(|(info, _)| info.id == id)
-                .unwrap_or_else(|| panic!("{id} is not in the Draw menu"));
-            assert_eq!(place.submenu, Some("Terminal strips"), "{id}");
+            let info = novo_workflow::commands::get(id).unwrap();
+            assert!(
+                novo_workflow::menus::place(info).is_none(),
+                "{id} has a menu row"
+            );
+            assert_eq!(
+                novo_workflow::homes::drawer_of(id),
+                Some("view.terminals_drawer"),
+                "{id}"
+            );
         }
     }
 
