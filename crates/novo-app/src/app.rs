@@ -1768,6 +1768,7 @@ impl NovoApp {
         self.window_width = ctx.content_rect().width();
         self.window_height = ctx.content_rect().height();
         self.sync_panels(&ctx);
+        panel::splitters_reset(&ctx);
         self.follow_window(self.window_width, self.window_height);
         let pinned = self.outline_pinned() && !self.focus_mode;
         if pinned {
