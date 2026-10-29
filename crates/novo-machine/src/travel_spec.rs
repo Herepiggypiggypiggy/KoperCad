@@ -118,16 +118,7 @@ pub fn travel_from_properties(
     let number = |key: &'static str| -> Result<f64, SpecError> {
         let default = KEYS.iter().find(|k| k.key == key).map_or("", |k| k.default);
         let raw = text(key).unwrap_or_else(|| default.to_owned());
-        // A comma is a decimal comma ("1,5" is 1.5), but a comma followed by three digits
-        // ("5,000") could as well be a thousands separator: refused, not guessed.
-        if let Some((_, after)) = raw.split_once(',')
-            && after.chars().filter(char::is_ascii_digit).count() >= 3
-        {
-            return Err(SpecError::NotANumber { key, text: raw });
-        }
-        raw.replace(',', ".")
-            .parse::<f64>()
-            .map_err(|_| SpecError::NotANumber { key, text: raw })
+        crate::spec::decimal(key, raw)
     };
     let np = MotorNameplate {
         voltage_v: number("trav_motor_v")?,
@@ -282,6 +273,18 @@ mod tests {
         }
         let p = props(&[(TRAVEL_KEY, "5000,5")]);
         assert!(build(&p).unwrap().is_some());
+    }
+
+    #[test]
+    fn zero_before_the_comma_is_a_decimal() {
+        // An integer part of 0 cannot be a thousands group.
+        for text in ["0,500", "0,5"] {
+            let p = props(&[(TRAVEL_KEY, "5000"), ("trav_rolling", text)]);
+            assert!(build(&p).is_ok(), "{text}");
+        }
+        assert_eq!(crate::spec::decimal("k", "-0,125".into()).unwrap(), -0.125);
+        let p = props(&[(TRAVEL_KEY, "5000"), ("trav_rolling", "10,500")]);
+        assert!(matches!(build(&p), Err(SpecError::NotANumber { .. })));
     }
 
     #[test]
