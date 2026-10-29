@@ -928,6 +928,53 @@ fn shared_estop_chain_is_an_and_so_a_pressed_pendant_estop_opens_it() {
 }
 
 #[test]
+fn a_target_that_mixes_an_and_chain_with_an_ordinary_signal_is_reported() {
+    let mut set = ControllerSet::new();
+    set.add_instance("radio", "Radio", &radio_profile())
+        .unwrap();
+    let chain = Target::Pin("-A1:E1".into());
+    fn mixed(t: &BindingTable, set: &ControllerSet) -> Vec<BindingFinding> {
+        t.check(set)
+            .into_iter()
+            .filter(|f| f.problem == BindingProblem::MixedOrAnd)
+            .collect()
+    }
+
+    let mut t = BindingTable::new();
+    t.bind(SignalKey::new("radio", "ESTOP_OK"), chain.clone());
+    assert!(mixed(&t, &set).is_empty(), "a chain alone is fine");
+
+    // an ordinary signal on the same target hides an open chain: the check says so
+    t.bind(SignalKey::new("radio", "MAIN"), chain.clone());
+    let found = mixed(&t, &set);
+    assert_eq!(found.len(), 1, "one line per target");
+    assert_eq!(found[0].severity, Severity::Warning);
+    assert!(found[0].message.contains("radio/ESTOP_OK"));
+    assert!(found[0].message.contains("radio/MAIN"));
+
+    // the behaviour the warning is about: the ordinary signal (here MAIN, inverted so it is high
+    // while the main switch is off, as an E-stop pressed drops it) overrides the open chain
+    let mut t = BindingTable::new();
+    t.bind(SignalKey::new("radio", "ESTOP_OK"), chain.clone());
+    t.bind_with(SignalKey::new("radio", "MAIN"), chain.clone(), true);
+    assert_eq!(mixed(&t, &set).len(), 1);
+    assert_eq!(t.resolve(&set)[&chain], 1.0);
+    act(&mut set, "radio", press("estop"));
+    assert_eq!(set.level(&SignalKey::new("radio", "ESTOP_OK")), Some(0.0));
+    assert_eq!(
+        t.resolve(&set)[&chain],
+        1.0,
+        "the pressed E-stop is hidden: this is what the check warns about"
+    );
+
+    // two ordinary signals alone are not this problem
+    let mut t = BindingTable::new();
+    t.bind(SignalKey::new("radio", "MAIN"), chain.clone());
+    t.bind(SignalKey::new("radio", "H_UP_SLOW"), chain);
+    assert!(mixed(&t, &set).is_empty());
+}
+
+#[test]
 fn two_signals_of_one_controller_on_one_target_are_reported() {
     let set = two_radios();
     let mut t = BindingTable::new();
