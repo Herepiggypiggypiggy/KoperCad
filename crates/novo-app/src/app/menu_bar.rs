@@ -317,7 +317,7 @@ impl NovoApp {
 
     /// Why a command cannot run now, from its needs and the shell's own
     /// rules for the action behind it.
-    fn command_unavailable(&self, info: &CommandInfo) -> Option<&'static str> {
+    pub(super) fn command_unavailable(&self, info: &CommandInfo) -> Option<&'static str> {
         if let Err(reason) = commands::availability(info, &self.command_context()) {
             return Some(reason);
         }
@@ -336,6 +336,9 @@ impl NovoApp {
             return Some("This page has no DXF background");
         }
         match info.id {
+            "file.import_controller" if !self.addon_enabled(super::addons::CONTROLLERS_ADDON) => {
+                return Some(super::addons::CONTROLLERS_NEEDED);
+            }
             "proposal.accept" if self.page_proposals().is_empty() => {
                 return Some("No proposal on this page");
             }
