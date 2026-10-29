@@ -84,6 +84,7 @@ pub(crate) struct Workbench {
     pub(super) preferences: bool,
     /// The shortcut sheet (`?`).
     pub(super) shortcuts: super::shortcuts_sheet::ShortcutSheet,
+    pub(super) icon_gallery: super::icon_gallery::IconGallery,
     /// The macro browser window.
     pub(super) macros: super::macro_browser::MacroBrowser,
     /// The Parts window (browser and one-click import), while open.
@@ -112,6 +113,7 @@ pub(crate) struct Workbench {
     pub(super) faults: Option<super::faults::FaultsWindow>,
     /// The Hoist run window and the run in it.
     pub(super) hoist: super::hoist_run::HoistRun,
+    pub(super) drive_run: super::drive_run::DriveRun,
     pub(super) motor_freq: super::motor_freq::MotorFreq,
     /// The Add fault window (`sim.add_fault`), while it is open.
     pub(super) add_fault: Option<super::faults::AddFault>,
@@ -336,6 +338,7 @@ impl Default for Workbench {
             plc_list: None,
             preferences: false,
             shortcuts: Default::default(),
+            icon_gallery: Default::default(),
             macros: Default::default(),
             parts: None,
             macro_save: None,
@@ -349,6 +352,7 @@ impl Default for Workbench {
             compare: None,
             faults: None,
             hoist: Default::default(),
+            drive_run: Default::default(),
             motor_freq: Default::default(),
             add_fault: None,
             calculations: None,
@@ -532,6 +536,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "sim.plc_program",
     "sim.faults",
     "sim.hoist",
+    "sim.drive_run",
     "sim.motor_curves",
     "sim.add_fault",
     "view.changes",
@@ -684,6 +689,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "xref.link",
     "app.preferences",
     "view.shortcuts",
+    "view.icon_gallery",
     "help.show_hints",
     "help.next_lesson",
     "help.whats_new",
@@ -1404,6 +1410,7 @@ impl NovoApp {
             }
             "sim.faults" => self.toggle_faults(),
             "sim.hoist" => self.toggle_hoist_run(),
+            "sim.drive_run" => self.toggle_drive_run(),
             "sim.motor_curves" => self.toggle_motor_curves(),
             "sim.add_fault" => self.begin_add_fault(),
             "view.changes" => self.toggle_changes(argument),
@@ -1615,6 +1622,7 @@ impl NovoApp {
                 self.wb.preferences = true;
             }
             "view.shortcuts" => self.toggle_shortcuts(),
+            "view.icon_gallery" => self.toggle_icon_gallery(),
             "help.show_hints" => self.show_hints_again(),
             "help.whats_new" => self.show_whats_new = true,
             "help.next_lesson" => self.learn_run_command(id, None),

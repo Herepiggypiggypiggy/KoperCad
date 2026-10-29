@@ -14,3 +14,7 @@ Conventions: reactances are given at the rated frequency per phase of the equiva
 Fit: Rs = rs_over_rr x Rr and equal leakage split by default; when the nameplate losses exceed copper plus the entered core and friction, the surplus goes to core and friction and a breakdown ratio is assumed (reported in `FitReport::assumed_breakdown_ratio` and a note). Constant rotor resistance underestimates standstill torque of deep-bar motors.
 Not modelled: flux transients, harmonics, skin effect, temperature. Torque follows the steady-state curve instantly.
 Resume: `cargo test -p novo-drive`. UI: Simulate > Motor at variable frequency.
+
+L5a part 3 (travel drive in the loop): `novo_machine::travel_loop` (`TravelLoop`, `TravelModule`, `TravelLoad`) and `novo_machine::travel_spec` (`trav_*` properties of a motor). Tick order is in `docs/design/electromechanical-loop.md`. UI: motor property sheet "Travel drive", Simulate > Drive run (`sim.drive_run`, `app/drive_run.rs`), fixture `qa/fixtures/travel-drive.novo` (built by `crates/novo-tests/examples/travel_fixture.rs`), QA 611.
+Limits: constant rolling resistance, no stiction or brake, drive output not traced through the drawing, fit assumptions shown in the window. Hand case 9 (current-limit acceleration, 2.618 s) is still ignored: it needs a closed-loop run with a stiffer load than this first slice.
+Resume: `cargo test -p novo-machine -p novo-drive`.

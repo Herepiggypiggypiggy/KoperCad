@@ -125,6 +125,8 @@ impl NovoApp {
         };
         let stopped = &self.wb.addons.stopped;
         let ext = Extensions::build_excluding(&set, &in_use, &|id| stopped.contains_key(id));
+        // Their icons and short labels join the tables the rail, menus and Ctrl K read.
+        super::addons_look::sync(&ext);
         for warning in &set.warnings {
             log::warn!("add-ons: {warning}");
         }

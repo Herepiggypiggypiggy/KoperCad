@@ -8,6 +8,8 @@ pub mod crane;
 pub mod hoist_loop;
 pub mod port;
 pub mod spec;
+pub mod travel_loop;
+pub mod travel_spec;
 
 #[cfg(test)]
 mod tests {

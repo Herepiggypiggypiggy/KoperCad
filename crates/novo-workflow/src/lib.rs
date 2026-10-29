@@ -20,6 +20,8 @@
 //! - [`manual`]: the offline user manual, with reference pages generated from
 //!   the command list, key map and menus.
 //! - [`menus`]: where each command sits in the menu bar.
+//! - [`homes`]: where each command can be found (menu, rail, centre, drawer
+//!   toolbar or only the command field), and the invariant that it has one.
 //! - [`locate`]: where a device occurs, as page and column (`/3.4`), on top
 //!   of novo-core's cross references.
 //! - [`renumber`]: renumber devices with a preview, as one undo step (J4).
@@ -39,6 +41,7 @@ pub mod expr;
 pub mod fuzzy;
 pub mod generate;
 pub mod history;
+pub mod homes;
 pub mod insert;
 pub mod keymap;
 pub mod language;
@@ -53,3 +56,6 @@ pub mod parametric;
 pub mod renumber;
 pub mod switch;
 pub mod userkeys;
+
+#[cfg(test)]
+mod presentation_tests;

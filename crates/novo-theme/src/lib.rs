@@ -10,12 +10,14 @@
 pub mod brand;
 pub mod canvas;
 mod density;
+pub mod drawn;
 pub mod emc;
 pub mod fonts;
 pub mod heat;
 pub mod icons;
 mod metrics;
 mod palette;
+pub mod presentation;
 mod style;
 pub mod table;
 pub mod tokens;

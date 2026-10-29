@@ -17,4 +17,5 @@ serde_json.workspace = true
 workspace = true
 
 [dev-dependencies]
+novo-theme.workspace = true
 novo-tests = { path = "../novo-tests" }

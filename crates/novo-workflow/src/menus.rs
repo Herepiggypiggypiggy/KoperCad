@@ -289,6 +289,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("simulate.motor-start", at("Simulate")),
     ("sim.faults", at("Simulate")),
     ("sim.hoist", at("Simulate")),
+    ("sim.drive_run", at("Simulate")),
     ("sim.motor_curves", at("Simulate")),
     ("sim.add_fault", at("Simulate")),
     ("view.protection", at("Simulate")),
@@ -367,6 +368,10 @@ const PALETTE_ONLY: &[(&str, &str)] = &[
     ("view.3d_trackpad_pans", "a switch of the 3D toolbar"),
     ("view.3d_move", "a switch of the 3D toolbar"),
     ("tool.repeat", "the key that repeats the last tool"),
+    (
+        "view.icon_gallery",
+        "a design reference for the icon set, opened from the command field",
+    ),
     ("edit.escape", "Esc"),
     (
         "view.command_field_here",
@@ -579,6 +584,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
             "sim.plc_program",
             "sim.faults",
             "sim.hoist",
+            "sim.drive_run",
             "sim.motor_curves",
             "view.protection",
         ]],

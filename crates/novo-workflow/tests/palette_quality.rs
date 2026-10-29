@@ -647,3 +647,16 @@ fn siemens_and_rockwell_find_the_places_that_choose_the_address_style() {
         }
     }
 }
+
+#[test]
+fn the_icon_gallery_is_found_by_name_and_by_its_dutch_word() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    assert_eq!(
+        search(&palette, &keymap, "icon gallery")[0].target,
+        Target::Command("view.icon_gallery")
+    );
+    assert_eq!(
+        search(&palette, &keymap, "pictogrammen")[0].target,
+        Target::Command("view.icon_gallery")
+    );
+}

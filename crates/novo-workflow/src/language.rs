@@ -153,6 +153,11 @@ pub const DUTCH: &[Aliases] = &[
         &["over de getallen", "schatting", "model", "rekenwaarde"],
     ),
     nl(
+        "view.icon_gallery",
+        &[],
+        &["pictogrammen", "iconen", "icoonbibliotheek"],
+    ),
+    nl(
         "help.learn",
         &["leren", "les"],
         &["leren", "training", "cursus", "uitleg"],
@@ -736,6 +741,17 @@ pub const DUTCH: &[Aliases] = &[
         "sim.hoist",
         &["hijsen"],
         &["kraan", "haak", "rem", "eindschakelaar", "tweesnelheden"],
+    ),
+    nl(
+        "sim.drive_run",
+        &["frequentieregelaar"],
+        &[
+            "rijden",
+            "loopkat",
+            "brug",
+            "kraanbaan",
+            "afstandsbediening",
+        ],
     ),
     nl(
         "sim.motor_curves",
