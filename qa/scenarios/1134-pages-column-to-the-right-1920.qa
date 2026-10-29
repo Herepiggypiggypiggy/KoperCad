@@ -6,7 +6,7 @@ wait 30
 shot left
 check_layout
 # The arrow beside the pin sends the column to the other side.
-click 236 57
+click 204 57
 wait 30
 expect "Main circuit"
 shot right

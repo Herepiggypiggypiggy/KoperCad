@@ -120,8 +120,9 @@ impl Panel {
 
     /// The panel can be docked at the left, the right or the bottom of the
     /// canvas: two buttons in its title bar, and snap zones while it is
-    /// dragged (see `panel_dock`). Not for cards that fit their content or
-    /// have no title bar.
+    /// dragged (see `panel_dock`). A card that fits its content floats at its
+    /// own size and fills its strip once docked. Not for cards that have no
+    /// title bar.
     pub(super) fn dockable(mut self) -> Self {
         self.dockable = true;
         self
@@ -231,9 +232,9 @@ impl Panel {
     ) -> Option<egui::InnerResponse<Option<R>>> {
         let id = id(self.id);
         note_seen(ctx, self.id);
-        // Cards that fit their content, have no title bar or are flyouts
-        // cannot be docked, whatever was asked for.
-        let dockable = self.dockable && self.title_bar && !self.fit && !self.flyout;
+        // Cards that have no title bar or are flyouts cannot be docked,
+        // whatever was asked for.
+        let dockable = self.dockable && self.title_bar && !self.flyout;
         // Docked: a pane of its slot, not a window.
         if dockable && let Some(slot) = super::panel_dock::slot_of(ctx, self.id) {
             return super::panel_dock::show_docked(
@@ -242,7 +243,11 @@ impl Panel {
                 self.id,
                 &self.title,
                 slot,
-                self.closable,
+                super::panel_dock::PaneOptions {
+                    closable: self.closable,
+                    float_tip: "Float this panel",
+                    scrolls: true,
+                },
                 add,
             );
         }

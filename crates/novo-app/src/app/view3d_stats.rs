@@ -87,6 +87,7 @@ impl Stats {
             400.0,
         )
         .fit()
+        .dockable()
         .show(ctx, |ui| {
             ui.label(egui::RichText::new(&text).monospace().small());
             ui.horizontal(|ui| {

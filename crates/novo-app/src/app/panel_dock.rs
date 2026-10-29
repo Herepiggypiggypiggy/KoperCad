@@ -179,6 +179,34 @@ pub(super) fn navigator_side_button(ui: &mut egui::Ui) {
     }
 }
 
+/// The name the Pages column docks under.
+pub(super) const PAGES: &str = "pages";
+
+/// Whether the Pages column is a pane of a dock slot rather than a column.
+pub(super) fn pages_docked(ctx: &egui::Context) -> Option<Slot> {
+    slot_of(ctx, PAGES)
+}
+
+/// The button in the header of the Pages column that makes it a pane of the
+/// strip on its side, stacked with the panels already docked there.
+pub(super) fn pages_dock_button(ui: &mut egui::Ui) {
+    let ctx = ui.ctx().clone();
+    let slot = if navigator_right(&ctx) {
+        Slot::Right
+    } else {
+        Slot::Left
+    };
+    let tip = match slot {
+        Slot::Right => "Dock Pages as a pane in the right strip, with other panels",
+        _ => "Dock Pages as a pane in the left strip, with other panels",
+    };
+    if novo_theme::widgets::icon_toggle(ui, novo_theme::icons::SQUARE_SPLIT_VERTICAL, false, tip)
+        .clicked()
+    {
+        set(&ctx, PAGES, Some(slot));
+    }
+}
+
 /// Where each slot was drawn this frame: the pane areas are laid out in it.
 fn rect_id(slot: Slot) -> egui::Id {
     egui::Id::new(("dock_rect", slot.code()))
@@ -356,7 +384,18 @@ enum Ask {
     Move(Slot),
 }
 
-/// A docked panel: a pane of its slot with a header and a body that scrolls.
+/// How a docked pane behaves: a close button, what its float button says, and
+/// whether the pane scrolls its body or the content brings its own scrolling.
+#[derive(Clone, Copy)]
+pub(super) struct PaneOptions {
+    pub closable: bool,
+    pub float_tip: &'static str,
+    pub scrolls: bool,
+}
+
+/// A docked panel: a pane of its slot with a header and a body that scrolls
+/// (`scrolls`) or brings its own scrolling. `float_tip` names what the float
+/// button does for this pane.
 /// `None` for the one frame before the slot exists.
 pub(super) fn show_docked<R>(
     ctx: &egui::Context,
@@ -364,7 +403,7 @@ pub(super) fn show_docked<R>(
     name: &str,
     title: &str,
     slot: Slot,
-    closable: bool,
+    opts: PaneOptions,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> Option<egui::InnerResponse<Option<R>>> {
     register(ctx, slot, name);
@@ -377,6 +416,11 @@ pub(super) fn show_docked<R>(
     let w = weights(ctx, slot, of);
     let sub = split(slot_area, slot, &w, at);
     let pal = crate::theme::ui_palette();
+    let PaneOptions {
+        closable,
+        float_tip,
+        scrolls,
+    } = opts;
     let mut ask = None;
     let mut closed = false;
     let mut out = egui::Area::new(id.with("docked"))
@@ -433,7 +477,7 @@ pub(super) fn show_docked<R>(
                                     .frame(false)
                                     .min_size(egui::vec2(BUTTON, BUTTON)),
                             )
-                            .on_hover_text("Float this panel")
+                            .on_hover_text(float_tip)
                             .clicked()
                         {
                             ask = Some(Ask::Float);
@@ -458,12 +502,19 @@ pub(super) fn show_docked<R>(
                     sub.max,
                 )
                 .shrink(6.0);
+                // `scrolls`: the pane scrolls its body; otherwise the content
+                // brings its own scrolling (the Pages list and its header).
                 let inner = ui
                     .scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
-                        egui::ScrollArea::both()
-                            .auto_shrink([false, false])
-                            .show(ui, add)
-                            .inner
+                        if scrolls {
+                            egui::ScrollArea::both()
+                                .auto_shrink([false, false])
+                                .show(ui, add)
+                                .inner
+                        } else {
+                            ui.set_clip_rect(body);
+                            add(ui)
+                        }
                     })
                     .inner;
                 if at + 1 < of {
@@ -618,6 +669,8 @@ mod tests {
     struct Harness {
         ctx: egui::Context,
         t: f64,
+        /// The panels fit their content, like the small cards do.
+        fit: bool,
     }
 
     struct Out {
@@ -628,7 +681,11 @@ mod tests {
     impl Harness {
         fn new() -> Self {
             let ctx = egui::Context::default();
-            Self { ctx, t: 100.0 }
+            Self {
+                ctx,
+                t: 100.0,
+                fit: false,
+            }
         }
 
         fn frame(&mut self, names: &[&'static str], events: Vec<egui::Event>) -> Out {
@@ -652,11 +709,11 @@ mod tests {
                 let ctx = ui.ctx().clone();
                 out.canvas = canvas;
                 for name in names {
-                    let shown = Panel::new(name, *name, canvas, Side::Right, 300.0)
-                        .dockable()
-                        .show(&ctx, |ui| {
-                            ui.label("body");
-                        });
+                    let panel = Panel::new(name, *name, canvas, Side::Right, 300.0).dockable();
+                    let panel = if self.fit { panel.fit() } else { panel };
+                    let shown = panel.show(&ctx, |ui| {
+                        ui.label("body");
+                    });
                     out.panels.push(shown.map(|r| r.response.rect));
                 }
             });
@@ -735,6 +792,39 @@ mod tests {
             "{pane:?} {:?}",
             out.canvas
         );
+    }
+
+    #[test]
+    fn a_card_that_fits_its_content_docks_and_floats_again() {
+        let mut h = Harness::new();
+        h.fit = true;
+        let home = h.settle(ONE).panels[0].unwrap();
+        assert!(
+            home.height() < 120.0,
+            "floats at its content's height: {home:?}"
+        );
+        // The title bar buttons work on a fitted card too.
+        let title = h
+            .ctx
+            .read_response(panel::id("dock_test_a").with("__title_click"))
+            .expect("a title bar")
+            .rect;
+        let at = egui::pos2(
+            title.right() - 4.0 - BUTTON / 2.0 - BUTTON,
+            title.center().y,
+        );
+        h.click(ONE, at);
+        assert_eq!(slot_of(&h.ctx, "dock_test_a"), Some(Slot::Left));
+        let out = h.settle(ONE);
+        let pane = out.panels[0].expect("the docked card is shown");
+        assert!((pane.width() - SIDE_DEFAULT).abs() < 2.0, "{pane:?}");
+        assert!(
+            (pane.height() - out.canvas.height()).abs() < 2.0,
+            "{pane:?}"
+        );
+        set(&h.ctx, "dock_test_a", None);
+        let back = h.settle(ONE).panels[0].unwrap();
+        assert!((back.min - home.min).length() < 3.0, "{home:?} {back:?}");
     }
 
     #[test]

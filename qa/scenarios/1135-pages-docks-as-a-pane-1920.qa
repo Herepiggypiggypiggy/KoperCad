@@ -1,0 +1,19 @@
+@title Pages docks as a pane of the left strip with the button in its header, moves to the right strip and floats back to the column (1920x1080)
+@area Windows
+@sizes 1920x1080
+click_text "Open example"
+wait 30
+shot column
+check_layout
+# The button beside the pin docks Pages as a pane of the strip on its side.
+click 237 57
+wait 30
+expect "Main circuit"
+shot docked-left
+check_layout
+# In the pane header the first button moves it to the right strip, the third floats it back to the column.
+click 293 54
+wait 30
+expect "Main circuit"
+shot docked-right
+check_layout
