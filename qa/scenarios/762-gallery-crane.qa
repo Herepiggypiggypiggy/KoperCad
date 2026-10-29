@@ -1,0 +1,70 @@
+@title Example gallery: overhead crane cabinet
+@area Examples
+# File > Examples > Open example: overhead crane cabinet. Every page (reached with Ctrl+K), the cabinet and 3D.
+fresh
+wait 10
+key ctrl+k
+wait 6
+text overhead crane
+wait 8
+key Enter
+wait 40
+expect "Supply, main contactor and 48 V"
+shot crane-first-view
+check_blank crane-first-view
+check_layout
+key ctrl+k
+wait 6
+text Supply, main contactor and 48 V
+wait 8
+key Enter
+wait 15
+expect "Supply, main contactor and 48 V"
+shot crane-page-1
+key ctrl+k
+wait 6
+text Hoist: two-speed motor and brake
+wait 8
+key Enter
+wait 15
+expect "Hoist: two-speed motor and brake"
+shot crane-page-2
+key ctrl+k
+wait 6
+text Travel: bridge and crab drives
+wait 8
+key Enter
+wait 15
+expect "Travel: bridge and crab drives"
+shot crane-page-3
+key ctrl+k
+wait 6
+text Control 48 V: hoist
+wait 8
+key Enter
+wait 15
+expect "Control 48 V: hoist"
+shot crane-page-4
+key ctrl+k
+wait 6
+text Control 48 V: travel relays
+wait 8
+key Enter
+wait 15
+expect "Control 48 V: travel relays"
+shot crane-page-5
+key ctrl+k
+wait 6
+text Drive commands
+wait 8
+key Enter
+wait 15
+expect "Drive commands"
+shot crane-page-6
+click_text "Cabinet"
+wait 20
+shot crane-cabinet
+check_blank crane-cabinet
+click_text "3D"
+wait 30
+shot crane-3d
