@@ -516,6 +516,9 @@ pub(super) fn natural_key(tag: &str) -> String {
     key
 }
 
+/// Said when the table is asked for and the cabinet has no mounting plate.
+const TABLE_NEEDS_PLATE: &str = "The table lists the devices of the mounting plate. Set the plate first (Cabinet, Plate setup).";
+
 pub(super) fn cabinet_table(
     ui: &mut egui::Ui,
     layout: &CabinetLayout,
@@ -883,6 +886,7 @@ impl NovoApp {
         let mut place_all_keyed = false;
         let mut delete_rail: Option<u64> = None;
         let mut move_rail: Option<super::cabinet_rails::RailDrag> = None;
+        let mut edit_ask: Option<super::cabinet_rails::RailAsk> = None;
         // Narrower than the fixed part of the bar (a 683 point window), the bar
         // scrolls sideways instead of running off the pane and the window.
         egui::ScrollArea::horizontal()
@@ -1641,8 +1645,8 @@ impl NovoApp {
                             ui.weak("Every device is placed");
                         }
                     });
-                cabinet_bar::note_rect(
-                    ui.ctx(),
+                cabinet_bar::note_rect_in(
+                    ui,
                     "cabinet.unplaced",
                     "Unplaced",
                     unplaced_panel.response.rect,
@@ -1803,7 +1807,10 @@ impl NovoApp {
                     let now_key = structure.map_or(0, |s| {
                         super::heat_sweep::key_of(project, s, ambient, &h.settings, &fans)
                     });
-                    let at = ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0);
+                    let at = super::panel::right_of_left_card(
+                        ui.ctx(),
+                        ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                    );
                     match self.cabinet.heat.advice.show(ui.ctx(), 1, now_key, at) {
                         Some(super::heat_sweep::Ask::Again) => self.cabinet.heat.advice.request(),
                         Some(super::heat_sweep::Ask::Add(c)) => ask = Some(Ask::CoolingPair(c)),
@@ -1815,7 +1822,10 @@ impl NovoApp {
                     self.cabinet.heat.layout.show(
                         ui.ctx(),
                         now_key,
-                        ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                        super::panel::right_of_left_card(
+                            ui.ctx(),
+                            ui.available_rect_before_wrap().min + egui::vec2(8.0, 8.0),
+                        ),
                     )
                 {
                     ask = Some(Ask::CoolerLayout(s, moves));
@@ -1855,13 +1865,7 @@ impl NovoApp {
                 self.cabinet.view.glide_secs =
                     super::motion::glide_secs(self.settings.reduce_motion);
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
-                cabinet_bar::note_rect(
-                    ui.ctx(),
-                    "cabinet.canvas",
-                    "Plate",
-                    out.response.rect,
-                    false,
-                );
+                cabinet_bar::note_rect_in(ui, "cabinet.canvas", "Plate", out.response.rect, false);
                 self.cabinet.heat.layout.paint(
                     &ui.painter_at(out.response.rect),
                     out.response.rect,
@@ -2012,15 +2016,63 @@ impl NovoApp {
                         .drag
                         .filter(|d| d.id == rail)
                         .map(|d| d.at);
-                    super::cabinet_rails::draw_selected(
-                        &ui.painter_at(rect),
-                        rect,
-                        &self.cabinet.view.viewport,
-                        project,
-                        rail,
-                        moved,
-                        novo_theme::Palette::of(ui),
-                    );
+                    let palette = novo_theme::Palette::of(ui);
+                    let painter = ui.painter_at(rect);
+                    let view = &self.cabinet.view.viewport;
+                    let resizing = self.cabinet.rails.resize.filter(|r| r.id == rail);
+                    let current = project.get::<novo_core::Rail>(novo_core::RailId::from(rail));
+                    if let Some(edit) = resizing.and_then(|r| r.edit) {
+                        // The piece the drag would leave, with its length.
+                        super::cabinet_rail_ends::draw_piece(
+                            &painter,
+                            (rect, view),
+                            project,
+                            rail,
+                            (edit.x, edit.y, edit.length),
+                            (
+                                &super::cabinet_rail_ends::edit_text(project, &edit),
+                                edit.stop.is_some(),
+                            ),
+                            palette,
+                        );
+                    } else if let Some(r) = current {
+                        let (x, y) = moved.unwrap_or((r.x, r.y));
+                        let stopped = self
+                            .cabinet
+                            .rails
+                            .drag
+                            .filter(|d| d.id == rail)
+                            .is_some_and(|d| d.stop.is_some());
+                        let note = if stopped {
+                            " - kept clear of what is in the way"
+                        } else {
+                            ""
+                        };
+                        super::cabinet_rail_ends::draw_piece(
+                            &painter,
+                            (rect, view),
+                            project,
+                            rail,
+                            (x, y, r.length),
+                            (&format!("{:.0} mm{note}", r.length), stopped),
+                            palette,
+                        );
+                    }
+                    if current.is_some() {
+                        let zoom = f64::from(view.zoom.max(0.01));
+                        super::cabinet_rail_ends::draw_handles(
+                            &painter,
+                            rect,
+                            view,
+                            project,
+                            rail,
+                            (
+                                super::cabinet_rail_ends::handle_size(zoom),
+                                resizing.map(|r| r.end),
+                            ),
+                            palette,
+                        );
+                    }
                 }
                 if let Some(input) = &heat_input {
                     super::heat::paint_over(
@@ -2190,6 +2242,16 @@ impl NovoApp {
                                 (14.0 / zoom).max(8.0),
                             )
                             .is_some()
+                        }) || self.cabinet.rails.selected.is_some_and(|id| {
+                            super::cabinet_rail_ends::pick_end(
+                                project,
+                                id,
+                                wx,
+                                wy,
+                                3.0 / zoom,
+                                super::cabinet_rail_ends::handle_size(zoom),
+                            )
+                            .is_some()
                         });
                         if !on_grip
                             && let Some(p) = on_plate.placements.iter().rev().find(|p| {
@@ -2243,7 +2305,42 @@ impl NovoApp {
                         } else {
                             out.response.hover_pos().and_then(|p| pick_at(to_world(p)))
                         };
-                        if self.cabinet.rails.drag.is_some() {
+                        let hs = super::cabinet_rail_ends::handle_size(zoom);
+                        let selected_rail = self.cabinet.rails.selected;
+                        let end_at = |w: (f64, f64)| {
+                            selected_rail.and_then(|id| {
+                                super::cabinet_rail_ends::pick_end(project, id, w.0, w.1, slack, hs)
+                                    .map(|end| (id, end))
+                            })
+                        };
+                        let horizontal = |id: u64| {
+                            project
+                                .get::<novo_core::Rail>(novo_core::RailId::from(id))
+                                .is_some_and(|r| !r.vertical)
+                        };
+                        let over_end = out
+                            .response
+                            .hover_pos()
+                            .and_then(|p| end_at(to_world(p)))
+                            .filter(|_| self.cabinet.drag.is_none());
+                        if self.cabinet.rails.trim {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+                            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                                self.cabinet.rails.trim = false;
+                            }
+                        } else if let Some(r) = self.cabinet.rails.resize {
+                            ui.ctx().set_cursor_icon(if horizontal(r.id) {
+                                egui::CursorIcon::ResizeHorizontal
+                            } else {
+                                egui::CursorIcon::ResizeVertical
+                            });
+                        } else if let Some((id, _)) = over_end {
+                            ui.ctx().set_cursor_icon(if horizontal(id) {
+                                egui::CursorIcon::ResizeHorizontal
+                            } else {
+                                egui::CursorIcon::ResizeVertical
+                            });
+                        } else if self.cabinet.rails.drag.is_some() {
                             ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
                         } else if self.cabinet.rails.hover.is_some() {
                             ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
@@ -2251,14 +2348,54 @@ impl NovoApp {
                         if out.response.clicked_by(egui::PointerButton::Primary)
                             && let Some(p) = out.response.interact_pointer_pos()
                         {
-                            self.cabinet.rails.selected = pick_at(to_world(p));
+                            let w = to_world(p);
+                            if self.cabinet.rails.trim {
+                                // Trim at point: the shorter side of the click
+                                // comes off. A click off the piece ends it.
+                                let hit = self.cabinet.rails.selected.filter(|&id| {
+                                    super::cabinet_rails::pick(project, s, w.0, w.1, slack)
+                                        == Some(id)
+                                });
+                                if let Some(id) = hit
+                                    && let Some(r) =
+                                        project.get::<novo_core::Rail>(novo_core::RailId::from(id))
+                                {
+                                    let (along, start) =
+                                        if r.vertical { (w.1, r.y) } else { (w.0, r.x) };
+                                    let end = if along - start < r.length / 2.0 {
+                                        novo_layout::railedit::End::Start
+                                    } else {
+                                        novo_layout::railedit::End::Finish
+                                    };
+                                    let at = if layout.grid > 0.0 {
+                                        (along / layout.grid).round() * layout.grid
+                                    } else {
+                                        along
+                                    };
+                                    edit_ask =
+                                        Some(super::cabinet_rails::RailAsk::TrimAt { id, end, at });
+                                } else {
+                                    self.cabinet.rails.trim = false;
+                                }
+                            } else {
+                                self.cabinet.rails.selected = pick_at(w);
+                            }
                         }
                         if self.cabinet.drag.is_none()
                             && out.response.drag_started_by(egui::PointerButton::Primary)
                             && let Some(press) = press
                         {
                             let w = to_world(press);
-                            if let Some(id) = pick_at(w)
+                            if let Some((id, end)) = end_at(w).filter(|_| !self.cabinet.rails.trim)
+                            {
+                                self.cabinet.rails.resize =
+                                    Some(super::cabinet_rail_ends::ResizeDrag {
+                                        id,
+                                        end,
+                                        edit: None,
+                                    });
+                            } else if !self.cabinet.rails.trim
+                                && let Some(id) = pick_at(w)
                                 && let Some(r) =
                                     project.get::<novo_core::Rail>(novo_core::RailId::from(id))
                             {
@@ -2267,19 +2404,47 @@ impl NovoApp {
                                     id,
                                     grab: (w.0 - r.x, w.1 - r.y),
                                     at: (r.x, r.y),
+                                    stop: None,
                                 });
                             }
                         }
+                        let tol = 8.0 / zoom;
                         if let (Some(d), Some(at)) =
                             (self.cabinet.rails.drag.as_mut(), out.cursor_raw)
+                            && let Some(m) = novo_layout::railedit::move_to(
+                                layout,
+                                d.id,
+                                f64::from(at.x) - d.grab.0,
+                                f64::from(at.y) - d.grab.1,
+                                tol,
+                            )
                         {
-                            d.at = layout
-                                .snapped(f64::from(at.x) - d.grab.0, f64::from(at.y) - d.grab.1);
+                            d.at = (m.x, m.y);
+                            d.stop = m.stop;
+                        }
+                        if let (Some(d), Some(at)) =
+                            (self.cabinet.rails.resize.as_mut(), out.cursor_raw)
+                            && let Some(r) =
+                                project.get::<novo_core::Rail>(novo_core::RailId::from(d.id))
+                        {
+                            let target = if r.vertical {
+                                f64::from(at.y)
+                            } else {
+                                f64::from(at.x)
+                            };
+                            d.edit =
+                                novo_layout::railedit::resize_end(layout, d.id, d.end, target, tol);
                         }
                         if out.response.drag_stopped()
                             && let Some(d) = self.cabinet.rails.drag.take()
                         {
                             move_rail = Some(d);
+                        }
+                        if out.response.drag_stopped()
+                            && let Some(d) = self.cabinet.rails.resize.take()
+                            && let Some(edit) = d.edit
+                        {
+                            edit_ask = Some(super::cabinet_rails::RailAsk::Resize(d.id, edit));
                         }
                     }
                     if let (Some(d), Some(at)) = (self.cabinet.drag.as_mut(), out.cursor_raw) {
@@ -2345,6 +2510,7 @@ impl NovoApp {
                                 id,
                                 grab: (0.0, 0.0),
                                 at: (r.x + dx * step, r.y + dy * step),
+                                stop: None,
                             });
                         }
                     }
@@ -2386,6 +2552,12 @@ impl NovoApp {
                 // nothing to run on: drop it, or the 3D view would send the
                 // person back here on every visit.
                 self.cabinet.heat.layout.drop_for_missing_plate();
+                // Ctrl+T and the command field switch the table on without
+                // asking the bar, so the plate is checked here: there is no
+                // table without a plate, and silence reads as a dead key.
+                if structure.is_some() && ask.is_none() && std::mem::take(&mut self.cabinet.table) {
+                    ask = Some(Ask::ToggleTable);
+                }
                 let search_asked = self.cabinet.heat.layout.needs_plate();
                 // The empty state names the next step and puts its button
                 // right under the sentence, not at the far end of the bar.
@@ -2497,6 +2669,9 @@ impl NovoApp {
         }
         if let Some(d) = move_rail {
             rail_ask = Some(super::cabinet_rails::RailAsk::MoveTo(d.id, d.at.0, d.at.1));
+        }
+        if edit_ask.is_some() {
+            rail_ask = edit_ask;
         }
         if all_placed_note {
             self.message(Level::Info, "Every device of this panel is placed");
@@ -2733,6 +2908,11 @@ impl NovoApp {
                 self.cabinet.preview = None;
                 self.cabinet.surface_preview.clear();
             }
+            Ask::ToggleTable if structure.is_some() && layout.is_none() && !self.cabinet.table => {
+                // The table lists the devices of the plate; with no plate
+                // there is nothing to show, and silence reads as a dead button.
+                self.message(Level::Info, TABLE_NEEDS_PLATE);
+            }
             Ask::ToggleTable => self.cabinet.table ^= true,
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
             Ask::CloseInspector => {
@@ -2886,7 +3066,7 @@ impl NovoApp {
                 super::heat_sweep::add_pair(&mut self.cabinet.heat.settings, &c);
                 self.sync_openings_now();
                 // The 3D view opens with the list showing the pair.
-                self.view3d.controls.heat_panel = true;
+                self.cabinet.heat.on = true;
                 self.cabinet
                     .heat
                     .advice
@@ -2992,7 +3172,22 @@ impl NovoApp {
                 // A preview was made for the old plate.
                 self.cabinet.preview = None;
                 self.cabinet.surface_preview.clear();
-                self.cabinet_edit("Set plate size", move |tx| set_plate(tx, s, plate));
+                let mut resized = 0;
+                if self.cabinet_edit("Set plate size", |tx| {
+                    resized = novo_layout::model::set_plate_following(tx, s, plate)?;
+                    Ok(())
+                }) && resized > 0
+                {
+                    self.message(
+                        Level::Info,
+                        format!(
+                            "{resized} {} that ran across the old plate now {} the new size. Undo restores the plate and the {}.",
+                            if resized == 1 { "rail or duct" } else { "rails and ducts" },
+                            if resized == 1 { "follows" } else { "follow" },
+                            if resized == 1 { "rail or duct" } else { "rails and ducts" },
+                        ),
+                    );
+                }
             }
             Ask::SetPlate(s) => {
                 self.cabinet_edit("Set plate", move |tx| set_plate(tx, s, DEFAULT_PLATE));

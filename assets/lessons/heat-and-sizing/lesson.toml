@@ -3,7 +3,7 @@
 #
 # Verified on main (59a37de0): the Heat chip (command heat.toggle, Shift+H) with the chips Map,
 # Contours, Airflow, Badges and the Simulate button (command heat.simulate); the legend says
-# "Preview model from the part losses, not a solver result" until a run finishes. The "Size
+# "Preview, not a solver result" until a run finishes. The "Size
 # enclosure" button (command cabinet.size-enclosure) opens a window; the enclosure list starts
 # empty, "Add" appends "Enclosure 1" 600 x 800 x 300 mm, plate 550 x 750 mm. With that one row and
 # the defaults (free space 20 %, ducts 20 %, ambient max 35 C, inside max 40 C, floor standing) the
@@ -73,11 +73,11 @@ title = "Read the legend"
 title_nl = "Lees de legenda"
 text = """
 The colour bar runs from cool to hot with ticks in °C, and the line under it says "°C · ambient" followed by the room temperature.
-Until you run a simulation the legend says "Preview model from the part losses, not a solver result": the picture is quick and shows where heat collects, not exact temperatures.
+Until you run a simulation the legend says "Preview, not a solver result": the picture is quick and shows where heat collects, not exact temperatures.
 """
 text_nl = """
 De kleurbalk loopt van koel naar heet met streepjes in °C en de regel eronder zegt "°C · ambient" gevolgd door de kamertemperatuur.
-Zolang je geen simulatie draait zegt de legenda "Preview model from the part losses, not a solver result": het beeld is snel en toont waar warmte zich ophoopt, geen exacte temperaturen.
+Zolang je geen simulatie draait zegt de legenda "Preview, not a solver result": het beeld is snel en toont waar warmte zich ophoopt, geen exacte temperaturen.
 """
 point = { ui = "heat.legend" }
 
@@ -127,11 +127,11 @@ title = "Unknown is not zero"
 title_nl = "Onbekend is niet nul"
 text = """
 A device whose part has no **power_loss_w** gets a "no data" pill instead of a temperature, is drawn dashed, and the legend counts it: "1 device has no loss data (shown dashed)".
-The total then counts only the devices that have a figure. Fill in the part to clear the warning.
+The total then counts only the devices that have a figure. If no device has one, the map is left out and the legend says "No heat picture yet". Fill in the part to clear the warning.
 """
 text_nl = """
 Een component waarvan het artikel geen **power_loss_w** heeft krijgt een "no data"-label in plaats van een temperatuur, wordt gestippeld getekend en de legenda telt het mee: "1 device has no loss data (shown dashed)".
-Het totaal telt dan alleen de componenten met een waarde. Vul het artikel in om de waarschuwing weg te nemen.
+Het totaal telt dan alleen de componenten met een waarde. Heeft geen enkel component er een, dan blijft de kaart weg en zegt de legenda "No heat picture yet". Vul het artikel in om de waarschuwing weg te nemen.
 """
 
 [[step]]
@@ -161,13 +161,13 @@ how_nl = ["Klik op Simulate naast de Heat-chips.", "Wacht tot de legenda zegt da
 title = "Simulate it for real"
 title_nl = "Simuleer het echt"
 text = """
-Click **Simulate** (or run **Simulate heat of the cabinet** from the palette). The solver runs in the background: the strip under the bar shows how long it has been running, and **Cancel** stops it and keeps the latest result.
-When it finishes, the legend names the fidelity of the result and says whether it converged, and the map is replaced by the solved field.
+Click **Simulate** (or run **Simulate heat of the cabinet** from the palette). The strip under the bar shows the level, the iteration and the seconds so far; **Cancel** (it reads "Stopping…" until the solver lets go) stops the run and keeps the latest result.
+When it finishes, the legend names the level, for example "Coarse 3D · not validated", and the map is replaced by the solved field.
 If you move a device afterwards, the legend says "Out of date: the layout changed since this run".
 """
 text_nl = """
-Klik op **Simulate** (of voer **Simulate heat of the cabinet** uit via het palet). De solver draait op de achtergrond: de strook onder de balk toont hoe lang hij al bezig is en **Cancel** stopt hem en houdt het laatste resultaat.
-Als hij klaar is noemt de legenda de nauwkeurigheid van het resultaat en of het geconvergeerd is en wordt de kaart vervangen door het opgeloste veld.
+Klik op **Simulate** (of voer **Simulate heat of the cabinet** uit via het palet). De strook onder de balk toont niveau, iteratie en seconden tot nu toe; **Cancel** (daarna "Stopping…") stopt de run en houdt het laatste resultaat.
+Als hij klaar is noemt de legenda het niveau, bijvoorbeeld "Coarse 3D · not validated", en wordt de kaart vervangen door het opgeloste veld.
 Verplaats je daarna een component, dan zegt de legenda "Out of date: the layout changed since this run".
 """
 point = { ui = "heat.simulate" }

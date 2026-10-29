@@ -200,12 +200,12 @@ title_nl = "Hoeveel staven je moet kopen"
 text = """
 Click **Cut list**. The window lists the DIN rail and each duct size as bars of 2000 mm stock with a 2 mm saw cut:
 which pieces come out of which bar, and how much is left over to keep or scrap.
-The five rails of 535 mm and the six ducts (five of 557.5 mm and the trunk of 780 mm) do not each need a bar of their own; the list packs them.
+The five rails of 535 mm and the six ducts (five of 545 mm and the trunk of 780 mm) do not each need a bar of their own; the list packs them.
 """
 text_nl = """
 Klik op **Cut list**. Het venster toont de DIN-rail en elke kanaalmaat als staven van 2000 mm met 2 mm zaagsnede:
 welke stukken uit welke staaf komen en hoeveel er overblijft om te bewaren of af te voeren.
-De vijf rails van 535 mm en de zes kanalen (vijf van 557,5 mm en de stam van 780 mm) hebben niet elk een eigen staaf nodig; de lijst pakt ze samen.
+De vijf rails van 535 mm en de zes kanalen (vijf van 545 mm en de stam van 780 mm) hebben niet elk een eigen staaf nodig; de lijst pakt ze samen.
 """
 point = { ui = "cabinet.cutlist" }
 expect = { clicked = "cabinet.cutlist" }

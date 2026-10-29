@@ -12,7 +12,7 @@ Headless proof: `crates/novo-app/src/app/lesson_verify_cables.rs` (`wire_numbers
 | preview | `wire numbering` `commands.rs:681` -> `workbench.rs:657` -> window `numbering.rs:178`; plan "7 numbered, 2 settled, 0 unchanged"; window closes with its **Close window** button (Esc did not close it when tried by key) |
 | number-wires | `wires.number` `commands.rs:672` -> `numbering.rs:75`; one undo step; duplicates would be renumbered (not in the start project), unique numbers kept |
 | type-number | click the wire, `number wire 100` (`commands.rs:706`, `numbering.rs:92`): `number wire 1` is refused first ("1 is already used on another net", `manual.rs:20-31`), then the net takes 100 and is locked |
-| renumber | `renumber wires` `commands.rs:691` opens on Selection when a wire is selected, so **Project** then **Renumber** (`numbering.rs:233-246`); toast "8 renumbered, 1 unchanged" |
+| renumber | `renumber wires` `commands.rs:691` opens on Selection when a wire is selected, so **Project** then **Renumber** (`numbering.rs:233-246`); toast "5 renumbered, 4 unchanged" |
 | wire-list-again, cable-diagram | `report.wires`, `report.cables` (`commands.rs:1139`, `:1148`); cable diagram columns `diagrams.rs:185` |
 
 Closed since the first writer: numbering rule, number wires, renumber, first number of an unnumbered wire (`number wire`), duplicate detection (the window's plan and `check wire numbers`; `check` reports duplicates before a run, a Fill plan shows none because it repairs them).

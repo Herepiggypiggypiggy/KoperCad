@@ -29,6 +29,11 @@
 //! report's assumptions (`power_factor` 1, `drop_limit_percent` 5,
 //! `ambient_c` 30, `grouped_circuits` 1, `parallel` 1, `insulation` PVC,
 //! `method` C).
+//!
+//! A single-phase circuit (`"phases": 1`) off a three-phase feeder whose
+//! voltage is about √3 times its own is taken to come from a phase of that
+//! feeder, with no transformer between, so the feeder's drop is added; the
+//! row text says so. Give the circuit another voltage to stop it.
 
 use std::collections::HashMap;
 
@@ -44,6 +49,7 @@ use super::network::{Branch, Network, NodeId, SourceModel, Transformer};
 use super::selectivity::{Backup, Basis, PairTable, Status as SelStatus, backup, selectivity};
 use super::short_circuit::Trip;
 use super::tables::TableSet;
+use super::{num, within};
 
 /// A parsed supply with its circuits, ready to evaluate.
 #[derive(Debug, Clone)]
@@ -326,6 +332,100 @@ pub fn parse(root: &Value) -> Result<Plant, String> {
     Ok(Plant { network, circuits })
 }
 
+/// Whether a drop in percent above a circuit is a drop of its own voltage:
+/// the same nominal voltage, or a single-phase circuit taken from the phases
+/// of a three-phase feeder (230 V off 400 V, no transformer between; the same
+/// line current gives the same percentage of the phase voltage).
+fn same_system(up: &CircuitDesign, here: &CircuitDesign) -> bool {
+    near_voltage(up.voltage, here.voltage) || from_a_phase(up, here)
+}
+
+fn near_voltage(a: f64, b: f64) -> bool {
+    (a - b).abs() <= 0.1 * b
+}
+
+/// The single-phase-off-three-phase route of [`same_system`] (the model
+/// assumption the row text names; giving the circuit another voltage stops it).
+fn from_a_phase(up: &CircuitDesign, here: &CircuitDesign) -> bool {
+    up.supply == Supply::ThreePhase
+        && here.supply == Supply::TwoWire
+        && near_voltage(up.voltage / 3.0_f64.sqrt(), here.voltage)
+}
+
+/// A circuit fed from another one sees the drop of every cable above it
+/// too: its *Voltage drop* row shows the sum along the chain (percent of
+/// each cable's own nominal voltage, a close sum when the voltage is the
+/// same all the way) and is judged against its own limit.
+fn accumulate_voltage_drop(plant: &Plant, reports: &mut [CircuitReport]) {
+    let own: Vec<Option<f64>> = reports
+        .iter()
+        .map(|r| {
+            r.rows
+                .iter()
+                .find(|r| r.rule == Rule::VoltageDrop)
+                .and_then(|r| r.value)
+        })
+        .collect();
+    for (i, c) in plant.circuits.iter().enumerate() {
+        let mut upstream = 0.0;
+        let mut names = Vec::new();
+        let (mut at, mut steps) = (c.parent, 0);
+        // The step count stops a loop of circuits fed from each other.
+        let mut stopped = false;
+        let mut via_phase = false;
+        while let Some(p) = at.filter(|_| steps < plant.circuits.len()) {
+            // A drop in percent of another voltage level (a transformer between
+            // the two) says nothing about this circuit's voltage: stop there.
+            if !same_system(&plant.circuits[p].design, &c.design) {
+                stopped = true;
+                break;
+            }
+            via_phase |= !near_voltage(plant.circuits[p].design.voltage, c.design.voltage)
+                && from_a_phase(&plant.circuits[p].design, &c.design);
+            if let Some(v) = own[p] {
+                upstream += v;
+                names.push(plant.circuits[p].design.name.clone());
+            }
+            at = plant.circuits[p].parent;
+            steps += 1;
+        }
+        let (Some(own_drop), true) = (own[i], upstream > 0.0) else {
+            continue;
+        };
+        let total = own_drop + upstream;
+        let limit = c.design.drop_limit_percent;
+        let Some(row) = reports[i]
+            .rows
+            .iter_mut()
+            .find(|r| r.rule == Rule::VoltageDrop)
+        else {
+            continue;
+        };
+        if row.status != Status::Fail && !within(total, limit) {
+            row.status = Status::Fail;
+        }
+        row.value = Some(total);
+        row.text = format!(
+            "{} % in total (sum of the percentages): {} % in this cable plus {} % above it ({}), limit {} %{}{}",
+            num(total),
+            num(own_drop),
+            num(upstream),
+            names.join(", "),
+            num(limit),
+            if stopped {
+                "; the drop above a change of voltage is not added"
+            } else {
+                ""
+            },
+            if via_phase {
+                "; the single-phase circuit is taken from a phase of the three-phase feeder (no transformer between)"
+            } else {
+                ""
+            }
+        );
+    }
+}
+
 /// Evaluates every circuit of a parsed plant. Circuits fed from another
 /// circuit also get a *Selectivity* row against the device upstream, and a
 /// breaking-capacity failure is re-judged as back-up protection when
@@ -340,6 +440,7 @@ pub fn evaluate_all(
         .iter()
         .map(|c| evaluate(&plant.network, c.at, &c.design, tables))
         .collect();
+    accumulate_voltage_drop(plant, &mut reports);
     for (i, c) in plant.circuits.iter().enumerate() {
         let Some(parent) = c.parent else { continue };
         let up = &plant.circuits[parent].design.device;
@@ -442,6 +543,76 @@ mod tests {
                   "cable": { "section_mm2": 2.5, "length_m": 20, "pe_mm2": 2.5 } }
             ]
         })
+    }
+
+    #[test]
+    fn a_branch_circuit_carries_the_drop_of_its_feeder() {
+        let plant = parse(&sample()).unwrap();
+        let reports = evaluate_all(&plant, &TableSet::builtin(), None);
+        let drop = |i: usize| {
+            reports[i]
+                .rows
+                .iter()
+                .find(|r| r.rule == Rule::VoltageDrop)
+                .unwrap()
+                .clone()
+        };
+        let alone = |i: usize| {
+            let mut one = plant.clone();
+            one.circuits[i].parent = None;
+            let r = evaluate_all(&one, &TableSet::builtin(), None);
+            r[i].rows
+                .iter()
+                .find(|r| r.rule == Rule::VoltageDrop)
+                .unwrap()
+                .value
+                .unwrap()
+        };
+        let (q1, m1) = (drop(0), drop(1));
+        assert_eq!(
+            q1.value.unwrap(),
+            alone(0),
+            "the feeder has nothing above it"
+        );
+        assert!((m1.value.unwrap() - (alone(1) + alone(0))).abs() < 1e-9);
+        assert!(m1.text.contains("above it (Q1)"), "{}", m1.text);
+    }
+
+    #[test]
+    fn a_drop_above_a_voltage_change_is_not_added() {
+        let mut v = sample();
+        // A 24 V circuit fed through a transformer from the 400 V feeder.
+        v["circuits"][1]["voltage"] = json!(24);
+        let plant = parse(&v).unwrap();
+        let reports = evaluate_all(&plant, &TableSet::builtin(), None);
+        let row = reports[1]
+            .rows
+            .iter()
+            .find(|r| r.rule == Rule::VoltageDrop)
+            .unwrap();
+        assert!(!row.text.contains("above it"), "{}", row.text);
+    }
+
+    #[test]
+    fn a_single_phase_branch_off_a_three_phase_feeder_gets_the_feeder_drop() {
+        let mut v = sample();
+        // 230 V between a phase and neutral, taken from the 400 V feeder.
+        v["circuits"][1]["phases"] = json!(1);
+        let plant = parse(&v).unwrap();
+        assert_eq!(plant.circuits[1].design.supply, Supply::TwoWire);
+        let reports = evaluate_all(&plant, &TableSet::builtin(), None);
+        let row = reports[1]
+            .rows
+            .iter()
+            .find(|r| r.rule == Rule::VoltageDrop)
+            .unwrap();
+        assert!(row.text.contains("above it (Q1)"), "{}", row.text);
+        assert!(
+            row.text
+                .contains("taken from a phase of the three-phase feeder (no transformer between)"),
+            "{}",
+            row.text
+        );
     }
 
     #[test]

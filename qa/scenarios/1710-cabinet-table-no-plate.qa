@@ -1,0 +1,14 @@
+@title Cabinet: Table without a plate says why (plate follow)
+@area Cabinet
+# qa/fixtures/plate-follow-none.novo (built by write_plate_follow_fixtures): cabinet +CP1 with three devices and no mounting plate. Ctrl+T and View, Table used to do nothing; it now says what to do first.
+open qa/fixtures/plate-follow-none.novo
+wait 20
+click_text Cabinet #1
+wait 20
+shot cabinet-no-plate
+# With no plate the bar has no Table button: Ctrl+T (also the command field, Cabinet as table, and View, Cabinet, Table) is what a person reaches for.
+key ctrl+t
+wait 6
+expect "The table lists the devices of the mounting plate"
+shot table-says-why
+check_layout

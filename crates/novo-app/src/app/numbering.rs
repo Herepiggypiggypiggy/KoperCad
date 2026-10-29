@@ -183,6 +183,10 @@ impl NovoApp {
                 };
                 self.message(Level::Info, text);
             }
+            // A refusal already starts with "Wire number: ".
+            Err(e @ novo_core::ModelError::Refused { .. }) => {
+                self.message(Level::Warning, e.to_string());
+            }
             Err(e) => self.message(Level::Warning, format!("Wire number: {e}")),
         }
     }
@@ -697,13 +701,11 @@ fn natural_key(s: &str) -> Vec<(u8, u64, String)> {
 }
 
 fn preview_ui(ui: &mut egui::Ui, plan: &Plan, reveal: &mut Option<WireId>) {
-    let mut any = false;
     egui::Grid::new("wirenum_preview")
         .num_columns(4)
         .striped(true)
         .show(ui, |ui| {
             for g in plan.changed_groups() {
-                any = true;
                 let first = g.wires.first().copied();
                 if ui.link(&g.at).clicked() {
                     *reveal = first;
@@ -719,9 +721,6 @@ fn preview_ui(ui: &mut egui::Ui, plan: &Plan, reveal: &mut Option<WireId>) {
                 ui.end_row();
             }
         });
-    if !any {
-        ui.weak("Nothing to change");
-    }
 }
 
 fn reason_text(reason: Reason) -> &'static str {

@@ -57,6 +57,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.open_read_only", under("File", "Open")),
     ("file.recover", under("File", "Open")),
     ("file.example", under("File", "Open")),
+    ("file.example_mcc", under("File", "Examples")),
     ("macro.browser", under("File", "Macros")),
     ("macro.import", under("File", "Macros")),
     ("page.new", under("File", "Pages")),
@@ -250,6 +251,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("cabinet.emc", under("View", "Cabinet")),
     // Layers: what is drawn on top of the page
     ("view.toggle_marks", under("View", "Layers")),
+    ("view.toggle_references", under("View", "Layers")),
     ("view.override_marks", under("View", "Layers")),
     ("view.left_out", under("View", "Layers")),
     ("view.changes", under("View", "Layers")),
@@ -274,6 +276,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("simulate.motor-start", at("Simulate")),
     ("sim.faults", at("Simulate")),
     ("sim.hoist", at("Simulate")),
+    ("sim.motor_curves", at("Simulate")),
     ("sim.add_fault", at("Simulate")),
     ("view.protection", at("Simulate")),
     ("heat.simulate", under("Simulate", "Heat")),
@@ -342,6 +345,14 @@ const REGROUPED: &[(&str, MenuPlace)] = &[
 
 /// Commands that are a key or a pointer gesture and have no menu row.
 const PALETTE_ONLY: &[(&str, &str)] = &[
+    ("view.3d_door_layer", "a switch of the 3D toolbar"),
+    ("view.3d_device_shapes", "a switch of the 3D toolbar"),
+    ("view.3d_surfaces", "a switch of the 3D toolbar"),
+    ("view.3d_duct_fill", "a switch of the 3D toolbar"),
+    ("view.3d_pins", "a switch of the 3D toolbar"),
+    ("view.3d_missing_data", "a switch of the 3D toolbar"),
+    ("view.3d_trackpad_pans", "a switch of the 3D toolbar"),
+    ("view.3d_move", "a switch of the 3D toolbar"),
     ("tool.repeat", "the key that repeats the last tool"),
     ("edit.escape", "Esc"),
     (
@@ -554,6 +565,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
             "sim.plc_program",
             "sim.faults",
             "sim.hoist",
+            "sim.motor_curves",
             "view.protection",
         ]],
     ),

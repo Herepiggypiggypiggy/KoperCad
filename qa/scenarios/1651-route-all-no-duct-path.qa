@@ -1,0 +1,20 @@
+@title Route all: a wire no duct reaches is marked and listed, not drawn straight
+@area Cabinet
+# Fixture: the example after Place all with the vertical trunk cut short, so only the first two row ducts join. Wires below them have no duct path: red rings at their terminals in the plate, a note in the Routes panel, and Issues lists them.
+open qa/fixtures/route-no-duct-path.novo
+wait 20
+click_text Cabinet #1
+wait 30
+key ctrl+k
+wait 4
+text Route all wires
+wait 6
+key Enter
+wait 40
+shot plate-and-routes
+check_layout
+check_blank plate-and-routes
+click_text "warnings"
+wait 10
+shot issues
+check_layout

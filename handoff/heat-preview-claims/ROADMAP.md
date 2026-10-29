@@ -15,8 +15,9 @@ Done
 - Scene dump reports the Heat readings; QA scenario 530 walks the heat lesson at both sizes.
 
 Next
+- Done (bench-output PR): work-cards, workshop-pack, kitting claims in `lesson_claims_bench_tests`.
 - Claims tests for the remaining lessons that quote engine numbers: wire-numbers (toast counts),
-  terminals, plc-io, work-cards (STEP n of 42), workshop-pack (@example), kitting, protection.
+  terminals-in-depth, plc-io, protection-and-single-line.
 - Calibrate the preview against the 3D solver (Simulate) once a validated cabinet exists.
 
 Open questions

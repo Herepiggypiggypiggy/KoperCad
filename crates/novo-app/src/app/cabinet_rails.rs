@@ -34,6 +34,21 @@ pub(super) enum RailAsk {
     Turn(u64),
     /// Dragged on the plate: the rail's new start.
     MoveTo(u64, f64, f64),
+    /// An end dragged: the new start and length (the other end stays).
+    Resize(u64, novo_layout::railedit::Edit),
+    /// Cut back to the nearest rail or duct that crosses this end.
+    Trim {
+        id: u64,
+        end: novo_layout::railedit::End,
+    },
+    /// Cut at a point along the run, the `end` side coming off.
+    TrimAt {
+        id: u64,
+        end: novo_layout::railedit::End,
+        at: f64,
+    },
+    /// A typed or stock length, the start staying.
+    SetLength(u64, f64),
     Delete(u64),
     /// Put every DIN rail's line on the middle of its devices, which stay put.
     CentreRails,
@@ -63,6 +78,10 @@ pub(super) struct RailsState {
     pub(super) drag: Option<RailDrag>,
     /// The rail or duct under the pointer, set by the canvas each frame.
     pub(super) hover: Option<u64>,
+    /// An end of the selected rail or duct being dragged.
+    pub(super) resize: Option<super::cabinet_rail_ends::ResizeDrag>,
+    /// "Trim at point" is on: a click on a rail or duct cuts it there.
+    pub(super) trim: bool,
 }
 
 /// A rail or duct being dragged: where its start would land.
@@ -72,6 +91,8 @@ pub(super) struct RailDrag {
     /// The pointer's offset from the start of the rail, in mm.
     pub(super) grab: (f64, f64),
     pub(super) at: (f64, f64),
+    /// What the move was pushed back from (it would have lain over it).
+    pub(super) stop: Option<novo_layout::railedit::Stop>,
 }
 
 /// The duct or rail under a point of the plate (mm), ducts first as they
@@ -200,7 +221,7 @@ pub(super) fn draw_grips(
 }
 
 /// How wide a rail or duct lies on the plate, across its run.
-fn across_of(r: &Rail) -> f64 {
+pub(super) fn across_of(r: &Rail) -> f64 {
     match r.kind {
         RailKind::Duct if r.width > 0.0 => r.width,
         RailKind::Duct => novo_layout::DEFAULT_DUCT_MM,
@@ -221,6 +242,45 @@ impl RailsState {
     }
 }
 
+/// Why a duct cannot stand as given: it would lie over other ducts. `None`
+/// for a rail, or when the place is clear. Ducts meet in a T or a corner by
+/// one ending against the side of the other, never by crossing.
+pub(super) fn duct_refusal(
+    project: &novo_core::Project,
+    structure: StructureId,
+    rail: RailId,
+    place: Option<(f64, f64, f64, f64, bool)>,
+) -> Option<String> {
+    let r = project
+        .get::<Rail>(rail)
+        .filter(|r| r.kind == RailKind::Duct)?;
+    let (x, y, length, width, vertical) =
+        place.unwrap_or((r.x, r.y, r.length, r.width, r.vertical));
+    let duct = novo_layout::Duct {
+        id: rail.raw(),
+        x,
+        y,
+        length,
+        width: if width > 0.0 {
+            width
+        } else {
+            novo_layout::DEFAULT_DUCT_MM
+        },
+        vertical,
+    };
+    let clash = novo_layout::model::duct_clash(project, structure, &duct);
+    (!clash.is_empty()).then(|| {
+        format!(
+            "A duct cannot lie over {}: move it clear, or end it against the side of the other duct for a T or a corner",
+            if clash.len() == 1 {
+                "another duct".to_string()
+            } else {
+                format!("{} other ducts", clash.len())
+            }
+        )
+    })
+}
+
 /// Where a new rail or duct goes: below everything on the plate for a
 /// horizontal one, along the left edge for a vertical duct, kept on the
 /// usable area. Rounded to 5 mm.
@@ -237,9 +297,25 @@ pub(super) fn new_rail_at(
         RailKind::Duct => (DUCT_WIDTH_MM, DUCT_HEIGHT_MM),
         _ => (0.0, 0.0),
     };
+    let clear = |x: f64, y: f64, length: f64| -> Option<(f64, f64, f64)> {
+        if kind != RailKind::Duct {
+            return Some((x, y, length));
+        }
+        // Never on top of another duct: the nearest free place.
+        let duct = novo_layout::Duct {
+            id: 0,
+            x,
+            y,
+            length,
+            width,
+            vertical,
+        };
+        novo_layout::clear_duct_spot(&layout.ducts, &duct, &usable).map(|d| (d.x, d.y, d.length))
+    };
     if vertical {
         let x = round(usable.x + width.max(35.0) / 2.0);
-        return Some((x, usable.y, usable.h, width, height));
+        let (x, y, length) = clear(x, usable.y, usable.h)?;
+        return Some((x, y, length, width, height));
     }
     // Under the lowest device and rail.
     let mut bottom = usable.y;
@@ -258,7 +334,8 @@ pub(super) fn new_rail_at(
     }
     let half = if kind == RailKind::Duct { width } else { 35.0 } / 2.0;
     let y = round(bottom + 10.0 + half).min(usable.y + usable.h - half);
-    Some((usable.x, y.max(usable.y + half), usable.w, width, height))
+    let (x, y, length) = clear(usable.x, y.max(usable.y + half), usable.w)?;
+    Some((x, y, length, width, height))
 }
 
 pub(super) fn value(
@@ -354,9 +431,14 @@ pub(super) fn show_window(
                 }
             });
             ui.weak(
-                "Edit a value to move or resize. Delete removes the selected row. \
-                 Ctrl+Z undoes each step.",
+                "Edit a value to move or resize, or drag the selected one on the plate: \
+                 its body to move, either end handle to cut it shorter or longer. \
+                 Delete removes it. Ctrl+Z undoes each step.",
             );
+            if let Some(a) = super::cabinet_rail_ends::selected_card(ui, state, project, structure)
+            {
+                ask = Some(a);
+            }
             let mut rails: Vec<&Rail> = project
                 .all::<Rail>()
                 .filter(|r| r.structure == structure)
@@ -460,45 +542,6 @@ pub(super) fn show_window(
     ask
 }
 
-/// Outlines the selected rail or duct over the canvas.
-pub(super) fn draw_selected(
-    painter: &egui::Painter,
-    rect: egui::Rect,
-    view: &Viewport,
-    project: &novo_core::Project,
-    selected: u64,
-    start: Option<(f64, f64)>,
-    palette: &novo_theme::Palette,
-) {
-    let Some(r) = project.get::<Rail>(RailId::from(selected)) else {
-        return;
-    };
-    let across = across_of(r);
-    let (w, h) = if r.vertical {
-        (across, r.length)
-    } else {
-        (r.length, across)
-    };
-    let (sx, sy) = start.unwrap_or((r.x, r.y));
-    let (x, y) = if r.vertical {
-        (sx - across / 2.0, sy)
-    } else {
-        (sx, sy - across / 2.0)
-    };
-    let to_screen = |x: f64, y: f64| {
-        let s = view.world_to_screen(novo_canvas::vec2(x as f32, y as f32));
-        egui::pos2(rect.min.x + s.x, rect.min.y + s.y)
-    };
-    let area = egui::Rect::from_two_pos(to_screen(x, y), to_screen(x + w, y + h)).expand(2.0);
-    let colour = palette.accent;
-    painter.rect_stroke(
-        area,
-        0.0,
-        egui::Stroke::new(2.0, colour),
-        egui::StrokeKind::Outside,
-    );
-}
-
 impl super::NovoApp {
     /// Opens or closes the rails and ducts list in the Cabinet.
     pub(super) fn toggle_cabinet_rails(&mut self) {
@@ -546,6 +589,10 @@ impl super::NovoApp {
                 let Some((x, y, length, width, height)) =
                     new_rail_at(doc.project(), structure, kind, vertical)
                 else {
+                    self.message(
+                        super::Level::Warning,
+                        "No room for another duct on the plate: ducts cannot lie over each other",
+                    );
                     return;
                 };
                 let label = if kind == RailKind::Duct {
@@ -574,8 +621,39 @@ impl super::NovoApp {
                     self.cabinet.rails.selected = Some(id);
                 }
             }
+            RailAsk::Resize(id, edit) => self.cabinet_rail_resize(structure, id, edit),
+            RailAsk::Trim { .. } | RailAsk::TrimAt { .. } | RailAsk::SetLength(..) => {
+                self.cabinet_rail_cut(structure, &ask)
+            }
+            // Only the length typed: the same limits as a drag, so the
+            // number typed is the number cut and ducts do not overlap.
+            RailAsk::Set(e)
+                if self.backend.document().is_some_and(|d| {
+                    d.project()
+                        .get::<Rail>(RailId::from(e.id))
+                        .is_some_and(|r| {
+                            (r.x, r.y, r.width, r.height) == (e.x, e.y, e.width, e.height)
+                                && r.length != e.length
+                        })
+                }) =>
+            {
+                self.cabinet_rail_cut(structure, &RailAsk::SetLength(e.id, e.length))
+            }
             RailAsk::Set(e) => {
                 let rail = RailId::from(e.id);
+                let refused = self.backend.document().and_then(|d| {
+                    let vertical = d.project().get::<Rail>(rail)?.vertical;
+                    duct_refusal(
+                        d.project(),
+                        structure,
+                        rail,
+                        Some((e.x, e.y, e.length, e.width, vertical)),
+                    )
+                });
+                if let Some(why) = refused {
+                    self.message(super::Level::Warning, why);
+                    return;
+                }
                 self.cabinet_edit("Edit rail", move |tx| {
                     let Some(r) = tx.project().get::<Rail>(rail) else {
                         return Ok(());
@@ -607,6 +685,19 @@ impl super::NovoApp {
                     .document()
                     .and_then(|d| d.project().get::<Rail>(rail).map(|r| (r.x, r.y) == (x, y)))
                     .unwrap_or(true);
+                let refused = self.backend.document().and_then(|d| {
+                    let r = d.project().get::<Rail>(rail)?;
+                    duct_refusal(
+                        d.project(),
+                        structure,
+                        rail,
+                        Some((x, y, r.length, r.width, r.vertical)),
+                    )
+                });
+                if let Some(why) = refused.filter(|_| !unchanged) {
+                    self.message(super::Level::Warning, why);
+                    return;
+                }
                 if !unchanged {
                     self.cabinet_edit("Move rail", move |tx| {
                         tx.execute(novo_core::Command::MoveRail { rail, x, y })
@@ -616,6 +707,19 @@ impl super::NovoApp {
             }
             RailAsk::Turn(id) => {
                 let rail = RailId::from(id);
+                let refused = self.backend.document().and_then(|d| {
+                    let r = d.project().get::<Rail>(rail)?;
+                    duct_refusal(
+                        d.project(),
+                        structure,
+                        rail,
+                        Some((r.x, r.y, r.length, r.width, !r.vertical)),
+                    )
+                });
+                if let Some(why) = refused {
+                    self.message(super::Level::Warning, why);
+                    return;
+                }
                 self.cabinet_edit("Turn rail", move |tx| {
                     tx.update::<Rail>(rail, |r| r.vertical = !r.vertical)
                         .map(|_| ())

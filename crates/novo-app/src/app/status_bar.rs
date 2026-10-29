@@ -11,6 +11,7 @@ use novo_core::AnyId;
 
 use super::workspace::Workspace;
 use super::{Level, NovoApp, TOAST_INFO};
+use crate::settings::XrefView;
 
 /// Height of the bar.
 pub(super) const STATUS_BAR: f32 = 22.0;
@@ -111,7 +112,26 @@ impl NovoApp {
                 ui.horizontal_centered(|ui| {
                     // The message gives way to the slots on its right: it is
                     // cut to half the bar, with the whole text on hover.
-                    let room = ui.available_width() * 0.5;
+                    // The slots on the right keep what their text needs; at a
+                    // large interface size they are wider than half the bar.
+                    let measure = |text: &str, font: egui::FontId| {
+                        ui.painter()
+                            .layout_no_wrap(text.to_owned(), font, egui::Color32::PLACEHOLDER)
+                            .size()
+                            .x
+                    };
+                    let small = egui::TextStyle::Small.resolve(ui.style());
+                    let mono = egui::FontId::monospace(small.size);
+                    let mut right = measure(saved, small.clone()) + 24.0;
+                    if let Some(values) = &values {
+                        right += measure(values, mono) + 24.0;
+                    }
+                    for chip in &chips {
+                        right += measure(&chip.label, small.clone()) + 24.0;
+                    }
+                    let room = (ui.available_width() - right)
+                        .min(ui.available_width() * 0.5)
+                        .max(48.0);
                     ui.scope(|ui| {
                         ui.set_max_width(room);
                         // A refusal, a step in progress and the rest of a
@@ -325,6 +345,20 @@ impl NovoApp {
                 command: "view.toggle_marks",
                 hover: "Show the marks again".into(),
             });
+        }
+        match self.settings.xref_view() {
+            XrefView::Full => {}
+            view => chips.push(ModeChip {
+                label: if view == XrefView::Faded {
+                    "References faded"
+                } else {
+                    "References hidden"
+                }
+                .into(),
+                command: "view.toggle_references",
+                hover: "Click to step references: full, faded, hidden. They always print in full"
+                    .into(),
+            }),
         }
         if self.wb.live.on {
             chips.push(ModeChip {

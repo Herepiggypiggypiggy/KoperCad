@@ -7,11 +7,12 @@ use novo_core::{
     Device, DeviceTag, Document, MountingPlate, Part, Result as ModelResult, Structure,
     StructureId, Tx, Value,
 };
-use novo_layout::enclosure::{Door, Enclosure, Hinge};
+use novo_layout::enclosure::Enclosure;
 use novo_layout::model::{apply_plan, load, set_enclosure, set_plate};
 use novo_layout::rules::RuleSet;
 use novo_parts::{Catalog, DataSource, PartKey};
 
+use super::example_kit;
 use super::{Level, NovoApp};
 
 /// What the example project is called.
@@ -90,7 +91,7 @@ const PLATE: MountingPlate = MountingPlate {
 /// that the starter catalog knows its sizes and technical data, so the
 /// cabinet, 3D and heat have real numbers to work with. Catalog data is
 /// copied, never invented here.
-fn give_parts_their_data(tx: &mut Tx<'_>) -> ModelResult<()> {
+pub(super) fn give_parts_their_data(tx: &mut Tx<'_>) -> ModelResult<()> {
     let catalog = Catalog::starter();
     let parts: Vec<_> = tx.project().all::<Part>().map(|p| p.id).collect();
     for id in parts {
@@ -122,39 +123,10 @@ fn give_parts_their_data(tx: &mut Tx<'_>) -> ModelResult<()> {
 /// rules planner proposes for the devices of the cabinet (what Place all
 /// would do), so Cabinet, 3D and Simulate work on the first click.
 fn add_cabinet(tx: &mut Tx<'_>) -> ModelResult<StructureId> {
-    // The outline filing has already made the structure of the location.
-    let tag = DeviceTag::parse("+CAB")?;
-    let existing = tx
-        .project()
-        .structures()
-        .find(|s| s.tag == tag)
-        .map(|s| s.id);
-    let cab = match existing {
-        Some(id) => id,
-        None => tx.add_structure(tag, "Control cabinet", true)?,
-    };
-    tx.update::<Structure>(cab, |s| {
-        s.enclosure = true;
-        s.description = "Control cabinet".into();
-    })?;
-    set_plate(tx, cab, PLATE)?;
-    set_enclosure(
-        tx,
-        cab,
-        &Enclosure {
-            width: 500.0,
-            height: 600.0,
-            depth: 250.0,
-            plate_setback: 20.0,
-            door: Some(Door {
-                hinge: Hinge::Right,
-                max_angle: 110.0,
-                inner_depth: 0.0,
-            }),
-            front_clearance: Some(400.0),
-            hinge_side_clearance: None,
-        },
-    )?;
+    let (_, mut enclosure) =
+        example_kit::enclosure((PLATE.width, PLATE.height), (500.0, 600.0, 250.0));
+    enclosure.front_clearance = Some(400.0);
+    let cab = prepare_cabinet(tx, "+CAB", PLATE, &enclosure)?;
     // The terminal strip -X1 is four blocks side by side, so it has no
     // single part to read its footprint from: its own size, the 4 blocks of
     // 5.2 mm and two end covers, and the 0.3 W the starter catalog gives a
@@ -198,10 +170,74 @@ fn add_cabinet(tx: &mut Tx<'_>) -> ModelResult<StructureId> {
             )?;
         }
     }
+    plan_cabinet(tx, cab)?;
+    Ok(cab)
+}
+
+/// The cabinet structure at `location` (`+CAB`), made an enclosure with its
+/// mounting plate and enclosure interior.
+pub(super) fn prepare_cabinet(
+    tx: &mut Tx<'_>,
+    location: &str,
+    plate: MountingPlate,
+    enclosure: &Enclosure,
+) -> ModelResult<StructureId> {
+    // The outline filing has already made the structure of the location.
+    let tag = DeviceTag::parse(location)?;
+    let existing = tx
+        .project()
+        .structures()
+        .find(|s| s.tag == tag)
+        .map(|s| s.id);
+    let cab = match existing {
+        Some(id) => id,
+        None => tx.add_structure(tag, "Control cabinet", true)?,
+    };
+    tx.update::<Structure>(cab, |s| {
+        s.enclosure = true;
+        s.description = "Control cabinet".into();
+    })?;
+    set_plate(tx, cab, plate)?;
+    set_enclosure(tx, cab, enclosure)?;
+    Ok(cab)
+}
+
+/// Lets the rules planner propose rails, ducts and device places for the
+/// devices of the cabinet (what Place all does).
+pub(super) fn plan_cabinet(tx: &mut Tx<'_>, cab: StructureId) -> ModelResult<()> {
+    // Pilot devices (buttons, lamps) would go to the door, which needs a
+    // wiring opening before their wires can be routed; the examples draw
+    // every wire, so they stay on the plate.
+    let location = tx
+        .project()
+        .structures()
+        .find(|s| s.id == cab)
+        .map(|s| s.tag.location.clone());
+    if let Some(location) = location {
+        let pilots: Vec<_> = tx
+            .project()
+            .devices()
+            .filter(|d| {
+                d.tag.location == location
+                    && matches!(
+                        d.tag.letter_code().to_ascii_uppercase().as_str(),
+                        "S" | "H" | "P"
+                    )
+                    && novo_layout::site::stated_site(tx.project(), d).is_none()
+            })
+            .map(|d| d.id)
+            .collect();
+        for pilot in pilots {
+            tx.set_property(
+                pilot,
+                novo_layout::site::SITE_KEY,
+                Some(Value::Text("plate".into())),
+            )?;
+        }
+    }
     let layout = load(tx.project(), cab).expect("the plate was just set");
     let (plan, _) = super::cabinet_rules::plan(tx.project(), cab, &layout, &RuleSet::standard());
-    apply_plan(tx, cab, &plan)?;
-    Ok(cab)
+    apply_plan(tx, cab, &plan)
 }
 
 impl NovoApp {
@@ -218,6 +254,14 @@ impl NovoApp {
         self.open_built_example(
             super::emc_demo::EMC_EXAMPLE_NAME,
             super::emc_demo::build_emc_example,
+        );
+    }
+
+    /// The motor control centre example: four feeders and a full cabinet.
+    pub(super) fn open_mcc_example(&mut self) {
+        self.open_built_example(
+            super::example_mcc::MCC_EXAMPLE_NAME,
+            super::example_mcc::build_mcc_example,
         );
     }
 

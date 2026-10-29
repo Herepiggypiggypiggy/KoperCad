@@ -179,7 +179,7 @@ fn the_cloud_layer_count_sets_how_much_is_drawn() {
             cloud_layers: layers,
             ..Heat3d::default()
         };
-        match &overlays(&snap, 20.0, place(), &s, &Flow::default())[..] {
+        match &overlays(&snap, 20.0, place(), &s, &Flow::default(), 1.0)[..] {
             [Overlay::Mesh(m)] => m.indices.len(),
             other => panic!("one cloud mesh expected, got {}", other.len()),
         }
@@ -191,7 +191,7 @@ fn the_cloud_layer_count_sets_how_much_is_drawn() {
 fn settings_choose_the_overlays() {
     let snap = snapshot();
     let fl = flow(&snap, place());
-    let count = |s: Heat3d| overlays(&snap, 20.0, place(), &s, &fl).len();
+    let count = |s: Heat3d| overlays(&snap, 20.0, place(), &s, &fl, 1.0).len();
     let off = Heat3d {
         slice: false,
         iso: false,
@@ -219,7 +219,8 @@ fn settings_choose_the_overlays() {
                 slice: false,
                 ..off
             },
-            &fl
+            &fl,
+            1.0
         )[0],
         Overlay::Lines(_)
     ));
@@ -229,7 +230,17 @@ fn settings_choose_the_overlays() {
 fn a_broken_snapshot_gives_no_overlays() {
     let mut snap = snapshot();
     snap.temperature_c.pop();
-    assert!(overlays(&snap, 20.0, place(), &Heat3d::default(), &Flow::default()).is_empty());
+    assert!(
+        overlays(
+            &snap,
+            20.0,
+            place(),
+            &Heat3d::default(),
+            &Flow::default(),
+            1.0
+        )
+        .is_empty()
+    );
     assert!(flow(&snap, place()).lines.is_empty());
 }
 

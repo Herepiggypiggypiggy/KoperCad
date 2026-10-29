@@ -26,6 +26,7 @@ mod cabinet_door;
 mod cabinet_inspector;
 mod cabinet_menu;
 mod cabinet_panel;
+mod cabinet_rail_ends;
 mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
@@ -87,6 +88,10 @@ mod eplan_import;
 mod eplan_parts;
 mod error_words;
 mod example;
+#[cfg(test)]
+mod example_gallery;
+mod example_kit;
+mod example_mcc;
 mod faults;
 mod handover;
 mod heat;
@@ -102,6 +107,9 @@ mod heat_compare_tests;
 mod heat_cooling;
 #[cfg(test)]
 mod heat_duct_slice_tests;
+mod heat_flow;
+#[cfg(test)]
+mod heat_flow_tests;
 mod heat_layout;
 #[cfg(test)]
 mod heat_layout_tests;
@@ -175,6 +183,7 @@ mod manual;
 mod menu_bar;
 mod model_labels;
 mod motion;
+mod motor_freq;
 mod net_trace;
 mod numbering;
 mod onboarding;
@@ -186,6 +195,7 @@ mod panel;
 mod part_picker;
 mod parts;
 mod parts_bulk;
+mod parts_bundle;
 mod parts_cad;
 mod parts_identity;
 mod parts_import;
@@ -267,6 +277,7 @@ mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
 mod view3d_nudge;
+mod view3d_options;
 mod view3d_pins;
 #[cfg(test)]
 mod view3d_pins_tests;
@@ -356,6 +367,8 @@ mod eplan_ui_tests;
 #[cfg(test)]
 mod error_words_tests;
 #[cfg(test)]
+mod example_gallery_tests;
+#[cfg(test)]
 mod example_tests;
 #[cfg(test)]
 mod faults_tests;
@@ -370,9 +383,13 @@ mod handover_tests;
 #[cfg(test)]
 mod kitting_tests;
 #[cfg(test)]
+mod learn_nav_tests;
+#[cfg(test)]
 mod learn_replay;
 #[cfg(test)]
 mod learn_tests;
+#[cfg(test)]
+mod lesson_claims_bench_tests;
 #[cfg(test)]
 mod lesson_claims_tests;
 #[cfg(test)]
@@ -389,6 +406,8 @@ mod onboarding_tests;
 mod outline_tests;
 #[cfg(test)]
 mod page_commands_tests;
+#[cfg(test)]
+mod pages_scale_tests;
 #[cfg(test)]
 mod parts_table_tests;
 #[cfg(test)]
@@ -407,6 +426,8 @@ mod reopen_fit_tests;
 mod review_notes_tests;
 #[cfg(test)]
 mod route_all_tests;
+#[cfg(test)]
+mod route_through_ducts_tests;
 #[cfg(test)]
 mod scale_tests;
 #[cfg(test)]
@@ -449,7 +470,7 @@ const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
 use pages::PageView;
 
-use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
+use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows_reusing};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
 use crate::{APP_NAME, PROJECT_EXTENSION, PROJECT_EXTENSIONS};
@@ -554,6 +575,7 @@ enum Leaving {
     OpenPath(PathBuf),
     Example,
     EmcExample,
+    MccExample,
     Practice,
     /// Open this lesson's sample project and start the lesson.
     Lesson(String),
@@ -802,13 +824,56 @@ impl NovoApp {
     /// The project panel's rows: each page, and each sheet of a generated
     /// page, from the live reports.
     fn page_rows(&mut self) -> Vec<PageRow> {
-        match self.backend.document() {
-            Some(doc) => {
-                let project = doc.project();
-                page_rows(project, self.wb.reports.live(project))
-            }
-            None => Vec::new(),
+        let Some(doc) = self.backend.document() else {
+            return Vec::new();
+        };
+        let project = doc.project();
+        let pages = project.pages().count();
+        let key = (project.revision(), pages, self.machine_generation());
+        // Worked out once per change of the project. In a big project the
+        // contents page is rebuilt only once the edits pause: until then its
+        // rows stay as they were, so an edit or a delete does not wait for it.
+        let settled = |c: &outline::RowsCache| {
+            c.stale_since
+                .is_none_or(|t| t.elapsed() >= outline::ROWS_SETTLE)
+        };
+        if let Some(c) = &self.ol.rows_cache
+            && c.key == key
+            && !settled(c)
+        {
+            return c.rows.clone();
         }
+        if let Some(c) = &self.ol.rows_cache
+            && c.key == key
+            && c.stale_since.is_none()
+        {
+            return c.rows.clone();
+        }
+        let previous = self.ol.rows_cache.take();
+        let reuse =
+            pages > outline::BIG_PROJECT_PAGES && previous.as_ref().is_some_and(|c| c.key != key);
+        let (rows, kept) = page_rows_reusing(
+            project,
+            self.wb.reports.live(project),
+            previous
+                .as_ref()
+                .filter(|_| reuse)
+                .map(|c| c.rows.as_slice()),
+        );
+        if previous
+            .as_ref()
+            .is_some_and(|c| c.stale_since.is_some() && c.key == key)
+        {
+            // The settled rebuild: the Pages list takes the new labels.
+            self.ol.rows_epoch += 1;
+        }
+        let out = rows.clone();
+        self.ol.rows_cache = Some(outline::RowsCache {
+            key,
+            rows,
+            stale_since: kept.then(Instant::now),
+        });
+        out
     }
 
     /// Keeps the shown page valid after undo, redo or a reload removed it.
@@ -903,6 +968,7 @@ impl NovoApp {
             Action::RecoverProject => self.leave_then(ctx, Leaving::Recover),
             Action::OpenExample => self.leave_then(ctx, Leaving::Example),
             Action::OpenEmcExample => self.leave_then(ctx, Leaving::EmcExample),
+            Action::OpenMccExample => self.leave_then(ctx, Leaving::MccExample),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
             Action::Learn => self.learn_run_command("help.learn", None),
@@ -1074,6 +1140,7 @@ impl NovoApp {
             Leaving::OpenPath(path) => self.open_path(&path),
             Leaving::Example => self.open_example(),
             Leaving::EmcExample => self.open_emc_example(),
+            Leaving::MccExample => self.open_mcc_example(),
             Leaving::Practice => self.start_practice(),
             Leaving::Lesson(id) => self.start_lesson_now(&id),
             Leaving::Close => self.close_project(),
@@ -1207,13 +1274,17 @@ impl NovoApp {
             // keeps changes in a copy.
             Err(BackendError::Storage(novo_storage::StorageError::ReadOnly(_))) if !read_only => {
                 self.open_path_as(path, true);
-                self.message(
-                    Level::Warning,
-                    format!(
-                        "{} is write-protected, so it was opened read-only. Use Save as to keep changes in a copy.",
-                        path.display()
-                    ),
-                );
+                // Only when it really opened: a failed retry has already
+                // said why, and must not be followed by a claim that it did.
+                if self.project_path.as_deref() == Some(path) {
+                    self.message(
+                        Level::Warning,
+                        format!(
+                            "{} is write-protected, so it was opened read-only. Use Save as to keep changes in a copy.",
+                            path.display()
+                        ),
+                    );
+                }
             }
             // A damaged file is never edited in place. What can be read is
             // written to a recovered copy beside it, and the copy opens.
@@ -1449,6 +1520,16 @@ impl NovoApp {
     /// time for the next one even when nothing else repaints.
     fn tick(&mut self, ctx: &egui::Context) {
         let now = Instant::now();
+        if let Some(since) = self.ol.rows_cache.as_ref().and_then(|c| c.stale_since) {
+            // Edits paused: bring the contents rows up to date.
+            match outline::ROWS_SETTLE.checked_sub(since.elapsed()) {
+                Some(left) => ctx.request_repaint_after(left),
+                None => {
+                    let _ = self.page_rows();
+                    ctx.request_repaint();
+                }
+            }
+        }
         if now < self.next_tick {
             ctx.request_repaint_after(self.next_tick - now);
             return;
@@ -1828,6 +1909,7 @@ impl NovoApp {
         self.protection_window(&ctx);
         self.faults_window(&ctx);
         self.hoist_window(&ctx);
+        self.motor_freq_window(&ctx);
         self.add_fault_window(&ctx);
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);
@@ -2446,107 +2528,114 @@ impl NovoApp {
             egui::vec2(width, rect.bottom() - top),
         );
         ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
-            ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
-                novo_theme::brand::lockup(ui, 64.0);
-                ui.add_space(novo_theme::space::XXL);
-                if self.first_run() {
-                    self.action_button(ui, Action::TryFastKeys, picked);
-                    ui.weak("Seven short steps: place, wire, cable, live view");
-                    ui.add_space(8.0);
-                }
-                for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
-                    self.action_button(ui, a, picked);
-                }
-                // Quiet, not a headline: most people never need it, and the ones
-                // who do look for the word "recover".
-                let recover = ui
-                    .add(
-                        egui::Button::new(
-                            egui::RichText::new("File damaged? Recover it…")
-                                .underline()
-                                .color(ui.visuals().hyperlink_color),
-                        )
-                        .frame(false),
-                    )
-                    .on_hover_text(
-                        "Reads what can be read from a damaged project and opens it as a \
+            // Scrolls: on a small window the recent list runs below the edge.
+            egui::ScrollArea::vertical()
+                .id_salt("start_panel")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
+                        novo_theme::brand::lockup(ui, 64.0);
+                        ui.add_space(novo_theme::space::XXL);
+                        if self.first_run() {
+                            self.action_button(ui, Action::TryFastKeys, picked);
+                            ui.weak("Seven short steps: place, wire, cable, live view");
+                            ui.add_space(8.0);
+                        }
+                        for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
+                            self.action_button(ui, a, picked);
+                        }
+                        // Quiet, not a headline: most people never need it, and the ones
+                        // who do look for the word "recover".
+                        let recover = ui
+                            .add(
+                                egui::Button::new(
+                                    egui::RichText::new("File damaged? Recover it…")
+                                        .underline()
+                                        .color(ui.visuals().hyperlink_color),
+                                )
+                                .frame(false),
+                            )
+                            .on_hover_text(
+                                "Reads what can be read from a damaged project and opens it as a \
                          recovered copy beside it. The damaged file is not changed.",
-                    );
-                if recover.clicked() {
-                    let ctx = ui.ctx().clone();
-                    self.leave_then(&ctx, Leaving::Recover);
-                }
-                // Ways to learn, named as such and each with what it is, so the
-                // two are not read as copies of each other.
-                ui.add_space(12.0);
-                ui.small("LEARN");
-                if !self.first_run() {
-                    self.action_button(ui, Action::TryFastKeys, picked);
-                    ui.weak("Seven short steps: place, wire, cable, live view");
-                    ui.add_space(4.0);
-                }
-                self.learn_start_entry(ui);
-                ui.weak("Lessons for every part of the program");
-                let unsaved = self.backend.unsaved_projects();
-                if !unsaved.is_empty() {
-                    ui.add_space(16.0);
-                    ui.small("UNSAVED");
-                    // The newest few; the rest fold away so a long history
-                    // of crashed or abandoned sessions does not fill the card.
-                    let (newest, older) = unsaved.split_at(unsaved.len().min(UNSAVED_SHOWN));
-                    let mut open = None;
-                    let mut rows = |ui: &mut egui::Ui, list: &[(PathBuf, SystemTime)]| {
-                        for (path, changed) in list {
-                            let row = ui.add(
-                                egui::Button::new(format!("Untitled, {}", ago(*changed)))
-                                    .frame(false),
                             );
-                            if row.clicked() {
-                                open = Some(path.clone());
+                        if recover.clicked() {
+                            let ctx = ui.ctx().clone();
+                            self.leave_then(&ctx, Leaving::Recover);
+                        }
+                        // Ways to learn, named as such and each with what it is, so the
+                        // two are not read as copies of each other.
+                        ui.add_space(12.0);
+                        ui.small("LEARN");
+                        if !self.first_run() {
+                            self.action_button(ui, Action::TryFastKeys, picked);
+                            ui.weak("Seven short steps: place, wire, cable, live view");
+                            ui.add_space(4.0);
+                        }
+                        self.learn_start_entry(ui);
+                        ui.weak("Lessons for every part of the program");
+                        let unsaved = self.backend.unsaved_projects();
+                        if !unsaved.is_empty() {
+                            ui.add_space(16.0);
+                            ui.small("UNSAVED");
+                            // The newest few; the rest fold away so a long history
+                            // of crashed or abandoned sessions does not fill the card.
+                            let (newest, older) =
+                                unsaved.split_at(unsaved.len().min(UNSAVED_SHOWN));
+                            let mut open = None;
+                            let mut rows = |ui: &mut egui::Ui, list: &[(PathBuf, SystemTime)]| {
+                                for (path, changed) in list {
+                                    let row = ui.add(
+                                        egui::Button::new(format!("Untitled, {}", ago(*changed)))
+                                            .frame(false),
+                                    );
+                                    if row.clicked() {
+                                        open = Some(path.clone());
+                                    }
+                                }
+                            };
+                            rows(ui, newest);
+                            if !older.is_empty() {
+                                egui::CollapsingHeader::new(format!("{} older", older.len()))
+                                    .id_salt("unsaved_older")
+                                    .show(ui, |ui| rows(ui, older));
+                            }
+                            if let Some(path) = open {
+                                let ctx = ui.ctx().clone();
+                                self.leave_then(&ctx, Leaving::OpenPath(path));
                             }
                         }
-                    };
-                    rows(ui, newest);
-                    if !older.is_empty() {
-                        egui::CollapsingHeader::new(format!("{} older", older.len()))
-                            .id_salt("unsaved_older")
-                            .show(ui, |ui| rows(ui, older));
-                    }
-                    if let Some(path) = open {
-                        let ctx = ui.ctx().clone();
-                        self.leave_then(&ctx, Leaving::OpenPath(path));
-                    }
-                }
-                ui.add_space(16.0);
-                ui.small("WHAT ELSE IS IN HERE");
-                for line in [
-                    "Cabinet: size the enclosure, place devices, cut lists",
-                    "3D: look inside the cabinet (needs a mounting plate)",
-                    "Heat: temperatures and airflow, under Simulate",
-                    "Commissioning: checks and punch list",
-                    "Ctrl+K finds every command",
-                ] {
-                    ui.weak(line);
-                }
-                let recent = self.settings.recent_projects.clone();
-                if !recent.is_empty() {
-                    ui.add_space(16.0);
-                    ui.small("RECENT");
-                    for path in recent {
-                        let name = path
-                            .file_stem()
-                            .map(|n| n.to_string_lossy().into_owned())
-                            .unwrap_or_else(|| path.display().to_string());
-                        let row = ui
-                            .add(egui::Button::new(name).frame(false))
-                            .on_hover_text(path.display().to_string());
-                        if row.clicked() {
-                            let ctx = ui.ctx().clone();
-                            self.leave_then(&ctx, Leaving::OpenPath(path));
+                        ui.add_space(16.0);
+                        ui.small("WHAT ELSE IS IN HERE");
+                        for line in [
+                            "Cabinet: size the enclosure, place devices, cut lists",
+                            "3D: look inside the cabinet (needs a mounting plate)",
+                            "Heat: temperatures and airflow, under Simulate",
+                            "Commissioning: checks and punch list",
+                            "Ctrl+K finds every command",
+                        ] {
+                            ui.weak(line);
                         }
-                    }
-                }
-            });
+                        let recent = self.settings.recent_projects.clone();
+                        if !recent.is_empty() {
+                            ui.add_space(16.0);
+                            ui.small("RECENT");
+                            for path in recent {
+                                let name = path
+                                    .file_stem()
+                                    .map(|n| n.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| path.display().to_string());
+                                let row = ui
+                                    .add(egui::Button::new(name).frame(false))
+                                    .on_hover_text(path.display().to_string());
+                                if row.clicked() {
+                                    let ctx = ui.ctx().clone();
+                                    self.leave_then(&ctx, Leaving::OpenPath(path));
+                                }
+                            }
+                        }
+                    });
+                });
         });
     }
 
@@ -3018,6 +3107,10 @@ fn describe_error(verb: &str, path: &Path, e: &BackendError) -> String {
             | S::ReadOnly(_)
             | S::Corrupt { .. },
         ) => format!("Could not {verb} the project: {e}"),
+        // These already name the file the person chose, once.
+        BackendError::Storage(S::CannotSave { .. } | S::ReservedName(_)) => {
+            format!("Could not {verb}: {e}")
+        }
         _ if is_not_found(e) => format!(
             "Could not {verb} {}: the file does not exist",
             path.display()
@@ -3349,6 +3442,47 @@ mod tests {
         app.answer_save_changes(&ctx, Some(true));
         assert_eq!(app.project_path, Some(PathBuf::from("other.novo")));
         assert!(!app.modal_open());
+    }
+
+    #[test]
+    fn a_refused_save_names_the_chosen_file_once() {
+        use novo_storage::StorageError as S;
+        let path = Path::new("D:/plans/nofolder/x.kopercad");
+        for (error, needle) in [
+            (
+                S::CannotSave {
+                    path: path.to_owned(),
+                    why: "the folder does not exist",
+                },
+                "the folder does not exist",
+            ),
+            (S::ReservedName(path.to_owned()), "reserves for devices"),
+        ] {
+            let text = describe_error("save", path, &BackendError::Storage(error));
+            assert!(text.contains(needle), "{text}");
+            assert_eq!(text.matches("x.kopercad").count(), 1, "{text}");
+            assert!(!text.contains(".saving"), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_failed_read_only_retry_is_not_followed_by_a_claim_that_it_opened() {
+        // An empty file is no project: the retry fails too, and the only
+        // message is the refusal itself.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty.kopercad");
+        std::fs::write(&path, b"").unwrap();
+        let mut app = storage_app();
+        app.open_path(&path);
+        assert_eq!(app.project_path, None);
+        assert!(
+            app.messages
+                .iter()
+                .all(|m| !m.text.contains("opened read-only")),
+            "{:?}",
+            app.messages.iter().map(|m| &m.text).collect::<Vec<_>>()
+        );
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), 0);
     }
 
     #[test]

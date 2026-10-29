@@ -141,6 +141,37 @@ fn child_contacts_join_their_coil_with_the_next_numbers() {
 }
 
 #[test]
+fn tenth_and_later_contacts_of_one_coil_get_their_own_numbers() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/coils/relay", None);
+    editor.click(&mut doc, page, p(40.0, 160.0), TOL);
+    for i in 0..14 {
+        let hit = editor.catalog.search("K1 no")[0].clone();
+        editor.begin_place(&hit.symbol, hit.parent.as_deref());
+        editor.click(&mut doc, page, p(100.0 + 20.0 * f64::from(i), 60.0), TOL);
+    }
+    let k1 = doc.project().devices().next().unwrap().id;
+    let mut contacts: Vec<String> = doc
+        .project()
+        .symbols_of_device(k1)
+        .iter()
+        .filter(|s| matches!(s.role, SymbolRole::Device { main: false, .. }))
+        .map(|s| {
+            s.pins
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>()
+                .join("-")
+        })
+        .collect();
+    contacts.sort();
+    contacts.dedup();
+    assert_eq!(contacts.len(), 14, "{contacts:?}");
+    assert!(contacts.contains(&"103-104".to_owned()));
+    assert!(contacts.contains(&"143-144".to_owned()));
+}
+
+#[test]
 fn a_contact_without_a_parent_gets_its_own_device() {
     let (mut doc, page, mut editor) = setup();
     editor.begin_place("iec/contacts/no", None);

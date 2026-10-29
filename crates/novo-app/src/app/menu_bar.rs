@@ -185,14 +185,21 @@ impl NovoApp {
                     {
                         continue;
                     }
+                    // A long submenu (View > 3D has dozens of rows) scrolls
+                    // inside the window instead of running off its edge.
+                    let room = (ui.ctx().content_rect().height() - 80.0).max(200.0);
                     ui.menu_button(*name, |ui| {
-                        for info in items {
-                            self.command_row(ui, info);
-                        }
-                        // File > Open > Recent is not a command of its own.
-                        if *name == "Open" {
-                            self.recent_menu(ui);
-                        }
+                        egui::ScrollArea::vertical()
+                            .max_height(room)
+                            .show(ui, |ui| {
+                                for info in items {
+                                    self.command_row(ui, info);
+                                }
+                                // File > Open > Recent is not a command of its own.
+                                if *name == "Open" {
+                                    self.recent_menu(ui);
+                                }
+                            });
                     });
                 }
             }
@@ -281,6 +288,10 @@ impl NovoApp {
         let mut button = egui::Button::new(self.command_label(info));
         if let Some(keys) = self.command_shortcut_text(ui.ctx(), info.id) {
             button = button.shortcut_text(keys);
+        }
+        // A switch of the 3D view shows its one value, as its button does.
+        if let Some(option) = super::view3d_options::ViewOption::from_command(info.id) {
+            button = button.selected(self.view3d_option(option));
         }
         let response = ui.add_enabled(reason.is_none(), button);
         self.anchor(&format!("cmd.{}", info.id), response.rect, info.label);

@@ -179,8 +179,10 @@ impl EnclosureCatalog {
             }
             let mut numbers = [0.0; 6];
             let mut bad = None;
+            let mut too_big = None;
             for (slot, cell) in numbers.iter_mut().zip(&cells[1..6]) {
                 match parse_mm(cell, separator) {
+                    Some(v) if v > MAX_SIZE_MM => too_big = Some(*cell),
                     Some(v) if v > 0.0 => *slot = v,
                     _ => bad = Some(*cell),
                 }
@@ -189,6 +191,15 @@ impl EnclosureCatalog {
                 errors.push(CatalogError {
                     line,
                     message: format!("'{cell}' is not a positive size in mm"),
+                });
+                continue;
+            }
+            if let Some(cell) = too_big {
+                errors.push(CatalogError {
+                    line,
+                    message: format!(
+                        "'{cell}' is over {MAX_SIZE_MM} mm, the largest size the list takes (typo?)"
+                    ),
                 });
                 continue;
             }
@@ -256,6 +267,10 @@ impl EnclosureCatalog {
         out
     }
 }
+
+/// The largest enclosure or plate size the list takes, mm (the size fields of
+/// the Enclosures window stop here too).
+pub const MAX_SIZE_MM: f64 = 5000.0;
 
 fn parse_mm(cell: &str, separator: char) -> Option<f64> {
     let cell = cell.trim();

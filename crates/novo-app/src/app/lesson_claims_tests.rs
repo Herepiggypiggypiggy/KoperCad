@@ -194,16 +194,16 @@ fn the_wire_routing_lesson_quotes_the_routes_panel() {
     let o = super::cabinet_routes::overlay(&project, cab);
     // "11 wires routed, fullest duct 10%".
     assert_eq!(o.summary(), "11 wires routed, fullest duct 10%");
-    // "The longest are the three from -F2 to -X1 at 1039 mm each", longest first.
+    // "The longest are the three from -F2 to -X1 at 966 to 1014 mm", longest first.
     let lengths: Vec<f64> = o.rows.iter().map(|r| r.length_mm).collect();
-    assert_eq!(lengths[..3], [1039.0; 3]);
-    assert!(lengths[3] < 1039.0);
+    assert_eq!(lengths[..3], [1014.0, 990.0, 966.0]);
+    assert!(lengths[3] < 966.0);
     assert!(
         o.rows[..3]
             .iter()
             .all(|r| r.ends.contains("-F2") && r.ends.contains("-X1"))
     );
-    // "Set Service loop per end from 50 mm to 100 mm: every length grows by 100 mm (1039 becomes 1139)."
+    // "Set Service loop per end from 50 mm to 100 mm: every length grows by 100 mm (966 becomes 1066)."
     project
         .transact("rule", |tx| {
             novo_routing::project_rules::set_rule(
@@ -216,7 +216,7 @@ fn the_wire_routing_lesson_quotes_the_routes_panel() {
     let o = super::cabinet_routes::overlay(&project, cab);
     assert_eq!(
         o.rows[..3].iter().map(|r| r.length_mm).collect::<Vec<_>>(),
-        [1139.0; 3]
+        [1114.0, 1090.0, 1066.0]
     );
 }
 
@@ -236,7 +236,7 @@ fn the_cut_lengths_lesson_quotes_the_wire_list_and_the_cut_list() {
             .count()
     };
     assert_eq!((basis("routed"), basis("cable length")), (15, 4));
-    // "Wire 4, from -F2 to -X1, is 1039 mm; the wire between the push buttons -S0 and -S1 only 255."
+    // "Wire 4, from -F2 to -X1, is 966 mm; the wire between the push buttons -S0 and -S1 only 335."
     let row = |no: &str| {
         wires
             .rows
@@ -244,7 +244,7 @@ fn the_cut_lengths_lesson_quotes_the_wire_list_and_the_cut_list() {
             .find(|r| cell(wires, r, "number") == no)
             .unwrap()
     };
-    assert_eq!(cell(wires, row("4"), "length_mm"), "1039");
+    assert_eq!(cell(wires, row("4"), "length_mm"), "966");
     assert!(
         cell(wires, row("4"), "from").ends_with("-F2:2")
             && cell(wires, row("4"), "to").ends_with("-X1:1")
@@ -256,7 +256,7 @@ fn the_cut_lengths_lesson_quotes_the_wire_list_and_the_cut_list() {
             cell(wires, r, "from").ends_with("-S0:12") && cell(wires, r, "to").ends_with("-S1:13")
         })
         .unwrap();
-    assert_eq!(cell(wires, buttons, "length_mm"), "255");
+    assert_eq!(cell(wires, buttons, "length_mm"), "335");
     // The four motor wires are the cores of cable -W1, 12 m long.
     for r in wires
         .rows
@@ -266,13 +266,13 @@ fn the_cut_lengths_lesson_quotes_the_wire_list_and_the_cut_list() {
         assert_eq!(cell(wires, r, "length_mm"), "12000");
         assert!(cell(wires, r, "to").contains("-M1") || cell(wires, r, "from").contains("-X1"));
     }
-    // The cut list: "4 wires of 1.5 mm² (no metres: cores) and 21 wires whose size is not set (10.6 m)".
+    // The cut list: "4 wires of 1.5 mm² (no metres: cores) and 21 wires whose size is not set (10.85 m)".
     let cut = CutList::of(&project).generate(&project);
     let summary = &cut.sections[0];
     let rows: Vec<Vec<String>> = summary.rows.iter().map(cells).collect();
     assert_eq!(rows[0], ["1.5 mm²", "4", "0"]);
-    assert_eq!(rows[1], ["Size unknown", "21", "10.6"]);
-    // "Wire 4 shows Wire mm 1039, Ends mm 20 and Cut mm 1059."
+    assert_eq!(rows[1], ["Size unknown", "21", "10.85"]);
+    // "Wire 4 shows Wire mm 966, Ends mm 20 and Cut mm 986."
     let group = cut.sections.iter().find(|s| s.key == "group-2").unwrap();
     let w4 = group
         .rows
@@ -285,7 +285,7 @@ fn the_cut_lengths_lesson_quotes_the_wire_list_and_the_cut_list() {
             cell(group, w4, "allowance_mm"),
             cell(group, w4, "cut_mm")
         ],
-        ["1039", "20", "1059"]
+        ["966", "20", "986"]
     );
 }
 
@@ -361,10 +361,10 @@ fn the_plate_lessons_quote_the_drill_table_and_the_rails() {
     );
     assert_eq!(layout.rails.len(), 5);
     assert!(layout.rails.iter().all(|r| r.length == 535.0));
-    // "The five rails of 535 mm and the six ducts (five of 557.5 mm and the trunk of 780 mm)".
+    // "The five rails of 535 mm and the six ducts (five of 545 mm and the trunk of 780 mm)".
     let mut ducts: Vec<f64> = layout.ducts.iter().map(|d| d.length).collect();
     ducts.sort_by(f64::total_cmp);
-    assert_eq!(ducts, [557.5, 557.5, 557.5, 557.5, 557.5, 780.0]);
+    assert_eq!(ducts, [545.0, 545.0, 545.0, 545.0, 545.0, 780.0]);
 }
 
 #[test]

@@ -187,6 +187,24 @@ pub(crate) fn draws_plc_channels(definition: &BlockDefinition) -> bool {
     })
 }
 
+/// How many of the placed symbols have their origin outside the sheet.
+fn off_sheet_count(project: &novo_core::Project, page: novo_core::PageId, ids: &[AnyId]) -> usize {
+    let Some(page) = project.page(page) else {
+        return 0;
+    };
+    let (w, h) = page.format.size_mm();
+    ids.iter()
+        .filter_map(|id| match id {
+            AnyId::Symbol(s) => project.symbol(*s),
+            _ => None,
+        })
+        .filter(|s| {
+            let o = s.placement.origin;
+            o.x < 0.0 || o.y < 0.0 || o.x > w || o.y > h
+        })
+        .count()
+}
+
 /// The preview line: what a placement will do.
 pub(crate) fn describe(report: &Report) -> String {
     let tags: Vec<String> = report.tags.iter().map(|t| t.to_string()).collect();
@@ -723,6 +741,8 @@ impl NovoApp {
                     .block_instance(placed.instance)
                     .map(|i| i.members.iter().map(|m| m.actual).collect())
                     .unwrap_or_default();
+                // Symbols that landed beyond the sheet edge print nowhere.
+                let off_sheet = off_sheet_count(doc.project(), page, &ids);
                 self.changed_outside_canvas(&changes);
                 if moved {
                     self.show_page(page);
@@ -760,6 +780,16 @@ impl NovoApp {
                 } else {
                     format!("Placed {name} · {}", describe(&placed.report))
                 };
+                if off_sheet > 0 {
+                    self.message(
+                        Level::Warning,
+                        format!(
+                            "{name}: {off_sheet} {} outside the page edge; move {} onto the sheet or use a bigger page",
+                            if off_sheet == 1 { "symbol is" } else { "symbols are" },
+                            if off_sheet == 1 { "it" } else { "them" }
+                        ),
+                    );
+                }
                 self.message(Level::Info, text);
                 self.wb.macro_place.open = false;
             }

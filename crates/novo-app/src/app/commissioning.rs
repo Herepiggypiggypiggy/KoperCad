@@ -8,7 +8,7 @@
 //! finger. On the drawing, passed objects get the "added" outline and failed
 //! ones the error mark.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -28,7 +28,7 @@ use novo_reports::CsvOptions;
 use novo_theme::{Density, Palette, icons, space, widgets};
 use novo_xref::Place;
 
-use super::cabinet_bar::{note_ctx, note_rect};
+use super::cabinet_bar::{note_ctx, note_rect_in};
 use super::commissioning_viewer::{self as viewer, PhotoViewer};
 
 use super::changes::shown_on;
@@ -63,6 +63,9 @@ pub(super) enum Tab {
     /// The continuity and insulation test sheet.
     Test,
 }
+
+/// The rows of each page of the checks list, with their group.
+type SortedPages = HashMap<PageId, Rc<Vec<(Group, TargetInfo)>>>;
 
 /// What a kept walking order was built for: project revision, scope, order.
 type WalkKey = (u64, WalkScope, WalkOrder);
@@ -110,6 +113,12 @@ pub(crate) struct CommissioningMode {
     index: Option<(u64, Rc<TargetIndex>)>,
     /// The walking order for the scope and order chosen, kept the same way.
     walk: Option<(WalkKey, Rc<Vec<TargetInfo>>)>,
+    /// The targets of each page in list order (wires, cores, terminals,
+    /// devices), kept until the project changes.
+    sorted: Option<(u64, SortedPages)>,
+    /// Measured heights of a page header and a group heading in the list,
+    /// which the list needs to skip the lines out of view.
+    line_heights: [f32; 2],
     /// What "Next open" and Space visit: everything, or the wires only.
     pub(super) scope: WalkScope,
     /// The order the wires are walked in.
@@ -159,6 +168,8 @@ impl CommissioningMode {
             generation: 0,
             index: None,
             walk: None,
+            sorted: None,
+            line_heights: [24.0, 18.0],
             scope: WalkScope::Wires,
             order: WalkOrder::Number,
             fail_pending: None,
@@ -204,6 +215,39 @@ impl CommissioningMode {
                 index
             }
         }
+    }
+
+    /// The targets drawn on `page` in list order, each with its group.
+    fn sorted_page(
+        &mut self,
+        revision: u64,
+        index: &TargetIndex,
+        plan: &WirePlan,
+        page: PageId,
+    ) -> Rc<Vec<(Group, TargetInfo)>> {
+        if self.sorted.as_ref().is_none_or(|(r, _)| *r != revision) {
+            self.sorted = Some((revision, HashMap::new()));
+        }
+        let map = &mut self.sorted.as_mut().expect("set above").1;
+        if let Some(rows) = map.get(&page) {
+            return Rc::clone(rows);
+        }
+        // Plain wires, then cable cores, each by number, then the terminals
+        // and devices: a number drawn as both a wire and a core sits in two
+        // groups instead of looking like a repeat.
+        let mut rows: Vec<(Group, TargetInfo)> = index
+            .on_page(page)
+            .map(|i| (target_group(i.target, plan), i.clone()))
+            .collect();
+        rows.sort_by(|(ga, a), (gb, b)| {
+            ga.cmp(gb).then_with(|| match (a.target, b.target) {
+                (Target::Wire(_), Target::Wire(_)) => novo_core::natural_cmp(&a.label, &b.label),
+                _ => std::cmp::Ordering::Equal,
+            })
+        });
+        let rows = Rc::new(rows);
+        map.insert(page, Rc::clone(&rows));
+        rows
     }
 
     /// The walking order for the scope and order chosen.
@@ -672,22 +716,22 @@ impl NovoApp {
                         egui::pos2(r.left() + third * (i + 1.0), r.bottom()),
                     )
                 };
-                note_rect(
-                    ui.ctx(),
+                note_rect_in(
+                    ui,
                     "commissioning.punch",
                     "Punch tab",
                     part(1.0),
                     row.inner && tab == 1,
                 );
-                note_rect(
-                    ui.ctx(),
+                note_rect_in(
+                    ui,
                     "commissioning.redlines",
                     "Redlines tab",
                     part(2.0),
                     row.inner && tab == 2,
                 );
-                note_rect(
-                    ui.ctx(),
+                note_rect_in(
+                    ui,
                     "commissioning.test",
                     "Test tab",
                     part(3.0),
@@ -1430,89 +1474,97 @@ fn checks_tab(
         mode.unfolded_for = current;
         mode.open_pages.extend(current);
     }
+    let revision = mode.cache_revision(project);
+    // Only the rows in view are laid out: a page of thousands of targets
+    // took tens of milliseconds a frame when every row was.
     egui::ScrollArea::vertical()
         .auto_shrink([false, true])
-        .show(ui, |ui| {
+        .show_viewport(ui, |ui, viewport| {
             ui.spacing_mut().item_spacing.y = 1.0;
+            let gap = ui.spacing().item_spacing.y;
+            let margin = 200.0;
+            let in_view = |y: f32, h: f32| {
+                y + h >= viewport.top() - margin && y <= viewport.bottom() + margin
+            };
+            // Height of the lines skipped since the last one drawn.
+            let mut y = 0.0_f32;
+            let mut skipped = 0.0_f32;
             for page in &pages {
-                let on_page: Vec<&TargetInfo> = index.on_page(page.id).collect();
-                if on_page.is_empty() {
+                if index.on_page(page.id).next().is_none() {
                     continue;
                 }
                 let open = mode.open_pages.contains(&page.id);
-                let done = index.progress(&mode.store, Scope::Page(page.id));
-                let name = if page.title.is_empty() {
-                    page.name.clone()
-                } else {
-                    format!("{} · {}", page.name, page.title)
-                };
-                let head = widgets::row(ui, false, |ui| {
-                    ui.label(
-                        egui::RichText::new(if open {
-                            icons::CARET_DOWN
-                        } else {
-                            icons::CARET_RIGHT
-                        })
-                        .color(p.text_tertiary),
-                    );
-                    widgets::section_label(ui, &name);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let color = if done.failed > 0 {
-                            p.error
-                        } else {
-                            p.text_secondary
-                        };
-                        ui.label(
-                            egui::RichText::new(format!("{}/{}", done.done(), done.total))
-                                .monospace()
-                                .color(color),
-                        );
-                    });
-                });
-                if head.clicked() {
-                    if open {
-                        mode.open_pages.remove(&page.id);
+                let head_h = mode.line_heights[0];
+                if in_view(y, head_h) {
+                    flush_skipped(ui, &mut skipped, gap);
+                    let top = ui.cursor().top();
+                    let done = index.progress(&mode.store, Scope::Page(page.id));
+                    let name = if page.title.is_empty() {
+                        page.name.clone()
                     } else {
-                        mode.open_pages.insert(page.id);
+                        format!("{} · {}", page.name, page.title)
+                    };
+                    let head = widgets::row(ui, false, |ui| {
+                        ui.label(
+                            egui::RichText::new(if open {
+                                icons::CARET_DOWN
+                            } else {
+                                icons::CARET_RIGHT
+                            })
+                            .color(p.text_tertiary),
+                        );
+                        widgets::section_label(ui, &name);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let color = if done.failed > 0 {
+                                p.error
+                            } else {
+                                p.text_secondary
+                            };
+                            ui.label(
+                                egui::RichText::new(format!("{}/{}", done.done(), done.total))
+                                    .monospace()
+                                    .color(color),
+                            );
+                        });
+                    });
+                    mode.line_heights[0] = (ui.cursor().top() - top - gap).max(1.0);
+                    if head.clicked() {
+                        if open {
+                            mode.open_pages.remove(&page.id);
+                        } else {
+                            mode.open_pages.insert(page.id);
+                        }
                     }
+                } else {
+                    skipped += head_h + gap;
                 }
+                y += mode.line_heights[0] + gap;
                 if !open {
                     continue;
                 }
-                let mut on_page = on_page;
-                // Plain wires, then cable cores, each by number, then the
-                // terminals and devices: a number drawn as both a wire and
-                // a core sits in two groups instead of looking like a repeat.
-                on_page.sort_by(|a, b| {
-                    let (ga, gb) = (target_group(a.target, &plan), target_group(b.target, &plan));
-                    ga.cmp(&gb).then_with(|| match (a.target, b.target) {
-                        (Target::Wire(_), Target::Wire(_)) => {
-                            novo_core::natural_cmp(&a.label, &b.label)
-                        }
-                        _ => std::cmp::Ordering::Equal,
-                    })
-                });
+                let rows = mode.sorted_page(revision, &index, &plan, page.id);
                 let mut group = None;
-                for info in on_page {
-                    let kind = target_group(info.target, &plan);
-                    if group != Some(kind) {
-                        group = Some(kind);
-                        ui.horizontal(|ui| {
-                            ui.add_space(space::XL);
-                            ui.label(
-                                egui::RichText::new(kind.heading())
-                                    .small()
-                                    .color(p.text_tertiary),
-                            );
-                        });
+                for (kind, info) in rows.iter() {
+                    if group != Some(*kind) {
+                        group = Some(*kind);
+                        let h = mode.line_heights[1];
+                        if in_view(y, h) {
+                            flush_skipped(ui, &mut skipped, gap);
+                            let top = ui.cursor().top();
+                            ui.horizontal(|ui| {
+                                ui.add_space(space::XL);
+                                ui.label(
+                                    egui::RichText::new(kind.heading())
+                                        .small()
+                                        .color(p.text_tertiary),
+                                );
+                            });
+                            mode.line_heights[1] = (ui.cursor().top() - top - gap).max(1.0);
+                        } else {
+                            skipped += h + gap;
+                        }
+                        y += mode.line_heights[1] + gap;
                     }
-                    let state = target_state(&mode.store, info.target);
-                    let decided = info
-                        .target
-                        .checks()
-                        .iter()
-                        .filter(|&&c| mode.store.state(info.target, c) != CheckState::Pending)
-                        .count();
                     let step = match info.target {
                         Target::Wire(w) => plan.step(w),
                         _ => None,
@@ -1523,6 +1575,20 @@ fn checks_tab(
                     // line so the list shows as many wires as it can.
                     let two_lines = step.is_some() && mode.large;
                     let height = if two_lines { height + 24.0 } else { height };
+                    if !in_view(y, height) {
+                        skipped += height + gap;
+                        y += height + gap;
+                        continue;
+                    }
+                    flush_skipped(ui, &mut skipped, gap);
+                    y += height + gap;
+                    let state = target_state(&mode.store, info.target);
+                    let decided = info
+                        .target
+                        .checks()
+                        .iter()
+                        .filter(|&&c| mode.store.state(info.target, c) != CheckState::Pending)
+                        .count();
                     let row = widgets::row_of_height(
                         ui,
                         mode.selected == Some(info.target),
@@ -1560,7 +1626,16 @@ fn checks_tab(
                     }
                 }
             }
+            flush_skipped(ui, &mut skipped, gap);
         });
+}
+
+/// Fills the space of the lines the list did not draw.
+fn flush_skipped(ui: &mut egui::Ui, skipped: &mut f32, gap: f32) {
+    if *skipped > 0.0 {
+        ui.add_space((*skipped - gap).max(0.0));
+        *skipped = 0.0;
+    }
 }
 
 /// The text of a wire's row: the number and what the wire is, and under it

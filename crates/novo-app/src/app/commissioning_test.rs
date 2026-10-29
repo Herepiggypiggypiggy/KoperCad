@@ -46,6 +46,37 @@ pub(super) fn parse_number(text: &str) -> Option<f64> {
     (v.is_finite() && v >= 0.0).then_some(v)
 }
 
+/// A continuity reading typed in ohms, or what is wrong with it.
+fn ohm_reading(text: &str) -> Result<f64, String> {
+    match parse_number(text) {
+        Some(v) if v > MAX_OHM => Err(format!(
+            "{} ohm is not a reading: a wire over {MAX_OHM:.0} ohm is open, press Open",
+            text.trim()
+        )),
+        Some(v) => Ok(v),
+        None => Err("Type the ohms as a number, for example 0.12".to_owned()),
+    }
+}
+
+/// An insulation reading typed in megohms, or what is wrong with it.
+fn megohm_reading(text: &str) -> Result<f64, String> {
+    match parse_number(text) {
+        Some(v) if v > MAX_MEGOHM => Err(format!(
+            "{} megohm is more than a tester shows: check the number (limit {MAX_MEGOHM:.0})",
+            text.trim()
+        )),
+        Some(v) => Ok(v),
+        None => Err("Type the megohms as a number, for example 50".to_owned()),
+    }
+}
+
+/// The largest continuity reading taken as a number, ohms. A wire that
+/// reads more is open: the Open button records that.
+const MAX_OHM: f64 = 100_000.0;
+/// The largest insulation reading taken as a number, megohms (testers stop
+/// at a few thousand).
+const MAX_MEGOHM: f64 = 100_000.0;
+
 impl CommissioningMode {
     /// The sheet for the project as it is now and the settings kept.
     pub(super) fn test_sheet(&mut self, project: &Project) -> Rc<TestSheet> {
@@ -81,10 +112,10 @@ impl CommissioningMode {
         } else if typed_c.is_empty() {
             None
         } else {
-            match parse_number(typed_c) {
-                Some(v) => Some(ContinuityInput::Ohm(v)),
-                None => {
-                    self.test.last = "Type the ohms as a number, for example 0.12".to_owned();
+            match ohm_reading(typed_c) {
+                Ok(v) => Some(ContinuityInput::Ohm(v)),
+                Err(why) => {
+                    self.test.last = why;
                     return false;
                 }
             }
@@ -92,10 +123,10 @@ impl CommissioningMode {
         let insulation_mohm = if typed_i.is_empty() {
             None
         } else {
-            match parse_number(typed_i) {
-                Some(v) => Some(v),
-                None => {
-                    self.test.last = "Type the megohms as a number, for example 50".to_owned();
+            match megohm_reading(typed_i) {
+                Ok(v) => Some(v),
+                Err(why) => {
+                    self.test.last = why;
                     return false;
                 }
             }
@@ -612,5 +643,25 @@ mod tests {
         assert_eq!(parse_number("NaN"), None);
         assert_eq!(parse_number("inf"), None);
         assert_eq!(parse_number(""), None);
+    }
+}
+
+#[cfg(test)]
+mod reading_tests {
+    use super::{megohm_reading, ohm_reading};
+
+    #[test]
+    fn readings_a_meter_cannot_show_are_refused_with_a_hint() {
+        // Hardware test LSC-15: 1e308 was recorded and printed in full.
+        assert_eq!(ohm_reading("0,15"), Ok(0.15));
+        assert_eq!(ohm_reading("0"), Ok(0.0));
+        assert!(ohm_reading("1e308").unwrap_err().contains("press Open"));
+        assert!(ohm_reading("-1").is_err() && ohm_reading("abc").is_err());
+        assert_eq!(megohm_reading("50"), Ok(50.0));
+        assert!(
+            megohm_reading("1e308")
+                .unwrap_err()
+                .contains("more than a tester")
+        );
     }
 }

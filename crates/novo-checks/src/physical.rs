@@ -263,28 +263,63 @@ pub(crate) fn layout(cx: &Context<'_>, out: &mut Vec<Problem>) {
                         structure.tag
                     ),
                 ),
-                DuctHit::Rail { id: rail, by } => (
+                DuctHit::Duct { id: other, w, h } => (
+                    // Ducts have no tag: the plate's enclosure stands for them.
+                    vec![AnyId::Structure(structure.id)],
+                    format!(
+                        "Duct {} crosses duct {} on the plate of {} ({} x {} mm): ducts cannot \
+                         pass through each other, so move one or end one against the side of the other",
+                        o.duct,
+                        other,
+                        structure.tag,
+                        w.round(),
+                        h.round()
+                    ),
+                ),
+                DuctHit::Rail { id: rail, by } => {
                     // A rail has no tag: the devices on it stand for it, a
                     // bare rail is found by its plate.
-                    {
-                        let on: Vec<AnyId> = layout
-                            .placements
-                            .iter()
-                            .filter(|p| p.rail == Some(rail))
-                            .map(|p| AnyId::Device(DeviceId::from(p.id)))
-                            .collect();
+                    let ids: Vec<u64> = layout
+                        .placements
+                        .iter()
+                        .filter(|p| p.rail == Some(rail))
+                        .map(|p| p.id)
+                        .collect();
+                    let on: Vec<AnyId> = ids
+                        .iter()
+                        .map(|&id| AnyId::Device(DeviceId::from(id)))
+                        .collect();
+                    // Two rails under ducts must not read as one problem
+                    // listed twice: say which rail, by what sits on it.
+                    let which = if on.is_empty() {
+                        let place = layout.rails.iter().find(|r| r.id == rail).map_or_else(
+                            String::new,
+                            |r| {
+                                format!(
+                                    " at {} mm from the left and {} mm from the top",
+                                    r.x.round(),
+                                    r.y.round()
+                                )
+                            },
+                        );
+                        format!("An empty DIN rail{place}")
+                    } else {
+                        let tags: Vec<String> = ids.iter().take(4).map(|&id| tag(id)).collect();
+                        format!("The DIN rail with {}", tags.join(", "))
+                    };
+                    (
                         if on.is_empty() {
                             vec![AnyId::Structure(structure.id)]
                         } else {
                             on
-                        }
-                    },
-                    format!(
-                        "A DIN rail of {} runs under a duct for {} mm",
-                        structure.tag,
-                        by.round()
-                    ),
-                ),
+                        },
+                        format!(
+                            "{which} on the plate of {} runs under a duct for {} mm",
+                            structure.tag,
+                            by.round()
+                        ),
+                    )
+                }
             };
             out.push(Problem::new(ProblemKind::DuctOverlap, at, what));
         }

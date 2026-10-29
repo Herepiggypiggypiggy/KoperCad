@@ -843,9 +843,22 @@ pub(crate) fn plan_around(
         why.separation_relaxed |= w.separation_relaxed;
         why.trunk |= w.trunk;
         why.trunk_dropped |= w.trunk_dropped;
-        // Only what no region takes is unplaced (and why, from the last try).
+        // Only what no region takes is unplaced. A device that fitted a region
+        // by size but found it full is "no room", never "too large": the
+        // smallest region tried last must not name the reason.
         left.retain(|s| unplaced.contains(&s.id));
-        why.unplaced = w.unplaced;
+        let mut merged: Vec<(u64, UnplacedWhy)> = Vec::new();
+        for (id, reason) in why.unplaced.drain(..).chain(w.unplaced) {
+            match merged.iter_mut().find(|(m, _)| *m == id) {
+                Some((_, kept)) => {
+                    if reason == UnplacedWhy::NoRoom {
+                        *kept = UnplacedWhy::NoRoom;
+                    }
+                }
+                None => merged.push((id, reason)),
+            }
+        }
+        why.unplaced = merged;
     }
     plan.unplaced = left.iter().map(|s| s.id).collect();
     if regions.is_empty() {
@@ -1341,9 +1354,10 @@ fn plan_once(
             cause: previous.map(|(_, p)| between_with(p, row).1),
         });
         if let Some((py, p)) = previous {
-            // Ducts start on the trunk's centre line so they meet it.
+            // Ducts end against the trunk's side, a T junction: they never
+            // run through it.
             let duct_x = if trunk {
-                full.x + strip / 2.0
+                full.x + strip / 2.0 + rules.duct_width / 2.0
             } else {
                 usable.x
             };
@@ -1408,11 +1422,14 @@ fn plan_ducts(
         height: rules.duct_height,
         class,
     };
-    if rules.separation > 0.0 && upper.1.conflicts(lower.1) {
+    // Two ducts each hugging its row need room for both and the gap between.
+    if rules.separation > 0.0 && upper.1.conflicts(lower.1) && space >= 2.0 * (w + DUCT_CLEAR_MM) {
         // Two ducts, each hugging the row it serves, kept apart.
         out.push(duct(upper.0 + DUCT_CLEAR_MM + w / 2.0, upper.1));
         out.push(duct(lower.0 - DUCT_CLEAR_MM - w / 2.0, lower.1));
     } else if space >= w {
+        // One duct between the rows, also when two kept-apart ducts do not
+        // fit: ducts never overlap.
         let class = match (upper.1, lower.1) {
             (a, b) if a == b => duct_class(a, b),
             (Class::Mixed, b) => b,

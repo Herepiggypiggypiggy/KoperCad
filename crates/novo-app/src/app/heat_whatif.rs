@@ -31,6 +31,15 @@ use super::heat_sweep::{key_of, settings_for};
 /// Width of the window's content, points: it fits beside the view cube at
 /// 1366 px.
 const WIDTH: f32 = 400.0;
+fn rect_id() -> egui::Id {
+    egui::Id::new("whatif_window_rect")
+}
+
+/// Where the window was drawn last, for panels that start beside it.
+pub(super) fn drawn_rect(ctx: &egui::Context) -> Option<egui::Rect> {
+    ctx.data(|d| d.get_temp::<egui::Rect>(rect_id()))
+}
+
 /// Width of the window with its frame, points.
 pub(super) const WINDOW_WIDTH: f32 = WIDTH + 24.0;
 /// Tallest the results get before they scroll, points.
@@ -403,7 +412,7 @@ impl Wizard {
         let mut ask = None;
         let mut open = true;
         let pal = crate::theme::ui_palette();
-        egui::Window::new("Cooling what-if")
+        let shown = egui::Window::new("Cooling what-if")
             .open(&mut open)
             // Folds to its title bar, so the preview behind it can be looked
             // at on a small screen.
@@ -468,6 +477,9 @@ impl Wizard {
                 ui.add_space(4.0);
                 ui.label(RichText::new(MODEL_NOTE).small().color(pal.text_secondary));
             });
+        if let Some(r) = shown {
+            ctx.data_mut(|d| d.insert_temp(rect_id(), r.response.rect));
+        }
         if ask.is_some() {
             self.apply = ask;
         }
@@ -1121,7 +1133,7 @@ impl super::NovoApp {
             self.sync_openings_now();
             super::heat_sweep::add_pair(&mut self.cabinet.heat.settings, &c);
             self.sync_openings_now();
-            self.view3d.controls.heat_panel = true;
+            self.cabinet.heat.on = true;
             said.push(super::heat_sweep::added_text(&c));
             if moved {
                 said.push(
