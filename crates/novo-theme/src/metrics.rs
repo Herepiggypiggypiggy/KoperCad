@@ -50,6 +50,8 @@ pub mod dialog_width {
     pub const SMALL: f32 = 360.0;
     pub const MEDIUM: f32 = 480.0;
     pub const LARGE: f32 = 640.0;
+    /// A centre (Import, Export): a workbench rather than a question.
+    pub const CENTRE: f32 = 960.0;
 }
 
 #[cfg(test)]

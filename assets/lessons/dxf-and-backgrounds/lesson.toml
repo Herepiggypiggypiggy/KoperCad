@@ -34,12 +34,12 @@ title_nl = "Exporteer deze pagina als DXF"
 text = "Hand over exactly what the workshop asked for: the page you are looking at, drawn as lines they can open."
 text_nl = "Lever precies wat de werkplaats vroeg: de pagina die je ziet, getekend als lijnen die zij kunnen openen."
 how = [
-  "Open the **File** menu, then **Export**, then **Export this page as DXF**.",
+  "Open the {ui:menu.File} menu, then {ui:cmd.file.export_centre}, pick {ui:cmd.export.dxf_page} and press Enter.",
   "Or press {key:view.command_palette}, type **export dxf** and press Enter.",
   "The message at the bottom names the file. This lesson project is not saved yet, so it goes to your Documents folder under **KoperCAD**.",
 ]
 how_nl = [
-  "Open het menu **File**, dan **Export**, dan **Export this page as DXF**.",
+  "Open het menu {ui:menu.File}, dan {ui:cmd.file.export_centre}, kies {ui:cmd.export.dxf_page} en druk op Enter.",
   "Of druk op {key:view.command_palette}, typ **export dxf** en druk op Enter.",
   "De melding onderaan noemt het bestand. Dit lesproject is nog niet bewaard, dus het gaat naar je map Documenten onder **KoperCAD**.",
 ]
@@ -54,12 +54,12 @@ title_nl = "Exporteer alle pagina's"
 text = "One command hands over the whole set, so nothing is forgotten. Running it again replaces only the files KoperCAD wrote itself, never yours."
 text_nl = "Eén opdracht levert de hele set, zodat niets vergeten wordt. Opnieuw uitvoeren vervangt alleen bestanden die KoperCAD zelf schreef, nooit de jouwe."
 how = [
-  "Open **File > Export drawings > Export all pages as DXF**.",
+  "Open {ui:cmd.file.export_centre}, pick {ui:cmd.export.dxf_all} and press Enter.",
   "KoperCAD writes one file per page into a folder called **<project name> DXF**.",
   "The message at the bottom tells you where it is.",
 ]
 how_nl = [
-  "Open **File > Export drawings > Export all pages as DXF**.",
+  "Open {ui:cmd.file.export_centre}, kies {ui:cmd.export.dxf_all} en druk op Enter.",
   "KoperCAD schrijft één bestand per pagina in een map met de naam **<projectnaam> DXF**.",
   "De melding onderaan vertelt waar die staat.",
 ]

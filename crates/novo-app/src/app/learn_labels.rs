@@ -219,6 +219,19 @@ pub(crate) fn menu_anchors() -> &'static [MenuAnchor] {
                 });
             }
         }
+        // The Export centre draws a tile for each format; while it is shut a
+        // lesson points at the File > Export... row that opens it.
+        for id in novo_workflow::centres::export_ids() {
+            if novo_workflow::centres::replaces_menu_row(id)
+                && let Some(info) = novo_workflow::commands::get(id)
+            {
+                all.push(MenuAnchor {
+                    id: format!("cmd.{id}"),
+                    label: info.label.to_owned(),
+                    parent: Some(format!("cmd.{}", novo_workflow::centres::EXPORT_CENTRE)),
+                });
+            }
+        }
         all
     })
 }

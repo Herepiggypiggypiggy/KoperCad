@@ -772,15 +772,7 @@ mod tests {
         );
         let export = file
             .iter()
-            .position(|i| {
-                matches!(
-                    i,
-                    MenuItem::Submenu {
-                        name: "Import",
-                        ..
-                    }
-                )
-            })
+            .position(|i| matches!(i, MenuItem::Submenu { name: "Import", .. }))
             .expect("an Import submenu");
         let new = file
             .iter()
@@ -905,13 +897,13 @@ mod tests {
     #[test]
     fn menu_rows_stay_inside_the_budget() {
         let ceilings: &[(&str, usize)] = &[
-            ("File", 88),
+            ("File", 58),
             ("Edit", 30),
             ("Draw", 39),
             ("View", 65),
             ("Check", 11),
-            ("Reports", 30),
-            ("Simulate", 24),
+            ("Reports", 17),
+            ("Simulate", 25),
             ("Help", 19),
         ];
         let mut total = 0;
@@ -929,7 +921,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 306, "the menus hold {total} rows");
+        assert!(total <= 264, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File
@@ -942,7 +934,8 @@ mod tests {
         for menu in MENUS {
             for (info, p) in entries(menu) {
                 assert!(
-                    !info.id.starts_with("export.") || crate::centres::ALSO_IN_MENU.contains(&info.id),
+                    !info.id.starts_with("export.")
+                        || crate::centres::ALSO_IN_MENU.contains(&info.id),
                     "{} still has a row in {menu} > {:?}",
                     info.id,
                     p.submenu

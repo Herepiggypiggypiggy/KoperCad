@@ -575,6 +575,22 @@ fn menu(l: &mut Ox, path: &[&str]) {
     }
 }
 
+/// File > Export..., the format found by `query`, then the Export button.
+fn export_via_centre(l: &mut Ox, query: &str, tile: &str) {
+    menu(l, &["File", "Export..."]);
+    l.d.app
+        .wb
+        .export_centre
+        .as_mut()
+        .expect("the Export centre opens")
+        .query = query.to_owned();
+    l.frames(3);
+    l.click_label(tile);
+    l.frames(2);
+    l.click_label("Export");
+    l.frames(2);
+}
+
 fn texts(l: &Ox) -> Vec<String> {
     l.labels.iter().map(|(t, _)| t.clone()).collect()
 }
@@ -667,12 +683,9 @@ fn wire_list_and_bom_every_step_works_from_its_own_start() {
     }
     l.next();
 
-    // export-sheet: File > Export interchange > Export for bulk edit (.xlsx).
+    // export-sheet: File > Export... > Export for bulk edit.
     l.open("export-sheet");
-    menu(
-        &mut l,
-        &["File", "Export interchange", "Export for bulk edit (.xlsx)"],
-    );
+    export_via_centre(&mut l, "bulk edit xlsx", "Export for bulk edit");
     l.ticked("export-sheet");
     let xlsx =
         l.d.app
@@ -863,19 +876,16 @@ fn the_menu_routes_and_the_page_list_click_work() {
     );
     l.press(egui::Key::Escape);
     l.frames(2);
-    menu(&mut l, &["File", "Export drawings", "Export PDF"]);
+    export_via_centre(&mut l, "pdf", "Export PDF");
     assert!(
         l.say().contains("Exported"),
-        "File > Export drawings > Export PDF: {}",
+        "File > Export... > Export PDF: {}",
         l.say()
     );
-    menu(
-        &mut l,
-        &["File", "Export reports", "Export bill of materials"],
-    );
+    export_via_centre(&mut l, "bill of materials", "Export bill of materials");
     assert!(
         l.say().contains("Bill of materials"),
-        "File > Export reports > Export bill of materials: {}",
+        "File > Export... > Export bill of materials: {}",
         l.say()
     );
 

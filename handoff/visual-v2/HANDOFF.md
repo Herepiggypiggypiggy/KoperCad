@@ -33,3 +33,16 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 - **Edit duplicates** (Undo/Redo also on the rail and in the top bar) stay in Edit: the menu is the place people look first and it shows the key.
 - V7 flips `MENU_NAMES_DEFAULT` and the lessons/QA scenarios that click menu words.
 - **Label policy in the classic menu bar**: the bar (menu words shown) still draws the full command labels (for example "Show or hide the wires in 3D", "EMC net classes on the schematic: each wire in the colour of its cable class (indicative)"). The short labels (28 characters) are used by the app menu, rails and palette. Moving the bar to short labels changes what lessons and QA scenarios click; that goes with V7 (menu words hidden by default).
+
+## V4a: the Export centre (2026-10-29)
+- `novo-workflow/src/centres.rs` lists the formats the centre shows, group by group (Drawings, Print, Reports, Workshop and bench, PLC, Exchange), with one sentence for each (`describe`). Every `export.*` command is in exactly one group (a test keeps it so). A new export command goes into a group there, or the test names it.
+- `novo-app/src/app/export_centre.rs` is the window (`modal_fill`, 960 by 640, `dialog_width::CENTRE`): search on top, tiles by group on the left, the picked format on the right, Export button at the foot. A tile click picks, a double click runs, Enter runs the picked one; the search keeps the keyboard so typing keeps narrowing. Each tile carries the lesson anchor `cmd.<id>`; while the centre is shut the anchor falls back to `cmd.file.export_centre` and then to the File menu.
+- `file.export_centre` ("Export...") is the one File row. The 44 other export rows left File and Reports (File 88 to 58, Reports 30 to 17). `export.print_preview` keeps its File row as the print entry and is also a tile. All stay in the command field.
+- Lessons that walked File > Export submenus now say "open Export... and pick the format"; the manual lines too. Scenarios 09, 184 and 723 changed for it; 726 is new.
+- Budget ceilings now: File 58, Edit 30, Draw 39, View 65, Check 11, Reports 17, Simulate 25, Help 19 = 264 (Simulate 25 because `sim.hoist3d` landed after V2c and left main's own budget test red).
+
+## V4 what is left
+- **Options and preview on the right of the centre** (design section 6): the right side now shows the sentence, the key and the reason a format is grey, not the options of the format or a preview. Formats with options (PDF options, print sets, DXF) still open their own window after Export.
+- **Import centre**: the File > Import and Import parts submenus (about 13 rows) and the Library rows are still menus.
+- **Drawer toolbars** (terminals, cables) and **Project and Pages** moves, as in the V2c gaps above.
+- The Reports rail's Export flyout (4 rows) still lists a few formats; it should open the centre once the rail has been used for a while.

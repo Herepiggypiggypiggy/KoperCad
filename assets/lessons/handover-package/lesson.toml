@@ -41,11 +41,11 @@ text_nl = """
 De voorvertoning is getekend met dezelfde plaatsing als de pdf-schrijver gebruikt, dus wat je ziet wordt geschreven.
 """
 how = [
-  "Open the {ui:menu.File} menu, then **Export print**, and choose {ui:cmd.export.print_preview}.",
+  "Open the {ui:menu.File} menu and choose {ui:cmd.export.print_preview}.",
   "Change the paper or the scale on the left and watch the sheet in the middle.",
 ]
 how_nl = [
-  "Open het menu {ui:menu.File}, dan **Export print**, en kies {ui:cmd.export.print_preview}.",
+  "Open het menu {ui:menu.File} en kies {ui:cmd.export.print_preview}.",
   "Verander papier of schaal links en kijk naar het vel in het midden.",
 ]
 point = { ui = "cmd.export.print_preview" }
@@ -82,11 +82,11 @@ title_nl = "Start de overdracht"
 text = "The command first checks the design. If problems are open it **asks**, instead of writing a folder the customer would read as finished."
 text_nl = "Het commando controleert eerst het ontwerp. Staan er problemen open, dan **vraagt** het dat, in plaats van een map te schrijven die de klant als af zou lezen."
 how = [
-  "Open {ui:menu.File}, then **Export reports**, and choose {ui:cmd.export.handover}.",
+  "Open {ui:menu.File}, then {ui:cmd.file.export_centre}, pick {ui:cmd.export.handover} and press Enter.",
   "Or press {key:view.command_palette}, type handover and press Enter.",
 ]
 how_nl = [
-  "Open {ui:menu.File}, dan **Export reports**, en kies {ui:cmd.export.handover}.",
+  "Open {ui:menu.File}, dan {ui:cmd.file.export_centre}, kies {ui:cmd.export.handover} en druk op Enter.",
   "Of druk op {key:view.command_palette}, typ handover en druk op Enter.",
 ]
 point = { ui = "cmd.export.handover" }

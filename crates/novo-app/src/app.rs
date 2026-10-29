@@ -110,6 +110,7 @@ mod example_kit;
 mod example_mcc;
 mod example_plc;
 mod example_pump;
+mod export_centre;
 mod faults;
 mod handover;
 mod heat;
@@ -407,6 +408,8 @@ mod error_words_tests;
 mod example_gallery_tests;
 #[cfg(test)]
 mod example_tests;
+#[cfg(test)]
+mod export_centre_tests;
 #[cfg(test)]
 mod faults_tests;
 #[cfg(test)]
@@ -2037,6 +2040,7 @@ impl NovoApp {
         self.describe_recipes_dialog(&ctx);
         self.project_settings_dialog(&ctx);
         self.crane_options_dialog(&ctx);
+        self.export_centre_window(&ctx);
         self.project_rules_dialog(&ctx);
         self.device_renumber_dialog(&ctx);
         self.selection_sheet_window(&ctx);
