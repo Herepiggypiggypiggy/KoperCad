@@ -1,0 +1,16 @@
+@title Double click on a splitter gives the panel its usual size back (pinned Pages column at 1920x1080)
+@area Windows
+@sizes 1920x1080
+# 1920 pins the navigator as a column (default 248 points wide).
+click_text "Open example"
+wait 20
+shot column-home
+# Drag the column's right edge wider, then double click it.
+drag 247 400 420 400
+wait 10
+shot column-wider
+check_layout
+double_click 418 400
+wait 20
+shot column-reset
+check_layout

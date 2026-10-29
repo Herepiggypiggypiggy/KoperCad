@@ -102,6 +102,7 @@ mod example_gallery;
 mod example_kit;
 mod example_mcc;
 mod example_plc;
+mod example_pump;
 mod faults;
 mod handover;
 mod heat;
@@ -235,6 +236,8 @@ mod probe;
 mod project_rules;
 mod project_settings;
 mod protection;
+mod rail;
+mod rail_schematic;
 mod reports;
 mod reports_view;
 mod review_notes;
@@ -377,8 +380,6 @@ mod compare_tests;
 #[cfg(test)]
 mod context_menu_tests;
 #[cfg(test)]
-mod dock_labels_tests;
-#[cfg(test)]
 mod eplan_ui_tests;
 #[cfg(test)]
 mod error_words_tests;
@@ -434,6 +435,8 @@ mod pdf_options_tests;
 mod print_preview_tests;
 #[cfg(test)]
 mod protection_tests;
+#[cfg(test)]
+mod rail_tests;
 #[cfg(test)]
 mod read_only_tests;
 #[cfg(test)]
@@ -599,6 +602,7 @@ enum Leaving {
     MccExample,
     CraneExample,
     PlcExample,
+    PumpExample,
     Practice,
     /// Open this lesson's sample project and start the lesson.
     Lesson(String),
@@ -994,6 +998,7 @@ impl NovoApp {
             Action::OpenMccExample => self.leave_then(ctx, Leaving::MccExample),
             Action::OpenCraneExample => self.leave_then(ctx, Leaving::CraneExample),
             Action::OpenPlcExample => self.leave_then(ctx, Leaving::PlcExample),
+            Action::OpenPumpExample => self.leave_then(ctx, Leaving::PumpExample),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
             Action::Learn => self.learn_run_command("help.learn", None),
@@ -1168,6 +1173,7 @@ impl NovoApp {
             Leaving::MccExample => self.open_mcc_example(),
             Leaving::CraneExample => self.open_crane_example(),
             Leaving::PlcExample => self.open_plc_example(),
+            Leaving::PumpExample => self.open_pump_example(),
             Leaving::Practice => self.start_practice(),
             Leaving::Lesson(id) => self.start_lesson_now(&id),
             Leaving::Close => self.close_project(),
@@ -1768,6 +1774,7 @@ impl NovoApp {
         self.window_width = ctx.content_rect().width();
         self.window_height = ctx.content_rect().height();
         self.sync_panels(&ctx);
+        panel::splitters_reset(&ctx);
         self.follow_window(self.window_width, self.window_height);
         let pinned = self.outline_pinned() && !self.focus_mode;
         if pinned {
@@ -1781,6 +1788,14 @@ impl NovoApp {
             .show(ui, |ui| self.top_bar(ui, &mut picked));
         self.status_bar(ui);
         let reports = self.workspace() == workspace::Workspace::Reports && self.is_open();
+        // The tool rail: the leftmost panel of the Schematic workspace.
+        if !self.focus_mode && self.is_open() && self.workspace() == workspace::Workspace::Schematic
+        {
+            self.schematic_rail_show(ui);
+        } else {
+            self.wb.rail_rect = None;
+            rail::close_flyout(&ctx);
+        }
         if reports {
             egui::Panel::left("reports_list")
                 .default_size(OUTLINE_WIDTH)
@@ -1880,7 +1895,6 @@ impl NovoApp {
             self.sync_connect_mode();
             self.sync_menu_keys();
             self.sync_catalog();
-            self.tool_dock(&ctx, canvas_rect);
             self.empty_sheet_ghost(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
             self.live_view(&ctx, canvas_rect);
@@ -2782,15 +2796,7 @@ impl NovoApp {
         // Never wider than the canvas: a 683 point window has less room than
         // the usual 420.
         let width = 420.0_f32.min((canvas.width() - 24.0).max(160.0));
-        // The tool dock sits bottom centre; where the stack would reach it
-        // (1366 wide and under), the stack stands on top of the dock instead.
-        let mut bottom = canvas.bottom() - 12.0;
-        if let Some(dock) = ctx.memory(|m| m.area_rect(crate::app::panel::id("tool_dock")))
-            && dock.left() < canvas.left() + 12.0 + width + 8.0
-            && dock.bottom() > bottom - 8.0
-        {
-            bottom = bottom.min(dock.top() - 8.0);
-        }
+        let bottom = canvas.bottom() - 12.0;
         egui::Area::new(egui::Id::new("toasts"))
             .pivot(egui::Align2::LEFT_BOTTOM)
             .fixed_pos(egui::pos2(canvas.left() + 12.0, bottom))
