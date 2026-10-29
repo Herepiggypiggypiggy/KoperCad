@@ -247,3 +247,11 @@ torque-speed curve (Kloss fit), one efficiency constant per direction, brake del
 user, contactor dead times. Not modelled: stator current, saturation, winding heating, changeover
 torque spikes, rope stretch. Inputs that cannot describe a machine (zero poles, zero ratio or
 efficiency, negative length, NaN) return `InputError`.
+
+### Lane L2c as built (closed-loop hoists and synchronous winches)
+
+`novo_drive::closed_loop` holds the encoder hoist drive (torque control at zero speed, torque proof
+before brake release, load held under torque while the brake closes, STO, monitoring) and
+`novo_machine::sync_winch` two winches on one load with rope stretch, tilt and the three
+synchronisation modes. Design, hand cases and limits: `docs/design/closed-loop-winch.md`. UI:
+Simulate > Winch scenarios.

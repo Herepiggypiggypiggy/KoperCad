@@ -340,6 +340,7 @@ mod view3d_wire_it_tests;
 mod view3d_wires;
 mod whats_new;
 mod wheel;
+mod winch_scenarios;
 mod wire_it_export;
 mod wire_panel;
 #[cfg(test)]
@@ -2021,6 +2022,7 @@ impl NovoApp {
         self.faults_window(&ctx);
         self.hoist_window(&ctx);
         self.drive_run_window(&ctx);
+        self.winch_scenarios_window(&ctx);
         self.motor_freq_window(&ctx);
         self.add_fault_window(&ctx);
         self.calculations_window(&ctx);

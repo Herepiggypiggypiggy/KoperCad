@@ -1111,6 +1111,7 @@ pub const TABLE: &[Presentation] = &[
     ),
     row("sim.hoist", d(&drawn::MOTOR), "Simulate hoist run"),
     row("sim.drive_run", d(&drawn::DRIVE), "Simulate drive run"),
+    row("sim.winches", d(&drawn::MOTOR), "Simulate winch scenarios"),
     row(
         "sim.controller",
         p(icons::GAME_CONTROLLER),
