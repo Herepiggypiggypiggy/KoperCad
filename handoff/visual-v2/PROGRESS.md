@@ -1,2 +1,3 @@
 2026-10-29 06:30 UTC V0 (#1669) merged; V5 and V3 went to their own threads. Started V2 from main 8c9c97e.
 2026-10-29 08:00 UTC App menu, setting, tests (10), QA scenario 721 built; screenshots at both sizes in dark and light.
+- 2026-10-29 follow-up of V2b (R3 and Main A nits): the menu search lists commands whose name holds the words before those found only by keyword or id (Enter on "pdf" runs Export PDF); a grey row shows its reason in words when it fits (the tooltip still has it). Test `a_name_match_ranks_before_a_keyword_match`, QA scenario `qa/scenarios/723-app-menu-reasons.qa`.
