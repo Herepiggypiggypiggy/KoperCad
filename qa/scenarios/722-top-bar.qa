@@ -1,0 +1,37 @@
+@title Top bar: workspace segment, undo and redo, page switcher, dark and light
+@area Layout
+# Lane V2a of the visual redesign (docs/design/visual-redesign.md section 3.1).
+fresh
+wait 20
+click_text "Open example"
+wait 40
+shot bar-dark
+expect "Undo"
+expect "Redo"
+expect "Switch page"
+check_layout
+click_text "Switch page"
+wait 8
+expect "Add page"
+shot page-switcher-dark
+check_layout
+text power
+wait 6
+shot page-switcher-filtered
+key Escape
+wait 6
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 6
+shot bar-light
+click_text "Switch page"
+wait 8
+shot page-switcher-light
+check_layout

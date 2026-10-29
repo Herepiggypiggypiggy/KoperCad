@@ -88,6 +88,7 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("switcher.commissioning", "Commissioning chip"),
     ("outline.pages", "Pages list"),
     ("outline.toggle", "Pages button"),
+    ("page.switcher", "Page switcher"),
     ("commissioning.who", "By menu"),
     ("settings.standard.nfpa", "NFPA 79 / ANSI Y32.2"),
     ("settings.standard.switch", "Switch placed symbols"),
