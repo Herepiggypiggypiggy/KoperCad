@@ -287,6 +287,8 @@ mod symbol_folder;
 mod symbol_preview;
 mod template_crane;
 mod template_crane_window;
+mod template_plants;
+mod template_plants_window;
 mod terminal_edit;
 mod terminals;
 #[cfg(test)]
@@ -482,6 +484,8 @@ mod small_window_tests;
 #[cfg(test)]
 mod template_crane_tests;
 #[cfg(test)]
+mod template_plants_tests;
+#[cfg(test)]
 mod tips_tests;
 #[cfg(test)]
 mod ui_gaps_tests;
@@ -630,6 +634,8 @@ enum Leaving {
     PlcExample,
     PumpExample,
     CraneTemplate,
+    PumpTemplate,
+    MccTemplate,
     Practice,
     /// Open this lesson's sample project and start the lesson.
     Lesson(String),
@@ -1027,6 +1033,8 @@ impl NovoApp {
             Action::OpenPlcExample => self.leave_then(ctx, Leaving::PlcExample),
             Action::OpenPumpExample => self.leave_then(ctx, Leaving::PumpExample),
             Action::NewCraneProject => self.leave_then(ctx, Leaving::CraneTemplate),
+            Action::NewPumpProject => self.leave_then(ctx, Leaving::PumpTemplate),
+            Action::NewMccProject => self.leave_then(ctx, Leaving::MccTemplate),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
             Action::Learn => self.learn_run_command("help.learn", None),
@@ -1203,6 +1211,8 @@ impl NovoApp {
             Leaving::PlcExample => self.open_plc_example(),
             Leaving::PumpExample => self.open_pump_example(),
             Leaving::CraneTemplate => self.open_crane_options(),
+            Leaving::PumpTemplate => self.open_plant_options(template_plants::Plant::PumpStation),
+            Leaving::MccTemplate => self.open_plant_options(template_plants::Plant::ControlCentre),
             Leaving::Practice => self.start_practice(),
             Leaving::Lesson(id) => self.start_lesson_now(&id),
             Leaving::Close => self.close_project(),
@@ -2055,6 +2065,7 @@ impl NovoApp {
         self.describe_recipes_dialog(&ctx);
         self.project_settings_dialog(&ctx);
         self.crane_options_dialog(&ctx);
+        self.plant_options_dialog(&ctx);
         self.project_rules_dialog(&ctx);
         self.device_renumber_dialog(&ctx);
         self.selection_sheet_window(&ctx);
