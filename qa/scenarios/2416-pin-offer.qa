@@ -1,0 +1,28 @@
+@title Part terminals: assigning a part offers the usual pin names (1366x768)
+@area Parts
+@sizes 1366x768
+# The fixture is one relay coil -K1 with the usual pins A1 A2 and no part. The user catalog holds a relay whose terminals are named a1 and A2. Choosing it in the Inspector opens a window that offers to rename the terminal a1 to A1; renaming is one undo step and the offer does not come back.
+user_catalog qa/fixtures/pin-offer-parts.json
+open qa/fixtures/pin-offer.kopercad
+wait 30
+shot start
+key ctrl+a
+wait 20
+shot selected
+click_text "Choose..."
+wait 20
+shot picker
+click_text "QA QA-REL-1"
+wait 20
+shot offer
+expect "Name the terminals like the pins"
+expect "Rename 1 part terminal to the usual names"
+click_text "Rename 1 part terminal to the usual names"
+wait 20
+shot renamed
+expect_not "Name the terminals like the pins"
+expect "Renamed the terminals to the usual names"
+key ctrl+z
+wait 20
+shot after-undo
+check_layout
