@@ -40,7 +40,10 @@ library on each page. You can change all of it afterwards.",
                 }
                 super::dialog_ui::hint(
                     ui,
-                    "Each one gets its own page and, in a motor control centre, its own section.",
+                    match plant {
+                        Plant::PumpStation => "Each pump gets its own feeder page and pump place.",
+                        Plant::ControlCentre => "Each feeder gets its own section and page.",
+                    },
                 );
                 super::dialog_ui::section(ui, "Options", false);
                 if plant == Plant::PumpStation {
