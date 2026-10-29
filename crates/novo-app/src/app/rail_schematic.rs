@@ -172,7 +172,7 @@ impl NovoApp {
         }
         Some(Entry {
             id,
-            anchor: anchor_of(id),
+            anchor: anchor_of(id).or_else(|| super::learn_labels::moved_anchor(id)),
             glyph,
             label,
             tip,
@@ -300,6 +300,9 @@ impl NovoApp {
             }
         }
         for (id, rect, clicked) in spots {
+            if id.starts_with("cmd.") {
+                continue;
+            }
             let label = match id {
                 "dock.select" => "Select",
                 "dock.place" => "Place",
@@ -332,6 +335,16 @@ impl NovoApp {
             self.settings.rail_expanded = expanded;
         }
         self.wb.rail_rect = Some(shown.rect);
+        // A row whose menu row moved here keeps the anchor `cmd.<id>`.
+        for &(id, rect, clicked) in &shown.spots {
+            if id.starts_with("cmd.") {
+                let label = super::learn_labels::any_anchor_label(id).unwrap_or_default();
+                self.anchor(id, rect, &label);
+                if clicked {
+                    self.learn_event(novo_learn::Event::Clicked(id.to_owned()));
+                }
+            }
+        }
         shown
     }
 

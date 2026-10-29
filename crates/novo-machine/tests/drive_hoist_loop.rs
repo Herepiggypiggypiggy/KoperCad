@@ -11,7 +11,7 @@ use novo_drive::drive::{
     TerminalMacro,
 };
 use novo_drive::hoist_logic::{
-    BrakeLogic, HoistLogic, HoistLogicConfig, LoadSense, LogicFault, LogicPhase,
+    BrakeLogic, HoistLogic, HoistLogicConfig, LoadSense, LogicFault, LogicPhase, ReversalJump,
 };
 use novo_drive::induction::{FitOptions, InductionMotor};
 use novo_drive::mechanics::Hoist;
@@ -66,6 +66,7 @@ fn logic_cfg() -> HoistLogicConfig {
     b.release_current_up_a = 10.0;
     b.release_current_down_a = 10.0;
     HoistLogicConfig {
+        jump: None,
         brake: b,
         steps_hz: vec![10.0, 25.0, 50.0],
         sense: None,
@@ -538,4 +539,76 @@ fn binding_problems_are_reported() {
     lp.modules[0].binding.brake_feed = None;
     let found = lp.check_bindings(&empty);
     assert!(found.iter().any(|f| f.message.contains("ideal wiring")));
+}
+
+/// Runs `first` for 8 s, then flips to `second` and logs the brake relay for 8 s.
+fn reversal(rig: &Rig, first_up: bool) -> (DriveHoistLoop, bool, f64) {
+    let (mut lp, mut c, cmd) = rig.start();
+    {
+        let mut cm = cmd.borrow_mut();
+        cm.up = first_up;
+        cm.down = !first_up;
+    }
+    run_for(&mut lp, &mut c, 8.0);
+    {
+        let mut cm = cmd.borrow_mut();
+        cm.up = !first_up;
+        cm.down = first_up;
+    }
+    let mut relay_opened = false;
+    let mut turned_at = None;
+    for k in 0..(8.0 / DT) as usize {
+        lp.step(&mut c);
+        if c.contacts.get("=A-R2") == Some(&false) {
+            relay_opened = true;
+        }
+        let v = m(&lp).snapshot().unwrap().speed_m_s;
+        if turned_at.is_none() && (v > 0.005) == !first_up && v.abs() > 0.005 {
+            turned_at = Some(k as f64 * DT);
+        }
+    }
+    (lp, relay_opened, turned_at.unwrap_or(f64::INFINITY))
+}
+
+fn jump_rig(ramp_s: f64) -> Rig {
+    let mut rig = Rig::new();
+    rig.logic.jump = Some(ReversalJump {
+        jump_hz: 8.0,
+        ramp_time_s: ramp_s,
+    });
+    rig
+}
+
+#[test]
+fn a_reversal_with_the_jump_keeps_the_brake_open_and_turns_much_sooner() {
+    // Up at step 1 (10 Hz), then down. Full cycle: down to 2 Hz (about 0.4 s), brake closes,
+    // 0.5 s restart, magnetise and release again. With the jump nothing of that happens.
+    let (lp_full, opened_full, t_full) = reversal(&Rig::new(), true);
+    assert!(opened_full);
+    let (lp_jump, opened_jump, t_jump) = reversal(&jump_rig(0.3), true);
+    assert!(
+        !opened_jump,
+        "the brake relay stays closed through the jump"
+    );
+    assert!(t_jump + 0.8 < t_full, "{t_jump} vs {t_full}");
+    assert!(m(&lp_jump).snapshot().unwrap().speed_m_s < -0.02);
+    assert!(m(&lp_full).snapshot().unwrap().speed_m_s < -0.02);
+}
+
+#[test]
+fn a_slow_pass_through_zero_lets_the_load_sink_more_than_a_fast_one() {
+    // Down at step 1, then up with the brake open: the weight is not held while the field
+    // passes zero. A fast band of 0.3 s gives the motor torque back sooner than the normal ramp.
+    let (fast, _, _) = reversal(&jump_rig(0.3), false);
+    let (slow, _, _) = reversal(&jump_rig(2.0), false);
+    let sag = |lp: &DriveHoistLoop| {
+        kinds(lp).iter().find_map(|k| match k {
+            FindingKind::ReversalSag { metres } => Some(*metres),
+            _ => None,
+        })
+    };
+    let (s_fast, s_slow) = (sag(&fast).unwrap_or(0.0), sag(&slow).unwrap_or(0.0));
+    assert!(s_slow > s_fast + 0.005, "{s_slow} vs {s_fast}");
+    // The brake never closed in either run: the hook ends up rising.
+    assert!(m(&fast).snapshot().unwrap().speed_m_s > 0.02);
 }

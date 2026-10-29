@@ -417,7 +417,7 @@ impl NovoApp {
     /// Gives the whole selection one catalog part: one undo step.
     pub(super) fn assign_selection_part(&mut self, key: &PartKey) {
         let selection = self.selection();
-        let Some((command, title, count)) = self.backend.document().and_then(|d| {
+        let Some((command, title, devices)) = self.backend.document().and_then(|d| {
             let catalog = self.wb.part_catalog.get()?;
             let devices = selected_devices(d.project(), &selection);
             let command = assign_devices_command(d.project(), catalog, &devices, key)?;
@@ -425,13 +425,19 @@ impl NovoApp {
             Some((
                 command,
                 format!("{} {}", part.manufacturer, part.order_number),
-                devices.len(),
+                devices,
             ))
         }) else {
             return;
         };
+        let count = devices.len();
         match self.execute(command) {
-            Some(Ok(_)) => self.message(Level::Info, format!("Part set on {count}: {title}")),
+            Some(Ok(_)) => {
+                self.message(Level::Info, format!("Part set on {count}: {title}"));
+                if let [device] = devices.as_slice() {
+                    self.offer_part_terminals(*device);
+                }
+            }
             Some(Err(e)) => self.message(Level::Error, format!("Could not set the part: {e}")),
             None => {}
         }

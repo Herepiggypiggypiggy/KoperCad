@@ -68,7 +68,7 @@ pub(super) struct Sheet<'a, 'b> {
     pub(super) tx: &'a mut Tx<'b>,
     pub(super) page: PageId,
     pub(super) items: Vec<AnyId>,
-    pub(super) lib: Library,
+    pub(super) lib: &'static Library,
 }
 
 impl Sheet<'_, '_> {
@@ -241,7 +241,7 @@ pub(super) fn capture(
             tx,
             page,
             items: Vec::new(),
-            lib: Library::builtin().expect("the built-in symbols load"),
+            lib: Library::shared(novo_symbols::Pack::Iec),
         };
         draw(&mut sheet)?;
         orthogonal_routes(sheet.tx)?;

@@ -1,0 +1,46 @@
+# Wired pendant station: emergency stop, two-step up and down buttons and a horn button.
+name = "Pendant station with two-step buttons"
+chapter = "control"
+description = "Wired pendant with an emergency stop, up and down push buttons with two steps each and a horn button, fed through a control breaker"
+tags = ["pendant", "station", "two-step", "push button", "hoist", "crane", "horn", "emergency stop", "control"]
+notes = """Step 1 of a button closes its first contact (slow), pressing further closes the second (fast): connect each output to the matching contactor or to the controller input of that speed. \\
+The emergency stop opens the feed to every button of the pendant; wire its chain contact into your emergency stop circuit as well. \\
+You connect: the control supply above F1 and the six outputs below the buttons (up 1, up 2, down 1, down 2, horn) to the pendant cable cores."""
+
+open = ["f1s.1", "s1a.14", "s1b.14", "s2a.14", "s2b.14", "s3s.14"]
+
+device = [
+  { id = "f1", tag = "-F1", description = "Pendant circuit breaker", mount = { kind = "din", size = [18, 90, 70], at = [15, 55], rail = "r1" } },
+  { id = "s0", tag = "-S0", description = "Emergency stop, pendant", mount = { kind = "field", place = "pendant station" } },
+  { id = "s1", tag = "-S1", description = "Up, two steps", mount = { kind = "field", place = "pendant station" } },
+  { id = "s2", tag = "-S2", description = "Down, two steps", mount = { kind = "field", place = "pendant station" } },
+  { id = "s3", tag = "-S3", description = "Horn", mount = { kind = "field", place = "pendant station" } },
+]
+
+symbol = [
+  { id = "f1s", key = "iec/protection/mcb_1p", at = [40, 40], device = "f1" },
+  { id = "s0s", key = "iec/operators/emergency_stop", at = [40, 80], device = "s0" },
+  { id = "s1a", key = "iec/operators/pushbutton_no", at = [72, 128], device = "s1" },
+  { id = "s1b", key = "iec/operators/pushbutton_no", at = [104, 128], device = "s1", main = false, numbers = ["23", "24"] },
+  { id = "s2a", key = "iec/operators/pushbutton_no", at = [144, 128], device = "s2" },
+  { id = "s2b", key = "iec/operators/pushbutton_no", at = [176, 128], device = "s2", main = false, numbers = ["23", "24"] },
+  { id = "s3s", key = "iec/operators/pushbutton_no", at = [216, 128], device = "s3" },
+]
+
+wire = [
+  { from = "f1s.2", to = "s0s.11" },
+]
+
+bus = [
+  { y = 112, taps = ["s0s.12", "s1a.13", "s1b.13", "s2a.13", "s2b.13", "s3s.13"] },
+]
+
+[plate]
+width = 60
+height = 160
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 50

@@ -1,0 +1,21 @@
+@title Part terminals: "Keep the part's names" closes the offer and changes nothing (1920x1080)
+@area Parts
+@sizes 1920x1080
+# Same fixture as scenario 2416. After assigning the part the offer opens; "Keep the part's names" closes it, the part keeps its terminal a1 and the offer does not come back when the Inspector is used again.
+user_catalog qa/fixtures/pin-offer-parts.json
+open qa/fixtures/pin-offer.kopercad
+wait 30
+key ctrl+a
+wait 20
+click_text "Choose..."
+wait 20
+click_text "QA QA-REL-1"
+wait 20
+shot offer
+expect "Name the terminals like the pins"
+click_text "Keep the part's names"
+wait 20
+shot kept
+expect_not "Name the terminals like the pins"
+expect_not "Renamed the terminals to the usual names"
+check_layout

@@ -23,3 +23,5 @@ Decisions and traps
 
 QA: scenarios `1709-drive-hoist-run` and `1709b-drive-hoist-run-1920` use `qa/fixtures/hoist-drive.novo` (hold S2: sensed load finding, brake closes on release).
 Resume: `cargo test -p novo-drive -p novo-machine`, then `cargo test -p novo-app --lib drive_run`.
+
+Update: jump at reversal is built (blank `dh_jump_hz` keeps the full brake cycle). Next item is slack rope.

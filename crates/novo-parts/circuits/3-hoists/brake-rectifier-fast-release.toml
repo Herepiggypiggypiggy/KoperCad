@@ -1,0 +1,47 @@
+# Spring brake fed through a bridge rectifier, switched on the AC and DC side.
+name = "Brake rectifier with DC-side switching"
+chapter = "hoists"
+description = "Spring brake fed from the mains through a bridge rectifier and a contactor that switches the AC side and the DC side, so the brake falls quickly"
+tags = ["brake", "rectifier", "hoist", "spring brake", "crane", "dc switching", "fast", "contactor"]
+notes = """K1 follows the motion: connect its coil to the control that releases the hoist. \\
+Switching only the AC side lets the brake coil's energy die away slowly through the rectifier; the second contact in the DC line drops the brake faster. \\
+Check the brake and rectifier data for the supply voltage and the DC voltage of the coil, and add the spark suppression the brake maker asks for. \\
+You connect: the phase above F1, neutral above the N terminal and the control of coil K1 (A1 and A2)."""
+
+open = ["f1s.1", "n1.1", "k1c.A1,A2"]
+
+device = [
+  { id = "f1", tag = "-F1", description = "Brake circuit breaker", mount = { kind = "din", size = [18, 90, 70], at = [15, 55], rail = "r1" } },
+  { id = "k1", tag = "-K1", description = "Brake contactor", mount = { kind = "din", size = [45, 77, 86], at = [40, 61.5], rail = "r1" } },
+  { id = "v1", tag = "-V1", description = "Brake rectifier", mount = { kind = "din", size = [18, 75, 60], at = [92, 62.5], rail = "r1" } },
+  { id = "y1", tag = "-Y1", description = "Spring brake", mount = { kind = "field", place = "on the motor" } },
+]
+
+symbol = [
+  { id = "f1s", key = "iec/protection/mcb_1p", at = [40, 40], device = "f1" },
+  { id = "k1a", key = "iec/contacts/no", at = [40, 80], device = "k1", main = false },
+  { id = "v1s", key = "iec/passive/bridge_rectifier", at = [40, 128], device = "v1" },
+  { id = "k1b", key = "iec/contacts/no", at = [40, 176], device = "k1", main = false, numbers = ["23", "24"] },
+  { id = "y1s", key = "iec/coils/brake", at = [40, 224], device = "y1" },
+  { id = "n1", key = "iec/terminals/terminal_n", at = [64, 96] },
+  { id = "k1c", key = "iec/coils/contactor", at = [104, 128], device = "k1", main = true },
+]
+
+wire = [
+  { from = "f1s.2", to = "k1a.13" },
+  { from = "k1a.14", to = "v1s.~1" },
+  { from = "n1.2", to = "v1s.~2", via = [[64, 116], [48, 116]] },
+  { from = "v1s.+", to = "k1b.13" },
+  { from = "k1b.14", to = "y1s.A1" },
+  { from = "v1s.-", to = "y1s.A2", via = [[48, 160], [56, 160], [56, 260], [40, 260]] },
+]
+
+[plate]
+width = 130
+height = 200
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 120

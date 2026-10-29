@@ -230,6 +230,7 @@ mod parts_quality;
 mod parts_table;
 mod pdf;
 mod pdf_options;
+mod pin_offer;
 mod plate_export;
 mod plc;
 mod plc_card;
@@ -2032,6 +2033,7 @@ impl NovoApp {
         self.parts_window(&ctx);
         self.parts_bulk_dialog(&ctx);
         self.auto_assign_dialog(&ctx);
+        self.pin_offer_dialog(&ctx);
         self.describe_recipes_dialog(&ctx);
         self.project_settings_dialog(&ctx);
         self.crane_options_dialog(&ctx);
