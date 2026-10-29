@@ -1,0 +1,21 @@
+@title Place all on a plate too small for every device names "no room", not "too large"
+@area Cabinet
+# CH-04: the reason came from the last band tried. Fixture: qa/fixtures/make_long_tag_fixture.py (a 450 x 450 plate).
+open qa/fixtures/cabinet-small-plate.novo
+wait 20
+click_text Cabinet #1
+wait 30
+key ctrl+k
+wait 3
+text place all
+wait 4
+key Enter
+wait 30
+shot place-all-reason
+shot place-all-preview
+key Enter
+wait 20
+shot place-all-accepted
+expect "Not placed"
+expect_not "larger than the usable plate"
+check_layout

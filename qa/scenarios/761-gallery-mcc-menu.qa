@@ -1,0 +1,21 @@
+@title Example gallery: File > Examples menu
+@area Examples
+# The File menu with its Examples entries, then the first view right after choosing the motor control centre.
+fresh
+wait 10
+click_text "File"
+wait 8
+shot file-menu
+click_text "Examples"
+wait 8
+shot file-examples
+key Escape
+key Escape
+wait 6
+key ctrl+k
+wait 6
+text motor control centre
+wait 8
+key Enter
+wait 40
+shot mcc-first-view

@@ -1181,6 +1181,16 @@ pub(super) fn items_of(
         .collect()
 }
 
+/// The longest enclosure side the heat run takes, mm: the engine's own
+/// limit, checked here because the 3D solver path does not call it.
+const MAX_SIDE_MM: f64 = 20_000.0;
+
+fn too_big(e: &novo_thermal::Enclosure) -> bool {
+    [e.width_mm, e.height_mm, e.depth_mm]
+        .iter()
+        .any(|v| !(v.is_finite() && *v <= MAX_SIDE_MM))
+}
+
 /// Builds the scenario of the enclosure from the project and starts a run.
 /// Says plainly when it cannot.
 pub(super) fn start_run(
@@ -1196,6 +1206,12 @@ pub(super) fn start_run(
         ..Default::default()
     };
     match novo_thermal::bridge::scenario_from_project(project, enclosure, &options) {
+        Ok(bridge) if too_big(&bridge.scenario.enclosure) => {
+            state.fail(format!(
+                "Cannot simulate: the enclosure is over {} m on one side; check its size in Cabinet > Size enclosure",
+                MAX_SIDE_MM / 1000.0
+            ));
+        }
         Ok(mut bridge) => {
             state.settings.apply(&mut bridge.scenario);
             let plate = bridge.scenario.enclosure.plate;
@@ -1539,12 +1555,30 @@ fn paint_airflow(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64,
         .iter()
         .flat_map(|s| s.speeds.iter())
         .copied()
-        .fold(0.0, f32::max)
-        .max(1e-6);
-    for s in &cache.streams {
+        .fold(0.0, f32::max);
+    // The same scale as the 3D view: colour and width are the speed in m/s,
+    // not a share of the fastest line, so a lot of air looks like a lot.
+    let scale_top = super::heat_flow::nice_top(top);
+    let mut shown: Vec<(&Streamline, f32)> = cache
+        .streams
+        .iter()
+        .map(|s| {
+            (
+                s,
+                s.speeds.iter().sum::<f32>() / s.speeds.len().max(1) as f32,
+            )
+        })
+        .filter(|(_, mean)| *mean >= super::heat_flow::QUIET_SHARE * scale_top)
+        .collect();
+    // Calm: the main streams only, the strongest first.
+    shown.sort_by(|a, b| b.1.total_cmp(&a.1));
+    shown.truncate(super::heat_flow::calm_count(shown.len()));
+    for (s, mean) in shown {
         let pts: Vec<Pos2> = s.points.iter().map(|p| to_screen(p.0, p.1)).collect();
-        let mean = s.speeds.iter().sum::<f32>() / s.speeds.len().max(1) as f32;
-        let width = 1.0 + 1.4 * (mean / top).clamp(0.0, 1.0);
+        let share = (mean / scale_top).clamp(0.0, 1.0);
+        let width = 1.6 + 2.8 * share;
+        let [r, g, b] = super::heat_flow::colour(mean, scale_top);
+        let line = Color32::from_rgb(r, g, b);
         painter.add(Shape::line(
             pts.clone(),
             // The halo is the surface colour, so the line keeps its edge on
@@ -1554,25 +1588,23 @@ fn paint_airflow(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64,
                 with_alpha(crate::theme::ui_palette().sunken, 0.5),
             ),
         ));
-        painter.add(Shape::line(
-            pts.clone(),
-            Stroke::new(width, crate::theme::ui_palette().info),
-        ));
-        // An arrowhead about every 70 points of screen length.
+        painter.add(Shape::line(pts.clone(), Stroke::new(width, line)));
+        // An arrowhead about every 110 points of screen length.
         let mut run = 0.0;
         for w in pts.windows(2) {
             run += (w[1] - w[0]).length();
-            if run >= 70.0 {
+            if run >= 110.0 {
                 run = 0.0;
                 let d = (w[1] - w[0]).normalized();
                 let n = Vec2::new(-d.y, d.x);
                 painter.add(Shape::line(
-                    vec![w[1] - d * 6.0 + n * 3.5, w[1], w[1] - d * 6.0 - n * 3.5],
-                    Stroke::new(width, crate::theme::ui_palette().info),
+                    vec![w[1] - d * 7.0 + n * 4.0, w[1], w[1] - d * 7.0 - n * 4.0],
+                    Stroke::new(width, line),
                 ));
             }
         }
     }
+    super::heat_flow::paint_key(painter, scale_top);
 }
 
 fn paint_rims(
@@ -2227,6 +2259,7 @@ fn legend(
 
 #[cfg(test)]
 mod tests {
+    use super::too_big;
     use super::*;
 
     #[test]
@@ -2692,6 +2725,28 @@ mod tests {
     }
 
     #[test]
+    fn the_legend_words_the_heat_lesson_quotes_are_the_legends() {
+        let lesson = include_str!("../../../../assets/lessons/heat-and-sizing/lesson.toml");
+        let mut state = HeatState::new();
+        let i = input();
+        state.start(scenario(), meta(&i));
+        run_to_end(&mut state);
+        let mut p = state.solution().unwrap().snapshot.progress.clone();
+        p.fidelity = novo_cfd::Fidelity::Coarse;
+        for said in [
+            PREVIEW_NOTE,
+            status_label(&p, false).as_str(),
+            "Out of date: the layout changed since this run",
+            "no loss data (shown dashed)",
+            "No heat picture yet",
+            "Stopping…",
+        ] {
+            assert!(lesson.contains(said), "the lesson does not quote: {said}");
+        }
+        assert!(!lesson.contains("Preview model from the part losses"));
+    }
+
+    #[test]
     fn a_cooler_second_run_shows_as_a_negative_difference() {
         let mut state = HeatState::new();
         let mut i = input();
@@ -2828,5 +2883,28 @@ mod tests {
             card.bottom() <= canvas.bottom() && card.top() >= canvas.top(),
             "{card:?} leaves the canvas {canvas:?}"
         );
+    }
+
+    #[test]
+    fn an_enclosure_over_twenty_metres_is_too_big_to_simulate() {
+        let mut e = novo_thermal::Enclosure {
+            width_mm: 1000.0,
+            height_mm: 2000.0,
+            depth_mm: 300.0,
+            wall_mm: 2.0,
+            material: novo_layout::sizing::Material::Steel,
+            installation: novo_layout::sizing::Installation::Wall,
+            plate: novo_layout::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 800.0,
+                h: 1800.0,
+            },
+        };
+        assert!(!too_big(&e));
+        e.height_mm = 25_000.0;
+        assert!(too_big(&e));
+        e.height_mm = f64::NAN;
+        assert!(too_big(&e));
     }
 }

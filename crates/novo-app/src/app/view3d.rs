@@ -22,6 +22,7 @@ use super::cabinet_inspector;
 use super::NovoApp;
 use super::heat::{self, HeatState};
 use super::heat_3d::{self, Heat3d, Place};
+use super::heat_flow;
 use super::heat_legend;
 use super::heat_openings;
 use super::heat_probe::{self, ProbeState};
@@ -124,6 +125,8 @@ pub(crate) struct View3dMode {
     /// Overlays without the moving tracers, and the lines the tracers follow.
     heat_base: Vec<novo_view3d::Overlay>,
     heat_flow: heat_3d::Flow,
+    /// The top of the air speed scale for a result (result id, m/s).
+    flow_scale: Option<(u64, f32)>,
     /// The heat-flow layer: lines the heat follows and conduction arrows.
     heat_carry: super::heat_carry::Carry,
     /// Scene with devices coloured by temperature, for the key (scene
@@ -223,6 +226,7 @@ impl Default for View3dMode {
             door_was_open: false,
             heat_base: Vec::new(),
             heat_flow: heat_3d::Flow::default(),
+            flow_scale: None,
             heat_carry: super::heat_carry::Carry::default(),
             heat_scene: None,
             built_layers: Layers::default(),
@@ -613,13 +617,31 @@ impl NovoApp {
                     .and_then(|d| d.tag.device_code().map(str::to_owned))
                     .unwrap_or_else(|| format!("device {raw}"))
             };
+            let scale_top = match mode.flow_scale {
+                Some((id, top)) if id == sol.id => top,
+                _ => {
+                    let top = heat_flow::speed_scale(&sol.snapshot);
+                    mode.flow_scale = Some((sol.id, top));
+                    top
+                }
+            };
+            // The openings of the run on screen: the air through each and the
+            // verdict, from the flows read for this very result.
+            let through = mode
+                .vent_flows
+                .as_ref()
+                .filter(|(id, _, _)| *id == sol.id)
+                .and_then(|(_, specs, flows)| {
+                    let loss: f64 = sol.snapshot.devices.iter().map(|d| d.loss_w).sum();
+                    heat_flow::through(specs, flows, loss)
+                });
             if let Some(raw) = heat_controls(
                 ui,
                 &mut mode.heat,
                 &mut mode.probe,
                 sol,
-                mode.heat_flow.top,
-                mode.heat_carry.top_air,
+                (scale_top, mode.heat_carry.top_air),
+                through.as_ref(),
                 &tag_of,
             ) {
                 // Jump to the device: select it and bring it into view.
@@ -773,7 +795,7 @@ impl NovoApp {
         // see: switch it on once for the first result, then leave it theirs.
         if !mode.auto_flow_done && solution.is_some() && !vent_specs.is_empty() {
             mode.auto_flow_done = true;
-            mode.heat.lines = true;
+            mode.heat.set_flow(heat_flow::FlowMode::Streamlines);
             ui.ctx().request_repaint();
         }
         // Runs: read how the picked wires were measured, then light their
@@ -982,7 +1004,12 @@ impl NovoApp {
                 )
             });
             if mode.heat.carry {
-                let lines = heat_3d::stream_lines_in(&mode.heat_carry.flow, heat_carry::RGB, 5);
+                let carried = heat_flow::thinned(
+                    &mode.heat_carry.flow,
+                    mode.heat.flow.strength,
+                    mode.heat_carry.flow.top,
+                );
+                let lines = heat_3d::stream_lines_in(&carried, heat_carry::RGB, 5);
                 if !lines.positions.is_empty() {
                     mode.heat_base.push(novo_view3d::Overlay::Lines(lines));
                 }
@@ -1030,13 +1057,20 @@ impl NovoApp {
             }
             if tracing {
                 let time = ui.input(|i| i.time);
-                let t = heat_3d::tracers(&mode.heat_flow, time);
+                let scale = mode.flow_scale.map_or(0.1, |(_, top)| top);
+                let strength = mode.heat.flow.strength;
+                let t =
+                    heat_3d::tracers(&heat_flow::thinned(&mode.heat_flow, strength, scale), time);
                 if !t.positions.is_empty() {
                     all.push(novo_view3d::Overlay::Lines(t));
                 }
                 if mode.heat.carry {
-                    let t =
-                        heat_3d::tracers_in(&mode.heat_carry.flow, time, heat_carry::TRACER_RGB, 6);
+                    let carried = heat_flow::thinned(
+                        &mode.heat_carry.flow,
+                        strength,
+                        mode.heat_carry.flow.top,
+                    );
+                    let t = heat_3d::tracers_in(&carried, time, heat_carry::TRACER_RGB, 6);
                     if !t.positions.is_empty() {
                         all.push(novo_view3d::Overlay::Lines(t));
                     }
@@ -1288,6 +1322,7 @@ impl NovoApp {
                     flows: &vent_flows,
                     running: heat_running,
                     stale: stale && has_result,
+                    whatif_open: self.cabinet.heat.whatif.is_open(),
                     suggestion: suggestion.as_ref(),
                 },
             );
@@ -2056,7 +2091,7 @@ fn run_heat(
 /// cabinet jumped down by this much under the person's pointer. Assumes the
 /// two colour bars fit one row; a window too narrow for that wraps them back
 /// to two rows and the strip grows past this room.
-const STRIP_HEIGHT: f32 = 98.0;
+const STRIP_HEIGHT: f32 = 110.0;
 
 /// The shortest window that keeps the strip's room before the first result:
 /// below it the panels beside the view would not all fit.
@@ -2107,8 +2142,8 @@ fn heat_controls(
     h: &mut Heat3d,
     probe: &mut ProbeState,
     sol: &super::heat_run::Solution,
-    top_speed: f32,
-    top_flux: f32,
+    (top_speed, top_flux): (f32, f32),
+    through: Option<&heat_flow::Through>,
     tag_of: &dyn Fn(u64) -> String,
 ) -> Option<u64> {
     use novo_heatview::cfd::Axis;
@@ -2140,11 +2175,11 @@ fn heat_controls(
             let level = range.lo + f64::from(h.iso_at) * (range.hi - range.lo);
             ui.label(egui::RichText::new(format!("{level:.0} °C")).small());
         }
-        ui.checkbox(&mut h.lines, "Airflow")
-            .on_hover_text("Streamlines from in front of the devices; faster air is brighter");
-        let top = h
-            .arrows
-            .then(|| super::heat_arrows::top_speed(&sol.snapshot, h.axis, h.slice_at));
+        let mut flow_mode = h.flow;
+        if heat_flow::control(ui, &mut flow_mode) {
+            h.flow.strength = flow_mode.strength;
+            h.set_flow(flow_mode.mode);
+        }
         ui.checkbox(&mut h.cloud, "Cloud").on_hover_text(
             "The whole cabinet volume as see-through layers coloured by air temperature; air at ambient is invisible, and opacity rises from ambient to the hot end of the air (not the devices), so a few kelvin of difference show. Strength and Contrast are the two sliders. Layers are cut across the direction you look along, so turning the view across the cabinet re-cuts them",
         );
@@ -2167,11 +2202,6 @@ fn heat_controls(
         ui.checkbox(&mut h.carry, "Heat flow").on_hover_text(
             "Where the heat goes: orange lines and moving dashes follow the heat the air carries away from hot parts (brighter is more heat per area); arrows inside plate, rails and devices show heat conducted through them. Derived from the solved temperature and air speed; surface radiation is not included. Air colder than ambient takes heat in, so its lines point against the air",
         );
-        ui.checkbox(&mut h.arrows, "Arrows")
-            .on_hover_text(super::heat_arrows::hover_text(top));
-        if let Some(top) = top.filter(|_| h.arrows) {
-            ui.label(egui::RichText::new(format!("longest {top:.2} m/s")).small());
-        }
         ui.checkbox(&mut h.devices, "Devices").on_hover_text(
             "Colour each device by the air temperature in front of it, on the same scale as the slice",
         );
@@ -2193,6 +2223,10 @@ fn heat_controls(
                 probe.text.as_str()
             };
             ui.label(egui::RichText::new(text).small());
+        }
+        if let Some(t) = through {
+            ui.end_row();
+            heat_flow::through_row(ui, t);
         }
         let cloud_range = novo_heatview::range::Range {
             lo: range.lo,

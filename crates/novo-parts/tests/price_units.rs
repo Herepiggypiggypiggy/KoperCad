@@ -133,3 +133,14 @@ fn a_price_in_exponent_notation_is_refused() {
             .any(|s| s.reason == "price in exponent notation")
     );
 }
+
+#[test]
+fn a_percent_or_unknown_unit_text_is_refused_with_a_reason() {
+    let o = import_prices(&[
+        ("2002-1201", "12.5 EUR %"),
+        ("2002-1202", "5 USD per 100 pcs"),
+    ]);
+    assert!(price(&o, "2002-1201").is_none(), "{:?}", o.recipe.skipped);
+    assert_eq!(price(&o, "2002-1202").unwrap().per, 100);
+    assert!(!o.recipe.skipped.is_empty());
+}

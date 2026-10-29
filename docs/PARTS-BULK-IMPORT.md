@@ -73,6 +73,11 @@ does not bundle the release. Install it once:
   **(folder)**, or
 - `kopercad-cli parts etim <zip, folder or csv>`.
 
+In the app the release is read on a background thread (a release can be
+hundreds of megabytes): the window shows "Installing the ETIM release..." and
+the install entries of More are disabled until it is done. Import maker files
+after that line is gone.
+
 A compact copy is kept beside the catalog (`etim\`, follows the profile folder).
 Every later import translates the codes it knows. The release's CSV tables are
 recognised by the codes in their columns, not by file or column names, because

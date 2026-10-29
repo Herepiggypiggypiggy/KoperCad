@@ -574,7 +574,7 @@ fn cabinet(project: &Project, enclosure: &Structure, jobs: &[WireCutJob]) -> Opt
             mm(layout.plate.height)
         ),
         if warnings.is_empty() {
-            vec!["The layout has no open problems.".to_owned()]
+            vec!["The cabinet layout has no open problems.".to_owned()]
         } else {
             warnings.clone()
         },

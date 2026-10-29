@@ -25,9 +25,13 @@ pub enum LinkError {
     NotLinkable(SymbolId),
     #[error("an interruption point links only to another interruption point")]
     Mixed,
-    #[error("both symbols are main functions (coils); one of them must be a contact")]
+    #[error(
+        "both are the main symbol of their device (a coil, breaker, motor ...); only a contact can share another device's tag, so pick a free tag"
+    )]
     BothMain,
-    #[error("that device already has a main function (coil); link a contact to it instead")]
+    #[error(
+        "that device already has its main symbol (a coil, breaker, motor ...); only a contact can join it"
+    )]
     DeviceHasMain,
     #[error("neither symbol belongs to a device yet; tag one of them first")]
     NoDevice,

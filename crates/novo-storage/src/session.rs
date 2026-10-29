@@ -329,6 +329,20 @@ impl Session {
             && self.last_autosave.elapsed() >= self.autosave_interval
     }
 
+    /// How long the app can sleep before the next [`Session::autosave_if_due`]
+    /// call matters: the time left until the pending changes are due, or one
+    /// full interval when there is nothing to write. Scheduling the next
+    /// call a whole interval ahead instead would skip a call that comes a
+    /// hair early and double the delay (hardware finding HPR-02).
+    pub fn autosave_wait(&self) -> Duration {
+        if self.recovery_pending || self.unautosaved == Pending::Nothing {
+            return self.autosave_interval;
+        }
+        self.autosave_interval
+            .saturating_sub(self.last_autosave.elapsed())
+            .max(Duration::from_millis(50))
+    }
+
     /// Autosaves if [`Session::autosave_due`]. Returns whether it wrote.
     /// Call it from the app's idle loop.
     pub fn autosave_if_due(&mut self, project: &Project) -> Result<bool> {

@@ -1,0 +1,37 @@
+@title Cabinet: drag a duct's end handle shorter, then cut it to a stock length (1366x768)
+@area Cabinet
+@sizes 1366x768
+# Rails and ducts window (palette: rails): Add duct selects the new duct, with its two end handles on the plate and
+# its length and bar in the card at the top of the window. The finish handle is dragged left (the label shows the
+# new length), the duct stays put at its start; Cut to length offers the stock lengths; Ctrl+Z undoes each step.
+open qa/fixtures/cabinet-lesson.novo
+wait 20
+click_text Cabinet #1
+wait 30
+key ctrl+k
+wait 3
+text rails and ducts
+wait 4
+key Enter
+wait 10
+click_text "Add duct"
+wait 10
+expect "Cut from one 2000 mm bar"
+expect "Trim at point"
+shot card
+mouse_down 985 705
+move 925 705
+move 865 705
+wait 5
+shot dragging
+mouse_up 865 705
+wait 10
+expect "Cut from one 2000 mm bar"
+shot shortened
+check_layout
+key ctrl+z
+wait 10
+shot undone
+click_text "Cut to length"
+wait 5
+shot cut-menu

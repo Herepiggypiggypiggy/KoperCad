@@ -84,13 +84,31 @@ pub(crate) struct PartsWindow {
     /// The installed ETIM release as one line (`None` until the menu first
     /// asks; `Some(None)` when there is none).
     etim_line: Option<Option<String>>,
+    /// An ETIM release being installed on a worker thread (a release can be
+    /// hundreds of megabytes): its answer when it is done.
+    etim_job: Option<std::sync::mpsc::Receiver<Result<String, String>>>,
     /// Add CAD files: matching of downloaded files to parts, while open.
     cad: Option<CadPanel>,
+    /// Export and import of a library bundle.
+    bundles: super::parts_bundle::BundleUi,
     /// Files dropped or picked that are still being read in the background.
     waiting: Vec<Waiting>,
     /// Repaints the window when a background read finishes; set on the first
     /// frame.
     wake: Option<egui::Context>,
+    /// The list rows worked out for the last (search, maker, catalog,
+    /// library): redone only when one of them changes, not on every frame.
+    rows_cache: std::sync::Mutex<Option<RowsCache>>,
+}
+
+/// What the list rows were worked out from, and the rows.
+struct RowsCache {
+    query: String,
+    maker: Option<String>,
+    revision: u64,
+    len: usize,
+    library: Option<(PathBuf, Option<(u64, std::time::SystemTime)>)>,
+    rows: std::sync::Arc<Vec<(PartKey, RowAction)>>,
 }
 
 /// The fields of the New part form.
@@ -181,9 +199,12 @@ impl PartsWindow {
             new_part: None,
             guide: false,
             etim_line: None,
+            etim_job: None,
             cad: None,
+            bundles: Default::default(),
             waiting: Vec::new(),
             wake: None,
+            rows_cache: Default::default(),
         }
     }
 
@@ -424,6 +445,49 @@ impl PartsWindow {
         Some(self.waiting.remove(0))
     }
 
+    /// Installs the ETIM release at `path` on a worker thread; the window
+    /// goes on painting and [`PartsWindow::poll_etim`] picks the answer up.
+    fn start_etim_install(&mut self, path: PathBuf, dir: Option<PathBuf>) {
+        if self.etim_job.is_some() {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let wake = self.wake.clone();
+        let spawned = std::thread::Builder::new()
+            .name("etim-install".into())
+            .spawn(move || {
+                slow_for_qa();
+                let done = std::panic::catch_unwind(|| install_etim(&path, dir.as_deref()))
+                    .unwrap_or_else(|_| Err("ETIM release: the file could not be read".into()));
+                let _ = tx.send(done);
+                if let Some(ctx) = wake {
+                    ctx.request_repaint();
+                }
+            });
+        if spawned.is_ok() {
+            self.etim_job = Some(rx);
+        } else {
+            self.etim_job = None;
+        }
+    }
+
+    /// The answer of a finished ETIM install, once.
+    fn poll_etim(&mut self) -> Option<Result<String, String>> {
+        use std::sync::mpsc::TryRecvError;
+        let answer = match self.etim_job.as_ref()?.try_recv() {
+            Ok(done) => done,
+            Err(TryRecvError::Empty) => return None,
+            Err(TryRecvError::Disconnected) => {
+                Err("ETIM release: the install stopped unexpectedly".into())
+            }
+        };
+        self.etim_job = None;
+        if let Ok(line) = &answer {
+            self.etim_line = Some(Some(line.clone()));
+        }
+        Some(answer)
+    }
+
     /// Opens Add CAD files for these files.
     fn add_cad_files(&mut self, paths: &[PathBuf]) {
         self.cad = Some(CadPanel::new(
@@ -445,6 +509,18 @@ impl PartsWindow {
         if let Some(panel) = self.cad.as_mut() {
             for p in panel.poll() {
                 self.catalog.upsert(p);
+            }
+        }
+        let added = self.bundles.poll();
+        if !added.is_empty() {
+            for p in &added {
+                self.catalog.upsert(p.clone());
+            }
+            if let Some(path) = self.catalog_path.as_deref()
+                && let Err(e) = super::parts_import::save_parts_to_user_catalog(path, &added)
+            {
+                self.bundles
+                    .note(format!("The parts could not be saved to your catalog: {e}"));
             }
         }
     }
@@ -533,18 +609,51 @@ impl PartsWindow {
 
     /// The rows the search text and maker filter leave, as keys with their
     /// button.
+    #[cfg(test)]
     pub(crate) fn rows(&self) -> Vec<(PartKey, RowAction)> {
+        self.rows_shared().as_ref().clone()
+    }
+
+    /// [`rows`](Self::rows) without a copy, kept until the search, the maker,
+    /// the catalog or the library's records change. Walking thousands of
+    /// parts every frame made the window lag.
+    fn rows_shared(&self) -> std::sync::Arc<Vec<(PartKey, RowAction)>> {
+        let library = self
+            .library
+            .as_ref()
+            .map(|l| (l.root().to_path_buf(), l.stamp()));
+        let mut slot = self.rows_cache.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(c) = slot.as_ref()
+            && c.query == self.query
+            && c.maker == self.maker
+            && c.revision == self.catalog.revision()
+            && c.len == self.catalog.len()
+            && c.library == library
+        {
+            return c.rows.clone();
+        }
         let none = LocalLibrary::at(std::path::PathBuf::new());
-        let library = self.library.as_ref().unwrap_or(&none);
-        browser_rows(&self.catalog, library, &self.sources, &self.query)
-            .into_iter()
-            .filter(|r| {
-                self.maker
-                    .as_ref()
-                    .is_none_or(|m| m.eq_ignore_ascii_case(&r.part.manufacturer))
-            })
-            .map(|r| (r.part.key(), r.action))
-            .collect()
+        let lib = self.library.as_ref().unwrap_or(&none);
+        let rows: std::sync::Arc<Vec<_>> =
+            browser_rows(&self.catalog, lib, &self.sources, &self.query)
+                .into_iter()
+                .filter(|r| {
+                    self.maker
+                        .as_ref()
+                        .is_none_or(|m| m.eq_ignore_ascii_case(&r.part.manufacturer))
+                })
+                .map(|r| (r.part.key(), r.action))
+                .collect::<Vec<_>>()
+                .into();
+        *slot = Some(RowsCache {
+            query: self.query.clone(),
+            maker: self.maker.clone(),
+            revision: self.catalog.revision(),
+            len: self.catalog.len(),
+            library,
+            rows: rows.clone(),
+        });
+        rows
     }
 
     /// Whether the part's files are in the library. A missing library
@@ -816,6 +925,10 @@ fn side_label(side: Side) -> Option<&'static str> {
 enum PartsAction {
     /// Open the table import with its mapping step.
     ImportTable,
+    /// Open the export form of Export library.
+    ExportLibrary,
+    /// Ask for a library bundle and open it.
+    ImportLibrary,
     Select(PartKey),
     Import(PartKey),
     OpenPage(String),
@@ -957,6 +1070,19 @@ impl NovoApp {
         if !picked_cad.is_empty() {
             win.add_cad_files(&picked_cad);
         }
+        // A library bundle dropped on the window opens in the bundle dialog.
+        let (bundle_files, dropped): (Vec<PathBuf>, Vec<PathBuf>) = dropped
+            .into_iter()
+            .partition(|p| matches!(classify(p), Dropped::Bundle));
+        if let Some(path) = bundle_files.into_iter().next() {
+            let env = super::parts_bundle::Env {
+                catalog: &win.catalog,
+                library: win.library.as_ref(),
+                wake: win.wake.as_ref(),
+                today: today(),
+            };
+            win.bundles.open_path(path, &env);
+        }
         let mut catalog_files = Vec::new();
         let mut table_file = None;
         let mut no_part_for = None;
@@ -985,7 +1111,7 @@ impl NovoApp {
                 match kind {
                     Dropped::Table => table_file = Some(path.clone()),
                     Dropped::Catalog => catalog_files.push(path.clone()),
-                    Dropped::Cad => {}
+                    Dropped::Cad | Dropped::Bundle => {}
                     Dropped::Other => {
                         no_part_for = path.file_name().map(|n| n.to_string_lossy().into_owned());
                     }
@@ -1007,6 +1133,13 @@ impl NovoApp {
         let mut close = !open;
         let mut error = None;
         let mut info = None;
+        match win.poll_etim() {
+            Some(Ok(line)) => {
+                info = Some(format!("Installed {line}. Import the maker file again."));
+            }
+            Some(Err(e)) => error = Some(e),
+            None => {}
+        }
         let mut assign = None;
         let mut open_dir = None;
         for action in actions {
@@ -1019,6 +1152,16 @@ impl NovoApp {
                     {
                         table_file = Some(path);
                     }
+                }
+                PartsAction::ExportLibrary => win.bundles.start_export(),
+                PartsAction::ImportLibrary => {
+                    let env = super::parts_bundle::Env {
+                        catalog: &win.catalog,
+                        library: win.library.as_ref(),
+                        wake: win.wake.as_ref(),
+                        today: today(),
+                    };
+                    win.bundles.start_import(&env);
                 }
                 PartsAction::AddCadFiles => {
                     if let Some(files) = crate::dialogs::FileDialog::new()
@@ -1081,14 +1224,7 @@ impl NovoApp {
                             .pick_file()
                     };
                     if let Some(path) = picked {
-                        match install_etim(&path) {
-                            Ok(line) => {
-                                info =
-                                    Some(format!("Installed {line}. Import the maker file again."));
-                                win.etim_line = Some(Some(line));
-                            }
-                            Err(e) => error = Some(e),
-                        }
+                        win.start_etim_install(path, novo_parts::EtimModel::dir_for(None));
                     }
                 }
                 PartsAction::NewPart => win.new_part = Some(NewPartForm::default()),
@@ -1212,12 +1348,25 @@ impl Waiting {
     }
 }
 
+/// Holds the ETIM install for `KOPERCAD_QA_SLOW_ETIM_MS` milliseconds (at
+/// most a minute) so a QA scenario can photograph the window while it runs.
+/// Unset, it does nothing.
+fn slow_for_qa() {
+    let ms = std::env::var("KOPERCAD_QA_SLOW_ETIM_MS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .map_or(0, |ms| ms.min(60_000));
+    if ms > 0 {
+        std::thread::sleep(std::time::Duration::from_millis(ms));
+    }
+}
+
 /// Installs the ETIM release at `path` into the user's profile; returns the
 /// one-line summary, or the reason in words.
-fn install_etim(path: &Path) -> Result<String, String> {
-    let dir = novo_parts::EtimModel::dir_for(None)
-        .ok_or("No profile folder is known, so there is nowhere to keep the ETIM release.")?;
-    novo_parts::EtimModel::install(path, &dir)
+fn install_etim(path: &Path, dir: Option<&Path>) -> Result<String, String> {
+    let dir =
+        dir.ok_or("No profile folder is known, so there is nowhere to keep the ETIM release.")?;
+    novo_parts::EtimModel::install(path, dir)
         .map(|m| m.summary())
         .map_err(|e| format!("ETIM release: {e}"))
 }
@@ -1374,7 +1523,9 @@ fn parts_ui(
                         .and_then(|d| novo_parts::EtimModel::load_installed(&d))
                         .map(|m| m.summary())
                 });
+                let installing = win.etim_job.is_some();
                 ui.weak(match line {
+                    _ if installing => "Installing the ETIM release\u{2026}",
                     Some(l) => l.as_str(),
                     None => "No ETIM release installed",
                 });
@@ -1390,12 +1541,33 @@ fn parts_ui(
                         true,
                     ),
                 ] {
-                    if ui.button(label).on_hover_text(hint).clicked() {
+                    if ui
+                        .add_enabled(!installing, egui::Button::new(label))
+                        .on_hover_text(hint)
+                        .clicked()
+                    {
                         actions.push(PartsAction::InstallEtim { folder });
                         ui.close();
                     }
                 }
                 ui.separator();
+                for (label, hint, action) in [
+                    (
+                        "Export library\u{2026}",
+                        "Write your parts, and optionally their CAD files, into one file to move to another computer or to share.",
+                        PartsAction::ExportLibrary,
+                    ),
+                    (
+                        "Import library\u{2026}",
+                        "Read a library file written by Export library. You can also drop it on this window.",
+                        PartsAction::ImportLibrary,
+                    ),
+                ] {
+                    if ui.button(label).on_hover_text(hint).clicked() {
+                        actions.push(action);
+                        ui.close();
+                    }
+                }
                 if ui
                     .button("Maker guide")
                     .on_hover_text("What to download from each maker and where to save it.")
@@ -1446,6 +1618,21 @@ fn parts_ui(
     if win.new_part.is_some() {
         new_part_ui(ui, win);
     }
+    if win.bundles.visible() {
+        let env = super::parts_bundle::Env {
+            catalog: &win.catalog,
+            library: win.library.as_ref(),
+            wake: win.wake.as_ref(),
+            today: today(),
+        };
+        win.bundles.show(ui, &env);
+    }
+    if win.etim_job.is_some() {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.weak("Installing the ETIM release\u{2026} import maker files when it is done.");
+        });
+    }
     if let Some(text) = super::parts_identity::reading_text().filter(|_| !win.waiting.is_empty()) {
         ui.horizontal(|ui| {
             ui.spinner();
@@ -1460,7 +1647,7 @@ fn parts_ui(
         }
     }
     ui.add_space(4.0);
-    let rows = win.rows();
+    let rows = win.rows_shared();
     let (up, down, esc) = ui.input(|i| {
         (
             i.key_pressed(egui::Key::ArrowUp),
@@ -2072,6 +2259,58 @@ mod tests {
         }));
         win.query = "zzz-no-such-part".into();
         assert!(win.rows().is_empty());
+    }
+
+    #[test]
+    fn rows_are_kept_until_the_search_the_catalog_or_the_library_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let lib = LocalLibrary::at(dir.path());
+        let mut catalog = Catalog::new();
+        for n in 0..5000 {
+            catalog.upsert(CatalogPart::new("Acme", format!("BIG-{n:05}")));
+        }
+        let mut win = PartsWindow::new(catalog, Some(lib), SourceTable::builtin());
+        let first = win.rows_shared();
+        assert_eq!(first.len(), 5000);
+        // Nothing changed: the same rows, not a new pass.
+        assert!(std::sync::Arc::ptr_eq(&first, &win.rows_shared()));
+        // A frame must stay cheap: the pass over 5000 parts is not repeated.
+        let t = std::time::Instant::now();
+        for _ in 0..200 {
+            win.rows_shared();
+        }
+        assert!(t.elapsed().as_millis() < 100, "{:?}", t.elapsed());
+        // A search, a new part and a stored file each give new rows.
+        win.query = "BIG-00042".into();
+        assert_eq!(win.rows_shared().len(), 1);
+        win.query.clear();
+        win.catalog.upsert(CatalogPart::new("Acme", "NEW-1"));
+        assert_eq!(win.rows_shared().len(), 5001);
+        let key = CatalogPart::new("Acme", "NEW-1").key();
+        assert_ne!(
+            win.rows_shared().iter().find(|(k, _)| *k == key).unwrap().1,
+            RowAction::InLibrary
+        );
+        win.library
+            .as_ref()
+            .unwrap()
+            .store(
+                &novo_parts::NewSource {
+                    manufacturer: "Acme",
+                    order_number: "NEW-1",
+                    file_name: "x.stp",
+                    url: None,
+                    flow: novo_parts::ImportFlow::Manual,
+                    imported: "2026-10-28",
+                    terms_url: None,
+                },
+                b"x",
+            )
+            .unwrap();
+        assert_eq!(
+            win.rows_shared().iter().find(|(k, _)| *k == key).unwrap().1,
+            RowAction::InLibrary
+        );
     }
 
     #[test]

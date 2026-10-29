@@ -1,0 +1,22 @@
+[[widget]]
+kind = "heading"
+text = "Demo engine"
+
+[[widget]]
+kind = "label"
+text = "The buttons ask the engine; it answers with lamp states."
+weak = true
+
+[[widget]]
+kind = "row"
+widgets = [
+  { kind = "lamp", id = "power", text = "Power", state = "neutral", lit = false },
+  { kind = "lamp", id = "fault", text = "Fault", state = "error", lit = false },
+]
+
+[[widget]]
+kind = "row"
+widgets = [
+  { kind = "button", id = "start", text = "Start" },
+  { kind = "button", id = "stop", text = "Stop" },
+]

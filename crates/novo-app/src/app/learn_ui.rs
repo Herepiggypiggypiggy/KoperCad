@@ -355,15 +355,17 @@ impl NovoApp {
                 if !card.finished {
                     ui.weak(&card.counter);
                 }
-                // The title gives way to the button, not the other way round.
+                // The card moves by its body; the grip says so.
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
-                    // The card moves by its body; the grip says so.
                     ui.weak(icons::DOTS_SIX_VERTICAL)
                         .on_hover_text(&card.words.drag_tip);
-                    section_label(ui, &card.header).on_hover_text(&card.header);
                 });
             });
+        });
+        // On its own line, wrapped: beside the counter and the two buttons a
+        // long lesson name was cut at 1366x768 ("FIX A HOT CABINET: ...").
+        ui.horizontal_wrapped(|ui| {
+            section_label(ui, &card.header);
         });
         super::learn_suite::progress_bar(ui, card.fraction);
         ui.add_space(4.0);
