@@ -32,7 +32,7 @@ shot defect-injected
 check_layout
 click_text "Stop and keep"
 wait 5
-click_text "Run"
+click_text "▶ Run"
 wait 10
 expect "Recording 1"
 shot walkthrough-report
