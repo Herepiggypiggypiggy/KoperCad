@@ -21,7 +21,7 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 ## V2c: where the commands live now (2026-10-29)
 - `menus::MOVED` (novo-workflow) lists the commands whose menu row left because a rail draws them; `menus::place` returns None for them and the app menu, the menu bar and the palette follow. They stay in the command palette. `homes::RELOCATED` names the rail as home; the test `a_command_moved_out_of_the_menus_has_a_home_elsewhere` and the app test `the_relocated_table_matches_what_the_rails_draw` keep both honest.
 - A rail row that took over a menu row carries the lesson anchor `cmd.<id>` (`learn_labels::moved_anchor`), so lessons keep pointing at it.
-- Budget: `menu_rows_stay_inside_the_budget` has a ceiling per menu (File 87, Edit 29, Draw 39, View 65, Check 11, Reports 30, Simulate 24, Help 19 = 304). Lower the ceilings when rows move; never raise them. The design target is about 152.
+- Budget: `menu_rows_stay_inside_the_budget` has a ceiling per menu (File 88, Edit 30, Draw 39, View 65, Check 11, Reports 30, Simulate 24, Help 19 = 306 after main added New from template and one Edit row). The ceilings are exact: a PR that adds a menu row raises its menu's ceiling by one and says why the row needs a menu; moving rows lowers it. The design target is about 152.
 - Label policy: menu rows use the short label of the presentation table (28 characters at most, tested by the V0 presentation tests).
 
 ## V2c: what is left (gaps)
