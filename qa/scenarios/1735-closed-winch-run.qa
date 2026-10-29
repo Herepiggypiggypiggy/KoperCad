@@ -23,7 +23,8 @@ mouse_down 123 343
 wait 400
 shot torque-proof-and-brake-opens
 wait 700
-expect "m/min"
+expect "running"
+expect_not "brake closed · 0 rpm"
 shot running
 mouse_up 123 343
 wait 800
