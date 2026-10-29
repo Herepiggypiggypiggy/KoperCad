@@ -89,10 +89,35 @@ drive is the model listed above. A channel or the encoder device that is not bou
 present, and the run says so. The encoder loss here is a lost signal (counts stop); a lost single
 channel (direction lost) is available in the engine and the scenarios window, not as a drawn device yet.
 
+## Two winches on one beam in the drawn circuit
+
+A motor whose **Two winches on one beam** section names a second motor (`cw_pair_partner`, rows in
+`cl_winch_spec::PAIR_KEYS`) makes the two a pair in Simulate > Drive run (`novo_machine::cl_pair_loop`).
+Both motors keep their own Closed-loop winch rows. The beam (mass, rope distance, centre of gravity,
+guided or free), the rope stiffness and damping, the rope rating, the synchronisation (independent,
+position lock, torque follower), the position limit and the partner action are entered on the first
+motor. The hook load of each winch is replaced by its share of the beam; the beam itself is
+integrated by the pair (`sync_winch`).
+
+The first winch's up, down and step 2 devices command both winches; the second winch's are not read
+and the binding check says so when they are drawn. Everything else is read per winch: the two STO
+channels, the encoder signal, the main contactor, the brake feed and feedback, and the reset. The
+drive's brake relay of each winch is its own drawn contact. So an open coil on one STO channel of
+winch B trips only winch B (the pair then stops through the partner link, or the position error
+stops it first, as set), a lost encoder signal on B is named as winch B's, a brake contactor of B that
+does not pull in leaves B's brake closed and the pair stops itself on the position error.
+
+The run lists trips, STO and encoder events per winch, the pair stopping itself, a rope above its
+rating, a slack rope and a tilt beyond what the model covers. Start rollback, stop travel and brake
+slip are reported for a single winch only; for a pair read them off the snapshot rows.
+
+Fidelity: the tick order and the beam statics are exact by definition; ropes as spring-dampers that
+pull only when taut, the beam as a rigid body at small tilt with vertical ropes, and the drives are the
+model listed above. No rope swing, no drum grooving, no rope over-lap. The default rope rating is
+0.6 times the beam weight when none is entered, and the run says so.
+
 ## Not yet
 
-- Two winches on one beam from the schematic (two motors, one beam): the pair needs per-winch bindings
-  and a shared mechanics block. `PairCommand` already takes per-winch STO.
 - Walk-throughs (`novo_sim::walkthrough`) do not run the winch loop yet; defects are injected in the
   live view.
 - Unconfirmed customer details: which drive maker's hoist and encoder arrangement applies. Everything

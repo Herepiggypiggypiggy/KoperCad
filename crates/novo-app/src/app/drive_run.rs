@@ -21,6 +21,7 @@
 
 use eframe::egui;
 use novo_core::{PageId, Project, Value};
+use novo_machine::cl_pair_loop::{ClPairLoop, ClPairModule};
 use novo_machine::cl_winch_loop::{ClWinchLoop, ClWinchModule};
 use novo_machine::cl_winch_spec;
 use novo_machine::cosim::StepConfig;
@@ -50,6 +51,7 @@ struct Active {
     lp: TravelLoop,
     hl: DriveHoistLoop,
     cw: ClWinchLoop,
+    cp: ClPairLoop,
     acc: f64,
 }
 
@@ -88,6 +90,7 @@ pub(super) fn drive_hoists_of(project: &Project) -> (Vec<DriveHoistModule>, Vec<
 pub(super) fn closed_winches_of(project: &Project) -> (Vec<ClWinchModule>, Vec<(Level, String)>) {
     let mut modules = Vec::new();
     let mut notes = Vec::new();
+    let members = pair_members(project);
     for device in project.devices() {
         if !device
             .properties
@@ -96,6 +99,9 @@ pub(super) fn closed_winches_of(project: &Project) -> (Vec<ClWinchModule>, Vec<(
             continue;
         }
         let tag = device.tag.to_string();
+        if members.contains(&tag) {
+            continue;
+        }
         let get = |key: &str| device.properties.get(key).map(|v: &Value| v.to_string());
         match cl_winch_spec::closed_winch_from_properties(&tag, &get) {
             Ok(Some((module, found))) => {
@@ -113,10 +119,95 @@ pub(super) fn closed_winches_of(project: &Project) -> (Vec<ClWinchModule>, Vec<(
     (modules, notes)
 }
 
+/// The tags of the motors that belong to a pair: every motor that names a partner and the
+/// partner it names. They are not single winches.
+fn pair_members(project: &Project) -> std::collections::BTreeSet<String> {
+    let mut members = std::collections::BTreeSet::new();
+    for device in project.devices() {
+        let get = |key: &str| device.properties.get(key).map(|v: &Value| v.to_string());
+        if let Some(partner) = cl_winch_spec::pair_partner(&get) {
+            members.insert(device.tag.to_string());
+            members.insert(partner);
+        }
+    }
+    members
+}
+
+/// The pairs of closed-loop winches of a project: every motor that names a second winch under
+/// "Two winches on one beam". A pair whose partner is missing or whose numbers the engine refuses
+/// is reported and left out. The notes are the design findings of its numbers.
+pub(super) fn closed_pairs_of(project: &Project) -> (Vec<ClPairModule>, Vec<(Level, String)>) {
+    let mut modules = Vec::new();
+    let mut notes = Vec::new();
+    for device in project.devices() {
+        let get_a = |key: &str| device.properties.get(key).map(|v: &Value| v.to_string());
+        let Some(partner) = cl_winch_spec::pair_partner(&get_a) else {
+            continue;
+        };
+        let tag = device.tag.to_string();
+        let Some(other) = project
+            .devices()
+            .find(|d| d.tag.to_string() == partner && d.id != device.id)
+        else {
+            notes.push((
+                Level::Warning,
+                format!(
+                    "{tag} is left out: the second winch {partner} is not a device of this project"
+                ),
+            ));
+            continue;
+        };
+        let get_b = |key: &str| other.properties.get(key).map(|v: &Value| v.to_string());
+        match cl_winch_spec::closed_pair_from_properties(&tag, &get_a, &partner, &get_b) {
+            Ok(Some((module, found))) => {
+                modules.push(module);
+                notes.extend(
+                    found
+                        .into_iter()
+                        .map(|n| (Level::Info, format!("{tag} + {partner}: {n}"))),
+                );
+            }
+            Ok(None) => {}
+            Err(why) => notes.push((Level::Warning, format!("{tag} is left out: {why}"))),
+        }
+    }
+    (modules, notes)
+}
+
 /// A one-line reading of a closed-loop winch, for the badge and the window.
 pub(super) fn winch_reading(module: &ClWinchModule) -> String {
-    use novo_drive::closed_loop::ClState;
+    winch_text(module.snapshot())
+}
+
+/// The readings of a pair: a line for the beam, then one per winch.
+pub(super) fn pair_readings(module: &ClPairModule) -> Vec<(String, String)> {
     let Some(s) = module.snapshot() else {
+        return vec![(module.id.clone(), "waiting".to_owned())];
+    };
+    let mut rows = vec![(
+        format!("{} + {}", module.names[0], module.names[1]),
+        format!(
+            "beam {:.2} m \u{b7} tilt {:.1}\u{b0} \u{b7} A carries {:.0} % \u{b7} A\u{2212}B {:.0} mm{}",
+            s.height_m,
+            s.tilt_deg,
+            s.share_a * 100.0,
+            s.position_error_m * 1000.0,
+            if s.sync_fault.is_some() {
+                " \u{b7} pair stopped"
+            } else {
+                ""
+            }
+        ),
+    )];
+    for i in 0..2 {
+        rows.push((module.names[i].clone(), winch_text(Some(&s.winches[i]))));
+    }
+    rows
+}
+
+fn winch_text(snapshot: Option<&novo_drive::closed_loop::WinchSnapshot>) -> String {
+    use novo_drive::closed_loop::ClState;
+    let Some(s) = snapshot else {
         return "waiting".to_owned();
     };
     let state = match s.drive.fault {
@@ -218,6 +309,7 @@ pub(super) fn advance(
         active.lp.step(&mut circuit);
         active.hl.step(&mut circuit);
         active.cw.step(&mut circuit);
+        active.cp.step(&mut circuit);
         active.acc -= dt;
         ticks += 1;
     }
@@ -285,6 +377,20 @@ pub(super) fn paint_badges(
                 .map(|m| (m.id.as_str(), winch_reading(m))),
         )
         .collect();
+    // A pair paints a badge on each of its motors (the beam line is for the window).
+    let pair_badges: Vec<(&str, String)> = active
+        .cp
+        .modules
+        .iter()
+        .flat_map(|m| {
+            let rows = pair_readings(m);
+            (0..2).filter_map(move |i| {
+                rows.get(i + 1)
+                    .map(|(_, text)| (m.names[i].as_str(), text.clone()))
+            })
+        })
+        .collect();
+    let readings: Vec<(&str, String)> = readings.into_iter().chain(pair_badges).collect();
     for (id, text) in readings {
         for symbol in project.symbols().filter(|s| s.page == page && is_motor(s)) {
             let tag = symbol
@@ -318,6 +424,7 @@ pub(super) fn paint_badges(
     if active.lp.modules.iter().any(|m| m.snapshot().is_some())
         || active.hl.modules.iter().any(|m| m.snapshot().is_some())
         || active.cw.modules.iter().any(|m| m.snapshot().is_some())
+        || active.cp.modules.iter().any(|m| m.snapshot().is_some())
     {
         ctx.request_repaint();
     }
@@ -339,6 +446,7 @@ impl NovoApp {
         let (axes, _) = axes_of(doc.project());
         let (drive_hoists, _) = drive_hoists_of(doc.project());
         let (winches, _) = closed_winches_of(doc.project());
+        let (pairs, _) = closed_pairs_of(doc.project());
         let live_on = self.wb.live.on;
         let mut open = true;
         let (mut start, mut stop, mut live_toggle) = (false, false, false);
@@ -357,6 +465,7 @@ impl NovoApp {
                         .iter()
                         .map(|m| (m.id.clone(), winch_reading(m))),
                 )
+                .chain(a.cp.modules.iter().flat_map(pair_readings))
                 .collect()
         });
         // What the drive hoists found, newest last (the run keeps the whole list).
@@ -373,6 +482,14 @@ impl NovoApp {
                         .iter()
                         .map(|f| (format!("{} \u{b7} {:.1} s", m.id, f.time_s), f.kind.text()))
                 }))
+                .chain(a.cp.modules.iter().flat_map(|m| {
+                    m.findings().iter().map(|f| {
+                        (
+                            format!("{} + {} \u{b7} {:.1} s", m.names[0], m.names[1], f.time_s),
+                            f.kind.text(),
+                        )
+                    })
+                }))
                 .collect()
         });
         let running = run.active.is_some();
@@ -382,6 +499,11 @@ impl NovoApp {
             .map(|a| a.id.clone())
             .chain(drive_hoists.iter().map(|h| h.id.clone()))
             .chain(winches.iter().map(|w| w.id.clone()))
+            .chain(
+                pairs
+                    .iter()
+                    .map(|p| format!("{} + {}", p.names[0], p.names[1])),
+            )
             .collect();
         // Foreground: the marks of the live view (contacts, coil rings) are painted on the Middle
         // layer and must not run through the notes.
@@ -533,7 +655,13 @@ impl NovoApp {
         notes.extend(hoist_notes);
         let (winch_modules, winch_notes) = closed_winches_of(project);
         notes.extend(winch_notes);
-        if modules.is_empty() && hoist_modules.is_empty() && winch_modules.is_empty() {
+        let (pair_modules, pair_notes) = closed_pairs_of(project);
+        notes.extend(pair_notes);
+        if modules.is_empty()
+            && hoist_modules.is_empty()
+            && winch_modules.is_empty()
+            && pair_modules.is_empty()
+        {
             notes.push((
                 Level::Warning,
                 "No axis can run: see the notes above.".into(),
@@ -565,11 +693,20 @@ impl NovoApp {
             }
         };
         cw.modules = winch_modules;
+        let mut cp = match ClPairLoop::new(StepConfig::default()) {
+            Ok(cp) => cp,
+            Err(why) => {
+                self.wb.drive_run.notice = vec![(Level::Error, why.to_string())];
+                return;
+            }
+        };
+        cp.modules = pair_modules;
         let findings = {
             let circuit = LiveCircuit::new(&mut self.wb.live, project);
             let mut f = lp.check_bindings(&circuit);
             f.extend(hl.check_bindings(&circuit));
             f.extend(cw.check_bindings(&circuit));
+            f.extend(cp.check_bindings(&circuit));
             f
         };
         notes.extend(
@@ -582,6 +719,7 @@ impl NovoApp {
             lp,
             hl,
             cw,
+            cp,
             acc: 0.0,
         });
     }
@@ -687,6 +825,7 @@ mod tests {
                 lp,
                 hl: DriveHoistLoop::new(StepConfig::default()).unwrap(),
                 cw: ClWinchLoop::new(StepConfig::default()).unwrap(),
+                cp: ClPairLoop::new(StepConfig::default()).unwrap(),
                 acc: 0.0,
             }),
             ..Default::default()
@@ -791,6 +930,7 @@ mod tests {
                 lp: TravelLoop::new(StepConfig::default()).unwrap(),
                 hl,
                 cw: ClWinchLoop::new(StepConfig::default()).unwrap(),
+                cp: ClPairLoop::new(StepConfig::default()).unwrap(),
                 acc: 0.0,
             }),
             ..Default::default()
@@ -899,6 +1039,134 @@ mod tests {
         (doc, button)
     }
 
+    /// The same drawing with a second winch M2 on one beam with M1: STOC, STOD, ENCB and KRB -> KBB
+    /// are its STO channels, encoder signal and brake contactor; M1 names M2 as its partner. L1 -> S1 -> coil KU (up). STOA, STOB (the two STO channels) and ENC (the encoder signal
+    /// monitor) are coils fed straight from L1; L1 -> KR (the drive's brake relay contact, written
+    /// by the loop) -> coil KB (the brake contactor). M1 is a closed-loop winch on all of them.
+    fn closed_pair() -> (Document, SymbolId) {
+        let mut doc = Document::default();
+        let (button, _) = doc
+            .transact("Draw", |tx| {
+                let page = tx.add_page("1")?;
+                let dev = |d, main| SymbolRole::Device { device: d, main };
+                let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+                let n = tx.add_potential("N", PotentialKind::Neutral)?;
+                let mut devices = std::collections::BTreeMap::new();
+                for t in [
+                    "KU", "KB", "KR", "S1", "STOA", "STOB", "ENC", "M1", "STOC", "STOD", "ENCB",
+                    "KRB", "KBB", "M2",
+                ] {
+                    devices.insert(t, tx.add_device(DeviceTag::product(t), "")?);
+                }
+                let feed = |tx: &mut novo_core::Tx<'_>, y, p| {
+                    put(
+                        tx,
+                        page,
+                        "t/feed",
+                        y,
+                        SymbolRole::PotentialFeed { potential: p },
+                    )
+                };
+                let mut y = 0.0;
+                let mut rung =
+                    |tx: &mut novo_core::Tx<'_>, contact: Option<(&str, &str)>, coil: &str| {
+                        let top = feed(tx, y, l1);
+                        let bottom = feed(tx, y + 30.0, n);
+                        let c = put(tx, page, "t/coil", y + 100.0, dev(devices[coil], true));
+                        let first = match contact {
+                            Some((key, tag)) => {
+                                let k = put(tx, page, key, y + 80.0, dev(devices[tag], true));
+                                tx.connect(Endpoint::pin(top, 1), Endpoint::pin(k, 0))?;
+                                tx.connect(Endpoint::pin(k, 1), Endpoint::pin(c, 0))?;
+                                Some(k)
+                            }
+                            None => {
+                                tx.connect(Endpoint::pin(top, 1), Endpoint::pin(c, 0))?;
+                                None
+                            }
+                        };
+                        tx.connect(Endpoint::pin(c, 1), Endpoint::pin(bottom, 1))?;
+                        y += 200.0;
+                        Ok::<_, novo_core::ModelError>(first)
+                    };
+                let button = rung(tx, Some(("t/contact/no", "S1")), "KU")?.unwrap();
+                rung(tx, None, "STOA")?;
+                rung(tx, None, "STOB")?;
+                rung(tx, None, "ENC")?;
+                rung(tx, Some(("t/contact/no", "KR")), "KB")?;
+                rung(tx, None, "STOC")?;
+                rung(tx, None, "STOD")?;
+                rung(tx, None, "ENCB")?;
+                rung(tx, Some(("t/contact/no", "KRB")), "KBB")?;
+                let m = tx.project().device(devices["M1"]).map(|d| d.id).unwrap();
+                tx.set_property(m, "cw_mass_kg", Some(2500.0.into()))?;
+                for (key, t) in [
+                    ("cw_in_up", "KU"),
+                    ("cw_sto_a", "STOA"),
+                    ("cw_sto_b", "STOB"),
+                    ("cw_encoder", "ENC"),
+                    ("cw_brake_relay", "KR"),
+                    ("cw_brake_feed", "KB"),
+                ] {
+                    tx.set_property(m, key, Some(DeviceTag::product(t).to_string().into()))?;
+                }
+                let m2 = tx.project().device(devices["M2"]).map(|d| d.id).unwrap();
+                tx.set_property(m2, "cw_mass_kg", Some(2500.0.into()))?;
+                for (key, t) in [
+                    ("cw_sto_a", "STOC"),
+                    ("cw_sto_b", "STOD"),
+                    ("cw_encoder", "ENCB"),
+                    ("cw_brake_relay", "KRB"),
+                    ("cw_brake_feed", "KBB"),
+                ] {
+                    tx.set_property(m2, key, Some(DeviceTag::product(t).to_string().into()))?;
+                }
+                tx.set_property(
+                    m,
+                    "cw_pair_partner",
+                    Some(DeviceTag::product("M2").to_string().into()),
+                )?;
+                tx.set_property(m, "cw_beam_mass_kg", Some(5000.0.into()))?;
+                tx.set_property(m, "cw_beam_length_m", Some(2.0.into()))?;
+                tx.set_property(m, "cw_pair_max_error_m", Some(0.0.into()))?;
+                Ok(button)
+            })
+            .unwrap();
+        (doc, button)
+    }
+
+    fn pair_run(doc: &Document) -> (DriveRun, LiveView) {
+        let project = doc.project();
+        let (winches, _) = closed_winches_of(project);
+        assert!(winches.is_empty(), "pair members are not single winches");
+        let (pairs, notes) = closed_pairs_of(project);
+        assert!(
+            notes.iter().all(|(l, _)| matches!(l, Level::Info)),
+            "{notes:?}"
+        );
+        assert_eq!(pairs.len(), 1);
+        let mut cp = ClPairLoop::new(StepConfig::default()).unwrap();
+        cp.modules = pairs;
+        let run = DriveRun {
+            active: Some(Active {
+                lp: TravelLoop::new(StepConfig::default()).unwrap(),
+                hl: DriveHoistLoop::new(StepConfig::default()).unwrap(),
+                cw: ClWinchLoop::new(StepConfig::default()).unwrap(),
+                cp,
+                acc: 0.0,
+            }),
+            ..Default::default()
+        };
+        let mut live = LiveView::default();
+        live.on = true;
+        live.reset_poles(project);
+        (run, live)
+    }
+
+    fn pair(run: &DriveRun) -> &ClPairModule {
+        &run.active.as_ref().unwrap().cp.modules[0]
+    }
+
     fn winch_run(doc: &Document) -> (DriveRun, LiveView) {
         let project = doc.project();
         let (winches, notes) = closed_winches_of(project);
@@ -914,6 +1182,7 @@ mod tests {
                 lp: TravelLoop::new(StepConfig::default()).unwrap(),
                 hl: DriveHoistLoop::new(StepConfig::default()).unwrap(),
                 cw,
+                cp: ClPairLoop::new(StepConfig::default()).unwrap(),
                 acc: 0.0,
             }),
             ..Default::default()
@@ -936,6 +1205,74 @@ mod tests {
 
     fn tag_of(t: &str) -> String {
         DeviceTag::product(t).to_string()
+    }
+
+    #[test]
+    fn the_button_in_the_drawing_lifts_two_winches_on_one_beam() {
+        let (doc, button) = closed_pair();
+        let project = doc.project();
+        let (mut run, mut live) = pair_run(&doc);
+        live.poles.set_all(project, button, true);
+        seconds(&mut run, &mut live, project, 8.0);
+        let m = pair(&run);
+        assert!(m.height_m() > 0.3, "{}", m.height_m());
+        assert!(m.snapshot().unwrap().tilt_deg.abs() < 0.3);
+        assert!(m.findings().is_empty(), "{:?}", m.findings());
+        let rows = pair_readings(m);
+        assert_eq!(rows.len(), 3);
+        assert!(rows[1].1.contains("running"), "{rows:?}");
+        assert!(rows[2].1.contains("running"), "{rows:?}");
+    }
+
+    #[test]
+    fn an_open_sto_coil_of_the_second_winch_trips_only_that_winch_and_the_link_stops_the_pair() {
+        use novo_machine::cl_pair_loop::ClPairFindingKind;
+        let (doc, button) = closed_pair();
+        let project = doc.project();
+        let (mut run, mut live) = pair_run(&doc);
+        live.poles.set_all(project, button, true);
+        seconds(&mut run, &mut live, project, 4.0);
+        live.defects.inject(novo_sim::inject::Defect::CoilOpen {
+            device: tag_of("STOC"),
+        });
+        seconds(&mut run, &mut live, project, 3.0);
+        let f = pair(&run).findings();
+        assert!(
+            f.iter().any(|f| matches!(
+                f.kind,
+                ClPairFindingKind::Trip {
+                    winch: 1,
+                    fault: novo_drive::closed_loop::ClFault::StoDiscrepancy
+                }
+            )),
+            "{f:?}"
+        );
+        assert!(
+            !f.iter()
+                .any(|f| matches!(f.kind, ClPairFindingKind::Trip { winch: 0, .. })),
+            "{f:?}"
+        );
+        assert!(pair(&run).snapshot().unwrap().winches[0].shaft_rpm.abs() < 1.0);
+    }
+
+    #[test]
+    fn a_lost_encoder_signal_of_the_second_winch_is_named() {
+        use novo_machine::cl_pair_loop::ClPairFindingKind;
+        let (doc, button) = closed_pair();
+        let project = doc.project();
+        let (mut run, mut live) = pair_run(&doc);
+        live.poles.set_all(project, button, true);
+        seconds(&mut run, &mut live, project, 4.0);
+        live.defects.inject(novo_sim::inject::Defect::CoilOpen {
+            device: tag_of("ENCB"),
+        });
+        seconds(&mut run, &mut live, project, 2.0);
+        let f = pair(&run).findings();
+        assert!(
+            f.iter()
+                .any(|f| matches!(f.kind, ClPairFindingKind::EncoderSignalLost { winch: 1 })),
+            "{f:?}"
+        );
     }
 
     #[test]

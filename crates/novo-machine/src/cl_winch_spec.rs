@@ -14,9 +14,11 @@ use novo_drive::drive::MotorNameplate;
 use novo_drive::mechanics::Hoist;
 
 use crate::bindings::SensorBinding;
+use crate::cl_pair_loop::ClPairModule;
 use crate::cl_winch_loop::{ClWinchBinding, ClWinchModule};
 use crate::hoist_loop::{LimitKind, LimitSwitch};
 use crate::spec::{SpecError, SpecKey};
+use crate::sync_winch::{Beam, PartnerAction, Rope, Supervision, SyncMode, WinchPair};
 
 /// Property key that marks a motor as a closed-loop winch.
 pub const CLOSED_WINCH_KEY: &str = "cw_mass_kg";
@@ -160,6 +162,240 @@ pub const KEYS: &[SpecKey] = &[
         "",
     ),
 ];
+
+/// Property key that makes a closed-loop winch the first of a pair: the tag of the second
+/// winch's motor.
+pub const PAIR_PARTNER_KEY: &str = "cw_pair_partner";
+
+/// The rows of a pair, shown on winch A's motor after the winch rows.
+pub const PAIR_KEYS: &[SpecKey] = &[
+    tag(
+        PAIR_PARTNER_KEY,
+        "Second winch on the same beam (motor tag)",
+    ),
+    num(
+        "cw_beam_mass_kg",
+        "Beam and load mass (blank: both hook loads)",
+        "kg",
+        "",
+    ),
+    num("cw_beam_length_m", "Distance between the ropes", "m", "4"),
+    num(
+        "cw_beam_cog_m",
+        "Centre of gravity, from the middle towards winch A",
+        "m",
+        "0",
+    ),
+    tag("cw_beam_guided", "Beam guided, tilt locked (yes, no)"),
+    num(
+        "cw_rope_k_n_m",
+        "Rope stiffness at the hook",
+        "N/m",
+        "2000000",
+    ),
+    num("cw_rope_damping", "Rope damping ratio (0 to 2)", "", "0.3"),
+    num(
+        "cw_rope_swl_n",
+        "Rope rating (blank: 0.6 x beam weight)",
+        "N",
+        "",
+    ),
+    tag(
+        "cw_sync_mode",
+        "Synchronisation (independent, position lock, torque follower)",
+    ),
+    num("cw_sync_gain", "Position lock gain", "1/s", "20"),
+    num(
+        "cw_sync_limit_m_s",
+        "Position lock correction limit",
+        "m/s",
+        "0.05",
+    ),
+    num("cw_sync_share", "Torque follower share of A", "", "1"),
+    num("cw_sync_margin", "Torque follower speed margin", "", "0.15"),
+    num(
+        "cw_pair_max_error_m",
+        "Stop both above this position difference (0: off)",
+        "m",
+        "0.1",
+    ),
+    tag(
+        "cw_partner_fault",
+        "When one drive faults (stop both, keep running)",
+    ),
+];
+
+/// The tag of the second winch's motor, if this motor is the first of a pair.
+pub fn pair_partner(get: &dyn Fn(&str) -> Option<String>) -> Option<String> {
+    get(PAIR_PARTNER_KEY)
+        .map(|t| t.trim().to_owned())
+        .filter(|t| !t.is_empty())
+}
+
+/// Two closed-loop winches on one beam. `get_a` reads the properties of the first motor (the
+/// pair, the beam, the ropes and the synchronisation are entered there), `get_b` those of the
+/// second. Returns `Ok(None)` when the first motor names no partner. Each winch is built from its
+/// own rows with the hook load replaced by its share of the beam (the beam is integrated by the
+/// pair); the notes are the design findings of both and the assumptions made.
+pub fn closed_pair_from_properties(
+    id_a: &str,
+    get_a: &dyn Fn(&str) -> Option<String>,
+    id_b: &str,
+    get_b: &dyn Fn(&str) -> Option<String>,
+) -> Result<Option<(ClPairModule, Vec<String>)>, SpecError> {
+    if pair_partner(get_a).is_none() {
+        return Ok(None);
+    }
+    let text = |key: &'static str| {
+        get_a(key)
+            .map(|t| t.trim().to_owned())
+            .filter(|t| !t.is_empty())
+    };
+    let number = |key: &'static str| -> Result<f64, SpecError> {
+        let default = PAIR_KEYS
+            .iter()
+            .find(|k| k.key == key)
+            .map_or("", |k| k.default);
+        let raw = text(key).unwrap_or_else(|| default.to_owned());
+        crate::spec::decimal(key, raw)
+    };
+    // The hook loads entered on the motors, for the default beam mass.
+    let load = |get: &dyn Fn(&str) -> Option<String>| -> f64 {
+        get(CLOSED_WINCH_KEY)
+            .and_then(|t| crate::spec::decimal(CLOSED_WINCH_KEY, t).ok())
+            .unwrap_or(0.0)
+    };
+    let beam_mass = match text("cw_beam_mass_kg") {
+        Some(_) => number("cw_beam_mass_kg")?,
+        None => load(get_a) + load(get_b),
+    };
+    let length = number("cw_beam_length_m")?;
+    let cog = number("cw_beam_cog_m")?;
+    let guided = match text("cw_beam_guided")
+        .map(|t| t.to_ascii_lowercase())
+        .as_deref()
+    {
+        None | Some("no") => false,
+        Some("yes") => true,
+        Some(other) => {
+            return Err(SpecError::UnknownWord {
+                key: "cw_beam_guided",
+                text: other.to_owned(),
+            });
+        }
+    };
+    let beam = Beam::new(beam_mass, length, cog, guided)?;
+    let rope = Rope::with_stiffness(number("cw_rope_k_n_m")?, number("cw_rope_damping")?)?;
+    let swl_default = text("cw_rope_swl_n").is_none();
+    let swl = if swl_default {
+        0.6 * beam_mass * novo_drive::GRAVITY
+    } else {
+        number("cw_rope_swl_n")?
+    };
+    let mode = match text("cw_sync_mode")
+        .map(|t| t.to_ascii_lowercase())
+        .as_deref()
+    {
+        None | Some("position lock") => SyncMode::PositionLock {
+            gain_per_s: number("cw_sync_gain")?,
+            limit_m_s: number("cw_sync_limit_m_s")?,
+        },
+        Some("independent") => SyncMode::Independent,
+        Some("torque follower") => SyncMode::TorqueFollower {
+            share: number("cw_sync_share")?,
+            margin: number("cw_sync_margin")?,
+        },
+        Some(other) => {
+            return Err(SpecError::UnknownWord {
+                key: "cw_sync_mode",
+                text: other.to_owned(),
+            });
+        }
+    };
+    let mut supervision = Supervision::new(swl);
+    supervision.max_position_error_m = number("cw_pair_max_error_m")?;
+    supervision.on_partner_fault = match text("cw_partner_fault")
+        .map(|t| t.to_ascii_lowercase())
+        .as_deref()
+    {
+        None | Some("stop both") => PartnerAction::StopBoth,
+        Some("keep running") => PartnerAction::KeepRunning,
+        Some(other) => {
+            return Err(SpecError::UnknownWord {
+                key: "cw_partner_fault",
+                text: other.to_owned(),
+            });
+        }
+    };
+
+    // Each winch carries its share of the beam: A the side the centre of gravity is nearer to.
+    let (fa, fb) = beam.static_forces_n();
+    let weight = beam_mass * novo_drive::GRAVITY;
+    let shares = [fa / weight, fb / weight];
+    let mut notes = Vec::new();
+    let mut parts = Vec::new();
+    for (i, (id, get)) in [(id_a, get_a), (id_b, get_b)].into_iter().enumerate() {
+        let mass = beam_mass * shares[i];
+        let with_mass = move |key: &str| -> Option<String> {
+            if key == CLOSED_WINCH_KEY {
+                Some(mass.to_string())
+            } else {
+                get(key)
+            }
+        };
+        let (module, found) =
+            closed_winch_from_properties(id, &with_mass)?.ok_or(SpecError::NotANumber {
+                key: CLOSED_WINCH_KEY,
+                text: String::new(),
+            })?;
+        let who = if i == 0 { "A" } else { "B" };
+        notes.extend(found.into_iter().map(|n| format!("Winch {who}: {n}")));
+        parts.push(module);
+    }
+    notes.push(format!(
+        "Each winch is checked and loaded with its share of the beam: {:.0} % for A, {:.0} % for B.",
+        shares[0] * 100.0,
+        shares[1] * 100.0
+    ));
+    if swl_default {
+        notes.push(
+            "No rope rating entered: 0.6 x the beam weight is used for the overload flag."
+                .to_owned(),
+        );
+    }
+    let mut it = parts.into_iter();
+    let (ma, mb) = (it.next().unwrap(), it.next().unwrap());
+    let speeds = ma.speeds_m_s;
+    let rebuilt =
+        |m: &ClWinchModule| -> Result<novo_drive::closed_loop::ClosedLoopWinch, SpecError> {
+            // The beam is integrated by the pair, so the shaft carries the rotor only.
+            let rotor = m.winch.rotor_inertia_kg_m2();
+            Ok(
+                novo_drive::closed_loop::ClosedLoopWinch::with_shaft_inertia(
+                    m.winch.drive.cfg.clone(),
+                    *m.winch.hoist(),
+                    *m.winch.brake(),
+                    rotor,
+                    rotor.max(1e-3),
+                )?,
+            )
+        };
+    let pair = WinchPair::new(
+        rebuilt(&ma)?,
+        rebuilt(&mb)?,
+        [rope; 2],
+        beam,
+        mode,
+        supervision,
+    );
+    let module = ClPairModule::new(
+        [id_a.to_owned(), id_b.to_owned()],
+        pair,
+        speeds,
+        [ma.binding, mb.binding],
+    )?;
+    Ok(Some((module, notes)))
+}
 
 /// A closed-loop winch from properties. `get(key)` returns the property text if set. Returns
 /// `Ok(None)` when the motor is no closed-loop winch (`cw_mass_kg` not set). The strings are the
@@ -442,5 +678,65 @@ mod tests {
             assert!(k.key.starts_with("cw_"));
         }
         assert_eq!(KEYS[0].key, CLOSED_WINCH_KEY);
+    }
+
+    fn pair(
+        a: &[(&str, &str)],
+        b: &[(&str, &str)],
+    ) -> Result<Option<(ClPairModule, Vec<String>)>, SpecError> {
+        let (pa, pb) = (props(a), props(b));
+        closed_pair_from_properties("=M1", &|k| pa.get(k).cloned(), "=M2", &|k| {
+            pb.get(k).cloned()
+        })
+    }
+
+    #[test]
+    fn a_motor_without_a_partner_is_no_pair() {
+        assert!(pair(&[(CLOSED_WINCH_KEY, "2500")], &[]).unwrap().is_none());
+    }
+
+    #[test]
+    fn the_beam_mass_defaults_to_both_hook_loads_and_the_cog_moves_the_share() {
+        let (m, notes) = pair(
+            &[
+                (CLOSED_WINCH_KEY, "2000"),
+                (PAIR_PARTNER_KEY, "=M2"),
+                ("cw_beam_cog_m", "0.5"),
+            ],
+            &[(CLOSED_WINCH_KEY, "3000")],
+        )
+        .unwrap()
+        .unwrap();
+        assert!((m.pair.beam.mass_kg - 5000.0).abs() < 1e-9);
+        // 4 m between the ropes, cog 0.5 m towards A: A carries 62.5 %.
+        assert!(
+            notes
+                .iter()
+                .any(|n| n.contains("62 % for A") || n.contains("63 % for A")),
+            "{notes:?}"
+        );
+        assert!(notes.iter().any(|n| n.contains("No rope rating")));
+    }
+
+    #[test]
+    fn bad_pair_values_are_named() {
+        let bad = |extra: &[(&str, &str)]| {
+            let mut a = vec![(CLOSED_WINCH_KEY, "2500"), (PAIR_PARTNER_KEY, "=M2")];
+            a.extend_from_slice(extra);
+            pair(&a, &[]).err().map(|e| e.to_string()).unwrap()
+        };
+        assert!(bad(&[("cw_sync_mode", "magic")]).contains("cw_sync_mode"));
+        assert!(bad(&[("cw_beam_guided", "maybe")]).contains("cw_beam_guided"));
+        assert!(bad(&[("cw_partner_fault", "ignore")]).contains("cw_partner_fault"));
+        assert!(bad(&[("cw_beam_cog_m", "9")]).contains("cog_offset_m"));
+    }
+
+    #[test]
+    fn pair_keys_are_unique_and_do_not_clash_with_the_winch_rows() {
+        let mut seen: std::collections::BTreeSet<&str> = KEYS.iter().map(|k| k.key).collect();
+        for k in PAIR_KEYS {
+            assert!(seen.insert(k.key), "{}", k.key);
+            assert!(k.key.starts_with("cw_"));
+        }
     }
 }
