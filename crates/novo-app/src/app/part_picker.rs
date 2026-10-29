@@ -111,6 +111,9 @@ pub(super) struct Candidate {
     pub(super) fit: Option<Fit>,
     /// Whether anyone vouched for the part's imported data.
     pub(super) trust: novo_parts::Trust,
+    /// The library symbol that pictures the part (its id), when a word of
+    /// the part names one; the list shows it as a thumbnail.
+    pub(super) symbol: Option<String>,
 }
 
 impl Candidate {
@@ -140,6 +143,11 @@ impl Candidate {
                 .collect(),
             fit: None,
             trust: super::parts_quality::user_trust(part),
+            symbol: crate::place_palette::symbol_for_part(
+                novo_symbols::Library::shared(novo_symbols::Pack::Iec),
+                part,
+            )
+            .map(|s| s.id.clone()),
         }
     }
 }
@@ -244,33 +252,55 @@ pub(super) fn picker_ui(
         .id_salt("part_picker_list")
         .max_height(220.0)
         .show(ui, |ui| {
+            let library = novo_symbols::Library::shared(novo_symbols::Pack::Iec);
             for c in candidates {
-                let response = ui
-                    .selectable_label(false, &c.title)
-                    .on_hover_text("Use this part");
+                let thumb = c.symbol.as_deref().and_then(|id| library.get(id));
+                let mut thumb_clicked = false;
+                let mut response = None;
                 ui.horizontal(|ui| {
-                    if let Some(fit) = &c.fit {
-                        ui.small(
-                            egui::RichText::new(format!("Match {}%", fit.percent))
-                                .color(match_color(fit)),
+                    if let Some(symbol) = thumb {
+                        let t = crate::place_palette::symbol_thumbnail(
+                            ui,
+                            symbol,
+                            egui::vec2(44.0, 36.0),
                         )
-                        .on_hover_text(format!(
-                            "How well the part suits this device, from {} check(s): {}",
-                            fit.checks,
-                            fit.reasons.join(", ")
-                        ));
+                        .on_hover_text(format!("{} (symbol of this kind of part)", symbol.name));
+                        thumb_clicked = t.clicked();
                     }
-                    ui.small(
-                        egui::RichText::new(format!("Data: {} {}%", c.grade.label(), c.percent))
-                            .color(data_color(c.grade)),
-                    )
-                    .on_hover_text(data_tooltip(c));
-                    super::parts_quality::trust_badge(ui, &c.trust);
-                    if !c.detail.is_empty() {
-                        ui.small(&c.detail);
-                    }
+                    ui.vertical(|ui| {
+                        response = Some(
+                            ui.selectable_label(false, &c.title)
+                                .on_hover_text("Use this part"),
+                        );
+                        ui.horizontal(|ui| {
+                            if let Some(fit) = &c.fit {
+                                ui.small(
+                                    egui::RichText::new(format!("Match {}%", fit.percent))
+                                        .color(match_color(fit)),
+                                )
+                                .on_hover_text(format!(
+                                    "How well the part suits this device, from {} check(s): {}",
+                                    fit.checks,
+                                    fit.reasons.join(", ")
+                                ));
+                            }
+                            ui.small(
+                                egui::RichText::new(format!(
+                                    "Data: {} {}%",
+                                    c.grade.label(),
+                                    c.percent
+                                ))
+                                .color(data_color(c.grade)),
+                            )
+                            .on_hover_text(data_tooltip(c));
+                            super::parts_quality::trust_badge(ui, &c.trust);
+                            if !c.detail.is_empty() {
+                                ui.small(&c.detail);
+                            }
+                        });
+                    });
                 });
-                if response.clicked() {
+                if thumb_clicked || response.is_some_and(|r| r.clicked()) {
                     chosen = Some(c.key.clone());
                 }
             }
