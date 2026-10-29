@@ -143,6 +143,40 @@ pub(super) fn reset(ctx: &egui::Context) {
         ctx.data_mut(|d| d.insert_temp(changed_id(), SETTLE_FRAMES));
     }
     ctx.data_mut(|d| d.insert_persisted(list_id(), Vec::<(String, u8)>::new()));
+    set_navigator_right(ctx, false);
+}
+
+/// Which side the Pages column (and the Reports list) sits on: the left, as
+/// ever, or the right. Saved with the window layout.
+fn navigator_side_id() -> egui::Id {
+    egui::Id::new("navigator_right")
+}
+
+pub(super) fn navigator_right(ctx: &egui::Context) -> bool {
+    ctx.data_mut(|d| d.get_persisted(navigator_side_id()))
+        .unwrap_or(false)
+}
+
+pub(super) fn set_navigator_right(ctx: &egui::Context, right: bool) {
+    if navigator_right(ctx) != right {
+        ctx.data_mut(|d| d.insert_temp(changed_id(), SETTLE_FRAMES));
+    }
+    ctx.data_mut(|d| d.insert_persisted(navigator_side_id(), right));
+}
+
+/// The button in the header of the Pages column and the Reports list that
+/// sends it to the other side of the window.
+pub(super) fn navigator_side_button(ui: &mut egui::Ui) {
+    let ctx = ui.ctx().clone();
+    let right = navigator_right(&ctx);
+    let (icon, tip) = if right {
+        (Slot::Left.icon(), "Move this column to the left side")
+    } else {
+        (Slot::Right.icon(), "Move this column to the right side")
+    };
+    if novo_theme::widgets::icon_toggle(ui, icon, false, tip).clicked() {
+        set_navigator_right(&ctx, !right);
+    }
 }
 
 /// Where each slot was drawn this frame: the pane areas are laid out in it.

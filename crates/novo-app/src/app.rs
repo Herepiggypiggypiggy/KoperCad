@@ -1802,7 +1802,13 @@ impl NovoApp {
             rail::close_flyout(&ctx);
         }
         if reports {
-            egui::Panel::left("reports_list")
+            let right = panel_dock::navigator_right(&ctx);
+            let panel = if right {
+                egui::Panel::right("reports_list_right")
+            } else {
+                egui::Panel::left("reports_list")
+            };
+            panel
                 .default_size(OUTLINE_WIDTH)
                 .size_range(OUTLINE_MIN_WIDTH..=OUTLINE_MAX_WIDTH)
                 .resizable(true)
@@ -1818,8 +1824,12 @@ impl NovoApp {
                     .exact_size(self.outline_width())
                     .resizable(false)
             } else {
-                egui::Panel::left("outline")
-                    .default_size(OUTLINE_WIDTH)
+                let base = if panel_dock::navigator_right(&ctx) {
+                    egui::Panel::right("outline_right")
+                } else {
+                    egui::Panel::left("outline")
+                };
+                base.default_size(OUTLINE_WIDTH)
                     .size_range(OUTLINE_MIN_WIDTH..=OUTLINE_MAX_WIDTH)
                     .resizable(true)
             };
@@ -2439,6 +2449,9 @@ impl NovoApp {
                     .clicked()
                 {
                     picked.push(Action::PinOutline);
+                }
+                if pinned {
+                    panel_dock::navigator_side_button(ui);
                 }
             });
         });

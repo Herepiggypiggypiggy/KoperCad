@@ -738,7 +738,9 @@ pub(super) fn esc<'a>(ctx: &egui::Context, open: &'a mut bool) -> &'a mut bool {
 /// them their usual size back.
 const EDGE_PANELS: &[&str] = &[
     "outline",
+    "outline_right",
     "reports_list",
+    "reports_list_right",
     "drawer",
     "dock_left",
     "dock_right",
