@@ -3,8 +3,9 @@
 //! the Hoist run window (hook height, the conditions it reports, the heights of the bound limit
 //! switches); the crane around them is a generic picture, see `CRANE_PICTURE_LEAVES_OUT`.
 
-use super::NovoApp;
+use super::crane_setup::CraneSetup;
 use super::hoist_run::conditions;
+use super::{Level, NovoApp};
 use eframe::egui;
 use novo_machine::hoist_loop::{HoistModule, LimitKind};
 use novo_machine::swing::{DEFAULT_DAMPING_RATIO, SWING_MODEL_LEAVES_OUT, Swing};
@@ -37,6 +38,8 @@ pub(crate) struct Hoist3d {
     /// the last frame, from which the acceleration is taken.
     swing: [Swing; 2],
     last_speed: [f64; 2],
+    /// The setup as the project last had it, read from or written to the project info.
+    synced: CraneSetup,
     /// The scene of the last frame and what it was built from, so an unchanged picture is not
     /// uploaded again.
     built: Option<(CraneLayout, CraneState, Arc<Scene>)>,
@@ -63,6 +66,7 @@ impl Default for Hoist3d {
             trolley_axis: None,
             swing: [new_swing(), new_swing()],
             last_speed: [0.0; 2],
+            synced: CraneSetup::default(),
             built: None,
             revision: 0,
             needs_fit: true,
@@ -89,6 +93,27 @@ pub(super) struct Travel {
 }
 
 impl Hoist3d {
+    /// What the project remembers of the picture, as the window has it now.
+    fn setup(&self) -> CraneSetup {
+        CraneSetup {
+            layout: self.layout,
+            bridge_m: self.bridge_m,
+            trolley_m: self.trolley_m,
+            bridge_axis: self.bridge_axis.clone(),
+            trolley_axis: self.trolley_axis.clone(),
+        }
+    }
+
+    /// Puts a setup read from the project into the window.
+    fn apply(&mut self, s: &CraneSetup) {
+        self.layout = s.layout;
+        self.bridge_m = s.bridge_m;
+        self.trolley_m = s.trolley_m;
+        self.bridge_axis = s.bridge_axis.clone();
+        self.trolley_axis = s.trolley_axis.clone();
+        self.needs_fit = true;
+    }
+
     /// One frame of travel: the axes that drive the bridge and the trolley give a position and a
     /// speed (`None` for an axis that is not driven or has no run), the swing steps with the
     /// acceleration of each axis over `dt_s`. `rope_m` is the length of the rope.
@@ -201,6 +226,38 @@ pub(super) fn hook_line(module: &HoistModule) -> String {
 }
 
 impl NovoApp {
+    /// Keeps the window and the project in step. A setup the project holds that the window does
+    /// not (a project just opened, an undo) is taken into the window; a setup the user changed in
+    /// the window is saved in the project, one undo step, once the mouse button is up so a drag
+    /// is not a hundred steps.
+    fn sync_crane_setup(&mut self, ctx: &egui::Context, axes: &[String]) {
+        let Some(doc) = self.backend.document() else {
+            return;
+        };
+        let stored = CraneSetup::from_properties(&doc.project().info().properties)
+            .without_missing_axes(axes);
+        let g = &mut self.wb.hoist.three_d;
+        if stored != g.synced {
+            g.apply(&stored);
+            g.synced = stored;
+            return;
+        }
+        let now = g.setup();
+        if now == g.synced || ctx.input(|i| i.pointer.any_down()) {
+            return;
+        }
+        g.synced = now.clone();
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        match doc.transact("Crane picture", |tx| {
+            tx.set_info(|i| now.write_properties(&mut i.properties))
+        }) {
+            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Err(e) => self.message(Level::Error, format!("Crane picture: {e}")),
+        }
+    }
+
     pub(super) fn toggle_hoist_3d(&mut self) {
         self.wb.hoist.three_d.open ^= true;
     }
@@ -229,6 +286,7 @@ impl NovoApp {
             .document()
             .map(|d| super::drive_run::travel_ids(d.project()))
             .unwrap_or_default();
+        self.sync_crane_setup(ctx, &axes);
         let dt = f64::from(ctx.input(|i| i.stable_dt).clamp(0.0, 0.1));
         let hook_m = self
             .wb
