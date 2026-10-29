@@ -271,3 +271,24 @@ fn unreadable_company_text_is_one_note_and_the_built_ins_stay() {
     assert_eq!(found.len(), 1, "{found:#?}");
     assert!(found[0].message.contains("cannot be read"));
 }
+
+#[test]
+fn the_part_terminal_fix_is_found_from_the_device() {
+    let mut project = one("iec/coils/contactor", "-K1", &["A1", "A2"], &["a1", "A2"]);
+    let device = project.devices().next().unwrap().id;
+    let fix = novo_checks::part_terminal_fix(&project, device).expect("a clear fix");
+    assert!(fix.label.contains("part terminal"));
+    apply(&mut project, fix.command);
+    assert!(novo_checks::part_terminal_fix(&project, device).is_none());
+    assert!(pin_names(&project).is_empty());
+}
+
+#[test]
+fn no_part_terminal_fix_when_they_already_follow_the_class() {
+    let project = one("iec/coils/contactor", "-K1", &["A1", "A2"], &["A1", "A2"]);
+    let device = project.devices().next().unwrap().id;
+    assert!(novo_checks::part_terminal_fix(&project, device).is_none());
+    let bare = one("iec/coils/contactor", "-K1", &["A1", "A2"], &[]);
+    let device = bare.devices().next().unwrap().id;
+    assert!(novo_checks::part_terminal_fix(&bare, device).is_none());
+}

@@ -214,6 +214,7 @@ const KNOWN_VERBS: &[&str] = &[
     "open",
     "fresh",
     "library",
+    "user_catalog",
     "shot",
     "wait",
     "wait_s",
@@ -893,6 +894,18 @@ impl Ctx<'_> {
                 self.srv.stop();
                 self.srv.keep_profile(false);
                 self.srv.set_library_seed(Some(dir));
+                self.srv.ensure()
+            }
+            "user_catalog" => {
+                let file = self.resolve(need(1, "a parts catalog file")?)?;
+                if !file.exists() {
+                    return Err(format!("catalog file {} not found", file.display()));
+                }
+                // Restart with the catalog in the profile; every later launch
+                // of the scenario has it too.
+                self.srv.stop();
+                self.srv.keep_profile(false);
+                self.srv.set_catalog_seed(Some(file));
                 self.srv.ensure()
             }
             "fresh" => {
