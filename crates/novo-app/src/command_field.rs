@@ -534,6 +534,14 @@ fn tile_row(ui: &mut egui::Ui, rows: &[Row], tiles: &[usize], selected: usize) -
             let (rect, response) =
                 ui.allocate_exact_size(egui::vec2(82.0, 62.0), egui::Sense::click());
             let enabled = row.disabled.is_none();
+            response.widget_info(|| {
+                egui::WidgetInfo::selected(
+                    egui::WidgetType::SelectableLabel,
+                    enabled,
+                    i == selected,
+                    row.label.as_str(),
+                )
+            });
             let fill = if i == selected {
                 p.accent_wash
             } else if response.hovered() && enabled {
@@ -623,6 +631,21 @@ fn row_ui(
     let (rect, response) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), 30.0), egui::Sense::click());
     let enabled = row.disabled.is_none();
+    // The text is painted, so name the row for the accessibility tree; the
+    // detail follows the label as it did when the row was one button.
+    let name = if row.detail.is_empty() || row.detail == row.group {
+        row.label.clone()
+    } else {
+        format!("{}   {}", row.label, row.detail)
+    };
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::SelectableLabel,
+            enabled,
+            selected,
+            name.as_str(),
+        )
+    });
     let fill = if selected {
         p.accent_wash
     } else if response.hovered() && enabled {

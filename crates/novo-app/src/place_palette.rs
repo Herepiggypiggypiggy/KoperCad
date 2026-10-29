@@ -522,6 +522,16 @@ pub(crate) fn category_column(
                     Vec2::new(ui.available_width(), 26.0),
                     egui::Sense::click(),
                 );
+                // The text is painted, so the accessibility tree (screen
+                // readers, the QA harness) needs the name from here.
+                response.widget_info(|| {
+                    egui::WidgetInfo::selected(
+                        egui::WidgetType::SelectableLabel,
+                        true,
+                        selected,
+                        line.name.as_str(),
+                    )
+                });
                 let fill = if selected {
                     p.accent_wash
                 } else if response.hovered() {
@@ -689,6 +699,14 @@ pub(crate) fn card_grid(
                     continue;
                 }
                 let response = ui.interact(rect, ui.id().with(("card", j)), egui::Sense::click());
+                response.widget_info(|| {
+                    egui::WidgetInfo::selected(
+                        egui::WidgetType::SelectableLabel,
+                        row.disabled.is_none(),
+                        j == selected,
+                        row.label.as_str(),
+                    )
+                });
                 let enabled = row.disabled.is_none();
                 let fill = if j == selected {
                     p.accent_wash
