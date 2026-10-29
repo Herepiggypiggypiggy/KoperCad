@@ -1,0 +1,21 @@
+@title Drag the Inspector's title bar to the left edge of the canvas to dock it next to the pinned Pages column, drag the slot wider and double click its edge to reset (1920x1080)
+@area Windows
+@sizes 1920x1080
+click_text "Open example"
+wait 30
+click 585 312
+wait 40
+drag 1715 112 300 500
+wait 30
+expect "Siemens"
+shot docked-left
+check_layout
+# The slot's edge is a splitter: wider, then a double click gives the usual width back.
+drag 567 500 760 500
+wait 20
+shot slot-wider
+check_layout
+double_click 758 500
+wait 20
+shot slot-reset
+check_layout

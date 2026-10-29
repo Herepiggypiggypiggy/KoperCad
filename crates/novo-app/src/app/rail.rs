@@ -119,6 +119,11 @@ fn set_flyout(ctx: &egui::Context, id: Option<&str>) {
     });
 }
 
+/// Opens the flyout of entry `id` (an entry whose click is only to open it).
+pub(super) fn open(ctx: &egui::Context, id: &str) {
+    set_flyout(ctx, Some(id));
+}
+
 /// Closes any open flyout (a tool was picked elsewhere, the workspace
 /// changed).
 pub(super) fn close_flyout(ctx: &egui::Context) {

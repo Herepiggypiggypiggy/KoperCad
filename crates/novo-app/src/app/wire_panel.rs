@@ -260,6 +260,7 @@ impl NovoApp {
             INSPECTOR_WIDTH,
         )
         .above_card()
+        .dockable()
         .fixed_open()
         .show(ctx, |ui| {
                     ui.heading(if wires.len() > 1 {

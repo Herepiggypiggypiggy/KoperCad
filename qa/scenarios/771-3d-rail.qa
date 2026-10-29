@@ -1,0 +1,28 @@
+@title 3D rail: rows, expand, Align flyout, chip stays clear
+@area Layout
+# Lane V3b of the visual redesign (docs/design/visual-redesign.md section 3.2).
+# The rail is the left edge of the 3D workspace; the toolbar with the
+# simulation status chip starts to its right.
+click_text "Open example"
+wait 20
+click_text 3D
+wait 30
+shot rail-collapsed
+check_layout
+click 23 722
+wait 8
+shot rail-expanded
+expect "Measure in 3D"
+expect "Section plane"
+expect "Place device in 3D"
+check_layout
+click_text Align
+wait 8
+shot align-flyout
+expect "Align left"
+expect "Spread down"
+key Escape
+wait 6
+expect_not "Align left"
+click 23 722
+wait 6
