@@ -24,7 +24,7 @@ use crate::inject::poles_of_device;
 use crate::{PoleState, Settled};
 
 /// The longest a run with a hoist in it may be, in seconds (every tick settles the circuit).
-pub const MAX_MACHINE_SECONDS: f64 = 600.0;
+pub const MAX_MACHINE_SECONDS: f64 = 120.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PhaseName {
@@ -257,7 +257,10 @@ pub(crate) fn describe_hook(hoist: &str, is: &HookIs) -> String {
         HookIs::Standing => format!("Expect hook of {hoist} standing"),
         HookIs::Moving => format!("Expect hook of {hoist} moving"),
         HookIs::Reporting { condition } => {
-            format!("Expect {hoist} to report {condition:?}").to_lowercase()
+            format!(
+                "Expect {hoist} to report {}",
+                format!("{condition:?}").to_lowercase()
+            )
         }
         HookIs::Clear => format!("Expect {hoist} to report nothing wrong"),
     }
