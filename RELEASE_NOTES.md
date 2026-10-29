@@ -85,6 +85,7 @@ KoperCAD tells you which is which. Please read the labels.
 - 3D view: the section plane is a slider (no mouse drag), heat arrows show no value on hover. The autosave interval
   is fixed, there is no custom symbol folder, terminal jumper numbers are automatic only.
 - STEP import approximates some curved surfaces.
+- Wire routing on large plates: each terminal tries its 8 nearest ducts and 4 nearest DIN rail channels, so a farther duct that would give a slightly shorter wire can be skipped; lengths on big plates can differ a little from an exhaustive search.
 - Wire routing: slot positions are a pitch you state, not maker data; devices are footprints (depth, and gaps under 20 mm between devices, are not used); the channel along a DIN rail is a model of where the wire lies beside it.
 - Big projects (about 1,500 symbols and wires or more): the design check runs in the background, so the issue counts and the Issues list can update a moment after an edit (a small pulsing dot by the issue counts shows while they catch up). Reports and exports always wait for the current answer. Measured on one synthetic 600-page project without a graphics card, a still page took about 8 ms of program time per frame; that is a measurement on one machine, not a promise.
 - The program is not code-signed, so Windows SmartScreen warns on first start: choose "More info", "Run anyway".
