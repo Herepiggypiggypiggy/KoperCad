@@ -55,6 +55,9 @@ pub struct ClWinchBinding {
     pub sto: [Option<String>; 2],
     /// Device tag whose energised state means the encoder signal is present. `None`: always.
     pub encoder: Option<String>,
+    /// Device tag whose energised state means encoder channel B is present. `None`: always. With
+    /// channel B lost the counts still arrive but only upward, whatever the direction.
+    pub encoder_b: Option<String>,
     /// Device tag of the main contactor coil that feeds the drive. `None`: mains is always on.
     pub mains: Option<String>,
     /// Device tag of the drive's brake relay contact. The module writes its state; the drawing
@@ -103,6 +106,9 @@ pub enum ClFindingKind {
     /// The encoder signal device lost its supply or its wire.
     EncoderSignalLost,
     EncoderSignalBack,
+    /// One encoder channel is gone: the counts no longer say which way the shaft turns.
+    EncoderChannelLost,
+    EncoderChannelBack,
 }
 
 impl ClFindingKind {
@@ -133,6 +139,11 @@ impl ClFindingKind {
                 "The encoder signal is gone: no speed or position feedback.".to_owned()
             }
             Self::EncoderSignalBack => "The encoder signal is back.".to_owned(),
+            Self::EncoderChannelLost => {
+                "An encoder channel is gone: the speed feedback no longer knows the direction."
+                    .to_owned()
+            }
+            Self::EncoderChannelBack => "The encoder channel is back.".to_owned(),
         }
     }
 }
@@ -150,6 +161,7 @@ pub struct ClWinchModule {
     last_fault: Option<ClFault>,
     last_sto_requested: bool,
     last_encoder_ok: bool,
+    last_channel_ok: bool,
     snapshot: Option<WinchSnapshot>,
     findings: Vec<ClWinchFinding>,
     findings_dropped: usize,
@@ -185,6 +197,7 @@ impl ClWinchModule {
             last_fault: None,
             last_sto_requested: false,
             last_encoder_ok: true,
+            last_channel_ok: true,
             snapshot: None,
             findings: Vec::new(),
             findings_dropped: 0,
@@ -318,6 +331,7 @@ pub(crate) fn binding_findings(
         ("STO channel 1", &b.sto[0]),
         ("STO channel 2", &b.sto[1]),
         ("encoder signal", &b.encoder),
+        ("encoder channel B", &b.encoder_b),
         ("main contactor", &b.mains),
         ("brake relay contact", &b.brake_relay),
         ("brake feed", &b.brake_feed),
@@ -375,6 +389,15 @@ pub(crate) fn binding_findings(
     out
 }
 
+/// What the drawing's encoder devices make of the encoder: no signal at all beats a lost channel.
+pub(crate) fn encoder_health(signal_ok: bool, channel_b_ok: bool) -> EncoderHealth {
+    match (signal_ok, channel_b_ok) {
+        (false, _) => EncoderHealth::SignalLost,
+        (true, false) => EncoderHealth::DirectionLost,
+        (true, true) => EncoderHealth::Healthy,
+    }
+}
+
 pub(crate) fn energised(circuit: &impl CircuitPort, tag: &Option<String>) -> bool {
     tag.as_deref().is_some_and(|t| circuit.is_energised(t))
 }
@@ -399,11 +422,8 @@ fn step_module(m: &mut ClWinchModule, circuit: &impl CircuitPort, dt: f64, time_
 
     // A lost encoder signal is a device of the drawing: it keeps the counts from moving. Losing
     // it and getting it back are separate findings.
-    m.winch.drive.encoder.health = if encoder_ok {
-        EncoderHealth::Healthy
-    } else {
-        EncoderHealth::SignalLost
-    };
+    let channel_ok = energised_or_true(circuit, &m.binding.encoder_b);
+    m.winch.drive.encoder.health = encoder_health(encoder_ok, channel_ok);
     if encoder_ok != m.last_encoder_ok {
         let kind = if encoder_ok {
             ClFindingKind::EncoderSignalBack
@@ -412,6 +432,15 @@ fn step_module(m: &mut ClWinchModule, circuit: &impl CircuitPort, dt: f64, time_
         };
         m.note(time_s, kind);
         m.last_encoder_ok = encoder_ok;
+    }
+    if channel_ok != m.last_channel_ok {
+        let kind = if channel_ok {
+            ClFindingKind::EncoderChannelBack
+        } else {
+            ClFindingKind::EncoderChannelLost
+        };
+        m.note(time_s, kind);
+        m.last_channel_ok = channel_ok;
     }
 
     let run = up != down;
