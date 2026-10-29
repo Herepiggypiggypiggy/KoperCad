@@ -182,6 +182,21 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "file.example_plc",
+        "Open example: PLC cabinet (CPU, I/O cards, 24 V supply, full cabinet)",
+        "Project",
+        &[
+            "plc",
+            "plc cabinet",
+            "i/o",
+            "io list",
+            "cabinet",
+            "demo",
+            "example",
+        ],
+        Needs::Nothing,
+    ),
+    cmd(
         "file.practice",
         "Try the fast keys",
         "Project",
