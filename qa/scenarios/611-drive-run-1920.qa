@@ -35,3 +35,11 @@ mouse_up 75 343
 wait 20
 expect "Hz"
 check_layout
+# The command palette opens above the Drive run window and takes the typing.
+key ctrl+k
+wait 3
+text Motor at variable
+wait 10
+shot palette-over-window
+key Escape
+wait 5
