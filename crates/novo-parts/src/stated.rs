@@ -54,7 +54,14 @@ fn read_segment(segment: &str, out: &mut Properties) {
         out.entry(eng::POLES.into()).or_insert(Value::Int(poles));
     }
     if has(&lower, COIL) {
-        if let Some(supply) = parse_supply(&lower) {
+        // The number next to the label: after it, else in the clause before it
+        // (`24 V AC coil`), never another number of the segment (`3 poles`).
+        let (before, after) = split_at_label(&lower, COIL);
+        let near_before = before.rsplit(',').next().unwrap_or("");
+        let found = parse_supply(after)
+            .map(|s| (s, after))
+            .or_else(|| parse_supply(near_before).map(|s| (s, near_before)));
+        if let Some((supply, clause)) = found {
             out.entry(eng::COIL_VOLTAGE_V.into())
                 .or_insert(Value::Float(supply.volts));
             let kind = match (supply.ac, supply.dc) {
@@ -64,15 +71,15 @@ fn read_segment(segment: &str, out: &mut Properties) {
             };
             out.entry(keys::COIL_KIND.into())
                 .or_insert(Value::Text(kind.into()));
-        }
-        if let Some(hz) = hertz_in(&lower) {
-            let value = hz
-                .parse::<i64>()
-                .map_or_else(|_| Value::Text(hz), Value::Int);
-            out.entry(keys::COIL_HZ.into()).or_insert(value);
+            if let Some(hz) = hertz_in(clause) {
+                let value = hz
+                    .parse::<i64>()
+                    .map_or_else(|_| Value::Text(hz), Value::Int);
+                out.entry(keys::COIL_HZ.into()).or_insert(value);
+            }
         }
     } else if has(&lower, RATED)
-        && let Some(v) = first_number(&lower).filter(|v| *v > 0.0)
+        && let Some(v) = first_number(split_at_label(&lower, RATED).1).filter(|v| *v > 0.0)
     {
         out.entry(keys::VOLTAGE_V.into()).or_insert(Value::Float(v));
     }
@@ -91,6 +98,15 @@ fn read_segment(segment: &str, out: &mut Properties) {
         out.entry(keys::MAIN_NO.into())
             .or_insert(Value::Int(i64::from(no)));
     }
+}
+
+/// The text before and after the first of `words` in `lower`.
+fn split_at_label<'a>(lower: &'a str, words: &[&str]) -> (&'a str, &'a str) {
+    words
+        .iter()
+        .filter_map(|w| lower.find(w).map(|i| (i, w.len())))
+        .min_by_key(|(i, _)| *i)
+        .map_or((lower, ""), |(i, n)| (&lower[..i], &lower[i + n..]))
 }
 
 /// `1 NO + 1 NC` written after (or before) the marking word.
@@ -169,6 +185,25 @@ mod tests {
         assert_eq!(get(&d, "poles"), Some(&Value::Int(4)));
         assert_eq!(get(&d, "aux_contacts_no"), Some(&Value::Int(2)));
         assert_eq!(get(&d, "aux_contacts_nc"), Some(&Value::Int(2)));
+    }
+
+    #[test]
+    fn the_number_next_to_the_label_is_the_one_read() {
+        let d = stated_data(&["3-pole contactor, coil 24 V DC"]);
+        assert_eq!(get(&d, "coil_voltage_v"), Some(&Value::Float(24.0)));
+        assert_eq!(get(&d, "poles"), Some(&Value::Int(3)));
+        let d = stated_data(&["3 poles, rated voltage 690 V"]);
+        assert_eq!(get(&d, "rated_voltage_v"), Some(&Value::Float(690.0)));
+        // The value written before its label, in its own clause.
+        let d = stated_data(&["3 poles, 24 V AC coil"]);
+        assert_eq!(get(&d, "coil_voltage_v"), Some(&Value::Float(24.0)));
+        assert_eq!(
+            get(&d, "coil_current_type"),
+            Some(&Value::Text("AC".into()))
+        );
+        // A coil label with no supply next to it states nothing.
+        let d = stated_data(&["3-pole contactor, coil"]);
+        assert!(!d.contains_key("coil_voltage_v"));
     }
 
     #[test]
