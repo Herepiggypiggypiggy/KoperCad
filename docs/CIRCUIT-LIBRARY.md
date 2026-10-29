@@ -24,11 +24,11 @@ circuit the user edited stays as they left it.
 | --- | --- | --- |
 | `Circuits/1 Supply and distribution` | supply | 24 V control supply, control transformer |
 | `Circuits/2 Protection and starters` | protection | direct-on-line feeder, reversing feeder |
-| `Circuits/3 Hoists` | hoists | single speed with spring brake, two speed (pole change) with rectifier-fed brake, frequency controlled with brake and braking resistor |
+| `Circuits/3 Hoists` | hoists | single speed with spring brake, two speed (pole change) with rectifier-fed brake, frequency controlled with brake and braking resistor, brake rectifier with DC-side switching |
 | `Circuits/4 Travel drives` | travel | two speed with brake, frequency controlled with brake |
-| `Circuits/5 Safety` | safety | emergency stop with main contactor |
-| `Circuits/6 Operator stations` | control | radio receiver relays |
-| `Circuits/7 Sensors and signalling` | peripherals | horn and beacon, limit switch permits, motor thermistor relay |
+| `Circuits/5 Safety` | safety | emergency stop with main contactor, emergency stop with safety relay and feedback |
+| `Circuits/6 Operator stations` | control | radio receiver relays, pendant station with two-step buttons |
+| `Circuits/7 Sensors and signalling` | peripherals | horn and beacon, limit switch permits, motor thermistor relay, cabinet fan with thermostat, anti-condensation heater with hygrostat |
 
 ## File format
 
