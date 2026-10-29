@@ -28,9 +28,11 @@ shot preferences-home
 # Centered at 1366x768: the title bar is at y 125.
 double_click 683 125
 wait 20
+expect "Preferences"
 shot preferences-maximised
 check_layout
 double_click 683 33
 wait 20
+expect "Preferences"
 shot preferences-restored
 check_layout

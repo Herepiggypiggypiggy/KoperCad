@@ -963,14 +963,17 @@ fn modal_impl<R: Default>(
     }
     // Only a window that was already up counts: the click that opened it is
     // still in this frame's input.
-    let clicked_outside = last.zip(rect).is_some_and(|(_, rect)| {
+    // Outside the window as it was before this frame too: the double click
+    // that restores a maximised window ends outside the small window it
+    // restores to, and that is not a click on the ground behind it.
+    let clicked_outside = last.zip(rect).is_some_and(|(before, rect)| {
         top_modal
             && !any_popup
             && ctx.input(|i| {
                 i.pointer.primary_clicked()
-                    && i.pointer
-                        .interact_pos()
-                        .is_some_and(|p| !rect.expand(8.0).contains(p))
+                    && i.pointer.interact_pos().is_some_and(|p| {
+                        !rect.expand(8.0).contains(p) && !before.expand(8.0).contains(p)
+                    })
             })
     });
     ModalOut {

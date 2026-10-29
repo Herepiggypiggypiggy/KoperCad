@@ -249,9 +249,12 @@ fn a_double_click_on_a_modal_title_maximises_it_and_again_restores_it() {
         "fills the window: {home:?} -> {big:?}"
     );
     assert!(screen().contains_rect(big), "{big:?}");
+    // The pointer ends outside the small window it restores to: that must
+    // not count as a click on the ground behind it (it closes the window).
     double_click(&mut d, big.center_top() + egui::vec2(0.0, 10.0), t);
     let back = rect_of(&d, win).unwrap();
     assert!(near(back, home), "{home:?} -> {back:?}");
+    assert!(d.app.wb.preferences, "the restored window is still open");
 }
 
 #[test]
