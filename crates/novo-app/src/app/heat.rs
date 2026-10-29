@@ -449,6 +449,16 @@ impl HeatState {
         self.run.is_some() && self.cancel_at.is_some()
     }
 
+    /// The notice after Cancel: with an earlier result on screen it is the one
+    /// that stays; without one there is nothing to show and it says so.
+    fn stopped_notice(&self) -> String {
+        if self.solution.is_some() {
+            "Stopped: the last result is not converged".into()
+        } else {
+            "Stopped: no result yet".into()
+        }
+    }
+
     /// Takes in what the worker has published. Called every frame.
     pub(super) fn poll(&mut self, ctx: &egui::Context) {
         self.poll_time(ctx);
@@ -497,9 +507,7 @@ impl HeatState {
                         // A run replaced by one for the edited cabinet is
                         // not worth a warning.
                         Outcome::Cancelled if self.live.take_superseded() => None,
-                        Outcome::Cancelled => {
-                            Some("Stopped: the last result is not converged".into())
-                        }
+                        Outcome::Cancelled => Some(self.stopped_notice()),
                         Outcome::Failed(e) => Some(format!("The simulation failed: {e}")),
                     };
                 }
@@ -514,7 +522,7 @@ impl HeatState {
             // flag: let it go (dropping the run cancels it once more) so the
             // person is not left with a Cancel that does nothing.
             done = true;
-            self.notice = Some("Stopped: the last result is not converged".into());
+            self.notice = Some(self.stopped_notice());
         }
         if done {
             self.run = None;
@@ -2627,8 +2635,8 @@ mod tests {
             state
                 .notice
                 .as_deref()
-                .is_some_and(|n| n.starts_with("Stopped")),
-            "{:?}",
+                .is_some_and(|n| n == "Stopped: no result yet"),
+            "no result exists, so it says so: {:?}",
             state.notice
         );
     }

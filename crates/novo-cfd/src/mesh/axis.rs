@@ -199,6 +199,15 @@ fn segment_steps(l: f64, qa: f64, qb: f64, cap: f64, growth: f64) -> Vec<f64> {
     steps
 }
 
+/// The largest `larger / smaller` of two neighbouring cells of an axis (1 for
+/// fewer than two cells).
+pub fn worst_ratio(edges: &[f64]) -> f64 {
+    let h: Vec<f64> = edges.windows(2).map(|w| w[1] - w[0]).collect();
+    h.windows(2)
+        .map(|w| (w[0] / w[1]).max(w[1] / w[0]))
+        .fold(1.0, f64::max)
+}
+
 /// Cells the halving cascade of [`enforce_ratio`] may add, per cell it starts
 /// with (plus [`CASCADE_SLACK`]), before the optimal split takes over.
 const CASCADE_PER_CELL: usize = 1;
@@ -358,13 +367,6 @@ mod tests {
             }
         }
         e
-    }
-
-    fn worst_ratio(e: &[f64]) -> f64 {
-        let h: Vec<f64> = e.windows(2).map(|w| w[1] - w[0]).collect();
-        h.windows(2)
-            .map(|w| (w[0] / w[1]).max(w[1] / w[0]))
-            .fold(1.0, f64::max)
     }
 
     #[test]

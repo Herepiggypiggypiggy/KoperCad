@@ -89,6 +89,7 @@ impl<'a> View<'a> {
         });
         notes.extend(duct_note(scn));
         notes.extend(super::march::lost_heat_note(setup, scn));
+        notes.extend(grading_note(&cm.grid));
         let base = CfdSnapshot {
             grid: cm.grid.clone(),
             temperature_c: Vec::new(),
@@ -493,4 +494,45 @@ fn duct_note(scn: &Scenario) -> Option<String> {
         if ducts.len() == 1 { "" } else { "s" },
         if ducts.len() == 1 { "" } else { "s" },
     ))
+}
+
+/// Said when the grid has neighbouring cells further apart than the planner
+/// keeps to: a very large cell next to a tiny one that it could not grade.
+fn grading_note(grid: &crate::result::Grid3) -> Option<String> {
+    let limit = crate::mesh::MeshSettings::default().max_ratio;
+    let (axis, ratio) = crate::mesh::grading_exceeded(grid, limit)?;
+    Some(format!(
+        "Mesh note: along {axis} neighbouring cells differ by up to {ratio:.1} times (the grid \
+         keeps to {limit:.1}); a very large cell sits next to a tiny one that the planner could \
+         not grade between. Flow and temperatures near that spot are less exact."
+    ))
+}
+
+#[cfg(test)]
+mod grading_tests {
+    use super::grading_note;
+    use crate::result::Grid3;
+
+    fn grid(x: Vec<f64>) -> Grid3 {
+        Grid3 {
+            nx: x.len() - 1,
+            ny: 1,
+            nz: 1,
+            x_edges_mm: x,
+            y_edges_mm: vec![0.0, 10.0],
+            z_edges_mm: vec![0.0, 10.0],
+        }
+    }
+
+    #[test]
+    fn a_smooth_grid_has_no_mesh_note() {
+        assert!(grading_note(&grid(vec![0.0, 10.0, 25.0, 45.0])).is_none());
+    }
+
+    #[test]
+    fn a_big_jump_is_named_with_its_axis_and_ratio() {
+        let note = grading_note(&grid(vec![0.0, 200.0, 201.0, 211.0])).expect("a note");
+        assert!(note.starts_with("Mesh note: along x"), "{note}");
+        assert!(note.contains("200.0 times"), "{note}");
+    }
 }
