@@ -3168,6 +3168,26 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "file.export_centre",
+            "Export...",
+            "Export",
+            &[
+                "export centre",
+                "export center",
+                "formats",
+                "save as pdf",
+                "dxf",
+                "excel",
+                "plc",
+                "bench",
+                "handover",
+            ],
+            Needs::Project,
+        ),
+        &["export", "export centre"],
+    ),
+    verb(
+        cmd(
             "export.pdf",
             "Export PDF",
             "Export",

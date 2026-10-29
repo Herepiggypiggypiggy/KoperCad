@@ -30,4 +30,4 @@ With heat on (**Shift+H**), a temperature field is drawn on the plate and in the
 
 ## Drawings from the layout
 
-The plate drawing is exported from File > Export (Export plate drawing, also as DXF); the bench output is in the Reports menu; see [the workshop pack](workshop.md).
+The plate drawing is exported from File > Export… (Export plate drawing, also as DXF); the bench output is in the Reports menu; see [the workshop pack](workshop.md).

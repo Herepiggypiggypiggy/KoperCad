@@ -864,7 +864,12 @@ fn menu_rows_are_anchors_that_fall_back_to_their_menu() {
         assert!(anchor_fallback(&format!("cmd.{id}")).is_none());
     }
     for row in rows {
-        let parent = anchor_fallback(&row.id).expect("a row points at its menu");
+        // A row points at its menu; a format of the Export centre points at
+        // the row that opens the centre, which points at its menu.
+        let mut parent = anchor_fallback(&row.id).expect("a row points at its menu");
+        if parent.starts_with("cmd.") {
+            parent = anchor_fallback(&parent).expect("the opener points at its menu");
+        }
         assert!(parent.starts_with("menu."), "{} -> {parent}", row.id);
         assert!(anchor_fallback(&parent).is_none());
         assert_eq!(any_anchor_label(&row.id), Some(row.label.clone()));
