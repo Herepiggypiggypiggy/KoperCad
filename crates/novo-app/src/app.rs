@@ -70,6 +70,9 @@ mod controller_live;
 #[cfg(test)]
 mod controller_live_tests;
 mod count_words;
+mod defects_card;
+#[cfg(test)]
+mod defects_card_tests;
 mod designer;
 mod device_renumber;
 mod diagnostics;

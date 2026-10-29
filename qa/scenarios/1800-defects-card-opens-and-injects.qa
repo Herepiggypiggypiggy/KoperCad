@@ -1,0 +1,24 @@
+@title Defects and walk-throughs opens from Simulate, injects a welded contact and shows the banner
+@sizes 1366x768 1920x1080
+@area Live
+# Lane F1. Simulate > Defects and walk-throughs switches the live view on and opens the card; a welded
+# contact is injected on the radio hoist fixture and the red strip appears.
+open qa/fixtures/radio-hoist.novo
+wait 20
+click_text Simulate
+wait 5
+expect "Defects and walk-throughs"
+click_text "Defects and walk-throughs"
+wait 20
+expect "Rehearsal of wiring and logic"
+expect "No defects: the plant is as drawn."
+shot card-opened
+check_layout
+key Escape
+wait 5
+key ctrl+k
+text weld
+wait 5
+expect "Defects and walk-throughs"
+shot command-field
+key Escape

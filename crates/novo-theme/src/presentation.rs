@@ -1116,6 +1116,11 @@ pub const TABLE: &[Presentation] = &[
         "Controller panel",
     ),
     row(
+        "sim.defects",
+        p(icons::WARNING),
+        "Defects and walk-throughs",
+    ),
+    row(
         "sim.motor_curves",
         d(&drawn::DRIVE),
         "Motor at variable frequency",
