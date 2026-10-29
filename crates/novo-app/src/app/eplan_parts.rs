@@ -203,12 +203,25 @@ impl EplanPartsImport {
     }
 }
 
+/// Holds the read for `KOPERCAD_QA_SLOW_READ_MS` milliseconds (at most a
+/// minute) so a QA scenario can photograph the window while it reads.
+fn qa_hold() {
+    let ms = std::env::var("KOPERCAD_QA_SLOW_READ_MS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .map_or(0, |ms| ms.min(60_000));
+    if ms > 0 {
+        std::thread::sleep(std::time::Duration::from_millis(ms));
+    }
+}
+
 /// Reads `path` and builds the preview; runs on the worker thread.
 fn read_job(
     path: &Path,
     name: &str,
     catalog_path: Option<PathBuf>,
 ) -> Result<EplanPartsImport, String> {
+    qa_hold();
     let bytes = std::fs::read(path).map_err(|e| format!("Could not read {name}: {e}"))?;
     let existing = existing_catalog(catalog_path.as_deref());
     let source = if is_article_file(path, &bytes) {

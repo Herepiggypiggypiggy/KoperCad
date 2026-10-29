@@ -2,9 +2,16 @@
 //! (`SE`, `SCHNEI`, `Schneider Electric SE`), and the catalog must hold one
 //! name per maker so search, grouping and part matching work.
 //!
-//! The built-in table holds generic, public maker names and the codes
-//! commonly used for them. The user's own codes (every shop invents some)
-//! are kept in `maker-aliases.json` beside the user catalog.
+//! Where the built-in table comes from: the maker names are the makers' own
+//! public company names. The short codes are the three shorthand codes
+//! named in the task for this feature (`SE`, `SIE`, `RIT`), well-known public
+//! abbreviations (`ABB`, `SEW`, `P+F`) and spellings of the name itself.
+//! Codes cut short (`SCHNEI`, `SIEMEN`) are not listed: a code that is the
+//! start of exactly one maker name is matched by [`MakerAliases::resolve`].
+//! Nothing was read from an EPLAN file, list, macro or text, or from any
+//! customer data, and no guessed three-letter codes are included. The
+//! user's own codes (every shop invents some) are kept in
+//! `maker-aliases.json` beside the user catalog.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -20,43 +27,40 @@ use crate::search::normalize_code;
 const BUILTIN: &[(&str, &[&str])] = &[
     (
         "Schneider Electric",
-        &["SE", "SCHNEI", "SCHNEIDER", "Telemecanique", "Merlin Gerin"],
+        &["SE", "Telemecanique", "Merlin Gerin"],
     ),
-    ("Siemens", &["SIE", "SIEMEN"]),
-    ("Rittal", &["RIT", "RITTA"]),
-    ("ABB", &["ABB", "ASEA Brown Boveri"]),
-    ("LAPP", &["LAPP", "LAP", "Lapp Kabel", "Lapp Group"]),
-    ("WAGO", &["WAGO", "WAG"]),
-    ("Phoenix Contact", &["PHOENIX", "PHX", "PXC"]),
-    ("Lenze", &["LENZE", "LEN"]),
-    ("Harting", &["HARTING", "HAR"]),
-    ("Eaton", &["EATON", "EAT", "Moeller", "Eaton Moeller"]),
-    ("Beckhoff", &["BECKHO", "BECK", "Beckhoff Automation"]),
-    ("Murrelektronik", &["MURR", "MURREL", "Murr Elektronik"]),
-    ("Bosch Rexroth", &["REXROTH", "REX", "Rexroth"]),
-    ("Danfoss", &["DANFOS"]),
-    ("Pilz", &["PILZ"]),
-    ("Werma", &["WERMA"]),
-    ("Lütze", &["LUTZE", "LUETZE", "LUT"]),
-    ("Kopp", &["KOPP"]),
-    ("ILME", &["ILME"]),
-    ("Zeca", &["ZECA"]),
-    ("Demag", &["DEMAG"]),
-    ("Omron", &["OMR", "OMRON"]),
-    (
-        "Weidmüller",
-        &["WEID", "WEIDMU", "Weidmuller", "Weidmueller"],
-    ),
-    ("Legrand", &["LEG", "LEGRAN"]),
-    ("Hager", &["HAGER"]),
-    ("Mitsubishi Electric", &["MITSU", "Mitsubishi"]),
-    ("SEW-Eurodrive", &["SEW", "SEW Eurodrive"]),
-    ("Sick", &["SICK"]),
-    ("Pepperl+Fuchs", &["PEPPER", "Pepperl Fuchs", "P+F"]),
-    ("Turck", &["TURCK"]),
-    ("Festo", &["FESTO"]),
-    ("Finder", &["FINDER"]),
-    ("Mean Well", &["MEANWELL", "Mean Well"]),
+    ("Siemens", &["SIE"]),
+    ("Rittal", &["RIT"]),
+    ("ABB", &["ASEA Brown Boveri"]),
+    ("LAPP", &["Lapp Kabel", "Lapp Group"]),
+    ("WAGO", &[]),
+    ("Phoenix Contact", &[]),
+    ("Lenze", &[]),
+    ("Harting", &[]),
+    ("Eaton", &["Moeller", "Eaton Moeller"]),
+    ("Beckhoff", &["Beckhoff Automation"]),
+    ("Murrelektronik", &["Murr Elektronik"]),
+    ("Bosch Rexroth", &["Rexroth"]),
+    ("Danfoss", &[]),
+    ("Pilz", &[]),
+    ("Werma", &[]),
+    ("Lütze", &["Luetze", "Lutze"]),
+    ("Kopp", &[]),
+    ("ILME", &[]),
+    ("Zeca", &[]),
+    ("Demag", &[]),
+    ("Omron", &[]),
+    ("Weidmüller", &["Weidmuller", "Weidmueller"]),
+    ("Legrand", &[]),
+    ("Hager", &[]),
+    ("Mitsubishi Electric", &["Mitsubishi"]),
+    ("SEW-Eurodrive", &["SEW"]),
+    ("Sick", &[]),
+    ("Pepperl+Fuchs", &["Pepperl Fuchs", "P+F"]),
+    ("Turck", &[]),
+    ("Festo", &[]),
+    ("Finder", &[]),
+    ("Mean Well", &[]),
 ];
 
 /// Trailing legal-form words dropped when a name is looked up.
