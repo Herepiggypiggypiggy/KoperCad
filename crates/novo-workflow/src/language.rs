@@ -1297,6 +1297,11 @@ pub const DUTCH: &[Aliases] = &[
         &["huidige pagina", "een pagina"],
     ),
     nl(
+        "export.drill_plan",
+        &["exporteer boorplan", "boorplan exporteren"],
+        &["boorplan", "handmatig boren"],
+    ),
+    nl(
         "export.plate_dxf",
         &["exporteer montageplaat dxf"],
         &["montageplaat dxf", "cnc"],
