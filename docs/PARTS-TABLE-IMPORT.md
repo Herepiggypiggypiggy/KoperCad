@@ -7,7 +7,7 @@ row becomes, then add the parts. Nothing is added before that last click.
 
 ## Where to find it
 
-- **File > Import parts > Import parts from a table (CSV or Excel)**, or Ctrl+K
+- **File > Import... > Import parts table**, or Ctrl+K
   and type "table" (command `parts.import_table`).
 - **File > Parts**, header button *Import table...*; an `.xlsx` file dropped on the
   Parts window opens it too.

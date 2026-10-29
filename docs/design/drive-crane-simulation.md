@@ -272,6 +272,13 @@ undo step ("Crane picture") once the mouse button is up. A project without them 
 a number that is missing or out of range falls back one by one, and an axis the project no longer
 has is dropped. Undo and opening another project reload the window from the project.
 
+Travel end limits: the forward and reverse end limit of a picked axis (the `trav_limit_fwd_m` and
+`trav_limit_rev_m` set on its motor, metres from the axis start) stand as upright flags, red for
+forward and amber for reverse: on the runway beam for the bridge, on the girder for the trolley, at
+the typed start plus the distance. They are read from the project, so they show before a run; a
+limit that falls outside the runway or the span is not drawn and the window says how many. The
+flag shows where the limit is set, not whether the switch is pressed.
+
 ### Lane L2c-open as built (open-loop drive hoist)
 
 A hoist behind a frequency drive without an encoder: `novo_drive::hoist_logic` (the brake sequence and

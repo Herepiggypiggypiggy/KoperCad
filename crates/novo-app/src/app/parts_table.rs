@@ -1,4 +1,4 @@
-//! File > Import parts > Import parts from a table: a CSV or Excel file with any
+//! File > Import... > Import parts table: a CSV or Excel file with any
 //! column layout becomes catalog parts in three steps the person can see:
 //! the columns (what each one becomes, in which unit), the rows (what each
 //! row turns into and what was left out and why), and Add.
@@ -302,7 +302,7 @@ impl NovoApp {
         };
         let screen = ctx.content_rect().size();
         let width = dialog_width(screen.x);
-        let body_height = (screen.y - 330.0).clamp(150.0, 560.0);
+        let body_height = body_height(screen.y);
         let (mut go, mut cancel) = (false, false);
         let mut changed = false;
         let title = format!("Import parts from {}", import.file);
@@ -310,7 +310,7 @@ impl NovoApp {
             ctx,
             "parts_table_import",
             title,
-            [width, body_height + 280.0],
+            [width, body_height + CHROME],
             |ui| {
                 super::dialog_ui::hint(
                     ui,
@@ -352,6 +352,18 @@ fn dialog_width(screen_x: f32) -> f32 {
         .clamp(640.0, 1180.0)
         .min(screen_x - 48.0)
         .max(280.0)
+}
+
+/// What the dialog needs besides its table: the title, the hint, the settings,
+/// the tabs, the notes above the rows and the Add row. The 1366x768 window
+/// pushed the Add button out of sight when this was 280 and the table area 438 tall.
+const CHROME: f32 = 380.0;
+
+/// How tall the table area of the import dialog is for a window `screen_y`
+/// points tall: the whole dialog (table plus [`CHROME`]) stays inside the
+/// window, so Add and Cancel can be reached.
+fn body_height(screen_y: f32) -> f32 {
+    (screen_y - 470.0).clamp(150.0, 560.0)
 }
 
 /// Sheet, header row, maker, origin and currency. Returns whether the
@@ -795,7 +807,7 @@ fn footer_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, cancel: &mut bool
 
 #[cfg(test)]
 mod width_tests {
-    use super::dialog_width;
+    use super::{CHROME, body_height, dialog_width};
 
     #[test]
     fn the_dialog_fits_the_window_it_opens_in() {
@@ -807,5 +819,14 @@ mod width_tests {
         }
         assert_eq!(dialog_width(1920.0), 1180.0);
         assert_eq!(dialog_width(1366.0), 1180.0);
+    }
+
+    #[test]
+    fn the_dialog_keeps_its_add_button_inside_a_768_point_window() {
+        for screen in [600.0, 700.0, 768.0, 900.0, 1080.0] {
+            let h = body_height(screen) + CHROME;
+            assert!(h <= screen - 60.0, "{screen}: the dialog is {h} tall");
+        }
+        assert_eq!(body_height(1080.0), 560.0);
     }
 }

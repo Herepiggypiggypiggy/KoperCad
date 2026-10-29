@@ -144,7 +144,7 @@ pub const KEYS: &[SpecKey] = &[
     ),
     tag(
         "cw_encoder_b",
-        "Encoder channel B device (energised: channel present)",
+        "Encoder channel B device (energised: present)",
     ),
     tag("cw_mains", "Main contactor device"),
     tag("cw_brake_relay", "Drive brake relay contact device"),

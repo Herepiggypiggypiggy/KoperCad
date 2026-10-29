@@ -205,3 +205,41 @@ fn a_walkthrough_with_a_hoist_defect_runs_from_the_card() {
     let report = super::defects_card::run_walkthrough(doc.project(), &w);
     assert!(report.ok(), "{:?}", report.steps);
 }
+
+#[test]
+fn a_walkthrough_with_a_closed_loop_winch_runs_from_the_card() {
+    use novo_sim::inject::Defect;
+    use novo_sim::walkthrough::Check;
+    use novo_sim::winch_check::WinchIs;
+    let mut doc = Document::default();
+    novo_tests::closed_winch::closed_winch(&mut doc).expect("fixture builds");
+    let motor = "=A1+FLD-M1";
+    let w = Walkthrough::new("open STO coil")
+        .at(
+            1.0,
+            Action::Operate {
+                device: "=A1+RAD-S1".into(),
+                pin: None,
+                operated: true,
+            },
+        )
+        .at(
+            4.0,
+            Action::Inject {
+                with: Defect::CoilOpen {
+                    device: "=A1+CAB-STOA".into(),
+                },
+            },
+        )
+        .at(
+            9.0,
+            Action::Expect {
+                check: Check::Winch {
+                    winch: motor.into(),
+                    is: WinchIs::Fault { code: "STD".into() },
+                },
+            },
+        );
+    let report = super::defects_card::run_walkthrough(doc.project(), &w);
+    assert!(report.ok(), "{:?}", report.steps);
+}

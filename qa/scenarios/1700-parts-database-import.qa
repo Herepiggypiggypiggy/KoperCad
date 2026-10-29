@@ -7,10 +7,14 @@ wait 20
 answer_dialog qa/fixtures/parts/invented-articles.eod
 click_text File
 wait 4
-click_text "Import parts"
+click_text "Import..."
 wait 4
 shot menu
-click_text "Import parts from a CAD parts export"
+text "cad parts"
+wait 4
+click_text "Import CAD parts export"
+wait 2
+click_text "Import" Button #1
 wait 6
 shot reading
 check_layout

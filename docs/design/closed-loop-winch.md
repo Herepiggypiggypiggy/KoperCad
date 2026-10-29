@@ -118,6 +118,18 @@ pull only when taut, the beam as a rigid body at small tilt with vertical ropes,
 model listed above. No rope swing, no drum grooving, no rope over-lap. The default rope rating is
 0.6 times the beam weight when none is entered, and the run says so.
 
+## Walk-throughs
+
+`novo_sim::walkthrough` runs the winch and pair loops on the healthy and the faulted plant, one circuit
+settle per tick (the loops split their tick into `write_contacts` and `step_after_settle` for this). The
+script writes circuit defects as for any plant and asks `winch` checks (`novo_sim::winch_check`): hook
+above or below a height, standing, moving, tripped, tripped with a code, clear, STO active, or the run found
+a trip, STO, a lost encoder signal, a brake slip, a start rollback, a pair stopping itself, a rope above
+its rating or a slack rope. The report's "what is different" lists a hook gap of 5 cm or more, a drive that
+trips only on the faulted plant and findings only the faulted run has. User: Simulate > Defects and
+walk-throughs, saved walk-throughs, `▶ Run`; the fixture `qa/fixtures/closed-winch-walk.novo` has one.
+Limits as for the hoist walk-throughs: a run with a machine in it stops at 120 s.
+
 ## Not yet
 
 - Unconfirmed customer details: which drive maker's hoist and encoder arrangement applies. Everything

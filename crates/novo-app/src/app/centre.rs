@@ -1,27 +1,30 @@
-//! The Export centre (lane V4, `docs/design/visual-redesign.md` section 6):
-//! one window for every format the program writes. The formats are tiles with
-//! their icon and a sentence, grouped by what they are for; picking one shows
-//! what it writes and the one button that writes it. File > Export opens it,
-//! and so does the command field.
+//! The Export and Import centres (lane V4, `docs/design/visual-redesign.md`
+//! section 6): one window each for every format the program writes and every
+//! file it brings in. The commands are tiles with their icon and a sentence,
+//! grouped by what they are for; picking one shows what it does and the one
+//! button that does it. File > Export... and File > Import... open them, and
+//! so do the command field and the app menu search.
 //!
-//! Where the user finds it: File > Export..., or Ctrl+K and "export". Every
-//! export command still runs from the command field by its own name.
+//! Where the user finds them: File > Export... and File > Import..., or
+//! Ctrl+K and "export" or "import". Every command still runs from the
+//! command field by its own name.
 
 use eframe::egui;
 use novo_theme::{icons, presentation, widgets};
-use novo_workflow::centres::{self, EXPORT_SECTIONS, Section};
+use novo_workflow::centres::{self, Centre, Section};
 use novo_workflow::commands::{self, CommandInfo};
 
 use super::NovoApp;
 
 const TILE_HEIGHT: f32 = 64.0;
-const TILE_MIN_WIDTH: f32 = 200.0;
+const TILE_MIN_WIDTH: f32 = 250.0;
 const DETAIL_WIDTH: f32 = 280.0;
 const FOOTER: f32 = 44.0;
 
-/// What the centre remembers while it is open.
-#[derive(Debug, Default, Clone)]
-pub(super) struct ExportCentre {
+/// What a centre remembers while it is open.
+#[derive(Debug, Clone)]
+pub(super) struct CentreWindow {
+    pub kind: Centre,
     pub query: String,
     pub selected: Option<&'static str>,
     /// The search field takes the keyboard on the first frame and again after
@@ -30,12 +33,27 @@ pub(super) struct ExportCentre {
     last_selected: Option<&'static str>,
 }
 
+impl CentreWindow {
+    fn new(kind: Centre) -> Self {
+        Self {
+            kind,
+            query: String::new(),
+            selected: None,
+            shown: false,
+            last_selected: None,
+        }
+    }
+}
+
 /// The tiles that match `query`, group by group; a group with none is left
 /// out. The words are matched in the label, the short label, the sentence,
 /// the keywords and the group name.
-pub(super) fn visible(query: &str) -> Vec<(&'static Section, Vec<&'static CommandInfo>)> {
+pub(super) fn visible(
+    kind: Centre,
+    query: &str,
+) -> Vec<(&'static Section, Vec<&'static CommandInfo>)> {
     let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
-    EXPORT_SECTIONS
+    kind.sections()
         .iter()
         .filter_map(|section| {
             let rows: Vec<&CommandInfo> = section
@@ -61,44 +79,47 @@ pub(super) fn visible(query: &str) -> Vec<(&'static Section, Vec<&'static Comman
 }
 
 impl NovoApp {
-    /// Opens the centre with nothing picked.
-    pub(super) fn open_export_centre(&mut self) {
-        self.wb.export_centre = Some(ExportCentre::default());
+    /// Opens a centre with nothing picked.
+    pub(super) fn open_centre(&mut self, kind: Centre) {
+        self.wb.centre = Some(CentreWindow::new(kind));
     }
 
-    pub(super) fn export_centre_window(&mut self, ctx: &egui::Context) {
-        let Some(mut state) = self.wb.export_centre.take() else {
+    pub(super) fn centre_window(&mut self, ctx: &egui::Context) {
+        let Some(mut state) = self.wb.centre.take() else {
             return;
         };
         let mut run: Option<&'static str> = None;
         let mut close = false;
         let modal = super::panel::modal_fill(
             ctx,
-            "export_centre",
-            "Export",
+            match state.kind {
+                Centre::Export => "export_centre",
+                Centre::Import => "import_centre",
+            },
+            state.kind.title(),
             [novo_theme::dialog_width::CENTRE, 640.0],
             |ui| {
-                self.export_centre_body(ui, &mut state, &mut run, &mut close);
+                self.centre_body(ui, &mut state, &mut run, &mut close);
             },
         );
         if let Some(id) = run {
             self.settings.remember_action(id);
             self.wb.queued.push(id);
         } else if !close && !modal.should_close() {
-            self.wb.export_centre = Some(state);
+            self.wb.centre = Some(state);
         }
     }
 
-    fn export_centre_body(
+    fn centre_body(
         &mut self,
         ui: &mut egui::Ui,
-        state: &mut ExportCentre,
+        state: &mut CentreWindow,
         run: &mut Option<&'static str>,
         close: &mut bool,
     ) {
         let search = ui.add(
             egui::TextEdit::singleline(&mut state.query)
-                .hint_text("Search formats: pdf, dxf, excel, bench, plc")
+                .hint_text(state.kind.search_hint())
                 .desired_width(f32::INFINITY),
         );
         if !state.shown {
@@ -111,7 +132,7 @@ impl NovoApp {
         }
         if search.changed()
             && let Some(sel) = state.selected
-            && !visible(&state.query)
+            && !visible(state.kind, &state.query)
                 .iter()
                 .any(|(_, rows)| rows.iter().any(|r| r.id == sel))
         {
@@ -130,16 +151,16 @@ impl NovoApp {
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| {
                         egui::ScrollArea::vertical()
-                            .id_salt("export_centre_tiles")
+                            .id_salt("centre_tiles")
                             .auto_shrink([false, false])
-                            .show(ui, |ui| self.export_tiles(ui, state, run));
+                            .show(ui, |ui| self.centre_tiles(ui, state, run));
                     },
                 );
                 ui.separator();
                 ui.allocate_ui_with_layout(
                     egui::vec2(DETAIL_WIDTH, height),
                     egui::Layout::top_down(egui::Align::Min),
-                    |ui| self.export_detail(ui, state),
+                    |ui| self.centre_detail(ui, state),
                 );
             },
         );
@@ -150,7 +171,14 @@ impl NovoApp {
             .is_some_and(|info| self.command_unavailable(info).is_none());
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let go = ui
-                .add_enabled_ui(selected_ok, |ui| widgets::primary_button(ui, "Export"))
+                .add_enabled_ui(selected_ok, |ui| {
+                    widgets::primary_button(
+                        ui,
+                        state
+                            .selected
+                            .map_or(state.kind.title(), |id| state.kind.button(id)),
+                    )
+                })
                 .inner;
             if go.clicked()
                 || (selected_ok
@@ -168,19 +196,22 @@ impl NovoApp {
         });
     }
 
-    fn export_tiles(
+    fn centre_tiles(
         &mut self,
         ui: &mut egui::Ui,
-        state: &mut ExportCentre,
+        state: &mut CentreWindow,
         run: &mut Option<&'static str>,
     ) {
         let pal = crate::theme::ui_palette();
-        let groups = visible(&state.query);
+        let groups = visible(state.kind, &state.query);
         if groups.is_empty() {
             ui.add_space(24.0);
             ui.label(
-                egui::RichText::new("No format matches. Try pdf, dxf, excel, bench or plc.")
-                    .color(pal.text_secondary),
+                egui::RichText::new(match state.kind {
+                    Centre::Export => "No format matches. Try pdf, dxf, excel, bench or plc.",
+                    Centre::Import => "Nothing matches. Try dxf, eplan, parts, excel or plc.",
+                })
+                .color(pal.text_secondary),
             );
             return;
         }
@@ -201,7 +232,7 @@ impl NovoApp {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = gap;
                     for info in line {
-                        self.export_tile(ui, state, run, info, tile_width);
+                        self.centre_tile(ui, state, run, info, tile_width);
                     }
                 });
                 ui.add_space(gap);
@@ -209,10 +240,10 @@ impl NovoApp {
         }
     }
 
-    fn export_tile(
+    fn centre_tile(
         &mut self,
         ui: &mut egui::Ui,
-        state: &mut ExportCentre,
+        state: &mut CentreWindow,
         run: &mut Option<&'static str>,
         info: &'static CommandInfo,
         width: f32,
@@ -264,8 +295,13 @@ impl NovoApp {
         let title = ui.painter().layout_job(title);
         ui.painter()
             .galley(egui::pos2(rect.left() + 44.0, rect.top() + 9.0), title, ink);
+        // A tile that cannot be used says why in its second line.
+        let second = match &reason {
+            Some(why) => why.to_string(),
+            None => centres::describe(info.id).to_owned(),
+        };
         let mut job = egui::text::LayoutJob::simple(
-            centres::describe(info.id).to_owned(),
+            second,
             egui::TextStyle::Small.resolve(ui.style()),
             soft,
             (rect.width() - 52.0).max(20.0),
@@ -278,7 +314,10 @@ impl NovoApp {
             soft,
         );
         self.anchor(&format!("cmd.{}", info.id), rect, info.label);
-        let response = response.on_hover_text(info.label);
+        let response = match &reason {
+            Some(why) => response.on_hover_text(format!("{}: {why}", info.label)),
+            None => response.on_hover_text(info.label),
+        };
         if response.clicked() {
             state.selected = Some(info.id);
             self.learn_event(novo_learn::Event::Clicked(format!("cmd.{}", info.id)));
@@ -288,14 +327,17 @@ impl NovoApp {
         }
     }
 
-    fn export_detail(&mut self, ui: &mut egui::Ui, state: &ExportCentre) {
+    fn centre_detail(&mut self, ui: &mut egui::Ui, state: &CentreWindow) {
         let pal = crate::theme::ui_palette();
         ui.add_space(4.0);
         let Some(info) = state.selected.and_then(commands::get) else {
             ui.add_space(24.0);
             ui.label(
-                egui::RichText::new("Choose a format on the left to see what it writes.")
-                    .color(pal.text_secondary),
+                egui::RichText::new(match state.kind {
+                    Centre::Export => "Choose a format on the left to see what it writes.",
+                    Centre::Import => "Choose an item on the left to see what it brings in.",
+                })
+                .color(pal.text_secondary),
             );
             return;
         };
@@ -330,9 +372,12 @@ impl NovoApp {
         }
         ui.add_space(10.0);
         ui.label(
-            egui::RichText::new("Any export also runs from Ctrl+K by its name.")
-                .small()
-                .color(pal.text_tertiary),
+            egui::RichText::new(match state.kind {
+                Centre::Export => "Any export also runs from Ctrl+K by its name.",
+                Centre::Import => "Any import also runs from Ctrl+K by its name.",
+            })
+            .small()
+            .color(pal.text_tertiary),
         );
     }
 }

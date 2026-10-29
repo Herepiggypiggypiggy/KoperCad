@@ -1,6 +1,6 @@
 //! The link to the PLC engineering tools in the app (novo-plc `link`,
 //! docs/design/plc-link.md): File > Export PLC writes the I/O as the file
-//! the programmer imports; File > Import PLC tags reads the programmer's
+//! the programmer imports; File > Import... > Import PLC tags reads the programmer's
 //! file back, shows what would change and applies it in one undo step.
 //!
 //! Exports go next to the project file (`Plant 2 PLC.xml`, or

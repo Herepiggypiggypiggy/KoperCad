@@ -7,3 +7,4 @@
 
 - 2026-10-29: #1736 merged. Follow-up PR: the closed-loop winch keeps at most `MAX_FINDINGS` (200) findings and counts the rest ("N more findings not shown" in Drive run); the honesty text lists the 5, 20 and 50 mm report thresholds. Next: two winches on one beam from the schematic, walk-throughs, drawn single-channel encoder loss.
 - 2026-10-29: single lost encoder channel (direction lost) is a drawn device: the motor's `cw_encoder_b` row; finding names it, lowering trips the drive. Fixture `qa/fixtures/closed-winch-channel.novo`, scenarios 1762, 1762b, 1762c. Walk-through check name waits for the walk-through PR.
+2026-10-29 21:50 UTC #1741 and #1751 merged. Walk-throughs run the winch and pair loops (`winch_check`, `Machinery`, `run_with_machinery`), `Check::Winch`, app wiring in `defects_card::run_walkthrough`, fixture `closed-winch-walk.novo`, scenario 1752.

@@ -279,9 +279,9 @@ impl ClPairLoop {
         out
     }
 
-    /// One tick.
-    pub fn step(&mut self, circuit: &mut impl CircuitPort) {
-        let dt = self.config.dt_s;
+    /// First half of a tick: limit switches and each drive's brake relay contact are written
+    /// from the previous tick (see `ClWinchLoop::write_contacts`).
+    pub fn write_contacts(&self, circuit: &mut impl CircuitPort) {
         for m in &self.modules {
             let heights = m.snapshot.as_ref().map_or([0.0; 2], |s| s.true_position_m);
             for (i, height) in heights.into_iter().enumerate() {
@@ -293,12 +293,23 @@ impl ClPairLoop {
                 }
             }
         }
-        circuit.settle(dt);
+    }
+
+    /// Second half of a tick: read the settled circuit and step every pair.
+    pub fn step_after_settle(&mut self, circuit: &impl CircuitPort) {
+        let dt = self.config.dt_s;
         let time_s = self.time_s;
         for m in &mut self.modules {
             step_module(m, circuit, dt, time_s);
         }
         self.time_s += dt;
+    }
+
+    /// One tick.
+    pub fn step(&mut self, circuit: &mut impl CircuitPort) {
+        self.write_contacts(circuit);
+        circuit.settle(self.config.dt_s);
+        self.step_after_settle(circuit);
     }
 
     /// Runs `ticks` ticks.

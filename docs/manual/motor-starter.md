@@ -24,7 +24,7 @@ Renumber always shows a preview and is one undo step.
 
 ## Parts
 
-Assign a part to a device from the Parts panel. The catalogue holds only what you import: maker data and tables via File > Import parts. Suggestions are limited to parts that fit the device. A device with no part still appears on the parts list, with a blank part number.
+Assign a part to a device from the Parts panel. The catalogue holds only what you import: maker data and tables via File > Import.... Suggestions are limited to parts that fit the device. A device with no part still appears on the parts list, with a blank part number.
 
 Weights and prices appear only when the part data has them.
 

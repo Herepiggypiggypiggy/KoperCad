@@ -1,4 +1,4 @@
-//! Spreadsheet import (WS-24): File > Import spreadsheet reads an `.xlsx`
+//! Spreadsheet import (WS-24): File > Import... > Import spreadsheet reads an `.xlsx`
 //! or CSV file made by the spreadsheet export, lists every row that would
 //! change with a tick per row, holds back changes that clash with later
 //! edits, lists the rows that cannot be used with their line and reason,
@@ -176,7 +176,7 @@ impl SheetImport {
 }
 
 impl NovoApp {
-    /// File > Import spreadsheet: asks for the file, then opens the preview.
+    /// File > Import... > Import spreadsheet: asks for the file, then opens the preview.
     pub(super) fn import_sheet(&mut self) {
         if !self.is_open() {
             return;

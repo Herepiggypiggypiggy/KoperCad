@@ -12,4 +12,4 @@ Done (PR from branch claude/project-thread-8de6e0):
 
 Done in the second PR: hoist_thermal.rs (stator current from the fitted circuit, two-phase current, two-node heat model, overload relay with trip class), mech_* heat and relay keys, Hoist run heat line with Reset overload relay and Let motors cool down.
 
-Done: 3D hook binding (Hoist in 3D window). Done: bridge and trolley from travel drives, hook swing. Done: axis picks and crane size saved in the project. Next: draw travel end limits as flags, closed-loop hoist, other gear arrangements if real data is supplied.
+Done: 3D hook binding (Hoist in 3D window). Done: bridge and trolley from travel drives, hook swing. Done: axis picks and crane size saved in the project. Done: travel end limits drawn as flags. Next: closed-loop hoist, other gear arrangements if real data is supplied.

@@ -6,9 +6,13 @@ wait 20
 answer_dialog qa/fixtures/parts/odd-list.xlsx
 click_text File
 wait 4
-click_text "Import parts"
+click_text "Import..."
 wait 4
-click_text "Import parts from a table (CSV or Excel)"
+text "table"
+wait 4
+click_text "Import parts table"
+wait 2
+click_text "Import" Button #1
 wait 20
 expect "Import parts from odd-list.xlsx"
 expect_not "No column is the order number"
@@ -28,9 +32,13 @@ shot added
 answer_dialog qa/fixtures/parts/odd-list.xlsx
 click_text File
 wait 4
-click_text "Import parts"
+click_text "Import..."
 wait 4
-click_text "Import parts from a table (CSV or Excel)"
+text "table"
+wait 4
+click_text "Import parts table"
+wait 2
+click_text "Import" Button #1
 wait 20
 click_text Rows Button
 wait 10
@@ -44,9 +52,13 @@ wait 6
 answer_dialog qa/fixtures/parts/unicode-text.txt
 click_text File
 wait 4
-click_text "Import parts"
+click_text "Import..."
 wait 4
-click_text "Import parts from a table (CSV or Excel)"
+text "table"
+wait 4
+click_text "Import parts table"
+wait 2
+click_text "Import" Button #1
 wait 20
 expect "Import parts from unicode-text.txt"
 expect "Order number"
@@ -57,9 +69,13 @@ wait 6
 answer_dialog qa/fixtures/parts/not-text.csv
 click_text File
 wait 4
-click_text "Import parts"
+click_text "Import..."
 wait 4
-click_text "Import parts from a table (CSV or Excel)"
+text "table"
+wait 4
+click_text "Import parts table"
+wait 2
+click_text "Import" Button #1
 wait 20
 expect "does not look like a text file"
 shot refused

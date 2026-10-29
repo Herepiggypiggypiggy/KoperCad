@@ -1,4 +1,4 @@
-//! File > Import parts > Import parts from a CAD parts export: reads a parts
+//! File > Import... > Import CAD parts export: reads a parts
 //! export the person made in their own EPLAN (parts-management XML, or the
 //! delimited text export) or the parts database files of their EPLAN
 //! installation (`.adb`, `.eod`) into the part catalog, after a preview of

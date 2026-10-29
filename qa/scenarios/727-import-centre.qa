@@ -1,0 +1,33 @@
+@title Import centre: tiles by purpose, search, detail pane, Import button
+@area Layout
+# Lane V4c (docs/design/visual-redesign.md section 6). File > Import... opens one
+# window with everything the program can bring in as a tile; picking one shows
+# what it does. Search narrows the tiles; the Import button stays grey until a
+# tile is picked. File no longer has the Import and Import parts submenus.
+click_text "Open example"
+wait 20
+click_text File #1
+wait 6
+shot file-menu-one-import-row
+click_text "Import..."
+wait 10
+shot centre-open
+expect "Drawings and backgrounds"
+expect "Projects"
+expect "Choose an item on the left"
+# The greyed tiles say why in their second line (see the picture): this page has no background, the Controllers add-on is off.
+check_layout
+click_text "Import parts table"
+wait 6
+shot centre-picked
+expect "Parts from a CSV or Excel table"
+check_layout
+text eplan
+wait 8
+shot centre-search-eplan
+expect "Import EPLAN project"
+expect_not "Import parts table"
+check_layout
+key Escape
+wait 6
+expect_not "Choose an item on the left"

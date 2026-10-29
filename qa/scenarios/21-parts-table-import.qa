@@ -6,9 +6,13 @@ wait 20
 answer_dialog qa/fixtures/parts/price-list-de.csv
 click_text File
 wait 4
-click_text "Import parts"
+click_text "Import..."
 wait 4
-click_text "Import parts from a table (CSV or Excel)"
+text "table"
+wait 4
+click_text "Import parts table"
+wait 2
+click_text "Import" Button #1
 wait 20
 shot columns
 check_layout

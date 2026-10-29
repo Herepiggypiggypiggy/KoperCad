@@ -7,9 +7,13 @@ wait 20
 answer_dialog qa/fixtures/parts/price-list-de.csv
 click_text File
 wait 4
-click_text "Import parts"
+click_text "Import..."
 wait 4
-click_text "Import parts from a folder"
+text "folder"
+wait 4
+click_text "Import parts folder"
+wait 2
+click_text "Import" Button #1
 wait 10
 shot old-error
 key ctrl+k

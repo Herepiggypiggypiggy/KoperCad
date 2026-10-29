@@ -159,7 +159,7 @@ pub fn homes(id: &str) -> Vec<Home> {
         out.extend(menus::place(info).map(Home::Menu));
     }
     out.extend(RELOCATED.iter().filter(|(i, _)| *i == id).map(|(_, h)| *h));
-    if crate::centres::in_export_centre(id) {
+    if crate::centres::in_centre(id) {
         out.push(Home::Centre);
     }
     if let Some(reason) = menus::palette_only_reason(id) {
