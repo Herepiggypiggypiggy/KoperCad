@@ -258,9 +258,10 @@ impl ClWinchLoop {
             .collect()
     }
 
-    /// One tick.
-    pub fn step(&mut self, circuit: &mut impl CircuitPort) {
-        let dt = self.config.dt_s;
+    /// First half of a tick: the limit switches and the drive's brake relay contact are written
+    /// from the previous tick. A host that settles one circuit for several loops calls this on
+    /// every loop, settles once, then calls [`step_after_settle`](Self::step_after_settle).
+    pub fn write_contacts(&self, circuit: &mut impl CircuitPort) {
         for m in &self.modules {
             let height = m.height_m();
             for limit in &m.binding.limits {
@@ -270,12 +271,23 @@ impl ClWinchLoop {
                 circuit.set_contact(tag, m.relay);
             }
         }
-        circuit.settle(dt);
+    }
+
+    /// Second half of a tick: read the settled circuit and step every winch.
+    pub fn step_after_settle(&mut self, circuit: &impl CircuitPort) {
+        let dt = self.config.dt_s;
         let time_s = self.time_s;
         for m in &mut self.modules {
             step_module(m, circuit, dt, time_s);
         }
         self.time_s += dt;
+    }
+
+    /// One tick.
+    pub fn step(&mut self, circuit: &mut impl CircuitPort) {
+        self.write_contacts(circuit);
+        circuit.settle(self.config.dt_s);
+        self.step_after_settle(circuit);
     }
 
     /// Runs `ticks` ticks.

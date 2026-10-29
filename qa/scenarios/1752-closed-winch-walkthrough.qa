@@ -1,0 +1,18 @@
+@title Walk-through with a closed-loop winch: an STO channel coil opens while the hook rises and the drive trips with the discrepancy code
+@sizes 1366x768 1920x1080
+@area Simulate
+# Lane L2c. The project has one saved walk-through (press up step 1, open the coil of STO channel 1, expect
+# the drive to be tripped with STD and the hook to stand). Simulate > Defects and walk-throughs lists it.
+open qa/fixtures/closed-winch-walk.novo
+wait 20
+click_text Simulate
+wait 5
+click_text "Defects and walk-throughs"
+wait 30
+expect "STO channel 1 opens while lifting"
+shot card-with-the-saved-walk-through
+click_text "▶ Run"
+wait 300
+expect "2 passed, 0 failed"
+shot report
+check_layout

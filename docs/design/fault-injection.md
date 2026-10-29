@@ -53,7 +53,18 @@ the hoist reports a condition (fed with the brake closed, brake slipping, phase 
 fed) or reports nothing wrong. "What is different" lists a hook that is 5 cm or more away from the healthy
 hoist's and any condition only the faulted hoist reports. A run with a hoist stops at 120 s (every 5 ms tick settles the circuit, and the card runs it on the UI thread).
 
-Not built: a lost encoder, drive overcurrent and the safe-torque-off input (the drive and travel models), radio
+Closed-loop (encoder) winches and winch pairs (`cw_*` properties, design `closed-loop-winch.md`) run in the same
+way, on both plants, with one circuit settle per tick. Circuit defects reach them with no extra step: an open
+coil or broken wire on an STO channel device (the drive latches the discrepancy and trips), a lost encoder signal
+device, a brake contactor that does not pull in. `expect` gains `winch` checks (`{"what":"winch","winch":"=A1+FLD-M1","state":"tripped"}`):
+`above` / `below` a hook height, `standing`, `moving`, `tripped`, `fault` with a drive code (`std`, `enc`),
+`clear`, `sto_active`, and `found` with a finding name (`trip`, `sto_requested`, `encoder_signal_lost`, `brake_slip`,
+`start_rollback`, and for a pair `pair_stopped`, `overload`, `slack`). For a pair the winch is named by either of its
+two motor tags. "What is different" lists a winch hook 5 cm or more away from the healthy one, a drive that trips
+where the healthy one does not, and the findings only the faulted run has. Hooks of a winch are a model (averaged
+drive, spring-damper ropes), not a measurement.
+
+Not built: drive overcurrent and a single lost encoder channel as a drawn device (the winch engine has it), radio
 link loss (the controller model), recording hoist faults from the Hoist run window.
 
 ## Walk-throughs (`novo_sim::walkthrough`)

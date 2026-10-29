@@ -18,7 +18,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{Endpoint, Netlist, PotentialId, Project, SymbolId};
-use novo_machine::hoist_loop::HoistLoop;
 use serde::{Deserialize, Serialize};
 
 use crate::devices::{DeviceStates, MotorRun, device_states};
@@ -26,10 +25,11 @@ use crate::inject::{
     Defect, DefectSet, Prepared, device_by_text, full_pin_name, pin_endpoints, poles_of_device,
 };
 use crate::machine::{
-    self, HoistDefect, HookIs, MAX_MACHINE_SECONDS, MachineSide, PlantPort, check_hook,
+    self, HoistDefect, HookIs, MAX_MACHINE_SECONDS, MachineSide, Machinery, PlantPort, check_hook,
     describe_hook, symbols_by_tag,
 };
 use crate::pins::{operate_poles, pole_of_pin};
+use crate::winch_check::{self, WinchIs};
 use crate::{Clock, Direction, Live, PoleState, Settled, is_coil, rest_state, settle_timed};
 
 /// File format revision of [`Walkthrough`].
@@ -139,6 +139,13 @@ pub enum Check {
         hoist: String,
         #[serde(flatten)]
         is: HookIs,
+    },
+    /// What a closed-loop winch did (needs closed-loop winches in the project): a single winch
+    /// by its motor tag, or one winch of a pair by its motor tag.
+    Winch {
+        winch: String,
+        #[serde(flatten)]
+        is: WinchIs,
     },
 }
 
@@ -432,7 +439,13 @@ fn machine_tick(
 ) {
     {
         let state = machine::with_contacts(project, manual, &m.0.contacts);
-        let MachineSide { lp, contacts, .. } = &mut m.0;
+        let MachineSide {
+            lp,
+            cw,
+            cp,
+            contacts,
+            ..
+        } = &mut m.0;
         let mut port = PlantPort::new(project, healthy_net, by_tag, state, contacts, |st, dt| {
             clean.clock.advance(dt);
             let s = settle_timed(
@@ -447,11 +460,23 @@ fn machine_tick(
             clean.settled = Some(s.clone());
             s
         });
+        // One settle per tick: the winch loops write their contacts first, the hoist loop
+        // settles, then the winch loops read.
+        cw.write_contacts(&mut port);
+        cp.write_contacts(&mut port);
         lp.step(&mut port);
+        cw.step_after_settle(&port);
+        cp.step_after_settle(&port);
     }
     let working = prepared.project(project);
     let state = machine::with_contacts(working, manual, &m.1.contacts);
-    let MachineSide { lp, contacts, .. } = &mut m.1;
+    let MachineSide {
+        lp,
+        cw,
+        cp,
+        contacts,
+        ..
+    } = &mut m.1;
     let mut port = PlantPort::new(
         working,
         prepared.netlist(),
@@ -466,7 +491,11 @@ fn machine_tick(
             s
         },
     );
+    cw.write_contacts(&mut port);
+    cp.write_contacts(&mut port);
     lp.step(&mut port);
+    cw.step_after_settle(&port);
+    cp.step_after_settle(&port);
 }
 
 /// [`run`] with the project's hoists: `hoists` makes a fresh loop for each plant. Steps can
@@ -474,12 +503,30 @@ fn machine_tick(
 pub fn run_with(
     project: &Project,
     walkthrough: &Walkthrough,
-    hoists: Option<&dyn Fn() -> HoistLoop>,
+    hoists: Option<&dyn Fn() -> novo_machine::hoist_loop::HoistLoop>,
+) -> Report {
+    run_with_machinery(
+        project,
+        walkthrough,
+        &Machinery {
+            hoists,
+            ..Machinery::default()
+        },
+    )
+}
+
+/// [`run`] with everything the project can run besides its circuit: hoists, closed-loop winches
+/// and winch pairs. Steps can then put machine defects on a hoist and ask where a hook is or what
+/// a winch's drive did.
+pub fn run_with_machinery(
+    project: &Project,
+    walkthrough: &Walkthrough,
+    machinery: &Machinery<'_>,
 ) -> Report {
     let healthy_net = project.netlist();
     let by_tag = symbols_by_tag(project);
     let mut machine: Option<Machines> =
-        hoists.map(|make| (MachineSide::new(make()), MachineSide::new(make())));
+        (!machinery.is_empty()).then(|| (MachineSide::new(machinery), MachineSide::new(machinery)));
     let rest = rest_state(project);
     let mut manual = rest.clone();
     let mut defects = DefectSet::new();
@@ -671,6 +718,12 @@ pub fn run_with(
                 let (ok, why) = match (check, machine.as_ref()) {
                     (Check::Hook { hoist, is }, Some(m)) => check_hook(&m.1, hoist, is),
                     (Check::Hook { .. }, None) => (false, "this project has no hoist".to_owned()),
+                    (Check::Winch { winch, is }, Some(m)) => {
+                        winch_check::check_winch(&m.1, winch, is)
+                    }
+                    (Check::Winch { .. }, None) => {
+                        (false, "this project has no closed-loop winch".to_owned())
+                    }
                     _ => evaluate(project, &prepared, &faulty, check),
                 };
                 verdict = if ok { Verdict::Pass } else { Verdict::Fail };
@@ -766,6 +819,7 @@ fn describe_check(check: &Check) -> String {
         }
         Check::Net { at, is } => format!("Expect {at} {}", net_is_text(is)),
         Check::Hook { hoist, is } => describe_hook(hoist, is),
+        Check::Winch { winch, is } => winch_check::describe_winch(winch, is),
     }
 }
 
@@ -861,6 +915,10 @@ fn evaluate(project: &Project, prepared: &Prepared, side: &Side, check: &Check) 
         Check::Hook { .. } => (
             false,
             "a hook is checked against the hoists, not the circuit".to_owned(),
+        ),
+        Check::Winch { .. } => (
+            false,
+            "a winch is checked against the winches, not the circuit".to_owned(),
         ),
         Check::Net { at, is } => {
             let ends = match pin_endpoints(project, at) {
