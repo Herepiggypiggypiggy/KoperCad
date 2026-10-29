@@ -93,6 +93,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `switcher.commissioning`: {ui:switcher.commissioning} shows **Commissioning chip**
 - `outline.pages`: {ui:outline.pages} shows **Pages list**
 - `outline.toggle`: {ui:outline.toggle} shows **Pages button**
+- `page.switcher`: {ui:page.switcher} shows **Page switcher**
 - `commissioning.who`: {ui:commissioning.who} shows **By menu**
 - `settings.standard.nfpa`: {ui:settings.standard.nfpa} shows **NFPA 79 / ANSI Y32.2**
 - `settings.standard.switch`: {ui:settings.standard.switch} shows **Switch placed symbols**

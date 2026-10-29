@@ -68,17 +68,6 @@ impl Workspace {
         }
     }
 
-    /// The chip text on a narrow window.
-    pub(crate) fn short_label(self) -> &'static str {
-        match self {
-            Workspace::Schematic => "Sch",
-            Workspace::Cabinet => "Cab",
-            Workspace::View3d => "3D",
-            Workspace::Reports => "Rpt",
-            Workspace::Commissioning => "Cmn",
-        }
-    }
-
     /// Whether the workspace has any content yet.
     fn is_built(self) -> bool {
         matches!(
@@ -219,26 +208,92 @@ impl NovoApp {
         }
     }
 
-    /// The switcher in the top bar: one chip per workspace. A chip that
-    /// cannot open yet stays visible and says why on hover.
+    /// The segment in the top bar (docs/design/visual-redesign.md section 3.1): one icon
+    /// button per workspace in a single track. The current one is on the accent
+    /// wash and shows its name; `names` says whether the others do too. A button
+    /// that cannot open yet stays visible and says why on hover. Every button
+    /// carries the full name for the accessibility tree and the QA harness, shown
+    /// or not.
     pub(super) fn workspace_switcher(
         &mut self,
         ui: &mut egui::Ui,
-        short: bool,
+        names: SegmentNames,
     ) -> Option<Workspace> {
+        let pal = crate::theme::ui_palette();
         let mut picked = None;
+        let height = 28.0;
+        // The track behind the five buttons.
+        let track = ui.painter().add(egui::Shape::Noop);
+        let start = ui.cursor().min;
+        let mut right = start.x;
+        ui.spacing_mut().item_spacing.x = 2.0;
+        ui.add_space(2.0);
         for workspace in Workspace::ALL {
             let reason = self.workspace_unavailable(workspace);
-            let response = ui
-                .add_enabled_ui(reason.is_none(), |ui| {
-                    let label = if short {
-                        workspace.short_label()
-                    } else {
-                        workspace.label()
-                    };
-                    novo_theme::widgets::segment(ui, label, workspace == self.workspace)
-                })
-                .inner;
+            let current = workspace == self.workspace;
+            let show_name = match names {
+                SegmentNames::All => true,
+                SegmentNames::Current => current,
+                SegmentNames::None => false,
+            };
+            let label = workspace.label();
+            let font = egui::TextStyle::Button.resolve(ui.style());
+            let color = if reason.is_some() {
+                pal.text_tertiary
+            } else if current {
+                pal.text_strong
+            } else {
+                pal.text_secondary
+            };
+            let galley =
+                show_name.then(|| ui.painter().layout_no_wrap(label.to_owned(), font, color));
+            let width = 8.0 + 16.0 + galley.as_ref().map_or(0.0, |g| 6.0 + g.size().x) + 8.0;
+            let (rect, response) = ui.allocate_exact_size(
+                egui::vec2(width, height),
+                if reason.is_none() {
+                    egui::Sense::click()
+                } else {
+                    egui::Sense::hover()
+                },
+            );
+            response.widget_info(|| {
+                egui::WidgetInfo::selected(
+                    egui::WidgetType::Button,
+                    reason.is_none(),
+                    current,
+                    label,
+                )
+            });
+            let rounding = egui::CornerRadius::same(6);
+            if current {
+                ui.painter().rect_filled(rect, rounding, pal.accent_wash);
+            } else if reason.is_none() && response.hovered() {
+                ui.painter().rect_filled(rect, rounding, pal.hover);
+            }
+            if response.has_focus() {
+                ui.painter().rect_stroke(
+                    rect,
+                    rounding,
+                    egui::Stroke::new(if pal.high_contrast { 2.5 } else { 2.0 }, pal.accent),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            workspace.glyph().paint(
+                ui.painter(),
+                egui::Rect::from_center_size(
+                    egui::pos2(rect.left() + 16.0, rect.center().y),
+                    egui::Vec2::splat(16.0),
+                ),
+                if current { pal.accent } else { color },
+            );
+            if let Some(galley) = galley {
+                ui.painter().galley(
+                    egui::pos2(rect.left() + 30.0, rect.center().y - galley.size().y / 2.0),
+                    galley,
+                    color,
+                );
+            }
+            right = rect.right();
             if response.clicked() {
                 picked = Some(workspace);
             }
@@ -252,11 +307,46 @@ impl NovoApp {
             self.anchor(anchor, response.rect, name);
             if let Some(reason) = reason {
                 response.on_disabled_hover_text(reason);
-            } else if short {
-                response.on_hover_text(workspace.label());
+            } else if !show_name {
+                response.on_hover_text(label);
             }
         }
+        ui.add_space(2.0);
+        let outer = egui::Rect::from_min_max(
+            egui::pos2(start.x, ui.cursor().top()),
+            egui::pos2(right + 2.0, ui.cursor().top() + height),
+        );
+        ui.painter().set(
+            track,
+            egui::Shape::rect_filled(outer, egui::CornerRadius::same(8), pal.control),
+        );
         picked
+    }
+}
+
+/// Which workspace buttons show their name (the current one always does, except
+/// when there is no room at all).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SegmentNames {
+    /// Every name: from 1500 points.
+    All,
+    /// Only the current one: 1100 to 1500.
+    Current,
+    /// Icons only: under 760 points.
+    None,
+}
+
+impl Workspace {
+    /// The icon of the workspace's button.
+    pub(crate) fn glyph(self) -> novo_theme::presentation::Glyph {
+        use novo_theme::presentation::Glyph;
+        match self {
+            Workspace::Schematic => Glyph::Drawn(&novo_theme::drawn::SCHEMATIC),
+            Workspace::Cabinet => Glyph::Drawn(&novo_theme::drawn::CABINET),
+            Workspace::View3d => Glyph::Phosphor(novo_theme::icons::CUBE),
+            Workspace::Reports => Glyph::Drawn(&novo_theme::drawn::REPORT),
+            Workspace::Commissioning => Glyph::Phosphor(novo_theme::icons::CLIPBOARD_TEXT),
+        }
     }
 }
 

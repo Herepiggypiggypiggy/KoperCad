@@ -284,6 +284,9 @@ mod test_wait;
 mod tidy;
 mod tips;
 mod title_revisions;
+mod top_bar;
+#[cfg(test)]
+mod top_bar_tests;
 mod userkeymap;
 mod variants;
 mod view3d;
@@ -583,7 +586,7 @@ const TOAST_ERROR: Duration = Duration::from_secs(30);
 /// Most toasts shown at once; older ones wait in [`NovoApp::messages`].
 const MAX_TOASTS: usize = 3;
 /// Height of the top bar.
-const TOP_BAR: f32 = 42.0;
+const TOP_BAR: f32 = 40.0;
 /// Width of the outline, pinned or as a flyout.
 const OUTLINE_WIDTH: f32 = 248.0;
 /// The narrowest and widest the navigator column can be dragged to.
@@ -2228,7 +2231,13 @@ impl NovoApp {
                 self.mark(ui, focus);
             }
             ui.separator();
-            if let Some(workspace) = self.workspace_switcher(ui, fit.short_switcher) {
+            // Undo and redo leave the dock for the bar; where the menu words need the
+            // room (a window narrower than 1250) the dock keeps them.
+            if self.window_width >= 1250.0 {
+                self.undo_redo_buttons(ui, picked);
+                ui.separator();
+            }
+            if let Some(workspace) = self.workspace_switcher(ui, fit.segment_names) {
                 self.wb.queued.push(workspace.command());
             }
             ui.separator();
@@ -2359,6 +2368,11 @@ impl NovoApp {
                 self.outline_open ^= true;
             }
             self.breadcrumb_link = Some(link);
+            // Narrower than 1250 the menu words need the room; the page name still
+            // opens the outline.
+            if self.window_width >= 1250.0 {
+                self.page_switcher_button(ui);
+            }
         }
         // A background that hides the wiring must show it exists.
         let background = self
