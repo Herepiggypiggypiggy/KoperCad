@@ -40,6 +40,38 @@ const DRIVE: Article = Article {
     loss_w: 60.0,
     props: &[("rated_power_kw", 3.0), ("rated_current_a", 7.5)],
 };
+const MPCB: Article = Article {
+    order: "MPCB-4-6.3A",
+    description: "Motor protection circuit breaker, 4 to 6.3 A, with trip contact",
+    size: (45.0, 97.0, 97.0),
+    loss_w: 5.0,
+    props: &[("rated_current_a", 6.3), ("poles", 3.0)],
+};
+const CONTACTOR: Article = Article {
+    order: "CONT-3P-9A-24VDC",
+    description: "Contactor 3 pole, AC-3 9 A / 4 kW at 400 V, coil 24 V DC",
+    size: (45.0, 85.0, 93.0),
+    loss_w: 2.5,
+    props: &[
+        ("ac3_current_a", 9.0),
+        ("rated_power_kw", 4.0),
+        ("poles", 3.0),
+    ],
+};
+const MOTOR: Article = Article {
+    order: "MOTOR-2.2KW-4P-IE3",
+    description: "Three phase induction motor 2.2 kW, 4 pole, IE3, for drive operation",
+    size: (200.0, 160.0, 290.0),
+    loss_w: 0.0,
+    props: &[("rated_current_a", 4.8), ("rated_power_kw", 2.2)],
+};
+const PSU: Article = Article {
+    order: "PSU-24V-10A",
+    description: "Power supply 24 V DC, 10 A, 230 V AC input, DIN rail",
+    size: (60.0, 125.0, 120.0),
+    loss_w: 25.0,
+    props: &[("rated_current_a", 10.0)],
+};
 const RELAY: Article = Article {
     order: "RELAY-1CO-24VDC",
     description: "Interface relay 1 changeover, 24 V DC coil",
@@ -481,14 +513,14 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
     }
     for n_ in ["1", "2"] {
         let q = dev(&kit, &format!("{CAB}-Q{n_}"));
-        parts.catalog(kit.tx, q, "Siemens", "3RV2011-1FA10")?;
+        parts.generic(kit.tx, q, &MPCB)?;
         let k = dev(&kit, &format!("{CAB}-K{n_}"));
-        parts.catalog(kit.tx, k, "Siemens", "3RT2016-1BB41")?;
+        parts.generic(kit.tx, k, &CONTACTOR)?;
         let m = dev(&kit, &format!("{FLD}-M{n_}"));
-        parts.catalog(kit.tx, m, "Siemens", "1LE1003-0EB42-2AA4")?;
+        parts.generic(kit.tx, m, &MOTOR)?;
     }
     let g1 = dev(&kit, &format!("{CAB}-G1"));
-    parts.catalog(kit.tx, g1, "Phoenix Contact", "2904601")?;
+    parts.generic(kit.tx, g1, &PSU)?;
     // Terminal strips: blocks, footprints.
     for (strip, count) in [(x0, 5usize), (x1, 10), (x2, 4)] {
         style_strip(kit.tx, &mut parts, strip, count)?;
