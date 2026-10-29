@@ -284,6 +284,7 @@ mod supply_feeds;
 mod symbol_folder;
 mod symbol_preview;
 mod template_crane;
+mod template_crane_window;
 mod terminal_edit;
 mod terminals;
 #[cfg(test)]
@@ -1199,7 +1200,7 @@ impl NovoApp {
             Leaving::CraneExample => self.open_crane_example(),
             Leaving::PlcExample => self.open_plc_example(),
             Leaving::PumpExample => self.open_pump_example(),
-            Leaving::CraneTemplate => self.new_crane_project(),
+            Leaving::CraneTemplate => self.open_crane_options(),
             Leaving::Practice => self.start_practice(),
             Leaving::Lesson(id) => self.start_lesson_now(&id),
             Leaving::Close => self.close_project(),
@@ -2007,6 +2008,7 @@ impl NovoApp {
         self.auto_assign_dialog(&ctx);
         self.describe_recipes_dialog(&ctx);
         self.project_settings_dialog(&ctx);
+        self.crane_options_dialog(&ctx);
         self.project_rules_dialog(&ctx);
         self.device_renumber_dialog(&ctx);
         self.selection_sheet_window(&ctx);

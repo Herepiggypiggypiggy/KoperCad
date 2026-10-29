@@ -8,7 +8,10 @@ move 260 466
 wait 8
 shot menu-new-from-template
 click 600 466
-wait 20
+wait 12
+shot options-window
+click_text "Create project"
+wait 30
 shot template-opened
 expect "New crane project"
 key ctrl+k
