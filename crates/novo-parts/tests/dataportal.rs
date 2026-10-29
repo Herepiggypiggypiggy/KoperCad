@@ -413,3 +413,17 @@ fn contact_counts_coil_data_and_poles_fill_the_description_keys() {
         Some(&Value::Float(50.0))
     );
 }
+
+#[test]
+fn ratings_and_currents_are_not_read_as_counts_or_coil_types() {
+    let xml = r#"<partsmanagement><part partnr="ACM.K-2" manufacturer="Acme"
+        auxcontactsbreakingcapacity="10 A" coilcurrent="0.02 A"
+        coilratedcurrent="25 mA" coilfrequencyhz="NaN" poles="3+N"/></partsmanagement>"#;
+    let r = read_portal(&[file("a.xml", xml)], "", "").unwrap();
+    let d = &r.parts[0].data;
+    assert!(d.get("aux_contacts_nc").is_none());
+    assert!(d.get("aux_contacts_no").is_none());
+    assert!(d.get("coil_current_type").is_none());
+    assert!(d.get("coil_frequency_hz").is_none());
+    assert_eq!(d.get("poles"), Some(&Value::Int(3)), "3+N reads as 3");
+}

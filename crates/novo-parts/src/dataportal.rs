@@ -972,7 +972,7 @@ impl Build {
                     .trim_end_matches("Hz")
                     .trim_end_matches("hz")
                     .trim();
-                if t.is_empty() {
+                if !t.chars().any(|c| c.is_ascii_digit()) {
                     return false;
                 }
                 let v = number(t)
@@ -984,9 +984,12 @@ impl Build {
                 return true;
             } else if k.contains("voltage") {
                 eng::COIL_VOLTAGE_V
-            } else if k.contains("type") || k.contains("current") {
+            } else if k.ends_with("type") || k.ends_with("kind") {
+                // Only a current type (AC, DC, AC/DC, UC); `coilcurrent="20 mA"`
+                // is a current, not a type.
                 let t = value.trim();
-                if t.is_empty() {
+                let up = t.to_ascii_uppercase();
+                if !matches!(up.as_str(), "AC" | "DC" | "AC/DC" | "DC/AC" | "UC") {
                     return false;
                 }
                 part.data
@@ -1014,8 +1017,12 @@ impl Build {
         }
         if k.contains("contact") {
             let aux = k.contains("aux");
-            let nc = k.ends_with("nc") || k.contains("break") || k.contains("normallyclosed");
-            let no = k.ends_with("no") || k.contains("make") || k.contains("normallyopen");
+            // Ratings such as `auxcontactsbreakingcapacity="10 A"` are not counts.
+            let rating = ["capacity", "current", "rating", "voltage"]
+                .iter()
+                .any(|w| k.contains(w));
+            let nc = !rating && (k.ends_with("nc") || k.ends_with("normallyclosed"));
+            let no = !rating && (k.ends_with("no") || k.ends_with("normallyopen"));
             let name = match (aux, no, nc) {
                 (true, true, false) => Some(keys::AUX_NO),
                 (true, false, true) => Some(keys::AUX_NC),
@@ -1024,14 +1031,16 @@ impl Build {
                 }
                 _ => None,
             };
-            return match (name, count(value)) {
+            // A count carries no unit.
+            let plain = value.trim().chars().all(|c| c.is_ascii_digit());
+            return match (name, count(value).filter(|_| plain)) {
                 (Some(name), Some(n)) => {
                     part.data.insert(name.into(), Value::Int(i64::from(n)));
                     part.sources.insert(name.into(), DataSource::MakerDatasheet);
                     true
                 }
                 // `1 NO + 1 NC` in one value: the description reads that text.
-                (None, _) if aux && !value.trim().is_empty() => {
+                (None, _) if aux && !rating && !value.trim().is_empty() => {
                     part.data.insert(
                         "auxiliary_contacts".into(),
                         Value::Text(value.trim().to_owned()),
