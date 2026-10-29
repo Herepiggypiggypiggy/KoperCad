@@ -609,11 +609,50 @@ pub(crate) fn looks_like_bmecat(text: &str) -> bool {
 /// Text of a downloaded table: UTF-8 (with or without BOM), else the
 /// Windows-1252 that German spreadsheet exports use.
 pub(crate) fn decode_text(bytes: &[u8]) -> String {
+    if let Some(text) = utf16_text(bytes) {
+        return text;
+    }
     let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
     match std::str::from_utf8(bytes) {
         Ok(t) => t.to_owned(),
         Err(_) => bytes.iter().map(|&b| cp1252(b)).collect(),
     }
+}
+
+/// UTF-16 text, with a byte order mark or, as ETIM International's own CSV
+/// tables are written, without one: every second byte is then zero.
+fn utf16_text(bytes: &[u8]) -> Option<String> {
+    let (rest, big) = match bytes {
+        [0xFF, 0xFE, rest @ ..] => (rest, false),
+        [0xFE, 0xFF, rest @ ..] => (rest, true),
+        _ => {
+            let head = &bytes[..bytes.len().min(512) & !1];
+            if head.len() < 4 {
+                return None;
+            }
+            let even_zero = head.iter().step_by(2).filter(|&&b| b == 0).count();
+            let odd_zero = head.iter().skip(1).step_by(2).filter(|&&b| b == 0).count();
+            let half = head.len() / 2;
+            if odd_zero * 10 >= half * 9 && even_zero == 0 {
+                (bytes, false)
+            } else if even_zero * 10 >= half * 9 && odd_zero == 0 {
+                (bytes, true)
+            } else {
+                return None;
+            }
+        }
+    };
+    let units: Vec<u16> = rest
+        .chunks_exact(2)
+        .map(|p| {
+            if big {
+                u16::from_be_bytes([p[0], p[1]])
+            } else {
+                u16::from_le_bytes([p[0], p[1]])
+            }
+        })
+        .collect();
+    Some(String::from_utf16_lossy(&units))
 }
 
 fn cp1252(b: u8) -> char {
