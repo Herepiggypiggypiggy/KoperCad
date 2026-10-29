@@ -1,0 +1,59 @@
+# Alternating duty pump: an impulse relay toggles on every run request and
+# routes the request to pump 1 or pump 2 in turn.
+name = "Pump duty alternation with impulse relay"
+chapter = "peripherals"
+description = "Alternates the duty pump on every run request: an impulse relay toggles at each request and passes it to the run coil of pump 1 or pump 2"
+tags = ["pump", "alternation", "duty", "standby", "impulse relay", "24 V", "run request", "level control", "relay"]
+notes = """Wiring example for equal wear of two pumps. Each time the run request closes (a float, the level control K1 contact, a PLC output), the impulse relay K3 changes state and the request is passed to the run coil of one pump, then of the other next time. \\
+K3 is an impulse (latching) relay that changes state on every pulse; draw it from an alternating relay module or a stepping relay. K11 and K12 are the run requests for the pump feeders: use their contacts there. \\
+A pump that is blocked or tripped is not skipped: add its fault contact in series with the matching coil, or let your controller do the alternation. \\
+This is a wiring example, not a validated design. \\
+You connect: 24 V DC above F1, 0 V below the coils of K3, K11 and K12."""
+
+open = ["f1s.1", "k3c.A2", "k11c.A2", "k12c.A2"]
+
+device = [
+  { id = "f1", tag = "-F1", description = "Control circuit breaker", mount = { kind = "din", size = [18, 90, 70], at = [15, 55], rail = "r1" } },
+  { id = "k3", tag = "-K3", description = "Alternating (impulse) relay", mount = { kind = "din", size = [15.5, 78, 66], at = [45, 61], rail = "r1" } },
+  { id = "k11", tag = "-K11", description = "Pump 1 run request", mount = { kind = "din", size = [15.5, 78, 66], at = [65, 61], rail = "r1" } },
+  { id = "k12", tag = "-K12", description = "Pump 2 run request", mount = { kind = "din", size = [15.5, 78, 66], at = [85, 61], rail = "r1" } },
+  { id = "s1", tag = "-S1", description = "Run request", mount = { kind = "field", place = "level control contact or PLC output" } },
+]
+
+symbol = [
+  { id = "f1s", key = "iec/protection/mcb_1p", at = [40, 40], device = "f1" },
+  { id = "s1s", key = "iec/operators/pushbutton_no", at = [72, 72], device = "s1" },
+  { id = "k3c", key = "iec/coils/relay", at = [72, 112], device = "k3", main = true },
+  { id = "k3a", key = "iec/contacts/no", at = [104, 112], device = "k3", main = false },
+  { id = "k3b", key = "iec/contacts/nc", at = [136, 112], device = "k3", main = false },
+  { id = "k11c", key = "iec/coils/relay", at = [104, 144], device = "k11", main = true },
+  { id = "k12c", key = "iec/coils/relay", at = [136, 144], device = "k12", main = true },
+]
+
+junction = [
+  { id = "ja", at = [72, 104] },
+  { id = "jb", at = [104, 104] },
+  { id = "jc", at = [136, 104] },
+]
+
+wire = [
+  { from = "s1s.14", to = "ja" },
+  { from = "ja", to = "jb" }, { from = "jb", to = "jc" },
+  { from = "ja", to = "k3c.A1" },
+  { from = "jb", to = "k3a.13" }, { from = "k3a.14", to = "k11c.A1" },
+  { from = "jc", to = "k3b.21" }, { from = "k3b.22", to = "k12c.A1" },
+]
+
+bus = [
+  { y = 60, taps = ["f1s.2", "s1s.13"] },
+]
+
+[plate]
+width = 120
+height = 200
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 105
