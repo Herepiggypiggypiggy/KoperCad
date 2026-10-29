@@ -1,0 +1,25 @@
+@title A placed circuit lands in the visible part of a drawn page
+@area Schematic
+@sizes 1366x768 1920x1080
+# Test report 16: circuits dropped at a fixed top-left spot, off screen once the page had a drawing and the view was panned.
+click_text "New project"
+wait 20
+key q
+text fuse
+key Return
+click 900 500
+wait 5
+key Escape
+scroll 500 300 -150
+wait 10
+key ctrl+k
+text "motor starter dol"
+wait 5
+key Enter
+wait 10
+try click_text "Motor starter DOL" Label
+wait 10
+click_text Place Button #2
+wait 20
+shot placed
+expect "Placed Motor starter DOL"

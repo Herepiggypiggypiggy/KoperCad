@@ -1,0 +1,66 @@
+@title Example gallery: PLC cabinet
+@area Examples
+# File > Examples > Open example: PLC cabinet. Every page (reached with Ctrl+K), the cabinet and the I/O list.
+fresh
+wait 10
+key ctrl+k
+wait 6
+text plc cabinet
+wait 8
+key Enter
+wait 40
+expect "Incoming supply and 24 V"
+shot plc-first-view
+check_blank plc-first-view
+check_layout
+key ctrl+k
+wait 6
+text PLC and cards
+wait 8
+key Enter
+wait 15
+expect "PLC and cards"
+shot plc-page-2
+key ctrl+k
+wait 6
+text Digital inputs: operator panel
+wait 8
+key Enter
+wait 15
+expect "Digital inputs: operator panel"
+shot plc-page-3
+key ctrl+k
+wait 6
+text Digital inputs: machine
+wait 8
+key Enter
+wait 15
+expect "Digital inputs: machine"
+shot plc-page-4
+key ctrl+k
+wait 6
+text Digital outputs
+wait 8
+key Enter
+wait 15
+expect "Digital outputs"
+shot plc-page-5
+key ctrl+k
+wait 6
+text Analog inputs
+wait 8
+key Enter
+wait 15
+expect "Analog inputs"
+shot plc-page-6
+click_text "Cabinet"
+wait 20
+shot plc-cabinet
+check_blank plc-cabinet
+key ctrl+k
+wait 6
+text I/O list
+wait 8
+key Enter
+wait 20
+shot plc-io-list

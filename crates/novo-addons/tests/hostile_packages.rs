@@ -116,7 +116,7 @@ fn a_file_the_manifest_does_not_list_is_refused() {
         let mut f = a.by_index(i).unwrap();
         let mut b = Vec::new();
         std::io::Read::read_to_end(&mut f, &mut b).unwrap();
-        entries.push((f.name().to_owned(), b));
+        entries.push((f.name().unwrap().into_owned(), b));
     }
     entries.push(("data/extra.dll".into(), b"MZ".to_vec()));
     let refs: Vec<(&str, &[u8])> = entries
@@ -265,7 +265,7 @@ fn a_broken_signature_is_refused_even_though_unsigned_would_pass() {
         let mut f = a.by_index(i).unwrap();
         let mut b = Vec::new();
         std::io::Read::read_to_end(&mut f, &mut b).unwrap();
-        entries.push((f.name().to_owned(), b));
+        entries.push((f.name().unwrap().into_owned(), b));
     }
     for (n, b) in &mut entries {
         if n == "manifest.toml" {

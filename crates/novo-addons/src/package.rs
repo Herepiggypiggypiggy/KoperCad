@@ -93,7 +93,10 @@ impl Package {
             let file = archive
                 .by_index(i)
                 .map_err(|e| AddonError::NotAPackage(e.to_string()))?;
-            let name = file.name().to_owned();
+            let name = file
+                .name()
+                .map_err(|e| AddonError::NotAPackage(e.to_string()))?
+                .into_owned();
             let is_dir = file.is_dir();
             check_path(name.trim_end_matches('/'))?;
             if file.encrypted() {
