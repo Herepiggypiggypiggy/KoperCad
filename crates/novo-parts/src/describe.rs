@@ -27,7 +27,7 @@ use novo_core::{Command, Device, DeviceId, Part, Project, Properties, Record, Va
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::CatalogPart;
-use crate::fit::{Role, part_role};
+use crate::fit::{Role, parse_supply, part_role};
 
 /// Stable `data` keys the generator reads, besides the ones in
 /// [`crate::eng`] (`poles`, `rated_current_a`, `ac3_current_a`,
@@ -55,6 +55,7 @@ pub const FIELDS: &[(&str, &str)] = &[
     ("voltage", "rated voltage, e.g. 400 V"),
     ("power", "rated power, e.g. 4 kW"),
     ("contacts", "contact configuration, e.g. 3M/1m/1v"),
+    ("switching", "the part's own contact text, e.g. 1 NO + 1 NC"),
     ("coil", "coil voltage and frequency, e.g. 48 V, 50 Hz"),
     ("coil_v", "coil voltage alone"),
     ("coil_hz", "coil frequency alone"),
@@ -206,6 +207,8 @@ pub struct Facts {
     /// `AC`, `DC`, `AC/DC`.
     pub coil_type: Option<String>,
     pub setting_a: Option<(f64, f64)>,
+    /// The part's own contact text, `1 NO + 1 NC` (push buttons, auxiliary blocks).
+    pub switching: Option<String>,
 }
 
 fn number(props: &Properties, key: &str) -> Option<f64> {
@@ -238,21 +241,39 @@ impl Facts {
         use crate::schema::eng;
         let min = number(data, eng::SETTING_MIN_A);
         let max = number(data, eng::SETTING_MAX_A);
+        // Maker tables often write the coil as one text, `24 V AC/DC`, and
+        // the auxiliary contacts as `1 NO + 1 NC`: read both spellings.
+        let coil_text = text(data, "coil_voltage");
+        let supply = coil_text.as_deref().and_then(parse_supply);
+        let (aux_no_t, aux_nc_t) = text(data, "auxiliary_contacts")
+            .map(|t| contact_counts(&t))
+            .unzip();
         Facts {
             maker: maker.to_owned(),
             type_number: type_number.to_owned(),
             poles: count(data, eng::POLES),
             current_a: number(data, eng::AC3_CURRENT_A)
                 .or_else(|| number(data, eng::RATED_CURRENT_A)),
-            voltage_v: number(data, keys::VOLTAGE_V),
+            voltage_v: number(data, keys::VOLTAGE_V)
+                .or_else(|| text(data, "rated_voltage").and_then(|t| first_number(&t))),
             power_kw: number(data, eng::RATED_POWER_KW),
             main_no: count(data, keys::MAIN_NO),
-            aux_no: count(data, keys::AUX_NO),
-            aux_nc: count(data, keys::AUX_NC),
-            coil_v: number(data, eng::COIL_VOLTAGE_V),
-            coil_hz: text(data, keys::COIL_HZ),
-            coil_type: text(data, keys::COIL_KIND),
+            aux_no: count(data, keys::AUX_NO).or(aux_no_t),
+            aux_nc: count(data, keys::AUX_NC).or(aux_nc_t),
+            coil_v: number(data, eng::COIL_VOLTAGE_V).or(supply.map(|s| s.volts)),
+            coil_hz: text(data, keys::COIL_HZ).or_else(|| coil_text.as_deref().and_then(hertz_in)),
+            coil_type: text(data, keys::COIL_KIND).or_else(|| {
+                supply.map(|s| {
+                    match (s.ac, s.dc) {
+                        (true, true) => "AC/DC",
+                        (true, false) => "AC",
+                        _ => "DC",
+                    }
+                    .to_owned()
+                })
+            }),
             setting_a: min.zip(max),
+            switching: text(data, "contacts").or_else(|| text(data, "auxiliary_contacts")),
         }
     }
 
@@ -263,6 +284,49 @@ impl Facts {
     pub fn of_project(part: &Part) -> Self {
         Self::from_data(&part.manufacturer, &part.type_number, &part.properties)
     }
+}
+
+/// The first number in a text: `400 V` gives 400.
+fn first_number(text: &str) -> Option<f64> {
+    let digits: String = text
+        .chars()
+        .skip_while(|c| !c.is_ascii_digit())
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    digits.parse().ok()
+}
+
+/// The number written before `Hz`: `230 V AC 50/60 Hz` gives `50/60`.
+fn hertz_in(text: &str) -> Option<String> {
+    let lower = text.to_lowercase();
+    let before = lower.split("hz").next().filter(|_| lower.contains("hz"))?;
+    let token: String = before
+        .trim_end()
+        .chars()
+        .rev()
+        .take_while(|c| c.is_ascii_digit() || *c == '/' || *c == '.')
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+    (!token.is_empty()).then_some(token)
+}
+
+/// Make and break counts of `1 NO + 1 NC`. A kind that is not named is zero:
+/// the text states the whole configuration.
+fn contact_counts(text: &str) -> (u32, u32) {
+    let mut no = 0;
+    let mut nc = 0;
+    for part in text.split(['+', ',', '/']) {
+        let upper = part.to_uppercase();
+        let n = first_number(&upper).map_or(1, |v| v as u32);
+        if upper.contains("NO") {
+            no += n;
+        } else if upper.contains("NC") {
+            nc += n;
+        }
+    }
+    (no, nc)
 }
 
 /// `9`, `1.6`, `0.25`: no trailing zeros.
@@ -321,6 +385,7 @@ impl Recipe {
                 let sep = if self.unit_space { " " } else { "" };
                 format!("{}-{}{sep}A", trim_number(lo), trim_number(hi))
             }),
+            "switching" => facts.switching.clone(),
             "type" => Some(facts.type_number.clone()).filter(|t| !t.is_empty()),
             "maker" => Some(facts.maker.clone()).filter(|t| !t.is_empty()),
             _ => None,
@@ -511,7 +576,7 @@ impl RecipeSet {
             "fuse holder",
             &["[{poles}-pole ]{kind}", "{current}", "{voltage}"],
         );
-        put("push_button", "push button", &["{kind}", "{contacts}"]);
+        put("push_button", "push button", &["{kind}", "{switching}"]);
         put("motor", "motor", &["{kind}", "{power}", "{voltage}"]);
         put(
             "drive",
@@ -797,6 +862,37 @@ mod tests {
             RecipeSet::load(&dir.path().join("none.json")),
             RecipeSet::english()
         );
+    }
+
+    #[test]
+    fn maker_table_spellings_are_read() {
+        // The starter catalog writes the coil and the contacts as text.
+        let mut p = CatalogPart::new("Acme", "C-2");
+        p.function = "contactor".into();
+        p.data.insert("poles".into(), Value::Int(3));
+        p.data.insert("rated_current_a".into(), Value::Float(9.0));
+        p.data
+            .insert("rated_voltage".into(), Value::Text("400 V".into()));
+        p.data.insert(
+            "coil_voltage".into(),
+            Value::Text("230 V AC 50/60 Hz".into()),
+        );
+        p.data.insert(
+            "auxiliary_contacts".into(),
+            Value::Text("1 NO + 1 NC".into()),
+        );
+        let d = RecipeSet::english().describe_catalog(&p).unwrap();
+        assert_eq!(
+            d.text,
+            "3-pole contactor; 9 A; 3M/1m/1b; 400 V; Coil: 230 V AC, 50/60 Hz"
+        );
+        let mut q = p.clone();
+        q.data
+            .insert("auxiliary_contacts".into(), Value::Text("1 NO".into()));
+        q.data
+            .insert("coil_voltage".into(), Value::Text("24 V AC/DC".into()));
+        let d = RecipeSet::english().describe_catalog(&q).unwrap();
+        assert!(d.text.contains("3M/1m/0b") && d.text.ends_with("Coil: 24 V AC/DC"));
     }
 
     #[test]

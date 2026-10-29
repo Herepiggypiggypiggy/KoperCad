@@ -86,8 +86,18 @@ impl NovoApp {
             );
             return;
         };
+        let n = match &command {
+            novo_core::Command::Batch { commands, .. } => commands.len(),
+            _ => 1,
+        };
         match self.execute(command) {
-            Some(Ok(_)) => self.message(Level::Info, format!("Described {what}s from the recipes")),
+            Some(Ok(_)) => self.message(
+                Level::Info,
+                format!(
+                    "Wrote {n} {what} description{} from the recipes",
+                    if n == 1 { "" } else { "s" }
+                ),
+            ),
             Some(Err(e)) => self.message(Level::Error, format!("Could not describe: {e}")),
             None => {}
         }
@@ -122,78 +132,81 @@ impl NovoApp {
                 });
                 ui.separator();
                 let ids: Vec<String> = dialog.set.recipes.keys().cloned().collect();
-                ui.horizontal_top(|ui| {
-                    ui.vertical(|ui| {
-                        ui.set_width(170.0);
-                        for id in &ids {
-                            let word = &dialog.set.recipes[id].kind;
-                            if ui.selectable_label(&dialog.kind == id, word).clicked() {
-                                dialog.kind = id.clone();
-                            }
-                        }
-                    });
-                    ui.separator();
-                    ui.vertical(|ui| {
-                        let facts = sample();
-                        let Some(recipe) = dialog.set.recipes.get_mut(&dialog.kind) else {
-                            return;
-                        };
-                        ui.horizontal(|ui| {
-                            ui.label("Kind word");
-                            ui.text_edit_singleline(&mut recipe.kind);
-                            ui.checkbox(&mut recipe.unit_space, "Space before units");
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("Contact letters (main, make, break)");
-                            for field in [
-                                &mut recipe.marks.main,
-                                &mut recipe.marks.make,
-                                &mut recipe.marks.brk,
-                            ] {
-                                ui.add(egui::TextEdit::singleline(field).desired_width(30.0));
-                            }
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("Between segments");
-                            ui.add(
-                                egui::TextEdit::singleline(&mut recipe.separator)
-                                    .desired_width(50.0),
-                            );
-                        });
-                        ui.add_space(4.0);
-                        ui.label(egui::RichText::new("Segments").strong());
-                        let problems = recipe.problems();
-                        let mut remove = None;
-                        for (at, segment) in recipe.segments.iter_mut().enumerate() {
-                            ui.horizontal(|ui| {
-                                ui.add(egui::TextEdit::singleline(segment).desired_width(300.0));
-                                if ui.small_button("Remove").clicked() {
-                                    remove = Some(at);
+                super::panel::fill_above(ui, 76.0, |ui| {
+                    ui.horizontal_top(|ui| {
+                        ui.vertical(|ui| {
+                            ui.set_width(170.0);
+                            for id in &ids {
+                                let word = &dialog.set.recipes[id].kind;
+                                if ui.selectable_label(&dialog.kind == id, word).clicked() {
+                                    dialog.kind = id.clone();
                                 }
-                                if let Some((_, e)) = problems.iter().find(|(i, _)| *i == at) {
-                                    ui.colored_label(palette.warning, e.to_string());
+                            }
+                        });
+                        ui.separator();
+                        ui.vertical(|ui| {
+                            let facts = sample();
+                            let Some(recipe) = dialog.set.recipes.get_mut(&dialog.kind) else {
+                                return;
+                            };
+                            ui.horizontal(|ui| {
+                                ui.label("Kind word");
+                                ui.text_edit_singleline(&mut recipe.kind);
+                                ui.checkbox(&mut recipe.unit_space, "Space before units");
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Contact letters (main, make, break)");
+                                for field in [
+                                    &mut recipe.marks.main,
+                                    &mut recipe.marks.make,
+                                    &mut recipe.marks.brk,
+                                ] {
+                                    ui.add(egui::TextEdit::singleline(field).desired_width(30.0));
                                 }
                             });
-                        }
-                        if let Some(at) = remove {
-                            recipe.segments.remove(at);
-                        }
-                        if ui.small_button("Add segment").clicked() {
-                            recipe.segments.push("{kind}".into());
-                        }
-                        ui.add_space(6.0);
-                        ui.label(egui::RichText::new("Fields").strong());
-                        ui.weak(
-                            novo_parts::describe::FIELDS
-                                .iter()
-                                .map(|(f, _)| format!("{{{f}}}"))
-                                .collect::<Vec<_>>()
-                                .join("  "),
-                        );
-                        ui.add_space(6.0);
-                        ui.label(egui::RichText::new("Preview on a sample part").strong());
-                        let d = recipe.describe(&facts);
-                        ui.monospace(&d.text);
+                            ui.horizontal(|ui| {
+                                ui.label("Between segments");
+                                ui.add(
+                                    egui::TextEdit::singleline(&mut recipe.separator)
+                                        .desired_width(50.0),
+                                );
+                            });
+                            ui.add_space(4.0);
+                            ui.label(egui::RichText::new("Preview on a sample part").strong());
+                            ui.monospace(recipe.describe(&facts).text);
+                            ui.add_space(4.0);
+                            ui.label(egui::RichText::new("Segments").strong());
+                            let problems = recipe.problems();
+                            let mut remove = None;
+                            for (at, segment) in recipe.segments.iter_mut().enumerate() {
+                                ui.horizontal(|ui| {
+                                    ui.add(
+                                        egui::TextEdit::singleline(segment).desired_width(300.0),
+                                    );
+                                    if ui.small_button("Remove").clicked() {
+                                        remove = Some(at);
+                                    }
+                                    if let Some((_, e)) = problems.iter().find(|(i, _)| *i == at) {
+                                        ui.colored_label(palette.warning, e.to_string());
+                                    }
+                                });
+                            }
+                            if let Some(at) = remove {
+                                recipe.segments.remove(at);
+                            }
+                            if ui.small_button("Add segment").clicked() {
+                                recipe.segments.push("{kind}".into());
+                            }
+                            ui.add_space(6.0);
+                            ui.label(egui::RichText::new("Fields").strong());
+                            ui.weak(
+                                novo_parts::describe::FIELDS
+                                    .iter()
+                                    .map(|(f, _)| format!("{{{f}}}"))
+                                    .collect::<Vec<_>>()
+                                    .join("  "),
+                            );
+                        });
                     });
                 });
                 ui.add_space(8.0);

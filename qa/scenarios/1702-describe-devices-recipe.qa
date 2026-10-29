@@ -1,0 +1,34 @@
+@title Describe devices from parts: recipe editor, bad recipe warning, result message
+@area Parts
+# PR 1702: Edit > Parts > Describe devices from parts writes descriptions from part data by a recipe per kind.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text describe devices from parts
+wait 8
+key Enter
+wait 10
+expect "Describe devices from parts"
+expect "Preview on a sample part"
+expect "3-pole contactor; 9 A; 3M/1m/1b; 400 V; 4 kW; Coil: 48 V AC, 50 Hz"
+shot recipe-editor-preview
+check_layout
+click_text "Add segment"
+wait 5
+click 650 556
+key ctrl+a
+text {nope}
+wait 8
+expect "unknown field {nope}"
+shot bad-recipe-warning
+check_layout
+key ctrl+a
+text {kind} {type}
+wait 5
+click_text "Replace descriptions that are already written"
+wait 3
+click_text "Describe selected devices"
+wait 10
+shot result-message
+check_layout
