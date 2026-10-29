@@ -13,6 +13,7 @@ pub enum Action {
     OpenExample,
     OpenEmcExample,
     OpenMccExample,
+    OpenPumpExample,
     TryFastKeys,
     ShowWalkthrough,
     Learn,
@@ -47,6 +48,7 @@ impl Action {
         Action::OpenExample,
         Action::OpenEmcExample,
         Action::OpenMccExample,
+        Action::OpenPumpExample,
         Action::TryFastKeys,
         Action::ShowWalkthrough,
         Action::Learn,
@@ -83,6 +85,7 @@ impl Action {
             Action::OpenExample => "file.example",
             Action::OpenEmcExample => "file.example_emc",
             Action::OpenMccExample => "file.example_mcc",
+            Action::OpenPumpExample => "file.example_pump",
             Action::TryFastKeys => "file.practice",
             Action::ShowWalkthrough => "help.walkthrough",
             Action::Learn => "help.learn",
@@ -122,6 +125,7 @@ impl Action {
             Action::OpenExample => "Open example",
             Action::OpenEmcExample => "Open EMC example",
             Action::OpenMccExample => "Open example: motor control centre",
+            Action::OpenPumpExample => "Open example: pump station",
             Action::TryFastKeys => "Try the fast keys",
             Action::ShowWalkthrough => "Fast keys card on this project",
             Action::Learn => "Learn…",
@@ -159,6 +163,7 @@ impl Action {
             | Action::OpenExample
             | Action::OpenEmcExample
             | Action::OpenMccExample
+            | Action::OpenPumpExample
             | Action::TryFastKeys
             | Action::SaveProject
             | Action::SaveProjectAs
@@ -209,6 +214,7 @@ impl Action {
             | Action::OpenExample
             | Action::OpenEmcExample
             | Action::OpenMccExample
+            | Action::OpenPumpExample
             | Action::TryFastKeys
             | Action::ShowWalkthrough
             | Action::Learn

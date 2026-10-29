@@ -265,6 +265,14 @@ impl NovoApp {
         );
     }
 
+    /// The pump station example: two frequency drives, pressure control and a full cabinet.
+    pub(super) fn open_pump_example(&mut self) {
+        self.open_built_example(
+            super::example_pump::PUMP_EXAMPLE_NAME,
+            super::example_pump::build_pump_example,
+        );
+    }
+
     fn open_built_example(
         &mut self,
         name: &str,

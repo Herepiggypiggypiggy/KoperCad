@@ -182,6 +182,21 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "file.example_pump",
+        "Open example: pump station (2 frequency drives, pressure control, full cabinet)",
+        "Project",
+        &[
+            "pump",
+            "pump station",
+            "vfd",
+            "frequency drive",
+            "cabinet",
+            "demo",
+            "example",
+        ],
+        Needs::Nothing,
+    ),
+    cmd(
         "file.practice",
         "Try the fast keys",
         "Project",
