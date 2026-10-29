@@ -132,6 +132,8 @@ pub(crate) struct Workbench {
     pub(super) selection_sheet: super::selection_sheet::SelectionSheet,
     /// The Project rules window is open.
     pub(super) project_rules: bool,
+    /// The company pin templates being edited in the Project rules window.
+    pub(super) pin_templates_text: Option<String>,
     /// The Wire numbering window, while it is open.
     pub(super) numbering: Option<super::numbering::NumberingWindow>,
     /// Text of the open "Set wire number" prompt.
@@ -374,6 +376,7 @@ impl Default for Workbench {
             device_renumber: None,
             selection_sheet: Default::default(),
             project_rules: false,
+            pin_templates_text: None,
             page_form: None,
             sheet_import: None,
             sheet: 0,

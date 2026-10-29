@@ -98,13 +98,13 @@ impl PinSet {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PinTemplate {
     /// Short id of the class (`coil`, `motor.ac3`).
-    pub class: &'static str,
+    pub class: String,
     /// Plain name for messages (`coil`, `three-phase motor`).
-    pub label: &'static str,
+    pub label: String,
     /// The symbol function types the template covers: the function itself
     /// and everything below it (`coil` covers `coil.relay`), unless a longer
     /// template matches.
-    pub functions: Vec<&'static str>,
+    pub functions: Vec<String>,
     /// Valid pin namings, preferred first.
     pub sets: Vec<PinSet>,
 }
@@ -112,8 +112,8 @@ pub struct PinTemplate {
 /// How a pin list differs from the template of its class.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Deviation {
-    pub class: &'static str,
-    pub label: &'static str,
+    pub class: String,
+    pub label: String,
     /// The set that is closest to the pins.
     pub closest: String,
     /// What that set looks like (`A1 A2`).
@@ -173,9 +173,9 @@ fn t(
     sets: Vec<PinSet>,
 ) -> PinTemplate {
     PinTemplate {
-        class,
-        label,
-        functions: functions.to_vec(),
+        class: class.to_owned(),
+        label: label.to_owned(),
+        functions: functions.iter().map(|f| (*f).to_owned()).collect(),
         sets,
     }
 }
@@ -409,16 +409,13 @@ fn covers(prefix: &str, function: &str) -> bool {
             .is_some_and(|rest| rest.starts_with('.'))
 }
 
-/// The template of a symbol function type: the one with the longest
-/// matching function, so `coil.brake` wins over `coil` for a brake coil.
-pub fn template_for(function: &str) -> Option<&'static PinTemplate> {
-    templates()
-        .iter()
+fn best_in<'a>(list: &'a [PinTemplate], function: &str) -> Option<&'a PinTemplate> {
+    list.iter()
         .filter_map(|tpl| {
             tpl.functions
                 .iter()
                 .filter(|f| covers(f, function))
-                .map(|f| f.len())
+                .map(String::len)
                 .max()
                 .map(|len| (len, tpl))
         })
@@ -426,10 +423,32 @@ pub fn template_for(function: &str) -> Option<&'static PinTemplate> {
         .map(|(_, tpl)| tpl)
 }
 
+/// The built-in template of a symbol function type: the one with the longest
+/// matching function, so `coil.brake` wins over `coil` for a brake coil.
+pub fn template_for(function: &str) -> Option<&'static PinTemplate> {
+    best_in(templates(), function)
+}
+
+/// Like [`template_for`], but a company template that covers `function`
+/// replaces the built-in one, whatever its function length.
+pub fn template_with<'a>(company: &'a [PinTemplate], function: &str) -> Option<&'a PinTemplate> {
+    best_in(company, function).or_else(|| template_for(function))
+}
+
 /// How `pins` differs from the template of `function`, or `None` when it
 /// follows the template (any of its sets) or the function has no template.
 pub fn check_pins(function: &str, pins: &[&str]) -> Option<Deviation> {
-    let tpl = template_for(function)?;
+    check_pins_with(&[], function, pins)
+}
+
+/// [`check_pins`] with the company templates of a project in front of the
+/// built-in ones.
+pub fn check_pins_with(
+    company: &[PinTemplate],
+    function: &str,
+    pins: &[&str],
+) -> Option<Deviation> {
+    let tpl = template_with(company, function)?;
     if tpl.sets.iter().any(|s| s.accepts(pins)) {
         return None;
     }
@@ -452,13 +471,125 @@ pub fn check_pins(function: &str, pins: &[&str]) -> Option<Deviation> {
         })
         .min_by_key(|(_, m, u)| m.len() + u.len())?;
     Some(Deviation {
-        class: tpl.class,
-        label: tpl.label,
+        class: tpl.class.clone(),
+        label: tpl.label.clone(),
         closest: set.name.clone(),
         closest_pins: set.describe(),
         missing,
         unexpected,
     })
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FileSet {
+    name: String,
+    #[serde(default)]
+    required: Vec<String>,
+    #[serde(default)]
+    optional: Vec<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FileClass {
+    id: String,
+    #[serde(default)]
+    label: String,
+    functions: Vec<String>,
+    set: Vec<FileSet>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct File {
+    #[serde(default)]
+    class: Vec<FileClass>,
+}
+
+/// Reads company pin templates from TOML text, one `[[class]]` per device
+/// class with `id`, `label`, the symbol `functions` it covers and one or more
+/// `[[class.set]]` with `name`, `required` and `optional` pin names:
+///
+/// ```toml
+/// [[class]]
+/// id = "motor.brake"
+/// label = "brake motor"
+/// functions = ["motor.ac3"]
+/// [[class.set]]
+/// name = "three terminals and brake"
+/// required = ["U1", "V1", "W1", "BD1", "BD2"]
+/// optional = ["PE"]
+/// ```
+///
+/// A class replaces the built-in template for the functions it covers. The
+/// error names what is wrong in plain words, for the person who typed it.
+pub fn parse_company_templates(text: &str) -> Result<Vec<PinTemplate>, String> {
+    let file: File = toml::from_str(text).map_err(|e| e.message().to_owned())?;
+    let mut out = Vec::new();
+    for class in file.class {
+        let id = class.id.trim().to_owned();
+        if id.is_empty() {
+            return Err("a class has no id".into());
+        }
+        if class.functions.is_empty() || class.functions.iter().any(|f| f.trim().is_empty()) {
+            return Err(format!(
+                "class {id} needs at least one function, like coil.relay"
+            ));
+        }
+        if class.set.is_empty() {
+            return Err(format!("class {id} needs at least one [[class.set]]"));
+        }
+        let mut sets = Vec::new();
+        for set in class.set {
+            let clean = |names: Vec<String>| -> Vec<String> {
+                names.into_iter().map(|n| n.trim().to_owned()).collect()
+            };
+            let (required, optional) = (clean(set.required), clean(set.optional));
+            if required.is_empty() {
+                return Err(format!(
+                    "set {} of class {id} has no required pins",
+                    set.name
+                ));
+            }
+            let mut seen = std::collections::HashSet::new();
+            for name in required.iter().chain(&optional) {
+                if name.is_empty() {
+                    return Err(format!(
+                        "set {} of class {id} has an empty pin name",
+                        set.name
+                    ));
+                }
+                if !seen.insert(name.as_str()) {
+                    return Err(format!(
+                        "set {} of class {id} lists pin {name} twice",
+                        set.name
+                    ));
+                }
+            }
+            sets.push(PinSet {
+                name: set.name,
+                required,
+                optional,
+                extras: Vec::new(),
+            });
+        }
+        out.push(PinTemplate {
+            label: if class.label.trim().is_empty() {
+                id.clone()
+            } else {
+                class.label.trim().to_owned()
+            },
+            class: id,
+            functions: class
+                .functions
+                .iter()
+                .map(|f| f.trim().to_owned())
+                .collect(),
+            sets,
+        });
+    }
+    Ok(out)
 }
 
 /// Pins to rename so that a pin list follows the template of its class.
@@ -489,7 +620,16 @@ fn squash(name: &str) -> String {
 /// Several guesses by position are never made, and every missing pin must be
 /// covered, so a rename never leaves the pins half way.
 pub fn suggest_renames(function: &str, pins: &[&str]) -> Option<Renames> {
-    let dev = check_pins(function, pins)?;
+    suggest_renames_with(&[], function, pins)
+}
+
+/// [`suggest_renames`] with the company templates of a project.
+pub fn suggest_renames_with(
+    company: &[PinTemplate],
+    function: &str,
+    pins: &[&str],
+) -> Option<Renames> {
+    let dev = check_pins_with(company, function, pins)?;
     if dev.missing.is_empty() || dev.unexpected.len() < dev.missing.len() {
         return None;
     }
@@ -548,10 +688,12 @@ pub fn suggest_renames(function: &str, pins: &[&str]) -> Option<Renames> {
         })
         .collect();
     let renamed: Vec<&str> = renamed.iter().map(String::as_str).collect();
-    check_pins(function, &renamed).is_none().then_some(Renames {
-        set: dev.closest,
-        renames,
-    })
+    check_pins_with(company, function, &renamed)
+        .is_none()
+        .then_some(Renames {
+            set: dev.closest,
+            renames,
+        })
 }
 
 #[cfg(test)]
@@ -614,9 +756,62 @@ mod tests {
     }
 
     #[test]
+    fn company_templates_replace_the_built_in_ones() {
+        let text = r#"
+[[class]]
+id = "motor.brake"
+label = "brake motor"
+functions = ["motor.ac3"]
+[[class.set]]
+name = "three terminals and brake"
+required = ["U1", "V1", "W1", "BD1", "BD2"]
+optional = ["PE"]
+"#;
+        let company = parse_company_templates(text).unwrap();
+        // The built-in template takes three terminals alone; the company one wants the brake.
+        assert!(check_pins("motor.ac3", &["U1", "V1", "W1"]).is_none());
+        let d = check_pins_with(&company, "motor.ac3", &["U1", "V1", "W1"]).unwrap();
+        assert_eq!(d.missing, ["BD1", "BD2"]);
+        assert_eq!(d.label, "brake motor");
+        assert!(
+            check_pins_with(&company, "motor.ac3", &["U1", "V1", "W1", "BD1", "BD2"]).is_none()
+        );
+        // Other functions keep the built-in templates.
+        assert!(check_pins_with(&company, "coil.relay", &["A1", "A2"]).is_none());
+    }
+
+    #[test]
+    fn company_template_text_errors_are_plain() {
+        let err = |t: &str| parse_company_templates(t).unwrap_err();
+        assert!(
+            err(
+                "[[class]]\nid = \"x\"\nfunctions = []\n[[class.set]]\nname=\"a\"\nrequired=[\"1\"]"
+            )
+            .contains("function")
+        );
+        assert!(err("[[class]]\nid = \"x\"\nfunctions = [\"coil\"]").contains("set"));
+        assert!(err("[[class]]\nid = \"x\"\nfunctions = [\"coil\"]\n[[class.set]]\nname=\"a\"\nrequired=[\"1\",\"1\"]").contains("twice"));
+        assert!(err("not toml at all [").len() > 3);
+        assert!(parse_company_templates("").unwrap().is_empty());
+    }
+
+    #[test]
     fn safety_relay_takes_contacts_and_inputs() {
         let pins = ["A1", "S11", "S12", "A2", "13", "14", "23", "24", "41", "42"];
         assert!(check_pins("safety.relay", &pins).is_none());
         assert!(check_pins("safety.relay", &["A1", "S11"]).is_some());
+    }
+}
+
+#[cfg(test)]
+mod inline_tests {
+    use super::*;
+
+    #[test]
+    fn inline_tables_are_read() {
+        let t = "class = [{ id = 'motor.brake', label = 'brake motor', functions = ['motor.ac3'], set = [{ name = 'with brake', required = ['U1', 'V1', 'W1', 'BD1', 'BD2'] }] }]";
+        let c = parse_company_templates(t).unwrap();
+        assert_eq!(c.len(), 1);
+        assert_eq!(c[0].sets[0].required.len(), 5);
     }
 }

@@ -119,7 +119,7 @@ mod more_rules;
 mod net_shorts;
 mod physical;
 mod pin_names;
-pub use pin_names::{PinFix, pin_fix};
+pub use pin_names::{PIN_TEMPLATES_PROPERTY, PinFix, pin_fix};
 pub mod protection;
 pub mod safety;
 pub mod single_line;
