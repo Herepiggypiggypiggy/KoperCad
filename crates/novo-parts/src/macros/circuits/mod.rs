@@ -136,6 +136,8 @@ const SOURCES: &[CircuitSource] = sources![
     "1-supply/control-supply-24v.toml",
     "1-supply/control-transformer.toml",
     "1-supply/crane-supply-isolator-fuses.toml",
+    "1-supply/crane-supply-surge-protection.toml",
+    "1-supply/maintenance-socket-rcbo.toml",
     "2-protection/feeder-dol.toml",
     "2-protection/feeder-reversing.toml",
     "2-protection/pump-feeder-frequency-controlled.toml",
@@ -157,6 +159,7 @@ const SOURCES: &[CircuitSource] = sources![
     "7-peripherals/horn-and-beacon.toml",
     "7-peripherals/limit-switch-permits.toml",
     "7-peripherals/motor-thermistor-relay.toml",
+    "7-peripherals/pump-duty-alternation.toml",
     "7-peripherals/pump-level-control.toml",
 ];
 

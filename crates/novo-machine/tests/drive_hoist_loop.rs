@@ -39,6 +39,8 @@ struct Cmd {
     contactor_wired: bool,
     /// An upper end limit stops the up command when this contact opens.
     limit_cuts_up: bool,
+    /// The slow-down switch cuts the speed step inputs when its contact opens.
+    slow_cuts_steps: bool,
 }
 
 type Shared = Rc<RefCell<Cmd>>;
@@ -111,6 +113,8 @@ struct Rig {
     brake_t: SpringBrake,
     feedback: bool,
     limit_m: Option<f64>,
+    slow_m: Option<f64>,
+    clearance_m: Option<f64>,
     heat: Option<HeatConfig>,
 }
 
@@ -123,6 +127,8 @@ impl Rig {
             brake_t: brake(Switching::AcSide),
             feedback: false,
             limit_m: None,
+            slow_m: None,
+            clearance_m: None,
             heat: None,
         }
     }
@@ -131,6 +137,16 @@ impl Rig {
         let np = plate();
         let (motor, _) = InductionMotor::from_nameplate(&np, None, &FitOptions::typical()).unwrap();
         let mut limits = Vec::new();
+        if let Some(m) = self.slow_m {
+            limits.push(LimitSwitch {
+                binding: SensorBinding {
+                    name: "slow-down upper".into(),
+                    device_tag: "=S-SLOW".into(),
+                    actuate_at_mm: m * 1000.0,
+                },
+                kind: LimitKind::Upper,
+            });
+        }
         if let Some(m) = self.limit_m {
             limits.push(LimitSwitch {
                 binding: SensorBinding {
@@ -163,7 +179,8 @@ impl Rig {
                 limits,
             },
         )
-        .unwrap();
+        .unwrap()
+        .with_clearance(self.clearance_m, None);
         match self.heat {
             Some(cfg) => module.with_heat(cfg).unwrap(),
             None => module,
@@ -181,12 +198,14 @@ impl Rig {
             let c = *shared.borrow();
             let top_ok = s.contacts.get("=S-TOP").copied().unwrap_or(true);
             let up = c.up && (top_ok || !c.limit_cuts_up);
+            let slow_ok = s.contacts.get("=S-SLOW").copied().unwrap_or(true);
+            let steps_ok = slow_ok || !c.slow_cuts_steps;
             s.energised.clear();
             for (on, tag) in [
                 (up, "=K-UP"),
                 (c.down, "=K-DOWN"),
-                (c.step2, "=K-S2"),
-                (c.step3, "=K-S3"),
+                (c.step2 && steps_ok, "=K-S2"),
+                (c.step3 && steps_ok, "=K-S3"),
                 (c.mains, "=K-MAIN"),
             ] {
                 if on {
@@ -700,4 +719,92 @@ fn a_winding_over_its_limit_is_reported_once_with_a_cool_down_time() {
         .filter(|k| matches!(k, FindingKind::MotorTooHot { .. }))
         .collect();
     assert_eq!(hot.len(), 1, "{hot:?}");
+}
+
+/// Up at the top step to a final limit at 1.6 m, optionally with a slow-down switch at 1.0 m that
+/// cuts the speed steps. Returns the loop after the hoist stood still.
+fn to_the_limit(slow: bool, clearance: Option<f64>) -> DriveHoistLoop {
+    let mut rig = Rig::new();
+    rig.mass = 500.0;
+    rig.limit_m = Some(1.6);
+    rig.slow_m = slow.then_some(1.0);
+    rig.clearance_m = clearance;
+    let (mut lp, mut c, cmd) = rig.start();
+    {
+        let mut cm = cmd.borrow_mut();
+        cm.up = true;
+        cm.step2 = true;
+        cm.step3 = true;
+        cm.limit_cuts_up = true;
+        cm.slow_cuts_steps = slow;
+    }
+    run_for(&mut lp, &mut c, 25.0);
+    lp
+}
+
+fn final_limit(lp: &DriveHoistLoop) -> (f64, Option<f64>) {
+    kinds(lp)
+        .into_iter()
+        .find_map(|k| match k {
+            FindingKind::FinalLimit {
+                speed_m_s,
+                slow_speed_m_s,
+                ..
+            } => Some((speed_m_s, slow_speed_m_s)),
+            _ => None,
+        })
+        .expect("the hook reached the final limit")
+}
+
+fn overtravel(lp: &DriveHoistLoop) -> f64 {
+    kinds(lp)
+        .into_iter()
+        .find_map(|k| match k {
+            FindingKind::LimitOvertravel { metres, .. } => Some(metres),
+            _ => None,
+        })
+        .expect("the hook stood still past the limit")
+}
+
+#[test]
+fn a_slow_down_switch_brings_the_hook_to_the_final_limit_slowly() {
+    let fast = to_the_limit(false, None);
+    let slow = to_the_limit(true, None);
+    let (v_fast, none) = final_limit(&fast);
+    let (v_slow, passed) = final_limit(&slow);
+    assert!(none.is_none());
+    // At the slow-down switch the hook was on the top step; at the final limit on step 1.
+    assert!(passed.unwrap() > 0.15, "{passed:?}");
+    assert!(v_slow < 0.5 * v_fast, "{v_slow} vs {v_fast}");
+    assert!(
+        kinds(&slow)
+            .iter()
+            .any(|k| matches!(k, FindingKind::SlowDownPassed { .. }))
+    );
+}
+
+#[test]
+fn the_overtravel_past_the_final_limit_is_smaller_when_the_hook_arrives_slowly() {
+    let fast = overtravel(&to_the_limit(false, None));
+    let slow = overtravel(&to_the_limit(true, None));
+    assert!(fast > 0.01, "{fast}");
+    assert!(slow < 0.7 * fast, "{slow} vs {fast}");
+}
+
+#[test]
+fn a_clearance_that_the_overtravel_exceeds_reports_the_stop_hit_speed() {
+    let tight = to_the_limit(false, Some(0.005));
+    assert!(
+        kinds(&tight)
+            .iter()
+            .any(|k| matches!(k, FindingKind::HitStop { speed_m_s, .. } if *speed_m_s > 0.0)),
+        "{:?}",
+        kinds(&tight)
+    );
+    let roomy = to_the_limit(false, Some(5.0));
+    assert!(
+        !kinds(&roomy)
+            .iter()
+            .any(|k| matches!(k, FindingKind::HitStop { .. }))
+    );
 }

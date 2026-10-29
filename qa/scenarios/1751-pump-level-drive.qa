@@ -1,0 +1,28 @@
+@title Pump station template: level control page and frequency-drive pumps
+@area Schematic
+@sizes 1366x768 1920x1080
+wait 20
+key ctrl+k
+wait 6
+text new from template pump station
+wait 8
+key Return
+wait 12
+click_text "3"
+click_text "Frequency drive on each pump"
+wait 6
+shot options-three-pumps-drives
+check_layout
+click_text "Create project"
+wait 30
+shot template-opened
+expect "Control supply"
+key PageDown
+wait 12
+shot page-2-level-control
+expect "Level control"
+check_layout
+key PageDown
+wait 12
+shot page-3-pump-1-frequency-drive
+check_layout

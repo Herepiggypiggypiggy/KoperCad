@@ -197,6 +197,27 @@ impl Supervision {
     }
 }
 
+/// What the circuit gives one winch of the pair besides the common command.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WinchLine {
+    /// Whether the brake coil is fed. `None`: the coil follows the drive's brake relay (ideal
+    /// wiring); `Some`: a brake contactor and rectifier in the drawing decide.
+    pub brake_coil: Option<bool>,
+    /// The brake feedback contact when the drawing has one; `None`: derived from the brake.
+    pub brake_feedback: Option<bool>,
+    pub mains_ok: bool,
+}
+
+impl Default for WinchLine {
+    fn default() -> Self {
+        Self {
+            brake_coil: None,
+            brake_feedback: None,
+            mains_ok: true,
+        }
+    }
+}
+
 /// The command to the pair for one tick.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PairCommand {
@@ -207,6 +228,8 @@ pub struct PairCommand {
     pub sto: [(bool, bool); 2],
     pub external_fault: [bool; 2],
     pub fault_reset: bool,
+    /// Brake coil, brake feedback and mains per winch (the defaults leave the old behaviour).
+    pub line: [WinchLine; 2],
 }
 
 impl PairCommand {
@@ -227,6 +250,7 @@ impl Default for PairCommand {
             sto: [(true, true); 2],
             external_fault: [false; 2],
             fault_reset: false,
+            line: [WinchLine::default(); 2],
         }
     }
 }
@@ -405,6 +429,9 @@ impl WinchPair {
             sto: cmd.sto[0],
             external_fault: cmd.external_fault[0],
             fault_reset: cmd.fault_reset,
+            mains_ok: cmd.line[0].mains_ok,
+            brake_coil: cmd.line[0].brake_coil,
+            brake_feedback: cmd.line[0].brake_feedback,
             ..ClInputs::default()
         };
         let mut ib = ClInputs {
@@ -414,6 +441,9 @@ impl WinchPair {
             sto: cmd.sto[1],
             external_fault: cmd.external_fault[1],
             fault_reset: cmd.fault_reset,
+            mains_ok: cmd.line[1].mains_ok,
+            brake_coil: cmd.line[1].brake_coil,
+            brake_feedback: cmd.line[1].brake_feedback,
             ..ClInputs::default()
         };
         match self.mode {
@@ -433,11 +463,11 @@ impl WinchPair {
                 };
             }
         }
-        if let Some(fb) = brake_feedback(&self.a) {
-            ia.brake_feedback = Some(fb);
+        if ia.brake_feedback.is_none() {
+            ia.brake_feedback = brake_feedback(&self.a);
         }
-        if let Some(fb) = brake_feedback(&self.b) {
-            ib.brake_feedback = Some(fb);
+        if ib.brake_feedback.is_none() {
+            ib.brake_feedback = brake_feedback(&self.b);
         }
         let (oa, ba) = self.a.control_step(&ia, dt_s);
         let (ob, bb) = self.b.control_step(&ib, dt_s);

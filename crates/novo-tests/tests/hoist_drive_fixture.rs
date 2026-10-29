@@ -22,3 +22,22 @@ fn the_fixture_builds_with_one_drive_hoist_and_its_bindings() {
         assert!(motor.properties.contains_key(key), "{key}");
     }
 }
+
+#[test]
+fn the_limits_variant_has_a_final_limit_a_slow_down_switch_and_a_clearance() {
+    let mut doc = Document::default();
+    let h = novo_tests::hoist_drive::drive_hoist_with_limits(&mut doc).unwrap();
+    let motor = doc.project().device(h.motor).unwrap();
+    for key in [
+        "dh_limit_up",
+        "dh_limit_up_m",
+        "dh_slow_up",
+        "dh_slow_up_m",
+        "dh_clearance_up_m",
+    ] {
+        assert!(motor.properties.contains_key(key), "{key}");
+    }
+    let tags: Vec<String> = doc.project().devices().map(|d| d.tag.to_string()).collect();
+    assert!(tags.iter().any(|t| t.ends_with("LS-F")));
+    assert!(tags.iter().any(|t| t.ends_with("LS-S")));
+}

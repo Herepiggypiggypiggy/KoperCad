@@ -15,6 +15,18 @@ fn built(plant: Plant, count: u8, extra: bool) -> Document {
         plant,
         count,
         extra,
+        frequency: false,
+    };
+    build_plant_template_on(&mut doc, "2026-10-30", options).expect("the template builds");
+    doc
+}
+
+fn built_with_drive(count: u8) -> Document {
+    let mut doc = Document::default();
+    let options = PlantOptions {
+        frequency: true,
+        count,
+        ..PlantOptions::new(Plant::PumpStation)
     };
     build_plant_template_on(&mut doc, "2026-10-30", options).expect("the template builds");
     doc
@@ -155,4 +167,40 @@ fn the_new_commands_open_their_window_and_an_unsaved_project() {
             &d.doc().project().info().properties
         ));
     }
+}
+
+#[test]
+fn a_pump_station_has_a_level_control_page_and_the_drive_option_picks_the_feeder() {
+    let doc = built(Plant::PumpStation, 2, false);
+    let pages: Vec<_> = doc
+        .project()
+        .pages_in_order()
+        .into_iter()
+        .filter(|p| !matches!(p.kind, PageKind::Generated { .. }))
+        .map(|p| p.title.clone())
+        .collect();
+    assert_eq!(
+        pages,
+        [
+            "Control supply",
+            "Level control",
+            "Pump 1 feeder and motor protection",
+            "Pump 2 feeder and motor protection"
+        ]
+    );
+    assert_eq!(devices_described(&doc, "Dry-run float"), 1);
+    assert_eq!(devices_described(&doc, "converter"), 0);
+
+    let drive = built_with_drive(3);
+    assert_eq!(devices_described(&drive, "Dry-run float"), 1);
+    assert_eq!(devices_described(&drive, "onverter"), 3, "a drive per pump");
+    // The drive variant draws no contactor feeder.
+    assert_eq!(devices_described(&drive, "Motor contactor"), 0);
+    let other: Vec<_> = novo_checks::check(drive.project())
+        .into_iter()
+        .filter(|p| p.severity != novo_checks::Severity::Info)
+        .filter(|p| p.kind != novo_checks::ProblemKind::UnconnectedPin)
+        .map(|p| format!("{:?}: {}", p.severity, p.message))
+        .collect();
+    assert!(other.is_empty(), "{other:#?}");
 }

@@ -90,6 +90,9 @@ pub(crate) struct PlantOptions {
     /// Pump station: thermistor relay per pump. Control centre: reversing
     /// feeders.
     pub extra: bool,
+    /// Pump station: each pump on a frequency drive instead of direct on
+    /// line. Not used by the control centre.
+    pub frequency: bool,
 }
 
 impl PlantOptions {
@@ -101,11 +104,14 @@ impl PlantOptions {
                 Plant::ControlCentre => 4,
             },
             extra: false,
+            frequency: false,
         }
     }
 }
 
 const CONTROL_SUPPLY: &str = "Control supply 48 V AC and 24 V DC";
+const PUMP_FEEDER_FREQUENCY: &str = "Pump feeder frequency controlled";
+const PUMP_LEVEL_CONTROL: &str = "Pump level control with dry-run protection";
 const FEEDER_DOL: &str = "Motor feeder DOL";
 const FEEDER_REVERSING: &str = "Motor feeder reversing";
 const THERMISTOR: &str = "Motor thermistor relay";
@@ -181,8 +187,16 @@ pub(crate) fn build_plant_template_on(
         };
         let page = page_of(tx, 1, "Control supply", &control)?;
         circuits.place(tx, page, CONTROL_SUPPLY)?;
+        // The pumps' run requests come from the level control: one page for
+        // the float switches and the duty and standby relays.
+        let mut next = 2;
+        if options.plant == Plant::PumpStation {
+            let page = page_of(tx, next, "Level control", &control)?;
+            circuits.place(tx, page, PUMP_LEVEL_CONTROL)?;
+            next += 1;
+        }
         for i in 1..=options.count {
-            let name = 1 + u32::from(i);
+            let name = next + u32::from(i) - 1;
             match options.plant {
                 Plant::PumpStation => {
                     let page = page_of(
@@ -191,7 +205,12 @@ pub(crate) fn build_plant_template_on(
                         &format!("Pump {i} feeder and motor protection"),
                         &format!("{root}+CAB"),
                     )?;
-                    circuits.place(tx, page, FEEDER_DOL)?;
+                    let feeder = if options.frequency {
+                        PUMP_FEEDER_FREQUENCY
+                    } else {
+                        FEEDER_DOL
+                    };
+                    circuits.place(tx, page, feeder)?;
                     if options.extra {
                         circuits.place_at(tx, page, THERMISTOR, Point::new(200.0, 20.0))?;
                     }
