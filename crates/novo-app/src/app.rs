@@ -400,6 +400,8 @@ mod outline_tests;
 #[cfg(test)]
 mod page_commands_tests;
 #[cfg(test)]
+mod pages_scale_tests;
+#[cfg(test)]
 mod parts_table_tests;
 #[cfg(test)]
 mod pdf_options_tests;
@@ -461,7 +463,7 @@ const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
 use pages::PageView;
 
-use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
+use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows_reusing};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
 use crate::{APP_NAME, PROJECT_EXTENSION, PROJECT_EXTENSIONS};
@@ -814,13 +816,56 @@ impl NovoApp {
     /// The project panel's rows: each page, and each sheet of a generated
     /// page, from the live reports.
     fn page_rows(&mut self) -> Vec<PageRow> {
-        match self.backend.document() {
-            Some(doc) => {
-                let project = doc.project();
-                page_rows(project, self.wb.reports.live(project))
-            }
-            None => Vec::new(),
+        let Some(doc) = self.backend.document() else {
+            return Vec::new();
+        };
+        let project = doc.project();
+        let pages = project.pages().count();
+        let key = (project.revision(), pages, self.machine_generation());
+        // Worked out once per change of the project. In a big project the
+        // contents page is rebuilt only once the edits pause: until then its
+        // rows stay as they were, so an edit or a delete does not wait for it.
+        let settled = |c: &outline::RowsCache| {
+            c.stale_since
+                .is_none_or(|t| t.elapsed() >= outline::ROWS_SETTLE)
+        };
+        if let Some(c) = &self.ol.rows_cache
+            && c.key == key
+            && !settled(c)
+        {
+            return c.rows.clone();
         }
+        if let Some(c) = &self.ol.rows_cache
+            && c.key == key
+            && c.stale_since.is_none()
+        {
+            return c.rows.clone();
+        }
+        let previous = self.ol.rows_cache.take();
+        let reuse =
+            pages > outline::BIG_PROJECT_PAGES && previous.as_ref().is_some_and(|c| c.key != key);
+        let (rows, kept) = page_rows_reusing(
+            project,
+            self.wb.reports.live(project),
+            previous
+                .as_ref()
+                .filter(|_| reuse)
+                .map(|c| c.rows.as_slice()),
+        );
+        if previous
+            .as_ref()
+            .is_some_and(|c| c.stale_since.is_some() && c.key == key)
+        {
+            // The settled rebuild: the Pages list takes the new labels.
+            self.ol.rows_epoch += 1;
+        }
+        let out = rows.clone();
+        self.ol.rows_cache = Some(outline::RowsCache {
+            key,
+            rows,
+            stale_since: kept.then(Instant::now),
+        });
+        out
     }
 
     /// Keeps the shown page valid after undo, redo or a reload removed it.
@@ -1465,6 +1510,16 @@ impl NovoApp {
     /// time for the next one even when nothing else repaints.
     fn tick(&mut self, ctx: &egui::Context) {
         let now = Instant::now();
+        if let Some(since) = self.ol.rows_cache.as_ref().and_then(|c| c.stale_since) {
+            // Edits paused: bring the contents rows up to date.
+            match outline::ROWS_SETTLE.checked_sub(since.elapsed()) {
+                Some(left) => ctx.request_repaint_after(left),
+                None => {
+                    let _ = self.page_rows();
+                    ctx.request_repaint();
+                }
+            }
+        }
         if now < self.next_tick {
             ctx.request_repaint_after(self.next_tick - now);
             return;
