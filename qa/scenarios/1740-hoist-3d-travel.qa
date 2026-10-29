@@ -1,0 +1,47 @@
+@title Hoist in 3D follows a travel drive: the bridge is driven by the axis of Drive run and the hook swings
+@area Simulate
+@sizes 1366x768
+# Starts Simulate > Drive run on the travel fixture, closes it, opens Hoist in 3D and picks the axis for the bridge.
+open qa/fixtures/travel-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 30
+shot before-pick
+click_text "none"
+wait 10
+shot axis-list
+click_text "=A1+FLD-M1"
+wait 10
+# Step 2 (S2): the high speed, so the bridge picture moves and the hook leans back.
+mouse_down 75 343
+wait 150
+shot bridge-moving
+expect "Swing"
+expect "Bridge start"
+click_text "Hook"
+wait 100
+shot hook-framed
+mouse_up 75 343
+wait 150
+shot after-stop
+check_layout
