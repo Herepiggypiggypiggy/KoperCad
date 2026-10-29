@@ -830,7 +830,8 @@ impl NovoApp {
         live.plc.sync(project, view.editor.catalog.library());
         let dt = f64::from(ctx.input(|i| i.stable_dt));
         // A hoist run steps the circuit itself, in small fixed ticks; the frame only reads it.
-        let running = super::hoist_run::advance(&mut self.wb.hoist, &mut self.wb.live, project, dt);
+        let running = super::hoist_run::advance(&mut self.wb.hoist, &mut self.wb.live, project, dt)
+            | super::drive_run::advance(&mut self.wb.drive_run, &mut self.wb.live, project, dt);
         let live = &mut self.wb.live;
         let solve_dt = if running { 0.0 } else { dt };
         let why_target = live.why;
@@ -962,6 +963,17 @@ impl NovoApp {
                 .map(|v| v.editor.catalog.library()),
             page,
             &self.wb.hoist,
+        );
+        super::drive_run::paint_badges(
+            ctx,
+            canvas,
+            &to_screen,
+            project,
+            self.canvas
+                .schematic_ref()
+                .map(|v| v.editor.catalog.library()),
+            page,
+            &self.wb.drive_run,
         );
 
         // Wires: lit in their colour, dimmed when nothing reaches them. The

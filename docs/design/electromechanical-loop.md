@@ -1,8 +1,8 @@
 # Electromechanical loop (lane L5a): design
 
-Status: part 1 (loop core, PR #1561) and part 2 (hoist run in the live view) are built. The
-drive module in the loop (travel drive with motor current feedback) is part 3 and waits for the
-motor-at-frequency lane (L2b).
+Status: part 1 (loop core, PR #1561), part 2 (hoist run in the live view) and part 3 (travel
+drive in the loop: `Drive::step` with motor current and power fed back from the induction motor
+of lane L2b, Simulate > Drive run) are built.
 
 ## Goal
 
@@ -65,7 +65,16 @@ work.
 | Simulate > Hoist run | window with Start/Stop, readings per hoist, notes from the binding check, the model-versus-exact list |
 | Live view (Shift+L) badges | next to the motor: rpm, winding, brake state, hook height |
 
-Not yet built: Property sheet of a drive ("Drive") and Simulate > Drive run (part 3).
+| Property sheet of a motor, "Travel drive" | moving mass, wheel, gearbox, motor plate, step 1 and 2 frequencies, ramps, input devices (forward, reverse, step 2, enable), main contactor, end limits |
+| Simulate > Drive run | window with Start/Stop, readings per axis (Hz, rpm, A, m/s, m), notes from the binding check and the motor fit, the model-versus-exact list |
+| Live view (Shift+L) badges | next to the motor: frequency, rpm, current, speed, position |
+
+Part 3 order of a tick (`novo_machine::travel_loop`): limit contacts from the last position, the
+circuit settles, the drive reads its inputs and mains from the circuit, `Drive::step` runs with
+the motor current and power of the previous tick, the induction motor runs the shaft under the
+drive's frequency and voltage and the wheel load. The drive replaces the contactors: its output
+terminals are not traced through the drawing. Not built: drivetrain efficiency only against the motion (not in the driven direction), gearbox and wheel inertia beyond the rotor and the reflected mass, wind that grows with speed, travel brake, stiction, skew, sway,
+a drawn drive symbol with parameters (the drive is configured from the motor's property sheet).
 
 ## Tests (written first)
 

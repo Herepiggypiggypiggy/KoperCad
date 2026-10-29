@@ -209,11 +209,11 @@ fn a_terminal_on_the_bottom_edge_uses_the_channel_below() {
 }
 
 #[test]
-fn a_duct_wins_when_it_is_shorter_than_the_rail() {
+fn a_rail_channel_is_used_when_it_is_shorter_than_the_duct() {
     let (bodies, rail) = row();
-    // A duct runs just above the row: shorter than the channel for a wire
-    // from the first device to the far end of the duct.
-    let net = Network::new(&[duct(7, (0.0, 10.0), (300.0, 10.0))])
+    // The duct runs well above the row, so the channel just over the devices
+    // is the shorter way between two devices on the rail.
+    let net = Network::new(&[duct(7, (0.0, 0.0), (300.0, 0.0))])
         .with_bodies(bodies)
         .with_rails(&[rail]);
     let j = job(
@@ -222,7 +222,95 @@ fn a_duct_wins_when_it_is_shorter_than_the_rail() {
     );
     let r = net.route(&j, &Rules::default());
     assert_eq!(r.kind, Kind::Ducted);
-    assert!(r.ducts.contains(&7) || r.rails == vec![9], "{r:?}");
+    assert_eq!(r.rails, vec![9], "{r:?}");
+    assert!(r.ducts.is_empty(), "{r:?}");
+}
+
+#[test]
+fn at_equal_length_the_duct_wins_over_the_rail_channel() {
+    let (bodies, rail) = row();
+    // A duct on the very line of the channel (y 30): the same length either
+    // way, so the 10% a rail channel costs extra decides for the duct.
+    let net = Network::new(&[duct(7, (0.0, 30.0), (300.0, 30.0))])
+        .with_bodies(bodies)
+        .with_rails(&[rail]);
+    let j = job(
+        anchor(50.0, 40.0, Facing::Up),
+        anchor(230.0, 40.0, Facing::Up),
+    );
+    let r = net.route(&j, &Rules::default());
+    assert_eq!(r.kind, Kind::Ducted);
+    assert_eq!(r.ducts, vec![7], "{r:?}");
+    assert!(r.rails.is_empty(), "{r:?}");
+}
+
+#[test]
+fn past_the_last_slot_a_wire_enters_at_the_last_slot() {
+    // Slots at 15, 45 and 75; the duct is 100 long, so 95 is nearest to the
+    // end of the duct but the end is not a slot.
+    let net = Network::new(&[duct(7, (0.0, 100.0), (100.0, 100.0))]).with_openings(&[(
+        7,
+        Openings::Pitch {
+            pitch: 30.0,
+            first: 15.0,
+        },
+    )]);
+    let j = job(
+        anchor(95.0, 40.0, Facing::Down),
+        anchor(45.0, 40.0, Facing::Down),
+    );
+    let r = net.route(&j, &Rules::default());
+    assert_eq!(r.kind, Kind::Ducted);
+    let on_duct: Vec<f64> = r
+        .points
+        .iter()
+        .filter(|p| (p.y - 100.0).abs() < 1e-6)
+        .map(|p| p.x)
+        .collect();
+    assert!(on_duct.contains(&75.0), "{:?}", r.points);
+    assert!(
+        on_duct.iter().all(|x| [15.0, 45.0, 75.0].contains(x)),
+        "{on_duct:?}"
+    );
+}
+
+/// Two rails with a row each, the lower row `gap` mm under the upper one.
+fn two_rows(gap: f64) -> (Network, Vec<Body>) {
+    let bodies = vec![
+        body(1, 20.0, 40.0, 80.0, 90.0),
+        body(2, 200.0, 40.0, 260.0, 90.0),
+        body(3, 20.0, 90.0 + gap, 80.0, 140.0 + gap),
+    ];
+    let rail = |id, y, across| RailRow {
+        id,
+        vertical: false,
+        start: Point::new(0.0, y),
+        length: 300.0,
+        across,
+    };
+    let net = Network::new(&[]).with_bodies(bodies.clone()).with_rails(&[
+        rail(9, 60.0, (40.0, 90.0)),
+        rail(10, 115.0 + gap, (90.0 + gap, 140.0 + gap)),
+    ]);
+    (net, bodies)
+}
+
+#[test]
+fn no_channel_lies_against_a_device_of_a_neighbouring_row() {
+    // Rows 10 mm apart: the channel under the upper row would touch the
+    // lower row's devices, so the upper row has none on that side.
+    let (net, _) = two_rows(10.0);
+    let j = job(
+        anchor(50.0, 90.0, Facing::Down),
+        anchor(230.0, 90.0, Facing::Down),
+    );
+    let r = net.route(&j, &Rules::default());
+    assert!(!r.rails.contains(&9), "{r:?}");
+    // 40 mm apart there is room: it runs along the channel between them.
+    let (net, _) = two_rows(40.0);
+    let r = net.route(&j, &Rules::default());
+    assert_eq!(r.kind, Kind::Ducted, "{r:?}");
+    assert_eq!(r.rails, vec![9]);
 }
 
 #[test]

@@ -73,9 +73,19 @@ pub const DUTCH: &[Aliases] = &[
         &["motorgroepenkast voorbeeld", "kast voorbeeld"],
     ),
     nl(
+        "file.example_crane",
+        &[],
+        &["kraan voorbeeld", "kraankast voorbeeld"],
+    ),
+    nl(
         "file.example_plc",
         &[],
         &["plc kast voorbeeld", "plc voorbeeld"],
+    ),
+    nl(
+        "file.example_pump",
+        &[],
+        &["pomp voorbeeld", "pompen voorbeeld"],
     ),
     nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
     nl(
@@ -141,6 +151,11 @@ pub const DUTCH: &[Aliases] = &[
         "help.numbers",
         &[],
         &["over de getallen", "schatting", "model", "rekenwaarde"],
+    ),
+    nl(
+        "view.icon_gallery",
+        &[],
+        &["pictogrammen", "iconen", "icoonbibliotheek"],
     ),
     nl(
         "help.learn",
@@ -726,6 +741,17 @@ pub const DUTCH: &[Aliases] = &[
         "sim.hoist",
         &["hijsen"],
         &["kraan", "haak", "rem", "eindschakelaar", "tweesnelheden"],
+    ),
+    nl(
+        "sim.drive_run",
+        &["frequentieregelaar"],
+        &[
+            "rijden",
+            "loopkat",
+            "brug",
+            "kraanbaan",
+            "afstandsbediening",
+        ],
     ),
     nl(
         "sim.motor_curves",

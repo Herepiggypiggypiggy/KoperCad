@@ -25,8 +25,9 @@ fn sheet_on_screen(d: &mut Drive) -> ([Vec2; 2], Vec2) {
 
 fn assert_whole_sheet(d: &mut Drive, what: &str) {
     let ([lo, hi], size) = sheet_on_screen(d);
-    // The dock floats over the bottom of the canvas: a fit keeps clear of it.
-    let dock = 70.0;
+    // Nothing floats over the bottom of the canvas any more (the tool rail
+    // is a side panel), so a fit uses all of it.
+    let dock = 0.0;
     assert!(
         lo.x >= 0.0 && lo.y >= 0.0 && hi.x <= size.x && hi.y <= size.y - dock + 1.0,
         "{what}: sheet {lo:?}..{hi:?} in a canvas of {size:?}"

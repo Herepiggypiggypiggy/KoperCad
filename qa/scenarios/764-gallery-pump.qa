@@ -1,0 +1,62 @@
+@title Example gallery: pump station
+@area Examples
+# File > Examples > Open example: pump system. Every page (reached with Ctrl+K), the cabinet and 3D.
+fresh
+wait 10
+key ctrl+k
+wait 6
+text example pump system
+wait 8
+key Enter
+wait 40
+expect "Incoming supply and 24 V"
+shot pump-first-view
+check_blank pump-first-view
+check_layout
+key ctrl+k
+wait 6
+text Incoming supply and 24 V
+wait 8
+key Enter
+wait 15
+expect "Incoming supply and 24 V"
+shot pump-page-1
+key ctrl+k
+wait 6
+text Pump drives
+wait 8
+key Enter
+wait 15
+expect "Pump drives"
+shot pump-page-2
+key ctrl+k
+wait 6
+text Pressure and level sensors
+wait 8
+key Enter
+wait 15
+expect "Pressure and level sensors"
+shot pump-page-3
+key ctrl+k
+wait 6
+text Control: pumps and drive commands
+wait 8
+key Enter
+wait 15
+expect "Control: pumps and drive commands"
+shot pump-page-4
+key ctrl+k
+wait 6
+text Drive fault signals
+wait 8
+key Enter
+wait 15
+expect "Drive fault signals"
+shot pump-page-5
+click_text "Cabinet"
+wait 20
+shot pump-cabinet
+check_blank pump-cabinet
+click_text "3D"
+wait 30
+shot pump-3d

@@ -524,18 +524,40 @@ impl<'a, 't> Kit<'a, 't> {
     /// A start button in parallel with the holding contact of `contactor`
     /// (the self-holding branch of a start/stop rung).
     pub fn hold(&mut self, col: &mut Col<'_>, button: &str, start: &str, contactor: &str) {
+        self.either(col, button, start, "iec/contacts/no", contactor);
+    }
+
+    /// Two elements in parallel (an OR): `key_a` of device `dev_a` and
+    /// `key_b` of device `dev_b`, side by side under the rung.
+    pub fn either(
+        &mut self,
+        col: &mut Col<'_>,
+        key_a: &str,
+        dev_a: &str,
+        key_b: &str,
+        dev_b: &str,
+    ) {
         let y = col.y;
-        let top = self.junction((col.x, y - 8.0 + 8.0));
+        let top = self.junction((col.x, y));
         self.link(col.last, End::Junction(top), &[]);
-        let s = self.put(button, (col.x, y + 8.0), start);
-        let c = self.put("iec/contacts/no", (col.x + 16.0, y + 8.0), contactor);
-        self.link(End::Junction(top), End::Idx(s, 0), &[]);
-        self.link(End::Junction(top), End::Idx(c, 0), &[]);
+        let a = self.put(key_a, (col.x, y + 8.0), dev_a);
+        let b = self.put(key_b, (col.x + 16.0, y + 8.0), dev_b);
+        self.link(End::Junction(top), End::Idx(a, 0), &[]);
+        self.link(End::Junction(top), End::Idx(b, 0), &[]);
         let bottom = self.junction((col.x, y + 32.0));
-        self.link(End::Idx(s, 1), End::Junction(bottom), &[]);
-        self.link(End::Idx(c, 1), End::Junction(bottom), &[]);
+        self.link(End::Idx(a, 1), End::Junction(bottom), &[]);
+        self.link(End::Idx(b, 1), End::Junction(bottom), &[]);
         col.last = End::Junction(bottom);
         col.y = y + 40.0;
+    }
+
+    /// A terminal of `strip` named `name` in the rung.
+    pub fn series_term(&mut self, col: &mut Col<'_>, strip: DeviceId, name: &str) -> SymbolId {
+        let s = self.term(strip, name, "iec/terminals/terminal", (col.x, col.y));
+        self.link(col.last, End::Idx(s, 0), &[]);
+        col.last = End::Idx(s, 1);
+        col.y += 24.0;
+        s
     }
 
     /// Ends a rung on `potential` (a feed under the last element).

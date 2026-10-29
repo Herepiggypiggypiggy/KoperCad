@@ -80,7 +80,9 @@ overrides the designer makes (see §6) are stored.
    two devices narrower than 20 mm is not used to pass between them.
    **DIN rails.** Each DIN rail with devices on it gets a wiring channel
    above and below its row of devices, 10 mm outside the tallest device,
-   reaching 100 mm past the rail's ends so it meets a duct that stands there.
+   reaching 100 mm past the rail's ends so it meets a duct that stands there. A
+   side whose channel would lie within 5 mm of a device of a neighbouring row
+   (rows less than about 15 mm apart) gets no channel.
    Wires between devices on one rail run along that channel instead of going
    to a duct and back. A channel is not a duct: it has no cross-section, no
    fill and no "no size" report, costs 10% more than a duct per millimetre so

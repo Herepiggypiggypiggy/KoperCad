@@ -187,7 +187,7 @@ pub(crate) fn detour(
             } else {
                 a.x + f64::from(side) * CHANNEL
             } + shift;
-            Some(simplify_around(
+            Some(simplify(
                 a,
                 vec![a1, Point::new(x, a1.y), Point::new(x, b1.y), b1],
                 b,
@@ -203,7 +203,7 @@ pub(crate) fn detour(
             } else {
                 a.y + f64::from(side) * CHANNEL
             } + shift;
-            Some(simplify_around(
+            Some(simplify(
                 a,
                 vec![a1, Point::new(a1.x, y), Point::new(b1.x, y), b1],
                 b,
@@ -214,23 +214,16 @@ pub(crate) fn detour(
             if !(leaves(sy, va.y) || leaves(sx, -vb.x)) {
                 return None;
             }
-            Some(simplify_around(a, vec![a1, Point::new(b1.x, a1.y), b1], b))
+            Some(simplify(a, vec![a1, Point::new(b1.x, a1.y), b1], b))
         }
         // Out horizontally, into a vertical pin.
         (false, true) => {
             if !(leaves(sx, va.x) || leaves(sy, -vb.y)) {
                 return None;
             }
-            Some(simplify_around(a, vec![a1, Point::new(a1.x, b1.y), b1], b))
+            Some(simplify(a, vec![a1, Point::new(a1.x, b1.y), b1], b))
         }
     }
-}
-
-/// `bends` between `a` and `b` with repeated and collinear points dropped.
-fn simplify_around(a: Point, bends: Vec<Point>, b: Point) -> Vec<Point> {
-    let pts = simplify(a, bends, b);
-    // A bare line has no bends; the detour is never that, but be safe.
-    pts
 }
 
 /// A full route through user corners: bends between `a`, each corner and
