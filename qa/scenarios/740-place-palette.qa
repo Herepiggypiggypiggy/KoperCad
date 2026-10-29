@@ -1,0 +1,25 @@
+@title Place palette: real symbols in categories, detail pane, keyboard and mouse
+@area Schematic
+# Lane V5 of the visual redesign (docs/design/visual-redesign.md section 7).
+# Q opens the place palette: categories on the left, the symbols as drawings
+# in the middle, the selected symbol large with its pins on the right.
+click_text "New project"
+wait 20
+key q
+wait 8
+expect "Favourites"
+expect "Circuits"
+expect "Contacts"
+shot start
+check_layout
+click_text Contacts
+wait 8
+expect "Pins"
+expect "Standard"
+shot contacts
+text coil
+wait 8
+shot search-coil
+check_layout
+key Escape
+wait 6
