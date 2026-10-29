@@ -162,6 +162,8 @@ impl NovoApp {
             .unwrap_or_else(|| stored_templates.clone());
         let mut save_templates = false;
         let (mut load_shared, mut save_shared) = (false, false);
+        let stored_offer = self.pin_offer_wanted();
+        let mut offer = stored_offer;
         let kinds = generated_kinds();
         let width = novo_theme::dialog_width::MEDIUM;
         // The body scrolls and the Done button stays in view at every window
@@ -232,6 +234,14 @@ impl NovoApp {
                      names for the symbol functions it lists; Check > Issues then flags \
                      devices that differ (kind \"Pin names\"). Leave empty for the built-in names.",
                     );
+                    ui.checkbox(
+                        &mut offer,
+                        "Offer to rename a part's terminals after a part is assigned",
+                    )
+                    .on_hover_text(
+                        "When the terminals of the part differ from the usual pin names of the \
+                         device's class.",
+                    );
                     ui.add(
                     egui::TextEdit::multiline(&mut templates)
                         .code_editor()
@@ -291,6 +301,9 @@ impl NovoApp {
                 super::dialog_ui::done(ui)
             },
         );
+        if offer != stored_offer {
+            self.set_pin_offer_wanted(offer);
+        }
         if save_templates {
             self.set_pin_templates(&templates);
         }

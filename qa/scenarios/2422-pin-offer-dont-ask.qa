@@ -1,0 +1,47 @@
+@title Part terminals: "do not ask again" switches the offer off for the project and Project > Rules switches it on (1366x768)
+@area Parts
+@sizes 1366x768
+# Fixture as in 2416 with two QA relays that both have terminals a1 and A2. The first assignment opens the offer; "Keep, and do not ask again in this project" closes it. Assigning the second relay then opens nothing. Project > Rules > Usual pin names has a checkbox that switches the offer on again; the next assignment opens it.
+user_catalog qa/fixtures/pin-offer-parts.json
+open qa/fixtures/pin-offer.kopercad
+wait 30
+key ctrl+a
+wait 20
+click_text "Choose..."
+wait 20
+click_text "QA QA-REL-1"
+wait 20
+expect "Name the terminals like the pins"
+shot offer
+click_text "Keep, and do not ask again in this project"
+wait 20
+shot never
+expect_not "Name the terminals like the pins"
+expect "Will not ask again in this project"
+click_text "Change..."
+wait 20
+click_text "QA QA-REL-2"
+wait 20
+shot second-part-quiet
+expect_not "Name the terminals like the pins"
+key ctrl+k
+wait 10
+text rules
+wait 10
+key Return
+wait 20
+scroll 680 400 -600
+wait 10
+shot rules-off
+click_text "Offer to rename a part's terminals after a part is assigned"
+wait 10
+shot rules-on
+click_text "Done"
+wait 20
+click_text "Change..."
+wait 20
+click_text "QA QA-REL-1"
+wait 20
+shot offer-again
+expect "Name the terminals like the pins"
+check_layout
