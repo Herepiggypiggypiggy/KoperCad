@@ -205,11 +205,26 @@ pub fn pin_fix(project: &Project, problem: &Problem) -> Option<PinFix> {
         });
     }
     // The pins follow the template: look at the terminals of the part.
-    let function = shared_function(&company, &symbols)?;
     let device = symbols.iter().find_map(|s| match s.role {
-        SymbolRole::Device { device, .. } => project.device(device),
+        SymbolRole::Device { device, .. } => Some(device),
         _ => None,
     })?;
+    part_terminal_fix(project, device)
+}
+
+/// The repair that renames the terminals of the part assigned to `device` to
+/// the usual pin names of its class, so they map onto the symbol pins. `None`
+/// when the device has no single part, its symbols are not all of one class,
+/// or the terminals already follow the class or cannot be told with certainty.
+/// The app offers it right after a part is assigned.
+///
+/// A part is shared by every device that uses it, so renaming its terminals
+/// renames them for all of them.
+pub fn part_terminal_fix(project: &Project, device: novo_core::DeviceId) -> Option<PinFix> {
+    let company = company_templates(project).unwrap_or_default();
+    let symbols = project.symbols_of_device(device);
+    let function = shared_function(&company, &symbols)?;
+    let device = project.device(device)?;
     let [part_id] = device.parts.as_slice() else {
         return None;
     };

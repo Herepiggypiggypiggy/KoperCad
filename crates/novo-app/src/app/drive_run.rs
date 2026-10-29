@@ -8,10 +8,17 @@
 //! follows with its current and power fed back, and a limit switch bound in the property sheet
 //! opens its drawn contact at its position. Badges on the motor show frequency, speed, current
 //! and position.
+//!
+//! A motor with a hook load under "Drive hoist" (`dh_*` properties) is an open-loop drive hoist:
+//! the drive's brake relay is a contact of the drawing that switches the brake contactor, the
+//! drive opens the brake only when the motor current says there is torque, and the run lists what
+//! it found (a hook that sank at the start, a brake that does not hold, a trip on over-voltage).
 
 use eframe::egui;
 use novo_core::{PageId, Project, Value};
 use novo_machine::cosim::StepConfig;
+use novo_machine::drive_hoist_loop::{DriveHoistLoop, DriveHoistModule};
+use novo_machine::drive_hoist_spec;
 use novo_machine::travel_loop::{TravelLoop, TravelModule};
 use novo_machine::travel_spec;
 use novo_sim::is_motor;
@@ -34,7 +41,64 @@ pub(crate) struct DriveRun {
 
 struct Active {
     lp: TravelLoop,
+    hl: DriveHoistLoop,
     acc: f64,
+}
+
+/// The open-loop drive hoists of a project: every motor with a hook load under "Drive hoist". A
+/// hoist whose numbers the engine refuses is reported and left out.
+pub(super) fn drive_hoists_of(project: &Project) -> (Vec<DriveHoistModule>, Vec<(Level, String)>) {
+    let mut modules = Vec::new();
+    let mut notes = Vec::new();
+    for device in project.devices() {
+        if !device
+            .properties
+            .contains_key(drive_hoist_spec::DRIVE_HOIST_KEY)
+        {
+            continue;
+        }
+        let tag = device.tag.to_string();
+        let get = |key: &str| device.properties.get(key).map(|v: &Value| v.to_string());
+        match drive_hoist_spec::drive_hoist_from_properties(&tag, &get) {
+            Ok(Some((module, fit))) => {
+                modules.push(module);
+                notes.extend(
+                    fit.into_iter()
+                        .map(|n| (Level::Info, format!("{tag}: {n}"))),
+                );
+            }
+            Ok(None) => {}
+            Err(why) => notes.push((Level::Warning, format!("{tag} is left out: {why}"))),
+        }
+    }
+    (modules, notes)
+}
+
+/// A one-line reading of a drive hoist, for the badge and the window.
+pub(super) fn hoist_reading(module: &DriveHoistModule) -> String {
+    if let Some(why) = module.fault() {
+        return why.to_owned();
+    }
+    let Some(s) = module.snapshot() else {
+        return "waiting".to_owned();
+    };
+    use novo_drive::hoist_logic::LogicPhase;
+    let phase = match s.logic.phase {
+        LogicPhase::Idle => "brake closed",
+        LogicPhase::Magnetising => "magnetising",
+        LogicPhase::Releasing => "opening brake",
+        LogicPhase::Running => "running",
+        LogicPhase::Decelerating => "slowing",
+        LogicPhase::Engaging => "closing brake",
+        LogicPhase::Fault(_) => "stopped by a fault",
+    };
+    format!(
+        "{phase} \u{b7} {:.1} Hz \u{b7} {:.1} A \u{b7} {:.1} m/min \u{b7} {:.2} m",
+        s.drive.frequency_hz.abs(),
+        s.motor.stator_current_a,
+        s.speed_m_s * 60.0,
+        s.height_m
+    )
 }
 
 /// The travel axes of a project: every motor with a moving mass set. An axis whose numbers the
@@ -83,6 +147,7 @@ pub(super) fn advance(
     let mut ticks = 0;
     while active.acc >= dt && ticks < MAX_TICKS {
         active.lp.step(&mut circuit);
+        active.hl.step(&mut circuit);
         active.acc -= dt;
         ticks += 1;
     }
@@ -130,13 +195,26 @@ pub(super) fn paint_badges(
         ))
         .with_clip_rect(canvas);
     let palette = crate::theme::ui_palette();
-    for module in &active.lp.modules {
+    let readings: Vec<(&str, String)> = active
+        .lp
+        .modules
+        .iter()
+        .map(|m| (m.id.as_str(), reading(m)))
+        .chain(
+            active
+                .hl
+                .modules
+                .iter()
+                .map(|m| (m.id.as_str(), hoist_reading(m))),
+        )
+        .collect();
+    for (id, text) in readings {
         for symbol in project.symbols().filter(|s| s.page == page && is_motor(s)) {
             let tag = symbol
                 .device()
                 .and_then(|d| project.device(d))
                 .map(|d| d.tag.to_string());
-            if tag.as_deref() != Some(module.id.as_str()) {
+            if tag.as_deref() != Some(id) {
                 continue;
             }
             let Some((at, r)) = super::live_anim::body(library, symbol) else {
@@ -144,7 +222,7 @@ pub(super) fn paint_badges(
             };
             let centre = to_screen(at);
             let galley = painter.layout_no_wrap(
-                reading(module),
+                text.clone(),
                 egui::FontId::proportional(12.0),
                 palette.text_strong,
             );
@@ -160,7 +238,9 @@ pub(super) fn paint_badges(
             painter.galley(pos, galley, palette.text_strong);
         }
     }
-    if active.lp.modules.iter().any(|m| m.snapshot().is_some()) {
+    if active.lp.modules.iter().any(|m| m.snapshot().is_some())
+        || active.hl.modules.iter().any(|m| m.snapshot().is_some())
+    {
         ctx.request_repaint();
     }
 }
@@ -179,6 +259,7 @@ impl NovoApp {
             return;
         };
         let (axes, _) = axes_of(doc.project());
+        let (drive_hoists, _) = drive_hoists_of(doc.project());
         let live_on = self.wb.live.on;
         let mut open = true;
         let (mut start, mut stop, mut live_toggle) = (false, false, false);
@@ -187,11 +268,31 @@ impl NovoApp {
             a.lp.modules
                 .iter()
                 .map(|m| (m.id.clone(), reading(m)))
+                .chain(
+                    a.hl.modules
+                        .iter()
+                        .map(|m| (m.id.clone(), hoist_reading(m))),
+                )
+                .collect()
+        });
+        // What the drive hoists found, newest last (the run keeps the whole list).
+        let findings: Vec<(String, String)> = run.active.as_ref().map_or_else(Vec::new, |a| {
+            a.hl.modules
+                .iter()
+                .flat_map(|m| {
+                    m.findings()
+                        .iter()
+                        .map(|f| (format!("{} \u{b7} {:.1} s", m.id, f.time_s), f.kind.text()))
+                })
                 .collect()
         });
         let running = run.active.is_some();
         let notice = run.notice.clone();
-        let names: Vec<String> = axes.iter().map(|a| a.id.clone()).collect();
+        let names: Vec<String> = axes
+            .iter()
+            .map(|a| a.id.clone())
+            .chain(drive_hoists.iter().map(|h| h.id.clone()))
+            .collect();
         // Foreground: the marks of the live view (contacts, coil rings) are painted on the Middle
         // layer and must not run through the notes.
         super::panel::dialog(ctx, "Drive run", [560.0, 560.0])
@@ -207,11 +308,15 @@ impl NovoApp {
                 ui.add_space(4.0);
                 if names.is_empty() {
                     ui.weak(
-                        "No travel axis yet. Select a motor and enter its moving mass under \
-                         Travel drive in the property sheet.",
+                        "No travel axis or drive hoist yet. Select a motor and enter its moving \
+                         mass under Travel drive, or its hook load under Drive hoist, in the \
+                         property sheet.",
                     );
                 } else {
-                    ui.label(format!("Travel axes in this project: {}", names.join(", ")));
+                    ui.label(format!(
+                        "Travel axes and drive hoists in this project: {}",
+                        names.join(", ")
+                    ));
                 }
                 ui.horizontal(|ui| {
                     if !live_on && ui.button("Switch on Live").clicked() {
@@ -267,6 +372,16 @@ impl NovoApp {
                             }
                         });
                 }
+                if !findings.is_empty() {
+                    ui.separator();
+                    ui.label(egui::RichText::new("What the hoist run found").strong());
+                    for (when, text) in findings.iter().rev().take(12) {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.weak(when);
+                            ui.label(text);
+                        });
+                    }
+                }
                 ui.separator();
                 ui.label(egui::RichText::new("Model, not measurement").strong());
                 ui.weak(
@@ -285,6 +400,13 @@ impl NovoApp {
                 ui.weak(
                     "\u{2022} The drive replaces the contactors: its output terminals are not \
                      traced through the drawing, its inputs and mains are.",
+                );
+                ui.weak(
+                    "\u{2022} Drive hoist: the brake sequence (magnetise, open the brake on \
+                     current, close it at a low frequency) is a generic model with your numbers, \
+                     not a maker's firmware or parameter set. The motor flux builds with one \
+                     time constant; a stuck or missing brake contactor shows as a brake that \
+                     never opens.",
                 );
                 ui.weak("\u{2022} Not a safety or compliance statement.");
             });
@@ -309,7 +431,9 @@ impl NovoApp {
         };
         let project = doc.project();
         let (modules, mut notes) = axes_of(project);
-        if modules.is_empty() {
+        let (hoist_modules, hoist_notes) = drive_hoists_of(project);
+        notes.extend(hoist_notes);
+        if modules.is_empty() && hoist_modules.is_empty() {
             notes.push((
                 Level::Warning,
                 "No axis can run: see the notes above.".into(),
@@ -325,9 +449,19 @@ impl NovoApp {
             }
         };
         lp.modules = modules;
+        let mut hl = match DriveHoistLoop::new(StepConfig::default()) {
+            Ok(hl) => hl,
+            Err(why) => {
+                self.wb.drive_run.notice = vec![(Level::Error, why.to_string())];
+                return;
+            }
+        };
+        hl.modules = hoist_modules;
         let findings = {
             let circuit = LiveCircuit::new(&mut self.wb.live, project);
-            lp.check_bindings(&circuit)
+            let mut f = lp.check_bindings(&circuit);
+            f.extend(hl.check_bindings(&circuit));
+            f
         };
         notes.extend(
             findings
@@ -335,7 +469,7 @@ impl NovoApp {
                 .map(|f| (Level::Warning, format!("{}: {}", f.module, f.message))),
         );
         self.wb.drive_run.notice = notes;
-        self.wb.drive_run.active = Some(Active { lp, acc: 0.0 });
+        self.wb.drive_run.active = Some(Active { lp, hl, acc: 0.0 });
     }
 }
 
@@ -435,7 +569,11 @@ mod tests {
         let mut lp = TravelLoop::new(StepConfig::default()).unwrap();
         lp.modules = modules;
         let mut run = DriveRun {
-            active: Some(Active { lp, acc: 0.0 }),
+            active: Some(Active {
+                lp,
+                hl: DriveHoistLoop::new(StepConfig::default()).unwrap(),
+                acc: 0.0,
+            }),
             ..Default::default()
         };
         let mut live = LiveView::default();
@@ -467,6 +605,113 @@ mod tests {
         let run = run_held(&doc, button, 30.0);
         let p = position(&run);
         assert!((1.0..1.15).contains(&p), "{p}");
+    }
+
+    /// L1 -> S1 -> coil KU (up command); L1 -> KR2 (the drive's brake relay contact, written by
+    /// the loop) -> coil KB (brake contactor). Motor M1 is an open-loop drive hoist on KU and KB.
+    fn drive_hoist(brake_wired: bool) -> (Document, SymbolId) {
+        let mut doc = Document::default();
+        let (button, _) = doc
+            .transact("Draw", |tx| {
+                let page = tx.add_page("1")?;
+                let dev = |d, main| SymbolRole::Device { device: d, main };
+                let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+                let n = tx.add_potential("N", PotentialKind::Neutral)?;
+                let ku = tx.add_device(DeviceTag::product("KU"), "")?;
+                let kb = tx.add_device(DeviceTag::product("KB"), "")?;
+                let kr2 = tx.add_device(DeviceTag::product("KR2"), "")?;
+                let s1 = tx.add_device(DeviceTag::product("S1"), "")?;
+                let m1 = tx.add_device(DeviceTag::product("M1"), "")?;
+                let feed = |tx: &mut novo_core::Tx<'_>, y, p| {
+                    put(
+                        tx,
+                        page,
+                        "t/feed",
+                        y,
+                        SymbolRole::PotentialFeed { potential: p },
+                    )
+                };
+                let (f1, f2, f3, f4) = (
+                    feed(tx, 0.0, l1),
+                    feed(tx, 30.0, n),
+                    feed(tx, 200.0, l1),
+                    feed(tx, 230.0, n),
+                );
+                let button = put(tx, page, "t/contact/no", 80.0, dev(s1, true));
+                let coil_u = put(tx, page, "t/coil", 100.0, dev(ku, true));
+                let relay = put(tx, page, "t/contact/no", 280.0, dev(kr2, true));
+                let coil_b = put(tx, page, "t/coil", 300.0, dev(kb, true));
+                tx.connect(Endpoint::pin(f1, 1), Endpoint::pin(button, 0))?;
+                tx.connect(Endpoint::pin(button, 1), Endpoint::pin(coil_u, 0))?;
+                tx.connect(Endpoint::pin(coil_u, 1), Endpoint::pin(f2, 1))?;
+                tx.connect(Endpoint::pin(f3, 1), Endpoint::pin(relay, 0))?;
+                tx.connect(Endpoint::pin(relay, 1), Endpoint::pin(coil_b, 0))?;
+                tx.connect(Endpoint::pin(coil_b, 1), Endpoint::pin(f4, 1))?;
+                let m = tx.project().device(m1).map(|d| d.id).unwrap();
+                tx.set_property(m, "dh_mass_kg", Some(2000.0.into()))?;
+                let tag = |t: &str| Some(DeviceTag::product(t).to_string().into());
+                tx.set_property(m, "dh_in_up", tag("KU"))?;
+                tx.set_property(m, "dh_brake_relay", tag("KR2"))?;
+                if brake_wired {
+                    tx.set_property(m, "dh_brake_feed", tag("KB"))?;
+                }
+                Ok(button)
+            })
+            .unwrap();
+        (doc, button)
+    }
+
+    fn run_hoist(doc: &Document, button: SymbolId, seconds: f64) -> DriveRun {
+        let project = doc.project();
+        let (hoists, notes) = drive_hoists_of(project);
+        assert!(
+            notes.iter().all(|(l, _)| matches!(l, Level::Info)),
+            "{notes:?}"
+        );
+        assert_eq!(hoists.len(), 1);
+        let mut hl = DriveHoistLoop::new(StepConfig::default()).unwrap();
+        hl.modules = hoists;
+        let mut run = DriveRun {
+            active: Some(Active {
+                lp: TravelLoop::new(StepConfig::default()).unwrap(),
+                hl,
+                acc: 0.0,
+            }),
+            ..Default::default()
+        };
+        let mut live = LiveView::default();
+        live.on = true;
+        live.reset_poles(project);
+        live.poles.set_all(project, button, true);
+        for _ in 0..(seconds / 0.016) as usize {
+            advance(&mut run, &mut live, project, 0.016);
+        }
+        run
+    }
+
+    #[test]
+    fn the_drives_brake_relay_in_the_drawing_opens_the_brake_and_the_hook_rises() {
+        let (doc, button) = drive_hoist(true);
+        let run = run_hoist(&doc, button, 12.0);
+        let hl = &run.active.as_ref().unwrap().hl;
+        let m = &hl.modules[0];
+        assert!(m.height_m() > 0.1, "{}", m.height_m());
+        assert!(hoist_reading(m).contains("running"), "{}", hoist_reading(m));
+    }
+
+    #[test]
+    fn a_missing_brake_contactor_wire_is_a_binding_finding_not_a_silent_run() {
+        let (doc, _) = drive_hoist(false);
+        let (hoists, _) = drive_hoists_of(doc.project());
+        let mut hl = DriveHoistLoop::new(StepConfig::default()).unwrap();
+        hl.modules = hoists;
+        let mut live = LiveView::default();
+        let circuit = LiveCircuit::new(&mut live, doc.project());
+        let found = hl.check_bindings(&circuit);
+        assert!(
+            found.iter().any(|f| f.message.contains("ideal wiring")),
+            "{found:?}"
+        );
     }
 
     #[test]

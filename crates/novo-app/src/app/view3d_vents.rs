@@ -58,6 +58,7 @@ pub(super) fn show(
     .top(super::view3d_controls::below(ctx))
     // As tall as its content: the list, and the form of the one open opening.
     .fit()
+    .dockable()
     .show(ctx, |ui| {
         // Past the window's bottom the list scrolls instead of being cut off.
         let room = (view.height() - super::view3d_controls::below(ctx) - 64.0).max(160.0);

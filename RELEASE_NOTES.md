@@ -35,7 +35,7 @@ format itself did not change, so to open a new project in an old build, copy it 
 - A part catalogue that you fill by importing maker data, with part assignment, quality checks and bulk edit.
 - Generated pages that follow your edits: contents, bill of materials, device list, wire list, terminal and cable
   diagrams, I/O list. PDF export with bookmarks and links; Excel and CSV export.
-- File > New from template > Overhead crane: a crane-shaped structure tree (girder, two hoist units, operator station, cabinets, limit switches, load cell, motors), empty drawing pages filed under it and cover pages (title, revisions, structure overview, general and project information) that fill themselves. Fill in the fields at File > Project > Project settings > Project information. Reports > Front matter adds the cover pages to any project.
+- File > New from template > Overhead crane: asks how many hoist units (1 to 4) and how the hoists and the travel motions are driven (two-speed contactors or frequency drive), then makes a crane-shaped structure tree (girder, hoist units, operator station, cabinets, limit switches, load cell, motors), drawing pages filed under it with a circuit from the library on each, and cover pages (title, revisions, structure overview, general and project information) that fill themselves. Fill in the fields at File > Project > Project settings > Project information. Reports > Front matter adds the cover pages to any project.
 - Bench output for the workshop: cut list, ferrule table, labels and an assembly checklist. Reports and
   checklists can be switched to Dutch.
 

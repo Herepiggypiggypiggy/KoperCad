@@ -52,6 +52,8 @@ pub(crate) struct TestUser {
     /// the empty profile at every launch (a QA scenario's `library` step).
     #[arg(skip)]
     library_seed: Option<PathBuf>,
+    /// A parts catalog file (`parts.json`) every launch starts with.
+    catalog_seed: Option<PathBuf>,
 }
 
 impl TestUser {
@@ -72,6 +74,7 @@ impl TestUser {
             real_profile: false,
             env,
             library_seed: None,
+            catalog_seed: None,
         }
     }
 }
@@ -472,6 +475,11 @@ impl Server {
         self.opts.library_seed = dir;
     }
 
+    /// Start every launch from here with this user parts catalog in the profile.
+    pub(crate) fn set_catalog_seed(&mut self, file: Option<PathBuf>) {
+        self.opts.catalog_seed = file;
+    }
+
     /// Whether the next launch keeps the profile of the last one.
     pub(crate) fn keep_profile(&mut self, keep: bool) {
         self.keep_profile = keep;
@@ -637,6 +645,24 @@ impl Server {
                     )
                 })?;
             }
+        }
+        if let (Some(seed), false) = (&self.opts.catalog_seed, self.opts.real_profile) {
+            // Where the app looks (`novo_parts::user_catalog_path`).
+            let home = work.join("home");
+            let to = if cfg!(windows) {
+                home.join("AppData/KoperCAD/parts.json")
+            } else {
+                home.join("data/novoelectric/parts.json")
+            };
+            if let Some(dir) = to.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            std::fs::copy(seed, &to).map_err(|e| {
+                format!(
+                    "cannot copy the catalog {} to the profile: {e}",
+                    seed.display()
+                )
+            })?;
         }
         #[cfg(target_os = "linux")]
         if std::env::var_os("DISPLAY").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none() {

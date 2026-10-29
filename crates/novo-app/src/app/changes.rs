@@ -299,6 +299,7 @@ impl NovoApp {
         })
         .fixed_open()
         .fit()
+        .dockable()
         .show(ctx, |ui| {
             pick = base_picker(ui, &revisions, mode.base);
             ui.horizontal(|ui| {

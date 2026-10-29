@@ -9,3 +9,8 @@ Decisions
 - Cabinet codes sort in drawing order (DST before MCC), because pages sort by structure first.
 - Front matter is one report with five sections so the standard report list grows by one, not five.
 - A template is a new unsaved project (not marked saved), unlike examples.
+
+Follow-up (after #1719 merged)
+- `file.new_crane` now opens the New crane project window (`template_crane_window.rs`, `wb.crane_new`); Create calls `new_crane_project(options)`.
+- `template_crane.rs`: `CraneOptions` (hoist_units 1..=4, hoist_drive, travel_drive); pages place circuits from `novo_parts::circuit_library()` by name (`Circuits`), one hoist page per unit. Open points of the circuits show as warnings (UnconnectedPin) on purpose: they are where the supply is connected.
+- Next: pump station and motor control centre templates, same menu (coordinator ask).

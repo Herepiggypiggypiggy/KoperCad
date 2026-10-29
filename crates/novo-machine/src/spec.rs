@@ -176,21 +176,21 @@ pub const KEYS: &[SpecKey] = &[
     ),
     num(
         "mech_fine_amps",
-        "Fine winding rated current (empty = from power)",
+        "Fine winding rated current (empty = from power, with an assumed efficiency)",
         "A",
         "",
     ),
     num("mech_fine_pf", "Fine winding power factor", "", "0.6"),
     num(
         "mech_coarse_amps",
-        "Coarse winding rated current (empty = from power)",
+        "Coarse winding rated current (empty = from power, with an assumed efficiency)",
         "A",
         "",
     ),
     num("mech_coarse_pf", "Coarse winding power factor", "", "0.85"),
     num(
         "mech_fl_amps",
-        "Fine-lift motor rated current (empty = from power)",
+        "Fine-lift motor rated current (empty = from power, with an assumed efficiency)",
         "A",
         "",
     ),
@@ -206,7 +206,7 @@ pub const KEYS: &[SpecKey] = &[
     num("mech_frame_tau_s", "Frame heat time constant", "s", "1500"),
     num(
         "mech_overload_amps",
-        "Overload relay setting (empty = no relay)",
+        "Overload relay setting, main motor only (empty = no relay)",
         "A",
         "",
     ),

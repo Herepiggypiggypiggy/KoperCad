@@ -4,7 +4,8 @@
 //!
 //!   cargo run -p novo-tests --example pin_names_fixture -- qa/fixtures
 //!
-//! Writes `OUT_DIR/pin-names.kopercad`.
+//! Writes `OUT_DIR/pin-names.kopercad` and `OUT_DIR/pin-offer.kopercad` (one relay
+//! coil -K1 with the usual pins A1 A2 and no part, for the part terminal offer).
 
 use novo_core::{DeviceTag, Document, Rotation, SymbolInstance};
 use novo_editor::catalog::Catalog;
@@ -52,6 +53,31 @@ fn main() {
     })
     .expect("fixture builds");
     let path = out.join("pin-names.kopercad");
+    let _ = std::fs::remove_file(&path);
+    Session::create(&path, doc.project()).expect("project file");
+    println!("wrote {}", path.display());
+
+    let mut doc = Document::default();
+    doc.transact("Pin offer", |tx| {
+        let mut b = Builder {
+            tx,
+            catalog: &catalog,
+        };
+        let page = b.page("1")?;
+        b.put(
+            page,
+            "iec/coils/relay",
+            (120.0, 60.0),
+            (Rotation::R0, false),
+            &PlaceOptions {
+                parent: DeviceTag::parse("-K1").ok(),
+                ..PlaceOptions::new()
+            },
+        );
+        Ok(())
+    })
+    .expect("fixture builds");
+    let path = out.join("pin-offer.kopercad");
     let _ = std::fs::remove_file(&path);
     Session::create(&path, doc.project()).expect("project file");
     println!("wrote {}", path.display());

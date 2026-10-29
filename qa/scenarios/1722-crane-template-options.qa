@@ -1,0 +1,29 @@
+@title Crane template options: two hoist units, frequency drives, circuits on the pages
+@area Schematic
+wait 20
+click_text File
+wait 6
+move 260 466
+wait 8
+click 600 466
+wait 12
+click_text "2"
+click_text "Frequency drive" #1
+wait 6
+shot options-two-units-frequency
+click_text "Create project"
+wait 30
+shot page-1-supply
+key PageDown
+key PageDown
+key PageDown
+wait 12
+shot page-4-crab-travel
+key PageDown
+wait 12
+shot page-5-hoist-unit-1
+check_layout
+key PageDown
+wait 12
+shot page-6-hoist-unit-2
+check_layout

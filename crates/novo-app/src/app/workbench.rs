@@ -106,6 +106,8 @@ pub(crate) struct Workbench {
     /// The Project information fields while the Project settings window is
     /// open: typed text, saved when a field loses focus.
     pub(super) project_info: Option<Vec<String>>,
+    /// The New crane project window, with the choices so far.
+    pub(super) crane_new: Option<super::template_crane::CraneOptions>,
     /// The Issue revision window, while it is open.
     pub(super) issue: Option<super::revisions::IssueDraft>,
     pub(super) restore_ask: Option<super::revisions::RestoreAsk>,
@@ -292,6 +294,8 @@ pub(crate) struct Workbench {
     pub(super) parts_bulk: Option<super::parts_bulk::BulkReport>,
     /// Part proposals waiting for Accept all or Cancel.
     pub(super) auto_assign: Option<super::parts_bulk::AutoAssignPreview>,
+    /// A rename of part terminals offered after a part was assigned.
+    pub(super) pin_offer: Option<super::pin_offer::PinOffer>,
     /// The description recipe editor.
     pub(super) describe: Option<super::describe_recipes::DescribeDialog>,
     /// An EPLAN (PXF) import waiting for the person to confirm.
@@ -364,6 +368,7 @@ impl Default for Workbench {
             macro_editor: Default::default(),
             project_settings: false,
             project_info: None,
+            crane_new: None,
             issue: None,
             restore_ask: None,
             handover_ask: None,
@@ -453,6 +458,7 @@ impl Default for Workbench {
             aml_import: None,
             parts_bulk: None,
             auto_assign: None,
+            pin_offer: None,
             describe: None,
             eplan_import: None,
             eplan_parts: None,
@@ -561,6 +567,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "sim.plc_program",
     "sim.faults",
     "sim.hoist",
+    "sim.hoist3d",
     "sim.drive_run",
     "sim.winches",
     "sim.motor_curves",
@@ -1443,6 +1450,7 @@ impl NovoApp {
             }
             "sim.faults" => self.toggle_faults(),
             "sim.hoist" => self.toggle_hoist_run(),
+            "sim.hoist3d" => self.toggle_hoist_3d(),
             "sim.drive_run" => self.toggle_drive_run(),
             "sim.winches" => self.toggle_winch_scenarios(),
             "sim.motor_curves" => self.toggle_motor_curves(),
