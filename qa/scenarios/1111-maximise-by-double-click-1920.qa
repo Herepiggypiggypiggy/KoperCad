@@ -1,0 +1,18 @@
+@title Double click on a title bar maximises a window and a second one restores it (Preferences, 1920x1080)
+@area Windows
+@sizes 1920x1080
+click_text "Open example"
+wait 20
+click_text File #1
+wait 5
+click_text Preferences
+wait 20
+shot preferences-home
+double_click 960 170
+wait 20
+shot preferences-maximised
+check_layout
+double_click 960 33
+wait 20
+shot preferences-restored
+check_layout

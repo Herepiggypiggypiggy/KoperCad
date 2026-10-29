@@ -170,6 +170,142 @@ fn about_and_preferences_are_windows_that_open_on_screen_and_move() {
     }
 }
 
+fn frame_at(d: &mut Drive, t: f64, events: Vec<egui::Event>) {
+    let input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, SIZE)),
+        time: Some(t),
+        events,
+        ..Default::default()
+    };
+    let app = &mut d.app;
+    let mut output = d.ctx.run_ui(input, |ui| app.show(ui));
+    output.textures_delta.clear();
+}
+
+/// Two quick clicks at `at`, starting at time `t`; returns the time after.
+fn double_click(d: &mut Drive, at: egui::Pos2, t: f64) -> f64 {
+    frame_at(d, t, vec![egui::Event::PointerMoved(at)]);
+    for (i, dt) in [0.1, 0.15, 0.2, 0.25].into_iter().enumerate() {
+        frame_at(d, t + dt, vec![press(at, i % 2 == 0)]);
+    }
+    for k in 0..4 {
+        frame_at(d, t + 0.5 + k as f64 * 0.1, vec![]);
+    }
+    t + 5.0
+}
+
+fn near(a: egui::Rect, b: egui::Rect) -> bool {
+    (a.min - b.min).length() < 3.0 && (a.size() - b.size()).length() < 3.0
+}
+
+#[test]
+fn a_double_click_on_a_panel_title_maximises_it_and_again_restores_it() {
+    let (_dir, mut d) = open_project();
+    d.app.outline_open = true;
+    settle(&mut d);
+    let id = panel::id("outline_flyout");
+    let home = rect_of(&d, id).expect("the navigator is shown");
+    let (_, canvas) = d.app.wb.canvas_area.unwrap();
+
+    let t = double_click(&mut d, home.center_top() + egui::vec2(0.0, 10.0), 100.0);
+    let big = rect_of(&d, id).unwrap();
+    assert!(
+        big.width() > canvas.width() - 40.0 && big.height() > canvas.height() - 100.0,
+        "fills the canvas: {home:?} -> {big:?} on {canvas:?}"
+    );
+    assert!(canvas.contains_rect(big), "{big:?} on {canvas:?}");
+    assert!(d.app.outline_open, "a double click does not close it");
+
+    // The title is at the top of the big window now.
+    double_click(&mut d, big.center_top() + egui::vec2(0.0, 10.0), t);
+    let back = rect_of(&d, id).unwrap();
+    assert!(near(back, home), "{home:?} -> {back:?}");
+}
+
+#[test]
+fn a_double_click_on_a_title_does_not_fold_the_panel_it_maximises() {
+    let (_dir, mut d) = open_project();
+    d.app.outline_open = true;
+    settle(&mut d);
+    let id = panel::id("outline_flyout");
+    let home = rect_of(&d, id).unwrap();
+    double_click(&mut d, home.center_top() + egui::vec2(0.0, 10.0), 100.0);
+    let big = rect_of(&d, id).unwrap();
+    // Folded, a panel is one title bar tall.
+    assert!(big.height() > 200.0, "{big:?}");
+}
+
+#[test]
+fn a_double_click_on_a_modal_title_maximises_it_and_again_restores_it() {
+    let (_dir, mut d) = open_project();
+    d.app.wb.preferences = true;
+    settle(&mut d);
+    let win = egui::Id::new(("modal", "preferences"));
+    let home = rect_of(&d, win).expect("preferences is shown");
+    let t = double_click(&mut d, home.center_top() + egui::vec2(0.0, 10.0), 100.0);
+    let big = rect_of(&d, win).unwrap();
+    assert!(
+        big.width() > SIZE.x - 40.0 && big.height() > SIZE.y - 80.0,
+        "fills the window: {home:?} -> {big:?}"
+    );
+    assert!(screen().contains_rect(big), "{big:?}");
+    double_click(&mut d, big.center_top() + egui::vec2(0.0, 10.0), t);
+    let back = rect_of(&d, win).unwrap();
+    assert!(near(back, home), "{home:?} -> {back:?}");
+}
+
+#[test]
+fn a_double_click_on_a_dialog_title_maximises_it_and_again_restores_it() {
+    let (_dir, mut d) = open_project();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "export.pdf_options", None);
+    settle(&mut d);
+    let win = egui::Id::new(Some("Export PDF"));
+    let home = rect_of(&d, win).expect("the dialog is shown");
+    let t = double_click(&mut d, home.center_top() + egui::vec2(0.0, 10.0), 100.0);
+    let big = rect_of(&d, win).unwrap();
+    assert!(
+        big.width() > SIZE.x - 40.0 && big.height() > SIZE.y - 80.0,
+        "fills the window: {home:?} -> {big:?}"
+    );
+    assert!(screen().contains_rect(big), "{big:?}");
+    double_click(&mut d, big.center_top() + egui::vec2(0.0, 10.0), t);
+    let back = rect_of(&d, win).unwrap();
+    assert!(near(back, home), "{home:?} -> {back:?}");
+}
+
+#[test]
+fn reset_panel_layout_forgets_a_maximised_window() {
+    let (_dir, mut d) = open_project();
+    d.app.outline_open = true;
+    settle(&mut d);
+    let id = panel::id("outline_flyout");
+    let home = rect_of(&d, id).unwrap();
+    double_click(&mut d, home.center_top() + egui::vec2(0.0, 10.0), 100.0);
+    assert!(rect_of(&d, id).unwrap().width() > home.width() + 100.0);
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.reset_panels", None);
+    settle(&mut d);
+    let back = rect_of(&d, id).unwrap();
+    assert!(near(back, home), "{home:?} -> {back:?}");
+}
+
+#[test]
+fn a_double_click_on_the_edge_of_the_pinned_navigator_gives_it_its_width_back() {
+    let (_dir, mut d) = open_project();
+    d.app.settings.outline_pinned = Some(true);
+    settle(&mut d);
+    let home = d.app.wb.outline_shown.expect("the column is shown");
+    let edge = egui::pos2(home - 2.0, 300.0);
+    drag(&mut d, edge, edge + egui::vec2(120.0, 0.0));
+    let wide = d.app.wb.outline_shown.unwrap();
+    assert!(wide > home + 80.0, "{home} -> {wide}");
+    let edge = egui::pos2(wide - 2.0, 300.0);
+    double_click(&mut d, edge, 100.0);
+    let back = d.app.wb.outline_shown.unwrap();
+    assert!((back - home).abs() < 3.0, "{home} -> {wide} -> {back}");
+}
+
 /// The rule for new code: no window that is neither movable nor resizable.
 /// Every floating panel goes through `panel.rs`; the few raw `egui::Area`s
 /// that remain are not windows (hover tips, toasts, the radial wheel,
