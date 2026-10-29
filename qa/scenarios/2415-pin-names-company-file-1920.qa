@@ -1,0 +1,37 @@
+@title Pin names: the company file shares typed pin names with other projects (1920x1080)
+@area Schematic
+@sizes 1920x1080
+# Project rules > Usual pin names has "Save as company file" and "Load company file". The text typed in the box is written to pin-templates.toml in the KoperCAD data folder of this run's own profile; after the box is emptied, "Load company file" brings it back.
+open qa/fixtures/pin-names.kopercad
+wait 30
+key ctrl+k
+wait 10
+text rules
+wait 10
+key Return
+wait 20
+scroll 960 500 -600
+wait 10
+click 960 695
+wait 5
+text class = [{ id = 'motor.brake', label = 'brake motor', functions = ['motor.ac3'], set = [{ name = 'with brake', required = ['U1', 'V1', 'W1', 'BD1', 'BD2'] }] }]
+wait 10
+expect "1 class read"
+shot typed
+click_text "Save as company file"
+wait 10
+expect "Saved as the company pin names file"
+expect_file "~/data/*/pin-templates.toml" 50
+click 960 695
+key ctrl+a
+key Delete
+wait 10
+expect "Built-in names only"
+shot emptied
+scroll 960 500 -600
+wait 5
+click_text "Load company file"
+wait 10
+expect "1 class read"
+shot loaded
+check_layout

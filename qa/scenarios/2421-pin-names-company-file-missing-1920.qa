@@ -1,0 +1,20 @@
+@title Pin names: Load company file with no file says so and changes nothing (1920x1080)
+@area Schematic
+@sizes 1920x1080
+# A fresh profile has no pin-templates.toml. "Load company file" shows "No company file to load" and the box stays empty.
+open qa/fixtures/pin-names.kopercad
+wait 30
+key ctrl+k
+wait 10
+text rules
+wait 10
+key Return
+wait 20
+scroll 960 500 -600
+wait 10
+click_text "Load company file"
+wait 10
+shot missing
+expect "No company file to load"
+expect "Built-in names only"
+check_layout
