@@ -2397,7 +2397,16 @@ impl PageScene {
             item.labels
                 .push(label.secondary().colored(self.style.wire.color));
         }
-        if let Some(c) = cable {
+        // One mark for the cable: the first of its cores drawn on this page
+        // carries the tag, the others show only the sheath.
+        let carries_tag = |c: &novo_core::Cable| {
+            c.cores
+                .iter()
+                .filter_map(|k| k.wire)
+                .find(|&w| project.wire(w).is_some_and(|w| w.page == self.page))
+                == Some(id)
+        };
+        if let Some(c) = cable.filter(|c| carries_tag(c)) {
             // Under the wire number, along the longest segment.
             let (s0, s1) = pts
                 .windows(2)
@@ -5010,6 +5019,59 @@ mod tests {
         ps.apply(doc.project(), &changes, &PlaceholderArt);
         assert_eq!(prims(&ps), before_prims);
         assert_eq!(labels(&ps), before_labels);
+    }
+
+    #[test]
+    fn a_cable_of_several_cores_is_marked_once() {
+        let (mut doc, page, first) = bent_wire();
+        // A second core on the same page, laid beside the first.
+        let (second, _) = doc
+            .transact("second", |tx| {
+                let sym = tx.place_symbol(
+                    page,
+                    "iec/terminal",
+                    MPlacement::at(Point::new(100.0, 90.0)),
+                    vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                    SymbolRole::Unassigned,
+                )?;
+                let wire = tx.connect(
+                    Endpoint::pin(sym, 0),
+                    Endpoint::Free {
+                        at: Point::new(140.0, 87.5),
+                    },
+                )?;
+                Ok(wire)
+            })
+            .unwrap();
+        let (_, changes) = doc
+            .transact("cable", |tx| {
+                tx.add_cable(
+                    DeviceTag::parse("-W1").unwrap(),
+                    [first, second]
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, w)| {
+                            let mut core = novo_core::CableCore::new(format!("{}", i + 1));
+                            core.wire = Some(w);
+                            core
+                        })
+                        .collect(),
+                )
+            })
+            .unwrap();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        let tags = |wire| {
+            ps.scene()
+                .get(item_id(wire))
+                .unwrap()
+                .labels
+                .iter()
+                .filter(|l| l.text == "-W1")
+                .count()
+        };
+        assert_eq!(tags(first) + tags(second), 1, "one mark for the cable");
+        assert_eq!(tags(first), 1, "on its first core");
     }
 
     #[test]

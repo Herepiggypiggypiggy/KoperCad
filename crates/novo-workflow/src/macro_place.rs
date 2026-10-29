@@ -414,6 +414,72 @@ pub fn free_origin(project: &Project, page: PageId, gap: f64) -> Point {
     Point::new(right + gap, corner(points.into_iter()).y)
 }
 
+/// How far a macro's drawn objects reach right and down of its origin, in
+/// mm: the spread of its symbols and junctions plus what a symbol itself
+/// covers.
+pub fn definition_extent(definition: &BlockDefinition) -> (f64, f64) {
+    let (mut max_x, mut max_y) = (0.0_f64, 0.0_f64);
+    for member in &definition.members {
+        let at = match member {
+            Record::Symbol(s) => s.placement.origin,
+            Record::Junction(j) => j.position,
+            _ => continue,
+        };
+        max_x = max_x.max(at.x);
+        max_y = max_y.max(at.y);
+    }
+    // The members are stored relative to the captured top-left corner.
+    (max_x + SYMBOL_REACH, max_y + SYMBOL_REACH)
+}
+
+/// What one symbol covers beyond its origin, for the room a macro needs.
+const SYMBOL_REACH: f64 = 15.0;
+
+/// Where a macro goes for a person looking at `visible` (the part of the
+/// page on screen, top-left and bottom-right): the top-left of that view,
+/// snapped to `grid` and kept inside the sheet margin, when the room the
+/// macro covers there is empty. Otherwise (and on an empty page) it is
+/// [`free_origin`], beside what is drawn. The flag says the view had no room,
+/// so the macro landed outside it and the view should follow.
+pub fn origin_in_view(
+    project: &Project,
+    page: PageId,
+    extent: (f64, f64),
+    visible: Option<(Point, Point)>,
+    grid: f64,
+    gap: f64,
+) -> (Point, bool) {
+    let beside = free_origin(project, page, gap);
+    let drawn =
+        project.symbols().any(|s| s.page == page) || project.junctions().any(|j| j.page == page);
+    let Some((min, _)) = visible.filter(|_| drawn) else {
+        return (beside, false);
+    };
+    let snap = |v: f64| {
+        if grid > 0.0 {
+            (v / grid).round() * grid
+        } else {
+            v
+        }
+    };
+    let at = Point::new(snap(min.x.max(10.0) + 10.0), snap(min.y.max(10.0) + 10.0));
+    let (right, bottom) = (at.x + extent.0 + gap, at.y + extent.1 + gap);
+    let blocked = project.symbols().filter(|s| s.page == page).any(|s| {
+        let reach =
+            |p: Point| p.x >= at.x - gap && p.x <= right && p.y >= at.y - gap && p.y <= bottom;
+        reach(s.placement.origin)
+            || s.pins
+                .iter()
+                .any(|pin| reach(s.placement.apply(pin.offset)))
+    }) || project.junctions().filter(|j| j.page == page).any(|j| {
+        j.position.x >= at.x - gap
+            && j.position.x <= right
+            && j.position.y >= at.y - gap
+            && j.position.y <= bottom
+    });
+    if blocked { (beside, true) } else { (at, false) }
+}
+
 fn corner(points: impl Iterator<Item = Point>) -> Point {
     let (mut x, mut y) = (f64::INFINITY, f64::INFINITY);
     for p in points {
