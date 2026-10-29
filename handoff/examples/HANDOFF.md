@@ -1,5 +1,7 @@
 # Example gallery handoff
 
 Branch `claude/project-thread-g1iblv`. Add an example: write `example_<name>.rs` with `build_<name>_example(doc)` using `Kit`, `Parts`, `finish`; add an `Action::Open<Name>Example` (actions.rs, app.rs Leaving + run, example.rs open fn), a command in novo-workflow `commands.rs`, placement `under("File","Examples")` in `menus.rs`, a Dutch `nl(...)` entry in `language.rs` (a test demands it), and one line in `GALLERY`. The gallery tests then cover it.
-Look at it: `scripts/qa.sh --only 700-gallery` (needs openbox, mesa-vulkan-drivers, libxkbcommon-x11-0), or `EXAMPLE_PDF_DIR=/tmp cargo test -p novo-app --lib example_gallery_pdf` (boxes only, no symbols).
+Look at it: `scripts/qa.sh --only gallery` (scenarios 760 MCC, 761 menu, 762 crane; pages are reached with Ctrl+K, the outline is hidden at 1366x768) (needs openbox, mesa-vulkan-drivers, libxkbcommon-x11-0), or `EXAMPLE_PDF_DIR=/tmp cargo test -p novo-app --lib example_gallery_pdf` (boxes only, no symbols).
 Traps: stop/start tags must not collide with the e-stop tag; pins leave in their direction, give crossing wires `wire_via` corners; the example cabinet front clearance is 1000 mm (the starter example keeps 400).
+Pilot devices (S, H, P) are set to the plate in `plan_cabinet`, because Place all puts them on the door and the examples route every wire. Terminal rows use 16 mm pitch against 8 mm device pins: give the wires `wire_via` levels so none cross, and list cable cores in reverse so the cable name lands on a clear wire.
+Crane example (PR 2): `example_crane.rs`, 6 pages, 36 devices, plate planned by Place all. Caveats: travel motors have no brake modelled, pilot devices stay on the plate, Generic parts are planning values.

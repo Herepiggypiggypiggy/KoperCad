@@ -263,30 +263,42 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
         .into_iter()
         .enumerate()
     {
-        tb.push(kit.term(x0, name, key, (40.0 + 8.0 * i as f64, 30.0)));
+        tb.push(kit.term(x0, name, key, (40.0 + 16.0 * i as f64, 40.0)));
     }
     for (i, pot) in [l1, l2, l3].into_iter().enumerate() {
-        let f = kit.feed(pot, (40.0 + 8.0 * i as f64, 14.0));
+        let f = kit.feed(pot, (40.0 + 16.0 * i as f64, 12.0));
         supply_wires.push(kit.wire_mm2((f, "1"), (tb[i], "1"), 6.0));
     }
-    let f = kit.feed_pe(pe, (64.0, 14.0));
+    let f = kit.feed_pe(pe, (88.0, 12.0));
     supply_wires.push(kit.wire_mm2((f, "1"), (tb[3], "1"), 6.0));
-    let fpe = kit.feed_down(pe, (64.0, 46.0));
+    let fpe = kit.feed_down(pe, (88.0, 56.0));
     kit.wire_mm2((tb[3], "2"), (fpe, "1"), 6.0);
     let q0 = kit.put(
         "iec/switches/switch_disconnector_3p",
-        (40.0, 56.0),
+        (40.0, 66.0),
         &format!("{CAB}-Q0"),
     );
     kit.describe(&format!("{CAB}-Q0"), "Main switch");
+    // The terminals sit 16 mm apart, the poles 8 mm: the outer two wires
+    // step in at their own level so none cross.
     for (i, pole) in ["1", "3", "5"].into_iter().enumerate() {
-        kit.wire_mm2((tb[i], "2"), (q0, pole), 6.0);
+        let corners: &[(f64, f64)] = match i {
+            1 => &[(56.0, 50.0), (48.0, 50.0)],
+            2 => &[(72.0, 54.0), (56.0, 54.0)],
+            _ => &[],
+        };
+        let w = kit.wire_via((tb[i], "2"), (q0, pole), corners);
+        kit.set_mm2(w, 6.0);
     }
-    let k0 = kit.put("iec/contactors/main_3p", (40.0, 96.0), &format!("{CAB}-K0"));
+    let k0 = kit.put(
+        "iec/contactors/main_3p",
+        (40.0, 106.0),
+        &format!("{CAB}-K0"),
+    );
     kit.describe(&format!("{CAB}-K0"), "Main contactor");
     kit.wire3((q0, ["2", "4", "6"]), (k0, ["1", "3", "5"]), 6.0);
     for (i, pot) in [s1, s2, s3].into_iter().enumerate() {
-        let f = kit.feed_down(pot, (40.0 + 8.0 * i as f64, 124.0));
+        let f = kit.feed_down(pot, (40.0 + 8.0 * i as f64, 134.0));
         kit.wire_mm2((k0, ["2", "4", "6"][i]), (f, "1"), 6.0);
     }
     // Control transformer from L1 and L2 ahead of the main contactor.
@@ -318,8 +330,8 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
     kit.wire_mm2((q2, "4"), (f0, "1"), 1.5);
     kit.cable(
         "=CRN-W0",
-        &["L1", "L2", "L3", "PE"],
-        &supply_wires,
+        &["PE", "L3", "L2", "L1"],
+        &supply_wires.iter().rev().copied().collect::<Vec<_>>(),
         6.0,
         30.0,
         "Supply cable 4G6",
@@ -542,31 +554,51 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
             .into_iter()
             .enumerate()
         {
-            ts.push(kit.term(x2, &format!("{n_}{nm}"), key, (x + 8.0 * i as f64, 168.0)));
+            ts.push(kit.term(x2, &format!("{n_}{nm}"), key, (x + 16.0 * i as f64, 168.0)));
         }
+        // The drive pins are 8 mm apart, the terminals 16 mm: each wire steps
+        // out at its own level so none cross.
+        let fan_out: [&[(f64, f64)]; 3] = [
+            &[],
+            &[(x + 8.0, 150.0), (x + 16.0, 150.0)],
+            &[(x + 16.0, 146.0), (x + 32.0, 146.0)],
+        ];
         for (i, pin) in ["U", "V", "W"].into_iter().enumerate() {
-            kit.wire_mm2((u, pin), (ts[i], "1"), 1.5);
+            let w = kit.wire_via((u, pin), (ts[i], "1"), fan_out[i]);
+            kit.set_mm2(w, 1.5);
         }
-        kit.wire_mm2((u, "PE2"), (ts[3], "1"), 1.5);
-        let m = kit.put("iec/motors/motor_3ph", (x, 204.0), &format!("{FLD}-M{n_}"));
+        let w = kit.wire_via(
+            (u, "PE2"),
+            (ts[3], "1"),
+            &[(x + 24.0, 142.0), (x + 48.0, 142.0)],
+        );
+        kit.set_mm2(w, 1.5);
+        let m = kit.put("iec/motors/motor_3ph", (x, 224.0), &format!("{FLD}-M{n_}"));
         kit.describe(
             &format!("{FLD}-M{n_}"),
             &format!("{what} travel motor 3 kW"),
         );
         kit.props(&format!("{FLD}-M{n_}"), &[("power_kw", 3.0)]);
         let mut mw_ = Vec::new();
-        for (i, pin) in ["U1", "V1", "W1"].into_iter().enumerate() {
-            mw_.push(kit.wire_mm2((ts[i], "2"), (m, pin), 1.5));
+        let fan_in: [&[(f64, f64)]; 4] = [
+            &[],
+            &[(x + 16.0, 176.0), (x + 8.0, 176.0)],
+            &[(x + 32.0, 180.0), (x + 16.0, 180.0)],
+            &[(x + 48.0, 184.0), (x + 24.0, 184.0)],
+        ];
+        for (i, pin) in ["U1", "V1", "W1", "PE"].into_iter().enumerate() {
+            let w = kit.wire_via((ts[i], "2"), (m, pin), fan_in[i]);
+            kit.set_mm2(w, 1.5);
+            mw_.push(w);
         }
-        mw_.push(kit.wire_mm2((ts[3], "2"), (m, "PE"), 1.5));
         // The screen is bonded to PE at the cabinet and at the motor.
-        let t_sh = kit.term(x2, &format!("{n_}SH"), term_pe, (x + 32.0, 168.0));
-        let f_sh = kit.feed_pe(pe, (x + 32.0, 148.0));
+        let t_sh = kit.term(x2, &format!("{n_}SH"), term_pe, (x + 64.0, 168.0));
+        let f_sh = kit.feed_pe(pe, (x + 64.0, 148.0));
         kit.wire_mm2((f_sh, "1"), (t_sh, "1"), 1.5);
         mw_.push(kit.wire_via(
             (t_sh, "2"),
             (m, "PE"),
-            &[(x + 32.0, 196.0), (x + 24.0, 196.0)],
+            &[(x + 64.0, 206.0), (x + 24.0, 206.0)],
         ));
         let c = kit.cable(
             &format!("=CRN-W{n_}"),
