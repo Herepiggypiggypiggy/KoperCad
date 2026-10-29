@@ -77,15 +77,15 @@ pub struct PartTerminal {
     pub position_mm: Option<[f64; 3]>,
     /// Number of conductors the terminal takes at once.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_wires: Option<u32>,
+    pub max_wires: Option<u8>,
     /// Conductor range in AWG (smallest and largest cross-section as AWG
     /// numbers, as the maker prints them).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub awg: Option<(f64, f64)>,
-    /// Length of insulation to strip, in mm.
+    /// Length of insulation to strip, in mm, as the maker states it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub strip_length_mm: Option<f64>,
-    /// Tightening torque range in N·m.
+    pub strip_mm: Option<f64>,
+    /// Smallest and largest tightening torque in N·m (screw terminals).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub torque_nm: Option<(f64, f64)>,
     /// Where the maker's file puts the entry point, in the maker's own frame

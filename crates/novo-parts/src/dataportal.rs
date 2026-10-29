@@ -1046,6 +1046,13 @@ impl Build {
             }
             draft.part.terminals.push(t);
         }
+        // The wire checks judge a wire against data that came from the maker.
+        if draft.part.terminals.iter().any(|t| t.wire_mm2.is_some()) {
+            draft
+                .part
+                .sources
+                .insert("connection_data".into(), DataSource::MakerDatasheet);
+        }
     }
 
     fn terminal(&mut self, r: &Node, units: &Units) -> Option<PartTerminal> {
@@ -1069,7 +1076,7 @@ impl Build {
                 Some(TField::Name) => t.name = v.clone(),
                 Some(TField::Pos(c)) => pos[axis(c)] = length_mm(v, units.length),
                 Some(TField::Dir(c)) => dir[axis(c)] = number(v),
-                Some(TField::Strip) => t.strip_length_mm = length_mm(v, units.length),
+                Some(TField::Strip) => t.strip_mm = length_mm(v, units.length),
                 Some(TField::Torque) => {
                     if let Some((lo, hi)) = torque_nm(v) {
                         match bound(&k) {
@@ -1106,7 +1113,9 @@ impl Build {
                         }
                     }
                 }
-                Some(TField::WireCount) => t.max_wires = count(v),
+                Some(TField::WireCount) => {
+                    t.max_wires = count(v).and_then(|n| u8::try_from(n).ok())
+                }
                 Some(TField::Kind) => t.kind = connection_kind(v),
                 None => {
                     self.unknown("connection point", key);

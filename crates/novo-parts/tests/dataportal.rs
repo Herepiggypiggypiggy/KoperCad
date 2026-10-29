@@ -115,7 +115,7 @@ fn connection_points_carry_wire_range_torque_and_strip_length() {
     assert_eq!(t[0].wire_mm2, Some((0.2, 4.0)));
     assert_eq!(t[0].awg, Some((24.0, 12.0)));
     assert_eq!(t[0].max_wires, Some(2));
-    assert_eq!(t[0].strip_length_mm, Some(10.0));
+    assert_eq!(t[0].strip_mm, Some(10.0));
     assert_eq!(t[0].torque_nm, Some((0.5, 0.6)), "50 Ncm is read as 0.5 Nm");
     assert_eq!(t[0].kind, ConnectionKind::Screw);
     assert_eq!(t[0].maker_position_mm, Some([0.0, -24.0, 18.5]));
@@ -130,6 +130,10 @@ fn connection_points_carry_wire_range_torque_and_strip_length() {
     );
     assert_eq!(t[1].kind, ConnectionKind::PushIn);
     assert_eq!(t[1].torque_nm, None);
+    assert_eq!(
+        r.parts[0].sources.get("connection_data"),
+        Some(&novo_parts::DataSource::MakerDatasheet)
+    );
     assert_eq!(r.counts.terminals, 2);
     assert_eq!(r.counts.with_wire_range, 2);
     assert_eq!(r.counts.with_torque, 1);
