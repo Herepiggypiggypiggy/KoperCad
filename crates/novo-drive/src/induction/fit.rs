@@ -343,8 +343,9 @@ impl InductionMotor {
                     return Err(InputError::OutOfRange {
                         field: "rpm",
                         value: np.rpm,
-                        min: 120.0 * np.frequency_hz / f64::from(MAX_DERIVED_POLES),
-                        max: f64::MAX,
+                        // Refused up to 60 f / (pairs + 1) rpm; the 2 pole synchronous speed bounds it above.
+                        min: 60.0 * np.frequency_hz / f64::from(MAX_DERIVED_POLES / 2 + 1),
+                        max: 120.0 * np.frequency_hz / 2.0,
                     });
                 }
                 2 * pairs as u32

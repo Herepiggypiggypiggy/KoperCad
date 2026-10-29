@@ -768,6 +768,14 @@ fn deriving_poles_from_a_tiny_rpm_is_refused_not_overflowed() {
             "rpm {rpm}"
         );
     }
+    // The message carries the true bound: 60 f / 13 = 230.77 rpm, below the 2 pole speed 3000 rpm.
+    let np = plate(1.5, 400.0, 3.6, 50.0, 200.0, 0.80);
+    let msg = InductionMotor::from_nameplate(&np, None, &d)
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(msg.contains("230.7"), "{msg}");
+    assert!(msg.contains("3000"), "{msg}");
     // A very slow 24-pole nameplate (250 rpm at 50 Hz) is still derived.
     let np = plate(1.5, 400.0, 3.6, 50.0, 245.0, 0.80);
     assert!(!matches!(
