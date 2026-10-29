@@ -238,6 +238,11 @@ pub const DUTCH: &[Aliases] = &[
         &["artikel wissen", "ontkoppelen"],
     ),
     nl(
+        "parts.describe",
+        &["omschrijving uit onderdelen"],
+        &["omschrijving", "beschrijving", "recept"],
+    ),
+    nl(
         "parts.remove_unused",
         &["ongebruikte onderdelen"],
         &["opruimen", "ongebruikt", "artikelen opruimen"],

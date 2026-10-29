@@ -76,6 +76,7 @@ mod count_words;
 mod defects_card;
 #[cfg(test)]
 mod defects_card_tests;
+mod describe_recipes;
 mod designer;
 mod device_renumber;
 mod diagnostics;
@@ -1998,6 +1999,7 @@ impl NovoApp {
         self.parts_window(&ctx);
         self.parts_bulk_dialog(&ctx);
         self.auto_assign_dialog(&ctx);
+        self.describe_recipes_dialog(&ctx);
         self.project_settings_dialog(&ctx);
         self.project_rules_dialog(&ctx);
         self.device_renumber_dialog(&ctx);

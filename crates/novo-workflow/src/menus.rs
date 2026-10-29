@@ -349,6 +349,7 @@ const REGROUPED: &[(&str, MenuPlace)] = &[
     ("edit.paste_in_place", under("Edit", "Paste special")),
     ("parts.auto_assign", under("Edit", "Parts")),
     ("parts.clear", under("Edit", "Parts")),
+    ("parts.describe", under("Edit", "Parts")),
     ("parts.remove_unused", under("Edit", "Parts")),
     ("wires.number", under("Edit", "Wire numbers")),
     ("wires.numbering", under("Edit", "Wire numbers")),

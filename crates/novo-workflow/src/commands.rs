@@ -1039,6 +1039,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Selection,
     ),
     cmd(
+        "parts.describe",
+        "Describe devices from parts",
+        "Edit",
+        &["description", "recipe", "text", "label", "bom"],
+        Needs::Project,
+    ),
+    cmd(
         "parts.remove_unused",
         "Remove unused parts",
         "Edit",

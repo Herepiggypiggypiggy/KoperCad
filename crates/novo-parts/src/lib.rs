@@ -37,6 +37,7 @@ mod cadmatch;
 mod catalog;
 mod csv;
 mod dataportal;
+pub mod describe;
 mod etim;
 mod fit;
 mod import;
@@ -93,6 +94,10 @@ pub use csv::{
 pub use dataportal::{
     PORTAL_SOURCE, PortalCounts, PortalError, PortalFile, PortalRead, looks_like_portal,
     read_portal,
+};
+pub use describe::{
+    ContactMarks, Description, Facts, RECIPES_FORMAT, Recipe, RecipeSet, TemplateError,
+    check_template, describe_devices, describe_parts, device_description, recipe_id, recipes_path,
 };
 pub use etim::{EtimError, EtimModel};
 pub use fit::{
