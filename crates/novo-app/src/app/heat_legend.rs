@@ -40,7 +40,7 @@ pub(crate) fn notes(h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) -> 
     }
     if h.carry {
         out.push(format!(
-            "Heat flow (orange): brighter is more heat, up to {top_flux:.0} W/m², no radiation"
+            "Heat flow (orange): up to {top_flux:.0} W/m², the heat the air carries away, no radiation"
         ));
     }
     if h.devices {
@@ -85,7 +85,10 @@ pub(crate) fn strip(
     if h.flow.mode != FlowMode::Off {
         super::heat_flow::legend(ui, &h.flow, top_speed);
     }
-    if wanted(h) || h.flow.mode != FlowMode::Off || h.cloud {
+    if h.carry && top_flux > 0.0 {
+        super::heat_flow::flux_legend(ui, top_flux);
+    }
+    if wanted(h) || h.flow.mode != FlowMode::Off || h.cloud || h.carry {
         ui.end_row();
     }
     if !notes.is_empty() {
