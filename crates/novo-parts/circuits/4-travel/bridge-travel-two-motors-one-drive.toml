@@ -1,0 +1,88 @@
+# Bridge travel: two end carriage motors on one frequency converter.
+name = "Bridge travel two motors on one drive"
+chapter = "travel"
+description = "Bridge travel with two end carriage motors on one frequency converter: breaker, line contactor, converter, a motor protection breaker for each motor, forward and reverse commands through end limits and the motor thermal contacts"
+tags = ["bridge", "travel", "two motors", "end carriage", "vfd", "frequency converter", "inverter", "drive", "motor protection", "crane"]
+notes = """Both motors run from the converter outputs U V W, each behind its own motor protection breaker (Q2 and Q3, set them to the motor current). Size the converter for both motors together. \\
+The converter's control terminals are drawn as device pins of -T1 with generic names (+24, FWD, REV): rename them to your drive's terminals. S1 and S2 command forward and reverse, B2 and B3 are the end limits, B1 stands for the thermal contacts of both motors in series. \\
+The brakes of the motors are not drawn: add them from the travel drive circuit with brake. \\
+You connect: L1 L2 L3 above Q1, PE above the PE terminal and the K1 coil from your emergency stop chain."""
+
+parameter = [
+  { name = "power", default = 2.2, description = "Power of one motor in kW" },
+]
+
+open = ["q1s.1,3,5", "pe1.1", "k1c.A1,A2"]
+
+device = [
+  { id = "q1", tag = "-Q1", description = "Drive input breaker", mount = { kind = "din", size = [54, 90, 70], at = [15, 55], rail = "r1" } },
+  { id = "k1", tag = "-K1", description = "Line contactor", mount = { kind = "din", size = [45, 77, 86], at = [75, 61.5], rail = "r1" } },
+  { id = "q2", tag = "-Q2", description = "Motor protection breaker, motor 1", mount = { kind = "din", size = [45, 90, 78], at = [125, 55], rail = "r1" } },
+  { id = "q3", tag = "-Q3", description = "Motor protection breaker, motor 2", mount = { kind = "din", size = [45, 90, 78], at = [175, 55], rail = "r1" } },
+  { id = "t1", tag = "-T1", description = "Frequency converter, 2 x {power} kW", props = { power_kw = "{power}" }, mount = { kind = "plate", size = [105, 143, 150], at = [15, 150] } },
+  { id = "m1", tag = "-M1", description = "Travel motor 1, {power} kW", props = { power_kw = "{power}" }, mount = { kind = "field", place = "on the end carriage, side 1" } },
+  { id = "m2", tag = "-M2", description = "Travel motor 2, {power} kW", props = { power_kw = "{power}" }, mount = { kind = "field", place = "on the end carriage, side 2" } },
+  { id = "b1", tag = "-B1", description = "Motor thermal contacts, in series", mount = { kind = "field", place = "in the windings of both motors" } },
+  { id = "b2", tag = "-B2", description = "Forward end limit", mount = { kind = "field", place = "at the forward end of the runway" } },
+  { id = "b3", tag = "-B3", description = "Reverse end limit", mount = { kind = "field", place = "at the reverse end of the runway" } },
+  { id = "s1", tag = "-S1", description = "Forward", mount = { kind = "field", place = "operator station" } },
+  { id = "s2", tag = "-S2", description = "Reverse", mount = { kind = "field", place = "operator station" } },
+]
+
+symbol = [
+  { id = "q1s", key = "iec/protection/mcb_3p", at = [40, 40], device = "q1" },
+  { id = "k1m", key = "iec/contactors/main_3p", at = [40, 72], device = "k1", main = false },
+  { id = "t1s", key = "iec/drives/frequency_converter", at = [40, 104], device = "t1" },
+  { id = "q2s", key = "iec/protection/motor_protection_breaker", at = [40, 168], device = "q2" },
+  { id = "q3s", key = "iec/protection/motor_protection_breaker", at = [96, 168], device = "q3" },
+  { id = "m1s", key = "iec/motors/motor_3ph", at = [40, 208], device = "m1" },
+  { id = "m2s", key = "iec/motors/motor_3ph", at = [96, 208], device = "m2" },
+  { id = "pe1", key = "iec/terminals/terminal_pe", at = [76, 56] },
+  { id = "dp24", key = "iec/connectivity/device_pin", at = [150, 24], rotate = 180, device = "t1", main = false, numbers = ["+24"] },
+  { id = "b1s", key = "iec/sensors/temperature_nc", at = [150, 40], device = "b1" },
+  { id = "s1s", key = "iec/operators/pushbutton_no", at = [150, 72], device = "s1" },
+  { id = "b2s", key = "iec/contacts/position_nc", at = [150, 96], device = "b2" },
+  { id = "dpf", key = "iec/connectivity/device_pin", at = [150, 120], device = "t1", main = false, numbers = ["FWD"] },
+  { id = "s2s", key = "iec/operators/pushbutton_no", at = [174, 72], device = "s2" },
+  { id = "b3s", key = "iec/contacts/position_nc", at = [174, 96], device = "b3" },
+  { id = "dpr", key = "iec/connectivity/device_pin", at = [174, 120], device = "t1", main = false, numbers = ["REV"] },
+  { id = "k1c", key = "iec/coils/contactor", at = [220, 40], device = "k1", main = true },
+]
+
+junction = [
+  { id = "bus", at = [150, 60] }, { id = "bus2", at = [174, 60] },
+  { id = "ju", at = [40, 136] }, { id = "jv", at = [48, 144] }, { id = "jw", at = [56, 152] },
+  { id = "jpe", at = [64, 176] },
+]
+
+chain = [
+  { path = "q1s.2,4,6 > k1m.1,3,5/2,4,6 > t1s.L1,L2,L3" },
+  { path = "pe1.2 > t1s.PE" },
+  { path = "q2s.2,4,6 > m1s.U1,V1,W1" },
+  { path = "q3s.2,4,6 > m2s.U1,V1,W1" },
+]
+
+wire = [
+  { from = "t1s.U", to = "ju" }, { from = "t1s.V", to = "jv" }, { from = "t1s.W", to = "jw" },
+  { from = "ju", to = "q2s.1" }, { from = "jv", to = "q2s.3" }, { from = "jw", to = "q2s.5" },
+  { from = "ju", to = "q3s.1", via = [[96, 136]] },
+  { from = "jv", to = "q3s.3", via = [[104, 144]] },
+  { from = "jw", to = "q3s.5", via = [[112, 152]] },
+  { from = "t1s.PE2", to = "jpe" },
+  { from = "jpe", to = "m1s.PE" },
+  { from = "jpe", to = "m2s.PE", via = [[120, 176]] },
+  { from = "dp24.1", to = "b1s.21" },
+  { from = "b1s.22", to = "bus" },
+  { from = "bus", to = "s1s.13" }, { from = "s1s.14", to = "b2s.21" }, { from = "b2s.22", to = "dpf.1" },
+  { from = "bus", to = "bus2" }, { from = "bus2", to = "s2s.13" }, { from = "s2s.14", to = "b3s.21" }, { from = "b3s.22", to = "dpr.1" },
+]
+
+[plate]
+width = 260
+height = 310
+
+[[rail]]
+id = "r1"
+x = 10
+y = 100
+length = 235
