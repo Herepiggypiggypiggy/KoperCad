@@ -643,12 +643,14 @@ fn utf16_text(bytes: &[u8]) -> Option<String> {
         }
     };
     let units: Vec<u16> = rest
-        .chunks_exact(2)
-        .map(|p| {
+        .iter()
+        .step_by(2)
+        .zip(rest.iter().skip(1).step_by(2))
+        .map(|(&a, &b)| {
             if big {
-                u16::from_be_bytes([p[0], p[1]])
+                u16::from_be_bytes([a, b])
             } else {
-                u16::from_le_bytes([p[0], p[1]])
+                u16::from_le_bytes([a, b])
             }
         })
         .collect();
