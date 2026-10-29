@@ -12,7 +12,7 @@ plus companion files, named `MAKER.ARTICLE.kind.xml`:
 
 | Kind | What KoperCAD keeps |
 | --- | --- |
-| `part` | maker, order and type number, texts in every language (English shown, the others kept as `description_<lang>`), GTIN, eCl@ss, datasheet link, size, weight, rated current and voltage, power loss, conductor range |
+| `part` | maker, order and type number, texts in every language (English shown, the others kept as `description_<lang>`), GTIN, eCl@ss, datasheet link, size, weight, rated current and voltage, power loss, conductor range, poles, main and auxiliary contact counts, coil voltage, frequency and type (the keys the device description recipes read) |
 | `connectionpoints` | per terminal: name, wire range (mm² and AWG), most wires, strip length, torque range, connection kind, position and direction in the maker's frame, other attributes as written |
 | `construction` | holes: position, diameter, kind, repeat count and spacing (expanded with `DrillHole::positions`) |
 | `accessorylist`, `accessoryplacementlist` | accessory part numbers with quantity and placement offset |

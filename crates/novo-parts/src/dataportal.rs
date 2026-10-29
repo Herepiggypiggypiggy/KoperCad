@@ -33,6 +33,7 @@ use quick_xml::events::{BytesStart, Event};
 use thiserror::Error;
 
 use crate::catalog::{CatalogPart, Dimensions, PartKey};
+use crate::describe::keys;
 use crate::recipes::{Dim, parse_quantity, recipe_for};
 use crate::schema::{
     Accessory, ConnectionKind, DataSource, DrillHole, DrillRepeat, PartRef, PartTerminal,
@@ -962,6 +963,84 @@ impl Build {
                 None => false,
             }
         };
+        if k.contains("coil") {
+            let name = if k.contains("freq") || k.ends_with("hz") {
+                // `50`, `50/60` or `50 Hz`: kept as the maker wrote it when
+                // it is not one number.
+                let t = value
+                    .trim()
+                    .trim_end_matches("Hz")
+                    .trim_end_matches("hz")
+                    .trim();
+                if t.is_empty() {
+                    return false;
+                }
+                let v = number(t)
+                    .filter(|_| !t.contains('/'))
+                    .map_or_else(|| Value::Text(t.to_owned()), Value::Float);
+                part.data.insert(keys::COIL_HZ.into(), v);
+                part.sources
+                    .insert(keys::COIL_HZ.into(), DataSource::MakerDatasheet);
+                return true;
+            } else if k.contains("voltage") {
+                eng::COIL_VOLTAGE_V
+            } else if k.contains("type") || k.contains("current") {
+                let t = value.trim();
+                if t.is_empty() {
+                    return false;
+                }
+                part.data
+                    .insert(keys::COIL_KIND.into(), Value::Text(t.to_owned()));
+                return true;
+            } else {
+                return false;
+            };
+            return put(part, name, Dim::Voltage);
+        }
+        if matches!(
+            k.as_str(),
+            "poles" | "numberofpoles" | "polecount" | "polenumber"
+        ) {
+            return match count(value) {
+                Some(n) => {
+                    part.data
+                        .insert(eng::POLES.into(), Value::Int(i64::from(n)));
+                    part.sources
+                        .insert(eng::POLES.into(), DataSource::MakerDatasheet);
+                    true
+                }
+                None => false,
+            };
+        }
+        if k.contains("contact") {
+            let aux = k.contains("aux");
+            let nc = k.ends_with("nc") || k.contains("break") || k.contains("normallyclosed");
+            let no = k.ends_with("no") || k.contains("make") || k.contains("normallyopen");
+            let name = match (aux, no, nc) {
+                (true, true, false) => Some(keys::AUX_NO),
+                (true, false, true) => Some(keys::AUX_NC),
+                (false, true, false) if k.contains("main") || !k.contains("aux") => {
+                    Some(keys::MAIN_NO)
+                }
+                _ => None,
+            };
+            return match (name, count(value)) {
+                (Some(name), Some(n)) => {
+                    part.data.insert(name.into(), Value::Int(i64::from(n)));
+                    part.sources.insert(name.into(), DataSource::MakerDatasheet);
+                    true
+                }
+                // `1 NO + 1 NC` in one value: the description reads that text.
+                (None, _) if aux && !value.trim().is_empty() => {
+                    part.data.insert(
+                        "auxiliary_contacts".into(),
+                        Value::Text(value.trim().to_owned()),
+                    );
+                    true
+                }
+                _ => false,
+            };
+        }
         if k.contains("powerdissipation") || k.contains("powerloss") {
             return put(part, eng::POWER_LOSS_W, Dim::PowerW);
         }
