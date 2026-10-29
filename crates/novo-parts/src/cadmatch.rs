@@ -487,6 +487,11 @@ pub struct Candidate {
 const ORDER: i32 = 100;
 const TYPE_NUMBER: i32 = 80;
 const LINKED: i32 = 85;
+/// The maker's own catalog lists this very file name for the part: below the
+/// order number, above a set you matched by hand.
+const LISTED_FILE: i32 = 90;
+/// The catalog lists files of this download set for the part.
+const LISTED_SET: i32 = 75;
 const FAMILY: i32 = 70;
 
 struct NameHit {
@@ -599,6 +604,26 @@ fn name_hit(id: &CadIdentity, prep: &Prepared, part: &CatalogPart, links: &CadLi
                 )],
             };
         }
+    }
+    if LISTED_FILE > best.score && links.listed_file(&id.file_name).contains(&part.key()) {
+        best = NameHit {
+            score: LISTED_FILE,
+            evidence: vec![format!(
+                "The maker's catalog lists the file \u{201c}{}\u{201d} for {part}.",
+                id.file_name
+            )],
+        };
+    }
+    if let Some(doc) = &id.doc_id
+        && LISTED_SET > best.score
+        && links.listed_set(doc).contains(&part.key())
+    {
+        best = NameHit {
+            score: LISTED_SET,
+            evidence: vec![format!(
+                "The maker's catalog lists files of the download set {doc} for {part}."
+            )],
+        };
     }
     best
 }
@@ -943,9 +968,16 @@ impl<'a> Index<'a> {
                 links
                     .keys_for(doc)
                     .iter()
+                    .chain(links.listed_set(doc))
                     .filter_map(|k| self.by_key.get(k)),
             );
         }
+        found.extend(
+            links
+                .listed_file(&id.file_name)
+                .iter()
+                .filter_map(|k| self.by_key.get(k)),
+        );
         found.into_iter().map(|i| &self.parts[i]).collect()
     }
 }
@@ -1114,6 +1146,11 @@ pub fn match_batch(
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CadLinks {
     sets: BTreeMap<String, Vec<PartKey>>,
+    /// File names (upper case) the maker's catalog lists for a part
+    /// (BMEcat `MIME_SOURCE`); not something you matched yourself.
+    listed: BTreeMap<String, Vec<PartKey>>,
+    /// The download sets of those file names, when they have one.
+    listed_sets: BTreeMap<String, Vec<PartKey>>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -1121,6 +1158,16 @@ struct LinksFile {
     format: u32,
     #[serde(default)]
     links: Vec<LinkRow>,
+    /// Older files have none.
+    #[serde(default)]
+    listed: Vec<ListedRow>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ListedRow {
+    file_name: String,
+    manufacturer: String,
+    order_number: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1156,7 +1203,73 @@ impl CadLinks {
             }
             links.add(&r.doc_id, &PartKey::new(&r.manufacturer, &r.order_number));
         }
+        for r in file.listed {
+            if [&r.file_name, &r.manufacturer, &r.order_number]
+                .iter()
+                .any(|f| f.trim().is_empty())
+            {
+                continue;
+            }
+            links.add_listed(
+                &r.file_name,
+                &PartKey::new(&r.manufacturer, &r.order_number),
+            );
+        }
         links
+    }
+
+    /// The parts the maker's catalog lists this file name for.
+    pub fn listed_file(&self, file_name: &str) -> &[PartKey] {
+        self.listed
+            .get(&file_name.to_ascii_uppercase())
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// The parts the maker's catalog lists files of this download set for.
+    pub fn listed_set(&self, doc_id: &str) -> &[PartKey] {
+        self.listed_sets
+            .get(&doc_id.to_ascii_uppercase())
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// Notes that the maker's catalog lists `file_name` for the part. When
+    /// the name starts with a download set id, files of that set are tied to
+    /// the part too (with less weight).
+    pub fn add_listed(&mut self, file_name: &str, key: &PartKey) {
+        let name = file_name.trim().to_ascii_uppercase();
+        if name.is_empty() {
+            return;
+        }
+        let keys = self.listed.entry(name).or_default();
+        if !keys.contains(key) {
+            keys.push(key.clone());
+        }
+        if let Some(doc) = doc_id_of(file_name) {
+            let keys = self.listed_sets.entry(doc).or_default();
+            if !keys.contains(key) {
+                keys.push(key.clone());
+            }
+        }
+    }
+
+    /// Adds the CAD files a BMEcat catalog lists to the links file of the
+    /// library at `library_root`, keeping what is there. Returns how many
+    /// file names the library now knows from catalogs.
+    pub fn remember_listed(
+        library_root: &Path,
+        files: &[crate::bmecat::ListedCadFile],
+    ) -> io::Result<usize> {
+        let mut links = CadLinks::load(library_root);
+        for f in files {
+            links.add_listed(&f.file_name, &f.key);
+        }
+        links.save(library_root)?;
+        Ok(links.listed_len())
+    }
+
+    /// How many file names the maker's catalogs listed.
+    pub fn listed_len(&self) -> usize {
+        self.listed.values().map(Vec::len).sum()
     }
 
     pub fn keys_for(&self, doc_id: &str) -> &[PartKey] {
@@ -1173,7 +1286,7 @@ impl CadLinks {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.sets.is_empty()
+        self.sets.is_empty() && self.listed.is_empty()
     }
 
     /// Writes beside the library records (temp file and rename).
@@ -1186,6 +1299,17 @@ impl CadLinks {
                 .flat_map(|(doc, keys)| {
                     keys.iter().map(|k| LinkRow {
                         doc_id: doc.clone(),
+                        manufacturer: k.manufacturer().to_owned(),
+                        order_number: k.order_number().to_owned(),
+                    })
+                })
+                .collect(),
+            listed: self
+                .listed
+                .iter()
+                .flat_map(|(name, keys)| {
+                    keys.iter().map(|k| ListedRow {
+                        file_name: name.clone(),
                         manufacturer: k.manufacturer().to_owned(),
                         order_number: k.order_number().to_owned(),
                     })
@@ -1327,6 +1451,85 @@ mod tests {
         assert_eq!(ranked[0].label, "Schneider Electric LC1D09BD");
         assert_eq!(ranked[0].verdict, Verdict::Likely);
         assert!(ranked[0].evidence[0].contains("MCADPP0003371"));
+    }
+
+    #[test]
+    fn a_file_the_makers_catalog_lists_for_a_part_is_likely_that_part_with_the_reason() {
+        let c = catalog();
+        let key = PartKey::new("Schneider Electric", "LC1D09BD");
+        let mut links = CadLinks::default();
+        links.add_listed("Drawing-0042.stp", &key);
+        // The name is matched without case, and nothing in the name is the order number.
+        let id = CadIdentity::from_file_name("DRAWING-0042.STP");
+        let ranked = rank(&id, &c, &links, 5);
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0].key, key);
+        assert_eq!(ranked[0].verdict, Verdict::Likely);
+        assert!(ranked[0].evidence[0].contains("catalog lists the file"));
+        // Another file name is not tied to it.
+        let other = CadIdentity::from_file_name("Drawing-0043.stp");
+        assert!(rank(&other, &c, &links, 5).is_empty());
+    }
+
+    #[test]
+    fn a_listed_file_never_beats_the_order_number_in_the_file_name() {
+        let c = catalog();
+        let mut links = CadLinks::default();
+        links.add_listed("LC1D09BD.stp", &PartKey::new("WAGO", "2002-1201"));
+        let id = CadIdentity::from_file_name("LC1D09BD.stp");
+        let ranked = rank(&id, &c, &links, 5);
+        assert_eq!(ranked[0].label, "Schneider Electric LC1D09BD");
+        assert_eq!(ranked[0].verdict, Verdict::Verified);
+    }
+
+    #[test]
+    fn files_of_a_listed_download_set_are_likely_the_part_but_with_less_weight() {
+        let c = catalog();
+        let key = PartKey::new("Schneider Electric", "LC1D09BD");
+        let mut links = CadLinks::default();
+        links.add_listed("MCADPP0003371_3D-simplified.stp", &key);
+        let dxf = CadIdentity::from_file_name("MCADPP0003371_2D-front.dxf");
+        let ranked = rank(&dxf, &c, &links, 5);
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0].verdict, Verdict::Likely);
+        assert_eq!(ranked[0].score, LISTED_SET);
+        assert!(ranked[0].evidence[0].contains("MCADPP0003371"));
+        let step = CadIdentity::from_file_name("MCADPP0003371_3D-simplified.stp");
+        assert_eq!(rank(&step, &c, &links, 5)[0].score, LISTED_FILE);
+    }
+
+    #[test]
+    fn listed_files_are_saved_and_come_back_and_an_older_links_file_still_loads() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = PartKey::new("Schneider Electric", "LC1D09BD");
+        let listed = [crate::bmecat::ListedCadFile {
+            key: key.clone(),
+            file_name: "Drawing-0042.stp".into(),
+            source: "https://example.invalid/Drawing-0042.stp".into(),
+        }];
+        CadLinks::remember_listed(dir.path(), &listed).unwrap();
+        // Remembering twice, or from another catalog, keeps one row and what was there.
+        CadLinks::remember_listed(dir.path(), &listed).unwrap();
+        let mut hand = CadLinks::load(dir.path());
+        hand.add("MCADPP0003371", &key);
+        hand.save(dir.path()).unwrap();
+        let back = CadLinks::load(dir.path());
+        assert_eq!(
+            back.listed_file("drawing-0042.STP"),
+            std::slice::from_ref(&key)
+        );
+        assert_eq!(back.keys_for("MCADPP0003371"), std::slice::from_ref(&key));
+        assert_eq!(back.listed_len(), 1);
+        // A file written before listed files existed has no such field.
+        let old = tempfile::tempdir().unwrap();
+        std::fs::write(
+            CadLinks::path_in(old.path()),
+            r#"{"format":1,"links":[{"doc_id":"MCADPP0003371","manufacturer":"Schneider Electric","order_number":"LC1D09BD"}]}"#,
+        )
+        .unwrap();
+        let loaded = CadLinks::load(old.path());
+        assert_eq!(loaded.keys_for("MCADPP0003371").len(), 1);
+        assert!(loaded.listed_file("x.stp").is_empty());
     }
 
     #[test]
@@ -1573,6 +1776,11 @@ mod tests {
         c.upsert(part("Schneider Electric", "LC1D09BD7", None));
         let mut links = CadLinks::default();
         links.add("MCADQQ0000001", &c.find("WAGO", "2002-1201").unwrap().key());
+        links.add_listed("Listed-77.stp", &c.find("WAGO", "2002-1201").unwrap().key());
+        links.add_listed(
+            "MCADLL0000009_3D.stp",
+            &c.find("WAGO", "2002-1201").unwrap().key(),
+        );
         let ids = [
             schneider(),
             CadIdentity::from_file_name("LC1D18BD_3D.stp"),
@@ -1580,6 +1788,8 @@ mod tests {
             CadIdentity::from_file_name("TYPE-D32.stp"),
             CadIdentity::from_file_name("2002-1201.stp"),
             CadIdentity::from_file_name("MCADQQ0000001_2D-front.dxf"),
+            CadIdentity::from_file_name("LISTED-77.stp"),
+            CadIdentity::from_file_name("MCADLL0000009_2D.dxf"),
             CadIdentity::from_file_name("holiday.stp"),
         ];
         for id in &ids {

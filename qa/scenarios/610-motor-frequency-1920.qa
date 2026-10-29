@@ -1,0 +1,43 @@
+@title Motor at variable frequency at 1920: curves, readouts, model label, and the project without a motor
+@area Simulate
+@sizes 1920x1080
+# The golden motor starter project has a motor: Simulate > Motor at variable frequency shows the
+# curves (each labelled with its frequency, rated and continuous lines labelled), the readout
+# table, the model label and the folded list of what the model leaves out.
+open crates/novo-tests/tests/golden/v0.1-motor-starter.novo
+wait 20
+key ctrl+k
+wait 3
+text Motor at variable frequency
+wait 4
+key Enter
+wait 30
+expect "What this model leaves out"
+expect "rated torque"
+expect "Breakdown"
+shot motor-curves
+click_text "What this model leaves out"
+wait 10
+shot leaves-out-open
+scroll 330 400 -800
+wait 10
+shot leaves-out-scrolled
+click_text "What this model leaves out"
+wait 10
+scroll 330 400 -800
+wait 10
+shot leaves-out-unfolded
+check_layout
+# A project without a motor says so.
+key Escape
+wait 5
+key ctrl+n
+wait 20
+key ctrl+k
+wait 3
+text Motor at variable frequency
+wait 4
+key Enter
+wait 20
+expect "no motor"
+shot no-motor

@@ -540,7 +540,28 @@ impl ImportJob<'_> {
                         crate::etim::unread_note(&read.etim_unread, self.etim.as_deref())
                     ));
                 }
-                self.take_parts(read.parts, name, "import:bmecat")
+                let before: Vec<_> = read.parts.iter().map(CatalogPart::key).collect();
+                let first = self.outcome.parts.len();
+                self.take_parts(read.parts, name, "import:bmecat");
+                let mut listed = read.cad_files;
+                if !listed.is_empty() {
+                    let moved = before
+                        .into_iter()
+                        .zip(self.outcome.parts[first..].iter().map(CatalogPart::key))
+                        .collect();
+                    crate::bmecat::ListedCadFile::follow(&mut listed, &moved);
+                    let n = listed.len();
+                    match crate::cadmatch::CadLinks::remember_listed(self.library.root(), &listed) {
+                        Ok(_) => self.outcome.notes.push(format!(
+                            "{name}: lists {n} CAD file name{}; Add CAD files uses {} to match downloaded files to parts.",
+                            if n == 1 { "" } else { "s" },
+                            if n == 1 { "it" } else { "them" },
+                        )),
+                        Err(e) => self.outcome.notes.push(format!(
+                            "{name}: the CAD file names it lists could not be remembered ({e})"
+                        )),
+                    }
+                }
             }
             Err(e) => self
                 .outcome

@@ -17,7 +17,7 @@ use crate::{
 /// not ducts and are left out. A duct without a cross-section keeps
 /// width and height 0, which the engine reports as unsized.
 pub fn ducts(project: &Project, structure: StructureId) -> Vec<Duct> {
-    project
+    let mut ducts: Vec<Duct> = project
         .all::<Rail>()
         .filter(|r| r.structure == structure && r.kind == RailKind::Duct)
         .map(|r| Duct {
@@ -31,7 +31,56 @@ pub fn ducts(project: &Project, structure: StructureId) -> Vec<Duct> {
             width: r.width,
             height: r.height,
         })
-        .collect()
+        .collect();
+    join_ducts_at_sides(&mut ducts);
+    ducts
+}
+
+/// Ducts meet in a T or a corner with one ending against the side of the
+/// other (they never cross). The engine joins ducts where their centre lines
+/// meet, so an end that lies against the side of another duct is carried on
+/// to that duct's centre line: the wires turn there.
+fn join_ducts_at_sides(ducts: &mut [Duct]) {
+    const TOUCH_MM: f64 = 0.5;
+    let others: Vec<Duct> = ducts.to_vec();
+    for d in ducts.iter_mut() {
+        let horizontal = (d.a.y - d.b.y).abs() < 1e-9;
+        for end in 0..2 {
+            let p = if end == 0 { d.a } else { d.b };
+            let joined = others.iter().find_map(|o| {
+                if o.id == d.id || !o.width.is_finite() {
+                    return None;
+                }
+                let o_horizontal = (o.a.y - o.b.y).abs() < 1e-9;
+                if o_horizontal == horizontal {
+                    return None;
+                }
+                let half = o.width.max(0.0) / 2.0;
+                // `o`'s run, and how far `p` is from its centre line.
+                let (across, along, lo, hi) = if o_horizontal {
+                    ((p.y - o.a.y).abs(), p.x, o.a.x.min(o.b.x), o.a.x.max(o.b.x))
+                } else {
+                    ((p.x - o.a.x).abs(), p.y, o.a.y.min(o.b.y), o.a.y.max(o.b.y))
+                };
+                // Against the side, not on the centre line (already joined).
+                let against = half > 0.0 && (across - half).abs() <= TOUCH_MM;
+                (against && along >= lo - TOUCH_MM && along <= hi + TOUCH_MM).then(|| {
+                    if o_horizontal {
+                        Point::new(p.x, o.a.y)
+                    } else {
+                        Point::new(o.a.x, p.y)
+                    }
+                })
+            });
+            if let Some(q) = joined {
+                if end == 0 {
+                    d.a = q;
+                } else {
+                    d.b = q;
+                }
+            }
+        }
+    }
 }
 
 /// The routing network of an enclosure's ducts.

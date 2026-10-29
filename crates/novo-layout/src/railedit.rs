@@ -565,6 +565,52 @@ pub fn trim_to_crossing(layout: &CabinetLayout, id: u64, end: End) -> Option<Tri
     trim_at(layout, id, end, at)
 }
 
+/// Why [`trim_to_crossing`] finds nothing for `end` of `id`, in a sentence
+/// for the person at the saw.
+pub fn no_crossing_reason(layout: &CabinetLayout, id: u64, end: End) -> String {
+    let Some(me) = item(layout, id) else {
+        return "That rail or duct is gone.".to_string();
+    };
+    let (a0, a1) = (me.line() - me.across / 2.0, me.line() + me.across / 2.0);
+    let near = |s0: f64, s1: f64| match end {
+        End::Finish => me.finish() - s0,
+        End::Start => s1 - me.start(),
+    };
+    let crossing: Vec<(f64, f64)> = items(layout)
+        .into_iter()
+        .filter(|o| o.id != id && o.vertical != me.vertical)
+        .filter_map(|o| {
+            let ((s0, s1), (c0, c1)) = span(&o.rect(), me.vertical);
+            (c0 < a1 && a0 < c1).then_some((s0, s1))
+        })
+        .collect();
+    if crossing.is_empty() {
+        return "No rail or duct runs across it.".to_string();
+    }
+    let touches = |&(s0, s1): &(f64, f64)| match end {
+        End::Finish => (s0 - me.finish()).abs() < 1e-6,
+        End::Start => (s1 - me.start()).abs() < 1e-6,
+    };
+    if crossing.iter().any(touches) {
+        return "The one it meets only touches this end (a T), so there is nothing to cut off."
+            .to_string();
+    }
+    let on_run = |&(s0, s1): &(f64, f64)| s1 > me.start() && s0 < me.finish();
+    if !crossing.iter().any(on_run) {
+        return "The ones that run across it lie beyond its ends.".to_string();
+    }
+    if crossing
+        .iter()
+        .filter(|c| on_run(c))
+        .all(|&(s0, s1)| near(s0, s1) < MIN_LENGTH_MM)
+    {
+        return format!(
+            "The one that crosses it is within {MIN_LENGTH_MM:.0} mm of this end, so there is nothing to cut off."
+        );
+    }
+    "The ones that cross it would leave less than the shortest piece.".to_string()
+}
+
 /// What a length is cut from: whole bars, and what is left.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BarNote {
@@ -852,6 +898,63 @@ mod tests {
         assert_eq!((e.length, e.stop), (333.0, None));
         let e = set_length(&l, 1, 500.0).unwrap();
         assert_eq!((e.length, e.stop), (380.0, Some(Stop::Part(2))));
+    }
+
+    #[test]
+    fn ducts_that_meet_in_a_t_touch_and_do_not_overlap() {
+        let mut l = layout();
+        // The trunk's right edge is at 115; the row ends against it.
+        l.ducts.push(duct(2, 100.0, 40.0, 500.0, true));
+        l.ducts.push(duct(1, 115.0, 200.0, 300.0, false));
+        // The start end cannot be pulled into the trunk.
+        let e = resize_end(&l, 1, End::Start, 50.0, 2.0).unwrap();
+        assert_eq!((e.x, e.length), (115.0, 300.0));
+        assert_eq!(e.stop, Some(Stop::Part(2)));
+        // Moving the row onto the trunk is slid back to the side.
+        let m = move_to(&l, 1, 90.0, 200.0, 2.0).unwrap();
+        assert_eq!(m.stop, Some(Stop::Part(2)));
+        assert!(m.x >= 115.0 || m.x + 300.0 <= 85.0);
+        // Touching is not an overlap for the layout check either.
+        assert!(
+            !trim_to_crossing(&l, 1, End::Start).is_some(),
+            "a duct that only touches has nothing to cut"
+        );
+        assert!(no_crossing_reason(&l, 1, End::Start).contains("a T"));
+    }
+
+    #[test]
+    fn the_no_crossing_reason_says_what_is_wrong() {
+        let mut l = layout();
+        l.ducts.push(duct(1, 20.0, 100.0, 300.0, false));
+        assert!(no_crossing_reason(&l, 1, End::Finish).starts_with("No rail or duct"));
+        l.ducts.push(duct(2, 500.0, 40.0, 300.0, true));
+        assert!(no_crossing_reason(&l, 1, End::Finish).contains("beyond its ends"));
+        l.ducts.clear();
+        assert!(no_crossing_reason(&l, 1, End::Finish).contains("gone"));
+    }
+
+    #[test]
+    fn very_long_ducts_and_many_neighbours_stay_instant() {
+        // 2000 ducts, each 100 m long: every call is one pass over the items
+        // (no stepping in millimetres), so this finishes in well under a second.
+        let mut l = layout();
+        l.plate = Plate {
+            width: 200_000.0,
+            height: 200_000.0,
+            margin: 10.0,
+        };
+        for i in 0..2000u64 {
+            l.ducts
+                .push(duct(i + 1, 20.0, 50.0 + i as f64 * 60.0, 100_000.0, false));
+        }
+        let t = std::time::Instant::now();
+        let e = resize_end(&l, 1, End::Finish, 150_000.0, 2.0).unwrap();
+        assert_eq!(e.length, 149_980.0);
+        let m = move_to(&l, 1000, 5_000.0, 50.0 + 999.0 * 60.0 + 5.0, 2.0).unwrap();
+        assert!(m.x > 0.0);
+        let tr = trim_at(&l, 5, End::Finish, 60_000.0).unwrap();
+        assert_eq!(tr.edit.length, 59_980.0);
+        assert!(t.elapsed().as_secs_f64() < 2.0);
     }
 
     #[test]

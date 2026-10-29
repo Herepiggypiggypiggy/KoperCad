@@ -417,6 +417,16 @@ pub(super) fn dialog<'a>(
     }
 }
 
+/// The size [`dialog`] opens at for this screen, the one a dialog that has
+/// been squeezed by a smaller window goes back to.
+pub(super) fn dialog_default_size(ctx: &egui::Context, size: [f32; 2]) -> Option<egui::Vec2> {
+    let full = ctx.content_rect().shrink(MARGIN);
+    let g = grow(full.width());
+    let width = (size[0] * g).max(DIALOG_MIN_WIDTH).min(full.width());
+    let height = (size[1] * g).min((full.height() - TOP).max(MIN_HEIGHT));
+    (size[1] > 0.0).then(|| egui::vec2(width, height))
+}
+
 /// For a dialog that sets its own window id: pass the id through here so
 /// [`esc`] finds the window.
 pub(super) fn keep_id(ctx: &egui::Context, id: egui::Id) -> egui::Id {

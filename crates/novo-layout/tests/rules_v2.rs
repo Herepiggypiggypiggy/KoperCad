@@ -573,10 +573,10 @@ fn a_trunk_duct_joins_every_duct_between_rows() {
     let ducts = row_ducts(&plan);
     assert!(ducts.len() >= 2);
     for d in ducts {
-        // Each duct starts on the trunk's centre line and lies within its span.
-        assert_eq!(d.x, trunk.x);
+        // Each duct ends against the trunk's side (a T junction, no overlap)
+        // and lies within its span.
+        assert!((d.x - tr.right()).abs() < 1e-9);
         assert!(d.y >= trunk.y && d.y <= trunk.y + trunk.length);
-        assert!(duct_rect(d).x <= tr.right());
     }
     // The trunk spans every row and stays on the plate.
     for p in &plan.placements {

@@ -23,6 +23,11 @@ pub enum InputError {
     BadPoles { poles: u32 },
     /// A pole-change motor needs a fine winding with more poles than the coarse one.
     PolesNotDescending { fine: u32, coarse: u32 },
+    /// The nameplate values contradict each other (for example an efficiency above 100 %).
+    Inconsistent { what: &'static str },
+    /// The equivalent circuit could not be fitted to the nameplate; `residual` is the worst
+    /// relative miss of the best attempt.
+    NoFit { residual: f64 },
 }
 
 impl fmt::Display for InputError {
@@ -50,6 +55,11 @@ impl fmt::Display for InputError {
             Self::PolesNotDescending { fine, coarse } => write!(
                 f,
                 "fine winding needs more poles than the coarse one (got {fine} and {coarse})"
+            ),
+            Self::Inconsistent { what } => write!(f, "nameplate is not consistent: {what}"),
+            Self::NoFit { residual } => write!(
+                f,
+                "no equivalent circuit reproduces this nameplate (worst miss {residual:.3})"
             ),
         }
     }

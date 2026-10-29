@@ -65,3 +65,33 @@ fn the_ducts_from_the_model_route_a_wire() {
     assert_eq!(plan.routes[0].ducts.len(), 2);
     assert_eq!(plan.routes[0].kind, novo_routing::Kind::Ducted);
 }
+
+#[test]
+fn a_duct_ending_against_the_side_of_another_joins_it_on_its_centre_line() {
+    let mut p = Project::new("t");
+    let (cab, _) = p
+        .transact("setup", |tx| {
+            let cab = tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "A", true)?;
+            tx.set_plate(
+                cab,
+                Some(MountingPlate {
+                    width: 600.0,
+                    height: 800.0,
+                    margin: 10.0,
+                }),
+            )?;
+            // A 30 mm trunk down x 100 and a row starting at its right side.
+            let trunk = tx.add_rail(cab, 100.0, 20.0, 500.0, RailKind::Duct)?;
+            tx.update::<Rail>(trunk, |r| r.vertical = true)?;
+            tx.set_rail_size(trunk, 500.0, 30.0, 60.0)?;
+            let row = tx.add_rail(cab, 115.0, 200.0, 400.0, RailKind::Duct)?;
+            tx.set_rail_size(row, 400.0, 30.0, 60.0)?;
+            Ok(cab)
+        })
+        .unwrap();
+    let d = ducts(&p, cab);
+    // The row's start is carried to the trunk's centre line: one network.
+    assert_eq!(d[1].a, Point::new(100.0, 200.0));
+    assert_eq!(d[1].b, Point::new(515.0, 200.0));
+    assert_eq!(d[0].a, Point::new(100.0, 20.0));
+}

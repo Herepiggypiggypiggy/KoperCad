@@ -383,6 +383,7 @@ impl Keymap {
         bind(Chord::plain(Enter), Canvas, "proposal.accept");
         bind(Chord::plain(Tab), Canvas, "proposal.next");
         bind(Chord::shift(l('p')), Canvas, "view.toggle_marks");
+        bind(Chord::shift(l('x')), Canvas, "view.toggle_references");
         bind(Chord::shift(l('l')), Canvas, "sim.live");
         // Held: the app shows override marks while Shift+O is down.
         bind(Chord::shift(l('o')), Canvas, "view.override_marks");
