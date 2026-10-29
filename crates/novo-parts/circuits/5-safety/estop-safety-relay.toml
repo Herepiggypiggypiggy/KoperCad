@@ -1,0 +1,51 @@
+# Two-channel emergency stop on a safety relay with reset, feedback loop and two contactors.
+name = "Emergency stop with safety relay and feedback"
+chapter = "safety"
+description = "Two-channel emergency stop on a safety relay with a reset button, a feedback loop through two contactors and two contactor coils"
+tags = ["safety relay", "emergency stop", "e-stop", "two channel", "reset", "feedback", "redundant", "crane", "contactor"]
+notes = """Wiring example: the relay releases its outputs when both channels of the emergency stop are closed and the reset button is pressed, but only if both contactors have fallen (their break contacts in the feedback loop). \\
+Connect the coils of the two contactors to the power circuit so that both interrupt the motion. \\
+The category and performance level depend on the relay type, the devices and the whole circuit; nothing here is validated as a safety design. \\
+You connect: +24 V (or your control voltage) to the relay A1, 13 and 23 and to the feedback loop above, 0 V below the relay A2 and the two coils. Terminals 33, 34, 41 and 42 are spare."""
+
+open = ["k1r.A1,A2,13,23,33,34,41,42", "k2f.21", "c1.A2", "c2.A2"]
+
+device = [
+  { id = "k1", tag = "-K1", description = "Safety relay, 2 channels", mount = { kind = "din", size = [22.5, 100, 120], at = [15, 50], rail = "r1" } },
+  { id = "k2", tag = "-K2", description = "Safety contactor 1", mount = { kind = "din", size = [45, 77, 86], at = [45, 61.5], rail = "r1" } },
+  { id = "k3", tag = "-K3", description = "Safety contactor 2", mount = { kind = "din", size = [45, 77, 86], at = [95, 61.5], rail = "r1" } },
+  { id = "s0", tag = "-S0", description = "Emergency stop, 2 channels", mount = { kind = "door", size = [40, 40, 60], at = [20, 20] } },
+  { id = "s1", tag = "-S1", description = "Reset", mount = { kind = "door", size = [30, 30, 60], at = [75, 25] } },
+]
+
+symbol = [
+  { id = "k1r", key = "iec/safety/relay", at = [80, 88], device = "k1" },
+  { id = "s0s", key = "iec/safety/emergency_stop_2ch", at = [176, 48], device = "s0" },
+  { id = "s1s", key = "iec/operators/pushbutton_no", at = [96, 48], device = "s1" },
+  { id = "k2f", key = "iec/contacts/nc", at = [32, 24], device = "k2", main = false },
+  { id = "k3f", key = "iec/contacts/nc", at = [32, 56], device = "k3", main = false },
+  { id = "c1", key = "iec/coils/contactor", at = [104, 144], device = "k2", main = true },
+  { id = "c2", key = "iec/coils/contactor", at = [136, 144], device = "k3", main = true },
+]
+
+wire = [
+  { from = "s1s.14", to = "k1r.S34" },
+  { from = "k1r.S11", to = "s0s.11", via = [[112, 32], [176, 32]] },
+  { from = "s0s.12", to = "k1r.S12", via = [[176, 72], [120, 72]] },
+  { from = "k1r.S21", to = "s0s.21", via = [[128, 24], [184, 24]] },
+  { from = "s0s.22", to = "k1r.S22", via = [[184, 76], [136, 76]] },
+  { from = "k1r.14", to = "c1.A1" },
+  { from = "k1r.24", to = "c2.A1", via = [[120, 132], [136, 132]] },
+  { from = "k2f.22", to = "k3f.21" },
+  { from = "k3f.22", to = "s1s.13", via = [[32, 80], [56, 80], [56, 36], [96, 36]] },
+]
+
+[plate]
+width = 160
+height = 200
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 150

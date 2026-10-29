@@ -1,0 +1,42 @@
+# Anti-condensation heater with a hygrostat that opens when the air is dry.
+name = "Anti-condensation heater with hygrostat"
+chapter = "peripherals"
+description = "Small heating element that keeps the cabinet above the dew point, switched by a hygrostat that opens when the air is dry"
+tags = ["heater", "heating", "anti-condensation", "hygrostat", "cabinet", "condensation", "dew point"]
+notes = """The heater is on while the humidity is above the set value and off when the air is dry. \\
+Mount it low in the cabinet, away from plastic parts and cables, with the hygrostat at the top of the cabinet. \\
+You connect: the phase above F1 and neutral above the N terminal."""
+
+open = ["f1s.1", "n1.1"]
+
+device = [
+  { id = "f1", tag = "-F1", description = "Heater circuit breaker", mount = { kind = "din", size = [18, 90, 70], at = [15, 55], rail = "r1" } },
+  { id = "b1", tag = "-B1", description = "Hygrostat, break contact", mount = { kind = "din", size = [33, 50, 40], at = [45, 75], rail = "r1" } },
+  { id = "e1", tag = "-E1", description = "Anti-condensation heater", mount = { kind = "plate", size = [40, 100, 60], at = [90, 60], note = "Mount it low, with free air all around" } },
+]
+
+symbol = [
+  { id = "f1s", key = "iec/protection/mcb_1p", at = [40, 40], device = "f1" },
+  { id = "b1s", key = "iec/sensors/temperature_nc", at = [40, 80], device = "b1" },
+  { id = "e1s", key = "iec/passive/heater", at = [40, 128], device = "e1" },
+  { id = "n1", key = "iec/terminals/terminal_n", at = [72, 144] },
+]
+
+wire = [
+  { from = "f1s.2", to = "b1s.21" },
+  { from = "b1s.22", to = "e1s.1" },
+]
+
+bus = [
+  { y = 160, taps = ["e1s.2", "n1.2"] },
+]
+
+[plate]
+width = 140
+height = 180
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 75

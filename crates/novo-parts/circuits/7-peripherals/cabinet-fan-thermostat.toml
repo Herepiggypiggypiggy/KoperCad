@@ -1,0 +1,41 @@
+# Cabinet fan switched by a thermostat.
+name = "Cabinet fan with thermostat"
+chapter = "peripherals"
+description = "Cabinet filter fan switched on by a thermostat that closes above the set temperature, behind its own breaker"
+tags = ["fan", "thermostat", "cabinet", "cooling", "ventilation", "temperature", "filter fan"]
+notes = """The thermostat closes when the cabinet is warmer than the set value (typical setting 35 to 40 degrees C) and the fan runs until it cools down again. \\
+Mount the fan at the bottom or in the door and the exhaust filter at the top, so air flows through the cabinet. \\
+You connect: the phase above F1, neutral above the N terminal and PE above the PE terminal."""
+
+open = ["f1s.1", "n1.1", "pe1.1"]
+
+device = [
+  { id = "f1", tag = "-F1", description = "Fan circuit breaker", mount = { kind = "din", size = [18, 90, 70], at = [15, 55], rail = "r1" } },
+  { id = "b1", tag = "-B1", description = "Cabinet thermostat, make contact", mount = { kind = "din", size = [33, 50, 40], at = [45, 75], rail = "r1" } },
+  { id = "m1", tag = "-M1", description = "Cabinet filter fan", mount = { kind = "door", size = [125, 125, 40], at = [20, 20], note = "Fan with exhaust filter; size it from the heat to remove" } },
+]
+
+symbol = [
+  { id = "f1s", key = "iec/protection/mcb_1p", at = [40, 40], device = "f1" },
+  { id = "b1s", key = "iec/sensors/temperature_no", at = [40, 80], device = "b1" },
+  { id = "m1s", key = "iec/motors/fan_1ph", at = [64, 128], device = "m1" },
+  { id = "n1", key = "iec/terminals/terminal_n", at = [72, 96] },
+  { id = "pe1", key = "iec/terminals/terminal_pe", at = [96, 96] },
+]
+
+wire = [
+  { from = "f1s.2", to = "b1s.13" },
+  { from = "b1s.14", to = "m1s.U1", via = [[40, 112], [64, 112]] },
+  { from = "n1.2", to = "m1s.U2" },
+  { from = "pe1.2", to = "m1s.PE", via = [[96, 116], [80, 116]] },
+]
+
+[plate]
+width = 100
+height = 160
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 90
