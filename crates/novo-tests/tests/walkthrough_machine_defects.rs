@@ -218,3 +218,29 @@ fn machine_steps_fail_plainly_without_a_hoist_and_json_round_trips() {
     let back = Walkthrough::from_json(&json).expect("reads back");
     assert_eq!(back, w);
 }
+
+#[test]
+fn a_long_run_with_a_hoist_is_cut_and_the_hoist_name_keeps_its_case() {
+    let doc = fixture();
+    let p = doc.project();
+    let h = id(p);
+    let w = Walkthrough::new("long")
+        .at(
+            1.0,
+            hook(
+                &h,
+                HookIs::Reporting {
+                    condition: ConditionName::PhaseLost,
+                },
+            ),
+        )
+        .at(1000.0, hook(&h, HookIs::Standing));
+    let report = run_with(p, &w, Some(&make(p)));
+    assert!(report.duration <= novo_sim::machine::MAX_MACHINE_SECONDS + 0.1);
+    assert!(report.problems.iter().any(|m| m.contains("stops at")));
+    assert!(
+        report.steps[0].label.contains(&h),
+        "{}",
+        report.steps[0].label
+    );
+}
