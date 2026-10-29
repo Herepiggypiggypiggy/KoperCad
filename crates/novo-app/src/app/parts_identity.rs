@@ -472,6 +472,8 @@ mod tests {
         for i in 0..n {
             let p = PathBuf::from(format!("/w/{i}.stp"));
             s.asked.insert(p.clone(), now);
+            // No disk call per file (see `no_stamp`): on Windows 200,000 of them took longer
+            // than KEEP_ASKED, so the entries stopped being wanted mid-loop.
             s.store(&p, no_stamp(), CadIdentity::from_file_name("x.stp"));
         }
         assert_eq!(s.done.len(), n, "wanted files are all kept");
