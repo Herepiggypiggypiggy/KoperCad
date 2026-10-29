@@ -1,13 +1,14 @@
 @title Part picker: a symbol thumbnail beside parts whose kind is clear
 @area Parts
-# Lane V5 follow-up. Select devices (Ctrl+A), open "Choose a part for all" in
-# the selection sheet: each part with a clear kind (contactor, fuse, lamp...)
+@sizes 1366x768
+# Lane V5 follow-up. Select a device, open Part > Choose... in the Inspector
+# (the selection sheet and the Cables drawer use the same list): each part with a clear kind (contactor, fuse, lamp...)
 # shows its symbol as a small picture; others show none rather than a guess.
 click_text "Open example"
 wait 20
-key ctrl+a
+click 340 243
 wait 8
-click_text "Choose a part for all"
+click_text "Change..."
 wait 8
 shot picker
 check_layout

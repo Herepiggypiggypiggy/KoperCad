@@ -15,3 +15,9 @@ Place palette: arrows move by card (Up/Down a row of cards; Left/Right when the 
 - Not verified on the cloud box: screenshots (no Xvfb/openbox/vulkan packages); run `scripts/qa.sh --only palette` on a box that has them. Nothing was seen on a real GPU or Windows.
 - Common scale: the fit scale 80 percent of the shown symbols can use; the largest fifth is shrunk to fit on its own.
 - Catalog parts in the detail pane are matched by letter code and part function; the starter catalog may list none for a symbol.
+
+## Follow-up PR (tooltip, add-on chip, part thumbnails)
+- `place_palette::symbol_for_part` picks the symbol that pictures a catalog part: the part function (all its words in one symbol), else a keyword that is a symbol's exact alias, name or function segment. Colour and NO/NC words never count. Ambiguous means no picture, never a guess. `symbol_thumbnail` draws it; `app/part_picker.rs` `Candidate.symbol` carries the id.
+- Most real maker parts have an empty function, so many show no thumbnail until their keywords name the kind.
+- `type_chip` and `addon_parts` in `place_palette.rs` give the add-on chip text and the description detail.
+- QA: `742-part-picker-thumbnails.qa` (1366x768), `743-part-picker-thumbnails-1920.qa` (1920x1080; the click on -K1 is size specific).
