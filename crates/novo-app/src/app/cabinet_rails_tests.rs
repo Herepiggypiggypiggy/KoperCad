@@ -72,7 +72,9 @@ fn rails_and_ducts_are_added_edited_turned_and_deleted_with_undo() {
     let (rail, duct, trunk) = (&all[0], &all[1], &all[2]);
     assert_eq!(rail.kind, RailKind::DinRail);
     assert_eq!((duct.width, duct.height), (25.0, 60.0));
-    assert!(trunk.vertical && trunk.length == 780.0);
+    // The vertical duct would cross the horizontal one at full length, so it
+    // is shortened to stand clear of it.
+    assert!(trunk.vertical && trunk.length < 780.0);
     // New horizontal ones stack below each other on the usable plate.
     assert!(duct.y > rail.y);
     assert_eq!(d.app.cabinet.rails.selected, Some(trunk.id.raw()));
@@ -82,7 +84,7 @@ fn rails_and_ducts_are_added_edited_turned_and_deleted_with_undo() {
         Some(cab),
         RailAsk::Set(RailEdit {
             id,
-            x: 30.0,
+            x: 100.0,
             y: 200.0,
             length: 300.0,
             width: 40.0,
@@ -98,7 +100,7 @@ fn rails_and_ducts_are_added_edited_turned_and_deleted_with_undo() {
             edited.width,
             edited.height
         ),
-        (30.0, 200.0, 300.0, 40.0, 40.0)
+        (100.0, 200.0, 300.0, 40.0, 40.0)
     );
     d.app.cabinet_rail_ask(Some(cab), RailAsk::Turn(id));
     assert!(
@@ -109,9 +111,9 @@ fn rails_and_ducts_are_added_edited_turned_and_deleted_with_undo() {
             .vertical
     );
     d.app
-        .cabinet_rail_ask(Some(cab), RailAsk::MoveTo(id, 100.0, 120.0));
+        .cabinet_rail_ask(Some(cab), RailAsk::MoveTo(id, 150.0, 120.0));
     let moved = rails(&d).into_iter().find(|r| r.id.raw() == id).unwrap();
-    assert_eq!((moved.x, moved.y), (100.0, 120.0));
+    assert_eq!((moved.x, moved.y), (150.0, 120.0));
 
     d.app.cabinet_rail_ask(Some(cab), RailAsk::Delete(id));
     assert_eq!(rails(&d).len(), 2);
@@ -324,6 +326,55 @@ fn the_grip_colours_come_from_the_palette_not_from_raw_tokens() {
         assert_ne!(p.border_strong, p.accent);
         assert_ne!(p.text_tertiary, p.on_accent);
     }
+}
+
+#[test]
+fn a_duct_never_lies_over_another_duct() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let cab = cabinet(&mut d);
+    let add = |d: &mut Drive, vertical| {
+        d.app.cabinet_rail_ask(
+            Some(cab),
+            RailAsk::Add {
+                kind: RailKind::Duct,
+                vertical,
+            },
+        )
+    };
+    add(&mut d, true);
+    // A second vertical duct asks for the same place and lands beside it.
+    add(&mut d, true);
+    let ducts: Vec<Rail> = rails(&d);
+    assert_eq!(ducts.len(), 2);
+    let layout = novo_layout::model::load(project(&d), cab).unwrap();
+    assert!(layout.report().duct_overlaps.is_empty());
+
+    // Typing a start that puts one on the other is refused, nothing changes.
+    let (a, b) = (&ducts[0], &ducts[1]);
+    let before = rails(&d);
+    d.app.cabinet_rail_ask(
+        Some(cab),
+        RailAsk::Set(RailEdit {
+            id: b.id.raw(),
+            x: a.x + 5.0,
+            y: a.y,
+            length: b.length,
+            width: b.width,
+            height: b.height,
+        }),
+    );
+    assert_eq!(rails(&d), before);
+    // So is dragging it there and turning it across the other.
+    d.app
+        .cabinet_rail_ask(Some(cab), RailAsk::MoveTo(b.id.raw(), a.x + 5.0, a.y));
+    assert_eq!(rails(&d), before);
+    // One that ends against the side of the other (a T) is fine.
+    let side = a.x + b.width.max(a.width) + 1.0;
+    d.app
+        .cabinet_rail_ask(Some(cab), RailAsk::MoveTo(b.id.raw(), side, a.y));
+    let layout = novo_layout::model::load(project(&d), cab).unwrap();
+    assert!(layout.report().duct_overlaps.is_empty());
 }
 
 mod ends {
