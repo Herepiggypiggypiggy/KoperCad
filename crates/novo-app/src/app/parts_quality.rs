@@ -176,8 +176,9 @@ fn duplicates_ui(ui: &mut egui::Ui, state: &mut QualityTab, catalog: &Catalog) -
     });
     ui.separator();
     egui::Panel::right("parts_duplicates_detail")
-        .exact_size(340.0)
-        .resizable(false)
+        .default_size(340.0)
+        .size_range(260.0..=ui.available_width() * 0.7)
+        .resizable(true)
         .show(ui, |ui| {
             let Some(group) = picked.and_then(|i| groups.get(i)) else {
                 ui.weak("Pick a group to compare its parts.");
@@ -324,8 +325,9 @@ fn review_ui(
     ui.separator();
 
     egui::Panel::right("parts_review_detail")
-        .exact_size(320.0)
-        .resizable(false)
+        .default_size(320.0)
+        .size_range(260.0..=ui.available_width() * 0.7)
+        .resizable(true)
         .show(ui, |ui| {
             let Some(item) = picked
                 .as_ref()
@@ -643,8 +645,9 @@ fn quality_ui(ui: &mut egui::Ui, state: &mut QualityTab, catalog: &Catalog) -> O
         .as_ref()
         .and_then(|k| report.rows.iter().find(|r| &r.key == k));
     egui::Panel::right("parts_quality_detail")
-        .exact_size(300.0)
-        .resizable(false)
+        .default_size(300.0)
+        .size_range(240.0..=ui.available_width() * 0.7)
+        .resizable(true)
         .show(ui, |ui| match detail {
             Some(row) => {
                 if let Some(key) = detail_ui(ui, row) {

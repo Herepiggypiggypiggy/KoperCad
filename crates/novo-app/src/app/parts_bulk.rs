@@ -281,9 +281,7 @@ impl NovoApp {
         };
         let mut close = false;
         let mut open_inbox = false;
-        let modal = egui::Modal::new(egui::Id::new("parts_bulk")).show(ctx, |ui| {
-            ui.set_width(640.0);
-            super::dialog_ui::title(ui, "Parts import", "");
+        let modal = super::panel::modal(ctx, "parts_bulk", "Parts import", [640.0, 540.0], |ui| {
             ui.weak(format!("Folder: {}", report.folder.display()));
             if report.rejected > 0 {
                 ui.colored_label(
@@ -416,32 +414,33 @@ impl NovoApp {
         };
         let palette = crate::theme::ui_palette();
         let (mut go, mut cancel) = (false, false);
-        let modal = egui::Modal::new(egui::Id::new("auto_assign")).show(ctx, |ui| {
-            ui.set_width(780.0);
-            super::dialog_ui::title(ui, "Assign parts to all devices", "");
-            ui.weak(
-                "Tick the devices that get a part and pick the part. Only parts that are \
+        let modal = super::panel::modal_fill(
+            ctx,
+            "auto_assign",
+            "Assign parts to all devices",
+            [780.0, 560.0],
+            |ui| {
+                ui.weak(
+                    "Tick the devices that get a part and pick the part. Only parts that are \
                  sure are ticked; a part of another kind is never offered.",
-            );
-            ui.add_space(4.0);
-            if preview.rows.is_empty() {
-                ui.label("No part in the catalog fits any of the devices without a part.");
-            }
-            ui.horizontal(|ui| {
-                if !preview.rows.is_empty() && ui.small_button("Tick sure parts").clicked() {
-                    for row in &mut preview.rows {
-                        row.chosen = best_sure(row);
-                    }
+                );
+                ui.add_space(4.0);
+                if preview.rows.is_empty() {
+                    ui.label("No part in the catalog fits any of the devices without a part.");
                 }
-                if !preview.rows.is_empty() && ui.small_button("Untick all").clicked() {
-                    for row in &mut preview.rows {
-                        row.chosen = None;
+                ui.horizontal(|ui| {
+                    if !preview.rows.is_empty() && ui.small_button("Tick sure parts").clicked() {
+                        for row in &mut preview.rows {
+                            row.chosen = best_sure(row);
+                        }
                     }
-                }
-            });
-            egui::ScrollArea::vertical()
-                .max_height(340.0)
-                .show(ui, |ui| {
+                    if !preview.rows.is_empty() && ui.small_button("Untick all").clicked() {
+                        for row in &mut preview.rows {
+                            row.chosen = None;
+                        }
+                    }
+                });
+                super::panel::fill_above(ui, 96.0, |ui| {
                     egui::Grid::new("auto_assign_rows")
                         .num_columns(5)
                         .spacing([10.0, 6.0])
@@ -497,35 +496,36 @@ impl NovoApp {
                             }
                         });
                 });
-            if !preview.none.is_empty() {
-                ui.add_space(4.0);
-                ui.colored_label(
-                    palette.warning,
-                    format!(
-                        "No part in the catalog fits {}: {}. Add one in the Parts window.",
-                        preview.none.len(),
-                        tag_list(&preview.none)
-                    ),
-                );
-            }
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                let n = preview.chosen_count();
-                ui.add_enabled_ui(n > 0, |ui| {
-                    let text = format!("Assign {n} part{}", if n == 1 { "" } else { "s" });
-                    go = novo_theme::widgets::primary_button(ui, &text).clicked();
+                if !preview.none.is_empty() {
+                    ui.add_space(4.0);
+                    ui.colored_label(
+                        palette.warning,
+                        format!(
+                            "No part in the catalog fits {}: {}. Add one in the Parts window.",
+                            preview.none.len(),
+                            tag_list(&preview.none)
+                        ),
+                    );
+                }
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    let n = preview.chosen_count();
+                    ui.add_enabled_ui(n > 0, |ui| {
+                        let text = format!("Assign {n} part{}", if n == 1 { "" } else { "s" });
+                        go = novo_theme::widgets::primary_button(ui, &text).clicked();
+                    });
+                    cancel = novo_theme::widgets::ghost_button(
+                        ui,
+                        if preview.rows.is_empty() {
+                            "Close"
+                        } else {
+                            "Cancel"
+                        },
+                    )
+                    .clicked();
                 });
-                cancel = novo_theme::widgets::ghost_button(
-                    ui,
-                    if preview.rows.is_empty() {
-                        "Close"
-                    } else {
-                        "Cancel"
-                    },
-                )
-                .clicked();
-            });
-        });
+            },
+        );
         if go {
             self.confirm_auto_assign();
         } else if cancel || modal.should_close() {

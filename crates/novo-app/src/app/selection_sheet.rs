@@ -276,26 +276,22 @@ impl NovoApp {
         let candidates = self.selection_candidates(devices);
         let mut state = std::mem::take(&mut self.wb.selection_sheet);
         let mut actions = Vec::new();
-        let max_height = (canvas.height() - 40.0 - 72.0).max(120.0);
-        egui::Area::new(egui::Id::new("inspector"))
-            .order(egui::Order::Middle)
-            .pivot(egui::Align2::RIGHT_TOP)
-            .fixed_pos(canvas.right_top() + egui::vec2(-12.0, 40.0))
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_width(INSPECTOR_WIDTH);
-                    ui.add(
-                        egui::Label::new(egui::RichText::new(sheet.title()).heading()).truncate(),
-                    );
-                    ui.weak("Typing a value sets it on all of them");
-                    egui::ScrollArea::vertical()
-                        .id_salt("selection_sheet_scroll")
-                        .max_height(max_height)
-                        .show(ui, |ui| {
-                            sheet_ui(ui, &sheet, &mut state, &candidates, &mut actions)
-                        });
-                });
-            });
+        // The same place as the one-device Inspector, so the card does not
+        // jump when the selection grows from one device to several.
+        super::panel::Panel::new(
+            "inspector",
+            sheet.title(),
+            canvas,
+            super::panel::Side::Right,
+            INSPECTOR_WIDTH,
+        )
+        .above_card()
+        .fixed_open()
+        .height(560.0)
+        .show(ctx, |ui| {
+            ui.weak("Typing a value sets it on all of them");
+            sheet_ui(ui, &sheet, &mut state, &candidates, &mut actions)
+        });
         self.wb.selection_sheet = state;
         self.apply_sheet_actions(actions);
         true
@@ -331,17 +327,13 @@ impl NovoApp {
         let content = ctx.content_rect();
         let area =
             egui::Rect::from_min_max(content.min + egui::vec2(0.0, MENU_BAR_HEIGHT), content.max);
-        egui::Window::new("Properties of the selection")
-            .open(&mut open)
-            .default_size([340.0, 420.0])
+        super::panel::dialog(ctx, "Properties of the selection", [340.0, 420.0])
+            .open(super::panel::esc(ctx, &mut open))
             .default_pos(area.min + egui::vec2(16.0, 16.0))
-            .constrain_to(area)
             .show(ctx, |ui| {
                 ui.label(egui::RichText::new(sheet.title()).strong());
                 ui.weak("Typing a value sets it on every selected object");
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    sheet_ui(ui, &sheet, &mut state, &candidates, &mut actions)
-                });
+                sheet_ui(ui, &sheet, &mut state, &candidates, &mut actions)
             });
         state.window = open;
         self.wb.selection_sheet = state;

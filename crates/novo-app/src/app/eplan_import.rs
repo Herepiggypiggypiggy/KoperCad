@@ -270,84 +270,91 @@ impl NovoApp {
         let (mut go, mut cancel) = (false, false);
         let can_import = !import.plan.is_empty();
         let report = import.plan.report();
-        let modal = egui::Modal::new(egui::Id::new("eplan_import")).show(ctx, |ui| {
-            ui.set_width(500.0);
-            ui.heading(format!("Import {}", import.file));
-            ui.add_space(4.0);
-            ui.label(import.plan.summary());
-            ui.horizontal(|ui| {
-                ui.label("Language of titles and texts");
-                egui::ComboBox::from_id_salt("eplan_import_lang")
-                    .selected_text(import.lang.clone())
-                    .show_ui(ui, |ui| {
-                        for l in &import.langs {
-                            lang_changed |= ui
-                                .selectable_value(&mut import.lang, l.clone(), l)
-                                .changed();
-                        }
-                    });
-                lang_changed |= ui.text_edit_singleline(&mut import.lang).lost_focus();
-                if import.langs.is_empty() {
-                    ui.weak("the file names no language");
-                } else {
-                    ui.weak(format!("in the file: {}", import.langs.join(", ")));
+        let modal = super::panel::modal(
+            ctx,
+            "eplan_import",
+            format!("Import {}", import.file),
+            [500.0, 540.0],
+            |ui| {
+                ui.add_space(4.0);
+                ui.label(import.plan.summary());
+                ui.horizontal(|ui| {
+                    ui.label("Language of titles and texts");
+                    egui::ComboBox::from_id_salt("eplan_import_lang")
+                        .selected_text(import.lang.clone())
+                        .show_ui(ui, |ui| {
+                            for l in &import.langs {
+                                lang_changed |= ui
+                                    .selectable_value(&mut import.lang, l.clone(), l)
+                                    .changed();
+                            }
+                        });
+                    lang_changed |= ui.text_edit_singleline(&mut import.lang).lost_focus();
+                    if import.langs.is_empty() {
+                        ui.weak("the file names no language");
+                    } else {
+                        ui.weak(format!("in the file: {}", import.langs.join(", ")));
+                    }
+                });
+                if let Some((current, text)) = &import.check {
+                    ui.add_space(6.0);
+                    let colour = if *current {
+                        ui.visuals().weak_text_color()
+                    } else {
+                        crate::theme::ui_palette().warning
+                    };
+                    ui.colored_label(colour, text);
                 }
-            });
-            if let Some((current, text)) = &import.check {
                 ui.add_space(6.0);
-                let colour = if *current {
-                    ui.visuals().weak_text_color()
-                } else {
-                    crate::theme::ui_palette().warning
-                };
-                ui.colored_label(colour, text);
-            }
-            ui.add_space(6.0);
-            ui.weak("An import only adds. Anything that exists keeps what the project says.");
-            if !report.lossy.is_empty() || !report.guessed.is_empty() || !report.notes.is_empty() {
-                ui.add_space(8.0);
-                if !report.lossy.is_empty() {
-                    ui.strong("Not carried over");
+                ui.weak("An import only adds. Anything that exists keeps what the project says.");
+                if !report.lossy.is_empty()
+                    || !report.guessed.is_empty()
+                    || !report.notes.is_empty()
+                {
+                    ui.add_space(8.0);
+                    if !report.lossy.is_empty() {
+                        ui.strong("Not carried over");
+                    }
+                    egui::ScrollArea::vertical()
+                        .max_height(260.0)
+                        .show(ui, |ui| {
+                            for l in &report.lossy {
+                                ui.label(l.line());
+                            }
+                            if !report.guessed.is_empty() {
+                                ui.strong("Guessed, not exact");
+                            }
+                            for l in &report.guessed {
+                                ui.label(l.line());
+                            }
+                            for n in &report.notes {
+                                ui.weak(n);
+                            }
+                        });
                 }
-                egui::ScrollArea::vertical()
-                    .max_height(260.0)
-                    .show(ui, |ui| {
-                        for l in &report.lossy {
-                            ui.label(l.line());
-                        }
-                        if !report.guessed.is_empty() {
-                            ui.strong("Guessed, not exact");
-                        }
-                        for l in &report.guessed {
-                            ui.label(l.line());
-                        }
-                        for n in &report.notes {
-                            ui.weak(n);
-                        }
-                    });
-            }
-            if let Some(survey) = &import.survey {
-                ui.add_space(8.0);
-                egui::CollapsingHeader::new("Survey of the file (names and counts, no values)")
-                    .id_salt("eplan_survey")
-                    .show(ui, |ui| {
-                        egui::ScrollArea::vertical()
-                            .max_height(200.0)
-                            .show(ui, |ui| {
-                                ui.add(egui::Label::new(
-                                    egui::RichText::new(survey).monospace().small(),
-                                ));
-                            });
-                    });
-            }
-            ui.add_space(10.0);
-            ui.horizontal(|ui| {
-                go = ui
-                    .add_enabled(can_import, egui::Button::new("Import"))
-                    .clicked();
-                cancel = ui.button("Cancel").clicked();
-            });
-        });
+                if let Some(survey) = &import.survey {
+                    ui.add_space(8.0);
+                    egui::CollapsingHeader::new("Survey of the file (names and counts, no values)")
+                        .id_salt("eplan_survey")
+                        .show(ui, |ui| {
+                            egui::ScrollArea::vertical()
+                                .max_height(200.0)
+                                .show(ui, |ui| {
+                                    ui.add(egui::Label::new(
+                                        egui::RichText::new(survey).monospace().small(),
+                                    ));
+                                });
+                        });
+                }
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    go = ui
+                        .add_enabled(can_import, egui::Button::new("Import"))
+                        .clicked();
+                    cancel = ui.button("Cancel").clicked();
+                });
+            },
+        );
         if lang_changed
             && let Some(doc) = self.backend.document()
             && let Some(import) = self.wb.eplan_import.as_mut()

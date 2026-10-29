@@ -511,7 +511,14 @@ mod refusal_tests {
             shown(&ctx),
             "a long refusal gets a card with the whole text"
         );
-        let rect = |name: &str| ctx.memory(|m| m.area_rect(egui::Id::new(name)));
+        let rect = |name: &str| {
+            let id = if name == "tool_dock" {
+                super::super::panel::id(name)
+            } else {
+                egui::Id::new(name)
+            };
+            ctx.memory(|m| m.area_rect(id))
+        };
         let card = ctx
             .memory(|m| m.area_rect(super::refusal_card_id()))
             .expect("the card has a place");
@@ -550,7 +557,9 @@ mod toast_dock_tests {
             }
             let rect = |name: &str| ctx.memory(|m| m.area_rect(egui::Id::new(name)));
             let toasts = rect("toasts").expect("the toast is shown");
-            let dock = rect("tool_dock").expect("the dock is shown");
+            let dock = ctx
+                .memory(|m| m.area_rect(super::super::panel::id("tool_dock")))
+                .expect("the dock is shown");
             assert!(
                 !toasts.intersects(dock),
                 "{size:?}: toast {toasts:?} over dock {dock:?}"
