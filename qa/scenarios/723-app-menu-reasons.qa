@@ -15,15 +15,11 @@ click_text Hidden
 wait 6
 key Escape
 wait 8
-key ctrl+k
-wait 6
-text close project
-wait 8
-key Enter
-wait 10
 key F10
 wait 10
 expect "About"
+click_text "Export drawings"
+wait 8
 shot file-no-project
 check_layout
 text pdf
