@@ -1,0 +1,38 @@
+# Supply of a crane from a conductor rail or festoon cable: lockable
+# switch-disconnector and three fuses, with the protective earth terminal.
+name = "Crane supply with isolator and fuses"
+chapter = "supply"
+description = "Supply for a crane from a conductor rail or festoon cable: switch-disconnector, three fuses and a protective earth terminal"
+tags = ["crane", "supply", "conductor rail", "collector", "festoon", "isolator", "switch disconnector", "fuse", "mains", "pe"]
+notes = """Wiring example for the incoming supply of a crane. The switch-disconnector isolates the whole crane and can be locked off for maintenance; the fuses protect the crane's main cable. \
+Choose the fuse size from the crane's total load and the cable, not from this example. \
+You connect: L1 L2 L3 above S1 (from the collector shoes or the festoon cable), PE above the PE terminal, and the feeders to the protective devices below F1. \
+This is a wiring example, not a validated supply design."""
+
+open = ["s1s.1,3,5", "f1s.2,4,6", "pe1.1,2"]
+
+device = [
+  { id = "s1", tag = "-S1", description = "Crane isolator", mount = { kind = "din", size = [54, 90, 70], at = [15, 55], rail = "r1" } },
+  { id = "f1", tag = "-F1", description = "Main fuses", mount = { kind = "din", size = [54, 90, 70], at = [75, 55], rail = "r1" } },
+  { id = "x1", tag = "-X1", description = "PE terminal", mount = { kind = "din", size = [8, 50, 40], at = [135, 75], rail = "r1" } },
+]
+
+symbol = [
+  { id = "s1s", key = "iec/switches/switch_disconnector_3p", at = [40, 40], device = "s1" },
+  { id = "f1s", key = "iec/protection/fuse_3p", at = [40, 72], device = "f1" },
+  { id = "pe1", key = "iec/terminals/terminal_pe", at = [90, 56], device = "x1" },
+]
+
+chain = [
+  { path = "s1s.2,4,6 > f1s.1,3,5" },
+]
+
+[plate]
+width = 155
+height = 200
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 145

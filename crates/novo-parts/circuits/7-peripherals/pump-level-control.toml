@@ -1,0 +1,65 @@
+# Level control of a duty and a standby pump on 24 V DC with float switches:
+# dry-run lockout, start level, stop level and a high level for the second pump.
+name = "Pump level control with dry-run protection"
+chapter = "peripherals"
+description = "Level control for a duty pump and a standby pump with float switches on 24 V DC: dry-run lockout, start and stop level, high level starts the second pump"
+tags = ["pump", "level", "float switch", "dry run", "duty", "standby", "24 V", "relay", "water", "sump"]
+notes = """Wiring example with float switches and two relays. B1 is the dry-run float: it opens when the water falls below the safe minimum and locks out both pumps. B3 is the stop level: it opens when the level has fallen enough and both pumps stop. \\
+B2 is the start level of the duty pump: it closes when the level rises, K1 pulls in and holds itself until B3 or B1 opens. B4 is the high level: it closes when the level keeps rising and K2 starts the standby pump as well. \\
+K1 and K2 are the run requests: use their contacts in the pump feeders (or the run input of the pump drives). To alternate which pump is the duty pump, swap the pump feeders by hand or use your controller; the circuit does not alternate. \\
+This is a wiring example, not a validated design; for drinking water, sewage or fire pumps follow the rules for that application. \\
+You connect: 24 V DC above F1 and 0 V below the coils of K1 and K2."""
+
+open = ["f1s.1", "k1c.A2", "k2c.A2"]
+
+device = [
+  { id = "f1", tag = "-F1", description = "Control circuit breaker", mount = { kind = "din", size = [18, 90, 70], at = [15, 55], rail = "r1" } },
+  { id = "k1", tag = "-K1", description = "Duty pump run request", mount = { kind = "din", size = [15.5, 78, 66], at = [45, 61], rail = "r1" } },
+  { id = "k2", tag = "-K2", description = "Standby pump run request", mount = { kind = "din", size = [15.5, 78, 66], at = [65, 61], rail = "r1" } },
+  { id = "b1", tag = "-B1", description = "Dry-run float, opens at minimum level", mount = { kind = "field", place = "in the sump, just above the pump inlet" } },
+  { id = "b2", tag = "-B2", description = "Start level float (duty pump)", mount = { kind = "field", place = "in the sump, start height" } },
+  { id = "b3", tag = "-B3", description = "Stop level float", mount = { kind = "field", place = "in the sump, stop height" } },
+  { id = "b4", tag = "-B4", description = "High level float (standby pump)", mount = { kind = "field", place = "in the sump, above the start height" } },
+]
+
+symbol = [
+  { id = "f1s", key = "iec/protection/mcb_1p", at = [40, 40], device = "f1" },
+  { id = "b1s", key = "iec/sensors/float_nc", at = [40, 64], device = "b1" },
+  { id = "b3s", key = "iec/sensors/float_nc", at = [40, 88], device = "b3" },
+  { id = "b2s", key = "iec/sensors/float_no", at = [72, 128], device = "b2" },
+  { id = "k1a", key = "iec/contacts/no", at = [96, 128], device = "k1", main = false },
+  { id = "k1c", key = "iec/coils/relay", at = [72, 168], device = "k1", main = true },
+  { id = "b4s", key = "iec/sensors/float_no", at = [136, 128], device = "b4" },
+  { id = "k2a", key = "iec/contacts/no", at = [160, 128], device = "k2", main = false },
+  { id = "k2c", key = "iec/coils/relay", at = [136, 168], device = "k2", main = true },
+]
+
+junction = [
+  { id = "ja", at = [72, 152] },
+  { id = "jb", at = [96, 152] },
+  { id = "jc", at = [136, 152] },
+  { id = "jd", at = [160, 152] },
+]
+
+wire = [
+  { from = "f1s.2", to = "b1s.21" },
+  { from = "b1s.22", to = "b3s.21" },
+  { from = "b2s.14", to = "ja" }, { from = "k1a.14", to = "jb" }, { from = "ja", to = "jb" },
+  { from = "ja", to = "k1c.A1" },
+  { from = "b4s.14", to = "jc" }, { from = "k2a.14", to = "jd" }, { from = "jc", to = "jd" },
+  { from = "jc", to = "k2c.A1" },
+]
+
+bus = [
+  { y = 120, taps = ["b3s.22", "b2s.13", "k1a.13", "b4s.13", "k2a.13"] },
+]
+
+[plate]
+width = 110
+height = 200
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 95
