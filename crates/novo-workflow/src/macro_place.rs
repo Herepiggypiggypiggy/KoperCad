@@ -414,12 +414,34 @@ pub fn free_origin(project: &Project, page: PageId, gap: f64) -> Point {
     Point::new(right + gap, corner(points.into_iter()).y)
 }
 
-/// How far a macro's drawn objects reach right and down of its origin, in
-/// mm: the spread of its symbols and junctions plus what a symbol itself
-/// covers.
-pub fn definition_extent(definition: &BlockDefinition) -> (f64, f64) {
-    let (mut max_x, mut max_y) = (0.0_f64, 0.0_f64);
+/// The box a macro's drawn objects cover, in the definition's own
+/// coordinates: its top-left and its size in mm. It spans the symbols (their
+/// origins and pins), junctions and wire bends, plus what a symbol itself
+/// covers on every side (its tag text and body).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Bounds {
+    pub min: Point,
+    pub size: (f64, f64),
+}
+
+impl Bounds {
+    /// A box from `(0, 0)`, for a macro captured at its own top-left.
+    pub fn at_origin(width: f64, height: f64) -> Self {
+        Self {
+            min: Point::new(0.0, 0.0),
+            size: (width, height),
+        }
+    }
+}
+
+/// The [`Bounds`] of a macro. Placing it at `origin` puts the box's top-left at
+/// `origin + bounds.min`; the starter circuits are drawn away from `(0, 0)`.
+pub fn definition_bounds(definition: &BlockDefinition) -> Bounds {
+    let (mut min_x, mut min_y) = (f64::INFINITY, f64::INFINITY);
+    let (mut max_x, mut max_y) = (f64::NEG_INFINITY, f64::NEG_INFINITY);
     let mut reach = |p: Point| {
+        min_x = min_x.min(p.x);
+        min_y = min_y.min(p.y);
         max_x = max_x.max(p.x);
         max_y = max_y.max(p.y);
     };
@@ -437,8 +459,16 @@ pub fn definition_extent(definition: &BlockDefinition) -> (f64, f64) {
             _ => {}
         }
     }
-    // The members are stored relative to the captured top-left corner.
-    (max_x + SYMBOL_REACH, max_y + SYMBOL_REACH)
+    if !min_x.is_finite() {
+        return Bounds::at_origin(2.0 * SYMBOL_REACH, 2.0 * SYMBOL_REACH);
+    }
+    Bounds {
+        min: Point::new(min_x - SYMBOL_REACH, min_y - SYMBOL_REACH),
+        size: (
+            max_x - min_x + 2.0 * SYMBOL_REACH,
+            max_y - min_y + 2.0 * SYMBOL_REACH,
+        ),
+    }
 }
 
 /// The title block in the bottom right corner of a sheet, in mm, with its margin.
@@ -462,7 +492,8 @@ pub struct PlaceView {
     pub grid: f64,
 }
 
-/// Where a macro goes for a person looking at `view.visible`: its top-left
+/// Where a macro goes (the origin to place it at) for a person looking at
+/// `view.visible`: the top-left of its box ([`Bounds`])
 /// at the pointer when that is on screen, else at the top-left of the view,
 /// snapped to the grid and kept inside the sheet margin, when the room the
 /// macro covers there is empty. Otherwise (and on an empty page with nothing
@@ -471,11 +502,14 @@ pub struct PlaceView {
 pub fn origin_in_view(
     project: &Project,
     page: PageId,
-    extent: (f64, f64),
+    bounds: Bounds,
     view: &PlaceView,
     gap: f64,
 ) -> (Point, bool) {
-    let beside = free_origin(project, page, gap);
+    let extent = bounds.size;
+    // The box's top-left becomes the origin once the box's own offset is taken off.
+    let to_origin = |at: Point| Point::new(at.x - bounds.min.x, at.y - bounds.min.y);
+    let beside = to_origin(free_origin(project, page, gap));
     let drawn =
         project.symbols().any(|s| s.page == page) || project.junctions().any(|j| j.page == page);
     let on_screen = |p: Point| {
@@ -534,7 +568,7 @@ pub fn origin_in_view(
     // corner to fall back on, so the pointer is the only try.
     for at in pointer.into_iter().chain(corner).map(fit) {
         if !blocked(at) {
-            return (at, false);
+            return (to_origin(at), false);
         }
     }
     (beside, true)

@@ -2,8 +2,8 @@
 
 use novo_core::*;
 use novo_workflow::macro_place::{
-    PlaceOptions, PlaceView, WireNumbers, capture, captured_parts, free_origin, origin_in_view,
-    parts_from_json, parts_to_json, place_macro, preview, selection_origin,
+    Bounds, PlaceOptions, PlaceView, WireNumbers, capture, captured_parts, free_origin,
+    origin_in_view, parts_from_json, parts_to_json, place_macro, preview, selection_origin,
 };
 
 fn tag(text: &str) -> DeviceTag {
@@ -368,7 +368,7 @@ fn a_macro_lands_at_the_pointer_snapped_to_the_grid() {
     let (at, outside) = origin_in_view(
         doc.project(),
         page,
-        (60.0, 40.0),
+        Bounds::at_origin(60.0, 40.0),
         &view(Some(Point::new(213.0, 152.0))),
         20.0,
     );
@@ -383,13 +383,19 @@ fn a_macro_on_an_empty_page_lands_at_the_pointer_too() {
     let (at, _) = origin_in_view(
         doc.project(),
         page,
-        (60.0, 40.0),
+        Bounds::at_origin(60.0, 40.0),
         &view(Some(Point::new(200.0, 120.0))),
         20.0,
     );
     assert_eq!(at, Point::new(200.0, 120.0));
     // With no pointer on the drawing the empty page keeps its start.
-    let (at, _) = origin_in_view(doc.project(), page, (60.0, 40.0), &view(None), 20.0);
+    let (at, _) = origin_in_view(
+        doc.project(),
+        page,
+        Bounds::at_origin(60.0, 40.0),
+        &view(None),
+        20.0,
+    );
     assert_eq!(at, free_origin(doc.project(), page, 20.0));
 }
 
@@ -399,7 +405,7 @@ fn a_macro_at_the_pointer_stays_on_the_sheet() {
     let (at, _) = origin_in_view(
         doc.project(),
         page,
-        (60.0, 40.0),
+        Bounds::at_origin(60.0, 40.0),
         &view(Some(Point::new(399.0, 299.0))),
         20.0,
     );
@@ -414,7 +420,7 @@ fn a_pointer_off_screen_or_on_drawn_symbols_falls_back_to_the_view() {
     let (at, outside) = origin_in_view(
         doc.project(),
         page,
-        (60.0, 40.0),
+        Bounds::at_origin(60.0, 40.0),
         &view(Some(Point::new(900.0, 900.0))),
         20.0,
     );
@@ -428,7 +434,33 @@ fn a_pointer_off_screen_or_on_drawn_symbols_falls_back_to_the_view() {
         sheet: Some((420.0, 297.0)),
         grid: 5.0,
     };
-    let (at, outside) = origin_in_view(doc.project(), page, (60.0, 40.0), &on_drawing, 20.0);
+    let (at, outside) = origin_in_view(
+        doc.project(),
+        page,
+        Bounds::at_origin(60.0, 40.0),
+        &on_drawing,
+        20.0,
+    );
     assert_eq!(at, free_origin(doc.project(), page, 20.0));
     assert!(outside);
+}
+
+#[test]
+fn the_box_of_a_circuit_drawn_away_from_the_origin_lands_on_the_pointer() {
+    let (doc, page) = target();
+    // A starter is drawn at (40, 50) in its own coordinates: placing at the
+    // pointer minus that offset puts the box's top-left under the pointer.
+    let bounds = Bounds {
+        min: Point::new(25.0, 35.0),
+        size: (60.0, 40.0),
+    };
+    let (origin, outside) = origin_in_view(
+        doc.project(),
+        page,
+        bounds,
+        &view(Some(Point::new(200.0, 150.0))),
+        20.0,
+    );
+    assert_eq!(origin, Point::new(175.0, 115.0));
+    assert!(!outside);
 }

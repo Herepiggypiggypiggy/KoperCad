@@ -299,7 +299,7 @@ fn a_circuit_lands_where_the_pointer_last_was_and_says_what_is_left_to_connect()
         .map(|s| s.placement.origin.x)
         .fold(f64::INFINITY, f64::min);
     assert!(
-        (190.0..=215.0).contains(&left),
+        (190.0..=225.0).contains(&left),
         "the circuit starts at the pointer, not the view corner: {left}"
     );
     let said = d

@@ -1,20 +1,43 @@
 @title A placed circuit lands where the pointer was on the drawing, large window
 @area Schematic
 @sizes 1920x1080
-# As 797 at 1920x1080: the pointer rests on the drawing at 1100,600.
+# Test report 16: circuits dropped at a fixed top-left spot, not at the cursor.
+# Rule (macro_place::origin_in_view): the top-left of the circuit's box (symbol origins and pins, plus 15 mm for a
+# symbol's body and tag text on every side) goes to the point where the pointer last rested on the drawing, snapped
+# to the grid, then kept on the sheet: x at most sheet width - box width - 10 mm, y at most sheet height - box height - 10 mm
+# (50 mm when the box reaches into the title block's 150 mm), both at least 10 mm.
+# Both spots are chosen far from those limits, so nothing is clamped and the two pictures differ by exactly the
+# distance between the spots. The status bar reads the pointer in mm only while it is over the drawing: the click on the
+# Place button moves it off, so each scenario moves it back to the spot before the picture (a cross shows it).
 click_text "New project"
 wait 20
-move 1100 600
+move 520 160
 wait 5
 key ctrl+k
-text "motor starter dol"
+text "start/stop latch"
 wait 5
 key Enter
 wait 10
-try click_text "Motor starter DOL" Label
+try click_text "Start/stop latch" Label
 wait 10
 click_text Place Button #2
 wait 20
-expect "Placed Motor starter DOL"
-expect_scene "-K1"
-shot placed-at-pointer
+expect "Placed Start/stop latch"
+move 520 160
+wait 5
+shot first-spot-520-160
+move 1050 160
+wait 5
+key ctrl+k
+text "start/stop latch"
+wait 5
+key Enter
+wait 10
+try click_text "Start/stop latch" Label
+wait 10
+click_text Place Button #2
+wait 20
+expect "Placed Start/stop latch"
+move 1050 160
+wait 5
+shot second-spot-1050-160

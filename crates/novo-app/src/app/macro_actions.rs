@@ -484,7 +484,7 @@ impl NovoApp {
                         let (origin, _) = macro_place::origin_in_view(
                             project,
                             page,
-                            macro_place::definition_extent(&definition),
+                            macro_place::definition_bounds(&definition),
                             &view,
                             PLACE_GAP,
                         );
@@ -718,7 +718,7 @@ impl NovoApp {
         let (origin, outside) = macro_place::origin_in_view(
             doc.project(),
             page,
-            macro_place::definition_extent(&shown.definition),
+            macro_place::definition_bounds(&shown.definition),
             &view,
             PLACE_GAP,
         );
