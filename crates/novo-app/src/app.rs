@@ -4,6 +4,9 @@
 //! bar and no status bar.
 
 mod addons;
+mod addons_look;
+#[cfg(test)]
+mod addons_look_tests;
 mod appearance;
 mod assembly;
 mod assistant;
@@ -147,6 +150,7 @@ mod heat_wires;
 #[cfg(test)]
 mod heat_wires_tests;
 mod hoist_run;
+mod icon_gallery;
 mod inspector;
 mod interop;
 mod kitting;
@@ -380,6 +384,8 @@ mod gate1_tests;
 mod greyed_commands_tests;
 #[cfg(test)]
 mod handover_tests;
+#[cfg(test)]
+mod icon_gallery_tests;
 #[cfg(test)]
 mod kitting_tests;
 #[cfg(test)]
@@ -1874,6 +1880,7 @@ impl NovoApp {
         self.plc_list_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
+        self.icon_gallery_window(&ctx);
         self.whats_new_window(&ctx);
         self.numbers_window(&ctx);
         self.background_panel(&ctx);

@@ -6,3 +6,5 @@
 2026-10-28 13:48 UTC 3D spec revised to the owner's model: one side panel with foldable, undockable sections (Inspector, Layers, Heat, Vents and fans, EMC, Door, Sizing); board side-panel; 3D rail panels zone reduced to Side panel, Layers, Heat, EMC; R3 nits folded in. Supersedes #1582.
 2026-10-28 13:51 UTC 3D spec: always-visible simulation status chip (Not run, Running, Done, Out of date, Failed, Not set) added to side-panel board and docs/design/visual-redesign-3d.md section 4.
 2026-10-28 14:07 UTC #1583 merged (3ad60cd0). Follow-up nits to docs/design/visual-redesign-3d.md: Not set before Out of date, chip reports the analysis not the overlay, floating section fold chevron disabled (V1), section 7 step 3 points to section 5.
+2026-10-28 11:40 UTC Audit, 12 boards, 40 icons, design doc and handoff written; PR opened from claude/project-thread-1ytuxa.
+2026-10-28 13:00 UTC Lane V0 built (handoff/visual-v0): icon engine, presentation table, homes invariant, icon gallery.

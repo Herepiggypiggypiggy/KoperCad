@@ -354,6 +354,10 @@ const PALETTE_ONLY: &[(&str, &str)] = &[
     ("view.3d_trackpad_pans", "a switch of the 3D toolbar"),
     ("view.3d_move", "a switch of the 3D toolbar"),
     ("tool.repeat", "the key that repeats the last tool"),
+    (
+        "view.icon_gallery",
+        "a design reference for the icon set, opened from the command field",
+    ),
     ("edit.escape", "Esc"),
     (
         "view.command_field_here",

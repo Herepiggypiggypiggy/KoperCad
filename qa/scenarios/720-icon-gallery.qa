@@ -1,0 +1,40 @@
+@title Icon gallery: the drawn icon set and the command table, dark and light
+@area Layout
+# Lane V0 of the visual redesign (docs/design/visual-redesign.md section 14).
+# Opened from the command field; checked at 16 and 20 points in both themes.
+fresh
+wait 20
+key ctrl+k
+wait 6
+text icon gallery
+wait 8
+shot search
+key Enter
+wait 10
+expect "Icon gallery"
+expect "All at 16 and 20 pt"
+expect "Frequency drive"
+shot drawn-dark
+check_layout
+click_text Commands
+wait 6
+expect "file.new"
+shot commands-dark
+text xref
+wait 6
+shot commands-filtered-dark
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+key Escape
+wait 6
+shot commands-light
+click_text "Drawn icons"
+wait 6
+shot drawn-light
+check_layout

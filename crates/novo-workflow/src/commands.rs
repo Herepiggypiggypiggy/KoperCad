@@ -2343,6 +2343,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "view.icon_gallery",
+        "Icon gallery",
+        "View",
+        &["icons", "pictures", "symbols", "design", "glyphs", "rail"],
+        Needs::Nothing,
+    ),
+    cmd(
         "help.manual",
         "User manual",
         "View",
