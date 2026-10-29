@@ -301,6 +301,17 @@ impl NovoApp {
         );
     }
 
+    /// File > New from template > Pump station / Motor control centre.
+    pub(super) fn new_plant_project(&mut self, options: super::template_plants::PlantOptions) {
+        let today = super::revisions::today();
+        self.open_built(
+            options.plant.project_name(),
+            |doc| super::template_plants::build_plant_template_on(doc, &today, options),
+            "New project. Each page carries a circuit; the open points in Issues are where you connect the supply and the control. Cover pages: Project settings > Project information.",
+            false,
+        );
+    }
+
     fn open_built_example(
         &mut self,
         name: &str,

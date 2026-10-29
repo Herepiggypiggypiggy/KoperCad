@@ -27,10 +27,12 @@ use std::f64::consts::TAU;
 
 use novo_drive::InputError;
 use novo_drive::brake::{BrakeState, SpringBrake};
+use novo_drive::brake_heat::{BrakeHeat, BrakeHeatParams};
 use novo_drive::drive::{Drive, DriveInputs, DriveOutputs, Fault};
 use novo_drive::hoist_logic::{
     HoistLogic, LogicEvent, LogicFault, LogicInput, LogicOutput, LogicPhase,
 };
+use novo_drive::hoist_thermal::{MotorThermal, ThermalParams};
 use novo_drive::induction::{InductionMotor, OperatingPoint, Supply};
 use novo_drive::mechanics::Hoist;
 use novo_drive::motor::Direction;
@@ -105,6 +107,18 @@ pub enum FindingKind {
     /// The hook went past the clearance behind a final limit and would hit the stop or buffer at
     /// this speed.
     HitStop { upper: bool, speed_m_s: f64 },
+    /// The motor winding reached its limit rise; `cool_down_s` is the time at standstill until it
+    /// is back to 80 % of the limit.
+    MotorTooHot {
+        rise_k: f64,
+        limit_k: f64,
+        cool_down_s: f64,
+    },
+    /// The brake reached its limit rise from slipping (late engagement, closing before the hook
+    /// has stopped).
+    BrakeHot { rise_k: f64, limit_k: f64 },
+    /// The brake lining used this share of its life (reported at 50 % and 100 %).
+    BrakeWear { share: f64 },
     /// The drive tripped.
     DriveTrip(Fault),
     /// The brake logic found something.
@@ -168,6 +182,22 @@ impl FindingKind {
                 side(*upper),
                 speed_m_s
             ),
+            Self::MotorTooHot {
+                rise_k,
+                limit_k,
+                cool_down_s,
+            } => format!(
+                "The motor winding is {rise_k:.0} K over ambient (limit {limit_k:.0} K). \
+                 At standstill it needs about {:.0} min to cool to 80 % of the limit.",
+                cool_down_s / 60.0
+            ),
+            Self::BrakeHot { rise_k, limit_k } => format!(
+                "The brake is {rise_k:.0} K over ambient (limit {limit_k:.0} K) from slipping."
+            ),
+            Self::BrakeWear { share } => format!(
+                "The brake lining has used {:.0} % of its life by slipping.",
+                share * 100.0
+            ),
             Self::BrakeSlip { metres } => format!(
                 "The brake does not hold the load: the hook moved {:.0} mm with the drive off.",
                 metres * 1000.0
@@ -219,6 +249,40 @@ pub struct DriveHoistSnapshot {
     pub flux: f64,
     /// Top speed step in use, Hz (nominal or sensed).
     pub top_step_hz: f64,
+    /// Winding and brake heat, when the module has a heat model.
+    pub heat: Option<HeatSnapshot>,
+}
+
+/// Heat and wear in the last tick.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HeatSnapshot {
+    pub winding_rise_k: f64,
+    pub frame_rise_k: f64,
+    pub brake_rise_k: f64,
+    pub brake_energy_j: f64,
+    /// Share of the brake lining life used.
+    pub brake_wear: f64,
+}
+
+/// The heat model of a drive hoist: motor winding and frame, brake disc and lining.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HeatConfig {
+    pub motor: ThermalParams,
+    /// Motor losses at the rated point, W (sets the thermal conductances).
+    pub rated_losses_w: f64,
+    /// Rated shaft speed, rad/s (the fan cools in proportion to the speed over it).
+    pub rated_omega_rad_s: f64,
+    pub brake: BrakeHeatParams,
+}
+
+#[derive(Debug)]
+struct HeatState {
+    motor: MotorThermal,
+    brake: BrakeHeat,
+    rated_omega: f64,
+    hot: bool,
+    brake_hot: bool,
+    wear_marks: u8,
 }
 
 /// An open-loop drive hoist: drive, brake logic, motor, brake, load and bindings.
@@ -232,6 +296,7 @@ pub struct DriveHoistModule {
     pub brake: SpringBrake,
     pub binding: DriveHoistBinding,
     inertia_kg_m2: f64,
+    heat: Option<HeatState>,
     /// Rotor time constant in s: how fast the flux builds.
     tau_flux_s: f64,
     flux: f64,
@@ -333,6 +398,7 @@ impl DriveHoistModule {
             brake,
             binding,
             inertia_kg_m2: inertia,
+            heat: None,
             tau_flux_s: tau,
             flux: 0.0,
             omega: 0.0,
@@ -362,6 +428,32 @@ impl DriveHoistModule {
     pub fn with_clearance(mut self, upper_m: Option<f64>, lower_m: Option<f64>) -> Self {
         self.clearance_m = (upper_m, lower_m);
         self
+    }
+
+    /// Limit rises `(winding K, brake K)` of the heat model, when the module has one.
+    pub fn heat_limits(&self) -> Option<(f64, f64)> {
+        self.heat
+            .as_ref()
+            .map(|h| (h.motor.params().limit_rise_k, h.brake.params().limit_rise_k))
+    }
+
+    /// Adds the heat model of the motor winding and the brake.
+    pub fn with_heat(mut self, cfg: HeatConfig) -> Result<Self, InputError> {
+        if cfg.rated_omega_rad_s <= 0.0 {
+            return Err(InputError::NotPositive {
+                field: "rated_omega_rad_s",
+                value: cfg.rated_omega_rad_s,
+            });
+        }
+        self.heat = Some(HeatState {
+            motor: MotorThermal::new(cfg.motor, cfg.rated_losses_w)?,
+            brake: BrakeHeat::new(cfg.brake)?,
+            rated_omega: cfg.rated_omega_rad_s,
+            hot: false,
+            brake_hot: false,
+            wear_marks: 0,
+        });
+        Ok(self)
     }
 
     /// Hook height in metres, 0 at the start (positive is up).
@@ -676,6 +768,14 @@ fn step_module(
 
     track_findings(m, &logic, time_s, speed);
     track_limits(m, time_s, speed);
+    track_heat(
+        m,
+        &point,
+        brake_t,
+        0.5 * (omega_start + omega_end),
+        time_s,
+        dt,
+    );
 
     m.snapshot = Some(DriveHoistSnapshot {
         drive: out,
@@ -686,6 +786,13 @@ fn step_module(
         speed_m_s: speed,
         flux: m.flux,
         top_step_hz: m.logic.top_step_hz(),
+        heat: m.heat.as_ref().map(|h| HeatSnapshot {
+            winding_rise_k: h.motor.winding_rise_k(),
+            frame_rise_k: h.motor.frame_rise_k(),
+            brake_rise_k: h.brake.rise_k(),
+            brake_energy_j: h.brake.energy_j(),
+            brake_wear: h.brake.wear_share(),
+        }),
         logic,
     });
     Ok(())
@@ -808,6 +915,64 @@ fn track_limits(m: &mut DriveHoistModule, time_s: f64, speed: f64) {
         for kind in found {
             m.note(time_s, kind);
         }
+    }
+}
+
+/// Time at standstill until the winding is back to 80 % of its limit, s (capped at 6 h).
+fn cool_down_time_s(motor: &MotorThermal) -> f64 {
+    let mut cold = *motor;
+    let target = 0.8 * cold.params().limit_rise_k;
+    let mut t = 0.0;
+    while cold.winding_rise_k() > target && t < 6.0 * 3600.0 {
+        cold.step(0.0, 0.0, 10.0);
+        t += 10.0;
+    }
+    t
+}
+
+fn track_heat(
+    m: &mut DriveHoistModule,
+    point: &OperatingPoint,
+    brake_t: f64,
+    omega_mean: f64,
+    time_s: f64,
+    dt: f64,
+) {
+    let Some(h) = m.heat.as_mut() else {
+        return;
+    };
+    h.motor
+        .step(point.losses_w(), omega_mean.abs() / h.rated_omega, dt);
+    h.brake.step(brake_t, omega_mean, dt);
+    let mut found = Vec::new();
+    let limit = h.motor.params().limit_rise_k;
+    if h.motor.too_hot() && !h.hot {
+        h.hot = true;
+        found.push(FindingKind::MotorTooHot {
+            rise_k: h.motor.winding_rise_k(),
+            limit_k: limit,
+            cool_down_s: cool_down_time_s(&h.motor),
+        });
+    } else if h.hot && h.motor.winding_rise_k() < 0.9 * limit {
+        h.hot = false;
+    }
+    let brake_limit = h.brake.params().limit_rise_k;
+    if h.brake.too_hot() && !h.brake_hot {
+        h.brake_hot = true;
+        found.push(FindingKind::BrakeHot {
+            rise_k: h.brake.rise_k(),
+            limit_k: brake_limit,
+        });
+    } else if h.brake_hot && h.brake.rise_k() < 0.9 * brake_limit {
+        h.brake_hot = false;
+    }
+    let share = h.brake.wear_share();
+    if (share >= 0.5 && h.wear_marks == 0) || (share >= 1.0 && h.wear_marks == 1) {
+        h.wear_marks += 1;
+        found.push(FindingKind::BrakeWear { share });
+    }
+    for kind in found {
+        m.note(time_s, kind);
     }
 }
 

@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use novo_drive::brake::{SpringBrake, Switching};
+use novo_drive::brake_heat::BrakeHeatParams;
 use novo_drive::drive::terminals::DigitalInput;
 use novo_drive::drive::{
     Drive, DriveConfig, DriveState, Fault, MotorNameplate, ReferenceSource, TerminalFunction,
@@ -13,12 +14,13 @@ use novo_drive::drive::{
 use novo_drive::hoist_logic::{
     BrakeLogic, HoistLogic, HoistLogicConfig, LoadSense, LogicFault, LogicPhase, ReversalJump,
 };
+use novo_drive::hoist_thermal::ThermalParams;
 use novo_drive::induction::{FitOptions, InductionMotor};
 use novo_drive::mechanics::Hoist;
 use novo_machine::bindings::SensorBinding;
 use novo_machine::cosim::StepConfig;
 use novo_machine::drive_hoist_loop::{
-    DriveHoistBinding, DriveHoistLoop, DriveHoistModule, DriveHoistParts, FindingKind,
+    DriveHoistBinding, DriveHoistLoop, DriveHoistModule, DriveHoistParts, FindingKind, HeatConfig,
 };
 use novo_machine::hoist_loop::{LimitKind, LimitSwitch};
 use novo_machine::port::FakeCircuit;
@@ -113,6 +115,7 @@ struct Rig {
     limit_m: Option<f64>,
     slow_m: Option<f64>,
     clearance_m: Option<f64>,
+    heat: Option<HeatConfig>,
 }
 
 impl Rig {
@@ -126,6 +129,7 @@ impl Rig {
             limit_m: None,
             slow_m: None,
             clearance_m: None,
+            heat: None,
         }
     }
 
@@ -175,8 +179,12 @@ impl Rig {
                 limits,
             },
         )
-        .unwrap();
-        module.with_clearance(self.clearance_m, None)
+        .unwrap()
+        .with_clearance(self.clearance_m, None);
+        match self.heat {
+            Some(cfg) => module.with_heat(cfg).unwrap(),
+            None => module,
+        }
     }
 
     fn start(&self) -> (DriveHoistLoop, FakeCircuit, Shared) {
@@ -630,6 +638,87 @@ fn a_slow_pass_through_zero_lets_the_load_sink_more_than_a_fast_one() {
     assert!(s_slow > s_fast + 0.005, "{s_slow} vs {s_fast}");
     // The brake never closed in either run: the hook ends up rising.
     assert!(m(&fast).snapshot().unwrap().speed_m_s > 0.02);
+}
+
+fn heat_cfg(brake_life_j: f64) -> HeatConfig {
+    HeatConfig {
+        motor: ThermalParams::GENERIC,
+        // Losses at the rated point of the 5.5 kW motor are in the region of 500 W.
+        rated_losses_w: 500.0,
+        rated_omega_rad_s: 1440.0 * std::f64::consts::TAU / 60.0,
+        brake: BrakeHeatParams {
+            lining_life_j: brake_life_j,
+            ..BrakeHeatParams::GENERIC
+        },
+    }
+}
+
+#[test]
+fn a_run_heats_the_winding_and_a_normal_stop_hardly_touches_the_brake() {
+    let mut rig = Rig::new();
+    rig.heat = Some(heat_cfg(20.0e6));
+    let (mut lp, mut c, cmd) = rig.start();
+    {
+        let mut cm = cmd.borrow_mut();
+        cm.up = true;
+        cm.step2 = true;
+        cm.step3 = true;
+    }
+    run_for(&mut lp, &mut c, 20.0);
+    cmd.borrow_mut().up = false;
+    run_for(&mut lp, &mut c, 4.0);
+    let heat = m(&lp).snapshot().unwrap().heat.unwrap();
+    assert!(heat.winding_rise_k > 1.0, "{}", heat.winding_rise_k);
+    assert!(heat.frame_rise_k > 0.0 && heat.frame_rise_k < heat.winding_rise_k);
+    // The brake closes at the engage frequency, nearly at rest: joules, not kilojoules.
+    assert!(heat.brake_energy_j < 200.0, "{}", heat.brake_energy_j);
+}
+
+#[test]
+fn losing_the_mains_while_lowering_slips_the_brake_and_wears_it() {
+    // A small lining life makes the wear visible: the hook is brought to rest by the brake.
+    let mut rig = Rig::new();
+    rig.heat = Some(heat_cfg(1000.0));
+    let (mut lp, mut c, cmd) = rig.start();
+    {
+        let mut cm = cmd.borrow_mut();
+        cm.down = true;
+        cm.step2 = true;
+    }
+    run_for(&mut lp, &mut c, 12.0);
+    cmd.borrow_mut().mains = false;
+    run_for(&mut lp, &mut c, 4.0);
+    let heat = m(&lp).snapshot().unwrap().heat.unwrap();
+    assert!(heat.brake_energy_j > 500.0, "{}", heat.brake_energy_j);
+    assert!(heat.brake_rise_k > 0.0);
+    assert!(
+        kinds(&lp)
+            .iter()
+            .any(|k| matches!(k, FindingKind::BrakeWear { .. })),
+        "{:?}",
+        kinds(&lp)
+    );
+}
+
+#[test]
+fn a_winding_over_its_limit_is_reported_once_with_a_cool_down_time() {
+    let mut rig = Rig::new();
+    let mut cfg = heat_cfg(20.0e6);
+    cfg.motor.limit_rise_k = 2.0;
+    rig.heat = Some(cfg);
+    let (mut lp, mut c, cmd) = rig.start();
+    {
+        let mut cm = cmd.borrow_mut();
+        cm.up = true;
+        cm.step2 = true;
+        cm.step3 = true;
+    }
+    run_for(&mut lp, &mut c, 30.0);
+    let hot: Vec<_> = kinds(&lp)
+        .into_iter()
+        .filter(|k| matches!(k, FindingKind::MotorTooHot { .. }))
+        .collect();
+    assert_eq!(hot.len(), 1, "{hot:?}");
 }
 
 /// Up at the top step to a final limit at 1.6 m, optionally with a slow-down switch at 1.0 m that

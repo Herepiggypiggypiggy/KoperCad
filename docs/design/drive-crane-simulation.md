@@ -295,6 +295,21 @@ it ("HitStop"). Exact by definition: the limit contacts follow the hook height, 
 hook height past the actuation point. Model: the stopping behaviour (all of the drive, brake and sequence
 models above). The stop or buffer itself is not modelled (no impact, no rope shock): the run only says
 at what speed the hook would reach it.
+Heat over a duty cycle (`dh_heat_*`, `dh_brake_*` rows, always on): the module carries the two-node
+winding and frame model of `novo_drive::hoist_thermal` (losses from the fitted motor at the drive's
+output, a fan that cools in proportion to shaft speed, so a long slow run at low frequency heats more
+than the same work at speed) and `novo_drive::brake_heat` (the brake dissipates torque x speed while it
+slips, one heat capacity and cooling constant, wear as the share of a lining life in joules). The run
+reports "MotorTooHot" (with the standstill time to cool back to 80 % of the limit), "BrakeHot" and
+"BrakeWear" (50 % and 100 %). `novo_machine::duty_cycle` repeats a lift, pause, lower, pause cycle
+faster than real time on an ideal operator and wiring (not the drawing) and returns peaks, starts per
+hour, the first time the winding hit its limit and a curve; Simulate > Drive run > "Duty cycle: heat
+over time" runs it in the background. Exact by definition: the dissipated power and its integral, the
+first-order cooling. Model: the generic thermal numbers (rise at rated load 80 K, limit 100 K, brake
+25 kJ/K, 15 min, 250 K, 20 MJ lining life) until the maker's replace them, losses from the equivalent
+circuit, no temperature effect on resistance or friction, no drive heat sink model. Not a duty class
+(S3, S5) rating of the motor. The duty run needs a step of at most 5 ms: a 10 ms step let a load hang
+on the drive that had just started to lower it (not investigated further, the run refuses it).
 
 Load sensing (optional, `dh_sense_boost_hz`): the torque is averaged at a probe frequency; a light load
 may run the top step above its nominal frequency, never beyond what the motor can deliver with a margin
@@ -310,7 +325,7 @@ Exact by definition: the order of the states, the tick order, the hanging-load a
 drive (averaged), the motor (quasi-static torque, no flux transient), the flux build-up (one lag with the
 rotor time constant of the fit, torque follows flux squared), stiction of the shaft against friction and
 brake torque, the brake timing, all sequence timing. Not modelled: encoder or closed-loop control,
-slack rope, rope stretch and hook swing, motor and brake heating, a maker's parameter
+slack rope, rope stretch and hook swing, a maker's parameter
 set. Parameters of a real drive never appear in a drawing, so the defaults are generic values for a
 5.5 kW 4 pole hoist motor and are meant to be edited.
 

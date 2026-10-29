@@ -19,13 +19,18 @@
 //! torque, and the two STO channels, the encoder signal and the brake contactor are devices of the
 //! drawing, so a defect injected there (Simulate > Defects and walk-throughs) reaches the drive.
 
+use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, mpsc};
+
 use eframe::egui;
 use novo_core::{PageId, Project, Value};
 use novo_machine::cl_winch_loop::{ClWinchLoop, ClWinchModule};
 use novo_machine::cl_winch_spec;
 use novo_machine::cosim::StepConfig;
-use novo_machine::drive_hoist_loop::{DriveHoistLoop, DriveHoistModule};
+use novo_machine::drive_hoist_loop::{DriveHoistLoop, DriveHoistModule, FindingKind};
 use novo_machine::drive_hoist_spec;
+use novo_machine::duty_cycle::{self, DutyCycle, DutyEnd, DutyReport};
 use novo_machine::travel_loop::{TravelLoop, TravelModule};
 use novo_machine::travel_spec;
 use novo_sim::is_motor;
@@ -42,8 +47,194 @@ const MAX_TICKS: usize = 40;
 pub(crate) struct DriveRun {
     pub(super) open: bool,
     active: Option<Active>,
+    duty: DutyUi,
     /// Why the last start did not run, or what it found.
     notice: Vec<(Level, String)>,
+}
+
+/// The duty cycle form, the job running in the background and the last result.
+struct DutyUi {
+    travel_m: f64,
+    step: usize,
+    pause_top_s: f64,
+    pause_bottom_s: f64,
+    cycles: u32,
+    stop_when_hot: bool,
+    choice: usize,
+    job: Option<DutyJob>,
+    result: Option<(String, Result<DutyReport, String>)>,
+}
+
+impl Default for DutyUi {
+    fn default() -> Self {
+        Self {
+            travel_m: 3.0,
+            step: 3,
+            pause_top_s: 10.0,
+            pause_bottom_s: 10.0,
+            cycles: 30,
+            stop_when_hot: true,
+            choice: 0,
+            job: None,
+            result: None,
+        }
+    }
+}
+
+struct DutyJob {
+    tag: String,
+    total: u32,
+    progress: Arc<AtomicU32>,
+    rx: mpsc::Receiver<Result<DutyReport, String>>,
+}
+
+/// Every drive hoist of a project with its property text, for a duty cycle run in the
+/// background (the module is built again inside the job).
+fn hoist_properties(project: &Project) -> Vec<(String, BTreeMap<String, String>)> {
+    project
+        .devices()
+        .filter(|d| d.properties.contains_key(drive_hoist_spec::DRIVE_HOIST_KEY))
+        .map(|d| {
+            let props = d
+                .properties
+                .iter()
+                .map(|(k, v): (&String, &Value)| (k.clone(), v.to_string()))
+                .collect();
+            (d.tag.to_string(), props)
+        })
+        .collect()
+}
+
+fn spawn_duty(tag: String, props: BTreeMap<String, String>, cycle: DutyCycle) -> DutyJob {
+    let (tx, rx) = mpsc::channel();
+    let progress = Arc::new(AtomicU32::new(0));
+    let seen = Arc::clone(&progress);
+    let total = cycle.cycles;
+    let id = tag.clone();
+    std::thread::spawn(move || {
+        let result = (|| {
+            let get = |k: &str| props.get(k).cloned();
+            let (module, _) = drive_hoist_spec::drive_hoist_from_properties(&id, &get)
+                .map_err(|e| e.to_string())?
+                .ok_or_else(|| "this motor has no hook load".to_owned())?;
+            duty_cycle::run(module, &cycle, &mut |n| seen.store(n, Ordering::Relaxed))
+                .map_err(|e| e.to_string())
+        })();
+        let _ = tx.send(result);
+    });
+    DutyJob {
+        tag,
+        total,
+        progress,
+        rx,
+    }
+}
+
+fn duration_text(s: f64) -> String {
+    if s >= 3600.0 {
+        format!(
+            "{:.0} h {:.0} min",
+            (s / 3600.0).floor(),
+            (s % 3600.0) / 60.0
+        )
+    } else if s >= 60.0 {
+        format!("{:.0} min {:.0} s", (s / 60.0).floor(), s % 60.0)
+    } else {
+        format!("{s:.0} s")
+    }
+}
+
+/// The result of a duty cycle run: figures, the curve of the winding and the brake, and what the
+/// run found.
+fn show_duty_result(ui: &mut egui::Ui, tag: &str, report: &DutyReport) {
+    let end = match report.end {
+        DutyEnd::Completed => "completed",
+        DutyEnd::MotorTooHot => "stopped: the winding reached its limit",
+        DutyEnd::BrakeTooHot => "stopped: the brake reached its limit",
+        DutyEnd::Stuck => "stopped: the hoist did not finish a stroke (fault or stuck brake)",
+        DutyEnd::TimeCap => "stopped at the 24 h cap",
+    };
+    ui.strong(format!("{tag}: {end}"));
+    ui.label(format!(
+        "{} cycles in {} \u{b7} {} starts ({:.0} per hour)",
+        report.cycles_done,
+        duration_text(report.time_s),
+        report.starts,
+        report.starts_per_hour()
+    ));
+    ui.label(format!(
+        "Winding peak {:.0} K of {:.0} K \u{b7} brake peak {:.0} K of {:.0} K \u{b7} brake lining \
+         used {:.1} % ({:.0} kJ slipped)",
+        report.peak_winding_rise_k,
+        report.winding_limit_k,
+        report.peak_brake_rise_k,
+        report.brake_limit_k,
+        report.brake_wear * 100.0,
+        report.brake_energy_j / 1000.0
+    ));
+    if let Some(t) = report.first_hot_s {
+        ui.colored_label(
+            ui.visuals().warn_fg_color,
+            format!(
+                "The winding first reached its limit after {}.",
+                duration_text(t)
+            ),
+        );
+    }
+    if report.curve.len() > 1 {
+        let width = ui.available_width().clamp(200.0, 520.0);
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 84.0), egui::Sense::hover());
+        let painter = ui.painter_at(rect);
+        painter.rect_filled(rect, 2.0, crate::theme::ui_palette().raised);
+        let t_max = report.curve.last().map_or(1.0, |c| c.0).max(1.0);
+        let y_max = (report.winding_limit_k * 1.1)
+            .max(report.peak_winding_rise_k * 1.05)
+            .max(report.peak_brake_rise_k * 1.05)
+            .max(1.0);
+        let at = |t: f64, v: f64| {
+            egui::pos2(
+                rect.min.x + (t / t_max) as f32 * rect.width(),
+                rect.max.y - (v / y_max) as f32 * rect.height(),
+            )
+        };
+        let limit_y = at(0.0, report.winding_limit_k).y;
+        painter.line_segment(
+            [
+                egui::pos2(rect.min.x, limit_y),
+                egui::pos2(rect.max.x, limit_y),
+            ],
+            egui::Stroke::new(1.0, ui.visuals().warn_fg_color),
+        );
+        let line = |pick: &dyn Fn(&(f64, f64, f64)) -> f64, color: egui::Color32| {
+            let pts: Vec<egui::Pos2> = report.curve.iter().map(|c| at(c.0, pick(c))).collect();
+            painter.add(egui::Shape::line(pts, egui::Stroke::new(1.5, color)));
+        };
+        line(&|c| c.1, ui.visuals().hyperlink_color);
+        line(&|c| c.2, ui.visuals().text_color());
+        ui.weak(
+            "Blue: winding rise, grey: brake rise (K over ambient), line: winding limit. \
+             Time runs left to right.",
+        );
+    }
+    for f in report
+        .findings
+        .iter()
+        .filter(|f| {
+            matches!(
+                f.kind,
+                FindingKind::MotorTooHot { .. }
+                    | FindingKind::BrakeHot { .. }
+                    | FindingKind::BrakeWear { .. }
+                    | FindingKind::DriveTrip(_)
+            )
+        })
+        .take(6)
+    {
+        ui.horizontal_wrapped(|ui| {
+            ui.weak(duration_text(f.time_s));
+            ui.label(f.kind.text());
+        });
+    }
 }
 
 struct Active {
@@ -161,8 +352,14 @@ pub(super) fn hoist_reading(module: &DriveHoistModule) -> String {
         LogicPhase::Engaging => "closing brake",
         LogicPhase::Fault(_) => "stopped by a fault",
     };
+    let heat = s.heat.map_or_else(String::new, |h| {
+        format!(
+            " \u{b7} winding +{:.0} K \u{b7} brake +{:.0} K",
+            h.winding_rise_k, h.brake_rise_k
+        )
+    });
     format!(
-        "{phase} \u{b7} {:.1} Hz \u{b7} {:.1} A \u{b7} {:.1} m/min \u{b7} {:.2} m",
+        "{phase} \u{b7} {:.1} Hz \u{b7} {:.1} A \u{b7} {:.1} m/min \u{b7} {:.2} m{heat}",
         s.drive.frequency_hz.abs(),
         s.motor.stator_current_a,
         s.speed_m_s * 60.0,
@@ -323,6 +520,85 @@ pub(super) fn paint_badges(
     }
 }
 
+/// The duty cycle form: what to lift, how often, and the result of the last run.
+fn duty_cycle_form(
+    ui: &mut egui::Ui,
+    duty: &mut DutyUi,
+    hoists: &[(String, BTreeMap<String, String>)],
+) {
+    ui.weak(
+        "Lifts and lowers the chosen hoist again and again, faster than real time, with an \
+         ideal operator and wiring (not the drawing), and shows how the motor winding and the \
+         brake heat up. The heat numbers are generic (Drive hoist section, heat and brake \
+         rows) until you enter the maker's.",
+    );
+    duty.choice = duty.choice.min(hoists.len() - 1);
+    let running = duty.job.is_some();
+    ui.add_enabled_ui(!running, |ui| {
+        if hoists.len() > 1 {
+            egui::ComboBox::from_label("Hoist")
+                .selected_text(&hoists[duty.choice].0)
+                .show_ui(ui, |ui| {
+                    for (i, (tag, _)) in hoists.iter().enumerate() {
+                        ui.selectable_value(&mut duty.choice, i, tag);
+                    }
+                });
+        }
+        egui::Grid::new("duty_form").num_columns(2).show(ui, |ui| {
+            ui.label("Travel per stroke (m)");
+            ui.add(
+                egui::DragValue::new(&mut duty.travel_m)
+                    .range(0.1..=100.0)
+                    .speed(0.1),
+            );
+            ui.end_row();
+            ui.label("Speed step (1 = slowest)");
+            ui.add(egui::DragValue::new(&mut duty.step).range(1..=4));
+            ui.end_row();
+            ui.label("Pause at the top (s)");
+            ui.add(egui::DragValue::new(&mut duty.pause_top_s).range(0.0..=3600.0));
+            ui.end_row();
+            ui.label("Pause at the bottom (s)");
+            ui.add(egui::DragValue::new(&mut duty.pause_bottom_s).range(0.0..=3600.0));
+            ui.end_row();
+            ui.label("Cycles (up and down)");
+            ui.add(egui::DragValue::new(&mut duty.cycles).range(1..=5000));
+            ui.end_row();
+        });
+        ui.checkbox(
+            &mut duty.stop_when_hot,
+            "Stop when the winding or the brake reaches its limit",
+        );
+    });
+    if let Some(job) = duty.job.as_ref() {
+        let done = job.progress.load(Ordering::Relaxed);
+        ui.add(
+            egui::ProgressBar::new(done as f32 / job.total.max(1) as f32)
+                .text(format!("{} {done} of {} cycles", job.tag, job.total)),
+        );
+    } else if ui.button("Run duty cycle").clicked() {
+        let (tag, props) = hoists[duty.choice].clone();
+        let cycle = DutyCycle {
+            travel_m: duty.travel_m,
+            step: duty.step,
+            pause_top_s: duty.pause_top_s,
+            pause_bottom_s: duty.pause_bottom_s,
+            cycles: duty.cycles,
+            dt_s: 0.005,
+            stop_when_hot: duty.stop_when_hot,
+        };
+        duty.result = None;
+        duty.job = Some(spawn_duty(tag, props, cycle));
+    }
+    match duty.result.as_ref() {
+        Some((tag, Ok(report))) => show_duty_result(ui, tag, report),
+        Some((tag, Err(why))) => {
+            ui.colored_label(ui.visuals().error_fg_color, format!("{tag}: {why}"));
+        }
+        None => {}
+    }
+}
+
 impl NovoApp {
     /// `sim.drive_run`: opens or closes the window.
     pub(super) fn toggle_drive_run(&mut self) {
@@ -340,6 +616,21 @@ impl NovoApp {
         let (drive_hoists, _) = drive_hoists_of(doc.project());
         let (winches, _) = closed_winches_of(doc.project());
         let live_on = self.wb.live.on;
+        let hoist_props = hoist_properties(doc.project());
+        let mut duty = std::mem::take(&mut self.wb.drive_run.duty);
+        if let Some(job) = duty.job.as_ref() {
+            match job.rx.try_recv() {
+                Ok(result) => {
+                    duty.result = Some((job.tag.clone(), result));
+                    duty.job = None;
+                }
+                Err(mpsc::TryRecvError::Empty) => ctx.request_repaint(),
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    duty.result = Some((job.tag.clone(), Err("the run stopped".to_owned())));
+                    duty.job = None;
+                }
+            }
+        }
         let mut open = true;
         let (mut start, mut stop, mut live_toggle) = (false, false, false);
         let run = &self.wb.drive_run;
@@ -472,6 +763,14 @@ impl NovoApp {
                         });
                     }
                 }
+                if !hoist_props.is_empty() {
+                    ui.separator();
+                    egui::CollapsingHeader::new("Duty cycle: heat over time")
+                        .id_salt("duty_cycle")
+                        .show(ui, |ui| {
+                            duty_cycle_form(ui, &mut duty, &hoist_props);
+                        });
+                }
                 ui.separator();
                 ui.label(egui::RichText::new("Model, not measurement").strong());
                 ui.weak(
@@ -508,6 +807,7 @@ impl NovoApp {
                 );
                 ui.weak("\u{2022} Not a safety or compliance statement.");
             });
+        self.wb.drive_run.duty = duty;
         if !open {
             self.wb.drive_run.open = false;
         }
@@ -864,6 +1164,39 @@ mod tests {
                 .any(|k| matches!(k, FindingKind::LimitOvertravel { .. })),
             "{kinds:?}"
         );
+    }
+
+    #[test]
+    fn the_reading_shows_the_heat_and_a_duty_cycle_runs_in_the_background() {
+        let (doc, button) = drive_hoist(true);
+        let run = run_hoist(&doc, button, 6.0);
+        let m = &run.active.as_ref().unwrap().hl.modules[0];
+        assert!(
+            hoist_reading(m).contains("winding +"),
+            "{}",
+            hoist_reading(m)
+        );
+        let hoists = hoist_properties(doc.project());
+        assert_eq!(hoists.len(), 1);
+        let (tag, props) = hoists[0].clone();
+        let cycle = DutyCycle {
+            travel_m: 0.5,
+            step: 3,
+            pause_top_s: 0.5,
+            pause_bottom_s: 0.5,
+            cycles: 1,
+            dt_s: 0.005,
+            stop_when_hot: false,
+        };
+        let job = spawn_duty(tag, props, cycle);
+        let report = job
+            .rx
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .expect("the job answers")
+            .expect("the cycle runs");
+        assert_eq!(report.cycles_done, 1);
+        assert_eq!(job.progress.load(Ordering::Relaxed), 1);
+        assert!(report.peak_winding_rise_k > 0.0);
     }
 
     #[test]
