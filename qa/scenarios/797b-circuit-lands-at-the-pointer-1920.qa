@@ -1,0 +1,20 @@
+@title A placed circuit lands where the pointer was on the drawing, large window
+@area Schematic
+@sizes 1920x1080
+# As 797 at 1920x1080: the pointer rests on the drawing at 1100,600.
+click_text "New project"
+wait 20
+move 1100 600
+wait 5
+key ctrl+k
+text "motor starter dol"
+wait 5
+key Enter
+wait 10
+try click_text "Motor starter DOL" Label
+wait 10
+click_text Place Button #2
+wait 20
+expect "Placed Motor starter DOL"
+expect_scene "-K1"
+shot placed-at-pointer

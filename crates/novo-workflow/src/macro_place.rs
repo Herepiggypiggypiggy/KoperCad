@@ -419,65 +419,125 @@ pub fn free_origin(project: &Project, page: PageId, gap: f64) -> Point {
 /// covers.
 pub fn definition_extent(definition: &BlockDefinition) -> (f64, f64) {
     let (mut max_x, mut max_y) = (0.0_f64, 0.0_f64);
+    let mut reach = |p: Point| {
+        max_x = max_x.max(p.x);
+        max_y = max_y.max(p.y);
+    };
     for member in &definition.members {
-        let at = match member {
-            Record::Symbol(s) => s.placement.origin,
-            Record::Junction(j) => j.position,
-            _ => continue,
-        };
-        max_x = max_x.max(at.x);
-        max_y = max_y.max(at.y);
+        match member {
+            Record::Symbol(s) => {
+                reach(s.placement.origin);
+                // Pins reach past the origin of a tall or wide symbol.
+                for pin in &s.pins {
+                    reach(s.placement.apply(pin.offset));
+                }
+            }
+            Record::Junction(j) => reach(j.position),
+            Record::Wire(w) => w.route.iter().copied().for_each(&mut reach),
+            _ => {}
+        }
     }
     // The members are stored relative to the captured top-left corner.
     (max_x + SYMBOL_REACH, max_y + SYMBOL_REACH)
 }
 
+/// The title block in the bottom right corner of a sheet, in mm, with its margin.
+const TITLE_BLOCK_WIDTH: f64 = 150.0;
+const TITLE_BLOCK_HEIGHT: f64 = 50.0;
+
 /// What one symbol covers beyond its origin, for the room a macro needs.
 const SYMBOL_REACH: f64 = 15.0;
 
-/// Where a macro goes for a person looking at `visible` (the part of the
-/// page on screen, top-left and bottom-right): the top-left of that view,
-/// snapped to `grid` and kept inside the sheet margin, when the room the
-/// macro covers there is empty. Otherwise (and on an empty page) it is
-/// [`free_origin`], beside what is drawn. The flag says the view had no room,
-/// so the macro landed outside it and the view should follow.
+/// What decides where a macro lands: the part of the page on screen, where
+/// the pointer last was on the drawing, the sheet and the grid.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PlaceView {
+    /// The part of the page on screen, top-left and bottom-right.
+    pub visible: Option<(Point, Point)>,
+    /// Where the pointer last was on the drawing (mm).
+    pub pointer: Option<Point>,
+    /// The sheet, width and height in mm; `None` leaves it unbounded.
+    pub sheet: Option<(f64, f64)>,
+    /// Grid step in mm; zero is free.
+    pub grid: f64,
+}
+
+/// Where a macro goes for a person looking at `view.visible`: its top-left
+/// at the pointer when that is on screen, else at the top-left of the view,
+/// snapped to the grid and kept inside the sheet margin, when the room the
+/// macro covers there is empty. Otherwise (and on an empty page with nothing
+/// to aim at) it is [`free_origin`], beside what is drawn. The flag says the
+/// view had no room, so the macro landed outside it and the view should follow.
 pub fn origin_in_view(
     project: &Project,
     page: PageId,
     extent: (f64, f64),
-    visible: Option<(Point, Point)>,
-    grid: f64,
+    view: &PlaceView,
     gap: f64,
 ) -> (Point, bool) {
     let beside = free_origin(project, page, gap);
     let drawn =
         project.symbols().any(|s| s.page == page) || project.junctions().any(|j| j.page == page);
-    let Some((min, _)) = visible.filter(|_| drawn) else {
-        return (beside, false);
+    let on_screen = |p: Point| {
+        view.visible
+            .is_none_or(|(min, max)| p.x >= min.x && p.x <= max.x && p.y >= min.y && p.y <= max.y)
     };
+    let pointer = view.pointer.filter(|&p| on_screen(p));
+    let corner = view
+        .visible
+        .filter(|_| drawn)
+        .map(|(min, _)| Point::new(min.x.max(10.0) + 10.0, min.y.max(10.0) + 10.0));
     let snap = |v: f64| {
-        if grid > 0.0 {
-            (v / grid).round() * grid
+        if view.grid > 0.0 {
+            (v / view.grid).round() * view.grid
         } else {
             v
         }
     };
-    let at = Point::new(snap(min.x.max(10.0) + 10.0), snap(min.y.max(10.0) + 10.0));
-    let (right, bottom) = (at.x + extent.0 + gap, at.y + extent.1 + gap);
-    let blocked = project.symbols().filter(|s| s.page == page).any(|s| {
+    // Keep the whole macro on the sheet, with a margin, and clear of the
+    // title block in the bottom right corner.
+    let fit = |p: Point| {
+        let clamp = |v: f64, room: Option<f64>| match room {
+            Some(r) => v.min(r).max(10.0),
+            None => v.max(10.0),
+        };
+        let x = snap(clamp(p.x, view.sheet.map(|s| s.0 - extent.0 - 10.0)));
+        let under_title = view
+            .sheet
+            .is_some_and(|s| x + extent.0 > s.0 - TITLE_BLOCK_WIDTH);
+        let bottom = if under_title {
+            TITLE_BLOCK_HEIGHT
+        } else {
+            10.0
+        };
+        let y = snap(clamp(p.y, view.sheet.map(|s| s.1 - extent.1 - bottom)));
+        Point::new(x, y)
+    };
+    if pointer.is_none() && corner.is_none() {
+        return (beside, false);
+    }
+    let blocked = |at: Point| {
+        let (right, bottom) = (at.x + extent.0 + gap, at.y + extent.1 + gap);
         let reach =
             |p: Point| p.x >= at.x - gap && p.x <= right && p.y >= at.y - gap && p.y <= bottom;
-        reach(s.placement.origin)
-            || s.pins
-                .iter()
-                .any(|pin| reach(s.placement.apply(pin.offset)))
-    }) || project.junctions().filter(|j| j.page == page).any(|j| {
-        j.position.x >= at.x - gap
-            && j.position.x <= right
-            && j.position.y >= at.y - gap
-            && j.position.y <= bottom
-    });
-    if blocked { (beside, true) } else { (at, false) }
+        project.symbols().filter(|s| s.page == page).any(|s| {
+            reach(s.placement.origin)
+                || s.pins
+                    .iter()
+                    .any(|pin| reach(s.placement.apply(pin.offset)))
+        }) || project
+            .junctions()
+            .filter(|j| j.page == page)
+            .any(|j| reach(j.position))
+    };
+    // The pointer first, then the corner of the view; an empty page has no
+    // corner to fall back on, so the pointer is the only try.
+    for at in pointer.into_iter().chain(corner).map(fit) {
+        if !blocked(at) {
+            return (at, false);
+        }
+    }
+    (beside, true)
 }
 
 fn corner(points: impl Iterator<Item = Point>) -> Point {

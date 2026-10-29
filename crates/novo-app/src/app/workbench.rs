@@ -181,6 +181,9 @@ pub(crate) struct Workbench {
     pub(super) space_down: Option<egui::Pos2>,
     /// The pointer on the drawing (mm), when it is over the canvas.
     pub(super) pointer_world: Option<novo_core::Point>,
+    /// The page and place where the pointer was last over the drawing; kept
+    /// after it leaves, for a circuit placed from a panel to land there.
+    pub(super) last_pointer: Option<(novo_core::PageId, novo_core::Point)>,
     /// Where a Space-held pan last moved the drawing from, once the
     /// pointer has gone more than 4 px from `space_down`.
     pub(super) space_pan: Option<egui::Pos2>,
@@ -384,6 +387,7 @@ impl Default for Workbench {
             proposal: 0,
             space_down: None,
             pointer_world: None,
+            last_pointer: None,
             space_pan: None,
             dock_size: egui::Vec2::ZERO,
             outline_shown: None,
@@ -912,6 +916,9 @@ impl NovoApp {
             }
             _ => None,
         };
+        if let (Some(at), Some(page)) = (self.wb.pointer_world, self.current_page) {
+            self.wb.last_pointer = Some((page, at));
+        }
     }
 
     /// Whether the shell runs `command` from a key press itself.
