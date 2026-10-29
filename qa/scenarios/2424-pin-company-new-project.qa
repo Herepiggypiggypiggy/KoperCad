@@ -1,0 +1,72 @@
+@title Pin names: a new project offers the company pin names file (1366x768)
+@area Schematic
+@sizes 1366x768
+# With a company file saved (Project > Rules > Save as company file), File > New project offers "Use your company pin names?". "Use the company pin names" stores them in the new project: Project > Rules then shows "1 class read". "Not now" leaves the project on the built-in names.
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+wait 10
+text rules
+wait 10
+key Return
+wait 20
+scroll 680 400 -600
+wait 10
+shot rules
+click 680 520
+wait 5
+text class = [{ id = 'motor.brake', label = 'brake motor', functions = ['motor.ac3'], set = [{ name = 'with brake', required = ['U1', 'V1', 'W1', 'BD1', 'BD2'] }] }]
+wait 10
+expect "1 class read"
+click_text "Save as company file"
+wait 10
+expect "Saved as the company pin names file"
+click_text "Done"
+wait 20
+key ctrl+k
+wait 10
+text new project
+wait 10
+key Return
+wait 30
+shot after-new
+expect "Use your company pin names?"
+click_text "Use the company pin names"
+wait 20
+expect "Using the company pin names in this project"
+key ctrl+k
+wait 10
+text rules
+wait 10
+key Return
+wait 20
+scroll 680 400 -600
+wait 10
+shot used
+expect "1 class read"
+click_text "Done"
+wait 20
+key ctrl+k
+wait 10
+text new project
+wait 10
+key Return
+wait 30
+click_text "Don't save"
+wait 30
+expect "Use your company pin names?"
+click_text "Not now"
+wait 20
+shot not-now
+expect_not "Use your company pin names?"
+key ctrl+k
+wait 10
+text rules
+wait 10
+key Return
+wait 20
+scroll 680 400 -600
+wait 10
+expect "Built-in names only"
+check_layout
