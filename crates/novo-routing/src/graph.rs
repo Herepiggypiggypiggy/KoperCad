@@ -133,8 +133,14 @@ impl Run {
         match self.openings {
             Openings::Anywhere => t,
             Openings::Pitch { pitch, first } if pitch > EPS && pitch.is_finite() => {
-                let k = ((t - self.lo - first) / pitch).round().max(0.0);
-                (self.lo + first + k * pitch).clamp(self.lo, self.hi)
+                // Only slots that lie on the duct: past the last one the wire
+                // enters at the last slot, not at the end of the duct.
+                let last = ((self.hi - self.lo - first) / pitch).floor();
+                if last < 0.0 {
+                    return t;
+                }
+                let k = ((t - self.lo - first) / pitch).round().clamp(0.0, last);
+                self.lo + first + k * pitch
             }
             Openings::Pitch { .. } => t,
             Openings::Ends => {
@@ -349,7 +355,9 @@ impl Network {
 
     /// The same network with a wiring channel along each rail's row of
     /// devices (above and below it), so wires between devices on one rail
-    /// run along it. A channel is not a duct: it has no fill and the route
+    /// run along it. Give the bodies first ([`Network::with_bodies`]): a side
+    /// whose channel would lie against a device of a neighbouring row, closer
+    /// than half the 10 mm gap, gets no channel. A channel is not a duct: it has no fill and the route
     /// lists it in [`Route::rails`].
     pub fn with_rails(self, rails: &[RailRow]) -> Network {
         let Network {
@@ -371,6 +379,23 @@ impl Network {
             for (side, fixed) in channels {
                 if !(fixed.is_finite() && start.is_finite() && rail.length.is_finite()) {
                     ignored.push(rail.id);
+                    continue;
+                }
+                // A channel closer than half the gap to a device of another
+                // row (a neighbouring rail less than two gaps away) would lie
+                // against it: that side has no channel.
+                let near = |b: &Body| {
+                    let (a0, a1, c0, c1) = if rail.vertical {
+                        (b.y0, b.y1, b.x0, b.x1)
+                    } else {
+                        (b.x0, b.x1, b.y0, b.y1)
+                    };
+                    a1 > start
+                        && a0 < start + rail.length
+                        && fixed > c0 - CHANNEL_GAP_MM / 2.0
+                        && fixed < c1 + CHANNEL_GAP_MM / 2.0
+                };
+                if bodies.iter().any(near) {
                     continue;
                 }
                 runs.push(Run {
