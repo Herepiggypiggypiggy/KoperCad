@@ -1,0 +1,20 @@
+@title Build mode: first step shows the design's open Issues next to the layout verdict
+@area Cabinet
+# LSC-01: Build mode said "no open problems" while Issues listed errors and warnings. The first step now
+# says "cabinet layout" and carries a banner with the Issues counts and a Show issues button.
+open qa/fixtures/door-cutouts.novo
+wait 30
+click_text Reports
+wait 5
+click_text "Build mode..."
+wait 30
+expect "Step 1 of"
+expect "Check the plate"
+expect "The cabinet layout has no open problems"
+shot build-first-step
+check_layout
+expect "The design has 2 errors and 8 warnings in Issues"
+expect "Show issues"
+click_text "Show issues"
+wait 10
+shot show-issues

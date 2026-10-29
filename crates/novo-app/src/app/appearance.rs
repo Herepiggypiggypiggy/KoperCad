@@ -30,9 +30,26 @@ impl NovoApp {
             ctx.set_zoom_factor(scale);
             ctx.data_mut(|d| d.insert_temp(id, scale));
         }
+        self.settle_dialogs_after_resize(ctx);
         if crate::theme::set_dark(ctx.theme() == egui::Theme::Dark) || restyle {
             self.canvas.restyle();
             self.cabinet.restyle();
+        }
+    }
+
+    /// A dialog is centred from the size it had last frame, and a modal's
+    /// size includes its backdrop, which is the whole screen. When the screen
+    /// shrinks (a smaller Interface size, a smaller window) the dialog keeps
+    /// the old, larger size and sits partly off screen. Starting the areas
+    /// afresh while a dialog is open, on the frame the size changed, centres
+    /// it again.
+    fn settle_dialogs_after_resize(&self, ctx: &egui::Context) {
+        let size = ctx.content_rect().size();
+        let id = egui::Id::new("screen_size_seen");
+        let seen = ctx.data(|d| d.get_temp::<egui::Vec2>(id));
+        ctx.data_mut(|d| d.insert_temp(id, size));
+        if seen.is_some_and(|s| s != size) && ctx.memory(|m| m.top_modal_layer().is_some()) {
+            ctx.memory_mut(|m| m.reset_areas());
         }
     }
 }

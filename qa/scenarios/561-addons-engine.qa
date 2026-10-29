@@ -1,0 +1,68 @@
+@title Add-on engine: panel buttons drive lamps, a broken engine stops alone
+@area Add-ons
+# Lane C0b-2. The demo-engine fixture carries a sandboxed engine.wasm (qa/fixtures/addons/engine-src).
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text add-ons
+wait 8
+key Enter
+wait 10
+answer_dialog qa/fixtures/addons/demo-engine-0.1.0.kcaddon
+click_text "Install from file..."
+wait 10
+expect "I trust this file"
+expect "runs in a sandbox"
+shot install-prompt
+check_layout
+click_text "I trust this file"
+wait 4
+click_text "Install" Button
+wait 12
+expect "Demo engine"
+shot installed
+check_layout
+key Escape
+wait 4
+key ctrl+k
+wait 6
+text demo engine panel
+wait 8
+key Enter
+wait 10
+expect "Power"
+shot panel-idle
+click_text "Start" Button
+wait 10
+expect "● Power"
+shot panel-started
+check_layout
+click_text "Stop" Button
+wait 10
+expect "○ Power"
+# A command without a panel goes to the engine and its answer is a message.
+key ctrl+k
+wait 6
+text demo engine ping
+wait 8
+key Enter
+wait 10
+expect "Pong from the demo engine"
+shot ping
+# A broken engine stops alone: its rows go, the program goes on.
+key ctrl+k
+wait 6
+text demo engine crash
+wait 8
+key Enter
+wait 10
+expect "stopped"
+shot stopped
+key ctrl+k
+wait 6
+text demo engine ping
+wait 8
+expect "No match"
+key Escape
+check_layout

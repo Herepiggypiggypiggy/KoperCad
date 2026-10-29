@@ -312,9 +312,9 @@ fn a_hand_edited_registry_cannot_point_outside_the_folder() {
     )
     .unwrap();
     let set = store.scan();
-    assert!(set.warnings.iter().any(|w| w.contains("unusable names")));
-    assert_eq!(set.entries.len(), 1);
-    assert!(matches!(set.entries[0].status, Status::Failed(_)));
+    assert!(set.warnings.iter().any(|w| w.contains("unusable")));
+    // a version that is not a version is dropped on load, never joined to a path
+    assert!(set.entries.is_empty());
 }
 
 #[test]
@@ -533,4 +533,40 @@ fn a_stale_lock_from_a_crashed_program_does_not_block() {
         .unwrap();
     store.set_enabled("demo", false).unwrap();
     assert!(!lock.exists());
+}
+
+#[test]
+fn files_a_file_manager_drops_in_do_not_fail_an_add_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    store
+        .install_bytes(&package("demo", "1.0.0", "x", false), tick())
+        .unwrap();
+    let folder = dir.path().join("addons").join("demo").join("1.0.0");
+    std::fs::write(folder.join("Thumbs.db"), "x").unwrap();
+    std::fs::write(folder.join("data").join("desktop.ini"), "x").unwrap();
+    assert!(store.scan().is_enabled("demo"));
+}
+
+#[test]
+fn a_version_in_the_registry_that_is_not_a_version_is_ignored() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    store
+        .install_bytes(&package("demo", "1.0.0", "x", false), tick())
+        .unwrap();
+    let registry = dir.path().join("addons").join("registry.toml");
+    let text = std::fs::read_to_string(&registry).unwrap();
+    std::fs::write(
+        &registry,
+        text.replace("active = \"1.0.0\"", "active = \"../../x\""),
+    )
+    .unwrap();
+    let set = store.scan();
+    assert!(set.entries.is_empty());
+    assert!(
+        set.warnings.iter().any(|w| w.contains("versions")),
+        "{:?}",
+        set.warnings
+    );
 }

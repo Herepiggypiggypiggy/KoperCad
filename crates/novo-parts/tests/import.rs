@@ -216,6 +216,46 @@ fn imports_the_downloaded_file_and_a_bmecat_catalog() {
 }
 
 #[test]
+fn a_bmecat_catalog_that_lists_a_cad_file_lets_add_cad_files_match_it_to_the_part() {
+    let lib_dir = tempfile::tempdir().unwrap();
+    let downloads = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(lib_dir.path());
+    let f = ScriptedFetcher::default();
+    let src = SourceTable::default();
+    let xml = downloads.path().join("catalog.xml");
+    fs::write(
+        &xml,
+        r#"<BMECAT version="2005"><HEADER><SUPPLIER><SUPPLIER_NAME>Phoenix Contact GmbH &amp; Co. KG</SUPPLIER_NAME></SUPPLIER></HEADER>
+<T_NEW_CATALOG><PRODUCT><SUPPLIER_PID>3044076</SUPPLIER_PID>
+<PRODUCT_DETAILS><DESCRIPTION_SHORT>Terminal block</DESCRIPTION_SHORT></PRODUCT_DETAILS>
+<MIME_INFO><MIME><MIME_SOURCE>https://example.invalid/cad/Drawing-0042.stp</MIME_SOURCE></MIME></MIME_INFO>
+</PRODUCT></T_NEW_CATALOG></BMECAT>"#,
+    )
+    .unwrap();
+    let mut job = ImportJob::new(&lib, &src, &f, "Phoenix Contact", "3044076", "2026-10-28");
+    let ImportState::Done(out) = job.import_file(&xml, ImportFlow::Downloads).clone() else {
+        panic!()
+    };
+    assert!(
+        out.notes
+            .iter()
+            .any(|n| n.contains("lists 1 CAD file name")),
+        "{:?}",
+        out.notes
+    );
+    // The links follow the part as the recipe left it.
+    let links = CadLinks::load(lib_dir.path());
+    assert_eq!(links.listed_file("drawing-0042.stp"), &[out.parts[0].key()]);
+
+    let mut catalog = Catalog::new();
+    catalog.upsert(out.parts[0].clone());
+    let id = CadIdentity::from_file_name("Drawing-0042.stp");
+    let ranked = rank(&id, &catalog, &links, 5);
+    assert_eq!(ranked.len(), 1);
+    assert_eq!(ranked[0].verdict, Verdict::Likely);
+}
+
+#[test]
 fn stored_names_cannot_escape_the_library() {
     let dir = tempfile::tempdir().unwrap();
     let lib = LocalLibrary::at(dir.path().join("lib"));

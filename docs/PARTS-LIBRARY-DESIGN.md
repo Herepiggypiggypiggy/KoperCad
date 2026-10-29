@@ -493,6 +493,15 @@ its technical data and every price. What changed, and the rules behind it:
   without an order number (listed), the table import's order-number check, and a
   part found in two files with different price or description (both files named).
 
+- **CAD files the catalog lists (follow-up, 2026-10-29).** `ListedCadFile` (part key,
+  file name, source) is read from `MIME_SOURCE` of each article (STEP, DXF, EDZ, ZIP
+  only; at most ten per article). The key follows the part after the maker recipe has
+  renamed the maker. `CadLinks` gained `listed` rows (file name upper case, part key;
+  the `format` stays 1, older files load) and the download set of a listed name
+  (`listed_sets`). Scores: `LISTED_FILE` 90 (above a hand-made set link 85, below the
+  order number 100) and `LISTED_SET` 75, both Likely, never Verified. Written by
+  `import_inbox` (not on a dry run) and by the one-click `ImportJob`.
+
 How the user does it: `PARTS-BULK-IMPORT.md` (Parts window > More > Install ETIM
 release, or `kopercad-cli parts etim <file>`).
 

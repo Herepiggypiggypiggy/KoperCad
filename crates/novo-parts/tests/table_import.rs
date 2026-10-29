@@ -818,3 +818,46 @@ fn prices_in_every_spelling_are_read_exactly_or_refused() {
         assert_eq!(got, *want, "price `{raw}`");
     }
 }
+
+#[test]
+fn one_row_with_stray_extra_cells_does_not_become_the_header() {
+    // The report's file: a four-column header and one row of seven cells.
+    let sheet = csv_sheet(
+        "Manufacturer,Order number,Description,Price\nAcme,RG-1,short row\nAcme,RG-2,long row,5.00,extra,extra2,extra3\nAcme\n,,,\nAcme,RG-5,ok,1.00\n",
+    );
+    assert_eq!(guess_header_row(&sheet), 0);
+    // The wide row last, or very wide: still the first line.
+    let last = csv_sheet(
+        "Manufacturer,Order number,Description,Price\nAcme,A-1,x,1.00\nAcme,A-2,y,2.00\nAcme,A-3,z,3.00,1,2,3\n",
+    );
+    assert_eq!(guess_header_row(&last), 0);
+    let wide = csv_sheet(
+        "Manufacturer,Order number,Description,Price\nAcme,A-1,x,1.00\nAcme,A-2,y,2.00,a,b,c,d,e,f\n",
+    );
+    assert_eq!(guess_header_row(&wide), 0);
+    let mapping = Mapping::suggest(&sheet, 0);
+    assert_eq!(*target_of(&mapping, "Order number"), Target::OrderNumber);
+}
+
+#[test]
+fn a_title_line_is_still_skipped_when_a_row_has_extra_cells() {
+    let sheet = csv_sheet(
+        "Price list 2026 (example; not real)\nMaker;Order number;Description;Price\nAcme;A-1;x;1,00\nAcme;A-2;y;2,00;a;b;c;d\nAcme;A-3;z;3,00\n",
+    );
+    assert_eq!(guess_header_row(&sheet), 1);
+}
+
+#[test]
+fn an_absurd_or_tiny_price_is_not_taken_silently() {
+    let sheet = csv_sheet(
+        "Maker,Order number,Price\nAcme,P-1,99999999999999\nAcme,P-2,\"0,001\"\nAcme,P-3,\"12,50\"\n",
+    );
+    let p = preview(&sheet, &Mapping::suggest(&sheet, 0));
+    let text = p.render("parts.csv");
+    let part = |o: &str| p.parts.iter().find(|x| x.order_number == o).unwrap();
+    assert!(part("P-1").price.is_none(), "{text}");
+    assert!(text.contains("too large to be a price"), "{text}");
+    assert!(part("P-2").price.is_some());
+    assert!(text.contains("unusually low"), "{text}");
+    assert_eq!(part("P-3").price.as_ref().unwrap().amount, 12.5);
+}

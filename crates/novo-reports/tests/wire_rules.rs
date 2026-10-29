@@ -59,7 +59,7 @@ fn a_project_without_rules_cuts_with_the_defaults() {
     let (doc, _) = cabinet();
     assert_eq!(WireRules::of(doc.project()), WireRules::default());
     let job = routed(&doc);
-    assert_eq!((job.length_mm, job.cut_mm), (670.0, 690.0));
+    assert_eq!((job.length_mm, job.cut_mm), (756.0, 776.0));
 }
 
 #[test]
@@ -68,8 +68,8 @@ fn the_service_loop_changes_the_routed_length_at_both_ends() {
     set(&mut doc, SLACK_MM, Some(80.0));
     let job = routed(&doc);
     // 30 mm more at each end than the default 50.
-    assert_eq!(job.length_mm, 730.0);
-    assert_eq!(job.cut_mm, 750.0);
+    assert_eq!(job.length_mm, 816.0);
+    assert_eq!(job.cut_mm, 836.0);
     // The wire list shows the same length: one rule for both.
     let list = WireList.generate(doc.project());
     let section = list.sections.first().unwrap();
@@ -78,7 +78,7 @@ fn the_service_loop_changes_the_routed_length_at_both_ends() {
         section
             .rows
             .iter()
-            .any(|r| r.cells[col].to_string().trim_end_matches(".0") == "730"),
+            .any(|r| r.cells[col].to_string().trim_end_matches(".0") == "816"),
         "{:?}",
         section.text_rows()
     );

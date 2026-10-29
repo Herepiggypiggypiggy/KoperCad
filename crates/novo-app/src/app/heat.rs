@@ -449,6 +449,16 @@ impl HeatState {
         self.run.is_some() && self.cancel_at.is_some()
     }
 
+    /// The notice after Cancel: with an earlier result on screen it is the one
+    /// that stays; without one there is nothing to show and it says so.
+    fn stopped_notice(&self) -> String {
+        if self.solution.is_some() {
+            "Stopped: the last result is not converged".into()
+        } else {
+            "Stopped: no result yet".into()
+        }
+    }
+
     /// Takes in what the worker has published. Called every frame.
     pub(super) fn poll(&mut self, ctx: &egui::Context) {
         self.poll_time(ctx);
@@ -497,9 +507,7 @@ impl HeatState {
                         // A run replaced by one for the edited cabinet is
                         // not worth a warning.
                         Outcome::Cancelled if self.live.take_superseded() => None,
-                        Outcome::Cancelled => {
-                            Some("Stopped: the last result is not converged".into())
-                        }
+                        Outcome::Cancelled => Some(self.stopped_notice()),
                         Outcome::Failed(e) => Some(format!("The simulation failed: {e}")),
                     };
                 }
@@ -514,7 +522,7 @@ impl HeatState {
             // flag: let it go (dropping the run cancels it once more) so the
             // person is not left with a Cancel that does nothing.
             done = true;
-            self.notice = Some("Stopped: the last result is not converged".into());
+            self.notice = Some(self.stopped_notice());
         }
         if done {
             self.run = None;
@@ -1181,6 +1189,16 @@ pub(super) fn items_of(
         .collect()
 }
 
+/// The longest enclosure side the heat run takes, mm: the engine's own
+/// limit, checked here because the 3D solver path does not call it.
+const MAX_SIDE_MM: f64 = 20_000.0;
+
+fn too_big(e: &novo_thermal::Enclosure) -> bool {
+    [e.width_mm, e.height_mm, e.depth_mm]
+        .iter()
+        .any(|v| !(v.is_finite() && *v <= MAX_SIDE_MM))
+}
+
 /// Builds the scenario of the enclosure from the project and starts a run.
 /// Says plainly when it cannot.
 pub(super) fn start_run(
@@ -1196,6 +1214,12 @@ pub(super) fn start_run(
         ..Default::default()
     };
     match novo_thermal::bridge::scenario_from_project(project, enclosure, &options) {
+        Ok(bridge) if too_big(&bridge.scenario.enclosure) => {
+            state.fail(format!(
+                "Cannot simulate: the enclosure is over {} m on one side; check its size in Cabinet > Size enclosure",
+                MAX_SIDE_MM / 1000.0
+            ));
+        }
         Ok(mut bridge) => {
             state.settings.apply(&mut bridge.scenario);
             let plate = bridge.scenario.enclosure.plate;
@@ -2243,6 +2267,7 @@ fn legend(
 
 #[cfg(test)]
 mod tests {
+    use super::too_big;
     use super::*;
 
     #[test]
@@ -2610,8 +2635,8 @@ mod tests {
             state
                 .notice
                 .as_deref()
-                .is_some_and(|n| n.starts_with("Stopped")),
-            "{:?}",
+                .is_some_and(|n| n == "Stopped: no result yet"),
+            "no result exists, so it says so: {:?}",
             state.notice
         );
     }
@@ -2705,6 +2730,28 @@ mod tests {
         let p = &sol.snapshot.progress;
         assert!(status_label(p, false).ends_with("not validated"));
         assert!(status_label(p, true).ends_with("converged"));
+    }
+
+    #[test]
+    fn the_legend_words_the_heat_lesson_quotes_are_the_legends() {
+        let lesson = include_str!("../../../../assets/lessons/heat-and-sizing/lesson.toml");
+        let mut state = HeatState::new();
+        let i = input();
+        state.start(scenario(), meta(&i));
+        run_to_end(&mut state);
+        let mut p = state.solution().unwrap().snapshot.progress.clone();
+        p.fidelity = novo_cfd::Fidelity::Coarse;
+        for said in [
+            PREVIEW_NOTE,
+            status_label(&p, false).as_str(),
+            "Out of date: the layout changed since this run",
+            "no loss data (shown dashed)",
+            "No heat picture yet",
+            "Stopping…",
+        ] {
+            assert!(lesson.contains(said), "the lesson does not quote: {said}");
+        }
+        assert!(!lesson.contains("Preview model from the part losses"));
     }
 
     #[test]
@@ -2844,5 +2891,28 @@ mod tests {
             card.bottom() <= canvas.bottom() && card.top() >= canvas.top(),
             "{card:?} leaves the canvas {canvas:?}"
         );
+    }
+
+    #[test]
+    fn an_enclosure_over_twenty_metres_is_too_big_to_simulate() {
+        let mut e = novo_thermal::Enclosure {
+            width_mm: 1000.0,
+            height_mm: 2000.0,
+            depth_mm: 300.0,
+            wall_mm: 2.0,
+            material: novo_layout::sizing::Material::Steel,
+            installation: novo_layout::sizing::Installation::Wall,
+            plate: novo_layout::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 800.0,
+                h: 1800.0,
+            },
+        };
+        assert!(!too_big(&e));
+        e.height_mm = 25_000.0;
+        assert!(too_big(&e));
+        e.height_mm = f64::NAN;
+        assert!(too_big(&e));
     }
 }

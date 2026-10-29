@@ -981,6 +981,39 @@ mod tests {
         d.frame();
     }
 
+    #[test]
+    fn the_messages_the_terminals_lesson_quotes_are_the_ones_the_commands_give() {
+        let lesson = include_str!("../../../../assets/lessons/terminals-in-depth/lesson.toml");
+        let (_dir, mut d, _, _) = drive_with_strip();
+        for (command, arg, said) in [
+            (
+                "terminal.set_level",
+                Some("2"),
+                "Tick terminals in the table (or select them) first",
+            ),
+            (
+                "terminal.set_jumper",
+                Some("1"),
+                "Tick terminals in the table (or select them) first",
+            ),
+            (
+                "terminal.restore_declined",
+                None,
+                "No declined terminal proposals",
+            ),
+        ] {
+            d.app.wb.terminal_edit.rows.clear();
+            d.app.terminal_edit_command(command, arg);
+            assert_eq!(d.app.messages().last().unwrap().text, said, "{command}");
+            assert!(lesson.contains(said), "the lesson does not quote: {said}");
+        }
+        assert!(
+            lesson.contains("No duplicate terminals on this strip"),
+            "the join step quotes the empty message"
+        );
+        assert_eq!(join_message(0), "No duplicate terminals on this strip");
+    }
+
     fn terminal_ids(d: &Drive, strip: DeviceId) -> Vec<TerminalId> {
         d.app
             .backend

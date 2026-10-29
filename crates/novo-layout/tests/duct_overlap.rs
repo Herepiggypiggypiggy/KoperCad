@@ -2,7 +2,7 @@
 //! the ducts that are already on the plate.
 
 use novo_layout::plan::Plan;
-use novo_layout::rules::{Gaps, RuleSet, Spec, place_all_around, place_all_explained};
+use novo_layout::rules::{Gaps, RuleSet, Spec, UnplacedWhy, place_all_around, place_all_explained};
 use novo_layout::state::CabinetLayout;
 use novo_layout::{Duct, DuctHit, Margins, Placement, Plate, Rail, Rect, Size, duct_overlaps};
 
@@ -292,4 +292,30 @@ fn the_ducts_place_all_plans_do_not_trip_the_check() {
         .collect();
     assert!(!ducts.is_empty());
     clear_of_ducts(&plan, &specs, &ducts);
+}
+
+#[test]
+fn a_device_that_fits_a_free_band_by_size_is_never_too_large() {
+    // A duct across the plate leaves a tall band and a low one. The three
+    // devices fill the tall band; the fourth fits it by size but has no room
+    // left, and the low band (tried last) is too low for it. The reason is
+    // "no room", not the last band's "too large".
+    let plate = Plate {
+        width: 300.0,
+        height: 300.0,
+        margin: 10.0,
+    };
+    let duct = Rect {
+        x: 0.0,
+        y: 200.0,
+        w: 300.0,
+        h: 30.0,
+    };
+    let specs: Vec<Spec> = (1..=4).map(|i| spec(i, "K", 120.0, 120.0)).collect();
+    let (plan, why) = place_all_around(&plate, &specs, &RuleSet::standard(), 1, 0.0, &[duct]);
+    assert!(!plan.unplaced.is_empty(), "the plate cannot take four");
+    for (id, reason) in &why.unplaced {
+        assert!(plan.unplaced.contains(id));
+        assert_eq!(*reason, UnplacedWhy::NoRoom, "device {id}");
+    }
 }

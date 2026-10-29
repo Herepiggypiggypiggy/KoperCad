@@ -23,15 +23,41 @@ pub fn keymap_path() -> Option<PathBuf> {
 /// skipped entry. A missing or unreadable file means the defaults.
 pub fn load(path: &Path) -> (Keymap, Vec<String>) {
     let mut keymap = Keymap::workflow();
-    let Ok(text) = std::fs::read_to_string(path) else {
+    let Ok(bytes) = std::fs::read(path) else {
         return (keymap, Vec::new());
     };
+    let text = decode(&bytes);
     let notes = keymap
         .apply_user_file(&text)
         .into_iter()
         .map(|p| format!("line {}: {}", p.line, p.message))
         .collect();
     (keymap, notes)
+}
+
+/// The file's text: UTF-8 (a byte order mark is dropped), or UTF-16 with its
+/// mark, which Notepad's "Unicode" save writes.
+fn decode(bytes: &[u8]) -> String {
+    let utf16 = |rest: &[u8], le: bool| {
+        let (pairs, _) = rest.as_chunks::<2>();
+        let units: Vec<u16> = pairs
+            .iter()
+            .map(|&pair| {
+                if le {
+                    u16::from_le_bytes(pair)
+                } else {
+                    u16::from_be_bytes(pair)
+                }
+            })
+            .collect();
+        String::from_utf16_lossy(&units)
+    };
+    match bytes {
+        [0xFF, 0xFE, rest @ ..] => utf16(rest, true),
+        [0xFE, 0xFF, rest @ ..] => utf16(rest, false),
+        [0xEF, 0xBB, 0xBF, rest @ ..] => String::from_utf8_lossy(rest).into_owned(),
+        _ => String::from_utf8_lossy(bytes).into_owned(),
+    }
 }
 
 /// What a new keymap file starts with: the format, as comments, so there is
@@ -168,5 +194,26 @@ mod tests {
         let (map, notes) = load(&path);
         assert_eq!(map.shortcut_text("tool.cable").as_deref(), Some("F6"));
         assert_eq!(notes, vec!["line 2: unknown command `bogus`".to_string()]);
+    }
+
+    #[test]
+    fn a_file_with_a_byte_order_mark_or_in_utf16_is_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(KEYMAP_FILE);
+        let mut utf8 = vec![0xEF, 0xBB, 0xBF];
+        utf8.extend_from_slice(b"tool.cable = F6\r\n");
+        std::fs::write(&path, utf8).unwrap();
+        let (map, notes) = load(&path);
+        assert!(notes.is_empty(), "{notes:?}");
+        assert_eq!(map.shortcut_text("tool.cable").as_deref(), Some("F6"));
+
+        let mut utf16 = vec![0xFF, 0xFE];
+        for unit in "tool.cable = F7\r\n".encode_utf16() {
+            utf16.extend_from_slice(&unit.to_le_bytes());
+        }
+        std::fs::write(&path, utf16).unwrap();
+        let (map, notes) = load(&path);
+        assert!(notes.is_empty(), "{notes:?}");
+        assert_eq!(map.shortcut_text("tool.cable").as_deref(), Some("F7"));
     }
 }

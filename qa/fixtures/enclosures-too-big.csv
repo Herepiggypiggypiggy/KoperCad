@@ -1,0 +1,3 @@
+name;width;height;depth;plate width;plate height;margin;material
+Small box;400;500;210;350;450;10;steel
+Huge box;20000;500;210;350;450;10;steel

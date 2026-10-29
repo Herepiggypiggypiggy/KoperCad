@@ -1,0 +1,5 @@
+# Example gallery handoff
+
+Branch `claude/project-thread-g1iblv`. Add an example: write `example_<name>.rs` with `build_<name>_example(doc)` using `Kit`, `Parts`, `finish`; add an `Action::Open<Name>Example` (actions.rs, app.rs Leaving + run, example.rs open fn), a command in novo-workflow `commands.rs`, placement `under("File","Examples")` in `menus.rs`, a Dutch `nl(...)` entry in `language.rs` (a test demands it), and one line in `GALLERY`. The gallery tests then cover it.
+Look at it: `scripts/qa.sh --only 700-gallery` (needs openbox, mesa-vulkan-drivers, libxkbcommon-x11-0), or `EXAMPLE_PDF_DIR=/tmp cargo test -p novo-app --lib example_gallery_pdf` (boxes only, no symbols).
+Traps: stop/start tags must not collide with the e-stop tag; pins leave in their direction, give crossing wires `wire_via` corners; the example cabinet front clearance is 1000 mm (the starter example keeps 400).

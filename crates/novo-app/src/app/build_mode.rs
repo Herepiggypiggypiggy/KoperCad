@@ -16,6 +16,7 @@
 use std::rc::Rc;
 
 use eframe::egui;
+use novo_checks::Summary;
 use novo_commissioning::{
     BuildPhase, BuildPlan, BuildStep, CabinetPlan, Next, StepStatus, claim_step, mark_done,
     mark_problem, release_step, undo_build,
@@ -52,6 +53,10 @@ pub(crate) struct BuildState {
     pub(super) away: bool,
     /// Steps ticked in this session, newest last, for Back.
     history: Vec<novo_commissioning::StepKey>,
+    /// Open design-check errors and warnings (the Issues list) of the
+    /// current revision, shown on the first step so Build mode and Issues
+    /// tell the same story. `None` while the checks have not run.
+    issues: Option<(usize, usize)>,
 }
 
 impl BuildState {
@@ -65,6 +70,7 @@ impl BuildState {
             large,
             away: false,
             history: Vec::new(),
+            issues: None,
         }
     }
 }
@@ -93,6 +99,8 @@ struct Asked {
     changed: bool,
     /// The Done button was pressed (or its keys), for the lesson.
     done: bool,
+    /// "Show issues" was pressed on the first step.
+    show_issues: bool,
     /// Where the step controls were drawn, for the lesson pointer.
     done_rect: Option<egui::Rect>,
     problem_rect: Option<egui::Rect>,
@@ -160,6 +168,13 @@ impl NovoApp {
             .map(|m| m.who.clone())
             .unwrap_or_default();
         let name = self.project_name().unwrap_or_default();
+        state.issues = {
+            let summary = Summary::of(self.shown_problems());
+            self.wb
+                .problems
+                .is_some()
+                .then_some((summary.errors, summary.warnings))
+        };
         if let (Some(doc), Some(mode)) = (self.backend.document(), self.wb.commissioning.as_mut()) {
             let project = doc.project();
             let stale = state
@@ -236,6 +251,9 @@ impl NovoApp {
         }
         if asked.done {
             self.learn_signal("build_step_done");
+        }
+        if asked.show_issues {
+            self.outline_mode = super::OutlineMode::Issues;
         }
         if asked.pick_photos
             && let Some(paths) = Self::pick_photo_files()
@@ -771,6 +789,24 @@ fn card(
             if let Some(caution) = &step.caution {
                 ui.add_space(8.0);
                 widgets::banner(ui, Tone::Warning, caution, |_| {});
+            }
+            // The step above judges the cabinet layout only; the schematic's
+            // own errors and warnings are in Issues.
+            if step.phase == BuildPhase::Prepare
+                && let Some((errors, warnings)) = state.issues
+                && errors + warnings > 0
+            {
+                ui.add_space(8.0);
+                let text = format!(
+                    "The design has {errors} error{} and {warnings} warning{} in Issues. They can change what you build.",
+                    if errors == 1 { "" } else { "s" },
+                    if warnings == 1 { "" } else { "s" },
+                );
+                widgets::banner(ui, Tone::Warning, &text, |ui| {
+                    if widgets::ghost_button(ui, "Show issues").clicked() {
+                        asked.show_issues = true;
+                    }
+                });
             }
             // What this step waits for.
             let waiting: Vec<usize> = step
