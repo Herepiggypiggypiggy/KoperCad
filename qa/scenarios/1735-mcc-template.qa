@@ -17,7 +17,7 @@ shot options-six-feeders-reversing
 click_text "Create project"
 wait 30
 shot template-opened
-expect "New motor control centre project"
+expect "Control supply"
 check_layout
 key PageDown
 wait 12
