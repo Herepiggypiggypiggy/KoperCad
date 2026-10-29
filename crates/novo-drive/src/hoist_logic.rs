@@ -100,9 +100,30 @@ impl LoadSense {
     }
 }
 
+/// Reversal with the brake kept open ("jump at reversal"): a change of direction in the running
+/// phase does not close the brake; the drive passes the low frequencies around zero with a
+/// short ramp so that the load is not left without torque for long.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReversalJump {
+    /// Below this frequency (either side of zero) the fast ramp is used, Hz.
+    pub jump_hz: f64,
+    /// Ramp time to the motor frequency used in that band, s (shorter than the normal ramp).
+    pub ramp_time_s: f64,
+}
+
+impl ReversalJump {
+    pub fn validate(&self) -> Result<(), InputError> {
+        error::positive("jump_hz", self.jump_hz)?;
+        error::positive("jump_ramp_time_s", self.ramp_time_s)?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct HoistLogicConfig {
     pub brake: BrakeLogic,
+    /// `None`: a reversal is a full brake cycle (stop, close the brake, restart).
+    pub jump: Option<ReversalJump>,
     /// Frequency of each speed step, slowest first (one to four steps). Step 0 runs when only
     /// a direction is given, step `k` when the k-th speed input is also on.
     pub steps_hz: Vec<f64>,
@@ -128,6 +149,20 @@ impl HoistLogicConfig {
         error::positive("rated_torque_nm", self.rated_torque_nm)?;
         if let Some(s) = &self.sense {
             s.validate()?;
+        }
+        if let Some(j) = &self.jump {
+            j.validate()?;
+            // The reversal ends when the frequency rises above the band, so the slowest step
+            // must lie above it.
+            let lowest = self.steps_hz.iter().copied().fold(f64::INFINITY, f64::min);
+            if j.jump_hz >= lowest {
+                return Err(InputError::OutOfRange {
+                    field: "jump_hz (must be below the slowest speed step)",
+                    value: j.jump_hz,
+                    min: 0.0,
+                    max: lowest,
+                });
+            }
         }
         Ok(())
     }
@@ -166,6 +201,10 @@ pub enum LogicEvent {
         limited_by_motor: bool,
     },
     Fault(LogicFault),
+    /// A reversal with the brake kept open has started.
+    ReversalStarted,
+    /// The drive has passed the low-frequency band and runs in the new direction.
+    ReversalDone,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -194,6 +233,8 @@ pub struct LogicOutput {
     /// The drive's brake relay: on means "open the brake".
     pub brake_relay: bool,
     pub phase: LogicPhase,
+    /// Ramp time to use now instead of the drive's own (the fast pass of a reversal).
+    pub ramp_time_s: Option<f64>,
     pub events: Vec<LogicEvent>,
 }
 
@@ -232,6 +273,8 @@ pub struct HoistLogic {
     /// Direction of the cycle that is running: `true` = up.
     up: bool,
     sense: Sense,
+    /// A reversal with the brake open is under way; `true` once the low band was entered.
+    reversing: Option<bool>,
 }
 
 impl HoistLogic {
@@ -244,6 +287,7 @@ impl HoistLogic {
             },
             up: true,
             sense: Sense::Unknown,
+            reversing: None,
         })
     }
 
@@ -351,13 +395,20 @@ impl HoistLogic {
                     }
                 }
             }
-            Phase::Running => {
-                if want_dir != Some(self.up) {
-                    Phase::Decelerating
-                } else {
+            Phase::Running => match (want_dir, self.cfg.jump.as_ref()) {
+                (Some(d), Some(_)) if d != self.up => {
+                    // Reversal with the brake kept open: only the direction changes.
+                    self.up = d;
+                    self.reversing = Some(false);
+                    events.push(LogicEvent::ReversalStarted);
                     Phase::Running
                 }
-            }
+                (d, _) if d != Some(self.up) => {
+                    self.reversing = None;
+                    Phase::Decelerating
+                }
+                _ => Phase::Running,
+            },
             Phase::Decelerating => {
                 if inp.frequency_hz <= b.engage_hz + HZ_TOL {
                     Phase::Engaging { t: 0.0 }
@@ -387,6 +438,21 @@ impl HoistLogic {
             }
         };
 
+        let mut ramp_time_s = None;
+        if let (Some(crossed), Some(j), Phase::Running) =
+            (self.reversing, self.cfg.jump.as_ref(), self.phase)
+        {
+            let in_band = inp.frequency_hz <= j.jump_hz;
+            if in_band {
+                self.reversing = Some(true);
+                ramp_time_s = Some(j.ramp_time_s);
+            } else if crossed {
+                self.reversing = None;
+                events.push(LogicEvent::ReversalDone);
+            }
+        } else if !matches!(self.phase, Phase::Running) {
+            self.reversing = None;
+        }
         let (run, reference_hz) = match self.phase {
             Phase::Idle { .. } | Phase::Fault(_) => (false, 0.0),
             Phase::Magnetising { .. } | Phase::Releasing { .. } => (true, b.release_hz),
@@ -406,6 +472,7 @@ impl HoistLogic {
             reference_hz,
             brake_relay,
             phase: self.phase(),
+            ramp_time_s,
             events,
         }
     }
@@ -513,6 +580,7 @@ mod tests {
 
     fn cfg() -> HoistLogicConfig {
         HoistLogicConfig {
+            jump: None,
             brake: BrakeLogic {
                 release_hz: 3.0,
                 release_current_up_a: 5.0,
@@ -789,7 +857,108 @@ mod tests {
     }
 
     #[test]
+    fn a_reversal_with_the_jump_keeps_the_brake_open_and_uses_the_fast_band() {
+        let mut c = cfg();
+        c.jump = Some(ReversalJump {
+            jump_hz: 6.0,
+            ramp_time_s: 0.3,
+        });
+        let mut l = HoistLogic::new(c).unwrap();
+        let mut i = input(true);
+        i.frequency_hz = 3.0;
+        i.motor_current_a = 6.0;
+        for _ in 0..60 {
+            l.step(&i, &flat, DT);
+        }
+        assert_eq!(l.phase(), LogicPhase::Running);
+        // Direction flips while running at 10 Hz: still running, relay on, down command.
+        i.up = false;
+        i.down = true;
+        i.frequency_hz = 10.0;
+        let o = l.step(&i, &flat, DT);
+        assert_eq!(o.phase, LogicPhase::Running);
+        assert!(o.brake_relay && o.run_down && !o.run_up);
+        assert_eq!(o.events, vec![LogicEvent::ReversalStarted]);
+        assert_eq!(
+            o.ramp_time_s, None,
+            "above the band the drive's own ramp runs"
+        );
+        // Inside the band: the fast ramp.
+        i.frequency_hz = 5.0;
+        let o = l.step(&i, &flat, DT);
+        assert_eq!(o.ramp_time_s, Some(0.3));
+        assert!(o.brake_relay);
+        // Out of the band on the other side: done, normal ramp again.
+        i.frequency_hz = 7.0;
+        let o = l.step(&i, &flat, DT);
+        assert_eq!(o.events, vec![LogicEvent::ReversalDone]);
+        assert_eq!(o.ramp_time_s, None);
+        assert!(o.brake_relay);
+    }
+
+    #[test]
+    fn without_the_jump_a_reversal_closes_the_brake() {
+        let mut l = HoistLogic::new(cfg()).unwrap();
+        let mut i = input(true);
+        i.frequency_hz = 3.0;
+        i.motor_current_a = 6.0;
+        for _ in 0..60 {
+            l.step(&i, &flat, DT);
+        }
+        i.up = false;
+        i.down = true;
+        i.frequency_hz = 10.0;
+        assert_eq!(l.step(&i, &flat, DT).phase, LogicPhase::Decelerating);
+    }
+
+    #[test]
+    fn a_stop_during_a_reversal_closes_the_brake() {
+        let mut c = cfg();
+        c.jump = Some(ReversalJump {
+            jump_hz: 6.0,
+            ramp_time_s: 0.3,
+        });
+        let mut l = HoistLogic::new(c).unwrap();
+        let mut i = input(true);
+        i.frequency_hz = 3.0;
+        i.motor_current_a = 6.0;
+        for _ in 0..60 {
+            l.step(&i, &flat, DT);
+        }
+        i.up = false;
+        i.down = true;
+        i.frequency_hz = 5.0;
+        l.step(&i, &flat, DT);
+        i.down = false;
+        assert_eq!(l.step(&i, &flat, DT).phase, LogicPhase::Decelerating);
+    }
+
+    #[test]
+    fn a_jump_band_that_reaches_the_slowest_step_is_refused() {
+        for jump_hz in [10.0, 12.0] {
+            let mut c = cfg();
+            c.jump = Some(ReversalJump {
+                jump_hz,
+                ramp_time_s: 0.3,
+            });
+            assert!(HoistLogic::new(c).is_err(), "{jump_hz} Hz");
+        }
+        let mut c = cfg();
+        c.jump = Some(ReversalJump {
+            jump_hz: 9.9,
+            ramp_time_s: 0.3,
+        });
+        assert!(HoistLogic::new(c).is_ok());
+    }
+
+    #[test]
     fn invalid_settings_are_refused() {
+        let mut c = cfg();
+        c.jump = Some(ReversalJump {
+            jump_hz: 0.0,
+            ramp_time_s: 0.3,
+        });
+        assert!(HoistLogic::new(c).is_err());
         let mut c = cfg();
         c.steps_hz.clear();
         assert!(HoistLogic::new(c).is_err());
