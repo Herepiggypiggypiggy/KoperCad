@@ -1,0 +1,38 @@
+# Maintenance socket on a residual current breaker with overcurrent trip.
+name = "Maintenance socket with RCBO"
+chapter = "supply"
+description = "Single-phase maintenance socket outlet behind a residual current breaker with overcurrent protection, for service tools on a crane or pump station"
+tags = ["socket", "maintenance", "service", "rcbo", "rcd", "residual current", "230 V", "tools", "crane", "pump"]
+notes = """Wiring example for a service socket: the RCBO trips on a residual current and on overload, so a faulty tool does not take the machine supply down. \\
+Choose the RCBO rating (residual current, curve, current) from the socket and the local rules. This is a wiring example, not a validated design. \\
+You connect: line and neutral above the RCBO and PE above the PE terminal, from a 230 V supply that stays on when the main switch is off."""
+
+open = ["f1s.1,N", "pe1.1"]
+
+device = [
+  { id = "f1", tag = "-F1", description = "RCBO 1P+N", mount = { kind = "din", size = [36, 90, 70], at = [15, 55], rail = "r1" } },
+  { id = "x1", tag = "-X1", description = "Maintenance socket", mount = { kind = "door", size = [60, 60, 50], at = [20, 20] } },
+  { id = "x2", tag = "-X2", description = "PE terminal", mount = { kind = "din", size = [8, 50, 40], at = [60, 75], rail = "r1" } },
+]
+
+symbol = [
+  { id = "f1s", key = "iec/protection/rcbo_2p", at = [40, 40], device = "f1" },
+  { id = "s1s", key = "iec/terminals/socket_outlet", at = [40, 88], device = "x1" },
+  { id = "pe1", key = "iec/terminals/terminal_pe", at = [76, 72], device = "x2" },
+]
+
+wire = [
+  { from = "f1s.2", to = "s1s.L" },
+  { from = "f1s.N'", to = "s1s.N" },
+  { from = "pe1.2", to = "s1s.PE" },
+]
+
+[plate]
+width = 85
+height = 200
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 70

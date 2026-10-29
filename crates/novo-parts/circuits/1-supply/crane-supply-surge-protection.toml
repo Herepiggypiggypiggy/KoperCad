@@ -1,0 +1,65 @@
+# Crane supply with surge protection: switch-disconnector, fuses, one surge
+# arrester per phase to earth, and terminals for the feeders.
+name = "Crane supply with surge protection"
+chapter = "supply"
+description = "Crane supply from a conductor rail or festoon cable with switch-disconnector, three fuses, a surge arrester per phase to earth and output terminals"
+tags = ["crane", "supply", "conductor rail", "collector", "festoon", "surge arrester", "spd", "overvoltage", "isolator", "fuse", "terminals"]
+notes = """Wiring example for the incoming supply of a crane or other machine fed over sliding contacts: isolator, fuses, and a surge arrester from each phase to earth after the fuses. \\
+Collector rails and festoon cables can pick up switching surges and lightning from the line, so many installations add this; whether you need it and which arrester class fits depends on the site and the maker's data. \\
+Keep the earth leads of the arresters short. Choose the fuses from the total crane load. This is a wiring example, not a validated supply or lightning protection design. \\
+You connect: L1 L2 L3 above S1 (from the collectors or the festoon cable), PE above the PE terminal, and the feeders below the three terminals X1 to X3."""
+
+open = ["s1s.1,3,5", "x1s.2", "x2s.2", "x3s.2", "pe1.1"]
+
+device = [
+  { id = "s1", tag = "-S1", description = "Crane isolator", mount = { kind = "din", size = [54, 90, 70], at = [15, 55], rail = "r1" } },
+  { id = "f1", tag = "-F1", description = "Main fuses", mount = { kind = "din", size = [54, 90, 70], at = [75, 55], rail = "r1" } },
+  { id = "f2", tag = "-F2", description = "Surge arrester L1", mount = { kind = "din", size = [18, 90, 70], at = [135, 55], rail = "r1" } },
+  { id = "f3", tag = "-F3", description = "Surge arrester L2", mount = { kind = "din", size = [18, 90, 70], at = [155, 55], rail = "r1" } },
+  { id = "f4", tag = "-F4", description = "Surge arrester L3", mount = { kind = "din", size = [18, 90, 70], at = [175, 55], rail = "r1" } },
+  { id = "x1", tag = "-X1", description = "Feeder terminals L1 L2 L3", mount = { kind = "din", size = [30, 50, 40], at = [200, 75], rail = "r1" } },
+  { id = "x2", tag = "-X2", description = "PE terminal", mount = { kind = "din", size = [8, 50, 40], at = [235, 75], rail = "r1" } },
+]
+
+symbol = [
+  { id = "s1s", key = "iec/switches/switch_disconnector_3p", at = [40, 40], device = "s1" },
+  { id = "f1s", key = "iec/protection/fuse_3p", at = [40, 72], device = "f1" },
+  { id = "x1s", key = "iec/terminals/terminal", at = [40, 116], device = "x1" },
+  { id = "x2s", key = "iec/terminals/terminal", at = [48, 116], device = "x1", main = false },
+  { id = "x3s", key = "iec/terminals/terminal", at = [56, 116], device = "x1", main = false },
+  { id = "f2s", key = "iec/protection/surge_arrester", at = [116, 92], device = "f2" },
+  { id = "f3s", key = "iec/protection/surge_arrester", at = [108, 100], device = "f3" },
+  { id = "f4s", key = "iec/protection/surge_arrester", at = [100, 108], device = "f4" },
+  { id = "pe1", key = "iec/terminals/terminal_pe", at = [132, 118], device = "x2" },
+]
+
+junction = [
+  { id = "ja", at = [40, 92] },
+  { id = "jb", at = [48, 100] },
+  { id = "jc", at = [56, 108] },
+]
+
+chain = [
+  { path = "s1s.2,4,6 > f1s.1,3,5" },
+]
+
+wire = [
+  { from = "f1s.2", to = "ja" }, { from = "ja", to = "x1s.1" }, { from = "ja", to = "f2s.1" },
+  { from = "f1s.4", to = "jb" }, { from = "jb", to = "x2s.1" }, { from = "jb", to = "f3s.1" },
+  { from = "f1s.6", to = "jc" }, { from = "jc", to = "x3s.1" }, { from = "jc", to = "f4s.1" },
+  { from = "pe1.2", to = "f2s.PE", via = [[132, 134], [116, 134]] },
+]
+
+bus = [
+  { y = 134, taps = ["f4s.PE", "f3s.PE", "f2s.PE"] },
+]
+
+[plate]
+width = 250
+height = 200
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 240

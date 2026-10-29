@@ -13,5 +13,8 @@ Pictures per circuit (picked in the Place window with the mounting view, then pl
 | 17106 | Hoist drive with encoder speed feedback |
 | 17107 | Pump feeder frequency controlled |
 | 17108 | Pump level control with dry-run protection |
+| 17109 | Crane supply with surge protection |
+| 17110 | Pump duty alternation with impulse relay |
+| 17111 | Maintenance socket with RCBO |
 
 Run: `scripts/qa.sh --only 1710 --out /mnt/project-files/qa/pr-circuits<batch>-<sha8>`, then write the full head sha to `HEAD.txt`.
