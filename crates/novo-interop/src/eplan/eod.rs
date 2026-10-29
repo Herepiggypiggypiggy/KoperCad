@@ -157,13 +157,14 @@ fn records(bytes: &[u8], limit: Option<usize>) -> impl Iterator<Item = Fields> +
                 at += 1;
                 continue;
             }
+            // A valid stream is skipped whole, article or not, so a file of
+            // many large non-article streams is decoded once, not once per byte.
+            at += usize::try_from(decoder.total_in()).unwrap_or(1).max(1);
             let fields = fields_of(&raw);
             if fields.contains_key(&0xf1) {
-                at += usize::try_from(decoder.total_in()).unwrap_or(1).max(1);
                 found += 1;
                 return Some(fields);
             }
-            at += 1;
         }
         None
     })
@@ -453,6 +454,26 @@ mod tests {
         let read = import_eod(&bytes, &MakerAliases::builtin(), "rittal").unwrap();
         assert_eq!(read.report.parts[0].manufacturer, "Rittal");
         assert_eq!(read.report.parts[0].order_number, "ABC123");
+    }
+
+    #[test]
+    fn streams_that_are_not_articles_are_skipped_whole() {
+        // 200 large non-article streams: each is decoded once.
+        let mut bytes = Vec::new();
+        for _ in 0..200 {
+            bytes.extend_from_slice(&record_raw(&vec![b'a'; 100_000]));
+        }
+        bytes.extend_from_slice(&record(&[(0xf1, "SE.LAST"), (0xf4, "Last")]));
+        let started = std::time::Instant::now();
+        let read = import_eod(&bytes, &MakerAliases::builtin(), "").unwrap();
+        assert_eq!(read.report.parts.len(), 1);
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    }
+
+    fn record_raw(raw: &[u8]) -> Vec<u8> {
+        let mut z = ZlibEncoder::new(Vec::new(), Compression::best());
+        z.write_all(raw).unwrap();
+        z.finish().unwrap()
     }
 
     #[test]

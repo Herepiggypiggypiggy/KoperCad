@@ -203,6 +203,9 @@ impl EplanPartsImport {
     }
 }
 
+/// Largest file read into memory.
+const MAX_FILE_BYTES: u64 = 1_000_000_000;
+
 /// Holds the read for `KOPERCAD_QA_SLOW_READ_MS` milliseconds (at most a
 /// minute) so a QA scenario can photograph the window while it reads.
 fn qa_hold() {
@@ -222,6 +225,14 @@ fn read_job(
     catalog_path: Option<PathBuf>,
 ) -> Result<EplanPartsImport, String> {
     qa_hold();
+    let size = std::fs::metadata(path).map_or(0, |m| m.len());
+    if size > MAX_FILE_BYTES {
+        return Err(format!(
+            "{name} is {} MB; a parts database larger than {} MB is not read. Export the parts you need from EPLAN instead.",
+            size / 1_000_000,
+            MAX_FILE_BYTES / 1_000_000
+        ));
+    }
     let bytes = std::fs::read(path).map_err(|e| format!("Could not read {name}: {e}"))?;
     let existing = existing_catalog(catalog_path.as_deref());
     let source = if is_article_file(path, &bytes) {

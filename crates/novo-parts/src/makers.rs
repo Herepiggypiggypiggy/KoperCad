@@ -135,6 +135,9 @@ impl MakerAliases {
     /// The display name a spelling stands for, `None` for an unknown maker.
     pub fn resolve(&self, text: &str) -> Option<String> {
         let words: Vec<&str> = text.split_whitespace().collect();
+        if words.is_empty() {
+            return None;
+        }
         // The whole text first, then without trailing legal-form words.
         let mut end = words.len();
         loop {
@@ -219,6 +222,11 @@ mod tests {
         assert_eq!(a.display("  XQZ "), "XQZ");
         // Two letters are too short to guess from.
         assert_eq!(a.resolve("SI"), None);
+        // A blank maker cell is common in a table.
+        for blank in ["", "   ", "\t"] {
+            assert_eq!(a.resolve(blank), None);
+            assert_eq!(a.display(blank), "");
+        }
     }
 
     #[test]
