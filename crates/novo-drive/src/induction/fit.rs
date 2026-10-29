@@ -251,6 +251,9 @@ pub const ASSUMED_BREAKDOWN_RATIOS: [f64; 7] = [2.5, 2.2, 2.8, 2.0, 3.2, 1.8, 3.
 /// Share of unexplained nameplate loss given to the core; the rest is friction and windage.
 pub const EXTRA_LOSS_CORE_SHARE: f64 = 0.6;
 
+/// Most poles derived from a nameplate speed; a motor slower than this needs the pole count entered.
+pub const MAX_DERIVED_POLES: u32 = 24;
+
 struct Found {
     x: Vec<f64>,
     r: Vec<f64>,
@@ -333,7 +336,19 @@ impl InductionMotor {
         }
         let poles = match poles {
             Some(p) => error::poles(p)?,
-            None => 2 * ((60.0 * np.frequency_hz / np.rpm).floor() as u32).max(1),
+            None => {
+                // Largest even pole count whose synchronous speed is not below the rated speed.
+                let pairs = (60.0 * np.frequency_hz / np.rpm).floor().max(1.0);
+                if pairs > f64::from(MAX_DERIVED_POLES / 2) {
+                    return Err(InputError::OutOfRange {
+                        field: "rpm",
+                        value: np.rpm,
+                        min: 120.0 * np.frequency_hz / f64::from(MAX_DERIVED_POLES),
+                        max: f64::MAX,
+                    });
+                }
+                2 * pairs as u32
+            }
         };
         let sync = 120.0 * np.frequency_hz / f64::from(poles);
         if np.rpm >= sync {
