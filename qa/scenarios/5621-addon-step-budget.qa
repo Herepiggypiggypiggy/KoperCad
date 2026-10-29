@@ -1,0 +1,39 @@
+@title Add-on Details: how much of its step budget a running engine uses
+@area Add-ons
+# Lane C3. After the demo engine answered a button, Details says how much of its step budget its
+# busiest call used (and warns from half the budget on; the unit tests cover the warning).
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text add-ons
+wait 8
+key Enter
+wait 10
+answer_dialog qa/fixtures/addons/demo-engine-0.1.0.kcaddon
+click_text "Install from file..."
+wait 10
+click_text "I trust this file"
+wait 4
+click_text "Install" Button
+wait 12
+key Escape
+wait 4
+key ctrl+k
+wait 6
+text demo engine panel
+wait 8
+key Enter
+wait 10
+click_text "Start" Button
+wait 10
+key ctrl+k
+wait 6
+text add-ons
+wait 8
+key Enter
+wait 10
+expect "Its busiest call used"
+expect "of its step budget"
+shot details-budget
+check_layout

@@ -1,0 +1,63 @@
+# Main switch, main contactor and an emergency stop chain with start and
+# self-hold, plus a mains-on lamp.
+name = "Main contactor with emergency stop chain"
+chapter = "safety"
+description = "Main switch and main contactor released by a chain of emergency stop stations, with start button, self-hold and a mains-on lamp"
+tags = ["emergency stop", "e-stop", "main contactor", "main switch", "mains", "start", "self-hold", "safety chain", "crane"]
+notes = """Wiring example of the classic emergency stop chain: the main contactor only pulls in when every emergency stop station is released and the start button is pressed, and drops when any station is pressed or the control supply fails. \\
+Add stations by adding break contacts in series (S0, S5). Whether this reaches a required category or performance level depends on the devices and the whole machine: nothing here is validated as a safety design. \\
+You connect: L1 L2 L3 above Q1, the machine supply below K1, the control supply above F1 and its return (0 V) below the coil and the lamp."""
+
+open = ["q1s.1,3,5", "k1m.2,4,6", "f1s.1", "k1c.A2", "h1s.X2"]
+
+device = [
+  { id = "q1", tag = "-Q1", description = "Main switch", mount = { kind = "din", size = [54, 75, 85], at = [15, 62.5], rail = "r1" } },
+  { id = "k1", tag = "-K1", description = "Main contactor", mount = { kind = "din", size = [45, 77, 86], at = [75, 61.5], rail = "r1" } },
+  { id = "f1", tag = "-F1", description = "Control circuit breaker", mount = { kind = "din", size = [18, 90, 70], at = [125, 55], rail = "r1" } },
+  { id = "s0", tag = "-S0", description = "Emergency stop, station 1", mount = { kind = "door", size = [40, 40, 60], at = [20, 20] } },
+  { id = "s5", tag = "-S5", description = "Emergency stop, station 2", mount = { kind = "field", place = "second operator station or the machine" } },
+  { id = "s1", tag = "-S1", description = "Start", mount = { kind = "door", size = [30, 30, 60], at = [75, 25] } },
+  { id = "h1", tag = "-H1", description = "Mains on lamp", mount = { kind = "door", size = [30, 30, 45], at = [115, 25] } },
+]
+
+symbol = [
+  { id = "q1s", key = "iec/switches/main_switch_3p", at = [40, 40], device = "q1" },
+  { id = "k1m", key = "iec/contactors/main_3p", at = [40, 72], device = "k1", main = false },
+  { id = "f1s", key = "iec/protection/mcb_1p", at = [96, 40], device = "f1" },
+  { id = "s0s", key = "iec/operators/emergency_stop", at = [96, 64], device = "s0" },
+  { id = "s5s", key = "iec/operators/emergency_stop", at = [96, 88], device = "s5" },
+  { id = "s1s", key = "iec/operators/pushbutton_no", at = [112, 128], device = "s1" },
+  { id = "k1a", key = "iec/contacts/no", at = [136, 128], device = "k1", main = false },
+  { id = "k1c", key = "iec/coils/contactor", at = [112, 160], device = "k1", main = true },
+  { id = "k1b", key = "iec/contacts/no", at = [160, 128], device = "k1", main = false, numbers = ["23", "24"] },
+  { id = "h1s", key = "iec/signalling/lamp_green", at = [160, 160], device = "h1" },
+]
+
+junction = [
+  { id = "j1", at = [112, 152] },
+  { id = "j2", at = [136, 152] },
+]
+
+wire = [
+  { from = "q1s.2", to = "k1m.1" }, { from = "q1s.4", to = "k1m.3" }, { from = "q1s.6", to = "k1m.5" },
+  { from = "f1s.2", to = "s0s.11" }, { from = "s0s.12", to = "s5s.11" },
+  { from = "s1s.14", to = "j1" }, { from = "k1a.14", to = "j2" }, { from = "j1", to = "j2" },
+  { from = "j1", to = "k1c.A1" },
+  { from = "k1b.14", to = "h1s.X1" },
+]
+
+# 48 V (or your control voltage) after the emergency stop stations feeds
+# start, self-hold and lamp; 0 V closes under the coil and the lamp.
+bus = [
+  { y = 112, taps = ["s5s.12", "s1s.13", "k1a.13", "k1b.13"] },
+]
+
+[plate]
+width = 200
+height = 200
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 190

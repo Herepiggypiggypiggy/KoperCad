@@ -131,3 +131,122 @@ fn a_fine_lift_motor_without_its_device_is_a_binding_finding() {
             .any(|f| f.message.contains("no fine-lift motor device"))
     );
 }
+
+fn coarse_fed() -> MotorFeed {
+    up(WindingSel::Coarse)
+}
+
+#[test]
+fn a_motor_stalled_against_a_closed_brake_draws_the_locked_current_and_trips_the_relay() {
+    // Supply at 70 %: the conical brake never lifts (pull-in 0.8), the coarse winding is fed.
+    // Locked-rotor current at 70 % is 0.7 of the rated-voltage figure; the relay (class 10,
+    // setting at the rated current) trips at a few times its setting, and its contact drops
+    // the feed in the circuit.
+    let mut c = FakeCircuit::new().with_rule(|st| {
+        st.energised.insert("=K-MAIN".into());
+        let ok = st.contacts.get("=F-OL").copied().unwrap_or(true);
+        st.feeds
+            .insert("=M1".into(), if ok { coarse_fed() } else { MotorFeed::Off });
+    });
+    c.known.insert("=F-OL".into());
+    let mut m = module(&[
+        ("mech_brake_kind", "conical"),
+        ("mech_overload_amps", "12"),
+        ("mech_overload_contact", "=F-OL"),
+    ]);
+    m.unit
+        .set_faults(novo_drive::hoist_unit::HoistFaults {
+            voltage_ratio: 0.7,
+            ..novo_drive::hoist_unit::HoistFaults::NONE
+        })
+        .unwrap();
+    let locked_at_70 = m
+        .unit
+        .electrics()
+        .unwrap()
+        .coarse
+        .locked_rotor_current_a(0.7)
+        .unwrap();
+    let mut l = the_loop(m);
+    let mut tripped_at = None;
+    for tick in 0..(120.0 / 0.002) as usize {
+        l.step(&mut c);
+        let s = *l.hoist("h").unwrap().snapshot().unwrap();
+        if tick == 100 {
+            assert!((s.motor_current_a - locked_at_70).abs() < 0.02 * locked_at_70);
+            assert!(s.conditions.low_voltage && !s.conditions.overload_tripped);
+        }
+        if tripped_at.is_none() && s.conditions.overload_tripped {
+            tripped_at = Some(tick as f64 * 0.002);
+        }
+    }
+    let t = tripped_at.expect("the relay never tripped");
+    // About 4 times the setting: trips in well under a minute but slower than class time.
+    assert!(t > 10.0 && t < 60.0, "{t}");
+    assert!(!c.contacts["=F-OL"]);
+    // The feed is gone and the winding starts to cool.
+    let s = *l.hoist("h").unwrap().snapshot().unwrap();
+    assert!(s.energised.is_none() && s.motor_current_a == 0.0);
+    assert!(s.winding_rise_k > 0.0);
+    // Reset closes the contact again, the relay still holds its heat.
+    l.hoists[0].unit.reset_overload();
+    assert!(!l.hoists[0].unit.overload_tripped());
+}
+
+#[test]
+fn a_hoist_running_on_two_phases_draws_more_current_and_heats_faster_than_on_three() {
+    let run = |lost: Option<Phase>| {
+        let mut c = FakeCircuit::new();
+        c.energised.insert("=K-MAIN".into());
+        c.feeds.insert("=M1".into(), up(WindingSel::Coarse));
+        let mut l = the_loop(module(&[("mech_brake_kind", "conical")]));
+        // Get it running on three phases first, then lose the phase.
+        l.run(&mut c, (3.0 / 0.002) as usize);
+        l.hoists[0]
+            .unit
+            .set_faults(novo_drive::hoist_unit::HoistFaults {
+                lost_phase: lost,
+                ..novo_drive::hoist_unit::HoistFaults::NONE
+            })
+            .unwrap();
+        l.run(&mut c, (20.0 / 0.002) as usize);
+        *l.hoist("h").unwrap().snapshot().unwrap()
+    };
+    let three = run(None);
+    let two = run(Some(Phase::L2));
+    assert!(!three.conditions.two_phase_overcurrent);
+    assert!(two.conditions.two_phase_overcurrent, "{two:?}");
+    assert!(two.motor_current_a > 1.5 * three.motor_current_a);
+    assert!(two.winding_rise_k > three.winding_rise_k);
+}
+
+#[test]
+fn the_fine_lift_motor_has_its_own_current_and_heat() {
+    let mut c = FakeCircuit::new();
+    c.energised.insert("=K-MAIN".into());
+    c.feeds.insert("=M1".into(), MotorFeed::Off);
+    c.feeds.insert("=M2".into(), up(WindingSel::Fine));
+    let mut l = the_loop(module(&[
+        ("mech_brake_kind", "conical"),
+        ("mech_fine_lift_motor", "=M2"),
+    ]));
+    l.run(&mut c, (10.0 / 0.002) as usize);
+    let s = *l.hoist("h").unwrap().snapshot().unwrap();
+    assert!(s.fine_current_a > 0.5, "{}", s.fine_current_a);
+    assert!(s.fine_winding_rise_k > 0.0);
+    // The main motor was not fed: no current, no heat.
+    assert_eq!(s.motor_current_a, 0.0);
+    assert!(s.winding_rise_k < 1.0);
+}
+
+#[test]
+fn an_overload_contact_that_is_not_in_the_drawing_is_a_binding_finding() {
+    let c = FakeCircuit::new();
+    let l = the_loop(module(&[("mech_overload_contact", "=F-OL")]));
+    let found = l.check_bindings(&c);
+    assert!(
+        found
+            .iter()
+            .any(|f| f.message.contains("overload relay contact =F-OL"))
+    );
+}

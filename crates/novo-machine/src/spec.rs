@@ -11,7 +11,9 @@ use std::fmt;
 use novo_drive::InputError;
 use novo_drive::brake::{SpringBrake, Switching};
 use novo_drive::brake_system::{BrakeSource, BrakeSystem, ConicalPull, Rectifier, RectifierKind};
-use novo_drive::hoist_unit::{BrakeFeed, FineLift, TwoSpeedHoistUnit};
+use novo_drive::drive::MotorNameplate;
+use novo_drive::hoist_thermal::{MotorThermal, OverloadRelay, ThermalParams, WindingElectrics};
+use novo_drive::hoist_unit::{BrakeFeed, FineLift, HoistElectrics, TwoSpeedHoistUnit};
 use novo_drive::mechanics::Hoist;
 use novo_drive::motor::{PoleChangeMotor, Winding};
 use novo_drive::sequencer::{Sequencer, SequencerConfig};
@@ -165,6 +167,58 @@ pub const KEYS: &[SpecKey] = &[
     tag(
         "mech_fl_releases_main_brake",
         "Fine-lift motor also lifts the main brake (yes or no)",
+    ),
+    num(
+        "mech_voltage_v",
+        "Supply voltage (line to line)",
+        "V",
+        "400",
+    ),
+    num(
+        "mech_fine_amps",
+        "Fine winding rated current (empty = from power)",
+        "A",
+        "",
+    ),
+    num("mech_fine_pf", "Fine winding power factor", "", "0.6"),
+    num(
+        "mech_coarse_amps",
+        "Coarse winding rated current (empty = from power)",
+        "A",
+        "",
+    ),
+    num("mech_coarse_pf", "Coarse winding power factor", "", "0.85"),
+    num(
+        "mech_fl_amps",
+        "Fine-lift motor rated current (empty = from power)",
+        "A",
+        "",
+    ),
+    num("mech_fl_pf", "Fine-lift motor power factor", "", "0.75"),
+    num("mech_rated_rise_k", "Winding rise at rated load", "K", "80"),
+    num("mech_rise_limit_k", "Winding rise limit", "K", "100"),
+    num(
+        "mech_thermal_tau_s",
+        "Winding heat time constant",
+        "s",
+        "40",
+    ),
+    num("mech_frame_tau_s", "Frame heat time constant", "s", "1500"),
+    num(
+        "mech_overload_amps",
+        "Overload relay setting (empty = no relay)",
+        "A",
+        "",
+    ),
+    num(
+        "mech_overload_class_s",
+        "Overload trip class (s at 7.2 x setting)",
+        "s",
+        "10",
+    ),
+    tag(
+        "mech_overload_contact",
+        "Overload relay contact device (opens on trip)",
     ),
     tag("mech_main_contactor", "Main contactor device"),
     tag("mech_upper_limit", "Upper limit switch device"),
@@ -329,6 +383,126 @@ fn fine_lift(
     )?)
 }
 
+/// Generic efficiency assumed to derive a rated current from the power when none is entered.
+/// A pole-change fine winding is far less efficient than the coarse one.
+const ASSUMED_EFFICIENCY: [(&str, f64); 3] = [("fine", 0.6), ("coarse", 0.85), ("fine-lift", 0.7)];
+
+/// One winding's electrical model from its `mech_*` numbers. The rated current is the entered
+/// one, or derived from the power with a generic efficiency and the power factor.
+fn winding_electrics(
+    text: &TextFn<'_>,
+    number: &NumFn<'_>,
+    volts: f64,
+    hz: f64,
+    keys: [&'static str; 5],
+    which: &str,
+) -> Result<WindingElectrics, SpecError> {
+    let [poles, kw, rpm, amps, pf] = keys;
+    let p_kw = number(kw)?;
+    let pf_v = number(pf)?;
+    let current = match text(amps) {
+        Some(_) => number(amps)?,
+        None => {
+            let eta = ASSUMED_EFFICIENCY
+                .iter()
+                .find(|(w, _)| *w == which)
+                .map_or(0.8, |(_, e)| *e);
+            p_kw * 1000.0 / (3f64.sqrt() * volts * eta * pf_v)
+        }
+    };
+    let np = MotorNameplate {
+        voltage_v: volts,
+        current_a: current,
+        frequency_hz: hz,
+        rpm: number(rpm)?,
+        power_kw: p_kw,
+        power_factor: pf_v,
+    };
+    Ok(WindingElectrics::from_nameplate(&np, number(poles)? as u32)?.0)
+}
+
+/// The current, heat and overload relay model of a hoist.
+fn electrics(
+    text: &TextFn<'_>,
+    number: &NumFn<'_>,
+    hz: f64,
+    fine_lift: bool,
+) -> Result<HoistElectrics, SpecError> {
+    let volts = number("mech_voltage_v")?;
+    let fine = winding_electrics(
+        text,
+        number,
+        volts,
+        hz,
+        [
+            "mech_fine_poles",
+            "mech_fine_kw",
+            "mech_fine_rpm",
+            "mech_fine_amps",
+            "mech_fine_pf",
+        ],
+        "fine",
+    )?;
+    let coarse = winding_electrics(
+        text,
+        number,
+        volts,
+        hz,
+        [
+            "mech_coarse_poles",
+            "mech_coarse_kw",
+            "mech_coarse_rpm",
+            "mech_coarse_amps",
+            "mech_coarse_pf",
+        ],
+        "coarse",
+    )?;
+    let params = ThermalParams {
+        winding_rise_rated_k: number("mech_rated_rise_k")?,
+        limit_rise_k: number("mech_rise_limit_k")?,
+        tau_winding_s: number("mech_thermal_tau_s")?,
+        tau_frame_s: number("mech_frame_tau_s")?,
+        ..ThermalParams::GENERIC
+    };
+    // The heat model is sized on the larger winding's rated losses.
+    let rated_losses = fine.rated_losses_w().max(coarse.rated_losses_w());
+    let thermal = MotorThermal::new(params, rated_losses)?;
+    let relay = match text("mech_overload_amps") {
+        Some(_) => Some(OverloadRelay::new(
+            number("mech_overload_amps")?,
+            number("mech_overload_class_s")?,
+        )?),
+        None => None,
+    };
+    let fine_lift = if fine_lift {
+        let w = winding_electrics(
+            text,
+            number,
+            volts,
+            hz,
+            [
+                "mech_fl_poles",
+                "mech_fl_kw",
+                "mech_fl_rpm",
+                "mech_fl_amps",
+                "mech_fl_pf",
+            ],
+            "fine-lift",
+        )?;
+        let t = MotorThermal::new(params, w.rated_losses_w())?;
+        Some((w, t))
+    } else {
+        None
+    };
+    Ok(HoistElectrics {
+        fine,
+        coarse,
+        thermal,
+        relay,
+        fine_lift,
+    })
+}
+
 /// Reads a hoist from properties. `get(key)` returns the property text if set. Returns
 /// `Ok(None)` when the motor is no hoist (`mech_mass_kg` not set).
 pub fn hoist_from_properties(
@@ -431,6 +605,7 @@ pub fn hoist_from_properties(
     };
     let mut unit = TwoSpeedHoistUnit::with_system(motor, hoist, sequencer, system, feed)?;
     let fine_motor = text("mech_fine_lift_motor");
+    unit = unit.with_electrics(electrics(&text, &number, hz, fine_motor.is_some())?);
     if fine_motor.is_some() {
         unit = unit.with_fine_lift(fine_lift(
             &text,
@@ -474,6 +649,7 @@ pub fn hoist_from_properties(
         HoistBinding {
             motor: motor_tag.to_owned(),
             fine_motor,
+            overload_contact: text("mech_overload_contact"),
             brake_feed,
             mains: text("mech_main_contactor"),
             limits,

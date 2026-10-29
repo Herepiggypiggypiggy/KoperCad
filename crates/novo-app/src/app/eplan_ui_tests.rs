@@ -270,7 +270,8 @@ fn a_parts_database_is_read_on_a_worker_merged_by_maker_and_the_names_are_kept()
     )
     .unwrap();
     let cat = dir.path().join("catalog.json");
-    d.app.start_eplan_parts_job(&file, Some(cat.clone()));
+    d.app
+        .start_eplan_parts_job(std::slice::from_ref(&file), Some(cat.clone()));
     // The preview is not there until the worker is done; nothing is saved.
     assert!(d.app.wb.eplan_parts_job.is_some());
     wait_for_preview(&mut d);
@@ -290,7 +291,8 @@ fn a_parts_database_is_read_on_a_worker_merged_by_maker_and_the_names_are_kept()
     assert!(d.app.confirm_eplan_parts());
     assert_eq!(Catalog::load(&cat).unwrap().parts().len(), 3);
     // The name is kept for the next import.
-    d.app.start_eplan_parts_job(&file, Some(cat));
+    d.app
+        .start_eplan_parts_job(std::slice::from_ref(&file), Some(cat));
     wait_for_preview(&mut d);
     let again = d.app.wb.eplan_parts.as_ref().unwrap();
     assert_eq!(again.parts()[2].manufacturer, "Example Works");
@@ -303,8 +305,82 @@ fn a_file_that_is_no_parts_database_reports_it_and_opens_nothing() {
     let file = dir.path().join("broken.adb");
     std::fs::write(&file, b"nothing compressed in here").unwrap();
     d.app
-        .start_eplan_parts_job(&file, Some(dir.path().join("c.json")));
+        .start_eplan_parts_job(std::slice::from_ref(&file), Some(dir.path().join("c.json")));
     wait_for_preview(&mut d);
     assert!(d.app.wb.eplan_parts.is_none());
     assert!(d.app.messages().last().unwrap().text.contains("No parts"));
+}
+
+const PORTAL_PART: &str = r#"<partsmanagement length-unit="mm">
+  <part partnr="ACM.TB-2.5" ordernr="TB-2.5" manufacturer="Acme" descr1="en_US@Terminal;"
+        width="5,2" height="48" depth="36" colour="grey"/>
+</partsmanagement>"#;
+const PORTAL_POINTS: &str = r#"<partsmanagement>
+  <connectionpoints partnr="ACM.TB-2.5">
+    <connectionpoint name="1" x="0" y="-24" z="18" crosssectionmin="0,2 mm2" crosssectionmax="4 mm2" torquemax="0,6 Nm"/>
+  </connectionpoints>
+</partsmanagement>"#;
+const PORTAL_DRILL: &str = r#"<partsmanagement>
+  <construction partnr="ACM.TB-2.5"><drill x="0" y="0" diameter="4,2"/></construction>
+</partsmanagement>"#;
+
+#[test]
+fn maker_parts_xml_files_are_read_together_and_say_what_was_assumed() {
+    let (dir, mut d) = open();
+    let paths: Vec<_> = [
+        ("ACM.TB-2.5.part.xml", PORTAL_PART),
+        ("ACM.TB-2.5.connectionpoints.xml", PORTAL_POINTS),
+        ("ACM.TB-2.5.construction.xml", PORTAL_DRILL),
+    ]
+    .into_iter()
+    .map(|(n, t)| {
+        let p = dir.path().join(n);
+        std::fs::write(&p, t).unwrap();
+        p
+    })
+    .collect();
+    let cat = dir.path().join("catalog.json");
+    assert!(
+        d.app
+            .import_eplan_parts_from_files(&paths, Some(cat.clone()))
+    );
+    let preview = d.app.wb.eplan_parts.as_ref().expect("a preview opens");
+    assert_eq!(preview.parts().len(), 1);
+    assert_eq!(preview.parts()[0].terminals.len(), 1);
+    assert_eq!(preview.parts()[0].drilling.len(), 1);
+    assert!(
+        preview
+            .portal_assumptions()
+            .iter()
+            .any(|a| a.contains("maker's own frame"))
+    );
+    // The dialog draws without panicking and nothing is saved before Add.
+    d.frame();
+    assert!(!cat.exists());
+    assert!(d.app.confirm_eplan_parts());
+    let saved = Catalog::load(&cat).unwrap();
+    assert_eq!(saved.parts().len(), 1);
+    assert_eq!(saved.parts()[0].terminals[0].torque_nm, Some((0.6, 0.6)));
+    assert_eq!(saved.parts()[0].drilling[0].diameter_mm, Some(4.2));
+}
+
+#[test]
+fn several_files_that_are_not_maker_xml_are_refused_with_the_reason() {
+    let (dir, mut d) = open();
+    let a = dir.path().join("a.csv");
+    let b = dir.path().join("b.csv");
+    std::fs::write(&a, "Part number;Manufacturer\nA;B\n").unwrap();
+    std::fs::write(&b, "Part number;Manufacturer\nC;D\n").unwrap();
+    assert!(
+        !d.app
+            .import_eplan_parts_from_files(&[a, b], Some(dir.path().join("c.json")))
+    );
+    assert!(
+        d.app
+            .messages()
+            .last()
+            .unwrap()
+            .text
+            .contains("maker parts XML")
+    );
 }

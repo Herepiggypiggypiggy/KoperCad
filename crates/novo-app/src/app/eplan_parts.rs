@@ -19,7 +19,8 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 use eframe::egui;
 use novo_interop::eplan::{MakerSeen, import_eod, looks_like_eod};
 use novo_parts::{
-    ALIAS_FILE_NAME, Catalog, CatalogPart, ImportReport, MakerAliases, user_catalog_path,
+    ALIAS_FILE_NAME, Catalog, CatalogPart, ImportReport, MakerAliases, PortalFile, PortalRead,
+    looks_like_portal, read_portal, user_catalog_path,
 };
 
 use super::{Level, NovoApp, projects_dir};
@@ -37,6 +38,8 @@ pub(crate) struct EplanPartsImport {
     makers: Vec<MakerSeen>,
     /// The names being typed, by code.
     typing: BTreeMap<String, String>,
+    /// What the maker parts XML reader found, with what it assumed.
+    portal: Option<PortalRead>,
     /// Manufacturer for rows that carry none.
     maker: String,
     read: Result<ImportReport, String>,
@@ -53,6 +56,8 @@ enum Source {
     Text(String),
     /// The bytes of an `.adb` or `.eod` article file.
     Articles(Vec<u8>),
+    /// Maker parts XML files (a part and its companion files), read together.
+    Portal(Vec<PortalFile>),
 }
 
 /// A file being read on a worker thread.
@@ -149,6 +154,7 @@ impl EplanPartsImport {
             alias_path,
             makers: Vec::new(),
             typing: BTreeMap::new(),
+            portal: None,
             maker: String::new(),
             read: Err(String::new()),
             added: 0,
@@ -161,7 +167,27 @@ impl EplanPartsImport {
     }
 
     fn reread(&mut self, existing: &Catalog) {
+        self.portal = None;
         self.read = match &self.source {
+            Source::Portal(files) => {
+                read_portal(files, self.maker.trim(), &super::revisions::today())
+                    .map(|read| {
+                        let skipped = read
+                            .skipped
+                            .iter()
+                            .chain(&read.unattached)
+                            .map(|s| (0, s.clone()))
+                            .collect();
+                        let report = ImportReport {
+                            parts: read.parts.clone(),
+                            skipped,
+                            data_columns: Vec::new(),
+                        };
+                        self.portal = Some(read);
+                        report
+                    })
+                    .map_err(|e| e.to_string())
+            }
             Source::Text(text) => read_eplan_parts(text, &self.maker),
             Source::Articles(bytes) => import_eod(bytes, &self.aliases, self.maker.trim())
                 .map(|read| {
@@ -176,6 +202,12 @@ impl EplanPartsImport {
             self.changed = preview.changed.len();
             self.unchanged = preview.unchanged;
         }
+    }
+
+    /// What the maker parts XML reader assumed, empty for other files.
+    #[cfg(test)]
+    pub(crate) fn portal_assumptions(&self) -> &[String] {
+        self.portal.as_ref().map_or(&[], |p| p.assumed.as_slice())
     }
 
     #[cfg(test)]
@@ -218,31 +250,71 @@ fn qa_hold() {
     }
 }
 
-/// Reads `path` and builds the preview; runs on the worker thread.
-fn read_job(
-    path: &Path,
-    name: &str,
-    catalog_path: Option<PathBuf>,
-) -> Result<EplanPartsImport, String> {
+/// Reads `paths` and builds the preview; runs on the worker thread. Several
+/// files, or a maker parts XML, are read together as one set.
+fn read_job(paths: &[PathBuf], catalog_path: Option<PathBuf>) -> Result<EplanPartsImport, String> {
     qa_hold();
-    let size = std::fs::metadata(path).map_or(0, |m| m.len());
-    if size > MAX_FILE_BYTES {
+    const MAX_FILES: usize = 5000;
+    if paths.len() > MAX_FILES {
         return Err(format!(
-            "{name} is {} MB; a parts database larger than {} MB is not read. Export the parts you need from EPLAN instead.",
-            size / 1_000_000,
-            MAX_FILE_BYTES / 1_000_000
+            "{} files picked; import at most {MAX_FILES} at once (or use the parts inbox for a whole folder)",
+            paths.len()
         ));
     }
-    let bytes = std::fs::read(path).map_err(|e| format!("Could not read {name}: {e}"))?;
-    let existing = existing_catalog(catalog_path.as_deref());
-    let source = if is_article_file(path, &bytes) {
-        Source::Articles(bytes)
-    } else {
-        Source::Text(decode_text(&bytes))
+    let name_of = |path: &Path| {
+        path.file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
     };
-    let import = EplanPartsImport::new(name.to_owned(), source, &existing, catalog_path);
+    let mut files: Vec<(PathBuf, String, Vec<u8>)> = Vec::new();
+    for path in paths {
+        let name = name_of(path);
+        let size = std::fs::metadata(path).map_or(0, |m| m.len());
+        if size > MAX_FILE_BYTES {
+            return Err(format!(
+                "{name} is {} MB; a parts database larger than {} MB is not read. Export the parts you need from EPLAN instead.",
+                size / 1_000_000,
+                MAX_FILE_BYTES / 1_000_000
+            ));
+        }
+        let bytes = std::fs::read(path).map_err(|e| format!("Could not read {name}: {e}"))?;
+        files.push((path.clone(), name, bytes));
+    }
+    let Some((first_path, first_name, first_bytes)) = files.first() else {
+        return Err("No file picked".into());
+    };
+    let existing = existing_catalog(catalog_path.as_deref());
+    let portal = files.len() > 1
+        || (!is_article_file(first_path, first_bytes)
+            && looks_like_portal(&decode_text(first_bytes)));
+    let label = if files.len() > 1 {
+        format!("{first_name} and {} more", files.len() - 1)
+    } else {
+        first_name.clone()
+    };
+    let source = if portal {
+        let set: Vec<PortalFile> = files
+            .iter()
+            .map(|(_, name, bytes)| PortalFile {
+                name: name.clone(),
+                text: decode_text(bytes),
+            })
+            .collect();
+        if !set.iter().any(|f| looks_like_portal(&f.text)) {
+            return Err(
+                "Pick one EPLAN parts export, or several maker parts XML files (root element partsmanagement)"
+                    .into(),
+            );
+        }
+        Source::Portal(set)
+    } else if is_article_file(first_path, first_bytes) {
+        Source::Articles(first_bytes.clone())
+    } else {
+        Source::Text(decode_text(first_bytes))
+    };
+    let import = EplanPartsImport::new(label.clone(), source, &existing, catalog_path);
     match &import.read {
-        Err(e) => Err(format!("No parts in {name}: {e}")),
+        Err(e) => Err(format!("No parts in {label}: {e}")),
         Ok(_) => Ok(import),
     }
 }
@@ -259,36 +331,40 @@ impl NovoApp {
     /// parts export and previews it.
     pub(super) fn import_eplan_parts(&mut self) {
         let mut dialog = crate::dialogs::FileDialog::new()
-            .set_title("Import parts from an EPLAN export")
+            .set_title("Import parts from a CAD parts export or maker parts XML files")
             .add_filter(
-                "EPLAN parts export (XML or text)",
+                "Parts export or maker parts XML (XML or text)",
                 &["xml", "csv", "txt", "tsv"],
             );
         if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
             dialog = dialog.set_directory(dir);
         }
-        if let Some(path) = dialog.pick_file() {
-            self.start_eplan_parts_job(&path, None);
+        if let Some(paths) = dialog.pick_files() {
+            self.start_eplan_parts_job(&paths, None);
         }
     }
 
     /// Like [`Self::import_eplan_parts_from`], but the file is read and
     /// decoded on a worker thread (a parts database is several megabytes);
     /// the preview opens when it is done.
-    pub(crate) fn start_eplan_parts_job(&mut self, path: &Path, catalog_path: Option<PathBuf>) {
-        if self.wb.eplan_parts_job.is_some() {
+    pub(crate) fn start_eplan_parts_job(
+        &mut self,
+        paths: &[PathBuf],
+        catalog_path: Option<PathBuf>,
+    ) {
+        if self.wb.eplan_parts_job.is_some() || paths.is_empty() {
             return;
         }
-        let file = path
+        let file = paths[0]
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let (path, name) = (path.to_path_buf(), file.clone());
+        let (paths, name) = (paths.to_vec(), file.clone());
         let spawned = std::thread::Builder::new()
             .name("eplan-parts".into())
             .spawn(move || {
-                let done = std::panic::catch_unwind(|| read_job(&path, &name, catalog_path))
+                let done = std::panic::catch_unwind(|| read_job(&paths, catalog_path))
                     .unwrap_or_else(|_| Err(format!("Could not read {name}")));
                 let _ = tx.send(done);
             });
@@ -327,30 +403,26 @@ impl NovoApp {
         path: &Path,
         catalog_path: Option<PathBuf>,
     ) -> bool {
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let bytes = match std::fs::read(path) {
-            Ok(b) => b,
-            Err(e) => {
-                self.message(Level::Error, format!("Could not read {name}: {e}"));
-                return false;
+        self.import_eplan_parts_from_files(&[path.to_path_buf()], catalog_path)
+    }
+
+    /// Like the above for several files, read in this thread.
+    #[cfg(test)]
+    pub(crate) fn import_eplan_parts_from_files(
+        &mut self,
+        paths: &[PathBuf],
+        catalog_path: Option<PathBuf>,
+    ) -> bool {
+        match read_job(paths, catalog_path) {
+            Ok(import) => {
+                self.wb.eplan_parts = Some(import);
+                true
             }
-        };
-        let existing = existing_catalog(catalog_path.as_deref());
-        let source = if is_article_file(path, &bytes) {
-            Source::Articles(bytes)
-        } else {
-            Source::Text(decode_text(&bytes))
-        };
-        let import = EplanPartsImport::new(name.clone(), source, &existing, catalog_path);
-        if let Err(e) = &import.read {
-            self.message(Level::Error, format!("No parts in {name}: {e}"));
-            return false;
+            Err(e) => {
+                self.message(Level::Error, e);
+                false
+            }
         }
-        self.wb.eplan_parts = Some(import);
-        true
     }
 
     /// Merges the previewed parts into the catalog and saves it.
@@ -364,7 +436,14 @@ impl NovoApp {
         };
         let mut catalog = existing_catalog(Some(&path));
         for part in import.parts() {
-            catalog.upsert(part.clone());
+            // Maker parts XML adds to a part that is already there: its price
+            // and classification from a catalog file stay.
+            let merged = if import.portal.is_some() {
+                catalog.get(&part.key()).map(|old| old.with_maker_xml(part))
+            } else {
+                None
+            };
+            catalog.upsert(merged.unwrap_or_else(|| part.clone()));
         }
         if let Err(e) = catalog.save(&path) {
             self.message(Level::Error, format!("Could not save the catalog: {e}"));
@@ -443,6 +522,9 @@ impl NovoApp {
                 if !import.makers.is_empty() {
                     makers_ui(ui, import, &mut aliases_changed);
                 }
+                if let Some(portal) = &import.portal {
+                    portal_summary(ui, portal);
+                }
                 if let Ok(report) = &import.read {
                     if !report.data_columns.is_empty() {
                         ui.weak(format!(
@@ -454,10 +536,19 @@ impl NovoApp {
                         .max_height(220.0)
                         .show(ui, |ui| {
                             for p in report.parts.iter().take(200) {
-                                ui.label(format!(
+                                let mut line = format!(
                                     "{}  {}  {}",
                                     p.manufacturer, p.order_number, p.description
-                                ));
+                                );
+                                if import.portal.is_some() {
+                                    line.push_str(&format!(
+                                        "  ({} connection points, {} holes, {} accessories)",
+                                        p.terminals.len(),
+                                        p.drilling.len(),
+                                        p.accessories.len()
+                                    ));
+                                }
+                                ui.label(line);
                             }
                             if report.parts.len() > 200 {
                                 ui.weak(format!("... and {} more", report.parts.len() - 200));
@@ -467,20 +558,24 @@ impl NovoApp {
                         ui.add_space(6.0);
                         ui.colored_label(
                             crate::theme::ui_palette().warning,
-                            format!("{} row(s) rejected", report.skipped.len()),
+                            format!("{} row(s) left out or not joined", report.skipped.len()),
                         );
                         egui::ScrollArea::vertical()
                             .id_salt("eplan_parts_rejects")
                             .max_height(120.0)
                             .show(ui, |ui| {
                                 for (line, why) in &report.skipped {
-                                    ui.label(format!("line {line}: {why}"));
+                                    if *line == 0 {
+                                        ui.label(why);
+                                    } else {
+                                        ui.label(format!("line {line}: {why}"));
+                                    }
                                 }
                             });
                     }
                 }
                 ui.add_space(6.0);
-                ui.weak("Only your own export is read. Nothing is added until you choose Add.");
+                ui.weak("Only your own files are read. Nothing is added until you choose Add.");
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     go = ui
@@ -500,6 +595,52 @@ impl NovoApp {
             self.wb.eplan_parts = None;
         }
     }
+}
+
+/// What the maker parts XML reader read, what it assumed and what it kept
+/// without understanding, so the person can judge the import.
+fn portal_summary(ui: &mut egui::Ui, portal: &PortalRead) {
+    let c = &portal.counts;
+    ui.add_space(4.0);
+    ui.label(format!(
+        "Read from {} file(s): {} connection points on {} parts ({} with a wire range, {} with torque), {} holes on {} parts, {} accessories on {} parts.",
+        c.files,
+        c.terminals,
+        c.parts_with_terminals,
+        c.with_wire_range,
+        c.with_torque,
+        c.holes,
+        c.parts_with_drilling,
+        c.accessories,
+        c.parts_with_accessories,
+    ));
+    let palette = crate::theme::ui_palette();
+    egui::CollapsingHeader::new("What was assumed, and what was not understood")
+        .id_salt("portal_assumed")
+        .default_open(true)
+        .show(ui, |ui| {
+            for a in &portal.assumed {
+                ui.colored_label(palette.warning, format!("Assumed: {a}"));
+            }
+            if portal.unrecognised.is_empty() {
+                ui.weak("Every attribute was placed.");
+            } else {
+                ui.weak("Kept as written, not understood (name and how often):");
+                for (name, n) in portal.unrecognised.iter().take(12) {
+                    ui.weak(format!("  {name} x{n}"));
+                }
+                if portal.unrecognised.len() > 12 {
+                    ui.weak(format!("  and {} more", portal.unrecognised.len() - 12));
+                }
+            }
+            if ui
+                .button("Copy format report")
+                .on_hover_text("Names only, no values: send it when a maker's file reads badly")
+                .clicked()
+            {
+                ui.ctx().copy_text(portal.format_report());
+            }
+        });
 }
 
 /// The maker codes of a database file and the name each one gets. A name

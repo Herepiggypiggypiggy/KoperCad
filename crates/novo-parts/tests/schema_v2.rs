@@ -23,6 +23,7 @@ fn rich() -> CatalogPart {
             wire_mm2: Some((0.08, 4.0)),
             side: Side::Top,
             position_mm: Some([2.5, 70.0, 10.0]),
+            ..Default::default()
         }],
         price: Some(Price {
             amount: 12.5,

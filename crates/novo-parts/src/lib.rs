@@ -36,6 +36,7 @@ mod bundle;
 mod cadmatch;
 mod catalog;
 mod csv;
+mod dataportal;
 mod etim;
 mod fit;
 mod import;
@@ -89,6 +90,10 @@ pub use csv::{
     Column, DelimitedRow, ImportError, ImportReport, ParseError, column_for, import_catalog,
     parse_delimited,
 };
+pub use dataportal::{
+    PORTAL_SOURCE, PortalCounts, PortalError, PortalFile, PortalRead, looks_like_portal,
+    read_portal,
+};
 pub use etim::{EtimError, EtimModel};
 pub use fit::{
     DeviceNeed, Fit, KindCheck, PartFacts, Role, Supply, check_kind, check_kind_with, coil_supply,
@@ -104,11 +109,13 @@ pub use library::{
     SourceRecord, StoreBatch, default_library_root,
 };
 pub use macros::{
-    Imported, MACRO_BASE_VERSION, MACRO_EXTENSION, MACRO_FORMAT, MACRO_FORMAT_VERSION,
-    MACRO_PACK_EXTENSION, MACRO_PACK_FORMAT, MacroEntry, MacroError, MacroFile, MacroLibrary,
-    MacroPack, MacroPart, MacroUpdate, OnConflict, PackEntry, ParamDraft, ParamKind,
-    STARTER_FOLDER, SYMBOL_PAD, ThumbSymbol, Thumbnail, macro_updates, param_drafts,
-    starter_macros, thumbnail, user_macros_dir, validate_parameters,
+    CHAPTERS, CIRCUIT_ROOT, Chapter, CircuitError, CircuitSource, CircuitSpec, Imported,
+    MACRO_BASE_VERSION, MACRO_EXTENSION, MACRO_FORMAT, MACRO_FORMAT_VERSION, MACRO_PACK_EXTENSION,
+    MACRO_PACK_FORMAT, MacroEntry, MacroError, MacroFile, MacroLibrary, MacroPack, MacroPart,
+    MacroUpdate, MountItem, MountKind, MountPlate, MountRail, MountingView, OnConflict, PackEntry,
+    ParamDraft, ParamKind, STARTER_FOLDER, SYMBOL_PAD, ThumbSymbol, Thumbnail, build_circuit,
+    circuit_library, circuit_sources, macro_updates, param_drafts, starter_macros, thumbnail,
+    user_macros_dir, validate_parameters,
 };
 pub use makers::{ALIAS_FILE_NAME, MakerAliases};
 pub use panel::{Clearances, Mounting, PanelData, is_panel_number_key, migrate_properties};
@@ -129,8 +136,8 @@ pub use recipes::{
 };
 pub use schema::eng;
 pub use schema::{
-    Asset, AssetKind, Classification, ConnectionKind, DataSource, LetThroughPoint, Lifecycle,
-    PartRef, PartTerminal, Price, Provenance, Side,
+    Accessory, Asset, AssetKind, Classification, ConnectionKind, DataSource, DrillHole,
+    DrillRepeat, LetThroughPoint, Lifecycle, PartRef, PartTerminal, Price, Provenance, Side,
 };
 pub use search::{Matcher, normalize_code};
 pub use sheet::{

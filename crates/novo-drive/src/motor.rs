@@ -219,6 +219,6 @@ impl PoleChangeMotor {
 pub const MOTOR_MODEL_LEAVES_OUT: &[&str] = &[
     "Torque-speed curve is a Kloss fit to the nameplate, not a measured curve",
     "No saturation, deep-bar effects, supply voltage dip or line impedance",
-    "No stator current, power factor or winding temperature",
+    "Stator current and winding heat are modelled (see the heat model notes); no measured motor data, no power factor display",
     "Changeover transients (flux and torque spikes) are not modelled; a dead time is",
 ];
