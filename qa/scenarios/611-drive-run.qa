@@ -1,0 +1,36 @@
+@title Drive run: the radio steps drive the frequency drive and the motor, the drawn end limit stops the axis
+@area Simulate
+@sizes 1366x768
+# Opens the travel fixture, starts Simulate > Drive run, switches Live on.
+open qa/fixtures/travel-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+shot drive-started
+key Home
+wait 30
+shot live-at-rest
+# Step 1 (S1): the drive runs the main reference, the axis creeps.
+mouse_down 75 273
+wait 300
+shot step-one
+mouse_up 75 273
+wait 300
+# Step 2 (S2): preset 2 selects the high speed; the drawn end limit opens at 6 m (the 4 s stop ramp coasts it on to about 7.6 m).
+mouse_down 75 343
+wait 400
+shot step-two
+wait 1200
+shot limit-reached
+mouse_up 75 343
+wait 20
+expect "Hz"
+check_layout

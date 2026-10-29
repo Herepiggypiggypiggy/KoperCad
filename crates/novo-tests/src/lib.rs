@@ -14,6 +14,7 @@ pub mod motor_starter;
 pub mod stress;
 pub mod text_conflicts;
 pub mod text_stress;
+pub mod travel;
 
 pub use big::{Big, BigSpec, big_project};
 pub use distribution::{
