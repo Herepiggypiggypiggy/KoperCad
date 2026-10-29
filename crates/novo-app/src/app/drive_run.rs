@@ -752,6 +752,7 @@ mod tests {
             active: Some(Active {
                 lp,
                 hl: DriveHoistLoop::new(StepConfig::default()).unwrap(),
+                cw: ClWinchLoop::new(StepConfig::default()).unwrap(),
                 acc: 0.0,
             }),
             ..Default::default()
