@@ -1008,7 +1008,10 @@ pub fn where_it_lives(info: &CommandInfo) -> String {
         },
         None => match crate::centres::Centre::of(info.id) {
             Some(centre) => format!("File › {}", centre.title()),
-            None => "Keys".to_owned(),
+            None => match crate::homes::panel_of(info.id) {
+                Some(panel) => panel.to_owned(),
+                None => "Keys".to_owned(),
+            },
         },
     }
 }

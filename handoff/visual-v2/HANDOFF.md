@@ -47,6 +47,11 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 - Tile minimum width 250 and the window 1120 wide: titles like "Export plate drawing as DXF" were cut at 1366x768.
 - QA scenarios that clicked `File > Import parts > ...` (21-parts-*, 60, 61, 639, 1700 and the `import_table` step) go through the centre: type the query, click the tile, press the Import button.
 
+## V4e: panel homes (2026-10-29)
+- New `Home::Panel(name)` (`HomeKind::Panel`): a button or context menu of a panel. `homes::PANEL_BUTTONS` lists the 6 `page.*` commands (Pages list: the + New button and the right-click menu of a page) and the 4 `learn.*` commands (lesson card: Back, Next, Start over, Close). Their File > Pages and Help > Lesson rows are gone: File 47 to 41, Help 19 to 15 (the design target), total 253 to 243.
+- The palette and the app menu search name the panel as the place; lesson anchors `cmd.page.*` fall back to the Pages list (`outline.pages`); the tags-and-pages lesson says "Right-click the page in the Pages list".
+- QA scenario 729.
+
 ## V4 what is left
 - **Options and preview on the right of the centre** (design section 6): the right side now shows the sentence, the key and the reason a format is grey, not the options of the format or a preview. Formats with options (PDF options, print sets, DXF) still open their own window after Export.
 - **Library rows** (File > Library, Macros) are still menus.
