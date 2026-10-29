@@ -579,8 +579,70 @@ pub(crate) fn columns(width: f32) -> usize {
     ((width / (CARD.x + 6.0)).floor() as usize).max(1)
 }
 
+/// Height of a group heading line.
+const HEADING: f32 = 18.0;
+const GAP: f32 = 6.0;
+
+/// Where each card and group heading sits in the grid, relative to its
+/// top left, and the height of all of it. Pure, so the scrolling grid only
+/// paints what its viewport shows.
+#[derive(Debug, Default, PartialEq)]
+pub(crate) struct GridLayout {
+    pub cards: Vec<Pos2>,
+    pub headings: Vec<(f32, &'static str)>,
+    pub height: f32,
+}
+
+pub(crate) fn grid_layout(rows: &[Row], per_row: usize) -> GridLayout {
+    let mut out = GridLayout::default();
+    let mut y = 0.0;
+    let mut group = "";
+    let mut in_line = 0;
+    for row in rows {
+        let new_group = !row.group.is_empty() && row.group != group;
+        if new_group || in_line == per_row {
+            if in_line > 0 {
+                y += CARD.y + GAP;
+            }
+            in_line = 0;
+        }
+        if new_group {
+            group = row.group;
+            out.headings.push((y, group));
+            y += HEADING;
+        }
+        out.cards
+            .push(Pos2::new(in_line as f32 * (CARD.x + GAP), y));
+        in_line += 1;
+    }
+    out.height = if in_line > 0 { y + CARD.y } else { y };
+    out
+}
+
+/// The scale the cards are drawn at, worked out once per list of rows and
+/// kept in egui's memory.
+fn grid_scale(ui: &egui::Ui, rows: &[Row], symbols: &[Option<&Symbol>]) -> f32 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for row in rows {
+        row.target.hash(&mut hasher);
+    }
+    let key = hasher.finish();
+    let id = egui::Id::new("place_grid_scale");
+    if let Some((k, scale)) = ui.data(|d| d.get_temp::<(u64, f32)>(id))
+        && k == key
+    {
+        return scale;
+    }
+    let scale = common_scale(symbols.iter().flatten().copied(), CARD_ART, 4.0);
+    ui.data_mut(|d| d.insert_temp(id, (key, scale)));
+    scale
+}
+
 /// The card grid: each row as a card with the real symbol drawing at one
-/// scale. `scroll_to` scrolls the selected card into view.
+/// scale. Only the cards in view are painted, so a folder of hundreds of
+/// symbols costs the same as one of twenty. `scroll_to` scrolls the
+/// selected card into view.
 pub(crate) fn card_grid(
     ui: &mut egui::Ui,
     rows: &[Row],
@@ -597,118 +659,105 @@ pub(crate) fn card_grid(
             _ => None,
         })
         .collect();
-    let scale = common_scale(symbols.iter().flatten().copied(), CARD_ART, 4.0);
-    let per_row = columns(ui.available_width());
+    let scale = grid_scale(ui, rows, &symbols);
+    let layout = grid_layout(rows, columns(ui.available_width()));
     egui::ScrollArea::vertical()
         .id_salt("place_grid")
         .auto_shrink([false, false])
-        .show(ui, |ui| {
-            ui.spacing_mut().item_spacing = Vec2::splat(6.0);
-            let mut group = "";
-            let mut i = 0;
-            while i < rows.len() {
-                if !rows[i].group.is_empty() && rows[i].group != group {
-                    group = rows[i].group;
-                    ui.add_space(2.0);
-                    ui.label(
-                        egui::RichText::new(group.to_uppercase())
-                            .small()
-                            .color(p.text_secondary),
+        .show_viewport(ui, |ui, viewport| {
+            let origin = ui.cursor().min;
+            ui.set_height(layout.height);
+            for (y, name) in &layout.headings {
+                if *y + HEADING < viewport.top() || *y > viewport.bottom() {
+                    continue;
+                }
+                ui.painter().text(
+                    origin + Vec2::new(2.0, *y + 2.0),
+                    Align2::LEFT_TOP,
+                    name.to_uppercase(),
+                    FontId::proportional(10.5),
+                    p.text_secondary,
+                );
+            }
+            for (j, row) in rows.iter().enumerate() {
+                let rect = Rect::from_min_size(origin + layout.cards[j].to_vec2(), CARD);
+                if j == selected && scroll_to {
+                    ui.scroll_to_rect(rect, None);
+                }
+                let top = layout.cards[j].y;
+                if top + CARD.y < viewport.top() || top > viewport.bottom() {
+                    continue;
+                }
+                let response = ui.interact(rect, ui.id().with(("card", j)), egui::Sense::click());
+                let enabled = row.disabled.is_none();
+                let fill = if j == selected {
+                    p.accent_wash
+                } else if response.hovered() && enabled {
+                    p.hover
+                } else {
+                    p.control
+                };
+                let border = if j == selected {
+                    p.accent
+                } else {
+                    p.border_subtle
+                };
+                ui.painter().rect_filled(rect, 6.0, fill);
+                ui.painter().rect_stroke(
+                    rect,
+                    6.0,
+                    Stroke::new(1.0, border),
+                    egui::StrokeKind::Inside,
+                );
+                let ink = if enabled {
+                    p.text_primary
+                } else {
+                    p.text_tertiary
+                };
+                let art = Rect::from_min_size(rect.min + Vec2::new(4.0, 4.0), CARD_ART);
+                match symbols[j] {
+                    Some(symbol) => {
+                        paint_symbol(ui.painter(), art, symbol, Some(scale), ink, false, false);
+                    }
+                    None => {
+                        let glyph = match row.kind {
+                            Kind::Macro => Icon::by_name("macro")
+                                .map_or(Glyph::Phosphor(novo_theme::icons::STACK), Glyph::Drawn),
+                            _ => Glyph::Phosphor(novo_theme::icons::DOT_OUTLINE),
+                        };
+                        glyph.paint(
+                            ui.painter(),
+                            Rect::from_center_size(art.center(), Vec2::splat(30.0)),
+                            ink,
+                        );
+                    }
+                }
+                novo_theme::widgets::paint_text_ellipsis(
+                    ui.painter(),
+                    Pos2::new(rect.left() + 6.0, rect.bottom() - 11.0),
+                    &row.label,
+                    FontId::proportional(11.5),
+                    ink,
+                    CARD.x - 12.0,
+                );
+                if let Some(key) = &row.shortcut {
+                    ui.painter().text(
+                        rect.min + Vec2::new(7.0, 8.0),
+                        Align2::LEFT_TOP,
+                        key,
+                        FontId::monospace(10.0),
+                        p.accent_hover,
                     );
                 }
-                // A line of cards ends at the next group heading too.
-                let end = (i..rows.len().min(i + per_row))
-                    .find(|&j| j > i && rows[j].group != rows[i].group)
-                    .unwrap_or(rows.len().min(i + per_row));
-                ui.horizontal(|ui| {
-                    for j in i..end {
-                        let row = &rows[j];
-                        let (rect, response) = ui.allocate_exact_size(CARD, egui::Sense::click());
-                        let enabled = row.disabled.is_none();
-                        let fill = if j == selected {
-                            p.accent_wash
-                        } else if response.hovered() && enabled {
-                            p.hover
-                        } else {
-                            p.control
-                        };
-                        let border = if j == selected {
-                            p.accent
-                        } else {
-                            p.border_subtle
-                        };
-                        ui.painter().rect_filled(rect, 6.0, fill);
-                        ui.painter().rect_stroke(
-                            rect,
-                            6.0,
-                            Stroke::new(1.0, border),
-                            egui::StrokeKind::Inside,
-                        );
-                        let ink = if enabled {
-                            p.text_primary
-                        } else {
-                            p.text_tertiary
-                        };
-                        let art = Rect::from_min_size(rect.min + Vec2::new(4.0, 4.0), CARD_ART);
-                        match symbols[j] {
-                            Some(symbol) => {
-                                paint_symbol(
-                                    ui.painter(),
-                                    art,
-                                    symbol,
-                                    Some(scale),
-                                    ink,
-                                    false,
-                                    false,
-                                );
-                            }
-                            None => {
-                                let glyph = match row.kind {
-                                    Kind::Macro => Icon::by_name("macro").map_or(
-                                        Glyph::Phosphor(novo_theme::icons::STACK),
-                                        Glyph::Drawn,
-                                    ),
-                                    _ => Glyph::Phosphor(novo_theme::icons::DOT_OUTLINE),
-                                };
-                                glyph.paint(
-                                    ui.painter(),
-                                    Rect::from_center_size(art.center(), Vec2::splat(30.0)),
-                                    ink,
-                                );
-                            }
-                        }
-                        novo_theme::widgets::paint_text_ellipsis(
-                            ui.painter(),
-                            Pos2::new(rect.left() + 6.0, rect.bottom() - 11.0),
-                            &row.label,
-                            FontId::proportional(11.5),
-                            ink,
-                            CARD.x - 12.0,
-                        );
-                        if let Some(key) = &row.shortcut {
-                            ui.painter().text(
-                                rect.min + Vec2::new(7.0, 8.0),
-                                Align2::LEFT_TOP,
-                                key,
-                                FontId::monospace(10.0),
-                                p.accent_hover,
-                            );
-                        }
-                        if j == selected && scroll_to {
-                            response.scroll_to_me(None);
-                        }
-                        if response.hovered() {
-                            out.hovered = Some(j);
-                        }
-                        if response.clicked() && enabled {
-                            out.clicked = Some(j);
-                        }
-                        if let Some(reason) = row.disabled {
-                            response.on_hover_text(reason);
-                        }
-                    }
-                });
-                i = end;
+                if response.hovered() {
+                    out.hovered = Some(j);
+                }
+                if response.clicked() && enabled {
+                    out.clicked = Some(j);
+                }
+                if let Some(reason) = row.disabled {
+                    response.on_hover_text(reason);
+                }
             }
         });
     out
@@ -1024,5 +1073,67 @@ mod tests {
         for symbol in lib.iter() {
             let _ = parts_for(&catalog, symbol, 3);
         }
+    }
+}
+
+#[cfg(test)]
+mod grid_tests {
+    use super::*;
+
+    fn row(label: &str, group: &'static str) -> Row {
+        Row {
+            target: Target::Symbol(label.to_owned()),
+            kind: Kind::Symbol,
+            label: label.to_owned(),
+            detail: String::new(),
+            group,
+            completion: None,
+            shortcut: None,
+            disabled: None,
+            score: 0,
+        }
+    }
+
+    #[test]
+    fn cards_wrap_and_headings_start_a_new_line() {
+        let rows = vec![
+            row("a", "Favourites"),
+            row("b", "Favourites"),
+            row("c", "Favourites"),
+            row("d", "Recent"),
+        ];
+        let l = grid_layout(&rows, 2);
+        assert_eq!(l.headings.len(), 2);
+        assert_eq!(l.cards[0], Pos2::new(0.0, HEADING));
+        assert_eq!(l.cards[1].x, CARD.x + GAP);
+        assert_eq!(l.cards[2].x, 0.0);
+        assert!(l.cards[2].y > l.cards[0].y);
+        // The next group starts below the last card of the one before.
+        assert!(l.headings[1].0 >= l.cards[2].y + CARD.y);
+        assert_eq!(l.cards[3].y, l.headings[1].0 + HEADING);
+        assert_eq!(l.height, l.cards[3].y + CARD.y);
+    }
+
+    /// A folder of a thousand cards paints only the ones in view.
+    #[test]
+    fn a_long_list_paints_only_the_visible_cards() {
+        let lib = Library::builtin().unwrap();
+        let one = lib.get("iec/contacts/no").unwrap();
+        let rows: Vec<Row> = (0..1000).map(|_| symbol_row(one, None)).collect();
+        let ctx = egui::Context::default();
+        let mut shapes = 0;
+        let mut out = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(500.0, 400.0))),
+                ..Default::default()
+            },
+            |ui| {
+                card_grid(ui, &rows, Some(&lib), 0, false);
+            },
+        );
+        out.textures_delta.clear();
+        shapes += out.shapes.len();
+        // About 4 lines of 4 cards fit; each card is a few shapes plus art.
+        assert!(shapes < 400, "{shapes} shapes for 1000 rows");
     }
 }
