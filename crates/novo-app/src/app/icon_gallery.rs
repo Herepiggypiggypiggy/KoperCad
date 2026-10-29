@@ -104,18 +104,10 @@ impl NovoApp {
             return;
         }
         let mut open = true;
-        // Opens in the middle of the window, never wider or taller than it.
-        let screen = ctx.content_rect();
-        let size = egui::vec2(
-            (screen.width() - 80.0).clamp(420.0, 880.0),
-            (screen.height() - 120.0).clamp(300.0, 700.0),
-        );
-        egui::Window::new("Icon gallery")
-            .open(&mut open)
-            .resizable(true)
-            .default_size(size)
-            .default_pos(screen.center() - size / 2.0 + egui::vec2(0.0, 20.0))
-            .min_size([420.0, 300.0])
+        // A panel dialog: moves by its title bar, resizes, stays on screen at 1366x768
+        // and comes back with View > Reset panel layout.
+        super::panel::dialog(ctx, "Icon gallery", [880.0, 700.0])
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 let state = &mut self.wb.icon_gallery;
                 novo_theme::widgets::tabs(ui, &mut state.tab, &TABS);
