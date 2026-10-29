@@ -254,9 +254,17 @@ efficiency, negative length, NaN) return `InputError`.
 `Hoist in 3D` window (Simulate > Hoist in 3D, `sim.hoist3d`) feeds it the hook height, the hoist's
 warnings and the heights of the bound limit switches from the Hoist run loop. Exact: the block
 stands at the start height plus the simulated height, a limit flag stands at its bound height.
-Picture only: the crane sizes, the straight rope (no sway, stretch or slack), bridge and trolley
-positions (typed in, not from the travel drives yet). Listed in the window as "Picture, not
-measurement".
+Picture only: the crane sizes and the straight rope (no stretch or slack). Listed in the window as
+"Picture, not measurement".
+
+Travel binding: the window picks a travel axis of Simulate > Drive run for the bridge and one for
+the trolley ("Bridge driven by", "Trolley driven by"); the axis position (forward positive, along
++x for the bridge and +z for the trolley) is added to a typed start position and held at the ends
+of the runway and the span with a note. The hook swings as one pendulum per direction
+(`novo_machine::swing`): exact is the equation of a point mass on a rope hung from an accelerating
+carriage, the small-angle period `2 pi sqrt(L / g)` and the lean `atan(a / g)` at constant
+acceleration; the damping ratio (2 %) is a number, the rope keeps its length, the swing does not
+push back on the drive, and the two directions do not couple.
 
 ### Lane L2c-open as built (open-loop drive hoist)
 

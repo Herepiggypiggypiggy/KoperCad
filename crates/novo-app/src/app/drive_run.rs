@@ -367,6 +367,30 @@ pub(super) fn hoist_reading(module: &DriveHoistModule) -> String {
     )
 }
 
+impl DriveRun {
+    pub(super) fn is_running(&self) -> bool {
+        self.active.is_some()
+    }
+
+    /// Position in metres from the start (forward positive) and speed in m/s of a travel axis of
+    /// the run, `None` without a run, for an unknown axis or before its first tick.
+    pub(super) fn travel_of(&self, id: &str) -> Option<(f64, f64)> {
+        let module = self.active.as_ref()?.lp.module(id)?;
+        let speed = module.snapshot()?.speed_m_s;
+        Some((module.position_m(), speed))
+    }
+}
+
+/// The tags of the travel axes of a project (motors with a moving mass), without fitting their
+/// motors: cheap enough to ask every frame.
+pub(super) fn travel_ids(project: &Project) -> Vec<String> {
+    project
+        .devices()
+        .filter(|d| d.properties.contains_key(travel_spec::TRAVEL_KEY))
+        .map(|d| d.tag.to_string())
+        .collect()
+}
+
 /// The travel axes of a project: every motor with a moving mass set. An axis whose numbers the
 /// engine refuses is reported and left out. The notes are what the motor fit assumed.
 pub(super) fn axes_of(project: &Project) -> (Vec<TravelModule>, Vec<(Level, String)>) {
@@ -1012,6 +1036,51 @@ mod tests {
         // Step 1 is 10 Hz: about 0.15 m/s after the 4 s ramp (5 s at 50 Hz scale).
         assert!(position(&run) > 1.5, "{}", position(&run));
         assert!(reading(&run.active.as_ref().unwrap().lp.modules[0]).contains("Hz"));
+    }
+
+    #[test]
+    fn the_3d_picture_follows_a_travel_axis_and_the_hook_leans_back_when_it_starts() {
+        let (doc, button) = axis(None);
+        let ids = travel_ids(doc.project());
+        assert_eq!(ids.len(), 1, "{ids:?}");
+        // Drive the axis by hand, frame by frame, and feed the picture the way the window does.
+        let project = doc.project();
+        let (modules, _) = axes_of(project);
+        let mut lp = TravelLoop::new(StepConfig::default()).unwrap();
+        lp.modules = modules;
+        let mut run = DriveRun {
+            active: Some(Active {
+                lp,
+                hl: DriveHoistLoop::new(StepConfig::default()).unwrap(),
+                cw: ClWinchLoop::new(StepConfig::default()).unwrap(),
+                acc: 0.0,
+            }),
+            ..Default::default()
+        };
+        let mut live = LiveView::default();
+        live.on = true;
+        live.reset_poles(project);
+        live.poles.set_all(project, button, true);
+        let mut picture = super::super::hoist_3d::Hoist3d::default();
+        let start = picture.bridge_start_m();
+        let mut lean = 0.0_f32;
+        let mut last = None;
+        for _ in 0..1250 {
+            advance(&mut run, &mut live, project, 0.016);
+            let t = picture.travel(0.016, [run.travel_of(&ids[0]), None], 4.0);
+            lean = lean.min(t.swing_rad[0]);
+            // The trolley is not driven: it stays put and its hook does not swing.
+            assert_eq!(t.swing_rad[1], 0.0);
+            last = Some(t);
+        }
+        let t = last.unwrap();
+        let moved = position(&run);
+        assert!(moved > 1.5, "{moved}");
+        assert!((f64::from(t.bridge_m) - (f64::from(start) + moved)).abs() < 1e-3);
+        // Pulled forward, the hook trails behind: a negative lean, about atan(a/g) for the ramp.
+        assert!(lean < -0.001, "{lean}");
+        assert!(lean > -0.05, "{lean}");
+        assert!(!t.bridge_at_end);
     }
 
     #[test]

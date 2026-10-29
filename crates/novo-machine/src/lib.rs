@@ -13,6 +13,7 @@ pub mod duty_cycle;
 pub mod hoist_loop;
 pub mod port;
 pub mod spec;
+pub mod swing;
 pub mod sync_winch;
 pub mod travel_loop;
 pub mod travel_spec;
