@@ -195,12 +195,14 @@ fn a_cabinet_row_runs_its_command_and_follows_the_state() {
 }
 
 #[test]
-fn reports_and_commissioning_have_no_rail_yet() {
+fn reports_and_commissioning_have_their_rail() {
     let size = SIZES[0];
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
     go(&mut d, size, "view.3d");
     assert!(d.app.wb.rail_rect.is_some());
     go(&mut d, size, "view.reports");
-    assert!(d.app.wb.rail_rect.is_none(), "V3d brings those rails");
+    assert!(d.app.wb.rail_rect.is_some(), "the Reports rail");
+    go(&mut d, size, "view.commissioning");
+    assert!(d.app.wb.rail_rect.is_some(), "the Commissioning rail");
 }
