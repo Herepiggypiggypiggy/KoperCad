@@ -19,6 +19,7 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 use crate::bmecat::{BmecatRead, read_bmecat};
+use crate::cadmatch::CadLinks;
 use crate::catalog::{Catalog, CatalogError, CatalogPart, user_catalog_path};
 use crate::csv::import_catalog;
 use crate::etim::EtimModel;
@@ -89,6 +90,9 @@ pub struct InboxReport {
     pub notes: Vec<String>,
     pub dry_run: bool,
     pub catalog_size: usize,
+    /// CAD file names the makers' catalogs list for the parts read, kept so
+    /// Add CAD files can tell a downloaded file belongs to a part.
+    pub cad_files_listed: usize,
 }
 
 impl InboxReport {
@@ -149,6 +153,15 @@ impl InboxReport {
                     ""
                 }
             ));
+            if self.cad_files_listed > 0 {
+                t.push_str(&format!(
+                    "\n{} CAD file name{} listed by the catalogs {} remembered: Add CAD files uses {} to match downloaded files to parts.\n",
+                    self.cad_files_listed,
+                    if self.cad_files_listed == 1 { "" } else { "s" },
+                    if self.dry_run { "would be" } else { "are" },
+                    if self.cad_files_listed == 1 { "it" } else { "them" },
+                ));
+            }
             t.push_str("\nCompleteness (Good 80%+, Fair 40-79%, Poor under 40%):\n");
             for (maker, m) in &self.makers {
                 t.push_str(&format!(
@@ -283,6 +296,8 @@ struct Run {
     parts: Vec<CatalogPart>,
     /// The ETIM release the user installed, for codes in BMEcat files.
     etim: Option<EtimModel>,
+    /// CAD files the BMEcat files list for their articles.
+    listed: Vec<crate::bmecat::ListedCadFile>,
 }
 
 /// Reads every file under `inbox`, checks the parts and merges them into
@@ -326,6 +341,12 @@ pub fn import_inbox(
         unique.insert(p.key(), p);
     }
     let parts: Vec<CatalogPart> = unique.into_values().collect();
+    // Only the files of parts that are kept.
+    let kept: std::collections::BTreeSet<_> = parts.iter().map(CatalogPart::key).collect();
+    let listed: Vec<_> = std::mem::take(&mut run.listed)
+        .into_iter()
+        .filter(|l| kept.contains(&l.key))
+        .collect();
 
     let mut catalog = if catalog_path.exists() {
         Catalog::load(&catalog_path)?
@@ -335,6 +356,7 @@ pub fn import_inbox(
     let preview = catalog.preview_merge(&parts);
     let mut report = run.report;
     report.dry_run = opts.dry_run;
+    report.cad_files_listed = listed.len();
 
     for p in &parts {
         let m = report.makers.entry(p.manufacturer.clone()).or_default();
@@ -384,6 +406,17 @@ pub fn import_inbox(
             catalog.upsert(p);
         }
         catalog.save(&catalog_path)?;
+        // The library folder is beside the catalog, as `default_library_root`
+        // has it. A links file that cannot be written only loses a hint.
+        if !listed.is_empty()
+            && let Some(dir) = catalog_path.parent()
+            && let Err(e) = CadLinks::remember_listed(&dir.join("library"), &listed)
+        {
+            report.warnings.push(format!(
+                "The CAD file names the catalogs list could not be remembered: {e}"
+            ));
+            report.cad_files_listed = 0;
+        }
     } else {
         for p in parts {
             catalog.upsert(p);
@@ -549,6 +582,7 @@ fn read_file(inbox: &Path, file: &Path, opts: &InboxOptions, run: &mut Run) {
             return;
         }
     };
+    let mut listed = std::mem::take(&mut extras.listed);
     for n in extras.notes {
         run.report.warnings.push(format!("{label}: {n}"));
     }
@@ -592,13 +626,16 @@ fn read_file(inbox: &Path, file: &Path, opts: &InboxOptions, run: &mut Run) {
             .push(p);
     }
     let mut counted: Vec<String> = Vec::new();
+    let mut moved = BTreeMap::new();
     for (_, (recipe, mut group, source)) in groups {
         let ctx = ApplyContext {
             source,
             file: &name,
             imported: &opts.today,
         };
+        let before: Vec<_> = group.iter().map(CatalogPart::key).collect();
         let rep = recipe.apply(&mut group, &ctx);
+        moved.extend(before.into_iter().zip(group.iter().map(CatalogPart::key)));
         for (feature, n) in rep.unmapped {
             run.report
                 .notes
@@ -619,6 +656,8 @@ fn read_file(inbox: &Path, file: &Path, opts: &InboxOptions, run: &mut Run) {
             run.parts.push(p);
         }
     }
+    crate::bmecat::ListedCadFile::follow(&mut listed, &moved);
+    run.listed.append(&mut listed);
 }
 
 fn maker_label(r: &MakerRecipe) -> &str {
@@ -645,6 +684,7 @@ fn recipe_by_name_in(file_name: &str) -> Option<&'static MakerRecipe> {
 struct Extras {
     notes: Vec<String>,
     unread: std::collections::BTreeSet<String>,
+    listed: Vec<crate::bmecat::ListedCadFile>,
 }
 
 fn bmecat(
@@ -657,6 +697,7 @@ fn bmecat(
         .map(|r: BmecatRead| {
             extras.notes.extend(r.notes);
             extras.unread.extend(r.etim_unread);
+            extras.listed.extend(r.cad_files);
             r.parts.into_iter().map(|p| (p, "import:bmecat")).collect()
         })
         .map_err(|e| e.to_string())
@@ -836,6 +877,77 @@ mod tests {
             today: "2026-10-16".into(),
             dry_run: false,
         }
+    }
+
+    fn bmecat_with_cad(pid: &str, file: &str) -> String {
+        bmecat_file("Phoenix Contact GmbH &amp; Co. KG", pid, 2).replace(
+            "</PRODUCT></T_NEW_CATALOG>",
+            &format!(
+                "<MIME_INFO><MIME><MIME_SOURCE>https://example.invalid/cad/{file}</MIME_SOURCE></MIME></MIME_INFO></PRODUCT></T_NEW_CATALOG>"
+            ),
+        )
+    }
+
+    #[test]
+    fn cad_files_a_catalog_lists_are_remembered_beside_the_catalog_and_a_dry_run_keeps_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let inbox = dir.path().join("inbox");
+        prepare_inbox(&inbox).unwrap();
+        fs::write(
+            inbox.join("phoenix-contact/cat.xml"),
+            bmecat_with_cad("3044076", "Drawing-0042.stp"),
+        )
+        .unwrap();
+        let cat = dir.path().join("parts.json");
+        let links = dir.path().join("library");
+
+        let dry = import_inbox(
+            &inbox,
+            Some(&cat),
+            &InboxOptions {
+                dry_run: true,
+                ..opts()
+            },
+        )
+        .unwrap();
+        assert_eq!(dry.cad_files_listed, 1);
+        assert!(
+            dry.render().contains("would be remembered"),
+            "{}",
+            dry.render()
+        );
+        assert!(!CadLinks::path_in(&links).exists());
+
+        let r = import_inbox(&inbox, Some(&cat), &opts()).unwrap();
+        assert!(
+            r.render().contains("1 CAD file name listed"),
+            "{}",
+            r.render()
+        );
+        let saved = CadLinks::load(&links);
+        let key = crate::catalog::PartKey::new("Phoenix Contact", "3044076");
+        assert_eq!(saved.listed_file("DRAWING-0042.STP"), &[key]);
+
+        // A rerun adds nothing twice.
+        import_inbox(&inbox, Some(&cat), &opts()).unwrap();
+        assert_eq!(CadLinks::load(&links).listed_len(), 1);
+    }
+
+    #[test]
+    fn a_catalog_without_cad_files_writes_no_links_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let inbox = dir.path().join("inbox");
+        prepare_inbox(&inbox).unwrap();
+        fs::write(
+            inbox.join("phoenix-contact/cat.xml"),
+            bmecat_file("Phoenix Contact GmbH &amp; Co. KG", "3044076", 2),
+        )
+        .unwrap();
+        let cat = dir.path().join("parts.json");
+        let r = import_inbox(&inbox, Some(&cat), &opts()).unwrap();
+        assert_eq!(r.cad_files_listed, 0);
+        assert!(!r.render().contains("CAD file name"));
+        assert!(!CadLinks::path_in(&dir.path().join("library")).exists());
     }
 
     #[test]

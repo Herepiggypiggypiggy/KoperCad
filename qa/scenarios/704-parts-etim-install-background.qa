@@ -1,0 +1,34 @@
+@title Parts: installing an ETIM release goes on in the background and the window keeps working
+@area Parts
+# KOPERCAD_QA_SLOW_ETIM_MS holds the install for 6 s so the "Installing" line can be seen; the release is the made-up test tables.
+@env KOPERCAD_QA_SLOW_ETIM_MS=6000
+fresh
+key ctrl+k
+text "parts"
+wait 10
+key Return
+wait 20
+click_text "More"
+wait 10
+expect "No ETIM release installed"
+answer_dialog qa/fixtures/parts/etim-test
+click_text "Install ETIM release (folder)"
+wait 10
+expect "Installing the ETIM release"
+note the window still answers while the release is installed: the menu opens and says so
+click_text "More"
+wait 10
+expect "Installing the ETIM release"
+expect_disabled "Install ETIM release (ZIP or CSV)"
+shot installing
+check_layout
+click_text "More"
+wait_s 8
+click_text "More"
+wait 10
+expect "features"
+expect_not "Installing the ETIM release"
+expect_not "No ETIM release installed"
+expect_enabled "Install ETIM release (folder)"
+shot installed
+check_layout

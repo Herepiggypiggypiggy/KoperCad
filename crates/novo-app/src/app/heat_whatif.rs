@@ -31,6 +31,15 @@ use super::heat_sweep::{key_of, settings_for};
 /// Width of the window's content, points: it fits beside the view cube at
 /// 1366 px.
 const WIDTH: f32 = 400.0;
+fn rect_id() -> egui::Id {
+    egui::Id::new("whatif_window_rect")
+}
+
+/// Where the window was drawn last, for panels that start beside it.
+pub(super) fn drawn_rect(ctx: &egui::Context) -> Option<egui::Rect> {
+    ctx.data(|d| d.get_temp::<egui::Rect>(rect_id()))
+}
+
 /// Width of the window with its frame, points.
 pub(super) const WINDOW_WIDTH: f32 = WIDTH + 24.0;
 /// Tallest the results get before they scroll, points.
@@ -406,7 +415,7 @@ impl Wizard {
         // Folds to its title bar, so the preview behind it can be looked at
         // on a small screen. It opens above `at` (its old bottom left
         // corner) and can be dragged and resized from there.
-        super::panel::dialog(ctx, "Cooling what-if", [WINDOW_WIDTH, 0.0])
+        let shown = super::panel::dialog(ctx, "Cooling what-if", [WINDOW_WIDTH, 0.0])
             .open(super::panel::esc(ctx, &mut open))
             // The list scrolls inside; the buttons below it stay in view.
             .scroll([false, false])
@@ -464,6 +473,9 @@ impl Wizard {
                 ui.add_space(4.0);
                 ui.label(RichText::new(MODEL_NOTE).small().color(pal.text_secondary));
             });
+        if let Some(r) = shown {
+            ctx.data_mut(|d| d.insert_temp(rect_id(), r.response.rect));
+        }
         if ask.is_some() {
             self.apply = ask;
         }

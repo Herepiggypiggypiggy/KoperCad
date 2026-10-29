@@ -195,8 +195,10 @@ fn wires_are_cut_from_reels_with_the_allowance_held_back() {
     let (mut doc, h) = starter();
     cabinet(&mut doc, &h, "+CAB", &[1000.0]);
     wired(&mut doc);
-    // Small reels so that several are needed: 2 m with 5 % held back.
-    with_settings(&mut doc, |s| s.reel_m = 2.0);
+    // Small reels so that several are needed: 3 m with 5 % held back (the
+    // three longest wires leave their terminals facing away from the only
+    // duct and come back, about 2.6 m each).
+    with_settings(&mut doc, |s| s.reel_m = 3.0);
     let jobs = bench_jobs(doc.project());
     let hookup: Vec<_> = jobs.iter().filter(|j| j.cable.is_none()).collect();
     assert!(hookup.len() > 5);
@@ -212,12 +214,12 @@ fn wires_are_cut_from_reels_with_the_allowance_held_back() {
     assert_eq!(group.wires, same.len());
     let total: f64 = same.iter().map(|j| j.cut_mm).sum::<f64>() / 1000.0;
     assert!((group.metres - total).abs() < 1e-6);
-    // Never more on a reel than 2 m less the allowance, and no reel bought too many.
+    // Never more on a reel than 3 m less the allowance, and no reel bought too many.
     for r in &group.reels {
-        assert!(r.used_m * 1.05 <= 2.0 + 1e-9, "reel holds {} m", r.used_m);
+        assert!(r.used_m * 1.05 <= 3.0 + 1e-9, "reel holds {} m", r.used_m);
     }
-    assert!(group.new_reels as f64 >= (total * 1.05 / 2.0).ceil() - 1e-9);
-    assert!(group.new_reels as f64 <= (total * 1.05 / 2.0).ceil() + 3.0);
+    assert!(group.new_reels as f64 >= (total * 1.05 / 3.0).ceil() - 1e-9);
+    assert!(group.new_reels as f64 <= (total * 1.05 / 3.0).ceil() + 3.0);
     // The wires of the other colours are on their own reels.
     assert!(
         plan.reels

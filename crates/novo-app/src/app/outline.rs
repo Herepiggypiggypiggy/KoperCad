@@ -23,7 +23,9 @@
 //! they are tested without a window.
 
 use std::collections::BTreeSet;
+use std::rc::Rc;
 
+use crate::backend::PageRow;
 use eframe::egui;
 use novo_core::{AnyId, Aspect, Command, DeviceTag, MountingPlate, PageId, PageKind};
 use novo_layout::sizing::EnclosureSize;
@@ -118,6 +120,21 @@ pub(super) struct Confirm {
     act: Act,
 }
 
+/// What the Pages list was built from, and what it made.
+struct OutlineCache {
+    key: OutlineKey,
+    page_rows: Rc<Vec<PageRow>>,
+    tree_rows: Rc<Vec<TreeRow>>,
+}
+
+type OutlineKey = (
+    Option<std::path::PathBuf>,
+    u64,
+    usize,
+    PageView,
+    BTreeSet<String>,
+);
+
 /// The tree's state, owned by the app.
 pub(super) struct OutlineState {
     pub(super) collapsed: BTreeSet<String>,
@@ -134,6 +151,8 @@ pub(super) struct OutlineState {
     pub(super) rename: Option<Rename>,
     /// The rows last drawn, for the keys.
     pub(super) rows: Vec<TreeRow>,
+    /// The Pages list's rows, kept until the project, view or folds change.
+    cache: Option<OutlineCache>,
     pub(super) cabinet_form: Option<CabinetForm>,
     pub(super) props: Option<PropsForm>,
     pub(super) confirm: Option<Confirm>,
@@ -160,6 +179,7 @@ impl OutlineState {
             rect: None,
             rename: None,
             rows: Vec::new(),
+            cache: None,
             cabinet_form: None,
             props: None,
             confirm: None,
@@ -336,24 +356,44 @@ impl NovoApp {
         ui.add_space(2.0);
         self.filing_banner(ui);
 
-        let page_rows = self.page_rows();
+        // The rows of the Pages list are worked out once per change of the
+        // project, the view or the folds: at a thousand pages that was most
+        // of the cost of an idle frame.
+        let key = self.outline_cache_key();
+        if self.ol.cache.as_ref().is_none_or(|c| c.key != key) {
+            let page_rows = self.page_rows();
+            let tree_rows = match self.backend.document() {
+                Some(doc) => tree::build(
+                    doc.project(),
+                    &page_rows,
+                    self.page_view,
+                    &self.ol.collapsed,
+                ),
+                None => Vec::new(),
+            };
+            self.ol.cache = Some(OutlineCache {
+                key,
+                page_rows: Rc::new(page_rows),
+                tree_rows: Rc::new(tree_rows),
+            });
+        }
+        let cache = self.ol.cache.as_ref().expect("filled above");
+        let (page_rows, cached_rows) = (Rc::clone(&cache.page_rows), Rc::clone(&cache.tree_rows));
         self.resolve_reveal(&page_rows);
         let filter = self.page_filter.trim().to_owned();
-        let tree_rows = match self.backend.document() {
-            Some(doc) if filter.is_empty() => tree::build(
-                doc.project(),
-                &page_rows,
-                self.page_view,
-                &self.ol.collapsed,
-            ),
-            _ => Vec::new(),
+        let tree_rows: Rc<Vec<TreeRow>> = if filter.is_empty() {
+            cached_rows
+        } else {
+            Rc::new(Vec::new())
         };
         let flat = match self.backend.document() {
             Some(doc) if !filter.is_empty() => tree::filtered(doc.project(), &page_rows, &filter),
             _ => Vec::new(),
         };
-        self.ol.rows = tree_rows.clone();
-        if filter.is_empty() {
+        if self.ol.rows != *tree_rows {
+            self.ol.rows = (*tree_rows).clone();
+        }
+        if filter.is_empty() && !self.ol.picked.is_empty() {
             // Pages that are gone or folded away leave the selection.
             let shown: BTreeSet<PageId> = tree_rows
                 .iter()
@@ -397,7 +437,7 @@ impl NovoApp {
         let mut net_jump = None;
         egui::ScrollArea::vertical()
             .auto_shrink(false)
-            .show(ui, |ui| {
+            .show_viewport(ui, |ui, viewport| {
                 self.auto_scroll(ui);
                 if !filter.is_empty() {
                     if flat.is_empty() {
@@ -416,9 +456,48 @@ impl NovoApp {
                     net_jump = self.net_sections(ui, &filter);
                     return;
                 }
-                for row in &tree_rows {
+                // Only the rows in view are laid out: a project of a thousand
+                // pages has a thousand rows, all the same height.
+                let step = ROW_H + ui.spacing().item_spacing.y;
+                let top = ui.cursor().top();
+                if let Some(key) = self
+                    .ol
+                    .scroll_to
+                    .take_if(|key| tree_rows.iter().any(|r| r.key.as_str() == key.as_str()))
+                    && let Some(at) = tree_rows.iter().position(|r| r.key == key)
+                {
+                    let target = egui::Rect::from_min_size(
+                        egui::pos2(ui.max_rect().left(), top + at as f32 * step),
+                        egui::vec2(ui.available_width(), ROW_H),
+                    );
+                    ui.scroll_to_rect(target, Some(egui::Align::Center));
+                }
+                let margin = 3;
+                let first = ((viewport.top() / step).floor().max(0.0) as usize)
+                    .saturating_sub(margin)
+                    .min(tree_rows.len());
+                let last = (((viewport.bottom() / step).ceil().max(0.0) as usize) + margin)
+                    .clamp(first, tree_rows.len());
+                if first > 0 {
+                    ui.add_space((first as f32 * step - ui.spacing().item_spacing.y).max(0.0));
+                }
+                #[cfg(test)]
+                for (n, row) in tree_rows.iter().enumerate() {
+                    if !(first..last).contains(&n) {
+                        let rect = egui::Rect::from_min_size(
+                            egui::pos2(ui.max_rect().left(), top + n as f32 * step),
+                            egui::vec2(ui.available_width(), ROW_H),
+                        );
+                        self.ol.rects.insert(row.key.clone(), rect);
+                    }
+                }
+                for row in &tree_rows[first..last] {
                     let out = self.tree_row(ui, row, None);
                     collect(out, row, &mut acts, &mut opened, &mut select);
+                }
+                let after = tree_rows.len() - last;
+                if after > 0 {
+                    ui.add_space((after as f32 * step - ui.spacing().item_spacing.y).max(0.0));
                 }
                 net_jump = self.net_sections(ui, &filter);
                 // The empty space under the rows is part of the tree: a
@@ -823,6 +902,20 @@ impl NovoApp {
 
     // ------------------------------------------------------------------
     // One row
+
+    /// What the Pages list's rows depend on.
+    fn outline_cache_key(&self) -> OutlineKey {
+        let (revision, pages) = self.backend.document().map_or((0, 0), |d| {
+            (d.project().revision(), d.project().pages().count())
+        });
+        (
+            self.backend.file(),
+            revision ^ ((pages as u64) << 48),
+            self.machine_generation() as usize,
+            self.page_view,
+            self.ol.collapsed.clone(),
+        )
+    }
 
     fn tree_row(&mut self, ui: &mut egui::Ui, row: &TreeRow, place: Option<&String>) -> RowOut {
         let mut out = RowOut::default();

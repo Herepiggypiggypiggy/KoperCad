@@ -22,6 +22,8 @@ pub(crate) enum Model {
     Heat,
     /// Motor start speed and current curve.
     MotorStart,
+    /// Motor torque, current and speed on a variable-frequency drive.
+    MotorFrequency,
     /// Wire lengths before routing.
     WireLength,
     /// Lengths of wires that end on the door or another surface.
@@ -44,7 +46,7 @@ pub(crate) struct Row {
 }
 
 /// Every number the product labels, in the order of the page.
-pub(crate) const ROWS: [Row; 7] = [
+pub(crate) const ROWS: [Row; 8] = [
     Row {
         model: Model::Ampacity,
         number: "Cable and wire ampacity, voltage drop tables",
@@ -72,6 +74,13 @@ pub(crate) const ROWS: [Row; 7] = [
         label: "estimated",
         text: "Estimated from the nameplate with a standard induction-motor model. The first-cycle inrush peak and the spike when a star-delta starter re-closes are not shown.",
         shown: "Simulate motor start window",
+    },
+    Row {
+        model: Model::MotorFrequency,
+        number: "Motor torque, current and speed at variable frequency",
+        label: "model, fitted to nameplate",
+        text: "An equivalent circuit fitted to the nameplate, run at other frequencies with reactances scaled by frequency and the voltage from the V/f law. The breakdown torque is exact for that circuit; the circuit is not a measured motor. No flux transients, no harmonics from the drive, no saturation unless entered.",
+        shown: "Simulate > Motor at variable frequency",
     },
     Row {
         model: Model::WireLength,
@@ -203,6 +212,7 @@ mod tests {
             Model::Pfhd,
             Model::Heat,
             Model::MotorStart,
+            Model::MotorFrequency,
             Model::WireLength,
             Model::DoorWire,
             Model::Standards,

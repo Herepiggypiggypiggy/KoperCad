@@ -661,7 +661,28 @@ pub fn answer_symbol(
     for p in &pins {
         let pin_name = &s.pins[usize::from(p.pin)].name;
         lines.push(Line::plain(format!("Pin {pin_name}:")));
-        lines.extend(p.explanation.lines(project, name).into_iter().map(|mut l| {
+        let mut about = p.explanation.lines(project, name);
+        if is_coil_symbol && !on && p.explanation.verdict == Verdict::Isolated {
+            // A dead pin of a coil whose other pin carries (or would carry,
+            // were a contact closed) a potential: name that potential, so the advice holds for a feed side or a return
+            // side, AC or DC. With nothing on the other pin either, the
+            // generic line stays.
+            let other = pins.iter().find(|q| q.pin != p.pin).and_then(|q| {
+                let pot = match &q.explanation.verdict {
+                    Verdict::Carries(route) | Verdict::Cut(route) => route.potential,
+                    Verdict::Driven(pot) => *pot,
+                    _ => return None,
+                };
+                let pot = project.potential(pot).map_or("?", |x| x.name.as_str());
+                Some((s.pins[usize::from(q.pin)].name.clone(), pot.to_owned()))
+            });
+            if let Some((other_pin, pot)) = other {
+                about = vec![Line::plain(format!(
+                    "Pin {other_pin} is on {pot}, but nothing connects pin {pin_name} to the other side of the supply. Wire it to the return (N, L2, 0 V) or the control feed."
+                ))];
+            }
+        }
+        lines.extend(about.into_iter().map(|mut l| {
             l.text = format!("  {}", l.text);
             l
         }));

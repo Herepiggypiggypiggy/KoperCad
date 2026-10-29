@@ -1,0 +1,16 @@
+@title Heat run refuses an enclosure over 20 m on a side
+@area Heat
+# CH-02: the engine's limit was not on the 3D path. Fixture: qa/fixtures/make_long_tag_fixture.py.
+open qa/fixtures/cabinet-huge-enclosure.novo
+wait 20
+click_text Cabinet #1
+wait 30
+key ctrl+k
+wait 3
+text Simulate heat of the cabinet
+wait 4
+key Enter
+wait 30
+shot refusal
+expect "Cannot simulate"
+check_layout

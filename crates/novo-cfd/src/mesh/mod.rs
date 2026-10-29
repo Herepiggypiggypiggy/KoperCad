@@ -20,7 +20,7 @@ mod classify;
 mod preview;
 mod regions;
 
-pub use axis::Spacing;
+pub use axis::{Spacing, worst_ratio};
 pub use classify::{BodyResolution, CellClass, Mesh, MixedCell};
 pub use preview::MeshPreview;
 pub use regions::{Region, domain_mm, opening_spans, regions, regions_with};
@@ -207,6 +207,22 @@ fn edges_for(dom: [f64; 3], spans: &[Vec<Span>; 3], s: f64, st: &MeshSettings) -
         max_ratio: st.max_ratio,
     };
     std::array::from_fn(|a| axis_edges(dom[a], &spans[a], &sp))
+}
+
+/// The axis (`'x'`, `'y'` or `'z'`) of a grid whose neighbouring cells differ by
+/// more than `max_ratio`, with the worst ratio. The planner keeps to the bound
+/// unless it cannot grade a very large cell next to a tiny one; the run then
+/// says so (see the cabinet solver's notes).
+pub fn grading_exceeded(grid: &Grid3, max_ratio: f64) -> Option<(char, f64)> {
+    [
+        ('x', &grid.x_edges_mm),
+        ('y', &grid.y_edges_mm),
+        ('z', &grid.z_edges_mm),
+    ]
+    .into_iter()
+    .map(|(c, e)| (c, worst_ratio(e)))
+    .filter(|(_, r)| *r > max_ratio * 1.01)
+    .max_by(|a, b| a.1.total_cmp(&b.1))
 }
 
 /// A grid and how the budget was spent.

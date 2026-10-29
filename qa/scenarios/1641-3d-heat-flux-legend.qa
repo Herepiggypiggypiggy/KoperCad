@@ -1,0 +1,22 @@
+@title 3D heat: the Heat flow layer has a W/m2 key and the through-flow line says how many watts the air carries out
+@area 3D
+@sizes 1366x768 1920x1080
+# The hot cabinet with four grilles (qa/fixtures/make_vents_fixtures.py). After the run, Heat flow on: the strip gets an orange bar in W/m2 and the through-flow line names the watts carried out by the air. The pictures are the evidence (drawn text and colour); the finished run is checked.
+open qa/fixtures/cabinet-vents-four-grilles.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 170
+expect_not "Locked while the run goes"
+click_text "Heat flow"
+wait 20
+shot 01-heat-flow-key
+check_layout
+check_blank 01-heat-flow-key

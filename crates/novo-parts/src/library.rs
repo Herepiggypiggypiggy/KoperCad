@@ -230,6 +230,22 @@ impl LocalLibrary {
             .collect())
     }
 
+    /// The keys of every part with a stored file, from one read of the
+    /// records. An unreadable records file counts as none, like [`has`](Self::has).
+    pub fn stored_keys(&self) -> std::collections::HashSet<PartKey> {
+        self.records()
+            .map(|all| all.iter().map(SourceRecord::key).collect())
+            .unwrap_or_default()
+    }
+
+    /// Size and modification time of the records file, a cheap way to see
+    /// whether anything was stored or removed since the last look. `None`
+    /// when there is no file.
+    pub fn stamp(&self) -> Option<(u64, std::time::SystemTime)> {
+        let meta = fs::metadata(self.records_path()).ok()?;
+        Some((meta.len(), meta.modified().ok()?))
+    }
+
     /// Whether any file of the part is stored.
     pub fn has(&self, key: &PartKey) -> bool {
         self.records_for(key).is_ok_and(|r| !r.is_empty())

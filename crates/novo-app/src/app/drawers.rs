@@ -99,8 +99,10 @@ impl NovoApp {
         // Controls for lessons to point at, registered after the panel.
         let mut spots: Vec<(String, egui::Rect, bool, String)> = Vec::new();
         let panel = egui::Panel::bottom("drawer")
+            // The user can drag it taller (a long strip at 1366x768 showed three
+            // rows); it starts at its share of the window.
             .default_size(height)
-            .size_range(120.0..=ui.ctx().content_rect().height() * 0.7)
+            .size_range(120.0..=(ui.ctx().content_rect().height() * 0.6).max(120.0))
             .resizable(true)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {

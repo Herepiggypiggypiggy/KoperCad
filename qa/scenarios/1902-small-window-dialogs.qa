@@ -1,0 +1,38 @@
+@title Dialogs in a small window: Done and the Save changes buttons stay in view
+@area Layout
+@sizes 1366x768
+# Floor cases of the window redesign: 380 x 240 points. The window shrinks
+# while the dialog is open, then grows back.
+click_text "Open example"
+wait 20
+key ctrl+a
+key Delete
+wait 10
+key ctrl+n
+wait 10
+shot save-changes-large
+resize 380 240
+wait 12
+shot save-changes-380x240
+expect_enabled "Cancel"
+check_layout
+resize 1366 768
+wait 12
+shot save-changes-grown-back
+key Escape
+wait 6
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+resize 380 240
+wait 12
+shot preferences-380x240
+expect_enabled Done
+resize 1366 768
+wait 12
+shot preferences-grown-back
+click_text Done
+wait 6

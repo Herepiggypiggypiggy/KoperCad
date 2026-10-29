@@ -32,9 +32,10 @@ use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 use thiserror::Error;
 
-use crate::catalog::CatalogPart;
+use crate::catalog::{CatalogPart, PartKey};
 use crate::csv::cell_value;
 use crate::etim::EtimModel;
+use crate::library::FileKind;
 use crate::schema::Price;
 use crate::sheet::property_key;
 
@@ -67,6 +68,69 @@ pub struct BmecatRead {
     /// ETIM feature, value or unit codes found that the supplied ETIM release
     /// (or none) could not translate, as distinct codes.
     pub etim_unread: BTreeSet<String>,
+    /// CAD file names the catalog lists for its articles (`MIME_SOURCE`).
+    pub cad_files: Vec<ListedCadFile>,
+}
+
+/// A CAD file the maker's catalog lists for an article.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedCadFile {
+    pub key: PartKey,
+    /// The name the file has when downloaded: the last part of the source.
+    pub file_name: String,
+    /// What the catalog says, a file name or a web address.
+    pub source: String,
+}
+
+impl ListedCadFile {
+    /// Points the listed files at the keys their parts have now: a maker
+    /// recipe can write the maker's name differently after the file was read.
+    /// `moved` maps the key a part had when read to the key it has now.
+    pub(crate) fn follow(
+        listed: &mut [ListedCadFile],
+        moved: &std::collections::BTreeMap<PartKey, PartKey>,
+    ) {
+        for l in listed {
+            if let Some(now) = moved.get(&l.key) {
+                l.key = now.clone();
+            }
+        }
+    }
+}
+
+/// Most CAD files kept per article, and the longest source text read.
+const MAX_CAD_PER_ARTICLE: usize = 10;
+const MAX_SOURCE_CHARS: usize = 1000;
+
+/// The file name at the end of a `MIME_SOURCE`: the last `/` or `\` part,
+/// without a query or fragment, with `%20` style escapes decoded. `None` when
+/// it names no CAD file (STEP, DXF, EDZ or ZIP).
+fn cad_file_name(source: &str) -> Option<String> {
+    let path = source.split(['?', '#']).next()?;
+    let last = path.rsplit(['/', '\\']).next()?.trim();
+    let mut bytes = Vec::with_capacity(last.len());
+    let raw = last.as_bytes();
+    let hex = |b: u8| (b as char).to_digit(16);
+    let mut i = 0;
+    while i < raw.len() {
+        if raw[i] == b'%'
+            && i + 2 < raw.len()
+            && let (Some(hi), Some(lo)) = (hex(raw[i + 1]), hex(raw[i + 2]))
+        {
+            bytes.push((hi * 16 + lo) as u8);
+            i += 3;
+        } else {
+            bytes.push(raw[i]);
+            i += 1;
+        }
+    }
+    let name = String::from_utf8(bytes).ok()?;
+    let name = name.trim();
+    matches!(
+        FileKind::of_file_name(name),
+        FileKind::Step | FileKind::Dxf | FileKind::Edz | FileKind::Zip
+    )
+    .then(|| name.to_owned())
 }
 
 /// Parses BMEcat text. `default_manufacturer` is used for articles that
@@ -312,6 +376,8 @@ struct Draft {
     tiers: Vec<Tier>,
     tier: Tier,
     price_date: String,
+    /// `MIME_SOURCE` texts of the article.
+    mime_sources: Vec<String>,
 }
 
 #[derive(Default)]
@@ -391,6 +457,9 @@ impl Walk {
                         d.type_number = text.to_owned()
                     }
                     "KEYWORD" => d.keywords.push(text.to_owned()),
+                    "MIME_SOURCE" if d.mime_sources.len() < 4 * MAX_CAD_PER_ARTICLE => d
+                        .mime_sources
+                        .push(text.chars().take(MAX_SOURCE_CHARS).collect()),
                     "REFERENCE_FEATURE_SYSTEM_NAME" => self.system = text.to_owned(),
                     "REFERENCE_FEATURE_GROUP_ID" => d.class(&self.system, text),
                     "FNAME" => self.fname = text.to_owned(),
@@ -434,8 +503,9 @@ impl Walk {
                 }
             }
             "PRODUCT" => {
-                if let Some(d) = self.cur.take() {
+                if let Some(mut d) = self.cur.take() {
                     let mut notes = Vec::new();
+                    let sources = std::mem::take(&mut d.mime_sources);
                     match d.finish(
                         &self.supplier,
                         default_manufacturer,
@@ -444,6 +514,19 @@ impl Walk {
                     ) {
                         Some(p) => {
                             out.notes.extend(notes);
+                            let mut seen = BTreeSet::new();
+                            for source in sources {
+                                if let Some(file_name) = cad_file_name(&source)
+                                    && seen.len() < MAX_CAD_PER_ARTICLE
+                                    && seen.insert(file_name.to_ascii_uppercase())
+                                {
+                                    out.cad_files.push(ListedCadFile {
+                                        key: p.key(),
+                                        file_name,
+                                        source,
+                                    });
+                                }
+                            }
                             out.parts.push(p);
                         }
                         None => self.skipped.push(skipped_label(self.articles)),
@@ -1261,6 +1344,58 @@ mod tests {
             "{:?}",
             r.notes.last()
         );
+    }
+
+    fn with_mime(order: &str, sources: &[&str]) -> String {
+        let mimes: String = sources
+            .iter()
+            .map(|s| format!("<MIME><MIME_SOURCE>{s}</MIME_SOURCE></MIME>"))
+            .collect();
+        format!(
+            "<PRODUCT><SUPPLIER_PID>{order}</SUPPLIER_PID><MIME_INFO>{mimes}</MIME_INFO></PRODUCT>"
+        )
+    }
+
+    #[test]
+    fn cad_files_an_article_lists_are_kept_and_other_files_are_left_out() {
+        let r = one(&with_mime(
+            "EX-1",
+            &[
+                "https://example.invalid/cad/Drawing%2042.stp?download=1#x",
+                "https://example.invalid/sheets/EX-1.pdf",
+                "C:\\media\\EX-1_2D.DXF",
+                "pictures/EX-1.jpg",
+                "Drawing%2042.STP",
+                "EX-1.zip",
+                "bad%zz%4",
+            ],
+        ));
+        let names: Vec<_> = r.cad_files.iter().map(|f| f.file_name.as_str()).collect();
+        assert_eq!(names, ["Drawing 42.stp", "EX-1_2D.DXF", "EX-1.zip"]);
+        assert!(r.cad_files.iter().all(|f| f.key == r.parts[0].key()));
+        assert!(
+            r.cad_files[0]
+                .source
+                .starts_with("https://example.invalid/cad/")
+        );
+    }
+
+    #[test]
+    fn a_catalog_without_cad_links_lists_none_and_an_article_cannot_list_without_end() {
+        assert!(one(&with_mime("EX-1", &["a.pdf"])).cad_files.is_empty());
+        let many: Vec<String> = (0..60).map(|i| format!("f{i}.stp")).collect();
+        let refs: Vec<&str> = many.iter().map(String::as_str).collect();
+        let r = one(&with_mime("EX-2", &refs));
+        assert_eq!(r.cad_files.len(), MAX_CAD_PER_ARTICLE);
+    }
+
+    #[test]
+    fn the_file_of_an_article_that_is_skipped_is_not_listed() {
+        let r = one(
+            "<PRODUCT><MIME_INFO><MIME><MIME_SOURCE>a.stp</MIME_SOURCE></MIME></MIME_INFO></PRODUCT>",
+        );
+        assert!(r.parts.is_empty());
+        assert!(r.cad_files.is_empty());
     }
 
     #[test]

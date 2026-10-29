@@ -72,9 +72,19 @@ impl Extensions {
     /// Builds the tables from the running add-ons. `key_in_use` says whether the program
     /// already binds a key (so the add-on's wish loses).
     pub fn build(set: &AddonSet, key_in_use: &dyn Fn(&str) -> bool) -> Extensions {
+        Extensions::build_excluding(set, key_in_use, &|_| false)
+    }
+
+    /// As [`Extensions::build`], leaving out the add-ons `stopped` names: one whose engine
+    /// stopped this session contributes nothing until it is turned off and on again.
+    pub fn build_excluding(
+        set: &AddonSet,
+        key_in_use: &dyn Fn(&str) -> bool,
+        stopped: &dyn Fn(&str) -> bool,
+    ) -> Extensions {
         let mut out = Extensions::default();
         let mut keys_taken: Vec<String> = Vec::new();
-        for entry in set.enabled() {
+        for entry in set.enabled().filter(|e| !stopped(&e.id)) {
             let Some(manifest) = &entry.manifest else {
                 continue;
             };
