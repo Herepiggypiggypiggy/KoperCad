@@ -1,2 +1,3 @@
 2026-10-29 06:30 UTC V0 (#1669) merged; V5 and V3 went to their own threads. Started V2 from main 8c9c97e.
 2026-10-29 08:00 UTC App menu, setting, tests (10), QA scenario 721 built; screenshots at both sizes in dark and light.
+- 2026-10-29 V2a follow-up: a Help icon button in the top bar (shown while the menu words are hidden, opens the app menu at Help, anchor `help.button`) and What's new as a sparkle with its count (the word in the tooltip). With the menu words shown, the Help menu is already in the bar. Test `the_help_button_opens_the_menu_at_the_help_area`, QA scenario `qa/scenarios/724-top-bar-help.qa`.
