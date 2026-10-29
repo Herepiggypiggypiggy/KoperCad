@@ -950,6 +950,11 @@ pub const DUTCH: &[Aliases] = &[
         &["eplan artikelen", "eplan onderdelen", "artikelexport"],
     ),
     nl(
+        "file.export_centre",
+        &["exporteren", "exportcentrum"],
+        &["formaten", "pdf", "dxf", "excel", "bank", "overdracht"],
+    ),
+    nl(
         "file.import_crane",
         &["importeer kraanconfigurator"],
         &["kraan", "configurator", "migreren", "overnemen"],

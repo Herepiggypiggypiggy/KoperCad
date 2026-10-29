@@ -99,39 +99,9 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("help.keymap_file", at("Help")),
     ("help.open_log_folder", at("Help")),
     ("help.copy_problem_report", at("Help")),
-    // File > Export, split by what the file is for.
-    ("export.pdf", under("File", "Export drawings")),
-    ("export.print_preview", under("File", "Export print")),
-    ("export.pdf_options", under("File", "Export print")),
-    ("export.pdf_page", under("File", "Export drawings")),
-    ("export.variant_pdf", under("File", "Export drawings")),
-    ("export.dxf_page", under("File", "Export drawings")),
-    ("export.dxf_all", under("File", "Export drawings")),
-    ("export.step", under("File", "Export drawings")),
-    ("export.plate", under("File", "Export drawings")),
-    ("export.plate_dxf", under("File", "Export drawings")),
-    ("export.drill_plan", under("File", "Export drawings")),
-    ("export.wiring_dxf", under("File", "Export drawings")),
-    ("export.handover", under("File", "Export reports")),
-    ("export.bom", under("File", "Export reports")),
-    ("export.change_report", under("File", "Export reports")),
-    ("export.commissioning", under("File", "Export reports")),
-    ("export.punch_list", under("File", "Export reports")),
-    ("export.standards_report", under("File", "Export reports")),
-    ("export.standards_xlsx", under("File", "Export reports")),
-    ("export.wirecut", under("File", "Export production")),
-    ("export.wirecut_xlsx", under("File", "Export production")),
-    ("export.wirecut_page", under("File", "Export production")),
-    ("export.plc_csv", under("File", "Export PLC")),
-    ("export.plc_plcopen", under("File", "Export PLC")),
-    ("export.plc_tia", under("File", "Export PLC")),
-    ("export.plc_studio5000", under("File", "Export PLC")),
-    ("export.plc_address_plan", under("File", "Export PLC")),
-    ("export.aml", under("File", "Export interchange")),
-    ("export.eplan", under("File", "Export interchange")),
-    ("export.sheets", under("File", "Export interchange")),
-    ("export.sheets_csv", under("File", "Export interchange")),
-    ("export.spec", under("File", "Export interchange")),
+    // File > Export... opens the Export centre; the formats are listed there.
+    ("file.export_centre", at("File")),
+    ("export.print_preview", at("File")),
     // Reports
     ("report.wirecut", at("Reports")),
     ("report.io", at("Reports")),
@@ -139,7 +109,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("report.plugs", under("Reports", "More reports")),
     ("report.singleline", under("Reports", "More reports")),
     ("report.add_page", at("Reports")),
-    ("export.report_pdf", under("Reports", "Export")),
     // Edit
     ("edit.rotate", at("Edit")),
     ("edit.mirror", at("Edit")),
@@ -276,21 +245,9 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("heat.add_grille", under("Simulate", "Heat")),
     ("heat.add_exhaust_fan", under("Simulate", "Heat")),
     // Reports
-    ("export.reports", under("Reports", "Export")),
-    ("export.assembly", under("Reports", "Export")),
-    ("export.workpack", under("Reports", "Export")),
-    ("export.wireit", under("Reports", "Export")),
-    ("export.workshop", under("Reports", "Export")),
-    ("export.scale_check", under("Reports", "Export")),
-    ("export.bench_packet", under("Reports", "Export")),
-    ("export.kitting", under("Reports", "Export")),
-    ("export.safety_sheets", under("Reports", "Export")),
     ("view.bench", at("Reports")),
     ("view.build", at("Reports")),
     ("report.designer", at("Reports")),
-    ("export.bench_cut", under("Reports", "Export")),
-    ("export.ferrules", under("Reports", "Export")),
-    ("export.labels", under("Reports", "Export")),
     ("report.toc", at("Reports")),
     ("report.bom", at("Reports")),
     ("report.devices", at("Reports")),
@@ -408,9 +365,10 @@ pub const MOVED: &[&str] = &[
     "view.devices_drawer",
 ];
 
-/// Whether the menu row of `id` moved to a rail ([`MOVED`]).
+/// Whether the menu row of `id` moved to a rail ([`MOVED`]) or to the Export
+/// centre ([`crate::centres`]).
 pub fn moved_out(id: &str) -> bool {
-    MOVED.contains(&id)
+    MOVED.contains(&id) || crate::centres::replaces_menu_row(id)
 }
 
 /// The command's place in the menu bar, or `None` for the commands in
@@ -652,11 +610,6 @@ const SUB_FIRST: &[(&str, &[&str])] = &[
             "Import",
             "Import parts",
             "Revisions",
-            "Export drawings",
-            "Export reports",
-            "Export production",
-            "Export PLC",
-            "Export interchange",
         ],
     ),
     (
@@ -823,12 +776,12 @@ mod tests {
                 matches!(
                     i,
                     MenuItem::Submenu {
-                        name: "Export drawings",
+                        name: "Import",
                         ..
                     }
                 )
             })
-            .expect("an Export drawings submenu");
+            .expect("an Import submenu");
         let new = file
             .iter()
             .position(|i| matches!(i, MenuItem::Command(c) if c.id == "file.new"))
@@ -852,7 +805,7 @@ mod tests {
     #[test]
     fn file_and_view_lead_with_the_expected_commands() {
         let file: Vec<_> = entries("File").iter().map(|(c, _)| c.id).collect();
-        assert!(file.contains(&"file.new") && file.contains(&"export.pdf"));
+        assert!(file.contains(&"file.new") && file.contains(&"file.export_centre"));
         let view: Vec<_> = entries("View").iter().map(|(c, _)| c.id).collect();
         assert!(view.contains(&"view.cabinet") && view.contains(&"nav.back"));
     }
@@ -979,23 +932,26 @@ mod tests {
         assert!(total <= 306, "the menus hold {total} rows");
     }
 
+    /// The formats are listed in the Export centre, not in the menus: File
+    /// has one Export... row and the print entry.
     #[test]
-    fn the_export_menu_is_split_and_every_export_has_a_submenu_of_its_own() {
-        for (info, p) in entries("File") {
-            if info.group == "Export" && info.id.starts_with("export.") {
-                let sub = p.submenu.unwrap();
+    fn the_export_formats_are_in_the_centre_and_file_has_one_export_row() {
+        let file: Vec<&str> = entries("File").iter().map(|(i, _)| i.id).collect();
+        assert!(file.contains(&"file.export_centre"));
+        assert!(file.contains(&"export.print_preview"));
+        for menu in MENUS {
+            for (info, p) in entries(menu) {
                 assert!(
-                    sub.starts_with("Export ") && sub != "Export other",
-                    "{} lands in {sub:?}: give it a place in PLACEMENTS",
-                    info.id
+                    !info.id.starts_with("export.") || crate::centres::ALSO_IN_MENU.contains(&info.id),
+                    "{} still has a row in {menu} > {:?}",
+                    info.id,
+                    p.submenu
                 );
             }
         }
         for item in layout("File") {
-            if let MenuItem::Submenu { name, items } = item
-                && name.starts_with("Export")
-            {
-                assert!(items.len() <= 10, "{name} has {} entries", items.len());
+            if let MenuItem::Submenu { name, .. } = item {
+                assert!(!name.starts_with("Export"), "{name} is still a submenu");
             }
         }
     }
@@ -1058,8 +1014,9 @@ mod tests {
         }
         assert_eq!(home("report.plugs"), under("Reports", "More reports"));
         assert_eq!(home("report.singleline"), under("Reports", "More reports"));
-        assert_eq!(home("export.report_pdf"), under("Reports", "Export"));
-        assert_eq!(home("export.pdf_page"), under("File", "Export drawings"));
-        assert_eq!(home("export.plate_dxf"), under("File", "Export drawings"));
+        for id in ["export.report_pdf", "export.pdf_page", "export.plate_dxf"] {
+            assert!(crate::centres::in_export_centre(id), "{id}");
+            assert!(place(crate::commands::get(id).unwrap()).is_none(), "{id}");
+        }
     }
 }
