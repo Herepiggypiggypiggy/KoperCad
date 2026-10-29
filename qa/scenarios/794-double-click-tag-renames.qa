@@ -13,8 +13,9 @@ try click_text "Motor starter DOL" Label
 wait 10
 click_text Place Button #2
 wait 20
+# egui counts a third click when the click before the pair is under 0.6 s old, so wait real time first.
 click 700 400
-wait 5
+wait_s 1
 click 318 229 double
 wait 8
 shot double
