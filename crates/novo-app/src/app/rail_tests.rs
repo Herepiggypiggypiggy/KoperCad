@@ -265,19 +265,6 @@ fn escape_closes_the_flyout_before_it_does_anything_else() {
 }
 
 #[test]
-fn only_the_schematic_has_a_rail_so_far() {
-    let size = egui::vec2(1366.0, 768.0);
-    let (_dir, mut d) = open(size);
-    let ctx = d.ctx.clone();
-    assert!(d.app.wb.rail_rect.is_some());
-    d.app.run_command(&ctx, "view.cabinet", None);
-    for _ in 0..3 {
-        d.frame_sized(size, Vec::new());
-    }
-    assert!(d.app.wb.rail_rect.is_none(), "V3c brings the Cabinet rail");
-}
-
-#[test]
 fn the_rail_stays_put_and_clickable_while_a_wire_is_under_way() {
     use novo_editor::Tool;
     // The old dock parked in the corner or moved aside while a wire was

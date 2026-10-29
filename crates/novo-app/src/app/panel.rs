@@ -76,6 +76,7 @@ pub(super) struct Panel {
     low: bool,
     own_scroll: bool,
     closable: bool,
+    dockable: bool,
 }
 
 impl Panel {
@@ -105,6 +106,7 @@ impl Panel {
             low: false,
             own_scroll: false,
             closable: false,
+            dockable: false,
         }
     }
 
@@ -113,6 +115,15 @@ impl Panel {
     /// showing it.
     pub(super) fn closable(mut self) -> Self {
         self.closable = true;
+        self
+    }
+
+    /// The panel can be docked at the left, the right or the bottom of the
+    /// canvas: two buttons in its title bar, and snap zones while it is
+    /// dragged (see `panel_dock`). Not for cards that fit their content or
+    /// have no title bar.
+    pub(super) fn dockable(mut self) -> Self {
+        self.dockable = true;
         self
     }
 
@@ -220,6 +231,21 @@ impl Panel {
     ) -> Option<egui::InnerResponse<Option<R>>> {
         let id = id(self.id);
         note_seen(ctx, self.id);
+        // Cards that fit their content, have no title bar or are flyouts
+        // cannot be docked, whatever was asked for.
+        let dockable = self.dockable && self.title_bar && !self.fit && !self.flyout;
+        // Docked: a pane of its slot, not a window.
+        if dockable && let Some(slot) = super::panel_dock::slot_of(ctx, self.id) {
+            return super::panel_dock::show_docked(
+                ctx,
+                id,
+                self.id,
+                &self.title,
+                slot,
+                self.closable,
+                add,
+            );
+        }
         // A layout preset that was just opened puts the panel where that
         // layout left it, or back at its side when the layout never moved it.
         let taken = take_place(ctx, id);
@@ -396,16 +422,28 @@ impl Panel {
             || ctx
                 .read_response(id.with("__title_click"))
                 .is_some_and(|r| r.dragged());
-        if shown.is_some()
+        let pulled = shown.is_some()
             && grabbed
             && ctx.input(|i| {
                 i.pointer
                     .press_origin()
                     .zip(i.pointer.latest_pos())
                     .is_some_and(|(from, to)| from.distance(to) > 1.0)
-            })
-        {
+            });
+        if pulled {
             mark_moved(ctx, id);
+        }
+        if dockable && shown.is_some() {
+            // The title bar buttons dock it at once; a drag that ends over a
+            // snap zone docks it there.
+            let stopped = ctx
+                .read_response(id.with("__title_click"))
+                .is_some_and(|r| r.drag_stopped());
+            let slot = super::panel_dock::title_buttons(ctx, id)
+                .or_else(|| super::panel_dock::snap_zones(ctx, self.canvas, pulled, stopped));
+            if let Some(slot) = slot {
+                super::panel_dock::set(ctx, self.id, Some(slot));
+            }
         }
         shown
     }
@@ -700,8 +738,13 @@ pub(super) fn esc<'a>(ctx: &egui::Context, open: &'a mut bool) -> &'a mut bool {
 /// them their usual size back.
 const EDGE_PANELS: &[&str] = &[
     "outline",
+    "outline_right",
     "reports_list",
+    "reports_list_right",
     "drawer",
+    "dock_left",
+    "dock_right",
+    "dock_bottom",
     "cabinet_unplaced",
     "cabinet_routes",
     "parts_detail",
@@ -744,6 +787,7 @@ fn maximise_step(
     collapsible: bool,
 ) -> Option<egui::Rect> {
     let title = ctx.read_response(id.with("__title_click"))?;
+    title_hint(ctx, id, &title);
     let hit = ctx.input(|i| {
         i.pointer
             .button_double_clicked(egui::PointerButton::Primary)
@@ -782,6 +826,44 @@ fn maximise_step(
             area
         }
     })
+}
+
+/// The words that say a double click on the title bar does something: shown
+/// while the pointer rests on the title, but not over the buttons at its right
+/// end (they have their own).
+fn title_hint(ctx: &egui::Context, id: egui::Id, title: &egui::Response) {
+    const BUTTONS: f32 = 140.0;
+    const DELAY: f32 = 0.5;
+    let (pointer, rested, down) = ctx.input(|i| {
+        (
+            i.pointer.hover_pos(),
+            i.pointer.time_since_last_movement() > DELAY,
+            i.pointer.any_down(),
+        )
+    });
+    let Some(pointer) = pointer else { return };
+    if down
+        || !rested
+        || !title.rect.contains(pointer)
+        || pointer.x >= title.rect.right() - BUTTONS.min(title.rect.width() * 0.3)
+        || ctx.layer_id_at(pointer) != Some(title.layer_id)
+    {
+        return;
+    }
+    let epoch: u32 = ctx.data_mut(|d| d.get_persisted(epoch_id())).unwrap_or(0);
+    let before: Option<(u32, egui::Rect)> = ctx.data(|d| d.get_temp(id.with("restore")));
+    let text = if before.is_some_and(|(e, _)| e == epoch) {
+        "Double click to restore"
+    } else {
+        "Double click to maximise"
+    };
+    egui::Tooltip::always_open(
+        ctx.clone(),
+        title.layer_id,
+        id.with("title_hint"),
+        egui::PopupAnchor::Pointer,
+    )
+    .show(|ui| ui.label(text));
 }
 
 /// What [`modal`] hands back: what the content returned, and whether the
@@ -1004,6 +1086,7 @@ pub(super) fn splitters_reset(ctx: &egui::Context) {
 /// size.
 pub(super) fn reset_layout(ctx: &egui::Context) {
     ctx.memory_mut(|m| m.reset_areas());
+    super::panel_dock::reset(ctx);
     // The columns and drawers that are dragged by their edge keep their size
     // apart from the floating windows.
     ctx.data_mut(|d| {

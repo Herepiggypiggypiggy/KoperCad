@@ -148,6 +148,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "switcher.commissioning",
     "outline.pages",
     "outline.toggle",
+    "page.switcher",
     "commissioning.who",
     "settings.standard.nfpa",
     "settings.standard.switch",

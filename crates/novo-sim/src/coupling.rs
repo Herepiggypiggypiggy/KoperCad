@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{DeviceId, Endpoint, Netlist, Project, SymbolId, SymbolInstance, Value};
 
-use crate::{PoleState, Solution, output_drives, solve_driven};
+use crate::{Defects, PoleState, Solution, output_drives, solve_with};
 
 /// Most rounds before a circuit that never settles (a buzzer) is given up
 /// on; the last round stands.
@@ -267,6 +267,42 @@ pub fn settle_timed(
     held: &BTreeSet<SymbolId>,
     clock: &mut Clock,
 ) -> Settled {
+    settle_faulted(
+        project,
+        netlist,
+        manual,
+        forced,
+        held,
+        clock,
+        &Faults::default(),
+    )
+}
+
+/// What injected faults do inside the coil and contact coupling (the solver part is
+/// [`Defects`]). Built by [`crate::inject`].
+#[derive(Debug, Clone, Default)]
+pub struct Faults {
+    /// Coils whose winding is open: they never energize.
+    pub coil_open: BTreeSet<SymbolId>,
+    /// Coils that are energized whatever feeds them (a jammed armature, a shorted driver).
+    pub coil_stuck_on: BTreeSet<SymbolId>,
+    /// Poles that stay closed whatever the coil or the hand says (welded).
+    pub welded: BTreeSet<(SymbolId, usize)>,
+    /// Poles that stay open (burnt out, tripped).
+    pub stuck_open: BTreeSet<(SymbolId, usize)>,
+    pub defects: Defects,
+}
+
+/// [`settle_timed`] with injected [`Faults`].
+pub fn settle_faulted(
+    project: &Project,
+    netlist: &Netlist,
+    manual: &PoleState,
+    forced: &BTreeSet<SymbolId>,
+    held: &BTreeSet<SymbolId>,
+    clock: &mut Clock,
+    faults: &Faults,
+) -> Settled {
     let coils: Vec<&SymbolInstance> = project.symbols().filter(|s| is_coil(s)).collect();
     let coil_devices: BTreeSet<DeviceId> = coils.iter().filter_map(|c| c.device()).collect();
     let driven: BTreeSet<SymbolId> = project
@@ -279,18 +315,30 @@ pub fn settle_timed(
     let mut energized: BTreeSet<SymbolId> = held
         .iter()
         .chain(forced)
+        .chain(&faults.coil_stuck_on)
         .copied()
-        .filter(|c| coils.iter().any(|k| k.id == *c))
+        .filter(|c| coils.iter().any(|k| k.id == *c) && !faults.coil_open.contains(c))
         .collect();
     // Outputs switched on by hand put their supply on their pin.
     let drives = output_drives(project, forced);
     let mut last = None;
     for _ in 0..ROUNDS {
-        let (poles, _) = poles_for(project, manual, &driven, &coils, &energized, clock);
-        let solution = solve_driven(project, netlist, &poles, &drives);
+        let (mut poles, _) = poles_for(project, manual, &driven, &coils, &energized, clock);
+        for &(symbol, group) in &faults.stuck_open {
+            poles.set(symbol, group, false);
+        }
+        for &(symbol, group) in &faults.welded {
+            poles.set(symbol, group, true);
+        }
+        let solution = solve_with(project, netlist, &poles, &drives, &faults.defects);
         let next: BTreeSet<SymbolId> = coils
             .iter()
-            .filter(|c| forced.contains(&c.id) || fed(c, netlist, &solution))
+            .filter(|c| !faults.coil_open.contains(&c.id))
+            .filter(|c| {
+                forced.contains(&c.id)
+                    || faults.coil_stuck_on.contains(&c.id)
+                    || fed(c, netlist, &solution)
+            })
             .map(|c| c.id)
             .collect();
         record(clock, &coils, &next);

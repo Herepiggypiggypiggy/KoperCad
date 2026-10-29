@@ -119,15 +119,39 @@ fn set_flyout(ctx: &egui::Context, id: Option<&str>) {
     });
 }
 
+/// Opens the flyout of entry `id` (an entry whose click is only to open it).
+pub(super) fn open(ctx: &egui::Context, id: &str) {
+    set_flyout(ctx, Some(id));
+}
+
 /// Closes any open flyout (a tool was picked elsewhere, the workspace
 /// changed).
 pub(super) fn close_flyout(ctx: &egui::Context) {
     set_flyout(ctx, None);
 }
 
+/// Opens the flyout of `id`, or closes it when it is the one open (an entry
+/// whose click has nothing to run but its card).
+pub(super) fn toggle_flyout(ctx: &egui::Context, id: &str) {
+    let open = open_flyout(ctx).as_deref() == Some(id);
+    set_flyout(ctx, if open { None } else { Some(id) });
+}
+
 /// Shows the rail as the left panel of `ui` and reports what happened.
 pub(super) fn show(ui: &mut egui::Ui, rail: &Rail, expanded: &mut bool) -> Shown {
     let pal = ui_palette();
+    // A card left open by another workspace's rail is shut, not carried over.
+    if let Some(open) = open_flyout(ui.ctx())
+        && !rail
+            .tools
+            .iter()
+            .chain(&rail.assists)
+            .chain(&rail.panels)
+            .chain(&rail.history)
+            .any(|e| e.id == open && !e.flyout.is_empty())
+    {
+        set_flyout(ui.ctx(), None);
+    }
     let width = if *expanded { WIDTH_EXPANDED } else { WIDTH };
     let mut shown = Shown {
         clicked: None,

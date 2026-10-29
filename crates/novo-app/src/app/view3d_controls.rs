@@ -124,10 +124,22 @@ const TOOLBAR_WIDTH: f32 = 980.0;
 /// window is one row, so they start higher.
 pub(super) fn below(ctx: &egui::Context) -> f32 {
     if short_window(ctx) {
-        first_inset(ctx) + 14.0
+        first_inset(ctx) + 14.0 + narrow_extra(ctx)
     } else {
         BELOW
     }
+}
+
+/// The rail takes 48 pt of a narrow canvas and the toolbar wraps onto
+/// another row there; the panels under it start one row lower.
+fn narrow_extra(ctx: &egui::Context) -> f32 {
+    if narrow_window(ctx) { 30.0 } else { 0.0 }
+}
+
+/// A window under 1000 pt wide: the toolbar is one row taller than it was
+/// before the rail.
+pub(super) fn narrow_window(ctx: &egui::Context) -> bool {
+    ctx.content_rect().width() < 1000.0
 }
 
 /// A window shorter than this (a 1280 x 688 one) gets the compact toolbar.

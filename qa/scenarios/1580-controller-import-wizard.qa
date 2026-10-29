@@ -4,6 +4,22 @@
 # and every row it is unsure about; Save, Copy and Close stay on screen.
 click_text "New project"
 wait 20
+# The wizard belongs to the Controllers add-on: install the package first (scripts/build-controllers-addon.sh).
+key ctrl+k
+wait 6
+text add-ons
+wait 8
+key Enter
+wait 10
+answer_dialog target/addons/controllers-0.1.0.kcaddon
+click_text "Install from file..."
+wait 10
+click_text "I trust this file"
+wait 4
+click_text "Install" Button
+wait 12
+key Escape
+wait 4
 key ctrl+k
 text import controller
 wait 5
@@ -28,6 +44,22 @@ check_layout
 fresh
 click_text "New project"
 wait 20
+# The wizard belongs to the Controllers add-on: install the package first (scripts/build-controllers-addon.sh).
+key ctrl+k
+wait 6
+text add-ons
+wait 8
+key Enter
+wait 10
+answer_dialog target/addons/controllers-0.1.0.kcaddon
+click_text "Install from file..."
+wait 10
+click_text "I trust this file"
+wait 4
+click_text "Install" Button
+wait 12
+key Escape
+wait 4
 key ctrl+k
 text import controller
 wait 5

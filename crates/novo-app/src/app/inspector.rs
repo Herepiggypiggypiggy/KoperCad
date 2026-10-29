@@ -560,6 +560,7 @@ impl NovoApp {
         };
         super::panel::Panel::new("inspector", "Inspector", canvas, side, INSPECTOR_WIDTH)
             .above_card()
+            .dockable()
             .fixed_open()
             .closable()
             .height(560.0)
@@ -587,6 +588,7 @@ impl NovoApp {
             INSPECTOR_WIDTH,
         )
         .above_card()
+        .dockable()
         .fixed_open()
         .show(ctx, |ui| {
             ui.horizontal(|ui| {

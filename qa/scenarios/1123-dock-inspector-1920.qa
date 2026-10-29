@@ -1,0 +1,30 @@
+@title Dock the Inspector with its title-bar buttons, move it between edges and float it again (1920x1080)
+@area Windows
+@sizes 1920x1080
+click_text "Open example"
+wait 30
+click 585 312
+wait 40
+shot floating
+# The second arrow in the floating title bar docks the panel at the right edge.
+click 1863 112
+wait 30
+expect "Siemens"
+shot docked-right
+check_layout
+# In the docked pane the first button moves it to the left edge (beside the pinned Pages column), the second to the bottom.
+click 1815 56
+wait 30
+expect "Siemens"
+shot docked-left
+check_layout
+click 541 56
+wait 30
+shot docked-bottom
+check_layout
+# The third button floats the pane again, where the panel was before.
+click 1875 832
+wait 30
+expect "Siemens"
+shot floated-again
+check_layout

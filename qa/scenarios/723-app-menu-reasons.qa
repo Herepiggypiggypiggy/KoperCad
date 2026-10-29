@@ -1,0 +1,32 @@
+@title App menu: grey rows say why, and a name match leads the search
+@area Layout
+# Follow-up of lane V2b (docs/design/visual-redesign.md section 5.1). With no
+# project open the project commands are grey and carry their reason in words;
+# "pdf" lists Export PDF first.
+fresh
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Hidden
+wait 6
+key Escape
+wait 8
+key F10
+wait 10
+expect "About"
+click_text "Export drawings"
+wait 8
+shot file-no-project
+check_layout
+key Escape
+wait 6
+key F10
+wait 10
+text pdf
+wait 8
+shot search-pdf
+check_layout
