@@ -92,8 +92,20 @@ pub(super) fn hoist_reading(module: &DriveHoistModule) -> String {
         LogicPhase::Engaging => "closing brake",
         LogicPhase::Fault(_) => "stopped by a fault",
     };
+    let rope = s.rope.map_or_else(String::new, |r| {
+        if r.on_floor && r.slack_m > 0.005 {
+            format!(" \u{b7} slack rope {:.0} mm", r.slack_m * 1000.0)
+        } else if r.on_floor {
+            " \u{b7} on the floor".to_owned()
+        } else {
+            format!(
+                " \u{b7} rope {:.0} % of the weight",
+                r.load_fraction * 100.0
+            )
+        }
+    });
     format!(
-        "{phase} \u{b7} {:.1} Hz \u{b7} {:.1} A \u{b7} {:.1} m/min \u{b7} {:.2} m",
+        "{phase} \u{b7} {:.1} Hz \u{b7} {:.1} A \u{b7} {:.1} m/min \u{b7} {:.2} m{rope}",
         s.drive.frequency_hz.abs(),
         s.motor.stator_current_a,
         s.speed_m_s * 60.0,
@@ -697,6 +709,38 @@ mod tests {
         let m = &hl.modules[0];
         assert!(m.height_m() > 0.1, "{}", m.height_m());
         assert!(hoist_reading(m).contains("running"), "{}", hoist_reading(m));
+    }
+
+    #[test]
+    fn a_floor_under_the_hook_shows_in_the_reading_and_in_the_findings() {
+        let (mut doc, button) = drive_hoist(true);
+        doc.transact("Floor", |tx| {
+            let id = tx
+                .project()
+                .devices()
+                .find(|d| d.tag.to_string() == DeviceTag::product("M1").to_string())
+                .map(|d| d.id)
+                .unwrap();
+            tx.set_property(id, "dh_floor_m", Some(0.0.into()))?;
+            Ok(())
+        })
+        .unwrap();
+        let run = run_hoist(&doc, button, 12.0);
+        let m = &run.active.as_ref().unwrap().hl.modules[0];
+        assert!(m.rope().is_some());
+        assert!(
+            hoist_reading(m).contains("% of the weight"),
+            "{}",
+            hoist_reading(m)
+        );
+        assert!(
+            m.findings().iter().any(|f| matches!(
+                f.kind,
+                novo_machine::drive_hoist_loop::FindingKind::LoadSnatch { .. }
+            )),
+            "{:?}",
+            m.findings()
+        );
     }
 
     #[test]

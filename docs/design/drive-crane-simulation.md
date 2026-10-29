@@ -283,6 +283,21 @@ brake open and only flips the run direction; inside a band of +-`dh_jump_hz` aro
 short ramp `dh_jump_ramp_s` instead of its normal ramps. The band must lie below the slowest speed step (refused otherwise), because the reversal ends when the frequency rises above it. A slow pass through zero lets a hanging load sink,
 so the run reports the sag as "ReversalSag" (metres below the height at the reversal).
 
+Slack rope and pick-up from the floor (optional, `dh_floor_m`, `dh_rope_stiff_n_per_mm`,
+`dh_rope_damping`): `novo_drive::rope` puts the hook on a spring-damper rope below the drum, above a
+floor `dh_floor_m` metres from the hook's start height (0 or below; 0 = the hook starts on the floor).
+Lowering past the floor leaves the hook resting there while the drum pays out rope (slack rope, the
+drum carries nothing); raising takes up the slack, stretches the rope and lifts the load off the floor
+with a tension peak that depends on the stiffness and the lifting speed. The shaft then carries only
+the rotor and gear inertia and the load torque follows the rope tension. The run reports
+"SlackRope" (how much slack was taken up), "FloorLanding" (hook speed on landing) and "LoadSnatch"
+(highest tension in the half second after lift-off, as a multiple of the weight). A niche consequence
+falls out of the model: load sensing averages the torque at the probe frequency, and if the probe runs
+while the drum still takes up slack rope it reads a light load and may boost a heavy pick-up.
+Exact by definition: the spring law, the weight, the floor as a one-sided inelastic constraint.
+Model: one stiffness and one damping ratio for the whole rope, hook mass lumped, no rope mass, hook
+swing or sheave friction, a one-tick lag between hook and shaft.
+
 Load sensing (optional, `dh_sense_boost_hz`): the torque is averaged at a probe frequency; a light load
 may run the top step above its nominal frequency, never beyond what the motor can deliver with a margin
 (breakdown torque of the fitted circuit on the V/f law). This is a generic function; the name and rule of
@@ -297,7 +312,7 @@ Exact by definition: the order of the states, the tick order, the hanging-load a
 drive (averaged), the motor (quasi-static torque, no flux transient), the flux build-up (one lag with the
 rotor time constant of the fit, torque follows flux squared), stiction of the shaft against friction and
 brake torque, the brake timing, all sequence timing. Not modelled: encoder or closed-loop control,
-slack rope, rope stretch and hook swing, motor and brake heating, a maker's parameter
+hook swing, motor and brake heating, a maker's parameter
 set. Parameters of a real drive never appear in a drawing, so the defaults are generic values for a
 5.5 kW 4 pole hoist motor and are meant to be edited.
 

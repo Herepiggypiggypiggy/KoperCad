@@ -15,6 +15,7 @@ use novo_drive::drive::{
 use novo_drive::hoist_logic::{BrakeLogic, HoistLogic, HoistLogicConfig, LoadSense, ReversalJump};
 use novo_drive::induction::{FitOptions, InductionMotor};
 use novo_drive::mechanics::Hoist;
+use novo_drive::rope::RopeConfig;
 
 use crate::bindings::SensorBinding;
 use crate::drive_hoist_loop::{DriveHoistBinding, DriveHoistModule, DriveHoistParts};
@@ -161,6 +162,24 @@ pub const KEYS: &[SpecKey] = &[
         "0.03",
     ),
     tag("dh_brake_switching", "Brake switched on (AC or DC)"),
+    num(
+        "dh_floor_m",
+        "Floor under the hook (m relative to the hook start, 0 or below; blank: rope always taut)",
+        "m",
+        "",
+    ),
+    num(
+        "dh_rope_stiff_n_per_mm",
+        "Rope stiffness at the hook (all falls)",
+        "N/mm",
+        "1000",
+    ),
+    num(
+        "dh_rope_damping",
+        "Rope damping (share of critical damping)",
+        "",
+        "0.1",
+    ),
     tag("dh_in_up", "Up command device"),
     tag("dh_in_down", "Down command device"),
     tag("dh_in_step2", "Speed step 2 input device"),
@@ -379,7 +398,15 @@ pub fn drive_hoist_from_properties(
         );
     }
     let rotor_inertia = number("dh_rotor_inertia")?;
-    let module = DriveHoistModule::new(
+    let rope = match text("dh_floor_m") {
+        None => None,
+        Some(_) => Some(RopeConfig {
+            floor_m: number("dh_floor_m")?,
+            stiffness_n_per_m: number("dh_rope_stiff_n_per_mm")? * 1000.0,
+            damping_ratio: number("dh_rope_damping")?,
+        }),
+    };
+    let mut module = DriveHoistModule::new(
         id,
         DriveHoistParts {
             drive: Drive::new(cfg),
@@ -391,6 +418,9 @@ pub fn drive_hoist_from_properties(
         },
         binding,
     )?;
+    if let Some(rope) = rope {
+        module = module.with_rope(rope)?;
+    }
     Ok(Some((module, notes)))
 }
 
@@ -461,6 +491,28 @@ mod tests {
             .unwrap();
         let j = m.logic.config().jump.as_ref().unwrap();
         assert_eq!((j.jump_hz, j.ramp_time_s), (8.0, 0.3));
+    }
+
+    #[test]
+    fn a_floor_puts_the_hook_on_an_elastic_rope() {
+        let (m, _) = build(&props(&[(DRIVE_HOIST_KEY, "2000")]))
+            .unwrap()
+            .unwrap();
+        assert!(m.rope().is_none());
+        let (m, _) = build(&props(&[
+            (DRIVE_HOIST_KEY, "2000"),
+            ("dh_floor_m", "-2"),
+            ("dh_rope_stiff_n_per_mm", "500"),
+        ]))
+        .unwrap()
+        .unwrap();
+        let c = m.rope().unwrap().config();
+        assert_eq!(
+            (c.floor_m, c.stiffness_n_per_m, c.damping_ratio),
+            (-2.0, 5.0e5, 0.1)
+        );
+        // A floor above the hook's start is refused with a message, not silently moved.
+        assert!(build(&props(&[(DRIVE_HOIST_KEY, "2000"), ("dh_floor_m", "1")])).is_err());
     }
 
     #[test]

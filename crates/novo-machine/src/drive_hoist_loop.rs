@@ -34,6 +34,7 @@ use novo_drive::hoist_logic::{
 use novo_drive::induction::{InductionMotor, OperatingPoint, Supply};
 use novo_drive::mechanics::Hoist;
 use novo_drive::motor::Direction;
+use novo_drive::rope::{RopeConfig, RopeEvent, RopeLoad};
 
 use crate::cosim::StepConfig;
 use crate::hoist_loop::{BindingFinding, LimitSwitch};
@@ -90,6 +91,14 @@ pub enum FindingKind {
     /// The hook sank below where it was when the direction changed, while the drive passed
     /// through zero frequency with the brake open (reversal with the brake kept open).
     ReversalSag { metres: f64 },
+    /// The rope was slack by up to `metres` before it took the load again: the hook was resting
+    /// on the floor while the drum paid out rope.
+    SlackRope { metres: f64 },
+    /// The hook came down on the floor at this speed (m/s).
+    FloorLanding { speed_m_s: f64 },
+    /// The load left the floor: the highest rope tension in the half second after was `newtons`,
+    /// `factor` times the weight.
+    LoadSnatch { newtons: f64, factor: f64 },
     /// The drive tripped.
     DriveTrip(Fault),
     /// The brake logic found something.
@@ -114,6 +123,18 @@ impl FindingKind {
                 "The hook sank {:.0} mm while the drive passed through zero frequency with the \
                  brake open.",
                 metres * 1000.0
+            ),
+            Self::SlackRope { metres } => format!(
+                "The rope went slack by up to {:.0} mm: the hook rested on the floor while the \
+                 drum paid out rope.",
+                metres * 1000.0
+            ),
+            Self::FloorLanding { speed_m_s } => {
+                format!("The hook came down on the floor at {:.2} m/s.", speed_m_s)
+            }
+            Self::LoadSnatch { newtons, factor } => format!(
+                "The load left the floor: the rope tension peaked at {:.0} N, {:.2} times the weight.",
+                newtons, factor
             ),
             Self::BrakeSlip { metres } => format!(
                 "The brake does not hold the load: the hook moved {:.0} mm with the drive off.",
@@ -166,6 +187,20 @@ pub struct DriveHoistSnapshot {
     pub flux: f64,
     /// Top speed step in use, Hz (nominal or sensed).
     pub top_step_hz: f64,
+    /// The hook and the rope, when the module has a floor.
+    pub rope: Option<RopeSnapshot>,
+}
+
+/// The hook on its rope, in the last tick.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RopeSnapshot {
+    /// Height of the hook itself (the snapshot's `height_m` is the drum position).
+    pub hook_m: f64,
+    pub tension_n: f64,
+    /// Rope tension as a share of the weight.
+    pub load_fraction: f64,
+    pub slack_m: f64,
+    pub on_floor: bool,
 }
 
 /// An open-loop drive hoist: drive, brake logic, motor, brake, load and bindings.
@@ -179,6 +214,9 @@ pub struct DriveHoistModule {
     pub brake: SpringBrake,
     pub binding: DriveHoistBinding,
     inertia_kg_m2: f64,
+    rotor_inertia_kg_m2: f64,
+    /// The hook on an elastic rope above a floor; `None`: a rigid rope that is always taut.
+    rope: Option<RopeLoad>,
     /// Rotor time constant in s: how fast the flux builds.
     tau_flux_s: f64,
     flux: f64,
@@ -254,6 +292,8 @@ impl DriveHoistModule {
             brake,
             binding,
             inertia_kg_m2: inertia,
+            rotor_inertia_kg_m2,
+            rope: None,
             tau_flux_s: tau,
             flux: 0.0,
             omega: 0.0,
@@ -275,6 +315,25 @@ impl DriveHoistModule {
             reversal_mark: None,
             base_ramp_s,
         })
+    }
+
+    /// Puts the hook on an elastic rope above a floor. The shaft then carries only the rotor and
+    /// the gear (the hook is a separate mass on the rope), so the rotor inertia must be set.
+    pub fn with_rope(mut self, cfg: RopeConfig) -> Result<Self, InputError> {
+        if self.rotor_inertia_kg_m2 <= 0.0 {
+            return Err(InputError::NotPositive {
+                field: "rotor_inertia_kg_m2 (needed with a floor)",
+                value: self.rotor_inertia_kg_m2,
+            });
+        }
+        self.rope = Some(RopeLoad::new(cfg, self.hoist.mass_kg())?);
+        self.inertia_kg_m2 = self.rotor_inertia_kg_m2;
+        Ok(self)
+    }
+
+    /// The hook and the rope, when the module has a floor.
+    pub fn rope(&self) -> Option<&RopeLoad> {
+        self.rope.as_ref()
     }
 
     /// Hook height in metres, 0 at the start (positive is up).
@@ -579,13 +638,30 @@ fn step_module(
     };
     let volts = if on { out.voltage_v * m.flux } else { 0.0 };
     let supply = Supply::new(out.frequency_hz.abs(), volts.max(0.0), direction)?;
-    let (point, omega_end) = advance_shaft(m, &supply, brake_t, dt)?;
+    let load_scale = m
+        .rope
+        .as_ref()
+        .map_or(1.0, |r| r.load_fraction().clamp(0.0, 4.0));
+    let (point, omega_end) = advance_shaft(m, &supply, brake_t, dt, load_scale)?;
     let omega_start = m.omega;
     m.omega = omega_end;
     m.feedback = (point.stator_current_a, point.input_power_w);
     let metres_per_rad = m.hoist.metres_per_rad();
     m.height_m += 0.5 * (omega_start + omega_end) * dt * metres_per_rad;
     let speed = omega_end * metres_per_rad;
+    if let Some(rope) = m.rope.as_mut() {
+        for e in rope.step(m.height_m, dt) {
+            let kind = match e {
+                RopeEvent::Landed { speed_m_s } => FindingKind::FloorLanding { speed_m_s },
+                RopeEvent::SlackTaken { slack_m } => FindingKind::SlackRope { metres: slack_m },
+                RopeEvent::TensionPeak { newtons, factor } => {
+                    FindingKind::LoadSnatch { newtons, factor }
+                }
+                RopeEvent::LiftOff { .. } => continue,
+            };
+            m.findings.push(HoistFinding { time_s, kind });
+        }
+    }
 
     track_findings(m, &logic, time_s, speed);
 
@@ -598,6 +674,13 @@ fn step_module(
         speed_m_s: speed,
         flux: m.flux,
         top_step_hz: m.logic.top_step_hz(),
+        rope: m.rope.as_ref().map(|r| RopeSnapshot {
+            hook_m: r.hook_m(),
+            tension_n: r.tension_n(),
+            load_fraction: r.load_fraction(),
+            slack_m: r.slack_m(),
+            on_floor: r.on_floor(),
+        }),
         logic,
     });
     Ok(())
@@ -610,14 +693,17 @@ fn advance_shaft(
     supply: &Supply,
     brake_t: f64,
     dt: f64,
+    load_scale: f64,
 ) -> Result<(OperatingPoint, f64), InputError> {
-    let weight = -m.hoist.static_torque_nm();
+    // `load_scale` is the share of the weight the drum carries (1 with a rigid rope).
+    let weight = -m.hoist.static_torque_nm() * load_scale;
     let fric = |s: f64| {
-        if s > 0.0 {
-            m.hoist.friction_up_nm()
-        } else {
-            m.hoist.friction_down_nm()
-        }
+        load_scale
+            * if s > 0.0 {
+                m.hoist.friction_up_nm()
+            } else {
+                m.hoist.friction_down_nm()
+            }
     };
     let mut omega = m.omega;
     let sign = if omega != 0.0 {

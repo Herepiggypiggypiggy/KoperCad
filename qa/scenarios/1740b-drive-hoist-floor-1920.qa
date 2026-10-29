@@ -1,0 +1,32 @@
+@title Drive hoist on the floor: the first lift takes up the rope and the run reports the snatch of the load (1920x1080)
+@area Simulate
+@sizes 1920x1080
+# Opens the floor variant of the drive hoist fixture (hook resting on the floor, 1500 kg), starts
+# Simulate > Drive run, switches Live on, and lifts with radio step 2.
+open qa/fixtures/hoist-drive-floor.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+key Home
+wait 30
+mouse_down 370 343
+wait 150
+shot magnetising-hook-on-the-floor
+wait 1200
+expect "of the weight"
+expect "What the hoist run found"
+expect "left the floor"
+check_layout
+shot load-lifted-with-snatch
+mouse_up 370 343
+wait 400
+expect "brake closed"
+shot stopped

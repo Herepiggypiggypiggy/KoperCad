@@ -42,6 +42,19 @@ pub fn drive_hoist(doc: &mut Document) -> Result<DriveHoist> {
     Ok(doc.transact("Draw drive hoist", build)?.0)
 }
 
+/// The same project with the hook resting on the floor at the start (`dh_floor_m` 0) and a 1500 kg
+/// load: the first lift takes the rope up and picks the load off the floor.
+pub fn drive_hoist_on_floor(doc: &mut Document) -> Result<DriveHoist> {
+    Ok(doc
+        .transact("Draw drive hoist on the floor", |tx| {
+            let h = build(tx)?;
+            tx.set_property(h.motor, "dh_mass_kg", Some(1500.0.into()))?;
+            tx.set_property(h.motor, "dh_floor_m", Some(0.0.into()))?;
+            Ok(h)
+        })?
+        .0)
+}
+
 fn build(tx: &mut Tx<'_>) -> Result<DriveHoist> {
     tx.set_info(|i| i.name = "Drive hoist".into())?;
     let page = tx.add_page("1")?;

@@ -6,3 +6,7 @@
 - `ReversalJump` in `hoist_logic` (events ReversalStarted/ReversalDone, ramp override), loop tracks the sag
   (`FindingKind::ReversalSag`), keys `dh_jump_hz` / `dh_jump_ramp_s`. 12 logic tests, 17 loop tests.
 - Next: item 2 (slack rope and pick-up from the floor), from main in its own PR.
+
+## Slack rope and pick-up (roadmap item 2)
+- `novo_drive::rope` (6 tests), `with_rope` in the loop (4 new loop tests), keys in the spec (1 test), reading in Simulate > Drive run (1 app test), fixture `qa/fixtures/hoist-drive-floor.novo` and QA 1740 / 1740b.
+- Next: item 3 (heat over a duty cycle; `novo_drive::hoist_thermal` exists for the contactor hoist).

@@ -15,6 +15,7 @@ use novo_drive::hoist_logic::{
 };
 use novo_drive::induction::{FitOptions, InductionMotor};
 use novo_drive::mechanics::Hoist;
+use novo_drive::rope::RopeConfig;
 use novo_machine::bindings::SensorBinding;
 use novo_machine::cosim::StepConfig;
 use novo_machine::drive_hoist_loop::{
@@ -109,6 +110,7 @@ struct Rig {
     brake_t: SpringBrake,
     feedback: bool,
     limit_m: Option<f64>,
+    rope: Option<RopeConfig>,
 }
 
 impl Rig {
@@ -120,6 +122,7 @@ impl Rig {
             brake_t: brake(Switching::AcSide),
             feedback: false,
             limit_m: None,
+            rope: None,
         }
     }
 
@@ -137,7 +140,7 @@ impl Rig {
                 kind: LimitKind::Upper,
             });
         }
-        DriveHoistModule::new(
+        let module = DriveHoistModule::new(
             "=M-HOIST",
             DriveHoistParts {
                 drive: Drive::new(drive_cfg(self.resistor)),
@@ -159,7 +162,11 @@ impl Rig {
                 limits,
             },
         )
-        .unwrap()
+        .unwrap();
+        match self.rope {
+            Some(cfg) => module.with_rope(cfg).unwrap(),
+            None => module,
+        }
     }
 
     fn start(&self) -> (DriveHoistLoop, FakeCircuit, Shared) {
@@ -611,4 +618,148 @@ fn a_slow_pass_through_zero_lets_the_load_sink_more_than_a_fast_one() {
     assert!(s_slow > s_fast + 0.005, "{s_slow} vs {s_fast}");
     // The brake never closed in either run: the hook ends up rising.
     assert!(m(&fast).snapshot().unwrap().speed_m_s > 0.02);
+}
+
+fn floor_rig(floor_m: f64) -> Rig {
+    let mut rig = Rig::new();
+    rig.rope = Some(RopeConfig {
+        floor_m,
+        stiffness_n_per_m: 1.0e6,
+        damping_ratio: 0.1,
+    });
+    rig
+}
+
+fn rope_finding<T>(lp: &DriveHoistLoop, pick: impl Fn(&FindingKind) -> Option<T>) -> Option<T> {
+    kinds(lp).iter().find_map(pick)
+}
+
+#[test]
+fn lowering_onto_the_floor_leaves_slack_rope_and_the_drum_carries_nothing() {
+    // Floor 0.4 m below the start. The hook comes down at step 3 (about 0.19 m/s), the drum keeps
+    // paying out rope until the command is dropped: the rope goes slack and the hook rests.
+    let (mut lp, mut c, cmd) = floor_rig(-0.4).start();
+    {
+        let mut cm = cmd.borrow_mut();
+        cm.down = true;
+        cm.step2 = true;
+        cm.step3 = true;
+    }
+    run_for(&mut lp, &mut c, 9.0);
+    cmd.borrow_mut().down = false;
+    run_for(&mut lp, &mut c, 4.0);
+    let s = m(&lp).snapshot().unwrap();
+    let rope = s.rope.unwrap();
+    assert!(rope.on_floor);
+    assert!(rope.tension_n < 1.0, "{}", rope.tension_n);
+    assert!((rope.hook_m + 0.4).abs() < 1e-6);
+    assert!(s.height_m < -0.6, "drum at {}", s.height_m);
+    assert!((rope.slack_m - (-0.4 - s.height_m)).abs() < 0.01);
+    let landed = rope_finding(&lp, |k| match k {
+        FindingKind::FloorLanding { speed_m_s } => Some(*speed_m_s),
+        _ => None,
+    });
+    assert!(landed.unwrap() > 0.1, "{landed:?}");
+}
+
+#[test]
+fn raising_again_takes_the_slack_and_snatches_the_load_off_the_floor() {
+    let (mut lp, mut c, cmd) = floor_rig(-0.4).start();
+    {
+        let mut cm = cmd.borrow_mut();
+        cm.down = true;
+        cm.step2 = true;
+        cm.step3 = true;
+    }
+    run_for(&mut lp, &mut c, 9.0);
+    {
+        let mut cm = cmd.borrow_mut();
+        cm.down = false;
+    }
+    run_for(&mut lp, &mut c, 4.0);
+    let slack = m(&lp).snapshot().unwrap().rope.unwrap().slack_m;
+    {
+        let mut cm = cmd.borrow_mut();
+        cm.up = true;
+    }
+    run_for(&mut lp, &mut c, 14.0);
+    let taken = rope_finding(&lp, |k| match k {
+        FindingKind::SlackRope { metres } => Some(*metres),
+        _ => None,
+    });
+    assert!(
+        (taken.unwrap() - slack).abs() < 0.02,
+        "{taken:?} vs {slack}"
+    );
+    let snatch = rope_finding(&lp, |k| match k {
+        FindingKind::LoadSnatch { factor, .. } => Some(*factor),
+        _ => None,
+    });
+    assert!(snatch.unwrap() > 1.0, "{snatch:?}");
+    let rope = m(&lp).snapshot().unwrap().rope.unwrap();
+    assert!(!rope.on_floor);
+    assert!(m(&lp).snapshot().unwrap().speed_m_s > 0.0);
+}
+
+#[test]
+fn a_load_picked_up_through_slack_rope_is_sensed_lighter_than_it_is() {
+    // The probe runs while the drum still takes up slack rope, so the torque it averages is far
+    // below the real load: load sensing lets a heavy pick-up run on a boosted top step.
+    let sensed = |rig: Rig, lower_first: bool| {
+        let mut rig = rig;
+        rig.mass = 3000.0;
+        rig.logic.sense = Some(LoadSense {
+            probe_hz: 20.0,
+            probe_time_s: 0.5,
+            light_fraction: 0.25,
+            boost_hz: 80.0,
+            margin: 1.5,
+        });
+        let (mut lp, mut c, cmd) = rig.start();
+        if lower_first {
+            {
+                let mut cm = cmd.borrow_mut();
+                cm.down = true;
+                cm.step2 = true;
+                cm.step3 = true;
+            }
+            run_for(&mut lp, &mut c, 9.0);
+            cmd.borrow_mut().down = false;
+            run_for(&mut lp, &mut c, 4.0);
+            assert!(m(&lp).snapshot().unwrap().rope.unwrap().slack_m > 0.3);
+        }
+        {
+            let mut cm = cmd.borrow_mut();
+            cm.up = true;
+            cm.step2 = true;
+            cm.step3 = true;
+        }
+        run_for(&mut lp, &mut c, 4.0);
+        kinds(&lp)
+            .iter()
+            .rev()
+            .find_map(|k| match k {
+                FindingKind::Logic(novo_drive::hoist_logic::LogicEvent::LoadSensed {
+                    fraction,
+                    ..
+                }) => Some(*fraction),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let hanging = sensed(Rig::new(), false);
+    let through_slack = sensed(floor_rig(-0.3), true);
+    assert!(
+        through_slack < 0.6 * hanging,
+        "{through_slack} vs {hanging}"
+    );
+}
+
+#[test]
+fn without_a_floor_nothing_changes_and_there_is_no_rope_reading() {
+    let (mut lp, mut c, cmd) = Rig::new().start();
+    cmd.borrow_mut().up = true;
+    run_for(&mut lp, &mut c, 3.0);
+    assert!(m(&lp).snapshot().unwrap().rope.is_none());
+    assert!(m(&lp).rope().is_none());
 }
