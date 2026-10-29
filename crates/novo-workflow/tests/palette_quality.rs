@@ -500,6 +500,19 @@ fn live_view_finds_the_live_view_before_any_lesson_about_it() {
 }
 
 #[test]
+fn the_controller_panel_is_found_by_what_a_crane_person_calls_it() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for query in ["controller panel", "radio", "pendant", "afstandsbediening"] {
+        let rows = search(&palette, &keymap, query);
+        assert!(
+            position(&rows, "sim.controller").is_some_and(|p| p < 3),
+            "{query:?} leads to the controller panel, not {:?}",
+            rows[0].label
+        );
+    }
+}
+
+#[test]
 fn the_single_line_diagram_is_found_by_what_people_call_it() {
     let (palette, keymap) = (Palette::default(), Keymap::workflow());
     for query in ["single line", "one-line diagram", "voltage drop overview"] {
@@ -633,4 +646,17 @@ fn siemens_and_rockwell_find_the_places_that_choose_the_address_style() {
             );
         }
     }
+}
+
+#[test]
+fn the_icon_gallery_is_found_by_name_and_by_its_dutch_word() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    assert_eq!(
+        search(&palette, &keymap, "icon gallery")[0].target,
+        Target::Command("view.icon_gallery")
+    );
+    assert_eq!(
+        search(&palette, &keymap, "pictogrammen")[0].target,
+        Target::Command("view.icon_gallery")
+    );
 }

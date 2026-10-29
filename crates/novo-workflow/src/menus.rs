@@ -58,6 +58,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.recover", under("File", "Open")),
     ("file.example", under("File", "Open")),
     ("file.example_mcc", under("File", "Examples")),
+    ("file.example_crane", under("File", "Examples")),
+    ("file.example_plc", under("File", "Examples")),
     ("macro.browser", under("File", "Macros")),
     ("macro.import", under("File", "Macros")),
     ("page.new", under("File", "Pages")),
@@ -251,7 +253,16 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("cabinet.emc", under("View", "Cabinet")),
     // Layers: what is drawn on top of the page
     ("view.toggle_marks", under("View", "Layers")),
-    ("view.toggle_references", under("View", "Layers")),
+    // Cross references: how they show on screen (the PDF always prints them)
+    ("view.toggle_references", under("View", "Cross references")),
+    (
+        "view.hide_references_page",
+        under("View", "Cross references"),
+    ),
+    (
+        "view.hide_references_device",
+        under("View", "Cross references"),
+    ),
     ("view.override_marks", under("View", "Layers")),
     ("view.left_out", under("View", "Layers")),
     ("view.changes", under("View", "Layers")),
@@ -271,11 +282,13 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("learn.close", under("Help", "Lesson")),
     // Simulate
     ("sim.live", at("Simulate")),
+    ("sim.controller", at("Simulate")),
     ("sim.why", at("Simulate")),
     ("sim.plc_program", at("Simulate")),
     ("simulate.motor-start", at("Simulate")),
     ("sim.faults", at("Simulate")),
     ("sim.hoist", at("Simulate")),
+    ("sim.drive_run", at("Simulate")),
     ("sim.motor_curves", at("Simulate")),
     ("sim.add_fault", at("Simulate")),
     ("view.protection", at("Simulate")),
@@ -354,6 +367,10 @@ const PALETTE_ONLY: &[(&str, &str)] = &[
     ("view.3d_trackpad_pans", "a switch of the 3D toolbar"),
     ("view.3d_move", "a switch of the 3D toolbar"),
     ("tool.repeat", "the key that repeats the last tool"),
+    (
+        "view.icon_gallery",
+        "a design reference for the icon set, opened from the command field",
+    ),
     ("edit.escape", "Esc"),
     (
         "view.command_field_here",
@@ -560,11 +577,13 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
         "Simulate",
         &[&[
             "sim.live",
+            "sim.controller",
             "sim.why",
             "simulate.motor-start",
             "sim.plc_program",
             "sim.faults",
             "sim.hoist",
+            "sim.drive_run",
             "sim.motor_curves",
             "view.protection",
         ]],

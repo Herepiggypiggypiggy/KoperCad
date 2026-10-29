@@ -71,7 +71,7 @@ fn safety_estop_relay() -> Result<MacroFile> {
 fn plc_network() -> Result<MacroFile> {
     capture(
         "PLC network with switch",
-        "PLC CPU on an Ethernet switch with two network devices. -T1 is the network port of a frequency converter (give it the converter's tag so both symbols share one device); -A3 is the port of an operator panel",
+        "PLC CPU on an Ethernet switch with two network devices. -T1 is the network port of a frequency converter (rename it to the converter's tag so both symbols share one device); -A3 is the port of an operator panel",
         Vec::new(),
         &[
             "plc", "network", "ethernet", "switch", "profinet", "hmi", "drive", "fieldbus",
@@ -85,7 +85,10 @@ fn plc_network() -> Result<MacroFile> {
             let cpu = s.put("iec/plc/cpu", 40.0, 40.0, a1, true)?;
             // Switch pins: 0 P1, 1 P2, 2 P3, 3 P4, 4 P5, 5 L+, 6 M.
             let sw = s.put("iec/network/ethernet_switch_5", 136.0, 48.0, a2, true)?;
-            let drive = s.put("iec/network/port_ethernet_2p", 136.0, 104.0, t1, true)?;
+            // Not a main function: the port is drawn for a converter that has its
+            // own main symbol elsewhere, and renaming it to the converter's tag
+            // joins the two (two main functions would be refused).
+            let drive = s.put("iec/network/port_ethernet_2p", 136.0, 104.0, t1, false)?;
             let hmi = s.put("iec/network/port_ethernet", 176.0, 104.0, a3, true)?;
             wire_via(
                 s,

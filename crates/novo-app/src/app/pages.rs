@@ -351,9 +351,7 @@ impl NovoApp {
                 )
             })
             .unwrap_or_default();
-        let modal = egui::Modal::new(egui::Id::new("page_form")).show(ctx, |ui| {
-            ui.set_width(360.0);
-            super::dialog_ui::title(ui, "New pages", "");
+        let modal = super::panel::modal(ctx, "page_form", "New pages", [360.0, 0.0], |ui| {
             ui.add_space(4.0);
             egui::Grid::new("page_form_grid").num_columns(2).show(ui, |ui| {
                 ui.label("Page group");

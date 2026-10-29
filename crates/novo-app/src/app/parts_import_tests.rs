@@ -643,14 +643,16 @@ fn an_etim_release_is_installed_on_a_worker_and_the_window_is_told_when_it_is_do
     let target = dir.path().join("etim");
     assert!(b.win.poll_etim().is_none(), "nothing is installing");
     b.win
-        .start_etim_install(etim_fixture(), Some(target.clone()));
+        .start_etim_install(etim_fixture(), Some(target.clone()))
+        .unwrap();
     assert!(
         b.win.etim_job.is_some(),
         "the window knows it is installing"
     );
     // A second install while one runs is ignored, not queued over it.
     b.win
-        .start_etim_install(etim_fixture(), Some(target.clone()));
+        .start_etim_install(etim_fixture(), Some(target.clone()))
+        .unwrap();
     let line = wait_for_etim(&mut b.win).expect("the release installs");
     assert!(!line.is_empty());
     assert!(b.win.etim_job.is_none());
@@ -660,18 +662,41 @@ fn an_etim_release_is_installed_on_a_worker_and_the_window_is_told_when_it_is_do
 }
 
 #[test]
+fn an_etim_install_that_cannot_start_a_thread_says_so_and_the_window_stays_usable() {
+    let mut b = bench();
+    let refused = |_job: Box<dyn FnOnce() + Send>| Err(std::io::Error::other("out of threads"));
+    let err = b
+        .win
+        .start_etim_with(etim_fixture(), None, refused)
+        .expect_err("the install did not start");
+    assert!(
+        err.contains("could not be started") && err.contains("out of threads"),
+        "{err}"
+    );
+    assert!(b.win.etim_job.is_none(), "nothing is waited for");
+    assert!(b.win.poll_etim().is_none());
+    // The next try works.
+    let dir = tempfile::tempdir().unwrap();
+    b.win
+        .start_etim_install(etim_fixture(), Some(dir.path().join("etim")))
+        .unwrap();
+    wait_for_etim(&mut b.win).expect("the release installs");
+}
+
+#[test]
 fn an_etim_release_that_cannot_be_read_says_so_and_the_window_goes_on() {
     let mut b = bench();
     let dir = tempfile::tempdir().unwrap();
     let junk = dir.path().join("release.zip");
     fs::write(&junk, b"not a zip").unwrap();
     b.win
-        .start_etim_install(junk, Some(dir.path().join("etim")));
+        .start_etim_install(junk, Some(dir.path().join("etim")))
+        .unwrap();
     let err = wait_for_etim(&mut b.win).expect_err("junk is refused");
     assert!(err.starts_with("ETIM release:"), "{err}");
     assert!(b.win.etim_line.is_none(), "no release is claimed");
     // With no profile folder there is nowhere to keep it.
-    b.win.start_etim_install(etim_fixture(), None);
+    b.win.start_etim_install(etim_fixture(), None).unwrap();
     let err = wait_for_etim(&mut b.win).expect_err("no folder");
     assert!(err.contains("nowhere to keep"), "{err}");
 }

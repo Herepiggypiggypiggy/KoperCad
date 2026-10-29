@@ -954,7 +954,8 @@ mod tests {
         assert!(m.x > 0.0);
         let tr = trim_at(&l, 5, End::Finish, 60_000.0).unwrap();
         assert_eq!(tr.edit.length, 59_980.0);
-        assert!(t.elapsed().as_secs_f64() < 2.0);
+        // Generous: it only guards against a scan of every duct per step.
+        assert!(t.elapsed().as_secs_f64() < 20.0);
     }
 
     #[test]

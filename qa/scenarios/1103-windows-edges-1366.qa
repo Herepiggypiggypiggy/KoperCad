@@ -1,0 +1,50 @@
+@title Windows at 1366x768: dragged to the screen edge, resized to the minimum, Reset panel layout recovers them, the dock stays on screen
+@area Windows
+@sizes 1366x768
+# Preferences (File menu) is dragged until its title bar is off the bottom right, the dock is dragged to the corner, the navigator is dragged to the right edge.
+click_text "Open example"
+wait 20
+click_text File #1
+wait 5
+click_text Preferences
+wait 20
+shot preferences-home
+# Bottom right corner dragged far in: the smallest size it keeps.
+drag 918 660 100 100
+wait 10
+shot preferences-minimum
+check_layout
+# Title bar far past the bottom right corner: it is kept on screen.
+drag 500 125 1500 900
+wait 10
+shot preferences-at-edge
+check_layout
+key Escape
+wait 10
+# The dock to the bottom right corner and beyond.
+drag 372 716 1500 900
+wait 10
+shot dock-at-edge
+check_layout
+# The navigator to the right edge.
+click_text Pages
+wait 20
+drag 135 72 1500 72
+wait 10
+shot navigator-at-edge
+check_layout
+# Back to the defaults.
+click_text View #1
+wait 5
+click_text "Reset panel layout"
+wait 20
+shot reset-dock
+click_text Pages
+wait 20
+shot reset-navigator
+click_text File #1
+wait 5
+click_text Preferences
+wait 20
+shot reset-preferences
+check_layout

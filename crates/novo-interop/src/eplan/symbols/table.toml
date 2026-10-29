@@ -1044,3 +1044,25 @@ names = ["can port", "can bus port", "canopen port", "can bus", "can anschluss",
 symbol = "network/bus_terminator"
 letters = ["R"]
 names = ["bus terminator", "terminating resistor", "bus termination", "120 ohm termination", "afsluitweerstand", "busafsluiting", "abschlusswiderstand", "busabschluss"]
+
+# ---------------------------------------------------------------- controllers (receivers, pendants)
+[[entry]]
+symbol = "controllers/output_dry"
+letters = ["A"]
+names = ["receiver dry contact", "radio receiver dry contact", "pendant dry contact", "controller output contact", "ontvanger potentiaalvrij contact", "zenderontvanger contact", "empfaenger potentialfreier kontakt"]
+[[entry]]
+symbol = "controllers/outputs_6"
+letters = ["A"]
+names = ["receiver 6 outputs", "radio receiver 6 outputs", "controller outputs 6", "ontvanger 6 uitgangen", "empfaenger 6 ausgaenge"]
+[[entry]]
+symbol = "controllers/outputs_9"
+letters = ["A"]
+names = ["receiver 9 outputs", "radio receiver 9 outputs", "controller outputs 9", "ontvanger 9 uitgangen", "empfaenger 9 ausgaenge"]
+[[entry]]
+symbol = "controllers/outputs_12"
+letters = ["A"]
+names = ["receiver 12 outputs", "radio receiver 12 outputs", "controller outputs 12", "ontvanger 12 uitgangen", "empfaenger 12 ausgaenge"]
+[[entry]]
+symbol = "controllers/outputs_16"
+letters = ["A"]
+names = ["receiver 16 outputs", "radio receiver 16 outputs", "controller outputs 16", "ontvanger 16 uitgangen", "empfaenger 16 ausgaenge"]

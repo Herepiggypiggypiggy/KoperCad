@@ -94,43 +94,46 @@ pub(super) fn panel(
     items: &[(u64, String, String)],
 ) -> Picked {
     let mut out = Picked::default();
-    egui::Area::new(egui::Id::new("view3d_place"))
-        .order(egui::Order::Middle)
-        .fixed_pos(view.left_top() + egui::vec2(MARGIN, super::view3d_controls::below(ctx)))
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.set_max_width(190.0);
-                ui.horizontal(|ui| {
-                    ui.strong("Place a device");
-                    if ui
-                        .small_button("Close")
-                        .on_hover_text("Close the list")
-                        .clicked()
-                    {
-                        out.close = true;
-                    }
-                });
-                ui.weak("Pick one, then click on the plate");
-                ui.add_space(2.0);
-                egui::ScrollArea::vertical()
-                    .max_height(260.0)
-                    .show(ui, |ui| {
-                        for (id, tag, size) in items {
-                            let on = state.armed == Some(*id);
-                            let row = ui.selectable_label(on, format!("{tag}   {size}"));
-                            if row.clicked() {
-                                state.armed = if on { None } else { Some(*id) };
-                            }
-                        }
-                        if items.is_empty() {
-                            ui.weak("Every device is placed");
-                        }
-                    });
-                if state.armed.is_some() {
-                    ui.weak("Esc lets go of the device");
+    super::panel::Float::new(
+        "view3d_place",
+        view,
+        egui::Align2::LEFT_TOP,
+        view.left_top() + egui::vec2(MARGIN, super::view3d_controls::below(ctx)),
+    )
+    .show(ctx, |ui| {
+        egui::Frame::popup(ui.style()).show(ui, |ui| {
+            ui.set_max_width(190.0);
+            ui.horizontal(|ui| {
+                ui.strong("Place a device");
+                if ui
+                    .small_button("Close")
+                    .on_hover_text("Close the list")
+                    .clicked()
+                {
+                    out.close = true;
                 }
             });
+            ui.weak("Pick one, then click on the plate");
+            ui.add_space(2.0);
+            egui::ScrollArea::vertical()
+                .max_height(260.0)
+                .show(ui, |ui| {
+                    for (id, tag, size) in items {
+                        let on = state.armed == Some(*id);
+                        let row = ui.selectable_label(on, format!("{tag}   {size}"));
+                        if row.clicked() {
+                            state.armed = if on { None } else { Some(*id) };
+                        }
+                    }
+                    if items.is_empty() {
+                        ui.weak("Every device is placed");
+                    }
+                });
+            if state.armed.is_some() {
+                ui.weak("Esc lets go of the device");
+            }
         });
+    });
     out
 }
 

@@ -360,8 +360,8 @@ const HIDDEN: &[&str] = &[
 /// Namespaces of properties that crates keep for their own bookkeeping:
 /// declined suggestions (`terminal.suggest`, `cable.propose`), strip styles
 /// (`terminal_part.*`, `terminal_symbol.*`), cable cores and shields, legacy
-/// terminal rules. Each is edited through its own screen, so the property
-/// sheet and the bulk table leave them out instead of showing raw ids.
+/// terminal rules, cross reference screen choices (`xref.hide`). Each is
+/// edited through its own screen, so the property sheet and the bulk table leave them out instead of showing raw ids.
 pub const INTERNAL_KEY_PREFIXES: &[&str] = &[
     "connect.",
     "terminal.",
@@ -369,6 +369,7 @@ pub const INTERNAL_KEY_PREFIXES: &[&str] = &[
     "terminal_part.",
     "terminal_symbol.",
     "cable.",
+    "xref.",
 ];
 
 /// Whether a property key belongs to an internal namespace

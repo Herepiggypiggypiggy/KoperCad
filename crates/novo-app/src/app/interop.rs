@@ -315,42 +315,46 @@ impl NovoApp {
         };
         let (mut go, mut cancel) = (false, false);
         let can_import = !import.plan.is_empty();
-        let modal = egui::Modal::new(egui::Id::new("aml_import")).show(ctx, |ui| {
-            ui.set_width(460.0);
-            ui.heading(format!("Import {}", import.file));
-            ui.add_space(4.0);
-            ui.label(import.plan.summary());
-            ui.add_space(6.0);
-            ui.weak("An import only adds. Anything that exists keeps what the project says.");
-            if !import.report.lossy.is_empty()
-                || !import.report.guessed.is_empty()
-                || !import.report.notes.is_empty()
-            {
-                ui.add_space(8.0);
-                if !import.report.lossy.is_empty() {
-                    ui.strong("Not carried over");
+        let modal = super::panel::modal(
+            ctx,
+            "aml_import",
+            format!("Import {}", import.file),
+            [460.0, 0.0],
+            |ui| {
+                ui.add_space(4.0);
+                ui.label(import.plan.summary());
+                ui.add_space(6.0);
+                ui.weak("An import only adds. Anything that exists keeps what the project says.");
+                if !import.report.lossy.is_empty()
+                    || !import.report.guessed.is_empty()
+                    || !import.report.notes.is_empty()
+                {
+                    ui.add_space(8.0);
+                    if !import.report.lossy.is_empty() {
+                        ui.strong("Not carried over");
+                    }
+                    for l in &import.report.lossy {
+                        ui.label(l.line());
+                    }
+                    if !import.report.guessed.is_empty() {
+                        ui.strong("Guessed, not exact");
+                    }
+                    for l in &import.report.guessed {
+                        ui.label(l.line());
+                    }
+                    for n in &import.report.notes {
+                        ui.weak(n);
+                    }
                 }
-                for l in &import.report.lossy {
-                    ui.label(l.line());
-                }
-                if !import.report.guessed.is_empty() {
-                    ui.strong("Guessed, not exact");
-                }
-                for l in &import.report.guessed {
-                    ui.label(l.line());
-                }
-                for n in &import.report.notes {
-                    ui.weak(n);
-                }
-            }
-            ui.add_space(10.0);
-            ui.horizontal(|ui| {
-                go = ui
-                    .add_enabled(can_import, egui::Button::new("Import"))
-                    .clicked();
-                cancel = ui.button("Cancel").clicked();
-            });
-        });
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    go = ui
+                        .add_enabled(can_import, egui::Button::new("Import"))
+                        .clicked();
+                    cancel = ui.button("Cancel").clicked();
+                });
+            },
+        );
         if go {
             self.confirm_aml_import();
         } else if cancel || modal.should_close() {
@@ -407,27 +411,31 @@ impl NovoApp {
             return;
         };
         let mut close = false;
-        let modal = egui::Modal::new(egui::Id::new("eplan_guide")).show(ctx, |ui| {
-            ui.set_width(560.0);
-            ui.heading("Export from EPLAN");
-            ui.weak(format!("Files written to {}", guide.folder.display()));
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut guide.dutch, false, "English");
-                ui.selectable_value(&mut guide.dutch, true, "Nederlands");
-            });
-            let lang = if guide.dutch {
-                eplan_export::Lang::Dutch
-            } else {
-                eplan_export::Lang::English
-            };
-            egui::ScrollArea::vertical()
-                .max_height(360.0)
-                .show(ui, |ui| {
-                    ui.label(egui::RichText::new(eplan_export::instructions(lang)).monospace());
+        let modal = super::panel::modal(
+            ctx,
+            "eplan_guide",
+            "Export from EPLAN",
+            [560.0, 520.0],
+            |ui| {
+                ui.weak(format!("Files written to {}", guide.folder.display()));
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut guide.dutch, false, "English");
+                    ui.selectable_value(&mut guide.dutch, true, "Nederlands");
                 });
-            ui.add_space(8.0);
-            close = ui.button("Close").clicked();
-        });
+                let lang = if guide.dutch {
+                    eplan_export::Lang::Dutch
+                } else {
+                    eplan_export::Lang::English
+                };
+                egui::ScrollArea::vertical()
+                    .max_height(360.0)
+                    .show(ui, |ui| {
+                        ui.label(egui::RichText::new(eplan_export::instructions(lang)).monospace());
+                    });
+                ui.add_space(8.0);
+                close = ui.button("Close").clicked();
+            },
+        );
         if close || modal.should_close() {
             self.wb.eplan_guide = None;
         }

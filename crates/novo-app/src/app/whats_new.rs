@@ -103,12 +103,13 @@ impl NovoApp {
         }
         let all = entries();
         let fresh = unseen(&all, &self.settings.whats_new_seen).len();
-        let modal = egui::Modal::new(egui::Id::new("whats_new")).show(ctx, |ui| {
-            ui.set_width(novo_theme::dialog_width::MEDIUM);
-            super::dialog_ui::title(ui, "What's new", "");
-            egui::ScrollArea::vertical()
-                .max_height(ctx.content_rect().height() * 0.6)
-                .show(ui, |ui| {
+        let modal = super::panel::modal_fill(
+            ctx,
+            "whats_new",
+            "What's new",
+            [novo_theme::dialog_width::MEDIUM, 480.0],
+            |ui| {
+                super::panel::fill_above(ui, 44.0, |ui| {
                     for (n, entry) in all.iter().enumerate() {
                         ui.add_space(6.0);
                         ui.horizontal(|ui| {
@@ -123,9 +124,10 @@ impl NovoApp {
                         }
                     }
                 });
-            ui.add_space(8.0);
-            super::dialog_ui::done(ui)
-        });
+                ui.add_space(8.0);
+                super::dialog_ui::done(ui)
+            },
+        );
         if modal.inner || modal.should_close() {
             self.show_whats_new = false;
             if let Some(newest) = all.first() {

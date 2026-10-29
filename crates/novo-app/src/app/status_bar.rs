@@ -349,16 +349,30 @@ impl NovoApp {
         match self.settings.xref_view() {
             XrefView::Full => {}
             view => chips.push(ModeChip {
-                label: if view == XrefView::Faded {
-                    "References faded"
-                } else {
-                    "References hidden"
+                label: match view {
+                    XrefView::Overlap => "References fade on overlap",
+                    XrefView::Faded => "References faded",
+                    _ => "References hidden",
                 }
                 .into(),
                 command: "view.toggle_references",
-                hover: "Click to step references: full, faded, hidden. They always print in full"
+                hover: "Click to step references: full, fade on overlap, faded, hidden. They always print in full"
                     .into(),
             }),
+        }
+        if self.page_hides_references() {
+            chips.push(ModeChip {
+                label: "Page references hidden".into(),
+                command: "view.hide_references_page",
+                hover: "Show this page's cross references again. They always print".into(),
+            });
+        }
+        if let Some(tag) = self.selected_device_hiding_references() {
+            chips.push(ModeChip {
+                label: format!("{tag} references hidden"),
+                command: "view.hide_references_device",
+                hover: format!("Show the cross references of {tag} again. They always print"),
+            });
         }
         if self.wb.live.on {
             chips.push(ModeChip {
@@ -511,7 +525,14 @@ mod refusal_tests {
             shown(&ctx),
             "a long refusal gets a card with the whole text"
         );
-        let rect = |name: &str| ctx.memory(|m| m.area_rect(egui::Id::new(name)));
+        let rect = |name: &str| {
+            let id = if name == "tool_dock" {
+                super::super::panel::id(name)
+            } else {
+                egui::Id::new(name)
+            };
+            ctx.memory(|m| m.area_rect(id))
+        };
         let card = ctx
             .memory(|m| m.area_rect(super::refusal_card_id()))
             .expect("the card has a place");
@@ -550,7 +571,9 @@ mod toast_dock_tests {
             }
             let rect = |name: &str| ctx.memory(|m| m.area_rect(egui::Id::new(name)));
             let toasts = rect("toasts").expect("the toast is shown");
-            let dock = rect("tool_dock").expect("the dock is shown");
+            let dock = ctx
+                .memory(|m| m.area_rect(super::super::panel::id("tool_dock")))
+                .expect("the dock is shown");
             assert!(
                 !toasts.intersects(dock),
                 "{size:?}: toast {toasts:?} over dock {dock:?}"

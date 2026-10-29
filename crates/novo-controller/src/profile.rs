@@ -336,8 +336,9 @@ pub struct SignalDef {
     /// Low while the link is lost. Default: true for a radio, false otherwise.
     #[serde(default)]
     pub needs_link: Option<bool>,
-    /// How this signal combines with others on the same target. If any signal on a target says
-    /// `and`, the whole target is an AND.
+    /// How this signal combines with others on the same target: `or` (default) takes the largest
+    /// magnitude, `and` the smallest among the `and` signals only; the two results then combine as
+    /// the larger magnitude.
     #[serde(default)]
     pub combine: Combine,
     /// Terminal label the real device wires this signal to (for auto-binding by name).

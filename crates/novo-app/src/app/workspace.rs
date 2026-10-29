@@ -165,6 +165,14 @@ impl NovoApp {
             return;
         }
         let left_commissioning = self.workspace == Workspace::Commissioning;
+        // A warning or an error is about the work done where it was raised; it
+        // does not follow the person to the next workspace (it stays in the
+        // log). Info toasts and the file toast of an export fade on their own.
+        for m in &mut self.messages {
+            if m.level != super::Level::Info {
+                m.dismissed = true;
+            }
+        }
         // The live view draws only over the schematic; it does not wait
         // switched on for the next visit.
         if workspace != Workspace::Schematic {
@@ -336,6 +344,43 @@ mod tests {
         d.app.run(&ctx, Action::CloseProject);
         d.frame();
         assert_eq!(d.app.workspace(), Workspace::Schematic);
+    }
+
+    #[test]
+    fn an_error_toast_does_not_follow_the_person_to_another_workspace() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        d.app.message(
+            crate::app::Level::Error,
+            "Cannot rename -T2: both symbols are main functions",
+        );
+        d.app
+            .message(crate::app::Level::Warning, "A warning about the drawing");
+        d.app
+            .message(crate::app::Level::Info, "Placed Motor starter DOL");
+        assert!(d.app.messages.iter().all(|m| !m.dismissed));
+        d.app.run(&ctx, Action::ShowCabinet);
+        d.frame();
+        let up = |level| {
+            d.app
+                .messages
+                .iter()
+                .any(|m| m.level == level && !m.dismissed)
+        };
+        assert!(
+            !up(crate::app::Level::Error),
+            "the error left with the schematic"
+        );
+        assert!(!up(crate::app::Level::Warning));
+        assert!(
+            up(crate::app::Level::Info),
+            "an info toast fades on its own"
+        );
+        // The log keeps them.
+        assert_eq!(d.app.messages.len(), 3);
     }
 
     #[test]

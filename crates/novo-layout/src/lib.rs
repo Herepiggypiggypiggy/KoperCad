@@ -555,8 +555,9 @@ pub fn ducts_in_the_way(ducts: &[Duct], duct: &Duct) -> Vec<u64> {
 /// The nearest place for `duct` that crosses no other duct and stays on
 /// `within`. Tries moving it in 5 mm steps out to 600 mm, along its run and
 /// across it, nearest first; when it has no place at its full length, the
-/// same with the duct shortened in 10 mm steps down to 100 mm. `None` when
-/// there is no room. The duct itself is returned when it is already clear.
+/// same with the duct shortened down to 100 mm: in 10 mm steps up to 1 m, and
+/// above that by a hundredth of its length per step. Shortened lengths are
+/// whole 10 mm, so they stay clean to cut by hand. `None` when there is no room. The duct itself is returned when it is already clear.
 pub fn clear_duct_spot(ducts: &[Duct], duct: &Duct, within: &Rect) -> Option<Duct> {
     let fits = |d: &Duct| {
         let f = d.footprint();
@@ -597,7 +598,16 @@ pub fn clear_duct_spot(ducts: &[Duct], duct: &Duct, within: &Rect) -> Option<Duc
                 }
             }
         }
-        length -= 10.0;
+        // 10 mm steps for ducts up to 1 m; a longer duct is shortened by a
+        // hundredth of its length per step, so the search stays bounded.
+        // Rounded down to a whole 10 mm; the step is at least 10 mm, so the
+        // length always falls.
+        let step = if length > 1000.0 {
+            length / 100.0
+        } else {
+            10.0
+        };
+        length = ((length - step) / 10.0).floor() * 10.0;
     }
     None
 }
@@ -683,6 +693,62 @@ mod tests {
             margins: Margins::default(),
             rail: None,
         }
+    }
+
+    #[test]
+    fn a_shortened_duct_has_a_whole_10_mm_length() {
+        let mine = Duct {
+            id: 1,
+            x: 10.0,
+            y: 50.0,
+            length: 1234.0,
+            width: 50.0,
+            vertical: false,
+        };
+        let within = Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 1105.0,
+            h: 200.0,
+        };
+        let spot = clear_duct_spot(&[], &mine, &within).unwrap();
+        assert!(spot.length < 1234.0);
+        assert_eq!(spot.length % 10.0, 0.0);
+    }
+
+    #[test]
+    fn a_very_long_duct_with_no_room_is_given_up_on_quickly() {
+        let wall = |id: u64, y: f64| Duct {
+            id,
+            x: 0.0,
+            y,
+            length: 100_000.0,
+            width: 50.0,
+            vertical: false,
+        };
+        // Every spot within reach is covered by a long duct.
+        let ducts: Vec<Duct> = (0..40)
+            .map(|i| wall(i + 1, 10.0 + f64::from(i as u32) * 30.0))
+            .collect();
+        let mine = Duct {
+            id: 99,
+            x: 0.0,
+            y: 600.0,
+            length: 99_000.0,
+            width: 50.0,
+            vertical: false,
+        };
+        let within = Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 100_000.0,
+            h: 1300.0,
+        };
+        let t = std::time::Instant::now();
+        let spot = clear_duct_spot(&ducts, &mine, &within);
+        assert!(spot.is_none());
+        // Generous: it only guards against the search running for minutes.
+        assert!(t.elapsed().as_secs_f64() < 30.0);
     }
 
     #[test]

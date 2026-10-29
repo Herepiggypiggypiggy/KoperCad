@@ -257,7 +257,7 @@ Two parameters name connections, and they mean different things:
 | --- | --- |
 | `none` | none (pure graphics: earth, interruption point, potential feed) |
 | `conductor` | **`poles`** (always joined: terminals, connectors, bridges) |
-| `contact` | **`poles`**, **`normally`** = `open` \| `closed` \| `changeover`, `latching` (bool; selector, E-stop), `delay` = `on` \| `off`, `center_off` (bool, changeover only: a middle position where the common joins neither side, as on an I-0-II switch) |
+| `contact` | **`poles`**, **`normally`** = `open` \| `closed` \| `changeover`, `latching` (bool; selector, E-stop), `delay` = `on` \| `off`, `center_off` (bool, changeover only: a middle position where the common joins neither side, as on an I-0-II switch), `common` (connection id that starts every pole and may repeat in all of them: the shared COM of a radio receiver's output contacts) |
 | `coil` | **`poles`**, `delay` = `on` \| `off` |
 | `fuse` | **`poles`**, `switched` (bool) |
 | `breaker` | **`poles`**, **`trip`** (non-empty subset of `thermal`, `magnetic`, `residual`), `adjustable` (bool) |

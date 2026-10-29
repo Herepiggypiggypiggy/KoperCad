@@ -255,6 +255,9 @@ pub(super) fn join_starter(
                 })
             })
     };
+    // A coil return alone is not a starter: a circuit that only has coils
+    // (an E-stop chain) is not joined to the supply.
+    let is_starter = phases.is_some() || control.is_some() || earth.is_some();
     let mut pairs: Vec<Join> = Vec::new();
     if let Some(entries) = phases {
         let outs: Vec<_> = ["2", "4", "6"]
@@ -272,7 +275,9 @@ pub(super) fn join_starter(
         pairs.push((from, entry[0], false));
     }
     // The coil return enters from below: the wire runs up to the bus.
-    if let (Some(entry), Some(from)) = (neutral, out("terminal_n", "2")) {
+    if let (Some(entry), Some(from)) = (neutral, out("terminal_n", "2"))
+        && is_starter
+    {
         pairs.push((from, entry, true));
     }
     // The channel: down under the supply, left through the gap between the
