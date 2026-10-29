@@ -160,6 +160,17 @@ impl Package {
             .ok_or_else(|| AddonError::Manifest("the package has no manifest.toml".into()))?;
         let signature = entries.remove("signature");
         let manifest = Manifest::parse(&manifest_bytes)?;
+        if let Some(engine) = &manifest.engine
+            && entries
+                .get(&engine.file)
+                .is_some_and(|wasm| wasm.len() > crate::host::MAX_ENGINE_BYTES)
+        {
+            return Err(AddonError::TooLarge(format!(
+                "{} is larger than {} MiB",
+                engine.file,
+                crate::host::MAX_ENGINE_BYTES / (1024 * 1024)
+            )));
+        }
 
         // Every file is listed and matches; every listed file is there.
         for name in entries.keys() {

@@ -19,7 +19,7 @@ Some features are not part of the base program. They are **add-ons**: a file end
 | `kopercad-cli addons list / inspect / install / enable / disable / remove / rollback / pack` | The same from a script or CI |
 | `kopercad.addons_list()`, `addons_install()`, `addons_set_enabled()`, `addons_remove()` (Python) | The same from Python |
 
-Not yet in the app, and listed so nobody looks for them: the rail slot and flyout (lane V3a draws the rail; the rows are ready in `Extensions::rail_rows`), the app-menu footer (V2b), the add-on chip in Ctrl K (V5), the drawn-icon painter for add-on icons (V0; the add-on glyph stands in), and the controller's own engine (the host is in; the controller add-on is lane C3).
+Not yet in the app, and listed so nobody looks for them: the rail slot and flyout (lane V3a draws the rail; the rows are ready in `Extensions::rail_rows`), the app-menu footer (V2b), the add-on chip in Ctrl K (V5), the drawn-icon painter for add-on icons (V0; the add-on glyph stands in), and the controller add-on's live-view card (the add-on itself, its engine and panel are in `addons/controllers`, see its README).
 
 ## The package
 
@@ -81,6 +81,7 @@ Each is declared in `permissions`, listed in the install prompt and in Details, 
 | What | Limit |
 | --- | --- |
 | Package file | 64 MiB |
+| `engine.wasm` | 4 MiB (refused at install and at load) |
 | Entries / one file after expansion / all files after expansion | 1,000 / 32 MiB / 128 MiB |
 | Expansion of a file over 1 MiB | at most 200 times its compressed size |
 | `manifest.toml` | 256 KiB |
@@ -155,7 +156,7 @@ Request `{"api":1,"op":"<name>","data":{...}}`, reply `{"ok":true,"data":{...}}`
 | Follow-up | Where |
 | --- | --- |
 | Gate the controller import wizard (File > Import > Controller profile) behind the controller add-on, once that package exists | after C3 packages the add-on |
-| Build the controller as `engine.wasm` (`wasm32-unknown-unknown`) and pack it in CI | C3 / release |
+| ~~Build the controller as `engine.wasm` and pack it in CI~~ done: `addons/controllers`, `scripts/build-controllers-addon.sh`, CI job `controllers add-on`. Signing the released file is still the release thread's | C3 / release |
 | Project data blocks tagged with the add-on id, kept untouched when the add-on is missing | needs a generic block in `novo-core`/`novo-storage` (WS-02/WS-04) |
 | Rail slot and flyout, app-menu footer with count badge, add-on chip and "Turn on" row in Ctrl K, drawn icons | V3a, V2b, V5, V0 |
 | Release signing key and `scripts/pack-addon` in CI | release thread |
