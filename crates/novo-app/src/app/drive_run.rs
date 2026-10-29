@@ -373,6 +373,17 @@ impl NovoApp {
                         .iter()
                         .map(|f| (format!("{} \u{b7} {:.1} s", m.id, f.time_s), f.kind.text()))
                 }))
+                .chain(
+                    a.cw.modules
+                        .iter()
+                        .filter(|m| m.findings_dropped() > 0)
+                        .map(|m| {
+                            (
+                                m.id.clone(),
+                                format!("{} more findings not shown", m.findings_dropped()),
+                            )
+                        }),
+                )
                 .collect()
         });
         let running = run.active.is_some();
@@ -504,7 +515,9 @@ impl NovoApp {
                      Torque is proven before the brake opens and held at zero speed; the STO \
                      channels, the encoder signal and the brake contactor are read from the \
                      drawing. Brake timing is entered, not measured; the plausibility check uses \
-                     the true shaft speed. Not a maker's firmware.",
+                     the true shaft speed. Hook movement under 5 mm is not reported; 20 mm \
+                     against the command ends the start check; 50 mm against it at the start is \
+                     reported at once. Not a maker's firmware.",
                 );
                 ui.weak("\u{2022} Not a safety or compliance statement.");
             });
