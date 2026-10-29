@@ -58,6 +58,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.recover", under("File", "Open")),
     ("file.example", under("File", "Open")),
     ("file.new_crane", under("File", "New from template")),
+    ("file.new_pump", under("File", "New from template")),
+    ("file.new_mcc", under("File", "New from template")),
     ("file.example_mcc", under("File", "Examples")),
     ("file.example_crane", under("File", "Examples")),
     ("file.example_plc", under("File", "Examples")),
@@ -952,13 +954,18 @@ mod tests {
     #[test]
     fn menu_rows_stay_inside_the_budget() {
         let ceilings: &[(&str, usize)] = &[
-            ("File", 88),
+            // 90: File > New from template gained Pump station and Motor control centre
+            // (#1737), next to the crane; a template is a start-of-work choice that has
+            // no rail or palette-only home a new user would find.
+            ("File", 90),
             ("Edit", 30),
             ("Draw", 39),
             ("View", 65),
             ("Check", 11),
             ("Reports", 30),
-            ("Simulate", 24),
+            // 25: one Simulate row merged in parallel with the ratchet (#1734) and was
+            // counted by no PR; it stays until the rail move lands.
+            ("Simulate", 25),
             ("Help", 19),
         ];
         let mut total = 0;
@@ -976,7 +983,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 306, "the menus hold {total} rows");
+        assert!(total <= 309, "the menus hold {total} rows");
     }
 
     #[test]
