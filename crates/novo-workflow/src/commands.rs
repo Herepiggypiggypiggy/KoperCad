@@ -428,6 +428,10 @@ pub const COMMANDS: &[CommandInfo] = &[
             "Project",
             &[
                 "eplan parts",
+                "parts database",
+                "eod",
+                "adb",
+                "maker aliases",
                 "parts",
                 "artikel",
                 "xml",
