@@ -9,3 +9,5 @@
 2026-10-28 C4 follow-up: preview counts say "1 control", the "to check" list comes first in the preview (visible at 1366x768), warning texts use quotes instead of backticks.
 
 2026-10-28 C4: preview shows "N rows: scroll the preview below to see every row and note" and an always-visible scrollbar (R3 note from #1615).
+
+2026-10-29 C4: `ProposedProfile::to_profile` builds a `novo_controller::Profile` directly (a test checks it equals the profile read back from the TOML); the wizard shows the engine validator's issues in the preview and refuses to save on an error. Bare direction words (RIGHT, FORWARD, UP) now use the crane convention (trolley, bridge, hoist) with an Info note, and a row that has only a step (for example "H SNEL") says so. Not done: tuning on the user's real I/O pages, because the device folders were not reachable from this thread; needs his files or a thread with his device approved.
