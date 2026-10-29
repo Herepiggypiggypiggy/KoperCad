@@ -1,0 +1,53 @@
+@title Controller panel and Hoist run: the radio lifts the hook through the drawn circuit (1920)
+@area Live
+@sizes 1920x1080
+# Lane C2 with the electromechanical loop (L5a): the virtual radio closes the receiver contacts, the
+# drawn contactors settle, the two-speed motor runs on the winding the circuit feeds and the hook
+# moves. The Hoist run window sits where the Controller card does, so it is moved to the left first.
+open qa/fixtures/radio-hoist.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate hoist run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+drag 1554 82 1034 82
+wait 10
+click_text "Controller…"
+wait 20
+expect "Hoists in this project: -M1"
+expect "0 rpm · off · brake closed"
+shot before-main
+# Main on, then hold up step 1 (fine winding): the hook rises slowly.
+click_text off
+wait 10
+mouse_down 1602 232
+wait 120
+expect "fine"
+expect "brake open"
+shot fine-rising
+mouse_up 1602 232
+wait 10
+# Hold up step 2 (coarse winding): faster.
+mouse_down 1654 232
+wait 120
+expect "coarse"
+shot coarse-rising
+mouse_up 1654 232
+wait 120
+expect "0 rpm"
+# E-stop with the rocker held again: every output drops, the motor stops, the brake closes.
+mouse_down 1654 232
+wait 60
+click_text E-stop
+wait 60
+expect "brake closed"
+expect "Signals (0 of 15 high)"
+shot e-stop
+mouse_up 1654 232
+check_layout

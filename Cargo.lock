@@ -2540,6 +2540,7 @@ dependencies = [
  "novo-cfd",
  "novo-checks",
  "novo-cli",
+ "novo-controller",
  "novo-core",
  "novo-editor",
  "novo-emc",
