@@ -10,7 +10,8 @@
 //! only; ratings are left for the project to enter.
 
 use novo_core::{
-    ChangeSet, DeviceTag, Document, Page, PageKind, Point, Result as ModelResult, Tx, Value,
+    ChangeSet, DeviceTag, Document, ModelError, Page, PageKind, Point, Result as ModelResult, Tx,
+    Value,
 };
 use novo_parts::circuit_library;
 use novo_reports::{GeneratedPageSpec, add_generated_pages, front_keys};
@@ -232,6 +233,8 @@ pub(crate) fn build_crane_template_on(
             info.properties
                 .insert(front_keys::ISSUE_DATE.into(), text(today));
             info.properties
+                .insert(front_keys::KIND.into(), text("crane"));
+            info.properties
                 .insert(front_keys::CONTROL.into(), text("48 V AC"));
             info.properties.insert(
                 novo_checks::calc_view::inputs::SUPPLY_VOLTAGE_V.into(),
@@ -245,7 +248,7 @@ pub(crate) fn build_crane_template_on(
 /// The circuits of the standard library by name, each adopted into the
 /// project once and then placed on as many pages as needed.
 #[derive(Default)]
-struct Circuits {
+pub(super) struct Circuits {
     adopted: Vec<(String, novo_core::BlockDefinitionId)>,
     /// The library, built on the first circuit asked for.
     library: Option<Vec<(String, novo_parts::MacroFile)>>,
@@ -253,24 +256,48 @@ struct Circuits {
 
 impl Circuits {
     /// Places circuit `name` at the top left of `page`.
-    fn place(&mut self, tx: &mut Tx<'_>, page: novo_core::PageId, name: &str) -> ModelResult<()> {
+    pub(super) fn place(
+        &mut self,
+        tx: &mut Tx<'_>,
+        page: novo_core::PageId,
+        name: &str,
+    ) -> ModelResult<()> {
+        self.place_at(tx, page, name, Point::new(20.0, 20.0))
+    }
+
+    /// Places circuit `name` with its origin at `at` on `page`.
+    pub(super) fn place_at(
+        &mut self,
+        tx: &mut Tx<'_>,
+        page: novo_core::PageId,
+        name: &str,
+        at: Point,
+    ) -> ModelResult<()> {
         let id = match self.adopted.iter().find(|(n, _)| n == name) {
             Some((_, id)) => *id,
             None => {
-                let library = self
+                if self.library.is_none() {
+                    self.library = Some(circuit_library().map_err(|e| ModelError::Refused {
+                        what: "Circuit library".into(),
+                        reason: e.to_string(),
+                    })?);
+                }
+                let file = self
                     .library
-                    .get_or_insert_with(|| circuit_library().unwrap_or_default());
-                let file = library
                     .iter()
+                    .flatten()
                     .find(|(_, f)| f.name == name)
                     .map(|(_, f)| f.clone())
-                    .unwrap_or_else(|| panic!("the circuit library has no \"{name}\""));
+                    .ok_or_else(|| ModelError::Refused {
+                        what: "Circuit library".into(),
+                        reason: format!("no circuit named \"{name}\""),
+                    })?;
                 let id = tx.adopt_block_definition(file.definition)?;
                 self.adopted.push((name.to_owned(), id));
                 id
             }
         };
-        tx.place_block(id, page, Point::new(20.0, 20.0), Vec::new())?;
+        tx.place_block(id, page, at, Vec::new())?;
         Ok(())
     }
 }
