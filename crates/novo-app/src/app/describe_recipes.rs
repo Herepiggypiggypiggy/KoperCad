@@ -133,17 +133,26 @@ impl NovoApp {
                 ui.separator();
                 let ids: Vec<String> = dialog.set.recipes.keys().cloned().collect();
                 super::panel::fill_above(ui, 76.0, |ui| {
-                    ui.horizontal_top(|ui| {
-                        ui.vertical(|ui| {
-                            ui.set_width(170.0);
-                            for id in &ids {
-                                let word = &dialog.set.recipes[id].kind;
-                                if ui.selectable_label(&dialog.kind == id, word).clicked() {
-                                    dialog.kind = id.clone();
+                    ui.horizontal(|ui| {
+                        ui.label("Kind of device");
+                        let shown = dialog
+                            .set
+                            .recipes
+                            .get(&dialog.kind)
+                            .map_or(String::new(), |r| r.kind.clone());
+                        egui::ComboBox::from_id_salt("describe_kind")
+                            .selected_text(shown)
+                            .show_ui(ui, |ui| {
+                                for id in &ids {
+                                    let word = &dialog.set.recipes[id].kind;
+                                    if ui.selectable_label(&dialog.kind == id, word).clicked() {
+                                        dialog.kind = id.clone();
+                                    }
                                 }
-                            }
-                        });
-                        ui.separator();
+                            });
+                    });
+                    ui.add_space(4.0);
+                    ui.vertical(|ui| {
                         ui.vertical(|ui| {
                             let facts = sample();
                             let Some(recipe) = dialog.set.recipes.get_mut(&dialog.kind) else {

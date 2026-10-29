@@ -14,9 +14,7 @@ expect "Preview on a sample part"
 expect "3-pole contactor; 9 A; 3M/1m/1b; 400 V; 4 kW; Coil: 48 V AC, 50 Hz"
 shot recipe-editor-preview
 check_layout
-click_text "Add segment"
-wait 5
-click 650 556
+click_text "Coil: {coil}" TextInput
 key ctrl+a
 text {nope}
 wait 8
