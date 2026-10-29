@@ -238,6 +238,7 @@ mod project_settings;
 mod protection;
 mod rail;
 mod rail_schematic;
+mod rail_workspaces;
 mod reports;
 mod reports_view;
 mod review_notes;
@@ -437,6 +438,8 @@ mod print_preview_tests;
 mod protection_tests;
 #[cfg(test)]
 mod rail_tests;
+#[cfg(test)]
+mod rail_workspaces_tests;
 #[cfg(test)]
 mod read_only_tests;
 #[cfg(test)]
@@ -1789,10 +1792,7 @@ impl NovoApp {
         self.status_bar(ui);
         let reports = self.workspace() == workspace::Workspace::Reports && self.is_open();
         // The tool rail: the leftmost panel of the Schematic workspace.
-        if !self.focus_mode && self.is_open() && self.workspace() == workspace::Workspace::Schematic
-        {
-            self.schematic_rail_show(ui);
-        } else {
+        if self.focus_mode || !self.is_open() || !self.workspace_rail_show(ui) {
             self.wb.rail_rect = None;
             rail::close_flyout(&ctx);
         }

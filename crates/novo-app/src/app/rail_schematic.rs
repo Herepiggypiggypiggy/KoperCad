@@ -112,7 +112,8 @@ fn local(id: &str) -> Option<(Glyph, &'static str, &'static str)> {
 
 /// The picture, short name and sentence of any rail row.
 pub(super) fn look(id: &str) -> Option<(Glyph, String, String)> {
-    if let Some((glyph, label, sentence)) = local(id) {
+    if let Some((glyph, label, sentence)) = local(id).or_else(|| super::rail_workspaces::local(id))
+    {
         return Some((glyph, label.to_owned(), sentence.to_owned()));
     }
     let label = presentation::short_label(id)?;
@@ -281,13 +282,19 @@ impl NovoApp {
 
     /// Draws the rail as the leftmost panel and acts on what was clicked.
     pub(super) fn schematic_rail_show(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         let super::dock::ToolHint { proposals, .. } = self.tool_hint();
         let rail = self.schematic_rail(proposals);
+        self.rail_show(ui, &rail);
+    }
+
+    /// Draws any workspace's rail as the leftmost panel, keeps the lesson
+    /// anchors and acts on what was clicked.
+    pub(super) fn rail_show(&mut self, ui: &mut egui::Ui, rail: &Rail) {
+        let ctx = ui.ctx().clone();
         let mut expanded = self.settings.rail_expanded
             || self.settings.dock_labels() == crate::settings::DockLabels::Always;
         let was = expanded;
-        let shown = super::rail::show(ui, &rail, &mut expanded);
+        let shown = super::rail::show(ui, rail, &mut expanded);
         if expanded != was {
             self.settings.rail_expanded = expanded;
         }
@@ -350,6 +357,7 @@ impl NovoApp {
             "rail.auto_never" => self.settings.set_connect_mode(ConnectMode::Never),
             "rail.pages" => self.show_pages(true),
             "check.problems" => self.show_issues(true),
+            other if other.starts_with("rail.") => self.workspace_rail_click(ctx, other),
             other => self.wb.queued.push(other),
         }
         ctx.request_repaint();

@@ -125,6 +125,13 @@ pub(super) fn close_flyout(ctx: &egui::Context) {
     set_flyout(ctx, None);
 }
 
+/// Opens the flyout of `id`, or closes it when it is the one open (an entry
+/// whose click has nothing to run but its card).
+pub(super) fn toggle_flyout(ctx: &egui::Context, id: &str) {
+    let open = open_flyout(ctx).as_deref() == Some(id);
+    set_flyout(ctx, if open { None } else { Some(id) });
+}
+
 /// Shows the rail as the left panel of `ui` and reports what happened.
 pub(super) fn show(ui: &mut egui::Ui, rail: &Rail, expanded: &mut bool) -> Shown {
     let pal = ui_palette();

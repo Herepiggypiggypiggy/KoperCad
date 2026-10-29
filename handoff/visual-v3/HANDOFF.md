@@ -17,3 +17,9 @@ Updated 2026-10-29. Branch `claude/project-thread-up7jgz`, based on main 8c9c97e
 
 ## Resume
 `CARGO_TARGET_DIR=... cargo test -p novo-app --lib rail`; QA scenario `qa/scenarios/730-tool-rail.qa`.
+
+## V3d: Reports and Commissioning rails
+- `rail_workspaces.rs`: row lists per workspace, `local()` for `rail.*` rows, `workspace_rail_show()` (one arm per workspace with a rail; 3D and Cabinet rails add theirs there), `workspace_rail_click()`.
+- Reports: Add as drawing page, Report designer, Labels | Bench output, Build mode | Export (flyout: Excel, report PDF, BOM, PDF), Print preview.
+- Commissioning: the four panel tabs (Checks, Punch, Redlines, Test) | Next open (moves only, never decides; Mark done stays the Space tick) | Export commissioning, Export punch list. The design's Photo and Note tools do not exist as tools; the tabs are what is there.
+- Known: `a_double_click_on_the_edge_of_the_pinned_navigator_gives_it_its_width_back` fails on main too (not from this lane); `xref_table_tests::a_double_click_on_a_table_row...` is flaky under the full run.
