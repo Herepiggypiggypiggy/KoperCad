@@ -7,6 +7,9 @@ mod addons;
 mod addons_look;
 #[cfg(test)]
 mod addons_look_tests;
+mod app_menu;
+#[cfg(test)]
+mod app_menu_tests;
 mod appearance;
 mod assembly;
 mod assistant;
@@ -204,6 +207,7 @@ mod outline_items;
 mod outline_tree;
 mod pages;
 mod panel;
+mod panel_dock;
 #[cfg(test)]
 mod panel_windows_tests;
 mod part_picker;
@@ -237,6 +241,8 @@ mod project_rules;
 mod project_settings;
 mod protection;
 mod rail;
+mod rail_3d;
+mod rail_cabinet;
 mod rail_schematic;
 mod reports;
 mod reports_view;
@@ -278,6 +284,9 @@ mod test_wait;
 mod tidy;
 mod tips;
 mod title_revisions;
+mod top_bar;
+#[cfg(test)]
+mod top_bar_tests;
 mod userkeymap;
 mod variants;
 mod view3d;
@@ -438,6 +447,8 @@ mod protection_tests;
 #[cfg(test)]
 mod rail_tests;
 #[cfg(test)]
+mod rail_workspaces_tests;
+#[cfg(test)]
 mod read_only_tests;
 #[cfg(test)]
 mod recover_tests;
@@ -575,7 +586,7 @@ const TOAST_ERROR: Duration = Duration::from_secs(30);
 /// Most toasts shown at once; older ones wait in [`NovoApp::messages`].
 const MAX_TOASTS: usize = 3;
 /// Height of the top bar.
-const TOP_BAR: f32 = 42.0;
+const TOP_BAR: f32 = 40.0;
 /// Width of the outline, pinned or as a flyout.
 const OUTLINE_WIDTH: f32 = 248.0;
 /// The narrowest and widest the navigator column can be dragged to.
@@ -1788,10 +1799,23 @@ impl NovoApp {
             .show(ui, |ui| self.top_bar(ui, &mut picked));
         self.status_bar(ui);
         let reports = self.workspace() == workspace::Workspace::Reports && self.is_open();
-        // The tool rail: the leftmost panel of the Schematic workspace.
-        if !self.focus_mode && self.is_open() && self.workspace() == workspace::Workspace::Schematic
+        // The tool rail: the leftmost panel of the Schematic, Cabinet and 3D
+        // workspaces.
+        let rail_workspace = self.workspace();
+        if !self.focus_mode
+            && self.is_open()
+            && matches!(
+                rail_workspace,
+                workspace::Workspace::Schematic
+                    | workspace::Workspace::Cabinet
+                    | workspace::Workspace::View3d
+            )
         {
-            self.schematic_rail_show(ui);
+            match rail_workspace {
+                workspace::Workspace::Schematic => self.schematic_rail_show(ui),
+                workspace::Workspace::Cabinet => self.cabinet_rail_show(ui),
+                _ => self.view3d_rail_show(ui),
+            }
         } else {
             self.wb.rail_rect = None;
             rail::close_flyout(&ctx);
@@ -1828,6 +1852,9 @@ impl NovoApp {
         }
         self.sync_commissioning_workspace();
         self.drawer(ui);
+        // Panels the person docked at an edge of the canvas take their strip here, so
+        // the canvas is what is left.
+        panel_dock::spacers(ui);
         // The canvases paint their own ground; the Reports tables and the
         // Cabinet toolbar sit on the theme's surfaces, not on the bare window.
         let pal = novo_theme::Palette::of_ctx(&ctx);
@@ -2195,14 +2222,22 @@ impl NovoApp {
         let fit = menu_bar::TopBarFit::at(self.window_width);
         let focus = self.menu_key_pressed(ui.ctx());
         ui.horizontal_centered(|ui| {
-            if self.menu_bar_wide() {
+            // F10 opens the app menu; with the menu words in the bar it moves the
+            // focus to them instead.
+            if self.menu_names_shown() {
                 self.mark(ui, false);
                 self.menu_bar(ui, focus);
             } else {
                 self.mark(ui, focus);
             }
             ui.separator();
-            if let Some(workspace) = self.workspace_switcher(ui, fit.short_switcher) {
+            // Undo and redo leave the dock for the bar; where the menu words need the
+            // room (a window narrower than 1250) the dock keeps them.
+            if self.window_width >= 1250.0 {
+                self.undo_redo_buttons(ui, picked);
+                ui.separator();
+            }
+            if let Some(workspace) = self.workspace_switcher(ui, fit.segment_names) {
                 self.wb.queued.push(workspace.command());
             }
             ui.separator();
@@ -2333,6 +2368,11 @@ impl NovoApp {
                 self.outline_open ^= true;
             }
             self.breadcrumb_link = Some(link);
+            // Narrower than 1250 the menu words need the room; the page name still
+            // opens the outline.
+            if self.window_width >= 1250.0 {
+                self.page_switcher_button(ui);
+            }
         }
         // A background that hides the wiring must show it exists.
         let background = self

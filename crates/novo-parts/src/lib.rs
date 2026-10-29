@@ -42,6 +42,7 @@ mod fit;
 mod import;
 mod library;
 mod macros;
+mod makers;
 mod panel;
 mod pins;
 mod plain;
@@ -114,6 +115,7 @@ pub use macros::{
     STARTER_FOLDER, SYMBOL_PAD, ThumbSymbol, Thumbnail, macro_updates, param_drafts,
     starter_macros, thumbnail, user_macros_dir, validate_parameters,
 };
+pub use makers::{ALIAS_FILE_NAME, MakerAliases};
 pub use panel::{Clearances, Mounting, PanelData, is_panel_number_key, migrate_properties};
 pub use pins::{
     POSITIONS_SOURCE_KEY, POSITIONS_SOURCE_PROPERTY, placed_terminals, positions_estimated,

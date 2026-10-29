@@ -1,0 +1,20 @@
+@title Cabinet rail: rows, expand, panels zone
+@area Layout
+# Lane V3c of the visual redesign (docs/design/visual-redesign.md section 3.2).
+# The rail is the left edge of the Cabinet workspace; the bar keeps its groups.
+click_text "Open example"
+wait 20
+click_text Cabinet #1
+wait 20
+shot rail-collapsed
+check_layout
+click 23 722
+wait 8
+shot rail-expanded
+expect "Place all"
+expect "Rails and ducts"
+expect "Route all wires"
+expect "Cabinet as table"
+check_layout
+click 23 722
+wait 6

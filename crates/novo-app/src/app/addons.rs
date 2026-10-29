@@ -726,6 +726,13 @@ fn trust_look(trust: &Trust, accepted: bool) -> (String, Tone, &'static str) {
     }
 }
 
+/// Id of the controller add-on (`addons/controllers`): the controller import wizard needs it.
+pub(super) const CONTROLLERS_ADDON: &str = "controllers";
+
+/// Why File > Import > Controller profile is greyed while the add-on is not on.
+pub(super) const CONTROLLERS_NEEDED: &str =
+    "Needs the Controllers add-on: install and turn it on in File > Add-ons...";
+
 fn manager_ui(
     ui: &mut egui::Ui,
     m: &mut Manager,
