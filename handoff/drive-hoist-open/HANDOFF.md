@@ -21,4 +21,5 @@ Decisions and traps
 - A maker's function names are not reproduced: "load sensing" is generic.
 - Test numbers are worked from a 5.5 kW motor, 2000 kg, 63:1, 2 falls (23.3 N m on the shaft, 64 % of rated).
 
+QA: scenarios `1709-drive-hoist-run` and `1709b-drive-hoist-run-1920` use `qa/fixtures/hoist-drive.novo` (hold S2: sensed load finding, brake closes on release).
 Resume: `cargo test -p novo-drive -p novo-machine`, then `cargo test -p novo-app --lib drive_run`.
