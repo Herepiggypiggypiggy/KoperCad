@@ -237,7 +237,7 @@ pub struct ModelStyle {
     pub note_warning_color: Color,
     /// A spare contact of a contact table: present on the device, unused.
     pub note_dim_color: Color,
-    /// Opacity (0 to 255) of a faded note ([`SymbolNote::faded`]).
+    /// Opacity (0 to 255) of a faded note ([`SymbolNote::fade`]).
     pub note_fade_alpha: u8,
 }
 
@@ -462,9 +462,23 @@ pub struct SymbolNote {
     pub rows: Vec<NoteRow>,
     /// How tightly the table is drawn.
     pub density: NoteDensity,
-    /// Drawn at [`ModelStyle::note_fade_alpha`] so it stays out of the way
-    /// of lines, parts and text it overlaps.
-    pub faded: bool,
+    /// Whether the note is drawn at [`ModelStyle::note_fade_alpha`] so it
+    /// stays out of the way of lines, parts and text it overlaps.
+    pub fade: NoteFade,
+}
+
+/// How much of a note is drawn on screen.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NoteFade {
+    /// Full opacity.
+    #[default]
+    Clear,
+    /// Always at the fade opacity.
+    Faded,
+    /// At the fade opacity only while it overlaps a wire, a symbol or text
+    /// that no free place nearby avoids (or that its person moved it onto);
+    /// at full opacity otherwise.
+    WhereCrossed,
 }
 
 /// The revision fields a title block prints (DESIGN §7), worked out by the
@@ -626,6 +640,10 @@ struct NoteSlot {
     at: (Vec2, Anchor),
     /// The note's place when the user moved it: it stays there.
     moved: bool,
+    /// The note's fade, from its [`SymbolNote`].
+    fade: NoteFade,
+    /// The note still overlaps a wire, a symbol or text at `at`.
+    crossed: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -1808,6 +1826,8 @@ impl PageScene {
                 at: (base.pos, base.anchor),
                 what: NoteWhat::Text(base),
                 moved: offset.is_some(),
+                fade: note.fade,
+                crossed: false,
             }
         } else {
             let ink = item
@@ -1821,7 +1841,7 @@ impl PageScene {
                 (ink.min.x, ink.max.y)
             };
             let origin = Vec2::new(left, top + 1.0) + offset.unwrap_or(Vec2::ZERO);
-            let (_, _, bounds) = self.table_parts(note, origin);
+            let (_, _, bounds) = self.table_parts(note, origin, false);
             NoteSlot {
                 primitives,
                 labels,
@@ -1834,18 +1854,20 @@ impl PageScene {
                     size: bounds.max - bounds.min,
                 },
                 moved: offset.is_some(),
+                fade: note.fade,
+                crossed: false,
             }
         };
-        slot.at = self.chosen_place(&slot, item, id);
-        let (p, l) = self.note_parts(&slot, slot.at);
+        (slot.at, slot.crossed) = self.chosen_place(&slot, item, id);
+        let (p, l) = self.note_parts(&slot, slot.at, slot.crossed);
         item.primitives.extend(p);
         item.labels.extend(l);
         Some(slot)
     }
 
     /// `color` as `note` is drawn: at the fade opacity when it is faded.
-    fn note_tone(&self, color: Color, note: &SymbolNote) -> Color {
-        if note.faded {
+    fn note_tone(&self, color: Color, note: &SymbolNote, crossed: bool) -> Color {
+        if note.fade == NoteFade::Faded || (note.fade == NoteFade::WhereCrossed && crossed) {
             let a = u16::from(color.0[3]) * u16::from(self.style.note_fade_alpha) / 255;
             color.with_alpha(u8::try_from(a).unwrap_or(u8::MAX))
         } else {
@@ -1854,7 +1876,12 @@ impl PageScene {
     }
 
     /// The contact table of `note` with its top left corner at `origin`.
-    fn table_layout(&self, note: &SymbolNote, origin: Vec2) -> note_table::NoteTable {
+    fn table_layout(
+        &self,
+        note: &SymbolNote,
+        origin: Vec2,
+        crossed: bool,
+    ) -> note_table::NoteTable {
         let color = if note.warning {
             self.style.note_warning_color
         } else {
@@ -1865,9 +1892,9 @@ impl PageScene {
             note.density,
             origin,
             self.style.tag_height,
-            Stroke::world(0.25, self.note_tone(color, note)),
-            self.note_tone(self.style.note_color, note),
-            self.note_tone(self.style.note_dim_color, note),
+            Stroke::world(0.25, self.note_tone(color, note, crossed)),
+            self.note_tone(self.style.note_color, note, crossed),
+            self.note_tone(self.style.note_dim_color, note, crossed),
         )
     }
 
@@ -1881,7 +1908,7 @@ impl PageScene {
                 return None;
             };
             let origin = slot.at.0 - slot.at.1.fractions() * *size;
-            let table = self.table_layout(note, origin);
+            let table = self.table_layout(note, origin, false);
             let row = note.rows.get(table.row_at(at)?)?;
             Some((coil, row.target?))
         })
@@ -1893,9 +1920,10 @@ impl PageScene {
         &self,
         note: &SymbolNote,
         origin: Vec2,
+        crossed: bool,
     ) -> (Vec<crate::Primitive>, Vec<Label>, crate::Aabb) {
         let h = self.style.tag_height;
-        let table = self.table_layout(note, origin);
+        let table = self.table_layout(note, origin, crossed);
         let mut bounds = table.bounds;
         let mut labels = table.labels.clone();
         if !note.lines.is_empty() {
@@ -1906,10 +1934,10 @@ impl PageScene {
             )
             .anchored(Anchor::TopLeft);
             let warn = if note.warning {
-                warn.colored(self.note_tone(self.style.note_warning_color, note))
+                warn.colored(self.note_tone(self.style.note_warning_color, note, crossed))
                     .keeping_color()
             } else {
-                warn.colored(self.note_tone(self.style.note_color, note))
+                warn.colored(self.note_tone(self.style.note_color, note, crossed))
             };
             bounds = bounds.union(&warn.bounds());
             labels.push(warn);
@@ -1922,17 +1950,23 @@ impl PageScene {
         &self,
         slot: &NoteSlot,
         at: (Vec2, Anchor),
+        crossed: bool,
     ) -> (Vec<crate::Primitive>, Vec<Label>) {
         match &slot.what {
             NoteWhat::Text(base) => {
                 let mut label = base.clone();
                 label.pos = at.0;
                 label.anchor = at.1;
+                if slot.fade == NoteFade::WhereCrossed && crossed {
+                    let a =
+                        u16::from(label.color.0[3]) * u16::from(self.style.note_fade_alpha) / 255;
+                    label.color = label.color.with_alpha(u8::try_from(a).unwrap_or(u8::MAX));
+                }
                 (Vec::new(), vec![label])
             }
             NoteWhat::Table { note, size } => {
                 let origin = at.0 - at.1.fractions() * *size;
-                let (p, l, _) = self.table_parts(note, origin);
+                let (p, l, _) = self.table_parts(note, origin, crossed);
                 (p, l)
             }
         }
@@ -1942,11 +1976,8 @@ impl PageScene {
     /// free place. `item` is the symbol's item as it is now (the note's own
     /// parts, after `slot.primitives` and `slot.labels`, do not count as
     /// obstacles).
-    fn chosen_place(&self, slot: &NoteSlot, item: &Item, id: SymbolId) -> (Vec2, Anchor) {
+    fn chosen_place(&self, slot: &NoteSlot, item: &Item, id: SymbolId) -> ((Vec2, Anchor), bool) {
         let preferred = slot.preferred;
-        if slot.moved {
-            return preferred;
-        }
         let later = |key: ItemId| match self.ids.get(&key) {
             Some(AnyId::Symbol(s)) if *s > id => self
                 .note_slots
@@ -1965,14 +1996,19 @@ impl PageScene {
             later: &later,
             no_tag: &|_| false,
         };
+        if slot.moved {
+            let (p, l) = self.note_parts(slot, preferred, false);
+            return (preferred, obstacles.blocks(&p, &l));
+        }
         let height = self.style.tag_height;
         for at in crate::note_place::candidates(preferred, &slot.ink, height) {
-            let (p, l) = self.note_parts(slot, at);
+            let (p, l) = self.note_parts(slot, at, false);
             if !obstacles.blocks(&p, &l) {
-                return at;
+                return (at, false);
             }
         }
-        preferred
+        // Nowhere is free: it stays at the preferred place, crossed.
+        (preferred, true)
     }
 
     /// Places every device tag against the drawing as it is now: the tag
@@ -2086,7 +2122,7 @@ impl PageScene {
                 continue;
             };
             let slot = &self.note_slots[&id];
-            if slot.moved {
+            if slot.moved && slot.fade != NoteFade::WhereCrossed {
                 continue;
             }
             if let Some(boxes) = &changed {
@@ -2095,11 +2131,11 @@ impl PageScene {
                     continue;
                 }
             }
-            let at = self.chosen_place(slot, item, id);
-            if at == slot.at {
+            let (at, crossed) = self.chosen_place(slot, item, id);
+            if at == slot.at && crossed == slot.crossed {
                 continue;
             }
-            let (p, l) = self.note_parts(slot, at);
+            let (p, l) = self.note_parts(slot, at, crossed);
             let before = self.scene.item_bounds(key);
             let mut item = item.clone();
             item.primitives.truncate(slot.primitives);
@@ -2109,6 +2145,7 @@ impl PageScene {
             self.scene.insert(key, item);
             if let Some(slot) = self.note_slots.get_mut(&id) {
                 slot.at = at;
+                slot.crossed = crossed;
             }
             // Notes after this one may now have to move, or move back.
             if let Some(boxes) = &mut changed {
@@ -2163,10 +2200,10 @@ impl PageScene {
             .secondary();
         let label = if note.warning {
             label
-                .colored(self.note_tone(self.style.note_warning_color, note))
+                .colored(self.note_tone(self.style.note_warning_color, note, false))
                 .keeping_color()
         } else {
-            label.colored(self.note_tone(self.style.note_color, note))
+            label.colored(self.note_tone(self.style.note_color, note, false))
         };
         (ink, label)
     }
@@ -3077,7 +3114,7 @@ mod tests {
             anchor: NoteAnchor::Right,
             rows: Vec::new(),
             density: NoteDensity::default(),
-            faded: false,
+            fade: NoteFade::Clear,
         }
     }
 
@@ -3138,7 +3175,7 @@ mod tests {
                 NoteRow::new(NoteGlyph::NormallyOpen, "13-14", "2.2"),
             ],
             density: NoteDensity::default(),
-            faded: false,
+            fade: NoteFade::Clear,
         };
         ps.set_notes(doc.project(), [table], &PlaceholderArt);
         let item = |ps: &PageScene| ps.scene().get(item_id(k1)).unwrap().clone();
@@ -3309,7 +3346,7 @@ mod tests {
             anchor: NoteAnchor::Below,
             rows,
             density: NoteDensity::default(),
-            faded: false,
+            fade: NoteFade::Clear,
         };
         let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
         ps.set_notes(doc.project(), [table], &PlaceholderArt);
@@ -3373,6 +3410,53 @@ mod tests {
         assert_eq!(note_label_of(&ps, k1).pos, home.pos + by);
     }
 
+    /// A note set to fade where crossed is at full opacity while nothing
+    /// touches it and fades the moment a wire runs through it (here it is
+    /// moved by hand, so it cannot slip to a free place).
+    #[test]
+    fn a_note_set_to_fade_where_crossed_fades_only_while_it_is_crossed() {
+        let (mut doc, page, k1, _s1, _w) = doc();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let note = |fade| SymbolNote {
+            fade,
+            ..right_note(k1)
+        };
+        doc.transact("move the note", |tx| {
+            tx.update::<SymbolInstance>(k1, |s| {
+                s.properties.insert(NOTE_DX.into(), Value::Float(30.0));
+                s.properties.insert(NOTE_DY.into(), Value::Float(-8.0));
+            })
+        })
+        .unwrap();
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        let alpha = ps.style.note_fade_alpha;
+        for fade in [NoteFade::WhereCrossed, NoteFade::Clear, NoteFade::Faded] {
+            let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+            ps.set_notes(doc.project(), [note(fade)], &PlaceholderArt);
+            let free = note_label_of(&ps, k1).color.0[3];
+            assert_eq!(
+                free,
+                if fade == NoteFade::Faded { alpha } else { 255 },
+                "{fade:?} with nothing in the way"
+            );
+        }
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        ps.set_notes(
+            doc.project(),
+            [note(NoteFade::WhereCrossed)],
+            &PlaceholderArt,
+        );
+        assert_eq!(note_label_of(&ps, k1).color.0[3], 255, "free: full");
+        let x = note_label_of(&ps, k1).bounds().center().x;
+        let (_, changes) = wire_at(&mut doc, page, x);
+        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
+        assert_eq!(note_label_of(&ps, k1).color.0[3], alpha, "crossed: faded");
+        // The same note that always stays clear is not touched by the wire.
+        let mut clear = PageScene::new(doc.project(), page, &PlaceholderArt);
+        clear.set_notes(doc.project(), [note(NoteFade::Clear)], &PlaceholderArt);
+        assert_eq!(note_label_of(&clear, k1).color.0[3], 255);
+    }
+
     #[test]
     fn notes_are_drawn_with_the_symbol_and_survive_edits() {
         let (mut doc, page, k1, s1, _w) = doc();
@@ -3384,7 +3468,7 @@ mod tests {
             anchor: NoteAnchor::TopRight,
             rows: Vec::new(),
             density: NoteDensity::default(),
-            faded: false,
+            fade: NoteFade::Clear,
         };
         let labels =
             |ps: &PageScene| -> Vec<Label> { ps.scene().get(item_id(k1)).unwrap().labels.clone() };
@@ -3454,7 +3538,7 @@ mod tests {
             anchor,
             rows: Vec::new(),
             density: NoteDensity::default(),
-            faded: false,
+            fade: NoteFade::Clear,
         };
         ps.set_notes(
             doc.project(),
@@ -3502,7 +3586,7 @@ mod tests {
             anchor: NoteAnchor::Below,
             rows: rows.clone(),
             density,
-            faded: false,
+            fade: NoteFade::Clear,
         };
         let bare = ps.scene().get(item_id(k1)).unwrap().clone();
         ps.set_notes(doc.project(), [table(NoteDensity::Full)], &PlaceholderArt);
@@ -3561,7 +3645,11 @@ mod tests {
             anchor: NoteAnchor::Below,
             rows: vec![NoteRow::new(NoteGlyph::NormallyOpen, "13-14", "2.3")],
             density: NoteDensity::Full,
-            faded,
+            fade: if faded {
+                NoteFade::Faded
+            } else {
+                NoteFade::Clear
+            },
         };
         ps.set_notes(doc.project(), [table(false)], &PlaceholderArt);
         let full = ps.scene().get(item_id(k1)).unwrap().clone();

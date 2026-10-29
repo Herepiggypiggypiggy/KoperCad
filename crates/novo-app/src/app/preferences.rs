@@ -7,7 +7,7 @@ use novo_editor::tool::ConnectMode;
 use std::time::Instant;
 
 use super::NovoApp;
-use crate::settings::XrefView;
+use crate::settings::{XrefFade, XrefView};
 
 impl NovoApp {
     pub(super) fn preferences_dialog(&mut self, ctx: &egui::Context) {
@@ -23,6 +23,7 @@ impl NovoApp {
         let mut density = self.settings.xref_density();
         let mut show_spare = !self.settings.xref_hide_spare;
         let mut xref_view = self.settings.xref_view();
+        let mut xref_fade = XrefFade::from_id(&self.settings.xref_fade);
         let mut theme = self.settings.theme_choice();
         let mut ui_density = self.settings.density_choice();
         let mut high_contrast = self.settings.high_contrast();
@@ -145,12 +146,24 @@ impl NovoApp {
                     choice(
                         ui,
                         "Cross references on screen",
-                        "Faded keeps them out of the way of lines, parts and text; the ones of the selected or hovered symbol stay clear. Hidden removes them from the screen. The PDF always prints them in full. Shift+X steps through the three.",
+                        "Fade where they overlap fades only the ones that sit on a wire, a symbol or text they cannot move away from. Faded fades all of them. Hidden removes them from the screen. The ones of the selected or hovered symbol stay clear, and the PDF always prints them in full. Shift+X steps through the four.",
                         &mut xref_view,
                         &[
                             (XrefView::Full, "Full"),
+                            (XrefView::Overlap, "Fade where they overlap"),
                             (XrefView::Faded, "Faded"),
                             (XrefView::Hidden, "Hidden"),
+                        ],
+                    );
+                    choice(
+                        ui,
+                        "How strongly they fade",
+                        "Light is about half the opacity, medium a quarter, strong an eighth.",
+                        &mut xref_fade,
+                        &[
+                            (XrefFade::Light, "Light"),
+                            (XrefFade::Medium, "Medium"),
+                            (XrefFade::Strong, "Strong"),
                         ],
                     );
                     section(ui, "Macros", false);
@@ -245,6 +258,7 @@ impl NovoApp {
         self.settings.ui_scale = (f32::from_bits(ui_scale) * 100.0).round() as u32;
         self.settings.xref_hide_spare = !show_spare;
         self.settings.xref_view = xref_view.id().into();
+        self.settings.xref_fade = xref_fade.id().into();
         if density != self.settings.xref_density() {
             self.settings.xref_density = density.id().into();
         }

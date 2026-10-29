@@ -4,9 +4,11 @@
 //!
 //!   cargo run -p novo-tests --example contact_mirror_fixture -- qa/fixtures
 //!
-//! Writes `OUT_DIR/contact-mirror.kopercad`.
+//! Writes `OUT_DIR/contact-mirror.kopercad` and `OUT_DIR/references-overlap.kopercad`
+//! (a table held by hand on a wire next to a free one, for the fade where
+//! crossed scenarios).
 
-use novo_core::{DeviceTag, Document, Rotation};
+use novo_core::{DeviceTag, Document, Endpoint, Rotation, SymbolInstance, Value};
 use novo_editor::catalog::Catalog;
 use novo_editor::edit::PlaceOptions;
 use novo_storage::Session;
@@ -90,6 +92,49 @@ fn main() {
     })
     .expect("limits");
     let path = out.join("contact-mirror.kopercad");
+    let _ = std::fs::remove_file(&path);
+    Session::create(&path, doc.project()).expect("project file");
+    println!("wrote {}", path.display());
+    overlap_fixture(&out, &catalog);
+}
+
+/// `-K1`'s table is held where it is and a wire runs through it; `-K2`'s
+/// table is free.
+fn overlap_fixture(out: &std::path::Path, catalog: &Catalog) {
+    let mut doc = Document::default();
+    let mut coil = None;
+    doc.transact("References overlap", |tx| {
+        let mut b = Builder { tx, catalog };
+        let r0 = (Rotation::R0, false);
+        let opts = |tag: &str| PlaceOptions {
+            parent: DeviceTag::parse(tag).ok(),
+            ..PlaceOptions::new()
+        };
+        let control = b.page("1")?;
+        let aux = b.page("2")?;
+        coil = b.put(control, "iec/coils/relay", (80.0, 50.0), r0, &opts("-K1"));
+        b.put(aux, "iec/contacts/no", (40.0, 50.0), r0, &opts("-K1"));
+        b.put(aux, "iec/contacts/nc", (80.0, 50.0), r0, &opts("-K1"));
+        b.put(control, "iec/coils/relay", (200.0, 50.0), r0, &opts("-K2"));
+        b.put(aux, "iec/contacts/no", (120.0, 50.0), r0, &opts("-K2"));
+        // A wire through where -K1's table sits.
+        let top = b.plain(control, "iec/contacts/no", (84.0, 72.0), r0);
+        let bottom = b.plain(control, "iec/contacts/no", (84.0, 122.0), r0);
+        if let (Some(top), Some(bottom)) = (top, bottom) {
+            b.tx.connect(Endpoint::pin(top, 1), Endpoint::pin(bottom, 0))?;
+        }
+        Ok(())
+    })
+    .expect("overlap fixture builds");
+    let coil = coil.expect("-K1 coil");
+    doc.transact("Hold the table", |tx| {
+        tx.update::<SymbolInstance>(coil, |s| {
+            s.properties.insert("note_dx".into(), Value::Float(0.5));
+            s.properties.insert("note_dy".into(), Value::Float(0.5));
+        })
+    })
+    .expect("table held");
+    let path = out.join("references-overlap.kopercad");
     let _ = std::fs::remove_file(&path);
     Session::create(&path, doc.project()).expect("project file");
     println!("wrote {}", path.display());

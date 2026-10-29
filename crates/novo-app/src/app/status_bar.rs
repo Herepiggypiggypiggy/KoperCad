@@ -349,16 +349,30 @@ impl NovoApp {
         match self.settings.xref_view() {
             XrefView::Full => {}
             view => chips.push(ModeChip {
-                label: if view == XrefView::Faded {
-                    "References faded"
-                } else {
-                    "References hidden"
+                label: match view {
+                    XrefView::Overlap => "References fade on overlap",
+                    XrefView::Faded => "References faded",
+                    _ => "References hidden",
                 }
                 .into(),
                 command: "view.toggle_references",
-                hover: "Click to step references: full, faded, hidden. They always print in full"
+                hover: "Click to step references: full, fade on overlap, faded, hidden. They always print in full"
                     .into(),
             }),
+        }
+        if self.page_hides_references() {
+            chips.push(ModeChip {
+                label: "Page references hidden".into(),
+                command: "view.hide_references_page",
+                hover: "Show this page's cross references again. They always print".into(),
+            });
+        }
+        if let Some(tag) = self.selected_device_hiding_references() {
+            chips.push(ModeChip {
+                label: format!("{tag} references hidden"),
+                command: "view.hide_references_device",
+                hover: format!("Show the cross references of {tag} again. They always print"),
+            });
         }
         if self.wb.live.on {
             chips.push(ModeChip {
