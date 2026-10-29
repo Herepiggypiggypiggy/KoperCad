@@ -1850,7 +1850,10 @@ impl NovoApp {
             self.wb.rail_rect = None;
             rail::close_flyout(&ctx);
         }
-        if reports {
+        let reports_docked = reports && panel_dock::reports_docked(&ctx).is_some();
+        if reports_docked {
+            // A pane of a strip, drawn below with the strips.
+        } else if reports {
             let right = panel_dock::navigator_right(&ctx);
             let panel = if right {
                 egui::Panel::right("reports_list_right")
@@ -1912,6 +1915,21 @@ impl NovoApp {
             if let Some(shown) = shown {
                 self.wb.outline_shown = Some(shown.response.rect.width().round());
             }
+        }
+        if reports_docked && let Some(slot) = panel_dock::reports_docked(&ctx) {
+            panel_dock::show_docked(
+                &ctx,
+                egui::Id::new("reports_pane"),
+                panel_dock::REPORTS,
+                "Reports",
+                slot,
+                panel_dock::PaneOptions {
+                    closable: false,
+                    float_tip: "Back to the Reports column",
+                    scrolls: true,
+                },
+                |ui| self.reports_list(ui),
+            );
         }
         // The canvases paint their own ground; the Reports tables and the
         // Cabinet toolbar sit on the theme's surfaces, not on the bare window.
@@ -2542,7 +2560,7 @@ impl NovoApp {
                     picked.push(Action::PinOutline);
                 }
                 if pinned && panel_dock::pages_docked(ui.ctx()).is_none() {
-                    panel_dock::pages_dock_button(ui);
+                    panel_dock::navigator_dock_button(ui, panel_dock::PAGES, "Pages");
                     panel_dock::navigator_side_button(ui);
                 }
             });
