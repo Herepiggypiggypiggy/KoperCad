@@ -25,7 +25,7 @@ wait 5
 click_text Preferences
 wait 20
 shot preferences-home
-# Centered at 1366x768: the title bar is at y 125.
+# Centered at 1366x768: the title bar is at y 125 (at 1920x1080 see 1111: y 269).
 double_click 683 125
 wait 20
 expect "Preferences"

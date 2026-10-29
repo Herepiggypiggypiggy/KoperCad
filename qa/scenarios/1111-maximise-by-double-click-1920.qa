@@ -8,7 +8,7 @@ wait 5
 click_text Preferences
 wait 20
 shot preferences-home
-double_click 960 170
+double_click 960 269
 wait 20
 expect "Preferences"
 shot preferences-maximised
