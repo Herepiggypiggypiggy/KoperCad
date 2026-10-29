@@ -2586,8 +2586,12 @@ impl NovoApp {
                             let mut rows = |ui: &mut egui::Ui, list: &[(PathBuf, SystemTime)]| {
                                 for (path, changed) in list {
                                     let row = ui.add(
-                                        egui::Button::new(format!("Untitled, {}", ago(*changed)))
-                                            .frame(false),
+                                        egui::Button::new(format!(
+                                            "{}, {}",
+                                            crate::backend::kept_label(path),
+                                            ago(*changed)
+                                        ))
+                                        .frame(false),
                                     );
                                     if row.clicked() {
                                         open = Some(path.clone());
