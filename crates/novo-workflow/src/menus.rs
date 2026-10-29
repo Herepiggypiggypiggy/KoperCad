@@ -899,12 +899,18 @@ mod tests {
     #[test]
     fn menu_rows_stay_inside_the_budget() {
         let ceilings: &[(&str, usize)] = &[
+            // 60: File > New from template has the crane, Pump station and Motor
+            // control centre rows (#1737); a template is a start-of-work choice that
+            // has no rail or palette-only home a new user would find. The export
+            // formats are in the Export centre.
             ("File", 60),
             ("Edit", 30),
             ("Draw", 39),
             ("View", 65),
             ("Check", 11),
             ("Reports", 17),
+            // 25: one Simulate row merged in parallel with the ratchet (#1734) and was
+            // counted by no PR; it stays until the rail move lands.
             ("Simulate", 25),
             ("Help", 19),
         ];
