@@ -138,6 +138,9 @@ fn nodes(options: PlantOptions) -> Vec<(String, String, bool)> {
                 out.push((format!("=MCC+F{i}"), format!("Feeder section {i}"), true));
             }
             out.push(n("=MCC+FLD", "Motors and field devices", false));
+            for i in 1..=options.count {
+                out.push((format!("=MCC+FLD+M{i}"), format!("Motor {i}"), false));
+            }
         }
     }
     out
