@@ -501,17 +501,16 @@ fn read_zip(bytes: &[u8]) -> Result<Vec<(String, Vec<u8>)>, EtimError> {
         let Ok(file) = archive.by_index(i) else {
             continue;
         };
-        if !file.is_file() || !is_table_name(file.name()) {
+        let full_name = String::from_utf8_lossy(file.name_raw()).into_owned();
+        if !file.is_file() || !is_table_name(&full_name) {
             continue;
         }
         if file.size() > MAX_MEMBER_BYTES || total + file.size() > MAX_TOTAL_BYTES {
             return Err(EtimError::Unreadable(format!(
-                "{} is too large to read as an ETIM table",
-                file.name()
+                "{full_name} is too large to read as an ETIM table"
             )));
         }
-        let name = file
-            .name()
+        let name = full_name
             .rsplit(['/', '\\'])
             .next()
             .unwrap_or("")

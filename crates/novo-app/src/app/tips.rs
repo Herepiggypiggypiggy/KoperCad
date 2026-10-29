@@ -219,10 +219,20 @@ impl NovoApp {
         if document.project().symbols().any(|s| s.page == page) {
             return;
         }
+        // Not while a tool is in hand (a symbol on the pointer is drawn over
+        // this text, and the hint has been followed).
+        if self
+            .canvas
+            .schematic_ref()
+            .is_some_and(|v| v.editor.tool_active())
+        {
+            return;
+        }
         let palette = crate::theme::ui_palette();
         let second = "Or press Ctrl+K and type: motor starter";
+        // Behind windows and popups: the Parts window and the like cover it.
         egui::Area::new(egui::Id::new("empty_sheet_ghost"))
-            .order(egui::Order::Foreground)
+            .order(egui::Order::Background)
             .interactable(false)
             .fixed_pos(canvas.center())
             .pivot(egui::Align2::CENTER_CENTER)

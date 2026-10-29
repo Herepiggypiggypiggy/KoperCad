@@ -3,13 +3,16 @@
 
 use eframe::egui;
 use novo_canvas::ItemId;
-use novo_canvas::model::{NoteAnchor, NoteDensity, NoteGlyph, NoteRow, SymbolNote, item_id};
-use novo_core::{AnyId, DeviceId, PageId, SymbolId};
+use novo_canvas::model::{
+    NoteAnchor, NoteDensity, NoteFade, NoteGlyph, NoteRow, SymbolNote, item_id,
+};
+use novo_core::{AnyId, DeviceId, PageId, Properties, SymbolId, SymbolRole, Value};
 use novo_xref::{ContactKind, Label, LabelAnchor, LiveXref, Place, Reference, XrefIndex};
 use std::collections::{BTreeMap, HashSet};
 
 use super::{Level, NovoApp};
 use crate::settings::XrefView;
+use crate::theme;
 
 impl NovoApp {
     /// Lights up what the selected symbol is linked to on this page (a
@@ -42,31 +45,91 @@ impl NovoApp {
     }
 
     /// The cross-reference labels of a page, as notes for the page scene,
-    /// as the View > Layers > Cross references choice shows them.
+    /// as the View > Layers > Cross references choice shows them and with
+    /// what the page and its coils hide left out.
     pub(super) fn xref_notes(&mut self, page: PageId) -> Vec<SymbolNote> {
+        // The strength of a fade is a setting; the canvas restyles when it changes.
+        if theme::set_xref_fade_alpha(self.settings.xref_fade_alpha()) {
+            self.canvas.restyle();
+        }
         let view = self.settings.xref_view();
-        if view == XrefView::Hidden {
+        if view == XrefView::Hidden || self.xref_hidden_on(page) {
             return Vec::new();
         }
         let (density, spare) = (self.settings.xref_density(), !self.settings.xref_hide_spare);
-        let awake = if view == XrefView::Faded {
-            self.awake_notes()
-        } else {
-            HashSet::new()
+        let fade = match view {
+            XrefView::Overlap => NoteFade::WhereCrossed,
+            XrefView::Faded => NoteFade::Faded,
+            XrefView::Full | XrefView::Hidden => NoteFade::Clear,
         };
-        self.xref_labels(page)
+        let awake = if fade == NoteFade::Clear {
+            HashSet::new()
+        } else {
+            self.awake_notes()
+        };
+        let hidden = self.devices_hiding_references();
+        let labels = self.xref_labels(page);
+        let project = self.backend.document().map(|d| d.project());
+        labels
             .into_iter()
+            .filter(|l| {
+                let device = project
+                    .and_then(|p| p.symbol(l.symbol))
+                    .and_then(|s| device_of(&s.role));
+                !device.is_some_and(|d| hidden.contains(&d))
+            })
             .map(|l| {
-                let faded = view == XrefView::Faded && !awake.contains(&item_id(l.symbol));
+                let fade = if awake.contains(&item_id(l.symbol)) {
+                    NoteFade::Clear
+                } else {
+                    fade
+                };
                 SymbolNote {
-                    faded,
+                    fade,
                     ..note(l, density, spare)
                 }
             })
             .collect()
     }
 
-    /// Shift+X: cross references full, then faded, then hidden, then full.
+    /// Whether the page hides its cross references on screen.
+    fn xref_hidden_on(&self, page: PageId) -> bool {
+        self.backend
+            .document()
+            .and_then(|d| d.project().page(page))
+            .is_some_and(|p| is_hidden(&p.properties))
+    }
+
+    /// Whether the open page hides its cross references (a status bar chip).
+    pub(super) fn page_hides_references(&self) -> bool {
+        self.current_page.is_some_and(|p| self.xref_hidden_on(p))
+    }
+
+    /// The tag of the selected symbol's device when it hides its cross
+    /// references (a status bar chip), so a hidden table can be found again.
+    pub(super) fn selected_device_hiding_references(&self) -> Option<String> {
+        let project = self.backend.document()?.project();
+        let device = device_of(&project.symbol(self.selected_symbol()?)?.role)?;
+        let device = project.device(device)?;
+        is_hidden(&device.properties).then(|| device.tag.to_string())
+    }
+
+    /// The devices whose cross references are hidden on screen.
+    fn devices_hiding_references(&self) -> HashSet<DeviceId> {
+        self.backend
+            .document()
+            .map(|d| {
+                d.project()
+                    .devices()
+                    .filter(|dev| is_hidden(&dev.properties))
+                    .map(|dev| dev.id)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Shift+X: cross references full, then faded where they overlap, then
+    /// faded, then hidden, then full again.
     pub(super) fn cycle_xref_view(&mut self) {
         let next = self.settings.xref_view().next();
         self.settings.xref_view = next.id().into();
@@ -74,12 +137,101 @@ impl NovoApp {
             Level::Info,
             match next {
                 XrefView::Full => "Cross references shown in full",
+                XrefView::Overlap => {
+                    "Cross references fade where they overlap something; select or hover one to read it"
+                }
                 XrefView::Faded => "Cross references faded; select or hover one to read it",
                 XrefView::Hidden => {
                     "Cross references hidden (they still print). Shift+X shows them"
                 }
             },
         );
+    }
+
+    /// Hides or shows the cross references of the selected device on
+    /// screen (the contact table under its coil and the coil location next
+    /// to its contacts): one undo step, kept in the project as `xref.hide`
+    /// on the device. The PDF still prints them.
+    pub(super) fn toggle_device_references(&mut self) {
+        let device = self.selected_symbol().and_then(|s| {
+            self.backend
+                .document()
+                .and_then(|d| d.project().symbol(s))
+                .and_then(|s| device_of(&s.role))
+        });
+        let Some(device) = device else {
+            self.message(
+                Level::Info,
+                "Select a coil or contact first to hide or show its cross references",
+            );
+            return;
+        };
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let Some(old) = doc.project().device(device) else {
+            return;
+        };
+        let hide = !is_hidden(&old.properties);
+        let label = format!(
+            "{} cross references of {}",
+            if hide { "Hide" } else { "Show" },
+            old.tag
+        );
+        let tag = old.tag.to_string();
+        match doc.transact(label, |tx| {
+            tx.set_property(device, XREF_HIDE, hide.then_some(Value::Bool(true)))
+        }) {
+            Ok(((), changes)) => {
+                self.changed_outside_canvas(&changes);
+                self.message(
+                    Level::Info,
+                    if hide {
+                        format!("Cross references of {tag} hidden on screen (they still print)")
+                    } else {
+                        format!("Cross references of {tag} shown")
+                    },
+                );
+            }
+            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
+        }
+    }
+
+    /// Hides or shows the cross references of the page on screen: one undo
+    /// step, kept in the project as `xref.hide` on the page. The PDF still
+    /// prints them.
+    pub(super) fn toggle_page_references(&mut self) {
+        let Some(page) = self.current_page else {
+            return;
+        };
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let Some(old) = doc.project().page(page) else {
+            return;
+        };
+        let hide = !is_hidden(&old.properties);
+        let label = format!(
+            "{} cross references of page {}",
+            if hide { "Hide" } else { "Show" },
+            old.name
+        );
+        match doc.transact(label, |tx| {
+            tx.set_property(page, XREF_HIDE, hide.then_some(Value::Bool(true)))
+        }) {
+            Ok(((), changes)) => {
+                self.changed_outside_canvas(&changes);
+                self.message(
+                    Level::Info,
+                    if hide {
+                        "Cross references of this page hidden on screen (they still print)"
+                    } else {
+                        "Cross references of this page shown"
+                    },
+                );
+            }
+            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
+        }
     }
 
     /// The symbols whose cross references stay at full opacity while the
@@ -313,7 +465,7 @@ pub(crate) fn note(label: Label, density: NoteDensity, spare: bool) -> SymbolNot
         },
         rows,
         density,
-        faded: false,
+        fade: Default::default(),
     }
 }
 
@@ -324,5 +476,20 @@ pub(crate) fn glyph_of(kind: ContactKind) -> NoteGlyph {
         ContactKind::NormallyClosed => NoteGlyph::NormallyClosed,
         ContactKind::Changeover => NoteGlyph::Changeover,
         ContactKind::NormallyOpen | ContactKind::Other => NoteGlyph::NormallyOpen,
+    }
+}
+
+/// The property that hides cross references on screen, on a page or a
+/// device (it is not printed differently: the PDF always prints them).
+pub(crate) const XREF_HIDE: &str = "xref.hide";
+
+fn is_hidden(properties: &Properties) -> bool {
+    matches!(properties.get(XREF_HIDE), Some(Value::Bool(true)))
+}
+
+fn device_of(role: &SymbolRole) -> Option<DeviceId> {
+    match role {
+        SymbolRole::Device { device, .. } => Some(*device),
+        _ => None,
     }
 }

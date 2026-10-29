@@ -1,0 +1,33 @@
+@title A moved tool dock stays where it was put while a wire is drawn and after Esc (1920x1080)
+@area Schematic
+@sizes 1920x1080
+# Review of the dock.rs merge: the parked rule (a wire under way moves the dock to the corner) must not override a dock the person has moved.
+click_text "New project"
+wait 20
+key ctrl+k
+text "motor starter dol"
+wait 5
+key Enter
+wait 10
+try click_text "Motor starter DOL" Label
+wait 10
+click_text Place Button #2
+wait 20
+click 1100 600
+wait 5
+shot dock-home
+drag 772 1027 1000 800
+wait 10
+shot dock-moved
+click_text Corners
+wait 3
+click 560 190
+wait 5
+shot wire-started-dock-stays
+expect "Esc or right-click cancels"
+check_layout
+key Escape
+wait 5
+shot esc-dock-still-moved
+expect_not "Esc or right-click cancels"
+check_layout

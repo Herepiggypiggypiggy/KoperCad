@@ -910,12 +910,37 @@ fn wire_query(query: &str) -> Option<&str> {
 /// Words that name a page, in English and Dutch.
 const PAGE_WORDS: [&str; 4] = ["page", "pagina", "blad", "sheet"];
 
+/// Phrases that ask to be taken somewhere, in English and Dutch, before the
+/// page word or name (`go to page 1a`, `open page 2`, `ga naar 3`).
+const GO_PHRASES: [&str; 7] = ["go to", "goto", "jump to", "open", "show", "ga naar", "ga"];
+
 /// What follows a page word (`page 2` gives `2`), if the query starts with
-/// one.
+/// one, with a leading "go to" and the like allowed (`go to page 1a`, and
+/// `go to 1a`, which names the page directly).
 fn page_query(query: &str) -> Option<&str> {
-    let (word, rest) = query.split_once(char::is_whitespace)?;
-    let rest = rest.trim();
-    (PAGE_WORDS.iter().any(|w| w.eq_ignore_ascii_case(word)) && !rest.is_empty()).then_some(rest)
+    let lower = query.to_ascii_lowercase();
+    let mut rest = query.trim();
+    let mut asked = false;
+    for phrase in GO_PHRASES {
+        if let Some(after) = lower.strip_prefix(phrase)
+            && after.starts_with(char::is_whitespace)
+        {
+            rest = query[phrase.len()..].trim();
+            asked = true;
+            break;
+        }
+    }
+    match rest.split_once(char::is_whitespace) {
+        Some((word, name))
+            if PAGE_WORDS.iter().any(|w| w.eq_ignore_ascii_case(word))
+                && !name.trim().is_empty() =>
+        {
+            Some(name.trim())
+        }
+        // "go to 1a": nothing but the page's name follows.
+        _ if asked && !rest.is_empty() => Some(rest),
+        _ => None,
+    }
 }
 
 fn location_rows(project: &Project, device: DeviceId, tag: &str, base: i32, rows: &mut Vec<Row>) {

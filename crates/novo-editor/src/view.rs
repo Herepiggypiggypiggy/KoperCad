@@ -1234,6 +1234,17 @@ impl SchematicView {
             self.editor.tool(),
             crate::tool::Tool::Wire(w) if w.start.is_some()
         );
+        // A click on a tag or other text beside a pin is on the text: it
+        // selects (and a second click renames) instead of starting a wire on
+        // the pin that is within reach of it.
+        let on_text = matches!(self.editor.tool(), crate::tool::Tool::Select)
+            && out
+                .hit
+                .as_ref()
+                .zip(self.scene.as_ref())
+                .is_some_and(|(hit, scene)| {
+                    hit.label.is_some() && scene.label_hit(document.project(), hit).is_some()
+                });
         if wiring && !self.swallow && response.double_clicked_by(egui::PointerButton::Primary) {
             let selection = self.selection();
             self.editor.key(document, EditorKey::FinishOpen, &selection);
@@ -1260,6 +1271,7 @@ impl SchematicView {
             }
         } else if response.clicked_by(egui::PointerButton::Primary)
             && !self.swallow
+            && !on_text
             && let Some(w) = out.cursor_raw
         {
             let clicked = self.editor.click(document, page, point(w), tolerance);
@@ -1402,8 +1414,12 @@ impl SchematicView {
             self.commands.push("edit.properties");
         }
 
-        // Right click: select what is under the pointer, then the menu.
-        if out.context_click.is_some() {
+        // Right click with a wire or cable under way takes the step back, as
+        // Esc does, instead of opening the menu.
+        if out.context_click.is_some() && !self.popup_open() && self.editor.line_in_progress() {
+            self.editor.cancel_step();
+        } else if out.context_click.is_some() {
+            // Right click: select what is under the pointer, then the menu.
             if let (Some(hovered), Some(scene)) = (out.hovered, &self.scene)
                 && !self.canvas.selection.contains(hovered)
                 && scene.model_id(hovered).is_some()
@@ -3615,7 +3631,7 @@ mod tests {
             anchor: NoteAnchor::Right,
             rows: Vec::new(),
             density: NoteDensity::default(),
-            faded: false,
+            fade: Default::default(),
         }]);
         h.frame(vec![]);
         let origin = h.doc.project().symbol(sym).unwrap().placement.origin;

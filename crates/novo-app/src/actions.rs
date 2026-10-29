@@ -13,6 +13,8 @@ pub enum Action {
     OpenExample,
     OpenEmcExample,
     OpenMccExample,
+    OpenCraneExample,
+    OpenPlcExample,
     OpenPumpExample,
     TryFastKeys,
     ShowWalkthrough,
@@ -48,6 +50,8 @@ impl Action {
         Action::OpenExample,
         Action::OpenEmcExample,
         Action::OpenMccExample,
+        Action::OpenCraneExample,
+        Action::OpenPlcExample,
         Action::OpenPumpExample,
         Action::TryFastKeys,
         Action::ShowWalkthrough,
@@ -85,6 +89,8 @@ impl Action {
             Action::OpenExample => "file.example",
             Action::OpenEmcExample => "file.example_emc",
             Action::OpenMccExample => "file.example_mcc",
+            Action::OpenCraneExample => "file.example_crane",
+            Action::OpenPlcExample => "file.example_plc",
             Action::OpenPumpExample => "file.example_pump",
             Action::TryFastKeys => "file.practice",
             Action::ShowWalkthrough => "help.walkthrough",
@@ -125,6 +131,8 @@ impl Action {
             Action::OpenExample => "Open example",
             Action::OpenEmcExample => "Open EMC example",
             Action::OpenMccExample => "Open example: motor control centre",
+            Action::OpenCraneExample => "Open example: overhead crane cabinet",
+            Action::OpenPlcExample => "Open example: PLC cabinet",
             Action::OpenPumpExample => "Open example: pump station",
             Action::TryFastKeys => "Try the fast keys",
             Action::ShowWalkthrough => "Fast keys card on this project",
@@ -163,6 +171,8 @@ impl Action {
             | Action::OpenExample
             | Action::OpenEmcExample
             | Action::OpenMccExample
+            | Action::OpenCraneExample
+            | Action::OpenPlcExample
             | Action::OpenPumpExample
             | Action::TryFastKeys
             | Action::SaveProject
@@ -214,6 +224,8 @@ impl Action {
             | Action::OpenExample
             | Action::OpenEmcExample
             | Action::OpenMccExample
+            | Action::OpenCraneExample
+            | Action::OpenPlcExample
             | Action::OpenPumpExample
             | Action::TryFastKeys
             | Action::ShowWalkthrough

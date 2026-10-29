@@ -1,0 +1,30 @@
+format = 1
+id = "iec/controllers/output_dry"
+name = "Controller output, one dry contact"
+description = "One isolated dry contact of a radio receiver or pendant, such as the main contact or the emergency-stop chain. The virtual controller panel of the live view closes it; give it the tag of the receiver to make them one device."
+standard = "IEC 60617"
+category = "controllers"
+function = "controller.output"
+keywords = ["controller", "receiver", "radio", "pendant", "main", "emergency stop", "chain", "dry contact", "crane", "noodstop", "hoofdschakelaar"]
+aliases = ["rxc"]
+
+connections = [
+  { id = "13", at = [0, 0], dir = "up" },
+  { id = "14", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [-4, 4] },
+  { kind = "rect", at = [-6, 3], size = [12, 10], stroke = "dashed" },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+poles = [["13", "14"]]

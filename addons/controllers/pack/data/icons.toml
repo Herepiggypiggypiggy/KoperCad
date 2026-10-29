@@ -1,0 +1,10 @@
+[[icon]]
+name = "controllers.radio"
+tooltip = "Radio controller"
+shape = [
+  { kind = "rect", x = 7, y = 9, w = 10, h = 12, r = 2 },
+  { kind = "line", x1 = 15, y1 = 9, x2 = 15, y2 = 3 },
+  { kind = "line", x1 = 9.5, y1 = 13, x2 = 14.5, y2 = 13 },
+  { kind = "circle", cx = 10, cy = 17, r = 1, filled = true },
+  { kind = "circle", cx = 14, cy = 17, r = 1, filled = true },
+]

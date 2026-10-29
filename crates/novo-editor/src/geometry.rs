@@ -87,6 +87,18 @@ pub fn route_offset(
     to: Option<Direction>,
     shift: f64,
 ) -> Vec<Point> {
+    detour(a, from, b, to, shift).unwrap_or_else(|| route_plain(a, from, b, to, shift))
+}
+
+/// [`route_offset`] without the detour: the legs of a route through clicked
+/// corners, where the directions are not pins' exits.
+fn route_plain(
+    a: Point,
+    from: Option<Direction>,
+    b: Point,
+    to: Option<Direction>,
+    shift: f64,
+) -> Vec<Point> {
     let dx = (b.x - a.x).abs();
     let dy = (b.y - a.y).abs();
     if dx < EPS || dy < EPS {
@@ -118,6 +130,109 @@ pub fn route_offset(
     }
 }
 
+/// How far a wire runs straight out of a pin before it turns, when it has to
+/// go around the symbol, in mm.
+pub(crate) const STUB: f64 = 5.0;
+
+/// How far from the pins a detour's side leg runs when the pins leave no room
+/// between them, in mm.
+const CHANNEL: f64 = 10.0;
+
+fn sign(v: f64) -> i32 {
+    if v > EPS {
+        1
+    } else if v < -EPS {
+        -1
+    } else {
+        0
+    }
+}
+
+/// A route for pins whose plain route would run against an exit direction:
+/// out of a pin back through its own symbol, or into a pin through its body
+/// (a breaker's output wired to the input of a device that stands above it
+/// ran straight up through both symbols). It leaves each pin a short way in
+/// its own direction and goes around by a side leg. `None` when the plain
+/// route respects both pins, or a pin's direction is not known.
+pub(crate) fn detour(
+    a: Point,
+    from: Option<Direction>,
+    b: Point,
+    to: Option<Direction>,
+    shift: f64,
+) -> Option<Vec<Point>> {
+    let (fa, fb) = (from?, to?);
+    let (va, vb) = (fa.vector(), fb.vector());
+    let (sx, sy) = (sign(b.x - a.x), sign(b.y - a.y));
+    if sx == 0 && sy == 0 {
+        return None;
+    }
+    // A leg against the exit direction runs through the pin's own symbol.
+    let leaves = |d: i32, exit: f64| d != 0 && f64::from(d) != exit;
+    // A nudge also lengthens the stubs, so wires leaving side by side do not
+    // share their first leg.
+    let stub = STUB + shift.abs();
+    let a1 = Point::new(a.x + va.x * stub, a.y + va.y * stub);
+    let b1 = Point::new(b.x + vb.x * stub, b.y + vb.y * stub);
+    match (is_vertical(fa), is_vertical(fb)) {
+        (true, true) => {
+            if !(leaves(sy, va.y) || leaves(sy, -vb.y)) {
+                return None;
+            }
+            // A side leg between the pins when they are far enough apart,
+            // else beside both.
+            let side = if sx == 0 { 1 } else { sx };
+            let x = if (b.x - a.x).abs() >= 2.0 * CHANNEL {
+                (a.x + b.x) / 2.0
+            } else {
+                a.x + f64::from(side) * CHANNEL
+            } + shift;
+            Some(simplify_around(
+                a,
+                vec![a1, Point::new(x, a1.y), Point::new(x, b1.y), b1],
+                b,
+            ))
+        }
+        (false, false) => {
+            if !(leaves(sx, va.x) || leaves(sx, -vb.x)) {
+                return None;
+            }
+            let side = if sy == 0 { 1 } else { sy };
+            let y = if (b.y - a.y).abs() >= 2.0 * CHANNEL {
+                (a.y + b.y) / 2.0
+            } else {
+                a.y + f64::from(side) * CHANNEL
+            } + shift;
+            Some(simplify_around(
+                a,
+                vec![a1, Point::new(a1.x, y), Point::new(b1.x, y), b1],
+                b,
+            ))
+        }
+        // Out vertically, into a horizontal pin.
+        (true, false) => {
+            if !(leaves(sy, va.y) || leaves(sx, -vb.x)) {
+                return None;
+            }
+            Some(simplify_around(a, vec![a1, Point::new(b1.x, a1.y), b1], b))
+        }
+        // Out horizontally, into a vertical pin.
+        (false, true) => {
+            if !(leaves(sx, va.x) || leaves(sy, -vb.y)) {
+                return None;
+            }
+            Some(simplify_around(a, vec![a1, Point::new(a1.x, b1.y), b1], b))
+        }
+    }
+}
+
+/// `bends` between `a` and `b` with repeated and collinear points dropped.
+fn simplify_around(a: Point, bends: Vec<Point>, b: Point) -> Vec<Point> {
+    let pts = simplify(a, bends, b);
+    // A bare line has no bends; the detour is never that, but be safe.
+    pts
+}
+
 /// A full route through user corners: bends between `a`, each corner and
 /// `b`, with the corners themselves included.
 pub fn route_through(
@@ -131,7 +246,7 @@ pub fn route_through(
     let mut prev = a;
     let mut prev_dir = from;
     for &c in corners {
-        out.extend(route(prev, prev_dir, c, None));
+        out.extend(route_plain(prev, prev_dir, c, None, 0.0));
         out.push(c);
         // Leave a corner at right angles to how we arrived.
         let last = out.len().checked_sub(2).map_or(prev, |i| out[i]);
@@ -142,7 +257,13 @@ pub fn route_through(
         });
         prev = c;
     }
-    out.extend(route(prev, prev_dir, b, to));
+    // Without corners the pins' own directions decide the route; after one,
+    // `prev_dir` only says which way the last leg ran.
+    if corners.is_empty() {
+        out.extend(route(prev, prev_dir, b, to));
+    } else {
+        out.extend(route_plain(prev, prev_dir, b, to, 0.0));
+    }
     simplify(a, out, b)
 }
 
@@ -174,6 +295,10 @@ pub fn simplify(a: Point, bends: Vec<Point>, b: Point) -> Vec<Point> {
     }
     out[1..out.len() - 1].to_vec()
 }
+
+/// How far the interruption point's arrow reaches from its pin, in mm (the
+/// drawn arrow of both symbol packs).
+const INTERRUPTION_ARROW: f64 = 7.0;
 
 /// What sits under a point on a page.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -215,6 +340,24 @@ pub fn target_at(project: &Project, page: PageId, p: Point, tolerance: f64) -> O
                     Target::Endpoint(Endpoint::pin(sid, pin), q),
                 );
             }
+        }
+        // An interruption point has one pin, at the arrow's tail. The whole
+        // arrow counts as that pin, so a click on its tip connects too; the
+        // pins of other symbols still win where they are nearer.
+        if matches!(sym.role, novo_core::SymbolRole::Interruption { .. })
+            && let [only] = sym.pins.as_slice()
+            && let Some(q) = sym.pin_position(0)
+        {
+            let tip = sym.placement.apply(Point::new(
+                only.offset.x,
+                only.offset.y + INTERRUPTION_ARROW,
+            ));
+            let (near, _) = closest_on_segment(p, q, tip);
+            offer(
+                &mut best,
+                near.distance(p) + tolerance * 0.25,
+                Target::Endpoint(Endpoint::pin(sid, 0), q),
+            );
         }
     }
     for &jid in &contents.junctions {
@@ -379,6 +522,62 @@ mod tests {
             Some(Direction::Up),
         );
         assert_eq!(bends, vec![p(0.0, 20.0), p(40.0, 20.0)]);
+    }
+
+    #[test]
+    fn an_output_wired_to_an_input_above_it_goes_around_both_symbols() {
+        // Pin 2 of a breaker leaves downwards; the next device stands above
+        // it with its pin 1 leaving upwards: a straight line would run up
+        // through both bodies.
+        let bends = route(
+            p(0.0, 0.0),
+            Some(Direction::Down),
+            p(0.0, -40.0),
+            Some(Direction::Up),
+        );
+        assert_eq!(
+            bends,
+            vec![
+                p(0.0, STUB),
+                p(CHANNEL, STUB),
+                p(CHANNEL, -40.0 - STUB),
+                p(0.0, -40.0 - STUB),
+            ]
+        );
+        // Offset sideways, the side leg runs halfway when there is room.
+        let bends = route(
+            p(0.0, 0.0),
+            Some(Direction::Down),
+            p(60.0, -40.0),
+            Some(Direction::Up),
+        );
+        assert_eq!(bends[1], p(30.0, STUB));
+        assert!(bends.iter().all(|b| b.y >= -40.0 - STUB && b.y <= STUB));
+    }
+
+    #[test]
+    fn a_route_that_respects_both_pins_is_left_alone() {
+        // Below: the straight line and the Z are what they always were.
+        assert!(
+            route(
+                p(0.0, 0.0),
+                Some(Direction::Down),
+                p(0.0, 40.0),
+                Some(Direction::Up)
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            route(
+                p(0.0, 0.0),
+                Some(Direction::Down),
+                p(20.0, 40.0),
+                Some(Direction::Up)
+            ),
+            vec![p(0.0, 20.0), p(20.0, 20.0)]
+        );
+        // A pin whose direction is not known never detours.
+        assert!(route(p(0.0, 0.0), None, p(0.0, -40.0), Some(Direction::Up)).is_empty());
     }
 
     #[test]
