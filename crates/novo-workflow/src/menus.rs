@@ -284,6 +284,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     // Simulate
     ("sim.live", at("Simulate")),
     ("sim.controller", at("Simulate")),
+    ("sim.defects", at("Simulate")),
     ("sim.why", at("Simulate")),
     ("sim.plc_program", at("Simulate")),
     ("simulate.motor-start", at("Simulate")),
@@ -579,6 +580,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
         &[&[
             "sim.live",
             "sim.controller",
+            "sim.defects",
             "sim.why",
             "simulate.motor-start",
             "sim.plc_program",
