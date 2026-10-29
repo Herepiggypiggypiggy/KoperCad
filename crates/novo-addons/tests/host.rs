@@ -467,11 +467,9 @@ fn an_engine_on_its_own_thread_answers_in_order_and_never_makes_the_caller_wait(
     let refuse = worker.submit("refuse", &json!({}));
     let spin = worker.submit("spin", &json!({}));
     let after = worker.submit("echo", &json!({"n": 2}));
-    assert!(
-        started.elapsed() < Duration::from_millis(250),
-        "submitting takes no time, even with an endless loop queued"
-    );
+    let submitting = started.elapsed();
     assert_eq!(worker.pending(), 4);
+    let waiting = Instant::now();
     let mut got = Vec::new();
     while let Some(done) = worker.wait_next() {
         got.push((done.ticket, done.result));
@@ -488,10 +486,22 @@ fn an_engine_on_its_own_thread_answers_in_order_and_never_makes_the_caller_wait(
         matches!(got[3].1, Err(CallError::Stopped(_))),
         "a stopped engine stays stopped"
     );
+    // the endless loop ran to the end of its budget while the caller was free: queueing the four
+    // requests took far less than waiting for their answers
+    assert!(
+        submitting < waiting.elapsed(),
+        "submitting took {submitting:?}, the answers {:?}",
+        waiting.elapsed()
+    );
     assert_eq!(worker.pending(), 0);
     let stats = worker.stats().expect("it has answered");
     assert_eq!(stats.fuel_budget, 20_000_000);
     assert!(stats.calls >= 4 && stats.peak_fuel > 0);
+    // the wake follows the send, so the last one may still be on its way
+    let until = Instant::now() + Duration::from_secs(5);
+    while wakes.load(Ordering::SeqCst) < 4 && Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(5));
+    }
     assert!(
         wakes.load(Ordering::SeqCst) >= 4,
         "each answer wakes the window"
