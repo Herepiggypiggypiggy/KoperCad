@@ -59,7 +59,12 @@ widgets = [
   { kind = "lamp", id = "h-up-fast", text = "Up fast", state = "ok", lit = false },
   { kind = "lamp", id = "h-dn-slow", text = "Down slow", state = "ok", lit = false },
   { kind = "lamp", id = "h-dn-fast", text = "Down fast", state = "ok", lit = false },
-  { kind = "lamp", id = "m-up-slow", text = "Mast up slow", state = "ok", lit = false },
+]
+
+[[widget]]
+kind = "row"
+widgets = [
+  { kind = "lamp", id = "m-up-slow", text = "Mast hoist up slow", state = "ok", lit = false },
 ]
 
 [[widget]]
