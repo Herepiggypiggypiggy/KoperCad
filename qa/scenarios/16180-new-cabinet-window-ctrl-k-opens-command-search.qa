@@ -1,0 +1,21 @@
+@title New cabinet window: Ctrl+K opens command search instead of typing into the name
+@area Hostile
+# Pre-work note E-3. In the New cabinet window the name field has the keyboard, so
+# a command typed after Ctrl+K became part of the cabinet's name.
+fresh
+key ctrl+n
+wait 20
+click_text Cabinet #1
+wait 20
+click_text "New cabinet..." Button
+wait 10
+expect "New cabinet"
+shot new-cabinet-window
+key ctrl+k
+wait 6
+expect_not "Create (Enter)"
+text simulate heat
+wait 6
+shot search-opened
+check_layout
+key Escape

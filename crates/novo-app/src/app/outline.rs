@@ -2544,6 +2544,13 @@ impl NovoApp {
         let Some(project) = self.backend.document().map(|d| d.project()) else {
             return;
         };
+        // Command search is for the drawing, not for the name field: Ctrl+K
+        // closes the window and opens it, instead of typing a command's
+        // words into the cabinet's name.
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)) {
+            self.wb.field.open(novo_workflow::palette::Mode::All, None);
+            return;
+        }
         if form.name.is_empty() && !form.focused {
             form.name = self.naming().next_cabinet(project);
         }
