@@ -102,6 +102,7 @@ mod example_gallery;
 mod example_kit;
 mod example_mcc;
 mod example_plc;
+mod example_pump;
 mod faults;
 mod handover;
 mod heat;
@@ -599,6 +600,7 @@ enum Leaving {
     MccExample,
     CraneExample,
     PlcExample,
+    PumpExample,
     Practice,
     /// Open this lesson's sample project and start the lesson.
     Lesson(String),
@@ -994,6 +996,7 @@ impl NovoApp {
             Action::OpenMccExample => self.leave_then(ctx, Leaving::MccExample),
             Action::OpenCraneExample => self.leave_then(ctx, Leaving::CraneExample),
             Action::OpenPlcExample => self.leave_then(ctx, Leaving::PlcExample),
+            Action::OpenPumpExample => self.leave_then(ctx, Leaving::PumpExample),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
             Action::Learn => self.learn_run_command("help.learn", None),
@@ -1168,6 +1171,7 @@ impl NovoApp {
             Leaving::MccExample => self.open_mcc_example(),
             Leaving::CraneExample => self.open_crane_example(),
             Leaving::PlcExample => self.open_plc_example(),
+            Leaving::PumpExample => self.open_pump_example(),
             Leaving::Practice => self.start_practice(),
             Leaving::Lesson(id) => self.start_lesson_now(&id),
             Leaving::Close => self.close_project(),
