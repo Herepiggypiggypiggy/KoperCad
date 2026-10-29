@@ -12,20 +12,20 @@ wait 30
 shot plate
 check_blank plate
 check_layout
-click 624 329
+click 600 329
 wait 10
 expect "55, 210 mm"
-click 1100 399
+click 1102 426
 wait 10
 expect "Mounted on"
 shot k1-selected
-drag 624 329 640 334
+drag 600 329 616 334
 wait 20
 expect "210 mm"
 expect_not "55, 210 mm"
 expect "Mounted on"
 shot k1-slid
-drag 640 334 800 436
+drag 616 334 776 436
 wait 20
 expect_not "Mounted on"
 shot k1-off-the-rail

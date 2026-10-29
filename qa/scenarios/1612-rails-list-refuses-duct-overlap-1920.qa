@@ -1,0 +1,18 @@
+@title Cabinet: Rails and ducts refuses a duct turn that would lie over another duct
+@area Cabinet
+@sizes 1920x1080
+# qa/fixtures/cabinet-lesson-t-junctions.novo: Place all result, row ducts end against the trunk's side. Turning
+# the first row duct (545 mm) upright would put it over the trunk: the edit is refused with a message and the
+# duct stays as it was. Pictures: the list, after the refused turn.
+open qa/fixtures/cabinet-lesson-t-junctions.novo
+wait 20
+click_text Cabinet #1
+wait 30
+click_text "Rails and ducts"
+wait 10
+shot list
+click 575 321
+wait 10
+expect "A duct cannot lie over"
+shot refused
+check_layout
