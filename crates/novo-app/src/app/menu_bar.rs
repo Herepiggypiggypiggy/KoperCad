@@ -25,8 +25,8 @@ pub(super) struct TopBarFit {
     pub(super) search_width: f32,
     /// Longest project name shown in the breadcrumb, in characters.
     pub(super) name_chars: usize,
-    /// Workspace chips use their short names.
-    pub(super) short_switcher: bool,
+    /// Which workspace buttons show their name (section 3.1).
+    pub(super) segment_names: super::workspace::SegmentNames,
     /// The "What's new" pill is in the bar; below [`ICON_ONLY_BELOW`] it
     /// makes way, the Help menu still opens it.
     pub(super) whats_new_pill: bool,
@@ -49,7 +49,13 @@ impl TopBarFit {
             search,
             search_width,
             name_chars: if width >= 1700.0 { 32 } else { 14 },
-            short_switcher: width < 1250.0,
+            segment_names: if width >= 1500.0 {
+                super::workspace::SegmentNames::All
+            } else if width >= ICON_ONLY_BELOW {
+                super::workspace::SegmentNames::Current
+            } else {
+                super::workspace::SegmentNames::None
+            },
             whats_new_pill: width >= ICON_ONLY_BELOW,
         }
     }
@@ -316,6 +322,9 @@ impl NovoApp {
             return Some("This page has no DXF background");
         }
         match info.id {
+            "file.import_controller" if !self.addon_enabled(super::addons::CONTROLLERS_ADDON) => {
+                return Some(super::addons::CONTROLLERS_NEEDED);
+            }
             "proposal.accept" if self.page_proposals().is_empty() => {
                 return Some("No proposal on this page");
             }

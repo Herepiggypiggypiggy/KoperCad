@@ -1,0 +1,30 @@
+@title Two docked panels share an edge: drag the divider between them, double click it to make them equal (1920x1080)
+@area Windows
+@sizes 1920x1080
+click_text "Open example"
+wait 30
+click 585 312
+wait 40
+# Dock the Inspector, then the Review notes, both at the right edge.
+click 1863 112
+wait 30
+key ctrl+k
+wait 4
+text review notes
+wait 6
+key Enter
+wait 30
+click 1573 112
+wait 30
+expect "No notes yet"
+shot two-panes
+check_layout
+# The divider sits at the foot of the upper pane: drag it down.
+drag 1760 546 1760 700
+wait 20
+shot divider-moved
+check_layout
+double_click 1760 700
+wait 20
+shot divider-reset
+check_layout

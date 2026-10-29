@@ -186,7 +186,12 @@ impl NovoApp {
                 (id, title, count)
             })
             .collect();
-        section_label(ui, "Reports");
+        ui.horizontal(|ui| {
+            section_label(ui, "Reports");
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                super::panel_dock::navigator_side_button(ui);
+            });
+        });
         let mut chosen = None;
         for (id, title, count) in &rows {
             ui.horizontal(|ui| {

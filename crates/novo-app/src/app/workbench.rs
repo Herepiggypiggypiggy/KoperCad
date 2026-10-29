@@ -85,6 +85,7 @@ pub(crate) struct Workbench {
     /// The shortcut sheet (`?`).
     pub(super) shortcuts: super::shortcuts_sheet::ShortcutSheet,
     pub(super) icon_gallery: super::icon_gallery::IconGallery,
+    pub(super) page_switcher: super::top_bar::PageSwitcher,
     pub(super) app_menu: super::app_menu::AppMenu,
     /// The macro browser window.
     pub(super) macros: super::macro_browser::MacroBrowser,
@@ -290,6 +291,8 @@ pub(crate) struct Workbench {
     pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
     /// Parts read from an EPLAN parts export, waiting for Add.
     pub(super) eplan_parts: Option<super::eplan_parts::EplanPartsImport>,
+    /// A parts database being read on a worker thread.
+    pub(super) eplan_parts_job: Option<super::eplan_parts::EplanPartsJob>,
     pub(super) parts_table: Option<super::parts_table::PartsTableImport>,
     /// The EPLAN export options being chosen.
     pub(super) eplan_export: Option<super::eplan_export::EplanExport>,
@@ -345,6 +348,7 @@ impl Default for Workbench {
             preferences: false,
             shortcuts: Default::default(),
             icon_gallery: Default::default(),
+            page_switcher: Default::default(),
             app_menu: Default::default(),
             macros: Default::default(),
             parts: None,
@@ -442,6 +446,7 @@ impl Default for Workbench {
             auto_assign: None,
             eplan_import: None,
             eplan_parts: None,
+            eplan_parts_job: None,
             parts_table: None,
             eplan_export: None,
             eplan_export_last: None,
@@ -541,6 +546,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.hide_references_device",
     "sim.live",
     "sim.controller",
+    "sim.defects",
     "sim.why",
     "sim.plc_program",
     "sim.faults",
@@ -1390,7 +1396,7 @@ impl NovoApp {
             "export.reports" => {
                 self.export_all_reports();
             }
-            "sim.live" | "sim.why" | "sim.plc_program" | "sim.controller" => {
+            "sim.live" | "sim.why" | "sim.plc_program" | "sim.controller" | "sim.defects" => {
                 // The live view and the PLC window draw only over the
                 // schematic: go there first so the command is not silent.
                 if self.workspace() != Workspace::Schematic && self.is_open() {
@@ -1404,6 +1410,8 @@ impl NovoApp {
                     self.toggle_live();
                 } else if id == "sim.controller" {
                     self.toggle_controller_panel();
+                } else if id == "sim.defects" {
+                    self.toggle_defects_panel();
                 } else if id == "sim.why" {
                     self.ask_why();
                 } else {
@@ -1601,7 +1609,14 @@ impl NovoApp {
                 self.export_aml();
             }
             "file.import_aml" => self.import_aml(),
-            "file.import_controller" => self.open_controller_import(),
+            "file.import_controller" => {
+                // Also reached from Ctrl+K and scripts, not only the menu row that greys.
+                if self.addon_enabled(super::addons::CONTROLLERS_ADDON) {
+                    self.open_controller_import();
+                } else {
+                    self.message(Level::Info, super::addons::CONTROLLERS_NEEDED);
+                }
+            }
             "addons.manage" => self.open_addons(),
             "file.import_crane" => self.import_crane(),
             "file.import_eplan" => self.import_eplan(),

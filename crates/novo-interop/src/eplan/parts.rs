@@ -16,6 +16,10 @@ pub enum EplanError {
     Xml(#[from] XmlError),
     #[error("no parts found: no element has an order number or part number")]
     NoParts,
+    #[error(
+        "no articles found: this is not an EPLAN article file (.adb or .eod) this reader knows"
+    )]
+    NoArticles,
     #[error(transparent)]
     Table(#[from] ImportError),
 }

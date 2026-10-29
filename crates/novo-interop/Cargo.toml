@@ -26,6 +26,8 @@ dirs.workspace = true
 # Pure-Rust Excel writer and reader: no Excel install, nothing to elevate.
 rust_xlsxwriter.workspace = true
 calamine.workspace = true
+# EPLAN article files hold zlib-compressed records.
+flate2.workspace = true
 # EPLAN symbol mapping tables (data files).
 serde.workspace = true
 toml.workspace = true

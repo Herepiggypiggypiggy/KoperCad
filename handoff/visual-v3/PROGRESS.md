@@ -1,2 +1,3 @@
 2026-10-29 07:20 UTC V3a part 1 built: rail widget, Schematic rail replaces dock, 7 rail tests, dock tests rewritten.
+2026-10-29 V3d (Reports and Commissioning rails), branch claude/project-thread-41vgul: `rail_workspaces.rs` holds the rows of both rails and `workspace_rail_show` (Schematic, Reports, Commissioning; other workspaces return false so the 3D and Cabinet threads add their arm there). `rail_schematic::rail_show` is the shared draw-and-act path. 5 tests in `rail_workspaces_tests.rs`, QA scenario 7400.
 2026-10-29 V3b/V3c: 3D and Cabinet rails built on the V3a widget, tests and QA 740/741 added.

@@ -691,7 +691,7 @@ fn row_ui(
         (None, Some(key)) => right = pp::paint_key_cap(painter, right, cy, key),
         (None, None) => {}
     }
-    right = pp::paint_chip(painter, right, cy, pp::type_chip(row), false);
+    right = pp::paint_chip(painter, right, cy, &pp::type_chip(row), false);
     if let Some(path) = path_chip(row) {
         right = pp::paint_chip(painter, right, cy, &path, true);
     }
@@ -707,13 +707,18 @@ fn row_ui(
     // Under a group heading the group name would only repeat it; a command's
     // detail is the menu path, which is the chip.
     let detail_is_path = matches!(row.target, Target::Command(_) | Target::Run { .. });
-    if !row.detail.is_empty() && row.detail != row.group && !detail_is_path {
+    // An add-on's name is in its chip; only its description follows.
+    let detail = match pp::addon_parts(row) {
+        Some((_, description)) => description,
+        None => row.detail.as_str(),
+    };
+    if !detail.is_empty() && row.detail != row.group && !detail_is_path {
         let from = label.right() + 8.0;
         if right - from > 30.0 {
             novo_theme::widgets::paint_text_ellipsis(
                 painter,
                 egui::pos2(from, cy),
-                &row.detail,
+                detail,
                 egui::FontId::proportional(12.0),
                 p.text_secondary,
                 right - from,

@@ -55,7 +55,7 @@ enum FieldAction {
     PunchPdf,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Tab {
     Checks,
     Punch,
@@ -981,6 +981,46 @@ impl NovoApp {
             self.message(Level::Info, "Everything in the walk is decided");
         }
         true
+    }
+
+    /// The rail's "Next open": the walk moves to the next wire, terminal or
+    /// device with an open check, the way the panel's button does. It decides
+    /// nothing (the big tick is Space). Returns whether there was one.
+    pub(super) fn commissioning_next_open(&mut self) -> bool {
+        if !self.commissioning_pins_panel() {
+            return false;
+        }
+        self.load_commissioning();
+        let current = self.current_page;
+        let mut go = None;
+        let choice = self.machine_variant();
+        let generation = self.machine_generation();
+        let found = {
+            let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
+            else {
+                return false;
+            };
+            mode.generation = generation;
+            let project = choice.as_deref().unwrap_or(doc.project());
+            match mode.next(project, mode.selected, current) {
+                Some(info) => {
+                    mode.walk_to(project, &info, current, &mut go);
+                    true
+                }
+                None => {
+                    mode.selected = None;
+                    false
+                }
+            }
+        };
+        if let Some(place) = go {
+            self.jump(place, true);
+        }
+        self.apply_walk_requests();
+        if !found {
+            self.message(Level::Info, "Everything in the walk is decided");
+        }
+        found
     }
 
     /// The `export.punch_list` command: the open punch items as a PDF.

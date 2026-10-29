@@ -288,6 +288,29 @@ fn a_double_click_on_the_edge_of_the_pinned_navigator_gives_it_its_width_back() 
     assert!((back - home).abs() < 3.0, "{home} -> {wide} -> {back}");
 }
 
+fn panel_rect(d: &Drive, name: &str) -> Option<egui::Rect> {
+    egui::containers::panel::PanelState::load(&d.ctx, egui::Id::new(name)).map(|s| s.outer_rect)
+}
+
+#[test]
+fn the_pinned_pages_column_moves_to_the_right_side_and_back() {
+    let (_dir, mut d) = open_project();
+    d.app.settings.outline_pinned = Some(true);
+    settle(&mut d);
+    let left = panel_rect(&d, "outline").expect("the column is shown at the left");
+    assert!(left.left() < 80.0, "{left:?}");
+    super::panel_dock::set_navigator_right(&d.ctx, true);
+    settle(&mut d);
+    let right = panel_rect(&d, "outline_right").expect("the column is shown at the right");
+    assert!(right.right() > SIZE.x - 2.0, "{right:?}");
+    assert!(d.app.wb.outline_shown.is_some_and(|w| w > 100.0));
+    // Reset panel layout brings it home.
+    panel::reset_layout(&d.ctx);
+    settle(&mut d);
+    assert!(!super::panel_dock::navigator_right(&d.ctx));
+    assert!(panel_rect(&d, "outline").is_some());
+}
+
 /// The rule for new code: no window that is neither movable nor resizable.
 /// Every floating panel goes through `panel.rs`; the few raw `egui::Area`s
 /// that remain are not windows (hover tips, toasts, the radial wheel,
@@ -320,6 +343,10 @@ fn no_fixed_window_is_built_outside_the_panel_helpers() {
         ),
         ("build_mode", "Build mode fills the canvas"),
         ("live_wire_tip", "hover tip on the sheet"),
+        (
+            "defect_banner",
+            "strip over the sheet while a defect is injected, not interactive",
+        ),
         ("live_input", "badge drawn on a symbol"),
         ("live_load", "badge drawn on a symbol"),
         ("live_pole", "badge drawn on a symbol"),

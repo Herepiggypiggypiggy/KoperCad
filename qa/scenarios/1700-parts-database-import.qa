@@ -1,0 +1,27 @@
+@title Parts database import (.eod, maker names)
+@area Parts
+@env KOPERCAD_QA_SLOW_READ_MS=4000
+# An invented article file (no EPLAN data); the native file dialog is answered by the harness.
+click_text "Open example"
+wait 20
+answer_dialog qa/fixtures/parts/invented-articles.eod
+click_text File
+wait 4
+click_text "Import parts"
+wait 4
+shot menu
+click_text "Import parts from a CAD parts export"
+wait 6
+shot reading
+check_layout
+wait 40
+shot preview
+check_layout
+check_blank preview
+expect "Makers in this file"
+expect "Schneider Electric"
+expect "not known"
+click_text "Add to catalog"
+wait 20
+shot added
+expect "added"
