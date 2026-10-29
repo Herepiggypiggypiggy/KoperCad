@@ -217,8 +217,8 @@ pub fn build(spec: &CircuitSpec) -> Result<MacroFile, CircuitError> {
             ),
         ));
     }
-    let lib = Library::builtin().expect("the built-in symbols load");
-    let pins = Pins::of(spec, &lib)?;
+    let lib = Library::shared(novo_symbols::Pack::Iec);
+    let pins = Pins::of(spec, lib)?;
     let plan = plan(spec, &pins)?;
 
     let mut tags = BTreeSet::new();
