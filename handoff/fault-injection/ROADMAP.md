@@ -8,7 +8,7 @@ Scope: break the drawn live circuit on purpose and rehearse scenarios. Design `d
 - App: Simulate > Defects and walk-throughs card, banner, record/run/delete, property `walkthroughs.project`.
 
 ## Next, in order
-1. Machine-level defects through the same list: brake that does not hold (mechanics), lost encoder, drive overcurrent/STO, radio link loss; needs the drive-hoist, closed-loop and contactor-hoist threads' machine models and the controller thread (`CircuitPort` in `novo-machine`).
+1. Machine-level defects: hoist brake, rectifier, phase and supply are DONE (F1b, `novo_sim::machine`). Still open: lost encoder, drive overcurrent/STO, radio link loss, recording hoist faults from the Hoist run window; needs the drive-hoist, closed-loop and contactor-hoist threads' machine models and the controller thread (`CircuitPort` in `novo-machine`).
 2. Scenario expectations on mechanics (hook height, speed, runaway) in the same Expect list.
 3. Controller presses recorded and replayed (needs a controller action trace).
 4. Starter library of generic walk-throughs (E-stop chain, welded reversing contactor, lost phase, brake open) shipped as lessons.

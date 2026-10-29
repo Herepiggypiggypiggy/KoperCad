@@ -2314,6 +2314,27 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "sim.winches",
+        "Simulate winch scenarios",
+        "View",
+        &[
+            "winch",
+            "hoist",
+            "closed loop",
+            "encoder",
+            "synchronous",
+            "two winches",
+            "brake",
+            "torque proof",
+            "safe torque off",
+            "sto",
+            "rope",
+            "tilt",
+            "load sharing",
+        ],
+        Needs::Nothing,
+    ),
+    cmd(
         "sim.motor_curves",
         "Motor at variable frequency",
         "View",
@@ -3228,6 +3249,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export plate"],
+    ),
+    verb(
+        cmd(
+            "export.drill_plan",
+            "Export hand drilling plan",
+            "Export",
+            &[
+                "drill plan",
+                "drilling",
+                "mounting plate",
+                "bench",
+                "hand",
+                "holes",
+            ],
+            Needs::Project,
+        ),
+        &["export drill plan"],
     ),
     verb(
         cmd(

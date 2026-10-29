@@ -128,20 +128,20 @@ pub struct Marks {
 }
 
 impl Marks {
-    fn line(&mut self, layer: Layer, a: (f64, f64), b: (f64, f64)) {
+    pub(crate) fn line(&mut self, layer: Layer, a: (f64, f64), b: (f64, f64)) {
         self.shapes.push((layer, Shape::Line { a, b }));
     }
 
-    fn rect(&mut self, layer: Layer, min: (f64, f64), max: (f64, f64)) {
+    pub(crate) fn rect(&mut self, layer: Layer, min: (f64, f64), max: (f64, f64)) {
         self.shapes.push((layer, Shape::Rect { min, max }));
     }
 
-    fn circle(&mut self, layer: Layer, centre: (f64, f64), radius: f64) {
+    pub(crate) fn circle(&mut self, layer: Layer, centre: (f64, f64), radius: f64) {
         self.shapes.push((layer, Shape::Circle { centre, radius }));
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn text(
+    pub(crate) fn text(
         &mut self,
         layer: Layer,
         pos: (f64, f64),

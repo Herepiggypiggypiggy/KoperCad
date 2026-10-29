@@ -7,6 +7,8 @@ license.workspace = true
 
 [dependencies]
 novo-core.workspace = true
+novo-drive.workspace = true
+novo-machine.workspace = true
 novo-symbols.workspace = true
 serde.workspace = true
 serde_json.workspace = true

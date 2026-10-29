@@ -169,3 +169,39 @@ fn saved_walkthroughs_are_read_from_the_project_property() {
     let report = novo_sim::walkthrough::run(doc.project(), &w);
     assert!(report.ok(), "{report:?}");
 }
+
+#[test]
+fn a_walkthrough_with_a_hoist_defect_runs_from_the_card() {
+    use novo_sim::machine::{HoistDefect, HookIs};
+    let mut doc = Document::default();
+    novo_tests::hoist::hoist(&mut doc).expect("fixture builds");
+    let (modules, _) = super::hoist_run::hoists_of(doc.project());
+    let id = modules[0].id.clone();
+    let w = Walkthrough::new("worn brake")
+        .at(
+            0.5,
+            Action::Machine {
+                hoist: id.clone(),
+                with: HoistDefect::BrakeLining { share: 0.05 },
+            },
+        )
+        .at(
+            1.0,
+            Action::Operate {
+                device: "-S1".into(),
+                pin: None,
+                operated: true,
+            },
+        )
+        .at(
+            2.0,
+            Action::Expect {
+                check: novo_sim::walkthrough::Check::Hook {
+                    hoist: id,
+                    is: HookIs::Moving,
+                },
+            },
+        );
+    let report = super::defects_card::run_walkthrough(doc.project(), &w);
+    assert!(report.ok(), "{:?}", report.steps);
+}

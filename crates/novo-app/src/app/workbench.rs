@@ -116,6 +116,8 @@ pub(crate) struct Workbench {
     /// The Hoist run window and the run in it.
     pub(super) hoist: super::hoist_run::HoistRun,
     pub(super) drive_run: super::drive_run::DriveRun,
+    /// The Winch scenarios window (`sim.winches`) and its last run.
+    pub(super) winches: super::winch_scenarios::WinchScenarios,
     pub(super) motor_freq: super::motor_freq::MotorFreq,
     /// The Add fault window (`sim.add_fault`), while it is open.
     pub(super) add_fault: Option<super::faults::AddFault>,
@@ -362,6 +364,7 @@ impl Default for Workbench {
             faults: None,
             hoist: Default::default(),
             drive_run: Default::default(),
+            winches: Default::default(),
             motor_freq: Default::default(),
             add_fault: None,
             calculations: None,
@@ -550,6 +553,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "sim.hoist",
     "sim.hoist3d",
     "sim.drive_run",
+    "sim.winches",
     "sim.motor_curves",
     "sim.add_fault",
     "view.changes",
@@ -574,6 +578,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.standards_xlsx",
     "export.plate",
     "export.plate_dxf",
+    "export.drill_plan",
     "export.pdf_page",
     "export.report_pdf",
     "report.add_page",
@@ -1430,6 +1435,7 @@ impl NovoApp {
             "sim.hoist" => self.toggle_hoist_run(),
             "sim.hoist3d" => self.toggle_hoist_3d(),
             "sim.drive_run" => self.toggle_drive_run(),
+            "sim.winches" => self.toggle_winch_scenarios(),
             "sim.motor_curves" => self.toggle_motor_curves(),
             "sim.add_fault" => self.begin_add_fault(),
             "view.changes" => self.toggle_changes(argument),
@@ -1501,6 +1507,9 @@ impl NovoApp {
             }
             "export.plate_dxf" => {
                 self.export_plate_dxf();
+            }
+            "export.drill_plan" => {
+                self.export_drill_plan_pdf();
             }
             "export.pdf_page" => {
                 self.export_pdf_page();

@@ -57,9 +57,28 @@ bottom, left to right. A long table continues on further PDF sheets.
 
 ## Not done
 
-No menu, CLI command or Cabinet-view button yet; the engines and writers are
-callable. Side-view drawings, duct cut lengths (R6) and machine formats are later.
+The plate drawing has a Cabinet export button and a command; there is no CLI command yet. Side-view drawings, duct cut lengths (R6) and machine formats are later.
 
 ## Workshop pack: 1:1 drilling template
 
 Reports > Export > Export workshop pack (folder), or the Workshop pack button in Bench output, writes `<project> workshop` next to the project file. The first file is the drilling template of each mounting plate at true size on A4 or A3: tiles overlap by 10 mm and carry grey registration crosses, a cross hair at every hole and cut-out centre with its number and size, and a 100 mm scale-check ruler. Print at 100%. Hole positions are exact in the file; on paper they are only as good as the print scale and the taping (about 0.5 mm is typical, an estimate). The folder also holds the bench cut list, ferrules, labels and the assembly checklist.
+
+## Hand drilling plan
+
+Cabinet > Output > Export > Drill plan (hand, PDF), the command "Export hand drilling plan" (Ctrl K, File > Export drawings), and `1 Drill plan <enclosure>.pdf` in the Workshop pack. A4 portrait, one sheet per surface with work (plate first, then door and walls), for a workshop that marks and drills by hand.
+
+Each sheet has: the datum (0 / 0 is the top left corner of the plate seen from the front, X right, Y down, in mm) with a small sketch; a "before you start" list with tick boxes (measure the real sheet, scribe the datum, check rails and devices against the layout); the tool list (one drill per diameter, a saw or punch per cut-out size) with counts; and the check-off table, grouped by tool, smallest drill first, then duct fixings, then cut-outs. Every row has a tick box, the number (the same hole numbers as the plate drawing and drill table, `C1` for cut-outs, `D1` for duct fixings), X and Y from the datum, the distance from the nearest edges in words (a check from the far side), the source (device tag, rail, opening) and the basis.
+
+Basis says where a number comes from, and the sheet never states more than it knows:
+
+| Basis | Meaning |
+| --- | --- |
+| maker data | the part's `hole_pattern` / `cutout` carries `drill_basis = maker`. Nothing sets this key yet: set the part property `drill_basis = maker` by hand until an importer writes it (follow-up in the parts importer thread) |
+| typed in | `drill_basis = typed` (entered by hand) |
+| part data | the part has the data, no recorded origin; shown as is, never promoted to maker data |
+| planning rule | KoperCAD defaults: rail screw holes (5.5 mm, 10 mm from the ends, at most 200 mm apart), duct fixings (4.5 mm, 25 mm from the ends, 200 mm pitch), a 4 mm pilot hole for drills over 8 mm, a 10 mm corner hole for rectangular cut-outs. The maker's instructions win |
+| project opening | a wiring opening entered in the project |
+
+The basis is looked up by the device tag shown in the Source column, so two devices with the same tag share one basis. Where a device sits on the plate is the layout (a model), not a measurement; the sheet says so and asks for a check against the real rails and devices. Cut-out sizes for the tool are rounded up to the next 0.5 mm. Part text that could not be read is listed at the end, not dropped.
+
+Code: `novo-layout::drill_plan` (plan and page marks), `novo-layout::model::drill_plan` (reads the project), `novo-pdf::drill_plan` (writer). Part key: `drill_basis` (`novo_layout::drill_plan::BASIS_KEY`).

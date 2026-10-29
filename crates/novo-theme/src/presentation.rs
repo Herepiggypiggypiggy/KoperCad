@@ -963,6 +963,11 @@ pub const TABLE: &[Presentation] = &[
     ),
     row("export.plate", d(&drawn::PLATE), "Export plate drawing"),
     row(
+        "export.drill_plan",
+        d(&drawn::PLATE),
+        "Export hand drilling plan",
+    ),
+    row(
         "export.plate_dxf",
         d(&drawn::PLATE),
         "Export plate drawing as DXF",
@@ -1107,6 +1112,7 @@ pub const TABLE: &[Presentation] = &[
     row("sim.hoist", d(&drawn::MOTOR), "Simulate hoist run"),
     row("sim.hoist3d", p(icons::CRANE), "Hoist in 3D"),
     row("sim.drive_run", d(&drawn::DRIVE), "Simulate drive run"),
+    row("sim.winches", d(&drawn::MOTOR), "Simulate winch scenarios"),
     row(
         "sim.controller",
         p(icons::GAME_CONTROLLER),
