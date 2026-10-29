@@ -14,6 +14,29 @@ expect "Rehearsal of wiring and logic"
 expect "No defects: the plant is as drawn."
 shot card-opened
 check_layout
+click_text "Contact welded closed"
+wait 5
+click_text "Coil open (never operates)"
+wait 5
+click_text "choose..."
+wait 5
+click_text -K1
+wait 5
+click_text Record
+wait 5
+click_text "Inject defect"
+wait 20
+expect "DEFECT INJECTED"
+expect "Coil open -K1"
+shot defect-injected
+check_layout
+click_text "Stop and keep"
+wait 5
+click_text "Run"
+wait 10
+expect "Recording 1"
+shot walkthrough-report
+check_layout
 key Escape
 wait 5
 key ctrl+k
