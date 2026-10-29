@@ -1,4 +1,4 @@
-//! File > Import > EPLAN project (PXF): reads an EPLAN project export
+//! File > Import... > Import EPLAN project: reads an EPLAN project export
 //! (`.epj`) or page macro (`.emp`), shows what would be added, what exists
 //! and what is not carried (counted), and applies it as one undo step when
 //! the person confirms (docs/design/eplan-pxf.md).

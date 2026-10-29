@@ -49,6 +49,7 @@ mod cable_proposals_fixture_tests;
 mod calculations;
 #[cfg(test)]
 mod calculations_tests;
+mod centre;
 mod change_report;
 mod changes;
 mod checks;
@@ -111,7 +112,6 @@ mod example_kit;
 mod example_mcc;
 mod example_plc;
 mod example_pump;
-mod export_centre;
 mod faults;
 mod handover;
 mod heat;
@@ -388,6 +388,8 @@ mod cabinet_surfaces_tests;
 #[cfg(test)]
 mod cabinet_tests;
 #[cfg(test)]
+mod centre_tests;
+#[cfg(test)]
 mod changes_tests;
 #[cfg(test)]
 mod checks_background_tests;
@@ -411,8 +413,6 @@ mod error_words_tests;
 mod example_gallery_tests;
 #[cfg(test)]
 mod example_tests;
-#[cfg(test)]
-mod export_centre_tests;
 #[cfg(test)]
 mod faults_tests;
 #[cfg(test)]
@@ -521,7 +521,7 @@ const WORKPACK_HINT: &str = "The build order as half-page work cards for the han
 const SCALE_CHECK_HINT: &str = "One A4 page with a 100 mm square, a 250 mm ruler and a table from what you measure to the print scale that repairs it. Print it first on the printer you will use for the 1:1 templates. Printed accuracy depends on the printer.";
 const BENCH_PACKET_HINT: &str = "One PDF to work from at the bench: a cover with page numbers and what is exact or estimated, the cabinet build order, cut list, ferrules, one tick sheet per schematic page (devices, wires, tests) and the terminal strip plans.";
 const ASSEMBLY_HINT: &str = "The shop-floor print pack of every cabinet: build order (rails, ducts, devices, wires, labels), then prepare with the cut list, drill table, mount, wire, label and check, then the wire cutting list. Needs a cabinet with a mounting plate.";
-const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Edit the file in Excel and bring it back with File > Import spreadsheet. The generated reports are under Export all reports to Excel.";
+const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Edit the file in Excel and bring it back with File > Import... > Import spreadsheet. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
 use pages::PageView;
 
@@ -2071,7 +2071,7 @@ impl NovoApp {
         self.describe_recipes_dialog(&ctx);
         self.project_settings_dialog(&ctx);
         self.crane_options_dialog(&ctx);
-        self.export_centre_window(&ctx);
+        self.centre_window(&ctx);
         self.plant_options_dialog(&ctx);
         self.project_rules_dialog(&ctx);
         self.device_renumber_dialog(&ctx);

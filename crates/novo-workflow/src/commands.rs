@@ -771,6 +771,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     // Draw
     verb(
         cmd(
+            "file.import_centre",
+            "Import...",
+            "Project",
+            &["import centre", "import center", "bring in"],
+            Needs::Project,
+        ),
+        &["import", "import centre"],
+    ),
+    verb(
+        cmd(
             "import.spreadsheet",
             "Import spreadsheet",
             "Project",

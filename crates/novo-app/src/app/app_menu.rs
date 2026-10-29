@@ -144,12 +144,12 @@ pub(super) fn search_entries(filter: &str) -> Vec<Entry> {
     let mut named = Vec::new();
     let mut by_keyword = Vec::new();
     let mut seen = HashSet::new();
-    // The formats of the Export centre have no menu row, but a search for
+    // The commands of the Export and Import centres have no menu row, but a search for
     // "pdf" still finds them: they follow the menu rows, in the centre's order.
     let menu_rows = MENUS
         .iter()
         .flat_map(|menu| menus::entries(menu).into_iter().map(|(info, _)| info));
-    let centre_rows = novo_workflow::centres::export_ids().filter_map(novo_workflow::commands::get);
+    let centre_rows = novo_workflow::centres::centre_ids().filter_map(novo_workflow::commands::get);
     for info in menu_rows.chain(centre_rows) {
         if !seen.insert(info.id) {
             continue;
@@ -178,7 +178,12 @@ pub(super) fn search_entries(filter: &str) -> Vec<Entry> {
 /// "View > 3D": where a command sits in the menus.
 fn path_of(info: &CommandInfo) -> String {
     if novo_workflow::centres::replaces_menu_row(info.id) {
-        return "File > Export".to_owned();
+        let centre = novo_workflow::centres::Centre::of(info.id);
+        return match centre {
+            Some(novo_workflow::centres::Centre::Import) => "File > Import",
+            _ => "File > Export",
+        }
+        .to_owned();
     }
     match menus::place(info) {
         Some(menus::MenuPlace {

@@ -415,7 +415,7 @@ fn draw_card(
     ui.horizontal(|ui| {
         if ui
             .small_button("Import profile…")
-            .on_hover_text("File > Import > Controller profile from I/O table")
+            .on_hover_text("File > Import... > Controller from I/O table")
             .clicked()
         {
             actions.push(CardAction::OpenWizard);

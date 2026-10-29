@@ -1,8 +1,72 @@
 //! The centres: Import and Export are workbenches, not menus of formats
 //! (`docs/design/visual-redesign.md` section 6). This file says which
-//! commands the Export centre lists and how it groups them; the window is in
+//! commands each centre lists and how it groups them; the window is in
 //! `novo-app`. A command listed here has no menu row: its home is the centre
-//! (`homes::Home::Centre`), and File > Export... opens it.
+//! (`homes::Home::Centre`), and File > Export... and File > Import... open
+//! them.
+
+/// Which of the two centres.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Centre {
+    Export,
+    Import,
+}
+
+impl Centre {
+    /// The command that opens the centre.
+    pub fn opener(self) -> &'static str {
+        match self {
+            Centre::Export => EXPORT_CENTRE,
+            Centre::Import => IMPORT_CENTRE,
+        }
+    }
+
+    /// The window title.
+    pub fn title(self) -> &'static str {
+        match self {
+            Centre::Export => "Export",
+            Centre::Import => "Import",
+        }
+    }
+
+    /// The hint in the search field.
+    pub fn search_hint(self) -> &'static str {
+        match self {
+            Centre::Export => "Search formats: pdf, dxf, excel, bench, plc",
+            Centre::Import => "Search: dxf, eplan, parts, excel, plc",
+        }
+    }
+
+    /// What the footer button says when `id` is picked.
+    pub fn button(self, id: &str) -> &'static str {
+        match (self, id) {
+            (Centre::Export, _) => "Export",
+            (Centre::Import, "file.remove_background") => "Remove",
+            (Centre::Import, "file.choose_dwg_converter") => "Choose",
+            (Centre::Import, "file.eplan_export_script") => "Get script",
+            (Centre::Import, _) => "Import",
+        }
+    }
+
+    pub fn sections(self) -> &'static [Section] {
+        match self {
+            Centre::Export => EXPORT_SECTIONS,
+            Centre::Import => IMPORT_SECTIONS,
+        }
+    }
+
+    /// The command ids of the centre, in the order it draws them.
+    pub fn ids(self) -> impl Iterator<Item = &'static str> {
+        self.sections().iter().flat_map(|s| s.ids.iter().copied())
+    }
+
+    /// The centre that lists `id`, if any.
+    pub fn of(id: &str) -> Option<Centre> {
+        [Centre::Export, Centre::Import]
+            .into_iter()
+            .find(|c| c.sections().iter().any(|s| s.ids.contains(&id)))
+    }
+}
 
 /// One group of tiles in the Export centre.
 #[derive(Debug, Clone, Copy)]
@@ -15,6 +79,49 @@ pub struct Section {
 
 /// The command that opens the Export centre.
 pub const EXPORT_CENTRE: &str = "file.export_centre";
+
+/// The command that opens the Import centre.
+pub const IMPORT_CENTRE: &str = "file.import_centre";
+
+/// The Import centre, group by group: what File > Import and File > Import
+/// parts held, by what comes in.
+pub const IMPORT_SECTIONS: &[Section] = &[
+    Section {
+        name: "Drawings and backgrounds",
+        about: "A DXF or DWG drawing behind the page, to trace over.",
+        ids: &[
+            "file.import_dxf_background",
+            "file.import_dwg",
+            "file.choose_dwg_converter",
+            "file.remove_background",
+        ],
+    },
+    Section {
+        name: "Projects",
+        about: "Another tool's project or plant, brought in as pages and devices.",
+        ids: &[
+            "file.import_eplan",
+            "file.eplan_export_script",
+            "file.import_crane",
+            "file.import_aml",
+            "file.import_controller",
+        ],
+    },
+    Section {
+        name: "Parts",
+        about: "Part data for the catalog, from files you have.",
+        ids: &[
+            "parts.import_folder",
+            "parts.import_table",
+            "parts.import_eplan",
+        ],
+    },
+    Section {
+        name: "Lists and tags",
+        about: "Spreadsheets for bulk edit, and the tags of a PLC programmer.",
+        ids: &["import.spreadsheet", "plc.import_tags"],
+    },
+];
 
 /// The Export centre, group by group. Every `export.*` command is in exactly
 /// one group (a test keeps it so), except Print preview, which keeps its row
@@ -156,24 +263,48 @@ pub fn describe(id: &str) -> &'static str {
         "export.spec" => "The spec sheet as an Excel file.",
         "export.eplan" => "The project as an EPLAN PXF file.",
         "export.aml" => "The plant as AutomationML.",
+        "file.import_dxf_background" => "A DXF drawing behind the page, to trace over.",
+        "file.import_dwg" => "A DWG drawing behind the page, through a free converter.",
+        "file.choose_dwg_converter" => "Pick the program that turns DWG into DXF.",
+        "file.remove_background" => "Takes the DXF drawing away from this page.",
+        "file.import_eplan" => "An EPLAN project export (PXF) as pages and devices.",
+        "file.eplan_export_script" => "The script that exports an EPLAN project for this import.",
+        "file.import_crane" => "A crane configurator project as a new schematic.",
+        "file.import_aml" => "A plant in AutomationML.",
+        "file.import_controller" => "A controller profile built from an I/O table.",
+        "parts.import_folder" => "A whole folder of maker catalog files.",
+        "parts.import_table" => "Parts from a CSV or Excel table, with your own columns.",
+        "parts.import_eplan" => "Parts from a CAD parts export or maker XML files.",
+        "import.spreadsheet" => "Changes made in Excel or CSV, checked before they apply.",
+        "plc.import_tags" => "The tags a PLC programmer wrote, matched to the I/O list.",
         _ => "",
     }
 }
 
 /// Whether the Export centre lists `id`.
 pub fn in_export_centre(id: &str) -> bool {
-    EXPORT_SECTIONS.iter().any(|s| s.ids.contains(&id))
+    Centre::of(id) == Some(Centre::Export)
+}
+
+/// Whether a centre lists `id`.
+pub fn in_centre(id: &str) -> bool {
+    Centre::of(id).is_some()
 }
 
 /// Whether the centre is the only home of the menu row of `id`: it is
-/// listed in the centre and has no row of its own any more.
+/// listed in a centre and has no row of its own any more.
 pub fn replaces_menu_row(id: &str) -> bool {
-    in_export_centre(id) && !ALSO_IN_MENU.contains(&id)
+    in_centre(id) && !ALSO_IN_MENU.contains(&id)
 }
 
 /// The command ids of the Export centre, in the order it draws them.
 pub fn export_ids() -> impl Iterator<Item = &'static str> {
-    EXPORT_SECTIONS.iter().flat_map(|s| s.ids.iter().copied())
+    Centre::Export.ids()
+}
+
+/// The command ids of both centres.
+pub fn centre_ids() -> impl Iterator<Item = &'static str> {
+    Centre::Export.ids().chain(Centre::Import.ids())
 }
 
 #[cfg(test)]
@@ -197,8 +328,19 @@ mod tests {
     }
 
     #[test]
-    fn every_listed_export_has_a_sentence() {
-        for id in export_ids() {
+    fn the_import_centre_lists_the_old_import_rows_once() {
+        let mut seen = HashSet::new();
+        for id in Centre::Import.ids() {
+            assert!(get(id).is_some(), "{id} is not a command");
+            assert!(seen.insert(id), "{id} is in two sections");
+            assert!(!in_export_centre(id), "{id} is in both centres");
+        }
+        assert_eq!(seen.len(), 14);
+    }
+
+    #[test]
+    fn every_listed_command_has_a_sentence() {
+        for id in centre_ids() {
             let d = describe(id);
             assert!(d.ends_with('.') && d.len() <= 70, "{id}: {d:?}");
         }
@@ -206,9 +348,12 @@ mod tests {
 
     #[test]
     fn sections_have_a_name_and_a_sentence_and_the_opener_is_a_command() {
-        for s in EXPORT_SECTIONS {
-            assert!(!s.name.is_empty() && !s.about.is_empty() && !s.ids.is_empty());
+        for c in [Centre::Export, Centre::Import] {
+            for s in c.sections() {
+                assert!(!s.name.is_empty() && !s.about.is_empty() && !s.ids.is_empty());
+            }
+            assert!(get(c.opener()).is_some());
+            assert!(!c.button("x").is_empty());
         }
-        assert!(get(EXPORT_CENTRE).is_some());
     }
 }

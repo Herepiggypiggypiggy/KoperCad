@@ -104,7 +104,7 @@ Before you start\n\
   - Close nothing: the project you want to export stays open in EPLAN.\n\
 \n\
 Steps\n\
-  1. In KoperCAD choose File > Import > Get the EPLAN export script and pick\n\
+  1. In KoperCAD choose File > Import... > Get the EPLAN export script and pick\n\
      a folder. KoperCAD writes {SCRIPT_FILE}, these instructions and a\n\
      self-test file there.\n\
   2. In EPLAN open the Utilities menu > Scripts > Load, and choose\n\
@@ -116,7 +116,7 @@ Steps\n\
      KoperCadExportFromEplan (the script name) to run it.\n\
   5. Wait. Big projects take minutes; EPLAN may look busy. A message shows the\n\
      folder when it is done: Documents\\KoperCAD\\EPLAN-export\\<project>-<date>.\n\
-  6. In KoperCAD choose File > Import > EPLAN project and pick that folder\n\
+  6. In KoperCAD choose File > Import... > Import EPLAN project and pick that folder\n\
      (that import arrives with the EPLAN project import itself). KoperCAD\n\
      checks the script version first.\n\
 \n\
@@ -150,7 +150,7 @@ Voor je begint\n\
   - Laat het project dat je wilt exporteren gewoon open in EPLAN staan.\n\
 \n\
 Stappen\n\
-  1. Kies in KoperCAD File > Import > Get the EPLAN export script en\n\
+  1. Kies in KoperCAD File > Import... > Get the EPLAN export script en\n\
      kies een map. KoperCAD schrijft daar {SCRIPT_FILE}, deze handleiding en\n\
      een zelftestbestand.\n\
   2. Open in EPLAN het menu Extra (Utilities) > Scripts > Laden en kies\n\
@@ -162,7 +162,7 @@ Stappen\n\
      KoperCadExportFromEplan (de scriptnaam) om het uit te voeren.\n\
   5. Wacht. Grote projecten duren minuten; EPLAN kan druk lijken. Een melding\n\
      toont de map als het klaar is: Documenten\\KoperCAD\\EPLAN-export\\<project>-<datum>.\n\
-  6. Kies in KoperCAD File > Import > EPLAN project en kies die map (die\n\
+  6. Kies in KoperCAD File > Import... > Import EPLAN project en kies die map (die\n\
      import komt met de EPLAN-import zelf). KoperCAD controleert eerst de\n\
      scriptversie.\n\
 \n\
@@ -311,7 +311,7 @@ impl VersionCheck {
         match self {
             VersionCheck::Current => "The export script is up to date.".into(),
             VersionCheck::ScriptOlder { found, current } => format!(
-                "The export was made by script version {found}; this KoperCAD ships version {current}. Get the script again (File > Import > Get the EPLAN export script) and load it in EPLAN."
+                "The export was made by script version {found}; this KoperCAD ships version {current}. Get the script again (File > Import... > Get the EPLAN export script) and load it in EPLAN."
             ),
             VersionCheck::ScriptNewer { found, current } => format!(
                 "The export was made by script version {found}, newer than the {current} this KoperCAD knows. Update KoperCAD."

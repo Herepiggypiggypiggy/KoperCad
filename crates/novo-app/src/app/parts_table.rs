@@ -1,4 +1,4 @@
-//! File > Import parts > Import parts from a table: a CSV or Excel file with any
+//! File > Import... > Import parts table: a CSV or Excel file with any
 //! column layout becomes catalog parts in three steps the person can see:
 //! the columns (what each one becomes, in which unit), the rows (what each
 //! row turns into and what was left out and why), and Add.

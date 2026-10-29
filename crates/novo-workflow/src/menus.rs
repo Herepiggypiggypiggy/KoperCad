@@ -77,19 +77,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("revision.lock_page", under("File", "Revisions")),
     ("revision.unlock_page", under("File", "Revisions")),
     ("revision.restore_page", under("File", "Revisions")),
-    ("file.import_dxf_background", under("File", "Import")),
-    ("file.remove_background", under("File", "Import")),
-    ("file.import_aml", under("File", "Import")),
-    ("file.import_controller", under("File", "Import")),
-    ("file.import_crane", under("File", "Import")),
-    ("file.import_eplan", under("File", "Import")),
-    ("parts.import_eplan", under("File", "Import parts")),
-    ("parts.import_table", under("File", "Import parts")),
-    ("file.import_dwg", under("File", "Import")),
-    ("file.choose_dwg_converter", under("File", "Import")),
-    ("file.eplan_export_script", under("File", "Import")),
-    ("parts.import_folder", under("File", "Import parts")),
-    ("plc.import_tags", under("File", "Import")),
     ("help.manual", at("Help")),
     ("help.context", at("Help")),
     ("help.walkthrough", at("Help")),
@@ -103,6 +90,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("help.copy_problem_report", at("Help")),
     // File > Export... opens the Export centre; the formats are listed there.
     ("file.export_centre", at("File")),
+    ("file.import_centre", at("File")),
     ("export.print_preview", at("File")),
     // Reports
     ("report.wirecut", at("Reports")),
@@ -279,7 +267,6 @@ const REGROUPED: &[(&str, MenuPlace)] = &[
     ("project.generate", under("File", "Project")),
     ("parts.browser", under("File", "Library")),
     ("parts.import_step", under("File", "Library")),
-    ("import.spreadsheet", under("File", "Import")),
     // Edit: the paste variants, the part commands and the numbering
     // commands are families.
     ("edit.paste_keep_tags", under("Edit", "Paste special")),
@@ -604,15 +591,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
 const SUB_FIRST: &[(&str, &[&str])] = &[
     (
         "File",
-        &[
-            "Project",
-            "Library",
-            "Macros",
-            "Pages",
-            "Import",
-            "Import parts",
-            "Revisions",
-        ],
+        &["Project", "Library", "Macros", "Pages", "Revisions"],
     ),
     (
         "Edit",
@@ -774,8 +753,16 @@ mod tests {
         );
         let export = file
             .iter()
-            .position(|i| matches!(i, MenuItem::Submenu { name: "Import", .. }))
-            .expect("an Import submenu");
+            .position(|i| {
+                matches!(
+                    i,
+                    MenuItem::Submenu {
+                        name: "Library",
+                        ..
+                    }
+                )
+            })
+            .expect("a Library submenu");
         let new = file
             .iter()
             .position(|i| matches!(i, MenuItem::Command(c) if c.id == "file.new"))
@@ -800,6 +787,7 @@ mod tests {
     fn file_and_view_lead_with_the_expected_commands() {
         let file: Vec<_> = entries("File").iter().map(|(c, _)| c.id).collect();
         assert!(file.contains(&"file.new") && file.contains(&"file.export_centre"));
+        assert!(file.contains(&"file.import_centre"));
         let view: Vec<_> = entries("View").iter().map(|(c, _)| c.id).collect();
         assert!(view.contains(&"view.cabinet") && view.contains(&"nav.back"));
     }
@@ -899,11 +887,11 @@ mod tests {
     #[test]
     fn menu_rows_stay_inside_the_budget() {
         let ceilings: &[(&str, usize)] = &[
-            // 60: File > New from template has the crane, Pump station and Motor
+            // 47: File > New from template has the crane, Pump station and Motor
             // control centre rows (#1737); a template is a start-of-work choice that
             // has no rail or palette-only home a new user would find. The export
-            // formats are in the Export centre.
-            ("File", 60),
+            // formats are in the Export centre, the imports in the Import centre.
+            ("File", 47),
             ("Edit", 30),
             ("Draw", 39),
             ("View", 65),
@@ -929,7 +917,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 266, "the menus hold {total} rows");
+        assert!(total <= 253, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File

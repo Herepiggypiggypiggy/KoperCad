@@ -36,13 +36,19 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 
 ## V4a: the Export centre (2026-10-29)
 - `novo-workflow/src/centres.rs` lists the formats the centre shows, group by group (Drawings, Print, Reports, Workshop and bench, PLC, Exchange), with one sentence for each (`describe`). Every `export.*` command is in exactly one group (a test keeps it so). A new export command goes into a group there, or the test names it.
-- `novo-app/src/app/export_centre.rs` is the window (`modal_fill`, 960 by 640, `dialog_width::CENTRE`): search on top, tiles by group on the left, the picked format on the right, Export button at the foot. A tile click picks, a double click runs, Enter runs the picked one; the search keeps the keyboard so typing keeps narrowing. Each tile carries the lesson anchor `cmd.<id>`; while the centre is shut the anchor falls back to `cmd.file.export_centre` and then to the File menu.
+- `novo-app/src/app/centre.rs` (was `export_centre.rs`) is the window for both centres (`modal_fill`, 1120 by 640, `dialog_width::CENTRE`): search on top, tiles by group on the left, the picked format on the right, Export button at the foot. A tile click picks, a double click runs, Enter runs the picked one; the search keeps the keyboard so typing keeps narrowing. Each tile carries the lesson anchor `cmd.<id>`; while the centre is shut the anchor falls back to `cmd.file.export_centre` and then to the File menu.
 - `file.export_centre` ("Export...") is the one File row. The 44 other export rows left File and Reports (File 88 to 58, Reports 30 to 17). `export.print_preview` keeps its File row as the print entry and is also a tile. All stay in the command field.
 - Lessons that walked File > Export submenus now say "open Export... and pick the format"; the manual lines too. Scenarios 09, 184 and 723 changed for it; 726 is new.
 - Budget ceilings now: File 60, Edit 30, Draw 39, View 65, Check 11, Reports 17, Simulate 25, Help 19 = 266 (Simulate 25 because `sim.hoist3d` landed after V2c and left main's own budget test red).
 
+## V4c: the Import centre (2026-10-29)
+- `centres::Centre` is `Export` or `Import`; `IMPORT_SECTIONS` groups the 14 commands of File > Import and File > Import parts (Drawings and backgrounds, Projects, Parts, Lists and tags). The window is the same (`centre.rs`, `CentreWindow { kind, .. }`, `wb.centre`); the footer button says Import, or Remove, Choose, Get script for the three that are not imports.
+- `file.import_centre` ("Import...") is the one File row; File 60 to 47, total 266 to 253. Palette and app-menu search show `File > Import` for the tiles; anchors fall back to `cmd.file.import_centre`.
+- Tile minimum width 250 and the window 1120 wide: titles like "Export plate drawing as DXF" were cut at 1366x768.
+- QA scenarios that clicked `File > Import parts > ...` (21-parts-*, 60, 61, 639, 1700 and the `import_table` step) go through the centre: type the query, click the tile, press the Import button.
+
 ## V4 what is left
 - **Options and preview on the right of the centre** (design section 6): the right side now shows the sentence, the key and the reason a format is grey, not the options of the format or a preview. Formats with options (PDF options, print sets, DXF) still open their own window after Export.
-- **Import centre**: the File > Import and Import parts submenus (about 13 rows) and the Library rows are still menus.
+- **Library rows** (File > Library, Macros) are still menus.
 - **Drawer toolbars** (terminals, cables) and **Project and Pages** moves, as in the V2c gaps above.
 - The Reports rail's Export flyout (4 rows) still lists a few formats; it should open the centre once the rail has been used for a while.
