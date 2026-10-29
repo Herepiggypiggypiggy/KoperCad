@@ -262,6 +262,14 @@ impl NovoApp {
                             egui::vec2(ui.available_width(), ROW),
                             egui::Sense::click(),
                         );
+                        response.widget_info(|| {
+                            egui::WidgetInfo::selected(
+                                egui::WidgetType::Button,
+                                true,
+                                current,
+                                *menu,
+                            )
+                        });
                         if response.hovered() || response.clicked() {
                             self.wb.app_menu.area = n;
                             if !self.wb.app_menu.filter.is_empty() && response.clicked() {
@@ -461,6 +469,16 @@ impl NovoApp {
                     egui::vec2(ui.available_width(), ROW),
                     egui::Sense::click(),
                 );
+                response.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::WidgetType::Button,
+                        true,
+                        format!(
+                            "{name}, {count} commands, {}",
+                            if open { "open" } else { "folded" }
+                        ),
+                    )
+                });
                 paint_row(ui, rect, highlighted, response.hovered());
                 let chevron = if open {
                     icons::CARET_DOWN
@@ -506,6 +524,10 @@ impl NovoApp {
                     },
                 );
                 let enabled = reason.is_none();
+                let accessible = presentation::short_label(info.id).unwrap_or(info.label);
+                response.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, accessible)
+                });
                 paint_row(ui, rect, highlighted, enabled && response.hovered());
                 let left = rect.left() + if indent { 18.0 } else { 0.0 };
                 let color = if enabled {

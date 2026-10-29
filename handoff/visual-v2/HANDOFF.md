@@ -16,4 +16,4 @@ Icon (drawn or Phosphor, `presentation::glyph`), short label (`presentation::sho
 - V3 (rail, other thread) and V5 (palettes, other thread) do not touch `app_menu.rs`.
 
 ## Not verified
-Windows fonts, 125 and 150 percent scaling, real GPU colour; screen readers (the rows are painted, they expose their text through the tooltip only).
+Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reader (the painted rows carry a `WidgetInfo` label, so the accessibility tree and the QA `click_text` see them, but no screen reader was run).

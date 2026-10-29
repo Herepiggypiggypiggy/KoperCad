@@ -24,6 +24,7 @@ shot file-dark
 check_layout
 key alt+v
 wait 6
+expect "Reset panel layout"
 shot view-dark
 key alt+h
 wait 6
