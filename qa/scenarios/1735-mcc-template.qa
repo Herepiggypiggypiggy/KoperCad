@@ -1,0 +1,25 @@
+@title Motor control centre template: options window, feeder sections, cover pages
+@area Schematic
+@sizes 1366x768 1920x1080
+wait 20
+key ctrl+k
+wait 6
+text new from template motor control centre
+wait 8
+shot palette-mcc
+key Return
+wait 12
+shot options-window
+click_text "6"
+click_text "Reversing feeders (contactor pair)"
+wait 6
+shot options-six-feeders-reversing
+click_text "Create project"
+wait 30
+shot template-opened
+expect "Control supply"
+check_layout
+key PageDown
+wait 12
+shot page-2-feeder-1
+check_layout

@@ -280,7 +280,8 @@ impl NovoApp {
         let mut leave = false;
         let mut compare = false;
         // Below the live potentials card when both are on.
-        let live = self.wb.live.on;
+        // A docked live card is a pane of a strip, not a card to stand under.
+        let live = self.wb.live.on && super::panel_dock::slot_of(ctx, "live_card").is_none();
         super::panel::Panel::new(
             "changes_card",
             "Changes",

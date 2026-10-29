@@ -58,6 +58,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.recover", under("File", "Open")),
     ("file.example", under("File", "Open")),
     ("file.new_crane", under("File", "New from template")),
+    ("file.new_pump", under("File", "New from template")),
+    ("file.new_mcc", under("File", "New from template")),
     ("file.example_mcc", under("File", "Examples")),
     ("file.example_crane", under("File", "Examples")),
     ("file.example_plc", under("File", "Examples")),
