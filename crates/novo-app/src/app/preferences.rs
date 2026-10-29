@@ -7,7 +7,7 @@ use novo_editor::tool::ConnectMode;
 use std::time::Instant;
 
 use super::NovoApp;
-use crate::settings::XrefView;
+use crate::settings::{XrefFade, XrefView};
 
 impl NovoApp {
     pub(super) fn preferences_dialog(&mut self, ctx: &egui::Context) {
@@ -23,27 +23,21 @@ impl NovoApp {
         let mut density = self.settings.xref_density();
         let mut show_spare = !self.settings.xref_hide_spare;
         let mut xref_view = self.settings.xref_view();
+        let mut xref_fade = XrefFade::from_id(&self.settings.xref_fade);
         let mut theme = self.settings.theme_choice();
         let mut ui_density = self.settings.density_choice();
         let mut high_contrast = self.settings.high_contrast();
         let mut autosave = self.settings.autosave_interval().as_secs() as u32;
         let mut dock_labels = self.settings.dock_labels();
         let mut ui_scale = self.settings.ui_scale_factor().to_bits();
-        let modal = egui::Modal::new(egui::Id::new("preferences")).show(ctx, |ui| {
-            ui.set_width(
-                novo_theme::dialog_width::MEDIUM
-                    .min(ctx.content_rect().width() - 48.0)
-                    .max(240.0),
-            );
-            ui.label(
-                egui::RichText::new("Preferences")
-                    .size(15.0)
-                    .family(novo_theme::fonts::strong_family()),
-            );
-            ui.add_space(4.0);
-            egui::ScrollArea::vertical()
-                .max_height((ctx.content_rect().height() - 180.0).max(200.0))
-                .show(ui, |ui| {
+        let width = novo_theme::dialog_width::MEDIUM;
+        let modal = super::panel::modal_fill(
+            ctx,
+            "preferences",
+            "Preferences",
+            [width, 560.0],
+            |ui| {
+                super::panel::fill_above(ui, 44.0, |ui| {
                     section(ui, "Appearance", true);
                     choice(
                         ui,
@@ -133,7 +127,10 @@ impl NovoApp {
                         "Contact table under a coil",
                         "One row per contact with its symbol, pins and page.column. Compact fits more on a busy sheet.",
                         &mut density,
-                        &[(NoteDensity::Full, "Full"), (NoteDensity::Compact, "Compact")],
+                        &[
+                            (NoteDensity::Full, "Full"),
+                            (NoteDensity::Compact, "Compact"),
+                        ],
                     );
                     choice(
                         ui,
@@ -145,12 +142,24 @@ impl NovoApp {
                     choice(
                         ui,
                         "Cross references on screen",
-                        "Faded keeps them out of the way of lines, parts and text; the ones of the selected or hovered symbol stay clear. Hidden removes them from the screen. The PDF always prints them in full. Shift+X steps through the three.",
+                        "Fade where they overlap fades only the ones that sit on a wire, a symbol or text they cannot move away from. Faded fades all of them. Hidden removes them from the screen. The ones of the selected or hovered symbol stay clear, and the PDF always prints them in full. Shift+X steps through the four.",
                         &mut xref_view,
                         &[
                             (XrefView::Full, "Full"),
+                            (XrefView::Overlap, "Fade where they overlap"),
                             (XrefView::Faded, "Faded"),
                             (XrefView::Hidden, "Hidden"),
+                        ],
+                    );
+                    choice(
+                        ui,
+                        "How strongly they fade",
+                        "Light is about half the opacity, medium a quarter, strong an eighth.",
+                        &mut xref_fade,
+                        &[
+                            (XrefFade::Light, "Light"),
+                            (XrefFade::Medium, "Medium"),
+                            (XrefFade::Strong, "Strong"),
                         ],
                     );
                     section(ui, "Macros", false);
@@ -229,12 +238,13 @@ impl NovoApp {
                         "The live view switches states at once and shows an arrow on running motors instead of spinning them. Fans and air in the 3D view stand still.",
                     );
                 });
-            ui.add_space(8.0);
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                novo_theme::widgets::primary_button(ui, "Done").clicked()
-            })
-            .inner
-        });
+                ui.add_space(8.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    novo_theme::widgets::primary_button(ui, "Done").clicked()
+                })
+                .inner
+            },
+        );
         if mode != self.settings.connect_mode() {
             self.settings.set_connect_mode(mode);
         }
@@ -245,6 +255,7 @@ impl NovoApp {
         self.settings.ui_scale = (f32::from_bits(ui_scale) * 100.0).round() as u32;
         self.settings.xref_hide_spare = !show_spare;
         self.settings.xref_view = xref_view.id().into();
+        self.settings.xref_fade = xref_fade.id().into();
         if density != self.settings.xref_density() {
             self.settings.xref_density = density.id().into();
         }

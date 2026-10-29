@@ -1,0 +1,32 @@
+@title Pages navigator flyout: drag by its title bar, resize from its corner, View > Reset panel layout
+@area Windows
+@sizes 1366x768
+# 1366x768: the navigator floats (it pins from 1700 points). It hangs from the left edge, its title bar at y 72, its bottom right corner at (655, 733).
+click_text "Open example"
+wait 20
+click_text Pages
+wait 20
+expect "Navigator"
+shot navigator-home
+# Title bar to the middle of the canvas.
+drag 135 72 535 72
+wait 10
+expect "Navigator"
+shot navigator-moved
+check_layout
+# Corner in and up: the window gets narrower and shorter.
+drag 650 728 560 600
+wait 10
+expect "Navigator"
+shot navigator-resized
+check_layout
+# Back to the left edge. A click in the menu bar closes the flyout, so it is opened again.
+click_text View #1
+wait 5
+click_text "Reset panel layout"
+wait 20
+click_text Pages
+wait 20
+expect "Navigator"
+shot navigator-reset
+check_layout

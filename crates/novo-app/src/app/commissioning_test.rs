@@ -50,7 +50,7 @@ pub(super) fn parse_number(text: &str) -> Option<f64> {
 fn ohm_reading(text: &str) -> Result<f64, String> {
     match parse_number(text) {
         Some(v) if v > MAX_OHM => Err(format!(
-            "{} ohm is not a reading: a wire over {MAX_OHM:.0} ohm is open, press Open",
+            "{} ohm is not a reading: a wire over {MAX_OHM:.0} ohm is open, press Open circuit",
             text.trim()
         )),
         Some(v) => Ok(v),
@@ -655,7 +655,11 @@ mod reading_tests {
         // Hardware test LSC-15: 1e308 was recorded and printed in full.
         assert_eq!(ohm_reading("0,15"), Ok(0.15));
         assert_eq!(ohm_reading("0"), Ok(0.0));
-        assert!(ohm_reading("1e308").unwrap_err().contains("press Open"));
+        assert!(
+            ohm_reading("1e308")
+                .unwrap_err()
+                .contains("press Open circuit")
+        );
         assert!(ohm_reading("-1").is_err() && ohm_reading("abc").is_err());
         assert_eq!(megohm_reading("50"), Ok(50.0));
         assert!(

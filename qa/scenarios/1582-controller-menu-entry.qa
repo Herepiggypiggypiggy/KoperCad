@@ -1,0 +1,23 @@
+@title Controller panel opens from Simulate > Controller panel and from the command field
+@area Live
+# Lane C2. The menu row switches the live view on (the panel only works there) and opens the panel;
+# the same command is found by "radio" in the command field.
+open qa/fixtures/radio-hoist.novo
+wait 20
+click_text Simulate
+wait 5
+expect "Controller panel"
+click_text "Controller panel"
+wait 20
+expect "Simulation of wiring and logic"
+expect "Signals (1 of 15 high)"
+shot menu-opened
+check_layout
+key Escape
+wait 5
+key ctrl+k
+text radio
+wait 5
+expect "Controller panel"
+shot command-field
+key Escape

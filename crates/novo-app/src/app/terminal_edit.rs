@@ -663,7 +663,26 @@ pub(super) fn strip_toolbar(
     declined: &[WireId],
     out: &mut Vec<ToolbarAction>,
 ) {
-    ui.horizontal_wrapped(|ui| {
+    // One row that scrolls sideways instead of wrapping: at 1366x768 the
+    // wrapped buttons took two rows of a drawer that only holds a few
+    // (hardware test TCN-04).
+    egui::ScrollArea::horizontal()
+        .id_salt("terminal_toolbar")
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            ui.horizontal(|ui| strip_toolbar_row(ui, project, strip, edit, declined, out));
+        });
+}
+
+fn strip_toolbar_row(
+    ui: &mut egui::Ui,
+    project: &novo_core::Project,
+    strip: Option<DeviceId>,
+    edit: &mut TerminalEdit,
+    declined: &[WireId],
+    out: &mut Vec<ToolbarAction>,
+) {
+    {
         let tag = |s: DeviceId| {
             project
                 .device(s)
@@ -726,7 +745,7 @@ pub(super) fn strip_toolbar(
                 }
             });
         }
-    });
+    }
 }
 
 /// The row context menu: the same commands as the toolbar and the menu.

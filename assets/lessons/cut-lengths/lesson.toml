@@ -1,12 +1,12 @@
 # Cabinet track, lesson 4. Sample: wire-routing/project.json (placed plate, ducts joined).
 #
 # Checked against the engines by `lesson_claims_tests` (novo-app), on this sample: the wire list has
-# 19 rows, 15 "routed" (966 mm for -F2 to -X1, 490 for -F1 to -K1, 572 for -K1 to -F2, 335 between
+# 19 rows, 15 "routed" (966 mm for -F2 to -X1, 490 for -F1 to -K1, 572 for -K1 to -F2, 210 between
 # the buttons -S0 and -S1) and 4 "cable length" at 12000 mm for the motor wires, the cores of cable
 # -W1 whose 12 m length is stated. The wire cut export is Cabinet > Route all > Export wire cut
 # (wire_production.rs): a semicolon CSV next to the project. The Reports workspace has a Cut list
 # report (command report.cutlist): a summary (1.5 mm2: 4 wires, 0 m because cable cores are left
-# out; size unknown: 21 wires, 10.85 m; the cut list also counts the supply and earth leads, 25 wires
+# out; size unknown: 21 wires, 10.77 m; the cut list also counts the supply and earth leads, 25 wires
 # against 19 rows) and one table per size with Wire mm + Ends mm (20) = Cut mm, e.g. wire 4:
 # 966 + 20 = 986.
 format = 1
@@ -67,12 +67,12 @@ title = "Routed"
 title_nl = "Gerouteerd"
 text = """
 Both devices are on the plate and a duct path joins them. The length is stub, duct run and stub, plus a {tip:service-loop} at each end.
-For example wire 4, from **-F2** to **-X1**, is 966 mm, and the wire between the two push buttons on the same rail, **-S0** to **-S1**, is only 335 mm.
+For example wire 4, from **-F2** to **-X1**, is 966 mm, and the wire between the two push buttons on the same rail, **-S0** to **-S1**, is only 210 mm.
 That is the number the workshop cuts to.
 """
 text_nl = """
 Beide componenten staan op de plaat en een kanaalpad verbindt ze. De lengte is stub, kanaaldeel en stub, plus een {tip:service-loop} aan elk uiteinde.
-Draad 4 van **-F2** naar **-X1** is bijvoorbeeld 966 mm en de draad tussen de twee drukknoppen op dezelfde rail, **-S0** naar **-S1**, is maar 335 mm.
+Draad 4 van **-F2** naar **-X1** is bijvoorbeeld 966 mm en de draad tussen de twee drukknoppen op dezelfde rail, **-S0** naar **-S1**, is maar 210 mm.
 Dat is het getal waarop de werkplaats afkort.
 """
 
@@ -96,10 +96,10 @@ how_nl = ["Voer Cut list uit in het opdrachtveld, of open Reports in de schakela
 title = "The cut list"
 title_nl = "De zaaglijst"
 text = """
-Run **Cut list** from the command field, or open **Reports** in the switcher at the top and click **Cut list** in the list. The report starts with a summary: per wire size the number of wires and the total metres to order, here 4 wires of 1.5 mm² and 21 wires whose size is not set yet (10.85 m).
+Run **Cut list** from the command field, or open **Reports** in the switcher at the top and click **Cut list** in the list. The report starts with a summary: per wire size the number of wires and the total metres to order, here 4 wires of 1.5 mm² and 21 wires whose size is not set yet (10.77 m).
 """
 text_nl = """
-Voer **Cut list** uit in het opdrachtveld, of open **Reports** in de schakelaar bovenin en klik op **Cut list** in de lijst. Het rapport begint met een samenvatting: per draaddoorsnede het aantal draden en de totale meters om te bestellen, hier 4 draden van 1,5 mm² en 21 draden waarvan de doorsnede nog niet is ingesteld (10,85 m).
+Voer **Cut list** uit in het opdrachtveld, of open **Reports** in de schakelaar bovenin en klik op **Cut list** in de lijst. Het rapport begint met een samenvatting: per draaddoorsnede het aantal draden en de totale meters om te bestellen, hier 4 draden van 1,5 mm² en 21 draden waarvan de doorsnede nog niet is ingesteld (10,77 m).
 """
 expect = { command = "report.cutlist" }
 solve = [ { command = "report.cutlist" } ]

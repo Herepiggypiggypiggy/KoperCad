@@ -1,0 +1,20 @@
+@title Route all: slotted ducts, wires round devices, wires along DIN rails
+@area Cabinet
+# Fixture: the example after Place all with a 25 mm slot pitch on every duct. Route all wires: a wire enters a duct at a slot, goes round the devices instead of through them, and runs along the DIN rail between devices on one rail. The Rails and ducts list (Ctrl+Shift+R) has a Slots column.
+open qa/fixtures/route-slotted-ducts.novo
+wait 20
+click_text Cabinet #1
+wait 30
+key ctrl+k
+wait 4
+text Route all wires
+wait 6
+key Enter
+wait 40
+shot routed-slotted
+check_layout
+check_blank routed-slotted
+key ctrl+shift+r
+wait 10
+shot rails-and-ducts-slots
+check_layout

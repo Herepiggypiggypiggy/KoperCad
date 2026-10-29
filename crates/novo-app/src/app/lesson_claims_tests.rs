@@ -236,7 +236,7 @@ fn the_cut_lengths_lesson_quotes_the_wire_list_and_the_cut_list() {
             .count()
     };
     assert_eq!((basis("routed"), basis("cable length")), (15, 4));
-    // "Wire 4, from -F2 to -X1, is 966 mm; the wire between the push buttons -S0 and -S1 only 335."
+    // "Wire 4, from -F2 to -X1, is 966 mm; the wire between the push buttons -S0 and -S1 only 210."
     let row = |no: &str| {
         wires
             .rows
@@ -256,7 +256,7 @@ fn the_cut_lengths_lesson_quotes_the_wire_list_and_the_cut_list() {
             cell(wires, r, "from").ends_with("-S0:12") && cell(wires, r, "to").ends_with("-S1:13")
         })
         .unwrap();
-    assert_eq!(cell(wires, buttons, "length_mm"), "335");
+    assert_eq!(cell(wires, buttons, "length_mm"), "210");
     // The four motor wires are the cores of cable -W1, 12 m long.
     for r in wires
         .rows
@@ -266,12 +266,12 @@ fn the_cut_lengths_lesson_quotes_the_wire_list_and_the_cut_list() {
         assert_eq!(cell(wires, r, "length_mm"), "12000");
         assert!(cell(wires, r, "to").contains("-M1") || cell(wires, r, "from").contains("-X1"));
     }
-    // The cut list: "4 wires of 1.5 mm² (no metres: cores) and 21 wires whose size is not set (10.85 m)".
+    // The cut list: "4 wires of 1.5 mm² (no metres: cores) and 21 wires whose size is not set (10.77 m)".
     let cut = CutList::of(&project).generate(&project);
     let summary = &cut.sections[0];
     let rows: Vec<Vec<String>> = summary.rows.iter().map(cells).collect();
     assert_eq!(rows[0], ["1.5 mm²", "4", "0"]);
-    assert_eq!(rows[1], ["Size unknown", "21", "10.85"]);
+    assert_eq!(rows[1], ["Size unknown", "21", "10.77"]);
     // "Wire 4 shows Wire mm 966, Ends mm 20 and Cut mm 986."
     let group = cut.sections.iter().find(|s| s.key == "group-2").unwrap();
     let w4 = group

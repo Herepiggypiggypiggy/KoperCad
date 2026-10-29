@@ -998,7 +998,8 @@ impl Ctx<'_> {
             }
             "click" | "move" => {
                 let mut args = json!({"x": num(1, "x")?, "y": num(2, "y")?});
-                // `click X Y right` (or `middle`) presses that button; `ctrl`
+                // `click X Y right` (or `middle`) presses that button; `double`
+                // presses twice fast enough to count as a double click; `ctrl`
                 // and `shift` hold those keys, in any order.
                 if words[0] == "click" {
                     let mut held = Vec::new();
@@ -1006,9 +1007,10 @@ impl Ctx<'_> {
                         match word.as_str() {
                             "ctrl" | "shift" => held.push(json!(word)),
                             "right" | "middle" => args["button"] = json!(word),
+                            "double" => args["count"] = json!(2),
                             other => {
                                 return Err(format!(
-                                    "click: `{other}` is not right, middle, ctrl or shift"
+                                    "click: `{other}` is not right, middle, double, ctrl or shift"
                                 ));
                             }
                         }

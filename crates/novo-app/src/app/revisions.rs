@@ -110,14 +110,12 @@ impl NovoApp {
             return;
         };
         let mut issue = false;
-        let modal = egui::Modal::new(egui::Id::new("issue_revision")).show(ctx, |ui| {
-            ui.set_width(380.0);
-            let shown = if draft.index.is_empty() {
-                "Issue revision".to_owned()
-            } else {
-                format!("Issue revision {}", draft.index)
-            };
-            ui.heading(shown);
+        let shown = if draft.index.is_empty() {
+            "Issue revision".to_owned()
+        } else {
+            format!("Issue revision {}", draft.index)
+        };
+        let modal = super::panel::modal(ctx, "issue_revision", shown, [380.0, 0.0], |ui| {
             ui.weak("Freezes the pages as they are now and keeps a copy to compare with.");
             ui.add_space(8.0);
             ui.label("What changed");
@@ -328,13 +326,12 @@ impl NovoApp {
             return;
         };
         let mut yes = false;
-        let modal = egui::Modal::new(egui::Id::new("restore_ask")).show(ctx, |ui| {
-            ui.set_width(360.0);
-            let what = match ask.scope {
-                RestoreScope::Project => "the whole project",
-                RestoreScope::Pages(_) => "this page",
-            };
-            ui.heading(format!("Restore {what} to revision {}?", ask.index));
+        let what = match ask.scope {
+            RestoreScope::Project => "the whole project",
+            RestoreScope::Pages(_) => "this page",
+        };
+        let title = format!("Restore {what} to revision {}?", ask.index);
+        let modal = super::panel::modal(ctx, "restore_ask", title, [360.0, 0.0], |ui| {
             ui.add_space(6.0);
             ui.label(format!(
                 "Yes, replace {} things: {} brought back, {} reset to how they were, {} removed because they were added since.",

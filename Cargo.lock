@@ -376,7 +376,7 @@ dependencies = [
  "log",
  "quick-xml",
  "serde",
- "zip",
+ "zip 8.6.0",
 ]
 
 [[package]]
@@ -1378,9 +1378,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "300e883d756b2e4ec94e02791f39b04b522276138852cfc41d9fb7e904106099"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "r-efi 6.0.0",
  "rand_core 0.10.1",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -2040,6 +2042,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.31.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
+dependencies = [
+ "bitflags 2.13.2",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
+]
+
+[[package]]
 name = "nohash-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2067,7 +2081,7 @@ dependencies = [
  "toml",
  "wasmi",
  "wat",
- "zip",
+ "zip 9.1.3",
 ]
 
 [[package]]
@@ -2148,7 +2162,7 @@ dependencies = [
  "tempfile",
  "ureq",
  "winresource",
- "zip",
+ "zip 9.1.3",
 ]
 
 [[package]]
@@ -2384,7 +2398,7 @@ dependencies = [
  "sha2 0.11.1",
  "tempfile",
  "thiserror 2.0.21",
- "zip",
+ "zip 9.1.3",
 ]
 
 [[package]]
@@ -2540,6 +2554,7 @@ dependencies = [
  "novo-cfd",
  "novo-checks",
  "novo-cli",
+ "novo-controller",
  "novo-core",
  "novo-editor",
  "novo-emc",
@@ -2566,7 +2581,7 @@ dependencies = [
  "tempfile",
  "toml",
  "wat",
- "zip",
+ "zip 9.1.3",
 ]
 
 [[package]]
@@ -3562,7 +3577,7 @@ version = "0.99.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34f2d2cda7223168a14fb86bc7411dbc3379bd7d49749ecc53b91ed98585b6b0"
 dependencies = [
- "zip",
+ "zip 8.6.0",
 ]
 
 [[package]]
@@ -4214,6 +4229,12 @@ name = "typed-path"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
+
+[[package]]
+name = "typed-path"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ce898823d8cd0f028662d2f349694b1af0a5cc9be83f1d213a00d3147445e1e"
 
 [[package]]
 name = "typeid"
@@ -5372,7 +5393,24 @@ dependencies = [
  "flate2",
  "indexmap",
  "memchr",
- "typed-path",
+ "typed-path 0.12.3",
+ "zopfli",
+]
+
+[[package]]
+name = "zip"
+version = "9.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1156b39d142a34b999c2310a50455e0cb3760bf7efad0122f796d813bee26ccb"
+dependencies = [
+ "crc32fast",
+ "flate2",
+ "getrandom 0.4.3",
+ "indexmap",
+ "memchr",
+ "nix",
+ "typed-path 0.13.0",
+ "windows-sys 0.61.2",
  "zopfli",
 ]
 

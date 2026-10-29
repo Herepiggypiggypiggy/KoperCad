@@ -1,0 +1,38 @@
+@title Status chip: the heat run is in sight in 3D and the Cabinet, with every panel closed
+@area 3D
+@sizes 1366x768 1920x1080
+# The chip at the top left of the 3D view and the Cabinet reads the one heat status: not run, running with Cancel, done. It is there with the Heat panel closed, and the Cabinet shows the same words (docs/design/visual-redesign-3d.md section 4).
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+expect "Heat has not been run"
+expect "Run heat"
+shot 3d-not-run
+check_layout
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+shot 3d-heat-panel-open
+check_layout
+click_text "Run heat"
+wait 40
+expect "Heat is running"
+expect "Cancel run"
+shot 3d-running
+check_layout
+wait_s 100
+wait 60
+wait_s 100
+wait 60
+expect "Heat is done"
+shot 3d-done
+check_layout
+click_text Cabinet #1
+wait 30
+expect "Heat is done"
+shot cabinet-done
+check_layout

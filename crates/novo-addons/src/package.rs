@@ -93,7 +93,10 @@ impl Package {
             let file = archive
                 .by_index(i)
                 .map_err(|e| AddonError::NotAPackage(e.to_string()))?;
-            let name = file.name().to_owned();
+            let name = file
+                .name()
+                .map_err(|e| AddonError::NotAPackage(e.to_string()))?
+                .into_owned();
             let is_dir = file.is_dir();
             check_path(name.trim_end_matches('/'))?;
             if file.encrypted() {
@@ -157,6 +160,17 @@ impl Package {
             .ok_or_else(|| AddonError::Manifest("the package has no manifest.toml".into()))?;
         let signature = entries.remove("signature");
         let manifest = Manifest::parse(&manifest_bytes)?;
+        if let Some(engine) = &manifest.engine
+            && entries
+                .get(&engine.file)
+                .is_some_and(|wasm| wasm.len() > crate::host::MAX_ENGINE_BYTES)
+        {
+            return Err(AddonError::TooLarge(format!(
+                "{} is larger than {} MiB",
+                engine.file,
+                crate::host::MAX_ENGINE_BYTES / (1024 * 1024)
+            )));
+        }
 
         // Every file is listed and matches; every listed file is there.
         for name in entries.keys() {

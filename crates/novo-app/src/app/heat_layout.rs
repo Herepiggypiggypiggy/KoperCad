@@ -242,14 +242,11 @@ impl LayoutSearch {
         let mut close = false;
         let mut open = true;
         let pal = crate::theme::ui_palette();
-        egui::Window::new("Cooler layout")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .fixed_pos(at)
-            .default_width(WIDTH)
+        super::panel::dialog(ctx, "Cooler layout", [WIDTH, 0.0])
+            .open(super::panel::esc(ctx, &mut open))
+            .scroll([false, false])
+            .default_pos(at)
             .show(ctx, |ui| {
-                ui.set_max_width(WIDTH);
                 super::heat_cooling::left_out_line(ui, self.left_out);
                 if let Some(run) = &self.run {
                     ui.horizontal(|ui| {

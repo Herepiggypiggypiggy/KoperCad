@@ -58,6 +58,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.recover", under("File", "Open")),
     ("file.example", under("File", "Open")),
     ("file.example_mcc", under("File", "Examples")),
+    ("file.example_crane", under("File", "Examples")),
+    ("file.example_plc", under("File", "Examples")),
     ("macro.browser", under("File", "Macros")),
     ("macro.import", under("File", "Macros")),
     ("page.new", under("File", "Pages")),
@@ -251,7 +253,16 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("cabinet.emc", under("View", "Cabinet")),
     // Layers: what is drawn on top of the page
     ("view.toggle_marks", under("View", "Layers")),
-    ("view.toggle_references", under("View", "Layers")),
+    // Cross references: how they show on screen (the PDF always prints them)
+    ("view.toggle_references", under("View", "Cross references")),
+    (
+        "view.hide_references_page",
+        under("View", "Cross references"),
+    ),
+    (
+        "view.hide_references_device",
+        under("View", "Cross references"),
+    ),
     ("view.override_marks", under("View", "Layers")),
     ("view.left_out", under("View", "Layers")),
     ("view.changes", under("View", "Layers")),
@@ -271,6 +282,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("learn.close", under("Help", "Lesson")),
     // Simulate
     ("sim.live", at("Simulate")),
+    ("sim.controller", at("Simulate")),
     ("sim.why", at("Simulate")),
     ("sim.plc_program", at("Simulate")),
     ("simulate.motor-start", at("Simulate")),
@@ -564,6 +576,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
         "Simulate",
         &[&[
             "sim.live",
+            "sim.controller",
             "sim.why",
             "simulate.motor-start",
             "sim.plc_program",

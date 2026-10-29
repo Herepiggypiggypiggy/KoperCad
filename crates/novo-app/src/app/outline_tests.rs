@@ -234,6 +234,18 @@ fn a_new_page_opens_its_title_box_and_the_title_sticks() {
 }
 
 #[test]
+fn ctrl_k_in_the_new_cabinet_window_opens_command_search_instead_of_typing() {
+    let (_dir, mut d) = drive();
+    d.app.perform(Act::NewCabinet { in_group: None });
+    d.frame();
+    d.frame();
+    assert!(d.app.ol.cabinet_form.is_some());
+    key(&mut d, egui::Key::K, egui::Modifiers::COMMAND);
+    assert!(d.app.ol.cabinet_form.is_none(), "the window closes");
+    assert!(d.app.wb.field.is_open(), "command search opens");
+}
+
+#[test]
 fn keys_rename_delete_and_move_the_selected_row() {
     let (_dir, mut d) = drive();
     let here = d.app.new_here();

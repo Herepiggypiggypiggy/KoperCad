@@ -1,0 +1,39 @@
+# The controller add-on (lane C3): a virtual radio for the live view. The engine is
+# `novo-controller` built to WebAssembly (addons/controllers/engine); the program draws the panel
+# from data/radio.panel.toml. Build and pack: scripts/build-controllers-addon.sh.
+# The folder has no [files] table and no signature: `kopercad-cli addons pack` writes both.
+
+[addon]
+id = "controllers"
+name = "Controllers"
+version = "0.1.0"
+publisher = "KoperVonk"
+description = "Virtual operator controllers: a generic radio with rockers, E-stop and main/start, simulated by a sandboxed engine."
+requires_app = ">=0.1.0"
+api_version = 1
+license = "MIT OR Apache-2.0"
+permissions = ["menu", "floating-panel"]
+
+[[command]]
+id = "panel"
+label = "Controller panel"
+description = "Open the virtual radio: press E-stop, main/start and move the rockers, and watch the signals."
+icon = "controllers.radio"
+keywords = ["radio", "pendant", "controller", "remote", "joystick"]
+home = "menu"
+menu = "Simulate"
+opens = "radio"
+
+[[panel]]
+id = "radio"
+title = "Radio"
+slot = "floating"
+file = "data/radio.panel.toml"
+
+[[contribute]]
+kind = "controller-profile"
+file = "data/generic-radio-3x2.controller.toml"
+
+[engine]
+file = "engine.wasm"
+host_api = 1

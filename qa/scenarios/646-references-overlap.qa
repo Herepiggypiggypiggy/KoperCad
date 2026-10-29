@@ -1,0 +1,19 @@
+@title Cross references fade only where they overlap, and come back on selection (1366x768)
+@area Schematic
+@sizes 1366x768
+# -K1's table is held by hand on a wire; -K2's table is free. Shift+X once: "fade on overlap" fades only -K1's table, -K2's stays clear. Selecting -K1 brings its table back. The status bar chip names the mode.
+open qa/fixtures/references-overlap.kopercad
+wait 30
+shot full
+key shift+x
+wait 20
+shot fade-on-overlap
+click 389 222
+wait 30
+shot crossed-table-selected-is-clear
+key escape
+wait 10
+key shift+x
+wait 20
+shot all-faded
+check_layout

@@ -275,16 +275,19 @@ impl NovoApp {
         let mut action = Action::None;
         let w = self.wb.controller_wizard.as_mut().expect("checked above");
         let mut changed = false;
-        let modal = egui::Modal::new(egui::Id::new("controller_import")).show(ctx, |ui| {
-            ui.set_width(820.0);
-            ui.heading("Controller profile from an I/O table");
-            ui.weak(
-                "Paste the terminal table of a receiver or pendant page (terminal, function, \
+        let modal = super::panel::modal(
+            ctx,
+            "controller_import",
+            "Controller profile from an I/O table",
+            [820.0, 640.0],
+            |ui| {
+                ui.weak(
+                    "Paste the terminal table of a receiver or pendant page (terminal, function, \
                  step; Excel columns work). Dutch and English words are understood. Nothing is \
                  saved until you press Save.",
-            );
-            ui.add_space(6.0);
-            ui.horizontal_wrapped(|ui| {
+                );
+                ui.add_space(6.0);
+                ui.horizontal_wrapped(|ui| {
                 ui.add_enabled_ui(selection_ready, |ui| {
                     if ui
                         .button("From the selected device")
@@ -307,102 +310,109 @@ impl NovoApp {
                         }
                     });
             });
-            if let Some((file, data, page)) = &mut w.pxf {
-                ui.horizontal(|ui| {
-                    ui.label(format!("EPLAN page of {file}"));
-                    let label = |i: usize| {
-                        let p = &data.pages[i];
-                        format!("{} {}{}", p.function, p.number, p.suffix).trim().to_owned()
-                    };
-                    egui::ComboBox::from_id_salt("controller_pxf_page")
-                        .selected_text(label(*page))
-                        .show_ui(ui, |ui| {
-                            for i in 0..data.pages.len() {
-                                ui.selectable_value(page, i, label(i));
-                            }
-                        });
-                    if ui.button("Use this page").clicked() {
-                        action = Action::UsePage;
-                    }
-                });
-            }
-            ui.add_space(4.0);
-            egui::ScrollArea::vertical()
-                .id_salt("controller_text")
-                .max_height(if compact { 90.0 } else { 150.0 })
-                .show(ui, |ui| {
-                    let table_box = ui.add(
+                if let Some((file, data, page)) = &mut w.pxf {
+                    ui.horizontal(|ui| {
+                        ui.label(format!("EPLAN page of {file}"));
+                        let label = |i: usize| {
+                            let p = &data.pages[i];
+                            format!("{} {}{}", p.function, p.number, p.suffix)
+                                .trim()
+                                .to_owned()
+                        };
+                        egui::ComboBox::from_id_salt("controller_pxf_page")
+                            .selected_text(label(*page))
+                            .show_ui(ui, |ui| {
+                                for i in 0..data.pages.len() {
+                                    ui.selectable_value(page, i, label(i));
+                                }
+                            });
+                        if ui.button("Use this page").clicked() {
+                            action = Action::UsePage;
+                        }
+                    });
+                }
+                ui.add_space(4.0);
+                egui::ScrollArea::vertical()
+                    .id_salt("controller_text")
+                    .max_height(if compact { 90.0 } else { 150.0 })
+                    .show(ui, |ui| {
+                        let table_box = ui.add(
                             egui::TextEdit::multiline(&mut w.text)
                                 .font(egui::TextStyle::Monospace)
                                 .desired_rows(if compact { 4 } else { 7 })
                                 .desired_width(f32::INFINITY)
-                                .hint_text("Terminal\tFunction\tStep\nCOM\tCommon\t\n1\tHoist up\t1"),
+                                .hint_text(
+                                    "Terminal\tFunction\tStep\nCOM\tCommon\t\n1\tHoist up\t1",
+                                ),
                         );
-                    if std::mem::take(&mut w.focus_table) {
-                        table_box.request_focus();
+                        if std::mem::take(&mut w.focus_table) {
+                            table_box.request_focus();
+                        }
+                        if table_box.changed() {
+                            w.library = None;
+                            changed = true;
+                        }
+                    });
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.label("Name");
+                    let name = ui.add(egui::TextEdit::singleline(&mut w.name).desired_width(240.0));
+                    if name.changed() {
+                        if !w.id_edited {
+                            w.id = import::slug(&w.name);
+                        }
+                        changed = true;
                     }
-                    if table_box.changed() {
-                        w.library = None;
+                    ui.label("File name");
+                    if ui
+                        .add(egui::TextEdit::singleline(&mut w.id).desired_width(180.0))
+                        .changed()
+                    {
+                        w.id_edited = true;
                         changed = true;
                     }
                 });
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                ui.label("Name");
-                let name = ui.add(egui::TextEdit::singleline(&mut w.name).desired_width(240.0));
-                if name.changed() {
-                    if !w.id_edited {
-                        w.id = import::slug(&w.name);
+                changed |= ui
+                    .checkbox(
+                        &mut w.step2_includes_step1,
+                        "Step 2 keeps the step 1 contact closed (usual for two-step switches)",
+                    )
+                    .changed();
+                changed |= ui
+                    .checkbox(
+                        &mut w.gate_on_main,
+                        "Motions only work after main/start is on (when the table has a main row)",
+                    )
+                    .changed();
+                ui.separator();
+                preview(ui, w, palette, preview_height);
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    let can_save = !w.proposal.profile.controls.is_empty();
+                    if ui
+                        .add_enabled(can_save, egui::Button::new("Save profile"))
+                        .on_hover_text(
+                            "Writes the profile and its binding table to your controller folder",
+                        )
+                        .clicked()
+                    {
+                        action = Action::Save;
                     }
-                    changed = true;
-                }
-                ui.label("File name");
-                if ui
-                    .add(egui::TextEdit::singleline(&mut w.id).desired_width(180.0))
-                    .changed()
-                {
-                    w.id_edited = true;
-                    changed = true;
-                }
-            });
-            changed |= ui
-                .checkbox(
-                    &mut w.step2_includes_step1,
-                    "Step 2 keeps the step 1 contact closed (usual for two-step switches)",
-                )
-                .changed();
-            changed |= ui
-                .checkbox(
-                    &mut w.gate_on_main,
-                    "Motions only work after main/start is on (when the table has a main row)",
-                )
-                .changed();
-            ui.separator();
-            preview(ui, w, palette, preview_height);
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                let can_save = !w.proposal.profile.controls.is_empty();
-                if ui
-                    .add_enabled(can_save, egui::Button::new("Save profile"))
-                    .on_hover_text("Writes the profile and its binding table to your controller folder")
-                    .clicked()
-                {
-                    action = Action::Save;
-                }
-                if ui
-                    .add_enabled(can_save, egui::Button::new("Copy profile text"))
-                    .clicked()
-                {
-                    action = Action::Copy;
-                }
-                if ui.button("Close").clicked() {
-                    action = Action::Close;
-                }
-                if let Some(saved) = &w.saved {
-                    ui.weak(format!("Saved {saved}"));
-                }
-            });
-        });
+                    if ui
+                        .add_enabled(can_save, egui::Button::new("Copy profile text"))
+                        .clicked()
+                    {
+                        action = Action::Copy;
+                    }
+                    if ui.button("Close").clicked() {
+                        action = Action::Close;
+                    }
+                    if let Some(saved) = &w.saved {
+                        ui.weak(format!("Saved {saved}"));
+                    }
+                });
+            },
+        );
         if changed {
             w.refresh();
         }
