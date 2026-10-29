@@ -554,8 +554,8 @@ fn compass_words_and_bare_directions_in_a_ten_motion_page() {
 #[test]
 fn a_bulleted_list_of_outputs_has_no_terminal_column() {
     let p = run(
-        "- NOODSTOP (O-Q2 A1/A2)\n- VOORUIT (H-Q1 A1/A2)\n- ACHTERUIT (H-Q2 A1/A2)\n\
-         - V/A SNEL (H-K41 A1/A2)\n- TOETER (-X1.1 3)",
+        "- NOODSTOP (K9 A1/A2)\n- VOORUIT (K1 A1/A2)\n- ACHTERUIT (K2 A1/A2)\n\
+         - V/A SNEL (K3 A1/A2)\n- TOETER (X7 3)",
     );
     assert_eq!(p.rows[0].row.terminal, "");
     assert!(matches!(&p.rows[0].outcome, Outcome::Signal(n) if n == "ESTOP_OK"));

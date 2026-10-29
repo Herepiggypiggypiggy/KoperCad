@@ -15,4 +15,4 @@ People: C4 import thread cmsg_01TV2QyH4AYw9X2aTmgUsuhC8mQQyNbZNcy3uo9rm8bA8D (bu
 
 2026-10-29 C4: the importer also builds `Profile` values (`ProposedProfile::to_profile`); the wizard validates with the engine. Bare directions use the crane convention. Word lists untouched by real pages yet.
 
-2026-10-29 C4 word lists tuned on real page patterns (see `docs/design/controller-import.md`, "Receiver pages in the field"). Still unseen: a wired Demag DST pendant page and the DRC receiver terminal table itself (only its output list was found). A user can add words in %APPDATA%\KoperCAD\controllers\words.txt, including `pair.<motion>:` lines.
+2026-10-29 C4 word lists tuned on real page patterns (see `docs/design/controller-import.md`, "Receiver pages in the field"). Still unseen: a wired pendant page and a second maker's receiver terminal table. A user can add words in %APPDATA%\KoperCAD\controllers\words.txt, including `pair.<motion>:` lines.
