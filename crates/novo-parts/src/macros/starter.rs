@@ -64,15 +64,15 @@ fn direction(d: novo_symbols::Direction) -> Direction {
 }
 
 /// Drawing helpers on one scratch page.
-struct Sheet<'a, 'b> {
-    tx: &'a mut Tx<'b>,
-    page: PageId,
-    items: Vec<AnyId>,
-    lib: Library,
+pub(super) struct Sheet<'a, 'b> {
+    pub(super) tx: &'a mut Tx<'b>,
+    pub(super) page: PageId,
+    pub(super) items: Vec<AnyId>,
+    pub(super) lib: Library,
 }
 
 impl Sheet<'_, '_> {
-    fn device(&mut self, tag: &str, description: &str) -> Result<DeviceId> {
+    pub(super) fn device(&mut self, tag: &str, description: &str) -> Result<DeviceId> {
         self.tx.add_device(
             DeviceTag::parse(tag).expect("starter tags are valid"),
             description,
@@ -82,7 +82,14 @@ impl Sheet<'_, '_> {
     /// Places a symbol of the library for a device. Pins (with their exit
     /// directions and spare points), bridges and pass-through paths come
     /// from the symbol library, so a macro cannot drift from its symbols.
-    fn put(&mut self, key: &str, x: f64, y: f64, device: DeviceId, main: bool) -> Result<SymbolId> {
+    pub(super) fn put(
+        &mut self,
+        key: &str,
+        x: f64,
+        y: f64,
+        device: DeviceId,
+        main: bool,
+    ) -> Result<SymbolId> {
         self.place(
             key,
             Placement::at(Point::new(x, y)),
@@ -91,11 +98,16 @@ impl Sheet<'_, '_> {
     }
 
     /// Places a symbol that belongs to no device, such as a terminal.
-    fn put_plain(&mut self, key: &str, x: f64, y: f64) -> Result<SymbolId> {
+    pub(super) fn put_plain(&mut self, key: &str, x: f64, y: f64) -> Result<SymbolId> {
         self.place(key, Placement::at(Point::new(x, y)), SymbolRole::Unassigned)
     }
 
-    fn place(&mut self, key: &str, placement: Placement, role: SymbolRole) -> Result<SymbolId> {
+    pub(super) fn place(
+        &mut self,
+        key: &str,
+        placement: Placement,
+        role: SymbolRole,
+    ) -> Result<SymbolId> {
         let sym = self.lib.get(key).expect("starter symbols exist");
         let pins: Vec<Pin> = sym
             .connections
@@ -132,7 +144,7 @@ impl Sheet<'_, '_> {
 
     /// Names the pins of a symbol, in connection order: the second contact
     /// of a device is 23-24 or 33-34, not 13-14 again.
-    fn number(&mut self, symbol: SymbolId, names: &[&str]) -> Result<()> {
+    pub(super) fn number(&mut self, symbol: SymbolId, names: &[&str]) -> Result<()> {
         self.tx.update::<SymbolInstance>(symbol, |s| {
             for (pin, name) in s.pins.iter_mut().zip(names) {
                 pin.name = (*name).into();
@@ -140,26 +152,26 @@ impl Sheet<'_, '_> {
         })
     }
 
-    fn describe(&mut self, device: DeviceId, key: &str, text: &str) -> Result<()> {
+    pub(super) fn describe(&mut self, device: DeviceId, key: &str, text: &str) -> Result<()> {
         self.tx.update::<Device>(device, |d| {
             d.properties.insert(key.into(), Value::Text(text.into()));
         })
     }
 
-    fn at(&self, symbol: SymbolId, pin: u16) -> Point {
+    pub(super) fn at(&self, symbol: SymbolId, pin: u16) -> Point {
         self.tx
             .project()
             .endpoint_position(Endpoint::pin(symbol, pin))
             .expect("the symbol was just placed")
     }
 
-    fn wire(&mut self, a: (SymbolId, u16), b: (SymbolId, u16)) -> Result<WireId> {
+    pub(super) fn wire(&mut self, a: (SymbolId, u16), b: (SymbolId, u16)) -> Result<WireId> {
         self.tx
             .connect(Endpoint::pin(a.0, a.1), Endpoint::pin(b.0, b.1))
     }
 
     /// A wire that follows the given corner points between its ends.
-    fn wire_via(
+    pub(super) fn wire_via(
         &mut self,
         from: impl Into<Endpoint>,
         to: impl Into<Endpoint>,
@@ -170,7 +182,7 @@ impl Sheet<'_, '_> {
         self.tx.update::<Wire>(id, |w| w.route = route)
     }
 
-    fn junction(&mut self, x: f64, y: f64) -> Result<JunctionId> {
+    pub(super) fn junction(&mut self, x: f64, y: f64) -> Result<JunctionId> {
         let j = self.tx.add_junction(self.page, Point::new(x, y))?;
         self.items.push(j.into());
         Ok(j)
@@ -180,7 +192,7 @@ impl Sheet<'_, '_> {
     /// chain from left to right, each joined to its tap pins (above or
     /// below the row) by a straight wire. Taps at the same x share a
     /// junction. Returns the junctions from left to right.
-    fn bus(&mut self, y: f64, taps: &[(SymbolId, u16)]) -> Result<Vec<JunctionId>> {
+    pub(super) fn bus(&mut self, y: f64, taps: &[(SymbolId, u16)]) -> Result<Vec<JunctionId>> {
         let mut at: Vec<(f64, (SymbolId, u16))> =
             taps.iter().map(|&t| (self.at(t.0, t.1).x, t)).collect();
         at.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -215,7 +227,7 @@ impl Sheet<'_, '_> {
 }
 
 /// Draws a macro in a scratch project and captures it.
-fn capture(
+pub(super) fn capture(
     name: &str,
     description: &str,
     parameters: Vec<BlockParameter>,
@@ -307,7 +319,7 @@ fn orthogonal_routes(tx: &mut Tx<'_>) -> Result<()> {
     Ok(())
 }
 
-fn parameter(name: &str, default: Value, description: &str) -> BlockParameter {
+pub(super) fn parameter(name: &str, default: Value, description: &str) -> BlockParameter {
     BlockParameter {
         name: name.into(),
         default,
