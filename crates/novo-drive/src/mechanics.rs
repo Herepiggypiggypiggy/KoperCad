@@ -165,6 +165,14 @@ impl Shaft {
         self.inertia_kg_m2
     }
 
+    /// Changes the inertia, for a rotor that is coupled or uncoupled while the shaft turns.
+    /// The speed is kept (the added rotor is taken to be at shaft speed).
+    pub fn set_inertia(&mut self, inertia_kg_m2: f64) -> Result<(), InputError> {
+        error::positive("inertia_kg_m2", inertia_kg_m2)?;
+        self.inertia_kg_m2 = inertia_kg_m2;
+        Ok(())
+    }
+
     /// Advance by `dt_s` under `drive_nm` (motor plus weight, signed). `resist_pos_nm` opposes
     /// motion in the positive sense and `resist_neg_nm` in the negative sense (losses plus
     /// brake torque, both not negative). At rest the shaft stays put while the drive torque is

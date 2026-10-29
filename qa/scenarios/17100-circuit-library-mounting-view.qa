@@ -1,0 +1,27 @@
+@title Circuit library: a hoist circuit shows its chapter and mounting view
+@area Schematic
+# PR 1710: the standard circuits sit in chapters under Circuits, and each has a mounting view.
+click_text "New project"
+wait 20
+key ctrl+k
+text "place macro"
+wait 5
+key Enter
+wait 10
+expect "Pick a macro to see what it will do."
+click 237 94
+text rectifier
+wait 5
+expect "Circuits"
+shot circuit-chapter-list
+click_text "Hoist two-speed with rectifier brake" Label
+wait 10
+expect "Mounting view"
+click_text "Mounting view"
+wait 10
+expect "Typical sizes of generic devices"
+shot circuit-mounting-view
+click_text Place Button
+wait 30
+expect_scene "-K1"
+shot circuit-placed

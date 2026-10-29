@@ -29,6 +29,7 @@ mod migrate;
 mod model_canvas;
 #[cfg(test)]
 mod packaging_tests;
+mod place_palette;
 mod settings;
 pub mod startup;
 mod theme;

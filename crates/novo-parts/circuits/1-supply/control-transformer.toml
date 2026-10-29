@@ -1,0 +1,43 @@
+# Control transformer behind a two-pole fuse, with a breaker on the secondary.
+name = "Control transformer 400 V to 48 V"
+chapter = "supply"
+description = "Single-phase control transformer fed from two phases through fuses, with a breaker on the secondary side"
+tags = ["transformer", "control supply", "48 V", "24 V", "230 V", "fuse", "secondary"]
+notes = """You connect: two phases above the fuses, the secondary line below F2 and the secondary 0 V from T1. \
+Set the primary and secondary voltage and the power in the parameters; the descriptions follow."""
+
+parameter = [
+  { name = "power", default = 250, description = "Transformer power in VA" },
+  { name = "primary", default = 400, description = "Primary voltage in V" },
+  { name = "secondary", default = 48, description = "Secondary voltage in V" },
+]
+
+open = ["f1s.1,3", "f2s.2", "t1s.2.2"]
+
+device = [
+  { id = "f1", tag = "-F1", description = "Primary fuses", mount = { kind = "din", size = [36, 90, 70], at = [15, 45], rail = "r1" } },
+  { id = "t1", tag = "-T1", description = "Control transformer {power} VA, {primary} V to {secondary} V", props = { power_va = "{power}" }, mount = { kind = "plate", size = [120, 105, 105], at = [15, 145] } },
+  { id = "f2", tag = "-F2", description = "Secondary circuit breaker", mount = { kind = "din", size = [18, 90, 70], at = [60, 45], rail = "r1" } },
+]
+
+symbol = [
+  { id = "f1s", key = "iec/protection/fuse_2p", at = [40, 40], device = "f1" },
+  { id = "t1s", key = "iec/transformers/transformer_1ph", at = [40, 72], device = "t1" },
+  { id = "f2s", key = "iec/protection/mcb_1p", at = [40, 120], device = "f2" },
+]
+
+wire = [
+  { from = "f1s.2", to = "t1s.1.1" },
+  { from = "f1s.4", to = "t1s.1.2" },
+  { from = "t1s.2.1", to = "f2s.1" },
+]
+
+[plate]
+width = 260
+height = 265
+
+[[rail]]
+id = "r1"
+x = 10
+y = 90
+length = 240

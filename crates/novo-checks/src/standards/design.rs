@@ -177,6 +177,7 @@ pub static FAMILIES: &[Family] = &[
             ProblemKind::TagRule,
             ProblemKind::DisplayedTag,
             ProblemKind::StructureCode,
+            ProblemKind::PinNames,
         ],
         source: "The drawing itself: symbols, wires, nets, tags and device properties.",
         assumptions: "Structural checks with no numbers: a finding is a fact about the drawing. They do not know what the machine should do, only that the drawing contradicts itself.",

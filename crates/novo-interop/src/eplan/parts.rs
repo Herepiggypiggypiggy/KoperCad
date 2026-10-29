@@ -16,8 +16,14 @@ pub enum EplanError {
     Xml(#[from] XmlError),
     #[error("no parts found: no element has an order number or part number")]
     NoParts,
+    #[error(
+        "no articles found: this is not an EPLAN article file (.adb or .eod) this reader knows"
+    )]
+    NoArticles,
     #[error(transparent)]
     Table(#[from] ImportError),
+    #[error("{0}")]
+    Portal(String),
 }
 
 /// Key prefix for properties without a catalog field, kept so nothing is lost.
@@ -100,6 +106,21 @@ fn is_part(props: &[(String, String)]) -> bool {
 /// small differences between EPLAN versions do not matter. Elements without
 /// a usable manufacturer fall back to `default_manufacturer`.
 pub fn import_xml(text: &str, default_manufacturer: &str) -> Result<ImportReport, EplanError> {
+    // A maker's parts XML (`partsmanagement`) has its own reader; a single
+    // file holds the part only, the app reads the companion files together.
+    if novo_parts::looks_like_portal(text) {
+        let file = novo_parts::PortalFile {
+            name: "parts.xml".into(),
+            text: text.to_owned(),
+        };
+        let read = novo_parts::read_portal(&[file], default_manufacturer, "")
+            .map_err(|e| EplanError::Portal(e.to_string()))?;
+        return Ok(ImportReport {
+            parts: read.parts,
+            skipped: read.skipped.into_iter().map(|s| (0, s)).collect(),
+            data_columns: Vec::new(),
+        });
+    }
     let root = xml::parse(text)?;
     let mut report = ImportReport::default();
     let mut seen = 0usize;

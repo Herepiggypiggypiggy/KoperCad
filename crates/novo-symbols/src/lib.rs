@@ -14,6 +14,7 @@
 mod letter;
 mod library;
 mod pack;
+mod pin_template;
 mod svg;
 mod symbol;
 mod validate;
@@ -21,6 +22,10 @@ mod validate;
 pub use letter::{BreakerCode, ContactorCode, LetterRules, letter_code, letter_code_with};
 pub use library::{Library, LoadError};
 pub use pack::Pack;
+pub use pin_template::{
+    Deviation, Extra, PinSet, PinTemplate, Renames, check_pins, suggest_renames, template_for,
+    templates,
+};
 pub use svg::{SvgOptions, to_svg};
 pub use symbol::{
     ALWAYS_CLOSED, Align, Anchor, Behavior, Connection, Direction, FORMAT_VERSION, GRID, Graphic,

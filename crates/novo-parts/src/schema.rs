@@ -5,6 +5,8 @@
 //! Every field is optional and defaults to "unknown". Unknown stays unknown:
 //! nothing here fills in a guess, so a report can list exactly what is missing.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 /// Classification codes only. The texts come from the ETIM model file.
@@ -79,16 +81,6 @@ pub struct PartTerminal {
     /// Smallest and largest conductor cross-section in mm².
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wire_mm2: Option<(f64, f64)>,
-    /// Length of insulation to strip, in mm, as the maker states it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub strip_mm: Option<f64>,
-    /// Smallest and largest tightening torque in N·m (screw terminals).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub torque_nm: Option<(f64, f64)>,
-    /// How many conductors the connection point takes. `None` when the
-    /// maker's data does not say; a check then does not judge occupancy.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_wires: Option<u8>,
     /// Whether the maker wants a ferrule on the conductor. `None` when the
     /// data does not say.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -100,6 +92,84 @@ pub struct PartTerminal {
     /// geometry has been read.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub position_mm: Option<[f64; 3]>,
+    /// Number of conductors the terminal takes at once.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_wires: Option<u8>,
+    /// Conductor range in AWG (smallest and largest cross-section as AWG
+    /// numbers, as the maker prints them).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub awg: Option<(f64, f64)>,
+    /// Length of insulation to strip, in mm, as the maker states it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strip_mm: Option<f64>,
+    /// Smallest and largest tightening torque in N·m (screw terminals).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub torque_nm: Option<(f64, f64)>,
+    /// Where the maker's file puts the entry point, in the maker's own frame
+    /// in mm, exactly as written. Which corner of the part it is measured
+    /// from is not known, so nothing routes to it; `position_mm` stays empty
+    /// until the frame is confirmed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub maker_position_mm: Option<[f64; 3]>,
+    /// The direction the conductor enters, as the maker's file gives it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<[f64; 3]>,
+    /// Attributes of the maker's file that have no field here (screwdriver,
+    /// twin sleeve), kept as written.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub extra: BTreeMap<String, String>,
+}
+
+/// One drilled or tapped hole in the mounting plate for a part, from the
+/// maker's construction data.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct DrillHole {
+    /// Position in mm in the maker's frame, as written. The reference point
+    /// the maker measures from is not stated in every file.
+    pub x_mm: f64,
+    pub y_mm: f64,
+    /// Drill diameter in mm; unknown when the file gives none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diameter_mm: Option<f64>,
+    /// What the maker calls the hole (`drill`, `thread M5`), as written.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub kind: String,
+    /// The hole repeated at a fixed spacing: total count including this
+    /// hole, and the step in mm.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repeat: Option<DrillRepeat>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct DrillRepeat {
+    pub count: u32,
+    pub dx_mm: f64,
+    pub dy_mm: f64,
+}
+
+impl DrillHole {
+    /// Every hole this entry stands for: the hole itself and its repeats.
+    pub fn positions(&self) -> Vec<[f64; 2]> {
+        let n = self.repeat.map_or(1, |r| r.count.clamp(1, 1000));
+        (0..n)
+            .map(|i| {
+                let (dx, dy) = self.repeat.map_or((0.0, 0.0), |r| (r.dx_mm, r.dy_mm));
+                [self.x_mm + f64::from(i) * dx, self.y_mm + f64::from(i) * dy]
+            })
+            .collect()
+    }
+}
+
+/// A part that goes with another (end plate, jumper, marker).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct Accessory {
+    pub part: PartRef,
+    /// How many per part; unknown when the file says nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quantity: Option<u32>,
+    /// Where it sits relative to the part in mm, when the maker gives it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub offset_mm: Option<[f64; 3]>,
 }
 
 /// Where the part stands in its maker's range.

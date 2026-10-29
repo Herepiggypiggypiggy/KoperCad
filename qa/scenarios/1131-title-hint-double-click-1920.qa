@@ -1,0 +1,20 @@
+@title A hint on a window's title bar says a double click maximises it, and restores it (Preferences, 1920x1080)
+@area Windows
+@sizes 1920x1080
+click_text "Open example"
+wait 20
+click_text File #1
+wait 5
+click_text Preferences
+wait 20
+move 800 269
+wait 60
+shot hint-maximise
+double_click 960 269
+wait 20
+move 700 33
+wait 5
+move 960 33
+wait 60
+shot hint-restore
+check_layout

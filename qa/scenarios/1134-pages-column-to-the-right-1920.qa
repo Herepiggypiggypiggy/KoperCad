@@ -1,0 +1,19 @@
+@title The pinned Pages column moves to the right side of the window and back with the arrow in its header (1920x1080)
+@area Windows
+@sizes 1920x1080
+click_text "Open example"
+wait 30
+shot left
+check_layout
+# The arrow beside the pin sends the column to the other side.
+click 236 57
+wait 30
+expect "Main circuit"
+shot right
+check_layout
+# The same arrow, now pointing left, sends it home.
+click 1861 57
+wait 30
+expect "Main circuit"
+shot left-again
+check_layout

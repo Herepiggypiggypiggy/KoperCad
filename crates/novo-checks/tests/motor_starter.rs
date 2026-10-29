@@ -262,6 +262,8 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::WireRange,
         ProblemKind::PointOccupied,
         ProblemKind::FerruleUse,
+        // Own fixture; see tests/pin_names.
+        ProblemKind::PinNames,
         ProblemKind::SafetyLevelNotMet,
         ProblemKind::SafetyBinding,
         // Only reported once the project turns the EMC check on; see tests/emc_checks.

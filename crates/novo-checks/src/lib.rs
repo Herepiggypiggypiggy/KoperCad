@@ -70,6 +70,7 @@
 //! | [`WireRange`](ProblemKind::WireRange) | error when too large, warning when too small | A wire outside the conductor range its part states for the connection point |
 //! | [`PointOccupied`](ProblemKind::PointOccupied) | warning | More conductors on a connection point than its part says it takes |
 //! | [`FerruleUse`](ProblemKind::FerruleUse) | warning | A ferrule missing where the part asks for one, or fitted where the part forbids it |
+//! | [`PinNames`](ProblemKind::PinNames) | info | Pins of a device, or terminals of its part, named differently from the usual names of its class (coil `A1 A2`, motor `U1 V1 W1`, brake `BD1 BD2`) |
 //! | [`Standard`](ProblemKind::Standard) | per rule | A rule of a selected standard (IEC 60204-1, NFPA 79, UL 508A) is not met; see [`standards`] |
 //! | [`DeviceCollision`](ProblemKind::DeviceCollision) | error | Two devices overlapping on a mounting plate |
 //! | [`DeviceOutsidePlate`](ProblemKind::DeviceOutsidePlate) | error | A device beyond the usable area of its plate |
@@ -121,6 +122,8 @@ mod house_rules;
 mod more_rules;
 mod net_shorts;
 mod physical;
+mod pin_names;
+pub use pin_names::{PinFix, pin_fix};
 pub mod protection;
 pub mod safety;
 pub mod single_line;
@@ -301,6 +304,10 @@ pub enum ProblemKind {
     /// A ferrule missing where the part asks for one, or used where the part
     /// does not allow one.
     FerruleUse,
+    /// A device whose pins, or whose assigned part's terminals, are named
+    /// differently from the pin template of its class (coil `A1 A2`, motor
+    /// `U1 V1 W1`, brake `BD1 BD2`; novo-symbols `pin_template`).
+    PinNames,
     /// A device drawn in the schematic but not placed on any mounting plate,
     /// in a project where the cabinet layout has been started.
     UnplacedDevice,
@@ -370,7 +377,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 75] = [
+    pub const ALL: [ProblemKind; 76] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -446,6 +453,7 @@ impl ProblemKind {
         ProblemKind::WireRange,
         ProblemKind::PointOccupied,
         ProblemKind::FerruleUse,
+        ProblemKind::PinNames,
     ];
 
     pub fn severity(self) -> Severity {
@@ -523,6 +531,7 @@ impl ProblemKind {
             | ProblemKind::GuessedWire
             | ProblemKind::DepthUnknown
             | ProblemKind::PlugPins
+            | ProblemKind::PinNames
             | ProblemKind::AmbiguousInterruption
             | ProblemKind::SameShortTag => Severity::Info,
         }
@@ -606,6 +615,7 @@ impl ProblemKind {
             ProblemKind::WireRange => "Wire size at terminal",
             ProblemKind::PointOccupied => "Terminal point full",
             ProblemKind::FerruleUse => "Ferrule at terminal",
+            ProblemKind::PinNames => "Pin names",
         }
     }
 
@@ -687,6 +697,7 @@ impl ProblemKind {
             ProblemKind::WireRange => "check.wire_range",
             ProblemKind::PointOccupied => "check.point_occupied",
             ProblemKind::FerruleUse => "check.ferrule_use",
+            ProblemKind::PinNames => "check.pin_names",
         }
     }
 }
@@ -839,6 +850,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     house_rules::displayed_tags(&cx, &mut problems);
     house_rules::structure_codes(&cx, &mut problems);
     conn_points::run(&cx, &mut problems);
+    pin_names::pin_names(&cx, &mut problems);
     calc_checks::run(&cx, netlist, &mut problems);
     physical::unplaced_devices(&cx, &mut problems);
     physical::routing(&cx, &mut problems);

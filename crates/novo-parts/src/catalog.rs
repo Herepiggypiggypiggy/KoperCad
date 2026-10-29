@@ -17,8 +17,8 @@ use thiserror::Error;
 use std::collections::{BTreeMap, HashMap};
 
 use crate::schema::{
-    Asset, Classification, DataSource, LetThroughPoint, Lifecycle, PartRef, PartTerminal, Price,
-    Provenance,
+    Accessory, Asset, Classification, DataSource, DrillHole, LetThroughPoint, Lifecycle, PartRef,
+    PartTerminal, Price, Provenance,
 };
 use crate::search::{Matcher, SearchDoc, normalize_code};
 
@@ -108,6 +108,12 @@ pub struct CatalogPart {
     /// Connection points of the part.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub terminals: Vec<PartTerminal>,
+    /// Holes to drill in the mounting plate, from the maker's construction data.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub drilling: Vec<DrillHole>,
+    /// Parts that go with this one (end plates, jumpers, markers).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accessories: Vec<Accessory>,
     /// List price as imported.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub price: Option<Price>,

@@ -1,0 +1,58 @@
+# End limits and slow-down limits for one motion, read by permit relays.
+name = "End and slow-down limits with permit relays"
+chapter = "peripherals"
+description = "Forward and reverse end limits and slow-down limits on a runway, each read by a permit relay whose contact tells the control the motion may go on"
+tags = ["limit switch", "end limit", "slow down", "travel", "runway", "crane", "relay", "permit"]
+notes = """The four limit switches are break contacts: they open at the end of travel (B2 forward, B3 reverse) and a little earlier for the slow-down (B4 forward, B5 reverse). \\
+Each opens its relay (K31 to K34); a relay that has dropped is a missing permit. Because the limits are break contacts a cut wire also stops the motion. \\
+Use the relay contacts in your control: K31 and K32 in the forward and reverse coil paths, K33 and K34 in the fast step. \\
+You connect: the control supply above F1, 0 V below the four coils, and the make contacts of the relays."""
+
+open = ["f1s.1", "k31c.A2", "k32c.A2", "k33c.A2", "k34c.A2", "k31a.13,14", "k32a.13,14", "k33a.13,14", "k34a.13,14"]
+
+device = [
+  { id = "f1", tag = "-F1", description = "Limit circuit breaker", mount = { kind = "din", size = [18, 90, 70], at = [15, 55], rail = "r1" } },
+  { id = "k31", tag = "-K31", description = "Forward permit relay", mount = { kind = "din", size = [15.5, 78, 66], at = [45, 61], rail = "r1" } },
+  { id = "k32", tag = "-K32", description = "Reverse permit relay", mount = { kind = "din", size = [15.5, 78, 66], at = [62, 61], rail = "r1" } },
+  { id = "k33", tag = "-K33", description = "Forward fast-speed permit relay", mount = { kind = "din", size = [15.5, 78, 66], at = [79, 61], rail = "r1" } },
+  { id = "k34", tag = "-K34", description = "Reverse fast-speed permit relay", mount = { kind = "din", size = [15.5, 78, 66], at = [96, 61], rail = "r1" } },
+  { id = "b2", tag = "-B2", description = "Forward end limit", mount = { kind = "field", place = "at the forward end of the runway" } },
+  { id = "b3", tag = "-B3", description = "Reverse end limit", mount = { kind = "field", place = "at the reverse end of the runway" } },
+  { id = "b4", tag = "-B4", description = "Forward slow-down limit", mount = { kind = "field", place = "before the forward end limit" } },
+  { id = "b5", tag = "-B5", description = "Reverse slow-down limit", mount = { kind = "field", place = "before the reverse end limit" } },
+]
+
+symbol = [
+  { id = "f1s", key = "iec/protection/mcb_1p", at = [40, 40], device = "f1" },
+  { id = "b2s", key = "iec/contacts/position_nc", at = [72, 88], device = "b2" },
+  { id = "k31c", key = "iec/coils/relay", at = [72, 112], device = "k31", main = true },
+  { id = "b3s", key = "iec/contacts/position_nc", at = [104, 88], device = "b3" },
+  { id = "k32c", key = "iec/coils/relay", at = [104, 112], device = "k32", main = true },
+  { id = "b4s", key = "iec/contacts/position_nc", at = [136, 88], device = "b4" },
+  { id = "k33c", key = "iec/coils/relay", at = [136, 112], device = "k33", main = true },
+  { id = "b5s", key = "iec/contacts/position_nc", at = [168, 88], device = "b5" },
+  { id = "k34c", key = "iec/coils/relay", at = [168, 112], device = "k34", main = true },
+  { id = "k31a", key = "iec/contacts/no", at = [72, 152], device = "k31", main = false },
+  { id = "k32a", key = "iec/contacts/no", at = [104, 152], device = "k32", main = false },
+  { id = "k33a", key = "iec/contacts/no", at = [136, 152], device = "k33", main = false },
+  { id = "k34a", key = "iec/contacts/no", at = [168, 152], device = "k34", main = false },
+]
+
+wire = [
+  { from = "b2s.22", to = "k31c.A1" }, { from = "b3s.22", to = "k32c.A1" },
+  { from = "b4s.22", to = "k33c.A1" }, { from = "b5s.22", to = "k34c.A1" },
+]
+
+bus = [
+  { y = 72, taps = ["f1s.2", "b2s.21", "b3s.21", "b4s.21", "b5s.21"] },
+]
+
+[plate]
+width = 130
+height = 180
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 120

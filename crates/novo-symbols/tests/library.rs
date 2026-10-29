@@ -641,3 +641,20 @@ fn receiver_blocks_switch_each_output_against_one_common() {
 fn letter(s: &Symbol) -> Option<&'static str> {
     novo_symbols::letter_code(&s.function)
 }
+
+/// The built-in symbols name their pins the way the pin template of their
+/// device class says (`pin_template`), in every pack.
+#[test]
+fn builtin_symbols_follow_pin_templates() {
+    let mut deviations = Vec::new();
+    for pack in novo_symbols::Pack::ALL {
+        let library = novo_symbols::Library::shared(pack);
+        for symbol in library.iter() {
+            let pins: Vec<&str> = symbol.connections.iter().map(|c| c.id.as_str()).collect();
+            if let Some(d) = novo_symbols::check_pins(&symbol.function, &pins) {
+                deviations.push(format!("{}: {}", symbol.id, d.message()));
+            }
+        }
+    }
+    assert!(deviations.is_empty(), "{}", deviations.join("\n"));
+}

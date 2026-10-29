@@ -8,6 +8,7 @@
 //! Nothing here touches the user's catalog: the caller previews and merges.
 
 pub mod crane;
+mod eod;
 pub mod export_script;
 pub mod nets;
 mod parts;
@@ -15,4 +16,5 @@ pub mod pxf;
 pub mod symbols;
 pub(crate) mod xml;
 
+pub use eod::{EodRead, MakerSeen, import_eod, looks_like_eod};
 pub use parts::{EplanError, import_auto, import_delimited, import_xml};

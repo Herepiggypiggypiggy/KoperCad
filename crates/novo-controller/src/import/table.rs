@@ -135,6 +135,16 @@ fn split_wide(line: &str) -> Vec<String> {
     cells
 }
 
+/// The text after a list bullet (`- `, `* `, `• `), `None` when the line has no bullet.
+fn strip_bullet(line: &str) -> Option<&str> {
+    let t = line.trim_start();
+    let mut chars = t.chars();
+    let first = chars.next()?;
+    let rest = chars.as_str();
+    (matches!(first, '-' | '*' | '•' | '–' | '·') && rest.starts_with(char::is_whitespace))
+        .then(|| rest.trim())
+}
+
 /// A short label with a digit or a bare common/earth name: what a terminal column looks like.
 fn looks_like_terminal(cell: &str) -> bool {
     let c = cell.trim();
@@ -193,6 +203,12 @@ impl Table {
         let grid: Vec<(usize, Vec<String>)> = lines
             .iter()
             .map(|&(n, l)| {
+                // A bulleted list ("- HOIST (A-Q1)") is text without terminals: the bullet is not one.
+                if matches!(delim, Delim::First | Delim::Wide)
+                    && let Some(rest) = strip_bullet(l)
+                {
+                    return (n, vec![String::new(), rest.to_owned()]);
+                }
                 let cells = match delim {
                     Delim::Char('|') => split_delimited(l.trim().trim_matches('|'), '|'),
                     Delim::Char(c) => split_delimited(l, c),
