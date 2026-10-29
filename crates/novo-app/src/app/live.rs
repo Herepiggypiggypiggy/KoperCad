@@ -1392,6 +1392,7 @@ impl NovoApp {
         .top(10.0)
         .fixed_open()
         .fit()
+        .dockable()
         .scrolls()
         .show(ctx, |ui| {
             if ui

@@ -1,0 +1,21 @@
+@title The Reports list docks as a pane of the left strip with the button in its header and floats back to its column (1920x1080)
+@area Windows
+@sizes 1920x1080
+click_text "Open example"
+wait 20
+click_text Reports #2
+wait 30
+shot column
+check_layout
+# The button beside the side arrow docks the list as a pane of the strip on its side.
+click 271 54
+wait 30
+expect "Table of contents"
+shot docked-left
+check_layout
+# The third button in the pane header floats it back to the column.
+click 353 54
+wait 30
+expect "Table of contents"
+shot column-again
+check_layout

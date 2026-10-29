@@ -362,6 +362,31 @@ fn the_pages_column_docks_as_a_pane_of_a_strip_with_other_panels() {
     assert_eq!(super::panel_dock::pages_docked(&d.ctx), None);
 }
 
+#[test]
+fn the_reports_list_docks_as_a_pane_of_a_strip_and_floats_back() {
+    use super::panel_dock::{self, Slot};
+    let (_dir, mut d) = open_project();
+    d.app.switch_workspace(super::workspace::Workspace::Reports);
+    settle(&mut d);
+    assert!(panel_rect(&d, "reports_list").is_some(), "a column first");
+    panel_dock::set(&d.ctx, panel_dock::REPORTS, Some(Slot::Left));
+    settle(&mut d);
+    let pane = rect_of(&d, egui::Id::new("reports_pane").with("docked")).expect("the reports pane");
+    let strip = panel_rect(&d, "dock_left").expect("the left strip");
+    assert!(
+        pane.width() > 200.0 && strip.width() > 200.0,
+        "{pane:?} {strip:?}"
+    );
+    panel_dock::set(&d.ctx, panel_dock::REPORTS, Some(Slot::Right));
+    settle(&mut d);
+    let strip = panel_rect(&d, "dock_right").expect("the right strip");
+    assert!(strip.right() > SIZE.x - 2.0, "{strip:?}");
+    // Reset panel layout floats it back to the column.
+    panel::reset_layout(&d.ctx);
+    settle(&mut d);
+    assert_eq!(panel_dock::reports_docked(&d.ctx), None);
+}
+
 /// The rule for new code: no window that is neither movable nor resizable.
 /// Every floating panel goes through `panel.rs`; the few raw `egui::Area`s
 /// that remain are not windows (hover tips, toasts, the radial wheel,
