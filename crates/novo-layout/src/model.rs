@@ -68,9 +68,9 @@ pub fn device_size(project: &Project, device: &Device) -> Size {
 }
 
 /// Planning footprints of a drive or soft starter by motor power, (largest
-/// kW, width, height) in mm: wall-mount frequency converters of the common
-/// makers fall in these bands. A planning value, not a part: the result is
-/// marked as guessed so every list says so.
+/// kW, width, height) in mm: planning bands for wall-mount frequency
+/// converters, not taken from any maker's data. A planning value, not a
+/// part: the result is marked as guessed so every list says so.
 const DRIVE_FOOTPRINTS: [(f64, f64, f64); 7] = [
     (1.5, 105.0, 145.0),
     (4.0, 140.0, 185.0),

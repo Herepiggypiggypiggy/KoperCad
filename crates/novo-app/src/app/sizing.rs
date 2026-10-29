@@ -447,14 +447,30 @@ fn show_panel(
     }
 }
 
+/// Most tags named in one list before "and N more": a long list would push
+/// the dialog's buttons out of reach.
+const MAX_TAGS_NAMED: usize = 6;
+
+/// The tags, in the order given, with the rest counted past `MAX_TAGS_NAMED`.
+fn tag_list(tags: &[String]) -> String {
+    if tags.len() <= MAX_TAGS_NAMED {
+        return tags.join(", ");
+    }
+    format!(
+        "{} and {} more",
+        tags[..MAX_TAGS_NAMED].join(", "),
+        tags.len() - MAX_TAGS_NAMED
+    )
+}
+
 /// The line that says which devices the sizing did not count, by tag.
 fn left_out_text(left: &novo_layout::sizing_model::LeftOut) -> Option<String> {
     let mut parts = Vec::new();
     if !left.field.is_empty() {
-        parts.push(format!("{} in the field", left.field.join(", ")));
+        parts.push(format!("{} in the field", tag_list(&left.field)));
     }
     if !left.door.is_empty() {
-        parts.push(format!("{} on the door", left.door.join(", ")));
+        parts.push(format!("{} on the door", tag_list(&left.door)));
     }
     (!parts.is_empty()).then(|| {
         format!(
@@ -590,6 +606,22 @@ pub(super) fn show_editor(ctx: &egui::Context, state: &mut SizingState) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_not_counted_line_names_a_few_tags_and_counts_the_rest() {
+        let tags = |n: usize| (1..=n).map(|i| format!("-M{i}")).collect::<Vec<_>>();
+        let left = novo_layout::sizing_model::LeftOut {
+            field: tags(9),
+            door: tags(2),
+        };
+        let line = super::left_out_text(&left).unwrap();
+        assert!(
+            line.contains("-M1, -M2, -M3, -M4, -M5, -M6 and 3 more in the field"),
+            "{line}"
+        );
+        assert!(line.contains("-M1, -M2 on the door"), "{line}");
+        assert!(super::left_out_text(&Default::default()).is_none());
+    }
+
     use super::*;
     use novo_layout::sizing::SizingDevice;
 
