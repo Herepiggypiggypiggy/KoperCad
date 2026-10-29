@@ -482,6 +482,35 @@ pub(super) fn travel_ids(project: &Project) -> Vec<String> {
         .collect()
 }
 
+/// The end limits of one travel axis as set on its motor, in metres from the axis start: `true` is
+/// the forward limit, `false` the reverse one. A limit counts when both its device and its
+/// distance are set; the distance may use a comma for the decimal point.
+pub(super) fn travel_limits_of(project: &Project, tag: &str) -> Vec<(bool, f64)> {
+    let Some(device) = project.devices().find(|d| d.tag.to_string() == tag) else {
+        return Vec::new();
+    };
+    let text = |key: &str| {
+        device
+            .properties
+            .get(key)
+            .map(|v: &Value| v.to_string())
+            .filter(|t| !t.trim().is_empty())
+    };
+    let mut out = Vec::new();
+    for (forward, device_key, distance_key) in [
+        (true, "trav_limit_fwd", "trav_limit_fwd_m"),
+        (false, "trav_limit_rev", "trav_limit_rev_m"),
+    ] {
+        let metres = text(distance_key)
+            .and_then(|t| t.trim().replace(',', ".").parse::<f64>().ok())
+            .filter(|m| m.is_finite());
+        if let (Some(_), Some(m)) = (text(device_key), metres) {
+            out.push((forward, m));
+        }
+    }
+    out
+}
+
 /// The travel axes of a project: every motor with a moving mass set. An axis whose numbers the
 /// engine refuses is reported and left out. The notes are what the motor fit assumed.
 pub(super) fn axes_of(project: &Project) -> (Vec<TravelModule>, Vec<(Level, String)>) {
@@ -1211,6 +1240,24 @@ mod tests {
         // Step 1 is 10 Hz: about 0.15 m/s after the 4 s ramp (5 s at 50 Hz scale).
         assert!(position(&run) > 1.5, "{}", position(&run));
         assert!(reading(&run.active.as_ref().unwrap().lp.modules[0]).contains("Hz"));
+    }
+
+    #[test]
+    fn the_end_limits_of_an_axis_become_flags_from_the_axis_start() {
+        use novo_view3d::crane::LimitFlag;
+        let (doc, _) = axis(Some(1.5));
+        let tag = travel_ids(doc.project()).remove(0);
+        assert_eq!(travel_limits_of(doc.project(), &tag), vec![(true, 1.5)]);
+        let marks = super::super::hoist_3d::travel_marks(Some(doc.project()), Some(&tag), 2.8);
+        assert_eq!(marks.len(), 1);
+        assert!((marks[0].position_m - 4.3).abs() < 1e-5);
+        assert_eq!(marks[0].kind, LimitFlag::Upper);
+        // No axis, an unknown axis or an axis without limits has nothing to draw.
+        assert!(super::super::hoist_3d::travel_marks(Some(doc.project()), None, 2.8).is_empty());
+        assert!(travel_limits_of(doc.project(), "=nowhere").is_empty());
+        let (plain, _) = axis(None);
+        let tag = travel_ids(plain.project()).remove(0);
+        assert!(travel_limits_of(plain.project(), &tag).is_empty());
     }
 
     #[test]
