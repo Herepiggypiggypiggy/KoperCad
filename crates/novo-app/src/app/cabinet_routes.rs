@@ -620,6 +620,15 @@ fn entry_section(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Op
                 egui::DragValue::new(&mut value)
                     .range(0.0..=100_000.0)
                     .speed(10.0)
+                    .custom_parser(|text| {
+                        // Typing "—" or "500 mm" must work as well as "500".
+                        text.trim()
+                            .trim_end_matches("mm")
+                            .trim()
+                            .replace(',', ".")
+                            .parse::<f64>()
+                            .ok()
+                    })
                     .custom_formatter(|v, _| {
                         if set.is_none() && v == 0.0 {
                             "—".to_owned()
