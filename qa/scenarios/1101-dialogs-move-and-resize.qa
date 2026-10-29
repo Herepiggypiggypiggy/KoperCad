@@ -1,0 +1,24 @@
+@title Dialogs are windows: Preferences opens on screen, moves by its title bar and resizes
+@area Windows
+@sizes 1366x768
+click_text "Open example"
+wait 20
+click_text File #1
+wait 5
+click_text Preferences
+wait 20
+shot preferences-home
+check_layout
+# Title bar to the lower right.
+drag 683 125 900 250
+wait 10
+shot preferences-moved
+check_layout
+key Escape
+wait 10
+click_text File #1
+wait 5
+click_text Preferences
+wait 20
+shot preferences-again
+check_layout

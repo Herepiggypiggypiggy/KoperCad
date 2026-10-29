@@ -3,6 +3,10 @@
 The id is a date and a letter; the top entry is the newest one a person has
 seen once they open the list. Add an entry when a feature PR merges. -->
 
+## 2026-10-28-a · Every window moves and resizes
+Where: Pages (the navigator), the tool dock, every dialog, and View > Reset panel layout.
+The navigator is a window you drag by its title and resize from its edges, or a column you widen by its edge when it is pinned. The tool dock and the 3D tool cards are dragged by their background. Questions and forms (About, Preferences, Project rules, the imports) open centered, can be moved and resized, and open where you left them. View > Reset panel layout puts everything back.
+
 ## 2026-10-22-a · The single-line diagram: supply data, lamps, overload relays
 Where: Reports > Single-line diagram.
 The diagram has an "Enter supply data" button that opens the Electrical inputs, and the example project now states an illustrative 400 V, 6 kA supply (replace it with yours) so it shows figures. Lamps and sounders on a mains feeder are drawn; a load on one line conductor is taken at the phase voltage (231 V from 400 V). An overload relay in a feeder is drawn as a box on the wire. Lamps on 24 V circuits stay off and are named in a note.

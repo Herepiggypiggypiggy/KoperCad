@@ -100,7 +100,7 @@ pub use import::{
 };
 pub use library::{
     FileKind, ImportFlow, LIBRARY_FORMAT_VERSION, LibraryError, LocalLibrary, NewSource,
-    SourceRecord, default_library_root,
+    SourceRecord, StoreBatch, default_library_root,
 };
 pub use macros::{
     Imported, MACRO_BASE_VERSION, MACRO_EXTENSION, MACRO_FORMAT, MACRO_FORMAT_VERSION,

@@ -124,6 +124,8 @@ impl Lx {
             egui::PointerButton::Primary,
             egui::Modifiers::NONE,
         );
+        // A window the click opens takes a frame to be measured before it shows.
+        self.frames(2);
     }
 
     /// Clicks the control whose visible label is `text`.

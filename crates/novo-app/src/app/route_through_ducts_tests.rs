@@ -73,18 +73,23 @@ fn every_routed_wire_stays_in_the_ducts_between_its_two_terminals() {
                 end.x, end.y
             );
         }
-        // Between the two stubs the wire lies in the ducts: every point but
-        // the first and last two is inside a duct.
+        // Between the two stubs the wire lies in the ducts (or, between
+        // devices on one DIN rail, along the rail's channel): every point
+        // from where it first reaches a duct to where it last leaves one.
         let n = pts.len();
-        for (i, pt) in pts.iter().enumerate() {
-            if i >= 2 && i + 2 < n {
+        let first = pts.iter().position(|p| inside(&ducts, *p));
+        let last = pts.iter().rposition(|p| inside(&ducts, *p));
+        if let (Some(first), Some(last)) = (first, last) {
+            for (i, pt) in pts.iter().enumerate().take(last + 1).skip(first) {
                 assert!(
                     inside(&ducts, *pt),
-                    "wire {id} point {i} ({}, {}) is outside the ducts",
+                    "wire {id} point {i} of {n} ({}, {}) is outside the ducts",
                     pt.x,
                     pt.y
                 );
             }
+        } else {
+            assert!(!r.rails.is_empty(), "wire {id} touches no duct and no rail");
         }
         // The cut length is at least the path.
         assert!(
@@ -153,6 +158,85 @@ fn write_no_duct_path_fixture() {
     assert!(routed.routes.values().any(|r| r.kind == Kind::Ducted));
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../qa/fixtures/route-no-duct-path.novo");
+    let _ = std::fs::remove_file(&path);
+    d.app.backend.save(&path).unwrap();
+}
+
+/// Slotted ducts: every wire still finds its way, and a duct's slot text is
+/// read back from what the Rails and ducts list stores.
+#[test]
+fn slotted_ducts_still_carry_every_wire_and_the_text_reads_back() {
+    use super::cabinet_rails::parse_slots;
+    assert_eq!(parse_slots(""), Some((false, None)));
+    assert_eq!(parse_slots("closed"), Some((true, None)));
+    assert_eq!(parse_slots("25"), Some((false, Some(25.0))));
+    assert_eq!(parse_slots("12,5 mm"), Some((false, Some(12.5))));
+    assert_eq!(parse_slots("-3"), None);
+    assert_eq!(parse_slots("wide"), None);
+
+    let (_dir, mut d) = placed_example();
+    let before = route_project(d.doc().project());
+    let ducts: Vec<_> = d
+        .doc()
+        .project()
+        .all::<Rail>()
+        .filter(|r| r.kind == RailKind::Duct)
+        .map(|r| r.id)
+        .collect();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Slots", |tx| {
+            for id in &ducts {
+                tx.set_property(
+                    *id,
+                    novo_routing::model::SLOT_PITCH,
+                    Some(novo_core::Value::Float(25.0)),
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let after = route_project(d.doc().project());
+    let ducted = |r: &novo_routing::model::Routed| {
+        r.routes.values().filter(|r| r.kind == Kind::Ducted).count()
+    };
+    assert_eq!(ducted(&before), ducted(&after));
+    assert!(after.routes.values().all(|r| !r.blocked));
+}
+
+/// Rewrites the QA fixture: the example cabinet after Place all with a slot
+/// pitch of 25 mm on every duct:
+/// `cargo test -p novo-app write_slotted_ducts_fixture -- --ignored`.
+#[test]
+#[ignore = "writes qa/fixtures/route-slotted-ducts.novo"]
+fn write_slotted_ducts_fixture() {
+    let (_dir, mut d) = placed_example();
+    let ducts: Vec<_> = d
+        .doc()
+        .project()
+        .all::<Rail>()
+        .filter(|r| r.kind == RailKind::Duct)
+        .map(|r| r.id)
+        .collect();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Slots", |tx| {
+            for id in &ducts {
+                tx.set_property(
+                    *id,
+                    novo_routing::model::SLOT_PITCH,
+                    Some(novo_core::Value::Float(25.0)),
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../qa/fixtures/route-slotted-ducts.novo");
     let _ = std::fs::remove_file(&path);
     d.app.backend.save(&path).unwrap();
 }

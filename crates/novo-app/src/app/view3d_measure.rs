@@ -200,44 +200,46 @@ pub(super) fn readout(
     r: Option<Reading>,
 ) -> bool {
     let mut clear = false;
-    egui::Area::new(egui::Id::new("view3d_measure"))
-        .order(egui::Order::Middle)
-        .pivot(egui::Align2::LEFT_BOTTOM)
-        .fixed_pos(view.left_bottom() + egui::vec2(MARGIN, -MARGIN))
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.strong("Measure");
-                match (m.pins.len(), r) {
-                    (0, _) => {
-                        ui.label("Click a point on the cabinet.");
-                    }
-                    (1, _) => {
-                        ui.label("Click the second point.");
-                    }
-                    (_, Some(r)) => {
-                        ui.label(format!("Distance   {}", mm(r.distance)));
-                        ui.weak(format!(
-                            "Across {}   Down {}   Height {}",
-                            mm(r.dx),
-                            mm(r.dy),
-                            mm(r.dz)
-                        ));
-                        if let Some(d) = r.devices {
-                            ui.separator();
-                            ui.label(format!("Gap between devices   {}", mm(d.gap)));
-                            ui.weak(format!("Centre to centre   {}", mm(d.centres)));
-                        }
-                    }
-                    _ => {}
+    super::panel::Float::new(
+        "view3d_measure",
+        view,
+        egui::Align2::LEFT_BOTTOM,
+        view.left_bottom() + egui::vec2(MARGIN, -MARGIN),
+    )
+    .show(ctx, |ui| {
+        egui::Frame::popup(ui.style()).show(ui, |ui| {
+            ui.strong("Measure");
+            match (m.pins.len(), r) {
+                (0, _) => {
+                    ui.label("Click a point on the cabinet.");
                 }
-                ui.horizontal(|ui| {
-                    if m.has_pins() && ui.small_button("Clear").clicked() {
-                        clear = true;
+                (1, _) => {
+                    ui.label("Click the second point.");
+                }
+                (_, Some(r)) => {
+                    ui.label(format!("Distance   {}", mm(r.distance)));
+                    ui.weak(format!(
+                        "Across {}   Down {}   Height {}",
+                        mm(r.dx),
+                        mm(r.dy),
+                        mm(r.dz)
+                    ));
+                    if let Some(d) = r.devices {
+                        ui.separator();
+                        ui.label(format!("Gap between devices   {}", mm(d.gap)));
+                        ui.weak(format!("Centre to centre   {}", mm(d.centres)));
                     }
-                    ui.weak("Esc clears, again to leave");
-                });
+                }
+                _ => {}
+            }
+            ui.horizontal(|ui| {
+                if m.has_pins() && ui.small_button("Clear").clicked() {
+                    clear = true;
+                }
+                ui.weak("Esc clears, again to leave");
             });
         });
+    });
     clear
 }
 

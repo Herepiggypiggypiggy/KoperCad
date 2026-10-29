@@ -265,11 +265,14 @@ impl NovoApp {
                 view.editor.tool(),
                 Tool::Move(_) | Tool::Paste(_) | Tool::Text
             );
-        let aside = parked
-            || (busy
-                && ctx
-                    .pointer_hover_pos()
-                    .is_some_and(|p| canvas.contains(p) && home.expand(NEAR).contains(p)));
+        // A dock the person has moved stays where they put it.
+        let moved = super::panel::is_moved(ctx, super::panel::id("tool_dock"));
+        let aside = !moved
+            && (parked
+                || (busy
+                    && ctx
+                        .pointer_hover_pos()
+                        .is_some_and(|p| canvas.contains(p) && home.expand(NEAR).contains(p))));
         let (pivot, at) = if aside {
             (
                 egui::Align2::RIGHT_BOTTOM,
@@ -311,176 +314,168 @@ impl NovoApp {
         let mut picked = None;
         // Where the controls are, for the lessons: id, rect, clicked.
         let mut spots: Vec<(&'static str, egui::Rect, bool)> = Vec::new();
-        let area = egui::Area::new(egui::Id::new("tool_dock"))
-            .order(egui::Order::Middle)
-            .pivot(pivot)
-            .fixed_pos(at)
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        for (tool, icon, word, tip, id) in [
-                            (
-                                DockTool::Select,
-                                icons::tool::SELECT,
-                                "Select",
-                                select_tip.as_str(),
-                                "dock.select",
-                            ),
-                            (
-                                DockTool::Place,
-                                icons::tool::PLACE,
-                                "Place",
-                                place_tip.as_str(),
-                                "dock.place",
-                            ),
-                            (
-                                DockTool::Connect,
-                                icons::tool::CONNECT,
-                                "Connect",
-                                connect_tip.as_str(),
-                                "dock.connect",
-                            ),
-                        ] {
-                            let response = dock_button(ui, labels, icon, word, active == tool, tip);
-                            spots.push((id, response.rect, response.clicked()));
-                            if response.clicked() {
-                                picked = Some(tool);
-                            }
-                            // The dock never keeps the keyboard: keys stay
-                            // with the drawing.
-                            response.surrender_focus();
-                        }
-                        // The wiring mode: two icons of one choice, always
-                        // there, faint while another tool is active; a click
-                        // connects in that mode.
-                        ui.separator();
-                        for (mode, icon, word, tip, id) in [
-                            (
-                                WiringMode::Corners,
-                                icons::tool::WIRE_CORNERS,
-                                "Corners",
-                                "Wire with corners (right angles) · Shift+W switches",
-                                "dock.corners",
-                            ),
-                            (
-                                WiringMode::Lines,
-                                icons::tool::WIRE_LINES,
-                                "Lines",
-                                "Wire with lines (any angle) · Shift+W switches",
-                                "dock.lines",
-                            ),
-                        ] {
-                            // Copper only for the active tool: with another
-                            // tool in hand the chosen mode is the brighter
-                            // of two faint icons.
-                            let connecting = active == DockTool::Connect;
-                            let response = ui
-                                .scope(|ui| {
-                                    if !connecting {
-                                        ui.multiply_opacity(if mode == chosen {
-                                            0.8
-                                        } else {
-                                            0.45
-                                        });
-                                    }
-                                    dock_button(
-                                        ui,
-                                        labels,
-                                        icon,
-                                        word,
-                                        connecting && mode == chosen,
-                                        tip,
-                                    )
-                                })
-                                .inner;
-                            spots.push((id, response.rect, response.clicked()));
-                            if response.clicked() {
-                                chip = Some(mode);
-                            }
-                            response.surrender_focus();
-                        }
-                        ui.separator();
-                        // The cable tool and the history sit after the wiring
-                        // mode: a tool of its own, then two plain actions.
-                        let response = dock_button(
-                            ui,
-                            labels,
-                            icons::tool::CABLE,
-                            "Cable",
-                            active == DockTool::Cable,
-                            cable_tip.as_str(),
-                        );
-                        spots.push(("dock.cable", response.rect, response.clicked()));
+        let area = super::panel::Float::new("tool_dock", canvas, pivot, at).show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    for (tool, icon, word, tip, id) in [
+                        (
+                            DockTool::Select,
+                            icons::tool::SELECT,
+                            "Select",
+                            select_tip.as_str(),
+                            "dock.select",
+                        ),
+                        (
+                            DockTool::Place,
+                            icons::tool::PLACE,
+                            "Place",
+                            place_tip.as_str(),
+                            "dock.place",
+                        ),
+                        (
+                            DockTool::Connect,
+                            icons::tool::CONNECT,
+                            "Connect",
+                            connect_tip.as_str(),
+                            "dock.connect",
+                        ),
+                    ] {
+                        let response = dock_button(ui, labels, icon, word, active == tool, tip);
+                        spots.push((id, response.rect, response.clicked()));
                         if response.clicked() {
-                            picked = Some(DockTool::Cable);
+                            picked = Some(tool);
+                        }
+                        // The dock never keeps the keyboard: keys stay
+                        // with the drawing.
+                        response.surrender_focus();
+                    }
+                    // The wiring mode: two icons of one choice, always
+                    // there, faint while another tool is active; a click
+                    // connects in that mode.
+                    ui.separator();
+                    for (mode, icon, word, tip, id) in [
+                        (
+                            WiringMode::Corners,
+                            icons::tool::WIRE_CORNERS,
+                            "Corners",
+                            "Wire with corners (right angles) · Shift+W switches",
+                            "dock.corners",
+                        ),
+                        (
+                            WiringMode::Lines,
+                            icons::tool::WIRE_LINES,
+                            "Lines",
+                            "Wire with lines (any angle) · Shift+W switches",
+                            "dock.lines",
+                        ),
+                    ] {
+                        // Copper only for the active tool: with another
+                        // tool in hand the chosen mode is the brighter
+                        // of two faint icons.
+                        let connecting = active == DockTool::Connect;
+                        let response = ui
+                            .scope(|ui| {
+                                if !connecting {
+                                    ui.multiply_opacity(if mode == chosen { 0.8 } else { 0.45 });
+                                }
+                                dock_button(
+                                    ui,
+                                    labels,
+                                    icon,
+                                    word,
+                                    connecting && mode == chosen,
+                                    tip,
+                                )
+                            })
+                            .inner;
+                        spots.push((id, response.rect, response.clicked()));
+                        if response.clicked() {
+                            chip = Some(mode);
                         }
                         response.surrender_focus();
-                        ui.separator();
-                        for (icon, word, tip, id, enabled, command) in [
-                            (
-                                icons::tool::UNDO,
-                                "Undo",
-                                undo_tip.as_str(),
-                                "dock.undo",
-                                can_undo,
-                                "edit.undo",
-                            ),
-                            (
-                                icons::tool::REDO,
-                                "Redo",
-                                redo_tip.as_str(),
-                                "dock.redo",
-                                can_redo,
-                                "edit.redo",
-                            ),
-                        ] {
-                            let response = ui
-                                .add_enabled_ui(enabled, |ui| {
-                                    dock_button(ui, labels, icon, word, false, tip)
-                                })
-                                .inner;
-                            spots.push((id, response.rect, response.clicked()));
-                            if response.clicked() {
-                                history = Some(command);
-                            }
-                            response.surrender_focus();
-                        }
-                        let response = dock_button(
-                            ui,
-                            labels,
-                            icons::tool::TEXT,
-                            "Text",
-                            active == DockTool::Text,
-                            &text_tip,
-                        );
+                    }
+                    ui.separator();
+                    // The cable tool and the history sit after the wiring
+                    // mode: a tool of its own, then two plain actions.
+                    let response = dock_button(
+                        ui,
+                        labels,
+                        icons::tool::CABLE,
+                        "Cable",
+                        active == DockTool::Cable,
+                        cable_tip.as_str(),
+                    );
+                    spots.push(("dock.cable", response.rect, response.clicked()));
+                    if response.clicked() {
+                        picked = Some(DockTool::Cable);
+                    }
+                    response.surrender_focus();
+                    ui.separator();
+                    for (icon, word, tip, id, enabled, command) in [
+                        (
+                            icons::tool::UNDO,
+                            "Undo",
+                            undo_tip.as_str(),
+                            "dock.undo",
+                            can_undo,
+                            "edit.undo",
+                        ),
+                        (
+                            icons::tool::REDO,
+                            "Redo",
+                            redo_tip.as_str(),
+                            "dock.redo",
+                            can_redo,
+                            "edit.redo",
+                        ),
+                    ] {
+                        let response = ui
+                            .add_enabled_ui(enabled, |ui| {
+                                dock_button(ui, labels, icon, word, false, tip)
+                            })
+                            .inner;
+                        spots.push((id, response.rect, response.clicked()));
                         if response.clicked() {
-                            picked = Some(DockTool::Text);
+                            history = Some(command);
                         }
                         response.surrender_focus();
-                        if in_bar {
-                            // See `tool_hint`: the bar shows it.
-                        } else if !hint.is_empty() {
-                            ui.separator();
-                            if refused {
-                                ui.colored_label(
-                                    crate::theme::ui_palette().error,
-                                    format!("{} {hint}", icons::status::WARNING),
-                                );
-                            } else {
-                                let response = ui.label(egui::RichText::new(&hint).weak());
-                                spots.push(("dock.hint", response.rect, false));
-                            }
+                    }
+                    let response = dock_button(
+                        ui,
+                        labels,
+                        icons::tool::TEXT,
+                        "Text",
+                        active == DockTool::Text,
+                        &text_tip,
+                    );
+                    if response.clicked() {
+                        picked = Some(DockTool::Text);
+                    }
+                    response.surrender_focus();
+                    if in_bar {
+                        // See `tool_hint`: the bar shows it.
+                    } else if !hint.is_empty() {
+                        ui.separator();
+                        if refused {
+                            ui.colored_label(
+                                crate::theme::ui_palette().error,
+                                format!("{} {hint}", icons::status::WARNING),
+                            );
+                        } else {
+                            let response = ui.label(egui::RichText::new(&hint).weak());
+                            spots.push(("dock.hint", response.rect, false));
                         }
-                        if proposals > 0 && !in_bar {
-                            ui.separator();
-                            let response = ui
-                                .label(egui::RichText::new(format!("{proposals} proposed")).weak())
-                                .on_hover_text("↵ accept · Tab next · Delete decline");
-                            spots.push(("dock.proposals", response.rect, false));
-                        }
-                    });
+                    }
+                    if proposals > 0 && !in_bar {
+                        ui.separator();
+                        let response = ui
+                            .label(egui::RichText::new(format!("{proposals} proposed")).weak())
+                            .on_hover_text("↵ accept · Tab next · Delete decline");
+                        spots.push(("dock.proposals", response.rect, false));
+                    }
                 });
             });
+        });
         self.wb.dock_size = area.response.rect.size();
         for (id, rect, clicked) in spots {
             let label = match id {

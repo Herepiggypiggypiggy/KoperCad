@@ -142,12 +142,17 @@ fn short_window(ctx: &egui::Context) -> bool {
 /// Where a panel under the toolbar starts, from the top of the view.
 pub(super) const BELOW: f32 = 140.0;
 
+/// The simulation status chip is the first row of the toolbar. In a window
+/// with a title bar it takes that bar's place; the compact toolbar of a short
+/// window has no bar, so the row adds this much.
+pub(super) const CHIP_ROW: f32 = 30.0;
+
 /// What the toolbar is assumed to cover before it has been drawn once, which
 /// is when the first fit of the camera happens.
 fn first_inset(ctx: &egui::Context) -> f32 {
     if short_window(ctx) {
-        // One row of buttons, no title bar.
-        56.0
+        // The status row and one row of buttons, no title bar.
+        56.0 + CHIP_ROW
     } else {
         BELOW
     }
@@ -178,6 +183,7 @@ pub(super) fn toolbar(
     selected: bool,
     section: &mut Option<Section>,
     bounds: &dyn Fn() -> Option<novo_view3d::Aabb>,
+    status: &mut dyn FnMut(&mut egui::Ui),
 ) -> (Changed, Option<&'static str>) {
     let mut changed = Changed::default();
     let mut command = None;
@@ -185,9 +191,10 @@ pub(super) fn toolbar(
     let width = TOOLBAR_WIDTH
         .min(view.width() - super::view3d_heat::CUBE_SIZE - 3.0 * MARGIN)
         .max(300.0);
-    // In a short window the title bar's row is cabinet height: the toolbar
-    // loses its title (it is still dragged by its body) and the cabinet is
-    // framed below one row instead of two.
+    // The simulation status is the first row, where the title bar was: the
+    // toolbar has no title (it is still dragged by its body), so the status
+    // is in sight with every panel folded and takes no room from the panels
+    // under the toolbar.
     let panel = super::panel::Panel::new(
         "view3d_toolbar",
         "3D view",
@@ -196,13 +203,10 @@ pub(super) fn toolbar(
         width,
     )
     .top(MARGIN)
+    .bare()
     .fit();
-    let panel = if short_window(ctx) {
-        panel.bare()
-    } else {
-        panel
-    };
     panel.show(ctx, |ui| {
+        status(ui);
         ui.horizontal_wrapped(|ui| {
             // Layers: things that are drawn or not, in one popover.
             let n_on = ALL

@@ -276,13 +276,7 @@ impl NovoApp {
         };
         let mut save = false;
         let mut replace = false;
-        let modal = egui::Modal::new(egui::Id::new("macro_save")).show(ctx, |ui| {
-            ui.set_width(380.0);
-            ui.label(
-                egui::RichText::new("Save as macro")
-                    .size(15.0)
-                    .family(novo_theme::fonts::strong_family()),
-            );
+        let modal = super::panel::modal(ctx, "macro_save", "Save as macro", [380.0, 0.0], |ui| {
             ui.weak("Keeps the selected circuit in your library, to place on any page.");
             ui.add_space(8.0);
             ui.label("Name");

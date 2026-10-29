@@ -159,21 +159,25 @@ impl super::NovoApp {
             return;
         }
         let p = crate::theme::ui_palette();
-        let modal = egui::Modal::new(egui::Id::new("about_numbers")).show(ctx, |ui| {
-            ui.set_width(novo_theme::dialog_width::MEDIUM);
-            super::dialog_ui::title(
-                ui,
-                "About the numbers",
-                "Some numbers are a model, an estimate or a placeholder. Each carries a label where it is shown; this is the list.",
-            );
-            egui::ScrollArea::vertical()
-                .max_height(ctx.content_rect().height() * 0.6)
-                .show(ui, |ui| {
+        let width = novo_theme::dialog_width::MEDIUM;
+        let modal = super::panel::modal_fill(
+            ctx,
+            "about_numbers",
+            "About the numbers",
+            [width, 480.0],
+            |ui| {
+                super::dialog_ui::hint(
+                    ui,
+                    "Some numbers are a model, an estimate or a placeholder. Each carries a label where it is shown; this is the list.",
+                );
+                super::panel::fill_above(ui, 72.0, |ui| {
                     for r in &ROWS {
                         ui.add_space(6.0);
                         ui.horizontal_wrapped(|ui| {
                             ui.strong(r.number);
-                            ui.label(egui::RichText::new(format!("({})", r.label)).color(p.warning));
+                            ui.label(
+                                egui::RichText::new(format!("({})", r.label)).color(p.warning),
+                            );
                         });
                         ui.label(r.text);
                         ui.weak(format!("Shown in: {}", r.shown));
@@ -184,12 +188,13 @@ impl super::NovoApp {
                         novo_checks::standards::provenance::BASIS.len()
                     ));
                 });
-            ui.add_space(8.0);
-            if ui.button("Copy as text").clicked() {
-                ctx.copy_text(page_text());
-            }
-            super::dialog_ui::done(ui)
-        });
+                ui.add_space(8.0);
+                if ui.button("Copy as text").clicked() {
+                    ctx.copy_text(page_text());
+                }
+                super::dialog_ui::done(ui)
+            },
+        );
         if modal.inner || modal.should_close() {
             self.show_numbers = false;
         }

@@ -537,7 +537,8 @@ and `import-library` do the same without the window.
   and a member over 1 MB that unpacks to more than 250 times its size in the ZIP
   is refused as not a real CAD file or list. The format number must not be newer. Export writes one file at a time (read to check it, read again to write it, the manifest last), so a backup needs no memory for the whole library. Export and import run on a worker thread; a failed export leaves
   no half-written file.
-- Not done: restoring many files rewrites the records file per file (slow for thousands of files; a `store_many` would fix it); no merge of two edited versions of one part (the preview lists the
+- Restoring many files writes the records file once (`LocalLibrary::batch`, `StoreBatch::finish`), not once per file; the files are written as they are added and the records are merged into the file as it is at the end, so an import running at the same time is not lost.
+- Not done: no merge of two edited versions of one part (the preview lists the
   difference and you pick one), no signing of bundles.
 
 ## 4. Offline and no admin rights
