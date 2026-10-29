@@ -80,10 +80,76 @@ impl HomeKind {
 /// may be listed more than once (a rail tool that also has a menu row is
 /// found by its menu row; one listed here gets that home in addition).
 ///
-/// Empty on purpose: the rails, centres and drawer toolbars do not exist yet.
-/// Each lane that builds one adds its commands here in the same pull
-/// request, and removes the menu row it replaces from [`menus`].
-pub const RELOCATED: &[(&str, Home)] = &[];
+/// The tool rails of the five workspaces are built (lane V3): every command a
+/// rail carries is listed here, in addition to its menu row when it keeps one
+/// and instead of it when [`menus::MOVED`] names it. The centres (V4) and the
+/// drawer toolbars add theirs in the pull request that builds them. The test
+/// in `novo-app` (`rail_homes`) keeps this list equal to what the rails draw.
+pub const RELOCATED: &[(&str, Home)] = &[
+    // Schematic rail
+    ("tool.place", Home::Rail),
+    ("tool.connect", Home::Rail),
+    ("tool.cable", Home::Rail),
+    ("draw.text", Home::Rail),
+    ("wires.autopilot", Home::Rail),
+    ("proposal.accept_all", Home::Rail),
+    ("draw.tidy", Home::Rail),
+    ("xref.link", Home::Rail),
+    ("macro.place", Home::Rail),
+    ("check.problems", Home::Rail),
+    ("view.terminals_drawer", Home::Rail),
+    ("view.cables_drawer", Home::Rail),
+    ("view.devices_drawer", Home::Rail),
+    ("edit.undo", Home::Rail),
+    ("edit.redo", Home::Rail),
+    // 3D rail
+    ("view.3d_move", Home::Rail),
+    ("view.3d_place", Home::Rail),
+    ("view.3d_measure", Home::Rail),
+    ("view.3d_section", Home::Rail),
+    ("view.3d_save_view", Home::Rail),
+    ("view.3d_assembly", Home::Rail),
+    ("heat.toggle", Home::Rail),
+    ("view.emc", Home::Rail),
+    ("view.3d_position", Home::Rail),
+    ("view.3d_stats", Home::Rail),
+    ("view.3d_align_left", Home::Rail),
+    ("view.3d_align_hcentre", Home::Rail),
+    ("view.3d_align_right", Home::Rail),
+    ("view.3d_align_top", Home::Rail),
+    ("view.3d_align_vcentre", Home::Rail),
+    ("view.3d_align_bottom", Home::Rail),
+    ("view.3d_spread_h", Home::Rail),
+    ("view.3d_spread_v", Home::Rail),
+    ("view.3d_hide", Home::Rail),
+    ("view.3d_isolate", Home::Rail),
+    ("view.3d_show_all", Home::Rail),
+    // Cabinet rail
+    ("cabinet.place-all", Home::Rail),
+    ("cabinet.rails", Home::Rail),
+    ("cabinet.plate", Home::Rail),
+    ("cabinet.surface", Home::Rail),
+    ("cabinet.size-enclosure", Home::Rail),
+    ("cabinet.routes", Home::Rail),
+    ("cabinet.rules", Home::Rail),
+    ("cabinet.emc", Home::Rail),
+    ("cabinet.cutlist", Home::Rail),
+    ("heat.vents", Home::Rail),
+    ("view.cabinet_table", Home::Rail),
+    // Reports and Commissioning rail
+    ("report.add_page", Home::Rail),
+    ("report.designer", Home::Rail),
+    ("export.labels", Home::Rail),
+    ("view.bench", Home::Rail),
+    ("view.build", Home::Rail),
+    ("export.print_preview", Home::Rail),
+    ("export.reports", Home::Rail),
+    ("export.report_pdf", Home::Rail),
+    ("export.bom", Home::Rail),
+    ("export.pdf", Home::Rail),
+    ("export.commissioning", Home::Rail),
+    ("export.punch_list", Home::Rail),
+];
 
 /// Every home of the command `id`, menu first. Empty only for a command that
 /// has none, which the test below does not allow.
@@ -166,6 +232,17 @@ mod tests {
         }
         let pairs: HashSet<_> = RELOCATED.iter().map(|(i, h)| (*i, h.kind())).collect();
         assert_eq!(pairs.len(), RELOCATED.len(), "a home is listed twice");
+    }
+
+    /// A command whose menu row moved must have another home to go to.
+    #[test]
+    fn a_command_moved_out_of_the_menus_has_a_home_elsewhere() {
+        for id in menus::MOVED {
+            assert!(
+                RELOCATED.iter().any(|(i, _)| i == id),
+                "{id} left the menus but no rail, centre or drawer toolbar lists it in RELOCATED"
+            );
+        }
     }
 
     #[test]

@@ -138,7 +138,11 @@ fn the_surface_command_opens_the_picker_and_has_a_menu_row() {
     assert!(egui::Popup::is_id_open(&ctx, popup), "the picker is open");
     assert!(d.app.learn_anchor("cabinet.surface").is_some());
     let info = novo_workflow::commands::get("cabinet.surface").expect("registered");
-    assert!(novo_workflow::menus::place(info).is_some());
+    // Its menu row moved to the Cabinet rail: it has a home there.
+    assert!(
+        novo_workflow::menus::place(info).is_some()
+            || !novo_workflow::homes::homes(info.id).is_empty()
+    );
 }
 
 #[test]

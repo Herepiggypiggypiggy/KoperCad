@@ -206,3 +206,54 @@ fn reports_and_commissioning_have_their_rail() {
     go(&mut d, size, "view.commissioning");
     assert!(d.app.wb.rail_rect.is_some(), "the Commissioning rail");
 }
+
+/// `homes::RELOCATED` says which commands a rail is the home of. The rails
+/// decide what they draw, so the two lists must agree both ways: a command
+/// the table sends to a rail is drawn on one, and a command that a rail
+/// draws and that has no menu row says so in the table.
+#[test]
+fn the_relocated_table_matches_what_the_rails_draw() {
+    use super::{rail_reports as rr, rail_schematic as rs};
+    use novo_workflow::homes::{Home, RELOCATED};
+    let drawn: std::collections::HashSet<&str> = [
+        rs::TOOLS,
+        rs::ASSISTS,
+        rs::PANELS,
+        rs::HISTORY,
+        rs::CONNECT_FLYOUT,
+        rail_3d::TOOLS,
+        rail_3d::ASSISTS,
+        rail_3d::PANELS,
+        rail_3d::ALIGN_FLYOUT,
+        rail_3d::HIDE_FLYOUT,
+        rail_cabinet::TOOLS,
+        rail_cabinet::ASSISTS,
+        rail_cabinet::PANELS,
+        rr::REPORTS_TOOLS,
+        rr::REPORTS_ASSISTS,
+        rr::REPORTS_PANELS,
+        rr::EXPORT_FLYOUT,
+        rr::COMMISSIONING_TOOLS,
+        rr::COMMISSIONING_ASSISTS,
+        rr::COMMISSIONING_PANELS,
+    ]
+    .into_iter()
+    .flatten()
+    .copied()
+    .collect();
+    for (id, home) in RELOCATED {
+        if *home == Home::Rail {
+            assert!(
+                drawn.contains(id),
+                "{id} is a Rail home but no rail draws it"
+            );
+        }
+    }
+    for id in &drawn {
+        if id.starts_with("rail.") {
+            continue;
+        }
+        let homes = novo_workflow::homes::homes(id);
+        assert!(!homes.is_empty(), "{id} is drawn on a rail and has no home");
+    }
+}

@@ -181,7 +181,11 @@ fn the_rails_and_ducts_list_has_a_command_a_menu_row_and_a_shortcut() {
     d.app.run_command(&ctx, "cabinet.rails", None);
     assert!(!d.app.cabinet.rails.open);
     let info = novo_workflow::commands::get("cabinet.rails").expect("registered");
-    assert!(novo_workflow::menus::place(info).is_some());
+    // Its menu row moved to the Cabinet rail: it has a home there.
+    assert!(
+        novo_workflow::menus::place(info).is_some()
+            || !novo_workflow::homes::homes(info.id).is_empty()
+    );
     let keymap = novo_workflow::keymap::Keymap::workflow();
     assert!(
         keymap

@@ -852,9 +852,17 @@ fn menu_rows_are_anchors_that_fall_back_to_their_menu() {
     use super::learn_labels::{anchor_fallback, any_anchor_label, menu_anchors};
     let rows: Vec<_> = menu_anchors()
         .iter()
-        .filter(|m| m.id.starts_with("cmd."))
+        .filter(|m| m.id.starts_with("cmd.") && m.parent.is_some())
         .collect();
     assert!(rows.len() > 20, "{} command rows", rows.len());
+    // A row that moved to a rail has no menu to fall back to: the rail draws it.
+    for id in novo_workflow::menus::MOVED {
+        assert_eq!(
+            super::learn_labels::moved_anchor(id),
+            Some(format!("cmd.{id}").as_str())
+        );
+        assert!(anchor_fallback(&format!("cmd.{id}")).is_none());
+    }
     for row in rows {
         let parent = anchor_fallback(&row.id).expect("a row points at its menu");
         assert!(parent.starts_with("menu."), "{} -> {parent}", row.id);
