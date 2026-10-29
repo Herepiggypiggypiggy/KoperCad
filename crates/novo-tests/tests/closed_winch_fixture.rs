@@ -31,3 +31,26 @@ fn the_fixture_builds_with_one_closed_loop_winch_and_its_bindings() {
         );
     }
 }
+
+#[test]
+fn the_pair_fixture_names_the_second_winch_and_its_devices() {
+    let mut doc = Document::default();
+    let w = novo_tests::closed_winch::closed_winch_pair(&mut doc).unwrap();
+    let project = doc.project();
+    let (m2, sym2) = w.second.expect("a second winch");
+    assert!(project.symbols().any(|s| s.id == sym2));
+    let first = project.device(w.motor).unwrap();
+    let partner = first.properties.get("cw_pair_partner").unwrap().to_string();
+    assert_eq!(partner, project.device(m2).unwrap().tag.to_string());
+    let second = project.device(m2).unwrap();
+    for key in [
+        "cw_sto_a",
+        "cw_sto_b",
+        "cw_encoder",
+        "cw_brake_relay",
+        "cw_brake_feed",
+    ] {
+        let tag = second.properties.get(key).map(|v| v.to_string()).unwrap();
+        assert!(project.devices().any(|d| d.tag.to_string() == tag), "{key}");
+    }
+}

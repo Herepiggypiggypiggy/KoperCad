@@ -3,6 +3,7 @@
 //! Lanes: L2c `sync_winch` (two closed-loop winches on one load), `cl_winch_spec` and `cl_winch_loop` (a closed-loop winch driven by the drawn circuit), L4 kinematics (`crane`), L4/L5 schematic `bindings`, L5 co-simulation `cosim`.
 
 pub mod bindings;
+pub mod cl_pair_loop;
 pub mod cl_winch_loop;
 pub mod cl_winch_spec;
 pub mod cosim;

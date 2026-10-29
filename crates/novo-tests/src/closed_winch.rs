@@ -5,6 +5,10 @@
 //! properties, so a defect injected on STOA, STOB, ENC or KB (Simulate > Defects and walk-throughs)
 //! reaches the drive.
 //!
+//! `closed_winch_pair` adds a second winch M2 on one beam with M1: its own STO channels STOC and
+//! STOD, encoder signal monitor ENCB and brake contactor KB2 behind the drive's brake relay KR3.
+//! M1 names M2 as its partner, so the run takes them as one pair; the radio commands both.
+//!
 //! The values are made up for the fixture: a generic 30 kW hoist motor, not any manufacturer's data.
 
 use novo_core::{
@@ -20,6 +24,8 @@ pub struct ClosedWinch {
     pub up_step1: SymbolId,
     pub up_step2: SymbolId,
     pub motor_sym: SymbolId,
+    /// The second winch (device and motor symbol) of the pair fixture.
+    pub second: Option<(DeviceId, SymbolId)>,
 }
 
 fn at(x: f64, y: f64) -> Placement {
@@ -40,13 +46,27 @@ fn role(device: DeviceId, main: bool) -> SymbolRole {
 
 /// Builds the closed-loop winch project as one undo step.
 pub fn closed_winch(doc: &mut Document) -> Result<ClosedWinch> {
-    Ok(doc.transact("Draw closed-loop winch", build)?.0)
+    Ok(doc
+        .transact("Draw closed-loop winch", |tx| build(tx, false))?
+        .0)
 }
 
-fn build(tx: &mut Tx<'_>) -> Result<ClosedWinch> {
-    tx.set_info(|i| i.name = "Closed-loop winch".into())?;
+/// Builds the project with two winches on one beam as one undo step.
+pub fn closed_winch_pair(doc: &mut Document) -> Result<ClosedWinch> {
+    Ok(doc
+        .transact("Draw two closed-loop winches", |tx| build(tx, true))?
+        .0)
+}
+
+fn build(tx: &mut Tx<'_>, pair: bool) -> Result<ClosedWinch> {
+    let title = if pair {
+        "Two closed-loop winches"
+    } else {
+        "Closed-loop winch"
+    };
+    tx.set_info(|i| i.name = title.into())?;
     let page = tx.add_page("1")?;
-    tx.update::<Page>(page, |p| p.title = "Closed-loop winch".into())?;
+    tx.update::<Page>(page, |p| p.title = title.into())?;
     let l = tx.add_potential("L", PotentialKind::Line)?;
     let n = tx.add_potential("N", PotentialKind::Neutral)?;
 
@@ -88,20 +108,30 @@ fn build(tx: &mut Tx<'_>) -> Result<ClosedWinch> {
         }
         Ok::<_, novo_core::ModelError>(id)
     };
+    // Column `k` of the rungs. The pair has ten, so they are drawn closer to stay inside the frame.
+    let col = |k: usize| {
+        if pair {
+            96.0 + 34.0 * k as f64
+        } else {
+            190.0 + 48.0 * k as f64
+        }
+    };
     let btn = "iec/operators/pushbutton_no";
     let no = "iec/contacts/no";
     let coil = "iec/coils/relay";
 
+    // The pair's motors sit below the rungs, clear of the Live panel and its readings.
+    let motor_at = if pair { (150.0, 185.0) } else { (60.0, 60.0) };
     let motor_sym = tx.place_symbol(
         page,
         "iec/motors/motor_3ph",
-        at(60.0, 60.0),
+        at(motor_at.0, motor_at.1),
         pins(&[("U1", 0.0, 0.0), ("V1", 8.0, 0.0), ("W1", 16.0, 0.0)]),
         role(m1, true),
     )?;
 
     // Rung 1: KA1 = S1 or S2.
-    let x = 190.0;
+    let x = col(0);
     let f = feed(tx, l, x, 20.0)?;
     let j_top = tx.add_junction(page, Point::new(x, 44.0))?;
     let b1 = sym(tx, btn, x - 12.0, 52.0, s1, true)?;
@@ -119,7 +149,7 @@ fn build(tx: &mut Tx<'_>) -> Result<ClosedWinch> {
 
     // Rung 2: KA3 = S2 (the same radio contact, drawn again).
     {
-        let x = 238.0;
+        let x = col(1);
         let f = feed(tx, l, x, 20.0)?;
         let b = sym(tx, btn, x, 52.0, s2, false)?;
         let k = sym(tx, coil, x, 112.0, ka3, true)?;
@@ -130,7 +160,7 @@ fn build(tx: &mut Tx<'_>) -> Result<ClosedWinch> {
     }
     // Rungs 3 to 5: the STO channels and the encoder signal monitor, each a relay fed from L and
     // N. A defect on one of them (open coil, lost supply) is what the drive sees.
-    for (x, device) in [(286.0, sto_a), (334.0, sto_b), (382.0, enc)] {
+    for (x, device) in [(col(2), sto_a), (col(3), sto_b), (col(4), enc)] {
         let f = feed(tx, l, x, 20.0)?;
         let k = sym(tx, coil, x, 112.0, device, true)?;
         let fnn = feed(tx, n, x, 136.0)?;
@@ -139,7 +169,7 @@ fn build(tx: &mut Tx<'_>) -> Result<ClosedWinch> {
     }
 
     // Rung 6: the drive's brake relay contact (written by the run) feeds the brake contactor KB.
-    let x = 430.0;
+    let x = col(5);
     let f = feed(tx, l, x, 20.0)?;
     let relay = sym(tx, no, x, 52.0, kr2, true)?;
     let kb_coil = sym(tx, coil, x, 112.0, kb, true)?;
@@ -147,6 +177,58 @@ fn build(tx: &mut Tx<'_>) -> Result<ClosedWinch> {
     tx.connect(Endpoint::pin(f, 0), Endpoint::pin(relay, 0))?;
     tx.connect(Endpoint::pin(relay, 1), Endpoint::pin(kb_coil, 0))?;
     tx.connect(Endpoint::pin(kb_coil, 1), Endpoint::pin(fnn, 0))?;
+
+    // The second winch: STO channels and encoder monitor as relays, the drive's brake relay
+    // contact written by the run, the brake contactor behind it.
+    let mut second = None;
+    if pair {
+        let m2 = tx.add_device(tag("=A1+FLD-M2"), "Hoist motor B")?;
+        let sto_c = tx.add_device(tag("=A1+CAB-STOC"), "STO channel 1, winch B")?;
+        let sto_d = tx.add_device(tag("=A1+CAB-STOD"), "STO channel 2, winch B")?;
+        let enc_b = tx.add_device(tag("=A1+CAB-ENCB"), "Encoder signal monitor, winch B")?;
+        let kr3 = tx.add_device(tag("=A1+CAB-KR3"), "Drive brake relay, winch B")?;
+        let kb2 = tx.add_device(tag("=A1+CAB-KB2"), "Brake contactor, winch B")?;
+        let motor_b = tx.place_symbol(
+            page,
+            "iec/motors/motor_3ph",
+            at(150.0, 235.0),
+            pins(&[("U1", 0.0, 0.0), ("V1", 8.0, 0.0), ("W1", 16.0, 0.0)]),
+            role(m2, true),
+        )?;
+        for (x, device) in [(col(6), sto_c), (col(7), sto_d), (col(8), enc_b)] {
+            let f = feed(tx, l, x, 20.0)?;
+            let k = sym(tx, coil, x, 112.0, device, true)?;
+            let fnn = feed(tx, n, x, 136.0)?;
+            tx.connect(Endpoint::pin(f, 0), Endpoint::pin(k, 0))?;
+            tx.connect(Endpoint::pin(k, 1), Endpoint::pin(fnn, 0))?;
+        }
+        let x = col(9);
+        let f = feed(tx, l, x, 20.0)?;
+        let relay = sym(tx, no, x, 52.0, kr3, true)?;
+        let kb_coil = sym(tx, coil, x, 112.0, kb2, true)?;
+        let fnn = feed(tx, n, x, 136.0)?;
+        tx.connect(Endpoint::pin(f, 0), Endpoint::pin(relay, 0))?;
+        tx.connect(Endpoint::pin(relay, 1), Endpoint::pin(kb_coil, 0))?;
+        tx.connect(Endpoint::pin(kb_coil, 1), Endpoint::pin(fnn, 0))?;
+        for (key, value) in [
+            ("cw_mass_kg", 2500.0.into()),
+            ("cw_sto_a", "=A1+CAB-STOC".into()),
+            ("cw_sto_b", "=A1+CAB-STOD".into()),
+            ("cw_encoder", "=A1+CAB-ENCB".into()),
+            ("cw_brake_relay", "=A1+CAB-KR3".into()),
+            ("cw_brake_feed", "=A1+CAB-KB2".into()),
+        ] {
+            tx.set_property(m2, key, Some(value))?;
+        }
+        for (key, value) in [
+            ("cw_pair_partner", "=A1+FLD-M2".into()),
+            ("cw_beam_mass_kg", 5000.0.into()),
+            ("cw_beam_length_m", 2.0.into()),
+        ] {
+            tx.set_property(m1, key, Some(value))?;
+        }
+        second = Some((m2, motor_b));
+    }
 
     for (key, value) in [
         ("cw_mass_kg", 2500.0.into()),
@@ -167,5 +249,6 @@ fn build(tx: &mut Tx<'_>) -> Result<ClosedWinch> {
         up_step1: b1,
         up_step2: b2,
         motor_sym,
+        second,
     })
 }

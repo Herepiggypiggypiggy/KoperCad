@@ -1,0 +1,20 @@
+@title Two closed-loop winches: the first motor's property sheet shows the Two winches on one beam section
+@area Simulate
+@sizes 1920x1080
+# Lane L2c, pair. Selecting the first winch's motor shows its "Closed-loop winch" rows and, below them,
+# "Two winches on one beam": the second winch, the beam, the ropes and the synchronisation.
+open qa/fixtures/closed-winch-pair.novo
+wait 30
+key Escape
+wait 5
+key Home
+wait 30
+click 938 719
+wait 30
+shot motor-selected
+expect "Hook load (payload and block)"
+scroll 1685 500 -1500
+wait 20
+expect "Second winch on the same beam"
+shot beam-and-sync-rows
+check_layout

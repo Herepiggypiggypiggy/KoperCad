@@ -252,87 +252,10 @@ impl ClWinchLoop {
 
     /// Binding problems to show before the run.
     pub fn check_bindings(&self, circuit: &impl CircuitPort) -> Vec<BindingFinding> {
-        let mut out = Vec::new();
-        let finding = |module: &str, message: String| BindingFinding {
-            module: module.to_owned(),
-            message,
-        };
-        for m in &self.modules {
-            let b = &m.binding;
-            let named = [
-                ("up input", &b.up),
-                ("down input", &b.down),
-                ("speed step 2 input", &b.fast),
-                ("STO channel 1", &b.sto[0]),
-                ("STO channel 2", &b.sto[1]),
-                ("encoder signal", &b.encoder),
-                ("main contactor", &b.mains),
-                ("brake relay contact", &b.brake_relay),
-                ("brake feed", &b.brake_feed),
-                ("brake feedback", &b.brake_feedback),
-                ("reset input", &b.reset),
-            ];
-            for (what, tag) in named {
-                if let Some(tag) = tag
-                    && !circuit.knows_device(tag)
-                {
-                    out.push(finding(
-                        &m.id,
-                        format!("{what} {tag} is not in the circuit"),
-                    ));
-                }
-            }
-            for limit in &b.limits {
-                if !circuit.knows_device(&limit.binding.device_tag) {
-                    out.push(finding(
-                        &m.id,
-                        format!(
-                            "limit switch {} is not in the circuit",
-                            limit.binding.device_tag
-                        ),
-                    ));
-                }
-            }
-            if b.up.is_none() && b.down.is_none() {
-                out.push(finding(
-                    &m.id,
-                    "no up or down input is bound: the winch cannot be commanded".into(),
-                ));
-            }
-            if b.brake_relay.is_none() && b.brake_feed.is_some() {
-                out.push(finding(
-                    &m.id,
-                    "the brake is fed from the circuit but the drive's brake relay contact is \
-                     not bound, so the brake is never commanded open"
-                        .into(),
-                ));
-            }
-            if b.brake_feed.is_none() {
-                out.push(finding(
-                    &m.id,
-                    "no brake feed device is bound: the brake follows the drive's relay \
-                     directly (ideal wiring, the brake contactor and rectifier are not checked)"
-                        .into(),
-                ));
-            }
-            if b.sto[0].is_none() || b.sto[1].is_none() {
-                out.push(finding(
-                    &m.id,
-                    "an STO channel is not bound: it counts as always energised, so STO can \
-                     never be requested through it"
-                        .into(),
-                ));
-            }
-            if b.encoder.is_none() {
-                out.push(finding(
-                    &m.id,
-                    "no encoder signal device is bound: the encoder is always present in the \
-                     drawing (a loss can still be injected in the engine)"
-                        .into(),
-                ));
-            }
-        }
-        out
+        self.modules
+            .iter()
+            .flat_map(|m| binding_findings(&m.id, &m.binding, true, circuit))
+            .collect()
     }
 
     /// One tick.
@@ -363,11 +286,88 @@ impl ClWinchLoop {
     }
 }
 
-fn energised(circuit: &impl CircuitPort, tag: &Option<String>) -> bool {
+/// Binding problems of one winch. `commanded`: this winch's own up and down inputs are what
+/// commands it (the second winch of a pair is commanded through the first one's).
+pub(crate) fn binding_findings(
+    module: &str,
+    b: &ClWinchBinding,
+    commanded: bool,
+    circuit: &impl CircuitPort,
+) -> Vec<BindingFinding> {
+    let mut out = Vec::new();
+    let finding = |message: String| BindingFinding {
+        module: module.to_owned(),
+        message,
+    };
+    let named = [
+        ("up input", &b.up),
+        ("down input", &b.down),
+        ("speed step 2 input", &b.fast),
+        ("STO channel 1", &b.sto[0]),
+        ("STO channel 2", &b.sto[1]),
+        ("encoder signal", &b.encoder),
+        ("main contactor", &b.mains),
+        ("brake relay contact", &b.brake_relay),
+        ("brake feed", &b.brake_feed),
+        ("brake feedback", &b.brake_feedback),
+        ("reset input", &b.reset),
+    ];
+    for (what, tag) in named {
+        if let Some(tag) = tag
+            && !circuit.knows_device(tag)
+        {
+            out.push(finding(format!("{what} {tag} is not in the circuit")));
+        }
+    }
+    for limit in &b.limits {
+        if !circuit.knows_device(&limit.binding.device_tag) {
+            out.push(finding(format!(
+                "limit switch {} is not in the circuit",
+                limit.binding.device_tag
+            )));
+        }
+    }
+    if commanded && b.up.is_none() && b.down.is_none() {
+        out.push(finding(
+            "no up or down input is bound: the winch cannot be commanded".into(),
+        ));
+    }
+    if b.brake_relay.is_none() && b.brake_feed.is_some() {
+        out.push(finding(
+            "the brake is fed from the circuit but the drive's brake relay contact is \
+             not bound, so the brake is never commanded open"
+                .into(),
+        ));
+    }
+    if b.brake_feed.is_none() {
+        out.push(finding(
+            "no brake feed device is bound: the brake follows the drive's relay \
+             directly (ideal wiring, the brake contactor and rectifier are not checked)"
+                .into(),
+        ));
+    }
+    if b.sto[0].is_none() || b.sto[1].is_none() {
+        out.push(finding(
+            "an STO channel is not bound: it counts as always energised, so STO can \
+             never be requested through it"
+                .into(),
+        ));
+    }
+    if b.encoder.is_none() {
+        out.push(finding(
+            "no encoder signal device is bound: the encoder is always present in the \
+             drawing (a loss can still be injected in the engine)"
+                .into(),
+        ));
+    }
+    out
+}
+
+pub(crate) fn energised(circuit: &impl CircuitPort, tag: &Option<String>) -> bool {
     tag.as_deref().is_some_and(|t| circuit.is_energised(t))
 }
 
-fn energised_or_true(circuit: &impl CircuitPort, tag: &Option<String>) -> bool {
+pub(crate) fn energised_or_true(circuit: &impl CircuitPort, tag: &Option<String>) -> bool {
     tag.as_deref().is_none_or(|t| circuit.is_energised(t))
 }
 
