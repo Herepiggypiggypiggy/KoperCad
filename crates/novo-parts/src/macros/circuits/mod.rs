@@ -138,6 +138,7 @@ const SOURCES: &[CircuitSource] = sources![
     "1-supply/crane-supply-isolator-fuses.toml",
     "2-protection/feeder-dol.toml",
     "2-protection/feeder-reversing.toml",
+    "2-protection/pump-feeder-frequency-controlled.toml",
     "3-hoists/hoist-encoder-feedback.toml",
     "3-hoists/hoist-load-limit-relay.toml",
     "3-hoists/hoist-single-speed-brake.toml",
@@ -156,6 +157,7 @@ const SOURCES: &[CircuitSource] = sources![
     "7-peripherals/horn-and-beacon.toml",
     "7-peripherals/limit-switch-permits.toml",
     "7-peripherals/motor-thermistor-relay.toml",
+    "7-peripherals/pump-level-control.toml",
 ];
 
 /// The circuit files that ship with the program.
