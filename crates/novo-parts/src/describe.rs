@@ -224,9 +224,13 @@ fn number(props: &Properties, key: &str) -> Option<f64> {
 }
 
 fn count(props: &Properties, key: &str) -> Option<u32> {
-    number(props, key)
-        .filter(|v| *v >= 0.0 && v.fract() == 0.0)
-        .map(|v| v as u32)
+    let v = match props.get(key)? {
+        Value::Float(v) => *v,
+        Value::Int(v) => *v as f64,
+        Value::Text(t) => t.trim().parse().ok()?,
+        _ => return None,
+    };
+    (v.is_finite() && (0.0..1e6).contains(&v) && v.fract() == 0.0).then_some(v as u32)
 }
 
 fn text(props: &Properties, key: &str) -> Option<String> {
