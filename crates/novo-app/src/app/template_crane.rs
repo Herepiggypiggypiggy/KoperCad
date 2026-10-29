@@ -3,10 +3,16 @@
 //! structure tree (girder, hoist units, operator station, cabinets, limit
 //! switches, collision protection, load cell, motors), a few empty drawing
 //! pages filed under it and the cover pages as one generated "Front matter"
-//! page that fills itself from the project. Generic overhead-crane
-//! knowledge only; ratings are left for the project to enter.
+//! page that fills itself from the project. The pages carry circuits from the
+//! standard circuit library (docs/CIRCUIT-LIBRARY.md), chosen by the options
+//! of the New crane project window: the number of hoist units and the drive
+//! of the hoists and of the travel motions. Generic overhead-crane knowledge
+//! only; ratings are left for the project to enter.
 
-use novo_core::{ChangeSet, DeviceTag, Document, Page, PageKind, Result as ModelResult, Tx, Value};
+use novo_core::{
+    ChangeSet, DeviceTag, Document, Page, PageKind, Point, Result as ModelResult, Tx, Value,
+};
+use novo_parts::circuit_library;
 use novo_reports::{GeneratedPageSpec, add_generated_pages, front_keys};
 
 /// What a project from this template is called until it is renamed.
@@ -40,14 +46,6 @@ const TREE: &[Node] = &[
     node("=CRN+GIR+DST", "Supply distribution", true),
     node("=CRN+GIR+MCC", "Main control cabinet", true),
     node("=CRN+GIR+AUX", "Additional cabinet, girder", true),
-    node("=CRN+HU1", "Hoist unit 1", false),
-    node("=CRN+HU1+APP", "Apparatus set, hoist unit 1", true),
-    node("=CRN+HU1+REL", "Relay cabinet, hoist unit 1", true),
-    node("=CRN+HU1+CTL", "Control cabinet, hoist unit 1", true),
-    node("=CRN+HU2", "Hoist unit 2", false),
-    node("=CRN+HU2+APP", "Apparatus set, hoist unit 2", true),
-    node("=CRN+HU2+REL", "Relay cabinet, hoist unit 2", true),
-    node("=CRN+HU2+CTL", "Control cabinet, hoist unit 2", true),
     node("=CRN+OPS", "Operator station", false),
     node("=CRN+OPS+PLG", "Operator plug", true),
     node("=CRN+OPS+OP1", "Operator 1 (pendant or radio)", false),
@@ -74,21 +72,66 @@ const TREE: &[Node] = &[
     ),
 ];
 
-/// The drawing pages the project starts with: name, title and the cabinet
-/// they are filed under. All empty; the structure and the numbering are the
-/// template.
-const PAGES: &[(&str, &str, &str)] = &[
-    ("1", "Incoming supply and distribution", "=CRN+GIR+DST"),
-    (
-        "2",
-        "Main control: protection and control supply",
-        "=CRN+GIR+MCC",
-    ),
-    ("3", "Bridge travel", "=CRN+GIR+MCC"),
-    ("4", "Crab travel", "=CRN+GIR+MCC"),
-    ("5", "Hoist unit 1: power", "=CRN+HU1+CTL"),
-    ("6", "Hoist unit 1: control", "=CRN+HU1+CTL"),
-];
+/// How a motion is driven; picks the circuit its page carries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum Drive {
+    /// Pole-change motor on contactors, with a brake.
+    #[default]
+    TwoSpeed,
+    /// Frequency drive, with a brake.
+    Frequency,
+}
+
+/// What the New crane project window asks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CraneOptions {
+    /// Hoist units, 1 to [`MAX_HOIST_UNITS`].
+    pub hoist_units: u8,
+    pub hoist_drive: Drive,
+    pub travel_drive: Drive,
+}
+
+pub(crate) const MAX_HOIST_UNITS: u8 = 4;
+
+impl Default for CraneOptions {
+    fn default() -> Self {
+        CraneOptions {
+            hoist_units: 1,
+            hoist_drive: Drive::TwoSpeed,
+            travel_drive: Drive::Frequency,
+        }
+    }
+}
+
+impl CraneOptions {
+    fn hoist_circuit(self) -> &'static str {
+        match self.hoist_drive {
+            Drive::TwoSpeed => "Hoist two-speed with rectifier brake",
+            Drive::Frequency => "Hoist frequency controlled with brake and braking resistor",
+        }
+    }
+
+    fn travel_circuit(self) -> &'static str {
+        match self.travel_drive {
+            Drive::TwoSpeed => "Travel two-speed with brake motor",
+            Drive::Frequency => "Travel drive frequency controlled with brake",
+        }
+    }
+}
+
+const SUPPLY_CIRCUIT: &str = "Control transformer 400 V to 48 V";
+const ESTOP_CIRCUIT: &str = "Main contactor with emergency stop chain";
+
+/// The structure nodes of hoist unit `n`.
+fn hoist_nodes(n: u8) -> Vec<(String, String, bool)> {
+    let t = |s: &str| format!("=CRN+HU{n}{s}");
+    vec![
+        (t(""), format!("Hoist unit {n}"), false),
+        (t("+APP"), format!("Apparatus set, hoist unit {n}"), true),
+        (t("+REL"), format!("Relay cabinet, hoist unit {n}"), true),
+        (t("+CTL"), format!("Control cabinet, hoist unit {n}"), true),
+    ]
+}
 
 fn tag(text: &str) -> DeviceTag {
     DeviceTag::parse(text).expect("the template tags are valid")
@@ -96,7 +139,12 @@ fn tag(text: &str) -> DeviceTag {
 
 /// Builds the template into a project that has only its empty first page.
 /// `today` is the issue date the cover pages start with.
-pub(crate) fn build_crane_template_on(doc: &mut Document, today: &str) -> ModelResult<ChangeSet> {
+pub(crate) fn build_crane_template_on(
+    doc: &mut Document,
+    today: &str,
+    options: CraneOptions,
+) -> ModelResult<ChangeSet> {
+    let units = options.hoist_units.clamp(1, MAX_HOIST_UNITS);
     let ((), changes) = doc.transact("New from template", |tx: &mut Tx<'_>| {
         let empty: Vec<_> = tx.project().pages().map(|p| p.id).collect();
         for page in empty {
@@ -105,12 +153,56 @@ pub(crate) fn build_crane_template_on(doc: &mut Document, today: &str) -> ModelR
         for n in TREE {
             tx.add_structure(tag(n.tag), n.description, n.enclosure)?;
         }
-        for (name, title, structure) in PAGES {
-            let page = tx.add_page(*name)?;
+        for unit in 1..=units {
+            for (t, description, enclosure) in hoist_nodes(unit) {
+                tx.add_structure(tag(&t), description, enclosure)?;
+            }
+        }
+        let mut circuits = Circuits::default();
+        let mut add = |tx: &mut Tx<'_>, name: &str, title: &str, structure: &str, circuit: &str| {
+            let page = tx.add_page(name)?;
             tx.update::<Page>(page, |p| {
-                p.title = (*title).into();
+                p.title = title.into();
                 p.structure = tag(structure);
             })?;
+            circuits.place(tx, page, circuit)
+        };
+        add(
+            tx,
+            "1",
+            "Incoming supply and control transformer",
+            "=CRN+GIR+DST",
+            SUPPLY_CIRCUIT,
+        )?;
+        add(
+            tx,
+            "2",
+            "Main contactor and emergency stop",
+            "=CRN+GIR+MCC",
+            ESTOP_CIRCUIT,
+        )?;
+        add(
+            tx,
+            "3",
+            "Bridge travel",
+            "=CRN+GIR+MCC",
+            options.travel_circuit(),
+        )?;
+        add(
+            tx,
+            "4",
+            "Crab travel",
+            "=CRN+GIR+MCC",
+            options.travel_circuit(),
+        )?;
+        for unit in 1..=units {
+            add(
+                tx,
+                &(4 + u32::from(unit)).to_string(),
+                &format!("Hoist unit {unit}"),
+                &format!("=CRN+HU{unit}+CTL"),
+                options.hoist_circuit(),
+            )?;
         }
         // The cover pages open the set (page 00, ahead of the drawing).
         add_generated_pages(
@@ -150,7 +242,35 @@ pub(crate) fn build_crane_template_on(doc: &mut Document, today: &str) -> ModelR
     Ok(changes)
 }
 
-/// [`build_crane_template_on`] dated today.
-pub(crate) fn build_crane_template(doc: &mut Document) -> ModelResult<ChangeSet> {
-    build_crane_template_on(doc, &super::revisions::today())
+/// The circuits of the standard library by name, each adopted into the
+/// project once and then placed on as many pages as needed.
+#[derive(Default)]
+struct Circuits {
+    adopted: Vec<(String, novo_core::BlockDefinitionId)>,
+    /// The library, built on the first circuit asked for.
+    library: Option<Vec<(String, novo_parts::MacroFile)>>,
+}
+
+impl Circuits {
+    /// Places circuit `name` at the top left of `page`.
+    fn place(&mut self, tx: &mut Tx<'_>, page: novo_core::PageId, name: &str) -> ModelResult<()> {
+        let id = match self.adopted.iter().find(|(n, _)| n == name) {
+            Some((_, id)) => *id,
+            None => {
+                let library = self
+                    .library
+                    .get_or_insert_with(|| circuit_library().unwrap_or_default());
+                let file = library
+                    .iter()
+                    .find(|(_, f)| f.name == name)
+                    .map(|(_, f)| f.clone())
+                    .unwrap_or_else(|| panic!("the circuit library has no \"{name}\""));
+                let id = tx.adopt_block_definition(file.definition)?;
+                self.adopted.push((name.to_owned(), id));
+                id
+            }
+        };
+        tx.place_block(id, page, Point::new(20.0, 20.0), Vec::new())?;
+        Ok(())
+    }
 }

@@ -291,11 +291,12 @@ impl NovoApp {
 
     /// File > New from template > Overhead crane: a structure tree, a few
     /// empty pages and the cover pages, in a new unsaved project.
-    pub(super) fn new_crane_project(&mut self) {
+    pub(super) fn new_crane_project(&mut self, options: super::template_crane::CraneOptions) {
+        let today = super::revisions::today();
         self.open_built(
             super::template_crane::CRANE_TEMPLATE_NAME,
-            super::template_crane::build_crane_template,
-            "New crane project. Fill in Project > Project settings > Project information; the cover pages follow.",
+            |doc| super::template_crane::build_crane_template_on(doc, &today, options),
+            "New crane project. Each page carries a circuit; the open points in Issues are where you connect the supply. Cover pages: Project settings > Project information.",
             false,
         );
     }
@@ -318,7 +319,7 @@ impl NovoApp {
     fn open_built(
         &mut self,
         name: &str,
-        build: fn(&mut Document) -> ModelResult<novo_core::ChangeSet>,
+        build: impl FnOnce(&mut Document) -> ModelResult<novo_core::ChangeSet>,
         welcome: &str,
         saved: bool,
     ) {
