@@ -234,6 +234,18 @@ impl Panel {
             }
             None => None,
         };
+        // A double click on the title bar maximises the panel to its canvas,
+        // and back. A card that fits its content has nothing to maximise.
+        let maximise = (self.title_bar && !self.fit)
+            .then(|| maximise_step(ctx, id, self.canvas.shrink(MARGIN), self.collapsible))
+            .flatten();
+        let placed = match maximise {
+            Some(target) => {
+                mark_moved(ctx, id);
+                Some(target.min)
+            }
+            None => placed,
+        };
         let moved = is_moved(ctx, id);
         // The outline flyout (Pages, Issues) hangs over the left edge of the
         // canvas; a panel on that side starts beside it, not under it.
@@ -251,8 +263,11 @@ impl Panel {
             0.0
         };
         let below = if self.low { MARGIN } else { BOTTOM };
-        let max_height =
-            (self.canvas.height() - self.top - below - self.bottom - corner).max(MIN_HEIGHT);
+        let max_height = if is_maximised(ctx, id) {
+            self.canvas.height() - 2.0 * MARGIN
+        } else {
+            (self.canvas.height() - self.top - below - self.bottom - corner).max(MIN_HEIGHT)
+        };
         let mut window = egui::Window::new(&self.title)
             .id(id)
             .order(egui::Order::Middle)
@@ -286,10 +301,15 @@ impl Panel {
             let h = self.height.unwrap_or(420.0).min(max_height);
             window = window.fixed_size([self.width, h]);
         }
+        if let Some(target) = maximise {
+            window = window.fixed_size(target.size());
+        }
         // Placed by us until the first drag (egui would shift a tall window
         // up while it is still sizing); kept on the canvas once it is dragged.
         window = if moved {
-            let window = window.constrain_to(self.canvas);
+            let window = window
+                .constrain_to(self.canvas)
+                .constrain(maximise.is_none());
             // egui keeps the position of the corner the window hangs from. A
             // panel at the right or bottom edge hung from that corner until
             // the person dragged it; from then on it hangs from its top left.
@@ -320,7 +340,7 @@ impl Panel {
             && ctx
                 .memory(|m| m.area_rect(id))
                 .is_some_and(|r| corner_of(r, pivot).distance(start) > 1.0);
-        if taken.is_some() || drifted {
+        if taken.is_some() || drifted || maximise.is_some() {
             window = window.drag_area(egui::containers::WindowDrag::Anywhere);
         }
         // The window's own scroll area has no bar setting, so a solid
@@ -550,6 +570,13 @@ pub(super) fn dialog<'a>(
         .min(screen.max.x - DIALOG_MIN_WIDTH);
     let width = size[0].max(DIALOG_MIN_WIDTH).min(screen.width());
     let window_title = title.text().to_owned();
+    let limits = egui::Rect::from_min_max(
+        screen.min,
+        egui::pos2(
+            screen.max.x,
+            (screen.max.y - STATUS_BAR).max(screen.min.y + DIALOG_MIN_HEIGHT),
+        ),
+    );
     let window = egui::Window::new(title)
         .resizable(true)
         .collapsible(true)
@@ -558,28 +585,39 @@ pub(super) fn dialog<'a>(
         .max_height((screen.height() - TOP - BOTTOM).max(MIN_HEIGHT))
         // Kept above the status bar (BOTTOM already leaves its room in the
         // height of a window that starts at the top).
-        .constrain_to(egui::Rect::from_min_max(
-            screen.min,
-            egui::pos2(
-                screen.max.x,
-                (screen.max.y - STATUS_BAR).max(screen.min.y + DIALOG_MIN_HEIGHT),
-            ),
-        ))
+        .constrain_to(limits)
         .scroll([false, true]);
     // A height of 0 means "as tall as the content", up to the screen (egui
     // starts a window at 420 and grows it to fit what is inside).
-    let reset = size_reset_due(ctx, egui::Id::new(Some(window_title)));
+    let reset = size_reset_due(ctx, egui::Id::new(Some(window_title.clone())));
     let height = if size[1] > 0.0 {
         size[1].min((screen.height() - TOP).max(MIN_HEIGHT))
     } else {
         420.0_f32.min((screen.height() - TOP).max(MIN_HEIGHT))
     };
-    if reset {
+    let window = if reset {
         window.fixed_size([width, height])
     } else if size[1] > 0.0 {
         window.default_size([width, height])
     } else {
         window.default_width(width)
+    };
+    // A double click on the title bar maximises the dialog to the window,
+    // and back; a maximised dialog may be as tall as the window.
+    let wid = egui::Id::new(Some(window_title.clone()));
+    let window = if is_maximised(ctx, wid) {
+        window.max_height(limits.height())
+    } else {
+        window
+    };
+    match maximise_step(ctx, egui::Id::new(Some(window_title)), limits, true) {
+        Some(target) => window
+            .fixed_size(target.size())
+            .pivot(egui::Align2::LEFT_TOP)
+            .current_pos(target.min)
+            .constrain(false)
+            .drag_area(egui::containers::WindowDrag::Anywhere),
+        None => window,
     }
 }
 
@@ -685,6 +723,67 @@ fn size_reset_due(ctx: &egui::Context, window: egui::Id) -> bool {
     })
 }
 
+/// True while the window `id` is maximised by [`maximise_step`].
+fn is_maximised(ctx: &egui::Context, id: egui::Id) -> bool {
+    let epoch: u32 = ctx.data_mut(|d| d.get_persisted(epoch_id())).unwrap_or(0);
+    ctx.data(|d| d.get_temp::<(u32, egui::Rect)>(id.with("restore")))
+        .is_some_and(|(e, _)| e == epoch)
+}
+
+/// What a double click on a window's title bar does: the window takes the
+/// whole `area` (the canvas for a panel, the screen for a dialog), and a
+/// second double click gives back the place and size it had. Returns the
+/// rect the window takes this frame. Call it once per frame per window,
+/// before the window is built; `collapsible` is whether the window folds up
+/// by a double click on its title (egui's own habit, undone here so the
+/// double click does one thing).
+fn maximise_step(
+    ctx: &egui::Context,
+    id: egui::Id,
+    area: egui::Rect,
+    collapsible: bool,
+) -> Option<egui::Rect> {
+    let title = ctx.read_response(id.with("__title_click"))?;
+    let hit = ctx.input(|i| {
+        i.pointer
+            .button_double_clicked(egui::PointerButton::Primary)
+            && i.pointer
+                .interact_pos()
+                .is_some_and(|p| title.rect.contains(p))
+    });
+    if !hit || ctx.layer_id_at(title.rect.center()) != Some(title.layer_id) {
+        return None;
+    }
+    let state_id = id.with("collapsing");
+    if collapsible {
+        let state =
+            egui::collapsing_header::CollapsingState::load_with_default_open(ctx, state_id, true);
+        // A folded window opens again, as it always did.
+        if !state.is_open() {
+            return None;
+        }
+        // egui folds the window on this very double click; this makes that
+        // toggle a no-op.
+        let mut state = state;
+        state.set_open(false);
+        state.store(ctx);
+    }
+    let current = ctx.memory(|m| m.area_rect(id))?;
+    let key = id.with("restore");
+    let epoch: u32 = ctx.data_mut(|d| d.get_persisted(epoch_id())).unwrap_or(0);
+    let before: Option<(u32, egui::Rect)> = ctx.data(|d| d.get_temp(key));
+    Some(match before {
+        Some((e, rect)) if e == epoch => {
+            ctx.data_mut(|d| d.remove::<(u32, egui::Rect)>(key));
+            rect
+        }
+        _ => {
+            ctx.data_mut(|d| d.insert_temp(key, (epoch, current)));
+            area
+        }
+    })
+}
+
 /// What [`modal`] hands back: what the content returned, and whether the
 /// person asked to close the window.
 pub(super) struct ModalOut<R> {
@@ -785,13 +884,18 @@ fn modal_impl<R: Default>(
     let width = size[0]
         .min(full.width())
         .max(DIALOG_MIN_WIDTH.min(full.width()));
+    let tall = if is_maximised(ctx, id) {
+        full.height()
+    } else {
+        (full.height() - 2.0 * MARGIN).max(MIN_HEIGHT)
+    };
     let mut window = egui::Window::new(title)
         .id(id)
         .order(egui::Order::Foreground)
         .collapsible(false)
         .min_width(DIALOG_MIN_WIDTH.min(width))
         .min_height(DIALOG_MIN_HEIGHT.min(full.height() - 2.0 * MARGIN))
-        .max_height((full.height() - 2.0 * MARGIN).max(MIN_HEIGHT))
+        .max_height(tall)
         .constrain_to(full)
         // A window with a size of its own scrolls and resizes both ways. One
         // that fits its content is only made wider or narrower: it starts too
@@ -808,9 +912,22 @@ fn modal_impl<R: Default>(
     if size_reset_due(ctx, id) {
         window = window.fixed_size([width, height]);
     }
+    // A double click on the title bar maximises the window, and back.
+    let maximise = maximise_step(ctx, id, full, false);
+    if let Some(target) = maximise {
+        mark_moved(ctx, id);
+        // Not kept inside the window for this frame: egui would clamp the
+        // new place by the old size and leave a restored window in a corner.
+        window = window
+            .fixed_size(target.size())
+            .pivot(egui::Align2::LEFT_TOP)
+            .current_pos(target.min)
+            .constrain(false)
+            .drag_area(egui::containers::WindowDrag::Anywhere);
+    }
     // Centered by us until the person moves it: the window's size is only
     // known after its first frame (that frame is not drawn).
-    if !moved {
+    if !moved && maximise.is_none() {
         let half = last.map_or(egui::vec2(width / 2.0, 0.0), |r| r.size() / 2.0);
         let target = full.center() - half;
         // A window moved by its title bar ignores the position given while it
@@ -846,14 +963,17 @@ fn modal_impl<R: Default>(
     }
     // Only a window that was already up counts: the click that opened it is
     // still in this frame's input.
-    let clicked_outside = last.zip(rect).is_some_and(|(_, rect)| {
+    // Outside the window as it was before this frame too: the double click
+    // that restores a maximised window ends outside the small window it
+    // restores to, and that is not a click on the ground behind it.
+    let clicked_outside = last.zip(rect).is_some_and(|(before, rect)| {
         top_modal
             && !any_popup
             && ctx.input(|i| {
                 i.pointer.primary_clicked()
-                    && i.pointer
-                        .interact_pos()
-                        .is_some_and(|p| !rect.expand(8.0).contains(p))
+                    && i.pointer.interact_pos().is_some_and(|p| {
+                        !rect.expand(8.0).contains(p) && !before.expand(8.0).contains(p)
+                    })
             })
     });
     ModalOut {
@@ -861,6 +981,22 @@ fn modal_impl<R: Default>(
         ctx: ctx.clone(),
         clicked_outside,
         escape_ok: top_modal && !any_popup,
+    }
+}
+
+/// A double click on the edge of a side or bottom panel (the navigator, the
+/// report list, the drawer, the detail columns) gives that panel its usual
+/// size back. Called once a frame before the panels are built; egui's own
+/// handle is the `__resize` widget under the panel's id.
+pub(super) fn splitters_reset(ctx: &egui::Context) {
+    for name in EDGE_PANELS {
+        let panel = egui::Id::new(*name);
+        let double = ctx
+            .read_response(panel.with("__resize"))
+            .is_some_and(|r| r.double_clicked());
+        if double {
+            ctx.data_mut(|d| d.remove::<egui::containers::panel::PanelState>(panel));
+        }
     }
 }
 

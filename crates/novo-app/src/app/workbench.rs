@@ -190,8 +190,8 @@ pub(crate) struct Workbench {
     /// Where a Space-held pan last moved the drawing from, once the
     /// pointer has gone more than 4 px from `space_down`.
     pub(super) space_pan: Option<egui::Pos2>,
-    /// The tool dock's size last frame, to tell where it would sit.
-    pub(super) dock_size: egui::Vec2,
+    /// Where the tool rail was drawn this frame (None: no rail).
+    pub(super) rail_rect: Option<egui::Rect>,
     /// The width the pinned navigator column has now (it is dragged wider
     /// or narrower), for the dialogs that open beside it.
     pub(super) outline_shown: Option<f32>,
@@ -395,7 +395,7 @@ impl Default for Workbench {
             pointer_world: None,
             last_pointer: None,
             space_pan: None,
-            dock_size: egui::Vec2::ZERO,
+            rail_rect: None,
             outline_shown: None,
             inspector: Default::default(),
             wire_panel: Default::default(),

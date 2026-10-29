@@ -25,6 +25,15 @@ pub struct Warning {
     pub message: String,
 }
 
+/// The motion a bare direction word usually means on a crane.
+fn convention_motion(dir: Dir) -> &'static str {
+    match dir {
+        Dir::Up | Dir::Down => "hoist",
+        Dir::Left | Dir::Right => "trolley",
+        Dir::Forward | Dir::Back => "bridge",
+    }
+}
+
 /// One control of the proposed profile (a rocker, a button, the E-stop...).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Control {
@@ -336,8 +345,28 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
             continue;
         }
         if let Some(dir) = r.dirs.first().copied() {
+            let by_convention = convention_motion(dir);
             let motion = match r.motions.first() {
                 Some(m) => Some(m.clone()),
+                // Bare direction words (RIGHT, FORWARD): the usual crane motion of that
+                // direction when the table does not contradict it.
+                None if named.is_empty()
+                    || named.iter().any(|n| n == by_convention)
+                    || sole_motion
+                        .as_ref()
+                        .is_some_and(|m| matches!(m.as_str(), "hoist" | "trolley" | "bridge")) =>
+                {
+                    warn(
+                        &mut warnings,
+                        line,
+                        Severity::Info,
+                        format!(
+                            "No motion word: “{}” read as the {by_convention} by the usual crane convention. Confirm against the page",
+                            row.function.trim()
+                        ),
+                    );
+                    Some(by_convention.to_owned())
+                }
                 None if named.is_empty() => {
                     warn(
                         &mut warnings,
@@ -464,6 +493,17 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                 ),
             );
             skip(i, &mut outcomes, "no direction");
+        } else if r.step.is_some() {
+            warn(
+                &mut warnings,
+                line,
+                Severity::Warning,
+                format!(
+                    "“{}” gives a step but no motion or direction: skipped. Put the motion and direction in the row",
+                    row.function.trim()
+                ),
+            );
+            skip(i, &mut outcomes, "step without motion");
         } else {
             warn(
                 &mut warnings,

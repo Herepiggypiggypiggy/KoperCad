@@ -37,4 +37,10 @@ pub(crate) const GALLERY: &[Entry] = &[
         cabinet: "+CAB",
         build: super::example_plc::build_plc_example,
     },
+    Entry {
+        action: Action::OpenPumpExample,
+        name: super::example_pump::PUMP_EXAMPLE_NAME,
+        cabinet: "+CAB",
+        build: super::example_pump::build_pump_example,
+    },
 ];

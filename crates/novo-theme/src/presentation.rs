@@ -258,6 +258,7 @@ pub const TABLE: &[Presentation] = &[
         d(&drawn::PLC),
         "Open PLC cabinet example",
     ),
+    row("file.example_pump", p(icons::DROP), "Open pump example"),
     row("file.practice", p(icons::KEYBOARD), "Try the fast keys"),
     row("project.languages", p(icons::TRANSLATE), "Report languages"),
     row("file.save", p(icons::FLOPPY_DISK), "Save"),
