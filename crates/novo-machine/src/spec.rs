@@ -148,6 +148,21 @@ impl From<InputError> for SpecError {
     }
 }
 
+/// Reads a typed number. A comma is a decimal comma ("1,5" is 1.5), but a comma followed by
+/// three digits ("5,000") could as well be a thousands separator: refused, not guessed. An
+/// integer part of 0 ("0,500", "-0,125") can never be a thousands group, so it reads as decimal.
+pub(crate) fn decimal(key: &'static str, raw: String) -> Result<f64, SpecError> {
+    if let Some((before, after)) = raw.split_once(',')
+        && after.chars().filter(char::is_ascii_digit).count() >= 3
+        && !matches!(before.trim(), "0" | "-0" | "+0")
+    {
+        return Err(SpecError::NotANumber { key, text: raw });
+    }
+    raw.replace(',', ".")
+        .parse::<f64>()
+        .map_err(|_| SpecError::NotANumber { key, text: raw })
+}
+
 /// Reads a hoist from properties. `get(key)` returns the property text if set. Returns
 /// `Ok(None)` when the motor is no hoist (`mech_mass_kg` not set).
 pub fn hoist_from_properties(
@@ -166,10 +181,7 @@ pub fn hoist_from_properties(
     let number = |key: &'static str| -> Result<f64, SpecError> {
         let default = KEYS.iter().find(|k| k.key == key).map_or("", |k| k.default);
         let raw = text(key).unwrap_or_else(|| default.to_owned());
-        // A comma is a decimal comma: "1,500" reads as 1.5, not 1500 (the property sheet says so).
-        raw.replace(',', ".")
-            .parse::<f64>()
-            .map_err(|_| SpecError::NotANumber { key, text: raw })
+        decimal(key, raw)
     };
     let hz = number("mech_frequency_hz")?;
     let winding = |poles: &'static str, kw: &'static str, rpm: &'static str, breakdown: f64| {
@@ -349,6 +361,7 @@ mod tests {
         assert!(bad(&[("mech_fine_poles", "12.5")]).contains("whole number"));
         // A comma is a decimal comma: 1,500 falls reads as 1.5, a non-whole count.
         assert!(bad(&[("mech_falls", "1,500")]).contains("mech_falls"));
+        assert!(bad(&[("mech_mass_kg", "5,000")]).contains("mech_mass_kg"));
         assert!(bad(&[("mech_upper_limit", "=S1")]).contains("upper limit"));
         assert!(bad(&[("mech_lower_limit_m", "0.2")]).contains("lower limit"));
         assert!(bad(&[("mech_brake_switching", "both")]).contains("mech_brake_switching"));
