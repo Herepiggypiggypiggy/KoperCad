@@ -5,6 +5,8 @@
 pub mod bindings;
 pub mod cosim;
 pub mod crane;
+pub mod drive_hoist_loop;
+pub mod drive_hoist_spec;
 pub mod hoist_loop;
 pub mod port;
 pub mod spec;

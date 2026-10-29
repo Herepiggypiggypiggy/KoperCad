@@ -649,6 +649,7 @@ impl NovoApp {
         let is_text = novo_machine::spec::KEYS
             .iter()
             .chain(novo_machine::travel_spec::KEYS)
+            .chain(novo_machine::drive_hoist_spec::KEYS)
             .any(|k| k.key == key && k.text);
         let value = if text.is_empty() {
             None
@@ -981,6 +982,7 @@ fn inspector_body(
     calc_inputs_section(ui, info, actions);
     mech_load_section(ui, info, actions);
     travel_drive_section(ui, info, actions);
+    drive_hoist_section(ui, info, actions);
 
     // The rest of the device's properties are the advanced part: closed
     // until opened, and absent when there are none.
@@ -1237,6 +1239,28 @@ fn travel_drive_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<
             help: "Moving mass turns the motor into a travel axis behind a frequency drive. \
                    Blank rows use generic values, not a manufacturer's data. Run it: \
                    Simulate > Drive run.",
+        },
+    );
+}
+
+/// The "Drive hoist" section of a motor: an open-loop hoist behind a frequency drive with brake
+/// logic (hook load, motor plate, speed steps, brake sequence and brake, load sensing, the drawing
+/// devices it is wired to) for Simulate > Drive run.
+fn drive_hoist_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<InspectorAction>) {
+    spec_section(
+        ui,
+        info,
+        actions,
+        SpecSection {
+            id: "inspector_drive_hoist",
+            title: "Drive hoist",
+            keys: novo_machine::drive_hoist_spec::KEYS,
+            marker: novo_machine::drive_hoist_spec::DRIVE_HOIST_KEY,
+            summary: "drive hoist",
+            comma_note: "A comma is a decimal comma: 1,5 means 1.5. A comma before three digits (5,000) is refused: type 5000.",
+            help: "Hook load turns the motor into an open-loop hoist behind a frequency drive \
+                   whose brake relay is a contact in the drawing. Blank rows use generic \
+                   values, not a manufacturer's data. Run it: Simulate > Drive run.",
         },
     );
 }
