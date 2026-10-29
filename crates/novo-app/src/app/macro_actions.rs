@@ -560,89 +560,96 @@ impl NovoApp {
                         }
                     });
                 ui.separator();
-                match &win.shown {
-                    None if win.selected.is_some() => {
-                        ui.weak("This macro could not be read.");
-                    }
-                    None => {
-                        ui.weak("Pick a macro to see what it will do.");
-                    }
-                    Some(shown) => {
-                        for parameter in &shown.definition.parameters {
-                            if let Some((_, value)) =
-                                win.values.iter_mut().find(|(n, _)| *n == parameter.name)
-                            {
-                                ui.horizontal(|ui| {
-                                    ui.label(&parameter.name);
-                                    match value {
-                                        Value::Float(v) => {
-                                            ui.add(egui::DragValue::new(v).speed(0.1));
+                // The details scroll so the Place button below stays on screen.
+                egui::ScrollArea::vertical()
+                    .id_salt("place_details")
+                    .auto_shrink([false, true])
+                    .max_height((ui.available_height() - 80.0).max(80.0))
+                    .show(ui, |ui| match &win.shown {
+                        None if win.selected.is_some() => {
+                            ui.weak("This macro could not be read.");
+                        }
+                        None => {
+                            ui.weak("Pick a macro to see what it will do.");
+                        }
+                        Some(shown) => {
+                            for parameter in &shown.definition.parameters {
+                                if let Some((_, value)) =
+                                    win.values.iter_mut().find(|(n, _)| *n == parameter.name)
+                                {
+                                    ui.horizontal(|ui| {
+                                        ui.label(&parameter.name);
+                                        match value {
+                                            Value::Float(v) => {
+                                                ui.add(egui::DragValue::new(v).speed(0.1));
+                                            }
+                                            Value::Int(v) => {
+                                                ui.add(egui::DragValue::new(v));
+                                            }
+                                            Value::Bool(v) => {
+                                                ui.checkbox(v, "");
+                                            }
+                                            Value::Text(v) => {
+                                                ui.text_edit_singleline(v);
+                                            }
                                         }
-                                        Value::Int(v) => {
-                                            ui.add(egui::DragValue::new(v));
+                                        if !parameter.description.is_empty() {
+                                            ui.weak(&parameter.description);
                                         }
-                                        Value::Bool(v) => {
-                                            ui.checkbox(v, "");
-                                        }
-                                        Value::Text(v) => {
-                                            ui.text_edit_singleline(v);
-                                        }
-                                    }
-                                    if !parameter.description.is_empty() {
-                                        ui.weak(&parameter.description);
-                                    }
-                                });
+                                    });
+                                }
                             }
-                        }
-                        if let Some(view) = &win.mounting {
-                            let texts: Vec<(String, String)> = win
-                                .values
-                                .iter()
-                                .map(|(n, v)| {
-                                    let v = match v {
-                                        Value::Float(v) => v.to_string(),
-                                        Value::Int(v) => v.to_string(),
-                                        Value::Bool(v) => v.to_string(),
-                                        Value::Text(v) => v.clone(),
-                                    };
-                                    (n.clone(), v)
-                                })
-                                .collect();
-                            egui::CollapsingHeader::new("Mounting view")
-                                .id_salt("place_mounting")
-                                .show(ui, |ui| super::macro_mounting::show(ui, view, &texts));
-                        }
-                        ui.checkbox(&mut win.keep_numbers, "Keep the macro's wire numbers");
-                        if !win.parts.is_empty() {
-                            let n = win.parts.len();
-                            let label =
-                                format!("Assign its {n} {}", if n == 1 { "part" } else { "parts" });
-                            ui.checkbox(&mut win.carry_parts, label);
-                        }
-                        match &shown.report {
-                            Ok(report) => {
-                                ui.label(describe(report));
-                                if draws_plc_channels(&shown.definition) {
-                                    ui.add(
-                                        egui::Label::new(
-                                            egui::RichText::new(PLC_CARD_NOTE)
-                                                .color(crate::theme::ui_palette().warning),
-                                        )
-                                        .wrap(),
+                            if let Some(view) = &win.mounting {
+                                let texts: Vec<(String, String)> = win
+                                    .values
+                                    .iter()
+                                    .map(|(n, v)| {
+                                        let v = match v {
+                                            Value::Float(v) => v.to_string(),
+                                            Value::Int(v) => v.to_string(),
+                                            Value::Bool(v) => v.to_string(),
+                                            Value::Text(v) => v.clone(),
+                                        };
+                                        (n.clone(), v)
+                                    })
+                                    .collect();
+                                egui::CollapsingHeader::new("Mounting view")
+                                    .id_salt("place_mounting")
+                                    .show(ui, |ui| super::macro_mounting::show(ui, view, &texts));
+                            }
+                            ui.checkbox(&mut win.keep_numbers, "Keep the macro's wire numbers");
+                            if !win.parts.is_empty() {
+                                let n = win.parts.len();
+                                let label = format!(
+                                    "Assign its {n} {}",
+                                    if n == 1 { "part" } else { "parts" }
+                                );
+                                ui.checkbox(&mut win.carry_parts, label);
+                            }
+                            match &shown.report {
+                                Ok(report) => {
+                                    ui.label(describe(report));
+                                    if draws_plc_channels(&shown.definition) {
+                                        ui.add(
+                                            egui::Label::new(
+                                                egui::RichText::new(PLC_CARD_NOTE)
+                                                    .color(crate::theme::ui_palette().warning),
+                                            )
+                                            .wrap(),
+                                        );
+                                    }
+                                }
+                                Err(reason) => {
+                                    novo_theme::widgets::banner(
+                                        ui,
+                                        novo_theme::widgets::Level::Error,
+                                        reason,
+                                        |_| {},
                                     );
                                 }
                             }
-                            Err(reason) => {
-                                novo_theme::widgets::banner(
-                                    ui,
-                                    novo_theme::widgets::Level::Error,
-                                    reason,
-                                    |_| {},
-                                );
-                            }
                         }
-                    }
-                }
+                    });
                 if !win.status.is_empty() {
                     ui.weak(&win.status);
                 }
