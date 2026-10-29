@@ -338,6 +338,7 @@ impl Drive {
         self.app.wb.autopilot = None;
         self.app.wb.handover_ask = None;
         self.app.wb.print_preview = None;
+        self.app.wb.export_centre = None;
         self.app.protection.open = false;
         // And so would a dialog (settings, shortcuts): Escape closes each.
         // The dialogs that lessons leave open stay, as they did before

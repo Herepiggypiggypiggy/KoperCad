@@ -103,11 +103,11 @@ id = "whole-pack"
 title = "Export all the cards"
 title_nl = "Exporteer alle kaarten"
 text = """
-**Work cards (PDF)** on the strip, or the command field, writes the whole pack: `<project> work cards.pdf`. It is also under Reports > Export and in Reports > Bench output.
+**Work cards (PDF)** on the strip, or the command field, writes the whole pack: `<project> work cards.pdf`. It is also a tile of the Export centre and in Reports > Bench output.
 The pack opens with a cover (how to print and the **tool list** of the cabinet), then a tick-off sheet with every step, then the cards, two to an A4 page: cut or fold at the dashed line.
 """
 text_nl = """
-**Work cards (PDF)** op de strook, of het opdrachtveld, schrijft het hele pakket: `<project> work cards.pdf`. Het staat ook onder Reports > Export en in Reports > Bench output.
+**Work cards (PDF)** op de strook, of het opdrachtveld, schrijft het hele pakket: `<project> work cards.pdf`. Het staat ook als tegel in het exportcentrum en in Reports > Bench output.
 Het pakket begint met een omslag (hoe te printen en de **gereedschapslijst** van de kast), dan een afvinkblad met elke stap, dan de kaarten, twee per A4-pagina: knip of vouw bij de stippellijn.
 """
 how = [

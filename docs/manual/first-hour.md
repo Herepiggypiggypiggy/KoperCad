@@ -46,7 +46,7 @@ Where two facing pins can be joined, KoperCAD shows a proposal; **Tab** jumps to
 
 - **Ctrl+S** saves. A project is one `.kopercad` file; see [Files](files.md).
 - While you work the program also saves a recovery copy. After a crash it offers the recovered work again; see [Troubleshooting](troubleshooting.md).
-- File > Export has the PDF of the drawing, with bookmarks and links between pages. Use Print preview first.
+- File > Export… has the PDF of the drawing, with bookmarks and links between pages. Use Print preview first.
 
 ## Learning paths
 
