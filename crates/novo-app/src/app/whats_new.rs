@@ -88,9 +88,20 @@ impl NovoApp {
         if count == 0 {
             return;
         }
-        let response = ui
-            .add(egui::Button::new(format!("What's new {count}")).small())
-            .on_hover_text("What changed since you last looked");
+        // The sparkle and the count: the word is in the tooltip and the menus.
+        let response =
+            ui.add(egui::Button::new(format!("{} {count}", novo_theme::icons::SPARKLE)).small());
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(
+                egui::WidgetType::Button,
+                true,
+                format!("What's new {count}"),
+            )
+        });
+        let response = response.on_hover_text(format!(
+            "What's new: {count} {} since you last looked",
+            if count == 1 { "change" } else { "changes" }
+        ));
         self.anchor_response("whats_new.pill", &response, "What's new");
         if response.clicked() {
             self.show_whats_new = true;
