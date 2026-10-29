@@ -54,6 +54,7 @@ jobs:
       - name: Run the tests of the changed crates
         shell: pwsh
         run: |
+          $log = Join-Path $env:RUNNER_TEMP 'tests.log'
           $files = git diff --name-only HEAD^1 HEAD
           $crates = @()
           $all = $false
@@ -66,13 +67,35 @@ jobs:
           $crates = @($crates | Where-Object { $_ -ne 'novo-cfd' } | Sort-Object -Unique)
           if ($all) {
             Write-Host 'Changes outside crates/<name>/: testing the whole workspace (without novo-cfd).'
-            cargo test --workspace --exclude novo-cfd --no-fail-fast --lib --bins --tests
+            cargo test --workspace --exclude novo-cfd --no-fail-fast --lib --bins --tests 2>&1 | Tee-Object -FilePath $log
           } elseif ($crates.Count -eq 0) {
             Write-Host 'Only novo-cfd or notes changed: nothing to test here (novo-cfd tests run on Linux, ci.yml).'
             exit 0
           } else {
             Write-Host "Testing: $($crates -join ', ')"
             $pkgs = $crates | ForEach-Object { '-p'; $_ }
-            cargo test @pkgs --no-fail-fast --lib --bins --tests
+            cargo test @pkgs --no-fail-fast --lib --bins --tests 2>&1 | Tee-Object -FilePath $log
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # The Actions log tail is clipped, so a flaky test left no readable name: copy the failure
+      # lines to the job summary and keep the full log for a failed run (same as ci.yml).
+      - name: failing tests in the job summary
+        if: always()
+        shell: pwsh
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP 'tests.log'
+          if (-not (Test-Path $path)) { exit 0 }
+          $bad = Get-Content $path | Where-Object { $_ -match '^test .* \.\.\. FAILED$' -or $_ -match 'panicked at' -or $_ -match 'error: test failed' -or $_ -match 'STATUS_' -or $_ -match 'process didn''t exit successfully' }
+          if ($bad) {
+            '### Windows tests' | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            $bad | Select-Object -First 80 | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          }
+      - name: full test log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-pr-test-logs
+          path: ${{ runner.temp }}/tests.log
+          retention-days: 7

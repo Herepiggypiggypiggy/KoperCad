@@ -276,6 +276,7 @@ fn a_double_click_on_the_edge_of_the_pinned_navigator_gives_it_its_width_back() 
     d.app.settings.outline_pinned = Some(true);
     settle(&mut d);
     let home = d.app.wb.outline_shown.expect("the column is shown");
+    // The column sits right of the tool rail.
     let rail = d.app.wb.rail_rect.map_or(0.0, |r| r.right());
     let edge = egui::pos2(rail + home - 2.0, 300.0);
     drag(&mut d, edge, edge + egui::vec2(120.0, 0.0));
