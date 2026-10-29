@@ -1,5 +1,6 @@
 @title Tool rail: tools, Connect flyout, expand, panels zone (Schematic)
 @area Layout
+@sizes 1366x768
 # Lane V3a of the visual redesign (docs/design/visual-redesign.md section 3.2).
 # The rail replaces the floating tool dock. Left edge of the Schematic workspace.
 click_text "New project"
@@ -15,12 +16,12 @@ check_layout
 key Escape
 wait 6
 expect_not "Wire shape"
-click 23 700
+click 23 722
 wait 8
 shot rail-expanded
 expect "Place symbol"
 expect "Autopilot"
 expect "Terminals"
 check_layout
-click 23 700
+click 23 722
 wait 6
