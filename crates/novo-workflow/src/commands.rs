@@ -183,10 +183,10 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "file.example_crane",
-        "Open example: overhead crane cabinet (2-speed hoist, drives, 48 V control, radio)",
+        "Open example: overhead crane cabinet (2-speed hoist, drives, 48 V control)",
         "Project",
         &[
-            "crane", "hoist", "bridge", "radio", "drive", "cabinet", "demo", "example",
+            "crane", "hoist", "bridge", "drive", "cabinet", "demo", "example",
         ],
         Needs::Nothing,
     ),
