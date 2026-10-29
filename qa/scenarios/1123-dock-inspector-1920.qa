@@ -18,7 +18,7 @@ wait 30
 expect "Siemens"
 shot docked-left
 check_layout
-click 493 56
+click 541 56
 wait 30
 shot docked-bottom
 check_layout
