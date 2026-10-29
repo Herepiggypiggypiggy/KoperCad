@@ -262,6 +262,20 @@ fn notes(
             plural(free, "wire has", "wires have")
         ));
     }
+    let through = count(&|p| matches!(p, Problem::StubThroughDevice { .. }));
+    if through > 0 {
+        notes.push(format!(
+            "{} cross a device on the way to a duct: no free way round it. Move the duct or the device",
+            plural(through, "wire has to", "wires have to")
+        ));
+    }
+    let along = plan.routes.iter().filter(|r| !r.rails.is_empty()).count();
+    if along > 0 {
+        notes.push(format!(
+            "{} run along a DIN rail beside the devices on it",
+            plural(along, "wire", "wires")
+        ));
+    }
     let overfull = count(&|p| matches!(p, Problem::OverfullDuct { .. }));
     if overfull > 0 {
         notes.push(format!(
