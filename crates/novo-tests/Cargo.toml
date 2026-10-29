@@ -42,6 +42,7 @@ novo-py.workspace = true
 novo-numbering.workspace = true
 novo-view3d.workspace = true
 novo-sim.workspace = true
+novo-machine.workspace = true
 novo-thermal.workspace = true
 novo-cfd.workspace = true
 novo-routing.workspace = true

@@ -2509,6 +2509,8 @@ name = "novo-sim"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-drive",
+ "novo-machine",
  "novo-symbols",
  "serde",
  "serde_json",
@@ -2563,6 +2565,7 @@ dependencies = [
  "novo-emc",
  "novo-interop",
  "novo-layout",
+ "novo-machine",
  "novo-numbering",
  "novo-parts",
  "novo-pdf",

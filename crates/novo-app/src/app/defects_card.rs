@@ -17,7 +17,9 @@ use novo_sim::inject::{
     Defect, DefectKind, DefectSet, Prepared, Target, devices_for, pins_of, potential_names,
     wire_numbers,
 };
-use novo_sim::walkthrough::{Action, Recorder, Report, Verdict, Walkthrough, differences_of, run};
+use novo_sim::walkthrough::{
+    Action, Recorder, Report, Verdict, Walkthrough, differences_of, run, run_with,
+};
 use novo_sim::{Clock, PoleState, Settled, rest_state, settle_timed};
 
 use super::{Level, NovoApp};
@@ -410,7 +412,7 @@ impl NovoApp {
                     if let Some(doc) = self.backend.document() {
                         let defects = &mut self.wb.live.defects;
                         if let Some(w) = defects.walk.get(index) {
-                            defects.report = Some(run(doc.project(), w));
+                            defects.report = Some(run_walkthrough(doc.project(), w));
                         }
                     }
                 }
@@ -804,4 +806,20 @@ fn report_view(ui: &mut egui::Ui, report: &Report) {
     if ui.small_button("Copy report").clicked() {
         ui.ctx().copy_text(report.to_markdown());
     }
+}
+
+/// Plays a walk-through with the project's hoists (if it has any), so steps that put a defect
+/// on a hoist or ask where its hook is have something to act on.
+pub(super) fn run_walkthrough(project: &novo_core::Project, w: &Walkthrough) -> Report {
+    use novo_machine::cosim::StepConfig;
+    use novo_machine::hoist_loop::HoistLoop;
+    if super::hoist_run::hoists_of(project).0.is_empty() {
+        return run(project, w);
+    }
+    let make = || {
+        let mut lp = HoistLoop::new(StepConfig::default()).expect("the default step is valid");
+        lp.hoists = super::hoist_run::hoists_of(project).0;
+        lp
+    };
+    run_with(project, w, Some(&make))
 }
