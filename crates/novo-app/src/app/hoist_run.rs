@@ -13,7 +13,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use eframe::egui;
 use novo_core::{PageId, Project, SymbolId, Value};
 use novo_drive::brake::BrakeState;
+use novo_drive::brake_system::RectifierFault;
+use novo_drive::hoist_unit::HoistFaults;
 use novo_drive::motor::{Direction, WindingSel};
+use novo_drive::supply::Phase;
 use novo_machine::cosim::StepConfig;
 use novo_machine::hoist_loop::{HoistLoop, HoistModule};
 use novo_machine::port::{CircuitPort, MotorFeed};
@@ -33,6 +36,16 @@ pub(crate) struct HoistRun {
     active: Option<Active>,
     /// Why the last start did not run, or what it found.
     notice: Vec<(Level, String)>,
+}
+
+/// What the window shows of one hoist.
+struct HoistRow {
+    tag: String,
+    text: String,
+    problems: Vec<&'static str>,
+    faults: HoistFaults,
+    heat: Option<String>,
+    tripped: bool,
 }
 
 struct Active {
@@ -117,6 +130,14 @@ impl CircuitPort for LiveCircuit<'_> {
     fn knows_device(&self, device: &str) -> bool {
         self.by_tag.contains_key(device)
     }
+
+    fn motor_humming(&self, motor: &str) -> bool {
+        self.by_tag
+            .get(motor)
+            .into_iter()
+            .flatten()
+            .any(|id| matches!(self.states.motors.get(id), Some(MotorRun::PhaseLoss)))
+    }
 }
 
 fn value_text(value: &Value) -> String {
@@ -186,11 +207,134 @@ pub(super) fn reading(module: &HoistModule) -> String {
         BrakeState::Applied => "brake closed",
         BrakeState::Released => "brake open",
     };
+    let fine_lift = if s.fine_engaged {
+        " \u{b7} fine lift"
+    } else {
+        ""
+    };
+    let warn = if s.conditions.any() { " \u{b7} !" } else { "" };
     format!(
-        "{:.0} rpm \u{b7} {winding} \u{b7} {brake} \u{b7} {:.2} m",
+        "{:.0} rpm \u{b7} {winding}{fine_lift} \u{b7} {brake} \u{b7} {:.2} m \u{b7} {:.1} A{warn}",
         s.shaft_rpm.abs(),
-        module.height_m()
+        module.height_m(),
+        s.motor_current_a + s.fine_current_a
     )
+}
+
+/// A line about heat: winding rise against its limit and the overload relay, if the hoist has
+/// the electrical model and has run.
+pub(super) fn heat_line(module: &HoistModule) -> Option<String> {
+    let s = module.snapshot()?;
+    let e = module.unit.electrics()?;
+    let limit = e.thermal.params().limit_rise_k;
+    let mut text = format!(
+        "Winding +{:.0} K of {:.0} K",
+        s.winding_rise_k.max(s.fine_winding_rise_k),
+        limit
+    );
+    if e.relay.is_some() {
+        text.push_str(&format!(
+            " \u{b7} overload relay {:.0} %{}",
+            s.overload_load * 100.0,
+            if module.unit.overload_tripped() {
+                " (tripped)"
+            } else {
+                ""
+            }
+        ));
+    }
+    Some(text)
+}
+
+/// Plain-language lines about what is wrong with a hoist right now (empty when all is well).
+pub(super) fn conditions(module: &HoistModule) -> Vec<&'static str> {
+    module
+        .snapshot()
+        .map_or_else(Vec::new, |s| s.conditions.messages())
+}
+
+const PHASES: [(&str, Option<Phase>); 4] = [
+    ("none", None),
+    ("L1", Some(Phase::L1)),
+    ("L2", Some(Phase::L2)),
+    ("L3", Some(Phase::L3)),
+];
+
+const VOLTAGES: [(&str, f64); 5] = [
+    ("100 %", 1.0),
+    ("90 %", 0.9),
+    ("80 %", 0.8),
+    ("70 %", 0.7),
+    ("50 %", 0.5),
+];
+
+const DELAYS: [(&str, f64); 4] = [
+    ("normal", 1.0),
+    ("2x slower", 2.0),
+    ("5x slower", 5.0),
+    ("10x slower", 10.0),
+];
+
+const LININGS: [(&str, f64); 4] = [("100 %", 1.0), ("60 %", 0.6), ("30 %", 0.3), ("10 %", 0.1)];
+
+const RECTIFIER_FAULTS: [(&str, RectifierFault); 6] = [
+    ("none", RectifierFault::None),
+    ("one diode open", RectifierFault::OpenDiode),
+    ("diode shorted (fuse blows)", RectifierFault::ShortedDiode),
+    ("coil circuit open", RectifierFault::OpenOutput),
+    ("output at 70 %", RectifierFault::LowOutput(0.7)),
+    ("no over-excitation", RectifierFault::NoBoost),
+];
+
+fn pick<T: PartialEq + Copy>(
+    ui: &mut egui::Ui,
+    id: &str,
+    label: &str,
+    options: &[(&str, T)],
+    value: &mut T,
+) -> bool {
+    let before = *value;
+    let shown = options
+        .iter()
+        .find(|(_, v)| *v == *value)
+        .map_or("custom", |(n, _)| *n);
+    ui.label(label);
+    egui::ComboBox::from_id_salt((id, label))
+        .selected_text(shown)
+        .show_ui(ui, |ui| {
+            for (name, v) in options {
+                ui.selectable_value(value, *v, *name);
+            }
+        });
+    ui.end_row();
+    *value != before
+}
+
+/// The "Faults to try" controls of one hoist. Returns whether anything changed.
+fn faults_ui(ui: &mut egui::Ui, id: &str, f: &mut HoistFaults) -> bool {
+    let mut changed = false;
+    egui::Grid::new(("hoist_faults", id))
+        .num_columns(2)
+        .show(ui, |ui| {
+            changed |= pick(ui, id, "Open phase", &PHASES, &mut f.lost_phase);
+            changed |= pick(ui, id, "Supply voltage", &VOLTAGES, &mut f.voltage_ratio);
+            changed |= pick(ui, id, "Brake delays", &DELAYS, &mut f.brake_delay_scale);
+            changed |= pick(
+                ui,
+                id,
+                "Brake lining torque",
+                &LININGS,
+                &mut f.brake_torque_scale,
+            );
+            changed |= pick(
+                ui,
+                id,
+                "Brake rectifier",
+                &RECTIFIER_FAULTS,
+                &mut f.rectifier,
+            );
+        });
+    changed
 }
 
 /// Badges on the motors of the hoists, on the page shown.
@@ -268,12 +412,22 @@ impl NovoApp {
         let mut stop = false;
         let mut live_toggle = false;
         let hoist = &self.wb.hoist;
-        let rows: Vec<(String, String)> = hoist.active.as_ref().map_or_else(Vec::new, |a| {
+        let rows: Vec<HoistRow> = hoist.active.as_ref().map_or_else(Vec::new, |a| {
             a.lp.hoists
                 .iter()
-                .map(|m| (m.id.clone(), reading(m)))
+                .map(|m| HoistRow {
+                    tag: m.id.clone(),
+                    text: reading(m),
+                    problems: conditions(m),
+                    faults: *m.unit.faults(),
+                    heat: heat_line(m),
+                    tripped: m.unit.overload_tripped(),
+                })
                 .collect()
         });
+        let mut fault_change: Option<(String, HoistFaults)> = None;
+        // (hoist, true = reset the overload relay, false = let the motors cool down)
+        let mut heat_action: Option<(String, bool)> = None;
         let running = hoist.active.is_some();
         let notice = hoist.notice.clone();
         let names: Vec<String> = hoists.iter().map(|h| h.id.clone()).collect();
@@ -322,17 +476,72 @@ impl NovoApp {
                 }
                 if !rows.is_empty() {
                     ui.separator();
-                    egui::Grid::new("hoist_rows").striped(true).show(ui, |ui| {
-                        for (tag, text) in &rows {
+                    let warning = crate::theme::ui_palette().warning;
+                    for HoistRow {
+                        tag,
+                        text,
+                        problems,
+                        faults,
+                        heat,
+                        tripped,
+                    } in &rows
+                    {
+                        ui.horizontal(|ui| {
                             ui.strong(tag);
                             ui.label(text);
-                            ui.end_row();
+                        });
+                        if let Some(heat) = heat {
+                            ui.horizontal(|ui| {
+                                ui.weak(heat);
+                                if ui
+                                    .add_enabled(
+                                        *tripped,
+                                        egui::Button::new("Reset overload relay"),
+                                    )
+                                    .on_disabled_hover_text("The relay has not tripped")
+                                    .clicked()
+                                {
+                                    heat_action = Some((tag.clone(), true));
+                                }
+                                if ui.button("Let motors cool down").clicked() {
+                                    heat_action = Some((tag.clone(), false));
+                                }
+                            });
                         }
-                    });
+                        for line in problems {
+                            ui.colored_label(warning, format!("\u{2022} {line}"));
+                        }
+                        let title = if faults.is_none() {
+                            "Faults to try".to_owned()
+                        } else {
+                            "Faults to try (set)".to_owned()
+                        };
+                        egui::CollapsingHeader::new(title)
+                            .id_salt(("hoist_faults_header", tag))
+                            .show(ui, |ui| {
+                                let mut f = *faults;
+                                if faults_ui(ui, tag, &mut f) {
+                                    fault_change = Some((tag.clone(), f));
+                                }
+                                if ui
+                                    .add_enabled(
+                                        !faults.is_none(),
+                                        egui::Button::new("Clear faults"),
+                                    )
+                                    .clicked()
+                                {
+                                    fault_change = Some((tag.clone(), HoistFaults::NONE));
+                                }
+                            });
+                    }
                 }
                 ui.separator();
                 ui.label(egui::RichText::new("Model, not measurement").strong());
-                for line in novo_drive::motor::MOTOR_MODEL_LEAVES_OUT {
+                for line in novo_drive::motor::MOTOR_MODEL_LEAVES_OUT
+                    .iter()
+                    .chain(novo_drive::brake_system::FAMILY_MODEL_LEAVES_OUT)
+                    .chain(novo_drive::hoist_thermal::THERMAL_MODEL_LEAVES_OUT)
+                {
                     ui.weak(format!("\u{2022} {line}"));
                 }
                 ui.weak(
@@ -351,6 +560,23 @@ impl NovoApp {
         }
         if live_toggle {
             self.toggle_live();
+        }
+        if let Some((id, faults)) = fault_change
+            && let Some(active) = self.wb.hoist.active.as_mut()
+            && let Some(m) = active.lp.hoists.iter_mut().find(|m| m.id == id)
+            && let Err(why) = m.unit.set_faults(faults)
+        {
+            self.wb.hoist.notice = vec![(Level::Warning, format!("{id}: {why}"))];
+        }
+        if let Some((id, reset)) = heat_action
+            && let Some(active) = self.wb.hoist.active.as_mut()
+            && let Some(m) = active.lp.hoists.iter_mut().find(|m| m.id == id)
+        {
+            if reset {
+                m.unit.reset_overload();
+            } else {
+                m.unit.cool_down();
+            }
         }
         if stop {
             self.wb.hoist.active = None;

@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use novo_layout::model::plate_documents;
+use novo_layout::model::{drill_plan, plate_documents};
 use novo_layout::plate_drawing::PlateDocument;
 
 use super::pdf::{replaceable_path, write_replacing};
@@ -17,6 +17,29 @@ impl NovoApp {
     /// Exports the plate drawing of the enclosure selected in the Cabinet
     /// canvas. Says why when there is nothing to export.
     fn plate_sheets(&mut self) -> Option<(String, String, Vec<PlateDocument>)> {
+        let (name, location) = self.plate_enclosure()?;
+        let docs = {
+            // The plate of the machine as the current choice is drilled.
+            let project = self.machine()?;
+            project
+                .structures()
+                .find(|s| s.enclosure && s.tag == location)
+                .and_then(|s| plate_documents(&project, s.id))
+        };
+        let Some((docs, _table)) = docs else {
+            self.message(
+                Level::Warning,
+                format!("{location} has no mounting plate yet; set its size in the Cabinet"),
+            );
+            return None;
+        };
+        Some((name, location.to_string(), docs))
+    }
+
+    /// The project name and the tag of the enclosure whose plate is exported:
+    /// the one shown in the Cabinet, else the only one with a plate. Says why
+    /// when there is none.
+    fn plate_enclosure(&mut self) -> Option<(String, novo_core::DeviceTag)> {
         let name = self.project_name()?;
         let location = match self.cabinet.location.clone() {
             Some(location) => location,
@@ -41,22 +64,7 @@ impl NovoApp {
                 only
             }
         };
-        let docs = {
-            // The plate of the machine as the current choice is drilled.
-            let project = self.machine()?;
-            project
-                .structures()
-                .find(|s| s.enclosure && s.tag == location)
-                .and_then(|s| plate_documents(&project, s.id))
-        };
-        let Some((docs, _table)) = docs else {
-            self.message(
-                Level::Warning,
-                format!("{location} has no mounting plate yet; set its size in the Cabinet"),
-            );
-            return None;
-        };
-        Some((name, location.to_string(), docs))
+        Some((name, location))
     }
 
     /// Exports the plate drawing of the enclosure selected in the Cabinet
@@ -135,5 +143,65 @@ impl NovoApp {
             }
         }
         first
+    }
+
+    /// The hand drilling plan of the shown enclosure as an A4 PDF for the
+    /// bench: `<project> <enclosure> drill plan.pdf`, next to the project
+    /// file. Says why when there is nothing to drill.
+    pub(super) fn export_drill_plan_pdf(&mut self) -> Option<PathBuf> {
+        let (name, location) = self.plate_enclosure()?;
+        let plan = {
+            let project = self.machine()?;
+            project
+                .structures()
+                .find(|s| s.enclosure && s.tag == location)
+                .and_then(|s| drill_plan(&project, s.id, &name))
+        };
+        let Some(plan) = plan else {
+            self.message(
+                Level::Warning,
+                format!("{location} has no mounting plate yet; set its size in the Cabinet"),
+            );
+            return None;
+        };
+        if plan.sheets.is_empty() {
+            self.message(
+                Level::Warning,
+                format!(
+                    "Nothing to drill on {location} yet: place devices that have a hole pattern, or add a rail"
+                ),
+            );
+            return None;
+        }
+        let file_name = format!("{name} {location} drill plan.pdf").replace(['/', '\\', ':'], "-");
+        let file = self.backend.file().filter(|_| !self.backend.is_untitled());
+        let dir = match file.as_ref().and_then(|f| f.parent()) {
+            Some(dir) => dir.to_owned(),
+            None => {
+                let Some(dir) = projects_dir() else {
+                    self.message(Level::Error, "Could not find the Documents folder");
+                    return None;
+                };
+                dir
+            }
+        };
+        let path = replaceable_path(&dir.join(file_name));
+        let replaced = path.exists();
+        let bytes = novo_pdf::drill_plan::export_drill_plan_pdf(&plan);
+        match write_replacing(&path, &bytes) {
+            Ok(()) => {
+                let verb = if replaced { "Replaced" } else { "Exported" };
+                self.message_file(format!("{verb} {}", path.display()), &path);
+                self.wb.last_export = Some(path.clone());
+                Some(path)
+            }
+            Err(e) => {
+                self.message(
+                    Level::Error,
+                    format!("Could not export the drill plan: {e}"),
+                );
+                None
+            }
+        }
     }
 }

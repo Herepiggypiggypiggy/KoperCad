@@ -20,6 +20,7 @@ mod devices;
 pub mod explain;
 pub mod fault;
 pub mod feeder;
+pub mod inject;
 mod loads;
 pub mod network;
 pub mod pins;
@@ -30,9 +31,11 @@ pub mod scenario;
 pub mod study;
 pub mod timing;
 pub mod trace;
+pub mod walkthrough;
 
 pub use coupling::{
-    Clock, DEFAULT_DELAY, Settled, delay_seconds, is_coil, is_timer_contact, settle, settle_timed,
+    Clock, DEFAULT_DELAY, Faults, Settled, delay_seconds, is_coil, is_timer_contact, settle,
+    settle_faulted, settle_timed,
 };
 pub use devices::{
     DeviceStates, Direction, MotorRun, TimerKind, TimerProgress, device_states, is_lamp, is_motor,
@@ -138,6 +141,28 @@ pub fn solve_driven(
     state: &PoleState,
     drives: &[(Endpoint, PotentialId)],
 ) -> Solution {
+    solve_with(project, netlist, state, drives, &Defects::default())
+}
+
+/// What injected defects change in a solution (see [`inject`]): potentials that are gone from
+/// the plant, and pins that leak into a potential even where the net defines its own.
+#[derive(Debug, Clone, Default)]
+pub struct Defects {
+    /// A supply that is lost: no net carries it any more (a phase gone).
+    pub lost: std::collections::BTreeSet<PotentialId>,
+    /// A pin joined to a potential by a fault: the net then carries it too, so a net with a
+    /// potential of its own becomes `Shorted`.
+    pub leaks: Vec<(Endpoint, PotentialId)>,
+}
+
+/// [`solve_driven`] with injected [`Defects`].
+pub fn solve_with(
+    project: &Project,
+    netlist: &Netlist,
+    state: &PoleState,
+    drives: &[(Endpoint, PotentialId)],
+    defects: &Defects,
+) -> Solution {
     let count = netlist.nets().len();
     // net -> (neighbour net) for every closed pole, both directions.
     let mut edges: Vec<Vec<usize>> = vec![Vec::new(); count];
@@ -167,13 +192,29 @@ pub fn solve_driven(
         .collect();
     let mut found: Vec<Vec<PotentialId>> = vec![Vec::new(); count];
     for (i, net) in netlist.nets().iter().enumerate() {
-        found[i].extend(net.defined.iter().copied());
+        found[i].extend(
+            net.defined
+                .iter()
+                .copied()
+                .filter(|p| !defects.lost.contains(p)),
+        );
     }
     // One walk per distinct (potential, source net); never enters a net
     // that defines its own potential.
     let mut sources: Vec<(PotentialId, usize)> = Vec::new();
     for (i, net) in netlist.nets().iter().enumerate() {
-        sources.extend(net.defined.iter().map(|&p| (p, i)));
+        sources.extend(
+            net.defined
+                .iter()
+                .filter(|p| !defects.lost.contains(p))
+                .map(|&p| (p, i)),
+        );
+    }
+    for &(pin, potential) in &defects.leaks {
+        if let Some(net) = netlist.net_of(pin).map(|n| n.0 as usize) {
+            found[net].push(potential);
+            sources.push((potential, net));
+        }
     }
     for &(pin, potential) in drives {
         if let Some(net) = netlist.net_of(pin).map(|n| n.0 as usize)

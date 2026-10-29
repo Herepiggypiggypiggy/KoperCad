@@ -69,6 +69,8 @@ pub(crate) struct LiveView {
     pub(super) plc: super::plc_run::PlcRun,
     /// The virtual controllers (radio, pendant) that close the receiver's contacts.
     pub(super) ctl: super::controller_live::ControllerLive,
+    /// Injected defects, walk-throughs and the recorder (lane F1).
+    pub(super) defects: super::defects_card::DefectsLive,
 }
 
 /// A page and the name to show for it.
@@ -131,6 +133,8 @@ pub(super) struct Solved {
     pub(super) settled: Settled,
     /// Output channels a running PLC program has on.
     plc_on: BTreeSet<SymbolId>,
+    /// The generation of the injected defects this was solved with.
+    defects: u64,
 }
 
 impl LiveView {
@@ -159,32 +163,47 @@ impl LiveView {
                     netlist,
                     settled,
                     plc_on: self.plc.outputs_on(),
+                    defects: self.defects.generation(),
                 });
                 return self.solved.as_ref().expect("set above");
             }
         }
+        let defects_on = self.defects.active();
         let changed = self.solved.as_ref().is_none_or(|s| {
             s.revision != project.revision()
                 || s.poles != self.poles
                 || s.forced != self.forced
-                || !s.netlist.is_current(project)
+                || s.defects != self.defects.generation()
+                // A cut wire gives the netlist of a copy of the drawing: the revision above
+                // stands in for its currency.
+                || !(defects_on || s.netlist.is_current(project))
         });
         let counting = self.solved.as_ref().is_some_and(|s| s.settled.timing);
         if counting && !changed {
             // A timer is running: time passes and the contacts may follow.
             self.clock.advance(dt);
+            self.defects.advance(dt);
             if let Some(s) = self.solved.as_mut() {
-                s.settled = settle_timed(
+                s.settled = match self.defects.settle(
                     project,
-                    &s.netlist,
                     &s.poles,
                     &s.forced,
                     &s.settled.energized,
                     &mut self.clock,
-                );
+                ) {
+                    Some((_, settled)) => settled,
+                    None => settle_timed(
+                        project,
+                        &s.netlist,
+                        &s.poles,
+                        &s.forced,
+                        &s.settled.energized,
+                        &mut self.clock,
+                    ),
+                };
             }
         } else if changed {
-            let netlist = project.netlist();
+            let mut netlist = project.netlist();
             // The coils that were on stay on while their own contacts feed
             // them, so a seal-in circuit holds after the button is released.
             let held = self
@@ -192,14 +211,28 @@ impl LiveView {
                 .as_ref()
                 .map(|s| s.settled.energized.clone())
                 .unwrap_or_default();
-            let settled = settle_timed(
+            let settled = match self.defects.settle(
                 project,
-                &netlist,
                 &self.poles,
                 &self.forced,
                 &held,
                 &mut self.clock,
-            );
+            ) {
+                // Injected defects: the circuit is solved with them in it (a cut wire gives
+                // the netlist of the drawing without that wire).
+                Some((faulted_net, settled)) => {
+                    netlist = faulted_net;
+                    settled
+                }
+                None => settle_timed(
+                    project,
+                    &netlist,
+                    &self.poles,
+                    &self.forced,
+                    &held,
+                    &mut self.clock,
+                ),
+            };
             self.solved = Some(Solved {
                 revision: project.revision(),
                 poles: self.poles.clone(),
@@ -207,6 +240,7 @@ impl LiveView {
                 netlist,
                 settled,
                 plc_on: BTreeSet::new(),
+                defects: self.defects.generation(),
             });
         }
         self.solved.as_ref().expect("solved above")
@@ -302,6 +336,7 @@ impl LiveView {
     /// Switches the live view off and drops what it was asking.
     pub(super) fn leave(&mut self) {
         self.on = false;
+        self.defects.repair_all();
         self.why_mode = false;
         self.why = None;
         self.held = None;
@@ -327,7 +362,7 @@ impl LiveView {
 
     /// A pushbutton goes down: its poles switch to the opposite of the
     /// pressed pole until [`release`](Self::release).
-    fn press(&mut self, project: &Project, symbol: SymbolId, group: usize) {
+    pub(super) fn press(&mut self, project: &Project, symbol: SymbolId, group: usize) {
         if self.held.is_none() {
             self.held = Some((symbol, self.poles.clone()));
             self.flip_together(project, symbol, group);
@@ -335,7 +370,7 @@ impl LiveView {
     }
 
     /// The pushbutton comes back up and its poles with it.
-    fn release(&mut self, project: &Project) {
+    pub(super) fn release(&mut self, project: &Project) {
         if let Some((symbol, before)) = self.held.take() {
             for member in together(project, symbol) {
                 for group in 0..project.symbol(member).map_or(0, |s| s.pass_through.len()) {
@@ -1685,6 +1720,7 @@ impl NovoApp {
             self.live_pole_clicked(symbol, group, together);
         }
         self.controller_card(ctx, canvas);
+        self.defects_card(ctx, canvas);
     }
 
     /// A click on a coil or output badge: the coil is switched by hand.

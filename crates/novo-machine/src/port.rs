@@ -33,6 +33,11 @@ pub trait CircuitPort {
     fn set_contact(&mut self, device: &str, closed: bool);
     /// Whether a device with this tag exists in the circuit (for binding checks).
     fn knows_device(&self, device: &str) -> bool;
+    /// Whether the motor hums on two phases in the drawing (a phase is open). The circuit does
+    /// not say which winding or which way; the hoist keeps what it was fed with.
+    fn motor_humming(&self, _motor: &str) -> bool {
+        false
+    }
 }
 
 type Rule = Box<dyn FnMut(&mut FakeState)>;
@@ -47,6 +52,8 @@ pub struct FakeCircuit {
     pub contacts: BTreeMap<String, bool>,
     /// Extra device tags the circuit knows (limit switches are known once written).
     pub known: BTreeSet<String>,
+    /// Motors that hum on two phases.
+    pub humming: BTreeSet<String>,
     pub settles: u64,
     rule: Option<Rule>,
 }
@@ -92,6 +99,10 @@ impl CircuitPort for FakeCircuit {
 
     fn set_contact(&mut self, device: &str, closed: bool) {
         self.contacts.insert(device.to_owned(), closed);
+    }
+
+    fn motor_humming(&self, motor: &str) -> bool {
+        self.humming.contains(motor)
     }
 
     fn knows_device(&self, device: &str) -> bool {

@@ -11,8 +11,9 @@
 //! inside `novo_drive` (see `novo_drive::motor::MOTOR_MODEL_LEAVES_OUT`).
 
 use novo_drive::InputError;
-use novo_drive::hoist_unit::{BrakeFeed, HoistSnapshot, TwoSpeedHoistUnit};
+use novo_drive::hoist_unit::{BrakeFeed, Feeds, HoistSnapshot, TwoSpeedHoistUnit};
 use novo_drive::sequencer::Energised;
+use novo_drive::supply::{Phase, Supply};
 
 use crate::bindings::SensorBinding;
 use crate::cosim::StepConfig;
@@ -52,6 +53,10 @@ impl LimitSwitch {
 pub struct HoistBinding {
     /// Device tag of the motor symbol.
     pub motor: String,
+    /// Device tag of the fine-lift motor symbol, for a hoist with a second motor.
+    pub fine_motor: Option<String>,
+    /// Device tag of the overload relay contact: normally closed, opens when the relay trips.
+    pub overload_contact: Option<String>,
     /// Device tag whose energised state feeds the brake coil (used with
     /// `BrakeFeed::Separate`; ignored with `BrakeFeed::MotorTerminals`).
     pub brake_feed: Option<String>,
@@ -141,6 +146,24 @@ impl HoistLoop {
             if !circuit.knows_device(&h.binding.motor) {
                 out.push(missing(&h.id, "motor", &h.binding.motor));
             }
+            match (&h.binding.fine_motor, h.unit.fine_lift()) {
+                (Some(tag), Some(_)) if !circuit.knows_device(tag) => {
+                    out.push(missing(&h.id, "fine-lift motor", tag))
+                }
+                (None, Some(_)) => out.push(BindingFinding {
+                    module: h.id.clone(),
+                    message: "the hoist has a fine-lift motor but no fine-lift motor device is \
+                              bound, so it is never fed"
+                        .into(),
+                }),
+                (Some(tag), None) => out.push(BindingFinding {
+                    module: h.id.clone(),
+                    message: format!(
+                        "fine-lift motor {tag} is bound but the fine-lift data is not complete"
+                    ),
+                }),
+                _ => {}
+            }
             if let Some(tag) = &h.binding.mains
                 && !circuit.knows_device(tag)
             {
@@ -158,6 +181,11 @@ impl HoistLoop {
                 }),
                 _ => {}
             }
+            if let Some(tag) = &h.binding.overload_contact
+                && !circuit.knows_device(tag)
+            {
+                out.push(missing(&h.id, "overload relay contact", tag));
+            }
             for limit in &h.binding.limits {
                 if !circuit.knows_device(&limit.binding.device_tag) {
                     out.push(missing(&h.id, "limit switch", &limit.binding.device_tag));
@@ -173,6 +201,9 @@ impl HoistLoop {
         for h in &self.hoists {
             for limit in &h.binding.limits {
                 circuit.set_contact(&limit.binding.device_tag, limit.closed_at(h.height_m));
+            }
+            if let Some(tag) = &h.binding.overload_contact {
+                circuit.set_contact(tag, !h.unit.overload_tripped());
             }
         }
         circuit.settle(dt);
@@ -191,7 +222,37 @@ impl HoistLoop {
                 .brake_feed
                 .as_deref()
                 .is_some_and(|tag| circuit.is_energised(tag));
-            let snap = h.unit.step_energised(energised, mains_on, brake_fed, dt);
+            let fine_lift =
+                h.binding
+                    .fine_motor
+                    .as_deref()
+                    .and_then(|tag| match circuit.motor_feed(tag) {
+                        MotorFeed::Fed { direction, .. } => Some(direction),
+                        MotorFeed::Off => None,
+                    });
+            let humming = circuit.motor_humming(&h.binding.motor)
+                || h.binding
+                    .fine_motor
+                    .as_deref()
+                    .is_some_and(|tag| circuit.motor_humming(tag));
+            // The drawing does not say which phase is open: take L3, the one the brake
+            // rectifier (on L1 and L2) does not use. An injected fault can pick another.
+            let supply = if humming {
+                Supply::HEALTHY.with_phase_lost(Phase::L3)
+            } else {
+                Supply::HEALTHY
+            };
+            let snap = h.unit.step_feeds(
+                Feeds {
+                    main: energised,
+                    fine_lift,
+                    mains_on,
+                    brake_coil_fed: brake_fed,
+                    supply,
+                    humming,
+                },
+                dt,
+            );
             h.height_m = snap.hook_height_m;
             h.snapshot = Some(snap);
         }

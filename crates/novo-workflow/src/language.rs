@@ -697,6 +697,20 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl(
+        "sim.defects",
+        &["storingen en scenario's"],
+        &[
+            "storing",
+            "fout",
+            "defect",
+            "verklevend contact",
+            "draadbreuk",
+            "fasebreuk",
+            "aardsluiting",
+            "scenario",
+        ],
+    ),
+    nl(
         "sim.controller",
         &["bediening paneel"],
         &[
@@ -1295,6 +1309,11 @@ pub const DUTCH: &[Aliases] = &[
         "export.pdf_page",
         &["exporteer pagina", "deze pagina exporteren"],
         &["huidige pagina", "een pagina"],
+    ),
+    nl(
+        "export.drill_plan",
+        &["exporteer boorplan", "boorplan exporteren"],
+        &["boorplan", "handmatig boren"],
     ),
     nl(
         "export.plate_dxf",

@@ -17,6 +17,7 @@ zip.workspace = true
 calamine.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

@@ -1,0 +1,28 @@
+@title Reports and Commissioning rails (left edge)
+@area Layout
+@sizes 1366x768 1920x1080
+# Lane V3d of the visual redesign (docs/design/visual-redesign.md section 3.2).
+# The rail of the Reports workspace and of the Commissioning workspace.
+click_text "Open example"
+wait 20
+click_text Reports #2
+wait 20
+shot reports-rail
+check_layout
+click 23 264
+wait 8
+shot export-flyout
+key Escape
+wait 6
+click_text Commissioning
+wait 20
+shot commissioning-rail
+check_layout
+click 23 102
+wait 8
+shot punch-tab
+check_layout
+click_text Schematic
+wait 20
+shot back-to-schematic
+check_layout

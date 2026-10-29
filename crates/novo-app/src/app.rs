@@ -73,6 +73,9 @@ mod controller_live;
 #[cfg(test)]
 mod controller_live_tests;
 mod count_words;
+mod defects_card;
+#[cfg(test)]
+mod defects_card_tests;
 mod designer;
 mod device_renumber;
 mod diagnostics;
@@ -193,6 +196,7 @@ mod macro_company_tests;
 mod macro_editor;
 #[cfg(test)]
 mod macro_editor_tests;
+mod macro_mounting;
 mod macro_thumb;
 mod manual;
 mod menu_bar;
@@ -243,6 +247,7 @@ mod protection;
 mod rail;
 mod rail_3d;
 mod rail_cabinet;
+mod rail_reports;
 mod rail_schematic;
 mod reports;
 mod reports_view;
@@ -444,6 +449,8 @@ mod pdf_options_tests;
 mod print_preview_tests;
 #[cfg(test)]
 mod protection_tests;
+#[cfg(test)]
+mod rail_reports_tests;
 #[cfg(test)]
 mod rail_tests;
 #[cfg(test)]
@@ -1810,8 +1817,8 @@ impl NovoApp {
             && !reports
             && !self.commissioning_tablet()
             && panel_dock::pages_docked(&ctx).is_some();
-        // The tool rail: the leftmost panel of the Schematic, Cabinet and 3D
-        // workspaces.
+        // The tool rail: the leftmost panel of the Schematic, Cabinet, 3D,
+        // Reports and Commissioning workspaces.
         let rail_workspace = self.workspace();
         if !self.focus_mode
             && self.is_open()
@@ -1820,11 +1827,15 @@ impl NovoApp {
                 workspace::Workspace::Schematic
                     | workspace::Workspace::Cabinet
                     | workspace::Workspace::View3d
+                    | workspace::Workspace::Reports
+                    | workspace::Workspace::Commissioning
             )
         {
             match rail_workspace {
                 workspace::Workspace::Schematic => self.schematic_rail_show(ui),
                 workspace::Workspace::Cabinet => self.cabinet_rail_show(ui),
+                workspace::Workspace::Reports => self.reports_rail_show(ui),
+                workspace::Workspace::Commissioning => self.commissioning_rail_show(ui),
                 _ => self.view3d_rail_show(ui),
             }
         } else {

@@ -543,6 +543,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.hide_references_device",
     "sim.live",
     "sim.controller",
+    "sim.defects",
     "sim.why",
     "sim.plc_program",
     "sim.faults",
@@ -572,6 +573,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.standards_xlsx",
     "export.plate",
     "export.plate_dxf",
+    "export.drill_plan",
     "export.pdf_page",
     "export.report_pdf",
     "report.add_page",
@@ -1391,7 +1393,7 @@ impl NovoApp {
             "export.reports" => {
                 self.export_all_reports();
             }
-            "sim.live" | "sim.why" | "sim.plc_program" | "sim.controller" => {
+            "sim.live" | "sim.why" | "sim.plc_program" | "sim.controller" | "sim.defects" => {
                 // The live view and the PLC window draw only over the
                 // schematic: go there first so the command is not silent.
                 if self.workspace() != Workspace::Schematic && self.is_open() {
@@ -1405,6 +1407,8 @@ impl NovoApp {
                     self.toggle_live();
                 } else if id == "sim.controller" {
                     self.toggle_controller_panel();
+                } else if id == "sim.defects" {
+                    self.toggle_defects_panel();
                 } else if id == "sim.why" {
                     self.ask_why();
                 } else {
@@ -1496,6 +1500,9 @@ impl NovoApp {
             }
             "export.plate_dxf" => {
                 self.export_plate_dxf();
+            }
+            "export.drill_plan" => {
+                self.export_drill_plan_pdf();
             }
             "export.pdf_page" => {
                 self.export_pdf_page();

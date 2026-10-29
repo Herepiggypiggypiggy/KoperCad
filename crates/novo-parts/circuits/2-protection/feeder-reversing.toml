@@ -1,0 +1,65 @@
+# Reversing motor feeder: one breaker, two contactors with the phases swapped
+# on the second, and each coil behind the other contactor's break contact.
+name = "Motor feeder reversing"
+chapter = "protection"
+description = "Reversing motor feeder with a motor protection breaker, forward and reverse contactors and an electrical interlock in each coil path"
+tags = ["motor", "feeder", "reversing", "forward", "reverse", "interlock", "contactor"]
+notes = """K1 runs the motor forward, K2 swaps two phases for reverse. Each coil sits behind a break contact of the other contactor, so both cannot pull in. \
+You connect: L1 L2 L3 above Q1, PE above the PE terminal, the control above the two interlock contacts and 0 V below the two coils."""
+
+parameter = [
+  { name = "power", default = 2.2, description = "Motor power in kW" },
+]
+
+open = ["q1s.1,3,5", "pe1.1", "k2i.21", "k1i.21", "k1c.A2", "k2c.A2"]
+
+device = [
+  { id = "q1", tag = "-Q1", description = "Motor protection breaker", mount = { kind = "din", size = [45, 90, 78], at = [15, 55], rail = "r1" } },
+  { id = "k1", tag = "-K1", description = "Forward contactor", mount = { kind = "din", size = [45, 77, 86], at = [65, 61.5], rail = "r1" } },
+  { id = "k2", tag = "-K2", description = "Reverse contactor", mount = { kind = "din", size = [45, 77, 86], at = [115, 61.5], rail = "r1" } },
+  { id = "m1", tag = "-M1", description = "Motor {power} kW", props = { power_kw = "{power}" }, mount = { kind = "field", place = "on the machine" } },
+]
+
+symbol = [
+  { id = "q1s", key = "iec/protection/motor_protection_breaker", at = [40, 40], device = "q1" },
+  { id = "k1m", key = "iec/contactors/main_3p", at = [40, 72], device = "k1", main = false },
+  { id = "k2m", key = "iec/contactors/main_3p", at = [80, 72], device = "k2", main = false },
+  { id = "m1s", key = "iec/motors/motor_3ph", at = [40, 116], device = "m1" },
+  { id = "pe1", key = "iec/terminals/terminal_pe", at = [64, 72] },
+  { id = "k2i", key = "iec/contacts/nc", at = [120, 56], device = "k2", main = false },
+  { id = "k1c", key = "iec/coils/contactor", at = [120, 80], device = "k1", main = true },
+  { id = "k1i", key = "iec/contacts/nc", at = [144, 56], device = "k1", main = false },
+  { id = "k2c", key = "iec/coils/contactor", at = [144, 80], device = "k2", main = true },
+]
+
+junction = [
+  # Breaker output to K1 straight and to K2 swapped
+  { id = "u0", at = [40, 68] }, { id = "u1", at = [48, 64] }, { id = "u2", at = [56, 60] },
+  # Phase rails U, V, W where the two contactor outputs meet
+  { id = "a0", at = [40, 96] }, { id = "b0", at = [80, 96] },
+  { id = "a1", at = [48, 100] }, { id = "b1", at = [88, 100] },
+  { id = "a2", at = [56, 104] }, { id = "b2", at = [96, 104] },
+]
+
+wire = [
+  { from = "q1s.2", to = "u0" }, { from = "q1s.4", to = "u1" }, { from = "q1s.6", to = "u2" },
+  { from = "u0", to = "k1m.1" }, { from = "u1", to = "k1m.3" }, { from = "u2", to = "k1m.5" },
+  { from = "u0", to = "k2m.5" }, { from = "u1", to = "k2m.3" }, { from = "u2", to = "k2m.1" },
+  { from = "k1m.2", to = "a0" }, { from = "k1m.4", to = "a1" }, { from = "k1m.6", to = "a2" },
+  { from = "k2m.2", to = "b0" }, { from = "k2m.4", to = "b1" }, { from = "k2m.6", to = "b2" },
+  { from = "a0", to = "b0" }, { from = "a1", to = "b1" }, { from = "a2", to = "b2" },
+  { from = "a0", to = "m1s.U1" }, { from = "a1", to = "m1s.V1" }, { from = "a2", to = "m1s.W1" },
+  { from = "pe1.2", to = "m1s.PE" },
+  { from = "k2i.22", to = "k1c.A1" },
+  { from = "k1i.22", to = "k2c.A1" },
+]
+
+[plate]
+width = 180
+height = 160
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 170
