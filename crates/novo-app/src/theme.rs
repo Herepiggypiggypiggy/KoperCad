@@ -68,6 +68,15 @@ pub fn cabinet_style() -> CabinetStyle {
     }
 }
 
+/// The opacity of a faded cross reference (Preferences > Cross references).
+static XREF_FADE_ALPHA: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(70);
+
+/// Sets the opacity of faded cross references; true when it changed, so the
+/// canvas must be restyled.
+pub fn set_xref_fade_alpha(alpha: u8) -> bool {
+    XREF_FADE_ALPHA.swap(alpha, std::sync::atomic::Ordering::Relaxed) != alpha
+}
+
 pub fn model_style() -> ModelStyle {
     model_style_from(palette())
 }
@@ -145,6 +154,7 @@ fn model_style_from(p: &CanvasPalette) -> ModelStyle {
         // A spare contact: the cross-reference colour at 45 percent over
         // the sheet, so it reads as present but unused.
         note_dim_color: color(mix(p.cross_reference, p.sheet, 0.45)),
+        note_fade_alpha: XREF_FADE_ALPHA.load(std::sync::atomic::Ordering::Relaxed),
         ..defaults
     }
 }

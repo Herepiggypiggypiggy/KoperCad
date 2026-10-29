@@ -2095,6 +2095,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["contact", "table", "opacity", "mirror", "xref", "overlap"],
         Needs::Page,
     ),
+    cmd(
+        "view.hide_references_page",
+        "Hide or show cross references on this page",
+        "View",
+        &["contact", "table", "xref", "screen"],
+        Needs::Page,
+    ),
+    cmd(
+        "view.hide_references_device",
+        "Hide or show cross references of the selected device",
+        "View",
+        &["contact", "table", "xref", "coil", "screen"],
+        Needs::Device,
+    ),
     verb(
         cmd(
             "view.changes",

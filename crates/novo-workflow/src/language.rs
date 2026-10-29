@@ -749,6 +749,16 @@ pub const DUTCH: &[Aliases] = &[
         &["verwijzingen tonen, vervagen of verbergen"],
     ),
     nl(
+        "view.hide_references_page",
+        &[],
+        &["verwijzingen van deze pagina verbergen of tonen"],
+    ),
+    nl(
+        "view.hide_references_device",
+        &[],
+        &["verwijzingen van het gekozen apparaat verbergen of tonen"],
+    ),
+    nl(
         "view.override_marks",
         &[],
         &["handmatige wijzigingen tonen"],

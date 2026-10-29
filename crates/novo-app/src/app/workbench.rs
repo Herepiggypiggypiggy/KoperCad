@@ -524,6 +524,8 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.devices_drawer",
     "view.toggle_marks",
     "view.toggle_references",
+    "view.hide_references_page",
+    "view.hide_references_device",
     "sim.live",
     "sim.controller",
     "sim.why",
@@ -1242,6 +1244,8 @@ impl NovoApp {
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
             "view.toggle_references" => self.cycle_xref_view(),
+            "view.hide_references_page" => self.toggle_page_references(),
+            "view.hide_references_device" => self.toggle_device_references(),
             "view.reports" => self.switch_workspace(super::workspace::Workspace::Reports),
             "view.3d" => self.switch_workspace(Workspace::View3d),
             "view.3d_assembly_next" | "view.3d_assembly_previous" => {

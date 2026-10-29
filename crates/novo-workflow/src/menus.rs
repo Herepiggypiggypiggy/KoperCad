@@ -252,7 +252,16 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("cabinet.emc", under("View", "Cabinet")),
     // Layers: what is drawn on top of the page
     ("view.toggle_marks", under("View", "Layers")),
-    ("view.toggle_references", under("View", "Layers")),
+    // Cross references: how they show on screen (the PDF always prints them)
+    ("view.toggle_references", under("View", "Cross references")),
+    (
+        "view.hide_references_page",
+        under("View", "Cross references"),
+    ),
+    (
+        "view.hide_references_device",
+        under("View", "Cross references"),
+    ),
     ("view.override_marks", under("View", "Layers")),
     ("view.left_out", under("View", "Layers")),
     ("view.changes", under("View", "Layers")),
