@@ -565,6 +565,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.standards_xlsx",
     "export.plate",
     "export.plate_dxf",
+    "export.drill_plan",
     "export.pdf_page",
     "export.report_pdf",
     "report.add_page",
@@ -1489,6 +1490,9 @@ impl NovoApp {
             }
             "export.plate_dxf" => {
                 self.export_plate_dxf();
+            }
+            "export.drill_plan" => {
+                self.export_drill_plan_pdf();
             }
             "export.pdf_page" => {
                 self.export_pdf_page();

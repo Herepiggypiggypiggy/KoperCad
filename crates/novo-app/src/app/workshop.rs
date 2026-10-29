@@ -18,7 +18,7 @@
 use std::path::{Path, PathBuf};
 
 use novo_core::Project;
-use novo_layout::model::template_documents;
+use novo_layout::model::{drill_plan, template_documents};
 use novo_layout::template::Paper;
 
 use novo_reports::packet::CoverLine;
@@ -50,6 +50,8 @@ pub(super) struct TemplatePdfs {
     pub plate: Option<Vec<u8>>,
     /// One A4 card per cut-out shape (doors, walls), when there are cut-outs.
     pub cards: Option<novo_pdf::template_cards::CutoutCards>,
+    /// The hand drilling plan: datum, tools and a check-off list on A4.
+    pub plan: Option<Vec<u8>>,
 }
 
 /// The enclosures that have a mounting plate and the PDFs of each one's
@@ -83,6 +85,9 @@ pub(super) fn template_pdfs(
                 .first()
                 .and_then(|plate| novo_pdf::template::export_plate_pdf(plate, name)),
             cards: novo_pdf::template_cards::export_cutout_cards_pdf(&sheets, name),
+            plan: drill_plan(project, s.id, name)
+                .filter(|p| !p.sheets.is_empty())
+                .map(|p| novo_pdf::drill_plan::export_drill_plan_pdf(&p)),
         });
     }
     (pdfs, too_big)
@@ -136,6 +141,12 @@ impl NovoApp {
             if self.workshop_write(&file, &t.tiled) {
                 done.push(format!("drilling template {tag} ({})", paper.name()));
             }
+            if let Some(bytes) = &t.plan {
+                let file = folder.join(format!("1 Drill plan {}.pdf", clean(tag)));
+                if self.workshop_write(&file, bytes) {
+                    done.push(format!("drill plan {tag}"));
+                }
+            }
             if let Some(cards) = &t.cards {
                 let file = folder.join(format!("1 Cut-out cards {}.pdf", clean(tag)));
                 if self.workshop_write(&file, &cards.pdf) {
@@ -188,6 +199,14 @@ impl NovoApp {
                 "Print at 100 % (actual size), then check the 100 mm ruler",
                 "Hole positions from the cabinet layout; about 0.5 mm if the check square is 100 mm, else up to 0.2 % (not measured)",
             ));
+            if t.plan.is_some() {
+                separate.push(CoverLine::new(
+                    &format!("Drill plan {}", t.tag),
+                    &format!("1 Drill plan {}.pdf", clean(&t.tag)),
+                    "A4; every number is mm from the datum",
+                    "Hole data from the part; device positions from the layout; rail and duct holes are planning rules",
+                ));
+            }
             if t.cards.is_some() {
                 separate.push(CoverLine::new(
                     &format!("Cut-out cards {}", t.tag),
