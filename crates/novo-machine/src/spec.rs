@@ -10,7 +10,8 @@ use std::fmt;
 
 use novo_drive::InputError;
 use novo_drive::brake::{SpringBrake, Switching};
-use novo_drive::hoist_unit::{BrakeFeed, TwoSpeedHoistUnit};
+use novo_drive::brake_system::{BrakeSource, BrakeSystem, ConicalPull, Rectifier, RectifierKind};
+use novo_drive::hoist_unit::{BrakeFeed, FineLift, TwoSpeedHoistUnit};
 use novo_drive::mechanics::Hoist;
 use novo_drive::motor::{PoleChangeMotor, Winding};
 use novo_drive::sequencer::{Sequencer, SequencerConfig};
@@ -95,6 +96,76 @@ pub const KEYS: &[SpecKey] = &[
     ),
     tag("mech_brake_switching", "Brake switched on (AC or DC)"),
     tag("mech_brake_feed", "Brake rectifier feed device"),
+    tag(
+        "mech_brake_kind",
+        "Brake kind (rectifier, or conical: lifted by the motor field)",
+    ),
+    tag(
+        "mech_rectifier",
+        "Rectifier (bridge, half-wave, fast or controlled)",
+    ),
+    num(
+        "mech_rectifier_boost",
+        "Fast rectifier: over-excitation",
+        "x",
+        "2",
+    ),
+    num(
+        "mech_rectifier_boost_s",
+        "Fast rectifier: over-excitation time",
+        "s",
+        "0.2",
+    ),
+    num(
+        "mech_brake_pull_in",
+        "Brake pull-in (share of rated voltage)",
+        "",
+        "0.8",
+    ),
+    num(
+        "mech_brake_drop_out",
+        "Brake drop-out (share of rated voltage)",
+        "",
+        "0.4",
+    ),
+    num(
+        "mech_conical_phase_pull",
+        "Conical brake: pull left with a phase lost",
+        "",
+        "0.5",
+    ),
+    num(
+        "mech_conical_fine_pull",
+        "Conical brake: pull on the fine winding vs coarse",
+        "",
+        "1",
+    ),
+    tag("mech_fine_lift_motor", "Fine-lift motor device"),
+    num("mech_fl_poles", "Fine-lift motor poles", "", "4"),
+    num("mech_fl_kw", "Fine-lift motor power", "kW", "0.37"),
+    num("mech_fl_rpm", "Fine-lift motor rated speed", "rpm", "1380"),
+    num(
+        "mech_fl_ratio",
+        "Fine-lift speed ratio (fine motor over main shaft)",
+        "",
+        "10",
+    ),
+    num(
+        "mech_fl_inertia",
+        "Fine-lift rotor inertia",
+        "kg m\u{b2}",
+        "0.002",
+    ),
+    num(
+        "mech_fl_brake_torque_nm",
+        "Fine-lift brake torque",
+        "N m",
+        "8",
+    ),
+    tag(
+        "mech_fl_releases_main_brake",
+        "Fine-lift motor also lifts the main brake (yes or no)",
+    ),
     tag("mech_main_contactor", "Main contactor device"),
     tag("mech_upper_limit", "Upper limit switch device"),
     num(
@@ -161,6 +232,96 @@ pub(crate) fn decimal(key: &'static str, raw: String) -> Result<f64, SpecError> 
     raw.replace(',', ".")
         .parse::<f64>()
         .map_err(|_| SpecError::NotANumber { key, text: raw })
+}
+
+type TextFn<'a> = dyn Fn(&'static str) -> Option<String> + 'a;
+type NumFn<'a> = dyn Fn(&'static str) -> Result<f64, SpecError> + 'a;
+
+/// What lifts the brake, from `mech_brake_kind` (empty = a rectifier) and its details.
+fn brake_source(text: &TextFn<'_>, number: &NumFn<'_>) -> Result<BrakeSource, SpecError> {
+    let word = |key: &'static str| text(key).map(|t| t.to_ascii_lowercase());
+    match word("mech_brake_kind").as_deref() {
+        Some("conical") => Ok(BrakeSource::Conical(ConicalPull::new(
+            number("mech_conical_phase_pull")?,
+            number("mech_conical_fine_pull")?,
+        )?)),
+        None | Some("rectifier") => {
+            let kind = match word("mech_rectifier").as_deref() {
+                None | Some("bridge") => RectifierKind::Bridge,
+                Some("half-wave" | "halfwave" | "half wave") => RectifierKind::HalfWave,
+                Some("controlled") => RectifierKind::Controlled,
+                Some("fast") => RectifierKind::FastExcitation {
+                    boost: number("mech_rectifier_boost")?,
+                    boost_s: number("mech_rectifier_boost_s")?,
+                },
+                Some(other) => {
+                    return Err(SpecError::NotANumber {
+                        key: "mech_rectifier",
+                        text: other.to_owned(),
+                    });
+                }
+            };
+            Ok(BrakeSource::Rectifier(Rectifier::new(kind)?))
+        }
+        Some(other) => Err(SpecError::NotANumber {
+            key: "mech_brake_kind",
+            text: other.to_owned(),
+        }),
+    }
+}
+
+/// The fine-lift motor from its `mech_fl_*` properties. Its brake is of the same kind as the
+/// main one (`source`) with its own torque; delays and thresholds follow the main brake.
+fn fine_lift(
+    text: &TextFn<'_>,
+    number: &NumFn<'_>,
+    hz: f64,
+    source: BrakeSource,
+) -> Result<FineLift, SpecError> {
+    let poles = number("mech_fl_poles")?;
+    if poles.fract() != 0.0 || poles < 0.0 || poles > f64::from(u32::MAX) {
+        return Err(SpecError::NotWhole {
+            key: "mech_fl_poles",
+            value: poles,
+        });
+    }
+    let winding = Winding::new(
+        poles as u32,
+        hz,
+        number("mech_fl_kw")? * 1000.0,
+        number("mech_fl_rpm")?,
+        2.2,
+    )?;
+    let mut brake = SpringBrake::new(
+        number("mech_fl_brake_torque_nm")?,
+        number("mech_brake_release_s")?,
+        number("mech_brake_apply_ac_s")?,
+        number("mech_brake_apply_dc_s")?,
+        0.02,
+        Switching::AcSide,
+    )?;
+    brake.set_thresholds(
+        number("mech_brake_pull_in")?,
+        number("mech_brake_drop_out")?,
+    )?;
+    let releases = match text("mech_fl_releases_main_brake").map(|t| t.to_ascii_lowercase()) {
+        None => true,
+        Some(t) if matches!(t.as_str(), "yes" | "y" | "true" | "1") => true,
+        Some(t) if matches!(t.as_str(), "no" | "n" | "false" | "0") => false,
+        Some(t) => {
+            return Err(SpecError::NotANumber {
+                key: "mech_fl_releases_main_brake",
+                text: t,
+            });
+        }
+    };
+    Ok(FineLift::new(
+        winding,
+        number("mech_fl_ratio")?,
+        number("mech_fl_inertia")?,
+        BrakeSystem::new(brake, source),
+        releases,
+    )?)
 }
 
 /// Reads a hoist from properties. `get(key)` returns the property text if set. Returns
@@ -237,7 +398,7 @@ pub fn hoist_from_properties(
             });
         }
     };
-    let brake = SpringBrake::new(
+    let mut brake = SpringBrake::new(
         number("mech_brake_torque_nm")?,
         number("mech_brake_release_s")?,
         number("mech_brake_apply_ac_s")?,
@@ -245,6 +406,12 @@ pub fn hoist_from_properties(
         0.02,
         switching,
     )?;
+    brake.set_thresholds(
+        number("mech_brake_pull_in")?,
+        number("mech_brake_drop_out")?,
+    )?;
+    let source = brake_source(&text, &number)?;
+    let system = BrakeSystem::new(brake, source);
     // The circuit decides what is fed; the sequencer is unused here and gets neutral times.
     let sequencer = Sequencer::new(SequencerConfig {
         changeover_dead_time_s: 0.1,
@@ -257,7 +424,16 @@ pub fn hoist_from_properties(
     } else {
         BrakeFeed::MotorTerminals
     };
-    let unit = TwoSpeedHoistUnit::new(motor, hoist, sequencer, brake, feed)?;
+    let mut unit = TwoSpeedHoistUnit::with_system(motor, hoist, sequencer, system, feed)?;
+    let fine_motor = text("mech_fine_lift_motor");
+    if fine_motor.is_some() {
+        unit = unit.with_fine_lift(fine_lift(
+            &text,
+            &number,
+            hz,
+            brake_source(&text, &number)?,
+        )?);
+    }
 
     let mut limits = Vec::new();
     for (which, kind, device, height) in [
@@ -292,6 +468,7 @@ pub fn hoist_from_properties(
         unit,
         HoistBinding {
             motor: motor_tag.to_owned(),
+            fine_motor,
             brake_feed,
             mains: text("mech_main_contactor"),
             limits,
@@ -366,6 +543,97 @@ mod tests {
         assert!(bad(&[("mech_lower_limit_m", "0.2")]).contains("lower limit"));
         assert!(bad(&[("mech_brake_switching", "both")]).contains("mech_brake_switching"));
         assert!(bad(&[("mech_drum_radius_m", "-1")]).contains("greater than zero"));
+    }
+
+    #[test]
+    fn brake_kind_and_rectifier_are_read() {
+        let kind = |extra: &[(&str, &str)]| {
+            let mut p = props(&[("mech_mass_kg", "500")]);
+            p.extend(props(extra));
+            build(&p)
+                .unwrap()
+                .unwrap()
+                .unit
+                .brake_system()
+                .source()
+                .to_owned()
+        };
+        assert!(matches!(
+            kind(&[]),
+            BrakeSource::Rectifier(r) if r.kind() == RectifierKind::Bridge
+        ));
+        assert!(matches!(
+            kind(&[("mech_brake_kind", "Conical")]),
+            BrakeSource::Conical(c) if c.phase_lost_pull() == 0.5
+        ));
+        assert!(matches!(
+            kind(&[("mech_rectifier", "half-wave")]),
+            BrakeSource::Rectifier(r) if r.kind() == RectifierKind::HalfWave
+        ));
+        assert!(matches!(
+            kind(&[("mech_rectifier", "fast"), ("mech_rectifier_boost", "3")]),
+            BrakeSource::Rectifier(r)
+                if r.kind() == RectifierKind::FastExcitation { boost: 3.0, boost_s: 0.2 }
+        ));
+    }
+
+    #[test]
+    fn a_fine_lift_motor_is_built_with_its_binding() {
+        let h = build(&props(&[
+            ("mech_mass_kg", "500"),
+            ("mech_brake_kind", "conical"),
+            ("mech_fine_lift_motor", "=M2"),
+            ("mech_fl_releases_main_brake", "no"),
+        ]))
+        .unwrap()
+        .unwrap();
+        assert_eq!(h.binding.fine_motor.as_deref(), Some("=M2"));
+        let f = h.unit.fine_lift().unwrap();
+        assert_eq!(f.ratio(), 10.0);
+        assert!(!f.releases_main_brake());
+        assert_eq!(f.winding().poles(), 4);
+        // No marker, no fine-lift motor.
+        let h = build(&props(&[("mech_mass_kg", "500"), ("mech_fl_ratio", "7")]))
+            .unwrap()
+            .unwrap();
+        assert!(h.unit.fine_lift().is_none() && h.binding.fine_motor.is_none());
+    }
+
+    #[test]
+    fn bad_family_values_are_named() {
+        let bad = |extra: &[(&str, &str)]| {
+            let mut p = props(&[("mech_mass_kg", "500")]);
+            p.extend(props(extra));
+            build(&p).unwrap_err().to_string()
+        };
+        assert!(bad(&[("mech_brake_kind", "magnetic")]).contains("mech_brake_kind"));
+        assert!(bad(&[("mech_rectifier", "triac")]).contains("mech_rectifier"));
+        assert!(
+            bad(&[
+                ("mech_brake_pull_in", "0.3"),
+                ("mech_brake_drop_out", "0.5")
+            ])
+            .contains("drop-out")
+        );
+        assert!(
+            bad(&[("mech_fine_lift_motor", "=M2"), ("mech_fl_poles", "3")])
+                .contains("mech_fl_poles")
+                || bad(&[("mech_fine_lift_motor", "=M2"), ("mech_fl_poles", "3")]).contains("pole")
+        );
+        assert!(
+            bad(&[
+                ("mech_fine_lift_motor", "=M2"),
+                ("mech_fl_releases_main_brake", "maybe")
+            ])
+            .contains("mech_fl_releases_main_brake")
+        );
+        assert!(
+            bad(&[
+                ("mech_brake_kind", "conical"),
+                ("mech_conical_phase_pull", "0")
+            ])
+            .contains("phase_lost_pull")
+        );
     }
 
     #[test]

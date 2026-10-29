@@ -48,6 +48,7 @@ fn module(id: &str, motor_tag: &str, feed: BrakeFeed, limits: Vec<LimitSwitch>) 
             brake_feed: Some("=K-BRK".into()),
             mains: Some("=K-MAIN".into()),
             limits,
+            ..Default::default()
         },
     )
 }
