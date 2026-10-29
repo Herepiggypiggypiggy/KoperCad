@@ -25,6 +25,7 @@ struct Cmd {
     /// STO channels per winch.
     sto: [(bool, bool); 2],
     encoder: [bool; 2],
+    encoder_b: [bool; 2],
     /// The brake contactor of a winch pulls in with the drive's relay contact.
     contactor_follows_relay: [bool; 2],
 }
@@ -37,6 +38,7 @@ impl Default for Cmd {
             fast: false,
             sto: [(true, true); 2],
             encoder: [true; 2],
+            encoder_b: [true; 2],
             contactor_follows_relay: [true; 2],
         }
     }
@@ -63,6 +65,7 @@ fn module(extra: &[(&str, &str)]) -> ClPairModule {
         ("cw_sto_a", "STOA1"),
         ("cw_sto_b", "STOA2"),
         ("cw_encoder", "ENCA"),
+        ("cw_encoder_b", "ENCAB"),
         ("cw_brake_relay", "KRA"),
         ("cw_brake_feed", "KBA"),
     ];
@@ -72,6 +75,7 @@ fn module(extra: &[(&str, &str)]) -> ClPairModule {
         ("cw_sto_a", "STOB1"),
         ("cw_sto_b", "STOB2"),
         ("cw_encoder", "ENCB"),
+        ("cw_encoder_b", "ENCBB"),
         ("cw_brake_relay", "KRB"),
         ("cw_brake_feed", "KBB"),
     ];
@@ -100,6 +104,8 @@ fn rig(extra: &[(&str, &str)]) -> (ClPairLoop, FakeCircuit, Shared) {
             ("STOB2", cmd.sto[1].1),
             ("ENCA", cmd.encoder[0]),
             ("ENCB", cmd.encoder[1]),
+            ("ENCAB", cmd.encoder_b[0]),
+            ("ENCBB", cmd.encoder_b[1]),
             ("KBA", cmd.contactor_follows_relay[0] && relay("KRA")),
             ("KBB", cmd.contactor_follows_relay[1] && relay("KRB")),
         ];
@@ -113,8 +119,8 @@ fn rig(extra: &[(&str, &str)]) -> (ClPairLoop, FakeCircuit, Shared) {
     });
     circuit.known.extend(
         [
-            "KU", "KD", "KF", "STOA1", "STOA2", "STOB1", "STOB2", "ENCA", "ENCB", "KRA", "KRB",
-            "KBA", "KBB",
+            "KU", "KD", "KF", "STOA1", "STOA2", "STOB1", "STOB2", "ENCA", "ENCB", "ENCAB", "ENCBB",
+            "KRA", "KRB", "KBA", "KBB",
         ]
         .map(str::to_owned),
     );
@@ -249,6 +255,35 @@ fn a_lost_encoder_signal_on_b_trips_b_and_names_it() {
     assert!(!has(m, |k| matches!(
         k,
         ClPairFindingKind::EncoderSignalLost { winch: 0 }
+    )));
+}
+
+#[test]
+fn a_lost_encoder_channel_on_b_is_named_and_lowering_trips_b() {
+    let (mut l, mut c, cmd) = rig(&[("cw_pair_max_error_m", "0")]);
+    cmd.borrow_mut().up = true;
+    seconds(&mut l, &mut c, 3.0);
+    cmd.borrow_mut().encoder_b[1] = false;
+    seconds(&mut l, &mut c, 1.0);
+    {
+        let mut c2 = cmd.borrow_mut();
+        c2.up = false;
+        c2.down = true;
+    }
+    seconds(&mut l, &mut c, 4.0);
+    let m = l.module("=M1").unwrap();
+    assert!(has(m, |k| matches!(
+        k,
+        ClPairFindingKind::EncoderChannelLost { winch: 1 }
+    )));
+    assert!(
+        has(m, |k| matches!(k, ClPairFindingKind::Trip { winch: 1, .. })),
+        "{:?}",
+        m.findings()
+    );
+    assert!(!has(m, |k| matches!(
+        k,
+        ClPairFindingKind::EncoderChannelLost { winch: 0 }
     )));
 }
 

@@ -53,7 +53,7 @@ the hoist reports a condition (fed with the brake closed, brake slipping, phase 
 fed) or reports nothing wrong. "What is different" lists a hook that is 5 cm or more away from the healthy
 hoist's and any condition only the faulted hoist reports. A run with a hoist stops at 120 s (every 5 ms tick settles the circuit, and the card runs it on the UI thread).
 
-Not built: a lost encoder, drive overcurrent and the safe-torque-off input (the drive and travel models), radio
+Not built: drive overcurrent and the safe-torque-off input (the drive and travel models), radio
 link loss (the controller model), recording hoist faults from the Hoist run window.
 
 ## Walk-throughs (`novo_sim::walkthrough`)

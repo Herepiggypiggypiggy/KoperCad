@@ -86,8 +86,10 @@ events.
 
 Fidelity: reading the devices and the tick order are exact by definition; everything inside the
 drive is the model listed above. A channel or the encoder device that is not bound counts as always
-present, and the run says so. The encoder loss here is a lost signal (counts stop); a lost single
-channel (direction lost) is available in the engine and the scenarios window, not as a drawn device yet.
+present, and the run says so. The encoder loss here is a lost signal (counts stop). A lost single
+channel (direction lost) is a second drawn device, the motor's "Encoder channel B device"
+(`cw_encoder_b`): when its coil opens the counts keep coming but the direction is gone, the run
+names it, and lowering trips the drive on the encoder code. Not bound means the channel is present.
 
 ## Two winches on one beam in the drawn circuit
 
@@ -118,7 +120,5 @@ model listed above. No rope swing, no drum grooving, no rope over-lap. The defau
 
 ## Not yet
 
-- Walk-throughs (`novo_sim::walkthrough`) do not run the winch loop yet; defects are injected in the
-  live view.
 - Unconfirmed customer details: which drive maker's hoist and encoder arrangement applies. Everything
   here is generic public knowledge.

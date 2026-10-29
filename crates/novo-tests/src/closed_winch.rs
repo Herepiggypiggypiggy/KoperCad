@@ -9,6 +9,10 @@
 //! STOD, encoder signal monitor ENCB and brake contactor KB2 behind the drive's brake relay KR3.
 //! M1 names M2 as its partner, so the run takes them as one pair; the radio commands both.
 //!
+//! `closed_winch_channel` adds a monitor ENCH for encoder channel B as a rung under the first one (drawn as one more
+//! relay fed from L and N), named by the motor's `cw_encoder_b`: opening its coil leaves the signal
+//! device ENC alone, so the encoder keeps its counts but loses the direction.
+//!
 //! The values are made up for the fixture: a generic 30 kW hoist motor, not any manufacturer's data.
 
 use novo_core::{
@@ -47,18 +51,27 @@ fn role(device: DeviceId, main: bool) -> SymbolRole {
 /// Builds the closed-loop winch project as one undo step.
 pub fn closed_winch(doc: &mut Document) -> Result<ClosedWinch> {
     Ok(doc
-        .transact("Draw closed-loop winch", |tx| build(tx, false))?
+        .transact("Draw closed-loop winch", |tx| build(tx, false, false))?
         .0)
 }
 
 /// Builds the project with two winches on one beam as one undo step.
 pub fn closed_winch_pair(doc: &mut Document) -> Result<ClosedWinch> {
     Ok(doc
-        .transact("Draw two closed-loop winches", |tx| build(tx, true))?
+        .transact("Draw two closed-loop winches", |tx| build(tx, true, false))?
         .0)
 }
 
-fn build(tx: &mut Tx<'_>, pair: bool) -> Result<ClosedWinch> {
+/// Builds the winch project with a monitor for encoder channel B as one undo step.
+pub fn closed_winch_channel(doc: &mut Document) -> Result<ClosedWinch> {
+    Ok(doc
+        .transact("Draw closed-loop winch with encoder channel", |tx| {
+            build(tx, false, true)
+        })?
+        .0)
+}
+
+fn build(tx: &mut Tx<'_>, pair: bool, channel: bool) -> Result<ClosedWinch> {
     let title = if pair {
         "Two closed-loop winches"
     } else {
@@ -177,6 +190,18 @@ fn build(tx: &mut Tx<'_>, pair: bool) -> Result<ClosedWinch> {
     tx.connect(Endpoint::pin(f, 0), Endpoint::pin(relay, 0))?;
     tx.connect(Endpoint::pin(relay, 1), Endpoint::pin(kb_coil, 0))?;
     tx.connect(Endpoint::pin(kb_coil, 1), Endpoint::pin(fnn, 0))?;
+
+    // Encoder channel B: a relay of its own, one rung under the first one.
+    if channel {
+        let ench = tx.add_device(tag("=A1+CAB-ENCH"), "Encoder channel B monitor")?;
+        let x = col(0);
+        let f = feed(tx, l, x, 160.0)?;
+        let k = sym(tx, coil, x, 206.0, ench, true)?;
+        let fnn = feed(tx, n, x, 230.0)?;
+        tx.connect(Endpoint::pin(f, 0), Endpoint::pin(k, 0))?;
+        tx.connect(Endpoint::pin(k, 1), Endpoint::pin(fnn, 0))?;
+        tx.set_property(m1, "cw_encoder_b", Some("=A1+CAB-ENCH".into()))?;
+    }
 
     // The second winch: STO channels and encoder monitor as relays, the drive's brake relay
     // contact written by the run, the brake contactor behind it.
