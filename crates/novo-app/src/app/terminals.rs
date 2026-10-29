@@ -201,7 +201,7 @@ impl NovoApp {
 }
 
 /// The strip table's columns, in the order a row writes its cells.
-const STRIP_HEADS: [&str; 10] = [
+const STRIP_HEADS: [&str; 11] = [
     "Terminal",
     "Kind",
     "Jumper",
@@ -211,6 +211,7 @@ const STRIP_HEADS: [&str; 10] = [
     "External",
     "Wire out",
     "Cable",
+    "Accepts",
     "State",
 ];
 
@@ -221,6 +222,7 @@ const STRIP_HEADS: [&str; 10] = [
 /// Rows drawn by a selected symbol show as selected.
 pub(super) fn strip_table(
     ui: &mut egui::Ui,
+    project: &novo_core::Project,
     view: &novo_terminals::StripView,
     screen: &novo_terminals::Screen,
     selected: &[AnyId],
@@ -300,12 +302,83 @@ pub(super) fn strip_table(
                     ui.label(join(row.external_targets()));
                     ui.label(screen_cell(screen, i, |r| r.wires_external.join(", ")));
                     ui.label(cable_cell(screen, i));
+                    let (accepts, why) = accepts_cell(project, row);
+                    ui.label(accepts).on_hover_text(why);
                     ui.weak(row.state().label());
                     ui.end_row();
                 }
             });
     });
     go
+}
+
+/// The Accepts cell of a strip row: the conductor range and tightening
+/// torque the terminal's part states (`0.5–2.5 mm², 0.4–0.5 N·m`), or a dash
+/// when it states none, with the source of the figures as hover text. Checks
+/// in Check > Issues judge wires against the same figures.
+fn accepts_cell(project: &novo_core::Project, row: &novo_terminals::Row) -> (String, String) {
+    let unknown = || {
+        (
+            "\u{2013}".to_owned(),
+            "The part states no wire range for this terminal (nothing is assumed)".to_owned(),
+        )
+    };
+    // The same lookup as the checks and reports: the data of the part at
+    // each connection point of the drawn symbol. Both sides show when they
+    // differ; a spare terminal falls back to the part's point `1`.
+    let mut points: Vec<novo_checks::PointData> = Vec::new();
+    match row
+        .occurrences
+        .first()
+        .and_then(|o| project.symbol(o.symbol))
+    {
+        Some(symbol) => {
+            for pin in 0..symbol.pins.len() {
+                let Ok(pin) = u16::try_from(pin) else { break };
+                points.extend(novo_checks::point_data(
+                    project,
+                    novo_core::PinRef::new(symbol.id, pin),
+                ));
+            }
+        }
+        None => {
+            if let Some(part) = row.part.and_then(|p| project.part(p)) {
+                let data = novo_parts::connection_data(&part.properties, "1");
+                if !data.is_empty() {
+                    points.push(novo_checks::PointData {
+                        data,
+                        source: novo_parts::connection_source(&part.properties)
+                            .unwrap_or("unknown")
+                            .to_owned(),
+                    });
+                }
+            }
+        }
+    }
+    let mut bits: Vec<String> = Vec::new();
+    let mut sources: Vec<&str> = Vec::new();
+    for point in &points {
+        let mut one = Vec::new();
+        if let Some((lo, hi)) = point.data.wire_mm2 {
+            one.push(format!("{lo}\u{2013}{hi} mm\u{b2}"));
+        }
+        if let Some((lo, hi)) = point.data.torque_nm {
+            one.push(format!("{lo}\u{2013}{hi} N\u{b7}m"));
+        }
+        let one = one.join(", ");
+        if !one.is_empty() && !bits.contains(&one) {
+            bits.push(one);
+            sources.push(point.source_text());
+        }
+    }
+    if bits.is_empty() {
+        return unknown();
+    }
+    sources.dedup();
+    (
+        bits.join(" / "),
+        format!("From the part: {}", sources.join(", ")),
+    )
 }
 
 /// The Jumper cell of a strip row: `J1` for a connected terminal, empty
@@ -571,11 +644,13 @@ mod tests {
 
     #[test]
     fn the_wire_and_cable_columns_sit_beside_their_targets() {
-        assert_eq!(STRIP_HEADS.len(), 10);
+        assert_eq!(STRIP_HEADS.len(), 11);
         assert_eq!(STRIP_HEADS[3..5], ["Bridged to", "Internal"]);
         assert_eq!(
             STRIP_HEADS[5..],
-            ["Wire in", "External", "Wire out", "Cable", "State"]
+            [
+                "Wire in", "External", "Wire out", "Cable", "Accepts", "State"
+            ]
         );
     }
 
@@ -583,5 +658,95 @@ mod tests {
     fn the_jumper_cell_names_the_group_or_stays_empty() {
         assert_eq!(jumper_cell(&row(Some(2))), "J2");
         assert_eq!(jumper_cell(&row(None)), "");
+    }
+
+    #[test]
+    fn the_accepts_cell_and_the_check_read_the_same_connection_point() {
+        use novo_core::{DeviceTag, Document, Endpoint, Pin, Placement, Point, SymbolRole, Value};
+        use novo_terminals::{Drop, place_terminals, strip_view};
+        let mut doc = Document::default();
+        let (strip, wire_out) = doc
+            .transact("Draw", |tx| {
+                let page = tx.add_page("1")?;
+                let m1 = tx.add_device(DeviceTag::parse("-M1")?, "")?;
+                let k1 = tx.add_device(DeviceTag::parse("-K1")?, "")?;
+                let motor = tx.place_symbol(
+                    page,
+                    "iec/motors/motor_1ph",
+                    Placement::at(Point::new(40.0, 100.0)),
+                    vec![Pin::new("U", 0.0, 0.0)],
+                    SymbolRole::Device {
+                        device: m1,
+                        main: true,
+                    },
+                )?;
+                let contact = tx.place_symbol(
+                    page,
+                    "iec/contacts/no",
+                    Placement::at(Point::new(40.0, 20.0)),
+                    vec![Pin::new("13", 0.0, 0.0), Pin::new("14", 0.0, 10.0)],
+                    SymbolRole::Device {
+                        device: k1,
+                        main: false,
+                    },
+                )?;
+                let wire = tx.connect(Endpoint::pin(contact, 1), Endpoint::pin(motor, 0))?;
+                let strip = novo_terminals::strip_in_use(tx, page)?;
+                let placed = place_terminals(
+                    tx,
+                    strip,
+                    &[Drop {
+                        wire,
+                        at: Point::new(40.0, 60.0),
+                    }],
+                )?;
+                // Point 1 takes 0.5-2.5 mm2, point 2 takes 1-4 mm2.
+                let part = tx.add_part("Acme", "CLAMP")?;
+                tx.update::<novo_core::Part>(part, |p| {
+                    for (k, v) in [
+                        ("pin.1.wire_min_mm2", 0.5),
+                        ("pin.1.wire_max_mm2", 2.5),
+                        ("pin.2.wire_min_mm2", 1.0),
+                        ("pin.2.wire_max_mm2", 4.0),
+                    ] {
+                        p.properties.insert(k.into(), Value::Float(v));
+                    }
+                    p.properties
+                        .insert("pin_data_source".into(), Value::Text("maker".into()));
+                })?;
+                tx.update::<novo_core::Terminal>(placed[0].terminal, |t| t.part = Some(part))?;
+                // A 6 mm2 wire on point 2, the side the second range is for.
+                tx.update::<novo_core::Wire>(placed[0].external_wire, |w| {
+                    w.cross_section_mm2 = Some(6.0)
+                })?;
+                Ok((strip, placed[0].external_wire))
+            })
+            .unwrap()
+            .0;
+        let project = doc.project();
+        let view = strip_view(project, strip);
+        let (text, why) = accepts_cell(project, &view.rows[0]);
+        assert!(
+            text.contains("0.5\u{2013}2.5") && text.contains("1\u{2013}4"),
+            "{text}"
+        );
+        assert!(why.contains("maker data"));
+        let problem = novo_checks::check(project)
+            .into_iter()
+            .find(|p| p.kind == novo_checks::ProblemKind::WireRange)
+            .expect("the 6 mm2 wire is too large");
+        assert!(problem.at.contains(&AnyId::from(wire_out)));
+        // The finding names a range that the cell shows.
+        assert!(
+            problem.message.contains("1\u{2013}4 mm")
+                || problem.message.contains("0.5\u{2013}2.5 mm"),
+            "{}",
+            problem.message
+        );
+        assert!(text.contains(if problem.message.contains("1\u{2013}4 mm") {
+            "1\u{2013}4"
+        } else {
+            "0.5\u{2013}2.5"
+        }));
     }
 }

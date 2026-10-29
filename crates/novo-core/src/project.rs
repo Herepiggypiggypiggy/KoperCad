@@ -189,6 +189,11 @@ pub struct Panel {
 /// opens the set rather than following the drawing.
 pub const CONTENTS_GENERATOR: &str = "toc";
 
+/// The generator id of the front matter (title, revisions, structure
+/// overview, general and project information): the cover pages that open the
+/// set, ahead of the drawn pages.
+pub const FRONT_GENERATOR: &str = "front";
+
 /// The generator id of the contents list of one panel: `toc@+BAY1G1`. The
 /// part after the `@` is the panel's location levels, so the list follows
 /// the panel when it is renamed ([`Tx::rename_level`](crate::Tx::rename_level)).
@@ -216,8 +221,8 @@ pub fn is_contents_generator(generator: &str) -> bool {
     generator == CONTENTS_GENERATOR || contents_scope(generator).is_some()
 }
 
-/// Reading order of pages: the contents list, drawn pages, then the other
-/// generated pages; within each, structure, then name. See
+/// Reading order of pages: the front matter and the contents list, drawn
+/// pages, then the other generated pages; within each, structure, then name. See
 /// [`Project::pages_in_order`].
 pub(crate) fn page_cmp(a: &Page, b: &Page) -> Ordering {
     page_section(a)
@@ -247,7 +252,11 @@ fn page_order(page: &Page) -> i64 {
 /// contents list, drawn pages, then the other generated pages.
 fn page_section(page: &Page) -> u8 {
     match &page.kind {
-        PageKind::Generated { generator } if is_contents_generator(generator) => 0,
+        PageKind::Generated { generator }
+            if is_contents_generator(generator) || generator == FRONT_GENERATOR =>
+        {
+            0
+        }
         PageKind::Generated { .. } => 2,
         _ => 1,
     }

@@ -1,0 +1,33 @@
+@title Drive hoist run: the drive opens the brake through the drawn relay, the hook rises and the run reports the sensed load
+@area Simulate
+@sizes 1366x768
+# Opens the drive hoist fixture, starts Simulate > Drive run, switches Live on.
+open qa/fixtures/hoist-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+key Home
+wait 30
+# Radio step 2 (S2): the drive magnetises, the relay contact in the drawing closes the brake contactor,
+# the hook rises, and at the probe frequency the load is sensed (200 kg: the top step may go faster).
+mouse_down 123 343
+wait 150
+shot magnetising-and-brake-opens
+wait 700
+expect "m/min"
+expect "Load sensed"
+expect "What the hoist run found"
+shot running-with-finding
+mouse_up 123 343
+wait 400
+expect "brake closed"
+check_layout
+shot stopped-brake-closed

@@ -94,6 +94,51 @@ impl NovoApp {
         }
     }
 
+    /// The text of each Project information field, in the order of
+    /// `novo_reports::front_keys::FIELDS`.
+    pub(super) fn project_info_fields(&self) -> Vec<String> {
+        let props = self
+            .backend
+            .document()
+            .map(|d| &d.project().info().properties);
+        novo_reports::front_keys::FIELDS
+            .iter()
+            .map(|(key, _)| match props.and_then(|p| p.get(*key)) {
+                Some(Value::Text(t)) => t.clone(),
+                Some(v) => v.to_string(),
+                None => String::new(),
+            })
+            .collect()
+    }
+
+    /// Saves the typed Project information fields as one undo step; a field
+    /// left empty is removed, and nothing is stored when nothing changed.
+    pub(super) fn set_project_info(&mut self, fields: &[String]) {
+        if fields == self.project_info_fields().as_slice() {
+            return;
+        }
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let result = doc.transact("Project information", |tx| {
+            tx.set_info(|info| {
+                for ((key, _), text) in novo_reports::front_keys::FIELDS.iter().zip(fields) {
+                    let text = text.trim();
+                    if text.is_empty() {
+                        info.properties.remove(*key);
+                    } else {
+                        info.properties
+                            .insert((*key).to_owned(), Value::Text(text.to_owned()));
+                    }
+                }
+            })
+        });
+        match result {
+            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Err(e) => self.message(Level::Error, format!("Project information: {e}")),
+        }
+    }
+
     pub(super) fn project_settings_dialog(&mut self, ctx: &egui::Context) {
         if !self.wb.project_settings {
             return;
@@ -116,6 +161,12 @@ impl NovoApp {
         let mut tag_rule = self.project_property_is("tag.rule", "page-column");
         let mut structure_complete = self.project_property_is("structure.list", "complete");
         let mut neutral_rule = self.project_property_is("neutral.rule", "supply-and-external");
+        let mut info = self
+            .wb
+            .project_info
+            .take()
+            .unwrap_or_else(|| self.project_info_fields());
+        let mut info_changed = false;
         let mut group_prefix = self.settings.group_prefix.clone();
         let mut cabinet_prefix = self.settings.cabinet_prefix.clone();
         // The preview uses what is typed now, over this project's names.
@@ -128,104 +179,131 @@ impl NovoApp {
         });
         // Controls the lessons point at, registered once the window is drawn.
         let mut marks: Vec<(&'static str, egui::Rect, &'static str, bool)> = Vec::new();
-        let modal = super::panel::modal(
+        let modal = super::panel::modal_fill(
             ctx,
             "project_settings",
             "Project settings",
-            [novo_theme::dialog_width::MEDIUM, 0.0],
+            [novo_theme::dialog_width::MEDIUM, 640.0],
             |ui| {
-                super::dialog_ui::section(ui, "Drawing standard", true);
-                super::dialog_ui::setting(
-                    ui,
-                    "Symbol pack",
-                    "Picks the symbol pack for new symbols.",
-                );
-                let mut index = usize::from(pack == Pack::Nfpa);
-                let (changed, segments) = novo_theme::widgets::segmented_with_rects(
-                    ui,
-                    &mut index,
-                    &["IEC 60617", "NFPA 79 / ANSI Y32.2"],
-                );
-                if changed {
-                    pack = if index == 1 { Pack::Nfpa } else { Pack::Iec };
-                }
-                if let Some((rect, clicked)) = segments.get(1) {
-                    marks.push((
-                        "settings.standard.nfpa",
-                        *rect,
-                        "NFPA 79 / ANSI Y32.2",
-                        *clicked,
-                    ));
-                }
-                ui.add_space(8.0);
-                if !stored.is_empty() && Pack::from_id(&stored).is_none() {
-                    ui.colored_label(
+                super::panel::fill_above(ui, 56.0, |ui| {
+                    super::dialog_ui::section(ui, "Drawing standard", true);
+                    super::dialog_ui::setting(
+                        ui,
+                        "Symbol pack",
+                        "Picks the symbol pack for new symbols.",
+                    );
+                    let mut index = usize::from(pack == Pack::Nfpa);
+                    let (changed, segments) = novo_theme::widgets::segmented_with_rects(
+                        ui,
+                        &mut index,
+                        &["IEC 60617", "NFPA 79 / ANSI Y32.2"],
+                    );
+                    if changed {
+                        pack = if index == 1 { Pack::Nfpa } else { Pack::Iec };
+                    }
+                    if let Some((rect, clicked)) = segments.get(1) {
+                        marks.push((
+                            "settings.standard.nfpa",
+                            *rect,
+                            "NFPA 79 / ANSI Y32.2",
+                            *clicked,
+                        ));
+                    }
+                    ui.add_space(8.0);
+                    if !stored.is_empty() && Pack::from_id(&stored).is_none() {
+                        ui.colored_label(
                     crate::theme::ui_palette().warning,
                     format!("This project says \"{stored}\", which this version does not know. It is shown as IEC."),
                 );
-                }
-                if let Some(plan) = &plan {
-                    apply = switch_section(ui, plan, &mut marks);
-                }
-                super::dialog_ui::section(ui, "Names for new groups and cabinets", false);
-                super::dialog_ui::hint(
-                    ui,
-                    "Nothing to set up: a new group or cabinet continues the names this project \
-already has. These letters only start a project that has none yet. Yours, for every project.",
-                );
-                ui.add_space(4.0);
-                egui::Grid::new("naming_prefixes")
-                    .num_columns(2)
-                    .spacing([12.0, 6.0])
-                    .show(ui, |ui| {
-                        ui.label(egui::RichText::new("Page group starts with").weak());
-                        ui.add(
-                            egui::TextEdit::singleline(&mut group_prefix)
-                                .hint_text("G")
-                                .desired_width(80.0),
-                        );
-                        ui.end_row();
-                        ui.label(egui::RichText::new("Cabinet starts with").weak());
-                        ui.add(
-                            egui::TextEdit::singleline(&mut cabinet_prefix)
-                                .hint_text("CAB")
-                                .desired_width(80.0),
-                        );
-                        ui.end_row();
-                    });
-                if let Some((group, cabinet)) = &preview {
+                    }
+                    if let Some(plan) = &plan {
+                        apply = switch_section(ui, plan, &mut marks);
+                    }
+                    super::dialog_ui::section(ui, "Project information", false);
                     super::dialog_ui::hint(
                         ui,
-                        &format!("Next page group {group}, next cabinet {cabinet}"),
+                        "Printed on the cover pages (Front matter). Leave a field empty and the page shows a dash.",
                     );
-                }
-                super::dialog_ui::section(ui, "Extra design checks", false);
-                super::dialog_ui::hint(ui, "Off until you ask. Findings appear under Issues.");
-                ui.add_space(4.0);
-                ui.checkbox(&mut tag_rule, "Device names follow page and column")
-                    .on_hover_text(
-                        "A name is its letters, the two-digit page and the column of its main \
+                    ui.add_space(4.0);
+                    egui::Grid::new("project_info_fields")
+                        .num_columns(2)
+                        .spacing([12.0, 6.0])
+                        .show(ui, |ui| {
+                            for ((_, label), text) in
+                                novo_reports::front_keys::FIELDS.iter().zip(info.iter_mut())
+                            {
+                                ui.label(egui::RichText::new(*label).weak());
+                                let response =
+                                    ui.add(egui::TextEdit::singleline(text).desired_width(220.0));
+                                info_changed |= response.lost_focus();
+                                ui.end_row();
+                            }
+                        });
+                    super::dialog_ui::section(ui, "Names for new groups and cabinets", false);
+                    super::dialog_ui::hint(
+                        ui,
+                        "Nothing to set up: a new group or cabinet continues the names this project \
+already has. These letters only start a project that has none yet. Yours, for every project.",
+                    );
+                    ui.add_space(4.0);
+                    egui::Grid::new("naming_prefixes")
+                        .num_columns(2)
+                        .spacing([12.0, 6.0])
+                        .show(ui, |ui| {
+                            ui.label(egui::RichText::new("Page group starts with").weak());
+                            ui.add(
+                                egui::TextEdit::singleline(&mut group_prefix)
+                                    .hint_text("G")
+                                    .desired_width(80.0),
+                            );
+                            ui.end_row();
+                            ui.label(egui::RichText::new("Cabinet starts with").weak());
+                            ui.add(
+                                egui::TextEdit::singleline(&mut cabinet_prefix)
+                                    .hint_text("CAB")
+                                    .desired_width(80.0),
+                            );
+                            ui.end_row();
+                        });
+                    if let Some((group, cabinet)) = &preview {
+                        super::dialog_ui::hint(
+                            ui,
+                            &format!("Next page group {group}, next cabinet {cabinet}"),
+                        );
+                    }
+                    super::dialog_ui::section(ui, "Extra design checks", false);
+                    super::dialog_ui::hint(ui, "Off until you ask. Findings appear under Issues.");
+                    ui.add_space(4.0);
+                    ui.checkbox(&mut tag_rule, "Device names follow page and column")
+                        .on_hover_text(
+                            "A name is its letters, the two-digit page and the column of its main \
 symbol: K031 on page 3, column 1; K031.2 for a repeat.",
-                    );
-                ui.checkbox(&mut structure_complete, "My structure list is complete")
-                    .on_hover_text(
-                        "Report function and location codes on devices and pages that no \
+                        );
+                    ui.checkbox(&mut structure_complete, "My structure list is complete")
+                        .on_hover_text(
+                            "Report function and location codes on devices and pages that no \
 structure node names.",
-                    );
-                ui.checkbox(
-                    &mut neutral_rule,
-                    "Neutral only to supply and external devices",
-                )
-                .on_hover_text(
-                    "Report a device on a neutral conductor unless it is a terminal or plug, \
+                        );
+                    ui.checkbox(
+                        &mut neutral_rule,
+                        "Neutral only to supply and external devices",
+                    )
+                    .on_hover_text(
+                        "Report a device on a neutral conductor unless it is a terminal or plug, \
 or its Supply or External property is set.",
-                );
+                    );
+                });
                 super::dialog_ui::done(ui)
             },
         );
         for (id, rect, label, clicked) in marks {
             self.anchor_clicked(id, rect, label, clicked);
         }
+        let closing = modal.inner || modal.should_close();
+        if info_changed || closing {
+            self.set_project_info(&info);
+        }
+        self.wb.project_info = (!closing).then_some(info);
         self.set_standard(pack);
         self.set_project_property("tag.rule", "page-column", tag_rule);
         self.set_project_property("structure.list", "complete", structure_complete);

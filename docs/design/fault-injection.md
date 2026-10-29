@@ -38,10 +38,23 @@ effect does not say how likely it is. The card and the printed report say so.
 Devices are named by tag, short (`-K1`) when only one device ends that way, else in full (`=A1+CAB-K1`);
 pins as `tag:pin`. A name that leads nowhere is reported in the card and the report, never ignored.
 
-Machine-level defects (a lost encoder, a stuck brake in the mechanics, a drive that faults on overcurrent,
-radio link loss) belong to the machine and controller models. Their circuit-visible form is available now:
-brake coil open, receiver contacts stuck open or tripped, drive fault relay tripped. Binding the machine-level
-causes to the same defect list is the next step (see ROADMAP in `handoff/fault-injection/`).
+### Machine-level defects (`novo_sim::machine`)
+
+Defects of the machine the wiring drives, put on a hoist by a walk-through step (`machine`, `machine_repair`):
+a lost supply phase, a supply at a share of rated, a brake that is slower or whose lining holds only a share of
+its torque, and a brake rectifier fault (one diode open, shorted, coil circuit open, no over-excitation, low
+output). They go through the hoist engine's `HoistFaults` (`novo-drive`), so the numbers are that model's: an
+averaged brake and motor, not a measured drive.
+
+With hoists in the project the walk-through runs tick by tick (5 ms) instead of jumping to the next event, once
+for the healthy plant and once for the faulted one, each settling the drawn circuit every tick; the drawn limit
+switches still cut the circuit. `expect` gains `hook` checks: at least or at most a height, standing or moving,
+the hoist reports a condition (fed with the brake closed, brake slipping, phase lost, low voltage, both motors
+fed) or reports nothing wrong. "What is different" lists a hook that is 5 cm or more away from the healthy
+hoist's and any condition only the faulted hoist reports. A run with a hoist stops at 120 s (every 5 ms tick settles the circuit, and the card runs it on the UI thread).
+
+Not built: a lost encoder, drive overcurrent and the safe-torque-off input (the drive and travel models), radio
+link loss (the controller model), recording hoist faults from the Hoist run window.
 
 ## Walk-throughs (`novo_sim::walkthrough`)
 

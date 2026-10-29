@@ -3,8 +3,26 @@
 //! or an assigned part whose terminals are not named the way the class
 //! usually names them. Written from generic IEC conventions only.
 
-use novo_core::{AnyId, Command, DeviceId, Project, Record, SymbolInstance, SymbolRole};
-use novo_symbols::{Library, Pack};
+use novo_core::{AnyId, Command, DeviceId, Project, Record, SymbolInstance, SymbolRole, Value};
+use novo_symbols::{Library, Pack, PinTemplate};
+
+/// The project property that holds the company pin templates as TOML text
+/// (`novo_symbols::parse_company_templates`). Set from Project > Rules.
+pub const PIN_TEMPLATES_PROPERTY: &str = "pin.templates";
+
+/// The text of the project's company pin templates, when it has some.
+fn company_text(project: &Project) -> Option<&str> {
+    match project.info().properties.get(PIN_TEMPLATES_PROPERTY)? {
+        Value::Text(t) if !t.trim().is_empty() => Some(t),
+        _ => None,
+    }
+}
+
+/// The company templates of the project, or the plain reason the stored
+/// text cannot be read (a project file edited by hand).
+fn company_templates(project: &Project) -> Result<Vec<PinTemplate>, String> {
+    company_text(project).map_or(Ok(Vec::new()), novo_symbols::parse_company_templates)
+}
 
 use crate::{Context, Problem, ProblemKind};
 
@@ -24,6 +42,17 @@ fn function_of(symbol: &SymbolInstance) -> Option<&'static str> {
 /// each device, against the template of their class.
 pub(crate) fn pin_names(cx: &Context<'_>, out: &mut Vec<Problem>) {
     let project = cx.project;
+    let company = match company_templates(project) {
+        Ok(c) => c,
+        Err(e) => {
+            out.push(Problem::new(
+                ProblemKind::PinNames,
+                Vec::new(),
+                format!("The company pin templates of this project cannot be read: {e}"),
+            ));
+            Vec::new()
+        }
+    };
     let mut devices: Vec<(&DeviceId, &Vec<&SymbolInstance>)> = cx.by_device.iter().collect();
     devices.sort_by_key(|(id, _)| **id);
     for (&device, symbols) in devices {
@@ -41,7 +70,7 @@ pub(crate) fn pin_names(cx: &Context<'_>, out: &mut Vec<Problem>) {
             };
             functions.push(function);
             let pins: Vec<&str> = symbol.pins.iter().map(|p| p.name.as_str()).collect();
-            if let Some(d) = novo_symbols::check_pins(function, &pins) {
+            if let Some(d) = novo_symbols::check_pins_with(&company, function, &pins) {
                 out.push(Problem::new(
                     ProblemKind::PinNames,
                     vec![symbol.id.into()],
@@ -56,11 +85,11 @@ pub(crate) fn pin_names(cx: &Context<'_>, out: &mut Vec<Problem>) {
         let Some(&function) = functions.first().filter(|_| !unknown) else {
             continue;
         };
-        let class = novo_symbols::template_for(function).map(|t| t.class);
+        let class = novo_symbols::template_with(&company, function).map(|t| t.class.as_str());
         if class.is_none()
-            || functions
-                .iter()
-                .any(|f| novo_symbols::template_for(f).map(|t| t.class) != class)
+            || functions.iter().any(|f| {
+                novo_symbols::template_with(&company, f).map(|t| t.class.as_str()) != class
+            })
         {
             continue;
         }
@@ -78,7 +107,7 @@ pub(crate) fn pin_names(cx: &Context<'_>, out: &mut Vec<Problem>) {
             continue;
         }
         let names: Vec<&str> = names.iter().map(String::as_str).collect();
-        if let Some(d) = novo_symbols::check_pins(function, &names) {
+        if let Some(d) = novo_symbols::check_pins_with(&company, function, &names) {
             out.push(Problem::new(
                 ProblemKind::PinNames,
                 symbols.iter().map(|s| s.id.into()).collect(),
@@ -90,16 +119,18 @@ pub(crate) fn pin_names(cx: &Context<'_>, out: &mut Vec<Problem>) {
 
 /// The one function type all device symbols of `symbols` share (as a
 /// template class), or `None` when they differ or one is unknown.
-fn shared_function(symbols: &[&SymbolInstance]) -> Option<&'static str> {
-    let mut found: Option<(&'static str, &'static str)> = None;
+fn shared_function(company: &[PinTemplate], symbols: &[&SymbolInstance]) -> Option<&'static str> {
+    let mut found: Option<(&'static str, String)> = None;
     for symbol in symbols
         .iter()
         .filter(|s| matches!(s.role, SymbolRole::Device { .. }))
     {
         let function = function_of(symbol)?;
-        let class = novo_symbols::template_for(function)?.class;
+        let class = novo_symbols::template_with(company, function)?
+            .class
+            .clone();
         match found {
-            Some((_, c)) if c != class => return None,
+            Some((_, ref c)) if *c != class => return None,
             Some(_) => {}
             None => found = Some((function, class)),
         }
@@ -141,6 +172,7 @@ pub fn pin_fix(project: &Project, problem: &Problem) -> Option<PinFix> {
             _ => None,
         })
         .collect();
+    let company = company_templates(project).unwrap_or_default();
     let mut commands = Vec::new();
     let mut renamed = 0;
     for &symbol in &symbols {
@@ -148,7 +180,7 @@ pub fn pin_fix(project: &Project, problem: &Problem) -> Option<PinFix> {
             continue;
         };
         let names: Vec<&str> = symbol.pins.iter().map(|p| p.name.as_str()).collect();
-        let Some(fix) = novo_symbols::suggest_renames(function, &names) else {
+        let Some(fix) = novo_symbols::suggest_renames_with(&company, function, &names) else {
             continue;
         };
         let mut next = symbol.clone();
@@ -173,7 +205,7 @@ pub fn pin_fix(project: &Project, problem: &Problem) -> Option<PinFix> {
         });
     }
     // The pins follow the template: look at the terminals of the part.
-    let function = shared_function(&symbols)?;
+    let function = shared_function(&company, &symbols)?;
     let device = symbols.iter().find_map(|s| match s.role {
         SymbolRole::Device { device, .. } => project.device(device),
         _ => None,
@@ -184,7 +216,7 @@ pub fn pin_fix(project: &Project, problem: &Problem) -> Option<PinFix> {
     let part = project.part(*part_id)?;
     let names = novo_parts::placed_terminals(&part.properties);
     let names: Vec<&str> = names.iter().map(String::as_str).collect();
-    let fix = novo_symbols::suggest_renames(function, &names)?;
+    let fix = novo_symbols::suggest_renames_with(&company, function, &names)?;
     let mut next = part.clone();
     for (old, new) in &fix.renames {
         // Every property of the terminal moves with it: the position, and

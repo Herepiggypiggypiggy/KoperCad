@@ -15,14 +15,19 @@
 //! This is a rehearsal of wiring and logic, not a certified safety function: no failure rates,
 //! no diagnostic coverage, no response times of real devices beyond the timers drawn.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{Endpoint, Netlist, PotentialId, Project, SymbolId};
+use novo_machine::hoist_loop::HoistLoop;
 use serde::{Deserialize, Serialize};
 
 use crate::devices::{DeviceStates, MotorRun, device_states};
 use crate::inject::{
     Defect, DefectSet, Prepared, device_by_text, full_pin_name, pin_endpoints, poles_of_device,
+};
+use crate::machine::{
+    self, HoistDefect, HookIs, MAX_MACHINE_SECONDS, MachineSide, PlantPort, check_hook,
+    describe_hook, symbols_by_tag,
 };
 use crate::pins::{operate_poles, pole_of_pin};
 use crate::{Clock, Direction, Live, PoleState, Settled, is_coil, rest_state, settle_timed};
@@ -107,7 +112,7 @@ pub enum NetIs {
 }
 
 /// A statement about the faulted plant at one moment.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "what", rename_all = "snake_case")]
 pub enum Check {
     /// The coil of this device is on (`on: true`) or off.
@@ -129,10 +134,16 @@ pub enum Check {
         at: String,
         is: NetIs,
     },
+    /// Where a hoist's hook is, or what the hoist reports (needs a hoist in the project).
+    Hook {
+        hoist: String,
+        #[serde(flatten)]
+        is: HookIs,
+    },
 }
 
 /// One thing that happens.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "do", rename_all = "snake_case")]
 pub enum Action {
     /// The operator holds (`operated: true`) or lets go of a hand device: its poles go to the
@@ -151,6 +162,10 @@ pub enum Action {
     Repair { with: Defect },
     /// All defects are repaired.
     RepairAll,
+    /// Something goes wrong with a hoist (a worn brake, an open phase, a sagging supply).
+    Machine { hoist: String, with: HoistDefect },
+    /// Every machine defect of this hoist is repaired.
+    MachineRepair { hoist: String },
     /// The faulted plant must now satisfy this.
     Expect { check: Check },
 }
@@ -393,9 +408,78 @@ impl Side {
     }
 }
 
-/// Plays `walkthrough` against `project`. The project is not changed.
+/// Plays `walkthrough` against `project`. The project is not changed. Steps that name a hoist
+/// fail here (use [`run_with`] to give the project's hoists).
 pub fn run(project: &Project, walkthrough: &Walkthrough) -> Report {
+    run_with(project, walkthrough, None)
+}
+
+type Machines = (MachineSide, MachineSide);
+
+/// One tick of the hoists on both plants: each settles its circuit once per tick, with the
+/// limit switch contacts the hoists wrote.
+#[allow(clippy::too_many_arguments)]
+fn machine_tick(
+    project: &Project,
+    by_tag: &BTreeMap<String, Vec<SymbolId>>,
+    healthy_net: &Netlist,
+    prepared: &Prepared,
+    manual: &PoleState,
+    forced: &BTreeSet<SymbolId>,
+    clean: &mut Side,
+    faulty: &mut Side,
+    m: &mut Machines,
+) {
+    {
+        let state = machine::with_contacts(project, manual, &m.0.contacts);
+        let MachineSide { lp, contacts, .. } = &mut m.0;
+        let mut port = PlantPort::new(project, healthy_net, by_tag, state, contacts, |st, dt| {
+            clean.clock.advance(dt);
+            let s = settle_timed(
+                project,
+                healthy_net,
+                st,
+                forced,
+                &clean.held,
+                &mut clean.clock,
+            );
+            clean.held = s.energized.clone();
+            clean.settled = Some(s.clone());
+            s
+        });
+        lp.step(&mut port);
+    }
+    let working = prepared.project(project);
+    let state = machine::with_contacts(working, manual, &m.1.contacts);
+    let MachineSide { lp, contacts, .. } = &mut m.1;
+    let mut port = PlantPort::new(
+        working,
+        prepared.netlist(),
+        by_tag,
+        state,
+        contacts,
+        |st, dt| {
+            faulty.clock.advance(dt);
+            let s = prepared.settle(project, st, forced, &faulty.held, &mut faulty.clock);
+            faulty.held = s.energized.clone();
+            faulty.settled = Some(s.clone());
+            s
+        },
+    );
+    lp.step(&mut port);
+}
+
+/// [`run`] with the project's hoists: `hoists` makes a fresh loop for each plant. Steps can
+/// then put machine defects on a hoist and ask where its hook is.
+pub fn run_with(
+    project: &Project,
+    walkthrough: &Walkthrough,
+    hoists: Option<&dyn Fn() -> HoistLoop>,
+) -> Report {
     let healthy_net = project.netlist();
+    let by_tag = symbols_by_tag(project);
+    let mut machine: Option<Machines> =
+        hoists.map(|make| (MachineSide::new(make()), MachineSide::new(make())));
     let rest = rest_state(project);
     let mut manual = rest.clone();
     let mut defects = DefectSet::new();
@@ -406,7 +490,19 @@ pub fn run(project: &Project, walkthrough: &Walkthrough) -> Report {
     let forced = BTreeSet::new();
 
     // Settle both sides with the operator's current inputs.
-    let settle = |manual: &PoleState, prepared: &Prepared, clean: &mut Side, faulty: &mut Side| {
+    let settle = |manual: &PoleState,
+                  machine: Option<&Machines>,
+                  prepared: &Prepared,
+                  clean: &mut Side,
+                  faulty: &mut Side| {
+        let (manual_clean, manual_faulty) = match machine {
+            Some(m) => (
+                machine::with_contacts(project, manual, &m.0.contacts),
+                machine::with_contacts(prepared.project(project), manual, &m.1.contacts),
+            ),
+            None => (manual.clone(), manual.clone()),
+        };
+        let (manual, manual_f) = (&manual_clean, &manual_faulty);
         let s = settle_timed(
             project,
             &healthy_net,
@@ -417,11 +513,24 @@ pub fn run(project: &Project, walkthrough: &Walkthrough) -> Report {
         );
         clean.held = s.energized.clone();
         clean.settled = Some(s);
-        let s = prepared.settle(project, manual, &forced, &faulty.held, &mut faulty.clock);
+        let s = prepared.settle(project, manual_f, &forced, &faulty.held, &mut faulty.clock);
         faulty.held = s.energized.clone();
         faulty.settled = Some(s);
     };
-    settle(&manual, &prepared, &mut clean, &mut faulty);
+    settle(
+        &manual,
+        machine.as_ref(),
+        &prepared,
+        &mut clean,
+        &mut faulty,
+    );
+    let diffs = |clean: &Side, prepared: &Prepared, faulty: &Side, machine: Option<&Machines>| {
+        let mut out = differences(project, &healthy_net, clean, prepared, faulty);
+        if let Some(m) = machine {
+            machine::differences(&m.0, &m.1, &mut out);
+        }
+        out
+    };
 
     let mut steps: Vec<&Step> = walkthrough.steps.iter().collect();
     steps.sort_by(|a, b| a.t.total_cmp(&b.t));
@@ -431,22 +540,54 @@ pub fn run(project: &Project, walkthrough: &Walkthrough) -> Report {
             "the script runs longer than {MAX_SECONDS} s: times and the tail are cut to that"
         ));
     }
-    let end = longest.clamp(0.0, MAX_SECONDS) + walkthrough.tail.clamp(0.0, MAX_SECONDS);
-
+    let mut end = longest.clamp(0.0, MAX_SECONDS) + walkthrough.tail.clamp(0.0, MAX_SECONDS);
+    if machine.is_some() && end > MAX_MACHINE_SECONDS {
+        problems.push(format!(
+            "a run with a hoist in it stops at {MAX_MACHINE_SECONDS} s (every tick settles the circuit)"
+        ));
+        end = MAX_MACHINE_SECONDS;
+    }
     let mut now = 0.0_f64;
-    let mut before = differences(project, &healthy_net, &clean, &prepared, &faulty);
+    // Plays to `target` seconds: tick by tick with hoists, else straight to the next event.
+    macro_rules! advance {
+        ($target:expr) => {{
+            let target: f64 = $target;
+            if let Some(m) = machine.as_mut() {
+                while now + 1e-9 < target {
+                    machine_tick(
+                        project,
+                        &by_tag,
+                        &healthy_net,
+                        &prepared,
+                        &manual,
+                        &forced,
+                        &mut clean,
+                        &mut faulty,
+                        m,
+                    );
+                    now += m.0.dt();
+                }
+            } else {
+                while now < target {
+                    let dt = next_dt(&clean, &faulty, target - now);
+                    clean.clock.advance(dt);
+                    faulty.clock.advance(dt);
+                    now += dt;
+                    settle(&manual, None, &prepared, &mut clean, &mut faulty);
+                }
+            }
+        }};
+    }
+
+    let mut before = diffs(&clean, &prepared, &faulty, machine.as_ref());
     let mut reports = Vec::with_capacity(steps.len());
     let (mut passed, mut failed) = (0, 0);
 
     for step in steps {
-        let target = step.t.clamp(0.0, MAX_SECONDS);
-        while now < target {
-            let dt = next_dt(&clean, &faulty, target - now);
-            clean.clock.advance(dt);
-            faulty.clock.advance(dt);
-            now += dt;
-            settle(&manual, &prepared, &mut clean, &mut faulty);
-        }
+        let target = step
+            .t
+            .clamp(0.0, if machine.is_some() { end } else { MAX_SECONDS });
+        advance!(target);
         let mut detail = String::new();
         let mut verdict = Verdict::Done;
         let label = match &step.action {
@@ -491,8 +632,47 @@ pub fn run(project: &Project, walkthrough: &Walkthrough) -> Report {
                 defects.clear_all();
                 "Repair everything".to_owned()
             }
+            Action::Machine { hoist, with } => {
+                match machine.as_mut() {
+                    Some(m) => {
+                        if let Err(e) = m.1.inject(hoist, *with) {
+                            detail = e;
+                            verdict = Verdict::Fail;
+                        }
+                    }
+                    None => {
+                        detail = "this project has no hoist".to_owned();
+                        verdict = Verdict::Fail;
+                    }
+                }
+                format!("Hoist {hoist}: {}", with.label())
+            }
+            Action::MachineRepair { hoist } => {
+                match machine.as_mut() {
+                    Some(m) => match m.1.repair(hoist) {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            detail = "that hoist had no defect".to_owned();
+                            verdict = Verdict::Fail;
+                        }
+                        Err(e) => {
+                            detail = e;
+                            verdict = Verdict::Fail;
+                        }
+                    },
+                    None => {
+                        detail = "this project has no hoist".to_owned();
+                        verdict = Verdict::Fail;
+                    }
+                }
+                format!("Repair hoist {hoist}")
+            }
             Action::Expect { check } => {
-                let (ok, why) = evaluate(project, &prepared, &faulty, check);
+                let (ok, why) = match (check, machine.as_ref()) {
+                    (Check::Hook { hoist, is }, Some(m)) => check_hook(&m.1, hoist, is),
+                    (Check::Hook { .. }, None) => (false, "this project has no hoist".to_owned()),
+                    _ => evaluate(project, &prepared, &faulty, check),
+                };
                 verdict = if ok { Verdict::Pass } else { Verdict::Fail };
                 if !ok {
                     detail = why;
@@ -511,13 +691,19 @@ pub fn run(project: &Project, walkthrough: &Walkthrough) -> Report {
                 }
             }
         }
-        settle(&manual, &prepared, &mut clean, &mut faulty);
+        settle(
+            &manual,
+            machine.as_ref(),
+            &prepared,
+            &mut clean,
+            &mut faulty,
+        );
         match verdict {
             Verdict::Pass => passed += 1,
             Verdict::Fail => failed += 1,
             Verdict::Done => {}
         }
-        let after = differences(project, &healthy_net, &clean, &prepared, &faulty);
+        let after = diffs(&clean, &prepared, &faulty, machine.as_ref());
         reports.push(StepReport {
             t: step.t,
             label,
@@ -537,17 +723,10 @@ pub fn run(project: &Project, walkthrough: &Walkthrough) -> Report {
         });
         before = after;
     }
-    while now < end {
-        let dt = next_dt(&clean, &faulty, end - now);
-        clean.clock.advance(dt);
-        faulty.clock.advance(dt);
-        now += dt;
-        settle(&manual, &prepared, &mut clean, &mut faulty);
-    }
-    let end_differences: Vec<String> =
-        differences(project, &healthy_net, &clean, &prepared, &faulty)
-            .into_iter()
-            .collect();
+    advance!(end);
+    let end_differences: Vec<String> = diffs(&clean, &prepared, &faulty, machine.as_ref())
+        .into_iter()
+        .collect();
     Report {
         name: walkthrough.name.clone(),
         steps: reports,
@@ -586,6 +765,7 @@ fn describe_check(check: &Check) -> String {
             format!("Expect motor {} {is:?}", device.trim()).to_lowercase()
         }
         Check::Net { at, is } => format!("Expect {at} {}", net_is_text(is)),
+        Check::Hook { hoist, is } => describe_hook(hoist, is),
     }
 }
 
@@ -678,6 +858,10 @@ fn evaluate(project: &Project, prepared: &Prepared, side: &Side, check: &Check) 
                 ),
             )
         }
+        Check::Hook { .. } => (
+            false,
+            "a hook is checked against the hoists, not the circuit".to_owned(),
+        ),
         Check::Net { at, is } => {
             let ends = match pin_endpoints(project, at) {
                 Ok(e) => e,

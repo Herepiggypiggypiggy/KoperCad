@@ -682,7 +682,8 @@ fn makers_ui(ui: &mut egui::Ui, import: &mut EplanPartsImport, changed: &mut boo
         });
     if unknown > 0 {
         ui.weak(format!(
-            "{unknown} code(s) are not known and are added under the code itself."
+            "{unknown} {} not known and added under the code itself.",
+            if unknown == 1 { "code is" } else { "codes are" }
         ));
     }
 }

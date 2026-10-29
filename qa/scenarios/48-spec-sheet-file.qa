@@ -9,7 +9,7 @@ wait 5
 key Enter
 wait 10
 expect "Keep the macro's wire numbers"
-click_text Place Button #2
+click_text Place Button
 wait 20
 expect_scene "-K1"
 key ctrl+k
