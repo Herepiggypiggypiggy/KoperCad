@@ -20,7 +20,7 @@ wait 10
 expect_not "Pick a macro to see what it will do."
 expect "Keep the macro's wire numbers"
 shot macro-picked
-click_text Place Button #2
+click_text Place Button
 wait 20
 expect_scene "-K1"
 shot macro-placed
