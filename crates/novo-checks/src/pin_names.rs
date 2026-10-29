@@ -27,15 +27,19 @@ pub(crate) fn pin_names(cx: &Context<'_>, out: &mut Vec<Problem>) {
     let mut devices: Vec<(&DeviceId, &Vec<&SymbolInstance>)> = cx.by_device.iter().collect();
     devices.sort_by_key(|(id, _)| **id);
     for (&device, symbols) in devices {
-        let mut class_function = None;
+        // Every drawn function of the device, to compare a part only when
+        // they all belong to one class.
+        let mut functions: Vec<&'static str> = Vec::new();
+        let mut unknown = false;
         for &symbol in symbols {
             if !matches!(symbol.role, SymbolRole::Device { .. }) {
                 continue;
             }
             let Some(function) = function_of(symbol) else {
+                unknown = true;
                 continue;
             };
-            class_function.get_or_insert(function);
+            functions.push(function);
             let pins: Vec<&str> = symbol.pins.iter().map(|p| p.name.as_str()).collect();
             if let Some(d) = novo_symbols::check_pins(function, &pins) {
                 out.push(Problem::new(
@@ -45,10 +49,22 @@ pub(crate) fn pin_names(cx: &Context<'_>, out: &mut Vec<Problem>) {
                 ));
             }
         }
-        // The terminals of an assigned part are only compared with a class
-        // when the device has a single one: a contactor with an auxiliary
-        // block has parts whose terminals belong to different functions.
-        let (Some(function), Some(dev)) = (class_function, project.device(device)) else {
+        // The terminals of an assigned part are compared with a class only
+        // when every symbol of the device is of that class: a contactor is a
+        // coil plus main contacts on one part, whose terminals belong to
+        // several functions.
+        let Some(&function) = functions.first().filter(|_| !unknown) else {
+            continue;
+        };
+        let class = novo_symbols::template_for(function).map(|t| t.class);
+        if class.is_none()
+            || functions
+                .iter()
+                .any(|f| novo_symbols::template_for(f).map(|t| t.class) != class)
+        {
+            continue;
+        }
+        let Some(dev) = project.device(device) else {
             continue;
         };
         let [part_id] = dev.parts.as_slice() else {

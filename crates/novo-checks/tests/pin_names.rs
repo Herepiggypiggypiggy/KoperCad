@@ -95,3 +95,49 @@ fn part_terminals_are_compared_with_the_class() {
 fn symbols_without_a_template_are_left_alone() {
     assert!(pin_names(&one("iec/contacts/no", "-K1", &["X", "Y"], &[])).is_empty());
 }
+
+#[test]
+fn a_contactor_part_with_coil_and_main_contacts_stays_quiet() {
+    let mut project = Project::default();
+    project
+        .transact("build", |tx| {
+            let page = tx.add_page("1")?;
+            let device = tx.add_device(tag("-K1"), "")?;
+            let coil = ["A1", "A2"].map(|n| Pin::new(n, 0.0, 0.0)).to_vec();
+            let main = ["1L1", "2T1", "3L2", "4T2", "5L3", "6T3"]
+                .map(|n| Pin::new(n, 0.0, 0.0))
+                .to_vec();
+            for (key, pins, is_main) in [
+                ("iec/coils/contactor", coil, true),
+                ("iec/contactors/main_3p", main, false),
+            ] {
+                tx.place_symbol(
+                    page,
+                    key,
+                    Placement::at(Point::new(10.0, 10.0)),
+                    pins,
+                    SymbolRole::Device {
+                        device,
+                        main: is_main,
+                    },
+                )?;
+            }
+            let part = tx.add_part("Acme", "LC1")?;
+            for (i, name) in ["A1", "A2", "1L1", "2T1", "3L2", "4T2", "5L3", "6T3"]
+                .iter()
+                .enumerate()
+            {
+                for axis in ["x", "y", "z"] {
+                    tx.set_property(
+                        part,
+                        format!("pin.{name}.{axis}_mm"),
+                        Some(Value::Float(i as f64)),
+                    )?;
+                }
+            }
+            tx.assign_part(device, part)?;
+            Ok(())
+        })
+        .unwrap();
+    assert!(pin_names(&project).is_empty(), "{:#?}", pin_names(&project));
+}
