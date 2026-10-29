@@ -1,0 +1,33 @@
+@title Pump station template: options window, pages with circuits, cover pages without crane rows
+@area Schematic
+@sizes 1366x768 1920x1080
+wait 20
+key ctrl+k
+wait 6
+text new from template pump station
+wait 8
+shot palette-pump
+key Return
+wait 12
+shot options-window
+click_text "3"
+click_text "Thermistor relay on each pump motor"
+wait 6
+shot options-three-pumps-thermistor
+click_text "Create project"
+wait 30
+shot template-opened
+expect "New pump station project"
+check_layout
+key PageDown
+wait 12
+shot page-2-pump-1
+check_layout
+key ctrl+k
+wait 6
+text project settings
+wait 8
+key Return
+wait 12
+shot project-settings-no-crane-rows
+check_layout

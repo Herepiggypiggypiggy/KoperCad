@@ -13,4 +13,5 @@ Decisions
 Follow-up (after #1719 merged)
 - `file.new_crane` now opens the New crane project window (`template_crane_window.rs`, `wb.crane_new`); Create calls `new_crane_project(options)`.
 - `template_crane.rs`: `CraneOptions` (hoist_units 1..=4, hoist_drive, travel_drive); pages place circuits from `novo_parts::circuit_library()` by name (`Circuits`), one hoist page per unit. Open points of the circuits show as warnings (UnconnectedPin) on purpose: they are where the supply is connected.
-- Next: pump station and motor control centre templates, same menu (coordinator ask).
+- Pump station and motor control centre templates: `template_plants.rs` (`Plant`, `PlantOptions`, `build_plant_template_on`), window `template_plants_window.rs`, `wb.plant_new`, commands `file.new_pump`, `file.new_mcc`. Reuse the crane `Circuits` helper. `project.kind` ("crane", "pump", "mcc") hides the crane-only cover rows and Project information fields (`front_keys::shows_crane_fields`). A missing library circuit is now an error, not a panic.
+- Ideas not done: a frequency-drive pump feeder circuit (the library has none without a brake), motor nodes per feeder in the MCC tree, level control page.

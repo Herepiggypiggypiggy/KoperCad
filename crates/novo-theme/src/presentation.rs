@@ -260,6 +260,12 @@ pub const TABLE: &[Presentation] = &[
     ),
     row("file.example_pump", p(icons::DROP), "Open pump example"),
     row("file.new_crane", d(&drawn::BRIDGE), "New crane project"),
+    row("file.new_pump", p(icons::DROP), "New pump station project"),
+    row(
+        "file.new_mcc",
+        d(&drawn::CONTACTOR),
+        "New motor control centre project",
+    ),
     row("file.practice", p(icons::KEYBOARD), "Try the fast keys"),
     row("project.languages", p(icons::TRANSLATE), "Report languages"),
     row("file.save", p(icons::FLOPPY_DISK), "Save"),
