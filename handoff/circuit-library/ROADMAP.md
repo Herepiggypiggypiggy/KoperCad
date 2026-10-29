@@ -4,7 +4,7 @@ Scope: KoperCAD's own generic standard circuits as plain TOML data, grouped in
 chapters, placeable from the Place macro window and the Macros browser, with a
 mounting view per circuit. Design and format: `docs/CIRCUIT-LIBRARY.md`.
 
-Done: format, build-time checks, 19 circuits in 7 chapters, mounting data,
+Done: format, build-time checks, 21 circuits in 7 chapters, mounting data,
 Place window headings and mounting view, CLI `macros install-circuits`.
 
 Next:
