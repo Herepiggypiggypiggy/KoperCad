@@ -3,10 +3,6 @@
 The id is a date and a letter; the top entry is the newest one a person has
 seen once they open the list. Add an entry when a feature PR merges. -->
 
-## 2026-10-29-a · Double click maximises a window, double click on an edge resets it
-Where: the title bar of any window or dialog, and the edge of the Pages column, the report list, the drawer and the detail columns.
-Double click a window's title bar and it fills the canvas (a dialog fills the window); double click again and it goes back to where it was. A window no longer folds up on a double click, use its arrow. Double click the edge you drag a column or drawer by and it gets its usual size back. View > Reset panel layout still puts everything back.
-
 ## 2026-10-28-a · Every window moves and resizes
 Where: Pages (the navigator), the tool dock, every dialog, and View > Reset panel layout.
 The navigator is a window you drag by its title and resize from its edges, or a column you widen by its edge when it is pinned. The tool dock and the 3D tool cards are dragged by their background. Questions and forms (About, Preferences, Project rules, the imports) open centered, can be moved and resized, and open where you left them. View > Reset panel layout puts everything back.
