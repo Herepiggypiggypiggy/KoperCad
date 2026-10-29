@@ -156,6 +156,21 @@ fn sto_one_low_channel_removes_torque_and_discrepancy_latches() {
     assert!(!s.discrepancy && s.torque_allowed);
 }
 
+#[test]
+fn sto_request_then_release_then_mismatch_stays_latched_until_a_new_cycle() {
+    let mut m = StoMonitor::new(1.0);
+    assert!(m.step(false, false, 0.1).requested);
+    assert!(m.step(true, true, 0.1).torque_allowed);
+    for _ in 0..30 {
+        m.step(true, false, 0.1);
+    }
+    // Both high again without a fresh both-low cycle: the fault stays.
+    let s = m.step(true, true, 0.1);
+    assert!(s.discrepancy && !s.torque_allowed);
+    m.step(false, false, 0.1);
+    assert!(m.step(true, true, 0.1).torque_allowed);
+}
+
 // ---- 3. hoist arithmetic and a holding brake ---------------------------------------------
 
 #[test]

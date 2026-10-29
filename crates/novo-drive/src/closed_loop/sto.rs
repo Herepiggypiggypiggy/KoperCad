@@ -40,8 +40,10 @@ impl StoMonitor {
             self.mismatch_s = 0.0;
         } else {
             self.mismatch_s += dt_s;
-            if self.mismatch_s > self.discrepancy_limit_s {
+            if self.mismatch_s > self.discrepancy_limit_s && !self.latched {
                 self.latched = true;
+                // An earlier ordinary request must not count as the cycle that clears this fault.
+                self.seen_both_low = false;
             }
         }
         let requested = !ch1 && !ch2;

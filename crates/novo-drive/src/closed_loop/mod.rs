@@ -49,7 +49,7 @@ pub const FIDELITY: &[(&str, Fidelity)] = &[
         Fidelity::Model,
     ),
     (
-        "Torque limit from the current limit, field weakening",
+        "Torque limit from the current limit, constant power above rated speed (no breakdown torque bound)",
         Fidelity::Model,
     ),
     ("Motor current and losses, DC bus voltage", Fidelity::Model),
