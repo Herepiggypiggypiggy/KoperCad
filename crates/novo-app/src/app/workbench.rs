@@ -283,6 +283,8 @@ pub(crate) struct Workbench {
     pub(super) parts_bulk: Option<super::parts_bulk::BulkReport>,
     /// Part proposals waiting for Accept all or Cancel.
     pub(super) auto_assign: Option<super::parts_bulk::AutoAssignPreview>,
+    /// The description recipe editor.
+    pub(super) describe: Option<super::describe_recipes::DescribeDialog>,
     /// An EPLAN (PXF) import waiting for the person to confirm.
     pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
     /// Parts read from an EPLAN parts export, waiting for Add.
@@ -435,6 +437,7 @@ impl Default for Workbench {
             aml_import: None,
             parts_bulk: None,
             auto_assign: None,
+            describe: None,
             eplan_import: None,
             eplan_parts: None,
             parts_table: None,
@@ -712,6 +715,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "parts.auto_assign",
     "edit.shared_properties",
     "parts.clear",
+    "parts.describe",
     "parts.remove_unused",
     "project.standard",
     "project.rules",
@@ -1648,6 +1652,7 @@ impl NovoApp {
             "parts.auto_assign" => self.start_auto_assign(),
             "edit.shared_properties" => self.open_selection_sheet(),
             "parts.clear" => self.clear_selected_parts(),
+            "parts.describe" => self.open_describe_recipes(),
             "parts.remove_unused" => self.remove_unused_project_parts(),
             "project.standard" => self.wb.project_settings = true,
             "project.rules" => self.wb.project_rules = true,

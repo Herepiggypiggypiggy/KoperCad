@@ -36,6 +36,7 @@ mod bundle;
 mod cadmatch;
 mod catalog;
 mod csv;
+pub mod describe;
 mod etim;
 mod fit;
 mod import;
@@ -87,6 +88,10 @@ pub use catalog::{
 pub use csv::{
     Column, DelimitedRow, ImportError, ImportReport, ParseError, column_for, import_catalog,
     parse_delimited,
+};
+pub use describe::{
+    ContactMarks, Description, Facts, RECIPES_FORMAT, Recipe, RecipeSet, TemplateError,
+    check_template, describe_devices, describe_parts, device_description, recipe_id, recipes_path,
 };
 pub use etim::{EtimError, EtimModel};
 pub use fit::{

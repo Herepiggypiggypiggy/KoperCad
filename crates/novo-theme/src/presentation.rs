@@ -443,6 +443,11 @@ pub const TABLE: &[Presentation] = &[
         "Assign parts to devices",
     ),
     row(
+        "parts.describe",
+        p(icons::PACKAGE),
+        "Describe devices from parts",
+    ),
+    row(
         "parts.clear",
         p(icons::PACKAGE),
         "Remove parts from devices",
