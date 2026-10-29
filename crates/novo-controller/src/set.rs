@@ -9,7 +9,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::binding::{Binding, SignalKey};
+use crate::binding::{Binding, BindingTable, SignalKey};
 use crate::engine::{Applied, ControlError, Controller, State};
 use crate::profile::Profile;
 use crate::sequence::{Action, Recorder, Sequence, TimedAction};
@@ -80,6 +80,15 @@ impl From<ControlError> for SetError {
     }
 }
 
+/// Ids are used in `controller/signal` keys and in files: not empty, no `/`, no whitespace.
+fn check_id(id: &str) -> Result<(), SetError> {
+    if id.is_empty() || id.contains('/') || id.contains(char::is_whitespace) {
+        Err(SetError::InvalidId(id.to_string()))
+    } else {
+        Ok(())
+    }
+}
+
 /// One instance as saved in the project.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InstanceRecord {
@@ -94,13 +103,84 @@ pub struct InstanceRecord {
     pub state: State,
 }
 
-/// What the project stores: instances (with state) and bindings.
+/// What the project stores: instances (with state), bindings and the profiles they use.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ProjectControllers {
     #[serde(default, rename = "instance")]
     pub instances: Vec<InstanceRecord>,
     #[serde(default, rename = "binding")]
     pub bindings: Vec<Binding>,
+    /// The profiles the instances use, as profile text by profile id, so a project opens on a PC
+    /// whose profile folder lacks them (a profile is data, not a licence to a vendor's file).
+    #[serde(
+        default,
+        rename = "profile",
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub profiles: BTreeMap<String, String>,
+}
+
+impl ProjectControllers {
+    /// The project data for `set` and `table`, with the text of every profile in use.
+    pub fn capture(set: &ControllerSet, table: &BindingTable) -> Result<Self, String> {
+        let mut profiles = BTreeMap::new();
+        for i in set.instances() {
+            let p = i.controller.profile();
+            if !profiles.contains_key(&p.controller.id) {
+                profiles.insert(p.controller.id.clone(), p.to_toml()?);
+            }
+        }
+        Ok(ProjectControllers {
+            instances: set.to_records(),
+            bindings: table.bindings.clone(),
+            profiles,
+        })
+    }
+
+    /// True when there is nothing to store (no instances and no bindings).
+    pub fn is_empty(&self) -> bool {
+        self.instances.is_empty() && self.bindings.is_empty()
+    }
+
+    /// The data as TOML text, the form the project file keeps it in.
+    pub fn to_text(&self) -> Result<String, String> {
+        toml::to_string_pretty(self).map_err(|e| e.to_string())
+    }
+
+    pub fn from_text(text: &str) -> Result<Self, String> {
+        toml::from_str(text).map_err(|e| e.to_string())
+    }
+
+    /// Rebuild the set and the binding table. A profile saved in the project wins over the
+    /// library's copy with the same id (the project keeps working as it was made); a note says
+    /// when the two differ. Fails when an instance names a profile neither has.
+    pub fn restore(
+        &self,
+        library: &ProfileLibrary,
+    ) -> Result<(ControllerSet, BindingTable, Vec<String>), SetError> {
+        let mut merged = library.clone();
+        let mut notes = Vec::new();
+        for (id, text) in &self.profiles {
+            match Profile::parse(text) {
+                Ok(p) => {
+                    if library.get(id).is_some_and(|mine| mine != &p) {
+                        notes.push(format!(
+                            "Profile `{id}` in this project differs from the copy in your profile folder; the project's copy is used"
+                        ));
+                    }
+                    merged.insert(p);
+                }
+                Err(e) => notes.push(format!(
+                    "Profile `{id}` saved in the project is damaged: {e}"
+                )),
+            }
+        }
+        let set = ControllerSet::from_records(&self.instances, &merged)?;
+        let table = BindingTable {
+            bindings: self.bindings.clone(),
+        };
+        Ok((set, table, notes))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -143,9 +223,7 @@ impl ControllerSet {
         label: &str,
         profile: &Profile,
     ) -> Result<(), SetError> {
-        if id.is_empty() || id.contains('/') || id.contains(char::is_whitespace) {
-            return Err(SetError::InvalidId(id.to_string()));
-        }
+        check_id(id)?;
         if self.instance(id).is_some() {
             return Err(SetError::DuplicateId(id.to_string()));
         }
@@ -311,6 +389,7 @@ impl ControllerSet {
     ) -> Result<ControllerSet, SetError> {
         let mut set = ControllerSet::new();
         for r in records {
+            check_id(&r.id)?;
             if set.instance(&r.id).is_some() {
                 return Err(SetError::DuplicateId(r.id.clone()));
             }

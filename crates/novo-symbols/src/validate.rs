@@ -226,7 +226,14 @@ const BEHAVIOR_SCHEMA: &[(&str, &[&str])] = &[
     ("conductor", &["poles"]),
     (
         "contact",
-        &["poles", "normally", "latching", "delay", "center_off"],
+        &[
+            "poles",
+            "normally",
+            "latching",
+            "delay",
+            "center_off",
+            "common",
+        ],
     ),
     ("coil", &["poles", "delay"]),
     ("fuse", &["poles", "switched"]),
@@ -364,26 +371,36 @@ fn check_behavior(symbol: &Symbol, ids: &HashSet<&str>) -> Vec<String> {
         Some(2)
     };
     let pole_min = if kind == "conductor" { 2 } else { 1 };
+    // A shared common (a receiver's COM) starts every pole and may repeat in all of them.
+    let common = params.get("common").and_then(|v| v.as_str());
+    if let Some(v) = params.get("common")
+        && !common.is_some_and(|c| ids.contains(c))
+    {
+        out.push(format!("behavior.common must name a connection, not {v}"));
+    }
     check_groups(
         params.get("poles"),
         "poles",
         pole_len,
         pole_min,
+        common,
         ids,
         &mut out,
     );
-    check_groups(params.get("ports"), "ports", None, 1, ids, &mut out);
+    check_groups(params.get("ports"), "ports", None, 1, None, ids, &mut out);
     out
 }
 
 /// Checks a list of connection-id groups: well formed, every id known, no
 /// id in two groups, at least `min` ids per group and (when given) the
-/// exact group size.
+/// exact group size. `common` is the one id that may sit in every group, and
+/// then must be the first of each.
 fn check_groups(
     value: Option<&toml::Value>,
     key: &str,
     len: Option<usize>,
     min: usize,
+    common: Option<&str>,
     ids: &HashSet<&str>,
     out: &mut Vec<String>,
 ) {
@@ -416,11 +433,19 @@ fn check_groups(
                 "behavior.{key} group {names:?} must have {len} connections"
             ));
         }
+        if let Some(c) = common
+            && names.contains(&c)
+            && names[0] != c
+        {
+            out.push(format!(
+                "behavior.{key} group {names:?} must start with the common '{c}'"
+            ));
+        }
         for name in names {
             if !ids.contains(name) {
                 out.push(format!("behavior.{key} names unknown connection '{name}'"));
             }
-            if !seen.insert(name) {
+            if Some(name) != common && !seen.insert(name) {
                 out.push(format!(
                     "behavior.{key} uses connection '{name}' more than once"
                 ));

@@ -1,22 +1,8 @@
-//! Small helpers so the dialogs share one look: a title with a line of
-//! help, captioned sections, a setting with its help and a segmented
+//! Small helpers so the dialogs share one look: captioned sections, a setting with its help and a segmented
 //! choice, and one primary "Done" button (docs/design/direction.md §6).
 
 use eframe::egui;
 use novo_theme::widgets;
-
-/// The dialog title in the title size, with an optional line of help.
-pub(super) fn title(ui: &mut egui::Ui, text: &str, help: &str) {
-    ui.label(
-        egui::RichText::new(text)
-            .size(15.0)
-            .family(novo_theme::fonts::strong_family()),
-    );
-    if !help.is_empty() {
-        hint(ui, help);
-    }
-    ui.add_space(4.0);
-}
 
 /// A caption-caps section label with space above it (less for the first).
 pub(super) fn section(ui: &mut egui::Ui, text: &str, first: bool) {

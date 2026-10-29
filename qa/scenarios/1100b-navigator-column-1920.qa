@@ -1,0 +1,16 @@
+@title Pinned navigator column at 1920x1080: its edge is dragged wider and View > Reset panel layout restores 248 pt
+@area Windows
+@sizes 1920x1080
+click_text "Open example"
+wait 20
+shot column-home
+drag 246 300 420 300
+wait 10
+shot column-wider
+check_layout
+click_text View #1
+wait 5
+click_text "Reset panel layout"
+wait 20
+shot column-reset
+check_layout

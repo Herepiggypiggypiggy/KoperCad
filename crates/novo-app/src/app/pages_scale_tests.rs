@@ -83,10 +83,26 @@ fn a_thousand_pages_filter_edit_and_delete_quickly() {
     eprintln!("idle frame: {:.1} ms", ms(t) / 5.0);
     d.app.page_filter = "1".into();
     d.frame_sized(size, Vec::new());
+    let cached = d
+        .app
+        .ol
+        .net_wires
+        .as_ref()
+        .map(|(_, _, g)| std::rc::Rc::as_ptr(g));
+    assert!(cached.is_some(), "the filtered wire rows were worked out");
     let t = Instant::now();
     for _ in 0..5 {
         d.frame_sized(size, Vec::new());
     }
+    assert_eq!(
+        d.app
+            .ol
+            .net_wires
+            .as_ref()
+            .map(|(_, _, g)| std::rc::Rc::as_ptr(g)),
+        cached,
+        "the filtered wire rows are kept between frames"
+    );
     let filter = ms(t) / 5.0;
     eprintln!("frame with the filter \"1\": {filter:.1} ms");
     d.app.page_filter.clear();
@@ -106,6 +122,14 @@ fn a_thousand_pages_filter_edit_and_delete_quickly() {
     d.frame_sized(size, Vec::new());
     let edit = ms(t);
     assert!(d.app.ol.rect.is_some(), "the Pages list was drawn");
+    assert!(
+        !d.app
+            .wb
+            .reports
+            .live(d.app.backend.document().unwrap().project())
+            .is_current(d.app.backend.document().unwrap().project(), "toc"),
+        "the edit did not wait for the contents page"
+    );
     eprintln!("edit a page and draw: {edit:.1} ms");
     // Once the edits pause the rows are made again.
     std::thread::sleep(std::time::Duration::from_millis(1600));
@@ -119,13 +143,16 @@ fn a_thousand_pages_filter_edit_and_delete_quickly() {
     d.frame_sized(size, Vec::new());
     let delete = ms(t);
     eprintln!("delete a page and draw: {delete:.1} ms");
-    // Before: about 280 ms, 2100 ms and 2200 ms for these three in a debug
-    // build at 200 pages. A debug build is ten to twenty times slower than
-    // release, so the budgets leave room for a slow CI machine.
-    assert!(filter < 150.0, "a frame with a filter took {filter:.0} ms");
-    assert!(edit < 1000.0, "an edit and its frame took {edit:.0} ms");
+    // Wall time on a loaded CI machine proves nothing, so the work is counted.
+    // The timings above are for the log: before the fix they were about 280,
+    // 2100 and 2200 ms in a debug build at 200 pages.
+    let _ = (filter, edit, delete);
     assert!(
-        delete < 1000.0,
-        "a delete and its frame took {delete:.0} ms"
+        !d.app
+            .wb
+            .reports
+            .live(d.app.backend.document().unwrap().project())
+            .is_current(d.app.backend.document().unwrap().project(), "toc"),
+        "the delete did not wait for the contents page"
     );
 }

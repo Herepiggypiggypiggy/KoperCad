@@ -33,6 +33,11 @@ const RAIL_COST: f64 = 1.1;
 const RAIL_REACH_MM: f64 = 100.0;
 /// Clear space between a row of devices and the channel along its rail, mm.
 const CHANNEL_GAP_MM: f64 = 10.0;
+/// With device bodies known, the stub round them is worked out for this many
+/// of the ducts nearest a terminal (straight distance) and this many rail
+/// channels, not for every run of the plate.
+const NEAR_DUCTS: usize = 8;
+const NEAR_RAILS: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Orient {
@@ -417,78 +422,13 @@ impl Network {
     fn entries(&self, a: &Anchor, rules: &Rules) -> Vec<Entry> {
         let known =
             !self.bodies.is_empty() || self.runs.iter().any(|r| r.openings != Openings::Anywhere);
-        let mut out: Vec<Entry> = self
-            .runs
-            .iter()
-            .enumerate()
-            .map(|(i, r)| {
-                let t = r.snap(match r.orient {
-                    Orient::H => a.pos.x,
-                    Orient::V => a.pos.y,
-                });
-                let p = r.at(t);
-                if known {
-                    let (mut path, blocked) = self.stub_path(a, p, r);
-                    let mut t = t;
-                    // A stub that goes round a device meets the duct's line
-                    // before its end: enter there, not farther along.
-                    if r.openings == Openings::Anywhere && !blocked {
-                        let on_line = |q: &Point| match r.orient {
-                            Orient::H => {
-                                (q.y - r.fixed).abs() < EPS
-                                    && q.x >= r.lo - EPS
-                                    && q.x <= r.hi + EPS
-                            }
-                            Orient::V => {
-                                (q.x - r.fixed).abs() < EPS
-                                    && q.y >= r.lo - EPS
-                                    && q.y <= r.hi + EPS
-                            }
-                        };
-                        if let Some(k) = path.iter().skip(1).position(on_line).map(|k| k + 1) {
-                            path.truncate(k + 1);
-                            t = match r.orient {
-                                Orient::H => path[k].x,
-                                Orient::V => path[k].y,
-                            };
-                        }
-                    }
-                    let stub = crate::polyline_length(&path);
-                    return Entry {
-                        run: i,
-                        t,
-                        stub,
-                        detour: 0.0,
-                        rank: stub + if blocked { BLOCKED_MM } else { 0.0 },
-                        path: Some(path),
-                        blocked,
-                    };
-                }
-                let back = match a.facing {
-                    Facing::Up => (p.y - a.pos.y).max(0.0),
-                    Facing::Down => (a.pos.y - p.y).max(0.0),
-                    Facing::Left => (p.x - a.pos.x).max(0.0),
-                    Facing::Right => (a.pos.x - p.x).max(0.0),
-                    Facing::Any => 0.0,
-                };
-                let sideways = matches!(
-                    (a.facing, r.orient),
-                    (Facing::Up | Facing::Down, Orient::V)
-                        | (Facing::Left | Facing::Right, Orient::H)
-                );
-                let detour = 2.0 * back.min(TURN_MM);
-                let stub = a.pos.manhattan(&p) + detour;
-                Entry {
-                    run: i,
-                    t,
-                    stub,
-                    detour,
-                    rank: stub + if sideways { SIDEWAYS_MM } else { 0.0 },
-                    path: None,
-                    blocked: false,
-                }
-            })
-            .collect();
+        let mut out: Vec<Entry> = if known {
+            self.nearest_entries(a)
+        } else {
+            (0..self.runs.len())
+                .map(|i| self.entry_of(i, a, false, &[]))
+                .collect()
+        };
         out.sort_by(|x, y| {
             x.rank
                 .total_cmp(&y.rank)
@@ -524,6 +464,121 @@ impl Network {
         ducts
     }
 
+    /// The entries worth working out when device bodies are known: the stub
+    /// round the devices is costly, so only the runs nearest the terminal by
+    /// straight distance are tried (the nearest few ducts and rail channels);
+    /// the rest only when every one of those is blocked.
+    fn nearest_entries(&self, a: &Anchor) -> Vec<Entry> {
+        let mut order: Vec<(f64, usize)> = self
+            .runs
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                let t = r.snap(match r.orient {
+                    Orient::H => a.pos.x,
+                    Orient::V => a.pos.y,
+                });
+                (a.pos.manhattan(&r.at(t)), i)
+            })
+            .collect();
+        order.sort_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)));
+        let (mut ducts, mut rails) = (0, 0);
+        let mut first = Vec::new();
+        let mut rest = Vec::new();
+        for (_, i) in order {
+            let (n, cap) = if self.runs[i].rail {
+                (&mut rails, NEAR_RAILS)
+            } else {
+                (&mut ducts, NEAR_DUCTS)
+            };
+            if *n < cap {
+                *n += 1;
+                first.push(i);
+            } else {
+                rest.push(i);
+            }
+        }
+        // The bodies the terminal sits on or in: its own device (or two
+        // touching ones), found once for all its entries.
+        let own: Vec<usize> = (0..self.bodies.len())
+            .filter(|&i| self.bodies[i].contains(a.pos, 1.0))
+            .collect();
+        let mut out: Vec<Entry> = first
+            .into_iter()
+            .map(|i| self.entry_of(i, a, true, &own))
+            .collect();
+        if out.iter().all(|e| e.blocked) {
+            out.extend(rest.into_iter().map(|i| self.entry_of(i, a, true, &own)));
+        }
+        out
+    }
+
+    /// The entry of an anchor on run `i`. `known`: device bodies or slots
+    /// are in play, so the stub is the real path round them.
+    fn entry_of(&self, i: usize, a: &Anchor, known: bool, own: &[usize]) -> Entry {
+        let r = &self.runs[i];
+        let t = r.snap(match r.orient {
+            Orient::H => a.pos.x,
+            Orient::V => a.pos.y,
+        });
+        let p = r.at(t);
+        if known {
+            let (mut path, blocked) = self.stub_path(a, p, r, own);
+            let mut t = t;
+            // A stub that goes round a device meets the duct's line
+            // before its end: enter there, not farther along.
+            if r.openings == Openings::Anywhere && !blocked {
+                let on_line = |q: &Point| match r.orient {
+                    Orient::H => {
+                        (q.y - r.fixed).abs() < EPS && q.x >= r.lo - EPS && q.x <= r.hi + EPS
+                    }
+                    Orient::V => {
+                        (q.x - r.fixed).abs() < EPS && q.y >= r.lo - EPS && q.y <= r.hi + EPS
+                    }
+                };
+                if let Some(k) = path.iter().skip(1).position(on_line).map(|k| k + 1) {
+                    path.truncate(k + 1);
+                    t = match r.orient {
+                        Orient::H => path[k].x,
+                        Orient::V => path[k].y,
+                    };
+                }
+            }
+            let stub = crate::polyline_length(&path);
+            return Entry {
+                run: i,
+                t,
+                stub,
+                detour: 0.0,
+                rank: stub + if blocked { BLOCKED_MM } else { 0.0 },
+                path: Some(path),
+                blocked,
+            };
+        }
+        let back = match a.facing {
+            Facing::Up => (p.y - a.pos.y).max(0.0),
+            Facing::Down => (a.pos.y - p.y).max(0.0),
+            Facing::Left => (p.x - a.pos.x).max(0.0),
+            Facing::Right => (a.pos.x - p.x).max(0.0),
+            Facing::Any => 0.0,
+        };
+        let sideways = matches!(
+            (a.facing, r.orient),
+            (Facing::Up | Facing::Down, Orient::V) | (Facing::Left | Facing::Right, Orient::H)
+        );
+        let detour = 2.0 * back.min(TURN_MM);
+        let stub = a.pos.manhattan(&p) + detour;
+        Entry {
+            run: i,
+            t,
+            stub,
+            detour,
+            rank: stub + if sideways { SIDEWAYS_MM } else { 0.0 },
+            path: None,
+            blocked: false,
+        }
+    }
+
     /// The wire from a terminal to a point on a duct, round the device
     /// bodies: the shortest of the two ways with one bend and the ways that
     /// leave the terminal, step clear of its own device and go on. The flag
@@ -531,7 +586,7 @@ impl Network {
     ///
     /// Into a duct with slots the wire arrives straight at the slot, across
     /// the duct (or along it at an end), never along the side of the duct.
-    fn stub_path(&self, a: &Anchor, entry: Point, run: &Run) -> (Vec<Point>, bool) {
+    fn stub_path(&self, a: &Anchor, entry: Point, run: &Run, own: &[usize]) -> (Vec<Point>, bool) {
         let off = run.width / 2.0 + GAP_MM / 2.0;
         // The point just outside the slot the wire reaches first.
         let e = match (run.openings, run.orient) {
@@ -553,17 +608,14 @@ impl Network {
                 Point::new(entry.x + s * off, entry.y)
             }
         };
-        let (mut path, blocked) = self.stub_path_to(a, e);
+        let (mut path, blocked) = self.stub_path_to(a, e, own);
         if e != entry {
             path.push(entry);
         }
         (path, blocked)
     }
 
-    fn stub_path_to(&self, a: &Anchor, e: Point) -> (Vec<Point>, bool) {
-        let own: Vec<usize> = (0..self.bodies.len())
-            .filter(|&i| self.bodies[i].contains(a.pos, 1.0))
-            .collect();
+    fn stub_path_to(&self, a: &Anchor, e: Point, own: &[usize]) -> (Vec<Point>, bool) {
         let first = stub(a, e);
         let other = match a.facing {
             Facing::Up | Facing::Down => vec![a.pos, Point::new(e.x, a.pos.y), e],
@@ -595,11 +647,26 @@ impl Network {
             }
         }
         let deep = own.iter().any(|&i| self.bodies[i].contains(a.pos, -1.0));
+        // Only the bodies inside the box that holds every candidate can be
+        // crossed by one of them.
+        let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+        for p in candidates.iter().flatten() {
+            x0 = x0.min(p.x);
+            y0 = y0.min(p.y);
+            x1 = x1.max(p.x);
+            y1 = y1.max(p.y);
+        }
+        let near: Vec<usize> = (0..self.bodies.len())
+            .filter(|&i| {
+                let b = &self.bodies[i];
+                b.x1 >= x0 && b.x0 <= x1 && b.y1 >= y0 && b.y0 <= y1
+            })
+            .collect();
         let clear = |path: &[Point]| {
             path.windows(2).enumerate().all(|(k, w)| {
-                self.bodies.iter().enumerate().all(|(i, body)| {
+                near.iter().all(|&i| {
                     let inside_start = k == 0 && deep && own.contains(&i);
-                    inside_start || !body.cuts(w[0], w[1])
+                    inside_start || !self.bodies[i].cuts(w[0], w[1])
                 })
             })
         };

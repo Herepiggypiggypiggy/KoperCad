@@ -116,16 +116,21 @@ pub(super) fn window(ctx: &egui::Context, viewer: &mut PhotoViewer) {
     };
     let screen = ctx.content_rect().size();
     let mut open = true;
-    egui::Window::new("Photo")
-        .open(&mut open)
-        .collapsible(false)
-        .resizable(false)
-        .max_size(screen * 0.9)
+    let size = texture.size_vec2();
+    let room = screen * 0.8;
+    let scale = (room.x / size.x).min(room.y / size.y).min(1.0);
+    // The window opens at the picture's size and the picture follows it
+    // when the window is resized.
+    super::panel::dialog(ctx, "Photo", [size.x * scale + 16.0, size.y * scale + 80.0])
+        .open(super::panel::esc(ctx, &mut open))
         .show(ctx, |ui| {
-            let room = screen * 0.8;
-            let size = texture.size_vec2();
-            let scale = (room.x / size.x).min(room.y / size.y).min(1.0);
-            ui.add(egui::Image::new(&texture).fit_to_exact_size(size * scale));
+            let line = 24.0;
+            let room = egui::vec2(
+                ui.available_width(),
+                (ui.available_height() - line).max(40.0),
+            );
+            let fit = (room.x / size.x).min(room.y / size.y);
+            ui.add(egui::Image::new(&texture).fit_to_exact_size(size * fit));
             ui.weak(format!("{name} · {at}"));
         });
     if !open {

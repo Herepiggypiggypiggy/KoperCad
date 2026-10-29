@@ -1614,8 +1614,9 @@ impl NovoApp {
                     })
                     .unwrap_or_default();
                 let unplaced_panel = egui::Panel::left("cabinet_unplaced")
-                    .exact_size(200.0)
-                    .resizable(false)
+                    .default_size(200.0)
+                    .size_range(150.0..=400.0)
+                    .resizable(true)
                     .show(ui, |ui| {
                         ui.add_space(6.0);
                         ui.strong("Unplaced");

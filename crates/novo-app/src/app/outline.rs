@@ -171,7 +171,7 @@ pub(super) struct OutlineState {
     /// The Pages list's rows, kept until the project, view or folds change.
     cache: Option<OutlineCache>,
     pub(super) rows_cache: Option<RowsCache>,
-    net_wires: Option<(u64, String, Rc<Vec<items::WireGroup>>)>,
+    pub(super) net_wires: Option<(u64, String, Rc<Vec<items::WireGroup>>)>,
     net_cables: Option<(u64, String, Rc<Vec<items::CableItem>>)>,
     /// Counts the rebuilds of kept rows, so the Pages list picks them up.
     pub(super) rows_epoch: u64,
@@ -348,15 +348,21 @@ impl NovoApp {
         self.ol.rect = Some(ui.max_rect());
         self.anchor("outline.pages", ui.max_rect(), "Pages list");
         self.toolbar(ui);
-        ui.horizontal(|ui| {
-            let width = ui.available_width() - 36.0;
-            ui.add(
-                egui::TextEdit::singleline(&mut self.page_filter)
-                    .hint_text("Filter pages")
-                    .desired_width(width),
-            );
-            self.outline_more_menu(ui);
-        });
+        // The menu button first, so the filter takes what is left and never
+        // pushes a resizable window wider.
+        let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+        ui.allocate_ui_with_layout(
+            row,
+            egui::Layout::right_to_left(egui::Align::Center),
+            |ui| {
+                self.outline_more_menu(ui);
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.page_filter)
+                        .hint_text("Filter pages")
+                        .desired_width(ui.available_width()),
+                );
+            },
+        );
         ui.add_space(4.0);
         // One fixed line, so the rows do not jump when a selection starts.
         let many = self.ol.picked.len() > 1;
@@ -2514,19 +2520,18 @@ impl NovoApp {
         let Some(confirm) = self.ol.confirm.clone() else {
             return;
         };
-        let modal = egui::Modal::new(egui::Id::new("outline_confirm")).show(ctx, |ui| {
-            ui.set_width(360.0);
-            ui.heading(&confirm.title);
-            ui.add_space(4.0);
-            ui.label(&confirm.body);
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                let yes = ui.button(format!("{} (Enter)", confirm.yes)).clicked();
-                let no = ui.button("Cancel (Esc)").clicked();
-                (yes, no)
-            })
-            .inner
-        });
+        let modal =
+            super::panel::modal(ctx, "outline_confirm", &confirm.title, [360.0, 0.0], |ui| {
+                ui.add_space(4.0);
+                ui.label(&confirm.body);
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    let yes = ui.button(format!("{} (Enter)", confirm.yes)).clicked();
+                    let no = ui.button("Cancel (Esc)").clicked();
+                    (yes, no)
+                })
+                .inner
+            });
         let (yes, no) = modal.inner;
         let enter = ctx.input(|i| i.key_pressed(egui::Key::Enter));
         if no || modal.should_close() {
@@ -2544,6 +2549,13 @@ impl NovoApp {
         let Some(project) = self.backend.document().map(|d| d.project()) else {
             return;
         };
+        // Command search is for the drawing, not for the name field: Ctrl+K
+        // closes the window and opens it, instead of typing a command's
+        // words into the cabinet's name.
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)) {
+            self.wb.field.open(novo_workflow::palette::Mode::All, None);
+            return;
+        }
         if form.name.is_empty() && !form.focused {
             form.name = self.naming().next_cabinet(project);
         }
@@ -2556,9 +2568,7 @@ impl NovoApp {
         let exists = tree::level_exists(project, Aspect::Location, &[form.name.trim().to_owned()]);
         let valid = super::pages::clean_level(&form.name, Aspect::Location);
         let mut open_list = false;
-        let modal = egui::Modal::new(egui::Id::new("cabinet_form")).show(ctx, |ui| {
-            ui.set_width(380.0);
-            ui.heading("New cabinet");
+        let modal = super::panel::modal(ctx, "cabinet_form", "New cabinet", [380.0, 0.0], |ui| {
             ui.add_space(6.0);
             egui::Grid::new("cabinet_form_grid")
                 .num_columns(2)
@@ -2752,9 +2762,7 @@ impl NovoApp {
             } => "Page group properties",
             PropsForm::Level { .. } => "Cabinet properties",
         };
-        let modal = egui::Modal::new(egui::Id::new("outline_props")).show(ctx, |ui| {
-            ui.set_width(380.0);
-            ui.heading(heading);
+        let modal = super::panel::modal(ctx, "outline_props", heading, [380.0, 0.0], |ui| {
             ui.add_space(6.0);
             egui::Grid::new("outline_props_grid")
                 .num_columns(2)

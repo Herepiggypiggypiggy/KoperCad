@@ -30,6 +30,7 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("drawer.devices", "Devices drawer"),
     ("drawer.devices.tab", "Devices tab"),
     ("live.card", "Live potentials"),
+    ("live.controller", "Controller card"),
     ("live.pole", "Pole badge"),
     ("live.coil", "Coil badge"),
     ("live.output", "Output badge"),

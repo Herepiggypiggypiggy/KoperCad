@@ -186,6 +186,9 @@ pub(crate) struct Workbench {
     pub(super) space_pan: Option<egui::Pos2>,
     /// The tool dock's size last frame, to tell where it would sit.
     pub(super) dock_size: egui::Vec2,
+    /// The width the pinned navigator column has now (it is dragged wider
+    /// or narrower), for the dialogs that open beside it.
+    pub(super) outline_shown: Option<f32>,
     /// The inspector's fields while they are edited.
     pub(super) inspector: super::inspector::InspectorState,
     /// The wire panel's text fields while they are edited.
@@ -383,6 +386,7 @@ impl Default for Workbench {
             pointer_world: None,
             space_pan: None,
             dock_size: egui::Vec2::ZERO,
+            outline_shown: None,
             inspector: Default::default(),
             wire_panel: Default::default(),
             marks: true,
@@ -521,6 +525,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.toggle_marks",
     "view.toggle_references",
     "sim.live",
+    "sim.controller",
     "sim.why",
     "sim.plc_program",
     "sim.faults",
@@ -1362,7 +1367,7 @@ impl NovoApp {
             "export.reports" => {
                 self.export_all_reports();
             }
-            "sim.live" | "sim.why" | "sim.plc_program" => {
+            "sim.live" | "sim.why" | "sim.plc_program" | "sim.controller" => {
                 // The live view and the PLC window draw only over the
                 // schematic: go there first so the command is not silent.
                 if self.workspace() != Workspace::Schematic && self.is_open() {
@@ -1374,6 +1379,8 @@ impl NovoApp {
                 }
                 if id == "sim.live" {
                     self.toggle_live();
+                } else if id == "sim.controller" {
+                    self.toggle_controller_panel();
                 } else if id == "sim.why" {
                     self.ask_why();
                 } else {
