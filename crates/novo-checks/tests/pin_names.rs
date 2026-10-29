@@ -174,6 +174,34 @@ fn the_fix_renames_part_terminals_when_the_pins_are_fine() {
 }
 
 #[test]
+fn a_terminal_keeps_its_wire_range_when_renamed() {
+    let mut project = one("iec/coils/contactor", "-K1", &["A1", "A2"], &["a1", "A2"]);
+    let part = project.parts().next().unwrap().id;
+    project
+        .transact("range", |tx| {
+            tx.set_property(part, "pin.a1.wire_min_mm2", Some(Value::Float(0.5)))?;
+            tx.set_property(part, "pin.a1.wire_max_mm2", Some(Value::Float(2.5)))?;
+            tx.set_property(part, "pin.a1.torque_nm", Some(Value::Float(0.6)))
+        })
+        .unwrap();
+    let problem = pin_names(&project).remove(0);
+    let fix = novo_checks::pin_fix(&project, &problem).unwrap();
+    assert!(fix.note.is_some());
+    apply(&mut project, fix.command);
+    let part = project.parts().next().unwrap();
+    for key in ["wire_min_mm2", "wire_max_mm2", "torque_nm", "x_mm"] {
+        assert!(
+            part.properties.contains_key(&format!("pin.A1.{key}")),
+            "{key}"
+        );
+        assert!(
+            !part.properties.contains_key(&format!("pin.a1.{key}")),
+            "{key}"
+        );
+    }
+}
+
+#[test]
 fn no_fix_when_the_names_are_a_guess() {
     let project = one(
         "iec/transformers/transformer_1ph",

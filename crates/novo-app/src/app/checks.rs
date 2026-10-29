@@ -418,7 +418,14 @@ impl NovoApp {
                                 .backend
                                 .document()
                                 .and_then(|d| novo_checks::pin_fix(d.project(), p))
-                            && ui.button(fix.label.as_str()).clicked()
+                            && {
+                                let button = ui.button(fix.label.as_str());
+                                match &fix.note {
+                                    Some(note) => button.on_hover_text(note.as_str()),
+                                    None => button,
+                                }
+                                .clicked()
+                            }
                         {
                             match self.execute(fix.command) {
                                 Some(Ok(_)) => {

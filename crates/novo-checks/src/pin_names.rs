@@ -114,6 +114,10 @@ pub struct PinFix {
     pub label: String,
     /// One undo step.
     pub command: Command,
+    /// A line to show beside the entry (a tooltip), when the user should know
+    /// more before choosing: a part's terminals are renamed for every device
+    /// that uses the part.
+    pub note: Option<String>,
 }
 
 /// The repair for a pin-names problem, when the right names are clear:
@@ -160,7 +164,8 @@ pub fn pin_fix(project: &Project, problem: &Problem) -> Option<PinFix> {
     }
     if !commands.is_empty() {
         return Some(PinFix {
-            label: format!("Rename {renamed} pin(s) to the usual names"),
+            label: format!("Rename {} to the usual names", count(renamed, "pin")),
+            note: None,
             command: Command::Batch {
                 label: "Rename pins to the usual names".into(),
                 commands,
@@ -182,21 +187,48 @@ pub fn pin_fix(project: &Project, problem: &Problem) -> Option<PinFix> {
     let fix = novo_symbols::suggest_renames(function, &names)?;
     let mut next = part.clone();
     for (old, new) in &fix.renames {
-        for axis in ['x', 'y', 'z'] {
-            let from = format!("pin.{old}.{axis}_mm");
-            if let Some(value) = next.properties.remove(&from) {
-                next.properties
-                    .insert(format!("pin.{new}.{axis}_mm"), value);
+        // Every property of the terminal moves with it: the position, and
+        // whatever else is stored under `pin.<name>.` (wire range, torque).
+        // A suffix with a dot in it belongs to a terminal whose own name has
+        // a dot (`1.1`), not to this one.
+        let from = format!("pin.{old}.");
+        let moved: Vec<String> = next
+            .properties
+            .keys()
+            .filter(|k| {
+                k.strip_prefix(&from)
+                    .is_some_and(|rest| !rest.contains('.'))
+            })
+            .cloned()
+            .collect();
+        for key in moved {
+            if let Some(value) = next.properties.remove(&key) {
+                let rest = &key[from.len()..];
+                next.properties.insert(format!("pin.{new}.{rest}"), value);
             }
         }
     }
     Some(PinFix {
         label: format!(
-            "Rename {} part terminal(s) to the usual names",
-            fix.renames.len()
+            "Rename {} to the usual names",
+            count(fix.renames.len(), "part terminal")
         ),
         command: Command::Replace {
             record: Record::Part(next),
         },
+        note: Some(
+            "The part is shared by every device that uses it, so its terminals are renamed \
+             for all of them."
+                .into(),
+        ),
     })
+}
+
+/// `1 pin`, `3 pins`.
+fn count(n: usize, noun: &str) -> String {
+    if n == 1 {
+        format!("1 {noun}")
+    } else {
+        format!("{n} {noun}s")
+    }
 }
