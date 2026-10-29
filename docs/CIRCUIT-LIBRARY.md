@@ -22,9 +22,9 @@ circuit the user edited stays as they left it.
 
 | Folder | Chapter | Circuits |
 | --- | --- | --- |
-| `Circuits/1 Supply and distribution` | supply | 24 V control supply, control transformer |
+| `Circuits/1 Supply and distribution` | supply | 24 V control supply, control transformer, crane supply with isolator and fuses |
 | `Circuits/2 Protection and starters` | protection | direct-on-line feeder, reversing feeder |
-| `Circuits/3 Hoists` | hoists | single speed with spring brake, two speed (pole change) with rectifier-fed brake, frequency controlled with brake and braking resistor, brake rectifier with DC-side switching, load limit with latching relay |
+| `Circuits/3 Hoists` | hoists | single speed with spring brake, two speed (pole change) with rectifier-fed brake, frequency controlled with brake and braking resistor, brake rectifier with DC-side switching, load limit with latching relay, encoder speed feedback |
 | `Circuits/4 Travel drives` | travel | two speed with brake, frequency controlled with brake, two motors on one drive |
 | `Circuits/5 Safety` | safety | emergency stop with main contactor, emergency stop with safety relay and feedback |
 | `Circuits/6 Operator stations` | control | radio receiver relays, pendant station with two-step buttons |

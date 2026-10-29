@@ -135,8 +135,10 @@ macro_rules! sources {
 const SOURCES: &[CircuitSource] = sources![
     "1-supply/control-supply-24v.toml",
     "1-supply/control-transformer.toml",
+    "1-supply/crane-supply-isolator-fuses.toml",
     "2-protection/feeder-dol.toml",
     "2-protection/feeder-reversing.toml",
+    "3-hoists/hoist-encoder-feedback.toml",
     "3-hoists/hoist-load-limit-relay.toml",
     "3-hoists/hoist-single-speed-brake.toml",
     "3-hoists/hoist-two-speed-brake.toml",
