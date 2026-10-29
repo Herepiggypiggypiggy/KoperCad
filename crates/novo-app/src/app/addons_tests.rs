@@ -376,3 +376,37 @@ fn the_controller_import_wizard_needs_the_controllers_add_on() {
     d.app.refresh_addons();
     assert!(d.app.command_unavailable(info).is_some());
 }
+
+#[test]
+fn a_button_press_returns_at_once_and_the_answer_is_applied_on_a_later_frame() {
+    use super::addons::Origin;
+    let (mut d, _dir) = drive();
+    install_engine_fixture(&mut d);
+    let sent = d
+        .app
+        .addon_engine_send(
+            "demo-engine",
+            "button",
+            &serde_json::json!({"panel": "panel", "id": "start"}),
+            Origin::Button,
+        )
+        .expect("it has an engine");
+    assert!(sent.is_ok());
+    // the answer arrives from the engine's own thread; the frames pick it up
+    let key = ("demo-engine".to_owned(), "power".to_owned());
+    let mut lit = None;
+    for _ in 0..500 {
+        d.frame();
+        lit = d.app.wb.addons.lamps.get(&key).map(|l| l.1);
+        if lit.is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(
+        lit,
+        Some(Some(true)),
+        "the Power lamp is lit by a later frame"
+    );
+    assert!(d.app.wb.addons.stopped.is_empty());
+}

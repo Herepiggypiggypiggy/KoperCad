@@ -28,7 +28,7 @@ key Escape
 wait 4
 key ctrl+k
 wait 6
-text controller panel
+text radio panel
 wait 8
 key Enter
 wait 10

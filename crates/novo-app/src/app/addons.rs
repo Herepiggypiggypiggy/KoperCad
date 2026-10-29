@@ -20,7 +20,7 @@ use novo_addons::{
     AddonSet, AppInfo, Entry, ExtCommand, Extensions, Inspection, InstallOptions, Status, Store,
     Trust, Version,
 };
-use novo_addons::{CallError, EngineHost, HostLimits};
+use novo_addons::{CallError, Done, EngineWorker, HostLimits};
 use novo_theme::widgets::{self, EmptySize, Level as Tone};
 use novo_theme::{icons, space};
 use novo_workflow::keymap::Chord;
@@ -44,12 +44,26 @@ pub(super) struct AddonsState {
     /// Live view cards the person closed this run.
     pub(super) closed_cards: BTreeSet<String>,
     /// Engines that are running, by add-on id (started when first needed).
-    engines: BTreeMap<String, EngineHost>,
+    engines: BTreeMap<String, EngineWorker>,
+    /// What each request in flight was for, by add-on id and ticket.
+    in_flight: BTreeMap<(String, u64), Origin>,
+    /// The window, so an engine thread can ask for a frame when it has answered.
+    wake: Option<egui::Context>,
     /// Add-ons whose engine stopped or would not start this run, with the reason in words. They
     /// add nothing until the person turns them off and on again.
     pub(super) stopped: BTreeMap<String, String>,
     /// What engines last said about lamps: add-on id and lamp id to its state.
     pub(super) lamps: BTreeMap<(String, String), (Option<Role>, Option<bool>)>,
+}
+
+/// What a request to an engine was for: where its answer goes when it arrives.
+#[derive(Clone, Copy)]
+pub(super) enum Origin {
+    Command,
+    Button,
+    /// A test waiting for the reply itself.
+    #[cfg(test)]
+    Test,
 }
 
 /// The manager window's own state.
@@ -137,6 +151,11 @@ impl NovoApp {
             .addons
             .engines
             .retain(|id, _| self.wb.addons.set.is_enabled(id));
+        let engines = &self.wb.addons.engines;
+        self.wb
+            .addons
+            .in_flight
+            .retain(|(id, _), _| engines.contains_key(id));
         // A panel of an add-on that is gone is not open any more.
         let ext = &self.wb.addons.ext;
         self.wb
@@ -145,23 +164,31 @@ impl NovoApp {
             .retain(|p| ext.panel(p).is_some());
     }
 
-    /// Sends one request to the engine of add-on `id`, starting it first when needed. `None`
-    /// when the add-on has no engine. A stop (or a start that fails) puts the add-on out of the
-    /// menus and panels for this run and says why in Details.
-    pub(super) fn addon_engine_call(
+    /// Queues one request for the engine of add-on `id` on its own thread, starting the thread
+    /// first when needed, and returns at once; the answer is applied by [`Self::poll_engines`]
+    /// on a later frame. `None` when the add-on has no engine. A start that fails stops the
+    /// add-on for this run and says why in Details.
+    pub(super) fn addon_engine_send(
         &mut self,
         id: &str,
         op: &str,
         data: &Value,
-    ) -> Option<Result<Value, String>> {
+        origin: Origin,
+    ) -> Option<Result<u64, String>> {
         if let Some(why) = self.wb.addons.stopped.get(id) {
             return Some(Err(why.clone()));
         }
         if !self.wb.addons.engines.contains_key(id) {
-            match self.wb.addons.set.load_engine(id, HostLimits::default()) {
+            match self.wb.addons.set.engine_wasm(id) {
                 Ok(None) => return None,
-                Ok(Some(host)) => {
-                    self.wb.addons.engines.insert(id.to_owned(), host);
+                Ok(Some(wasm)) => {
+                    let ctx = self.wb.addons.wake.clone();
+                    let worker = EngineWorker::start(wasm, HostLimits::default(), move || {
+                        if let Some(ctx) = &ctx {
+                            ctx.request_repaint();
+                        }
+                    });
+                    self.wb.addons.engines.insert(id.to_owned(), worker);
                 }
                 Err(e) => {
                     self.stop_addon(id, e.to_string());
@@ -169,13 +196,83 @@ impl NovoApp {
                 }
             }
         }
-        let host = self.wb.addons.engines.get_mut(id)?;
-        match host.call(op, data) {
-            Ok(v) => Some(Ok(v)),
-            Err(CallError::Refused(why)) => Some(Err(why)),
+        let worker = self.wb.addons.engines.get_mut(id)?;
+        let ticket = worker.submit(op, data);
+        self.wb
+            .addons
+            .in_flight
+            .insert((id.to_owned(), ticket), origin);
+        Some(Ok(ticket))
+    }
+
+    /// Applies the answers engine threads have sent since the last frame. Never waits.
+    pub(super) fn poll_engines(&mut self) {
+        let ids: Vec<String> = self.wb.addons.engines.keys().cloned().collect();
+        for id in ids {
+            while let Some(done) = self
+                .wb
+                .addons
+                .engines
+                .get_mut(&id)
+                .and_then(EngineWorker::try_next)
+            {
+                self.engine_answered(&id, done);
+            }
+        }
+    }
+
+    /// One answer: a stop is shown, a refusal is the engine's own words, data is applied.
+    fn engine_answered(&mut self, id: &str, done: Done) -> Option<Result<Value, String>> {
+        let origin = self
+            .wb
+            .addons
+            .in_flight
+            .remove(&(id.to_owned(), done.ticket));
+        let result = match done.result {
+            Ok(v) => Ok(v),
+            Err(CallError::Refused(why)) => Err(why),
             Err(CallError::Stopped(why)) => {
-                self.stop_addon(id, why.clone());
-                Some(Err(why))
+                // Answers queued behind a stop find the add-on already stopped.
+                if !self.wb.addons.stopped.contains_key(id) {
+                    self.stop_addon(id, why.clone());
+                }
+                Err(why)
+            }
+        };
+        match (&origin, &result) {
+            (Some(Origin::Command | Origin::Button), Ok(reply)) => {
+                self.apply_engine_reply(id, reply);
+            }
+            // A refusal is the engine's own words; a stop was already shown.
+            (Some(Origin::Command | Origin::Button), Err(why))
+                if !self.wb.addons.stopped.contains_key(id) =>
+            {
+                self.message(Level::Info, why.clone());
+            }
+            _ => {}
+        }
+        Some(result)
+    }
+
+    /// Sends one request and waits for its answer, applying the answers before it on the way.
+    /// For tests and scripts that need the reply in hand; the window never calls it.
+    #[cfg(test)]
+    pub(super) fn addon_engine_call(
+        &mut self,
+        id: &str,
+        op: &str,
+        data: &Value,
+    ) -> Option<Result<Value, String>> {
+        let wanted = match self.addon_engine_send(id, op, data, Origin::Test)? {
+            Ok(ticket) => ticket,
+            Err(why) => return Some(Err(why)),
+        };
+        loop {
+            let done = self.wb.addons.engines.get_mut(id)?.wait_next()?;
+            let last = done.ticket == wanted;
+            let result = self.engine_answered(id, done);
+            if last {
+                return result;
             }
         }
     }
@@ -184,6 +281,7 @@ impl NovoApp {
         log::warn!("add-on {id} stopped: {why}");
         let name = self.addon_name(id);
         self.wb.addons.engines.remove(id);
+        self.wb.addons.in_flight.retain(|(i, _), _| i != id);
         self.wb.addons.stopped.insert(id.to_owned(), why.clone());
         self.refresh_addons();
         self.message(
@@ -245,7 +343,10 @@ impl NovoApp {
             .addons
             .engines
             .iter()
-            .map(|(id, h)| (id.clone(), (h.calls(), h.peak_fuel(), h.fuel_budget())))
+            .filter_map(|(id, w)| {
+                let s = w.stats()?;
+                Some((id.clone(), (s.calls, s.peak_fuel, s.fuel_budget)))
+            })
             .collect()
     }
 
@@ -289,10 +390,16 @@ impl NovoApp {
                     .strip_prefix(&format!("addon.{}.", cmd.addon_id))
                     .unwrap_or(&cmd.id)
                     .to_owned();
-                match self.addon_engine_call(&cmd.addon_id, "command", &json!({ "id": local })) {
-                    Some(Ok(reply)) => self.apply_engine_reply(&cmd.addon_id, &reply),
+                let sent = self.addon_engine_send(
+                    &cmd.addon_id,
+                    "command",
+                    &json!({ "id": local }),
+                    Origin::Command,
+                );
+                match sent {
+                    Some(Ok(_)) => {}
                     Some(Err(why)) => {
-                        // A refusal is the engine's own words; a stop was already shown.
+                        // The add-on is stopped already; Details says why.
                         if !self.wb.addons.stopped.contains_key(&cmd.addon_id) {
                             self.message(Level::Info, why);
                         }
@@ -351,6 +458,8 @@ impl NovoApp {
 
     /// Draws the manager and the panels add-ons declared. Called every frame.
     pub(super) fn addons_windows(&mut self, ctx: &egui::Context) {
+        self.wb.addons.wake.get_or_insert_with(|| ctx.clone());
+        self.poll_engines();
         self.addon_panels(ctx);
         if self.wb.addons.manager.is_none() {
             return;
@@ -645,12 +754,11 @@ impl NovoApp {
                 .to_owned();
             for button in clicked {
                 let sent = json!({ "panel": local, "id": button });
-                match self.addon_engine_call(&panel.addon_id, "button", &sent) {
-                    Some(Ok(reply)) => self.apply_engine_reply(&panel.addon_id, &reply),
-                    Some(Err(why)) if !self.wb.addons.stopped.contains_key(&panel.addon_id) => {
-                        self.message(Level::Info, why);
-                    }
-                    _ => {}
+                if let Some(Err(why)) =
+                    self.addon_engine_send(&panel.addon_id, "button", &sent, Origin::Button)
+                    && !self.wb.addons.stopped.contains_key(&panel.addon_id)
+                {
+                    self.message(Level::Info, why);
                 }
             }
             if !open {

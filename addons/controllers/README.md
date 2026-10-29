@@ -25,8 +25,8 @@ keeps the package as an artifact. Signing: `KOPERCAD_SIGN_KEY_ID` and `KOPERCAD_
 
 ## Where the user finds it
 
-Install in File > Add-ons... (Ctrl+K "Add-ons"), turn it on, then **Simulate > Controller panel**
-(Ctrl+K "Controller panel") opens the Radio panel. The buttons send `button` requests to the
+Install in File > Add-ons... (Ctrl+K "Add-ons"), turn it on, then **Simulate > Radio panel**
+(Ctrl+K "Radio panel") opens the Radio panel. The buttons send `button` requests to the
 engine; the lamps show the signals it answers with.
 
 ## What the engine does (host API 1 ops)
