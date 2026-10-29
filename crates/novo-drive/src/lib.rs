@@ -4,9 +4,10 @@
 //! Averaged model: no PWM and no harmonics. Exact by definition: synchronous
 //! speed and ramp arithmetic. Model: slip, current, thermal state, brake
 //! behaviour. Not a replica of any manufacturer's drive and no compliance claim.
-//! Lanes: L1 drive (`drive`), L2 motor and mechanics (`motor`, `induction`, `sequencer`, `mechanics`, `brake`, `hoist_unit`).
+//! Lanes: L2c closed loop (`closed_loop`), L1 drive (`drive`), L2 motor and mechanics (`motor`, `induction`, `sequencer`, `mechanics`, `brake`, `hoist_unit`).
 
 pub mod brake;
+pub mod closed_loop;
 pub mod drive;
 pub mod error;
 pub mod hoist_unit;

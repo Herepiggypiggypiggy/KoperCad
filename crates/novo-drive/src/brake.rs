@@ -82,7 +82,19 @@ impl SpringBrake {
         self.torque_nm
     }
 
-    fn apply_delay_s(&self) -> f64 {
+    /// Time from the coil being fed until the brake lets go, s.
+    pub fn release_delay_s(&self) -> f64 {
+        self.release_delay_s
+    }
+
+    /// Time the torque takes to build from zero to full after the apply delay, s.
+    pub fn torque_rise_s(&self) -> f64 {
+        self.torque_rise_s
+    }
+
+    /// Time from the coil being switched off until the torque starts to build, s (depends on
+    /// the side of the rectifier that is switched).
+    pub fn apply_delay_s(&self) -> f64 {
         match self.switching {
             Switching::AcSide => self.apply_delay_ac_s,
             Switching::DcSide => self.apply_delay_dc_s,

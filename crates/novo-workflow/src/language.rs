@@ -754,6 +754,18 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl(
+        "sim.winches",
+        &["lieren"],
+        &[
+            "lier",
+            "synchroon",
+            "encoder",
+            "rem",
+            "gesloten lus",
+            "veiligheidsuitschakeling",
+        ],
+    ),
+    nl(
         "sim.motor_curves",
         &["frequentie"],
         &[
