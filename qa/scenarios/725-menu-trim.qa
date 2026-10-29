@@ -1,0 +1,24 @@
+@title Menu trim: rows that moved to a rail are gone from View, the rail still has them
+@area Layout
+# Lane V2c (docs/design/visual-redesign.md sections 5.2 and 14). View no longer
+# lists the 3D and Cabinet rows that the rails draw (Align, Spread, Measure,
+# Section, Rails and ducts, Cut list); the heat rows are under Simulate > Heat.
+# The 3D submenu keeps the layer switches that have no rail row.
+click_text "Open example"
+wait 20
+click_text View #1
+wait 6
+shot view-menu-trimmed
+click_text "3D ⏵"
+wait 8
+shot view-3d-submenu-trimmed
+expect "Isometric"
+expect_not "Spread down"
+expect_not "Align left"
+expect_not "Section plane"
+key Escape
+wait 6
+click_text Simulate #1
+wait 6
+shot simulate-menu-heat
+expect "Heat"

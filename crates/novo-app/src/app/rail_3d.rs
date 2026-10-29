@@ -101,7 +101,7 @@ impl NovoApp {
                 }
                 Some(FlyEntry {
                     id,
-                    anchor: None,
+                    anchor: super::learn_labels::moved_anchor(id),
                     glyph,
                     label,
                     tip,

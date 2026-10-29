@@ -197,7 +197,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.3d_wires", under("View", "3D")),
     ("view.3d_slotted_ducts", under("View", "3D")),
     ("view.3d_shadows", under("View", "3D")),
-    ("view.3d_assembly", under("View", "3D")),
     ("view.3d_assembly_next", under("View", "3D")),
     ("view.3d_assembly_previous", under("View", "3D")),
     ("view.3d_wire_it", under("View", "3D")),
@@ -205,55 +204,26 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.3d_wire_it_previous", under("View", "3D")),
     ("view.3d_wire_it_done", under("View", "3D")),
     ("view.3d_finish", under("View", "3D")),
-    ("view.3d_align_left", under("View", "3D")),
-    ("view.3d_align_hcentre", under("View", "3D")),
-    ("view.3d_align_right", under("View", "3D")),
-    ("view.3d_align_top", under("View", "3D")),
-    ("view.3d_align_vcentre", under("View", "3D")),
-    ("view.3d_align_bottom", under("View", "3D")),
-    ("view.3d_spread_h", under("View", "3D")),
-    ("view.3d_spread_v", under("View", "3D")),
     ("view.3d_ssao", under("View", "3D")),
     ("view.3d_dimensions", under("View", "3D")),
     ("view.3d_quality", under("View", "3D")),
-    ("view.3d_stats", under("View", "3D")),
-    ("view.3d_measure", under("View", "3D")),
-    ("view.3d_section", under("View", "3D")),
-    ("view.3d_save_view", under("View", "3D")),
     ("view.3d_wire_runs", under("View", "3D")),
-    ("view.emc", under("View", "3D")),
     ("view.emc_nets", at("View")),
     ("view.3d_hints", under("View", "3D")),
     ("view.3d_select_devices", under("View", "3D")),
     ("view.3d_select_rails", under("View", "3D")),
     ("view.3d_select_ducts", under("View", "3D")),
-    ("view.3d_hide", under("View", "3D")),
-    ("view.3d_isolate", under("View", "3D")),
-    ("view.3d_show_all", under("View", "3D")),
     ("view.3d_duplicate", under("View", "3D")),
-    ("view.3d_position", under("View", "3D")),
-    ("view.3d_place", under("View", "3D")),
     ("view.iso", under("View", "3D")),
     ("view.front", under("View", "3D")),
     ("view.top", under("View", "3D")),
-    ("view.cabinet_table", under("View", "Cabinet")),
-    ("cabinet.rails", under("View", "Cabinet")),
-    ("cabinet.rules", under("View", "Cabinet")),
-    ("cabinet.plate", under("View", "Cabinet")),
-    ("cabinet.cutlist", under("View", "Cabinet")),
     ("cabinet.door", under("View", "Cabinet")),
-    ("cabinet.surface", under("View", "Cabinet")),
-    ("view.terminals_drawer", under("View", "Panels")),
-    ("view.cables_drawer", under("View", "Panels")),
-    ("view.devices_drawer", under("View", "Panels")),
     ("view.pin_outline", under("View", "Panels")),
     ("view.reports", under("View", "Workspace")),
     ("view.commissioning", under("View", "Workspace")),
     ("cabinet.place-all", under("View", "Cabinet")),
     ("cabinet.size-enclosure", under("View", "Cabinet")),
     ("cabinet.enclosures", under("View", "Cabinet")),
-    ("cabinet.routes", under("View", "Cabinet")),
-    ("cabinet.emc", under("View", "Cabinet")),
     // Layers: what is drawn on top of the page
     ("view.toggle_marks", under("View", "Layers")),
     // Cross references: how they show on screen (the PDF always prints them)
@@ -271,10 +241,10 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.changes", under("View", "Layers")),
     ("view.background", under("View", "Layers")),
     ("view.background_place", under("View", "Layers")),
-    ("heat.toggle", under("View", "Layers")),
-    ("heat.airflow", under("View", "Layers")),
-    ("heat.contours", under("View", "Layers")),
-    ("heat.vents", under("View", "Layers")),
+    ("heat.toggle", under("Simulate", "Heat")),
+    ("heat.airflow", under("Simulate", "Heat")),
+    ("heat.contours", under("Simulate", "Heat")),
+    ("heat.vents", under("Simulate", "Heat")),
     // Lessons live with Help
     ("help.learn", at("Help")),
     ("ai.assistant", at("Help")),
@@ -299,6 +269,12 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("sim.add_fault", at("Simulate")),
     ("view.protection", at("Simulate")),
     ("heat.simulate", under("Simulate", "Heat")),
+    ("heat.cooling_advice", under("Simulate", "Heat")),
+    ("heat.cooling_whatif", under("Simulate", "Heat")),
+    ("heat.cooler_layout", under("Simulate", "Heat")),
+    ("heat.add_filter_fan", under("Simulate", "Heat")),
+    ("heat.add_grille", under("Simulate", "Heat")),
+    ("heat.add_exhaust_fan", under("Simulate", "Heat")),
     // Reports
     ("export.reports", under("Reports", "Export")),
     ("export.assembly", under("Reports", "Export")),
@@ -372,7 +348,6 @@ const PALETTE_ONLY: &[(&str, &str)] = &[
     ("view.3d_pins", "a switch of the 3D toolbar"),
     ("view.3d_missing_data", "a switch of the 3D toolbar"),
     ("view.3d_trackpad_pans", "a switch of the 3D toolbar"),
-    ("view.3d_move", "a switch of the 3D toolbar"),
     ("tool.repeat", "the key that repeats the last tool"),
     (
         "view.icon_gallery",
@@ -392,10 +367,56 @@ const PALETTE_ONLY: &[(&str, &str)] = &[
     ),
 ];
 
+/// Commands whose menu row moved to the tool rail of their workspace (lane
+/// V2c, docs/design/visual-redesign.md section 5.2). Each is still found with
+/// Ctrl K and listed as a rail home in [`crate::homes::RELOCATED`]; the test
+/// there fails for a command that left the menus with nowhere to go.
+pub const MOVED: &[&str] = &[
+    // The 3D rail and its flyouts.
+    "view.3d_assembly",
+    "view.3d_measure",
+    "view.3d_align_left",
+    "view.3d_align_hcentre",
+    "view.3d_align_right",
+    "view.3d_align_top",
+    "view.3d_align_vcentre",
+    "view.3d_align_bottom",
+    "view.3d_spread_h",
+    "view.3d_spread_v",
+    "view.emc",
+    "view.3d_move",
+    "view.3d_position",
+    "view.3d_place",
+    "view.3d_stats",
+    "view.3d_section",
+    "view.3d_save_view",
+    "view.3d_hide",
+    "view.3d_isolate",
+    "view.3d_show_all",
+    // The Cabinet rail.
+    "cabinet.rails",
+    "cabinet.rules",
+    "cabinet.plate",
+    "cabinet.cutlist",
+    "cabinet.surface",
+    "cabinet.routes",
+    "cabinet.emc",
+    "view.cabinet_table",
+    // The Panels zone of the schematic rail (the drawers).
+    "view.terminals_drawer",
+    "view.cables_drawer",
+    "view.devices_drawer",
+];
+
+/// Whether the menu row of `id` moved to a rail ([`MOVED`]).
+pub fn moved_out(id: &str) -> bool {
+    MOVED.contains(&id)
+}
+
 /// The command's place in the menu bar, or `None` for the commands in
-/// [`PALETTE_ONLY`].
+/// [`PALETTE_ONLY`] and [`MOVED`].
 pub fn place(info: &CommandInfo) -> Option<MenuPlace> {
-    if palette_only_reason(info.id).is_some() {
+    if palette_only_reason(info.id).is_some() || moved_out(info.id) {
         return None;
     }
     PLACEMENTS
@@ -723,10 +744,10 @@ mod tests {
     fn every_command_has_a_menu_or_a_reason() {
         for info in COMMANDS {
             let has_place = place(info).is_some();
-            let has_reason = palette_only_reason(info.id).is_some();
+            let has_reason = palette_only_reason(info.id).is_some() || moved_out(info.id);
             assert!(
                 has_place != has_reason,
-                "{} needs a menu row (PLACEMENTS or its group) or an entry in PALETTE_ONLY, not both",
+                "{} needs a menu row (PLACEMENTS or its group) or an entry in PALETTE_ONLY or MOVED, not both",
                 info.id
             );
         }
@@ -744,6 +765,17 @@ mod tests {
             assert!(
                 PLACEMENTS.iter().chain(REGROUPED).all(|(p, _)| p != id),
                 "{id} is both placed and palette-only"
+            );
+        }
+        for id in MOVED {
+            assert!(ids.contains(id), "{id} is not a command");
+            assert!(
+                palette_only_reason(id).is_none(),
+                "{id} is both moved to a rail and palette-only"
+            );
+            assert!(
+                PLACEMENTS.iter().chain(REGROUPED).all(|(p, _)| p != id),
+                "{id} is both placed and moved to a rail"
             );
         }
         let mut seen = HashSet::new();
@@ -912,6 +944,39 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The design target is about 152 rows over all menus (`docs/design/visual-redesign.md`
+    /// section 14). Rows leave a menu only when their new home exists, so the
+    /// ceilings below are exact: a PR that gives a command a menu row raises its menu's ceiling by one (and says why a rail or palette-only home will not do); a PR that moves rows lowers it.
+    #[test]
+    fn menu_rows_stay_inside_the_budget() {
+        let ceilings: &[(&str, usize)] = &[
+            ("File", 88),
+            ("Edit", 30),
+            ("Draw", 39),
+            ("View", 65),
+            ("Check", 11),
+            ("Reports", 30),
+            ("Simulate", 24),
+            ("Help", 19),
+        ];
+        let mut total = 0;
+        for (menu, ceiling) in ceilings {
+            let n = entries(menu).len();
+            total += n;
+            assert!(
+                n <= *ceiling,
+                "{menu} has {n} rows, the ceiling is {ceiling}"
+            );
+        }
+        for menu in MENUS {
+            assert!(
+                ceilings.iter().any(|(m, _)| m == &menu) || entries(menu).is_empty(),
+                "{menu} has no ceiling"
+            );
+        }
+        assert!(total <= 306, "the menus hold {total} rows");
     }
 
     #[test]

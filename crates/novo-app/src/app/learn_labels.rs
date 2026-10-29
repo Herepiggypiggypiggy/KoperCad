@@ -209,8 +209,26 @@ pub(crate) fn menu_anchors() -> &'static [MenuAnchor] {
                 }
             }
         }
+        // A row that moved to a rail keeps its anchor: the rail draws it.
+        for id in menus::MOVED {
+            if let Some(info) = novo_workflow::commands::get(id) {
+                all.push(MenuAnchor {
+                    id: format!("cmd.{id}"),
+                    label: info.label.to_owned(),
+                    parent: None,
+                });
+            }
+        }
         all
     })
+}
+
+/// The `cmd.<id>` anchor of a command whose menu row moved to a rail.
+pub(crate) fn moved_anchor(id: &str) -> Option<&'static str> {
+    menu_anchors()
+        .iter()
+        .find(|m| m.parent.is_none() && m.id.strip_prefix("cmd.") == Some(id))
+        .map(|m| m.id.as_str())
 }
 
 /// The name `{ui:id}` shows: the table's, or a menu entry's own label.
