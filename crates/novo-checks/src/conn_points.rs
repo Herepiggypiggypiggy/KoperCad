@@ -119,7 +119,12 @@ pub(crate) fn run(cx: &Context<'_>, out: &mut Vec<Problem>) {
                             number(hi)
                         ),
                     );
-                    p.severity = Severity::Error;
+                    // Only a figure a maker published or a person typed in is
+                    // firm enough for an error; an estimate or data of unknown
+                    // origin is a warning.
+                    if matches!(point.source.as_str(), "maker" | "typed") {
+                        p.severity = Severity::Error;
+                    }
                     out.push(p);
                 } else if mm2 + EPS < lo {
                     out.push(Problem::new(

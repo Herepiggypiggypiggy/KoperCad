@@ -112,6 +112,21 @@ fn a_wire_too_large_is_an_error_naming_the_source() {
 }
 
 #[test]
+fn a_too_large_wire_is_only_a_warning_when_the_data_is_estimated_or_unsourced() {
+    for source in [None, Some(DataSource::Estimated)] {
+        let f = fixture(Some(catalog_part(source)), 0, &[Some(4.0)]);
+        let p = found(&f.project, ProblemKind::WireRange);
+        assert_eq!(p.len(), 1);
+        assert_eq!(p[0].severity, Severity::Warning, "{source:?}");
+    }
+    let f = fixture(Some(catalog_part(Some(DataSource::Typed))), 0, &[Some(4.0)]);
+    assert_eq!(
+        found(&f.project, ProblemKind::WireRange)[0].severity,
+        Severity::Error
+    );
+}
+
+#[test]
 fn a_wire_too_small_is_a_warning() {
     let f = fixture(Some(catalog_part(None)), 0, &[Some(0.14)]);
     let p = found(&f.project, ProblemKind::WireRange);
