@@ -21,7 +21,7 @@ click_text "Mounting view"
 wait 10
 expect "Typical sizes of generic devices"
 shot circuit-mounting-view
-click_text Place Button #2
+click_text Place Button
 wait 30
 expect_scene "-K1"
 shot circuit-placed
