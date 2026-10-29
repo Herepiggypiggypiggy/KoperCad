@@ -1,0 +1,36 @@
+@title Hoist run faults: the section collapsed, expanded, a fault set with warnings, cleared
+@area Simulate
+# Opens the two-speed hoist fixture, starts Simulate > Hoist run, then tries a low supply voltage.
+open qa/fixtures/hoist-two-speed.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate hoist run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 40
+shot faults-collapsed
+expect "Faults to try"
+click_text "Faults to try"
+wait 20
+shot faults-expanded
+expect "Open phase"
+expect "Brake lining torque"
+# Supply voltage 70 %: below the brake pull-in, so the hoist reports a low supply.
+click_text "100 %"
+wait 10
+click_text "70 %"
+wait 60
+shot fault-set
+expect "Faults to try (set)"
+expect "Supply voltage is low"
+click_text "Clear faults"
+wait 60
+shot faults-cleared
+expect_not "Faults to try (set)"
+expect_not "Supply voltage is low"
+check_layout

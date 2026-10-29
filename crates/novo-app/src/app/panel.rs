@@ -738,7 +738,9 @@ pub(super) fn esc<'a>(ctx: &egui::Context, open: &'a mut bool) -> &'a mut bool {
 /// them their usual size back.
 const EDGE_PANELS: &[&str] = &[
     "outline",
+    "outline_right",
     "reports_list",
+    "reports_list_right",
     "drawer",
     "dock_left",
     "dock_right",
@@ -785,6 +787,7 @@ fn maximise_step(
     collapsible: bool,
 ) -> Option<egui::Rect> {
     let title = ctx.read_response(id.with("__title_click"))?;
+    title_hint(ctx, id, &title);
     let hit = ctx.input(|i| {
         i.pointer
             .button_double_clicked(egui::PointerButton::Primary)
@@ -823,6 +826,44 @@ fn maximise_step(
             area
         }
     })
+}
+
+/// The words that say a double click on the title bar does something: shown
+/// while the pointer rests on the title, but not over the buttons at its right
+/// end (they have their own).
+fn title_hint(ctx: &egui::Context, id: egui::Id, title: &egui::Response) {
+    const BUTTONS: f32 = 140.0;
+    const DELAY: f32 = 0.5;
+    let (pointer, rested, down) = ctx.input(|i| {
+        (
+            i.pointer.hover_pos(),
+            i.pointer.time_since_last_movement() > DELAY,
+            i.pointer.any_down(),
+        )
+    });
+    let Some(pointer) = pointer else { return };
+    if down
+        || !rested
+        || !title.rect.contains(pointer)
+        || pointer.x >= title.rect.right() - BUTTONS.min(title.rect.width() * 0.3)
+        || ctx.layer_id_at(pointer) != Some(title.layer_id)
+    {
+        return;
+    }
+    let epoch: u32 = ctx.data_mut(|d| d.get_persisted(epoch_id())).unwrap_or(0);
+    let before: Option<(u32, egui::Rect)> = ctx.data(|d| d.get_temp(id.with("restore")));
+    let text = if before.is_some_and(|(e, _)| e == epoch) {
+        "Double click to restore"
+    } else {
+        "Double click to maximise"
+    };
+    egui::Tooltip::always_open(
+        ctx.clone(),
+        title.layer_id,
+        id.with("title_hint"),
+        egui::PopupAnchor::Pointer,
+    )
+    .show(|ui| ui.label(text));
 }
 
 /// What [`modal`] hands back: what the content returned, and whether the

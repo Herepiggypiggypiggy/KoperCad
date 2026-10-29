@@ -73,6 +73,9 @@ mod controller_live;
 #[cfg(test)]
 mod controller_live_tests;
 mod count_words;
+mod defects_card;
+#[cfg(test)]
+mod defects_card_tests;
 mod designer;
 mod device_renumber;
 mod diagnostics;
@@ -193,6 +196,7 @@ mod macro_company_tests;
 mod macro_editor;
 #[cfg(test)]
 mod macro_editor_tests;
+mod macro_mounting;
 mod macro_thumb;
 mod manual;
 mod menu_bar;
@@ -243,6 +247,7 @@ mod protection;
 mod rail;
 mod rail_3d;
 mod rail_cabinet;
+mod rail_reports;
 mod rail_schematic;
 mod reports;
 mod reports_view;
@@ -444,6 +449,8 @@ mod pdf_options_tests;
 mod print_preview_tests;
 #[cfg(test)]
 mod protection_tests;
+#[cfg(test)]
+mod rail_reports_tests;
 #[cfg(test)]
 mod rail_tests;
 #[cfg(test)]
@@ -1785,6 +1792,10 @@ impl NovoApp {
         self.window_width = ctx.content_rect().width();
         self.window_height = ctx.content_rect().height();
         self.sync_panels(&ctx);
+        if panel_dock::take_changed(&ctx) {
+            // The canvas got another size: fit the drawing into what is left.
+            self.canvas.zoom_to_fit();
+        }
         panel::splitters_reset(&ctx);
         self.follow_window(self.window_width, self.window_height);
         let pinned = self.outline_pinned() && !self.focus_mode;
@@ -1799,8 +1810,8 @@ impl NovoApp {
             .show(ui, |ui| self.top_bar(ui, &mut picked));
         self.status_bar(ui);
         let reports = self.workspace() == workspace::Workspace::Reports && self.is_open();
-        // The tool rail: the leftmost panel of the Schematic, Cabinet and 3D
-        // workspaces.
+        // The tool rail: the leftmost panel of the Schematic, Cabinet, 3D,
+        // Reports and Commissioning workspaces.
         let rail_workspace = self.workspace();
         if !self.focus_mode
             && self.is_open()
@@ -1809,11 +1820,15 @@ impl NovoApp {
                 workspace::Workspace::Schematic
                     | workspace::Workspace::Cabinet
                     | workspace::Workspace::View3d
+                    | workspace::Workspace::Reports
+                    | workspace::Workspace::Commissioning
             )
         {
             match rail_workspace {
                 workspace::Workspace::Schematic => self.schematic_rail_show(ui),
                 workspace::Workspace::Cabinet => self.cabinet_rail_show(ui),
+                workspace::Workspace::Reports => self.reports_rail_show(ui),
+                workspace::Workspace::Commissioning => self.commissioning_rail_show(ui),
                 _ => self.view3d_rail_show(ui),
             }
         } else {
@@ -1821,7 +1836,13 @@ impl NovoApp {
             rail::close_flyout(&ctx);
         }
         if reports {
-            egui::Panel::left("reports_list")
+            let right = panel_dock::navigator_right(&ctx);
+            let panel = if right {
+                egui::Panel::right("reports_list_right")
+            } else {
+                egui::Panel::left("reports_list")
+            };
+            panel
                 .default_size(OUTLINE_WIDTH)
                 .size_range(OUTLINE_MIN_WIDTH..=OUTLINE_MAX_WIDTH)
                 .resizable(true)
@@ -1837,8 +1858,12 @@ impl NovoApp {
                     .exact_size(self.outline_width())
                     .resizable(false)
             } else {
-                egui::Panel::left("outline")
-                    .default_size(OUTLINE_WIDTH)
+                let base = if panel_dock::navigator_right(&ctx) {
+                    egui::Panel::right("outline_right")
+                } else {
+                    egui::Panel::left("outline")
+                };
+                base.default_size(OUTLINE_WIDTH)
                     .size_range(OUTLINE_MIN_WIDTH..=OUTLINE_MAX_WIDTH)
                     .resizable(true)
             };
@@ -2480,6 +2505,9 @@ impl NovoApp {
                     .clicked()
                 {
                     picked.push(Action::PinOutline);
+                }
+                if pinned {
+                    panel_dock::navigator_side_button(ui);
                 }
             });
         });

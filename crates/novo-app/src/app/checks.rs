@@ -413,6 +413,31 @@ impl NovoApp {
                             self.wb.queued.push("parts.auto_assign");
                             ui.close();
                         }
+                        if p.kind == novo_checks::ProblemKind::PinNames
+                            && let Some(fix) = self
+                                .backend
+                                .document()
+                                .and_then(|d| novo_checks::pin_fix(d.project(), p))
+                            && {
+                                let button = ui.button(fix.label.as_str());
+                                match &fix.note {
+                                    Some(note) => button.on_hover_text(note.as_str()),
+                                    None => button,
+                                }
+                                .clicked()
+                            }
+                        {
+                            match self.execute(fix.command) {
+                                Some(Ok(_)) => {
+                                    self.message(Level::Info, "Renamed to the usual pin names");
+                                }
+                                Some(Err(e)) => {
+                                    self.message(Level::Error, format!("Could not rename: {e}"));
+                                }
+                                None => {}
+                            }
+                            ui.close();
+                        }
                         let waive = ui.button("Waive with a reason…");
                         self.learn_row("issues.list", "Waive with a reason…", waive.rect);
                         if waive.clicked() {

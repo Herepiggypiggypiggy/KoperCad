@@ -498,6 +498,105 @@ pub(crate) fn parts_for<'c>(
 }
 
 // ---------------------------------------------------------------------------
+// The symbol that stands for a part
+
+/// The library symbol that pictures a catalog part. Only words that name a
+/// symbol count, and only when they name exactly one:
+/// - the part's function (`pilot lamp`) matches the symbols whose name,
+///   function, keywords or aliases contain all its words;
+/// - a keyword (`contactor`) must be a symbol's exact alias or name, or one
+///   whole segment of its function (`contact.main`), never a loose match.
+///
+/// One candidate is the picture; several give the one whose name is the
+/// term itself; anything still ambiguous (`plc io module` fits inputs and
+/// outputs alike) gets no picture, so a part is never shown with a symbol
+/// that may be the wrong one.
+pub(crate) fn symbol_for_part<'l>(
+    library: &'l Library,
+    part: &novo_parts::CatalogPart,
+) -> Option<&'l Symbol> {
+    let exact = |s: &Symbol, term: &str| {
+        s.name.to_lowercase() == term
+            || s.aliases.iter().any(|a| a == term)
+            || s.function.split('.').any(|seg| seg == term)
+    };
+    let pick = |candidates: Vec<&'l Symbol>, term: &str| match candidates.as_slice() {
+        [one] => Some(*one),
+        many => {
+            let mut named = many.iter().filter(|s| s.name.to_lowercase() == term);
+            match (named.next(), named.next()) {
+                (Some(one), None) => Some(*one),
+                _ => None,
+            }
+        }
+    };
+    let function = part.function.trim().to_lowercase();
+    let words: Vec<&str> = function
+        .split_whitespace()
+        .filter(|w| w.chars().count() >= 3)
+        .collect();
+    if !words.is_empty() {
+        let candidates = library
+            .iter()
+            .filter(|s| {
+                let text = format!(
+                    "{} {} {} {}",
+                    s.name,
+                    s.function,
+                    s.keywords.join(" "),
+                    s.aliases.join(" ")
+                )
+                .to_lowercase();
+                words.iter().all(|w| text.contains(w))
+            })
+            .collect();
+        if let Some(found) = pick(candidates, &function) {
+            return Some(found);
+        }
+    }
+    for keyword in &part.keywords {
+        let term = keyword.trim().to_lowercase();
+        // Colours and variants say how a part looks, not what it is: a
+        // green pushbutton is not a green lamp.
+        const NOT_A_KIND: [&str; 12] = [
+            "green", "red", "yellow", "blue", "white", "black", "amber", "orange", "no", "nc",
+            "led", "plc",
+        ];
+        if term.chars().count() < 3 || NOT_A_KIND.contains(&term.as_str()) {
+            continue;
+        }
+        let candidates = library.iter().filter(|s| exact(s, &term)).collect();
+        if let Some(found) = pick(candidates, &term) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+/// A thumbnail of a symbol in a small square: the drawing in a quiet frame.
+pub(crate) fn symbol_thumbnail(ui: &mut egui::Ui, symbol: &Symbol, size: Vec2) -> egui::Response {
+    let p = ui_palette();
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    ui.painter().rect_filled(rect, 4.0, p.sunken);
+    ui.painter().rect_stroke(
+        rect,
+        4.0,
+        Stroke::new(1.0, p.border_subtle),
+        egui::StrokeKind::Inside,
+    );
+    paint_symbol(
+        ui.painter(),
+        rect.shrink(2.0),
+        symbol,
+        None,
+        p.text_primary,
+        false,
+        false,
+    );
+    response
+}
+
+// ---------------------------------------------------------------------------
 // Widgets
 
 pub(crate) const CARD: Vec2 = Vec2::new(98.0, 84.0);
@@ -773,9 +872,11 @@ pub(crate) fn card_grid(
                 if response.clicked() && enabled {
                     out.clicked = Some(j);
                 }
-                if let Some(reason) = row.disabled {
-                    response.on_hover_text(reason);
-                }
+                // Labels are cut to the card, so the full name is the tooltip.
+                match row.disabled {
+                    Some(reason) => response.on_hover_text(format!("{}\n{reason}", row.label)),
+                    None => response.on_hover_text(&row.label),
+                };
             }
         });
     out
@@ -920,12 +1021,35 @@ pub(crate) fn kind_glyph(row: &Row) -> Glyph {
     }
 }
 
-/// The type chip of a row: what it is, in one word.
-pub(crate) fn type_chip(row: &Row) -> &'static str {
+/// The type chip of a row: what it is, in one word; an add-on's command
+/// names the add-on (`Add-on: Controllers`).
+pub(crate) fn type_chip(row: &Row) -> String {
     match &row.target {
-        Target::Addon(_) => "Add-on",
-        _ => row.kind.label(),
+        Target::Addon(_) => match addon_parts(row) {
+            Some((name, _)) => format!("Add-on: {}", shorten(name, 22)),
+            None => "Add-on".to_owned(),
+        },
+        _ => row.kind.label().to_owned(),
     }
+}
+
+/// The add-on's name and the rest of the row's detail (its description),
+/// from the detail `Add-on: name` or `Add-on: name · description`.
+pub(crate) fn addon_parts(row: &Row) -> Option<(&str, &str)> {
+    let rest = row.detail.strip_prefix("Add-on: ")?;
+    Some(match rest.split_once(" \u{b7} ") {
+        Some((name, description)) => (name, description),
+        None => (rest, ""),
+    })
+}
+
+fn shorten(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        return text.to_owned();
+    }
+    let mut cut: String = text.chars().take(max.saturating_sub(1)).collect();
+    cut.push('\u{2026}');
+    cut
 }
 
 /// A small outlined label: the type or the menu path of a row.
@@ -1153,5 +1277,78 @@ mod grid_tests {
         shapes += out.shapes.len();
         // About 4 lines of 4 cards fit; each card is a few shapes plus art.
         assert!(shapes < 400, "{shapes} shapes for 1000 rows");
+    }
+}
+
+#[cfg(test)]
+mod part_symbol_tests {
+    use super::*;
+
+    #[test]
+    fn a_part_is_pictured_by_a_symbol_that_its_words_name() {
+        let lib = Library::builtin().unwrap();
+        let catalog = Catalog::starter();
+        let mut pictured = 0;
+        for part in catalog.parts() {
+            let Some(symbol) = symbol_for_part(&lib, part) else {
+                continue;
+            };
+            pictured += 1;
+            // The picture is never a guess: a word of the part is in the symbol.
+            let text = format!(
+                "{} {} {} {}",
+                symbol.name,
+                symbol.function,
+                symbol.keywords.join(" "),
+                symbol.aliases.join(" ")
+            )
+            .to_lowercase();
+            let words = part
+                .function
+                .split_whitespace()
+                .chain(part.keywords.iter().map(String::as_str));
+            assert!(
+                words
+                    .map(str::to_lowercase)
+                    .any(|w| w.chars().count() >= 3 && text.contains(&w)),
+                "{} {} -> {}",
+                part.manufacturer,
+                part.order_number,
+                symbol.id
+            );
+        }
+        assert!(
+            pictured >= 10,
+            "only {pictured} of {} parts have a picture",
+            catalog.len()
+        );
+    }
+
+    #[test]
+    fn the_add_on_chip_names_the_add_on_and_the_detail_keeps_the_description() {
+        let row = |detail: &str| Row {
+            target: Target::Addon("addon.ctl.run".into()),
+            kind: Kind::Command,
+            label: "Run".into(),
+            detail: detail.into(),
+            group: "",
+            completion: None,
+            shortcut: None,
+            disabled: None,
+            score: 0,
+        };
+        assert_eq!(
+            type_chip(&row("Add-on: Controllers \u{b7} Starts it")),
+            "Add-on: Controllers"
+        );
+        assert_eq!(
+            addon_parts(&row("Add-on: Controllers \u{b7} Starts it")),
+            Some(("Controllers", "Starts it"))
+        );
+        assert_eq!(
+            addon_parts(&row("Add-on: Controllers")),
+            Some(("Controllers", ""))
+        );
+        assert_eq!(type_chip(&row("")), "Add-on");
     }
 }

@@ -70,6 +70,14 @@ pub(crate) enum Macros {
         #[command(flatten)]
         lib: LibraryArg,
     },
+    /// Put the standard circuit library in the library (folders
+    /// `Circuits/<n> <chapter>`: supply, protection, hoists, travel drives,
+    /// safety, operator stations, sensors); existing ones are never
+    /// overwritten.
+    InstallCircuits {
+        #[command(flatten)]
+        lib: LibraryArg,
+    },
 }
 
 fn library(arg: &LibraryArg) -> Result<MacroLibrary, Failure> {
@@ -162,6 +170,16 @@ pub(crate) fn run(cmd: Macros, out: &mut dyn Write) -> Result<i32, Failure> {
                 OnConflict::KeepBoth
             };
             let done = lib.import(&file, &folder, on).map_err(read_failure)?;
+            report(out, &done)?;
+            Ok(exit::OK)
+        }
+        Macros::InstallCircuits { lib } => {
+            let lib = library(&lib)?;
+            let done = lib.install_circuits().map_err(write_failure)?;
+            print(
+                out,
+                &format!("Standard circuits in folder {}:", novo_parts::CIRCUIT_ROOT),
+            )?;
             report(out, &done)?;
             Ok(exit::OK)
         }

@@ -25,6 +25,12 @@ const SIDE_MAX: f32 = 520.0;
 const BOTTOM_DEFAULT: f32 = 240.0;
 const BOTTOM_MIN: f32 = 140.0;
 /// The header of a docked pane and the buttons in it.
+/// The least a pane keeps when the divider between two panes is dragged: along
+/// a side slot its height, along the bottom slot its width.
+const PANE_MIN_HEIGHT: f32 = 120.0;
+const PANE_MIN_WIDTH: f32 = 200.0;
+/// How far the divider's grip reaches into a pane from the edge it shares.
+const DIVIDER: f32 = 6.0;
 const HEADER: f32 = 28.0;
 const BUTTON: f32 = 22.0;
 
@@ -98,6 +104,9 @@ pub(super) fn slot_of(ctx: &egui::Context, name: &str) -> Option<Slot> {
 
 /// Docks the panel in `slot` (at the end of it), or floats it with `None`.
 pub(super) fn set(ctx: &egui::Context, name: &str, slot: Option<Slot>) {
+    if slot_of(ctx, name) != slot {
+        ctx.data_mut(|d| d.insert_temp(changed_id(), SETTLE_FRAMES));
+    }
     let mut all = list(ctx);
     all.retain(|(n, _)| n != name);
     if let Some(slot) = slot {
@@ -107,9 +116,67 @@ pub(super) fn set(ctx: &egui::Context, name: &str, slot: Option<Slot>) {
     ctx.request_repaint();
 }
 
+fn changed_id() -> egui::Id {
+    egui::Id::new("dock_changed")
+}
+
+/// Frames between a dock change and the refit: the strip appears a pass or two
+/// after the panel asks for it, and the fit must see the canvas at its new size.
+const SETTLE_FRAMES: u8 = 4;
+
+/// True once, a few frames after a panel was docked, moved to another slot or
+/// floated: the canvas has a different size by then, so the app fits the view
+/// again (the sheet would otherwise sit partly under the strip).
+pub(super) fn take_changed(ctx: &egui::Context) -> bool {
+    let left = ctx.data(|d| d.get_temp::<u8>(changed_id())).unwrap_or(0);
+    if left == 0 {
+        return false;
+    }
+    ctx.data_mut(|d| d.insert_temp(changed_id(), left - 1));
+    ctx.request_repaint();
+    left == 1
+}
+
 /// Floats every panel (Reset panel layout).
 pub(super) fn reset(ctx: &egui::Context) {
+    if !list(ctx).is_empty() {
+        ctx.data_mut(|d| d.insert_temp(changed_id(), SETTLE_FRAMES));
+    }
     ctx.data_mut(|d| d.insert_persisted(list_id(), Vec::<(String, u8)>::new()));
+    set_navigator_right(ctx, false);
+}
+
+/// Which side the Pages column (and the Reports list) sits on: the left, as
+/// ever, or the right. Saved with the window layout.
+fn navigator_side_id() -> egui::Id {
+    egui::Id::new("navigator_right")
+}
+
+pub(super) fn navigator_right(ctx: &egui::Context) -> bool {
+    ctx.data_mut(|d| d.get_persisted(navigator_side_id()))
+        .unwrap_or(false)
+}
+
+pub(super) fn set_navigator_right(ctx: &egui::Context, right: bool) {
+    if navigator_right(ctx) != right {
+        ctx.data_mut(|d| d.insert_temp(changed_id(), SETTLE_FRAMES));
+    }
+    ctx.data_mut(|d| d.insert_persisted(navigator_side_id(), right));
+}
+
+/// The button in the header of the Pages column and the Reports list that
+/// sends it to the other side of the window.
+pub(super) fn navigator_side_button(ui: &mut egui::Ui) {
+    let ctx = ui.ctx().clone();
+    let right = navigator_right(&ctx);
+    let (icon, tip) = if right {
+        (Slot::Left.icon(), "Move this column to the left side")
+    } else {
+        (Slot::Right.icon(), "Move this column to the right side")
+    };
+    if novo_theme::widgets::icon_toggle(ui, icon, false, tip).clicked() {
+        set_navigator_right(&ctx, !right);
+    }
 }
 
 /// Where each slot was drawn this frame: the pane areas are laid out in it.
@@ -152,25 +219,95 @@ fn pane(ctx: &egui::Context, slot: Slot, name: &str) -> (usize, usize) {
     (at, order.len().max(1))
 }
 
-/// The share of a slot a pane gets: equal parts, stacked down a side slot and
-/// laid side by side along the bottom one.
-fn split(rect: egui::Rect, slot: Slot, at: usize, of: usize) -> egui::Rect {
-    let part = 1.0 / of as f32;
+fn weights_id(slot: Slot) -> egui::Id {
+    egui::Id::new(("dock_weights", slot.code()))
+}
+
+/// The share of its slot each of `n` panes has (they add up to one): equal
+/// until a divider is dragged, and equal again when the number of panes
+/// changes.
+fn weights(ctx: &egui::Context, slot: Slot, n: usize) -> Vec<f32> {
+    let stored: Option<Vec<f32>> = ctx.data_mut(|d| d.get_persisted(weights_id(slot)));
+    match stored {
+        Some(w) if w.len() == n && n > 0 => w,
+        _ => vec![1.0 / n.max(1) as f32; n.max(1)],
+    }
+}
+
+fn set_weights(ctx: &egui::Context, slot: Slot, w: Vec<f32>) {
+    ctx.data_mut(|d| d.insert_persisted(weights_id(slot), w));
+}
+
+/// The share of a slot a pane gets: its weight of the slot, stacked down a
+/// side slot and laid side by side along the bottom one.
+fn split(rect: egui::Rect, slot: Slot, w: &[f32], at: usize) -> egui::Rect {
+    let before: f32 = w[..at].iter().sum();
+    let part = w[at];
     match slot {
-        Slot::Bottom => {
-            let w = rect.width() * part;
-            egui::Rect::from_min_size(
-                egui::pos2(rect.left() + w * at as f32, rect.top()),
-                egui::vec2(w, rect.height()),
-            )
-        }
-        Slot::Left | Slot::Right => {
-            let h = rect.height() * part;
-            egui::Rect::from_min_size(
-                egui::pos2(rect.left(), rect.top() + h * at as f32),
-                egui::vec2(rect.width(), h),
-            )
-        }
+        Slot::Bottom => egui::Rect::from_min_size(
+            egui::pos2(rect.left() + rect.width() * before, rect.top()),
+            egui::vec2(rect.width() * part, rect.height()),
+        ),
+        Slot::Left | Slot::Right => egui::Rect::from_min_size(
+            egui::pos2(rect.left(), rect.top() + rect.height() * before),
+            egui::vec2(rect.width(), rect.height() * part),
+        ),
+    }
+}
+
+/// The divider between pane `at` and the next one: dragged, it moves the
+/// share of one pane to the other (each keeps a minimum); a double click gives
+/// both equal shares again. `sub` is the pane `at`, `slot_area` the whole slot.
+fn divider(
+    ui: &mut egui::Ui,
+    id: egui::Id,
+    slot: Slot,
+    slot_area: egui::Rect,
+    sub: egui::Rect,
+    at: usize,
+    w: &[f32],
+) {
+    let ctx = ui.ctx().clone();
+    let (grip, length, min, icon) = match slot {
+        Slot::Bottom => (
+            egui::Rect::from_x_y_ranges(sub.right() - DIVIDER..=sub.right(), sub.y_range()),
+            slot_area.width(),
+            PANE_MIN_WIDTH,
+            egui::CursorIcon::ResizeHorizontal,
+        ),
+        Slot::Left | Slot::Right => (
+            egui::Rect::from_x_y_ranges(sub.x_range(), sub.bottom() - DIVIDER..=sub.bottom()),
+            slot_area.height(),
+            PANE_MIN_HEIGHT,
+            egui::CursorIcon::ResizeVertical,
+        ),
+    };
+    let response = ui.interact(
+        grip,
+        id.with(("divider", at)),
+        egui::Sense::click_and_drag(),
+    );
+    if response.hovered() || response.dragged() {
+        ctx.set_cursor_icon(icon);
+        let pal = crate::theme::ui_palette();
+        ui.painter().rect_filled(grip, 0.0, pal.accent);
+    }
+    let mut w = w.to_vec();
+    if response.double_clicked() {
+        let pair = w[at] + w[at + 1];
+        w[at] = pair / 2.0;
+        w[at + 1] = pair / 2.0;
+        set_weights(&ctx, slot, w);
+    } else if response.dragged() {
+        let delta = match slot {
+            Slot::Bottom => response.drag_delta().x,
+            _ => response.drag_delta().y,
+        } / length.max(1.0);
+        let pair = w[at] + w[at + 1];
+        let floor = (min / length.max(1.0)).min(pair / 2.0);
+        w[at] = (w[at] + delta).clamp(floor, pair - floor);
+        w[at + 1] = pair - w[at];
+        set_weights(&ctx, slot, w);
     }
 }
 
@@ -237,7 +374,8 @@ pub(super) fn show_docked<R>(
         return None;
     };
     let (at, of) = pane(ctx, slot, name);
-    let sub = split(slot_area, slot, at, of);
+    let w = weights(ctx, slot, of);
+    let sub = split(slot_area, slot, &w, at);
     let pal = crate::theme::ui_palette();
     let mut ask = None;
     let mut closed = false;
@@ -320,13 +458,18 @@ pub(super) fn show_docked<R>(
                     sub.max,
                 )
                 .shrink(6.0);
-                ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
-                    egui::ScrollArea::both()
-                        .auto_shrink([false, false])
-                        .show(ui, add)
-                        .inner
-                })
-                .inner
+                let inner = ui
+                    .scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
+                        egui::ScrollArea::both()
+                            .auto_shrink([false, false])
+                            .show(ui, add)
+                            .inner
+                    })
+                    .inner;
+                if at + 1 < of {
+                    divider(ui, id, slot, slot_area, sub, at, &w);
+                }
+                inner
             })
             .inner
         });
@@ -682,6 +825,32 @@ mod tests {
     }
 
     #[test]
+    fn a_change_of_slot_asks_for_one_refit_a_few_frames_later() {
+        let mut h = Harness::new();
+        let ctx = h.ctx.clone();
+        assert!(!take_changed(&ctx), "nothing changed yet");
+        set(&ctx, "dock_test_a", Some(Slot::Left));
+        let mut asked = Vec::new();
+        for _ in 0..8 {
+            asked.push(take_changed(&ctx));
+        }
+        assert_eq!(asked.iter().filter(|a| **a).count(), 1, "{asked:?}");
+        assert!(
+            !asked[0],
+            "not on the same frame: the strip is not there yet"
+        );
+        // The same slot again changes nothing; floating does.
+        set(&ctx, "dock_test_a", Some(Slot::Left));
+        assert!((0..8).all(|_| !take_changed(&ctx)));
+        set(&ctx, "dock_test_a", None);
+        assert!((0..8).any(|_| take_changed(&ctx)));
+        // Reset panel layout with nothing docked asks for nothing.
+        reset(&ctx);
+        assert!((0..8).all(|_| !take_changed(&ctx)));
+        let _ = &mut h;
+    }
+
+    #[test]
     fn the_title_bar_buttons_dock_left_and_right() {
         let mut h = Harness::new();
         h.settle(ONE);
@@ -743,5 +912,77 @@ mod tests {
         panel::splitters_reset(&h.ctx);
         let back = h.settle(ONE).canvas.left();
         assert!((back - SIDE_DEFAULT).abs() < 2.0, "{back}");
+    }
+
+    /// Two panes stacked in the right slot and the point on the divider.
+    fn stacked(h: &mut Harness) -> (Out, egui::Pos2) {
+        h.settle(TWO);
+        set(&h.ctx, "dock_test_a", Some(Slot::Right));
+        set(&h.ctx, "dock_test_b", Some(Slot::Right));
+        let out = h.settle(TWO);
+        let top = out.panels[0].expect("first pane");
+        let at = egui::pos2(top.center().x, top.bottom() - DIVIDER / 2.0);
+        (out, at)
+    }
+
+    #[test]
+    fn dragging_the_divider_moves_height_from_one_pane_to_the_other() {
+        let mut h = Harness::new();
+        let (before, at) = stacked(&mut h);
+        h.drag(TWO, at, at + egui::vec2(0.0, 80.0));
+        let after = h.settle(TWO);
+        let (a0, b0) = (before.panels[0].unwrap(), before.panels[1].unwrap());
+        let (a1, b1) = (after.panels[0].unwrap(), after.panels[1].unwrap());
+        assert!(
+            (a1.height() - a0.height() - 80.0).abs() < 3.0,
+            "{a0:?} {a1:?}"
+        );
+        assert!(
+            (b0.height() - b1.height() - 80.0).abs() < 3.0,
+            "{b0:?} {b1:?}"
+        );
+    }
+
+    #[test]
+    fn a_pane_keeps_a_minimum_when_the_divider_is_dragged_far() {
+        let mut h = Harness::new();
+        let (_, at) = stacked(&mut h);
+        h.drag(TWO, at, at + egui::vec2(0.0, 2000.0));
+        let after = h.settle(TWO);
+        let b = after.panels[1].unwrap();
+        assert!(b.height() >= PANE_MIN_HEIGHT - 2.0, "{b:?}");
+        h.drag(
+            TWO,
+            egui::pos2(at.x, after.panels[0].unwrap().bottom() - 3.0),
+            egui::pos2(at.x, 0.0),
+        );
+        let after = h.settle(TWO);
+        assert!(after.panels[0].unwrap().height() >= PANE_MIN_HEIGHT - 2.0);
+    }
+
+    #[test]
+    fn a_double_click_on_the_divider_makes_the_panes_equal_again() {
+        let mut h = Harness::new();
+        let (before, at) = stacked(&mut h);
+        h.drag(TWO, at, at + egui::vec2(0.0, 80.0));
+        let moved = h.settle(TWO).panels[0].unwrap();
+        let at = egui::pos2(at.x, moved.bottom() - DIVIDER / 2.0);
+        h.click(TWO, at);
+        h.click(TWO, at);
+        let after = h.settle(TWO);
+        let (a0, a1) = (before.panels[0].unwrap(), after.panels[0].unwrap());
+        assert!((a0.height() - a1.height()).abs() < 3.0, "{a0:?} {a1:?}");
+    }
+
+    #[test]
+    fn the_shares_are_equal_again_when_the_number_of_panes_changes() {
+        let ctx = egui::Context::default();
+        set_weights(&ctx, Slot::Left, vec![0.7, 0.3]);
+        assert_eq!(weights(&ctx, Slot::Left, 2), vec![0.7, 0.3]);
+        let three = weights(&ctx, Slot::Left, 3);
+        assert!(
+            three.iter().all(|w| (w - 1.0 / 3.0).abs() < 1e-6),
+            "{three:?}"
+        );
     }
 }

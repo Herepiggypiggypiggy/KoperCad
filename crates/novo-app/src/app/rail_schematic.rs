@@ -115,6 +115,7 @@ pub(super) fn look(id: &str) -> Option<(Glyph, String, String)> {
     if let Some((glyph, label, sentence)) = local(id)
         .or_else(|| super::rail_3d::local(id))
         .or_else(|| super::rail_cabinet::local(id))
+        .or_else(|| super::rail_reports::local(id))
     {
         return Some((glyph, label.to_owned(), sentence.to_owned()));
     }

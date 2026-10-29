@@ -23,7 +23,8 @@ pub use letter::{BreakerCode, ContactorCode, LetterRules, letter_code, letter_co
 pub use library::{Library, LoadError};
 pub use pack::Pack;
 pub use pin_template::{
-    Deviation, Extra, PinSet, PinTemplate, check_pins, template_for, templates,
+    Deviation, Extra, PinSet, PinTemplate, Renames, check_pins, suggest_renames, template_for,
+    templates,
 };
 pub use svg::{SvgOptions, to_svg};
 pub use symbol::{

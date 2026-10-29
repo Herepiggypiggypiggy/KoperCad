@@ -239,6 +239,16 @@ impl NovoApp {
         self.wb.addons.set.is_enabled(id)
     }
 
+    /// What each running engine has used so far, for Details.
+    pub(super) fn engine_load(&self) -> EngineLoad {
+        self.wb
+            .addons
+            .engines
+            .iter()
+            .map(|(id, h)| (id.clone(), (h.calls(), h.peak_fuel(), h.fuel_budget())))
+            .collect()
+    }
+
     /// Opens the manager (File > Add-ons..., Ctrl+K).
     pub(super) fn open_addons(&mut self) {
         self.dismiss_toasts();
@@ -373,6 +383,7 @@ impl NovoApp {
             .map(|s| s.root().to_path_buf());
         let can_store = self.wb.addons.store.is_some();
         let stopped = self.wb.addons.stopped.clone();
+        let load = self.engine_load();
         super::panel::dialog(
             ctx,
             format!("{} Add-ons", icons::ADDON_ICON),
@@ -387,7 +398,10 @@ impl NovoApp {
                 &set,
                 root.as_deref(),
                 can_store,
-                &stopped,
+                &Engines {
+                    stopped: &stopped,
+                    load: &load,
+                },
                 &mut actions,
             );
         });
@@ -726,6 +740,15 @@ fn trust_look(trust: &Trust, accepted: bool) -> (String, Tone, &'static str) {
     }
 }
 
+/// Per running engine: calls so far, most steps one call used, steps one call may use.
+type EngineLoad = BTreeMap<String, (u64, u64, u64)>;
+
+/// What the running engines look like to Details: why one stopped, and what each has used.
+struct Engines<'a> {
+    stopped: &'a BTreeMap<String, String>,
+    load: &'a EngineLoad,
+}
+
 /// Id of the controller add-on (`addons/controllers`): the controller import wizard needs it.
 pub(super) const CONTROLLERS_ADDON: &str = "controllers";
 
@@ -739,7 +762,7 @@ fn manager_ui(
     set: &AddonSet,
     root: Option<&std::path::Path>,
     can_store: bool,
-    stopped: &BTreeMap<String, String>,
+    engines: &Engines,
     actions: &mut Vec<Act>,
 ) {
     let p = crate::theme::ui_palette();
@@ -800,7 +823,7 @@ fn manager_ui(
             egui::vec2(ui.available_width(), full.y),
             egui::Layout::top_down(egui::Align::Min),
             |ui| match m.selected.as_ref().and_then(|id| set.get(id)) {
-                Some(entry) => details_ui(ui, m, entry, root, stopped.get(&entry.id).map(String::as_str), actions),
+                Some(entry) => details_ui(ui, m, entry, root, engines.stopped.get(&entry.id).map(String::as_str), engines.load.get(&entry.id).copied(), actions),
                 None if set.entries.is_empty() => widgets::empty_state(
                     ui,
                     EmptySize::Panel,
@@ -868,6 +891,7 @@ fn details_ui(
     entry: &Entry,
     root: Option<&std::path::Path>,
     stopped: Option<&str>,
+    load: Option<(u64, u64, u64)>,
     actions: &mut Vec<Act>,
 ) {
     let p = crate::theme::ui_palette();
@@ -915,6 +939,16 @@ fn details_ui(
                     &format!("It stopped: {why}. Turn it off and on again to start it."),
                     |_| {},
                 );
+            }
+            // A running engine: how much of its step budget its busiest call used, and a warning
+            // when one slightly heavier call would stop it.
+            if let (Some((calls, peak, budget)), None) = (load, stopped) {
+                let (text, near) = novo_addons::budget_note(calls, peak, budget);
+                if near {
+                    widgets::banner(ui, Tone::Warning, &text, |_| {});
+                } else {
+                    ui.weak(text);
+                }
             }
             match &entry.status {
                 Status::Incompatible(why) => {

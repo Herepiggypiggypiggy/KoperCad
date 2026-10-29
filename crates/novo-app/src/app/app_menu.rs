@@ -132,36 +132,43 @@ pub(super) fn area_entries(menu: &str, expanded: &HashSet<&'static str>) -> Vec<
 }
 
 /// Every command of every area whose label, short label, id or keywords hold
-/// all the words of `filter`, in menu order.
+/// all the words of `filter`: those named by the words first, then those found
+/// by a keyword or id, each group in menu order.
 pub(super) fn search_entries(filter: &str) -> Vec<Entry> {
     let words: Vec<String> = filter
         .split_whitespace()
         .map(|w| w.to_lowercase())
         .collect();
-    let mut out = Vec::new();
+    // Commands whose own name holds every word come before those found only by
+    // a keyword or the id, so Enter on "pdf" runs "Export PDF".
+    let mut named = Vec::new();
+    let mut by_keyword = Vec::new();
     let mut seen = HashSet::new();
     for menu in MENUS {
         for (info, _) in menus::entries(menu) {
             if !seen.insert(info.id) {
                 continue;
             }
-            let hay = format!(
-                "{} {} {} {}",
+            let name = format!(
+                "{} {}",
                 info.label,
-                presentation::short_label(info.id).unwrap_or(""),
-                info.id,
-                info.keywords.join(" ")
+                presentation::short_label(info.id).unwrap_or("")
             )
             .to_lowercase();
-            if words.iter().all(|w| hay.contains(w.as_str())) {
-                out.push(Entry::Command {
-                    info,
-                    indent: false,
-                });
+            let hay = format!("{name} {} {}", info.id, info.keywords.join(" ")).to_lowercase();
+            let entry = Entry::Command {
+                info,
+                indent: false,
+            };
+            if words.iter().all(|w| name.contains(w.as_str())) {
+                named.push(entry);
+            } else if words.iter().all(|w| hay.contains(w.as_str())) {
+                by_keyword.push(entry);
             }
         }
     }
-    out
+    named.extend(by_keyword);
+    named
 }
 
 /// "View > 3D": where a command sits in the menus.
@@ -583,6 +590,28 @@ impl NovoApp {
                         pal.text_tertiary,
                     );
                     right = galley.left() - 10.0;
+                }
+                // The reason a grey row is grey, in words, when it fits.
+                if let Some(reason) = reason {
+                    let width = ui
+                        .painter()
+                        .layout_no_wrap(
+                            reason.to_owned(),
+                            egui::TextStyle::Small.resolve(ui.style()),
+                            pal.text_tertiary,
+                        )
+                        .size()
+                        .x;
+                    if galley.right() + 16.0 + width < right {
+                        ui.painter().text(
+                            egui::pos2(right, rect.center().y),
+                            egui::Align2::RIGHT_CENTER,
+                            reason,
+                            egui::TextStyle::Small.resolve(ui.style()),
+                            pal.text_tertiary,
+                        );
+                        right -= width + 10.0;
+                    }
                 }
                 if searching {
                     let path = path_of(info);

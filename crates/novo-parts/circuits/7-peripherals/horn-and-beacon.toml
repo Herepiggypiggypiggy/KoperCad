@@ -1,0 +1,52 @@
+# Warning beacon and horn while a motion runs, and a horn button.
+name = "Warning beacon and horn"
+chapter = "peripherals"
+description = "Warning beacon and horn that sound while a crane motion runs, with a horn push button that works at any time"
+tags = ["beacon", "horn", "warning", "signalling", "lamp", "crane", "travel", "buzzer"]
+notes = """K21 is a relay that follows the motion: connect its coil to the contactor or the drive output that says the crane is moving. \\
+Its contact switches the beacon and the horn together; S1 sounds the horn on its own. \\
+You connect: the control supply above F1, the K21 coil, and 0 V below the beacon and the horn."""
+
+open = ["f1s.1", "k21c.A1,A2", "h1s.X2", "h2s.2"]
+
+device = [
+  { id = "f1", tag = "-F1", description = "Signalling circuit breaker", mount = { kind = "din", size = [18, 90, 70], at = [15, 55], rail = "r1" } },
+  { id = "k21", tag = "-K21", description = "Motion warning relay", mount = { kind = "din", size = [15.5, 78, 66], at = [45, 61], rail = "r1" } },
+  { id = "h1", tag = "-H1", description = "Warning beacon", mount = { kind = "field", place = "on the crane, visible from the floor" } },
+  { id = "h2", tag = "-H2", description = "Warning horn", mount = { kind = "field", place = "on the crane" } },
+  { id = "s1", tag = "-S1", description = "Horn", mount = { kind = "field", place = "operator station" } },
+]
+
+symbol = [
+  { id = "f1s", key = "iec/protection/mcb_1p", at = [40, 40], device = "f1" },
+  { id = "k21c", key = "iec/coils/relay", at = [72, 104], device = "k21", main = true },
+  { id = "k21a", key = "iec/contacts/no", at = [96, 72], device = "k21", main = false },
+  { id = "h1s", key = "iec/signalling/beacon", at = [96, 112], device = "h1" },
+  { id = "s1s", key = "iec/operators/pushbutton_no", at = [120, 72], device = "s1" },
+  { id = "h2s", key = "iec/signalling/horn", at = [120, 112], device = "h2" },
+  { id = "k21b", key = "iec/contacts/no", at = [144, 72], device = "k21", main = false, numbers = ["23", "24"] },
+]
+
+junction = [
+  { id = "jh", at = [120, 96] },
+]
+
+wire = [
+  { from = "k21a.14", to = "h1s.X1" },
+  { from = "s1s.14", to = "jh" }, { from = "k21b.14", to = "jh", via = [[144, 96]] },
+  { from = "jh", to = "h2s.1" },
+]
+
+bus = [
+  { y = 64, taps = ["f1s.2", "k21a.13", "s1s.13", "k21b.13"] },
+]
+
+[plate]
+width = 120
+height = 200
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 110

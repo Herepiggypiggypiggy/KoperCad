@@ -289,6 +289,8 @@ pub(crate) struct Workbench {
     pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
     /// Parts read from an EPLAN parts export, waiting for Add.
     pub(super) eplan_parts: Option<super::eplan_parts::EplanPartsImport>,
+    /// A parts database being read on a worker thread.
+    pub(super) eplan_parts_job: Option<super::eplan_parts::EplanPartsJob>,
     pub(super) parts_table: Option<super::parts_table::PartsTableImport>,
     /// The EPLAN export options being chosen.
     pub(super) eplan_export: Option<super::eplan_export::EplanExport>,
@@ -441,6 +443,7 @@ impl Default for Workbench {
             auto_assign: None,
             eplan_import: None,
             eplan_parts: None,
+            eplan_parts_job: None,
             parts_table: None,
             eplan_export: None,
             eplan_export_last: None,
@@ -540,6 +543,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.hide_references_device",
     "sim.live",
     "sim.controller",
+    "sim.defects",
     "sim.why",
     "sim.plc_program",
     "sim.faults",
@@ -569,6 +573,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.standards_xlsx",
     "export.plate",
     "export.plate_dxf",
+    "export.drill_plan",
     "export.pdf_page",
     "export.report_pdf",
     "report.add_page",
@@ -1388,7 +1393,7 @@ impl NovoApp {
             "export.reports" => {
                 self.export_all_reports();
             }
-            "sim.live" | "sim.why" | "sim.plc_program" | "sim.controller" => {
+            "sim.live" | "sim.why" | "sim.plc_program" | "sim.controller" | "sim.defects" => {
                 // The live view and the PLC window draw only over the
                 // schematic: go there first so the command is not silent.
                 if self.workspace() != Workspace::Schematic && self.is_open() {
@@ -1402,6 +1407,8 @@ impl NovoApp {
                     self.toggle_live();
                 } else if id == "sim.controller" {
                     self.toggle_controller_panel();
+                } else if id == "sim.defects" {
+                    self.toggle_defects_panel();
                 } else if id == "sim.why" {
                     self.ask_why();
                 } else {
@@ -1493,6 +1500,9 @@ impl NovoApp {
             }
             "export.plate_dxf" => {
                 self.export_plate_dxf();
+            }
+            "export.drill_plan" => {
+                self.export_drill_plan_pdf();
             }
             "export.pdf_page" => {
                 self.export_pdf_page();

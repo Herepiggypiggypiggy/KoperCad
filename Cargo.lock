@@ -2113,6 +2113,7 @@ dependencies = [
  "dirs",
  "eframe",
  "env_logger",
+ "flate2",
  "glam",
  "image",
  "log",
@@ -2325,6 +2326,7 @@ dependencies = [
  "calamine",
  "dirs",
  "earcutr",
+ "flate2",
  "glam",
  "novo-cables",
  "novo-canvas",
@@ -2398,6 +2400,7 @@ dependencies = [
  "sha2 0.11.1",
  "tempfile",
  "thiserror 2.0.21",
+ "toml",
  "zip 9.1.3",
 ]
 

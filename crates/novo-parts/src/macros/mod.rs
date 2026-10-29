@@ -29,9 +29,15 @@ use thiserror::Error;
 
 use crate::search::Matcher;
 
+mod circuits;
 mod extras;
 mod params;
 mod starter;
+pub use circuits::{
+    CHAPTERS, CIRCUIT_ROOT, Chapter, CircuitError, CircuitSource, CircuitSpec, MountItem,
+    MountKind, MountPlate, MountRail, MountingView, build_circuit, circuit_library,
+    circuit_sources,
+};
 pub use extras::{
     MacroPart, MacroUpdate, SYMBOL_PAD, ThumbSymbol, Thumbnail, macro_updates, thumbnail,
 };
