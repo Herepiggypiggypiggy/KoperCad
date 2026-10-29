@@ -42,6 +42,20 @@ as; the wizard runs the engine's `validate` on it, shows the issues in the previ
 A bare direction word (RIGHT, FORWARD, UP) is read with the usual crane convention (trolley, bridge, hoist) unless the
 table names a different motion, and the preview says so.
 
+Receiver pages in the field are written in short forms, and the lists read them:
+
+- **Pair abbreviations** (`pair.<motion>` lines): `H/Z SNEL`, `V/A SNEL`, `L/R snel`, `U/D 2S`. One pin that gives a step
+  for both directions of a motion. It becomes two signals on the same terminal (`HOIST_UP_FAST` and `HOIST_DN_FAST`), the
+  row shows both, an Info note says so, and the shared terminal is not reported as a clash. A pair row without a step is
+  skipped with the usual "names both directions" warning.
+- **Compass words** on ten-motion receivers: east/west read as the auxiliary (second) hoist up/down, north/south as slew
+  right/left, with an Info note. Bare up/down/left/right next to them keep the crane convention.
+- **Mains-1 / Mains-2** are main contacts, like `MAIN`.
+- **Supply rows** (`48Vac`, `48V`): the voltage is read, the row is not reported. `0Vac`/`0Vdc` are the supply neutral:
+  they are the common only when the table has no `COM` row.
+- **Bulleted lists** (`- HIJSEN (A-Q1 A1/A2)`) have no terminal column: the bullet is not taken as a terminal. Rows then
+  have no pin and each signal says it cannot be bound until a terminal is added.
+
 ## Warnings the preview gives
 
 A row that names both directions (`Hoist up/down`), several motions, a motion without direction, a direction without a

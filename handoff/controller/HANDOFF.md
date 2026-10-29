@@ -14,3 +14,5 @@ People: C4 import thread cmsg_01TV2QyH4AYw9X2aTmgUsuhC8mQQyNbZNcy3uo9rm8bA8D (bu
 2026-10-28 C4 import wizard: `novo_controller::import` (table parser, NL/EN word lists in `data/`, `propose` with warnings, TOML in the C1 profile format, device pins, generic library) and the wizard window `crates/novo-app/src/app/controller_import.rs` (File > Import > Controller profile from I/O table). Design: `docs/design/controller-import.md`. Resume: `cargo test -p novo-controller -p novo-app controller_import`. A test parses every library profile with `Profile::parse` and `validate`.
 
 2026-10-29 C4: the importer also builds `Profile` values (`ProposedProfile::to_profile`); the wizard validates with the engine. Bare directions use the crane convention. Word lists untouched by real pages yet.
+
+2026-10-29 C4 word lists tuned on real page patterns (see `docs/design/controller-import.md`, "Receiver pages in the field"). Still unseen: a wired Demag DST pendant page and the DRC receiver terminal table itself (only its output list was found). A user can add words in %APPDATA%\KoperCAD\controllers\words.txt, including `pair.<motion>:` lines.

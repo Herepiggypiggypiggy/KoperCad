@@ -1,7 +1,7 @@
 # Word list for the controller import wizard, English.
 # One line per category: `category: word, word, phrase with spaces, stem*`.
 # A trailing * matches any word that starts with the stem. Lines starting with # are comments.
-# Categories: motion.<name>, dir.<up|down|forward|back|left|right>, combo.<motion>.<dir>,
+# Categories: pair.<motion> (one abbreviation for both directions: `l/r`), motion.<name>, dir.<up|down|forward|back|left|right>, combo.<motion>.<dir>,
 #             speed.<slow|fast>, role.<estop|main|stop|common|horn|light|selector>,
 #             kind.<radio|pendant|joystick|plc-panel>
 motion.hoist: hoist, hoisting, lift
@@ -18,12 +18,21 @@ dir.left: left
 dir.right: right
 combo.hoist.up: hoist up, lift up
 combo.hoist.down: hoist down, lift down
+combo.aux.up: east
+combo.aux.down: west
+combo.slew.right: north
+combo.slew.left: south
+pair.hoist: u/d, d/u
+pair.bridge: f/b, b/f
+pair.trolley: l/r, r/l
+pair.aux: e/w, w/e
+pair.slew: n/s, s/n
 speed.slow: slow, low, creep, fine, crawl, 1st speed, first speed
 speed.fast: fast, high, rapid, coarse, 2nd speed, second speed
 role.estop: emergency stop, e-stop, estop, emergency*, e stop, mushroom
-role.main: main, start, power on, contactor on, master
+role.main: main, mains, start, power on, contactor on, master
 role.stop: stop, power off
-role.common: com, common, supply, c, 0v
+role.common: com, common, supply, c, 0v, 0vac, 0vdc, 0 v
 role.horn: horn, hooter, siren, warning
 role.light: light, lamp, work light
 role.selector: selector, select, selection, changeover, key switch
