@@ -475,3 +475,105 @@ fn slugs_are_never_empty_or_reserved_windows_names() {
     assert_eq!(slug("con.txt"), "con-txt");
     assert_eq!(slug("Radio, 3 motions"), "radio-3-motions");
 }
+
+// Patterns seen on real receiver pages, reproduced with invented labels and terminals.
+
+const SHARED_FAST_PAGE: &str = "1;NOODSTOP\n2;VOORUIT\n3;ACHTERUIT\n4;V/A SNEL\n5;HIJSEN\n6;ZAKKEN\n\
+    7;H/Z SNEL\n8;RECHTS\n9;LINKS\n10;R/L SNEL\n11;STOP\n12;MAIN-1\n13;MAIN-2\n14;48Vac\n15;COM\n16;0Vac";
+
+#[test]
+fn one_fast_pin_for_both_directions_feeds_both_signals() {
+    let p = run(SHARED_FAST_PAGE);
+    assert_eq!(group_step(&p, "HOIST_UP_FAST"), ("up", 2));
+    assert_eq!(group_step(&p, "HOIST_DN_FAST"), ("down", 2));
+    assert_eq!(signal(&p, "HOIST_UP_FAST").pin, "7");
+    assert_eq!(signal(&p, "HOIST_DN_FAST").pin, "7");
+    assert_eq!(signal(&p, "TROLLEY_LEFT_FAST").pin, "10");
+    assert_eq!(signal(&p, "TROLLEY_RIGHT_FAST").pin, "10");
+    assert_eq!(signal(&p, "BRIDGE_FWD_FAST").pin, "4");
+    let hoist = p.profile.controls.iter().find(|c| c.id == "hoist").unwrap();
+    assert_eq!(hoist.kind, "rocker2");
+    assert_eq!(hoist.positions, ["off", "up1", "up2", "down1", "down2"]);
+    // The row shows both signals, and the shared pin is not reported as a clash.
+    assert!(
+        matches!(&p.rows[6].outcome, Outcome::Signal(n) if n == "HOIST_UP_FAST + HOIST_DN_FAST")
+    );
+    assert!(
+        p.warnings
+            .iter()
+            .all(|w| !w.message.contains("is used for"))
+    );
+    assert!(p.warnings.iter().all(|w| w.severity != Severity::Warning));
+}
+
+#[test]
+fn supply_rows_are_read_not_reported() {
+    let p = run(SHARED_FAST_PAGE);
+    // 48Vac is the supply, COM the common; 0Vac is the neutral of the supply, not a second common.
+    let supply = p.profile.supply.expect("48Vac gives the supply");
+    assert!(supply.ac);
+    assert_eq!(supply.volts, 48.0);
+    assert_eq!(p.profile.common.as_deref(), Some("15"));
+    assert!(matches!(&p.rows[13].outcome, Outcome::Skipped(r) if r.contains("supply")));
+    assert!(matches!(&p.rows[15].outcome, Outcome::Skipped(r) if r.contains("supply")));
+    assert!(
+        p.warnings
+            .iter()
+            .all(|w| !w.message.contains("not recognised"))
+    );
+    // Without COM the 0 V row is the common, as before.
+    let q = run("1;Hoist up\n2;Hoist down\n3;0V");
+    assert_eq!(q.profile.common.as_deref(), Some("3"));
+}
+
+#[test]
+fn mains_contacts_are_main_contacts() {
+    let p = run("1;Mains-1\n2;Mains-2\n3;Hijsen\n4;Zakken\n5;Stop");
+    assert!(p.profile.controls.iter().any(|c| c.id == "start"));
+    assert_eq!(signal(&p, "MAIN").pin, "1");
+    assert_eq!(signal(&p, "MAIN_2").pin, "2");
+}
+
+#[test]
+fn compass_words_and_bare_directions_in_a_ten_motion_page() {
+    let p = run(
+        "1;Up 1S\n2;Up 2S\n3;Down 1S\n4;Down 2S\n5;East 1S\n6;East 2S\n7;West 1S\n8;West 2S\n\
+         9;North 1S\n10;North 2S\n11;South 1S\n12;South 2S\n13;STOP\n14;MAIN-1\n15;COM",
+    );
+    assert_eq!(group_step(&p, "HOIST_UP_FAST"), ("up", 2));
+    assert_eq!(group_step(&p, "AUX_DN_SLOW"), ("down", 1));
+    assert_eq!(group_step(&p, "SLEW_RIGHT_FAST"), ("right", 2));
+    assert!(
+        p.warnings
+            .iter()
+            .any(|w| w.message.contains("Compass words"))
+    );
+    assert!(p.warnings.iter().all(|w| w.severity != Severity::Warning));
+}
+
+#[test]
+fn a_bulleted_list_of_outputs_has_no_terminal_column() {
+    let p = run(
+        "- NOODSTOP (K9 A1/A2)\n- VOORUIT (K1 A1/A2)\n- ACHTERUIT (K2 A1/A2)\n\
+         - V/A SNEL (K3 A1/A2)\n- TOETER (X7 3)",
+    );
+    assert_eq!(p.rows[0].row.terminal, "");
+    assert!(matches!(&p.rows[0].outcome, Outcome::Signal(n) if n == "ESTOP_OK"));
+    assert!(matches!(&p.rows[4].outcome, Outcome::Signal(n) if n == "HORN"));
+    assert_eq!(group_step(&p, "BRIDGE_BACK_FAST"), ("back", 2));
+    // A pin named like a bullet in a real column is kept.
+    let q = run("-X1;Hoist up\n-X2;Hoist down");
+    assert_eq!(q.rows[0].row.terminal, "-X1");
+}
+
+#[test]
+fn the_shared_pin_proposal_passes_the_engine_check() {
+    use novo_controller::{Severity as Sev, validate};
+    let p = run(SHARED_FAST_PAGE);
+    let profile = p.profile.to_profile().expect("builds");
+    let issues = validate(&profile);
+    assert!(
+        issues.iter().all(|i| i.severity != Sev::Error),
+        "{issues:?}"
+    );
+}
