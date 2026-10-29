@@ -18,5 +18,5 @@ expect "Mounting view"
 shot loadlimit-picked
 click_text Place Button
 wait 30
-expect_scene "-K5"
+expect_scene "-F1"
 shot loadlimit-placed
