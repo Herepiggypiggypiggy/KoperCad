@@ -1,0 +1,39 @@
+@title Crane template at 1920: New from template, fill a field, the cover page fills in
+@area Schematic
+@sizes 1920x1080
+wait 20
+click_text File
+wait 6
+move 260 466
+wait 8
+shot menu-new-from-template
+click 600 466
+wait 20
+shot template-opened
+expect "New crane project"
+key ctrl+k
+wait 6
+text project settings
+wait 8
+key Return
+wait 12
+shot project-settings
+tree Customer
+click 983 461
+text Acme Cranes
+key Tab
+wait 8
+shot customer-typed
+click 1162 813
+wait 10
+click 150 123
+text Front
+wait 10
+shot pages-filtered
+click 150 175
+wait 20
+shot cover-title
+click 150 233
+wait 20
+shot cover-structure
+check_layout
