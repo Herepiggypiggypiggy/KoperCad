@@ -3,7 +3,7 @@
 //! or an assigned part whose terminals are not named the way the class
 //! usually names them. Written from generic IEC conventions only.
 
-use novo_core::{DeviceId, SymbolInstance, SymbolRole};
+use novo_core::{AnyId, Command, DeviceId, Project, Record, SymbolInstance, SymbolRole};
 use novo_symbols::{Library, Pack};
 
 use crate::{Context, Problem, ProblemKind};
@@ -85,5 +85,150 @@ pub(crate) fn pin_names(cx: &Context<'_>, out: &mut Vec<Problem>) {
                 format!("{}: part terminals: {}", dev.tag, d.message()),
             ));
         }
+    }
+}
+
+/// The one function type all device symbols of `symbols` share (as a
+/// template class), or `None` when they differ or one is unknown.
+fn shared_function(symbols: &[&SymbolInstance]) -> Option<&'static str> {
+    let mut found: Option<(&'static str, &'static str)> = None;
+    for symbol in symbols
+        .iter()
+        .filter(|s| matches!(s.role, SymbolRole::Device { .. }))
+    {
+        let function = function_of(symbol)?;
+        let class = novo_symbols::template_for(function)?.class;
+        match found {
+            Some((_, c)) if c != class => return None,
+            Some(_) => {}
+            None => found = Some((function, class)),
+        }
+    }
+    found.map(|(f, _)| f)
+}
+
+/// A repair for a [`PinNames`](ProblemKind::PinNames) problem.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PinFix {
+    /// What the repair does, in a few plain words.
+    pub label: String,
+    /// One undo step.
+    pub command: Command,
+    /// A line to show beside the entry (a tooltip), when the user should know
+    /// more before choosing: a part's terminals are renamed for every device
+    /// that uses the part.
+    pub note: Option<String>,
+}
+
+/// The repair for a pin-names problem, when the right names are clear:
+/// renames the pins of the marked symbols to the usual names of their class,
+/// or, when the pins are fine and the assigned part's terminals are not,
+/// renames the part's terminals to the same names so they map onto the
+/// symbol pins. `None` for other problems and for names that cannot be told
+/// with certainty (see `novo_symbols::suggest_renames`).
+///
+/// A part is shared by every device that uses it, so renaming its terminals
+/// renames them for all of them.
+pub fn pin_fix(project: &Project, problem: &Problem) -> Option<PinFix> {
+    if problem.kind != ProblemKind::PinNames {
+        return None;
+    }
+    let symbols: Vec<&SymbolInstance> = problem
+        .at
+        .iter()
+        .filter_map(|id| match id {
+            AnyId::Symbol(s) => project.symbol(*s),
+            _ => None,
+        })
+        .collect();
+    let mut commands = Vec::new();
+    let mut renamed = 0;
+    for &symbol in &symbols {
+        let Some(function) = function_of(symbol) else {
+            continue;
+        };
+        let names: Vec<&str> = symbol.pins.iter().map(|p| p.name.as_str()).collect();
+        let Some(fix) = novo_symbols::suggest_renames(function, &names) else {
+            continue;
+        };
+        let mut next = symbol.clone();
+        for pin in &mut next.pins {
+            if let Some((_, new)) = fix.renames.iter().find(|(old, _)| *old == pin.name) {
+                pin.name = new.clone();
+            }
+        }
+        renamed += fix.renames.len();
+        commands.push(Command::Replace {
+            record: Record::Symbol(next),
+        });
+    }
+    if !commands.is_empty() {
+        return Some(PinFix {
+            label: format!("Rename {} to the usual names", count(renamed, "pin")),
+            note: None,
+            command: Command::Batch {
+                label: "Rename pins to the usual names".into(),
+                commands,
+            },
+        });
+    }
+    // The pins follow the template: look at the terminals of the part.
+    let function = shared_function(&symbols)?;
+    let device = symbols.iter().find_map(|s| match s.role {
+        SymbolRole::Device { device, .. } => project.device(device),
+        _ => None,
+    })?;
+    let [part_id] = device.parts.as_slice() else {
+        return None;
+    };
+    let part = project.part(*part_id)?;
+    let names = novo_parts::placed_terminals(&part.properties);
+    let names: Vec<&str> = names.iter().map(String::as_str).collect();
+    let fix = novo_symbols::suggest_renames(function, &names)?;
+    let mut next = part.clone();
+    for (old, new) in &fix.renames {
+        // Every property of the terminal moves with it: the position, and
+        // whatever else is stored under `pin.<name>.` (wire range, torque).
+        // A suffix with a dot in it belongs to a terminal whose own name has
+        // a dot (`1.1`), not to this one.
+        let from = format!("pin.{old}.");
+        let moved: Vec<String> = next
+            .properties
+            .keys()
+            .filter(|k| {
+                k.strip_prefix(&from)
+                    .is_some_and(|rest| !rest.contains('.'))
+            })
+            .cloned()
+            .collect();
+        for key in moved {
+            if let Some(value) = next.properties.remove(&key) {
+                let rest = &key[from.len()..];
+                next.properties.insert(format!("pin.{new}.{rest}"), value);
+            }
+        }
+    }
+    Some(PinFix {
+        label: format!(
+            "Rename {} to the usual names",
+            count(fix.renames.len(), "part terminal")
+        ),
+        command: Command::Replace {
+            record: Record::Part(next),
+        },
+        note: Some(
+            "The part is shared by every device that uses it, so its terminals are renamed \
+             for all of them."
+                .into(),
+        ),
+    })
+}
+
+/// `1 pin`, `3 pins`.
+fn count(n: usize, noun: &str) -> String {
+    if n == 1 {
+        format!("1 {noun}")
+    } else {
+        format!("{n} {noun}s")
     }
 }

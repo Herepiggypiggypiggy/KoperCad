@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Invented for the QA suite; not a real maker's data. -->
+<partsmanagement length-unit="mm" weight-unit="kg">
+  <part partnr="ACM.TB-2.5" ordernr="TB-2.5" manufacturer="Acme Terminals" typenr="TB 2.5"
+        descr1="en_US@Feed-through terminal 2.5 mm2;nl_NL@Doorgangsklem 2,5 mm2;"
+        width="5,2" height="48" depth="36.5" weight="0,012" ean="4012345678901"
+        currentiec="24,0 A" voltageiec="800 V" colour="grey"/>
+  <connectionpoints partnr="ACM.TB-2.5">
+    <connectionpoint name="1" x="0" y="-24" z="18,5" crosssectionmin="0,2 mm2" crosssectionmax="4 mm2"
+        maxwirecount="1" strippinglength="10" torquemin="0,5 Nm" torquemax="0,6 Nm"
+        typeofterminal="Screw connection" screwdriver="PZ1"/>
+    <connectionpoint name="2" x="0" y="24" z="18,5" crosssectionmin="0,2 mm2" crosssectionmax="4 mm2"
+        maxwirecount="1" typeofterminal="Push-in"/>
+  </connectionpoints>
+  <construction partnr="ACM.TB-2.5">
+    <drill x="0" y="0" diameter="4,2" type="drill" repeatcount="3" repeatx="35" repeaty="0"/>
+  </construction>
+</partsmanagement>

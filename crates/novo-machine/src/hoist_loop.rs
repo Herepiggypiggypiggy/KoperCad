@@ -55,6 +55,8 @@ pub struct HoistBinding {
     pub motor: String,
     /// Device tag of the fine-lift motor symbol, for a hoist with a second motor.
     pub fine_motor: Option<String>,
+    /// Device tag of the overload relay contact: normally closed, opens when the relay trips.
+    pub overload_contact: Option<String>,
     /// Device tag whose energised state feeds the brake coil (used with
     /// `BrakeFeed::Separate`; ignored with `BrakeFeed::MotorTerminals`).
     pub brake_feed: Option<String>,
@@ -179,6 +181,11 @@ impl HoistLoop {
                 }),
                 _ => {}
             }
+            if let Some(tag) = &h.binding.overload_contact
+                && !circuit.knows_device(tag)
+            {
+                out.push(missing(&h.id, "overload relay contact", tag));
+            }
             for limit in &h.binding.limits {
                 if !circuit.knows_device(&limit.binding.device_tag) {
                     out.push(missing(&h.id, "limit switch", &limit.binding.device_tag));
@@ -194,6 +201,9 @@ impl HoistLoop {
         for h in &self.hoists {
             for limit in &h.binding.limits {
                 circuit.set_contact(&limit.binding.device_tag, limit.closed_at(h.height_m));
+            }
+            if let Some(tag) = &h.binding.overload_contact {
+                circuit.set_contact(tag, !h.unit.overload_tripped());
             }
         }
         circuit.settle(dt);

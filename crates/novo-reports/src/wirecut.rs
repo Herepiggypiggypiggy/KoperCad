@@ -19,7 +19,7 @@ use crate::table::{Cell, Column, ReportOutput, Section};
 use crate::wires::items;
 
 /// Part property that gives the length a clamp or connector needs stripped.
-pub const STRIP_LENGTH_KEY: &str = "strip_length_mm";
+pub const STRIP_LENGTH_KEY: &str = "strip_mm";
 /// Wire property that states the end processing in words (`Ring lug M5`) and
 /// replaces the proposed one at both ends.
 pub const END_PROCESSING_KEY: &str = "end_processing";

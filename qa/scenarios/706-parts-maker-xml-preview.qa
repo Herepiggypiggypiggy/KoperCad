@@ -1,0 +1,20 @@
+@title Maker parts XML shows what it read and what it assumed
+@area Parts
+# Invented fixture: part, two connection points and one repeated hole in one file.
+fresh
+answer_dialog qa/fixtures/parts-maker-xml/acme-terminal.xml
+key ctrl+k
+wait 4
+text Import parts from a CAD parts export
+wait 6
+key Enter
+wait 20
+expect "Read from 1 file(s): 2 connection points on 1 parts"
+expect "3 holes on 1 parts"
+expect "Assumed: Connection point and hole positions are kept in the maker's own frame"
+expect "Kept as written, not understood"
+expect "part/colour"
+expect_enabled "Add to catalog"
+shot maker-xml-preview
+check_layout
+check_blank maker-xml-preview

@@ -968,6 +968,11 @@ pub const TABLE: &[Presentation] = &[
     ),
     row("export.plate", d(&drawn::PLATE), "Export plate drawing"),
     row(
+        "export.drill_plan",
+        d(&drawn::PLATE),
+        "Export hand drilling plan",
+    ),
+    row(
         "export.plate_dxf",
         d(&drawn::PLATE),
         "Export plate drawing as DXF",

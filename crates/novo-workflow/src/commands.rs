@@ -438,6 +438,11 @@ pub const COMMANDS: &[CommandInfo] = &[
                 "csv",
                 "catalog",
                 "migrate",
+                "maker xml",
+                "parts xml",
+                "data portal",
+                "connection points",
+                "drilling",
                 "other tool",
             ],
             Needs::Nothing,
@@ -3221,6 +3226,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export plate"],
+    ),
+    verb(
+        cmd(
+            "export.drill_plan",
+            "Export hand drilling plan",
+            "Export",
+            &[
+                "drill plan",
+                "drilling",
+                "mounting plate",
+                "bench",
+                "hand",
+                "holes",
+            ],
+            Needs::Project,
+        ),
+        &["export drill plan"],
     ),
     verb(
         cmd(
