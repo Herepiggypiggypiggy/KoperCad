@@ -289,6 +289,8 @@ pub(crate) struct Workbench {
     pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
     /// Parts read from an EPLAN parts export, waiting for Add.
     pub(super) eplan_parts: Option<super::eplan_parts::EplanPartsImport>,
+    /// A parts database being read on a worker thread.
+    pub(super) eplan_parts_job: Option<super::eplan_parts::EplanPartsJob>,
     pub(super) parts_table: Option<super::parts_table::PartsTableImport>,
     /// The EPLAN export options being chosen.
     pub(super) eplan_export: Option<super::eplan_export::EplanExport>,
@@ -441,6 +443,7 @@ impl Default for Workbench {
             auto_assign: None,
             eplan_import: None,
             eplan_parts: None,
+            eplan_parts_job: None,
             parts_table: None,
             eplan_export: None,
             eplan_export_last: None,

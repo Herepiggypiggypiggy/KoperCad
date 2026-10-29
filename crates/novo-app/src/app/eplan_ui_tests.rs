@@ -216,3 +216,95 @@ fn a_folder_without_a_project_is_refused_in_words() {
     assert!(!d.app.import_crane_from(dir.path()));
     assert!(d.app.wb.eplan_import.is_none());
 }
+
+/// An invented article file: junk, then zlib records with tagged fields.
+fn article_file(articles: &[&[(u8, &str)]]) -> Vec<u8> {
+    use flate2::{Compression, write::ZlibEncoder};
+    use std::io::Write;
+    let mut out = b"INVENTED\0".to_vec();
+    for fields in articles {
+        let mut raw = vec![1u8, 0];
+        for (tag, text) in *fields {
+            raw.push(*tag);
+            raw.extend_from_slice(b"U\0\0");
+            raw.extend_from_slice(text.as_bytes());
+            raw.push(0);
+        }
+        let mut z = ZlibEncoder::new(Vec::new(), Compression::fast());
+        z.write_all(&raw).unwrap();
+        out.extend_from_slice(&[0xaa, 0x00]);
+        out.extend_from_slice(&z.finish().unwrap());
+    }
+    out
+}
+
+/// Runs frames until the worker thread has delivered the preview.
+fn wait_for_preview(d: &mut Drive) {
+    for _ in 0..200 {
+        d.frame();
+        if d.app.wb.eplan_parts_job.is_none() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    panic!("the worker thread did not finish");
+}
+
+#[test]
+fn a_parts_database_is_read_on_a_worker_merged_by_maker_and_the_names_are_kept() {
+    let (dir, mut d) = open();
+    let file = dir.path().join("Articles.eod");
+    std::fs::write(
+        &file,
+        article_file(&[
+            &[
+                (0xf1, "SE.AA100"),
+                (0xf4, "nl_NL@Relais;en_US@Relay"),
+                (0xfc, "80"),
+                (0xfd, "20"),
+                (0xfe, "70"),
+            ],
+            &[(0xf1, "SCHNEI.AA200"), (0xf4, "en_US@Contactor")],
+            &[(0xf1, "XQZ.W1"), (0xf4, "en_US@Widget")],
+        ]),
+    )
+    .unwrap();
+    let cat = dir.path().join("catalog.json");
+    d.app.start_eplan_parts_job(&file, Some(cat.clone()));
+    // The preview is not there until the worker is done; nothing is saved.
+    assert!(d.app.wb.eplan_parts_job.is_some());
+    wait_for_preview(&mut d);
+    let preview = d.app.wb.eplan_parts.as_mut().expect("a preview opens");
+    let makers: Vec<_> = preview
+        .parts()
+        .iter()
+        .map(|p| p.manufacturer.clone())
+        .collect();
+    assert_eq!(makers, ["Schneider Electric", "Schneider Electric", "XQZ"]);
+    assert!(!cat.exists());
+    // The person names the unknown code; the preview follows.
+    preview.name_maker("XQZ", "Example Works");
+    let existing = Catalog::default();
+    preview.reread_for_test(&existing);
+    assert_eq!(preview.parts()[2].manufacturer, "Example Works");
+    assert!(d.app.confirm_eplan_parts());
+    assert_eq!(Catalog::load(&cat).unwrap().parts().len(), 3);
+    // The name is kept for the next import.
+    d.app.start_eplan_parts_job(&file, Some(cat));
+    wait_for_preview(&mut d);
+    let again = d.app.wb.eplan_parts.as_ref().unwrap();
+    assert_eq!(again.parts()[2].manufacturer, "Example Works");
+    assert_eq!(again.counts(), (0, 0, 3));
+}
+
+#[test]
+fn a_file_that_is_no_parts_database_reports_it_and_opens_nothing() {
+    let (dir, mut d) = open();
+    let file = dir.path().join("broken.adb");
+    std::fs::write(&file, b"nothing compressed in here").unwrap();
+    d.app
+        .start_eplan_parts_job(&file, Some(dir.path().join("c.json")));
+    wait_for_preview(&mut d);
+    assert!(d.app.wb.eplan_parts.is_none());
+    assert!(d.app.messages().last().unwrap().text.contains("No parts"));
+}
