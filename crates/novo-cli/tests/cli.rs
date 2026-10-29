@@ -487,7 +487,8 @@ fn export_reports_as_excel_and_csv() {
             "Cable schedule",
             "Plug connection list",
             "Labels",
-            "Single-line diagram"
+            "Single-line diagram",
+            "Front matter"
         ]
     );
 

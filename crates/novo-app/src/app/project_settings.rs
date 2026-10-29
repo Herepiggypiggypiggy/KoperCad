@@ -94,6 +94,51 @@ impl NovoApp {
         }
     }
 
+    /// The text of each Project information field, in the order of
+    /// `novo_reports::front_keys::FIELDS`.
+    pub(super) fn project_info_fields(&self) -> Vec<String> {
+        let props = self
+            .backend
+            .document()
+            .map(|d| &d.project().info().properties);
+        novo_reports::front_keys::FIELDS
+            .iter()
+            .map(|(key, _)| match props.and_then(|p| p.get(*key)) {
+                Some(Value::Text(t)) => t.clone(),
+                Some(v) => v.to_string(),
+                None => String::new(),
+            })
+            .collect()
+    }
+
+    /// Saves the typed Project information fields as one undo step; a field
+    /// left empty is removed, and nothing is stored when nothing changed.
+    pub(super) fn set_project_info(&mut self, fields: &[String]) {
+        if fields == self.project_info_fields().as_slice() {
+            return;
+        }
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let result = doc.transact("Project information", |tx| {
+            tx.set_info(|info| {
+                for ((key, _), text) in novo_reports::front_keys::FIELDS.iter().zip(fields) {
+                    let text = text.trim();
+                    if text.is_empty() {
+                        info.properties.remove(*key);
+                    } else {
+                        info.properties
+                            .insert((*key).to_owned(), Value::Text(text.to_owned()));
+                    }
+                }
+            })
+        });
+        match result {
+            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Err(e) => self.message(Level::Error, format!("Project information: {e}")),
+        }
+    }
+
     pub(super) fn project_settings_dialog(&mut self, ctx: &egui::Context) {
         if !self.wb.project_settings {
             return;
@@ -116,6 +161,12 @@ impl NovoApp {
         let mut tag_rule = self.project_property_is("tag.rule", "page-column");
         let mut structure_complete = self.project_property_is("structure.list", "complete");
         let mut neutral_rule = self.project_property_is("neutral.rule", "supply-and-external");
+        let mut info = self
+            .wb
+            .project_info
+            .take()
+            .unwrap_or_else(|| self.project_info_fields());
+        let mut info_changed = false;
         let mut group_prefix = self.settings.group_prefix.clone();
         let mut cabinet_prefix = self.settings.cabinet_prefix.clone();
         // The preview uses what is typed now, over this project's names.
@@ -167,6 +218,26 @@ impl NovoApp {
                 if let Some(plan) = &plan {
                     apply = switch_section(ui, plan, &mut marks);
                 }
+                super::dialog_ui::section(ui, "Project information", false);
+                super::dialog_ui::hint(
+                    ui,
+                    "Printed on the cover pages (Front matter). Leave a field empty and the page shows a dash.",
+                );
+                ui.add_space(4.0);
+                egui::Grid::new("project_info_fields")
+                    .num_columns(2)
+                    .spacing([12.0, 6.0])
+                    .show(ui, |ui| {
+                        for ((_, label), text) in
+                            novo_reports::front_keys::FIELDS.iter().zip(info.iter_mut())
+                        {
+                            ui.label(egui::RichText::new(*label).weak());
+                            let response =
+                                ui.add(egui::TextEdit::singleline(text).desired_width(220.0));
+                            info_changed |= response.lost_focus();
+                            ui.end_row();
+                        }
+                    });
                 super::dialog_ui::section(ui, "Names for new groups and cabinets", false);
                 super::dialog_ui::hint(
                     ui,
@@ -226,6 +297,11 @@ or its Supply or External property is set.",
         for (id, rect, label, clicked) in marks {
             self.anchor_clicked(id, rect, label, clicked);
         }
+        let closing = modal.inner || modal.should_close();
+        if info_changed || closing {
+            self.set_project_info(&info);
+        }
+        self.wb.project_info = (!closing).then_some(info);
         self.set_standard(pack);
         self.set_project_property("tag.rule", "page-column", tag_rule);
         self.set_project_property("structure.list", "complete", structure_complete);
