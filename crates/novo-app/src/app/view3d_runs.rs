@@ -934,6 +934,7 @@ pub(super) fn panel(
         .top(top)
         .height(room.min(760.0))
         .above_card()
+        .dockable()
         .show(ctx, |ui| {
             // The list on top so another run is always one click away; the card of
             // the picked run below it. The panel's own scroll bar takes over when

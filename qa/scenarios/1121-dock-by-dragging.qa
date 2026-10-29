@@ -1,0 +1,21 @@
+@title Drag the Inspector's title bar to the left edge to dock it, drag the slot wider and double click its edge to reset (1366x768)
+@area Windows
+@sizes 1366x768
+click_text "Open example"
+wait 30
+click 353 228
+wait 40
+drag 1160 112 4 400
+wait 30
+expect "Siemens"
+shot docked-left
+check_layout
+# The slot's edge is a splitter: wider, then a double click gives the usual width back.
+drag 320 400 480 400
+wait 20
+shot slot-wider
+check_layout
+double_click 478 400
+wait 20
+shot slot-reset
+check_layout
