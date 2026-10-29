@@ -27,3 +27,4 @@ Resume: `cargo test -p novo-drive -p novo-machine`, then `cargo test -p novo-app
 Update: jump at reversal is built (blank `dh_jump_hz` keeps the full brake cycle). Next item is slack rope.
 
 Update: slack rope and pick-up from the floor is built (blank `dh_floor_m` = rope always taut). Next item is heat over a duty cycle.
+Update: heat over a duty cycle is built (Simulate > Drive run > Duty cycle). The hoist loop misbehaves at dt 10 ms (see PROGRESS). Next item is the slow-down before the final upper limit.

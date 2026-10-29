@@ -5,12 +5,60 @@
       "manufacturer": "QA",
       "order_number": "QA-REL-1",
       "description": "Relay 24 V DC, coil terminals a1 and A2 (QA fixture)",
-      "letter_codes": ["K"],
-      "keywords": ["relay"],
+      "letter_codes": [
+        "K"
+      ],
+      "keywords": [
+        "relay"
+      ],
       "function": "relay",
       "terminals": [
-        { "name": "a1", "position_mm": [0.0, 0.0, 0.0] },
-        { "name": "A2", "position_mm": [0.0, 0.0, 10.0] }
+        {
+          "name": "a1",
+          "position_mm": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "A2",
+          "position_mm": [
+            0.0,
+            0.0,
+            10.0
+          ]
+        }
+      ]
+    },
+    {
+      "manufacturer": "QA",
+      "order_number": "QA-REL-2",
+      "description": "Relay 24 V DC, second article with the same terminals (QA fixture)",
+      "letter_codes": [
+        "K"
+      ],
+      "keywords": [
+        "relay"
+      ],
+      "function": "relay",
+      "terminals": [
+        {
+          "name": "a1",
+          "position_mm": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "A2",
+          "position_mm": [
+            0.0,
+            0.0,
+            10.0
+          ]
+        }
       ]
     }
   ]

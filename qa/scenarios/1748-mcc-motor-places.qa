@@ -1,0 +1,26 @@
+@title MCC template motor places: six feeders, the structure tree and the cover structure sheet list Motor 1 to 6
+@sizes 1366x768
+@area Schematic
+wait 20
+key ctrl+k
+wait 6
+text new from template motor control centre
+wait 8
+key Return
+wait 12
+click_text "6"
+click_text "Create project"
+wait 30
+shot template-opened
+expect "Control supply"
+click_text Pages
+wait 10
+shot pages-panel
+click 165 185
+text Front
+wait 10
+shot pages-filtered
+click 200 295
+wait 20
+shot cover-structure-motors
+check_layout

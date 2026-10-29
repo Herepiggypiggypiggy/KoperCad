@@ -1,0 +1,59 @@
+# Pump on a frequency converter: motor protection breaker, converter, screened
+# motor cable, run command contact and a fault output, no brake.
+name = "Pump feeder frequency controlled"
+chapter = "protection"
+description = "Pump motor on a frequency converter behind a motor protection breaker, run command through a relay contact, fault relay output left open, screened motor cable"
+tags = ["pump", "feeder", "vfd", "frequency converter", "inverter", "drive", "motor protection", "run", "fault", "screened cable", "no brake"]
+notes = """The converter's control terminals are drawn as device pins of -T1 with generic names (+24, FWD, RA, RC): rename them to your drive's terminals. \\
+K1 is the run request from your pump control (PLC output, level relay): when its coil is energised the contact gives the run command. The converter's fault relay (RA to RC) is left open for your alarm input or lamp. \\
+Use a screened motor cable, screen on the PE terminal at both ends with a 360 degree clamp as the drive maker prescribes. Speed setpoint and ramps are set in the drive, not drawn here. \\
+Size the breaker and the converter from the motor data. This is a wiring example, not a validated design. \\
+You connect: L1 L2 L3 above Q1, PE above the PE terminal, the K1 coil from your control and the fault contact RA and RC. The run contact takes its 24 V from the drive."""
+
+parameter = [
+  { name = "power", default = 4, description = "Motor power in kW" },
+]
+
+open = ["q1s.1,3,5", "pe1.1", "k1c.A1,A2", "dpra.1", "dprc.1"]
+
+device = [
+  { id = "q1", tag = "-Q1", description = "Motor protection breaker", mount = { kind = "din", size = [45, 90, 78], at = [15, 55], rail = "r1" } },
+  { id = "k1", tag = "-K1", description = "Run request relay", mount = { kind = "din", size = [15.5, 78, 66], at = [65, 61], rail = "r1" } },
+  { id = "t1", tag = "-T1", description = "Frequency converter {power} kW", props = { power_kw = "{power}" }, mount = { kind = "plate", size = [105, 143, 150], at = [15, 150] } },
+  { id = "m1", tag = "-M1", description = "Pump motor {power} kW", props = { power_kw = "{power}" }, mount = { kind = "field", place = "on the pump" } },
+]
+
+symbol = [
+  { id = "q1s", key = "iec/protection/motor_protection_breaker", at = [40, 40], device = "q1" },
+  { id = "t1s", key = "iec/drives/frequency_converter", at = [40, 76], device = "t1" },
+  { id = "m1s", key = "iec/motors/motor_3ph", at = [40, 124], device = "m1" },
+  { id = "pe1", key = "iec/terminals/terminal_pe", at = [76, 60] },
+  { id = "dp24", key = "iec/connectivity/device_pin", at = [110, 24], rotate = 180, device = "t1", main = false, numbers = ["+24"] },
+  { id = "k1a", key = "iec/contacts/no", at = [110, 40], device = "k1", main = false },
+  { id = "dpf", key = "iec/connectivity/device_pin", at = [110, 72], device = "t1", main = false, numbers = ["FWD"] },
+  { id = "k1c", key = "iec/coils/relay", at = [150, 40], device = "k1", main = true },
+  { id = "dpra", key = "iec/connectivity/device_pin", at = [190, 40], device = "t1", main = false, numbers = ["RA"] },
+  { id = "dprc", key = "iec/connectivity/device_pin", at = [214, 40], device = "t1", main = false, numbers = ["RC"] },
+]
+
+chain = [
+  { path = "q1s.2,4,6 > t1s.L1,L2,L3" },
+  { path = "t1s.U,V,W > m1s.U1,V1,W1" },
+  { path = "t1s.PE2 > m1s.PE" },
+  { path = "pe1.2 > t1s.PE" },
+]
+
+wire = [
+  { from = "dp24.1", to = "k1a.13" },
+  { from = "k1a.14", to = "dpf.1" },
+]
+
+[plate]
+width = 140
+height = 310
+
+[[rail]]
+id = "r1"
+x = 5
+y = 100
+length = 120

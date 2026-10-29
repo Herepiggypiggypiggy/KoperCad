@@ -254,9 +254,17 @@ efficiency, negative length, NaN) return `InputError`.
 `Hoist in 3D` window (Simulate > Hoist in 3D, `sim.hoist3d`) feeds it the hook height, the hoist's
 warnings and the heights of the bound limit switches from the Hoist run loop. Exact: the block
 stands at the start height plus the simulated height, a limit flag stands at its bound height.
-Picture only: the crane sizes, the straight rope (no sway, stretch or slack), bridge and trolley
-positions (typed in, not from the travel drives yet). Listed in the window as "Picture, not
-measurement".
+Picture only: the crane sizes and the straight rope (no stretch or slack). Listed in the window as
+"Picture, not measurement".
+
+Travel binding: the window picks a travel axis of Simulate > Drive run for the bridge and one for
+the trolley ("Bridge driven by", "Trolley driven by"); the axis position (forward positive, along
++x for the bridge and +z for the trolley) is added to a typed start position and held at the ends
+of the runway and the span with a note. The hook swings as one pendulum per direction
+(`novo_machine::swing`): exact is the equation of a point mass on a rope hung from an accelerating
+carriage, the small-angle period `2 pi sqrt(L / g)` and the lean `atan(a / g)` at constant
+acceleration; the damping ratio (2 %) is a number, the rope keeps its length, the swing does not
+push back on the drive, and the two directions do not couple.
 
 ### Lane L2c-open as built (open-loop drive hoist)
 
@@ -297,6 +305,21 @@ while the drum still takes up slack rope it reads a light load and may boost a h
 Exact by definition: the spring law, the weight, the floor as a one-sided inelastic constraint.
 Model: one stiffness and one damping ratio for the whole rope, hook mass lumped, no rope mass, hook
 swing or sheave friction, a one-tick lag between hook and shaft.
+Heat over a duty cycle (`dh_heat_*`, `dh_brake_*` rows, always on): the module carries the two-node
+winding and frame model of `novo_drive::hoist_thermal` (losses from the fitted motor at the drive's
+output, a fan that cools in proportion to shaft speed, so a long slow run at low frequency heats more
+than the same work at speed) and `novo_drive::brake_heat` (the brake dissipates torque x speed while it
+slips, one heat capacity and cooling constant, wear as the share of a lining life in joules). The run
+reports "MotorTooHot" (with the standstill time to cool back to 80 % of the limit), "BrakeHot" and
+"BrakeWear" (50 % and 100 %). `novo_machine::duty_cycle` repeats a lift, pause, lower, pause cycle
+faster than real time on an ideal operator and wiring (not the drawing) and returns peaks, starts per
+hour, the first time the winding hit its limit and a curve; Simulate > Drive run > "Duty cycle: heat
+over time" runs it in the background. Exact by definition: the dissipated power and its integral, the
+first-order cooling. Model: the generic thermal numbers (rise at rated load 80 K, limit 100 K, brake
+25 kJ/K, 15 min, 250 K, 20 MJ lining life) until the maker's replace them, losses from the equivalent
+circuit, no temperature effect on resistance or friction, no drive heat sink model. Not a duty class
+(S3, S5) rating of the motor. The duty run needs a step of at most 5 ms: a 10 ms step let a load hang
+on the drive that had just started to lower it (not investigated further, the run refuses it).
 
 Load sensing (optional, `dh_sense_boost_hz`): the torque is averaged at a probe frequency; a light load
 may run the top step above its nominal frequency, never beyond what the motor can deliver with a margin
@@ -313,6 +336,7 @@ drive (averaged), the motor (quasi-static torque, no flux transient), the flux b
 rotor time constant of the fit, torque follows flux squared), stiction of the shaft against friction and
 brake torque, the brake timing, all sequence timing. Not modelled: encoder or closed-loop control,
 hook swing, motor and brake heating, a maker's parameter
+slack rope, rope stretch and hook swing, a maker's parameter
 set. Parameters of a real drive never appear in a drawing, so the defaults are generic values for a
 5.5 kW 4 pole hoist motor and are meant to be edited.
 

@@ -108,6 +108,8 @@ pub(crate) struct Workbench {
     pub(super) project_info: Option<Vec<String>>,
     /// The New crane project window, with the choices so far.
     pub(super) crane_new: Option<super::template_crane::CraneOptions>,
+    /// The New pump station / motor control centre window.
+    pub(super) plant_new: Option<super::template_plants::PlantOptions>,
     /// The Issue revision window, while it is open.
     pub(super) issue: Option<super::revisions::IssueDraft>,
     pub(super) restore_ask: Option<super::revisions::RestoreAsk>,
@@ -296,6 +298,8 @@ pub(crate) struct Workbench {
     pub(super) auto_assign: Option<super::parts_bulk::AutoAssignPreview>,
     /// A rename of part terminals offered after a part was assigned.
     pub(super) pin_offer: Option<super::pin_offer::PinOffer>,
+    /// The text of the company pin names file offered to a new project.
+    pub(super) company_pin_offer: Option<String>,
     /// The description recipe editor.
     pub(super) describe: Option<super::describe_recipes::DescribeDialog>,
     /// An EPLAN (PXF) import waiting for the person to confirm.
@@ -369,6 +373,7 @@ impl Default for Workbench {
             project_settings: false,
             project_info: None,
             crane_new: None,
+            plant_new: None,
             issue: None,
             restore_ask: None,
             handover_ask: None,
@@ -459,6 +464,7 @@ impl Default for Workbench {
             parts_bulk: None,
             auto_assign: None,
             pin_offer: None,
+            company_pin_offer: None,
             describe: None,
             eplan_import: None,
             eplan_parts: None,
