@@ -62,9 +62,9 @@ impl Slot {
 
     fn tip(self) -> &'static str {
         match self {
-            Slot::Left => "Dock left",
-            Slot::Right => "Dock right",
-            Slot::Bottom => "Dock at the bottom",
+            Slot::Left => "Dock at the left edge",
+            Slot::Right => "Dock at the right edge",
+            Slot::Bottom => "Dock at the bottom edge",
         }
     }
 
