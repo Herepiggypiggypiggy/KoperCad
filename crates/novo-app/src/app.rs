@@ -74,6 +74,7 @@ mod dialog_ui;
 mod dock;
 mod drawers;
 mod drill_cue;
+mod drive_run;
 mod duplicate;
 mod dxf;
 mod electrical;
@@ -1946,6 +1947,7 @@ impl NovoApp {
         self.protection_window(&ctx);
         self.faults_window(&ctx);
         self.hoist_window(&ctx);
+        self.drive_run_window(&ctx);
         self.motor_freq_window(&ctx);
         self.add_fault_window(&ctx);
         self.calculations_window(&ctx);
