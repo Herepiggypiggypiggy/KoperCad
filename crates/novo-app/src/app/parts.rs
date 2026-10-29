@@ -436,10 +436,18 @@ impl PartsWindow {
 
     /// The files waiting to be read, once every one has been.
     fn take_read(&mut self) -> Option<Waiting> {
+        // Asked again every frame so the files stay wanted, without a call to
+        // the disk per file; the disk is looked at once the worker is idle.
         for files in &self.waiting {
-            super::parts_identity::prefetch(files.paths(), self.wake.clone());
+            super::parts_identity::keep_asking(files.paths(), self.wake.clone());
         }
-        if !super::parts_identity::ready(self.waiting.first()?.paths()) {
+        if super::parts_identity::still_reading() {
+            return None;
+        }
+        let first = self.waiting.first()?.paths();
+        if !super::parts_identity::ready(first) {
+            // A file that changed or was forgotten is read again.
+            super::parts_identity::prefetch(first, self.wake.clone());
             return None;
         }
         Some(self.waiting.remove(0))
@@ -447,27 +455,45 @@ impl PartsWindow {
 
     /// Installs the ETIM release at `path` on a worker thread; the window
     /// goes on painting and [`PartsWindow::poll_etim`] picks the answer up.
-    fn start_etim_install(&mut self, path: PathBuf, dir: Option<PathBuf>) {
+    fn start_etim_install(&mut self, path: PathBuf, dir: Option<PathBuf>) -> Result<(), String> {
+        self.start_etim_with(path, dir, |job| {
+            std::thread::Builder::new()
+                .name("etim-install".into())
+                .spawn(job)
+                .map(drop)
+        })
+    }
+
+    /// [`Self::start_etim_install`] with the way a thread is started given,
+    /// so a machine that cannot start one can be tried.
+    fn start_etim_with(
+        &mut self,
+        path: PathBuf,
+        dir: Option<PathBuf>,
+        spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::io::Result<()>,
+    ) -> Result<(), String> {
         if self.etim_job.is_some() {
-            return;
+            return Ok(());
         }
         let (tx, rx) = std::sync::mpsc::channel();
         let wake = self.wake.clone();
-        let spawned = std::thread::Builder::new()
-            .name("etim-install".into())
-            .spawn(move || {
-                slow_for_qa();
-                let done = std::panic::catch_unwind(|| install_etim(&path, dir.as_deref()))
-                    .unwrap_or_else(|_| Err("ETIM release: the file could not be read".into()));
-                let _ = tx.send(done);
-                if let Some(ctx) = wake {
-                    ctx.request_repaint();
-                }
-            });
-        if spawned.is_ok() {
-            self.etim_job = Some(rx);
-        } else {
-            self.etim_job = None;
+        let job = move || {
+            slow_for_qa();
+            let done = std::panic::catch_unwind(|| install_etim(&path, dir.as_deref()))
+                .unwrap_or_else(|_| Err("ETIM release: the file could not be read".into()));
+            let _ = tx.send(done);
+            if let Some(ctx) = wake {
+                ctx.request_repaint();
+            }
+        };
+        match spawn(Box::new(job)) {
+            Ok(()) => {
+                self.etim_job = Some(rx);
+                Ok(())
+            }
+            Err(e) => Err(format!(
+                "ETIM release: the install could not be started ({e}). Close other programs and try again."
+            )),
         }
     }
 
@@ -1223,8 +1249,11 @@ impl NovoApp {
                             .add_filter("ETIM release", &["zip", "csv", "txt"])
                             .pick_file()
                     };
-                    if let Some(path) = picked {
-                        win.start_etim_install(path, novo_parts::EtimModel::dir_for(None));
+                    if let Some(path) = picked
+                        && let Err(e) =
+                            win.start_etim_install(path, novo_parts::EtimModel::dir_for(None))
+                    {
+                        error = Some(e);
                     }
                 }
                 PartsAction::NewPart => win.new_part = Some(NewPartForm::default()),
