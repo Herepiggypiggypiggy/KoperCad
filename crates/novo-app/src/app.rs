@@ -7,6 +7,9 @@ mod addons;
 mod addons_look;
 #[cfg(test)]
 mod addons_look_tests;
+mod app_menu;
+#[cfg(test)]
+mod app_menu_tests;
 mod appearance;
 mod assembly;
 mod assistant;
@@ -204,6 +207,7 @@ mod outline_items;
 mod outline_tree;
 mod pages;
 mod panel;
+mod panel_dock;
 #[cfg(test)]
 mod panel_windows_tests;
 mod part_picker;
@@ -237,8 +241,10 @@ mod project_rules;
 mod project_settings;
 mod protection;
 mod rail;
+mod rail_3d;
+mod rail_cabinet;
+mod rail_reports;
 mod rail_schematic;
-mod rail_workspaces;
 mod reports;
 mod reports_view;
 mod review_notes;
@@ -436,6 +442,8 @@ mod pdf_options_tests;
 mod print_preview_tests;
 #[cfg(test)]
 mod protection_tests;
+#[cfg(test)]
+mod rail_reports_tests;
 #[cfg(test)]
 mod rail_tests;
 #[cfg(test)]
@@ -1791,8 +1799,28 @@ impl NovoApp {
             .show(ui, |ui| self.top_bar(ui, &mut picked));
         self.status_bar(ui);
         let reports = self.workspace() == workspace::Workspace::Reports && self.is_open();
-        // The tool rail: the leftmost panel of the Schematic workspace.
-        if self.focus_mode || !self.is_open() || !self.workspace_rail_show(ui) {
+        // The tool rail: the leftmost panel of the Schematic, Cabinet, 3D,
+        // Reports and Commissioning workspaces.
+        let rail_workspace = self.workspace();
+        if !self.focus_mode
+            && self.is_open()
+            && matches!(
+                rail_workspace,
+                workspace::Workspace::Schematic
+                    | workspace::Workspace::Cabinet
+                    | workspace::Workspace::View3d
+                    | workspace::Workspace::Reports
+                    | workspace::Workspace::Commissioning
+            )
+        {
+            match rail_workspace {
+                workspace::Workspace::Schematic => self.schematic_rail_show(ui),
+                workspace::Workspace::Cabinet => self.cabinet_rail_show(ui),
+                workspace::Workspace::Reports => self.reports_rail_show(ui),
+                workspace::Workspace::Commissioning => self.commissioning_rail_show(ui),
+                _ => self.view3d_rail_show(ui),
+            }
+        } else {
             self.wb.rail_rect = None;
             rail::close_flyout(&ctx);
         }
@@ -1828,6 +1856,9 @@ impl NovoApp {
         }
         self.sync_commissioning_workspace();
         self.drawer(ui);
+        // Panels the person docked at an edge of the canvas take their strip here, so
+        // the canvas is what is left.
+        panel_dock::spacers(ui);
         // The canvases paint their own ground; the Reports tables and the
         // Cabinet toolbar sit on the theme's surfaces, not on the bare window.
         let pal = novo_theme::Palette::of_ctx(&ctx);
@@ -2195,7 +2226,9 @@ impl NovoApp {
         let fit = menu_bar::TopBarFit::at(self.window_width);
         let focus = self.menu_key_pressed(ui.ctx());
         ui.horizontal_centered(|ui| {
-            if self.menu_bar_wide() {
+            // F10 opens the app menu; with the menu words in the bar it moves the
+            // focus to them instead.
+            if self.menu_names_shown() {
                 self.mark(ui, false);
                 self.menu_bar(ui, focus);
             } else {

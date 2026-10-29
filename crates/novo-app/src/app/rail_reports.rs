@@ -1,5 +1,5 @@
 //! The Reports and Commissioning rails (docs/design/visual-redesign.md
-//! section 3.2, lane V3d): the same widget as the Schematic rail, with the
+//! section 3.2, lane V3d): the same widget as the other rails, with the
 //! rows of these two workspaces. Rows are data, as there; a row names a
 //! command or a `rail.*` id that only this file knows.
 //!
@@ -20,7 +20,6 @@ use novo_theme::presentation::Glyph;
 use super::NovoApp;
 use super::commissioning::Tab;
 use super::rail::{self, Entry, FlyEntry, Rail};
-use super::workspace::Workspace;
 
 pub(super) const REPORTS_TOOLS: &[&str] = &["report.add_page", "report.designer", "export.labels"];
 pub(super) const REPORTS_ASSISTS: &[&str] = &["view.bench", "view.build"];
@@ -90,26 +89,28 @@ fn tab_of(id: &str) -> Option<Tab> {
 }
 
 impl NovoApp {
-    /// Draws the rail of the workspace on show, if it has one. Returns
-    /// whether it did.
-    pub(super) fn workspace_rail_show(&mut self, ui: &mut egui::Ui) -> bool {
-        match self.workspace() {
-            Workspace::Schematic => self.schematic_rail_show(ui),
-            Workspace::Reports => {
-                let rail = self.workspace_rail(REPORTS_TOOLS, REPORTS_ASSISTS, REPORTS_PANELS);
-                self.rail_show(ui, &rail);
-            }
-            Workspace::Commissioning => {
-                let rail = self.workspace_rail(
-                    COMMISSIONING_TOOLS,
-                    COMMISSIONING_ASSISTS,
-                    COMMISSIONING_PANELS,
-                );
-                self.rail_show(ui, &rail);
-            }
-            _ => return false,
+    /// The Reports rail, drawn as the leftmost panel.
+    pub(super) fn reports_rail_show(&mut self, ui: &mut egui::Ui) {
+        let rail = self.workspace_rail(REPORTS_TOOLS, REPORTS_ASSISTS, REPORTS_PANELS);
+        self.workspace_rail_draw(ui, &rail);
+    }
+
+    /// The Commissioning rail, drawn as the leftmost panel.
+    pub(super) fn commissioning_rail_show(&mut self, ui: &mut egui::Ui) {
+        let rail = self.workspace_rail(
+            COMMISSIONING_TOOLS,
+            COMMISSIONING_ASSISTS,
+            COMMISSIONING_PANELS,
+        );
+        self.workspace_rail_draw(ui, &rail);
+    }
+
+    fn workspace_rail_draw(&mut self, ui: &mut egui::Ui, rail: &Rail) {
+        let ctx = ui.ctx().clone();
+        let shown = self.rail_draw(ui, rail);
+        if let Some(id) = shown.clicked {
+            self.workspace_rail_click(&ctx, id);
         }
-        true
     }
 
     /// One row of the Reports or Commissioning rail.
@@ -208,6 +209,9 @@ impl NovoApp {
             self.commissioning_next_open();
         } else if id == "rail.export" {
             rail::toggle_flyout(ctx, id);
+        } else {
+            self.wb.queued.push(id);
         }
+        ctx.request_repaint();
     }
 }
