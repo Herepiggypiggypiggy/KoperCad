@@ -524,7 +524,7 @@ fn makers_ui(ui: &mut egui::Ui, import: &mut EplanPartsImport, changed: &mut boo
                             .typing
                             .entry(m.code.clone())
                             .or_insert_with(|| m.name.clone());
-                        let r = ui.add(egui::TextEdit::singleline(text).desired_width(200.0));
+                        let r = ui.add_sized([200.0, 20.0], egui::TextEdit::singleline(text));
                         if r.lost_focus() && *text != m.name {
                             import.aliases.set(&m.code, text);
                             import.typing.remove(&m.code);
