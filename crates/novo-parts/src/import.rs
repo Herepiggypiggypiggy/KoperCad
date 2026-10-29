@@ -680,7 +680,7 @@ pub(crate) fn read_zip(bytes: &[u8]) -> Result<ZipContent, String> {
         if !file.is_file() {
             continue;
         }
-        let name = file.name().to_owned();
+        let name = String::from_utf8_lossy(file.name_raw()).into_owned();
         out.names.push(name.clone());
         let lower = name.to_ascii_lowercase();
         let is_step = FileKind::of_file_name(&name) == FileKind::Step;

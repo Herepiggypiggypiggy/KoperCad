@@ -481,7 +481,7 @@ impl Bundle {
             if size >= MIN_RATIO_SIZE && size / packed.max(1) > MAX_RATIO {
                 return Err(BundleError::Damaged(format!(
                     "{} unpacks to {size} bytes from {packed}, which is not a real CAD file or list",
-                    entry.name()
+                    String::from_utf8_lossy(entry.name_raw())
                 )));
             }
             total = total.saturating_add(size);
@@ -938,7 +938,7 @@ mod tests {
         let mut members = Vec::new();
         for i in 0..z.len() {
             let mut f = z.by_index(i).unwrap();
-            let name = f.name().to_owned();
+            let name = f.name().unwrap().into_owned();
             let mut bytes = Vec::new();
             f.read_to_end(&mut bytes).unwrap();
             members.push((name.clone(), edit(&name, bytes)));
@@ -1056,7 +1056,7 @@ mod tests {
             let mut f = z.by_index(i).unwrap();
             let mut data = Vec::new();
             f.read_to_end(&mut data).unwrap();
-            members.push((f.name().to_owned(), data));
+            members.push((f.name().unwrap().into_owned(), data));
         }
         members.push((name.to_owned(), bytes.to_vec()));
         let mut w = zip::ZipWriter::new(File::create(path).unwrap());
@@ -1131,8 +1131,12 @@ mod tests {
         assert!(full.files >= 1);
         // The manifest is the last member, after every file.
         let z = zip::ZipArchive::new(File::open(&out).unwrap()).unwrap();
-        let names: Vec<&str> = z.file_names().collect();
-        assert_eq!(names.last().copied(), Some(MANIFEST), "{names:?}");
+        let names: Vec<String> = z.file_names().map(|n| n.unwrap().into_owned()).collect();
+        assert_eq!(
+            names.last().map(String::as_str),
+            Some(MANIFEST),
+            "{names:?}"
+        );
         // A file taken out of the library is left out with a note.
         for r in b.library.records().unwrap() {
             std::fs::remove_file(b.library.path_of(&r)).unwrap();

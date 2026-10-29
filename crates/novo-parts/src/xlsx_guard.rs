@@ -78,7 +78,7 @@ pub fn check_xlsx_with(bytes: &[u8], limits: XlsxLimits) -> Result<(), XlsxTooLa
         let file = archive
             .by_index(i)
             .map_err(|e| XlsxTooLarge(format!("the workbook cannot be read: {e}")))?;
-        let name = file.name().to_owned();
+        let name = String::from_utf8_lossy(file.name_raw()).into_owned();
         if name == "[Content_Types].xml" {
             continue;
         }
