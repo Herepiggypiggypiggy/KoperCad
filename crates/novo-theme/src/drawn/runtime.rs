@@ -8,17 +8,19 @@
 //!
 //! Rules, so an add-on cannot break the look of the set:
 //! - the name is namespaced, `<addon-id>.<name>` (lower case, digits, hyphens), so it
-//!   can never be one of the built-in names, which have no colon;
+//!   can never be one of the built-in names, which have no dot;
 //! - every centre line lies inside the 24 grid (a stroke on the edge reaches
 //!   0.75 past it);
 //! - the group is always [`Group::Addon`].
 //!
 //! Registered icons live until the program ends: the data is leaked so the
 //! painter can keep handing out `&'static Icon`. [`unregister_prefix`] makes an
-//! unloaded add-on's icons unfindable; the few bytes stay. An add-on that
-//! reloads registers the same names again, which replaces the old entry.
+//! unloaded add-on's icons unfindable; the few bytes stay. A spec is leaked once:
+//! registering the same spec again (an add-on that reloads, the set rebuilt) hands
+//! out the same icon, so toggling add-ons does not grow memory. A changed spec
+//! under the same name replaces the old entry.
 
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 
 use super::{GRID, Group, Icon, Seg, Shape};
 
@@ -190,6 +192,36 @@ fn check_shape(spec: &ShapeSpec) -> Result<(), IconError> {
     }
 }
 
+static BUILT: Mutex<Vec<(IconSpec, Result<&'static Icon, IconError>)>> = Mutex::new(Vec::new());
+
+/// Leaks the data of a spec that passed the cheap checks and tests the finished
+/// icon against the 24 grid (the rule the add-on manager checks a manifest
+/// against: every centre line inside the grid, a stroke on the edge reaches
+/// 0.75 past it, which the painter allows).
+fn build(spec: &IconSpec) -> Result<&'static Icon, IconError> {
+    let shapes: Vec<Shape> = spec.shapes.iter().map(leak_shape).collect();
+    let icon: &'static Icon = Box::leak(Box::new(Icon {
+        name: Box::leak(spec.name.clone().into_boxed_str()),
+        group: Group::Addon,
+        title: Box::leak(spec.title.clone().into_boxed_str()),
+        shapes: leak(shapes),
+    }));
+    let bounds = icon.bounds();
+    let eps = 1e-2;
+    let inside = [bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y]
+        .iter()
+        .all(|v| v.is_finite())
+        && bounds.min.x >= -eps
+        && bounds.min.y >= -eps
+        && bounds.max.x <= GRID + eps
+        && bounds.max.y <= GRID + eps;
+    if inside {
+        Ok(icon)
+    } else {
+        Err(IconError::OutOfGrid)
+    }
+}
+
 /// Registers an icon (or replaces the one of the same name) and returns it.
 pub fn register(spec: IconSpec) -> Result<&'static Icon, IconError> {
     if !valid_name(&spec.name) {
@@ -210,35 +242,18 @@ pub fn register(spec: IconSpec) -> Result<&'static Icon, IconError> {
         }
         check_shape(shape)?;
     }
-    let shapes: Vec<Shape> = spec.shapes.iter().map(leak_shape).collect();
-    let probe = Icon {
-        name: "probe",
-        group: Group::Addon,
-        title: "probe",
-        shapes: leak(shapes.clone()),
+    // The add-on set is rebuilt often (toggling an add-on registers every running
+    // icon again); the same spec is leaked once and handed out again.
+    let mut built = BUILT.lock().unwrap_or_else(|e| e.into_inner());
+    let icon = match built.iter().find(|(s, _)| *s == spec) {
+        Some((_, result)) => result.clone()?,
+        None => {
+            let result = build(&spec);
+            built.push((spec, result.clone()));
+            result?
+        }
     };
-    let bounds = probe.bounds();
-    // Every centre line inside the 24 grid, the rule the add-on manager checks
-    // a manifest against (a stroke on the edge reaches 0.75 past it, which the
-    // painter allows).
-    let finite = [bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y]
-        .iter()
-        .all(|v| v.is_finite());
-    let eps = 1e-2;
-    if !finite
-        || bounds.min.x < -eps
-        || bounds.min.y < -eps
-        || bounds.max.x > GRID + eps
-        || bounds.max.y > GRID + eps
-    {
-        return Err(IconError::OutOfGrid);
-    }
-    let icon: &'static Icon = Box::leak(Box::new(Icon {
-        name: Box::leak(spec.name.into_boxed_str()),
-        group: Group::Addon,
-        title: Box::leak(spec.title.into_boxed_str()),
-        shapes: leak(shapes),
-    }));
+    drop(built);
     let mut all = REGISTERED.write().unwrap_or_else(|e| e.into_inner());
     all.retain(|i| i.name != icon.name);
     all.push(icon);
@@ -255,7 +270,7 @@ pub fn clear() -> usize {
 }
 
 /// Forgets every registered icon whose name starts with `prefix` (an add-on
-/// unloading passes `"myaddon:"`). Returns how many were removed.
+/// unloading passes `"myaddon."`). Returns how many were removed.
 pub fn unregister_prefix(prefix: &str) -> usize {
     let mut all = REGISTERED.write().unwrap_or_else(|e| e.into_inner());
     let before = all.len();

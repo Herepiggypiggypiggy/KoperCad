@@ -359,8 +359,10 @@ fn an_add_on_icon_is_found_by_name_paints_and_unloads() {
             );
         }
     }
-    // Registering the name again replaces it.
-    register(demo("pt-icons.demo")).unwrap();
+    // Registering the name again replaces it, and the same spec is not leaked twice
+    // (toggling add-ons registers every running icon again).
+    let again = register(demo("pt-icons.demo")).unwrap();
+    assert!(std::ptr::eq(icon, again));
     assert_eq!(
         registered()
             .iter()
