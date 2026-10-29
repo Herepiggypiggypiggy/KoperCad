@@ -108,7 +108,7 @@ Each is declared in `permissions`, listed in the install prompt and in Details, 
 
 Keys: built-in keys (`novo_addons::trust::BUILTIN_KEYS`, **empty until the release thread generates the KoperVonk key**; the private key never enters the repository) and keys the person adds in `%LOCALAPPDATA%\KoperCAD\addons\trusted-keys.toml` (`[[key]]` with `id`, `owner`, `public` as 64 hex digits). The signed message is `kopercad-addon-manifest-v1\n` followed by the manifest bytes.
 
-Honest limits: a signature says who made the file, not that it is good. An add-on's engine runs in a sandbox: no file, network, clock or thread access, a step budget and a memory limit. What it can do is limited to computing, so the worst case is wrong results inside what its permissions allow, which is why the permissions are listed in plain words. The `.kcaddon` format is new; nothing outside this repository reads it.
+Honest limits: a signature says who made the file, not that it is good. An add-on's engine runs in a sandbox: no file, network, clock or thread access, a step budget and a memory limit. Each engine runs on its own thread, so a slow call never freezes the window. What it can do is limited to computing, so the worst case is wrong results inside what its permissions allow, which is why the permissions are listed in plain words. The `.kcaddon` format is new; nothing outside this repository reads it.
 
 ## The engine
 

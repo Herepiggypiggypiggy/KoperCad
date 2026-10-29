@@ -16,7 +16,7 @@ permissions = ["menu", "floating-panel"]
 
 [[command]]
 id = "panel"
-label = "Controller panel"
+label = "Radio panel"
 description = "Open the virtual radio: press E-stop, main/start and move the rockers, and watch the signals."
 icon = "controllers.radio"
 keywords = ["radio", "pendant", "controller", "remote", "joystick"]

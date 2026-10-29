@@ -60,7 +60,7 @@ wait 6
 key Enter
 wait 10
 shot safety-macro-picked
-click_text Place Button #2
+click_text Place Button
 wait 20
 expect_scene "-K1"
 expect_scene "iec/safety/relay"
@@ -74,7 +74,7 @@ wait 6
 key Enter
 wait 10
 shot network-macro-picked
-click_text Place Button #2
+click_text Place Button
 wait 20
 expect_scene "iec/network/ethernet_switch_5"
 shot network-macro-placed

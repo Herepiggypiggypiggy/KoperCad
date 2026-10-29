@@ -94,6 +94,12 @@ fn colour(i: usize) -> egui::Color32 {
 
 fn chart(ui: &mut egui::Ui, trace: &Trace, channels: &[usize]) {
     let pal = crate::theme::ui_palette();
+    ui.horizontal_wrapped(|ui| {
+        for (n, &c) in channels.iter().enumerate() {
+            let ch = &trace.channels[c];
+            ui.colored_label(colour(n), format!("\u{25A0} {} ({})", ch.name, ch.unit));
+        }
+    });
     let size = egui::vec2(ui.available_width().max(320.0), 120.0);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
     let p = ui.painter_at(rect);
@@ -180,12 +186,6 @@ fn chart(ui: &mut egui::Ui, trace: &Trace, channels: &[usize]) {
             pal.text_strong,
         );
     }
-    ui.horizontal_wrapped(|ui| {
-        for (n, &c) in channels.iter().enumerate() {
-            let ch = &trace.channels[c];
-            ui.colored_label(colour(n), format!("\u{25A0} {} ({})", ch.name, ch.unit));
-        }
-    });
 }
 
 fn level(s: Severity) -> novo_theme::widgets::Level {
@@ -394,6 +394,10 @@ impl super::NovoApp {
                     ui.label(
                         "Closed-loop hoists with an encoder, and two winches carrying one load. \
                          Choose what goes wrong and read what the drives, the brakes and the ropes do.",
+                    );
+                    ui.weak(
+                        "A model, not a measurement: generic hardware, averaged drive. See the \
+                         notes at the end for what is exact and what is left out.",
                     );
                     ui.add_space(4.0);
                     if controls(ui, state) {

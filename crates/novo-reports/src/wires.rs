@@ -120,6 +120,7 @@ impl WireList {
                 Column::new("location", "Location", 15.0),
                 Column::new("length_mm", "Route length mm", 14.0).right(),
                 Column::new("length_basis", "Length basis", 12.0),
+                Column::new("torque", "Torque", 20.0),
             ],
         );
         // The wire's own cross-section, else its cable core's.
@@ -207,6 +208,7 @@ impl WireList {
                     location.into(),
                     Cell::Number(length.mm),
                     Cell::text(length.basis.text()),
+                    Cell::text(torque_notes(project, connection.from, connection.to)),
                 ],
                 members.iter().map(|w| AnyId::from(w.id)).collect(),
             );
@@ -223,6 +225,20 @@ impl WireList {
             sections: vec![section],
         }
     }
+}
+
+/// The torque of the connection points at both ends, `-K1:1 0.4–0.5 N·m;
+/// -X1:2 0.5 N·m`: only ends whose part states one.
+fn torque_notes(project: &Project, from: PinRef, to: PinRef) -> String {
+    let notes: Vec<String> = [from, to]
+        .into_iter()
+        .filter_map(|pin| {
+            let torque = crate::wirecut::torque_text(project, pin);
+            (!torque.is_empty())
+                .then(|| format!("{} {torque}", crate::wirecut::end_designation(project, pin)))
+        })
+        .collect();
+    notes.join("; ")
 }
 
 /// One physical connection of the wire list: two pins and the drawn wires

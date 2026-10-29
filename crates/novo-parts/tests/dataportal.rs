@@ -388,3 +388,42 @@ fn a_folder_of_maker_parts_xml_imports_through_the_inbox() {
     assert_eq!(p.terminals.len(), 2);
     assert_eq!(p.drilling.len(), 2);
 }
+
+#[test]
+fn contact_counts_coil_data_and_poles_fill_the_description_keys() {
+    let xml = r#"<partsmanagement><part partnr="ACM.K-1" manufacturer="Acme"
+        poles="3" maincontactsno="3" auxcontactsno="1" auxcontactsnc="1"
+        coilvoltage="24 V" coilfrequency="50/60" coiltype="AC/DC"
+        ratedvoltage="690 V"/></partsmanagement>"#;
+    let r = read_portal(&[file("a.xml", xml)], "", "").unwrap();
+    let d = &r.parts[0].data;
+    assert_eq!(d.get("poles"), Some(&Value::Int(3)));
+    assert_eq!(d.get("main_contacts_no"), Some(&Value::Int(3)));
+    assert_eq!(d.get("aux_contacts_no"), Some(&Value::Int(1)));
+    assert_eq!(d.get("aux_contacts_nc"), Some(&Value::Int(1)));
+    assert_eq!(d.get("coil_voltage_v"), Some(&Value::Float(24.0)));
+    assert_eq!(text(d.get("coil_frequency_hz")), "50/60");
+    assert_eq!(text(d.get("coil_current_type")), "AC/DC");
+    assert_eq!(d.get("rated_voltage_v"), Some(&Value::Float(690.0)));
+    assert!(r.unrecognised.is_empty(), "{:?}", r.unrecognised);
+    let single = xml.replace("50/60", "50 Hz");
+    let r = read_portal(&[file("a.xml", &single)], "", "").unwrap();
+    assert_eq!(
+        r.parts[0].data.get("coil_frequency_hz"),
+        Some(&Value::Float(50.0))
+    );
+}
+
+#[test]
+fn ratings_and_currents_are_not_read_as_counts_or_coil_types() {
+    let xml = r#"<partsmanagement><part partnr="ACM.K-2" manufacturer="Acme"
+        auxcontactsbreakingcapacity="10 A" coilcurrent="0.02 A"
+        coilratedcurrent="25 mA" coilfrequencyhz="NaN" poles="3+N"/></partsmanagement>"#;
+    let r = read_portal(&[file("a.xml", xml)], "", "").unwrap();
+    let d = &r.parts[0].data;
+    assert!(d.get("aux_contacts_nc").is_none());
+    assert!(d.get("aux_contacts_no").is_none());
+    assert!(d.get("coil_current_type").is_none());
+    assert!(d.get("coil_frequency_hz").is_none());
+    assert_eq!(d.get("poles"), Some(&Value::Int(3)), "3+N reads as 3");
+}

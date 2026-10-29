@@ -3,10 +3,14 @@
 //! joined clamps are linked, whether a terminal named PE or N defines that
 //! potential, and which generated pages the project wants.
 //!
+//! The window also holds the company pin templates (the usual pin names per
+//! device class, `novo_symbols::parse_company_templates`) as TOML text in the
+//! project property `pin.templates`, which the Pin names check reads.
+//!
 //! Where the user finds it: Project > Rules, Ctrl+K "rules".
 
 use eframe::egui;
-use novo_core::{JoinLink, ProjectRules, SameName};
+use novo_core::{JoinLink, ProjectRules, SameName, Value};
 
 use super::{Level, NovoApp};
 
@@ -62,6 +66,49 @@ impl NovoApp {
         }
     }
 
+    /// The stored company pin templates text, empty when there is none.
+    fn stored_pin_templates(&self) -> String {
+        self.backend
+            .document()
+            .and_then(|d| {
+                match d
+                    .project()
+                    .info()
+                    .properties
+                    .get(novo_checks::PIN_TEMPLATES_PROPERTY)
+                {
+                    Some(Value::Text(t)) => Some(t.clone()),
+                    _ => None,
+                }
+            })
+            .unwrap_or_default()
+    }
+
+    /// Stores the company pin templates as one undo step; empty text removes
+    /// them. The text was read by `parse_company_templates` before.
+    fn set_pin_templates(&mut self, text: &str) {
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let text = text.trim().to_owned();
+        let result = doc.transact("Company pin templates", |tx| {
+            tx.set_info(|i| {
+                if text.is_empty() {
+                    i.properties.remove(novo_checks::PIN_TEMPLATES_PROPERTY);
+                } else {
+                    i.properties.insert(
+                        novo_checks::PIN_TEMPLATES_PROPERTY.to_owned(),
+                        Value::Text(text.clone()),
+                    );
+                }
+            })
+        });
+        match result {
+            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Err(e) => self.message(Level::Warning, format!("Pin templates: {e}")),
+        }
+    }
+
     pub(super) fn project_rules_dialog(&mut self, ctx: &egui::Context) {
         if !self.wb.project_rules {
             return;
@@ -72,69 +119,135 @@ impl NovoApp {
         }
         let stored = self.project_rules();
         let mut rules = stored.clone();
+        let stored_templates = self.stored_pin_templates();
+        let mut templates = self
+            .wb
+            .pin_templates_text
+            .take()
+            .unwrap_or_else(|| stored_templates.clone());
+        let mut save_templates = false;
         let kinds = generated_kinds();
         let width = novo_theme::dialog_width::MEDIUM;
-        let modal = super::panel::modal(
+        // The body scrolls and the Done button stays in view at every window
+        // size (the window is taller than the screen with the pin names box).
+        let modal = super::panel::modal_fill(
             ctx,
             "project_rules",
             "Project rules",
-            [width, 0.0],
+            [width, 640.0],
             |ui| {
-                super::dialog_ui::hint(
-                    ui,
-                    "Saved in the project file. Every rule is explicit; undo takes one back.",
-                );
-                super::dialog_ui::section(ui, "Terminals with the same name on a strip", true);
-                let mut same_name = rules.terminals.same_name;
-                super::dialog_ui::choice(
-                    ui,
-                    "Same name",
-                    "Join: two -X2:1 are one electrical point, built from several clamps. Refuse: join duplicates first, a strip with two of one name blocks this. Off: keep them separate and list them as a finding.",
-                    &mut same_name,
-                    &[
-                        (SameName::Join, "Join them"),
-                        (SameName::Refuse, "Refuse a second"),
-                        (SameName::Off, "No rule"),
-                    ],
-                );
-                rules.terminals.same_name = same_name;
-                ui.add_enabled_ui(rules.terminals.same_name == SameName::Join, |ui| {
+                super::panel::fill_above(ui, 44.0, |ui| {
+                    super::dialog_ui::hint(
+                        ui,
+                        "Saved in the project file. Every rule is explicit; undo takes one back.",
+                    );
+                    super::dialog_ui::section(ui, "Terminals with the same name on a strip", true);
+                    let mut same_name = rules.terminals.same_name;
                     super::dialog_ui::choice(
                         ui,
-                        "Clamps of a joined terminal are linked by",
-                        "",
-                        &mut rules.terminals.join_link,
+                        "Same name",
+                        "Join: two -X2:1 are one electrical point, built from several clamps. Refuse: join duplicates first, a strip with two of one name blocks this. Off: keep them separate and list them as a finding.",
+                        &mut same_name,
                         &[
-                            (JoinLink::Connector, "Connector"),
-                            (JoinLink::Jumper, "Jumper"),
+                            (SameName::Join, "Join them"),
+                            (SameName::Refuse, "Refuse a second"),
+                            (SameName::Off, "No rule"),
                         ],
                     );
-                });
-                super::dialog_ui::section(ui, "Supply potentials", false);
-                ui.checkbox(
-                    &mut rules.potentials.from_terminal_names,
-                    "A terminal named PE, N or L1 defines that potential",
-                )
-                .on_hover_text("-X4:PE puts PE on its net without any other action");
-                super::dialog_ui::section(ui, "Generated pages", false);
-                super::dialog_ui::hint(
-                    ui,
-                    "Pages the project adds and keeps current. Deleting one switches it off here.",
-                );
-                ui.add_space(4.0);
-                for (id, title) in &kinds {
-                    let mut wanted = rules.wants_generated(id);
-                    if ui.checkbox(&mut wanted, title.as_str()).changed() {
-                        if wanted {
-                            rules.generated_pages_off.remove(id);
-                        } else {
-                            rules.generated_pages_off.insert(id.clone());
+                    rules.terminals.same_name = same_name;
+                    ui.add_enabled_ui(rules.terminals.same_name == SameName::Join, |ui| {
+                        super::dialog_ui::choice(
+                            ui,
+                            "Clamps of a joined terminal are linked by",
+                            "",
+                            &mut rules.terminals.join_link,
+                            &[
+                                (JoinLink::Connector, "Connector"),
+                                (JoinLink::Jumper, "Jumper"),
+                            ],
+                        );
+                    });
+                    super::dialog_ui::section(ui, "Supply potentials", false);
+                    ui.checkbox(
+                        &mut rules.potentials.from_terminal_names,
+                        "A terminal named PE, N or L1 defines that potential",
+                    )
+                    .on_hover_text("-X4:PE puts PE on its net without any other action");
+                    super::dialog_ui::section(ui, "Generated pages", false);
+                    super::dialog_ui::hint(
+                        ui,
+                        "Pages the project adds and keeps current. Deleting one switches it off here.",
+                    );
+                    ui.add_space(4.0);
+                    for (id, title) in &kinds {
+                        let mut wanted = rules.wants_generated(id);
+                        if ui.checkbox(&mut wanted, title.as_str()).changed() {
+                            if wanted {
+                                rules.generated_pages_off.remove(id);
+                            } else {
+                                rules.generated_pages_off.insert(id.clone());
+                            }
                         }
                     }
-                }
+                    super::dialog_ui::section(ui, "Usual pin names", false);
+                    super::dialog_ui::hint(
+                        ui,
+                        "Your own pin names per device class, as TOML. A class replaces the built-in \
+                     names for the symbol functions it lists; Check > Issues then flags \
+                     devices that differ (kind \"Pin names\"). Leave empty for the built-in names.",
+                    );
+                    ui.add(
+                    egui::TextEdit::multiline(&mut templates)
+                        .code_editor()
+                        .desired_rows(5)
+                        .desired_width(f32::INFINITY)
+                        .hint_text("[[class]]\nid = \"motor.brake\"\nfunctions = [\"motor.ac3\"]\n[[class.set]]\nname = \"with brake\"\nrequired = [\"U1\", \"V1\", \"W1\", \"BD1\", \"BD2\"]"),
+                );
+                    let p = crate::theme::ui_palette();
+                    let parsed = novo_symbols::parse_company_templates(&templates);
+                    match &parsed {
+                        Ok(_) if templates.trim().is_empty() => {
+                            ui.label(
+                                egui::RichText::new("Built-in names only").color(p.text_secondary),
+                            );
+                        }
+                        Ok(classes) => {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} read",
+                                    if classes.len() == 1 {
+                                        "1 class".to_owned()
+                                    } else {
+                                        format!("{} classes", classes.len())
+                                    }
+                                ))
+                                .color(p.success),
+                            );
+                        }
+                        Err(e) => {
+                            ui.label(egui::RichText::new(e.as_str()).color(p.error));
+                        }
+                    }
+                    let changed = templates.trim() != stored_templates.trim();
+                    if ui
+                        .add_enabled(
+                            parsed.is_ok() && changed,
+                            egui::Button::new("Save pin names"),
+                        )
+                        .clicked()
+                    {
+                        save_templates = true;
+                    }
+                });
                 super::dialog_ui::done(ui)
             },
         );
+        if save_templates {
+            self.set_pin_templates(&templates);
+        }
+        if !(modal.inner || modal.should_close()) {
+            self.wb.pin_templates_text = Some(templates);
+        }
         self.set_project_rules(rules);
         if modal.inner || modal.should_close() {
             self.wb.project_rules = false;

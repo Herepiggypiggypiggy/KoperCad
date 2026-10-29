@@ -76,6 +76,7 @@ mod count_words;
 mod defects_card;
 #[cfg(test)]
 mod defects_card_tests;
+mod describe_recipes;
 mod designer;
 mod device_renumber;
 mod diagnostics;
@@ -282,6 +283,7 @@ mod strip_grouping_tests;
 mod supply_feeds;
 mod symbol_folder;
 mod symbol_preview;
+mod template_crane;
 mod terminal_edit;
 mod terminals;
 #[cfg(test)]
@@ -475,6 +477,8 @@ mod shortcuts_sheet_tests;
 #[cfg(test)]
 mod small_window_tests;
 #[cfg(test)]
+mod template_crane_tests;
+#[cfg(test)]
 mod tips_tests;
 #[cfg(test)]
 mod ui_gaps_tests;
@@ -622,6 +626,7 @@ enum Leaving {
     CraneExample,
     PlcExample,
     PumpExample,
+    CraneTemplate,
     Practice,
     /// Open this lesson's sample project and start the lesson.
     Lesson(String),
@@ -1018,6 +1023,7 @@ impl NovoApp {
             Action::OpenCraneExample => self.leave_then(ctx, Leaving::CraneExample),
             Action::OpenPlcExample => self.leave_then(ctx, Leaving::PlcExample),
             Action::OpenPumpExample => self.leave_then(ctx, Leaving::PumpExample),
+            Action::NewCraneProject => self.leave_then(ctx, Leaving::CraneTemplate),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
             Action::Learn => self.learn_run_command("help.learn", None),
@@ -1193,6 +1199,7 @@ impl NovoApp {
             Leaving::CraneExample => self.open_crane_example(),
             Leaving::PlcExample => self.open_plc_example(),
             Leaving::PumpExample => self.open_pump_example(),
+            Leaving::CraneTemplate => self.new_crane_project(),
             Leaving::Practice => self.start_practice(),
             Leaving::Lesson(id) => self.start_lesson_now(&id),
             Leaving::Close => self.close_project(),
@@ -1811,6 +1818,13 @@ impl NovoApp {
             .show(ui, |ui| self.top_bar(ui, &mut picked));
         self.status_bar(ui);
         let reports = self.workspace() == workspace::Workspace::Reports && self.is_open();
+        // Pages docked as a pane of a strip is drawn below, with the strips; not
+        // at the Commissioning tablet view, whose wide touch column stays a column.
+        let pages_docked = pinned
+            && self.is_open()
+            && !reports
+            && !self.commissioning_tablet()
+            && panel_dock::pages_docked(&ctx).is_some();
         // The tool rail: the leftmost panel of the Schematic, Cabinet, 3D,
         // Reports and Commissioning workspaces.
         let rail_workspace = self.workspace();
@@ -1848,7 +1862,7 @@ impl NovoApp {
                 .size_range(OUTLINE_MIN_WIDTH..=OUTLINE_MAX_WIDTH)
                 .resizable(true)
                 .show(ui, |ui| self.reports_list(ui));
-        } else if pinned && self.is_open() {
+        } else if pinned && self.is_open() && !pages_docked {
             // The edge is dragged to the width the person wants; the Commissioning
             // tablet view keeps its wide touch column.
             // (The tablet column has an id of its own, so the width the person
@@ -1881,6 +1895,24 @@ impl NovoApp {
         // Panels the person docked at an edge of the canvas take their strip here, so
         // the canvas is what is left.
         panel_dock::spacers(ui);
+        if pages_docked && let Some(slot) = panel_dock::pages_docked(&ctx) {
+            let shown = panel_dock::show_docked(
+                &ctx,
+                egui::Id::new("pages_pane"),
+                panel_dock::PAGES,
+                self.outline_mode.label(),
+                slot,
+                panel_dock::PaneOptions {
+                    closable: false,
+                    float_tip: "Back to the Pages column",
+                    scrolls: false,
+                },
+                |ui| self.outline(ui, &mut picked),
+            );
+            if let Some(shown) = shown {
+                self.wb.outline_shown = Some(shown.response.rect.width().round());
+            }
+        }
         // The canvases paint their own ground; the Reports tables and the
         // Cabinet toolbar sit on the theme's surfaces, not on the bare window.
         let pal = novo_theme::Palette::of_ctx(&ctx);
@@ -1998,6 +2030,7 @@ impl NovoApp {
         self.parts_window(&ctx);
         self.parts_bulk_dialog(&ctx);
         self.auto_assign_dialog(&ctx);
+        self.describe_recipes_dialog(&ctx);
         self.project_settings_dialog(&ctx);
         self.project_rules_dialog(&ctx);
         self.device_renumber_dialog(&ctx);
@@ -2508,7 +2541,8 @@ impl NovoApp {
                 {
                     picked.push(Action::PinOutline);
                 }
-                if pinned {
+                if pinned && panel_dock::pages_docked(ui.ctx()).is_none() {
+                    panel_dock::pages_dock_button(ui);
                     panel_dock::navigator_side_button(ui);
                 }
             });

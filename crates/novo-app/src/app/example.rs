@@ -289,13 +289,41 @@ impl NovoApp {
         );
     }
 
+    /// File > New from template > Overhead crane: a structure tree, a few
+    /// empty pages and the cover pages, in a new unsaved project.
+    pub(super) fn new_crane_project(&mut self) {
+        self.open_built(
+            super::template_crane::CRANE_TEMPLATE_NAME,
+            super::template_crane::build_crane_template,
+            "New crane project. Fill in Project > Project settings > Project information; the cover pages follow.",
+            false,
+        );
+    }
+
     fn open_built_example(
         &mut self,
         name: &str,
         build: fn(&mut Document) -> ModelResult<novo_core::ChangeSet>,
     ) {
+        self.open_built(
+            name,
+            build,
+            "This is an example. Edit freely; Ctrl+S keeps your own copy.",
+            true,
+        );
+    }
+
+    /// Opens a project drawn by `build`. An example starts as saved (nothing
+    /// to ask about on close); a template is a new project the person owns.
+    fn open_built(
+        &mut self,
+        name: &str,
+        build: fn(&mut Document) -> ModelResult<novo_core::ChangeSet>,
+        welcome: &str,
+        saved: bool,
+    ) {
         if let Err(e) = self.backend.new_project(name) {
-            self.message(Level::Error, format!("Could not open the example: {e}"));
+            self.message(Level::Error, format!("Could not open the project: {e}"));
             return;
         }
         self.project_path = None;
@@ -313,15 +341,14 @@ impl NovoApp {
         self.document_replaced();
         self.fix_current_page();
         if let Some(doc) = self.backend.document_mut() {
-            doc.mark_saved();
+            if saved {
+                doc.mark_saved();
+            }
             // Opening starts with an empty history, like a fresh project:
             // Ctrl+Z must not silently undo the example's own drawing.
             doc.clear_history();
         }
-        self.message(
-            Level::Info,
-            "This is an example. Edit freely; Ctrl+S keeps your own copy.",
-        );
+        self.message(Level::Info, welcome);
     }
 }
 

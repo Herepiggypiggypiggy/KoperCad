@@ -87,6 +87,7 @@ pub mod designer;
 mod devices;
 mod diagrams;
 mod export;
+mod front;
 pub mod handover;
 pub mod i18n;
 mod io;
@@ -130,6 +131,7 @@ pub use defaults::{
 pub use devices::DeviceList;
 pub use diagrams::{CableDiagram, TerminalDiagram};
 pub use export::{CsvOptions, ExportError, save_xlsx, to_csv, xlsx_bytes};
+pub use front::{FrontMatter, keys as front_keys};
 pub use io::IoList;
 pub use kitting::{KitPlan, KitSettings, Kitting};
 pub use label_sheet::{
@@ -181,6 +183,7 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
         Box::new(PlugList),
         Box::new(Labels),
         Box::new(SingleLineDiagram),
+        Box::new(FrontMatter),
     ]
 }
 
