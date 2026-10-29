@@ -628,6 +628,17 @@ impl NovoApp {
                      drawing. Brake timing is entered, not measured; the plausibility check uses \
                      the true shaft speed. Not a maker's firmware.",
                 );
+                ui.weak(
+                    "\u{2022} Two winches on one beam: a rigid beam hanging on two elastic ropes \
+                     with the stiffness, damping, rope distance and centre of gravity you enter; \
+                     a rope pulls only when taut, so a slack rope is modelled and flagged. The \
+                     beam tilts freely (or is guided) at small angles with vertical ropes; rope \
+                     sway and swing, drum grooving and the beam's own flex are not modelled. The \
+                     synchronisation mode, its gains and the rope rating are entered numbers, not \
+                     measurements, and the first winch's up, down and step 2 devices command both \
+                     winches. Start rollback, stop travel and brake slip are reported for a \
+                     single winch only.",
+                );
                 ui.weak("\u{2022} Not a safety or compliance statement.");
             });
         if !open {
