@@ -1,0 +1,25 @@
+@title Parts: a CAD file the maker's BMEcat lists for an article is matched to that article
+@area Parts
+# Made-up maker file. The STEP file is named EXM-DRAWING-0042.stp and says nothing about the order number;
+# only the catalog ties it to EX-3001, through MIME_SOURCE.
+fresh
+key ctrl+k
+text "parts"
+wait 10
+key Return
+wait 20
+answer_dialog qa/fixtures/parts/bmecat-cad/example-maker-with-cad.xml
+click_text "Import catalog files"
+wait 60
+expect "CAD file name"
+shot import-report
+check_layout
+click_text "Close"
+wait 10
+answer_dialog qa/fixtures/parts/bmecat-cad/EXM-DRAWING-0042.stp
+click_text "Add CAD files…"
+wait 40
+expect "catalog lists the file"
+expect "Example Maker EX-3001"
+shot matched
+check_layout
