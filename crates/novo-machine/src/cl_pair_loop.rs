@@ -21,10 +21,10 @@
 //! rollback, stop travel and brake slip; read them off the snapshot.
 
 use novo_drive::InputError;
-use novo_drive::closed_loop::{ClFault, EncoderHealth};
+use novo_drive::closed_loop::ClFault;
 
 use crate::cl_winch_loop::{
-    ClWinchBinding, MAX_FINDINGS, binding_findings, energised, energised_or_true,
+    ClWinchBinding, MAX_FINDINGS, binding_findings, encoder_health, energised, energised_or_true,
 };
 use crate::cosim::StepConfig;
 use crate::hoist_loop::BindingFinding;
@@ -61,6 +61,13 @@ pub enum ClPairFindingKind {
         winch: usize,
     },
     EncoderSignalBack {
+        winch: usize,
+    },
+    /// One encoder channel is gone: the winch's counts no longer say which way it turns.
+    EncoderChannelLost {
+        winch: usize,
+    },
+    EncoderChannelBack {
         winch: usize,
     },
     /// The pair stopped itself.
@@ -108,6 +115,13 @@ impl ClPairFindingKind {
                 "Winch {}: the encoder signal is gone, no speed or position feedback.",
                 n(*winch)
             ),
+            Self::EncoderChannelLost { winch } => format!(
+                "Winch {}: an encoder channel is gone, the speed feedback no longer knows the direction.",
+                n(*winch)
+            ),
+            Self::EncoderChannelBack { winch } => {
+                format!("Winch {}: the encoder channel is back.", n(*winch))
+            }
             Self::EncoderSignalBack { winch } => {
                 format!("Winch {}: the encoder signal is back.", n(*winch))
             }
@@ -150,6 +164,7 @@ pub struct ClPairModule {
     last_fault: [Option<ClFault>; 2],
     last_sto: [bool; 2],
     last_encoder_ok: [bool; 2],
+    last_channel_ok: [bool; 2],
     last_sync: Option<SyncFault>,
     overloaded: [bool; 2],
     slack: [bool; 2],
@@ -183,6 +198,7 @@ impl ClPairModule {
             last_fault: [None; 2],
             last_sto: [false; 2],
             last_encoder_ok: [true; 2],
+            last_channel_ok: [true; 2],
             last_sync: None,
             overloaded: [false; 2],
             slack: [false; 2],
@@ -318,11 +334,8 @@ fn step_module(m: &mut ClPairModule, circuit: &impl CircuitPort, dt: f64, time_s
             energised_or_true(circuit, &b.sto[1]),
         );
         let encoder_ok = energised_or_true(circuit, &b.encoder);
-        let health = if encoder_ok {
-            EncoderHealth::Healthy
-        } else {
-            EncoderHealth::SignalLost
-        };
+        let channel_ok = energised_or_true(circuit, &b.encoder_b);
+        let health = encoder_health(encoder_ok, channel_ok);
         let drive = if i == 0 {
             &mut m.pair.a.drive
         } else {
@@ -345,6 +358,15 @@ fn step_module(m: &mut ClPairModule, circuit: &impl CircuitPort, dt: f64, time_s
             };
             m.note(time_s, kind);
             m.last_encoder_ok[i] = encoder_ok;
+        }
+        if channel_ok != m.last_channel_ok[i] {
+            let kind = if channel_ok {
+                ClPairFindingKind::EncoderChannelBack { winch: i }
+            } else {
+                ClPairFindingKind::EncoderChannelLost { winch: i }
+            };
+            m.note(time_s, kind);
+            m.last_channel_ok[i] = channel_ok;
         }
     }
     let run = up != down;

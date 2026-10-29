@@ -142,6 +142,10 @@ pub const KEYS: &[SpecKey] = &[
         "cw_encoder",
         "Encoder signal device (energised: signal present)",
     ),
+    tag(
+        "cw_encoder_b",
+        "Encoder channel B device (energised: present)",
+    ),
     tag("cw_mains", "Main contactor device"),
     tag("cw_brake_relay", "Drive brake relay contact device"),
     tag("cw_brake_feed", "Brake contactor / rectifier device"),
@@ -547,6 +551,7 @@ pub fn closed_winch_from_properties(
         fast: text("cw_in_fast"),
         sto: [text("cw_sto_a"), text("cw_sto_b")],
         encoder: text("cw_encoder"),
+        encoder_b: text("cw_encoder_b"),
         mains: text("cw_mains"),
         brake_relay: text("cw_brake_relay"),
         brake_feed: text("cw_brake_feed"),
