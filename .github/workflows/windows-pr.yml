@@ -90,6 +90,9 @@ jobs:
             '### Windows tests' | Out-File -Append $env:GITHUB_STEP_SUMMARY
             '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY
             $bad | Select-Object -First 80 | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            # Also in the step log: it is the last step, so its output lands in the log tail the API returns.
+            'Failing tests:' | Write-Host
+            $bad | Select-Object -First 80 | ForEach-Object { Write-Host $_ }
             '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY
           }
       - name: full test log
