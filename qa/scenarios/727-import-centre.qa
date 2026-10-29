@@ -15,6 +15,8 @@ shot centre-open
 expect "Drawings and backgrounds"
 expect "Projects"
 expect "Choose an item on the left"
+# A greyed tile says why in words (this page has no background).
+expect "This page has no DXF background"
 check_layout
 click_text "Import parts table"
 wait 6

@@ -295,8 +295,13 @@ impl NovoApp {
         let title = ui.painter().layout_job(title);
         ui.painter()
             .galley(egui::pos2(rect.left() + 44.0, rect.top() + 9.0), title, ink);
+        // A tile that cannot be used says why in its second line.
+        let second = match &reason {
+            Some(why) => why.to_string(),
+            None => centres::describe(info.id).to_owned(),
+        };
         let mut job = egui::text::LayoutJob::simple(
-            centres::describe(info.id).to_owned(),
+            second,
             egui::TextStyle::Small.resolve(ui.style()),
             soft,
             (rect.width() - 52.0).max(20.0),
@@ -309,7 +314,10 @@ impl NovoApp {
             soft,
         );
         self.anchor(&format!("cmd.{}", info.id), rect, info.label);
-        let response = response.on_hover_text(info.label);
+        let response = match &reason {
+            Some(why) => response.on_hover_text(format!("{}: {why}", info.label)),
+            None => response.on_hover_text(info.label),
+        };
         if response.clicked() {
             state.selected = Some(info.id);
             self.learn_event(novo_learn::Event::Clicked(format!("cmd.{}", info.id)));
