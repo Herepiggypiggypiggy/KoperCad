@@ -24,4 +24,4 @@ Updated 2026-10-29. Branch `claude/project-thread-up7jgz`, based on main 8c9c97e
 - 3D flyouts: Align (six align rows, caption Spread over two), Hide (hide, isolate, show all). Their entries only open the card (`rail::open`).
 - The 3D toolbar (with the sim status chip) and the Cabinet bar stay for now: they hold Layers, the door slider, the Plate/Table switch, Accept/Cancel of a preview and the fold-into-More logic. They start right of the rail because the rail is a real left panel. `view3d_controls::below` now also follows the drawn toolbar height, since the 48 pt of the rail can wrap the toolbar onto another row.
 - Not built, on purpose: the 3D side panel (Side panel, Layers rows; Position and Statistics stand in the panels zone), Select on the Cabinet rail (no tool in hand), the Cabinet Inspector row and a Heat flyout. Trim the toolbar/bar duplicates once the lessons are re-anchored (V7).
-- QA: `qa/scenarios/740-cabinet-rail.qa`, `741-3d-rail.qa`. Tests: `cargo test -p novo-app --lib rail_workspaces`.
+- QA: `qa/scenarios/770-cabinet-rail.qa`, `771-3d-rail.qa`. Tests: `cargo test -p novo-app --lib rail_workspaces`.
