@@ -238,7 +238,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "file.new_pump",
-        "New from template: pump station",
+        "New pump station template",
         "Project",
         &[
             "pump",
@@ -255,7 +255,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "file.new_mcc",
-        "New from template: motor control centre",
+        "New motor control centre template",
         "Project",
         &[
             "mcc",

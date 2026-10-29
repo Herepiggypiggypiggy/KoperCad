@@ -95,7 +95,7 @@ pub const DUTCH: &[Aliases] = &[
     nl(
         "file.new_pump",
         &[],
-        &["nieuw pomp", "pompstation sjabloon", "pompproject"],
+        &["nieuw pomp", "pomp sjabloon", "pompproject"],
     ),
     nl(
         "file.new_mcc",
