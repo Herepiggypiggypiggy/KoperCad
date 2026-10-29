@@ -1143,6 +1143,9 @@ impl NovoApp {
         let before =
             view3d_options::snapshot(mode, &self.cabinet.heat, self.settings.trackpad_pans);
         let mut values = before.clone();
+        // The status of the heat simulation, whether or not its panel is open.
+        let no_cabinet = empty_hint.is_some();
+        let heat_shown = self.cabinet.heat.on;
         let (changed, asked) = view3d_controls::toolbar(
             ui.ctx(),
             view_rect,
@@ -1153,6 +1156,16 @@ impl NovoApp {
             !mode.view.state.selection.is_empty(),
             &mut mode.view.state.section,
             &|| mode.built.as_ref().map(|(_, _, scene)| scene.bounds()),
+            &mut |ui| {
+                if !no_cabinet {
+                    super::sim_chip::row(
+                        ui,
+                        &mut self.cabinet.heat,
+                        heat_shown,
+                        options.reduced_motion,
+                    );
+                }
+            },
         );
         let mut owners = view3d_options::Owners {
             controls: &mut mode.controls,

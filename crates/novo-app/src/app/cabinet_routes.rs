@@ -262,6 +262,20 @@ fn notes(
             plural(free, "wire has", "wires have")
         ));
     }
+    let through = count(&|p| matches!(p, Problem::StubThroughDevice { .. }));
+    if through > 0 {
+        notes.push(format!(
+            "{} cross a device on the way to a duct: no free way round it. Move the duct or the device",
+            plural(through, "wire has to", "wires have to")
+        ));
+    }
+    let along = plan.routes.iter().filter(|r| !r.rails.is_empty()).count();
+    if along > 0 {
+        notes.push(format!(
+            "{} run along a DIN rail beside the devices on it",
+            plural(along, "wire", "wires")
+        ));
+    }
     let overfull = count(&|p| matches!(p, Problem::OverfullDuct { .. }));
     if overfull > 0 {
         notes.push(format!(
@@ -434,8 +448,9 @@ fn fits(area: egui::Rect, label: &str) -> bool {
 pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Option<Ask> {
     let mut ask = None;
     let panel = egui::Panel::right("cabinet_routes")
-        .exact_size(340.0)
-        .resizable(false)
+        .default_size(340.0)
+        .size_range(260.0..=ui.available_width() * 0.6)
+        .resizable(true)
         .show(ui, |ui| {
             ui.add_space(6.0);
             ui.strong("Routes");
@@ -620,6 +635,7 @@ fn entry_section(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Op
                 egui::DragValue::new(&mut value)
                     .range(0.0..=100_000.0)
                     .speed(10.0)
+                    .custom_parser(parse_mm)
                     .custom_formatter(|v, _| {
                         if set.is_none() && v == 0.0 {
                             "—".to_owned()
@@ -937,5 +953,37 @@ mod tests {
         // The panel is its 340 points wide, inside the window, and the
         // buttons wrap instead of widening it.
         assert_eq!(left, 1000.0);
+    }
+}
+
+/// A length typed into the entry's outside field: "500", "500 mm" or "1,5"
+/// (a decimal comma with one or two digits). Nothing, "—" (the field's
+/// not-stated display) or a comma followed by three digits ("1,500" is
+/// ambiguous between 1.5 and 1500) is not a number.
+fn parse_mm(text: &str) -> Option<f64> {
+    let t = text.trim().to_lowercase();
+    let t = t.trim_end_matches("mm").trim();
+    if let Some((_, after)) = t.split_once(',')
+        && after.chars().filter(char::is_ascii_digit).count() >= 3
+    {
+        return None;
+    }
+    t.replace(',', ".").parse::<f64>().ok()
+}
+
+#[cfg(test)]
+mod parse_mm_tests {
+    use super::parse_mm;
+
+    #[test]
+    fn typed_lengths_are_read_and_ambiguous_ones_refused() {
+        assert_eq!(parse_mm("500"), Some(500.0));
+        assert_eq!(parse_mm("500 mm"), Some(500.0));
+        assert_eq!(parse_mm("500 MM"), Some(500.0));
+        assert_eq!(parse_mm(" 1,5 "), Some(1.5));
+        assert_eq!(parse_mm("1,50"), Some(1.5));
+        assert_eq!(parse_mm("1,500"), None);
+        assert_eq!(parse_mm(""), None);
+        assert_eq!(parse_mm("—"), None);
     }
 }

@@ -288,104 +288,111 @@ impl NovoApp {
         let Some(mut import) = self.wb.sheet_import.take() else {
             return;
         };
-        let modal = egui::Modal::new(egui::Id::new("sheet_import")).show(ctx, |ui| {
-            ui.set_width(600.0);
-            ui.heading(format!("Import {}", import.file_name));
-            ui.weak(import.plan.summary());
-            if !import.plan.has_baseline {
-                ui.weak("This file has no baseline, so later edits in the project are not checked");
-            }
-            ui.add_space(4.0);
-            ui.horizontal(|ui| {
-                let counts = import.counts();
-                for (filter, count) in Filter::ALL.into_iter().zip(counts) {
-                    let text = format!("{} {count}", filter.label());
-                    if ui.selectable_label(import.filter == filter, text).clicked() {
-                        import.filter = filter;
-                    }
+        let modal = super::panel::modal(
+            ctx,
+            "sheet_import",
+            format!("Import {}", import.file_name),
+            [600.0, 540.0],
+            |ui| {
+                ui.weak(import.plan.summary());
+                if !import.plan.has_baseline {
+                    ui.weak(
+                        "This file has no baseline, so later edits in the project are not checked",
+                    );
                 }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.small_button("None").clicked() {
-                        import.set_listed(false);
-                    }
-                    if ui.small_button("All").clicked() {
-                        import.set_listed(true);
-                    }
-                });
-            });
-            if import.plan.conflicts().next().is_some() {
+                ui.add_space(4.0);
                 ui.horizontal(|ui| {
-                    ui.colored_label(ui.visuals().warn_fg_color, "Conflicts:");
-                    if ui.small_button("Take the sheet").clicked() {
-                        import.plan.resolve(Resolution::Sheet);
+                    let counts = import.counts();
+                    for (filter, count) in Filter::ALL.into_iter().zip(counts) {
+                        let text = format!("{} {count}", filter.label());
+                        if ui.selectable_label(import.filter == filter, text).clicked() {
+                            import.filter = filter;
+                        }
                     }
-                    if ui.small_button("Keep the project").clicked() {
-                        import.plan.resolve(Resolution::Project);
-                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button("None").clicked() {
+                            import.set_listed(false);
+                        }
+                        if ui.small_button("All").clicked() {
+                            import.set_listed(true);
+                        }
+                    });
                 });
-            }
-            ui.separator();
-            egui::ScrollArea::vertical()
-                .max_height(360.0)
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    for g in 0..import.groups.len() {
-                        if import.shows(&import.groups[g]) {
-                            row(ui, &mut import, g);
+                if import.plan.conflicts().next().is_some() {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(ui.visuals().warn_fg_color, "Conflicts:");
+                        if ui.small_button("Take the sheet").clicked() {
+                            import.plan.resolve(Resolution::Sheet);
                         }
-                    }
-                    if import.shows_new() {
-                        for i in 0..import.plan.new_devices.len() {
-                            new_row(ui, &mut import.plan, i);
+                        if ui.small_button("Keep the project").clicked() {
+                            import.plan.resolve(Resolution::Project);
                         }
-                        // Terminals, cables and cores the sheet adds.
-                        let skip = import.plan.new_devices.len();
-                        for (k, added) in
-                            import.plan.added_rows().into_iter().enumerate().skip(skip)
-                        {
-                            added_row(ui, &mut import.plan, k, &added);
+                    });
+                }
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .max_height(360.0)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        for g in 0..import.groups.len() {
+                            if import.shows(&import.groups[g]) {
+                                row(ui, &mut import, g);
+                            }
                         }
-                    }
-                    if matches!(import.filter, Filter::All | Filter::Rejected) {
-                        for r in &import.plan.rejected {
-                            ui.horizontal_wrapped(|ui| {
-                                ui.colored_label(
-                                    ui.visuals().error_fg_color,
-                                    format!("{} line {}", r.table.name(), r.line),
-                                );
-                                if !r.item.is_empty() {
-                                    ui.strong(&r.item);
-                                }
-                                ui.label(r.reasons.join("; "));
-                            });
+                        if import.shows_new() {
+                            for i in 0..import.plan.new_devices.len() {
+                                new_row(ui, &mut import.plan, i);
+                            }
+                            // Terminals, cables and cores the sheet adds.
+                            let skip = import.plan.new_devices.len();
+                            for (k, added) in
+                                import.plan.added_rows().into_iter().enumerate().skip(skip)
+                            {
+                                added_row(ui, &mut import.plan, k, &added);
+                            }
                         }
-                    }
-                    for text in &import.plan.notes {
-                        ui.weak(text);
-                    }
-                });
-            // Warnings stay in view next to Apply: confirm with them read.
-            for text in &import.plan.warnings {
-                ui.colored_label(ui.visuals().warn_fg_color, format!("Warning: {text}"));
-            }
-            ui.separator();
-            let n = import.plan.selected();
-            ui.horizontal(|ui| {
-                let label = format!("Apply {n} change{} (Enter)", if n == 1 { "" } else { "s" });
-                let apply = ui.add_enabled(n > 0, egui::Button::new(label)).clicked();
-                let cancel = ui.button("Cancel (Esc)").clicked();
-                let rejected = import.plan.rejected.len();
-                let save = ui
-                    .add_enabled(rejected > 0, egui::Button::new("Save rejected rows..."))
-                    .on_hover_text(
-                        "Write the rows that cannot be used to a workbook, with the reason \
+                        if matches!(import.filter, Filter::All | Filter::Rejected) {
+                            for r in &import.plan.rejected {
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.colored_label(
+                                        ui.visuals().error_fg_color,
+                                        format!("{} line {}", r.table.name(), r.line),
+                                    );
+                                    if !r.item.is_empty() {
+                                        ui.strong(&r.item);
+                                    }
+                                    ui.label(r.reasons.join("; "));
+                                });
+                            }
+                        }
+                        for text in &import.plan.notes {
+                            ui.weak(text);
+                        }
+                    });
+                // Warnings stay in view next to Apply: confirm with them read.
+                for text in &import.plan.warnings {
+                    ui.colored_label(ui.visuals().warn_fg_color, format!("Warning: {text}"));
+                }
+                ui.separator();
+                let n = import.plan.selected();
+                ui.horizontal(|ui| {
+                    let label =
+                        format!("Apply {n} change{} (Enter)", if n == 1 { "" } else { "s" });
+                    let apply = ui.add_enabled(n > 0, egui::Button::new(label)).clicked();
+                    let cancel = ui.button("Cancel (Esc)").clicked();
+                    let rejected = import.plan.rejected.len();
+                    let save = ui
+                        .add_enabled(rejected > 0, egui::Button::new("Save rejected rows..."))
+                        .on_hover_text(
+                            "Write the rows that cannot be used to a workbook, with the reason \
                          in a last column. Fix them there and import that file.",
-                    )
-                    .clicked();
-                (apply, cancel, save)
-            })
-            .inner
-        });
+                        )
+                        .clicked();
+                    (apply, cancel, save)
+                })
+                .inner
+            },
+        );
         let (apply, cancel, save) = modal.inner;
         if save {
             self.save_rejected_rows(&import.plan, &import.book);

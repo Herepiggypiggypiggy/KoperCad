@@ -818,14 +818,16 @@ fn wire_list_routes_lengths_through_the_ducts_of_the_plate() {
     // spread along its edge in marking order, F1:2 is the first of three
     // below F1 (x 107.5), K1:1 the first of three above K1 (x 413.5). F1:2 leaves the bottom edge
     // (y 190), 60 mm above the duct at y 250. K1:1 is on the top edge (y 100),
-    // 150 mm above the duct, facing away from it: the wire leaves 40 mm, turns
-    // and comes back (80 mm detour). 306 mm along the duct, 50 mm slack per
-    // end, and 30 mm per end from the plate to the middle of the 60 mm duct:
-    // the parts have no depth yet, so the list says it measured from the plate.
+    // 150 mm above the duct, facing away from it: the wire leaves 10 mm up,
+    // goes 23.5 mm along the top to 10 mm clear of K1's left side (x 390) and
+    // down 160 mm to the duct, 282.5 mm along the duct to x 107.5, then 60 mm
+    // 60 mm up to F1:2's bottom edge: 536 mm in all. Plus 50 mm slack per end, and 30 mm
+    // per end from the plate to the middle of the 60 mm duct: the parts have
+    // no depth yet, so the list says it measured from the plate.
     let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
     assert_eq!(
         (row[8].as_str(), row[9].as_str()),
-        ("756", "routed, no depth")
+        ("696", "routed, no depth")
     );
     // With a depth the terminals stand 80 mm off the plate: 50 mm to the duct.
     let parts: Vec<_> = [h.f1, h.k1]
@@ -842,7 +844,7 @@ fn wire_list_routes_lengths_through_the_ducts_of_the_plate() {
     .expect("depth");
     let wires = report(&doc, "wires");
     let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
-    assert_eq!((row[8].as_str(), row[9].as_str()), ("796", "routed"));
+    assert_eq!((row[8].as_str(), row[9].as_str()), ("736", "routed"));
     // F2 is not placed: that wire stays an estimate.
     let row = wire_row(&wires, "=A1+CAB-K1:2", "=A1+CAB-F2:1");
     assert_eq!(row[9], "estimate");

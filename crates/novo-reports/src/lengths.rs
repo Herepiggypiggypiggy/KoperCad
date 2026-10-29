@@ -170,8 +170,10 @@ pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurem
                         ducts: Vec::new(),
                     });
                     if cut.mm < route.length_mm {
+                        // The whole wire, not only its inside part: the page
+                        // estimate, which the designer measures on the plate.
                         cut = CutLength {
-                            mm: route.length_mm,
+                            mm: estimate(project, &rules, c.from, c.to).max(route.length_mm),
                             basis: Basis::Estimate,
                             ducts: Vec::new(),
                         };
