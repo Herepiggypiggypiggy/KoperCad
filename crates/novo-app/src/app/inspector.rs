@@ -652,6 +652,7 @@ impl NovoApp {
             .iter()
             .chain(novo_machine::travel_spec::KEYS)
             .chain(novo_machine::drive_hoist_spec::KEYS)
+            .chain(novo_machine::cl_winch_spec::KEYS)
             .any(|k| k.key == key && k.text);
         let value = if text.is_empty() {
             None
@@ -985,6 +986,7 @@ fn inspector_body(
     mech_load_section(ui, info, actions);
     travel_drive_section(ui, info, actions);
     drive_hoist_section(ui, info, actions);
+    closed_winch_section(ui, info, actions);
 
     // The rest of the device's properties are the advanced part: closed
     // until opened, and absent when there are none.
@@ -1263,6 +1265,31 @@ fn drive_hoist_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<I
             help: "Hook load turns the motor into an open-loop hoist behind a frequency drive \
                    whose brake relay is a contact in the drawing. Blank rows use generic \
                    values, not a manufacturer's data. Run it: Simulate > Drive run.",
+        },
+    );
+}
+
+/// The "Closed-loop winch" section of a motor: a hoist behind an encoder drive that holds torque
+/// at zero speed and opens the brake only after proving it (hook load, motor plate, encoder, brake,
+/// the drawing devices for the commands, the two STO channels and the encoder signal) for
+/// Simulate > Drive run.
+fn closed_winch_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<InspectorAction>) {
+    spec_section(
+        ui,
+        info,
+        actions,
+        SpecSection {
+            id: "inspector_closed_winch",
+            title: "Closed-loop winch",
+            keys: novo_machine::cl_winch_spec::KEYS,
+            marker: novo_machine::cl_winch_spec::CLOSED_WINCH_KEY,
+            summary: "closed-loop winch",
+            comma_note: "A comma is a decimal comma: 1,5 means 1.5. A comma before three digits (5,000) is refused: type 5000.",
+            help: "Hook load turns the motor into a winch behind an encoder drive. The STO \
+                   channels and the encoder signal are devices of the drawing, so a defect \
+                   injected on them (Simulate > Defects and walk-throughs) reaches the drive. \
+                   Blank rows use generic values, not a manufacturer's data. Run it: \
+                   Simulate > Drive run.",
         },
     );
 }

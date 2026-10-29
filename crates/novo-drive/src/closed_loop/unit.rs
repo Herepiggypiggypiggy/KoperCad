@@ -100,7 +100,8 @@ impl ClosedLoopWinch {
             dt_s,
         );
         let brake_torque = self.brake.holding_torque_nm();
-        self.brake.step(out.brake_release_cmd, dt_s);
+        self.brake
+            .step(inp.brake_coil.unwrap_or(out.brake_release_cmd), dt_s);
         (out, brake_torque)
     }
 
