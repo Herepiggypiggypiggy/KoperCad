@@ -266,6 +266,12 @@ carriage, the small-angle period `2 pi sqrt(L / g)` and the lean `atan(a / g)` a
 acceleration; the damping ratio (2 %) is a number, the rope keeps its length, the swing does not
 push back on the drive, and the two directions do not couple.
 
+Saved setup: the axis picks, the crane size (runway, span, rail height, hook start, load) and the
+start positions are kept in the project info properties (`crane3d.*`, `app/crane_setup.rs`), one
+undo step ("Crane picture") once the mouse button is up. A project without them gets the defaults;
+a number that is missing or out of range falls back one by one, and an axis the project no longer
+has is dropped. Undo and opening another project reload the window from the project.
+
 ### Lane L2c-open as built (open-loop drive hoist)
 
 A hoist behind a frequency drive without an encoder: `novo_drive::hoist_logic` (the brake sequence and

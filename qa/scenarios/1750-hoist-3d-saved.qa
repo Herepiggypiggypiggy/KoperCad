@@ -1,0 +1,26 @@
+@title Hoist in 3D keeps its axis picks in the project: picking an axis is one undo step and undo puts it back
+@area Simulate
+@sizes 1366x768
+# The picks and the crane size are saved with the project; Edit > Undo takes the pick back.
+open qa/fixtures/travel-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 30
+shot before-pick
+click_text "none"
+wait 10
+click_text "=A1+FLD-M1"
+wait 20
+expect "Bridge start"
+click_text "Edit"
+wait 10
+shot edit-menu
+click_text "Undo"
+wait 30
+expect_not "Bridge start"
+shot after-undo
+check_layout
