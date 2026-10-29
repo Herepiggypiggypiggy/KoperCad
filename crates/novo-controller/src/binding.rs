@@ -86,6 +86,9 @@ pub enum BindingProblem {
     /// Several controllers share a target that carries an ungated signal (an E-stop chain)
     /// which does not combine as `and`: a pressed E-stop on one could be hidden by another.
     SharedChainNotAnd,
+    /// One target has both an `and` signal (a chain) and an ordinary signal: the ordinary one,
+    /// when high, hides an open chain (see [`BindingTable::resolve`]).
+    MixedOrAnd,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -263,6 +266,42 @@ impl BindingTable {
                 }
             }
         }
+
+        let mut mixed: BTreeMap<&Target, (Vec<&SignalKey>, Vec<&SignalKey>)> = BTreeMap::new();
+        for b in &self.bindings {
+            let Some(def) = set
+                .instance(&b.key.controller)
+                .and_then(|i| i.controller.profile().signal(&b.key.signal))
+            else {
+                continue;
+            };
+            let entry = mixed.entry(&b.target).or_default();
+            if def.combine == Combine::And {
+                entry.0.push(&b.key);
+            } else {
+                entry.1.push(&b.key);
+            }
+        }
+        for (target, (ands, ors)) in mixed {
+            if let (Some(first), false) = (ands.first(), ors.is_empty()) {
+                let names = |keys: &[&SignalKey]| {
+                    keys.iter()
+                        .map(|k| k.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+                finding(
+                    BindingProblem::MixedOrAnd,
+                    Severity::Warning,
+                    first,
+                    format!(
+                        "{target} mixes the `and` signal {} with the ordinary signal {}: while the ordinary one is high it hides an open chain (a pressed E-stop)",
+                        names(&ands),
+                        names(&ors)
+                    ),
+                );
+            }
+        }
         out
     }
 
@@ -272,7 +311,9 @@ impl BindingTable {
     /// - a signal with `combine = "and"` joins the others of its kind as the smallest magnitude (a
     ///   normally-closed chain is open as soon as one controller opens it);
     /// - when a target has both kinds, the two results are combined as the larger magnitude, so
-    ///   one `and` signal does not turn the other signals of the target into an AND.
+    ///   one `and` signal does not turn the other signals of the target into an AND. This means a
+    ///   high ordinary signal overrides an open `and` chain on the same target; [`check`](Self::check)
+    ///   reports such a target as [`BindingProblem::MixedOrAnd`].
     ///
     /// A binding whose controller or signal does not exist adds nothing (the check reports it);
     /// a target with no known signal is absent from the result. An inverted binding contributes

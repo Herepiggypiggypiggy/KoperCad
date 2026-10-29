@@ -196,8 +196,31 @@ fn main_hoist_is_a_hoist_not_the_main_contactor() {
 fn rows_without_motion_borrow_the_only_named_motion() {
     let p = run("1;Hoist up\n2;Down");
     assert_eq!(p.profile.controls.len(), 1);
+    // Several motions named: a bare direction goes by the crane convention.
     let q = run("1;Hoist up\n2;Bridge forward\n3;Down");
-    assert!(matches!(&q.rows[2].outcome, Outcome::Skipped(_)));
+    assert!(matches!(&q.rows[2].outcome, Outcome::Signal(n) if n.starts_with("HOIST_DN")));
+    // A bare direction the named motion cannot make (right) is not forced onto it.
+    let r = run("1;Hoist up\n2;Hoist down\n3;Right");
+    assert!(matches!(&r.rows[2].outcome, Outcome::Signal(n) if n.starts_with("TROLLEY")));
+    // Slew has no convention: it borrows the only named motion.
+    let s = run("1;Slew left\n2;Right");
+    assert!(matches!(&s.rows[1].outcome, Outcome::Signal(n) if n.starts_with("SLEW")));
+}
+
+#[test]
+fn bare_directions_follow_the_crane_convention() {
+    let p = run("COM;Common\n1;Right\n2;Left\n3;Forward\n4;Back\n5;Up\n6;Down\n7;Fast");
+    let names: Vec<&str> = p.profile.signals.iter().map(|s| s.name.as_str()).collect();
+    for want in ["TROLLEY_RIGHT_1", "BRIDGE_FWD_1", "HOIST_UP_1"] {
+        assert!(names.contains(&want), "{want} in {names:?}");
+    }
+    assert!(
+        p.warnings
+            .iter()
+            .any(|w| w.message.contains("usual crane convention"))
+    );
+    // A speed alone is not a signal.
+    assert!(matches!(&p.rows[7].outcome, Outcome::Skipped(r) if r == "step without motion"));
 }
 
 #[test]
@@ -386,6 +409,30 @@ fn proposals_parse_and_validate_with_the_engine() {
         assert!(issues.is_empty(), "{id}: {issues:?}\n{text}");
         assert!(issues.iter().all(|i| i.severity != Sev::Error));
     }
+}
+
+#[test]
+fn the_profile_value_equals_the_profile_read_from_the_text() {
+    use novo_controller::Profile;
+    let mixed = run(
+        "COM;Common 48 VAC\n1;Main start\n2;Stop\n3;Emergency stop\n4;Hijsen;1\n5;Hijsen;2\n6;Zakken;1\n7;Zakken;2\n8;Horn\n9;Bridge forward\n10;Bridge back",
+    );
+    let mut all = vec![("mixed".to_owned(), mixed.profile)];
+    for (id, _) in library::list() {
+        all.push((id.to_owned(), library::build(id).unwrap().profile));
+    }
+    for (id, p) in all {
+        let direct = p.to_profile().unwrap_or_else(|e| panic!("{id}: {e}"));
+        let text = Profile::parse(&p.to_toml()).unwrap();
+        assert_eq!(direct, text, "{id}");
+    }
+}
+
+#[test]
+fn an_unknown_kind_is_refused_not_guessed() {
+    let mut p = run("COM;Common\n1;Horn").profile;
+    p.kind = "teapot".into();
+    assert!(p.to_profile().is_err());
 }
 
 #[test]

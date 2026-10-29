@@ -51,7 +51,9 @@ data that cannot be read is kept untouched until the person discards it on the c
 
 The engine's binding checks plus what only the drawing can say: a target that leads nowhere, two targets that close
 the same contact, a coil-driven contact the controller cannot close, a PLC word input. Signals that drive nothing
-are one line per controller, not one per signal. Not yet in the Check menu (`novo-checks`); the card shows them.
+are one line per controller, not one per signal. A target that mixes an `and` signal (an E-stop chain) with an
+ordinary one gets a warning: while the ordinary signal is high it overrides an open chain, so a pressed E-stop would
+not drop the target. Bind the chain to a target of its own. Not yet in the Check menu (`novo-checks`); the card shows them.
 
 ## Honest limits
 

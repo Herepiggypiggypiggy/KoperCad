@@ -1212,6 +1212,7 @@ fn mech_load_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<Ins
             keys: novo_machine::spec::KEYS,
             marker: novo_machine::spec::HOIST_KEY,
             summary: "hoist",
+            comma_note: "A comma is a decimal comma: 1,5 means 1.5. A comma before three digits (5,000) is refused: type 5000.",
             help: "Hook load turns the motor into a hoist. Blank rows use generic values, \
                    not a manufacturer's data. Run it: Simulate > Hoist run.",
         },
@@ -1232,6 +1233,7 @@ fn travel_drive_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<
             keys: novo_machine::travel_spec::KEYS,
             marker: novo_machine::travel_spec::TRAVEL_KEY,
             summary: "travel",
+            comma_note: "A comma is a decimal comma: 1,5 means 1.5. A comma before three digits (5,000) is refused: type 5000.",
             help: "Moving mass turns the motor into a travel axis behind a frequency drive. \
                    Blank rows use generic values, not a manufacturer's data. Run it: \
                    Simulate > Drive run.",
@@ -1246,6 +1248,7 @@ struct SpecSection {
     marker: &'static str,
     summary: &'static str,
     help: &'static str,
+    comma_note: &'static str,
 }
 
 fn spec_section(
@@ -1276,7 +1279,7 @@ fn spec_section(
         section.summary.to_owned()
     };
     widgets::collapsing_section(ui, section.id, section.title, &summary, set > 0, |ui| {
-        ui.weak("A comma is a decimal comma: 1,5 means 1.5, and 1,500 also means 1.5.");
+        ui.weak(section.comma_note);
         for k in section.keys {
             let shown = value_of(k.key);
             let id = egui::Id::new(("inspector_mech", k.key));

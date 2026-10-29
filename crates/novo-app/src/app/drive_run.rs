@@ -94,6 +94,9 @@ pub(super) fn advance(
 
 /// A one-line reading of an axis, for the badge and the window.
 pub(super) fn reading(module: &TravelModule) -> String {
+    if let Some(why) = module.fault() {
+        return why.to_owned();
+    }
     let Some(s) = module.snapshot() else {
         return "waiting".to_owned();
     };
