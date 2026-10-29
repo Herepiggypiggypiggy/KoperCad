@@ -1,0 +1,32 @@
+@title A wire under way: the tool rail stays put and Select still works
+@area Schematic
+@sizes 1366x768
+# Replaces the moved-dock scenario (796): the rail is a side panel with no moved or parked state.
+click_text "New project"
+wait 20
+key ctrl+k
+text "motor starter dol"
+wait 5
+key Enter
+wait 10
+try click_text "Motor starter DOL" Label
+wait 10
+click_text Place Button
+wait 20
+click 700 400
+wait 5
+shot rail-home
+wait 10
+shot rail-still
+key w
+wait 3
+click 337 150
+wait 5
+shot wire-started-rail-stays
+expect "Esc or right-click cancels"
+check_layout
+click 23 66
+wait 5
+shot select-from-rail
+expect_not "Esc or right-click cancels"
+check_layout
