@@ -21,7 +21,7 @@ use std::sync::Arc;
 pub const CRANE_PICTURE_LEAVES_OUT: &[&str] = &[
     "Generic crane proportions: the girder, trolley and hook block are not your crane's sizes",
     "The rope is a straight bar of fixed length: its swing is a simple pendulum model, not a measurement; stretch and slack rope are not modelled",
-    "Bridge and trolley follow a travel drive if you pick one (forward is along +x for the bridge and +z for the trolley); otherwise they stand where you set them",
+    "Bridge and trolley follow a travel drive if you pick one (forward is +x for the bridge, +z for the trolley) and its end limits stand as upright flags, red forward and amber reverse; otherwise they stand where you set them",
     "The swing is one pendulum per direction on a rope that keeps its length: no turning load, no push back on the drive",
     "No building, no clearance check, no structural model",
 ];
@@ -67,6 +67,14 @@ pub struct LimitMark {
     pub kind: LimitFlag,
 }
 
+/// One end limit of a travel axis: where along the runway (bridge) or across the span (trolley) it
+/// sits, m. `Upper` is the forward end, `Lower` the reverse end, as for the hoist.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TravelMark {
+    pub position_m: f32,
+    pub kind: LimitFlag,
+}
+
 /// The moving numbers of one frame.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct CraneState {
@@ -82,6 +90,10 @@ pub struct CraneState {
     /// The hoist reports a condition (a limit stopped it, the brake slipped, ...): the block turns red.
     pub warning: bool,
     pub limits: Vec<LimitMark>,
+    /// End limits of the bridge's travel axis, along the runway. A limit outside the runway is not drawn.
+    pub bridge_limits: Vec<TravelMark>,
+    /// End limits of the trolley's travel axis, across the span. A limit outside the span is not drawn.
+    pub trolley_limits: Vec<TravelMark>,
 }
 
 /// Sizes of the generic crane parts, mm. One place so the tests and the builder agree.
@@ -97,6 +109,8 @@ pub mod size {
     pub const BLOCK: [f32; 3] = [380.0, 520.0, 260.0];
     pub const HOOK: [f32; 3] = [90.0, 260.0, 90.0];
     pub const FLAG: [f32; 3] = [260.0, 40.0, 40.0];
+    /// An upright flag of a travel end limit: along the travel, up, across.
+    pub const TRAVEL_FLAG: [f32; 3] = [400.0, 1400.0, 60.0];
     /// The rope hangs beside the girder: this far from its centre line.
     pub const ROPE_OFFSET: f32 = 650.0;
     /// Gap between the hook tip and the top of the load (the sling).
@@ -115,6 +129,8 @@ const RAW_HOOK: u64 = 11;
 const RAW_LOAD: u64 = 12;
 const RAW_SLING: u64 = 13;
 const RAW_FLAG: u64 = 20;
+const RAW_BRIDGE_FLAG: u64 = 1000;
+const RAW_TROLLEY_FLAG: u64 = 2000;
 
 /// Length of the rope from the drum's underside to the top of the block, mm.
 pub fn rope_length_mm(layout: &CraneLayout, hook_m: f32) -> f32 {
@@ -362,6 +378,52 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
             tint,
         ));
     }
+    // Travel end limits stand on the runway beam (bridge) and on the girder (trolley), upright so
+    // they are not taken for the horizontal hoist flags.
+    let tint_of = |kind: LimitFlag| match kind {
+        LimitFlag::Upper => UPPER_FLAG,
+        LimitFlag::Lower => LOWER_FLAG,
+    };
+    for (k, mark) in state.bridge_limits.iter().enumerate() {
+        if !(0.0..=l.runway_m).contains(&mark.position_m) {
+            continue;
+        }
+        push(boxed(
+            RAW_BRIDGE_FLAG + k as u64,
+            ItemKind::Other,
+            Vec3::new(
+                mark.position_m * 1000.0 - size::TRAVEL_FLAG[0] * 0.5,
+                rail,
+                -size::TRAVEL_FLAG[2] * 0.5,
+            ),
+            Vec3::new(
+                size::TRAVEL_FLAG[0],
+                size::TRAVEL_FLAG[1],
+                size::TRAVEL_FLAG[2],
+            ),
+            tint_of(mark.kind),
+        ));
+    }
+    for (k, mark) in state.trolley_limits.iter().enumerate() {
+        if !(0.0..=l.span_m).contains(&mark.position_m) {
+            continue;
+        }
+        push(boxed(
+            RAW_TROLLEY_FLAG + k as u64,
+            ItemKind::Other,
+            Vec3::new(
+                bridge - size::TRAVEL_FLAG[2] * 0.5,
+                girder_top,
+                mark.position_m * 1000.0 - size::TRAVEL_FLAG[0] * 0.5,
+            ),
+            Vec3::new(
+                size::TRAVEL_FLAG[2],
+                size::TRAVEL_FLAG[1],
+                size::TRAVEL_FLAG[0],
+            ),
+            tint_of(mark.kind),
+        ));
+    }
     scene.revision = 1;
     scene
 }
@@ -532,6 +594,44 @@ mod tests {
         assert!(((girder.min.x + girder.max.x) * 0.5).abs() < 1e-2);
         let trolley = s.world_bounds(item(&s, RAW_TROLLEY));
         assert!(((trolley.min.z + trolley.max.z) * 0.5 - l.span_m * 1000.0).abs() < 1e-2);
+    }
+
+    #[test]
+    fn travel_limits_stand_on_the_beam_and_on_the_girder_and_outside_ones_are_skipped() {
+        let l = CraneLayout::default();
+        let s = build(
+            &l,
+            &CraneState {
+                bridge_m: 4.0,
+                bridge_limits: vec![
+                    TravelMark {
+                        position_m: 9.0,
+                        kind: LimitFlag::Upper,
+                    },
+                    TravelMark {
+                        position_m: l.runway_m + 1.0,
+                        kind: LimitFlag::Lower,
+                    },
+                ],
+                trolley_limits: vec![TravelMark {
+                    position_m: 2.5,
+                    kind: LimitFlag::Lower,
+                }],
+                ..Default::default()
+            },
+        );
+        let b = s.world_bounds(item(&s, RAW_BRIDGE_FLAG));
+        assert!(((b.min.x + b.max.x) * 0.5 - 9000.0).abs() < 1e-2);
+        assert!((b.min.y - l.rail_m * 1000.0).abs() < 1e-2);
+        assert_eq!(item(&s, RAW_BRIDGE_FLAG).tint, Some(UPPER_FLAG));
+        assert!(
+            s.items.iter().all(|i| i.id.raw != RAW_BRIDGE_FLAG + 1),
+            "a limit beyond the runway is not drawn"
+        );
+        let t = s.world_bounds(item(&s, RAW_TROLLEY_FLAG));
+        assert!(((t.min.z + t.max.z) * 0.5 - 2500.0).abs() < 1e-2);
+        assert!(((t.min.x + t.max.x) * 0.5 - 4000.0).abs() < 1e-2);
+        assert_eq!(item(&s, RAW_TROLLEY_FLAG).tint, Some(LOWER_FLAG));
     }
 
     #[test]

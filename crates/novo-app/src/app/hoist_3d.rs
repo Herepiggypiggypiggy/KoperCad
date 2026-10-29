@@ -10,8 +10,8 @@ use novo_machine::hoist_loop::{HoistModule, LimitKind};
 use novo_machine::swing::{DEFAULT_DAMPING_RATIO, SWING_MODEL_LEAVES_OUT, Swing};
 use novo_view3d::camera::ViewPreset;
 use novo_view3d::crane::{
-    CRANE_PICTURE_LEAVES_OUT, CraneLayout, CraneState, LimitFlag, LimitMark, build, hook_bounds,
-    rope_length_mm,
+    CRANE_PICTURE_LEAVES_OUT, CraneLayout, CraneState, LimitFlag, LimitMark, TravelMark, build,
+    hook_bounds, rope_length_mm,
 };
 use novo_view3d::palette::View3dTheme;
 use novo_view3d::widget::{View3d, ViewOptions};
@@ -166,6 +166,8 @@ pub(super) fn state_of(module: Option<&HoistModule>, bridge_m: f32, trolley_m: f
         hook_m: m.height_m() as f32,
         swing_rad: [0.0; 2],
         warning: !conditions(m).is_empty(),
+        bridge_limits: Vec::new(),
+        trolley_limits: Vec::new(),
         limits: m
             .binding
             .limits
@@ -179,6 +181,29 @@ pub(super) fn state_of(module: Option<&HoistModule>, bridge_m: f32, trolley_m: f
             })
             .collect(),
     }
+}
+
+/// The end limits of a travel axis as flag positions in the picture: the start of the axis plus the
+/// distance set on its motor. Nothing without an axis or a project.
+pub(super) fn travel_marks(
+    project: Option<&novo_core::Project>,
+    axis: Option<&str>,
+    start_m: f32,
+) -> Vec<TravelMark> {
+    let (Some(project), Some(axis)) = (project, axis) else {
+        return Vec::new();
+    };
+    super::drive_run::travel_limits_of(project, axis)
+        .into_iter()
+        .map(|(forward, m)| TravelMark {
+            position_m: start_m + m as f32,
+            kind: if forward {
+                LimitFlag::Upper
+            } else {
+                LimitFlag::Lower
+            },
+        })
+        .collect()
 }
 
 /// The line under the controls: where the hook is and what it does.
@@ -250,6 +275,28 @@ impl NovoApp {
             .hoist
             .module_at(follow)
             .map(|m| state_of(Some(m), travel.bridge_m, travel.trolley_m));
+        // The end limits of the picked axes, as flags: where the axis starts plus the distance
+        // set on the motor.
+        let (bridge_marks, trolley_marks) = {
+            let g = &self.wb.hoist.three_d;
+            let project = self.backend.document().map(|d| d.project());
+            (
+                travel_marks(project, g.bridge_axis.as_deref(), g.bridge_m),
+                travel_marks(project, g.trolley_axis.as_deref(), g.trolley_m),
+            )
+        };
+        let outside = [
+            (&bridge_marks, self.wb.hoist.three_d.layout.runway_m),
+            (&trolley_marks, self.wb.hoist.three_d.layout.span_m),
+        ]
+        .iter()
+        .map(|(marks, end)| {
+            marks
+                .iter()
+                .filter(|m| !(0.0..=*end).contains(&m.position_m))
+                .count()
+        })
+        .sum::<usize>();
         let g = &mut self.wb.hoist.three_d;
         let swinging = g.swinging();
         let drive_running = self.wb.drive_run.is_running();
@@ -392,6 +439,11 @@ impl NovoApp {
                         );
                     }
                 }
+                if outside > 0 {
+                    ui.weak(format!(
+                        "\u{2022} {outside} end limit(s) lie outside the picture and are not drawn"
+                    ));
+                }
                 match &line {
                     Some(text) => {
                         ui.label(text);
@@ -410,6 +462,8 @@ impl NovoApp {
                 }
                 let state = CraneState {
                     swing_rad: travel.swing_rad,
+                    bridge_limits: bridge_marks,
+                    trolley_limits: trolley_marks,
                     ..hoist_state
                         .clone()
                         .unwrap_or_else(|| state_of(None, travel.bridge_m, travel.trolley_m))
@@ -433,7 +487,7 @@ impl NovoApp {
                     let b = hook_bounds(&g.layout, &state);
                     g.view.frame_bounds(&b, now, reduced);
                 }
-                let height = (ui.available_height() - 170.0).max(160.0);
+                let height = (ui.available_height() - 190.0).max(160.0);
                 ui.allocate_ui(egui::vec2(ui.available_width(), height), |ui| {
                     g.view.show(
                         ui,
@@ -448,7 +502,7 @@ impl NovoApp {
                 ui.label(egui::RichText::new("Picture, not measurement").strong());
                 egui::ScrollArea::vertical()
                     .id_salt("hoist3d_notes")
-                    .max_height(130.0)
+                    .max_height(150.0)
                     .show(ui, |ui| {
                         for line in CRANE_PICTURE_LEAVES_OUT
                             .iter()

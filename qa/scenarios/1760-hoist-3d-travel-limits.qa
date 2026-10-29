@@ -1,0 +1,21 @@
+@title Hoist in 3D draws the end limits of a picked travel axis as upright flags on the runway
+@area Simulate
+@sizes 1366x768
+# The travel fixture has a forward end limit at 6 m; the flag stands at the bridge start plus 6 m.
+open qa/fixtures/travel-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 30
+shot before-pick
+click_text "none"
+wait 10
+click_text "=A1+FLD-M1"
+wait 20
+click_text "Front"
+wait 40
+shot flag-on-runway
+check_layout
