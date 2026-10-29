@@ -515,7 +515,7 @@ impl NovoApp {
         let can_place = page.is_some();
         let win = &mut self.wb.macro_place;
         let entries = win.entries();
-        let window = super::panel::dialog(ctx, "Place macro", [420.0, 440.0])
+        let window = super::panel::dialog(ctx, "Place macro", [420.0, 580.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.add(
@@ -525,7 +525,7 @@ impl NovoApp {
                 );
                 ui.add_space(4.0);
                 egui::ScrollArea::vertical()
-                    .max_height(180.0)
+                    .max_height(150.0)
                     .show(ui, |ui| {
                         if entries.is_empty() {
                             ui.weak("No macros. Select a circuit and use Save as macro.");
