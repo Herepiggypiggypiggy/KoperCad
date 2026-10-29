@@ -1,0 +1,22 @@
+@title Circuit library: the hoist load limit circuit is found and placed
+@area Schematic
+# Batch 4 of the circuit library: a new circuit is found by search and placed on the page.
+click_text "New project"
+wait 20
+key ctrl+k
+text "place macro"
+wait 5
+key Enter
+wait 10
+click 237 94
+text "load limit"
+wait 5
+expect "Circuits/3 Hoists"
+click_text "Hoist load limit with latching relay" Label
+wait 10
+expect "Mounting view"
+shot loadlimit-picked
+click_text Place Button
+wait 30
+expect_scene "-F1"
+shot loadlimit-placed

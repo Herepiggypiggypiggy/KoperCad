@@ -73,6 +73,11 @@ fn the_count_makes_the_pages_and_the_nodes() {
             if let Some(node) = node {
                 assert!(node.enclosure, "a feeder section is a cabinet");
             }
+            let motor = p.structure_by_tag(&DeviceTag::parse(&format!("=MCC+FLD+M{n}")).unwrap());
+            assert_eq!(motor.is_some(), n <= count, "motor {n} of {count}");
+            if let Some(motor) = motor {
+                assert!(!motor.enclosure, "a motor is a place, not a box");
+            }
         }
     }
 }

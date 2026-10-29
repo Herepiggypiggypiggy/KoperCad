@@ -8,7 +8,7 @@
 //!
 //! What it is: a picture of the numbers the hoist loop computed, in the proportions of a generic
 //! crane. What it is not: a structural model, a clearance check against a building, or a rope
-//! model (the rope is a straight bar, no sway, no stretch, no slack).
+//! model (the rope has a fixed length: the swing is a simple pendulum model, no stretch, no slack).
 //!
 //! World axes follow the scene contract: x along the runway (bridge travel), y up, z across the
 //! span (trolley travel). Millimetres in the scene, metres in the inputs.
@@ -20,8 +20,9 @@ use std::sync::Arc;
 /// What the picture leaves out, shown next to it in the window.
 pub const CRANE_PICTURE_LEAVES_OUT: &[&str] = &[
     "Generic crane proportions: the girder, trolley and hook block are not your crane's sizes",
-    "The rope is a straight bar: no sway, no stretch, no slack rope",
-    "Bridge and trolley stand where you set them; their drives do not move them here yet",
+    "The rope is a straight bar of fixed length: its swing is a simple pendulum model, not a measurement; stretch and slack rope are not modelled",
+    "Bridge and trolley follow a travel drive if you pick one (forward is along +x for the bridge and +z for the trolley); otherwise they stand where you set them",
+    "The swing is one pendulum per direction on a rope that keeps its length: no turning load, no push back on the drive",
     "No building, no clearance check, no structural model",
 ];
 
@@ -75,6 +76,9 @@ pub struct CraneState {
     pub trolley_m: f32,
     /// Hook height above its start position, m (negative is down).
     pub hook_m: f32,
+    /// Rope angle from the vertical along the runway (x) and across the span (z), radians; 0 is
+    /// a hook hanging straight down. Positive leans towards +x and +z.
+    pub swing_rad: [f32; 2],
     /// The hoist reports a condition (a limit stopped it, the brake slipped, ...): the block turns red.
     pub warning: bool,
     pub limits: Vec<LimitMark>,
@@ -112,14 +116,39 @@ const RAW_LOAD: u64 = 12;
 const RAW_SLING: u64 = 13;
 const RAW_FLAG: u64 = 20;
 
+/// Length of the rope from the drum's underside to the top of the block, mm.
+pub fn rope_length_mm(layout: &CraneLayout, hook_m: f32) -> f32 {
+    let (top, _) = block_top_mm(layout, hook_m);
+    (drum_underside_mm(layout) - top).max(0.0)
+}
+
+/// Offsets of the block from straight under the drum for a swing, mm: `(dx, drop, dz)` where
+/// `drop` is how far the block top hangs below the drum. The rope keeps its length.
+pub fn swung_offset_mm(rope_mm: f32, swing_rad: [f32; 2]) -> (f32, f32, f32) {
+    let dx = rope_mm * swing_rad[0].sin();
+    let dz = rope_mm * swing_rad[1].sin();
+    // Keep the horizontal reach inside the rope, so a wild angle cannot lift the block above the drum.
+    let reach = (dx * dx + dz * dz).sqrt();
+    let limit = rope_mm * 0.99;
+    let k = if reach > limit && reach > 0.0 {
+        limit / reach
+    } else {
+        1.0
+    };
+    let (dx, dz) = (dx * k, dz * k);
+    let drop = (rope_mm * rope_mm - dx * dx - dz * dz).max(0.0).sqrt();
+    (dx, drop, dz)
+}
+
 /// Where the hook block's top is in the world, mm, and whether the drum stops it there.
 ///
 /// The block cannot rise above the underside of the drum: a hook height that asks for more is
 /// clamped and reported, so a limit switch bound too high shows as a hook pressed against the drum.
 pub fn block_top_mm(layout: &CraneLayout, hook_m: f32) -> (f32, bool) {
     let wanted = (layout.hook_start_m + hook_m) * 1000.0;
-    let ceiling = drum_underside_mm(layout);
     let floor = size::BLOCK[1];
+    // A rail lower than the block is tall leaves no room: the ceiling never drops below the floor.
+    let ceiling = drum_underside_mm(layout).max(floor);
     let top = wanted.clamp(floor, ceiling);
     (top, (wanted - top).abs() > 0.5)
 }
@@ -256,18 +285,23 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
     ));
 
     // Hook block, hook, load and rope.
-    let (top, clamped) = block_top_mm(l, state.hook_m);
+    let (still_top, clamped) = block_top_mm(l, state.hook_m);
     let warn = state.warning || clamped;
     let block_tint = if warn { BLOCK_WARN } else { BLOCK_OK };
+    // The block hangs from the drum on a rope of constant length and may swing out of plumb.
+    let rope_mm = (drum_bottom - still_top).max(0.0);
+    let (dx, drop, dz) = swung_offset_mm(rope_mm, state.swing_rad);
+    let top = drum_bottom - drop;
+    let (hook_x, hook_z) = (rope_x + dx, trolley + dz);
     let block_min = Vec3::new(
-        rope_x - size::BLOCK[0] * 0.5,
+        hook_x - size::BLOCK[0] * 0.5,
         top - size::BLOCK[1],
-        trolley - size::BLOCK[2] * 0.5,
+        hook_z - size::BLOCK[2] * 0.5,
     );
     push(bar(
         RAW_ROPE,
         Vec3::new(rope_x, drum_bottom, trolley),
-        Vec3::new(rope_x, top, trolley),
+        Vec3::new(hook_x, top, hook_z),
         size::ROPE,
         STEEL,
     ));
@@ -283,9 +317,9 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
         RAW_HOOK,
         ItemKind::Other,
         Vec3::new(
-            rope_x - size::HOOK[0] * 0.5,
+            hook_x - size::HOOK[0] * 0.5,
             hook_bottom,
-            trolley - size::HOOK[2] * 0.5,
+            hook_z - size::HOOK[2] * 0.5,
         ),
         Vec3::new(size::HOOK[0], size::HOOK[1], size::HOOK[2]),
         STEEL,
@@ -295,15 +329,15 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
         let load_top = hook_bottom - size::SLING;
         push(bar(
             RAW_SLING,
-            Vec3::new(rope_x, hook_bottom, trolley),
-            Vec3::new(rope_x, load_top, trolley),
+            Vec3::new(hook_x, hook_bottom, hook_z),
+            Vec3::new(hook_x, load_top, hook_z),
             size::ROPE * 0.6,
             STEEL,
         ));
         push(boxed(
             RAW_LOAD,
             ItemKind::Other,
-            Vec3::new(rope_x - w * 0.5, load_top - h, trolley - d * 0.5),
+            Vec3::new(hook_x - w * 0.5, load_top - h, hook_z - d * 0.5),
             Vec3::new(w, h, d),
             LOAD,
         ));
@@ -344,7 +378,7 @@ pub fn hook_bounds(layout: &CraneLayout, state: &CraneState) -> crate::math::Aab
         - layout
             .load_m
             .map_or(0.0, |[_, h, _]| size::SLING + h * 1000.0);
-    let pad = 1500.0;
+    let pad = 1500.0 + rope_length_mm(layout, state.hook_m) * 0.3;
     crate::math::Aabb::new(
         Vec3::new(rope_x - pad, bottom.min(top) - 300.0, z - pad),
         Vec3::new(
@@ -558,6 +592,59 @@ mod tests {
         // It is far smaller than the crane.
         let all = s.bounds();
         assert!(hb.max.x - hb.min.x < (all.max.x - all.min.x) * 0.5);
+    }
+
+    #[test]
+    fn a_swing_moves_the_block_along_the_travel_direction_and_keeps_the_rope_length() {
+        let l = CraneLayout::default();
+        let rope = rope_length_mm(&l, 0.0);
+        let at = |swing: [f32; 2]| {
+            let s = build(
+                &l,
+                &CraneState {
+                    swing_rad: swing,
+                    ..Default::default()
+                },
+            );
+            let b = s.world_bounds(item(&s, RAW_BLOCK));
+            (
+                (b.min.x + b.max.x) * 0.5,
+                b.max.y,
+                (b.min.z + b.max.z) * 0.5,
+            )
+        };
+        let (x0, y0, z0) = at([0.0, 0.0]);
+        let (x1, y1, z1) = at([0.2, 0.0]);
+        let (x2, _, z2) = at([0.0, -0.2]);
+        assert!((x1 - x0 - rope * 0.2_f32.sin()).abs() < 1.0);
+        assert!((z1 - z0).abs() < 1e-2);
+        assert!(y1 > y0, "a swung block hangs higher");
+        assert!((x2 - x0).abs() < 1e-2);
+        assert!((z2 - z0 + rope * 0.2_f32.sin()).abs() < 1.0);
+        // The distance from the drum to the block top is the rope length at any angle.
+        let drum = drum_underside_mm(&l);
+        let reach = ((x1 - x0).powi(2) + (drum - y1).powi(2)).sqrt();
+        assert!((reach - rope).abs() < 1.0, "{reach} vs {rope}");
+    }
+
+    #[test]
+    fn a_wild_swing_never_lifts_the_block_above_the_drum() {
+        let (dx, drop, dz) = swung_offset_mm(2000.0, [1.5, 1.5]);
+        assert!(drop > 0.0 && drop.is_finite());
+        assert!((dx * dx + drop * drop + dz * dz).sqrt() <= 2001.0);
+        let (_, drop, _) = swung_offset_mm(0.0, [0.5, 0.5]);
+        assert_eq!(drop, 0.0);
+    }
+
+    #[test]
+    fn a_very_low_rail_does_not_panic() {
+        let l = CraneLayout {
+            rail_m: 0.1,
+            ..Default::default()
+        };
+        let (top, _) = block_top_mm(&l, 1.0);
+        assert!(top.is_finite());
+        let _ = build(&l, &CraneState::default());
     }
 
     #[test]

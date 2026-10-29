@@ -4,3 +4,5 @@
 2026-10-29 12:50 UTC Window Simulate > Winch scenarios (sim.winches).
 2026-10-29 16:30 UTC PR #1712 and the UI nits #1725 merged. Schematic binding: `cw_*` section, `cl_winch_spec`, `cl_winch_loop`, Drive run rows and findings, fixture `closed-winch.novo`, tests with injected coil defects.
 2026-10-29 18:00 UTC #1736 merged (5963bcb2). Follow-up #1741 (findings cap, thresholds text). Pair on the schematic: `cl_pair_loop`, `PAIR_KEYS`/`closed_pair_from_properties`, `WinchLine` on `PairCommand`, Drive run rows and badges per winch, section "Two winches on one beam", fixture `closed-winch-pair.novo`, scenarios 1738 to 1738d.
+
+- 2026-10-29: #1736 merged. Follow-up PR: the closed-loop winch keeps at most `MAX_FINDINGS` (200) findings and counts the rest ("N more findings not shown" in Drive run); the honesty text lists the 5, 20 and 50 mm report thresholds. Next: two winches on one beam from the schematic, walk-throughs, drawn single-channel encoder loss.

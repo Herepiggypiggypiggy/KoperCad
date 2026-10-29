@@ -7,17 +7,22 @@
 //! value for a 5.5 kW 4 pole hoist motor behind a generic drive, labelled as such in the UI, and
 //! a drive's real parameter set never appears in a drawing.
 
+use std::f64::consts::TAU;
+
 use novo_drive::brake::{SpringBrake, Switching};
+use novo_drive::brake_heat::BrakeHeatParams;
 use novo_drive::drive::terminals::DigitalInput;
 use novo_drive::drive::{
     Drive, DriveConfig, MotorNameplate, ReferenceSource, TerminalFunction, TerminalMacro,
 };
 use novo_drive::hoist_logic::{BrakeLogic, HoistLogic, HoistLogicConfig, LoadSense, ReversalJump};
-use novo_drive::induction::{FitOptions, InductionMotor};
+use novo_drive::hoist_thermal::ThermalParams;
+use novo_drive::induction::{FitOptions, InductionMotor, Supply};
 use novo_drive::mechanics::Hoist;
+use novo_drive::motor::Direction;
 
 use crate::bindings::SensorBinding;
-use crate::drive_hoist_loop::{DriveHoistBinding, DriveHoistModule, DriveHoistParts};
+use crate::drive_hoist_loop::{DriveHoistBinding, DriveHoistModule, DriveHoistParts, HeatConfig};
 use crate::hoist_loop::{LimitKind, LimitSwitch};
 use crate::spec::{SpecError, SpecKey};
 
@@ -161,6 +166,50 @@ pub const KEYS: &[SpecKey] = &[
         "0.03",
     ),
     tag("dh_brake_switching", "Brake switched on (AC or DC)"),
+    num(
+        "dh_heat_winding_rise_k",
+        "Heat: winding rise at rated load (generic value)",
+        "K",
+        "80",
+    ),
+    num("dh_heat_limit_k", "Heat: winding rise limit", "K", "100"),
+    num(
+        "dh_heat_standstill",
+        "Heat: cooling at standstill (share of full)",
+        "",
+        "0.4",
+    ),
+    num(
+        "dh_heat_tau_winding_s",
+        "Heat: winding time constant",
+        "s",
+        "40",
+    ),
+    num(
+        "dh_heat_tau_frame_s",
+        "Heat: frame time constant",
+        "s",
+        "1500",
+    ),
+    num(
+        "dh_brake_heat_kj_per_k",
+        "Brake heat capacity",
+        "kJ/K",
+        "25",
+    ),
+    num(
+        "dh_brake_cool_tau_s",
+        "Brake cooling time constant",
+        "s",
+        "900",
+    ),
+    num("dh_brake_limit_k", "Brake rise limit", "K", "250"),
+    num(
+        "dh_brake_life_mj",
+        "Brake lining life (energy slipped)",
+        "MJ",
+        "20",
+    ),
     tag("dh_in_up", "Up command device"),
     tag("dh_in_down", "Down command device"),
     tag("dh_in_step2", "Speed step 2 input device"),
@@ -379,6 +428,31 @@ pub fn drive_hoist_from_properties(
         );
     }
     let rotor_inertia = number("dh_rotor_inertia")?;
+    let rated_omega = np.rpm * TAU / 60.0;
+    let rated_losses_w = motor
+        .evaluate(
+            &Supply::new(np.frequency_hz, np.voltage_v, Direction::Positive)?,
+            rated_omega,
+        )?
+        .losses_w();
+    let heat = HeatConfig {
+        motor: ThermalParams {
+            winding_rise_rated_k: number("dh_heat_winding_rise_k")?,
+            winding_to_frame_k: ThermalParams::GENERIC.winding_to_frame_k,
+            tau_winding_s: number("dh_heat_tau_winding_s")?,
+            tau_frame_s: number("dh_heat_tau_frame_s")?,
+            standstill_cooling: number("dh_heat_standstill")?,
+            limit_rise_k: number("dh_heat_limit_k")?,
+        },
+        rated_losses_w,
+        rated_omega_rad_s: rated_omega,
+        brake: BrakeHeatParams {
+            heat_capacity_j_per_k: number("dh_brake_heat_kj_per_k")? * 1000.0,
+            cooling_tau_s: number("dh_brake_cool_tau_s")?,
+            limit_rise_k: number("dh_brake_limit_k")?,
+            lining_life_j: number("dh_brake_life_mj")? * 1.0e6,
+        },
+    };
     let module = DriveHoistModule::new(
         id,
         DriveHoistParts {
@@ -390,7 +464,8 @@ pub fn drive_hoist_from_properties(
             rotor_inertia_kg_m2: rotor_inertia,
         },
         binding,
-    )?;
+    )?
+    .with_heat(heat)?;
     Ok(Some((module, notes)))
 }
 
@@ -461,6 +536,30 @@ mod tests {
             .unwrap();
         let j = m.logic.config().jump.as_ref().unwrap();
         assert_eq!((j.jump_hz, j.ramp_time_s), (8.0, 0.3));
+    }
+
+    #[test]
+    fn the_heat_model_is_on_with_generic_limits_that_the_sheet_can_change() {
+        let (m, _) = build(&props(&[(DRIVE_HOIST_KEY, "2000")]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(m.heat_limits(), Some((100.0, 250.0)));
+        let (m, _) = build(&props(&[
+            (DRIVE_HOIST_KEY, "2000"),
+            ("dh_heat_limit_k", "90"),
+            ("dh_brake_limit_k", "180"),
+        ]))
+        .unwrap()
+        .unwrap();
+        assert_eq!(m.heat_limits(), Some((90.0, 180.0)));
+        // A rise at rated load above the limit makes no sense to the model.
+        assert!(
+            build(&props(&[
+                (DRIVE_HOIST_KEY, "2000"),
+                ("dh_heat_winding_rise_k", "-5"),
+            ]))
+            .is_err()
+        );
     }
 
     #[test]

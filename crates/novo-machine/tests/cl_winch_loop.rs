@@ -275,6 +275,20 @@ fn a_lost_encoder_signal_trips_the_drive_and_the_brake_catches_the_load() {
 }
 
 #[test]
+fn a_flapping_encoder_signal_keeps_a_capped_list_and_counts_the_rest() {
+    use novo_machine::cl_winch_loop::MAX_FINDINGS;
+    let (mut l, mut c, cmd) = rig(&[]);
+    // Every other tick the signal toggles: well over MAX_FINDINGS changes in 10 s.
+    for i in 0..2000 {
+        cmd.borrow_mut().encoder = i % 2 == 0;
+        l.run(&mut c, 1);
+    }
+    let m = l.module("=M1").unwrap();
+    assert_eq!(m.findings().len(), MAX_FINDINGS);
+    assert!(m.findings_dropped() > 0);
+}
+
+#[test]
 fn binding_problems_are_named() {
     let (l, c, _) = rig(&[]);
     assert!(

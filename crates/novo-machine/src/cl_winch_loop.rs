@@ -37,6 +37,10 @@ const REPORT_BELOW_M: f64 = 0.005;
 /// A hook that moved this far against the command at the start is reported at once.
 const RUNAWAY_M: f64 = 0.05;
 
+/// Findings kept per winch. A flapping STO or encoder signal would otherwise add a line every
+/// time it toggles; the rest is counted, not stored.
+pub const MAX_FINDINGS: usize = 200;
+
 /// Where a closed-loop winch is attached to the schematic.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ClWinchBinding {
@@ -148,6 +152,7 @@ pub struct ClWinchModule {
     last_encoder_ok: bool,
     snapshot: Option<WinchSnapshot>,
     findings: Vec<ClWinchFinding>,
+    findings_dropped: usize,
     // Trackers for the findings.
     start_mark: Option<(f64, bool)>,
     start_worst_m: f64,
@@ -182,6 +187,7 @@ impl ClWinchModule {
             last_encoder_ok: true,
             snapshot: None,
             findings: Vec::new(),
+            findings_dropped: 0,
             start_mark: None,
             start_worst_m: 0.0,
             start_reported: false,
@@ -205,7 +211,16 @@ impl ClWinchModule {
         &self.findings
     }
 
+    /// How many findings after the first [`MAX_FINDINGS`] were counted but not kept.
+    pub fn findings_dropped(&self) -> usize {
+        self.findings_dropped
+    }
+
     fn note(&mut self, time_s: f64, kind: ClFindingKind) {
+        if self.findings.len() >= MAX_FINDINGS {
+            self.findings_dropped += 1;
+            return;
+        }
         self.findings.push(ClWinchFinding { time_s, kind });
     }
 }

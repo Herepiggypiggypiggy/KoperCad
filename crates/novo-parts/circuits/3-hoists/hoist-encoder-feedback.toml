@@ -1,0 +1,41 @@
+# Speed feedback of a hoist drive: an incremental encoder on the motor shaft
+# wired to the converter's encoder input.
+name = "Hoist drive with encoder speed feedback"
+chapter = "hoists"
+description = "Incremental encoder on the hoist motor wired to the encoder input of the frequency converter for closed-loop speed control"
+tags = ["hoist", "crane", "encoder", "speed feedback", "closed loop", "vfd", "frequency converter", "incremental", "drive"]
+notes = """The converter's encoder terminals are drawn as device pins of -T1 with generic names (+, 0V, A, B, Z): rename them to your drive's terminals and set the drive's encoder type and pulses per revolution to match. \
+Use a screened cable with twisted pairs, keep it apart from motor cables and connect the screen at the drive end only, as the drive maker prescribes. \
+The encoder's supply voltage (5 V, 10 to 30 V) must match the output the drive offers. \
+Whether closed loop is needed at all depends on the lifting task; this is a wiring example, not a validated lifting safety function. \
+You connect: the rest of the drive (power, brake, commands) as in the frequency controlled hoist circuit."""
+
+open = ["pe1.1,2"]
+
+device = [
+  { id = "t1", tag = "-T1", description = "Frequency converter, encoder input", mount = { kind = "plate", size = [105, 143, 150], at = [15, 20] } },
+  { id = "b1", tag = "-B1", description = "Incremental encoder on the motor shaft", mount = { kind = "field", place = "on the motor shaft end, non-drive side" } },
+  { id = "x1", tag = "-X1", description = "Cable screen earth terminal", mount = { kind = "plate", size = [20, 10, 20], at = [15, 170] } },
+]
+
+symbol = [
+  { id = "dpp", key = "iec/connectivity/device_pin", at = [60, 24], rotate = 180, device = "t1", main = true, numbers = ["+"] },
+  { id = "dpz", key = "iec/connectivity/device_pin", at = [68, 24], rotate = 180, device = "t1", main = false, numbers = ["0V"] },
+  { id = "dpa", key = "iec/connectivity/device_pin", at = [76, 24], rotate = 180, device = "t1", main = false, numbers = ["A"] },
+  { id = "dpb", key = "iec/connectivity/device_pin", at = [84, 24], rotate = 180, device = "t1", main = false, numbers = ["B"] },
+  { id = "dpc", key = "iec/connectivity/device_pin", at = [92, 24], rotate = 180, device = "t1", main = false, numbers = ["Z"] },
+  { id = "pe1", key = "iec/terminals/terminal_pe", at = [110, 72], device = "x1" },
+  { id = "b1s", key = "iec/sensors/encoder", at = [60, 72], device = "b1" },
+]
+
+wire = [
+  { from = "dpp.1", to = "b1s.+" },
+  { from = "dpz.1", to = "b1s.0V" },
+  { from = "dpa.1", to = "b1s.A" },
+  { from = "dpb.1", to = "b1s.B" },
+  { from = "dpc.1", to = "b1s.Z" },
+]
+
+[plate]
+width = 135
+height = 195

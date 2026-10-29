@@ -23,7 +23,9 @@
 use novo_drive::InputError;
 use novo_drive::closed_loop::{ClFault, EncoderHealth};
 
-use crate::cl_winch_loop::{ClWinchBinding, binding_findings, energised, energised_or_true};
+use crate::cl_winch_loop::{
+    ClWinchBinding, MAX_FINDINGS, binding_findings, energised, energised_or_true,
+};
 use crate::cosim::StepConfig;
 use crate::hoist_loop::BindingFinding;
 use crate::port::CircuitPort;
@@ -128,9 +130,6 @@ impl ClPairFindingKind {
         }
     }
 }
-
-/// Findings kept per pair; the rest is counted.
-pub const MAX_FINDINGS: usize = 200;
 
 /// Two closed-loop winches on one beam and their bindings.
 pub struct ClPairModule {

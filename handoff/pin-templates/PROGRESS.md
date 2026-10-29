@@ -3,3 +3,4 @@
 2026-10-29 15:30 UTC  Company templates in Project > Rules, scenarios 2410-2413 and fixture added; PR from main.
 2026-10-29 17:00 UTC  Shared company file %APPDATA%/KoperCAD/pin-templates.toml: Load company file / Save as company file in Project > Rules; PR from main. Idea left: auto-offer the file in a new project.
 2026-10-29 16:30 UTC  Part terminals are offered the usual names right after a part is assigned (novo_checks::part_terminal_fix, pin_offer dialog); PR from main. Next: shared company templates file.
+2026-10-29 19:00 UTC  Per-project do not ask again for the part terminal offer (PR from main); company pin names file offered when a new project is created (PR from main).

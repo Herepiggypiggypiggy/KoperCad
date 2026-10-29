@@ -10,7 +10,11 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-const SLOW: Duration = Duration::from_secs(20);
+/// What one input may take before it counts as a hang. The whole workspace runs in parallel
+/// in CI, where a debug build of one output over a big fixture can pass 20 s on a loaded
+/// runner (circuits PRs #1726 and #1739 failed here and passed on re-run). A real hang or a
+/// quadratic blow-up takes minutes, so the limit is loose.
+const SLOW: Duration = Duration::from_secs(120);
 
 /// Small deterministic generator, so a failure repeats.
 struct Rng(u64);
