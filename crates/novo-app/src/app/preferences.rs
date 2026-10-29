@@ -7,6 +7,7 @@ use novo_editor::tool::ConnectMode;
 use std::time::Instant;
 
 use super::NovoApp;
+use crate::settings::XrefView;
 
 impl NovoApp {
     pub(super) fn preferences_dialog(&mut self, ctx: &egui::Context) {
@@ -21,6 +22,7 @@ impl NovoApp {
         let mut reload_symbols = false;
         let mut density = self.settings.xref_density();
         let mut show_spare = !self.settings.xref_hide_spare;
+        let mut xref_view = self.settings.xref_view();
         let mut theme = self.settings.theme_choice();
         let mut ui_density = self.settings.density_choice();
         let mut high_contrast = self.settings.high_contrast();
@@ -140,6 +142,17 @@ impl NovoApp {
                         &mut show_spare,
                         &[(true, "Show"), (false, "Hide")],
                     );
+                    choice(
+                        ui,
+                        "Cross references on screen",
+                        "Faded keeps them out of the way of lines, parts and text; the ones of the selected or hovered symbol stay clear. Hidden removes them from the screen. The PDF always prints them in full. Shift+X steps through the three.",
+                        &mut xref_view,
+                        &[
+                            (XrefView::Full, "Full"),
+                            (XrefView::Faded, "Faded"),
+                            (XrefView::Hidden, "Hidden"),
+                        ],
+                    );
                     section(ui, "Macros", false);
                     row_title(
                         ui,
@@ -231,6 +244,7 @@ impl NovoApp {
         self.settings.set_dock_labels(dock_labels);
         self.settings.ui_scale = (f32::from_bits(ui_scale) * 100.0).round() as u32;
         self.settings.xref_hide_spare = !show_spare;
+        self.settings.xref_view = xref_view.id().into();
         if density != self.settings.xref_density() {
             self.settings.xref_density = density.id().into();
         }

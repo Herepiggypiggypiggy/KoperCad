@@ -23,9 +23,16 @@ shot 04-settings-step
 check_layout
 click_text "Settings for the next run"
 wait 10
-click_text Quick
+# At 1366x768 the Heat panel is short beside the lesson card (the step says "scroll it"): scroll to the Quality choices, pick Quick, scroll back up to Simulate.
+move 1190 330
+wait 5
+scroll 1190 330 -90
+wait 10
+click_text Quick RadioButton
 wait 10
 shot 05-quick-chosen
+scroll 1190 330 300
+wait 10
 check_layout
 try click_text "Next"
 wait 20
@@ -36,8 +43,7 @@ wait_s 100
 wait 60
 wait_s 100
 wait 60
-wait_s 100
-wait 60
+expect "Coarse 3D"
 expect "Result for this layout"
 shot 07-verdict-step-result
 check_layout

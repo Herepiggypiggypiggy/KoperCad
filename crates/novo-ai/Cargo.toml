@@ -9,7 +9,6 @@ license.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-dirs.workspace = true
 ureq.workspace = true
 novo-core.workspace = true
 novo-symbols.workspace = true
@@ -21,6 +20,7 @@ novo-reports.workspace = true
 novo-numbering.workspace = true
 novo-cables.workspace = true
 novo-py.workspace = true
+novo-storage.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

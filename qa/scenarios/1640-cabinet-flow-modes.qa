@@ -1,0 +1,28 @@
+@title Cabinet heat: the Flow menu draws arrows, streamlines or a speed map on one m/s key
+@area Heat
+@sizes 1366x768 1920x1080
+# The example cabinet, coarse run from the command field. The Heat strip has one Flow menu and a Strength slider (it replaces the Airflow chip); every mode shares the m/s key at the bottom left of the plate. The pictures are the evidence (drawn arrows, colour and text).
+click_text "Open example"
+wait 20
+click_text Cabinet #1
+wait 20
+key ctrl+k
+wait 3
+text Simulate heat of the cabinet
+wait 4
+key Enter
+wait_s 120
+expect "· it "
+click_text Off
+click_text Streamlines
+wait 10
+shot 01-streamlines
+click_text Streamlines
+click_text Arrows
+wait 10
+shot 02-arrows
+click_text Arrows
+click_text "Speed map"
+wait 10
+shot 03-speed-map
+check_layout

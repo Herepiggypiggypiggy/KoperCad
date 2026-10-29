@@ -19,8 +19,9 @@ use novo_drive::{
         BrakingDuty, BrakingResistor, BusConfig, DcBus, I2tOverload, Ramp, ResistorFlag, SRamp,
         VfCurve, check_braking_resistor,
     },
+    induction::{Circuit, InductionMotor, Supply},
     mechanics::{Hoist, Shaft, hoist_lowering_torque_nm, hoist_raising_torque_nm},
-    motor::{SYNC_RPM_FIDELITY, sync_rpm},
+    motor::{Direction, SYNC_RPM_FIDELITY, sync_rpm},
 };
 use std::f64::consts::PI;
 
@@ -92,7 +93,6 @@ fn case01_pole_change_pair_speeds() {
 }
 
 #[test]
-#[ignore = "L2b: motor at frequency must offer rated_rpm_at(frequency_hz) (constant slip speed convention)"]
 fn case01_slip_speed_constant_in_constant_flux_region() {
     // Model convention (neglects the stator drop, so it is least exact at 5-10 Hz).
     // Nameplate 4 pole, 50 Hz, 1450 rpm: slip speed 1500 - 1450 = 50 rpm. At constant V/f and
@@ -100,8 +100,20 @@ fn case01_slip_speed_constant_in_constant_flux_region() {
     // at 25 Hz: 750 - 50 = 700 rpm. Scaling the slip FRACTION (3.33 %) would give 725 rpm and
     // is the common mistake. At 10 Hz: 300 - 50 = 250 rpm.
     let expected = [(10.0, 250.0), (25.0, 700.0), (50.0, 1450.0)];
-    assert_eq!(expected.len(), 3);
-    todo!("L2b: compare engine rated-torque rpm at each frequency with the hand values");
+    // The motor's own `rated_rpm_at`, nameplate 4 pole 50 Hz 1450 rpm.
+    let motor = InductionMotor::new(
+        Circuit::new(0.45, 0.9, 0.35, 1.1, 25.0),
+        4,
+        400.0,
+        50.0,
+        1450.0,
+    )
+    .unwrap();
+    for (f, rpm) in expected {
+        close(motor.rated_rpm_at(f), rpm, 1e-9, &format!("{f} Hz"));
+        // The common mistake (scale the slip fraction) would give 725 rpm at 25 Hz.
+    }
+    assert!((motor.rated_rpm_at(25.0) - 725.0).abs() > 10.0);
 }
 
 // ---------------------------------------------------------------- case 2: ramps
@@ -347,11 +359,37 @@ fn oracle_case04_breakdown_scaling() {
 }
 
 #[test]
-#[ignore = "L2b: variable-frequency torque-speed curve not in the engine yet"]
 fn case04_engine_breakdown_matches_thevenin() {
-    todo!(
-        "L2b: engine breakdown torque at 5, 25, 50 Hz with V/f constant = 51.519, 157.781, 194.485 N m (R1 0.45); R1 = 0 gives 241.027 at all three"
-    );
+    // Generic motor of the oracle above; V/f constant, 400 V at 50 Hz.
+    let engine = |f: f64, r1: f64| {
+        let m = InductionMotor::new(
+            Circuit::new(r1, 0.9, 0.35, 1.1, 25.0),
+            4,
+            400.0,
+            50.0,
+            1450.0,
+        )
+        .unwrap();
+        let s = Supply::new(f, 400.0 * f / 50.0, Direction::Positive).unwrap();
+        m.breakdown(&s).motoring_nm
+    };
+    for (f, hand) in [(5.0, 51.519_435), (25.0, 157.780_862), (50.0, 194.485_480)] {
+        close(engine(f, 0.45), hand, 1e-3, &format!("R1 0.45 at {f} Hz"));
+        close(
+            engine(f, 0.45),
+            breakdown_torque(f, 1.0, 0.45),
+            1e-9,
+            "same closed form",
+        );
+    }
+    for f in [5.0, 25.0, 50.0] {
+        close(
+            engine(f, 0.0),
+            241.026_809,
+            1e-3,
+            &format!("R1 = 0 at {f} Hz"),
+        );
+    }
 }
 
 // ---------------------------------------------------------------- case 5: hoist torque and holding

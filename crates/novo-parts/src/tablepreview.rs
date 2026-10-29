@@ -1121,6 +1121,18 @@ fn plausible(
     true
 }
 
+/// Whether what stands around an amount is a currency (`€ `, `EUR`) or
+/// nothing; any other word or sign (`%`, `kr 100`) would be a guess.
+pub(crate) fn decoration_is_currency(lead: &str, trail: &str) -> bool {
+    let decoration = format!("{} {}", lead.trim(), trail.trim());
+    // Only currency: signs and three-letter codes, nothing else.
+    let only_currency = decoration
+        .split(|c: char| c.is_whitespace() || matches!(c, '€' | '£' | '$'))
+        .filter(|w| !w.is_empty())
+        .all(|w| w.len() == 3 && currency_of(w).is_some());
+    only_currency && (decoration.trim().is_empty() || currency_of(&decoration).is_some())
+}
+
 fn price(raw: &str, warn: &mut impl FnMut(Severity, String)) -> Option<f64> {
     let not_a_price = |warn: &mut dyn FnMut(Severity, String)| {
         warn(
@@ -1150,13 +1162,7 @@ fn price(raw: &str, warn: &mut impl FnMut(Severity, String)) -> Option<f64> {
         .or_else(|| trail.strip_prefix(",-"))
         .unwrap_or(trail)
         .trim_start_matches(['.', ',']);
-    let decoration = format!("{} {}", lead.trim(), trail.trim());
-    // Only currency: signs and three-letter codes, nothing else.
-    let only_currency = decoration
-        .split(|c: char| c.is_whitespace() || matches!(c, '€' | '£' | '$'))
-        .filter(|w| !w.is_empty())
-        .all(|w| w.len() == 3 && currency_of(w).is_some());
-    if !only_currency || (!decoration.trim().is_empty() && currency_of(&decoration).is_none()) {
+    if !decoration_is_currency(lead, trail) {
         return not_a_price(warn);
     }
     // The amount: digits with `.`, `,`, `'` or a space as separators. A space
@@ -1177,7 +1183,25 @@ fn price(raw: &str, warn: &mut impl FnMut(Severity, String)) -> Option<f64> {
         warn(Severity::Warning, note);
     }
     match parse_quantity(&text) {
-        Some(q) if q.low.is_finite() && q.low > 0.0 && !q.range => Some(q.low),
+        Some(q) if q.low.is_finite() && q.low > 0.0 && !q.range => {
+            // The same limit the folder import uses (`recipes/apply.rs`).
+            if q.low > 1.0e8 {
+                warn(
+                    Severity::Warning,
+                    format!("\"{raw}\" is too large to be a price; the price is left unknown"),
+                );
+                return None;
+            }
+            if q.low < 0.01 {
+                warn(
+                    Severity::Warning,
+                    format!(
+                        "\"{raw}\" is unusually low for a price; imported, please check the unit"
+                    ),
+                );
+            }
+            Some(q.low)
+        }
         _ => not_a_price(warn),
     }
 }

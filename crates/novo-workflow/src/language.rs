@@ -67,6 +67,11 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["emc voorbeeld", "storing voorbeeld"],
     ),
+    nl(
+        "file.example_mcc",
+        &[],
+        &["motorgroepenkast voorbeeld", "kast voorbeeld"],
+    ),
     nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
     nl(
         "help.walkthrough",
@@ -718,9 +723,25 @@ pub const DUTCH: &[Aliases] = &[
         &["kraan", "haak", "rem", "eindschakelaar", "tweesnelheden"],
     ),
     nl(
+        "sim.motor_curves",
+        &["frequentie"],
+        &[
+            "frequentieregelaar",
+            "toerental",
+            "koppel",
+            "veldverzwakking",
+            "motor op frequentie",
+        ],
+    ),
+    nl(
         "view.toggle_marks",
         &[],
         &["markeringen tonen of verbergen"],
+    ),
+    nl(
+        "view.toggle_references",
+        &[],
+        &["verwijzingen tonen, vervagen of verbergen"],
     ),
     nl(
         "view.override_marks",

@@ -836,6 +836,16 @@ fn read_price(value: &Value) -> Result<PriceRead, &'static str> {
             {
                 return Err("price in exponent notation");
             }
+            // Around the amount only a currency may stand (`12.5 EUR %` is not a price).
+            if let (Some(a), Some(z)) = (
+                head.find(|c: char| c.is_ascii_digit()),
+                head.rfind(|c: char| c.is_ascii_digit()),
+            ) && !crate::tablepreview::decoration_is_currency(
+                head[..a].trim_end().trim_end_matches(['-', '+']),
+                &head[z + 1..],
+            ) {
+                return Err("price with text around it that is not a currency");
+            }
             let (norm, note) = crate::tablepreview::normalise_number_text(head);
             let q = super::quantity::parse_quantity(&norm).ok_or("price that is not a number")?;
             if q.range {

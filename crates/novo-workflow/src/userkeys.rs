@@ -37,6 +37,8 @@ impl Keymap {
     pub fn apply_user_file(&mut self, text: &str) -> Vec<Problem> {
         let mut problems = Vec::new();
         let mut replaced: BTreeSet<&'static str> = BTreeSet::new();
+        // Notepad and friends may start the file with a byte order mark.
+        let text = text.strip_prefix('\u{feff}').unwrap_or(text);
         for (index, raw) in text.lines().enumerate() {
             let line = index + 1;
             let content = raw.split('#').next().unwrap_or("").trim();
@@ -194,6 +196,13 @@ tool.repeat = F7
             Some("Ctrl+D")
         );
         assert!(map.conflicts().is_empty());
+    }
+
+    #[test]
+    fn a_byte_order_mark_at_the_start_is_ignored() {
+        let mut keymap = Keymap::workflow();
+        let problems = keymap.apply_user_file("\u{feff}tool.cable = F6\n");
+        assert!(problems.is_empty(), "{problems:?}");
     }
 
     #[test]

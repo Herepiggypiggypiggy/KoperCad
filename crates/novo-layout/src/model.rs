@@ -68,9 +68,9 @@ pub fn device_size(project: &Project, device: &Device) -> Size {
 }
 
 /// Planning footprints of a drive or soft starter by motor power, (largest
-/// kW, width, height) in mm: wall-mount frequency converters of the common
-/// makers fall in these bands. A planning value, not a part: the result is
-/// marked as guessed so every list says so.
+/// kW, width, height) in mm: planning bands for wall-mount frequency
+/// converters, not taken from any maker's data. A planning value, not a
+/// part: the result is marked as guessed so every list says so.
 const DRIVE_FOOTPRINTS: [(f64, f64, f64); 7] = [
     (1.5, 105.0, 145.0),
     (4.0, 140.0, 185.0),
@@ -433,6 +433,29 @@ pub fn without_enclosure(project: &Project, id: StructureId) -> Vec<u64> {
         .filter(|d| !crate::site::is_field(project, d))
         .map(|d| d.id.raw())
         .collect()
+}
+
+/// The other ducts of an enclosure that a duct would lie over if it stood
+/// as `duct` (an id of a stored duct replaces that duct; any other id is a
+/// new one). Empty when the place is clear.
+pub fn duct_clash(project: &Project, id: StructureId, duct: &Duct) -> Vec<u64> {
+    let others: Vec<Duct> = project
+        .all::<ModelRail>()
+        .filter(|r| r.structure == id && r.kind == RailKind::Duct && r.id.raw() != duct.id)
+        .map(|r| Duct {
+            id: r.id.raw(),
+            x: r.x,
+            y: r.y,
+            length: r.length,
+            width: if r.width > 0.0 {
+                r.width
+            } else {
+                DEFAULT_DUCT_MM
+            },
+            vertical: r.vertical,
+        })
+        .collect();
+    crate::ducts_in_the_way(&others, duct)
 }
 
 /// Sets the plate of an enclosure.

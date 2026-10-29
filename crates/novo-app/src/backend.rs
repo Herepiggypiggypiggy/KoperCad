@@ -972,8 +972,33 @@ pub struct PageRow {
 /// its sheets by name and what it shows (`20a  Terminal diagram · -X1`,
 /// DESIGN.md §8), so any sheet can be opened from the panel.
 pub fn page_rows(project: &Project, reports: &mut novo_reports::LiveReports) -> Vec<PageRow> {
+    page_rows_reusing(project, reports, None).0
+}
+
+/// Like [`page_rows`]. With `previous` (the rows of the project a moment
+/// ago) a generated page whose report is out of date keeps its old rows
+/// instead of waiting for the report: at a thousand pages the contents list
+/// takes over a second to build, and every edit made it stale. The flag says
+/// whether any old rows were kept.
+pub fn page_rows_reusing(
+    project: &Project,
+    reports: &mut novo_reports::LiveReports,
+    previous: Option<&[PageRow]>,
+) -> (Vec<PageRow>, bool) {
     let mut rows = Vec::new();
+    let mut kept = false;
     for p in project.pages_in_order() {
+        if let Some(previous) = previous
+            && let novo_core::PageKind::Generated { generator } = &p.kind
+            && !reports.is_current(project, generator)
+        {
+            let old: Vec<&PageRow> = previous.iter().filter(|r| r.page == p.id).collect();
+            if !old.is_empty() {
+                rows.extend(old.into_iter().cloned());
+                kept = true;
+                continue;
+            }
+        }
         let sheets = reports.sheets_of_page(project, p.id);
         if sheets.is_empty() {
             let label = if p.title.is_empty() {
@@ -1012,7 +1037,7 @@ pub fn page_rows(project: &Project, reports: &mut novo_reports::LiveReports) -> 
             });
         }
     }
-    rows
+    (rows, kept)
 }
 
 #[cfg(test)]

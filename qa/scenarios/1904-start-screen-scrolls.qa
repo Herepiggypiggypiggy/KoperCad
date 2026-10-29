@@ -1,0 +1,14 @@
+@title Start screen scrolls in a small window
+@area Layout
+# HPR-03: the column ran below the window edge and could not be scrolled.
+fresh
+wait 20
+resize 900 420
+wait 12
+shot start-small-top
+scroll 450 300 -2000
+wait 8
+shot start-small-scrolled
+resize 1366 768
+wait 12
+shot start-grown-back

@@ -72,11 +72,17 @@ pub fn wire_count(project: &Project) -> usize {
 pub fn wire_groups(project: &Project, filter: &str) -> Vec<WireGroup> {
     let filter = filter.trim().to_lowercase();
     let mut groups = Vec::new();
+    // One pass over the wires, not one per page: a thousand pages and tens of
+    // thousands of wires made the filter cost a frame of seconds.
+    let mut by_page: std::collections::HashMap<PageId, Vec<&Wire>> =
+        std::collections::HashMap::new();
+    for wire in project.wires() {
+        by_page.entry(wire.page).or_default().push(wire);
+    }
     for page in project.pages_in_order() {
-        let mut wires: Vec<&Wire> = project.wires().filter(|w| w.page == page.id).collect();
-        if wires.is_empty() {
+        let Some(mut wires) = by_page.remove(&page.id) else {
             continue;
-        }
+        };
         wires.sort_by(|a, b| match (&a.number, &b.number) {
             (Some(x), Some(y)) => natural_cmp(x, y),
             (Some(_), None) => std::cmp::Ordering::Less,

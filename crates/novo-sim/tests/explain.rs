@@ -395,3 +395,113 @@ fn a_drawing_with_no_supply_says_so_for_every_question() {
     let l = latch();
     assert!(has_supply(&l.doc.project().netlist()));
 }
+
+#[test]
+fn a_coil_with_its_return_pin_unwired_says_so() {
+    use novo_sim::explain::answer_symbol;
+    // L1 - coil K1 pin 1; pin 2 (the return) is not wired. A feed exists, so
+    // the answer is not the "no supply" one.
+    let mut doc = Document::default();
+    let (coil, _) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+            let k1 = tx.add_device(DeviceTag::product("K1"), "")?;
+            let f1 = put(
+                tx,
+                page,
+                "t/feed",
+                0.0,
+                SymbolRole::PotentialFeed { potential: l1 },
+            );
+            let coil = put(tx, page, COIL, 20.0, dev(k1, true));
+            tx.connect(Endpoint::pin(f1, 1), Endpoint::pin(coil, 0))?;
+            Ok(coil)
+        })
+        .unwrap();
+    let project = doc.project();
+    let netlist = project.netlist();
+    let none = BTreeSet::new();
+    let settled = settle(project, &netlist, &rest_state(project), &none, &none);
+    let a = answer_symbol(project, &netlist, &settled, &none, coil, &names);
+    assert!(a.dead);
+    assert!(
+        a.lines.iter().any(|l| l.text.contains(
+            "Pin 1 is on L1, but nothing connects pin 2 to the other side of the supply"
+        )),
+        "{:?}",
+        a.lines
+    );
+}
+
+/// One coil K1 with an optional feed on each pin.
+fn coil_with_feeds(on_pin1: bool, on_pin2: bool) -> (Document, SymbolId) {
+    let mut doc = Document::default();
+    let (coil, _) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+            let n = tx.add_potential("N", PotentialKind::Neutral)?;
+            let k1 = tx.add_device(DeviceTag::product("K1"), "")?;
+            let fl = put(
+                tx,
+                page,
+                "t/feed",
+                0.0,
+                SymbolRole::PotentialFeed { potential: l1 },
+            );
+            let fnn = put(
+                tx,
+                page,
+                "t/feed",
+                10.0,
+                SymbolRole::PotentialFeed { potential: n },
+            );
+            let coil = put(tx, page, COIL, 20.0, dev(k1, true));
+            if on_pin1 {
+                tx.connect(Endpoint::pin(fl, 1), Endpoint::pin(coil, 0))?;
+            }
+            if on_pin2 {
+                tx.connect(Endpoint::pin(fnn, 1), Endpoint::pin(coil, 1))?;
+            }
+            Ok(coil)
+        })
+        .unwrap();
+    (doc, coil)
+}
+
+fn coil_lines(doc: &Document, coil: SymbolId) -> Vec<String> {
+    use novo_sim::explain::answer_symbol;
+    let project = doc.project();
+    let netlist = project.netlist();
+    let none = BTreeSet::new();
+    let settled = settle(project, &netlist, &rest_state(project), &none, &none);
+    answer_symbol(project, &netlist, &settled, &none, coil, &names)
+        .lines
+        .into_iter()
+        .map(|l| l.text)
+        .collect()
+}
+
+#[test]
+fn an_unwired_feed_side_pin_is_not_told_to_go_to_the_return() {
+    // Pin 2 sits on N, pin 1 is the open one: the advice names N as what the
+    // other pin carries and does not call pin 1 the return.
+    let (doc, coil) = coil_with_feeds(false, true);
+    let lines = coil_lines(&doc, coil);
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("Pin 2 is on N, but nothing connects pin 1")),
+        "{lines:?}"
+    );
+    assert!(!lines.iter().any(|l| l.contains("the return is open")));
+}
+
+#[test]
+fn a_coil_with_both_pins_unwired_keeps_the_generic_line() {
+    let (doc, coil) = coil_with_feeds(false, false);
+    let lines = coil_lines(&doc, coil);
+    assert!(!lines.iter().any(|l| l.contains("other side of the supply")));
+    assert!(lines.iter().any(|l| l.contains("It is dead")), "{lines:?}");
+}

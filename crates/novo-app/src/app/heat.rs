@@ -28,6 +28,7 @@ use novo_theme::tokens as t;
 use novo_thermal::Status;
 
 use super::heat_compare::{self, Diff};
+use super::heat_flow::{self, FlowMode};
 use super::heat_progress;
 use super::heat_run::{Event, Runner, Solution};
 use super::heat_settings::HeatSettings;
@@ -106,6 +107,9 @@ pub(super) struct HeatState {
     pub map: bool,
     pub contours: bool,
     pub airflow: bool,
+    /// The Flow control: how the airflow is drawn and how much of it. `airflow`
+    /// is on while the mode is not Off.
+    pub flow: super::heat_flow::FlowView,
     pub badges: bool,
     cache: Option<Cache>,
     /// Follows the cabinet while a result is shown: out of date marking and
@@ -188,6 +192,11 @@ struct Cache {
     diff: Option<Diff>,
     mean: f32,
     streams: Vec<Streamline>,
+    /// The in-plane air speed, m/s, and the top of the speed scale for it.
+    speed: Scalar,
+    speed_top: f32,
+    /// The in-plane velocity the arrows sample.
+    velocity: Vector,
     /// The preview's estimate for each device (at its centre), by device id;
     /// empty for a solver result.
     preview: std::collections::HashMap<u64, f64>,
@@ -213,6 +222,7 @@ impl HeatState {
             map: true,
             contours: true,
             airflow: false,
+            flow: super::heat_flow::FlowView::default(),
             badges: true,
             cache: None,
             requested: false,
@@ -449,6 +459,16 @@ impl HeatState {
         self.run.is_some() && self.cancel_at.is_some()
     }
 
+    /// The notice after Cancel: with an earlier result on screen it is the one
+    /// that stays; without one there is nothing to show and it says so.
+    fn stopped_notice(&self) -> String {
+        if self.solution.is_some() {
+            "Stopped: the last result is not converged".into()
+        } else {
+            "Stopped: no result yet".into()
+        }
+    }
+
     /// Takes in what the worker has published. Called every frame.
     pub(super) fn poll(&mut self, ctx: &egui::Context) {
         self.poll_time(ctx);
@@ -497,9 +517,7 @@ impl HeatState {
                         // A run replaced by one for the edited cabinet is
                         // not worth a warning.
                         Outcome::Cancelled if self.live.take_superseded() => None,
-                        Outcome::Cancelled => {
-                            Some("Stopped: the last result is not converged".into())
-                        }
+                        Outcome::Cancelled => Some(self.stopped_notice()),
                         Outcome::Failed(e) => Some(format!("The simulation failed: {e}")),
                     };
                 }
@@ -514,7 +532,7 @@ impl HeatState {
             // flag: let it go (dropping the run cancels it once more) so the
             // person is not left with a Cancel that does nothing.
             done = true;
-            self.notice = Some("Stopped: the last result is not converged".into());
+            self.notice = Some(self.stopped_notice());
         }
         if done {
             self.run = None;
@@ -591,7 +609,12 @@ impl HeatState {
                 self.layout.request();
             }
             "heat.airflow" => {
-                self.airflow = !(self.on && self.airflow);
+                let mode = if self.on && self.airflow {
+                    FlowMode::Off
+                } else {
+                    FlowMode::Streamlines
+                };
+                self.set_flow_mode(mode);
                 self.on |= self.airflow;
             }
             "heat.contours" => {
@@ -602,10 +625,16 @@ impl HeatState {
         }
     }
 
+    /// Sets the Flow mode and the `airflow` switch that follows it.
+    pub(super) fn set_flow_mode(&mut self, mode: FlowMode) {
+        self.flow.mode = mode;
+        self.airflow = mode != FlowMode::Off;
+    }
+
     /// The map is drawn under the canvas, which then must not paint its own
-    /// background.
+    /// background. A speed map is a map: it is drawn even with Map off.
     pub(super) fn under_canvas(&self) -> bool {
-        self.on && self.map
+        self.on && (self.map || self.flow.mode == FlowMode::SpeedMap)
     }
 
     fn refresh(&mut self, input: &Input, dragging: bool) -> bool {
@@ -770,7 +799,20 @@ fn assemble(
         }
     }
     let streams = streamline::evenly_spaced(&velocity, &seeds, Spacing::default(), solid);
+    let speed = Scalar {
+        grid: velocity.grid,
+        values: velocity
+            .vx
+            .iter()
+            .zip(&velocity.vy)
+            .map(|(x, y)| x.hypot(*y))
+            .collect(),
+    };
+    let speed_top = heat_flow::speed_scale_of(&speed.values);
     Cache {
+        speed,
+        speed_top,
+        velocity,
         key: key(input),
         ambient,
         size: input.plate,
@@ -836,7 +878,13 @@ pub(super) fn strip(ui: &mut egui::Ui, state: &mut HeatState) {
     };
     let mut chips = chip(ui, &mut state.map, "Map");
     chips = chips.union(chip(ui, &mut state.contours, "Contours"));
-    chips = chips.union(chip(ui, &mut state.airflow, "Airflow"));
+    let mut flow = state.flow;
+    let control = ui.scope(|ui| heat_flow::control(ui, &mut flow));
+    if control.inner {
+        state.flow.strength = flow.strength;
+        state.set_flow_mode(flow.mode);
+    }
+    chips = chips.union(control.response.rect);
     chips = chips.union(chip(ui, &mut state.badges, "Badges"));
     super::cabinet_bar::note_rect_in(ui, "heat.chips", "Heat chips", chips, false);
     simulate_controls(ui, state);
@@ -1181,6 +1229,16 @@ pub(super) fn items_of(
         .collect()
 }
 
+/// The longest enclosure side the heat run takes, mm: the engine's own
+/// limit, checked here because the 3D solver path does not call it.
+const MAX_SIDE_MM: f64 = 20_000.0;
+
+fn too_big(e: &novo_thermal::Enclosure) -> bool {
+    [e.width_mm, e.height_mm, e.depth_mm]
+        .iter()
+        .any(|v| !(v.is_finite() && *v <= MAX_SIDE_MM))
+}
+
 /// Builds the scenario of the enclosure from the project and starts a run.
 /// Says plainly when it cannot.
 pub(super) fn start_run(
@@ -1196,6 +1254,12 @@ pub(super) fn start_run(
         ..Default::default()
     };
     match novo_thermal::bridge::scenario_from_project(project, enclosure, &options) {
+        Ok(bridge) if too_big(&bridge.scenario.enclosure) => {
+            state.fail(format!(
+                "Cannot simulate: the enclosure is over {} m on one side; check its size in Cabinet > Size enclosure",
+                MAX_SIDE_MM / 1000.0
+            ));
+        }
         Ok(mut bridge) => {
             state.settings.apply(&mut bridge.scenario);
             let plate = bridge.scenario.enclosure.plate;
@@ -1251,7 +1315,7 @@ pub(super) fn paint_under(
     if let Some(cache) = state.cache.as_ref().filter(|c| !state.no_data(c, input)) {
         let to_screen = screen_fn(rect, viewport);
         let delta = state.delta_diff(cache);
-        paint_map(&painter, cache, &to_screen, delta);
+        paint_map(&painter, cache, &to_screen, delta, state.flow.mode);
         if let Some(d) = state.side_diff(cache) {
             let off = cache.size.0 + SIDE_GAP_MM;
             let shifted = |x: f64, y: f64| to_screen(x + off, y);
@@ -1296,8 +1360,22 @@ pub(super) fn paint_over(
     let to_screen = screen_fn(rect, viewport);
     let delta = state.delta_diff(cache);
     let empty = state.no_data(cache, input);
-    if state.airflow && !empty {
-        paint_airflow(&painter, cache, &to_screen);
+    if !empty {
+        match state.flow.mode {
+            FlowMode::Streamlines => {
+                paint_airflow(&painter, cache, &state.flow, &to_screen);
+            }
+            FlowMode::Arrows => paint_arrows(&painter, cache, input, &state.flow, &to_screen),
+            FlowMode::SpeedMap | FlowMode::Off => {}
+        }
+        if state.flow.mode != FlowMode::Off {
+            let title = if state.flow.mode == FlowMode::SpeedMap {
+                "Map: air speed along the plate"
+            } else {
+                "Air speed along the plate"
+            };
+            heat_flow::paint_key(&painter, cache.speed_top, title);
+        }
     }
     // No hot-spot cards or contour labels on an empty plate or beside
     // "Cannot simulate": the colours stay as a preview, but "46 °C, +5 K"
@@ -1435,12 +1513,19 @@ fn paint_map(
     cache: &Cache,
     to_screen: &dyn Fn(f64, f64) -> Pos2,
     delta: Option<&Diff>,
+    mode: FlowMode,
 ) {
     let field = delta.map_or(&cache.smooth, |d| &d.field);
     let shape = match delta {
         Some(d) => plate_mesh(field, cache.size, to_screen, &|v| {
             rgb(heat_compare::colour(v as f32, d.extent), MAP_ALPHA)
         }),
+        // Air speed instead of temperature, on the scale of the key.
+        None if mode == FlowMode::SpeedMap => {
+            plate_mesh(&cache.speed, cache.size, to_screen, &|v| {
+                rgb(heat_flow::colour(v as f32, cache.speed_top), MAP_ALPHA)
+            })
+        }
         None => plate_mesh(field, cache.size, to_screen, &|v| {
             rgb(heat::ramp(cache.range.t(v)), MAP_ALPHA)
         }),
@@ -1533,16 +1618,15 @@ fn paint_contours(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64
     }
 }
 
-fn paint_airflow(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f64) -> Pos2) {
-    let top = cache
-        .streams
-        .iter()
-        .flat_map(|s| s.speeds.iter())
-        .copied()
-        .fold(0.0, f32::max);
+fn paint_airflow(
+    painter: &egui::Painter,
+    cache: &Cache,
+    flow: &heat_flow::FlowView,
+    to_screen: &dyn Fn(f64, f64) -> Pos2,
+) {
     // The same scale as the 3D view: colour and width are the speed in m/s,
     // not a share of the fastest line, so a lot of air looks like a lot.
-    let scale_top = super::heat_flow::nice_top(top);
+    let scale_top = cache.speed_top;
     let mut shown: Vec<(&Streamline, f32)> = cache
         .streams
         .iter()
@@ -1554,9 +1638,9 @@ fn paint_airflow(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64,
         })
         .filter(|(_, mean)| *mean >= super::heat_flow::QUIET_SHARE * scale_top)
         .collect();
-    // Calm: the main streams only, the strongest first.
+    // The strongest streams first; strength says how many.
     shown.sort_by(|a, b| b.1.total_cmp(&a.1));
-    shown.truncate(super::heat_flow::calm_count(shown.len()));
+    shown.truncate(heat_flow::kept_count(shown.len(), flow.strength));
     for (s, mean) in shown {
         let pts: Vec<Pos2> = s.points.iter().map(|p| to_screen(p.0, p.1)).collect();
         let share = (mean / scale_top).clamp(0.0, 1.0);
@@ -1588,7 +1672,72 @@ fn paint_airflow(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64,
             }
         }
     }
-    super::heat_flow::paint_key(painter, scale_top);
+}
+
+/// Arrows on a coarse grid over the plate: length, width and colour are the
+/// air speed on the key's scale, none over a device body or in nearly still air.
+fn paint_arrows(
+    painter: &egui::Painter,
+    cache: &Cache,
+    input: &Input,
+    flow: &heat_flow::FlowView,
+    to_screen: &dyn Fn(f64, f64) -> Pos2,
+) {
+    let (w, h) = cache.size;
+    let across = 7.0 + 13.0 * f64::from(flow.strength.clamp(0.0, 1.0));
+    let step = (w.max(h) / across).max(10.0);
+    let (nu, nv) = ((w / step).floor() as usize, (h / step).floor() as usize);
+    let top = cache.speed_top;
+    for r in 0..nv {
+        for c in 0..nu {
+            let (x, y) = ((c as f64 + 0.5) * step, (r as f64 + 0.5) * step);
+            if input
+                .items
+                .iter()
+                .any(|i| x >= i.x && x <= i.x + i.w && y >= i.y && y <= i.y + i.h)
+            {
+                continue;
+            }
+            let (vx, vy) = cache.velocity.sample(x, y);
+            let speed = vx.hypot(vy);
+            if speed < heat_flow::QUIET_SHARE * top {
+                continue;
+            }
+            let share = (speed / top).clamp(0.0, 1.0);
+            let len = step * (0.3 + 0.6 * f64::from(share));
+            let d = (vx / speed, vy / speed);
+            let tail = to_screen(
+                x - 0.5 * len * f64::from(d.0),
+                y - 0.5 * len * f64::from(d.1),
+            );
+            let tip = to_screen(
+                x + 0.5 * len * f64::from(d.0),
+                y + 0.5 * len * f64::from(d.1),
+            );
+            let [cr, cg, cb] = heat_flow::colour(speed, top);
+            let colour = Color32::from_rgb(cr, cg, cb);
+            let width = 1.6 + 2.0 * share;
+            let dir = (tip - tail).normalized();
+            let n = Vec2::new(-dir.y, dir.x);
+            let head = ((tip - tail).length() * 0.3).clamp(4.0, 10.0);
+            painter.line_segment(
+                [tail, tip],
+                Stroke::new(
+                    width + 1.6,
+                    with_alpha(crate::theme::ui_palette().sunken, 0.5),
+                ),
+            );
+            painter.line_segment([tail, tip], Stroke::new(width, colour));
+            painter.add(Shape::line(
+                vec![
+                    tip - dir * head + n * head * 0.55,
+                    tip,
+                    tip - dir * head - n * head * 0.55,
+                ],
+                Stroke::new(width, colour),
+            ));
+        }
+    }
 }
 
 fn paint_rims(
@@ -2243,6 +2392,7 @@ fn legend(
 
 #[cfg(test)]
 mod tests {
+    use super::too_big;
     use super::*;
 
     #[test]
@@ -2610,8 +2760,8 @@ mod tests {
             state
                 .notice
                 .as_deref()
-                .is_some_and(|n| n.starts_with("Stopped")),
-            "{:?}",
+                .is_some_and(|n| n == "Stopped: no result yet"),
+            "no result exists, so it says so: {:?}",
             state.notice
         );
     }
@@ -2705,6 +2855,28 @@ mod tests {
         let p = &sol.snapshot.progress;
         assert!(status_label(p, false).ends_with("not validated"));
         assert!(status_label(p, true).ends_with("converged"));
+    }
+
+    #[test]
+    fn the_legend_words_the_heat_lesson_quotes_are_the_legends() {
+        let lesson = include_str!("../../../../assets/lessons/heat-and-sizing/lesson.toml");
+        let mut state = HeatState::new();
+        let i = input();
+        state.start(scenario(), meta(&i));
+        run_to_end(&mut state);
+        let mut p = state.solution().unwrap().snapshot.progress.clone();
+        p.fidelity = novo_cfd::Fidelity::Coarse;
+        for said in [
+            PREVIEW_NOTE,
+            status_label(&p, false).as_str(),
+            "Out of date: the layout changed since this run",
+            "no loss data (shown dashed)",
+            "No heat picture yet",
+            "Stopping…",
+        ] {
+            assert!(lesson.contains(said), "the lesson does not quote: {said}");
+        }
+        assert!(!lesson.contains("Preview model from the part losses"));
     }
 
     #[test]
@@ -2844,5 +3016,28 @@ mod tests {
             card.bottom() <= canvas.bottom() && card.top() >= canvas.top(),
             "{card:?} leaves the canvas {canvas:?}"
         );
+    }
+
+    #[test]
+    fn an_enclosure_over_twenty_metres_is_too_big_to_simulate() {
+        let mut e = novo_thermal::Enclosure {
+            width_mm: 1000.0,
+            height_mm: 2000.0,
+            depth_mm: 300.0,
+            wall_mm: 2.0,
+            material: novo_layout::sizing::Material::Steel,
+            installation: novo_layout::sizing::Installation::Wall,
+            plate: novo_layout::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 800.0,
+                h: 1800.0,
+            },
+        };
+        assert!(!too_big(&e));
+        e.height_mm = 25_000.0;
+        assert!(too_big(&e));
+        e.height_mm = f64::NAN;
+        assert!(too_big(&e));
     }
 }

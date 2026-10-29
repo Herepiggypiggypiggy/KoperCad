@@ -1,0 +1,20 @@
+@title Cabinet: Place all lays the row ducts against the trunk's side, no duct over another
+@area Cabinet
+@sizes 1366x768 1920x1080
+# The cabinet lesson plate with nothing placed. Place all adds the vertical trunk duct and the row ducts; the
+# row ducts end against the trunk's side (a T junction), so the problems pill shows no duct crossing.
+open qa/fixtures/cabinet-unplaced-plate.novo
+wait 20
+click_text Cabinet #1
+wait 30
+shot before
+key ctrl+shift+p
+wait 40
+shot preview
+expect "Preview"
+click_text "Accept"
+wait 40
+shot after
+expect "0 problems"
+expect "No issues"
+check_layout

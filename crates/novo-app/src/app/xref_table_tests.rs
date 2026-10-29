@@ -252,3 +252,122 @@ fn a_mistyped_contact_count_stays_a_short_table() {
         "{labels:?}"
     );
 }
+
+impl Table {
+    /// The opacity (0 to 255) of the first label of `symbol`'s item that reads `text`.
+    fn alpha_of(&self, symbol: SymbolId, text: &str) -> Option<u8> {
+        self.d
+            .app
+            .canvas
+            .schematic_ref()
+            .and_then(|v| v.scene())
+            .and_then(|s| s.scene().get(item_id(AnyId::Symbol(symbol))))
+            .and_then(|i| {
+                i.labels
+                    .iter()
+                    .find(|l| l.text == text)
+                    .map(|l| l.color.0[3])
+            })
+    }
+
+    fn cycle_references(&mut self) {
+        let ctx = self.d.ctx.clone();
+        self.d.app.run_command(&ctx, "view.toggle_references", None);
+        self.d.frame();
+        self.d.frame();
+    }
+
+    /// Selects `symbol` the way a click does.
+    fn select(&mut self, symbols: &[SymbolId]) {
+        let view = self.d.app.canvas.schematic().expect("editor");
+        view.canvas.selection.clear();
+        view.canvas.selection.apply(
+            symbols
+                .iter()
+                .map(|&s| item_id(AnyId::Symbol(s)))
+                .collect::<Vec<_>>(),
+            novo_canvas::SelectOp::Replace,
+        );
+        self.d.frame();
+        self.d.frame();
+    }
+}
+
+#[test]
+fn references_cycle_full_faded_hidden_and_the_choice_is_kept() {
+    let mut t = table();
+    assert_eq!(t.alpha_of(t.coil, "13"), Some(255), "full to begin with");
+    t.cycle_references();
+    assert_eq!(t.d.app.settings.xref_view, "faded");
+    let faded = t.alpha_of(t.coil, "13").expect("still drawn");
+    assert!(faded < 128, "faded: {faded}");
+    // Same place, same rows: only the opacity changed.
+    assert!(t.labels_of(t.coil).iter().any(|l| l == "14"));
+    t.cycle_references();
+    assert_eq!(t.d.app.settings.xref_view, "hidden");
+    assert!(
+        t.labels_of(t.coil).iter().all(|l| l != "13" && l != "14"),
+        "{:?}",
+        t.labels_of(t.coil)
+    );
+    // A contact's own reference (the coil location) goes too.
+    assert!(
+        !t.labels_of(t.contacts[0])
+            .iter()
+            .any(|l| l.starts_with("1."))
+    );
+    t.cycle_references();
+    assert_eq!(t.d.app.settings.xref_view, "full");
+    assert_eq!(t.alpha_of(t.coil, "13"), Some(255));
+}
+
+#[test]
+fn faded_references_come_back_for_the_selected_coil() {
+    let mut t = table();
+    t.cycle_references();
+    assert!(t.alpha_of(t.coil, "13").unwrap() < 128);
+    t.select(&[t.coil]);
+    assert_eq!(t.alpha_of(t.coil, "13"), Some(255), "selected: clear");
+    t.select(&[]);
+    assert!(
+        t.alpha_of(t.coil, "13").unwrap() < 128,
+        "deselected: faded again"
+    );
+}
+
+#[test]
+fn the_pdf_prints_references_in_full_whatever_the_screen_shows() {
+    let mut t = table();
+    t.cycle_references();
+    t.cycle_references();
+    assert_eq!(t.d.app.settings.xref_view, "hidden");
+    let pages = t.d.app.xref_notes_by_page();
+    let coil_note = pages[&t.pages[0]]
+        .iter()
+        .find(|n| n.symbol == t.coil)
+        .expect("the coil's table is printed");
+    assert!(!coil_note.rows.is_empty());
+    assert!(pages.values().flatten().all(|n| !n.faded));
+}
+
+#[test]
+fn shift_x_is_the_shortcut_and_the_status_bar_offers_the_way_back() {
+    let mut t = table();
+    assert!(
+        t.d.app
+            .mode_chips()
+            .iter()
+            .all(|c| c.command != "view.toggle_references")
+    );
+    t.d.key(egui::Key::X, egui::Modifiers::SHIFT);
+    t.d.frame();
+    assert_eq!(t.d.app.settings.xref_view, "faded");
+    let chip =
+        t.d.app
+            .mode_chips()
+            .into_iter()
+            .find(|c| c.command == "view.toggle_references")
+            .expect("a chip while references are not shown in full");
+    assert!(chip.label.contains("faded"), "{}", chip.label);
+    assert!(novo_workflow::commands::is_known(chip.command));
+}

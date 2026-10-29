@@ -1,0 +1,15 @@
+@title Cabinet: ducts that cross each other are an Issues finding
+@area Cabinet
+@sizes 1366x768 1920x1080
+# qa/fixtures/cabinet-crossing-ducts.novo is the older Place all result: the trunk duct runs through the five
+# row ducts. The "5 errors" pill (Check > Issues) lists "Duct N crosses duct M" and says how to fix it.
+open qa/fixtures/cabinet-crossing-ducts.novo
+wait 20
+click_text Cabinet #1
+wait 30
+shot plate
+click_text "5 errors"
+wait 20
+expect "crosses duct"
+shot problems
+check_layout

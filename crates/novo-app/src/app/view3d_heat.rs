@@ -19,7 +19,7 @@ pub(super) const CUBE_SIZE: f32 = 88.0;
 const CUBE_MARGIN: f32 = 12.0;
 const GAP: f32 = 8.0;
 /// What the toolbar covers from the view's top, with the strip above it.
-const TOOLBAR_CLEAR: f32 = 150.0;
+const TOOLBAR_CLEAR: f32 = 115.0;
 
 /// Top right corner of the panel: under the cube, inside the view.
 #[cfg(test)]
@@ -129,11 +129,16 @@ pub(super) fn show(
             },
         ));
         let (text, warn) = phase_line(state.running(), state.solution().is_some(), stale);
-        ui.label(egui::RichText::new(text).small().color(if warn {
-            t::WARNING
-        } else {
-            t::TEXT_MUTED
-        }));
+        // Beside a lesson card the panel is short: the sentence that only
+        // repeats "not simulated" gives its two lines to the Quality row.
+        let cramped = super::panel::reserved_bottom_right(ctx) > 0.0;
+        if !(cramped && !state.running() && state.solution().is_none()) {
+            ui.label(egui::RichText::new(text).small().color(if warn {
+                t::WARNING
+            } else {
+                t::TEXT_MUTED
+            }));
+        }
         if let Some(sol) = state.solution() {
             jump = verdict_line(ui, &sol.snapshot, tag_of, stale, state.running());
             let running = state.running();
@@ -141,6 +146,9 @@ pub(super) fn show(
         }
         ui.horizontal_wrapped(|ui| heat::simulate_controls_with(ui, state, false));
         let running = state.running();
+        // Outside the fold: in a short panel beside a lesson card the fold sits
+        // below the scroll, and Quality is the one choice made before most runs.
+        ui.add_enabled_ui(!running, |ui| quality_row(ui, state));
         // Kept when there is nothing to show, so the feature can be found and
         // the fold says why it is empty.
         if let Some(sol) = state.solution() {
@@ -299,13 +307,19 @@ fn describe_question(
     q
 }
 
+/// The quality levels on one wrapped row under the Simulate buttons.
+fn quality_row(ui: &mut egui::Ui, state: &mut HeatState) {
+    ui.horizontal_wrapped(|ui| {
+        ui.label("Quality");
+        for (level, name, hint) in LEVELS {
+            ui.radio_value(&mut state.settings.top, level, name)
+                .on_hover_text(hint);
+        }
+    });
+}
+
 fn settings(ui: &mut egui::Ui, state: &mut HeatState) {
     let s = &mut state.settings;
-    ui.label("Quality");
-    for (level, name, hint) in LEVELS {
-        ui.radio_value(&mut s.top, level, name).on_hover_text(hint);
-    }
-    ui.add_space(4.0);
     ui.label("Turbulence");
     for (model, name, hint) in MODELS {
         ui.radio_value(&mut s.turbulence, model, name)
@@ -429,7 +443,7 @@ mod tests {
         // The Heat panel is about 330 wide at the right edge under the cube.
         const HEAT_PANEL: f32 = 340.0;
         // Strip, toolbar and gap above the free part of the view.
-        const TOOLBAR_BOTTOM: f32 = 140.0;
+        const TOOLBAR_BOTTOM: f32 = 105.0;
         for (w, h) in [(1366.0, 650.0), (900.0, 500.0), (1920.0, 1040.0)] {
             let view = egui::Rect::from_min_size(egui::pos2(0.0, 117.0), egui::vec2(w, h));
             let corner = whatif_pos(view);

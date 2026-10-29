@@ -713,13 +713,26 @@ impl Mapping {
 }
 
 /// The first of the first 30 rows that looks like a header: nearly as wide
-/// as the widest row, with almost no plain numbers in it. A title line above
-/// the table is narrower (even when a `;` in the title splits it in two) and
-/// is skipped.
+/// as the table's usual row, with almost no plain numbers in it. A title line
+/// above the table is narrower (even when a `;` in the title splits it in two)
+/// and is skipped. The usual width is the most common one among the rows with
+/// two or more cells, so one row with stray extra cells (a note, an unquoted
+/// comma) does not make the real header look too narrow.
 pub fn guess_header_row(sheet: &Sheet) -> usize {
     let filled = |row: &Vec<String>| row.iter().filter(|c| !c.trim().is_empty()).count();
-    let widest = sheet.rows.iter().take(30).map(filled).max().unwrap_or(0);
-    let wanted = (widest * 3).div_ceil(5).max(2);
+    let mut votes: std::collections::BTreeMap<usize, usize> = Default::default();
+    for row in sheet.rows.iter().take(30) {
+        let n = filled(row);
+        if n >= 2 {
+            *votes.entry(n).or_default() += 1;
+        }
+    }
+    // Most rows win; on a tie the wider table beats a one-off title.
+    let usual = votes
+        .iter()
+        .max_by_key(|(width, rows)| (**rows, **width))
+        .map_or(0, |(width, _)| *width);
+    let wanted = (usual * 3).div_ceil(5).max(2);
     for (i, row) in sheet.rows.iter().take(30).enumerate() {
         let n = filled(row);
         let numeric = row
