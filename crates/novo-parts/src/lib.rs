@@ -36,6 +36,7 @@ mod bundle;
 mod cadmatch;
 mod catalog;
 mod csv;
+mod dataportal;
 mod etim;
 mod fit;
 mod import;
@@ -88,6 +89,10 @@ pub use csv::{
     Column, DelimitedRow, ImportError, ImportReport, ParseError, column_for, import_catalog,
     parse_delimited,
 };
+pub use dataportal::{
+    PORTAL_SOURCE, PortalCounts, PortalError, PortalFile, PortalRead, looks_like_portal,
+    read_portal,
+};
 pub use etim::{EtimError, EtimModel};
 pub use fit::{
     DeviceNeed, Fit, KindCheck, PartFacts, Role, Supply, check_kind, check_kind_with, coil_supply,
@@ -127,8 +132,8 @@ pub use recipes::{
 };
 pub use schema::eng;
 pub use schema::{
-    Asset, AssetKind, Classification, ConnectionKind, DataSource, LetThroughPoint, Lifecycle,
-    PartRef, PartTerminal, Price, Provenance, Side,
+    Accessory, Asset, AssetKind, Classification, ConnectionKind, DataSource, DrillHole,
+    DrillRepeat, LetThroughPoint, Lifecycle, PartRef, PartTerminal, Price, Provenance, Side,
 };
 pub use search::{Matcher, normalize_code};
 pub use sheet::{

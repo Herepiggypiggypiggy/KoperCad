@@ -22,6 +22,7 @@ use crate::bmecat::{BmecatRead, read_bmecat};
 use crate::cadmatch::CadLinks;
 use crate::catalog::{Catalog, CatalogError, CatalogPart, user_catalog_path};
 use crate::csv::import_catalog;
+use crate::dataportal::{PORTAL_SOURCE, PortalFile, looks_like_portal, read_portal};
 use crate::etim::EtimModel;
 use crate::import::{decode_text, looks_like_bmecat, read_zip};
 use crate::library::FileKind;
@@ -298,6 +299,10 @@ struct Run {
     etim: Option<EtimModel>,
     /// CAD files the BMEcat files list for their articles.
     listed: Vec<crate::bmecat::ListedCadFile>,
+    /// Maker parts XML files, by the maker their folder names. They are read
+    /// together because a part's connection points, drilling and accessories
+    /// are in files of their own.
+    portal: BTreeMap<String, Vec<PortalFile>>,
 }
 
 /// Reads every file under `inbox`, checks the parts and merges them into
@@ -322,6 +327,7 @@ pub fn import_inbox(
     for file in &files {
         read_file(inbox, file, opts, &mut run);
     }
+    read_portal_files(opts, &mut run);
 
     // Duplicates inside the run: the later file wins.
     let mut unique: BTreeMap<_, CatalogPart> = BTreeMap::new();
@@ -403,7 +409,7 @@ pub fn import_inbox(
             let _ = fs::copy(&catalog_path, catalog_path.with_extension("json.bak"));
         }
         for p in parts {
-            catalog.upsert(p);
+            upsert_merged(&mut catalog, p);
         }
         catalog.save(&catalog_path)?;
         // The library folder is beside the catalog, as `default_library_root`
@@ -419,11 +425,26 @@ pub fn import_inbox(
         }
     } else {
         for p in parts {
-            catalog.upsert(p);
+            upsert_merged(&mut catalog, p);
         }
     }
     report.catalog_size = catalog.len();
     Ok(report)
+}
+
+/// Adds a part. Maker parts XML adds to a part that is already there (its
+/// price and classification stay); anything else replaces it.
+fn upsert_merged(catalog: &mut Catalog, p: CatalogPart) {
+    let from_xml = p
+        .provenance
+        .as_ref()
+        .is_some_and(|x| x.source == PORTAL_SOURCE);
+    let merged = if from_xml {
+        catalog.get(&p.key()).map(|old| old.with_maker_xml(&p))
+    } else {
+        None
+    };
+    catalog.upsert(merged.unwrap_or(p));
 }
 
 fn file_of(p: &CatalogPart) -> String {
@@ -523,6 +544,20 @@ fn read_file(inbox: &Path, file: &Path, opts: &InboxOptions, run: &mut Run) {
     };
 
     let kind = FileKind::of_file_name(&name);
+    if kind == FileKind::Bmecat && starts_like_portal(file) {
+        match fs::read(file) {
+            Ok(b) => run
+                .portal
+                .entry(hint_name.clone())
+                .or_default()
+                .push(PortalFile {
+                    name: label,
+                    text: decode_text(&b),
+                }),
+            Err(e) => run.report.rejected.push(format!("{label}: {e}")),
+        }
+        return;
+    }
     // Rows and articles the reader left out; each one is reported by line.
     let mut dropped: Vec<String> = Vec::new();
     let lower = name.to_ascii_lowercase();
@@ -658,6 +693,67 @@ fn read_file(inbox: &Path, file: &Path, opts: &InboxOptions, run: &mut Run) {
     }
     crate::bmecat::ListedCadFile::follow(&mut listed, &moved);
     run.listed.append(&mut listed);
+}
+
+/// Whether the first bytes of an XML file say it is a maker parts XML.
+fn starts_like_portal(file: &Path) -> bool {
+    use std::io::Read;
+    let mut head = vec![0u8; 4096];
+    let Ok(mut f) = fs::File::open(file) else {
+        return false;
+    };
+    let n = f.read(&mut head).unwrap_or(0);
+    looks_like_portal(&String::from_utf8_lossy(&head[..n]))
+}
+
+/// Reads the maker parts XML files the run collected, one set per maker
+/// folder, and adds their parts and notes to the run.
+fn read_portal_files(opts: &InboxOptions, run: &mut Run) {
+    for (maker, files) in std::mem::take(&mut run.portal) {
+        match read_portal(&files, &maker, &opts.today) {
+            Ok(read) => {
+                for s in read.skipped.iter().take(MAX_DROPPED_LINES * 4) {
+                    run.report.warnings.push(s.clone());
+                }
+                for s in read.unattached.iter().take(MAX_DROPPED_LINES * 4) {
+                    run.report.warnings.push(s.clone());
+                }
+                let c = &read.counts;
+                run.report.notes.push(format!(
+                    "Maker parts XML ({} file(s)): {} parts, {} connection points, {} holes, {} accessories",
+                    c.files, c.parts, c.terminals, c.holes, c.accessories
+                ));
+                for a in &read.assumed {
+                    run.report.notes.push(format!("Assumed: {a}"));
+                }
+                for (name, n) in &read.unrecognised {
+                    run.report
+                        .notes
+                        .push(format!("Kept as written, not understood: {name} ({n}x)"));
+                }
+                let mut counted: Vec<String> = Vec::new();
+                for p in read.parts {
+                    if !counted.contains(&p.manufacturer) {
+                        counted.push(p.manufacturer.clone());
+                        run.report
+                            .makers
+                            .entry(p.manufacturer.clone())
+                            .or_default()
+                            .files += 1;
+                    }
+                    run.parts.push(p);
+                }
+            }
+            Err(e) => run.report.rejected.push(format!(
+                "maker parts XML in {}: {e}",
+                if maker.is_empty() {
+                    "the inbox"
+                } else {
+                    &maker
+                }
+            )),
+        }
+    }
 }
 
 fn maker_label(r: &MakerRecipe) -> &str {
