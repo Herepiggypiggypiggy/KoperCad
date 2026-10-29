@@ -6,3 +6,7 @@
 - `ReversalJump` in `hoist_logic` (events ReversalStarted/ReversalDone, ramp override), loop tracks the sag
   (`FindingKind::ReversalSag`), keys `dh_jump_hz` / `dh_jump_ramp_s`. 12 logic tests, 17 loop tests.
 - Next: item 2 (slack rope and pick-up from the floor), from main in its own PR.
+
+## Slow-down before the final limit (roadmap item 4)
+- Limit tracks in the loop (4 findings), `dh_slow_*` and `dh_clearance_*` keys (1 spec test), 3 loop tests, 1 app test with the drawn fixture `qa/fixtures/hoist-drive-limits.novo` (`drive_hoist_with_limits`), QA 1760 / 1760b.
+- Roadmap items 1 to 4 are built. Open: item 5 (closed-loop hoist) is a separate thread.

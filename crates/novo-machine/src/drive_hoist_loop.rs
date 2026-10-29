@@ -90,10 +90,29 @@ pub enum FindingKind {
     /// The hook sank below where it was when the direction changed, while the drive passed
     /// through zero frequency with the brake open (reversal with the brake kept open).
     ReversalSag { metres: f64 },
+    /// The hook passed a slow-down switch (a limit named "slow-down ..." in the binding) at this
+    /// speed; the drawing is what turns that into a slower step.
+    SlowDownPassed { upper: bool, speed_m_s: f64 },
+    /// The hook reached a final limit at this speed; `slow_speed_m_s` is the speed at the
+    /// slow-down switch on the same side, when there is one.
+    FinalLimit {
+        upper: bool,
+        speed_m_s: f64,
+        slow_speed_m_s: Option<f64>,
+    },
+    /// How far the hook went past the final limit before it stood still.
+    LimitOvertravel { upper: bool, metres: f64 },
+    /// The hook went past the clearance behind a final limit and would hit the stop or buffer at
+    /// this speed.
+    HitStop { upper: bool, speed_m_s: f64 },
     /// The drive tripped.
     DriveTrip(Fault),
     /// The brake logic found something.
     Logic(LogicEvent),
+}
+
+fn side(upper: bool) -> &'static str {
+    if upper { "upper" } else { "lower" }
 }
 
 impl FindingKind {
@@ -114,6 +133,40 @@ impl FindingKind {
                 "The hook sank {:.0} mm while the drive passed through zero frequency with the \
                  brake open.",
                 metres * 1000.0
+            ),
+            Self::SlowDownPassed { upper, speed_m_s } => format!(
+                "The hook passed the {} slow-down switch at {:.2} m/s.",
+                side(*upper),
+                speed_m_s
+            ),
+            Self::FinalLimit {
+                upper,
+                speed_m_s,
+                slow_speed_m_s,
+            } => match slow_speed_m_s {
+                Some(slow) => format!(
+                    "The hook reached the {} final limit at {:.2} m/s (it was at {:.2} m/s at the \
+                     slow-down switch).",
+                    side(*upper),
+                    speed_m_s,
+                    slow
+                ),
+                None => format!(
+                    "The hook reached the {} final limit at {:.2} m/s (no slow-down switch).",
+                    side(*upper),
+                    speed_m_s
+                ),
+            },
+            Self::LimitOvertravel { upper, metres } => format!(
+                "The hook went {:.0} mm past the {} final limit before it stood still.",
+                metres * 1000.0,
+                side(*upper)
+            ),
+            Self::HitStop { upper, speed_m_s } => format!(
+                "The hook went past the clearance behind the {} final limit and hits the stop at \
+                 {:.2} m/s.",
+                side(*upper),
+                speed_m_s
             ),
             Self::BrakeSlip { metres } => format!(
                 "The brake does not hold the load: the hook moved {:.0} mm with the drive off.",
@@ -202,6 +255,32 @@ pub struct DriveHoistModule {
     /// Hook height at the start of a reversal and the lowest height since.
     reversal_mark: Option<(f64, f64)>,
     base_ramp_s: (f64, f64),
+    /// One track per limit switch of the binding (filled in as the run goes).
+    limit_tracks: Vec<LimitTrack>,
+    /// Clearance behind the final limits to the stop, m: `(upper, lower)`.
+    clearance_m: (Option<f64>, Option<f64>),
+}
+
+/// What the run remembers about one limit switch.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct LimitTrack {
+    was_closed: bool,
+    /// Hook speed (m/s, magnitude) when the switch opened.
+    speed_at_open: Option<f64>,
+    /// Furthest distance past the actuation point since it opened (final limits only).
+    worst_m: f64,
+    stop_reported: bool,
+}
+
+impl Default for LimitTrack {
+    fn default() -> Self {
+        Self {
+            was_closed: true,
+            speed_at_open: None,
+            worst_m: 0.0,
+            stop_reported: false,
+        }
+    }
 }
 
 /// The parts of a drive hoist, before they are bound to a schematic.
@@ -274,7 +353,15 @@ impl DriveHoistModule {
             slip_reported: false,
             reversal_mark: None,
             base_ramp_s,
+            limit_tracks: Vec::new(),
+            clearance_m: (None, None),
         })
+    }
+
+    /// Clearance from each final limit to the stop or buffer behind it, m (`None`: not checked).
+    pub fn with_clearance(mut self, upper_m: Option<f64>, lower_m: Option<f64>) -> Self {
+        self.clearance_m = (upper_m, lower_m);
+        self
     }
 
     /// Hook height in metres, 0 at the start (positive is up).
@@ -588,6 +675,7 @@ fn step_module(
     let speed = omega_end * metres_per_rad;
 
     track_findings(m, &logic, time_s, speed);
+    track_limits(m, time_s, speed);
 
     m.snapshot = Some(DriveHoistSnapshot {
         drive: out,
@@ -645,6 +733,82 @@ fn advance_shaft(
         omega = 0.0;
     }
     Ok((step.point, omega))
+}
+
+/// A limit whose name starts with this is a slow-down switch, any other a final limit.
+pub const SLOW_DOWN_PREFIX: &str = "slow-down";
+
+fn track_limits(m: &mut DriveHoistModule, time_s: f64, speed: f64) {
+    let limits = m.binding.limits.clone();
+    m.limit_tracks.resize(limits.len(), LimitTrack::default());
+    let h = m.height_m;
+    let stopped = m.omega == 0.0;
+    for (i, lim) in limits.iter().enumerate() {
+        let upper = matches!(lim.kind, crate::hoist_loop::LimitKind::Upper);
+        let slow = lim.binding.name.starts_with(SLOW_DOWN_PREFIX);
+        let at_m = lim.binding.actuate_at_mm / 1000.0;
+        let closed = lim.closed_at(h);
+        let mut track = m.limit_tracks[i];
+        let mut found = Vec::new();
+        if track.was_closed && !closed {
+            track.speed_at_open = Some(speed.abs());
+            track.worst_m = 0.0;
+            track.stop_reported = false;
+            if slow {
+                found.push(FindingKind::SlowDownPassed {
+                    upper,
+                    speed_m_s: speed.abs(),
+                });
+            } else {
+                let slow_speed = limits
+                    .iter()
+                    .zip(&m.limit_tracks)
+                    .filter(|(l, _)| {
+                        l.binding.name.starts_with(SLOW_DOWN_PREFIX) && l.kind == lim.kind
+                    })
+                    .find_map(|(_, t)| t.speed_at_open);
+                found.push(FindingKind::FinalLimit {
+                    upper,
+                    speed_m_s: speed.abs(),
+                    slow_speed_m_s: slow_speed,
+                });
+            }
+        }
+        if !closed && !slow && track.speed_at_open.is_some() {
+            let past = if upper { h - at_m } else { at_m - h };
+            track.worst_m = track.worst_m.max(past);
+            let clearance = if upper {
+                m.clearance_m.0
+            } else {
+                m.clearance_m.1
+            };
+            if let Some(c) = clearance
+                && past > c
+                && !track.stop_reported
+            {
+                track.stop_reported = true;
+                found.push(FindingKind::HitStop {
+                    upper,
+                    speed_m_s: speed.abs(),
+                });
+            }
+            if stopped && speed == 0.0 {
+                found.push(FindingKind::LimitOvertravel {
+                    upper,
+                    metres: track.worst_m,
+                });
+                track.speed_at_open = None;
+            }
+        }
+        if closed && !track.was_closed {
+            track.speed_at_open = None;
+        }
+        track.was_closed = closed;
+        m.limit_tracks[i] = track;
+        for kind in found {
+            m.note(time_s, kind);
+        }
+    }
 }
 
 fn track_findings(m: &mut DriveHoistModule, logic: &LogicOutput, time_s: f64, speed: f64) {

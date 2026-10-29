@@ -16,7 +16,7 @@ Next, in order
 1. (done) Jump at reversal: `dh_jump_hz`, `dh_jump_ramp_s`, finding ReversalSag.
 2. Slack rope and hook-on-load detection (a load that is picked up from the floor).
 3. Brake and motor heating over a duty cycle; restart-time and brake wear findings.
-4. Ramp-to-limit slow-down switches for the upper limit (slow step before the final limit).
+4. (done) Slow-down switches before the final limits: keys `dh_slow_*`, `dh_clearance_*`, findings SlowDownPassed, FinalLimit, LimitOvertravel, HitStop.
 5. Closed-loop hoist (encoder, torque proving) in its own thread, sharing `HoistLogic` where it fits.
 
 Open questions

@@ -161,6 +161,35 @@ pub const KEYS: &[SpecKey] = &[
         "0.03",
     ),
     tag("dh_brake_switching", "Brake switched on (AC or DC)"),
+    tag("dh_slow_up", "Upper slow-down switch device (blank: none)"),
+    num(
+        "dh_slow_up_m",
+        "Upper slow-down height (m above the hook start)",
+        "m",
+        "",
+    ),
+    tag(
+        "dh_slow_down",
+        "Lower slow-down switch device (blank: none)",
+    ),
+    num(
+        "dh_slow_down_m",
+        "Lower slow-down height (m above the hook start)",
+        "m",
+        "",
+    ),
+    num(
+        "dh_clearance_up_m",
+        "Clearance behind the upper final limit to the stop (blank: not checked)",
+        "m",
+        "",
+    ),
+    num(
+        "dh_clearance_down_m",
+        "Clearance behind the lower final limit to the stop (blank: not checked)",
+        "m",
+        "",
+    ),
     tag("dh_in_up", "Up command device"),
     tag("dh_in_down", "Down command device"),
     tag("dh_in_step2", "Speed step 2 input device"),
@@ -322,6 +351,18 @@ pub fn drive_hoist_from_properties(
 
     let mut limits = Vec::new();
     for (which, kind, device, height) in [
+        (
+            "slow-down upper",
+            LimitKind::Upper,
+            "dh_slow_up",
+            "dh_slow_up_m",
+        ),
+        (
+            "slow-down lower",
+            LimitKind::Lower,
+            "dh_slow_down",
+            "dh_slow_down_m",
+        ),
         ("upper", LimitKind::Upper, "dh_limit_up", "dh_limit_up_m"),
         (
             "lower",
@@ -343,6 +384,33 @@ pub fn drive_hoist_from_properties(
             _ => return Err(SpecError::LimitIncomplete(which)),
         }
     }
+    let mut slow_notes = Vec::new();
+    for (slow, fin, what) in [
+        ("slow-down upper", "upper", "upper"),
+        ("slow-down lower", "lower", "lower"),
+    ] {
+        let at = |name: &str| {
+            limits
+                .iter()
+                .find(|l: &&LimitSwitch| l.binding.name == name)
+                .map(|l| l.binding.actuate_at_mm)
+        };
+        if let (Some(s_mm), Some(f_mm)) = (at(slow), at(fin)) {
+            let before = if what == "upper" {
+                s_mm < f_mm
+            } else {
+                s_mm > f_mm
+            };
+            if !before {
+                slow_notes.push(format!(
+                    "The {what} slow-down switch ({:.2} m) is not before the {what} final limit \
+                     ({:.2} m): the hook reaches the final limit first.",
+                    s_mm / 1000.0,
+                    f_mm / 1000.0
+                ));
+            }
+        }
+    }
     let speed_inputs: Vec<Option<String>> = ["dh_in_step2", "dh_in_step3", "dh_in_step4"]
         .iter()
         .take(steps_hz.len() - 1)
@@ -360,6 +428,7 @@ pub fn drive_hoist_from_properties(
         limits,
     };
     let mut notes: Vec<String> = report.notes.iter().map(|n| (*n).to_owned()).collect();
+    notes.extend(slow_notes);
     if let Some(ratio) = report.assumed_breakdown_ratio {
         notes.push(format!(
             "The motor's breakdown torque was not on the plate: {ratio:.1} x rated is assumed."
@@ -379,6 +448,16 @@ pub fn drive_hoist_from_properties(
         );
     }
     let rotor_inertia = number("dh_rotor_inertia")?;
+    let clearance = |key: &'static str| -> Result<Option<f64>, SpecError> {
+        match text(key) {
+            None => Ok(None),
+            Some(_) => number(key).map(Some),
+        }
+    };
+    let (clear_up, clear_down) = (
+        clearance("dh_clearance_up_m")?,
+        clearance("dh_clearance_down_m")?,
+    );
     let module = DriveHoistModule::new(
         id,
         DriveHoistParts {
@@ -390,7 +469,8 @@ pub fn drive_hoist_from_properties(
             rotor_inertia_kg_m2: rotor_inertia,
         },
         binding,
-    )?;
+    )?
+    .with_clearance(clear_up, clear_down);
     Ok(Some((module, notes)))
 }
 
@@ -461,6 +541,44 @@ mod tests {
             .unwrap();
         let j = m.logic.config().jump.as_ref().unwrap();
         assert_eq!((j.jump_hz, j.ramp_time_s), (8.0, 0.3));
+    }
+
+    #[test]
+    fn a_slow_down_switch_is_a_limit_before_the_final_one_and_a_wrong_order_is_noted() {
+        let base = [
+            (DRIVE_HOIST_KEY, "2000"),
+            ("dh_limit_up", "=LS-F"),
+            ("dh_limit_up_m", "1.6"),
+            ("dh_slow_up", "=LS-S"),
+            ("dh_slow_up_m", "1.0"),
+        ];
+        let (m, notes) = build(&props(&base)).unwrap().unwrap();
+        let names: Vec<&str> = m
+            .binding
+            .limits
+            .iter()
+            .map(|l| l.binding.name.as_str())
+            .collect();
+        assert_eq!(names, ["slow-down upper", "upper"]);
+        assert!(notes.iter().all(|n| !n.contains("slow-down")), "{notes:?}");
+        // A slow-down switch behind the final limit does nothing useful: say so.
+        let mut wrong = base.to_vec();
+        wrong.push(("dh_slow_up_m", "1.8"));
+        let (_, notes) = build(&props(&wrong)).unwrap().unwrap();
+        assert!(
+            notes
+                .iter()
+                .any(|n| n.contains("not before the upper final limit")),
+            "{notes:?}"
+        );
+        // A device without a height is refused like any other limit.
+        assert!(
+            build(&props(&[
+                (DRIVE_HOIST_KEY, "2000"),
+                ("dh_slow_up", "=LS-S")
+            ]))
+            .is_err()
+        );
     }
 
     #[test]

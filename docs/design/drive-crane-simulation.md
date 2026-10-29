@@ -283,6 +283,19 @@ brake open and only flips the run direction; inside a band of +-`dh_jump_hz` aro
 short ramp `dh_jump_ramp_s` instead of its normal ramps. The band must lie below the slowest speed step (refused otherwise), because the reversal ends when the frequency rises above it. A slow pass through zero lets a hanging load sink,
 so the run reports the sag as "ReversalSag" (metres below the height at the reversal).
 
+Slow-down before the final limit (optional, `dh_slow_up`/`dh_slow_up_m`, `dh_slow_down`/`dh_slow_down_m`,
+`dh_clearance_up_m`/`dh_clearance_down_m`): a slow-down switch is a second limit contact in the drawing,
+placed before the final limit (the property sheet notes it when it is not). The loop only writes the
+contact by hook height; what it cuts is the drawing's business (for example the relays of the fast speed
+steps, so the drive falls back to step 1 and the final limit is reached at creep speed). The run reports
+the speed at the slow-down switch ("SlowDownPassed"), the speed at the final limit with the speed at the
+slow-down switch beside it ("FinalLimit"), how far the hook went past the final limit before it stood
+still ("LimitOvertravel") and, with a clearance entered, the speed at which it would hit the stop behind
+it ("HitStop"). Exact by definition: the limit contacts follow the hook height, the overtravel is the
+hook height past the actuation point. Model: the stopping behaviour (all of the drive, brake and sequence
+models above). The stop or buffer itself is not modelled (no impact, no rope shock): the run only says
+at what speed the hook would reach it.
+
 Load sensing (optional, `dh_sense_boost_hz`): the torque is averaged at a probe frequency; a light load
 may run the top step above its nominal frequency, never beyond what the motor can deliver with a margin
 (breakdown torque of the fitted circuit on the V/f law). This is a generic function; the name and rule of
