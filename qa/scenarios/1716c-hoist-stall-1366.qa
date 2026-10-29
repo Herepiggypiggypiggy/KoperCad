@@ -1,0 +1,32 @@
+@title Hoist run stall at 1366: supply at 70 percent, the brake stays shut and the motor heats
+@area Simulate
+@sizes 1366x768
+# Supply voltage 70 %: the field-released brake does not lift, the held coarse step stalls the motor.
+open qa/fixtures/hoist-two-speed.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate hoist run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 40
+click_text "Faults to try"
+wait 20
+click_text "100 %"
+wait 10
+click_text "70 %"
+wait 20
+mouse_down 123 341
+wait 600
+shot stalled-heating
+expect "Winding +"
+expect "Supply voltage is low"
+wait 1500
+shot stalled-later
+mouse_up 123 341
+wait 20
+check_layout

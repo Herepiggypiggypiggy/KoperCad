@@ -498,6 +498,7 @@ impl NovoApp {
                                         *tripped,
                                         egui::Button::new("Reset overload relay"),
                                     )
+                                    .on_disabled_hover_text("The relay has not tripped")
                                     .clicked()
                                 {
                                     heat_action = Some((tag.clone(), true));
