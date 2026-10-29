@@ -125,6 +125,19 @@ fn connect_opens_its_flyout_and_a_row_sets_the_wiring_mode() {
     let (_dir, mut d) = open(size);
     let ctx = d.ctx.clone();
     let connect = d.app.learn_anchor("dock.connect").unwrap();
+    // A plain click starts the wire tool, as the dock's button did.
+    click(&mut d, size, connect.center());
+    let tool = |d: &Drive| d.app.canvas.schematic_ref().unwrap().editor.tool().clone();
+    assert!(
+        matches!(tool(&d), novo_editor::Tool::Wire(_)),
+        "{:?}",
+        tool(&d)
+    );
+    assert!(
+        rail::open_flyout(&ctx).is_none(),
+        "a plain click opens no card"
+    );
+    // A click on the tool in hand opens the card.
     click(&mut d, size, connect.center());
     assert_eq!(rail::open_flyout(&ctx).as_deref(), Some("tool.connect"));
     // The flyout shows Corners and Lines where the lessons look for them.
@@ -136,18 +149,19 @@ fn connect_opens_its_flyout_and_a_row_sets_the_wiring_mode() {
     click(&mut d, size, lines.center());
     assert!(rail::open_flyout(&ctx).is_none(), "picking a row closes it");
     assert_eq!(d.app.settings.wiring_mode(), WiringMode::Lines);
-    let tool = d.app.canvas.schematic_ref().unwrap().editor.tool().clone();
-    assert!(matches!(tool, novo_editor::Tool::Wire(_)), "{tool:?}");
+    assert!(matches!(tool(&d), novo_editor::Tool::Wire(_)));
 
-    // A second click on the tool toggles the flyout shut.
+    // The tool is in hand: a click on it opens the card, a second shuts it.
     let connect = d.app.learn_anchor("dock.connect").unwrap();
     click(&mut d, size, connect.center());
     assert!(rail::open_flyout(&ctx).is_some());
     click(&mut d, size, connect.center());
     assert!(rail::open_flyout(&ctx).is_none());
-    // A click elsewhere closes it too.
-    click(&mut d, size, connect.center());
+    // The corner notch opens it too, tool in hand or not.
+    let notch = egui::pos2(connect.left() + 26.0, connect.bottom() - 4.0);
+    click(&mut d, size, notch);
     assert!(rail::open_flyout(&ctx).is_some());
+    // A click elsewhere closes it too.
     let (_, canvas) = d.app.wb.canvas_area.unwrap();
     click(&mut d, size, canvas.center());
     assert!(rail::open_flyout(&ctx).is_none());
@@ -242,7 +256,8 @@ fn escape_closes_the_flyout_before_it_does_anything_else() {
     let (_dir, mut d) = open(size);
     let ctx = d.ctx.clone();
     let connect = d.app.learn_anchor("dock.connect").unwrap();
-    click(&mut d, size, connect.center());
+    let notch = egui::pos2(connect.left() + 26.0, connect.bottom() - 4.0);
+    click(&mut d, size, notch);
     assert!(rail::open_flyout(&ctx).is_some());
     d.key(egui::Key::Escape, egui::Modifiers::NONE);
     d.frame_sized(size, Vec::new());

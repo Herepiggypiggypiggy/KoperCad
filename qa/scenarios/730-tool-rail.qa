@@ -9,6 +9,9 @@ shot rail-collapsed
 check_layout
 click 23 138
 wait 8
+shot connect-started
+click 23 138
+wait 8
 shot connect-flyout
 expect "Wire shape"
 expect "Auto-connect pins that touch"
@@ -16,6 +19,8 @@ check_layout
 key Escape
 wait 6
 expect_not "Wire shape"
+key Escape
+wait 4
 click 23 722
 wait 8
 shot rail-expanded

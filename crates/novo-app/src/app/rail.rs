@@ -93,6 +93,9 @@ pub(super) struct Shown {
     pub spots: Vec<(&'static str, Rect, bool)>,
     /// The panel's own rect.
     pub rect: Rect,
+    /// An entry whose flyout was asked for: the notch, a right click, or a
+    /// click on the tool already in hand.
+    pub asked: Option<&'static str>,
     /// The height the entries needed, for the fit test.
     pub content_height: f32,
 }
@@ -130,6 +133,7 @@ pub(super) fn show(ui: &mut egui::Ui, rail: &Rail, expanded: &mut bool) -> Shown
         clicked: None,
         spots: Vec::new(),
         rect: Rect::NOTHING,
+        asked: None,
         content_height: 0.0,
     };
     let frame = egui::Frame::new()
@@ -169,8 +173,14 @@ pub(super) fn show(ui: &mut egui::Ui, rail: &Rail, expanded: &mut bool) -> Shown
                         }
                         first = false;
                         for entry in zone {
-                            let (rect, clicked) =
-                                entry_button(ui, entry, *expanded, open.as_deref(), &mut order);
+                            let (rect, clicked) = entry_button(
+                                ui,
+                                entry,
+                                *expanded,
+                                open.as_deref(),
+                                &mut order,
+                                &mut shown.asked,
+                            );
                             used += ENTRY + 2.0;
                             if let Some(a) = entry.anchor {
                                 shown.spots.push((a, rect, clicked));
@@ -208,13 +218,20 @@ pub(super) fn show(ui: &mut egui::Ui, rail: &Rail, expanded: &mut bool) -> Shown
                     badge: None,
                     flyout: Vec::new(),
                 };
-                let (_, clicked) = entry_button(ui, &toggle, *expanded, None, &mut order);
+                let (_, clicked) =
+                    entry_button(ui, &toggle, *expanded, None, &mut order, &mut shown.asked);
                 if clicked {
                     *expanded = !*expanded;
                 }
                 for entry in rail.history.iter().rev() {
-                    let (rect, clicked) =
-                        entry_button(ui, entry, *expanded, open.as_deref(), &mut order);
+                    let (rect, clicked) = entry_button(
+                        ui,
+                        entry,
+                        *expanded,
+                        open.as_deref(),
+                        &mut order,
+                        &mut shown.asked,
+                    );
                     if let Some(a) = entry.anchor {
                         shown.spots.push((a, rect, clicked));
                     }
@@ -234,23 +251,14 @@ pub(super) fn show(ui: &mut egui::Ui, rail: &Rail, expanded: &mut bool) -> Shown
     // A click on a flyout entry opens or closes it; any other pick closes
     // the open one.
     let ctx = ui.ctx().clone();
-    if let Some(id) = shown.clicked {
-        let has_flyout = rail
-            .tools
-            .iter()
-            .chain(&rail.assists)
-            .chain(&rail.panels)
-            .chain(&rail.history)
-            .find(|e| e.id == id)
-            .is_some_and(|e| !e.flyout.is_empty());
-        if has_flyout {
-            let now_open = open_flyout(&ctx).as_deref() == Some(id);
-            set_flyout(&ctx, if now_open { None } else { Some(id) });
-            // The click opens a card, it does not run the entry.
-            shown.clicked = None;
-        } else if id != "rail.expand" && !is_flyout_row(rail, id) {
-            set_flyout(&ctx, None);
-        }
+    if let Some(id) = shown.asked {
+        let now_open = open_flyout(&ctx).as_deref() == Some(id);
+        set_flyout(&ctx, if now_open { None } else { Some(id) });
+    } else if let Some(id) = shown.clicked
+        && id != "rail.expand"
+        && !is_flyout_row(rail, id)
+    {
+        set_flyout(&ctx, None);
     }
     if open_flyout(&ctx).is_some() {
         let outside = ctx.input(|i| {
@@ -303,6 +311,7 @@ fn entry_button(
     expanded: bool,
     open: Option<&str>,
     order: &mut Vec<egui::Id>,
+    asked: &mut Option<&'static str>,
 ) -> (Rect, bool) {
     let pal = ui_palette();
     let width = ui.available_width();
@@ -409,8 +418,25 @@ fn entry_button(
     } else {
         response.on_hover_text(&entry.tip)
     };
-    let clicked = response.clicked() && entry.enabled;
-    if clicked && ui.input(|i| i.pointer.primary_released()) {
+    // A plain click runs the tool, as the dock's button did. The flyout is
+    // asked for by the corner notch, a right click, or a click on the tool
+    // that is already in hand.
+    let on_notch = response.interact_pointer_pos().is_some_and(|p| {
+        Rect::from_min_max(
+            egui::pos2(rect.left() + ENTRY - 14.0, rect.bottom() - 14.0),
+            egui::pos2(rect.left() + ENTRY, rect.bottom()),
+        )
+        .contains(p)
+    });
+    let ask = !entry.flyout.is_empty()
+        && entry.enabled
+        && (response.secondary_clicked()
+            || (response.clicked() && (entry.active || opened || on_notch)));
+    if ask {
+        *asked = Some(entry.id);
+    }
+    let clicked = response.clicked() && entry.enabled && !ask;
+    if (clicked || ask) && ui.input(|i| i.pointer.primary_released()) {
         // The keys stay with the drawing after a click; keyboard use keeps
         // its focus.
         response.surrender_focus();

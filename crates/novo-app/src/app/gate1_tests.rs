@@ -1187,12 +1187,21 @@ fn the_rail_switches_tools_and_keeps_the_keys_with_the_drawing() {
         pressed,
         modifiers: egui::Modifiers::NONE,
     };
-    d.frame_with(vec![egui::Event::PointerMoved(at), button(true)]);
+    d.frame_with(vec![egui::Event::PointerMoved(at)]);
+    d.frame();
+    d.frame_with(vec![button(true)]);
     d.frame_with(vec![button(false)]);
     d.frame();
     let tool = |d: &Drive| d.app.canvas.schematic_ref().unwrap().editor.tool().clone();
-    // A click on Connect opens its flyout and does not start wiring itself.
-    assert!(matches!(tool(&d), Tool::Select), "{:?}", tool(&d));
+    // One click on Connect starts wiring, as the dock's button did.
+    assert!(matches!(tool(&d), Tool::Wire(_)), "{:?}", tool(&d));
+    assert!(crate::app::rail::open_flyout(&ctx).is_none());
+    // A click on the tool in hand opens its flyout; Esc closes it.
+    d.frame_with(vec![egui::Event::PointerMoved(at)]);
+    d.frame();
+    d.frame_with(vec![button(true)]);
+    d.frame_with(vec![button(false)]);
+    d.frame();
     assert!(crate::app::rail::open_flyout(&ctx).is_some());
     d.key(egui::Key::Escape, egui::Modifiers::NONE);
     d.frame();
