@@ -38,6 +38,16 @@ pub(crate) struct HoistRun {
     notice: Vec<(Level, String)>,
 }
 
+/// What the window shows of one hoist.
+struct HoistRow {
+    tag: String,
+    text: String,
+    problems: Vec<&'static str>,
+    faults: HoistFaults,
+    heat: Option<String>,
+    tripped: bool,
+}
+
 struct Active {
     lp: HoistLoop,
     acc: f64,
@@ -204,10 +214,36 @@ pub(super) fn reading(module: &HoistModule) -> String {
     };
     let warn = if s.conditions.any() { " \u{b7} !" } else { "" };
     format!(
-        "{:.0} rpm \u{b7} {winding}{fine_lift} \u{b7} {brake} \u{b7} {:.2} m{warn}",
+        "{:.0} rpm \u{b7} {winding}{fine_lift} \u{b7} {brake} \u{b7} {:.2} m \u{b7} {:.1} A{warn}",
         s.shaft_rpm.abs(),
-        module.height_m()
+        module.height_m(),
+        s.motor_current_a + s.fine_current_a
     )
+}
+
+/// A line about heat: winding rise against its limit and the overload relay, if the hoist has
+/// the electrical model and has run.
+pub(super) fn heat_line(module: &HoistModule) -> Option<String> {
+    let s = module.snapshot()?;
+    let e = module.unit.electrics()?;
+    let limit = e.thermal.params().limit_rise_k;
+    let mut text = format!(
+        "Winding +{:.0} K of {:.0} K",
+        s.winding_rise_k.max(s.fine_winding_rise_k),
+        limit
+    );
+    if e.relay.is_some() {
+        text.push_str(&format!(
+            " \u{b7} overload relay {:.0} %{}",
+            s.overload_load * 100.0,
+            if module.unit.overload_tripped() {
+                " (tripped)"
+            } else {
+                ""
+            }
+        ));
+    }
+    Some(text)
 }
 
 /// Plain-language lines about what is wrong with a hoist right now (empty when all is well).
@@ -376,14 +412,22 @@ impl NovoApp {
         let mut stop = false;
         let mut live_toggle = false;
         let hoist = &self.wb.hoist;
-        let rows: Vec<(String, String, Vec<&'static str>, HoistFaults)> =
-            hoist.active.as_ref().map_or_else(Vec::new, |a| {
-                a.lp.hoists
-                    .iter()
-                    .map(|m| (m.id.clone(), reading(m), conditions(m), *m.unit.faults()))
-                    .collect()
-            });
+        let rows: Vec<HoistRow> = hoist.active.as_ref().map_or_else(Vec::new, |a| {
+            a.lp.hoists
+                .iter()
+                .map(|m| HoistRow {
+                    tag: m.id.clone(),
+                    text: reading(m),
+                    problems: conditions(m),
+                    faults: *m.unit.faults(),
+                    heat: heat_line(m),
+                    tripped: m.unit.overload_tripped(),
+                })
+                .collect()
+        });
         let mut fault_change: Option<(String, HoistFaults)> = None;
+        // (hoist, true = reset the overload relay, false = let the motors cool down)
+        let mut heat_action: Option<(String, bool)> = None;
         let running = hoist.active.is_some();
         let notice = hoist.notice.clone();
         let names: Vec<String> = hoists.iter().map(|h| h.id.clone()).collect();
@@ -433,11 +477,36 @@ impl NovoApp {
                 if !rows.is_empty() {
                     ui.separator();
                     let warning = crate::theme::ui_palette().warning;
-                    for (tag, text, problems, faults) in &rows {
+                    for HoistRow {
+                        tag,
+                        text,
+                        problems,
+                        faults,
+                        heat,
+                        tripped,
+                    } in &rows
+                    {
                         ui.horizontal(|ui| {
                             ui.strong(tag);
                             ui.label(text);
                         });
+                        if let Some(heat) = heat {
+                            ui.horizontal(|ui| {
+                                ui.weak(heat);
+                                if ui
+                                    .add_enabled(
+                                        *tripped,
+                                        egui::Button::new("Reset overload relay"),
+                                    )
+                                    .clicked()
+                                {
+                                    heat_action = Some((tag.clone(), true));
+                                }
+                                if ui.button("Let motors cool down").clicked() {
+                                    heat_action = Some((tag.clone(), false));
+                                }
+                            });
+                        }
                         for line in problems {
                             ui.colored_label(warning, format!("\u{2022} {line}"));
                         }
@@ -470,6 +539,7 @@ impl NovoApp {
                 for line in novo_drive::motor::MOTOR_MODEL_LEAVES_OUT
                     .iter()
                     .chain(novo_drive::brake_system::FAMILY_MODEL_LEAVES_OUT)
+                    .chain(novo_drive::hoist_thermal::THERMAL_MODEL_LEAVES_OUT)
                 {
                     ui.weak(format!("\u{2022} {line}"));
                 }
@@ -496,6 +566,16 @@ impl NovoApp {
             && let Err(why) = m.unit.set_faults(faults)
         {
             self.wb.hoist.notice = vec![(Level::Warning, format!("{id}: {why}"))];
+        }
+        if let Some((id, reset)) = heat_action
+            && let Some(active) = self.wb.hoist.active.as_mut()
+            && let Some(m) = active.lp.hoists.iter_mut().find(|m| m.id == id)
+        {
+            if reset {
+                m.unit.reset_overload();
+            } else {
+                m.unit.cool_down();
+            }
         }
         if stop {
             self.wb.hoist.active = None;
