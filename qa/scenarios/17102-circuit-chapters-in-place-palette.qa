@@ -1,0 +1,16 @@
+@title Place palette: the circuit chapters are lines of their own
+@area Schematic
+# Follow-up of PR 1710: under Circuits the place palette lists each chapter of the circuit library.
+click_text "New project"
+wait 20
+key q
+wait 15
+expect "Circuits"
+expect "3 Hoists"
+click_text "3 Hoists"
+wait 8
+expect "Hoist two-speed with rectifier brake"
+shot hoists-chapter
+check_layout
+key Escape
+wait 6

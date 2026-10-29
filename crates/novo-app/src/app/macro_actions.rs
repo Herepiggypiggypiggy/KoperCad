@@ -87,6 +87,7 @@ impl PlaceWindow {
             .map(|e| novo_workflow::palette::MacroEntry {
                 words: format!("{} {}", e.tags.join(" "), e.description).to_lowercase(),
                 detail: e.description,
+                folder: e.folder,
                 name: e.name,
             })
             .collect();

@@ -160,6 +160,9 @@ pub struct AddonEntry {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MacroEntry {
     pub name: String,
+    /// The library folder the macro is in (`Circuits/3 Hoists`); empty at
+    /// the top level.
+    pub folder: String,
     /// What the row says after the name (the description).
     pub detail: String,
     /// Tags and description, lower case.
