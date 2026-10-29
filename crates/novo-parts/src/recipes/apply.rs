@@ -1341,6 +1341,7 @@ impl MakerRecipe {
                     wire_mm2: wire,
                     side: Side::Unknown,
                     position_mm: None,
+                    ..Default::default()
                 })
                 .collect();
             let w = "Terminal names are numbered 1 to N where the file gives only the count; check them against the part.";

@@ -872,6 +872,7 @@ fn make_part(d: Draft, mapping: &Mapping, file: &str, today: &str) -> CatalogPar
                 wire_mm2: wire,
                 side: Side::Unknown,
                 position_mm: None,
+                ..Default::default()
             })
             .collect();
     }
