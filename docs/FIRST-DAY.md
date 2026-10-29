@@ -14,7 +14,7 @@ at any point; if something asks for them, stop and say so.
 ## 2. Install (two ways, pick one)
 
 **Where the files are.** The work build is a draft release on GitHub, so it is visible only when you are signed in to the
-KoperCAD repository: open Releases and pick the version you were told (for example `v0.1.0-rc12`). Download them **at home, the evening before**: a company proxy may block them. Its files are
+KoperCAD repository: open Releases and pick the version you were told (for example `v0.1.0-rc13`). Download them **at home, the evening before**: a company proxy may block them. Its files are
 `KoperCAD-<version>-setup.exe`, `KoperCAD-<version>-portable.zip` and `SHA256SUMS`. If you cannot see the draft, ask for
 the three files to be sent to you another way. The public `experimental` pre-release holds a different, single zip
 (`kopercad.exe` only): do not use it for work.
