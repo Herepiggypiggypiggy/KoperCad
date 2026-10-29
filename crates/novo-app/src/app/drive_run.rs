@@ -511,6 +511,12 @@ impl NovoApp {
                      never opens.",
                 );
                 ui.weak(
+                    "\u{2022} Rope (when a floor height is set): one spring and damper between \
+                     the drum and the hook, with a stiffness and damping ratio you enter, not a \
+                     measured rope. The load is taken up at the floor with a snatch; the model \
+                     has no rope stretch history, no sway and no multi-fall reeving.",
+                );
+                ui.weak(
                     "\u{2022} Closed-loop winch: an averaged encoder drive (speed loop around a \
                      first order torque loop, current limit, constant power above rated speed). \
                      Torque is proven before the brake opens and held at zero speed; the STO \

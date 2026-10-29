@@ -164,7 +164,7 @@ pub const KEYS: &[SpecKey] = &[
     tag("dh_brake_switching", "Brake switched on (AC or DC)"),
     num(
         "dh_floor_m",
-        "Floor under the hook (m relative to the hook start, 0 or below; blank: rope always taut)",
+        "Floor under the hook (0 or below; blank: taut rope)",
         "m",
         "",
     ),
