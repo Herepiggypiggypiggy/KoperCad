@@ -15,7 +15,7 @@ wait 8
 expect "Add page"
 shot page-switcher-dark
 check_layout
-text power
+text main
 wait 6
 shot page-switcher-filtered
 key Escape
