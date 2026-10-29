@@ -73,12 +73,12 @@ Basis says where a number comes from, and the sheet never states more than it kn
 
 | Basis | Meaning |
 | --- | --- |
-| maker data | the part's `hole_pattern` / `cutout` carries `drill_basis = maker` (the parts importers set it for maker files) |
+| maker data | the part's `hole_pattern` / `cutout` carries `drill_basis = maker`. Nothing sets this key yet: set the part property `drill_basis = maker` by hand until an importer writes it (follow-up in the parts importer thread) |
 | typed in | `drill_basis = typed` (entered by hand) |
 | part data | the part has the data, no recorded origin; shown as is, never promoted to maker data |
 | planning rule | KoperCAD defaults: rail screw holes (5.5 mm, 10 mm from the ends, at most 200 mm apart), duct fixings (4.5 mm, 25 mm from the ends, 200 mm pitch), a 4 mm pilot hole for drills over 8 mm, a 10 mm corner hole for rectangular cut-outs. The maker's instructions win |
 | project opening | a wiring opening entered in the project |
 
-Where a device sits on the plate is the layout (a model), not a measurement; the sheet says so and asks for a check against the real rails and devices. Cut-out sizes for the tool are rounded up to the next 0.5 mm. Part text that could not be read is listed at the end, not dropped.
+The basis is looked up by the device tag shown in the Source column, so two devices with the same tag share one basis. Where a device sits on the plate is the layout (a model), not a measurement; the sheet says so and asks for a check against the real rails and devices. Cut-out sizes for the tool are rounded up to the next 0.5 mm. Part text that could not be read is listed at the end, not dropped.
 
 Code: `novo-layout::drill_plan` (plan and page marks), `novo-layout::model::drill_plan` (reads the project), `novo-pdf::drill_plan` (writer). Part key: `drill_basis` (`novo_layout::drill_plan::BASIS_KEY`).

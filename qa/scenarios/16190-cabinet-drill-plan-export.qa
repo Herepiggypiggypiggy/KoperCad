@@ -1,0 +1,22 @@
+@title Cabinet: Output > Export > Drill plan writes the hand drilling plan
+@area Cabinet
+# The example's cabinet has rails and devices on a plate, so there is something to drill.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text Cabinet
+wait 6
+key Enter
+wait 30
+shot a-cabinet
+click_text "Export"
+wait 6
+shot b-export-menu
+expect "Drill plan (hand, PDF)"
+click_text "Drill plan (hand, PDF)"
+wait 20
+shot c-exported
+expect "Exported"
+expect_file "~/Documents/KoperCAD/*drill plan.pdf" 1500
+check_layout
