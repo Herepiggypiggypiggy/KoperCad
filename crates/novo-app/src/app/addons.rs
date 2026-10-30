@@ -1069,7 +1069,7 @@ fn kept_height(kept: &[Kept]) -> f32 {
     if kept.is_empty() {
         0.0
     } else {
-        40.0 + 30.0 * kept.len().min(4) as f32
+        40.0 + 52.0 * kept.len().min(2) as f32
     }
 }
 
@@ -1085,17 +1085,12 @@ fn kept_ui(ui: &mut egui::Ui, m: &mut Manager, kept: &[Kept], actions: &mut Vec<
     ui.label(egui::RichText::new("Data in this project").color(p.text_primary));
     egui::ScrollArea::vertical()
         .id_salt("addon_kept")
-        .max_height(30.0 * 4.0)
+        .max_height(52.0 * 2.0)
         .show(ui, |ui| {
             for k in kept {
                 ui.horizontal(|ui| {
                     let name = k.installed.as_deref().unwrap_or(k.id.as_str());
                     ui.label(egui::RichText::new(name).color(p.text_primary));
-                    let what = match &k.installed {
-                        Some(_) => format!("{} (installed)", size_text(k)),
-                        None => format!("{}, add-on not installed: kept as it is", size_text(k)),
-                    };
-                    ui.label(egui::RichText::new(what).color(p.text_tertiary));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if m.confirm_data.as_deref() == Some(k.id.as_str()) {
                             if widgets::danger_button(ui, "Remove data").clicked() {
@@ -1109,6 +1104,11 @@ fn kept_ui(ui: &mut egui::Ui, m: &mut Manager, kept: &[Kept], actions: &mut Vec<
                         }
                     });
                 });
+                let what = match &k.installed {
+                    Some(_) => format!("{} (installed)", size_text(k)),
+                    None => format!("{}, add-on not installed: kept as it is", size_text(k)),
+                };
+                ui.add(egui::Label::new(egui::RichText::new(what).color(p.text_tertiary)).wrap());
             }
         });
 }
