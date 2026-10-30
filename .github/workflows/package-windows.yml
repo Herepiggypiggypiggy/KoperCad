@@ -408,8 +408,10 @@ jobs:
           if [ "$IS_TAG" = "true" ] && [ -n "$SIGN_SEED" ] && [ -n "$SIGN_KEY_ID" ]; then
             seed_file="$RUNNER_TEMP/addon-seed.hex"
             umask 077
-            printf '%s' "$SIGN_SEED" > "$seed_file"
             trap 'rm -f "$seed_file"' EXIT
+            printf '%s' "$SIGN_SEED" > "$seed_file"
+            # The cargo build scripts in this step must not inherit the seed.
+            unset SIGN_SEED
             export KOPERCAD_SIGN_KEY_ID="$SIGN_KEY_ID" KOPERCAD_SIGN_SEED_FILE="$seed_file"
             echo "Signing the add-on package with key $SIGN_KEY_ID"
           else
