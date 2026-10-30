@@ -16,3 +16,4 @@
 - 2026-10-30 V4h (branch `claude/visual-v4-numbering`): Numbering centre. Rows 213 -> 205 (Edit 30 -> 22). Scenario 7372.
 - 2026-10-30 V4i (branch `claude/visual-v4-parts`): Part tools centre. Rows 205 -> 200 (File 26 -> 24, Edit 22 -> 19). Scenario 7373.
 - 2026-10-30 V4k follow-up (branch `claude/visual-v4-followups`, from R2/R3 on #1774): Send to PLC hover text says a PLC card is needed first; the Import centre lists "Lists and tags" second so Import I/O list is above the fold at 1366x768. No row count change.
+- 2026-10-30 V4l (branch `claude/visual-v4-macros`): File > Macros and Draw > Macros gone: one File row opens the Macros window (Import, Export pack, Edit parameters), Place macro on the rail, Save as macro on the symbol right-click menu. File 24 -> 22, Draw 15 -> 12, total 191 -> 186. Scenario 7378.

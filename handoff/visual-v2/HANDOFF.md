@@ -77,6 +77,10 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 - `centres::Centre::Numbering` (command `edit.numbering_centre`, Edit > Numbering...): Number wires, Renumber wires, Check wire numbers, Wire numbering, Set and Unlock wire number ("Wires") and Renumber devices, Number interruption points, Renumber I/O ("Devices and points"). The Edit > Wire numbers and Edit > Renumber submenus (9 rows) are gone: Edit 30 to 22, total 213 to 205. Tiles that need a selection say why they are grey.
 - Lessons that name those commands fall back to the opener, then Edit. QA scenario 7372. Next: Parts rows (Edit > Parts, File > Library), then the Draw leftovers.
 
+## V4l: Macros leave the menus (2026-10-30)
+- File has one Macros row (`macro.browser`, opens the Macros window); the File > Macros and Draw > Macros submenus (6 rows) are gone. The Macros window carries Import..., Export pack... and Edit parameters... (`homes::PANEL_BUTTONS` "Macros window"; lessons fall back to `cmd.macro.browser`). Place macro is the Place tool of the rail (`menus::MOVED`). Save selection as macro is a row of the symbol right-click menu ("Symbol right-click menu"). Every row is still in Ctrl+K. File 24 to 22, Draw 15 to 12, total 191 to 186.
+- Tests: `the_macros_window_carries_import_export_pack_and_edit_parameters`, `the_symbol_right_click_menu_carries_save_as_macro`. QA 7378; scenario 723 now opens the Revisions submenu where it opened Macros. Next: View (65; 28 are 3D rows for the 3D rail thread), Simulate 25.
+
 ## V4k: Draw > PLC leaves the menu (2026-10-30)
 - Add PLC card and PLC overview are plain Draw rows. Import I/O list is a tile of the Import centre ("Lists and tags", next to Import PLC tags). Send signal to PLC is a row ("Send to PLC") of the right-click menu of one selected symbol (`homes::PANEL_BUTTONS` "Symbol right-click menu"; the app says what to select when it is not a contact, sensor or coil). Draw 24 to 22, total 205 to 203 (after #1772).
 - Test `the_symbol_right_click_menu_carries_send_to_plc` reads the editor's menu source. QA 7376 (1366x768) and 7377 (1920x1080).
