@@ -18,8 +18,23 @@ fn status_name(s: &Status) -> (&'static str, Option<&str>) {
 
 fn trust_json(t: &Trust) -> Value {
     match t {
-        Trust::Signed { key_id, owner } => json!({"signed": true, "key": key_id, "owner": owner}),
-        Trust::Unsigned { note } => json!({"signed": false, "note": note}),
+        Trust::Signed { key_id, owner } => {
+            json!({"signed": true, "state": "signed", "key": key_id, "owner": owner})
+        }
+        Trust::Unsigned { note } => json!({"signed": false, "state": "unsigned", "note": note}),
+        Trust::UnknownKey { key_id } => {
+            json!({"signed": false, "state": "unknown-key", "key": key_id})
+        }
+        Trust::Revoked {
+            key_id,
+            owner,
+            reason,
+        } => {
+            json!({"signed": false, "state": "revoked", "key": key_id, "owner": owner, "reason": reason})
+        }
+        Trust::Tampered { key_id, owner } => {
+            json!({"signed": false, "state": "tampered", "key": key_id, "owner": owner})
+        }
     }
 }
 
