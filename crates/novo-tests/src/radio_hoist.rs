@@ -15,7 +15,7 @@
 //! `2U 2V 2W`. A model of the wiring for the live view, not an engineered drive.
 //!
 //! The controller itself (instance `radio-1`, profile `generic-radio-3x2`) and its bindings
-//! are stored in the project's `controllers.project` property by [`radio_hoist_with_controller`].
+//! are stored in the project's `controllers` add-on data block by [`radio_hoist_with_controller`].
 
 use novo_core::{
     DeviceId, DeviceTag, Document, Endpoint, PageId, Placement, Point, PotentialId, PotentialKind,
@@ -390,11 +390,14 @@ pub fn radio_hoist_with_controller(doc: &mut Document) -> Result<(RadioHoist, St
         .and_then(|d| d.to_text())
         .expect("serialises");
     doc.transact("Store controller", |tx| {
-        let text = text.clone();
-        tx.set_info(|i| {
-            i.properties
-                .insert("controllers.project".into(), Value::Text(text));
-        })
+        tx.set_addon_block(
+            "controllers",
+            "project",
+            novo_core::AddonBlock {
+                format: 1,
+                text: text.clone(),
+            },
+        )
     })?;
     Ok((handles, text))
 }

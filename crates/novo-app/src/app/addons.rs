@@ -73,6 +73,8 @@ pub(super) struct Manager {
     filter: String,
     pub(super) prompt: Option<Prompt>,
     confirm_remove: Option<String>,
+    /// The add-on whose data in the open project is waiting for a second click to be removed.
+    confirm_data: Option<String>,
     pub(super) notice: Option<(Tone, String)>,
 }
 
@@ -493,6 +495,11 @@ impl NovoApp {
         let can_store = self.wb.addons.store.is_some();
         let stopped = self.wb.addons.stopped.clone();
         let load = self.engine_load();
+        let kept = self
+            .backend
+            .document()
+            .map(|d| kept_in(d.project(), &set))
+            .unwrap_or_default();
         super::panel::dialog(
             ctx,
             format!("{} Add-ons", icons::ADDON_ICON),
@@ -511,6 +518,7 @@ impl NovoApp {
                     stopped: &stopped,
                     load: &load,
                 },
+                &kept,
                 &mut actions,
             );
         });
@@ -529,6 +537,10 @@ impl NovoApp {
     }
 
     fn addons_act(&mut self, act: Act) {
+        if let Act::RemoveProjectData(id) = &act {
+            self.remove_project_data(id);
+            return;
+        }
         let Some(store) = self.wb.addons.store.clone() else {
             return;
         };
@@ -579,9 +591,10 @@ impl NovoApp {
                 let name = self.addon_name(&id);
                 store
                     .remove(&id)
-                    .map(|()| format!("{name} removed. Projects keep the data they stored for it."))
+                    .map(|()| format!("{name} removed. Projects keep the data they stored for it (File > Add-ons > Data in this project)."))
                     .map_err(|e| e.to_string())
             }
+            Act::RemoveProjectData(_) => return,
             Act::RollBack(id) => {
                 let name = self.addon_name(&id);
                 store
@@ -611,6 +624,31 @@ impl NovoApp {
                 Ok(text) => m.notice = Some((Tone::Success, text)),
                 Err(text) => m.notice = Some((Tone::Error, text)),
             }
+        }
+    }
+
+    /// Removes what an add-on stored in the open project, as one undo step.
+    pub(super) fn remove_project_data(&mut self, id: &str) {
+        let name = self.addon_name(id);
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let result = doc.transact("Remove add-on data", |tx| tx.remove_addon_data(id));
+        let notice = match result {
+            Ok((count, changes)) => {
+                self.changed_outside_canvas(&changes);
+                Ok(format!(
+                    "Removed {count} block(s) of {name} data from this project. Undo brings it back."
+                ))
+            }
+            Err(e) => Err(format!("Could not remove the data: {e}")),
+        };
+        if let Some(m) = &mut self.wb.addons.manager {
+            m.confirm_data = None;
+            m.notice = Some(match notice {
+                Ok(t) => (Tone::Success, t),
+                Err(t) => (Tone::Error, t),
+            });
         }
     }
 
@@ -789,6 +827,8 @@ enum Act {
     },
     Enable(String, bool),
     Remove(String),
+    /// Take everything this add-on stored in the open project out of it.
+    RemoveProjectData(String),
     RollBack(String),
     OpenFolder,
 }
@@ -851,6 +891,28 @@ fn trust_look(trust: &Trust, accepted: bool) -> (String, Tone, &'static str) {
 /// Per running engine: calls so far, most steps one call used, steps one call may use.
 type EngineLoad = BTreeMap<String, (u64, u64, u64)>;
 
+/// What the open project holds for one add-on id.
+pub(super) struct Kept {
+    pub(super) id: String,
+    /// The add-on's name when it is installed, `None` when the project holds data for one that
+    /// is not here (the data is kept untouched either way).
+    pub(super) installed: Option<String>,
+    pub(super) blocks: usize,
+    pub(super) bytes: usize,
+}
+
+pub(super) fn kept_in(project: &novo_core::Project, set: &AddonSet) -> Vec<Kept> {
+    let data = &project.info().addon_data;
+    data.addons()
+        .map(|id| Kept {
+            id: id.to_owned(),
+            installed: set.get(id).map(|e| e.display_name().to_owned()),
+            blocks: data.blocks(id).count(),
+            bytes: data.blocks(id).map(|(_, b)| b.text.len()).sum(),
+        })
+        .collect()
+}
+
 /// What the running engines look like to Details: why one stopped, and what each has used.
 struct Engines<'a> {
     stopped: &'a BTreeMap<String, String>,
@@ -871,6 +933,7 @@ fn manager_ui(
     root: Option<&std::path::Path>,
     can_store: bool,
     engines: &Engines,
+    kept: &[Kept],
     actions: &mut Vec<Act>,
 ) {
     let p = crate::theme::ui_palette();
@@ -924,7 +987,7 @@ fn manager_ui(
         ui.allocate_ui_with_layout(
             egui::vec2(left_width, full.y),
             egui::Layout::top_down(egui::Align::Min),
-            |ui| list_ui(ui, m, set, actions),
+            |ui| list_ui(ui, m, set, kept, actions),
         );
         ui.separator();
         ui.allocate_ui_with_layout(
@@ -952,7 +1015,13 @@ fn manager_ui(
     });
 }
 
-fn list_ui(ui: &mut egui::Ui, m: &mut Manager, set: &AddonSet, actions: &mut Vec<Act>) {
+fn list_ui(
+    ui: &mut egui::Ui,
+    m: &mut Manager,
+    set: &AddonSet,
+    kept: &[Kept],
+    actions: &mut Vec<Act>,
+) {
     let p = crate::theme::ui_palette();
     ui.add(
         egui::TextEdit::singleline(&mut m.filter)
@@ -964,7 +1033,7 @@ fn list_ui(ui: &mut egui::Ui, m: &mut Manager, set: &AddonSet, actions: &mut Vec
     egui::ScrollArea::vertical()
         .id_salt("addon_list")
         .auto_shrink([false, false])
-        .max_height((ui.available_height() - 64.0).max(80.0))
+        .max_height((ui.available_height() - 64.0 - kept_height(kept)).max(80.0))
         .show(ui, |ui| {
             for entry in set.entries.iter().filter(|e| {
                 needle.is_empty()
@@ -991,6 +1060,60 @@ fn list_ui(ui: &mut egui::Ui, m: &mut Manager, set: &AddonSet, actions: &mut Vec
         });
     ui.add_space(space::S);
     ui.weak("Drop a .kcaddon file on this window to install it.");
+    kept_ui(ui, m, kept, actions);
+}
+
+fn kept_height(kept: &[Kept]) -> f32 {
+    if kept.is_empty() {
+        0.0
+    } else {
+        40.0 + 30.0 * kept.len().min(4) as f32
+    }
+}
+
+/// "Data in this project": what add-ons stored in the open project, including for add-ons that
+/// are not installed. The data stays in the file untouched; removing it is the person's choice.
+fn kept_ui(ui: &mut egui::Ui, m: &mut Manager, kept: &[Kept], actions: &mut Vec<Act>) {
+    if kept.is_empty() {
+        return;
+    }
+    let p = crate::theme::ui_palette();
+    ui.add_space(space::S);
+    ui.separator();
+    ui.label(egui::RichText::new("Data in this project").color(p.text_primary));
+    egui::ScrollArea::vertical()
+        .id_salt("addon_kept")
+        .max_height(30.0 * 4.0)
+        .show(ui, |ui| {
+            for k in kept {
+                ui.horizontal(|ui| {
+                    let name = k.installed.as_deref().unwrap_or(k.id.as_str());
+                    ui.label(egui::RichText::new(name).color(p.text_primary));
+                    let what = match &k.installed {
+                        Some(_) => format!("{} (installed)", size_text(k)),
+                        None => format!("{}, add-on not installed: kept as it is", size_text(k)),
+                    };
+                    ui.label(egui::RichText::new(what).color(p.text_tertiary));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if m.confirm_data.as_deref() == Some(k.id.as_str()) {
+                            if widgets::danger_button(ui, "Remove data").clicked() {
+                                actions.push(Act::RemoveProjectData(k.id.clone()));
+                            }
+                            if ui.button("Keep it").clicked() {
+                                m.confirm_data = None;
+                            }
+                        } else if widgets::ghost_button(ui, "Remove...").clicked() {
+                            m.confirm_data = Some(k.id.clone());
+                        }
+                    });
+                });
+            }
+        });
+}
+
+fn size_text(k: &Kept) -> String {
+    let blocks = if k.blocks == 1 { "block" } else { "blocks" };
+    format!("{} {blocks}, {} KB", k.blocks, k.bytes.div_ceil(1024))
 }
 
 fn details_ui(

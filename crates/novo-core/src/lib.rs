@@ -79,13 +79,13 @@ mod xref;
 pub use command::Command;
 pub use document::{DEFAULT_HISTORY_LIMIT, Document, Outcome};
 pub use entity::{
-    BlockDefinition, BlockInstance, BlockMember, BlockOverride, BlockParameter, BlockSource,
-    CabinetPlacement, Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, JoinLink,
-    Junction, MountingPlate, Page, PageFormat, PageFreeze, PageKind, PaperSize, Part, PeOverride,
-    Pin, PinFeed, PinRef, Potential, PotentialKind, PotentialRules, PotentialSet, PotentialSpec,
-    PotentialSystem, ProjectInfo, ProjectRules, Properties, Rail, RailKind, Revision, SameName,
-    Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal, TerminalKind, TerminalRules, Text,
-    TextAnchor, TextContent, TextPlacement, Value, Wire,
+    AddonBlock, AddonData, BlockDefinition, BlockInstance, BlockMember, BlockOverride,
+    BlockParameter, BlockSource, CabinetPlacement, Cable, CableCore, Device, DeviceKind, Dismissal,
+    Endpoint, JoinLink, Junction, MountingPlate, Page, PageFormat, PageFreeze, PageKind, PaperSize,
+    Part, PeOverride, Pin, PinFeed, PinRef, Potential, PotentialKind, PotentialRules, PotentialSet,
+    PotentialSpec, PotentialSystem, ProjectInfo, ProjectRules, Properties, Rail, RailKind,
+    Revision, SameName, Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal, TerminalKind,
+    TerminalRules, Text, TextAnchor, TextContent, TextPlacement, Value, Wire,
 };
 pub use error::{ModelError, Result};
 pub use geom::{Direction, Placement, Point, Rotation};

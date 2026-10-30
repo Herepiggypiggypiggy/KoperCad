@@ -8,8 +8,10 @@
 //! drawn pole, and the per-frame step that turns signals into poles. The live view calls
 //! [`ControllerLive::drive`] before it solves (everything that solves, lessons and tests too),
 //! and the card ([`super::controller_card`]) edits the state. Nothing here is a model change:
-//! the data lives in one text property of the project (`controllers.project`), so it saves,
-//! copies and undoes with the project.
+//! the data lives in the project's add-on data block (`controllers` / `project`), so it saves,
+//! copies and undoes with the project and stays in the file when the add-on is not installed.
+//! Projects written before the block existed hold it in the property `controllers.project`;
+//! that is read as a fallback and replaced by the block at the next write.
 //!
 //! What a signal does to the drawing, by kind of target:
 //! - a pin of a device (`-A1:3`): the switched pole that pin belongs to closes while the signal
@@ -32,8 +34,13 @@ use novo_sim::pins::{PoleRef, force_pole, operate_poles, pole_of_pin, poles_of_d
 
 use super::plc_run::PlcRun;
 
-/// The project property that holds the controllers (instances, bindings, the profiles in use).
-pub(super) const PROPERTY: &str = "controllers.project";
+/// The add-on data block that holds the controllers (instances, bindings, the profiles in use).
+pub(super) const ADDON: &str = "controllers";
+pub(super) const BLOCK: &str = "project";
+/// Version of the text in the block.
+pub(super) const BLOCK_FORMAT: u32 = 1;
+/// Where projects from before the add-on data block kept the same text.
+pub(super) const LEGACY_PROPERTY: &str = "controllers.project";
 
 /// Where a profile came from.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,9 +136,12 @@ pub(super) enum HoldBy {
     Key,
 }
 
-/// The text the project property holds, empty for none.
-fn stored(project: &Project) -> &str {
-    match project.info().properties.get(PROPERTY) {
+/// The text the project holds for the controllers, empty for none.
+pub(super) fn stored(project: &Project) -> &str {
+    if let Some(block) = project.info().addon_data.get(ADDON, BLOCK) {
+        return block.text.as_str();
+    }
+    match project.info().properties.get(LEGACY_PROPERTY) {
         Some(Value::Text(t)) => t.as_str(),
         _ => "",
     }
