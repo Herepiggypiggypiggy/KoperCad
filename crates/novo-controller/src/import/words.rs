@@ -77,7 +77,8 @@ pub enum Role {
     Horn,
     Light,
     Selector,
-    /// Dead-man bar or enabling switch: motion only while it is held.
+    /// Dead-man bar or enabling switch: a hold control whose signal is high only while held.
+    /// What the circuit does with it is the drawing's business.
     Deadman,
     /// Weighing tare button.
     Tare,
