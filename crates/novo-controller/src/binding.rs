@@ -9,6 +9,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use crate::machine::{MachineCatalog, MachinePath};
 use crate::profile::Combine;
 use crate::set::ControllerSet;
 use crate::validate::Severity;
@@ -47,6 +48,21 @@ pub enum Target {
     PlcAddress(String),
     /// A module instance in the machine model, such as `runway1/bridge2/crab1/hoistA`.
     ModulePath(String),
+}
+
+impl Target {
+    /// A target for a port of a machine module (`module@port`, see [`crate::machine`]).
+    pub fn machine(path: &MachinePath) -> Target {
+        Target::ModulePath(path.to_string())
+    }
+
+    /// The parsed machine target, `None` for other kinds and for text that does not parse.
+    pub fn machine_path(&self) -> Option<MachinePath> {
+        match self {
+            Target::ModulePath(s) => MachinePath::parse(s).ok(),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for Target {
@@ -89,6 +105,19 @@ pub enum BindingProblem {
     /// One target has both an `and` signal (a chain) and an ordinary signal: the ordinary one,
     /// when high, hides an open chain (see [`BindingTable::resolve`]).
     MixedOrAnd,
+    /// A machine target whose text is not a valid `module@port`.
+    MachineSyntax,
+    /// A machine target that names a module and no port.
+    MachineNoPort,
+    /// The module does not exist in the machine model of the drawing.
+    MachineUnknownModule,
+    /// The module has no such port.
+    MachineUnknownPort,
+    /// The signal does not fit the kind of port (a chain on a motion port, an analog value on a
+    /// switching port, a motion signal on a safety chain).
+    MachineWrongKind,
+    /// Controllers that are not all `shared` drive commands of one module.
+    MachineTwoOwners,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -169,6 +198,24 @@ impl BindingTable {
     /// The checks of the plan: signal bound to nothing, binding to a missing signal, the same
     /// binding twice, two controllers on one target (unless every one of them is `shared`).
     pub fn check(&self, set: &ControllerSet) -> Vec<BindingFinding> {
+        self.check_with(set, None)
+    }
+
+    /// [`check`](Self::check) plus, when the host has the machine model of the drawing, the
+    /// checks of the machine targets ([`check_machine`](Self::check_machine)).
+    pub fn check_with(
+        &self,
+        set: &ControllerSet,
+        machine: Option<&MachineCatalog>,
+    ) -> Vec<BindingFinding> {
+        let mut out = self.check_core(set);
+        if let Some(catalog) = machine {
+            out.extend(self.check_machine(set, catalog));
+        }
+        out
+    }
+
+    fn check_core(&self, set: &ControllerSet) -> Vec<BindingFinding> {
         let mut out = Vec::new();
         let mut finding = |problem, severity, key: &SignalKey, message: String| {
             out.push(BindingFinding {
@@ -377,6 +424,19 @@ impl BindingTable {
                     }
                 })
                 .or_insert(v);
+        }
+        out
+    }
+
+    /// The machine ports the table drives and their level now (see [`resolve`](Self::resolve) for
+    /// how signals combine). Targets that are not valid machine paths are left out;
+    /// [`check_with`](Self::check_with) reports them.
+    pub fn resolve_machine(&self, set: &ControllerSet) -> BTreeMap<MachinePath, f64> {
+        let mut out = BTreeMap::new();
+        for (target, level) in self.resolve(set) {
+            if let Some(path) = target.machine_path() {
+                out.insert(path, level);
+            }
         }
         out
     }

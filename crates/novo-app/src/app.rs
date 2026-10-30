@@ -74,6 +74,9 @@ mod controller_import;
 mod controller_live;
 #[cfg(test)]
 mod controller_live_tests;
+mod controller_machine;
+#[cfg(test)]
+mod controller_machine_tests;
 mod controller_pad;
 #[cfg(test)]
 mod controller_pad_tests;

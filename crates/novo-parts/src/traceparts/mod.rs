@@ -21,7 +21,7 @@ mod transport;
 pub use cache::{DEFAULT_CAP_BYTES, DownloadCache, Entry, MISS_TTL_SECS, looks_like_cad};
 pub use client::{
     CadTarget, Client, DEFAULT_BASE, Format, Item, MAX_DOWNLOAD, View, Views, ids_from_view_url,
-    pick_step_format, url_encode,
+    is_safe_url, pick_step_format, url_encode,
 };
 pub use error::TpError;
 pub use keystore::{Credentials, ENV_KEY, ENV_TENANT, KeySource, KeyStore};

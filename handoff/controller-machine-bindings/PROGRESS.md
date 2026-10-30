@@ -1,0 +1,4 @@
+2026-10-30 L5b: engine side done. `MachinePath`, `MachineCatalog`, `check_with`, `resolve_machine` in novo-controller; `commands.rs` in novo-machine (ports, wirings for hoist, travel, drive hoist, winch, pair; commanded circuit); 17 + 8 tests green, fixed-step press, release, E-stop, dead-man and determinism.
+2026-10-30 L5b: host side done. `controller_machine.rs`, resolve and commands in `ControllerLive`, hoist and drive run wrap the circuit, card picker and Machine modules block, run windows print the driving signals; 14 app tests plus a fixture test.
+2026-10-30 L5b: fixture `qa/fixtures/radio-machine.novo`, docs section "Machine ports", QA 17300.
+2026-10-30 L5b: QA 17300 passes at 1366x768 (radio lifts the hook through machine ports, E-stop permit stops it). fmt, clippy -D warnings clean on changed crates; novo-app lib 2081 pass, 1 timing test in parts_identity failed under load (unrelated).
