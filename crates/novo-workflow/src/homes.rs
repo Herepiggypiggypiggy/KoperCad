@@ -317,6 +317,8 @@ mod tests {
             .iter()
             .find(|(k, _)| *k == HomeKind::Menu)
             .map(|(_, n)| *n);
-        assert!(menu.is_some_and(|n| n > 100), "{census:?}");
+        // The floor follows the menu budget (`menus::tests::menu_rows_stay_inside_the_budget`):
+        // the design target is about 152 rows, so a count under 140 means the census lost the menus.
+        assert!(menu.is_some_and(|n| n >= 140), "{census:?}");
     }
 }
