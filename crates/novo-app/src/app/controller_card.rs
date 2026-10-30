@@ -311,15 +311,16 @@ impl NovoApp {
         };
         let result = doc.transact("Controllers", |tx| {
             tx.set_info(|i| {
-                if text.is_empty() {
-                    i.properties.remove(super::controller_live::PROPERTY);
-                } else {
-                    i.properties.insert(
-                        super::controller_live::PROPERTY.to_owned(),
-                        novo_core::Value::Text(text.clone()),
-                    );
-                }
-            })
+                i.properties.remove(super::controller_live::LEGACY_PROPERTY);
+            })?;
+            tx.set_addon_block(
+                super::controller_live::ADDON,
+                super::controller_live::BLOCK,
+                novo_core::AddonBlock {
+                    format: super::controller_live::BLOCK_FORMAT,
+                    text: text.clone(),
+                },
+            )
         });
         match result {
             Ok(((), changes)) => {

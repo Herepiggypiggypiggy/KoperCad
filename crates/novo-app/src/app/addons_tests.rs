@@ -424,3 +424,146 @@ fn a_button_press_returns_at_once_and_the_answer_is_applied_on_a_later_frame() {
     );
     assert!(d.app.wb.addons.stopped.is_empty());
 }
+
+fn new_project(d: &mut Drive) {
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::app::Action::NewProject);
+    d.frame();
+    assert!(d.app.backend.document().is_some(), "a project is open");
+}
+
+fn store_block(d: &mut Drive, addon: &str, text: &str) {
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Store", |tx| {
+            tx.set_addon_block(
+                addon,
+                "state",
+                novo_core::AddonBlock {
+                    format: 3,
+                    text: text.into(),
+                },
+            )
+        })
+        .unwrap();
+}
+
+fn kept_ids(d: &Drive) -> Vec<String> {
+    d.app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .info()
+        .addon_data
+        .addons()
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn data_of_an_add_on_that_is_not_installed_is_listed_kept_and_can_be_removed_and_undone() {
+    let (mut d, _dir) = drive();
+    new_project(&mut d);
+    store_block(&mut d, "gone-addon", "{\"a\":1}");
+    d.app.open_addons();
+    d.frame();
+    let set = d.app.wb.addons.set.clone();
+    let kept = super::addons::kept_in(d.app.backend.document().unwrap().project(), &set);
+    assert_eq!(kept.len(), 1);
+    assert_eq!(kept[0].id, "gone-addon");
+    assert!(kept[0].installed.is_none(), "not installed, still listed");
+    assert_eq!((kept[0].blocks, kept[0].bytes), (1, 7));
+
+    // the window still fits both screens with the section shown
+    for (w, h) in [(1366.0, 768.0), (1920.0, 1080.0)] {
+        d.frame_sized(egui::vec2(w, h), Vec::new());
+        d.frame_sized(egui::vec2(w, h), Vec::new());
+        let rect = d
+            .ctx
+            .memory(|m| m.area_rect(super::panel::id("addons")))
+            .expect("the manager is on screen");
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h));
+        assert!(screen.contains_rect(rect), "{rect:?} inside {screen:?}");
+    }
+
+    // refreshing or removing other add-ons never touches it
+    d.app.refresh_addons();
+    assert_eq!(kept_ids(&d), ["gone-addon"]);
+
+    d.app.remove_project_data("gone-addon");
+    assert!(kept_ids(&d).is_empty());
+    assert!(
+        d.app
+            .wb
+            .addons
+            .manager
+            .as_ref()
+            .and_then(|m| m.notice.as_ref())
+            .is_some_and(|(_, t)| t.contains("Undo brings it back")),
+    );
+    d.app.backend.document_mut().unwrap().undo().unwrap();
+    assert_eq!(kept_ids(&d), ["gone-addon"]);
+}
+
+#[test]
+fn controller_data_stays_in_the_project_without_the_add_on_and_old_projects_move_over() {
+    let (mut d, _dir) = drive();
+    new_project(&mut d);
+    assert!(!d.app.addon_enabled("controllers"));
+    // a project from before the data block: the text is a property
+    let text = "legacy text".to_owned();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Old", |tx| {
+            tx.set_info(|i| {
+                i.properties.insert(
+                    super::controller_live::LEGACY_PROPERTY.into(),
+                    novo_core::Value::Text(text.clone()),
+                );
+            })
+        })
+        .unwrap();
+    let project = d.app.backend.document().unwrap().project();
+    assert_eq!(super::controller_live::stored(project), "legacy text");
+
+    // the first write moves it into the block and drops the property
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Controllers", |tx| {
+            tx.set_info(|i| {
+                i.properties.remove(super::controller_live::LEGACY_PROPERTY);
+            })?;
+            tx.set_addon_block(
+                super::controller_live::ADDON,
+                super::controller_live::BLOCK,
+                novo_core::AddonBlock {
+                    format: super::controller_live::BLOCK_FORMAT,
+                    text: "new text".into(),
+                },
+            )
+        })
+        .unwrap();
+    let info = d.app.backend.document().unwrap().project().info().clone();
+    assert!(
+        !info
+            .properties
+            .contains_key(super::controller_live::LEGACY_PROPERTY)
+    );
+    assert_eq!(
+        super::controller_live::stored(d.app.backend.document().unwrap().project()),
+        "new text"
+    );
+    d.frame();
+    assert_eq!(
+        kept_ids(&d),
+        ["controllers"],
+        "kept with no add-on installed"
+    );
+}

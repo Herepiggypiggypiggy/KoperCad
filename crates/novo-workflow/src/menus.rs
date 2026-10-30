@@ -57,8 +57,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.open_read_only", under("File", "Open")),
     ("file.recover", under("File", "Open")),
     ("file.example", under("File", "Open")),
-    ("macro.browser", under("File", "Macros")),
-    ("macro.import", under("File", "Macros")),
+    ("macro.browser", at("File")),
     ("revision.issue", under("File", "Revisions")),
     ("revision.compare", under("File", "Revisions")),
     ("revision.lock_page", under("File", "Revisions")),
@@ -82,6 +81,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.start_centre", at("File")),
     // Edit > Numbering... opens the Numbering centre; the numbering commands are listed there.
     ("edit.numbering_centre", at("Edit")),
+    // Edit > Part tools... opens the Parts centre; the part commands are listed there.
+    ("edit.parts_centre", at("Edit")),
     // File > Project settings... opens the Project centre; the project commands are listed there.
     ("file.project_centre", at("File")),
     ("export.print_preview", at("File")),
@@ -103,10 +104,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("net.trace", under("Edit", "Net")),
     ("plc.add_card", at("Draw")),
     ("plc.overview", at("Draw")),
-    ("macro.save", under("Draw", "Macros")),
-    ("macro.place", under("Draw", "Macros")),
-    ("macro.edit", under("Draw", "Macros")),
-    ("macro.export_pack", under("File", "Macros")),
     // View
     ("layout.draw", under("View", "Layouts")),
     ("layout.cabinet", under("View", "Layouts")),
@@ -216,16 +213,10 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
 const REGROUPED: &[(&str, MenuPlace)] = &[
     // File: project settings and the library each get one submenu, so the
     // top level is only what you do to a file.
-    ("parts.browser", under("File", "Library")),
-    ("parts.import_step", under("File", "Library")),
     // Edit: the paste variants, the part commands and the numbering
     // commands are families.
     ("edit.paste_keep_tags", under("Edit", "Paste special")),
     ("edit.paste_in_place", under("Edit", "Paste special")),
-    ("parts.auto_assign", under("Edit", "Parts")),
-    ("parts.clear", under("Edit", "Parts")),
-    ("parts.describe", under("Edit", "Parts")),
-    ("parts.remove_unused", under("Edit", "Parts")),
     // Help: both fast-key walk-throughs sit together.
     ("file.practice", at("Help")),
 ];
@@ -305,6 +296,8 @@ pub const MOVED: &[&str] = &[
     "cabinet.routes",
     "cabinet.emc",
     "view.cabinet_table",
+    // The Place tool of the schematic rail opens the Place macro window.
+    "macro.place",
     // The Panels zone of the schematic rail (the drawers).
     "view.terminals_drawer",
     "view.cables_drawer",
@@ -549,11 +542,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
 
 /// Submenus drawn first, in this order, for the menus named here; the
 /// others follow in the order [`layout`] gives them.
-const SUB_FIRST: &[(&str, &[&str])] = &[
-    ("File", &["Library", "Macros", "Revisions"]),
-    ("Edit", &["Paste special", "Parts"]),
-    ("Draw", &["Macros"]),
-];
+const SUB_FIRST: &[(&str, &[&str])] = &[("File", &["Revisions"]), ("Edit", &["Paste special"])];
 
 /// What the menu bar draws: [`layout`] with the plain rows in their
 /// [`BLOCKS`] (a separator between blocks) and the submenus in
@@ -709,12 +698,12 @@ mod tests {
                 matches!(
                     i,
                     MenuItem::Submenu {
-                        name: "Library",
+                        name: "Revisions",
                         ..
                     }
                 )
             })
-            .expect("a Library submenu");
+            .expect("a Revisions submenu");
         let new = file
             .iter()
             .position(|i| matches!(i, MenuItem::Command(c) if c.id == "file.new"))
@@ -841,9 +830,9 @@ mod tests {
         let ceilings: &[(&str, usize)] = &[
             // The export formats are in the Export centre, the imports in the Import
             // centre, the templates and examples in the Start centre.
-            ("File", 26),
-            ("Edit", 22),
-            ("Draw", 15),
+            ("File", 22),
+            ("Edit", 19),
+            ("Draw", 12),
             ("View", 65),
             ("Check", 11),
             ("Reports", 17),
@@ -867,7 +856,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 196, "the menus hold {total} rows");
+        assert!(total <= 186, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File

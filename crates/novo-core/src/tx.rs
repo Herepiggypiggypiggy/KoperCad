@@ -3,8 +3,8 @@
 use std::collections::BTreeSet;
 
 use crate::entity::{
-    CabinetPlacement, Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, Junction,
-    MountingPlate, Page, PageFreeze, PageKind, Part, PeOverride, Pin, PinFeed, Potential,
+    AddonBlock, CabinetPlacement, Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint,
+    Junction, MountingPlate, Page, PageFreeze, PageKind, Part, PeOverride, Pin, PinFeed, Potential,
     PotentialKind, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo, Rail, RailKind,
     Revision, Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal, Text, TextContent,
     TextPlacement, Value, Wire,
@@ -205,6 +205,25 @@ impl<'p> Tx<'p> {
             return Ok(());
         }
         self.apply(Op::SetInfo { before, after })
+    }
+
+    /// Stores (or, with empty text, removes) one block of add-on data. One undo step.
+    pub fn set_addon_block(&mut self, addon: &str, block: &str, value: AddonBlock) -> Result<()> {
+        let mut checked = self.project.info().addon_data.clone();
+        checked
+            .set(addon, block, value)
+            .map_err(|reason| ModelError::Refused {
+                what: "Add-on data".into(),
+                reason,
+            })?;
+        self.set_info(|i| i.addon_data = checked)
+    }
+
+    /// Removes everything an add-on stored in the project. Returns how many blocks went.
+    pub fn remove_addon_data(&mut self, addon: &str) -> Result<usize> {
+        let mut count = 0;
+        self.set_info(|i| count = i.addon_data.remove_addon(addon))?;
+        Ok(count)
     }
 
     /// Sets (`Some`) or clears (`None`) a property on any object that has

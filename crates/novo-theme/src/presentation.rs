@@ -376,6 +376,7 @@ pub const TABLE: &[Presentation] = &[
         "Project settings",
     ),
     row("edit.numbering_centre", p(icons::LIST_NUMBERS), "Numbering"),
+    row("edit.parts_centre", p(icons::PACKAGE), "Part tools"),
     row("file.import_crane", p(icons::CRANE), "Import crane project"),
     row(
         "file.import_eplan",

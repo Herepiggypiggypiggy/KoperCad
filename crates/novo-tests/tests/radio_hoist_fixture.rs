@@ -8,7 +8,7 @@
 use std::collections::BTreeSet;
 
 use novo_controller::{ProjectControllers, Target};
-use novo_core::{Document, Value};
+use novo_core::Document;
 use novo_sim::pins::{force_pole, pole_of_pin};
 use novo_sim::{MotorRun, device_states, rest_state, settle};
 use novo_tests::radio_hoist_with_controller;
@@ -18,9 +18,9 @@ fn fixture_path() -> std::path::PathBuf {
 }
 
 fn stored(project: &novo_core::Project) -> String {
-    match project.info().properties.get("controllers.project") {
-        Some(Value::Text(t)) => t.clone(),
-        _ => String::new(),
+    match project.info().addon_data.get("controllers", "project") {
+        Some(b) => b.text.clone(),
+        None => String::new(),
     }
 }
 

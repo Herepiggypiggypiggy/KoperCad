@@ -875,9 +875,15 @@ fn menu_rows_are_anchors_that_fall_back_to_their_menu() {
             assert_eq!(any_anchor_label(&row.id), Some(row.label.clone()));
             continue;
         }
-        // A page command points at the Pages list, which has its own fallback.
-        if novo_workflow::homes::panel_of(row.id.trim_start_matches("cmd.")).is_some() {
-            assert_eq!(parent, "outline.pages", "{}", row.id);
+        // A page command points at the Pages list, a macro command at the
+        // Macros window; both have their own fallback.
+        if let Some(panel) = novo_workflow::homes::panel_of(row.id.trim_start_matches("cmd.")) {
+            let window = if panel == "Macros window" {
+                "macros.window"
+            } else {
+                "outline.pages"
+            };
+            assert_eq!(parent, window, "{}", row.id);
             assert_eq!(any_anchor_label(&row.id), Some(row.label.clone()));
             continue;
         }

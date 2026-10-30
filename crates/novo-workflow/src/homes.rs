@@ -175,7 +175,7 @@ pub const PANEL_BUTTONS: &[(&str, &[&str])] = &[
             "page.move_down",
         ],
     ),
-    ("Symbol right-click menu", &["plc.to_plc"]),
+    ("Symbol right-click menu", &["plc.to_plc", "macro.save"]),
     (
         "Terminal right-click menu",
         &[
@@ -187,6 +187,10 @@ pub const PANEL_BUTTONS: &[(&str, &[&str])] = &[
             "terminal.strip_down",
             "terminal.strip_lowest",
         ],
+    ),
+    (
+        "Macros window",
+        &["macro.import", "macro.export_pack", "macro.edit"],
     ),
     (
         "Lesson card",
