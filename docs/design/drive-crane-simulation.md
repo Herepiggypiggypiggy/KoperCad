@@ -360,9 +360,7 @@ Exact by definition: the order of the states, the tick order, the hanging-load a
 drive (averaged), the motor (quasi-static torque, no flux transient), the flux build-up (one lag with the
 rotor time constant of the fit, torque follows flux squared), stiction of the shaft against friction and
 brake torque, the brake timing, all sequence timing. Not modelled: encoder or closed-loop control,
-hook swing, motor and brake heating, a maker's parameter
-slack rope, rope stretch and hook swing, a maker's parameter
-set. Parameters of a real drive never appear in a drawing, so the defaults are generic values for a
+hook swing, a maker's parameter set. Parameters of a real drive never appear in a drawing, so the defaults are generic values for a
 5.5 kW 4 pole hoist motor and are meant to be edited.
 
 Where the user finds it: motor property sheet section "Drive hoist" (hook load turns the motor into a
