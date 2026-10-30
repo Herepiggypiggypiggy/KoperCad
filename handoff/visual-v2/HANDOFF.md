@@ -80,3 +80,7 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 ## V4k: Draw > PLC leaves the menu (2026-10-30)
 - Add PLC card and PLC overview are plain Draw rows. Import I/O list is a tile of the Import centre ("Lists and tags", next to Import PLC tags). Send signal to PLC is a row ("Send to PLC") of the right-click menu of one selected symbol (`homes::PANEL_BUTTONS` "Symbol right-click menu"; the app says what to select when it is not a contact, sensor or coil). Draw 24 to 22, total 205 to 203 (after #1772).
 - Test `the_symbol_right_click_menu_carries_send_to_plc` reads the editor's menu source. QA 7376 (1366x768) and 7377 (1920x1080).
+
+## V4j: terminal rows leave Draw (2026-10-30)
+- The seven Draw > Terminals rows (Connect and Disconnect terminals, Toggle PE terminal, Reset PE override, strip number Up, Down, Lowest free) act on the terminals selected on the page. Their home is the right-click menu of a selected terminal, which already carried each one: `homes::PANEL_BUTTONS` entry "Terminal right-click menu". Draw 24 to 17, total 203 to 196 (after #1772 and #1774). Up and Down keep their keys; every row is still in Ctrl+K (its path reads "Terminal right-click menu").
+- Test `the_terminal_right_click_menu_carries_every_terminal_row_that_left_draw` reads the editor's menu source, so a row dropped from the menu fails it. QA scenarios 7374 (1366x768) and 7375 (1920x1080) walk the terminal-strips lesson to two selected terminals and open the menu.
