@@ -61,7 +61,7 @@ if [ -z "${KOPERCAD_BIN_DIR:-}" ]; then
     exit 4
   fi
 fi
-# Scenarios 560-5621 and 1580 install the Controllers add-on from target/addons. Without that file the
+# Scenarios 5620 and 1580 install the Controllers add-on from target/addons. Without that file the
 # file picker answers nothing and the run dies at the "I trust this file" step, which looks like a
 # trust-flow regression. Build the package when it is missing or older than its sources.
 pkg=target/addons/controllers-0.1.0.kcaddon
