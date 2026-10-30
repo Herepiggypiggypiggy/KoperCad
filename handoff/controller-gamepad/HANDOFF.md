@@ -19,3 +19,5 @@ Traps: a new live card needs a registered lesson anchor (`learn.rs`, `learn_labe
 must use `panel::dialog`; the pad lets go when the card closes, the window loses focus or calibration runs; the map edit is written to the project only
 when no pointer button is down (one undo step per drag). Under `--control` the app reads the shared fake pad, never hardware.
 Honest limits: simulates wiring and logic, no certification claim; the dead-man gate and E-stop button are logic, not a safety function.
+
+PR: #1795 (head 4468c86c at open). Open points: run the Windows reader on real hardware (only compile-checked), wasm build check of novo-controller, regenerate THIRD_PARTY_NOTICES.txt separately.
