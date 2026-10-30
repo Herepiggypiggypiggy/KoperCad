@@ -8,10 +8,10 @@ wait 20
 click 644 311
 wait 20
 shot motor-selected
-scroll 1160 500 -450
+scroll 1720 400 -450
 wait 10
 shot rows-wind-and-gust
-scroll 1160 500 -300
+scroll 1720 400 -300
 wait 10
 shot rows-grip-and-brake
 expect "Travel brake torque"
