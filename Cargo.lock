@@ -2402,6 +2402,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "toml",
+ "ureq",
  "zip 9.1.3",
 ]
 
