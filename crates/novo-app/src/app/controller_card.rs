@@ -686,12 +686,11 @@ fn popped_panels(
         };
         let mut open = true;
         let step = 28.0 * n as f32;
-        egui::Window::new(title)
-            .id(egui::Id::new(("controller_popout", id)))
+        let window_id = egui::Id::new(("controller_popout", id));
+        super::panel::dialog(ctx, title, [290.0, 0.0])
+            .id(super::panel::keep_id(ctx, window_id))
             .open(&mut open)
             .default_pos(canvas.left_top() + egui::vec2(60.0 + step, 70.0 + step))
-            .constrain_to(canvas)
-            .resizable(false)
             .show(ctx, |ui| {
                 let palette = crate::theme::ui_palette();
                 ui.set_max_width(280.0);
