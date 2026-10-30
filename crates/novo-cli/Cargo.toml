@@ -38,6 +38,7 @@ image.workspace = true
 novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"] }
 tempfile.workspace = true
 calamine.workspace = true
+lopdf.workspace = true
 
 [lints]
 workspace = true

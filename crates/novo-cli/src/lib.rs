@@ -359,6 +359,41 @@ enum Export {
         #[arg(long, value_name = "TAG")]
         enclosure: Option<String>,
     },
+    /// The hand drilling plan of an enclosure as an A4 PDF: datum, tools
+    /// and a check-off list of holes and cut-outs (Cabinet > Output >
+    /// Export > Drill plan in the app).
+    DrillPlan {
+        file: PathBuf,
+        /// Output file (.pdf).
+        #[arg(short, long)]
+        output: PathBuf,
+        /// The enclosure by tag (e.g. `+CAB1`); not needed when the project
+        /// has exactly one enclosure with a plate.
+        #[arg(long, value_name = "TAG")]
+        enclosure: Option<String>,
+    },
+    /// The 1:1 drilling template of an enclosure: the plate (and any door
+    /// or wall with holes) tiled on A4 or A3 to print at 100 %. Print the
+    /// scale check first (`--scale-check`).
+    Template {
+        file: PathBuf,
+        /// Output file (.pdf).
+        #[arg(short, long)]
+        output: PathBuf,
+        /// The enclosure by tag (e.g. `+CAB1`); not needed when the project
+        /// has exactly one enclosure with a plate.
+        #[arg(long, value_name = "TAG")]
+        enclosure: Option<String>,
+        /// Paper size of the tiles: `a4` or `a3`.
+        #[arg(long, default_value = "a4")]
+        paper: String,
+        /// Also write one A4 card per cut-out shape (doors, walls) here.
+        #[arg(long, value_name = "FILE")]
+        cards: Option<PathBuf>,
+        /// Also write the print-scale check page here.
+        #[arg(long, value_name = "FILE")]
+        scale_check: Option<PathBuf>,
+    },
     /// The PLC I/O as the file a PLC programming tool imports: one file per
     /// station for `plcopen`, `tia` and `studio5000`, one table for `csv`.
     Plc {
@@ -690,6 +725,72 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             let project = read(&file)?;
             let bytes = plate_pdf(&project, enclosure.as_deref())?;
             write_output(&file, &output, &bytes)?;
+            Ok(exit::OK)
+        }
+        Cmd::Export(Export::DrillPlan {
+            file,
+            output,
+            enclosure,
+        }) => {
+            let project = read(&file)?;
+            let chosen = pick_enclosure(&project, enclosure.as_deref())?;
+            let plan = novo_layout::model::drill_plan(&project, chosen.0, &project.info().name)
+                .ok_or_else(|| {
+                    Failure::new(exit::USAGE, format!("{} has no mounting plate", chosen.1))
+                })?;
+            if plan.sheets.is_empty() {
+                return Err(Failure::new(
+                    exit::USAGE,
+                    format!(
+                        "nothing to drill on {} yet: place devices that have a hole pattern, or add a rail",
+                        chosen.1
+                    ),
+                ));
+            }
+            let bytes = novo_pdf::drill_plan::export_drill_plan_pdf(&plan);
+            write_output(&file, &output, &bytes)?;
+            Ok(exit::OK)
+        }
+        Cmd::Export(Export::Template {
+            file,
+            output,
+            enclosure,
+            paper,
+            cards,
+            scale_check,
+        }) => {
+            let paper = match paper.to_lowercase().as_str() {
+                "a4" => novo_layout::template::Paper::A4,
+                "a3" => novo_layout::template::Paper::A3,
+                other => {
+                    return Err(Failure::new(
+                        exit::USAGE,
+                        format!("unknown paper {other:?}: use a4 or a3"),
+                    ));
+                }
+            };
+            let project = read(&file)?;
+            let chosen = pick_enclosure(&project, enclosure.as_deref())?;
+            let name = project.info().name.clone();
+            let (sheets, _) = novo_layout::model::template_documents(&project, chosen.0)
+                .ok_or_else(|| {
+                    Failure::new(exit::USAGE, format!("{} has no mounting plate", chosen.1))
+                })?;
+            let bytes = novo_pdf::template::export_template_pdf(&sheets, &name, paper);
+            write_output(&file, &output, &bytes)?;
+            if let Some(path) = cards {
+                match novo_pdf::template_cards::export_cutout_cards_pdf(&sheets, &name) {
+                    Some(c) => {
+                        write_output(&file, &path, &c.pdf)?;
+                        print(out, &format!("{} cut-outs on {} cards", c.cutouts, c.pages))?;
+                    }
+                    None => print(out, "No cut-outs to put on cards")?,
+                }
+            }
+            if let Some(path) = scale_check {
+                let bytes = novo_pdf::template_cards::export_scale_check_pdf(&name);
+                write_output(&file, &path, &bytes)?;
+            }
             Ok(exit::OK)
         }
         Cmd::Export(Export::Plc {
@@ -1766,9 +1867,11 @@ fn file_stem(name: &str) -> String {
     }
 }
 
-/// The plate PDF of one enclosure: the one named by `tag`, or the only
-/// enclosure that has a plate.
-fn plate_pdf(project: &Project, tag: Option<&str>) -> Result<Vec<u8>, Failure> {
+/// The enclosure named by `tag`, or the only enclosure that has a plate.
+fn pick_enclosure(
+    project: &Project,
+    tag: Option<&str>,
+) -> Result<(novo_core::StructureId, novo_core::DeviceTag), Failure> {
     let usage = |text: String| Failure::new(exit::USAGE, text);
     let with_plate: Vec<_> = project
         .structures()
@@ -1795,8 +1898,15 @@ fn plate_pdf(project: &Project, tag: Option<&str>) -> Result<Vec<u8>, Failure> {
             }
         },
     };
-    let (docs, _table) = novo_layout::model::plate_documents(project, chosen.id)
-        .ok_or_else(|| usage(format!("{} has no mounting plate", chosen.tag)))?;
+    Ok((chosen.id, chosen.tag.clone()))
+}
+
+/// The plate PDF of one enclosure: the one named by `tag`, or the only
+/// enclosure that has a plate.
+fn plate_pdf(project: &Project, tag: Option<&str>) -> Result<Vec<u8>, Failure> {
+    let (id, tag) = pick_enclosure(project, tag)?;
+    let (docs, _table) = novo_layout::model::plate_documents(project, id)
+        .ok_or_else(|| Failure::new(exit::USAGE, format!("{tag} has no mounting plate")))?;
     Ok(novo_pdf::plate::export_plate_pdf(
         &docs,
         &project.info().name,

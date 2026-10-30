@@ -57,7 +57,7 @@ bottom, left to right. A long table continues on further PDF sheets.
 
 ## Not done
 
-The plate drawing has a Cabinet export button and a command; there is no CLI command yet. Side-view drawings, duct cut lengths (R6) and machine formats are later.
+The plate drawing has a Cabinet export button and a command, and `kopercad-cli export plate`. Side-view drawings, duct cut lengths (R6) and machine formats are later.
 
 ## Workshop pack: 1:1 drilling template
 
@@ -82,3 +82,7 @@ Basis says where a number comes from, and the sheet never states more than it kn
 The basis is looked up by the device tag shown in the Source column, so two devices with the same tag share one basis. Where a device sits on the plate is the layout (a model), not a measurement; the sheet says so and asks for a check against the real rails and devices. Cut-out sizes for the tool are rounded up to the next 0.5 mm. Part text that could not be read is listed at the end, not dropped.
 
 Code: `novo-layout::drill_plan` (plan and page marks), `novo-layout::model::drill_plan` (reads the project), `novo-pdf::drill_plan` (writer). Part key: `drill_basis` (`novo_layout::drill_plan::BASIS_KEY`).
+
+## Command line
+
+`kopercad-cli export drill-plan <project> -o plan.pdf [--enclosure +CAB1]` writes the hand drilling plan (refuses, writing nothing, when the plate has nothing to drill). `kopercad-cli export template <project> -o template.pdf [--paper a4|a3] [--cards cards.pdf] [--scale-check check.pdf]` writes the tiled 1:1 template, optionally the A4 cut-out cards and the print-scale check page. These are the same files as the Workshop pack in the app. Rail and duct saw plans: Reports > Bench output > Kitting (exact search with offcuts, `novo-reports::kitting::cutting`) and the Cabinet Cut list window (`novo-layout::stock`).

@@ -493,6 +493,18 @@ pub(super) fn hoist_reading(module: &DriveHoistModule) -> String {
         LogicPhase::Engaging => "closing brake",
         LogicPhase::Fault(_) => "stopped by a fault",
     };
+    let rope = s.rope.map_or_else(String::new, |r| {
+        if r.on_floor && r.slack_m > 0.005 {
+            format!(" \u{b7} slack rope {:.0} mm", r.slack_m * 1000.0)
+        } else if r.on_floor {
+            " \u{b7} on the floor".to_owned()
+        } else {
+            format!(
+                " \u{b7} rope {:.0} % of the weight",
+                r.load_fraction * 100.0
+            )
+        }
+    });
     let heat = s.heat.map_or_else(String::new, |h| {
         format!(
             " \u{b7} winding +{:.0} K \u{b7} brake +{:.0} K",
@@ -500,7 +512,7 @@ pub(super) fn hoist_reading(module: &DriveHoistModule) -> String {
         )
     });
     format!(
-        "{phase} \u{b7} {:.1} Hz \u{b7} {:.1} A \u{b7} {:.1} m/min \u{b7} {:.2} m{heat}",
+        "{phase} \u{b7} {:.1} Hz \u{b7} {:.1} A \u{b7} {:.1} m/min \u{b7} {:.2} m{rope}{heat}",
         s.drive.frequency_hz.abs(),
         s.motor.stator_current_a,
         s.speed_m_s * 60.0,
@@ -1078,6 +1090,12 @@ impl NovoApp {
                      never opens.",
                 );
                 ui.weak(
+                    "\u{2022} Rope (when a floor height is set): one spring and damper between \
+                     the drum and the hook, with a stiffness and damping ratio you enter, not a \
+                     measured rope. The load is taken up at the floor with a snatch; the model \
+                     has no rope stretch history, no sway and no multi-fall reeving.",
+                );
+                ui.weak(
                     "\u{2022} Closed-loop winch: an averaged encoder drive (speed loop around a \
                      first order torque loop, current limit, constant power above rated speed). \
                      Torque is proven before the brake opens and held at zero speed; the STO \
@@ -1516,6 +1534,38 @@ mod tests {
         let m = &hl.modules[0];
         assert!(m.height_m() > 0.1, "{}", m.height_m());
         assert!(hoist_reading(m).contains("running"), "{}", hoist_reading(m));
+    }
+
+    #[test]
+    fn a_floor_under_the_hook_shows_in_the_reading_and_in_the_findings() {
+        let (mut doc, button) = drive_hoist(true);
+        doc.transact("Floor", |tx| {
+            let id = tx
+                .project()
+                .devices()
+                .find(|d| d.tag.to_string() == DeviceTag::product("M1").to_string())
+                .map(|d| d.id)
+                .unwrap();
+            tx.set_property(id, "dh_floor_m", Some(0.0.into()))?;
+            Ok(())
+        })
+        .unwrap();
+        let run = run_hoist(&doc, button, 12.0);
+        let m = &run.active.as_ref().unwrap().hl.modules[0];
+        assert!(m.rope().is_some());
+        assert!(
+            hoist_reading(m).contains("% of the weight"),
+            "{}",
+            hoist_reading(m)
+        );
+        assert!(
+            m.findings().iter().any(|f| matches!(
+                f.kind,
+                novo_machine::drive_hoist_loop::FindingKind::LoadSnatch { .. }
+            )),
+            "{:?}",
+            m.findings()
+        );
     }
 
     #[test]

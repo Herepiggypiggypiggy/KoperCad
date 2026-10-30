@@ -128,6 +128,22 @@ pub struct BindingFinding {
     pub message: String,
 }
 
+/// Who owns one target: see [`BindingTable::ownership`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TargetOwnership {
+    pub target: Target,
+    /// Every signal bound to the target.
+    pub signals: Vec<SignalKey>,
+    /// The distinct controller instances behind those signals.
+    pub controllers: Vec<String>,
+    /// The signals that are high now.
+    pub driving: Vec<SignalKey>,
+    /// Several controllers drive the target and not all of them are marked `shared`.
+    pub conflict: bool,
+    /// Several controllers have a high signal on the target at this moment.
+    pub contested: bool,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BindingTable {
     #[serde(default, rename = "binding")]
@@ -421,6 +437,28 @@ impl BindingTable {
             if let Some(path) = target.machine_path() {
                 out.insert(path, level);
             }
+        }
+        out
+    }
+
+    /// Who owns each bound target: every signal bound to it, which of them are high now, and
+    /// whether the target is a conflict (several controllers, not all `shared`) or contested at
+    /// this moment (several controllers high at once). Targets come in order.
+    pub fn ownership(&self, set: &ControllerSet) -> Vec<TargetOwnership> {
+        let mut out: Vec<TargetOwnership> = Vec::new();
+        for (target, controllers) in controllers_by_target(&self.bindings) {
+            let signals: Vec<SignalKey> = self.signals_of(target).cloned().collect();
+            let driving = self.owners(target, set);
+            let driving_controllers: BTreeSet<&str> =
+                driving.iter().map(|k| k.controller.as_str()).collect();
+            out.push(TargetOwnership {
+                target: target.clone(),
+                controllers: controllers.iter().map(|c| (*c).to_owned()).collect(),
+                conflict: controllers.len() > 1 && controllers.iter().any(|c| !set.is_shared(c)),
+                contested: driving_controllers.len() > 1,
+                signals,
+                driving,
+            });
         }
         out
     }
