@@ -60,8 +60,8 @@ mod table;
 mod tablefile;
 mod tablemap;
 mod tablepreview;
-pub mod traceparts;
 pub mod tp_handoff;
+pub mod traceparts;
 pub mod xlsx_guard;
 
 pub use assign::{

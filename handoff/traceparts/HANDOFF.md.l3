@@ -1,0 +1,2 @@
+# TraceParts L3 (Parts window button)
+"Get CAD from TraceParts" on a part's detail row: opens TraceParts search for the order number in a browser tab, then the existing Downloads watch (parts_import.rs Import::start_traceparts) waits, reads the file, matches it with cadmatch and files it for the part. Keyed path (#1796 Service::fetch_step) is NOT yet behind the button; wire it when the API key arrives. Search URL form unverified.

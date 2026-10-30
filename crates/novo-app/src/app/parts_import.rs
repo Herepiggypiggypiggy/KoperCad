@@ -185,6 +185,40 @@ impl Import {
         }
     }
 
+    /// Starts the keyless TraceParts hand-off for `part`: the page to open is
+    /// TraceParts' search for the order number, and Downloads is watched for
+    /// the STEP file the user saves there. TraceParts names files by its own
+    /// ids, so the file itself is read and matched before it is taken.
+    pub(crate) fn start_traceparts(part: &CatalogPart, downloads: Option<&Path>) -> Import {
+        let page_url = novo_parts::tp_handoff::search_url(&part.order_number)
+            .unwrap_or_else(|| novo_parts::tp_handoff::HOME_URL.to_owned());
+        Import {
+            key: part.key(),
+            label: part.to_string(),
+            page_url: Some(page_url),
+            page_verified: false,
+            steps: vec![
+                format!("Open the {} entry in the TraceParts tab.", part.order_number),
+                "Press Download CAD model and choose STEP (sign in to TraceParts if it asks).".into(),
+                "Come back here: KoperCAD picks the file up from Downloads and checks it is the right part.".into(),
+            ],
+            order_warning: None,
+            account: Some(
+                "TraceParts needs your own free account to download. KoperCAD never signs in or keeps a password; the download is yours and stays on this computer."
+                    .into(),
+            ),
+            phase: Phase::Waiting,
+            declined: Vec::new(),
+            judged: Vec::new(),
+            left_alone: Vec::new(),
+            watcher: downloads.map(|d| DownloadsWatcher::new(d, SystemTime::now(), &part.order_number)),
+            last_poll: f64::NEG_INFINITY,
+            waiting_since: None,
+            now: 0.0,
+            read: None,
+        }
+    }
+
     /// Starts reading `path` for `part` on a worker thread; the window
     /// calls [`Import::tick`] each frame to collect the result. `wake`
     /// repaints the window when the thread is done.
@@ -622,6 +656,20 @@ mod tests {
     }
 
     const STEP: &str = "ISO-10303-21;\nDATA;\n#1=CARTESIAN_POINT('',(0.,0.,0.));\n#2=CARTESIAN_POINT('',(5.2,0.,0.));\n#3=CARTESIAN_POINT('',(5.2,70.,0.));\n#4=CARTESIAN_POINT('',(0.,70.,32.));\nENDSEC;\nEND-ISO-10303-21;\n";
+
+    #[test]
+    fn traceparts_hand_off_opens_the_search_and_watches_downloads() {
+        let dir = tempfile::tempdir().unwrap();
+        let imp = Import::start_traceparts(&part(), Some(dir.path()));
+        assert_eq!(imp.phase, Phase::Waiting);
+        assert!(imp.watching());
+        let url = imp.page_url.unwrap();
+        assert!(url.starts_with("https://www.traceparts.com/"), "{url}");
+        assert!(url.contains("2002-1201"), "{url}");
+        assert!(!imp.page_verified);
+        let none = Import::start_traceparts(&part(), None);
+        assert!(!none.watching());
+    }
 
     #[test]
     fn a_click_starts_the_hand_off_with_the_makers_page() {
