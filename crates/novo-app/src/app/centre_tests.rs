@@ -280,3 +280,41 @@ fn the_project_centre_replaces_the_project_submenu_and_the_name_taking_commands_
     let fallback = super::learn_labels::anchor_fallback("cmd.project.rules").expect("fallback");
     assert_eq!(fallback, "cmd.file.project_centre");
 }
+
+#[test]
+fn the_numbering_centre_replaces_the_wire_number_and_renumber_submenus() {
+    let ids = |q: &str| -> Vec<&'static str> {
+        visible(Centre::Numbering, q)
+            .into_iter()
+            .flat_map(|(_, rows)| rows.into_iter().map(|r| r.id))
+            .collect()
+    };
+    assert!(ids("wire").contains(&"wires.renumber"));
+    assert!(ids("interruption").contains(&"interruption.renumber"));
+    assert!(ids("zzzz").is_empty());
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_project(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(super::workbench::app_runs("edit.numbering_centre"));
+    d.app.run_command(&ctx, "edit.numbering_centre", None);
+    d.frame();
+    assert_eq!(
+        d.app.wb.centre.as_ref().map(|c| c.kind),
+        Some(Centre::Numbering)
+    );
+    let edit = novo_workflow::menus::layout("Edit");
+    let submenu = |what: &str| {
+        edit.iter().any(
+            |i| matches!(i, novo_workflow::menus::MenuItem::Submenu { name, .. } if *name == what),
+        )
+    };
+    assert!(!submenu("Wire numbers") && !submenu("Renumber"));
+    let fallback =
+        super::learn_labels::anchor_fallback("cmd.wires.renumber").expect("a tile has a fallback");
+    assert_eq!(fallback, "cmd.edit.numbering_centre");
+    // The commands still run by name without the centre.
+    d.app.wb.centre = None;
+    d.app.run_command(&ctx, "wires.numbering", None);
+    d.frame();
+}

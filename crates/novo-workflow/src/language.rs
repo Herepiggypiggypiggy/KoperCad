@@ -974,6 +974,11 @@ pub const DUTCH: &[Aliases] = &[
         &["nieuw uit sjabloon", "beginnen met"],
     ),
     nl(
+        "edit.numbering_centre",
+        &["nummering"],
+        &["hernummeren", "draadnummers", "tags"],
+    ),
+    nl(
         "file.project_centre",
         &["projectinstellingen"],
         &["instellingen", "tekennorm", "varianten"],

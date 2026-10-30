@@ -72,3 +72,7 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 - `centres::Centre::Project` (command `file.project_centre`, File > Project settings...): Drawing standard, Rules, Report languages, Project options, Untie from options and Generate pages as tiles. The File > Project submenu (8 rows) and Report languages leave File: File 34 to 26, total 221 to 213.
 - `project.variant`, `project.option` and `project.tie` take a name in the command field and open Project options without one: they are palette-only (`menus::PALETTE_ONLY`, with the reason). Lessons that name them fall back to the opener.
 - QA scenario 7371.
+
+## V4h: Numbering centre (2026-10-30)
+- `centres::Centre::Numbering` (command `edit.numbering_centre`, Edit > Numbering...): Number wires, Renumber wires, Check wire numbers, Wire numbering, Set and Unlock wire number ("Wires") and Renumber devices, Number interruption points, Renumber I/O ("Devices and points"). The Edit > Wire numbers and Edit > Renumber submenus (9 rows) are gone: Edit 30 to 22, total 213 to 205. Tiles that need a selection say why they are grey.
+- Lessons that name those commands fall back to the opener, then Edit. QA scenario 7372. Next: Parts rows (Edit > Parts, File > Library), then the Draw leftovers.

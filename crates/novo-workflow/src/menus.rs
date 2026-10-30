@@ -80,6 +80,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.import_centre", at("File")),
     // File > Templates and examples... opens the Start centre; the templates and examples are listed there.
     ("file.start_centre", at("File")),
+    // Edit > Numbering... opens the Numbering centre; the numbering commands are listed there.
+    ("edit.numbering_centre", at("Edit")),
     // File > Project settings... opens the Project centre; the project commands are listed there.
     ("file.project_centre", at("File")),
     ("export.print_preview", at("File")),
@@ -94,9 +96,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("edit.rotate", at("Edit")),
     ("edit.mirror", at("Edit")),
     ("edit.shared_properties", at("Edit")),
-    ("edit.renumber", under("Edit", "Renumber")),
-    ("interruption.renumber", under("Edit", "Renumber")),
-    ("plc.renumber_io", under("Edit", "Renumber")),
     // Draw
     ("xref.link", at("Draw")),
     ("draw.text", at("Draw")),
@@ -236,12 +235,6 @@ const REGROUPED: &[(&str, MenuPlace)] = &[
     ("parts.clear", under("Edit", "Parts")),
     ("parts.describe", under("Edit", "Parts")),
     ("parts.remove_unused", under("Edit", "Parts")),
-    ("wires.number", under("Edit", "Wire numbers")),
-    ("wires.numbering", under("Edit", "Wire numbers")),
-    ("wires.check_numbers", under("Edit", "Wire numbers")),
-    ("wires.set_number", under("Edit", "Wire numbers")),
-    ("wires.unlock_number", under("Edit", "Wire numbers")),
-    ("wires.renumber", under("Edit", "Renumber")),
     // Help: both fast-key walk-throughs sit together.
     ("file.practice", at("Help")),
 ];
@@ -567,10 +560,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
 /// others follow in the order [`layout`] gives them.
 const SUB_FIRST: &[(&str, &[&str])] = &[
     ("File", &["Library", "Macros", "Revisions"]),
-    (
-        "Edit",
-        &["Paste special", "Parts", "Wire numbers", "Renumber"],
-    ),
+    ("Edit", &["Paste special", "Parts"]),
     ("Draw", &["Terminals", "PLC", "Macros"]),
 ];
 
@@ -861,7 +851,7 @@ mod tests {
             // The export formats are in the Export centre, the imports in the Import
             // centre, the templates and examples in the Start centre.
             ("File", 26),
-            ("Edit", 30),
+            ("Edit", 22),
             ("Draw", 24),
             ("View", 65),
             ("Check", 11),
@@ -886,7 +876,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 213, "the menus hold {total} rows");
+        assert!(total <= 205, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File
