@@ -24,30 +24,30 @@ expect "Hoists in this project: -M1"
 expect "0 rpm · off · brake closed"
 shot before-main
 # Main on, then hold up step 1 (fine winding): the hook rises slowly.
-click_text off
+click 1052 315
 wait 10
-mouse_down 1048 232
+mouse_down 1081 452
 wait 120
 expect "fine"
 expect "brake open"
 shot fine-rising
-mouse_up 1048 232
+mouse_up 1081 452
 wait 10
 # Hold up step 2 (coarse winding): faster.
-mouse_down 1100 232
+mouse_down 1081 482
 wait 120
 expect "coarse"
 shot coarse-rising
-mouse_up 1100 232
+mouse_up 1081 482
 wait 120
 expect "0 rpm"
 # E-stop with the rocker held again: every output drops, the motor stops, the brake closes.
-mouse_down 1100 232
+mouse_down 1081 482
 wait 60
-click_text E-stop
+click 1055 265
 wait 60
 expect "brake closed"
 expect "Signals (0 of 15 high)"
 shot e-stop
-mouse_up 1100 232
+mouse_up 1081 482
 check_layout

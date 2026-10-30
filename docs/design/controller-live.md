@@ -18,6 +18,28 @@ as on the crane. It simulates wiring and logic only: no radio protocol, no recei
 - The fixture is `qa/fixtures/radio-hoist.novo` (a generic radio, a receiver, two reversing and two speed
   contactors, a two-speed motor). QA scenarios `1581` (1366x768) and `1581b` (1920x1080) drive it; `1582` opens it from the menu and the command field; `1583` runs it together with Simulate > Hoist run (the motor carries a 100 kg hook load, so the radio lifts the hook through the drawn circuit).
 
+## The panel widgets (lane C3)
+
+The card draws the controller the way the device looks, from a plan derived from the profile
+(`novo_controller::panel::plan`), so a profile from the import wizard gets the right widgets with no code per controller:
+
+| Control | Widget |
+| --- | --- |
+| Two-step or three-step rocker (`rocker2`, `rocker3`) | A stack of step zones per direction. Press the top zone for step 1 (slow), slide down or press the lower zone for step 2 (fast); a closed lower contact is tinted. Springs back on release |
+| Joystick axes (`axis`, or rockers in a `joystick` profile) | A pad with a dot per detent. Two axes share a pad (name the pad with `stick = "..."` on a control, or the axes pair in order: first left-right, second up-down). Drag the knob to a detent; it springs back |
+| `selector` | A rotary with a pointer: click turns to the next position, or click a position name |
+| `estop` | The mushroom, latched; Reset twists it free |
+| `latch`, `key` | A switch |
+| `button`, `deadman` | A hold button; stop, horn and enabling bar get their own icon |
+
+Next to the Keyboard switch: **Sticky** (a click keeps a button or the stick held until clicked again, so several motions run at once) and **Key map**
+(a table of every key and what it does). The template follows the kind of controller: radio and pendant put safety and power first, then motions;
+a joystick puts the pads first; a PLC panel or custom profile is one list.
+
+The import wizard now also recognises a dead-man or enabling bar (`deadman` control), the tare button, a coupling switch and a fast-step release relay
+(English and Dutch words); the release relay becomes a latch `fast_release` and every step-2 signal gets `requires = ["fast_release=on"]`. Hoist-unit selection is a
+`selector`; two E-stop channels are two parallel contacts of the one mushroom.
+
 ## How a signal reaches the drawing
 
 A binding connects a signal (`radio-1/HOIST_UP_FAST`) to a target, and each target kind has one meaning:
@@ -63,6 +85,9 @@ not drop the target. Bind the chain to a target of its own. Not yet in the Check
 - Interlocks in the example (K1/K2, K3/K4) are the drawing's own; the engine refuses only what the profile says.
 - Not a safety function: the E-stop chain shows the logic of the wiring.
 - Generic profiles only. A person builds a vendor profile with File > Import > Controller profile from I/O table.
+
+- The dead-man bar, tare, coupling switch and fast-step release are modelled from the drawing and the profile you enter. They are not a certified
+  enabling or safety function (no PL, SIL or compliance claim), and the import wizard only recognises them by the wording of the table.
 
 ## Add-on seam
 

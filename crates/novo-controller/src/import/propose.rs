@@ -57,6 +57,7 @@ impl Control {
         }
         match self.kind.as_str() {
             "estop" => "released / pressed",
+            "deadman" => "released / held",
             _ => "off / on",
         }
         .to_owned()
@@ -78,6 +79,8 @@ pub struct Signal {
     pub ungated: bool,
     /// Terminal label of the table row this signal came from.
     pub pin: String,
+    /// Extra conditions (`fast_release=on`).
+    pub requires: Vec<String>,
 }
 
 /// Which pin carries which signal in this drawing.
@@ -743,6 +746,7 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                         step: (kind != "button").then_some(s),
                         ungated: false,
                         pin: row.terminal.trim().to_owned(),
+                        requires: Vec::new(),
                     });
                 }
                 for s in 1..*n {
@@ -778,7 +782,17 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
 
     let kind_guess = kind.clone();
     // Roles: E-stop, main, stop, horn, light. Several rows of one role are parallel contacts.
-    for role in [Role::Estop, Role::Main, Role::Stop, Role::Horn, Role::Light] {
+    for role in [
+        Role::Estop,
+        Role::Main,
+        Role::Stop,
+        Role::Horn,
+        Role::Light,
+        Role::Deadman,
+        Role::Tare,
+        Role::Coupling,
+        Role::Release,
+    ] {
         let rows: Vec<usize> = role_rows
             .iter()
             .filter(|(_, r)| *r == role)
@@ -799,6 +813,17 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
             Role::Main => ("start", "Main / start", "latch", "MAIN", "on", true),
             Role::Stop => ("stop", "Stop", "button", "STOP", "on", true),
             Role::Horn => ("horn", "Horn", "button", "HORN", "on", false),
+            Role::Deadman => ("deadman", "Dead-man", "deadman", "DEADMAN", "held", false),
+            Role::Tare => ("tare", "Tare", "button", "TARE", "on", false),
+            Role::Coupling => ("coupling", "Coupling", "latch", "COUPLING", "on", false),
+            Role::Release => (
+                "fast_release",
+                "Fast step release",
+                "latch",
+                "FAST_RELEASE",
+                "on",
+                false,
+            ),
             _ => ("light", "Light", "latch", "LIGHT", "on", false),
         };
         let has = |r: Role| role_rows.iter().any(|(_, x)| *x == r);
@@ -836,12 +861,24 @@ pub fn propose(table: &Table, words: &WordList, options: &Options) -> Proposal {
                 step: None,
                 ungated,
                 pin: table.rows[*i].terminal.trim().to_owned(),
+                requires: Vec::new(),
             });
         }
         match role {
             Role::Estop => warn(&mut warnings, table.rows[rows[0]].line, Severity::Info, "E-stop modelled as a normally closed chain: the signal is high while the mushroom is out. Confirm against the page".to_owned()),
             Role::Main if has(Role::Stop) => warn(&mut warnings, table.rows[rows[0]].line, Severity::Info, "Main/start is a latch that the stop button drops. Confirm against the page".to_owned()),
             _ => {}
+        }
+    }
+
+    // A fast-step release relay (a row for it in the table) lets the second step act only
+    // while it is on, for every motion.
+    if controls.iter().any(|c| c.id == "fast_release") {
+        for signal in signals
+            .iter_mut()
+            .filter(|s| s.step.is_some_and(|n| n >= 2))
+        {
+            signal.requires.push("fast_release=on".to_owned());
         }
     }
 

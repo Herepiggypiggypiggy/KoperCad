@@ -48,7 +48,8 @@
           "spring": { "type": "boolean" },
           "needs_link": { "type": "boolean", "default": false },
           "requires": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
-          "drops_when": { "type": "array", "items": { "$ref": "#/$defs/condition" } }
+          "drops_when": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
+          "stick": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" }
         }
       }
     },

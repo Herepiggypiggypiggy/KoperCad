@@ -250,6 +250,10 @@ pub struct ControlDef {
     /// Conditions that send the control to rest and keep it there (a stop button for main).
     #[serde(default)]
     pub drops_when: Vec<String>,
+    /// Joystick this axis belongs to. Axes that name the same stick share one pad: the first is
+    /// left-right, the second up-down. Without it a joystick pairs its axes in order.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stick: Option<String>,
 }
 
 impl ControlDef {

@@ -119,33 +119,16 @@ pub(super) fn key_map(profile: &Profile) -> Vec<KeyBinding> {
     out
 }
 
-/// The positions of a rocker or axis grouped by direction, each as `(step, position)`: `up1` and
-/// `up2` are one direction, `down1` and `down2` the next. A detent without a step number is a
-/// direction of its own.
+/// The positions of a rocker or axis grouped by direction, each as `(step, position)`.
 fn direction_groups(def: &ControlDef) -> Vec<Vec<(u8, String)>> {
-    let rest = def.rest_position();
-    let mut groups: Vec<(String, Vec<(u8, String)>)> = Vec::new();
-    for position in def.position_list().into_iter().filter(|p| *p != rest) {
-        let (name, step) = match split_group_step(&position) {
-            Some((g, n)) => (g.to_owned(), n),
-            None => (position.clone(), 1),
-        };
-        match groups.iter_mut().find(|(g, _)| *g == name) {
-            Some((_, list)) => list.push((step, position)),
-            None => groups.push((name, vec![(step, position)])),
-        }
-    }
-    groups
+    novo_controller::panel::direction_groups(def)
         .into_iter()
-        .map(|(_, mut list)| {
-            list.sort();
-            list
-        })
+        .map(|d| d.steps)
         .collect()
 }
 
 /// A position as the card prints it: `up2` is "up 2".
-fn position_label(position: &str) -> String {
+pub(super) fn position_label(position: &str) -> String {
     match split_group_step(position) {
         Some((g, n)) => format!("{g} {n}"),
         None => position.to_owned(),
@@ -153,7 +136,7 @@ fn position_label(position: &str) -> String {
 }
 
 /// The key a hint shows: arrows as arrows.
-fn key_name(key: egui::Key) -> String {
+pub(super) fn key_name(key: egui::Key) -> String {
     match key {
         egui::Key::ArrowUp => "↑".into(),
         egui::Key::ArrowDown => "↓".into(),
@@ -373,10 +356,16 @@ fn draw_card(
     if generic {
         ui.weak("Generic controller, not a specific product");
     }
-    ui.separator();
-    for def in &profile.controls {
-        control_row(ui, ctl, &id, def, &profile);
+    // The effect of what is held, without scrolling to the signal list.
+    if let Some(inst) = ctl.set.instance(&id) {
+        let signals = inst.controller.signals();
+        let high = signals.iter().filter(|s| s.is_high()).count();
+        ui.weak(format!("Signals ({high} of {} high)", signals.len()));
     }
+    ui.separator();
+    let map = key_map(&profile);
+    let plan = novo_controller::panel::plan(&profile);
+    super::controller_widgets::draw_panel(ui, ctl, &id, &profile, &plan, &map);
     if let Some(why) = ctl.refused.clone() {
         ui.colored_label(palette.warning, why);
     }
@@ -386,6 +375,10 @@ fn draw_card(
              latch, X presses the emergency stop and R resets it. The canvas does not see \
              these keys while this is on",
         );
+        ui.checkbox(&mut ctl.sticky, "Sticky").on_hover_text(
+            "A click keeps a button or the stick held until you click it again, so several \
+             motions run at once",
+        );
         if ui
             .small_button("Reset")
             .on_hover_text("Every control back to rest")
@@ -394,6 +387,11 @@ fn draw_card(
             ctl.reset_state();
         }
     });
+    egui::CollapsingHeader::new("Key map")
+        .id_salt(("controller_key_map", &id))
+        .show(ui, |ui| {
+            super::controller_widgets::key_map_table(ui, &profile, &map);
+        });
     effects_row(ui, ctl, &id);
     ui.weak("Scroll for the signals, bindings and checks");
     ui.separator();
@@ -492,151 +490,13 @@ fn instance_row(ui: &mut egui::Ui, ctl: &mut ControllerLive, _actions: &mut Vec<
     });
 }
 
-fn hint(map: &[KeyBinding], control: &str) -> String {
-    let keys: Vec<String> = map
-        .iter()
-        .filter(|b| b.control == control)
-        .map(|b| key_name(b.key))
-        .collect();
-    keys.join(" ")
-}
-
-fn control_row(
-    ui: &mut egui::Ui,
+/// Press, toggle or set a position from a click, keeping what the engine refused.
+pub(super) fn press_outcome(
     ctl: &mut ControllerLive,
     id: &str,
-    def: &ControlDef,
-    profile: &Profile,
+    control: &str,
+    position: Option<&str>,
 ) {
-    let palette = crate::theme::ui_palette();
-    let at = ctl
-        .set
-        .instance(id)
-        .and_then(|i| i.controller.effective_position(&def.id))
-        .unwrap_or_default();
-    let rest = def.rest_position();
-    let label = if def.label.is_empty() {
-        &def.id
-    } else {
-        &def.label
-    };
-    let map = key_map(profile);
-    ui.horizontal_wrapped(|ui| {
-        ui.label(egui::RichText::new(label).strong());
-        let keys = hint(&map, &def.id);
-        if !keys.is_empty() {
-            ui.weak(format!("[{keys}]"));
-        }
-    });
-    let scope = egui::Id::new(("controller_control", id, &def.id));
-    match def.kind {
-        ControlKind::Button | ControlKind::Deadman => {
-            let active = def.first_active_position().unwrap_or_default();
-            let on = at != rest;
-            let response = ui
-                .scope_builder(egui::UiBuilder::new().id(scope), |ui| {
-                    ui.add(
-                        egui::Button::new(if on { "held" } else { "hold" })
-                            .selected(on)
-                            .sense(egui::Sense::click_and_drag()),
-                    )
-                })
-                .inner;
-            let down = response.is_pointer_button_down_on();
-            ctl.hold(id, &def.id, HoldBy::Mouse, down.then_some(active.as_str()));
-        }
-        ControlKind::Rocker2 | ControlKind::Rocker3 | ControlKind::Axis => {
-            ui.horizontal_wrapped(|ui| {
-                for position in def.position_list().into_iter().filter(|p| *p != rest) {
-                    let on = at == position;
-                    let response = ui
-                        .scope_builder(egui::UiBuilder::new().id(scope.with(&position)), |ui| {
-                            ui.add(
-                                egui::Button::new(position_label(&position))
-                                    .selected(on)
-                                    .sense(egui::Sense::click_and_drag()),
-                            )
-                        })
-                        .inner;
-                    if def.is_spring() {
-                        // The pointer holds one zone at a time; letting go springs back.
-                        let down = response.is_pointer_button_down_on();
-                        if down {
-                            ctl.hold(id, &def.id, HoldBy::Mouse, Some(&position));
-                        } else if on
-                            && (!response.contains_pointer() || !ui.input(|i| i.pointer.any_down()))
-                        {
-                            ctl.hold(id, &def.id, HoldBy::Mouse, None);
-                        }
-                    } else if response.clicked() {
-                        press_outcome(ctl, id, &def.id, Some(&position));
-                    }
-                }
-            });
-        }
-        ControlKind::Latch | ControlKind::Key => {
-            let on = at != rest;
-            let response = ui
-                .scope_builder(egui::UiBuilder::new().id(scope), |ui| {
-                    ui.add(egui::Button::new(if on { "on" } else { "off" }).selected(on))
-                })
-                .inner;
-            if response.clicked() {
-                press_outcome(ctl, id, &def.id, None);
-            }
-        }
-        ControlKind::Selector => {
-            let positions = def.position_list();
-            egui::ComboBox::from_id_salt(scope)
-                .selected_text(position_label(&at))
-                .show_ui(ui, |ui| {
-                    for p in &positions {
-                        if ui.selectable_label(at == *p, position_label(p)).clicked() {
-                            press_outcome(ctl, id, &def.id, Some(p));
-                        }
-                    }
-                });
-        }
-        ControlKind::EStop => {
-            ui.horizontal(|ui| {
-                let pressed = at != rest;
-                let text = if pressed {
-                    egui::RichText::new("E-stop pressed").color(palette.on_accent)
-                } else {
-                    egui::RichText::new("E-stop")
-                };
-                let mut button = egui::Button::new(text);
-                if pressed {
-                    button = button.fill(palette.error);
-                }
-                if ui
-                    .scope_builder(egui::UiBuilder::new().id(scope), |ui| ui.add(button))
-                    .inner
-                    .clicked()
-                    && !pressed
-                {
-                    press_outcome(ctl, id, &def.id, None);
-                }
-                if pressed
-                    && ui
-                        .small_button("Reset")
-                        .on_hover_text("Twist to release")
-                        .clicked()
-                {
-                    ctl.act(
-                        id,
-                        novo_controller::Action::Reset {
-                            control: def.id.clone(),
-                        },
-                    );
-                }
-            });
-        }
-    }
-}
-
-/// Press, toggle or set a position from a click, keeping what the engine refused.
-fn press_outcome(ctl: &mut ControllerLive, id: &str, control: &str, position: Option<&str>) {
     let action = match position {
         Some(p) => novo_controller::Action::SetPosition {
             control: control.to_owned(),

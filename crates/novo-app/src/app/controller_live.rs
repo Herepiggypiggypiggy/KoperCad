@@ -112,6 +112,8 @@ pub(crate) struct ControllerLive {
     pub(super) selected: Option<String>,
     /// The keyboard drives the selected instance (off until asked, so the canvas keys stay free).
     pub(super) keys: bool,
+    /// A click keeps a button or the stick held until clicked again (several motions at once).
+    pub(super) sticky: bool,
     /// The structure changed since it was last written to the project.
     pub(super) dirty: bool,
     /// Findings of the last check, kept for the revision and table they were worked out for.

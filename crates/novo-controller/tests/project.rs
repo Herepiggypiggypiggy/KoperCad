@@ -787,6 +787,7 @@ spring = false
 needs_link = true
 requires = ["b=on"]
 drops_when = ["b=on"]
+stick = "pad"
 [[control]]
 id = "b"
 kind = "key"
