@@ -192,6 +192,11 @@ impl Package {
         }
 
         let trust = judge(&manifest_bytes, signature.as_deref(), trust)?;
+        // A revoked key still gives a readable package (the install prompt names it and refuses);
+        // a signature that does not fit is a damaged or doctored file.
+        if let Trust::Tampered { .. } = &trust {
+            return Err(AddonError::Tampered(trust.refusal().unwrap_or_default()));
+        }
         let icons = match entries.get(ICONS_FILE) {
             Some(data) => icons::parse(&manifest.addon.id, data)?,
             None => Vec::new(),

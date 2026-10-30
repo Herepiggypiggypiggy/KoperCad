@@ -15,9 +15,6 @@ as on the crane. It simulates wiring and logic only: no radio protocol, no recei
   link, power and battery switches, the signal list with the receiver pin each one is bound to, the binding table
   and the checks. **Keyboard** turns the keyboard into the radio (keys are listed next to each control); it is off
   until asked so the canvas keys stay free.
-- **Several controllers.** The instance list on the card picks which controller it shows. **Pop out** opens that controller
-  in a window of its own (the window says "Active" while a control of it is held and which group it drives); open as many
-  as you have controllers, one per monitor, and close the card if you only want the windows.
 - **Signal filter.** Above the signals and the binding table: a controller picker ("This controller", "All controllers" or
   one by name), a search box (all words must occur in the controller, the signal or its target), **Active** (only signals
   that are high) and **Unbound** (only signals that drive nothing yet), and Clear. With "All controllers" each line names
@@ -47,6 +44,21 @@ a joystick puts the pads first; a PLC panel or custom profile is one list.
 The import wizard now also recognises a dead-man or enabling bar (`deadman` control), the tare button, a coupling switch and a fast-step release relay
 (English and Dutch words); the release relay becomes a latch `fast_release` and every step-2 signal gets `requires = ["fast_release=on"]`. Hoist-unit selection is a
 `selector`; two E-stop channels are two parallel contacts of the one mushroom.
+### Several controllers at once
+
+- The card starts with one **tab per controller instance**: a dot in the instance colour (ringed in green while a
+  control is held away from rest, an E-stop pressed included) and its name. **+ Add** makes another instance of any
+  profile; **Duplicate** makes one of the same kind with no bindings; **Name, colour and group** renames it (the id
+  stays, so bindings and scripts keep working), picks a colour and names what it drives ("runway1/bridge2").
+- **Pop out** gives an instance a floating panel of its own (a tab with the sign ⧉ shows it is out). Any number of
+  panels can be open and operated at the same time, also with the card closed; closing a panel docks the instance back.
+  They are panels inside the program window, not separate operating-system windows (not built yet). The keyboard drives
+  one instance at a time: **Keyboard here** in a panel (or the selected tab) moves it.
+- **Shared targets** (card and panel): when another instance also drives a target of this one, a line says who, who is
+  pressing now, and whether it is a conflict (not marked `shared`, in the Check list as an error) or both are pressing.
+  Engine side: `BindingTable::ownership`, `ControllerSet::is_active`.
+- Instances, names, colours and groups are stored in `controllers.project` like the bindings. Which panels are popped out is
+  not saved. Moving that property into the generic project block stays with the persistence lane.
 
 ## How a signal reaches the drawing
 

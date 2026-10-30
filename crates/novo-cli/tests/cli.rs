@@ -775,6 +775,113 @@ fn export_plate_writes_the_plate_pdf_of_the_enclosure() {
     assert!(run.err.contains("no enclosure"), "{}", run.err);
 }
 
+/// A saved project whose plate has `devices` placed devices with a hole
+/// pattern, and a door cut-out on the first one.
+fn drilled_project(dir: &Path, devices: usize) -> PathBuf {
+    use novo_core::{DeviceTag, MountingPlate, Project, Value};
+    use novo_layout::model::{apply_plan, candidates, load, set_plate};
+    let path = dir.join("drilled.novo");
+    let mut p = Project::new("Drilled");
+    let (cab, _) = p
+        .transact("setup", |tx| {
+            let cab = tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+            let part = tx.add_part("ACME", "C1")?;
+            tx.set_property(part, "width_mm", Some(Value::Float(20.0)))?;
+            tx.set_property(part, "height_mm", Some(Value::Int(60)))?;
+            tx.set_property(
+                part,
+                "hole_pattern",
+                Some(Value::Text("3,3,4.2;17,57,4.2".into())),
+            )?;
+            for n in 1..=devices {
+                let d = tx.add_device(DeviceTag::parse(&format!("=A1+CAB1-K{n}")).unwrap(), "")?;
+                tx.assign_part(d, part)?;
+            }
+            set_plate(
+                tx,
+                cab,
+                MountingPlate {
+                    width: 600.0,
+                    height: 800.0,
+                    margin: 10.0,
+                },
+            )?;
+            Ok(cab)
+        })
+        .unwrap();
+    let plan = load(&p, cab).unwrap().preview(&candidates(&p, cab));
+    p.transact("place", |tx| apply_plan(tx, cab, &plan))
+        .unwrap();
+    novo_storage::ProjectFile::create(&path, &p)
+        .unwrap()
+        .close()
+        .unwrap();
+    path
+}
+
+#[test]
+fn export_drill_plan_writes_the_hand_plan_and_refuses_an_empty_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = drilled_project(dir.path(), 2);
+    let out = dir.path().join("plan.pdf");
+    let run = novo(&["export", "drill-plan", s(&path), "-o", s(&out)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(std::fs::read(&out).unwrap().starts_with(b"%PDF"));
+
+    // A plate with nothing on it has nothing to drill: say so, write nothing.
+    let empty = drilled_project(dir.path(), 0);
+    let none = dir.path().join("none.pdf");
+    let run = novo(&["export", "drill-plan", s(&empty), "-o", s(&none)]);
+    assert_eq!(run.code, exit::USAGE);
+    assert!(run.err.contains("nothing to drill"), "{}", run.err);
+    assert!(!none.exists());
+}
+
+#[test]
+fn export_template_tiles_the_plate_and_checks_the_paper() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = drilled_project(dir.path(), 2);
+    let a4 = dir.path().join("a4.pdf");
+    let a3 = dir.path().join("a3.pdf");
+    let check = dir.path().join("check.pdf");
+    let run = novo(&[
+        "export",
+        "template",
+        s(&path),
+        "-o",
+        s(&a4),
+        "--scale-check",
+        s(&check),
+    ]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    let run = novo(&[
+        "export",
+        "template",
+        s(&path),
+        "-o",
+        s(&a3),
+        "--paper",
+        "a3",
+    ]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(std::fs::read(&check).unwrap().starts_with(b"%PDF"));
+    // A3 tiles are bigger, so the same plate needs fewer pages.
+    let pages = |f: &Path| lopdf::Document::load(f).unwrap().get_pages().len();
+    assert!(pages(&a3) < pages(&a4), "{} vs {}", pages(&a3), pages(&a4));
+
+    let run = novo(&[
+        "export",
+        "template",
+        s(&path),
+        "-o",
+        s(&a4),
+        "--paper",
+        "a0",
+    ]);
+    assert_eq!(run.code, exit::USAGE);
+    assert!(run.err.contains("a4 or a3"), "{}", run.err);
+}
+
 /// A saved project with a cabinet: an enclosure with a plate and two devices.
 fn cabinet_project(dir: &Path) -> PathBuf {
     use novo_core::{DeviceTag, MountingPlate, Project};

@@ -454,6 +454,18 @@ pub(super) fn hoist_reading(module: &DriveHoistModule) -> String {
         LogicPhase::Engaging => "closing brake",
         LogicPhase::Fault(_) => "stopped by a fault",
     };
+    let rope = s.rope.map_or_else(String::new, |r| {
+        if r.on_floor && r.slack_m > 0.005 {
+            format!(" \u{b7} slack rope {:.0} mm", r.slack_m * 1000.0)
+        } else if r.on_floor {
+            " \u{b7} on the floor".to_owned()
+        } else {
+            format!(
+                " \u{b7} rope {:.0} % of the weight",
+                r.load_fraction * 100.0
+            )
+        }
+    });
     let heat = s.heat.map_or_else(String::new, |h| {
         format!(
             " \u{b7} winding +{:.0} K \u{b7} brake +{:.0} K",
@@ -461,7 +473,7 @@ pub(super) fn hoist_reading(module: &DriveHoistModule) -> String {
         )
     });
     format!(
-        "{phase} \u{b7} {:.1} Hz \u{b7} {:.1} A \u{b7} {:.1} m/min \u{b7} {:.2} m{heat}",
+        "{phase} \u{b7} {:.1} Hz \u{b7} {:.1} A \u{b7} {:.1} m/min \u{b7} {:.2} m{rope}{heat}",
         s.drive.frequency_hz.abs(),
         s.motor.stator_current_a,
         s.speed_m_s * 60.0,
@@ -491,6 +503,37 @@ impl DriveRun {
         let module = self.active.as_ref()?.lp.module(id)?;
         let speed = module.snapshot()?.speed_m_s;
         Some((module.position_m(), speed))
+    }
+
+    /// Wind, brake and last stop of a travel axis as one line, `None` when the axis has none of
+    /// the three to show or the run has not ticked yet.
+    pub(super) fn travel_status(&self, id: &str) -> Option<String> {
+        let s = self.active.as_ref()?.lp.module(id)?.snapshot()?;
+        let mut parts = Vec::new();
+        if s.wind_force_n.abs() >= 1.0 {
+            parts.push(format!(
+                "wind {:.0} m/s pushes with {:.0} N",
+                s.wind_speed_m_s.abs(),
+                s.wind_force_n
+            ));
+        }
+        if let Some(state) = s.brake_state {
+            parts.push(
+                match state {
+                    novo_drive::brake::BrakeState::Applied => "brake closed",
+                    novo_drive::brake::BrakeState::Released => "brake open",
+                }
+                .to_owned(),
+            );
+        }
+        if let Some(stop) = s.last_stop {
+            parts.push(format!(
+                "last stop {:.2} m from {:.2} m/s",
+                stop.distance_m,
+                stop.from_speed_m_s.abs()
+            ));
+        }
+        (!parts.is_empty()).then(|| format!("{id}: {}", parts.join(" \u{b7} ")))
     }
 }
 
@@ -591,7 +634,8 @@ pub(super) fn advance(
     true
 }
 
-/// A one-line reading of an axis, for the badge and the window.
+/// A one-line reading of an axis, for the badge (short: the badge sits on the drawing) and the
+/// window. [`travel_detail`] adds the wind and the last stop in the window.
 pub(super) fn reading(module: &TravelModule) -> String {
     if let Some(why) = module.fault() {
         return why.to_owned();
@@ -599,14 +643,39 @@ pub(super) fn reading(module: &TravelModule) -> String {
     let Some(s) = module.snapshot() else {
         return "waiting".to_owned();
     };
-    format!(
+    let mut text = format!(
         "{:.1} Hz \u{b7} {:.0} rpm \u{b7} {:.1} A \u{b7} {:.2} m/s \u{b7} {:.2} m",
         s.drive.frequency_hz.abs(),
         module.rpm().abs(),
         s.motor.stator_current_a,
         s.speed_m_s.abs(),
         s.position_m
-    )
+    );
+    if let Some(state) = s.brake_state {
+        text.push_str(match state {
+            novo_drive::brake::BrakeState::Applied => " \u{b7} brake closed",
+            novo_drive::brake::BrakeState::Released => " \u{b7} brake open",
+        });
+    }
+    text
+}
+
+/// What the badge leaves out, for the window row: the wind and the last stop.
+pub(super) fn travel_detail(module: &TravelModule) -> String {
+    let Some(s) = module.snapshot() else {
+        return String::new();
+    };
+    let mut text = String::new();
+    if s.wind_force_n.abs() >= 1.0 {
+        text.push_str(&format!(
+            " \u{b7} wind {:.0} N ({:.0} m/s)",
+            s.wind_force_n, s.wind_speed_m_s
+        ));
+    }
+    if let Some(stop) = s.last_stop {
+        text.push_str(&format!(" \u{b7} last stop {:.2} m", stop.distance_m));
+    }
+    text
 }
 
 /// Badges on the motors of the axes, on the page shown.
@@ -820,7 +889,7 @@ impl NovoApp {
         let rows: Vec<(String, String)> = run.active.as_ref().map_or_else(Vec::new, |a| {
             a.lp.modules
                 .iter()
-                .map(|m| (m.id.clone(), reading(m)))
+                .map(|m| (m.id.clone(), format!("{}{}", reading(m), travel_detail(m))))
                 .chain(
                     a.hl.modules
                         .iter()
@@ -843,6 +912,11 @@ impl NovoApp {
                         .iter()
                         .map(|f| (format!("{} \u{b7} {:.1} s", m.id, f.time_s), f.kind.text()))
                 })
+                .chain(a.lp.modules.iter().flat_map(|m| {
+                    m.findings()
+                        .iter()
+                        .map(|f| (format!("{} \u{b7} {:.1} s", m.id, f.time_s), f.kind.text()))
+                }))
                 .chain(a.cw.modules.iter().flat_map(|m| {
                     m.findings()
                         .iter()
@@ -974,7 +1048,7 @@ impl NovoApp {
                 }
                 if !findings.is_empty() {
                     ui.separator();
-                    ui.label(egui::RichText::new("What the hoist run found").strong());
+                    ui.label(egui::RichText::new("What the run found").strong());
                     for (when, text) in findings.iter().rev().take(12) {
                         ui.horizontal_wrapped(|ui| {
                             ui.weak(when);
@@ -1002,8 +1076,11 @@ impl NovoApp {
                      deep-bar motors.",
                 );
                 ui.weak(
-                    "\u{2022} Rolling resistance is one constant; no stiction, no travel brake, \
-                     no skew or sway yet.",
+                    "\u{2022} Travel: rolling resistance is one constant (no stiction); the wind \
+                     is a uniform speed along the track with one drag coefficient and area; the \
+                     travel brake has the delays and torque you enter, and its force is capped \
+                     by one wheel-on-rail friction coefficient (no slip dynamics). No skew or \
+                     sway of the crane. None of this is a safety function.",
                 );
                 ui.weak(
                     "\u{2022} The drive replaces the contactors: its output terminals are not \
@@ -1015,6 +1092,12 @@ impl NovoApp {
                      not a maker's firmware or parameter set. The motor flux builds with one \
                      time constant; a stuck or missing brake contactor shows as a brake that \
                      never opens.",
+                );
+                ui.weak(
+                    "\u{2022} Rope (when a floor height is set): one spring and damper between \
+                     the drum and the hook, with a stiffness and damping ratio you enter, not a \
+                     measured rope. The load is taken up at the floor with a snatch; the model \
+                     has no rope stretch history, no sway and no multi-fall reeving.",
                 );
                 ui.weak(
                     "\u{2022} Closed-loop winch: an averaged encoder drive (speed loop around a \
@@ -1284,6 +1367,42 @@ mod tests {
     }
 
     #[test]
+    fn a_travel_brake_and_wind_show_in_the_reading_the_status_line_and_the_findings() {
+        let (mut doc, button) = axis(None);
+        let motor = doc
+            .project()
+            .devices()
+            .find(|d| d.properties.contains_key(travel_spec::TRAVEL_KEY))
+            .map(|d| d.id)
+            .unwrap();
+        doc.transact("Brake and wind", |tx| {
+            for (key, value) in [
+                ("trav_brake_torque_nm", 15.0),
+                ("trav_wind_ms", 8.0),
+                ("trav_wind_area_m2", 30.0),
+            ] {
+                tx.set_property(motor, key, Some(value.into()))?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        let run = run_held(&doc, button, 12.0);
+        let module = &run.active.as_ref().unwrap().lp.modules[0];
+        let text = reading(module);
+        assert!(text.contains("brake open"), "{text}");
+        assert!(!text.contains("wind"), "the badge stays short: {text}");
+        assert!(travel_detail(module).contains("wind"));
+        let id = module.id.clone();
+        let line = run.travel_status(&id).expect("a status line");
+        assert!(
+            line.contains("pushes with") && line.contains("brake open"),
+            "{line}"
+        );
+        // The wind pushes forward, so the axis runs further than without it.
+        assert!(position(&run) > 1.0);
+    }
+
+    #[test]
     fn the_end_limits_of_an_axis_become_flags_from_the_axis_start() {
         use novo_view3d::crane::LimitFlag;
         let (doc, _) = axis(Some(1.5));
@@ -1455,6 +1574,38 @@ mod tests {
         let m = &hl.modules[0];
         assert!(m.height_m() > 0.1, "{}", m.height_m());
         assert!(hoist_reading(m).contains("running"), "{}", hoist_reading(m));
+    }
+
+    #[test]
+    fn a_floor_under_the_hook_shows_in_the_reading_and_in_the_findings() {
+        let (mut doc, button) = drive_hoist(true);
+        doc.transact("Floor", |tx| {
+            let id = tx
+                .project()
+                .devices()
+                .find(|d| d.tag.to_string() == DeviceTag::product("M1").to_string())
+                .map(|d| d.id)
+                .unwrap();
+            tx.set_property(id, "dh_floor_m", Some(0.0.into()))?;
+            Ok(())
+        })
+        .unwrap();
+        let run = run_hoist(&doc, button, 12.0);
+        let m = &run.active.as_ref().unwrap().hl.modules[0];
+        assert!(m.rope().is_some());
+        assert!(
+            hoist_reading(m).contains("% of the weight"),
+            "{}",
+            hoist_reading(m)
+        );
+        assert!(
+            m.findings().iter().any(|f| matches!(
+                f.kind,
+                novo_machine::drive_hoist_loop::FindingKind::LoadSnatch { .. }
+            )),
+            "{:?}",
+            m.findings()
+        );
     }
 
     #[test]

@@ -24,6 +24,11 @@ pub enum AddonError {
     /// The signature file is present but does not verify.
     #[error("the add-on's signature is not valid ({0}); it was not installed")]
     BadSignature(String),
+    /// The signature names a trusted key but does not fit the manifest.
+    #[error(
+        "the add-on was changed after it was signed, or was not signed by the holder of its key: {0}; it was not installed"
+    )]
+    Tampered(String),
     /// The add-on needs a different program or add-on API version.
     #[error("{0}")]
     Incompatible(String),
@@ -44,6 +49,9 @@ pub enum AddonError {
     /// The engine of an add-on could not be loaded or refused to start.
     #[error("the add-on's engine could not be started: {0}")]
     Engine(String),
+    /// A signing key file or secret is unusable.
+    #[error("signing key: {0}")]
+    Key(String),
     /// The per-user folder could not be read or written.
     #[error("the add-on folder could not be used: {0}")]
     Io(String),

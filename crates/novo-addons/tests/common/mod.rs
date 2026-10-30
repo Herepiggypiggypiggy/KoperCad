@@ -23,11 +23,11 @@ pub fn store(dir: &std::path::Path) -> Store {
 
 pub fn key() -> TrustedKey {
     let sk = SigningKey::from_bytes(&SEED);
-    TrustedKey {
-        id: "test-key".into(),
-        owner: "Test Publisher".into(),
-        public: to_hex(sk.verifying_key().as_bytes()),
-    }
+    TrustedKey::new(
+        "test-key",
+        "Test Publisher",
+        &to_hex(sk.verifying_key().as_bytes()),
+    )
 }
 
 pub fn trusting_store(dir: &std::path::Path) -> Store {
@@ -49,6 +49,7 @@ pub fn signer() -> Signer32<'static> {
     Signer32 {
         key_id: "test-key",
         seed: SEED,
+        date: None,
     }
 }
 

@@ -12,7 +12,8 @@ use novo_controller::{ControlDef, ControlKind, Profile, Severity, SignalKey, Sig
 use novo_core::Project;
 
 use super::controller_live::{
-    ControllerLive, HoldBy, Resolved, Source, hand_devices, receiver_outputs, receivers,
+    ControllerLive, HoldBy, PRESET_COLOURS, Resolved, Source, hand_devices, receiver_outputs,
+    receivers,
 };
 use super::{Level, NovoApp};
 
@@ -229,9 +230,7 @@ impl NovoApp {
 
     /// The Controller card, drawn over the live view while it is open.
     pub(super) fn controller_card(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
-        let ctl = &self.wb.live.ctl;
-        // The windows of popped-out controllers stay while the card is closed.
-        if !self.wb.live.on || (!ctl.open && ctl.popouts.is_empty()) {
+        if !self.wb.live.on || !(self.wb.live.ctl.open || !self.wb.live.ctl.popped.is_empty()) {
             return;
         }
         self.controller_keys(ctx);
@@ -243,7 +242,7 @@ impl NovoApp {
         ctl.sync(project);
         ctl.apply_holds();
         let mut actions = Vec::new();
-        let card = ctl.open.then(|| {
+        let card = if ctl.open {
             super::panel::Panel::new(
                 "controller_card",
                 "Controller",
@@ -257,9 +256,11 @@ impl NovoApp {
             .dockable()
             .scrolls()
             .show(ctx, |ui| draw_card(ui, ctl, project, &mut actions))
-        });
-        popout_windows(ctx, ctl);
-        if let Some(Some(card)) = card {
+        } else {
+            None
+        };
+        popped_panels(ctx, canvas, ctl, project);
+        if let Some(card) = card {
             self.anchor("live.controller", card.response.rect, "Controller card");
         }
         // The held controls change signals every frame they are held.
@@ -365,22 +366,19 @@ fn draw_card(
     if let Some(inst) = ctl.set.instance(&id) {
         let signals = inst.controller.signals();
         let high = signals.iter().filter(|s| s.is_high()).count();
-        let line = format!("Signals ({high} of {} high)", signals.len());
-        ui.horizontal(|ui| {
-            ui.weak(line);
-            if ui
-                .small_button("Pop out")
-                .on_hover_text("Show this controller in a window of its own, next to the card")
-                .clicked()
-            {
-                ctl.pop_out(&id);
-            }
-        });
+        ui.weak(format!("Signals ({high} of {} high)", signals.len()));
     }
     ui.separator();
+    let popped = ctl.popped.contains(&id);
     let map = key_map(&profile);
-    let plan = novo_controller::panel::plan(&profile);
-    super::controller_widgets::draw_panel(ui, ctl, &id, &profile, &plan, &map);
+    if popped {
+        ui.add(
+            egui::Label::new("This controller has a panel of its own. Dock it to operate it here.")
+                .wrap(),
+        );
+    } else {
+        instance_controls(ui, ctl, &id, &profile);
+    }
     if let Some(why) = ctl.refused.clone() {
         ui.colored_label(palette.warning, why);
     }
@@ -407,13 +405,16 @@ fn draw_card(
         .show(ui, |ui| {
             super::controller_widgets::key_map_table(ui, &profile, &map);
         });
-    effects_row(ui, ctl, &id);
+    if !popped {
+        effects_row(ui, ctl, &id);
+    }
     ui.weak("Scroll for the signals, bindings and checks");
     ui.separator();
     filter_bar(ui, ctl);
     signals_block(ui, ctl, &id, project);
     ui.separator();
     bindings_block(ui, ctl, &id, project);
+    ownership_lines(ui, ctl, &id);
     let findings = ctl.findings(project);
     if !findings.is_empty() {
         ui.separator();
@@ -445,89 +446,41 @@ fn draw_card(
     });
 }
 
-/// One window per popped-out controller (button "Pop out" on the card): its panel, the group it
-/// drives and a mark while a control is held. Several can be open at once, one per monitor.
-fn popout_windows(ctx: &egui::Context, ctl: &mut ControllerLive) {
-    let palette = crate::theme::ui_palette();
-    // An instance that was removed or replaced by an undo has no window any more.
-    let set = &ctl.set;
-    let gone: Vec<String> = ctl
-        .popouts
-        .iter()
-        .filter(|id| set.instance(id).is_none())
-        .cloned()
-        .collect();
-    ctl.popouts.retain(|id| !gone.contains(id));
-    for id in ctl.popouts.clone() {
-        let Some((profile, label, group)) = ctl.set.instance(&id).map(|i| {
-            (
-                i.controller.profile().clone(),
-                i.label.clone(),
-                i.target_group.clone(),
-            )
-        }) else {
-            continue;
-        };
-        let held = ctl.is_held(&id);
-        let mut open = true;
-        let title = format!("Controller {label}");
-        super::panel::dialog(ctx, title, [300.0, 0.0])
-            .id(super::panel::id(&format!("controller_popout_{id}")))
-            .open(&mut open)
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    let (mark, color) = if held {
-                        ("● Active", palette.success)
-                    } else {
-                        ("○ Idle", palette.text_secondary)
-                    };
-                    ui.label(egui::RichText::new(mark).color(color));
-                    if let Some(group) = &group {
-                        ui.weak(format!("drives {group}"));
-                    }
-                });
-                let map = key_map(&profile);
-                let plan = novo_controller::panel::plan(&profile);
-                super::controller_widgets::draw_panel(ui, ctl, &id, &profile, &plan, &map);
-                if let Some(why) = ctl.refused.clone() {
-                    ui.colored_label(palette.warning, why);
-                }
-            });
-        if !open {
-            ctl.popouts.retain(|p| p != &id);
-        }
-    }
-}
-
+/// The instance tabs, the Add menu and the settings of the selected instance.
 fn instance_row(ui: &mut egui::Ui, ctl: &mut ControllerLive, _actions: &mut Vec<CardAction>) {
-    ui.horizontal(|ui| {
-        let current = ctl
-            .selected
-            .as_ref()
-            .and_then(|s| ctl.set.instance(s))
-            .map(|i| i.label.clone())
-            .unwrap_or_else(|| "No controller".to_owned());
-        let ids: Vec<(String, String)> = ctl
-            .set
-            .instances()
-            .iter()
-            .map(|i| (i.id.clone(), i.label.clone()))
-            .collect();
-        egui::ComboBox::from_id_salt("controller_instance")
-            .selected_text(current)
-            .width(128.0)
-            .show_ui(ui, |ui| {
-                for (id, label) in &ids {
-                    if ui
-                        .selectable_label(ctl.selected.as_deref() == Some(id), label)
-                        .clicked()
-                    {
-                        ctl.selected = Some(id.clone());
-                    }
+    let palette = crate::theme::ui_palette();
+    let ids: Vec<(String, String)> = ctl
+        .set
+        .instances()
+        .iter()
+        .map(|i| (i.id.clone(), i.label.clone()))
+        .collect();
+    ui.horizontal_wrapped(|ui| {
+        for (id, label) in &ids {
+            let colour = ctl.colour_of(id);
+            let active = ctl.set.is_active(id);
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.0;
+                instance_dot(ui, colour, active);
+                let popped = ctl.popped.contains(id);
+                // A long name is cut so the tab and the Pop out mark fit the card; the hover has it all.
+                let mut text = tab_text(label);
+                if popped {
+                    text.push_str(" ⧉");
+                }
+                let mut response = ui
+                    .selectable_label(ctl.selected.as_deref() == Some(id), text)
+                    .on_hover_text(label.as_str());
+                if popped {
+                    response = response.on_hover_text("In a panel of its own");
+                }
+                if response.clicked() {
+                    ctl.selected = Some(id.clone());
                 }
             });
+        }
         let mut add: Option<novo_controller::Profile> = None;
-        ui.menu_button("Add", |ui| {
+        ui.menu_button("+ Add", |ui| {
             let mut last_source: Option<bool> = None;
             for e in ctl.profiles() {
                 let folder = matches!(e.source, Source::Folder(_));
@@ -549,15 +502,266 @@ fn instance_row(ui: &mut egui::Ui, ctl: &mut ControllerLive, _actions: &mut Vec<
         {
             ctl.refused = Some(e);
         }
-        if let Some(id) = ctl.selected.clone()
-            && ui
-                .small_button("Remove")
-                .on_hover_text("Remove this controller and its bindings")
-                .clicked()
+    });
+    let Some(id) = ctl.selected.clone() else {
+        return;
+    };
+    if ctl.set.instance(&id).is_none() {
+        return;
+    }
+    ui.horizontal(|ui| {
+        let popped = ctl.popped.contains(&id);
+        if ui
+            .small_button(if popped { "Dock" } else { "Pop out" })
+            .on_hover_text(if popped {
+                "Show this controller in the card again"
+            } else {
+                "Give this controller a panel of its own, so several can be operated at once"
+            })
+            .clicked()
+        {
+            ctl.set_popped(&id, !popped);
+        }
+        if ui
+            .small_button("Duplicate")
+            .on_hover_text("A second controller of the same kind, with no bindings yet")
+            .clicked()
+            && let Err(e) = ctl.duplicate_instance(&id)
+        {
+            ctl.refused = Some(e);
+        }
+        if ui
+            .small_button("Remove")
+            .on_hover_text("Remove this controller and its bindings")
+            .clicked()
         {
             ctl.remove_instance(&id);
         }
     });
+    let Some(inst) = ctl.set.instance(&id) else {
+        return;
+    };
+    let (label, group) = (inst.label.clone(), inst.target_group.clone());
+    egui::CollapsingHeader::new("Name, colour and group")
+        .id_salt(("controller_settings", &id))
+        .show(ui, |ui| {
+            let state_id = egui::Id::new(("controller_rename", &id));
+            let mut name: String = ui.data(|d| d.get_temp(state_id)).unwrap_or(label);
+            let edit =
+                ui.add(egui::TextEdit::singleline(&mut name).desired_width(ui.available_width()));
+            if edit.lost_focus() {
+                ctl.rename_instance(&id, &name);
+                ui.data_mut(|d| d.remove_temp::<String>(state_id));
+            } else {
+                ui.data_mut(|d| d.insert_temp(state_id, name));
+            }
+            ui.horizontal(|ui| {
+                for (name, rgb) in PRESET_COLOURS {
+                    let (rect, response) =
+                        ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::click());
+                    let chosen = ctl.colour_of(&id) == rgb;
+                    ui.painter().rect_filled(
+                        rect.shrink(2.0),
+                        3.0,
+                        egui::Color32::from_rgb(rgb[0], rgb[1], rgb[2]),
+                    );
+                    if chosen {
+                        ui.painter().rect_stroke(
+                            rect,
+                            3.0,
+                            egui::Stroke::new(1.5, palette.text_primary),
+                            egui::StrokeKind::Inside,
+                        );
+                    }
+                    if response.on_hover_text(name).clicked() {
+                        let hex = format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]);
+                        ctl.set_colour(&id, Some(&hex));
+                    }
+                }
+            });
+            let group_id = egui::Id::new(("controller_group", &id));
+            let mut text: String = ui
+                .data(|d| d.get_temp(group_id))
+                .unwrap_or(group.unwrap_or_default());
+            let edit = ui.add(
+                egui::TextEdit::singleline(&mut text)
+                    .hint_text("drives: crane 1, crab, hoist A")
+                    .desired_width(ui.available_width()),
+            );
+            if edit.lost_focus() {
+                ctl.set_target_group(&id, &text);
+                ui.data_mut(|d| d.remove_temp::<String>(group_id));
+            } else {
+                ui.data_mut(|d| d.insert_temp(group_id, text));
+            }
+        });
+}
+
+/// Control rows of one instance, the same in the card and in a panel of its own.
+fn instance_controls(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, profile: &Profile) {
+    let map = key_map(profile);
+    let plan = novo_controller::panel::plan(profile);
+    super::controller_widgets::draw_panel(ui, ctl, id, profile, &plan, &map);
+}
+
+/// Who else drives the targets of this instance, and who has them right now.
+fn ownership_lines(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str) {
+    let palette = crate::theme::ui_palette();
+    let rows = ctl.shared_targets(id);
+    if rows.is_empty() {
+        return;
+    }
+    ui.separator();
+    ui.label(egui::RichText::new("Shared targets").strong());
+    for o in rows {
+        let others: Vec<String> = o
+            .controllers
+            .iter()
+            .filter(|c| *c != id)
+            .map(|c| {
+                ctl.set
+                    .instance(c)
+                    .map_or_else(|| c.clone(), |i| i.label.clone())
+            })
+            .collect();
+        let now = if o.driving.is_empty() {
+            "nobody is pressing".to_owned()
+        } else {
+            let who: Vec<String> = o
+                .driving
+                .iter()
+                .map(|k| {
+                    ctl.set
+                        .instance(&k.controller)
+                        .map_or_else(|| k.controller.clone(), |i| i.label.clone())
+                })
+                .collect();
+            format!("{} driving", who.join(" and "))
+        };
+        let (color, note) = if o.contested {
+            (palette.error, " (both pressing)")
+        } else if o.conflict {
+            (palette.warning, " (not marked shared)")
+        } else {
+            (palette.text_secondary, "")
+        };
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(format!(
+                    "{} also driven by {}: {now}{note}",
+                    short(&o.target),
+                    others.join(", ")
+                ))
+                .color(color),
+            )
+            .wrap(),
+        );
+    }
+}
+
+/// One floating panel for each popped-out instance: its controls, who owns its shared targets and
+/// its own findings. Closing the window docks the instance back into the card.
+fn popped_panels(
+    ctx: &egui::Context,
+    canvas: egui::Rect,
+    ctl: &mut ControllerLive,
+    project: &Project,
+) {
+    let popped: Vec<String> = ctl
+        .popped
+        .iter()
+        .filter(|id| ctl.set.instance(id).is_some())
+        .cloned()
+        .collect();
+    ctl.popped.retain(|id| popped.contains(id));
+    let findings = if popped.is_empty() {
+        Vec::new()
+    } else {
+        ctl.findings(project)
+    };
+    for (n, id) in popped.iter().enumerate() {
+        let Some(inst) = ctl.set.instance(id) else {
+            continue;
+        };
+        let profile = inst.controller.profile().clone();
+        let title = match &inst.target_group {
+            Some(g) => format!("{} · {g}", inst.label),
+            None => inst.label.clone(),
+        };
+        let mut open = true;
+        let step = 28.0 * n as f32;
+        let window_id = egui::Id::new(("controller_popout", id));
+        super::panel::dialog(ctx, title, [290.0, 0.0])
+            .id(super::panel::keep_id(ctx, window_id))
+            .open(&mut open)
+            .default_pos(super::panel::right_of_left_card(
+                ctx,
+                // Right of the Live potentials card, which sits at the top left of the canvas.
+                canvas.left_top() + egui::vec2(310.0 + step, 70.0 + step),
+            ))
+            .show(ctx, |ui| {
+                let palette = crate::theme::ui_palette();
+                ui.set_max_width(280.0);
+                ui.horizontal(|ui| {
+                    instance_dot(ui, ctl.colour_of(id), ctl.set.is_active(id));
+                    let mine = ctl.selected.as_deref() == Some(id.as_str()) && ctl.keys;
+                    if ui
+                        .selectable_label(mine, "Keyboard here")
+                        .on_hover_text("The keyboard drives this controller")
+                        .clicked()
+                    {
+                        ctl.selected = Some(id.clone());
+                        ctl.keys = !mine;
+                    }
+                });
+                instance_controls(ui, ctl, id, &profile);
+                if let Some(why) = ctl.refused.clone() {
+                    ui.colored_label(palette.warning, why);
+                }
+                effects_row(ui, ctl, id);
+                ownership_lines(ui, ctl, id);
+                for f in findings
+                    .iter()
+                    .filter(|f| f.key.as_ref().is_some_and(|k| k.controller == *id))
+                {
+                    let color = match f.severity {
+                        Severity::Error => palette.error,
+                        Severity::Warning => palette.warning,
+                    };
+                    ui.add(egui::Label::new(egui::RichText::new(&f.text).color(color)).wrap());
+                }
+            });
+        if !open {
+            ctl.set_popped(id, false);
+        }
+    }
+}
+
+/// The most of a name a tab shows.
+const TAB_CHARS: usize = 16;
+
+pub(super) fn tab_text(label: &str) -> String {
+    if label.chars().count() <= TAB_CHARS {
+        label.to_owned()
+    } else {
+        let cut: String = label.chars().take(TAB_CHARS - 1).collect();
+        format!("{}…", cut.trim_end())
+    }
+}
+
+/// A dot in the colour of the instance, ringed while a control is held away from rest.
+fn instance_dot(ui: &mut egui::Ui, rgb: [u8; 3], active: bool) {
+    let palette = crate::theme::ui_palette();
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
+    ui.painter().circle_filled(
+        rect.center(),
+        4.5,
+        egui::Color32::from_rgb(rgb[0], rgb[1], rgb[2]),
+    );
+    if active {
+        ui.painter()
+            .circle_stroke(rect.center(), 6.5, egui::Stroke::new(1.5, palette.success));
+    }
 }
 
 /// Press, toggle or set a position from a click, keeping what the engine refused.
@@ -1033,17 +1237,5 @@ ungated = true
         card_text(&mut ctl);
         assert_eq!(ctl.filter.scope, Scope::Selected);
         assert!(ctl.filter.only_active, "the rest of the filter stays");
-    }
-
-    #[test]
-    fn a_popped_out_controller_opens_once_and_goes_with_its_instance() {
-        let mut ctl = two();
-        ctl.pop_out("pendant");
-        ctl.pop_out("pendant");
-        ctl.pop_out("nobody");
-        assert_eq!(ctl.popouts, vec!["pendant".to_owned()]);
-        assert!(!ctl.is_held("pendant"));
-        ctl.remove_instance("pendant");
-        assert!(ctl.popouts.is_empty());
     }
 }

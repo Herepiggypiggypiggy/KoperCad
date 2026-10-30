@@ -7,13 +7,14 @@
 //! Nothing here is a manufacturer's data: the defaults are a generic 1.5 kW 4 pole motor on a
 //! generic drive, labelled as such in the UI.
 
+use novo_drive::brake::{SpringBrake, Switching};
 use novo_drive::drive::{Drive, DriveConfig, MotorNameplate, ReferenceSource, TerminalMacro};
 use novo_drive::induction::{FitOptions, InductionMotor};
 
 use crate::bindings::SensorBinding;
 use crate::hoist_loop::{LimitKind, LimitSwitch};
 use crate::spec::{SpecError, SpecKey};
-use crate::travel_loop::{TravelBinding, TravelLoad, TravelModule};
+use crate::travel_loop::{Grip, Gust, TravelBinding, TravelLoad, TravelModule, Wind};
 
 /// Property key that marks a motor as a travel axis.
 pub const TRAVEL_KEY: &str = "trav_mass_kg";
@@ -61,7 +62,56 @@ pub const KEYS: &[SpecKey] = &[
         "",
         "0.01",
     ),
-    num("trav_wind_n", "Wind force, forward positive", "N", "0"),
+    num(
+        "trav_wind_n",
+        "Constant wind force, forward positive",
+        "N",
+        "0",
+    ),
+    num("trav_wind_ms", "Wind speed, forward positive", "m/s", "0"),
+    num(
+        "trav_wind_area_m2",
+        "Wind area (crane, load)",
+        "m\u{b2}",
+        "0",
+    ),
+    num("trav_wind_cd", "Wind drag coefficient", "", "1.2"),
+    num("trav_gust_ms", "Gust: extra wind (0: none)", "m/s", "0"),
+    num("trav_gust_start_s", "Gust starts after", "s", "10"),
+    num("trav_gust_rise_s", "Gust rises over", "s", "2"),
+    num("trav_gust_hold_s", "Gust holds for", "s", "5"),
+    num("trav_gust_fall_s", "Gust falls over", "s", "3"),
+    num("trav_driven_share", "Weight on driven wheels", "", "0.5"),
+    num("trav_adhesion", "Wheel on rail friction", "", "0.15"),
+    num(
+        "trav_brake_torque_nm",
+        "Travel brake torque (blank: none)",
+        "N m",
+        "",
+    ),
+    num("trav_brake_release_s", "Brake release delay", "s", "0.15"),
+    num(
+        "trav_brake_apply_ac_s",
+        "Brake apply delay, AC side",
+        "s",
+        "0.25",
+    ),
+    num(
+        "trav_brake_apply_dc_s",
+        "Brake apply delay, DC side",
+        "s",
+        "0.03",
+    ),
+    num("trav_brake_rise_s", "Brake torque build-up", "s", "0.05"),
+    tag("trav_brake_switching", "Brake switched on (AC or DC)"),
+    num(
+        "trav_brake_release_hz",
+        "Drive brake output on from",
+        "Hz",
+        "2",
+    ),
+    tag("trav_brake_relay", "Drive brake relay R2 device"),
+    tag("trav_brake_feed", "Brake contactor (blank: follows R2)"),
     num("trav_motor_kw", "Motor power", "kW", "1.5"),
     num("trav_motor_v", "Motor voltage", "V", "400"),
     num("trav_motor_a", "Motor current", "A", "3.6"),
@@ -139,6 +189,7 @@ pub fn travel_from_properties(
     cfg.reference = ReferenceSource::Panel(step1);
     cfg.presets_hz[2] = step2;
     cfg.max_hz = cfg.max_hz.max(step2);
+    cfg.brake_release_hz = number("trav_brake_release_hz")?;
     cfg.accel_time_s = number("trav_accel_s")?;
     cfg.decel_time_s = number("trav_decel_s")?;
     cfg.macro_ = TerminalMacro::two_wire_two_speed();
@@ -155,6 +206,31 @@ pub fn travel_from_properties(
     if enable.is_some() {
         inputs.push(enable);
     }
+    let gust_peak = number("trav_gust_ms")?;
+    let gust = (gust_peak != 0.0).then(|| Gust {
+        peak_m_s: gust_peak,
+        start_s: number("trav_gust_start_s").unwrap_or(0.0),
+        rise_s: number("trav_gust_rise_s").unwrap_or(0.0),
+        hold_s: number("trav_gust_hold_s").unwrap_or(0.0),
+        fall_s: number("trav_gust_fall_s").unwrap_or(0.0),
+    });
+    if gust.is_some() {
+        // Surface a bad gust number as the parse error it is, not as a zero.
+        for key in [
+            "trav_gust_start_s",
+            "trav_gust_rise_s",
+            "trav_gust_hold_s",
+            "trav_gust_fall_s",
+        ] {
+            number(key)?;
+        }
+    }
+    let wind = Wind {
+        speed_m_s: number("trav_wind_ms")?,
+        gust,
+        area_m2: number("trav_wind_area_m2")?,
+        drag_coeff: number("trav_wind_cd")?,
+    };
     let load = TravelLoad::new(
         number(TRAVEL_KEY)?,
         number("trav_wheel_radius_m")?,
@@ -163,7 +239,9 @@ pub fn travel_from_properties(
         number("trav_rolling")?,
         number("trav_wind_n")?,
         number("trav_rotor_inertia")?,
-    )?;
+    )?
+    .with_wind(wind)?;
+    let grip = Grip::new(number("trav_driven_share")?, number("trav_adhesion")?)?;
     let mut limits = Vec::new();
     for (which, kind, device, distance) in [
         (
@@ -196,6 +274,8 @@ pub fn travel_from_properties(
         inputs,
         mains: text("trav_mains"),
         limits,
+        brake_relay: text("trav_brake_relay"),
+        brake_feed: text("trav_brake_feed"),
     };
     let mut notes: Vec<String> = report.notes.iter().map(|n| (*n).to_owned()).collect();
     if let Some(ratio) = report.assumed_breakdown_ratio {
@@ -203,10 +283,38 @@ pub fn travel_from_properties(
             "The motor's breakdown torque was not on the plate: {ratio:.1} x rated is assumed."
         ));
     }
-    Ok(Some((
-        TravelModule::new(id, Drive::new(cfg), motor, load, binding),
-        notes,
-    )))
+    let mut module = TravelModule::new(id, Drive::new(cfg), motor, load, binding);
+    module.grip = grip;
+    if text("trav_brake_torque_nm").is_some() {
+        let switching = match text("trav_brake_switching").map(|t| t.to_ascii_lowercase()) {
+            None => Switching::AcSide,
+            Some(t) if t == "ac" => Switching::AcSide,
+            Some(t) if t == "dc" => Switching::DcSide,
+            Some(t) => {
+                return Err(SpecError::NotANumber {
+                    key: "trav_brake_switching",
+                    text: t,
+                });
+            }
+        };
+        module = module.with_brake(
+            SpringBrake::new(
+                number("trav_brake_torque_nm")?,
+                number("trav_brake_release_s")?,
+                number("trav_brake_apply_ac_s")?,
+                number("trav_brake_apply_dc_s")?,
+                number("trav_brake_rise_s")?,
+                switching,
+            )?,
+            grip,
+        );
+    } else if text("trav_brake_relay").is_some() || text("trav_brake_feed").is_some() {
+        notes.push(
+            "A brake relay or contactor is bound but no brake torque is entered: the axis has no brake."
+                .to_owned(),
+        );
+    }
+    Ok(Some((module, notes)))
 }
 
 #[cfg(test)]
@@ -315,6 +423,75 @@ mod tests {
         ]);
         let (m, _) = build(&p).unwrap().unwrap();
         assert_eq!(m.binding.limits[0].binding.actuate_at_mm, 12_500.0);
+    }
+
+    #[test]
+    fn a_brake_torque_fits_a_brake_with_its_bindings() {
+        let p = props(&[
+            (TRAVEL_KEY, "5000"),
+            ("trav_brake_torque_nm", "15"),
+            ("trav_brake_switching", "DC"),
+            ("trav_brake_relay", "=K-R2"),
+            ("trav_brake_feed", "=K-BR"),
+            ("trav_adhesion", "0,1"),
+            ("trav_driven_share", "0,25"),
+        ]);
+        let (m, _) = build(&p).unwrap().unwrap();
+        let brake = m.brake.expect("a brake is fitted");
+        assert_eq!(brake.apply_delay_s(), 0.03);
+        assert_eq!(m.binding.brake_relay.as_deref(), Some("=K-R2"));
+        assert_eq!(m.binding.brake_feed.as_deref(), Some("=K-BR"));
+        assert_eq!(m.grip.coeff, 0.1);
+        assert_eq!(m.grip.share, 0.25);
+    }
+
+    #[test]
+    fn no_brake_torque_means_no_brake_and_a_bound_contactor_is_said_to_be_unused() {
+        let p = props(&[(TRAVEL_KEY, "5000"), ("trav_brake_relay", "=K-R2")]);
+        let (m, notes) = build(&p).unwrap().unwrap();
+        assert!(m.brake.is_none());
+        assert!(notes.iter().any(|n| n.contains("no brake torque")));
+    }
+
+    #[test]
+    fn wind_and_gust_come_from_properties_and_bad_ones_are_refused() {
+        let p = props(&[
+            (TRAVEL_KEY, "5000"),
+            ("trav_wind_ms", "8"),
+            ("trav_wind_area_m2", "40"),
+            ("trav_gust_ms", "7"),
+            ("trav_gust_start_s", "20"),
+        ]);
+        let (m, _) = build(&p).unwrap().unwrap();
+        let w = m.load.wind();
+        assert_eq!(w.speed_m_s, 8.0);
+        assert_eq!(w.drag_coeff, 1.2);
+        let g = w.gust.expect("a gust");
+        assert_eq!((g.peak_m_s, g.start_s, g.rise_s), (7.0, 20.0, 2.0));
+        let bad = |k: &str, v: &str| build(&props(&[(TRAVEL_KEY, "5000"), (k, v)])).is_err();
+        assert!(bad("trav_wind_ms", "400"));
+        assert!(bad("trav_wind_area_m2", "-1"));
+        let p = props(&[
+            (TRAVEL_KEY, "5000"),
+            ("trav_brake_torque_nm", "15"),
+            ("trav_brake_switching", "both"),
+        ]);
+        assert!(build(&p).is_err());
+        assert!(bad("trav_driven_share", "0"));
+        assert!(bad("trav_driven_share", "1.5"));
+        assert!(bad("trav_adhesion", "0"));
+        let p = props(&[
+            (TRAVEL_KEY, "5000"),
+            ("trav_gust_ms", "5"),
+            ("trav_gust_rise_s", "x"),
+        ]);
+        assert!(build(&p).is_err());
+        let p = props(&[
+            (TRAVEL_KEY, "5000"),
+            ("trav_gust_ms", "5"),
+            ("trav_gust_rise_s", "0"),
+        ]);
+        assert!(build(&p).is_err());
     }
 
     #[test]

@@ -14,7 +14,7 @@ Done
 
 Next, in order
 1. (done) Jump at reversal: `dh_jump_hz`, `dh_jump_ramp_s`, finding ReversalSag.
-2. Slack rope and hook-on-load detection (a load that is picked up from the floor).
+2. (done) Slack rope and pick-up from the floor: `novo_drive::rope`, keys `dh_floor_m`, `dh_rope_stiff_n_per_mm`, `dh_rope_damping`, findings SlackRope, FloorLanding, LoadSnatch.
 4. (done) Slow-down switches before the final limits: keys `dh_slow_*`, `dh_clearance_*`, findings SlowDownPassed, FinalLimit, LimitOvertravel, HitStop.
 3. (done) Heat over a duty cycle: `novo_drive::brake_heat`, `novo_machine::duty_cycle`, findings MotorTooHot, BrakeHot, BrakeWear, Simulate > Drive run > Duty cycle.
 5. Closed-loop hoist (encoder, torque proving) in its own thread, sharing `HoistLogic` where it fits.

@@ -362,6 +362,18 @@ impl ControllerSet {
             .is_some_and(|i| i.controller.profile().signal(&key.signal).is_some())
     }
 
+    /// Whether the instance has a press down: a control is away from its rest position (an
+    /// emergency stop pressed counts, a signal that is high at rest does not).
+    pub fn is_active(&self, instance: &str) -> bool {
+        self.instance(instance).is_some_and(|i| {
+            i.controller.profile().controls.iter().any(|def| {
+                i.controller
+                    .effective_position(&def.id)
+                    .is_some_and(|p| p != def.rest_position())
+            })
+        })
+    }
+
     /// Whether the instance's profile marks it as allowed to share targets.
     pub fn is_shared(&self, instance: &str) -> bool {
         self.instance(instance)

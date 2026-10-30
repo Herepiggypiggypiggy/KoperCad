@@ -29,6 +29,7 @@ novo-workflow.workspace = true
 # Symbol artwork for PDF export, without the egui widget or wgpu.
 novo-editor = { path = "../novo-editor", default-features = false, features = ["art"] }
 clap.workspace = true
+getrandom.workspace = true
 serde_json.workspace = true
 image.workspace = true
 
@@ -38,6 +39,7 @@ image.workspace = true
 novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"] }
 tempfile.workspace = true
 calamine.workspace = true
+lopdf.workspace = true
 
 [lints]
 workspace = true

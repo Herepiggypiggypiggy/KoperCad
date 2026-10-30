@@ -329,7 +329,7 @@ fn a_broken_signature_is_refused_even_though_unsigned_would_pass() {
     let err = store
         .install_bytes(&tampered, Default::default())
         .unwrap_err();
-    assert!(matches!(err, AddonError::BadSignature(_)), "{err}");
+    assert!(matches!(err, AddonError::Tampered(_)), "{err}");
     assert!(
         listing(&store_dir.path().join("addons"))
             .iter()

@@ -10,7 +10,7 @@ Thread scope: two connected items of lane C3 (`plans/controller-live-view.md` se
 - Version gate: `API_VERSION = 2`, `MIN_API_VERSION = 1`; a kind needs the API it came with (`parse_for_api`).
 - The Controllers add-on panel (`addons/controllers/pack/data/radio.panel.toml`) uses the new kinds; add-on version 0.2.0.
 - Signal filter (`novo_controller::monitor`): controller, text, only active, only unbound; Controller card UI; remembered
-  for the session. Pop-out windows per controller instance.
+  for the session. Pop-out panels: main has its own, this PR uses those.
 - Docs `docs/design/addons.md`, `docs/design/controller-live.md`; QA scenarios 5630 to 5633.
 
 ## Next, in order
@@ -22,5 +22,4 @@ Thread scope: two connected items of lane C3 (`plans/controller-live-view.md` se
 
 ## Open questions
 
-- The pop-out windows use the shared `panel::dialog`, so Escape closes the topmost one. If that is unwelcome while the
-  keyboard drives a controller, give them their own id handling.
+- None open.

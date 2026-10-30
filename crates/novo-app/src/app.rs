@@ -366,6 +366,8 @@ mod xref;
 #[cfg(test)]
 mod addons_tests;
 #[cfg(test)]
+mod addons_trust_tests;
+#[cfg(test)]
 mod assembly_pack_tests;
 #[cfg(test)]
 mod assembly_tests;
@@ -1823,6 +1825,8 @@ impl NovoApp {
         if panel_dock::take_changed(&ctx) {
             // The canvas got another size: fit the drawing into what is left.
             self.canvas.zoom_to_fit();
+            // The 3D view refits too (it frames the cabinet in its own rectangle).
+            self.view3d.pending = Some(view3d::Pending::Fit);
         }
         panel::splitters_reset(&ctx);
         self.follow_window(self.window_width, self.window_height);

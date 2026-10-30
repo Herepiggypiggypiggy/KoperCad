@@ -33,12 +33,9 @@ gate the controller import wizard once the controller add-on exists; rail slot, 
 - wasmi needs the `portable-dispatch` feature (set in the workspace dependency): without it a debug build overflows the thread stack in the interpreter loop.
 - Test engines are WebAssembly text built with the `wat` crate in tests only; the program accepts binary modules only.
 
-## Release signing (wired by the Release thread)
+## Release signing (replaced by PR #1793)
 
-- `package-windows.yml`, job `controllers-addon`, signs the Controllers package on tag builds when two repository
-  secrets exist: `KOPERCAD_SIGN_SEED` (Ed25519 seed, hex) and `KOPERCAD_SIGN_KEY_ID` (for example `koper-1`).
-  Without them the package stays unsigned and installs as "unsigned, from file" (tick needed).
-- The seed is written to a temporary file for the build step and removed afterwards. The private key never enters
-  the repository; generating it and setting the secrets is Tadjiro's step.
-- After the key exists, the add-ons owner adds the public key to `BUILTIN_KEYS` in `crates/novo-addons/src/trust.rs`.
-  Until then a signed package shows as signed by an unknown key.
+- **The secret is `ADDON_SIGNING_KEY`** (base64 of the whole key file made by `kopercad-cli addons keygen`; the key id and the seed are both inside it). #1777/#1781 named two secrets, `KOPERCAD_SIGN_SEED` and `KOPERCAD_SIGN_KEY_ID`; **those no longer exist anywhere in the release workflow and must not be set**. (`KOPERCAD_SIGN_KEY_ID` / `KOPERCAD_SIGN_SEED_FILE` remain only as local environment variables of `scripts/build-controllers-addon.sh`, for a developer signing with a bare seed file; they are not GitHub secrets.)
+- `package-windows.yml`, job `controllers-addon`, builds unsigned and a separate step signs on tag builds when `ADDON_SIGNING_KEY` exists. Without it the package stays unsigned and installs as "unsigned, from file" (tick needed), and the job summary says so.
+- The key is decoded in memory by `kopercad-cli addons sign --key-env ADDON_SIGNING_KEY`; it is never written to disk. The private key never enters the repository; generating it and setting the secret is Tadjiro's step.
+- After the key exists, the public key goes as one line into `addons/keys/kopervonk.pub` (embedded at build time), not into code. Until then a signed package shows as signed by an unknown key. Full guide: `docs/design/addons-signing.md`.
