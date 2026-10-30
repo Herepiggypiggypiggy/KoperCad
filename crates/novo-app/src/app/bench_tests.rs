@@ -137,6 +137,9 @@ fn exports_use_the_drafts_in_the_window_and_the_project_otherwise() {
             mm2: 0.0,
             colour: String::new(),
             length_mm: 0.0,
+            crimp: Default::default(),
+            die: String::new(),
+            total_mm: None,
         });
     let ferrules = dir.path().join("f.pdf");
     assert_eq!(d.app.export_ferrules_to(&ferrules), None);

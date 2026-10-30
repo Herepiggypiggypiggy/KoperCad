@@ -25,6 +25,10 @@ pub(crate) const WIRE_LABELS_COUNT_TITLE: &str =
 ///   PE leads (the far end of a lead is the potential's name with `(feed)`),
 ///   the same wires as wire production. A connection that is a daisy chain
 ///   gives a label per pair.
+/// - `cuts`: one label per wire to cut, for the piece itself at the bench, in
+///   production order: the wire number, then length and size, then the
+///   sleeve or processing of end A and end B (`A1.5-10 > A1.5-10`). A `~`
+///   in front of the length says it is an estimate to check on the plate.
 /// - `terminals`: strip tag and terminal name, strip order.
 /// - `devices`: tag and description, natural tag order.
 /// - `cables`: tag, description and core count.
@@ -37,7 +41,7 @@ pub struct Labels;
 impl Labels {
     pub const ID: &'static str = "labels";
     /// Section keys, in the order they are listed.
-    pub const KINDS: [&'static str; 4] = ["wires", "terminals", "devices", "cables"];
+    pub const KINDS: [&'static str; 5] = ["wires", "cuts", "terminals", "devices", "cables"];
 }
 
 fn section(key: &str, title: &str) -> Section {
@@ -100,6 +104,42 @@ impl Report for Labels {
 
         wires.title = WIRE_LABELS_COUNT_TITLE.replace("{n}", &wires.rows.len().to_string());
 
+        // Cuts: the label that goes on the cut piece.
+        let mut cuts = section("cuts", "Cut piece labels");
+        for job in crate::bench_jobs(project) {
+            let size = job.cross_section_mm2.map(|s| {
+                let mut t = format!("{} mm²", crate::bench::number_text(s));
+                if !job.colour.is_empty() {
+                    t.push(' ');
+                    t.push_str(&job.colour);
+                }
+                t
+            });
+            let mark = if crate::is_estimate(&job.basis) {
+                "~"
+            } else {
+                ""
+            };
+            let length = format!("{mark}{} mm", job.length_mm.round() as i64);
+            let first = [Some(length), size]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+            let sleeve = |e: &crate::WireEnd| e.sleeve_text().unwrap_or_else(|| "-".to_owned());
+            cuts.push(
+                lines(&[
+                    job.number.clone(),
+                    first.join("  "),
+                    format!("{} > {}", sleeve(&job.end_a), sleeve(&job.end_b)),
+                ]),
+                job.wires.iter().map(|w| (*w).into()).collect(),
+            );
+        }
+        cuts.title = format!(
+            "Cut piece labels · {} (one per wire to cut)",
+            cuts.rows.len()
+        );
+
         // Terminals: strips in tag order, terminals in strip order.
         let mut terminals = section("terminals", "Terminal labels");
         let mut strips: Vec<_> = project
@@ -149,7 +189,7 @@ impl Report for Labels {
             title: self.title(),
             revision: project.revision(),
             // A kind without labels has no table, like the other reports.
-            sections: [wires, terminals, devices, cables]
+            sections: [wires, cuts, terminals, devices, cables]
                 .into_iter()
                 .filter(|s| !s.rows.is_empty())
                 .collect(),

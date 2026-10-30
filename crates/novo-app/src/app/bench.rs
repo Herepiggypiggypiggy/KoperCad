@@ -7,9 +7,11 @@
 //!   (lengths that are estimates carry a `~`);
 //! - ferrule table: how many of which size and colour to crimp, twin
 //!   ferrules where two wires share a clamp, spares, and the ferrule
-//!   standard (colour and contact length per cross-section) it was worked
+//!   standard (colour, contact and overall length, crimp profile and tool die
+//!   per cross-section) it was worked
 //!   out with, editable here and saved in the project;
-//! - label sheets: wire flags, terminal, device and cable labels on A4
+//! - label sheets: wire flags, cut piece labels (one per wire to cut, with
+//!   length, size and both sleeves), terminal, device and cable labels on A4
 //!   sticker sheets or on tape, at 1:1.
 //!
 //! Files are written next to the project, like the other exports. The
@@ -1011,16 +1013,19 @@ fn ferrule_tab(
 ) {
     novo_theme::widgets::section_label(ui, "Ferrule standard");
     ui.weak(
-        "Colour and contact length per cross-section. The default is the DIN 46228-4 colour code as commonly sold; makers differ, above 16 mm² in particular. Edit it to match your stock.",
+        "Colour, contact length, overall length, crimp profile and tool die per cross-section. The default is the DIN 46228-4 colour code as commonly sold; makers differ, above 16 mm² in particular. Edit it to match your stock.",
     );
     let mut remove = None;
     egui::Grid::new("bench_standard")
-        .num_columns(4)
+        .num_columns(7)
         .spacing([8.0, 3.0])
         .show(ui, |ui| {
             ui.weak("mm²");
             ui.weak("Colour");
             ui.weak("Contact mm");
+            ui.weak("Total mm");
+            ui.weak("Crimp");
+            ui.weak("Die / setting");
             ui.label("");
             ui.end_row();
             for (i, size) in state.standard.sizes.iter_mut().enumerate() {
@@ -1036,6 +1041,39 @@ fn ferrule_tab(
                         .speed(0.5)
                         .range(0.0..=60.0)
                         .max_decimals(1),
+                );
+                let mut total = size.total_mm.unwrap_or(0.0);
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut total)
+                            .speed(0.5)
+                            .range(0.0..=120.0)
+                            .max_decimals(1)
+                            .custom_formatter(|v, _| {
+                                if v == 0.0 {
+                                    "-".to_owned()
+                                } else {
+                                    format!("{v}")
+                                }
+                            }),
+                    )
+                    .on_hover_text("Overall length with the collar. - means not stated")
+                    .changed()
+                {
+                    size.total_mm = (total > 0.0).then_some(total);
+                }
+                egui::ComboBox::from_id_salt(("bench_crimp", i))
+                    .selected_text(size.crimp.text())
+                    .width(80.0)
+                    .show_ui(ui, |ui| {
+                        for p in novo_reports::CrimpProfile::ALL {
+                            ui.selectable_value(&mut size.crimp, p, p.text());
+                        }
+                    });
+                ui.add(
+                    egui::TextEdit::singleline(&mut size.die)
+                        .desired_width(90.0)
+                        .hint_text("tool die"),
                 );
                 if ui
                     .small_button("x")
@@ -1056,6 +1094,9 @@ fn ferrule_tab(
                 mm2: 0.0,
                 colour: String::new(),
                 length_mm: 10.0,
+                crimp: Default::default(),
+                die: String::new(),
+                total_mm: None,
             });
         }
         if ui.small_button("Sort").clicked() {
@@ -1099,10 +1140,12 @@ fn ferrule_tab(
             }
             for c in &counts {
                 ui.label(format!(
-                    "{} {}  {}  x {} (prepare {})",
+                    "{} {}  {}  {} {}  x {} (prepare {})",
                     c.ferrule,
                     if c.twin { "twin" } else { "" },
                     c.colour,
+                    c.crimp.map(novo_reports::CrimpProfile::text).unwrap_or(""),
+                    c.die,
                     c.pieces,
                     with_spares(c.pieces, state.standard.spare_percent)
                 ));

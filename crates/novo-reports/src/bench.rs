@@ -33,6 +33,59 @@ pub struct FerruleSize {
     pub colour: String,
     /// Contact (crimp) length in mm, which is also the strip length.
     pub length_mm: f64,
+    /// Crimp profile the tool makes for this size.
+    #[serde(default)]
+    pub crimp: CrimpProfile,
+    /// The die, jaw or tool setting for this size, in the workshop's own
+    /// words (`4.0 / 6.0`, `setting 3`). Empty when not set.
+    #[serde(default)]
+    pub die: String,
+    /// Overall length of the sleeve with its collar in mm, `None` when not
+    /// stated. A sleeve longer than the contact length is what the box says
+    /// in its second number.
+    #[serde(default)]
+    pub total_mm: Option<f64>,
+}
+
+/// The shape a ferrule crimp makes. Which one is right depends on the
+/// tool and on the ferrule maker's instruction: it is a setting to match
+/// the workshop's tool, not a rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CrimpProfile {
+    /// Trapezoid: the common profile of bench crimpers for sleeves.
+    #[default]
+    Trapezoidal,
+    /// Four-point square.
+    Square,
+    /// Hexagonal.
+    Hexagonal,
+}
+
+impl CrimpProfile {
+    pub const ALL: [CrimpProfile; 3] = [
+        CrimpProfile::Trapezoidal,
+        CrimpProfile::Square,
+        CrimpProfile::Hexagonal,
+    ];
+
+    pub fn text(self) -> &'static str {
+        match self {
+            CrimpProfile::Trapezoidal => "trapezoid",
+            CrimpProfile::Square => "square",
+            CrimpProfile::Hexagonal => "hexagon",
+        }
+    }
+}
+
+/// Typical collar length (mm) added to the contact length for the overall
+/// length of an insulated sleeve. A planning value; the maker's data wins.
+fn typical_collar_mm(mm2: f64) -> f64 {
+    match mm2 {
+        s if s <= 4.0 => 6.0,
+        s if s <= 16.0 => 8.0,
+        _ => 10.0,
+    }
 }
 
 /// The ferrule standard a workshop works to: colour and contact length per
@@ -59,6 +112,9 @@ impl Default for FerruleStandard {
             mm2,
             colour: colour.to_owned(),
             length_mm: typical_strip_mm(mm2),
+            crimp: CrimpProfile::default(),
+            die: String::new(),
+            total_mm: Some(typical_strip_mm(mm2) + typical_collar_mm(mm2)),
         };
         FerruleStandard {
             sizes: vec![
@@ -113,8 +169,9 @@ impl FerruleStandard {
     /// Sizes positive and finite, no size twice, spare and twin in range.
     pub fn is_valid(&self) -> bool {
         let ok = |v: f64| v.is_finite() && v > 0.0;
-        self.sizes.iter().all(|s| ok(s.mm2) && ok(s.length_mm))
-            && self.spare_percent.is_finite()
+        self.sizes.iter().all(|s| {
+            ok(s.mm2) && ok(s.length_mm) && s.total_mm.is_none_or(|t| ok(t) && t >= s.length_mm)
+        }) && self.spare_percent.is_finite()
             && (0.0..=100.0).contains(&self.spare_percent)
             && self.twin_to_mm2.is_finite()
             && self.twin_to_mm2 >= 0.0
@@ -185,6 +242,11 @@ pub struct FerruleCount {
     pub mm2: Option<f64>,
     pub colour: String,
     pub length_mm: Option<f64>,
+    /// Overall length with the collar, when the standard states it.
+    pub total_mm: Option<f64>,
+    /// Crimp profile and die of the size, from the standard.
+    pub crimp: Option<CrimpProfile>,
+    pub die: String,
     /// Wire ends this ferrule covers (two per twin).
     pub ends: usize,
     /// Ferrules to crimp.
@@ -211,10 +273,8 @@ pub fn ferrule_counts(jobs: &[WireCutJob], standard: &FerruleStandard) -> Vec<Fe
     }
     let mut rows: BTreeMap<(bool, String), FerruleCount> = BTreeMap::new();
     let mut add = |ferrule: String, twin: bool, mm2: Option<f64>, ends: usize, pieces: usize| {
-        let colour = mm2
-            .and_then(|s| standard.lookup(s))
-            .map(|s| s.colour.clone())
-            .unwrap_or_default();
+        let size = mm2.and_then(|s| standard.lookup(s));
+        let colour = size.map(|s| s.colour.clone()).unwrap_or_default();
         let length_mm = ferrule
             .rsplit('-')
             .next()
@@ -227,6 +287,9 @@ pub fn ferrule_counts(jobs: &[WireCutJob], standard: &FerruleStandard) -> Vec<Fe
                 mm2,
                 colour,
                 length_mm,
+                total_mm: size.and_then(|s| s.total_mm),
+                crimp: size.map(|s| s.crimp),
+                die: size.map(|s| s.die.clone()).unwrap_or_default(),
                 ends: 0,
                 pieces: 0,
             });
@@ -314,6 +377,9 @@ impl FerruleTable {
                     Column::new("mm2", "mm²", 8.0).right(),
                     Column::new("colour", "Colour", 10.0),
                     Column::new("length", "Contact mm", 10.0).right(),
+                    Column::new("total", "Total mm", 9.0).right(),
+                    Column::new("crimp", "Crimp", 10.0),
+                    Column::new("die", "Die / setting", 14.0),
                     Column::new("type", "Type", 8.0),
                     Column::new("ends", "Wire ends", 10.0).right(),
                     Column::new("pieces", "Crimp", 8.0).right(),
@@ -328,6 +394,9 @@ impl FerruleTable {
                         c.mm2.into(),
                         Cell::text(c.colour.clone()),
                         c.length_mm.into(),
+                        c.total_mm.into(),
+                        Cell::text(c.crimp.map(CrimpProfile::text).unwrap_or_default()),
+                        Cell::text(c.die.clone()),
                         Cell::text(if c.twin { "twin" } else { "single" }),
                         Cell::Int(c.ends as i64),
                         Cell::Int(c.pieces as i64),
@@ -346,6 +415,9 @@ impl FerruleTable {
                 vec![
                     Cell::Empty,
                     Cell::text("Total"),
+                    Cell::Empty,
+                    Cell::Empty,
+                    Cell::Empty,
                     Cell::Empty,
                     Cell::Empty,
                     Cell::Empty,
@@ -408,6 +480,9 @@ impl FerruleTable {
                 Column::new("mm2", "mm²", 10.0).right(),
                 Column::new("colour", "Colour", 14.0),
                 Column::new("length", "Contact mm", 12.0).right(),
+                Column::new("total", "Total mm", 10.0).right(),
+                Column::new("crimp", "Crimp", 10.0),
+                Column::new("die", "Die / setting", 14.0),
                 Column::new("note", "", 60.0),
             ],
         );
@@ -417,6 +492,9 @@ impl FerruleTable {
                     Cell::Number(s.mm2),
                     Cell::text(s.colour.clone()),
                     Cell::Number(s.length_mm),
+                    s.total_mm.into(),
+                    Cell::text(s.crimp.text()),
+                    Cell::text(s.die.clone()),
                     Cell::Empty,
                 ],
                 Vec::new(),
@@ -428,10 +506,18 @@ impl FerruleTable {
                 number_text(standard.spare_percent),
                 number_text(standard.twin_to_mm2)
             ),
-            "Default colours follow DIN 46228-4 as commonly sold; makers differ, above 16 mm² in particular. Edit under Reports > Bench output.".to_owned(),
+            "Default colours follow DIN 46228-4 as commonly sold; makers differ, above 16 mm² in particular. Total length, crimp profile and die are planning values to match your stock and tool. Edit under Reports > Bench output.".to_owned(),
         ] {
             std_section.push(
-                vec![Cell::Empty, Cell::Empty, Cell::Empty, Cell::text(note)],
+                vec![
+                    Cell::Empty,
+                    Cell::Empty,
+                    Cell::Empty,
+                    Cell::Empty,
+                    Cell::Empty,
+                    Cell::Empty,
+                    Cell::text(note),
+                ],
                 Vec::new(),
             );
         }
