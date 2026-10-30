@@ -19,11 +19,11 @@ use super::controller_card::{KeyAction, KeyBinding, key_name};
 use super::controller_live::{ControllerLive, HoldBy};
 
 /// Width of one direction stack.
-const STACK_W: f32 = 112.0;
+pub(super) const STACK_W: f32 = 112.0;
 /// Height of one step zone.
-const ZONE_H: f32 = 30.0;
+pub(super) const ZONE_H: f32 = 30.0;
 /// Side of a joystick pad.
-const PAD: f32 = 150.0;
+pub(super) const PAD: f32 = 150.0;
 /// Radius of the emergency stop mushroom.
 const MUSHROOM: f32 = 26.0;
 
@@ -249,51 +249,17 @@ fn stack(
         p.text_secondary,
     );
     for (i, (step, position)) in dir.steps.iter().enumerate() {
-        let cell = Rect::from_min_size(
-            Pos2::new(zones.left(), zones.top() + i as f32 * ZONE_H),
-            Vec2::new(zones.width(), ZONE_H),
-        )
-        .shrink2(Vec2::new(0.0, 1.0));
         let held = at == position;
         // A closed contact below the held step: a real two-step button keeps step 1 closed.
         let closed = !held && at_step > 0 && step_contact(at_step, *step, includes);
-        let fill = if held {
-            p.accent
-        } else if closed {
-            p.accent_wash
-        } else if response.hovered() {
-            p.hover
-        } else {
-            p.control
-        };
-        let ink = if held { p.on_accent } else { p.text_primary };
-        painter.rect_filled(cell, 5.0, fill);
-        painter.rect_stroke(
-            cell,
-            5.0,
-            Stroke::new(1.0, p.border_control),
-            StrokeKind::Inside,
-        );
-        // Second and further steps get inner ticks: the deeper the press the more ticks.
-        for t in 0..*step {
-            let x = cell.left() + 8.0 + t as f32 * 5.0;
-            painter.line_segment(
-                [
-                    Pos2::new(x, cell.center().y - 5.0),
-                    Pos2::new(x, cell.center().y + 5.0),
-                ],
-                Stroke::new(1.5, ink),
-            );
-        }
-        painter.text(
-            Pos2::new(
-                cell.left() + 8.0 + *step as f32 * 5.0 + 6.0,
-                cell.center().y,
-            ),
-            Align2::LEFT_CENTER,
-            step_word(*step, n),
-            FontId::proportional(12.0),
-            ink,
+        paint_zone(
+            painter,
+            zone_cell(zones, i),
+            *step,
+            &step_word(*step, n),
+            held,
+            closed,
+            response.hovered(),
         );
     }
     response.on_hover_text(if spring && !frame.sticky {
@@ -313,7 +279,6 @@ fn stick(
     label: &str,
     axes: &[StickAxis],
 ) {
-    let p = crate::theme::ui_palette();
     let Some(x_axis) = axes.first() else {
         return;
     };
@@ -336,8 +301,7 @@ fn stick(
         Vec2::new(PAD, 44.0)
     };
     let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
-    let margin = 16.0;
-    let usable = Vec2::new(rect.width() / 2.0 - margin, rect.height() / 2.0 - margin);
+    let usable = pad_travel(rect);
 
     let spring = x_axis.spring && !frame.sticky;
     let down = response.is_pointer_button_down_on();
@@ -365,7 +329,155 @@ fn stick(
         }
     }
 
-    let painter = ui.painter();
+    let pad = |axis: &StickAxis| {
+        let end = |last: bool| {
+            let name = if last {
+                axis.detents.last()
+            } else {
+                axis.detents.first()
+            };
+            name.map(|n| super::controller_card::position_label(n))
+                .unwrap_or_default()
+        };
+        PadAxis {
+            dots: axis.detents.iter().map(|d| axis.offset_of(d)).collect(),
+            minus: end(false),
+            plus: end(true),
+        }
+    };
+    let ax = x_axis.offset_of(&at_of(ctl, frame.id, &x_axis.control));
+    let ay = y_axis
+        .map(|a| a.offset_of(&at_of(ctl, frame.id, &a.control)))
+        .unwrap_or(0.0);
+    paint_pad(
+        ui.painter(),
+        rect,
+        &pad(x_axis),
+        y_axis.map(pad).as_ref(),
+        (ax, ay),
+    );
+    response.on_hover_text(if spring {
+        "Drag the knob to a detent. It springs back when you let go"
+    } else {
+        "Drag the knob to a detent. It stays where you leave it"
+    });
+}
+
+/// The cell of step zone `i` in a stack whose zones start at `zones`.
+pub(super) fn zone_cell(zones: Rect, i: usize) -> Rect {
+    Rect::from_min_size(
+        Pos2::new(zones.left(), zones.top() + i as f32 * ZONE_H),
+        Vec2::new(zones.width(), ZONE_H),
+    )
+    .shrink2(Vec2::new(0.0, 1.0))
+}
+
+/// Paints one step zone: a held zone in the accent colour, a zone whose contact is closed by a
+/// deeper press washed, and ticks inside for the second and further steps. Shared by the
+/// Controller card and the rockers of add-on panels, so both look the same.
+pub(super) fn paint_zone(
+    painter: &egui::Painter,
+    cell: Rect,
+    step: u8,
+    word: &str,
+    held: bool,
+    closed: bool,
+    hovered: bool,
+) {
+    let p = crate::theme::ui_palette();
+    let fill = if held {
+        p.accent
+    } else if closed {
+        p.accent_wash
+    } else if hovered {
+        p.hover
+    } else {
+        p.control
+    };
+    let ink = if held { p.on_accent } else { p.text_primary };
+    painter.rect_filled(cell, 5.0, fill);
+    painter.rect_stroke(
+        cell,
+        5.0,
+        Stroke::new(1.0, p.border_control),
+        StrokeKind::Inside,
+    );
+    // Second and further steps get inner ticks: the deeper the press the more ticks.
+    for t in 0..step {
+        let x = cell.left() + 8.0 + t as f32 * 5.0;
+        painter.line_segment(
+            [
+                Pos2::new(x, cell.center().y - 5.0),
+                Pos2::new(x, cell.center().y + 5.0),
+            ],
+            Stroke::new(1.5, ink),
+        );
+    }
+    painter.text(
+        Pos2::new(cell.left() + 8.0 + step as f32 * 5.0 + 6.0, cell.center().y),
+        Align2::LEFT_CENTER,
+        word,
+        FontId::proportional(12.0),
+        ink,
+    );
+}
+
+/// Paints the rotary knob with `n` ticks on a 270 degree arc, pointing at tick `index`.
+pub(super) fn paint_knob(painter: &egui::Painter, centre: Pos2, n: usize, index: usize) {
+    let p = crate::theme::ui_palette();
+    let n = n.max(1);
+    painter.circle_filled(centre, 22.0, p.control);
+    painter.circle_stroke(centre, 22.0, Stroke::new(1.5, p.border_control));
+    // Positions spread over an arc of 270 degrees, the first at lower left.
+    let angle = |i: usize| {
+        let t = if n > 1 {
+            i as f32 / (n - 1) as f32
+        } else {
+            0.5
+        };
+        (-225.0f32 + t * 270.0).to_radians()
+    };
+    for i in 0..n {
+        let a = angle(i);
+        let tick = centre + Vec2::new(a.cos(), -a.sin()) * 18.0;
+        painter.circle_filled(tick, 1.8, p.text_tertiary);
+    }
+    let a = angle(index.min(n - 1));
+    painter.line_segment(
+        [centre, centre + Vec2::new(a.cos(), -a.sin()) * 18.0],
+        Stroke::new(3.0, p.accent),
+    );
+}
+
+/// One axis of a pad as it is painted: where its detents sit (-1 to 1) and the names of its ends.
+pub(super) struct PadAxis {
+    pub(super) dots: Vec<f32>,
+    pub(super) minus: String,
+    pub(super) plus: String,
+}
+
+/// The margin between the edge of a pad and the travel of its knob.
+const PAD_MARGIN: f32 = 16.0;
+
+/// The half extent of the knob's travel on a pad of this rectangle.
+pub(super) fn pad_travel(rect: Rect) -> Vec2 {
+    Vec2::new(
+        rect.width() / 2.0 - PAD_MARGIN,
+        rect.height() / 2.0 - PAD_MARGIN,
+    )
+}
+
+/// Paints a joystick pad (one axis as a strip, two as a square) with a dot per detent, the end
+/// names and the knob at `knob` (-1 to 1 on each axis).
+pub(super) fn paint_pad(
+    painter: &egui::Painter,
+    rect: Rect,
+    x: &PadAxis,
+    y: Option<&PadAxis>,
+    knob: (f32, f32),
+) {
+    let p = crate::theme::ui_palette();
+    let usable = pad_travel(rect);
     painter.rect_filled(rect, 8.0, p.sunken);
     painter.rect_stroke(
         rect,
@@ -382,7 +494,7 @@ fn stick(
         ],
         line,
     );
-    if y_axis.is_some() {
+    if y.is_some() {
         painter.line_segment(
             [
                 Pos2::new(centre.x, rect.top() + 6.0),
@@ -393,74 +505,69 @@ fn stick(
     }
     // A dot for each detent on each axis line, so the person sees where the stops are.
     let dot = |pos: Pos2| painter.circle_filled(pos, 2.5, p.text_tertiary);
-    for detent in &x_axis.detents {
-        dot(Pos2::new(
-            centre.x + x_axis.offset_of(detent) * usable.x,
-            centre.y,
-        ));
+    for d in &x.dots {
+        dot(Pos2::new(centre.x + d * usable.x, centre.y));
     }
-    if let Some(y_axis) = y_axis {
-        for detent in &y_axis.detents {
-            dot(Pos2::new(
-                centre.x,
-                centre.y - y_axis.offset_of(detent) * usable.y,
-            ));
+    if let Some(y) = y {
+        for d in &y.dots {
+            dot(Pos2::new(centre.x, centre.y - d * usable.y));
         }
     }
     // The ends are named, so a pad of "left/right, up/down" reads without a legend.
-    let end_name = |axis: &StickAxis, last: bool| {
-        let name = if last {
-            axis.detents.last()
-        } else {
-            axis.detents.first()
-        };
-        name.map(|n| super::controller_card::position_label(n))
-            .unwrap_or_default()
-    };
     let small = FontId::proportional(10.0);
     painter.text(
         Pos2::new(rect.left() + 4.0, rect.top() + 3.0),
         Align2::LEFT_TOP,
-        format!("← {}", end_name(x_axis, false)),
+        format!("← {}", x.minus),
         small.clone(),
         p.text_secondary,
     );
     painter.text(
         Pos2::new(rect.right() - 4.0, rect.top() + 3.0),
         Align2::RIGHT_TOP,
-        format!("{} →", end_name(x_axis, true)),
+        format!("{} →", x.plus),
         small.clone(),
         p.text_secondary,
     );
-    if let Some(y_axis) = y_axis {
+    if let Some(y) = y {
         painter.text(
             Pos2::new(rect.left() + 4.0, rect.bottom() - 3.0),
             Align2::LEFT_BOTTOM,
-            format!("↓ {}", end_name(y_axis, false)),
+            format!("↓ {}", y.minus),
             small.clone(),
             p.text_secondary,
         );
         painter.text(
             Pos2::new(rect.right() - 4.0, rect.bottom() - 3.0),
             Align2::RIGHT_BOTTOM,
-            format!("↑ {}", end_name(y_axis, true)),
+            format!("↑ {}", y.plus),
             small,
             p.text_secondary,
         );
     }
-    let ax = x_axis.offset_of(&at_of(ctl, frame.id, &x_axis.control));
-    let ay = y_axis
-        .map(|a| a.offset_of(&at_of(ctl, frame.id, &a.control)))
-        .unwrap_or(0.0);
-    let knob = Pos2::new(centre.x + ax * usable.x, centre.y - ay * usable.y);
-    let moved = ax != 0.0 || ay != 0.0;
-    painter.circle_filled(knob, 11.0, if moved { p.accent } else { p.control });
-    painter.circle_stroke(knob, 11.0, Stroke::new(1.5, p.border_strong));
-    response.on_hover_text(if spring {
-        "Drag the knob to a detent. It springs back when you let go"
-    } else {
-        "Drag the knob to a detent. It stays where you leave it"
-    });
+    let k = Pos2::new(centre.x + knob.0 * usable.x, centre.y - knob.1 * usable.y);
+    let moved = knob.0 != 0.0 || knob.1 != 0.0;
+    painter.circle_filled(k, 11.0, if moved { p.accent } else { p.control });
+    painter.circle_stroke(k, 11.0, Stroke::new(1.5, p.border_strong));
+}
+
+/// A two-column grid of key caps and what they do. Shared by the Controller card's key map and
+/// the `keymap` widget of add-on panels.
+pub(super) fn key_grid(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    rows: &[(String, String)],
+) {
+    egui::Grid::new(id)
+        .num_columns(2)
+        .spacing([12.0, 2.0])
+        .show(ui, |ui| {
+            for (key, what) in rows {
+                ui.label(egui::RichText::new(key).monospace().strong());
+                ui.label(what);
+                ui.end_row();
+            }
+        });
 }
 
 /// A rotary that stays where it is.
@@ -472,36 +579,13 @@ fn selector(
     label: &str,
     positions: &[String],
 ) {
-    let p = crate::theme::ui_palette();
     title(ui, frame, control, label);
     let at = at_of(ctl, frame.id, control);
     let n = positions.len().max(1);
     let index = positions.iter().position(|q| *q == at).unwrap_or(0);
     ui.horizontal(|ui| {
         let (rect, response) = ui.allocate_exact_size(Vec2::splat(48.0), Sense::click());
-        let painter = ui.painter();
-        let centre = rect.center();
-        painter.circle_filled(centre, 22.0, p.control);
-        painter.circle_stroke(centre, 22.0, Stroke::new(1.5, p.border_control));
-        // Positions spread over an arc of 270 degrees, the first at lower left.
-        let angle = |i: usize| {
-            let t = if n > 1 {
-                i as f32 / (n - 1) as f32
-            } else {
-                0.5
-            };
-            (-225.0f32 + t * 270.0).to_radians()
-        };
-        for i in 0..n {
-            let a = angle(i);
-            let tick = centre + Vec2::new(a.cos(), -a.sin()) * 18.0;
-            painter.circle_filled(tick, 1.8, p.text_tertiary);
-        }
-        let a = angle(index);
-        painter.line_segment(
-            [centre, centre + Vec2::new(a.cos(), -a.sin()) * 18.0],
-            Stroke::new(3.0, p.accent),
-        );
+        paint_knob(ui.painter(), rect.center(), n, index);
         if response.clicked() {
             let next = &positions[(index + 1) % n];
             super::controller_card::press_outcome(ctl, frame.id, control, Some(next));
@@ -762,16 +846,7 @@ pub(super) fn key_map_table(ui: &mut egui::Ui, profile: &Profile, map: &[KeyBind
         ui.weak("This controller has no keys.");
         return;
     }
-    egui::Grid::new("controller_key_map")
-        .num_columns(2)
-        .spacing([12.0, 2.0])
-        .show(ui, |ui| {
-            for (key, what) in rows {
-                ui.label(egui::RichText::new(key).monospace().strong());
-                ui.label(what);
-                ui.end_row();
-            }
-        });
+    key_grid(ui, "controller_key_map", &rows);
 }
 
 #[cfg(test)]

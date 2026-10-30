@@ -1,4 +1,5 @@
-# The generic radio panel: drawn by KoperCAD from this data; every button asks the engine.
+# The generic radio panel: drawn by KoperCAD from this data (add-on API 2 widgets); every control
+# sends a button id to the engine: set-hoist-up2, set-bridge-fwd1, set-hoist-sel-mast, press-estop...
 
 [[widget]]
 kind = "heading"
@@ -26,91 +27,55 @@ widgets = [
 ]
 
 [[widget]]
-kind = "label"
-text = "Hoist select"
-weak = true
-
-[[widget]]
-kind = "row"
-widgets = [
-  { kind = "button", id = "set-hoist-sel-main", text = "Main hoist" },
-  { kind = "button", id = "set-hoist-sel-mast", text = "Mast hoist" },
-]
-
-[[widget]]
-kind = "label"
-text = "Hoist"
-weak = true
-
-[[widget]]
-kind = "row"
-widgets = [
-  { kind = "button", id = "set-hoist-off", text = "Off" },
-  { kind = "button", id = "set-hoist-up1", text = "Up 1" },
-  { kind = "button", id = "set-hoist-up2", text = "Up 2" },
-  { kind = "button", id = "set-hoist-down1", text = "Down 1" },
-  { kind = "button", id = "set-hoist-down2", text = "Down 2" },
-]
-
-[[widget]]
-kind = "row"
-widgets = [
-  { kind = "lamp", id = "h-up-slow", text = "Up slow", state = "ok", lit = false },
-  { kind = "lamp", id = "h-up-fast", text = "Up fast", state = "ok", lit = false },
-  { kind = "lamp", id = "h-dn-slow", text = "Down slow", state = "ok", lit = false },
-  { kind = "lamp", id = "h-dn-fast", text = "Down fast", state = "ok", lit = false },
-]
-
-[[widget]]
-kind = "row"
-widgets = [
-  { kind = "lamp", id = "m-up-slow", text = "Mast hoist up slow", state = "ok", lit = false },
-]
-
-[[widget]]
-kind = "label"
-text = "Bridge"
-weak = true
-
-[[widget]]
-kind = "row"
-widgets = [
-  { kind = "button", id = "set-bridge-off", text = "Off" },
-  { kind = "button", id = "set-bridge-fwd1", text = "Forward 1" },
-  { kind = "button", id = "set-bridge-fwd2", text = "Forward 2" },
-  { kind = "button", id = "set-bridge-rev1", text = "Reverse 1" },
-  { kind = "button", id = "set-bridge-rev2", text = "Reverse 2" },
-]
-
-[[widget]]
-kind = "row"
-widgets = [
-  { kind = "lamp", id = "b-fwd-slow", text = "Fwd slow", state = "ok", lit = false },
-  { kind = "lamp", id = "b-fwd-fast", text = "Fwd fast", state = "ok", lit = false },
-  { kind = "lamp", id = "b-rev-slow", text = "Rev slow", state = "ok", lit = false },
-  { kind = "lamp", id = "b-rev-fast", text = "Rev fast", state = "ok", lit = false },
-]
-
-[[widget]]
-kind = "label"
-text = "Trolley"
-weak = true
-
-[[widget]]
-kind = "row"
-widgets = [
-  { kind = "button", id = "set-trolley-off", text = "Off" },
-  { kind = "button", id = "set-trolley-left1", text = "Left 1" },
-  { kind = "button", id = "set-trolley-left2", text = "Left 2" },
-  { kind = "button", id = "set-trolley-right1", text = "Right 1" },
-  { kind = "button", id = "set-trolley-right2", text = "Right 2" },
-]
-
-[[widget]]
-kind = "row"
-widgets = [
-  { kind = "lamp", id = "t-left-slow", text = "Left slow", state = "ok", lit = false },
-  { kind = "lamp", id = "t-left-fast", text = "Left fast", state = "ok", lit = false },
-  { kind = "lamp", id = "t-right-slow", text = "Right slow", state = "ok", lit = false },
-  { kind = "lamp", id = "t-right-fast", text = "Right fast", state = "ok", lit = false },
+kind = "tabs"
+tabs = [
+  { id = "motions", text = "Motions", widgets = [
+    { kind = "selector", id = "set-hoist-sel", text = "Hoist select", rotary = true, options = [
+      { name = "main", text = "Main hoist" },
+      { name = "mast", text = "Mast hoist" },
+    ] },
+    { kind = "separator" },
+    { kind = "rocker", id = "set-hoist", text = "Hoist", steps = 2, spring = true, plus = { name = "up", text = "Up" }, minus = { name = "down", text = "Down" } },
+    { kind = "row", widgets = [
+      { kind = "lamp", id = "h-up-slow", text = "Up slow", state = "ok", lit = false },
+      { kind = "lamp", id = "h-up-fast", text = "Up fast", state = "ok", lit = false },
+      { kind = "lamp", id = "h-dn-slow", text = "Down slow", state = "ok", lit = false },
+      { kind = "lamp", id = "h-dn-fast", text = "Down fast", state = "ok", lit = false },
+    ] },
+    { kind = "lamp", id = "m-up-slow", text = "Mast hoist up slow", state = "ok", lit = false },
+    { kind = "separator" },
+    { kind = "rocker", id = "set-bridge", text = "Bridge", steps = 2, spring = true, plus = { name = "fwd", text = "Forward" }, minus = { name = "rev", text = "Reverse" } },
+    { kind = "row", widgets = [
+      { kind = "lamp", id = "b-fwd-slow", text = "Fwd slow", state = "ok", lit = false },
+      { kind = "lamp", id = "b-fwd-fast", text = "Fwd fast", state = "ok", lit = false },
+      { kind = "lamp", id = "b-rev-slow", text = "Rev slow", state = "ok", lit = false },
+      { kind = "lamp", id = "b-rev-fast", text = "Rev fast", state = "ok", lit = false },
+    ] },
+    { kind = "separator" },
+    { kind = "rocker", id = "set-trolley", text = "Trolley", steps = 2, spring = true, plus = { name = "right", text = "Right" }, minus = { name = "left", text = "Left" } },
+    { kind = "row", widgets = [
+      { kind = "lamp", id = "t-left-slow", text = "Left slow", state = "ok", lit = false },
+      { kind = "lamp", id = "t-left-fast", text = "Left fast", state = "ok", lit = false },
+      { kind = "lamp", id = "t-right-slow", text = "Right slow", state = "ok", lit = false },
+      { kind = "lamp", id = "t-right-fast", text = "Right fast", state = "ok", lit = false },
+    ] },
+  ] },
+  { id = "keys", text = "Keys", widgets = [
+    { kind = "label", text = "Open the Controller card (Simulate > Controller panel) and tick Keyboard to use these keys. Shift picks step 2.", weak = true },
+    { kind = "keymap", text = "Keyboard", rows = [
+      { key = "Arrows, letters", text = "Hold a rocker (see the Key map of the card)" },
+      { key = "Shift", text = "Step 2 (fast)" },
+      { key = "Space", text = "Main latch" },
+      { key = "X", text = "Press the E-stop" },
+      { key = "R", text = "Reset the E-stop" },
+    ] },
+  ] },
+  { id = "table", text = "Contacts", widgets = [
+    { kind = "table", text = "Contacts of a 2-step rocker", columns = ["Position", "Slow", "Fast"], rows = [
+      ["Off", "open", "open"],
+      ["Step 1", "closed", "open"],
+      ["Step 2", "closed", "closed"],
+    ] },
+    { kind = "label", text = "Step 2 keeps the slow contact closed, as on a real two-step switch.", weak = true },
+  ] },
 ]

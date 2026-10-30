@@ -10,6 +10,7 @@
 //! - [`engine`]: one [`Controller`] (state machines, interlocks, link effects, signals).
 //! - [`set`]: several named instances per project ([`ControllerSet`]).
 //! - [`binding`]: signal to target bindings keyed `controller/signal`, with checks.
+//! - [`monitor`]: the signal monitor's rows and their filter (instance, text, active, unbound).
 //! - [`panel`]: which widget draws which control (pendant, two-step pairs, joystick, rotary).
 //! - [`sequence`]: deterministic record and replay of timed presses.
 //!
@@ -20,6 +21,7 @@
 pub mod binding;
 pub mod engine;
 pub mod import;
+pub mod monitor;
 pub mod panel;
 pub mod profile;
 pub mod sequence;
@@ -28,6 +30,7 @@ pub mod validate;
 
 pub use binding::{Binding, BindingFinding, BindingProblem, BindingTable, SignalKey, Target};
 pub use engine::{Applied, Block, ControlError, Controller, SignalChange, SignalState, State};
+pub use monitor::{Monitor, MonitorRow, Scope, SignalFilter, monitor};
 pub use profile::{
     Combine, Condition, ControlDef, ControlKind, ControllerKind, ControllerMeta, Effects,
     InterlockDef, InterlockMode, Profile, ProfileError, SignalDef, SignalKind, Supply, SupplyKind,

@@ -47,9 +47,11 @@ pub enum Compat {
 
 /// Judges `manifest` against `app`.
 pub fn check_compat(manifest: &Manifest, app: &AppInfo) -> Compat {
-    if manifest.addon.api_version != app.api_version {
+    if manifest.addon.api_version > app.api_version
+        || manifest.addon.api_version < crate::manifest::MIN_API_VERSION
+    {
         return Compat::No(format!(
-            "built for add-on API {}; this KoperCAD speaks API {}",
+            "built for add-on API {}; this KoperCAD speaks API {} (update KoperCAD or the add-on)",
             manifest.addon.api_version, app.api_version
         ));
     }

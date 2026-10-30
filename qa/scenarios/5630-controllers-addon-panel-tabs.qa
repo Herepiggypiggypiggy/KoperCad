@@ -1,0 +1,42 @@
+@title Controller add-on: the radio panel has tabs, a rotary, step rockers, a key map and a table
+@area Add-ons
+# Lane C3. Needs the built package (scripts/build-controllers-addon.sh). The panel is data: tabs, a rotary hoist
+# select, spring rockers with two steps, a key map and a table, all drawn by the program.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text add-ons
+wait 8
+key Enter
+wait 10
+answer_dialog target/addons/controllers-0.2.0.kcaddon
+click_text "Install from file..."
+wait 10
+click_text "I trust this file"
+wait 4
+click_text "Install" Button
+wait 12
+key Escape
+wait 4
+key ctrl+k
+wait 6
+text radio panel
+wait 8
+key Enter
+wait 10
+shot motions-tab
+expect "Hoist select"
+expect "Mast hoist"
+check_layout
+click_text "Keys"
+wait 6
+shot keys-tab
+expect "Main latch"
+check_layout
+click_text "Contacts"
+wait 6
+shot contacts-tab
+expect "Contacts of a 2-step rocker"
+expect "closed"
+check_layout

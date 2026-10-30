@@ -1,0 +1,17 @@
+@title Controller card: pop a controller out into its own window
+@area Live
+@sizes 1366x768
+# Lane C3. "Pop out" on the Controller card opens the selected controller in a window of its own,
+# with an Active or Idle mark; the card stays.
+open qa/fixtures/radio-hoist.novo
+wait 20
+key shift+l
+wait 20
+click_text "Controller…"
+wait 20
+click_text "Pop out"
+wait 20
+shot popped-out
+expect "Controller Radio, 3 motions, 2-step"
+expect "Idle"
+check_layout

@@ -2,7 +2,7 @@
 
 A virtual radio for the live view, packaged as an add-on (`controllers-<version>.kcaddon`). The
 sandboxed engine is `novo-controller` (the C1 crate) behind add-on host API 1; the panel is data
-that the program draws; the generic radio profile is data too. Guide to add-ons:
+(add-on API 2 widgets: rockers with steps, a rotary selector, tabs, a key map and a table) that the program draws; the generic radio profile is data too. Guide to add-ons:
 `docs/design/addons.md`. Plan: `plans/controller-live-view.md` section 5b (project files).
 
 | Folder | What |
@@ -16,7 +16,7 @@ that the program draws; the generic radio profile is data too. Guide to add-ons:
 rustup target add wasm32-unknown-unknown
 scripts/build-controllers-addon.sh          # engine.wasm (cap 4 MiB) and target/addons/controllers-<version>.kcaddon
 cargo test -p novo-tests --test controllers_addon -- --nocapture   # the package, installed and driven through the host
-kopercad-cli addons install target/addons/controllers-0.1.0.kcaddon --trust-unsigned
+kopercad-cli addons install target/addons/controllers-0.2.0.kcaddon --trust-unsigned
 ```
 
 CI job `controllers add-on` does the same on every pull request that touches an add-on part and
@@ -26,8 +26,11 @@ keeps the package as an artifact. Signing: `KOPERCAD_SIGN_KEY_ID` and `KOPERCAD_
 ## Where the user finds it
 
 Install in File > Add-ons... (Ctrl+K "Add-ons"), turn it on, then **Simulate > Radio panel**
-(Ctrl+K "Radio panel") opens the Radio panel. The buttons send `button` requests to the
-engine; the lamps show the signals it answers with.
+(Ctrl+K "Radio panel") opens the Radio panel. It has three tabs: Motions (hoist select as a
+rotary, a two-step spring rocker per motion, lamps for the signals the engine answers with),
+Keys (the keyboard map) and Contacts (what a two-step rocker closes). Every control sends a
+`button` request such as `set-hoist-up2` to the engine. Needs KoperCAD with add-on API 2 (an older
+program refuses the package and says so).
 
 ## What the engine does (host API 1 ops)
 

@@ -122,6 +122,12 @@ pub(crate) struct ControllerLive {
     holds: BTreeMap<(String, String), Hold>,
     /// The last thing a control refused, in words (an interlock, an E-stop that needs a reset).
     pub(super) refused: Option<String>,
+    /// What the signal monitor and the binding table list: instance, search words, only active,
+    /// only unbound. Kept for the session (it is not part of the project), so closing and
+    /// opening the card, or opening another project, leaves the person's view as it was.
+    pub(super) filter: novo_controller::SignalFilter,
+    /// Instances shown in a window of their own next to the card, in the order they were opened.
+    pub(super) popouts: Vec<String>,
 }
 
 /// What holds a spring control away from rest: the pointer and a key, each at a position.
@@ -365,10 +371,24 @@ impl ControllerLive {
             return;
         }
         self.table.bindings.retain(|b| b.key.controller != id);
+        self.popouts.retain(|p| p != id);
         if self.selected.as_deref() == Some(id) {
             self.selected = self.set.instances().first().map(|i| i.id.clone());
         }
         self.changed();
+    }
+
+    /// Whether a person is holding a control of this instance away from rest (the "Active"
+    /// mark on its window).
+    pub(super) fn is_held(&self, id: &str) -> bool {
+        self.holds.keys().any(|(instance, _)| instance == id)
+    }
+
+    /// Shows an instance in a window of its own (once).
+    pub(super) fn pop_out(&mut self, id: &str) {
+        if self.set.instance(id).is_some() && !self.popouts.iter().any(|p| p == id) {
+            self.popouts.push(id.to_owned());
+        }
     }
 
     /// Discards data the project holds that could not be read.

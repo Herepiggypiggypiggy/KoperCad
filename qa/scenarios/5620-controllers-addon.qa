@@ -1,7 +1,8 @@
 @title Controller add-on: install the pack, open the radio panel, press start and a rocker
 @area Add-ons
+@sizes 1366x768
 # Lane C3. Needs the built package: run scripts/build-controllers-addon.sh first (it writes
-# target/addons/controllers-0.1.0.kcaddon). The engine is novo-controller built to WebAssembly.
+# target/addons/controllers-0.2.0.kcaddon). The engine is novo-controller built to WebAssembly.
 click_text "Open example"
 wait 20
 key ctrl+k
@@ -10,7 +11,7 @@ text add-ons
 wait 8
 key Enter
 wait 10
-answer_dialog target/addons/controllers-0.1.0.kcaddon
+answer_dialog target/addons/controllers-0.2.0.kcaddon
 click_text "Install from file..."
 wait 10
 expect "I trust this file"
@@ -39,12 +40,16 @@ check_layout
 click_text "Main / start" Button
 wait_s 1
 expect "● Main"
-click_text "Up 2" Button
+# The hoist rocker is a spring stack: hold its Up step 2 zone (window points for 1366x768).
+mouse_down 1165 422
 wait_s 1
 expect "● Up slow"
 expect "● Up fast"
 shot hoist-up-step-2
 check_layout
+mouse_up 1165 422
+wait_s 1
+expect "○ Up fast"
 click_text "E-stop" Button
 wait_s 1
 expect "○ Main"

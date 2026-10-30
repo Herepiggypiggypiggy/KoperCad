@@ -42,7 +42,7 @@ fn engine(dir: &Path) -> Option<novo_addons::EngineHost> {
         dir.join("addons"),
         AppInfo {
             version: Version::new(0, 1, 0),
-            api_version: 1,
+            api_version: novo_addons::API_VERSION,
         },
     );
     store
@@ -161,4 +161,40 @@ fn a_replay_in_the_sandbox_is_deterministic() {
     assert_eq!(a, b);
     let last = a["samples"].as_array().unwrap().last().unwrap();
     assert_eq!(last["signals"]["radio/B_FWD_SLOW"], 1.0);
+}
+
+/// The shipped panel is data only: it needs no wasm and checks every id it can send against the
+/// generic profile the engine ships with (`set-<control>-<position>`, ids lower case with hyphens).
+#[test]
+fn the_shipped_panel_uses_api_2_widgets_and_only_ids_the_engine_knows() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../addons/controllers/pack");
+    let manifest = std::fs::read_to_string(root.join("manifest.toml")).unwrap();
+    assert!(manifest.contains("api_version = 2"), "uses API 2 widgets");
+    let panel = std::fs::read(root.join("data/radio.panel.toml")).unwrap();
+    let layout = novo_addons::layout::PanelLayout::parse_for_api(&panel, 2).unwrap();
+    assert_eq!(layout.min_api(), 2);
+    assert!(
+        novo_addons::layout::PanelLayout::parse_for_api(&panel, 1).is_err(),
+        "an API 1 program must refuse it"
+    );
+    let profile = novo_controller::Profile::parse(
+        &std::fs::read_to_string(root.join("data/generic-radio-3x2.controller.toml")).unwrap(),
+    )
+    .unwrap();
+    let panel_id = |s: &str| s.to_ascii_lowercase().replace('_', "-");
+    let mut sets = 0;
+    for event in layout.events() {
+        let Some(rest) = event.strip_prefix("set-") else {
+            continue;
+        };
+        let known = profile.controls.iter().any(|c| {
+            c.position_list()
+                .iter()
+                .any(|p| rest == format!("{}-{}", panel_id(&c.id), panel_id(p)))
+        });
+        assert!(known, "the engine has no control position for `{event}`");
+        sets += 1;
+    }
+    // Three rockers (5 positions each) and a selector (2 positions).
+    assert_eq!(sets, 17);
 }

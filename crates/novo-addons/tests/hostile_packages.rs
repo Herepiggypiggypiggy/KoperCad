@@ -96,6 +96,52 @@ fn a_symbolic_link_entry_is_refused() {
     assert!(refused(&out).contains("symbolic link"));
 }
 
+const PANEL_MANIFEST: &str = r#"[addon]
+id = "evil"
+name = "Evil"
+version = "1.0.0"
+publisher = "Nobody"
+api_version = API
+permissions = ["floating-panel"]
+
+[[panel]]
+id = "p"
+title = "P"
+slot = "floating"
+file = "data/p.panel.toml"
+"#;
+const ROCKER: &str = "[[widget]]\nkind = \"rocker\"\nid = \"hoist\"\ntext = \"Hoist\"\nsteps = 2\n";
+
+#[test]
+fn a_panel_kind_of_a_newer_api_needs_the_add_on_to_declare_it() {
+    // Declared API 1 but uses the rocker of API 2: refused, naming both.
+    let m = PANEL_MANIFEST.replace("API", "1");
+    let why = refused(&raw_package(
+        &m,
+        &[("data/p.panel.toml", ROCKER.as_bytes())],
+    ));
+    assert!(why.contains("rocker needs add-on API 2"), "{why}");
+    // Declared API 2: accepted.
+    let m = PANEL_MANIFEST.replace("API", "2");
+    assert!(
+        read(&raw_package(
+            &m,
+            &[("data/p.panel.toml", ROCKER.as_bytes())]
+        ))
+        .is_ok()
+    );
+    // An API this program does not know yet is refused before the panel is looked at.
+    let m = PANEL_MANIFEST.replace("API", "3");
+    let why = refused(&raw_package(
+        &m,
+        &[("data/p.panel.toml", ROCKER.as_bytes())],
+    ));
+    assert!(
+        why.contains("API 3") && why.contains("update KoperCAD"),
+        "{why}"
+    );
+}
+
 #[test]
 fn names_that_differ_only_in_case_are_refused() {
     let zip = raw_zip(&[

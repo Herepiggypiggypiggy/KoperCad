@@ -198,7 +198,7 @@ impl Package {
         };
         for panel in &manifest.panels {
             if let Some(data) = entries.get(&panel.file) {
-                PanelLayout::parse(data)
+                PanelLayout::parse_for_api(data, manifest.addon.api_version)
                     .map_err(|e| AddonError::Manifest(format!("{}: {e}", panel.file)))?;
             }
         }

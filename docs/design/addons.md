@@ -43,7 +43,7 @@ version = "0.1.0"
 publisher = "KoperVonk"
 description = "Virtual operator controllers for the live view."
 requires_app = ">=0.1.0, <0.3"      # the program versions it works with
-api_version = 1                     # add-on API generation (this program speaks 1)
+api_version = 2                     # add-on API generation (this program speaks 1 to 2)
 permissions = ["menu", "floating-panel"]
 
 [[command]]                         # one command per row it adds
@@ -92,7 +92,27 @@ Each is declared in `permissions`, listed in the install prompt and in Details, 
 
 ### Panels
 
-`*.panel.toml` describes a panel as data: `heading`, `label`, `separator`, `button`, `lamp`, `row`. The program draws it with its own widgets and palette, so dark, light and High contrast work without the add-on knowing. A lamp is a filled or hollow mark **and** its text, never colour alone. Buttons send their id to the add-on's engine (op `button`); with no engine they are greyed and the tooltip says so. An engine's answer can set lamp states (`lamps`) and show a message (`notice`). Lane C3 adds the rocker with steps, joystick with detents, tabs and tables to this set; an unknown kind is refused at install, so an older program never shows half a panel.
+`*.panel.toml` describes a panel as data. The program draws it with its own widgets and palette (the same painters the Controller card uses), so dark, light and High contrast work without the add-on knowing; an add-on cannot paint a pixel, set a colour or open a window.
+
+| Kind | API | What it is | Sends to the engine |
+| --- | --- | --- | --- |
+| `heading`, `label`, `separator` | 1 | Text and a rule | nothing |
+| `button` (`id`, `text`, `hint`) | 1 | A push button; greyed with a tooltip when the add-on has no engine | `id` |
+| `lamp` (`id`, `text`, `state`, `lit`) | 1 | A filled or hollow mark **and** its text, never colour alone; the engine sets it with `lamps` | nothing |
+| `row` (`widgets`) | 1 | Widgets side by side | nothing |
+| `rocker` (`id`, `text`, `steps` 1 to 3, `spring`, `plus`, `minus`) | 2 | One stack of step zones per labelled direction, `plus = { name = "fwd", text = "Forward" }`. `spring = true` holds while the pointer is down and lets go to off; otherwise it stays and a second click on the same zone sets it off | `<id>-<dir><step>`, `<id>-off` |
+| `joystick` (`id`, `text`, `axes`, `spring`) | 2 | A pad (one axis is a strip) with a dot per detent; an axis is `{ name, plus, minus, detents 1 to 3 }`. Springs back to the middle unless `spring = false` | `<id>-<axis>-<dir><n>`, `<id>-<axis>-off` |
+| `selector` (`id`, `text`, `options`, `rotary`) | 2 | One of 2 to 12 positions, as choices or with a rotary knob | `<id>-<option>` |
+| `keymap` (`text`, `rows` of `{ key, text }`) | 2 | A read-only table of key caps and what they do | nothing |
+| `table` (`text`, `columns`, `rows`) | 2 | A read-only table of text, at most 8 columns and 60 rows | nothing |
+| `tabs` (`tabs` of `{ id, text, widgets }`) | 2 | 2 to 6 tabs, only at the top of a panel | whatever is inside |
+| `bar` (`id`, `text`, `min`, `max`, `value`, `unit`, `state`) | 2 | A meter; the value is always in the text too. The engine sets it with `bars` | nothing |
+
+Every control sends an ordinary button id, the same op as a `button` (`{"panel","id"}`), so an engine needs no new op: the Controllers add-on's rocker `set-hoist` sends `set-hoist-up2`, which the engine already reads as "set control hoist to position up2". An id a widget makes may not be another widget's id (checked at install, `PanelLayout::events` lists them all). An engine's answer can set lamp states (`lamps`), bar values (`bars`, `{"<id>": 12.5}`) and show a message (`notice`); only ids the add-on's own panels declare are kept.
+
+Limits, all checked at install with a plain message: 200 widgets in a panel (nested ones count), nesting of 2 (a row in a row, or a row in a tab, but not deeper), 200 characters of text, ids of 1 to 32 characters (`a-z`, `0-9`, hyphen), each id once, 128 KiB per file, unknown fields (a colour, a URL) refused.
+
+**Versions.** The kinds marked API 2 need `api_version = 2` in the manifest; a layout that uses one under `api_version = 1` is refused ("a rocker needs add-on API 2, but this add-on declares API 1"). This program speaks API 1 to 2. A program that only speaks API 1 refuses an API 2 add-on whole ("built for add-on API 2; this KoperCAD speaks API ..., update KoperCAD"), and an unknown kind is refused at install, so an older program never shows half a panel.
 
 ### Icons
 
@@ -141,7 +161,7 @@ Request `{"api":1,"op":"<name>","data":{...}}`, reply `{"ok":true,"data":{...}}`
 - **Same version, same content**: "already installed". **Same version, other content**: refused (raise the version). **Older than installed**: refused (roll back or remove first). **Installed copy broken**: the same file repairs it.
 - **Remove** deletes every version. Projects keep any data they stored for the add-on, untouched.
 - **At every start** each installed add-on is checked again: manifest fingerprint, the hash of every file, the signature against the current keys, the icon and panel data, compatibility. One that fails shows as *Failed* with the reason and does not load; the others are unaffected. A damaged `registry.toml` is set aside as `registry.toml.damaged` and the program starts with none.
-- **Compatibility**: `requires_app` and `api_version`. An add-on the program has outgrown stays installed and shows "Needs another version", off.
+- **Compatibility**: `requires_app` and `api_version` (this program accepts API 1 and 2; a newer API is refused with the version named). An add-on the program has outgrown stays installed and shows "Needs another version", off.
 
 ## For code that adds features
 
