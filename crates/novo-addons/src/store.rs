@@ -98,7 +98,7 @@ impl Inspection {
     /// `None` when installing is allowed; otherwise the reason it is not.
     pub fn blocked(&self) -> Option<String> {
         if let Some(why) = self.package.trust.refusal() {
-            return Some(format!("{} {why}", self.package.manifest.addon.name));
+            return Some(format!("{}: {why}", self.package.manifest.addon.name));
         }
         if let Compat::No(why) = &self.compat {
             return Some(format!("{} {why}", self.package.manifest.addon.name));
