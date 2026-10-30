@@ -110,13 +110,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("macro.place", under("Draw", "Macros")),
     ("macro.edit", under("Draw", "Macros")),
     ("macro.export_pack", under("File", "Macros")),
-    ("terminal.connect", under("Draw", "Terminals")),
-    ("terminal.disconnect", under("Draw", "Terminals")),
-    ("terminal.toggle_pe", under("Draw", "Terminals")),
-    ("terminal.reset_pe", under("Draw", "Terminals")),
-    ("terminal.strip_up", under("Draw", "Terminals")),
-    ("terminal.strip_down", under("Draw", "Terminals")),
-    ("terminal.strip_lowest", under("Draw", "Terminals")),
     // View
     ("layout.draw", under("View", "Layouts")),
     ("layout.cabinet", under("View", "Layouts")),
@@ -571,7 +564,7 @@ const SUB_FIRST: &[(&str, &[&str])] = &[
         "Edit",
         &["Paste special", "Parts", "Wire numbers", "Renumber"],
     ),
-    ("Draw", &["Terminals", "PLC", "Macros"]),
+    ("Draw", &["PLC", "Macros"]),
 ];
 
 /// What the menu bar draws: [`layout`] with the plain rows in their
@@ -862,7 +855,7 @@ mod tests {
             // centre, the templates and examples in the Start centre.
             ("File", 26),
             ("Edit", 30),
-            ("Draw", 24),
+            ("Draw", 17),
             ("View", 65),
             ("Check", 11),
             ("Reports", 17),
@@ -886,7 +879,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 213, "the menus hold {total} rows");
+        assert!(total <= 206, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File

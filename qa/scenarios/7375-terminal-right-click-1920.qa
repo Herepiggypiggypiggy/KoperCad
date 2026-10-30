@@ -1,0 +1,55 @@
+@title Terminal rows: Draw no longer lists them, the terminal right-click menu does
+@area Terminals
+@sizes 1920x1080
+# Lane V4j (docs/design/visual-redesign.md section 6). The seven Draw > Terminals rows (Connect and
+# Disconnect terminals, Toggle PE terminal, Reset PE override, strip number Up, Down and Lowest free)
+# act on the terminals selected on the page. Their home is the right-click menu of a selected terminal,
+# which already carried every one; Ctrl+K still runs them.
+# The terminal-strips lesson supplies the drawn terminals: walk it to the step that selects two.
+key ctrl+k
+wait 4
+text terminal strips
+wait 6
+key Enter
+wait 40
+shot 01-lesson-start
+try click_text "Next"
+wait 20
+try click_text "Do it for me"
+wait 30
+try click_text "Do it for me"
+wait 30
+try click_text "Do it for me"
+wait 30
+try click_text "Do it for me"
+wait 30
+try click_text "Next"
+wait 20
+try click_text "Do it for me"
+wait 30
+expect "2 selected"
+click 801 367 right
+wait 10
+shot 02-terminal-right-click-menu
+expect "Connect terminals"
+expect "Disconnect terminals"
+expect "Strip number"
+check_layout
+key Escape
+wait 4
+click_text Draw #1
+wait 6
+shot 03-draw-menu
+expect_not "Disconnect terminals"
+expect_not "Toggle PE terminal"
+expect_not "Reset PE override"
+key Escape
+wait 4
+key ctrl+k
+wait 6
+text "disconnect terminals"
+wait 8
+shot 04-palette-path
+expect "Terminal right-click menu"
+key Escape
+wait 4

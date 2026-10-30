@@ -66,3 +66,22 @@ fn the_keys_the_menu_shows_come_from_the_keymap() {
         assert_eq!(keymap.shortcut_text(id).as_deref(), Some(key), "{id}");
     }
 }
+
+/// The Draw menu no longer lists the terminal rows: the right-click menu of a
+/// selected terminal carries every one (`homes::PANEL_BUTTONS`), and Ctrl+K
+/// still runs them.
+#[test]
+fn the_terminal_right_click_menu_carries_every_terminal_row_that_left_draw() {
+    let shown = menu_ids();
+    let panel = "Terminal right-click menu";
+    let listed = novo_workflow::homes::PANEL_BUTTONS
+        .iter()
+        .find(|(name, _)| *name == panel)
+        .map(|(_, ids)| *ids)
+        .expect(panel);
+    assert_eq!(listed.len(), 7);
+    for id in listed {
+        assert!(shown.iter().any(|s| s == id), "{id} is not in the menu");
+        assert_eq!(novo_workflow::homes::panel_of(id), Some(panel), "{id}");
+    }
+}
