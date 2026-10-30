@@ -131,15 +131,6 @@ impl KeyStore {
         }
         let tmp = self.path.with_extension("json.tmp");
         let text = serde_json::to_string_pretty(creds).map_err(|e| TpError::Io(e.to_string()))?;
-<<<<<<< HEAD
-        fs::write(&tmp, text).map_err(io)?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600)).map_err(io)?;
-        }
-        fs::rename(&tmp, &self.path).map_err(io)
-=======
         let mut opts = fs::OpenOptions::new();
         opts.write(true).create(true).truncate(true);
         #[cfg(unix)]
@@ -156,7 +147,6 @@ impl KeyStore {
             let _ = fs::remove_file(&tmp);
         }
         result.map_err(io)
->>>>>>> origin/main
     }
 
     pub fn clear(&self) -> Result<(), TpError> {

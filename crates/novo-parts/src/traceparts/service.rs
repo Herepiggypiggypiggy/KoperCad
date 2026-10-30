@@ -33,10 +33,7 @@ pub struct Service<T: Transport> {
 
 impl<T: Transport> Service<T> {
     pub fn new(cache: DownloadCache, client: Option<Client<T>>) -> Self {
-<<<<<<< HEAD
-=======
         cache.sweep();
->>>>>>> origin/main
         Service {
             cache,
             client,
@@ -63,11 +60,7 @@ impl<T: Transport> Service<T> {
             return Err(TpError::NotCached);
         }
         if self.cache.recent_miss(part_number) {
-<<<<<<< HEAD
-            return Err(TpError::NotFound);
-=======
             return Err(TpError::NoModel);
->>>>>>> origin/main
         }
         let language = self.language.clone();
         let client = self.client.as_mut().ok_or(TpError::NoKey)?;
@@ -82,11 +75,7 @@ impl<T: Transport> Service<T> {
                         .is_some_and(|d| d.eq_ignore_ascii_case("3D"))
                 })
                 .or(list.first())
-<<<<<<< HEAD
-                .ok_or(TpError::NotFound)?;
-=======
                 .ok_or(TpError::NoModel)?;
->>>>>>> origin/main
             let description = view.description.clone().unwrap_or_else(|| "3D".into());
             let (id, logic) = view
                 .url
@@ -96,11 +85,7 @@ impl<T: Transport> Service<T> {
                     TpError::BadResponse("the view address carries no part ids".into())
                 })?;
             if !client.is_cad_available(&id)? {
-<<<<<<< HEAD
-                return Err(TpError::NotFound);
-=======
                 return Err(TpError::NoModel);
->>>>>>> origin/main
             }
             let formats: Vec<Format> = client.available_formats(&description)?;
             let format = pick_step_format(&formats)
@@ -126,15 +111,9 @@ impl<T: Transport> Service<T> {
                 path,
                 from_cache: false,
             }),
-<<<<<<< HEAD
-            Err(TpError::NotFound) => {
-                let _ = self.cache.note_miss(part_number);
-                Err(TpError::NotFound)
-=======
             Err(TpError::NoModel) => {
                 let _ = self.cache.note_miss(part_number);
                 Err(TpError::NoModel)
->>>>>>> origin/main
             }
             Err(e) => Err(e),
         }

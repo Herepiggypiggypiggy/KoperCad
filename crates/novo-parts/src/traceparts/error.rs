@@ -12,17 +12,12 @@ pub enum TpError {
     Unauthorized,
     /// 403: the key is valid but the contract does not cover this call.
     Forbidden,
-<<<<<<< HEAD
-    /// 404 or an empty answer: TraceParts does not know the part.
-    NotFound,
-=======
     /// A bare 404: the address or part is unknown. Never remembered as a
     /// miss (a wrong endpoint would otherwise poison the cache).
     NotFound,
     /// A proper answer that there is no model: an empty view list, or
     /// `IsCADAvailable` false. Remembered for a while.
     NoModel,
->>>>>>> origin/main
     /// 400 or 422: TraceParts rejected the request.
     Rejected(String),
     /// 429: too many requests. Seconds to wait, when TraceParts said.
@@ -59,12 +54,8 @@ impl fmt::Display for TpError {
                 f,
                 "TraceParts says this key may not do that (403). Check what your contract covers."
             ),
-<<<<<<< HEAD
-            TpError::NotFound => write!(f, "TraceParts has no CAD model for this part."),
-=======
             TpError::NotFound => write!(f, "TraceParts did not find that part or address (404)."),
             TpError::NoModel => write!(f, "TraceParts has no CAD model for this part."),
->>>>>>> origin/main
             TpError::Rejected(why) => write!(f, "TraceParts rejected the request: {why}"),
             TpError::RateLimited(Some(s)) => {
                 write!(f, "TraceParts asks to slow down; try again in {s} s.")
