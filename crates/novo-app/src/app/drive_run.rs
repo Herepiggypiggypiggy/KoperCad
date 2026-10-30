@@ -28,6 +28,7 @@ use novo_core::{PageId, Project, Value};
 use novo_machine::cl_pair_loop::{ClPairLoop, ClPairModule};
 use novo_machine::cl_winch_loop::{ClWinchLoop, ClWinchModule};
 use novo_machine::cl_winch_spec;
+use novo_machine::commands::CommandedCircuit;
 use novo_machine::cosim::StepConfig;
 use novo_machine::drive_hoist_loop::{DriveHoistLoop, DriveHoistModule, FindingKind};
 use novo_machine::drive_hoist_spec;
@@ -51,6 +52,44 @@ pub(crate) struct DriveRun {
     duty: DutyUi,
     /// Why the last start did not run, or what it found.
     notice: Vec<(Level, String)>,
+}
+
+#[cfg(test)]
+impl DriveRun {
+    /// A run over travel axes and drive hoists, as if started (tests of the controller's machine
+    /// ports).
+    pub(super) fn for_test(axes: Vec<TravelModule>, hoists: Vec<DriveHoistModule>) -> Self {
+        let step = StepConfig::default();
+        let mut lp = TravelLoop::new(step).unwrap();
+        lp.modules = axes;
+        let mut hl = DriveHoistLoop::new(step).unwrap();
+        hl.modules = hoists;
+        Self {
+            active: Some(Active {
+                lp,
+                hl,
+                cw: ClWinchLoop::new(step).unwrap(),
+                cp: ClPairLoop::new(step).unwrap(),
+                acc: 0.0,
+            }),
+            ..Default::default()
+        }
+    }
+
+    pub(super) fn axis_position_m(&self, index: usize) -> f64 {
+        self.active
+            .as_ref()
+            .and_then(|a| a.lp.modules.get(index))
+            .map_or(f64::NAN, TravelModule::position_m)
+    }
+
+    pub(super) fn axis_speed_m_s(&self, index: usize) -> f64 {
+        self.active
+            .as_ref()
+            .and_then(|a| a.lp.modules.get(index))
+            .and_then(|m| m.snapshot())
+            .map_or(0.0, |s| s.speed_m_s)
+    }
 }
 
 /// The duty cycle form, the job running in the background and the last result.
@@ -575,7 +614,20 @@ pub(super) fn advance(
     }
     let dt = active.lp.config.dt_s;
     active.acc += frame_dt.clamp(0.0, 0.1);
-    let mut circuit = LiveCircuit::new(live, project);
+    // Machine ports bound to controller signals command the modules (lane L5b).
+    let commands = live.ctl.machine_commands().clone();
+    let wirings = super::controller_machine::wirings(
+        &commands,
+        super::controller_machine::Loops {
+            hoists: &mut [],
+            drive_hoists: &mut active.hl.modules,
+            winches: &mut active.cw.modules,
+            pairs: &mut active.cp.modules,
+            axes: &mut active.lp.modules,
+        },
+    );
+    let mut live_circuit = LiveCircuit::new(live, project);
+    let mut circuit = CommandedCircuit::new(&mut live_circuit, &wirings, &commands);
     let mut ticks = 0;
     while active.acc >= dt && ticks < MAX_TICKS {
         active.lp.step(&mut circuit);
@@ -817,6 +869,7 @@ impl NovoApp {
         let mut open = true;
         let (mut start, mut stop, mut live_toggle) = (false, false, false);
         let run = &self.wb.drive_run;
+        let drivers = self.wb.live.ctl.machine_drivers();
         let rows: Vec<(String, String)> = run.active.as_ref().map_or_else(Vec::new, |a| {
             a.lp.modules
                 .iter()
@@ -967,7 +1020,15 @@ impl NovoApp {
                         .show(ui, |ui| {
                             for (tag, text) in &rows {
                                 ui.strong(tag);
-                                ui.label(text);
+                                ui.vertical(|ui| {
+                                    ui.label(text);
+                                    if let Some(list) = drivers.get(tag) {
+                                        ui.weak(format!(
+                                            "Controller: {}",
+                                            super::controller_machine::driver_line(list)
+                                        ));
+                                    }
+                                });
                                 ui.end_row();
                             }
                         });

@@ -255,9 +255,10 @@ fn every_kind_of_target_resolves_to_what_it_drives() {
         resolve_target(p, &Target::PlcAddress("%QX0.3".into())),
         Resolved::Broken(_)
     ));
+    // The fixture has no motor with mechanical data, so the machine model has no such module.
     assert!(matches!(
-        resolve_target(p, &Target::ModulePath("crane/hoist".into())),
-        Resolved::Machine(_)
+        resolve_target(p, &Target::ModulePath("crane/hoist@up".into())),
+        Resolved::Broken(why) if why.contains("no module")
     ));
 }
 
