@@ -1,5 +1,5 @@
 //! The macro editor: define, change and remove the parameters of a macro in
-//! the library (`macro.edit`, Draw > Macros > Edit macro parameters, or the
+//! the library (`macro.edit`, Ctrl+K "edit macro", or the
 //! "Edit parameters..." button of the macro browser).
 //!
 //! A parameter has a name, a type and a default. Texts and device properties

@@ -57,8 +57,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.open_read_only", under("File", "Open")),
     ("file.recover", under("File", "Open")),
     ("file.example", under("File", "Open")),
-    ("macro.browser", under("File", "Macros")),
-    ("macro.import", under("File", "Macros")),
+    ("macro.browser", at("File")),
     ("revision.issue", under("File", "Revisions")),
     ("revision.compare", under("File", "Revisions")),
     ("revision.lock_page", under("File", "Revisions")),
@@ -105,10 +104,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("net.trace", under("Edit", "Net")),
     ("plc.add_card", at("Draw")),
     ("plc.overview", at("Draw")),
-    ("macro.save", under("Draw", "Macros")),
-    ("macro.place", under("Draw", "Macros")),
-    ("macro.edit", under("Draw", "Macros")),
-    ("macro.export_pack", under("File", "Macros")),
     // View
     ("layout.draw", under("View", "Layouts")),
     ("layout.cabinet", under("View", "Layouts")),
@@ -301,6 +296,8 @@ pub const MOVED: &[&str] = &[
     "cabinet.routes",
     "cabinet.emc",
     "view.cabinet_table",
+    // The Place tool of the schematic rail opens the Place macro window.
+    "macro.place",
     // The Panels zone of the schematic rail (the drawers).
     "view.terminals_drawer",
     "view.cables_drawer",
@@ -545,11 +542,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
 
 /// Submenus drawn first, in this order, for the menus named here; the
 /// others follow in the order [`layout`] gives them.
-const SUB_FIRST: &[(&str, &[&str])] = &[
-    ("File", &["Macros", "Revisions"]),
-    ("Edit", &["Paste special"]),
-    ("Draw", &["Macros"]),
-];
+const SUB_FIRST: &[(&str, &[&str])] = &[("File", &["Revisions"]), ("Edit", &["Paste special"])];
 
 /// What the menu bar draws: [`layout`] with the plain rows in their
 /// [`BLOCKS`] (a separator between blocks) and the submenus in
@@ -701,8 +694,16 @@ mod tests {
         );
         let export = file
             .iter()
-            .position(|i| matches!(i, MenuItem::Submenu { name: "Macros", .. }))
-            .expect("a Macros submenu");
+            .position(|i| {
+                matches!(
+                    i,
+                    MenuItem::Submenu {
+                        name: "Revisions",
+                        ..
+                    }
+                )
+            })
+            .expect("a Revisions submenu");
         let new = file
             .iter()
             .position(|i| matches!(i, MenuItem::Command(c) if c.id == "file.new"))
@@ -829,9 +830,9 @@ mod tests {
         let ceilings: &[(&str, usize)] = &[
             // The export formats are in the Export centre, the imports in the Import
             // centre, the templates and examples in the Start centre.
-            ("File", 24),
+            ("File", 22),
             ("Edit", 19),
-            ("Draw", 15),
+            ("Draw", 12),
             ("View", 65),
             ("Check", 11),
             ("Reports", 17),
@@ -855,7 +856,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 191, "the menus hold {total} rows");
+        assert!(total <= 186, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File

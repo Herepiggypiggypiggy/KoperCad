@@ -18,7 +18,7 @@ wait 8
 key F10
 wait 10
 expect "About"
-click_text "Macros, "
+click_text "Revisions, "
 wait 8
 shot file-no-project
 check_layout

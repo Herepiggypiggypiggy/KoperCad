@@ -235,16 +235,21 @@ pub(crate) fn menu_anchors() -> &'static [MenuAnchor] {
         // The Pages list offers the page commands in its right-click menu; while
         // the list is hidden a lesson points at the list, and from there at the
         // button that opens it.
+        // The Macros window has Import, Export pack and Edit parameters buttons;
+        // while it is shut a lesson points at the window, and from there at the
+        // Macros row that opens it.
         for (panel, ids) in novo_workflow::homes::PANEL_BUTTONS {
-            if *panel != "Pages list" {
-                continue;
-            }
+            let parent = match *panel {
+                "Pages list" => "outline.pages",
+                "Macros window" => "macros.window",
+                _ => continue,
+            };
             for id in *ids {
                 if let Some(info) = novo_workflow::commands::get(id) {
                     all.push(MenuAnchor {
                         id: format!("cmd.{id}"),
                         label: info.label.to_owned(),
-                        parent: Some("outline.pages".to_owned()),
+                        parent: Some(parent.to_owned()),
                     });
                 }
             }
@@ -303,6 +308,7 @@ pub(crate) fn anchor_fallback(id: &str) -> Option<String> {
         | "cabinet.plate_drawing" => Some("cabinet.more".to_owned()),
         // The list and the field are not there until their button is pressed.
         "outline.pages" => Some("outline.toggle".to_owned()),
+        "macros.window" => Some("cmd.macro.browser".to_owned()),
         "palette.field" => Some("palette.button".to_owned()),
         "heat.chips"
         | "heat.legend"
