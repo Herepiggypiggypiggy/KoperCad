@@ -339,6 +339,8 @@ jobs:
       - name: Update over a running copy (information only)
         shell: pwsh
         continue-on-error: true
+        # Setup can wait for ever on a copy that will not close; one run sat 38 minutes here.
+        timeout-minutes: 6
         run: |
           # Install, start the program, then install the same setup over it
           # silently, as an update does. Inno's CloseApplications should close
