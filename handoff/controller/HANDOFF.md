@@ -19,3 +19,5 @@ Open: the Check menu does not list the binding findings yet; the Live card still
 
 2026-10-29 C4 word lists tuned on real page patterns (see `docs/design/controller-import.md`, "Receiver pages in the field"). Still unseen: a wired pendant page and a second maker's receiver terminal table. A user can add words in %APPDATA%\KoperCAD\controllers\words.txt, including `pair.<motion>:` lines.
 
+
+Update 2026-10-30: several instances and pop-out panels are in the live view (see PROGRESS.md and docs/design/controller-live.md, "Several controllers at once"). Panels are in-window floats; OS windows and saving popped state are open.

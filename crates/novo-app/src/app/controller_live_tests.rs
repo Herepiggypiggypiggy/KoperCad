@@ -298,3 +298,112 @@ fn the_card_draws_for_the_fixture_in_the_live_view() {
         "pressing controls edits nothing"
     );
 }
+
+fn open_fixture() -> (tempfile::TempDir, super::gate1_tests::Drive) {
+    use super::gate1_tests::Drive;
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("radio-hoist.novo");
+    let mut doc = Document::default();
+    radio_hoist_with_controller(&mut doc).expect("fixture builds");
+    novo_storage::ProjectFile::create(&file, doc.project()).unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.open_path(&file);
+    d.frame();
+    d.app.wb.live.on = true;
+    d.app.wb.live.ctl.open = true;
+    for _ in 0..3 {
+        d.frame();
+    }
+    (dir, d)
+}
+
+#[test]
+fn several_instances_keep_name_colour_and_group_in_the_project() {
+    let (_dir, mut d) = open_fixture();
+    let ctl = &mut d.app.wb.live.ctl;
+    let second = ctl.duplicate_instance(ID).unwrap();
+    assert_eq!(second, "radio-1-2");
+    assert_eq!(ctl.selected.as_deref(), Some("radio-1-2"));
+    assert!(
+        ctl.table.bindings.iter().all(|b| b.key.controller == ID),
+        "a duplicate starts with no bindings"
+    );
+    ctl.rename_instance(&second, "  Crane 2 radio ");
+    ctl.set_colour(&second, Some("#e06cb4"));
+    ctl.set_target_group(&second, "runway1/bridge2");
+    assert_eq!(ctl.colour_of(&second), [0xe0, 0x6c, 0xb4]);
+    assert_ne!(ctl.colour_of(ID), ctl.colour_of(&second));
+    for _ in 0..3 {
+        d.frame();
+    }
+    // The card wrote the structure into the project; a view that starts empty reads it back.
+    let mut fresh = LiveView::default();
+    fresh.ctl.sync(d.doc().project());
+    let inst = fresh.ctl.set.instance(&second).expect("restored");
+    assert_eq!(inst.label, "Crane 2 radio");
+    assert_eq!(inst.colour.as_deref(), Some("#e06cb4"));
+    assert_eq!(inst.target_group.as_deref(), Some("runway1/bridge2"));
+    assert_eq!(fresh.ctl.set.instances().len(), 2);
+}
+
+#[test]
+fn two_popped_panels_work_independently_and_dock_back() {
+    let (_dir, mut d) = open_fixture();
+    let second = d.app.wb.live.ctl.duplicate_instance(ID).unwrap();
+    d.app.wb.live.ctl.set_popped(ID, true);
+    d.app.wb.live.ctl.set_popped(&second, true);
+    d.app.wb.live.ctl.open = false; // the panels draw without the card
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert_eq!(d.app.wb.live.ctl.popped.len(), 2);
+    let ctl = &mut d.app.wb.live.ctl;
+    ctl.act(ID, press("start"));
+    assert!(ctl.set.is_active(ID));
+    assert!(!ctl.set.is_active(&second), "the other panel is untouched");
+    ctl.act(&second, press("estop"));
+    assert!(ctl.set.is_active(&second));
+    ctl.set_popped(&second, false);
+    assert_eq!(ctl.popped.len(), 1);
+    // Removing an instance takes its panel with it.
+    ctl.remove_instance(ID);
+    assert!(ctl.popped.is_empty());
+    for _ in 0..3 {
+        d.frame();
+    }
+}
+
+#[test]
+fn two_instances_on_one_pin_are_a_conflict_the_panel_can_name() {
+    let (_dir, mut d) = open_fixture();
+    let second = d.app.wb.live.ctl.duplicate_instance(ID).unwrap();
+    let ctl = &mut d.app.wb.live.ctl;
+    let (pin, key) = {
+        let b = &ctl.table.bindings[0];
+        (b.target.clone(), b.key.signal.clone())
+    };
+    ctl.bind(SignalKey::new(&second, &key), pin.clone(), false);
+    let shared = ctl.shared_targets(&second);
+    assert_eq!(shared.len(), 1);
+    assert_eq!(shared[0].target, pin);
+    assert!(shared[0].conflict, "the generic radio is not marked shared");
+    assert_eq!(ctl.shared_targets(ID).len(), 1);
+    let project = d.doc().project().clone();
+    let findings = d.app.wb.live.ctl.findings(&project);
+    assert!(
+        findings
+            .iter()
+            .any(|f| f.severity == Severity::Error && f.text.contains("not all are marked shared")),
+        "{findings:?}"
+    );
+}
+
+#[test]
+fn colour_text_reads_back_and_bad_text_falls_back_to_the_presets() {
+    use super::controller_live::parse_hex;
+    assert_eq!(parse_hex("#4c9aff"), Some([0x4c, 0x9a, 0xff]));
+    assert_eq!(parse_hex("4c9aff"), None);
+    assert_eq!(parse_hex("#4c9af"), None);
+    assert_eq!(parse_hex("#zzzzzz"), None);
+    assert_eq!(parse_hex("#ééé"), None);
+}

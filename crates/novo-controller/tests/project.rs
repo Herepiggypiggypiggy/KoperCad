@@ -1238,3 +1238,41 @@ fn project_text_carries_the_profiles_and_the_project_copy_wins() {
     assert!(parsed.profiles.is_empty());
     assert!(!parsed.is_empty());
 }
+
+// ---- ownership of targets ----
+
+#[test]
+fn ownership_names_owners_conflicts_and_contested_moments() {
+    let mut set = two_radios();
+    let mut t = BindingTable::new();
+    let shared = Target::Pin("-A1:9".into());
+    let own = Target::Pin("-A1:1".into());
+    t.bind(SignalKey::new("radio-crane1", "MAIN"), shared.clone());
+    t.bind(SignalKey::new("radio-crane2", "MAIN"), shared.clone());
+    t.bind(SignalKey::new("radio-crane1", "B_FWD_SLOW"), own.clone());
+
+    assert!(!set.is_active("radio-crane1"));
+    assert!(!set.is_active("nope"));
+    let rows = t.ownership(&set);
+    assert_eq!(rows.len(), 2);
+    let row = |target: &Target| rows.iter().find(|r| &r.target == target).unwrap();
+    assert_eq!(row(&shared).controllers, ["radio-crane1", "radio-crane2"]);
+    assert!(row(&shared).conflict, "neither radio is marked shared");
+    assert!(!row(&shared).contested, "nobody presses yet");
+    assert!(!row(&own).conflict);
+    assert_eq!(row(&own).controllers, ["radio-crane1"]);
+
+    act(&mut set, "radio-crane1", press("start"));
+    assert!(set.is_active("radio-crane1"));
+    assert!(!set.is_active("radio-crane2"));
+    let rows = t.ownership(&set);
+    let r = rows.iter().find(|r| r.target == shared).unwrap();
+    assert_eq!(r.driving, [SignalKey::new("radio-crane1", "MAIN")]);
+    assert!(!r.contested, "one controller drives it");
+
+    act(&mut set, "radio-crane2", press("start"));
+    let rows = t.ownership(&set);
+    let r = rows.iter().find(|r| r.target == shared).unwrap();
+    assert!(r.contested, "both radios are high on the same pin");
+    assert_eq!(r.driving.len(), 2);
+}

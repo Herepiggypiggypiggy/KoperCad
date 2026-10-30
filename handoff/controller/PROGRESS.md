@@ -16,3 +16,9 @@
 
 2026-10-29 C4 tuning on real page patterns (receiver pages with shared fast pins, Dutch labels, 48Vac/0Vac supply rows, compass words on the 10-motion receiver, Mains-1/2, bulleted output lists). Fixes: pair abbreviations, compass combos, mains, supply/neutral rows, bullets. Tests use invented tables only (`tests/import.rs`, last six tests). Real-page facts are in plans/crane-setup-facts.md in the project folder, not in this repository.
 2026-10-29 C2 follow-up (R1 finding on #1615): new binding check `MixedOrAnd` warns when one target mixes an `and` signal (E-stop chain) with an ordinary one, because the ordinary signal, while high, overrides an open chain. Documented in `resolve` and in docs/design/controller-live.md; test in novo-controller/tests/project.rs. The card shows it with the other findings.
+
+## 2026-10-30 Several controller instances and panels (branch claude/project-thread-uvlaiu)
+Instance tabs with colour and active ring, rename/colour/group, duplicate, pop-out floating panels (several at once),
+shared-target lines with owner and conflict, `BindingTable::ownership`, `ControllerSet::is_active`. Tests in
+`novo-controller/tests/project.rs` and `controller_live_tests.rs`. Open: OS-level windows, saving which panels are out,
+signal monitor filter by instance, binding table controller column, Machine workspace module owners.
