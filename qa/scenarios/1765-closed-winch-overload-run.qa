@@ -1,0 +1,33 @@
+@title Closed-loop winch with a rated load: a load above the cut-out inhibits lifting and the run says so
+@area Simulate
+@sizes 1366x768
+# Opens the closed-loop winch fixture, starts Simulate > Drive run, switches Live on.
+open qa/fixtures/closed-winch-overload.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+key Home
+wait 30
+shot before-pressing
+# Radio step 2 (S2): the drive proves its torque, the relay contact in the drawing closes the brake
+# contactor, the brake opens, the hook rises.
+mouse_down 123 343
+wait 400
+shot torque-proof-and-brake-opens
+wait 700
+expect "lifting inhibited"
+expect "Overload protection"
+shot running
+mouse_up 123 343
+wait 800
+expect "brake closed"
+check_layout
+shot stopped-brake-closed

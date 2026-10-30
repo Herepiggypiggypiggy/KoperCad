@@ -70,6 +70,12 @@ pub struct ClWinchBinding {
     pub brake_feedback: Option<String>,
     /// Device tag whose energised state resets a tripped drive (rising edge).
     pub reset: Option<String>,
+    /// Device tag whose energised state means the load cell signal is present. `None`: always.
+    /// Only used when the winch has a rated load.
+    pub load_cell: Option<String>,
+    /// Device tag the module writes: closed while lifting is inhibited by the overload
+    /// protection (cut-out or lost load cell). The drawing can light a lamp or interlock with it.
+    pub overload_out: Option<String>,
     /// Upper limit protects the top, lower limit the bottom, by hook height.
     pub limits: Vec<LimitSwitch>,
 }
@@ -109,6 +115,19 @@ pub enum ClFindingKind {
     /// One encoder channel is gone: the counts no longer say which way the shaft turns.
     EncoderChannelLost,
     EncoderChannelBack,
+    /// The load cell reads more than the rated load (`pct` of it).
+    OverRated {
+        pct: f64,
+    },
+    /// The overload protection inhibited lifting at `pct` of the rated load.
+    OverloadCutOut {
+        pct: f64,
+    },
+    /// Lifting is allowed again.
+    OverloadCleared,
+    /// The load cell signal device lost its supply or its wire: lifting is inhibited.
+    LoadCellLost,
+    LoadCellBack,
 }
 
 impl ClFindingKind {
@@ -144,9 +163,35 @@ impl ClFindingKind {
                     .to_owned()
             }
             Self::EncoderChannelBack => "The encoder channel is back.".to_owned(),
+            Self::OverRated { pct } => {
+                format!("The load cell reads {pct:.0} % of the rated load.")
+            }
+            Self::OverloadCutOut { pct } => format!(
+                "Overload protection: lifting inhibited at {pct:.0} % of the rated load (lowering stays allowed)."
+            ),
+            Self::OverloadCleared => "Overload protection released: lifting is allowed.".to_owned(),
+            Self::LoadCellLost => {
+                "The load cell signal is gone: the load is unknown, so lifting is inhibited."
+                    .to_owned()
+            }
+            Self::LoadCellBack => "The load cell signal is back.".to_owned(),
         }
     }
 }
+
+/// Overload protection from a load cell: the rated load and the cut-out above it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LoadMonitor {
+    /// Rated load (safe working load) in kg.
+    pub swl_kg: f64,
+    /// Lifting is inhibited above this share of the rated load, in per cent (110 is common).
+    pub cutout_pct: f64,
+}
+
+/// The cut-out lets go this many per cent below its threshold, so a load on the edge does not chatter.
+const CUTOUT_HYSTERESIS_PCT: f64 = 2.0;
+
+use novo_drive::GRAVITY as G;
 
 /// A closed-loop winch: drive, brake, hoist load and bindings.
 #[derive(Debug)]
@@ -156,7 +201,13 @@ pub struct ClWinchModule {
     pub binding: ClWinchBinding,
     /// Hook speed of step 1 and step 2, m/s.
     pub speeds_m_s: [f64; 2],
+    /// Overload protection; `None`: the load is not monitored.
+    pub monitor: Option<LoadMonitor>,
     last_reset: bool,
+    cutout: bool,
+    over_rated: bool,
+    last_cell_ok: bool,
+    accel_m_s2: f64,
     relay: bool,
     last_fault: Option<ClFault>,
     last_sto_requested: bool,
@@ -192,7 +243,12 @@ impl ClWinchModule {
             winch,
             binding,
             speeds_m_s,
+            monitor: None,
             last_reset: false,
+            cutout: false,
+            over_rated: false,
+            last_cell_ok: true,
+            accel_m_s2: 0.0,
             relay: false,
             last_fault: None,
             last_sto_requested: false,
@@ -213,6 +269,23 @@ impl ClWinchModule {
     /// Hook height in metres, 0 at the start (positive is up).
     pub fn height_m(&self) -> f64 {
         self.snapshot.as_ref().map_or(0.0, |s| s.hook_height_m)
+    }
+
+    /// Force in the rope at the hook in newtons, as a load cell reads it: the weight plus the
+    /// inertia of the hook mass (the rope is taken as rigid).
+    pub fn load_n(&self) -> f64 {
+        self.winch.hoist().mass_kg() * (G + self.accel_m_s2)
+    }
+
+    /// The load cell reading as a share of the rated load, in per cent (`None`: no rated load).
+    pub fn load_pct(&self) -> Option<f64> {
+        self.monitor
+            .map(|mon| self.load_n() / (mon.swl_kg * G) * 100.0)
+    }
+
+    /// True while the overload protection inhibits lifting.
+    pub fn lifting_inhibited(&self) -> bool {
+        self.monitor.is_some() && (self.cutout || !self.last_cell_ok)
     }
 
     pub fn snapshot(&self) -> Option<&WinchSnapshot> {
@@ -283,6 +356,9 @@ impl ClWinchLoop {
             if let Some(tag) = &m.binding.brake_relay {
                 circuit.set_contact(tag, m.relay);
             }
+            if let Some(tag) = &m.binding.overload_out {
+                circuit.set_contact(tag, m.lifting_inhibited());
+            }
         }
     }
 
@@ -337,6 +413,8 @@ pub(crate) fn binding_findings(
         ("brake feed", &b.brake_feed),
         ("brake feedback", &b.brake_feedback),
         ("reset input", &b.reset),
+        ("load cell", &b.load_cell),
+        ("overload output", &b.overload_out),
     ];
     for (what, tag) in named {
         if let Some(tag) = tag
@@ -443,7 +521,9 @@ fn step_module(m: &mut ClWinchModule, circuit: &impl CircuitPort, dt: f64, time_
         m.last_channel_ok = channel_ok;
     }
 
-    let run = up != down;
+    update_overload(m, circuit, time_s);
+    // Overload protection inhibits lifting only; lowering and holding stay possible.
+    let run = up != down && !(up && m.lifting_inhibited());
     let metres_per_rad = m.winch.hoist().metres_per_rad();
     let speed = if fast {
         m.speeds_m_s[1]
@@ -470,6 +550,9 @@ fn step_module(m: &mut ClWinchModule, circuit: &impl CircuitPort, dt: f64, time_
         ..ClInputs::default()
     };
     let snap = m.winch.step(&inp, dt);
+    if let Some(prev) = &m.snapshot {
+        m.accel_m_s2 = (snap.hook_speed_m_s - prev.hook_speed_m_s) / dt;
+    }
     let out = snap.drive;
     m.relay = out.brake_release_cmd;
     if out.fault != m.last_fault {
@@ -491,6 +574,41 @@ fn step_module(m: &mut ClWinchModule, circuit: &impl CircuitPort, dt: f64, time_
     }
     track_findings(m, &snap, time_s, run, up);
     m.snapshot = Some(snap);
+}
+
+/// The load cell and the cut-out of one tick, from the load the previous tick left.
+fn update_overload(m: &mut ClWinchModule, circuit: &impl CircuitPort, time_s: f64) {
+    let Some(mon) = m.monitor else {
+        return;
+    };
+    let cell_ok = energised_or_true(circuit, &m.binding.load_cell);
+    if cell_ok != m.last_cell_ok {
+        let kind = if cell_ok {
+            ClFindingKind::LoadCellBack
+        } else {
+            ClFindingKind::LoadCellLost
+        };
+        m.note(time_s, kind);
+        m.last_cell_ok = cell_ok;
+    }
+    let pct = m.load_n() / (mon.swl_kg * G) * 100.0;
+    // Past the rated load is a finding of its own, once per crossing.
+    if cell_ok && pct > 100.0 && !m.over_rated {
+        m.over_rated = true;
+        m.note(time_s, ClFindingKind::OverRated { pct });
+    } else if pct <= 100.0 - CUTOUT_HYSTERESIS_PCT {
+        m.over_rated = false;
+    }
+    if !cell_ok {
+        return;
+    }
+    if pct > mon.cutout_pct && !m.cutout {
+        m.cutout = true;
+        m.note(time_s, ClFindingKind::OverloadCutOut { pct });
+    } else if m.cutout && pct <= mon.cutout_pct - CUTOUT_HYSTERESIS_PCT {
+        m.cutout = false;
+        m.note(time_s, ClFindingKind::OverloadCleared);
+    }
 }
 
 fn track_findings(m: &mut ClWinchModule, snap: &WinchSnapshot, time_s: f64, run: bool, up: bool) {

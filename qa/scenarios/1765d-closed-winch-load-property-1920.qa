@@ -1,0 +1,23 @@
+@title Closed-loop winch: the property sheet lists the rated load, overload cut-out and load cell rows
+@area Simulate
+@sizes 1920x1080
+# Lane L2c. Selecting the winch motor shows the "Closed-loop winch" section of the property sheet:
+# hook load, drum, gearbox, motor plate, encoder, brake and the drawing devices it is wired to.
+open qa/fixtures/closed-winch-load.novo
+wait 30
+key Escape
+wait 5
+key Home
+wait 30
+click 621 310
+wait 30
+shot motor-selected
+expect "Hook load (payload and block)"
+scroll 1685 500 -600
+wait 20
+shot numbers-rows
+scroll 1685 500 -900
+wait 20
+expect "Overload cut-out"
+shot devices-rows
+check_layout
