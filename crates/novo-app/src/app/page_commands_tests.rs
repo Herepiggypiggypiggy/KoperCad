@@ -25,7 +25,7 @@ fn drawn_pages(d: &Drive) -> usize {
 }
 
 #[test]
-fn the_page_commands_run_and_sit_in_the_pages_menu() {
+fn the_page_commands_run_and_sit_in_the_pages_list() {
     for id in [
         "page.rename",
         "page.duplicate",
@@ -38,8 +38,15 @@ fn the_page_commands_run_and_sit_in_the_pages_menu() {
             .iter()
             .find(|c| c.id == id)
             .unwrap();
-        let place = novo_workflow::menus::place(info).expect("in a menu");
-        assert_eq!((place.menu, place.submenu), ("File", Some("Pages")), "{id}");
+        assert!(
+            novo_workflow::menus::place(info).is_none(),
+            "{id} has a menu row"
+        );
+        assert_eq!(
+            novo_workflow::homes::panel_of(id),
+            Some("Pages list"),
+            "{id}"
+        );
     }
 }
 

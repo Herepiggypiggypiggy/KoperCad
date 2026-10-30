@@ -6,7 +6,7 @@ A direct-on-line starter is the classic first circuit: a breaker, a contactor, a
 
 ## Draw the main circuit
 
-1. File > New project, then add a page (File > Pages > New page).
+1. File > New project, then add a page (the + New button of the Pages list).
 2. **Q**, type `breaker`, Enter, click to place. Repeat for the contactor (`contactor`), overload relay (`overload`) and motor (`motor`).
 3. **W** from pin to pin. A proposal appears where two pins face each other; **Enter** accepts.
 4. The contactor coil goes on the control page. KoperCAD links coil and contacts: each contact shows the coil's page and column, and the coil lists its contacts. These are the cross references; click one to jump, **Alt+Left** comes back.
