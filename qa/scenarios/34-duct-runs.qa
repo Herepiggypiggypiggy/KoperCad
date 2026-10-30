@@ -8,7 +8,7 @@ wait 10
 click_text 3D
 wait 40
 shot before
-click 592 345
+click 800 330
 wait 60
 shot duct-picked
 expect "Duct runs"
