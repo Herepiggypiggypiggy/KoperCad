@@ -62,3 +62,8 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 - **Library rows** (File > Library, Macros) are still menus.
 - **Project and Pages** moves, as in the V2c gaps above; the remaining Draw rows (Terminals submenu, PLC, Macros) and View (65 rows).
 - The Reports rail's Export flyout (4 rows) still lists a few formats; it should open the centre once the rail has been used for a while.
+
+## V4f: Start centre (2026-10-30)
+- `centres::Centre::Start` (command `file.start_centre`, File > Templates and examples...): the 3 `file.new_*` templates and the 6 example commands as tiles (Create / Open button). The File > New from template and Examples submenus and the EMC example row are gone: File 41 to 34, total 228 to 221 (after #1763). `file.example` keeps its row in File > Open (`centres::ALSO_IN_MENU`) and is also a tile.
+- Lessons: `cmd.file.new_*` and `cmd.file.example_*` fall back to `cmd.file.start_centre`, then File. Palette and app menu search say `File > Templates and examples`.
+- QA scenario 7370. Not done: preview of the template or example in the detail pane; options and preview pane for the other centres.

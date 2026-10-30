@@ -1,13 +1,14 @@
-//! The Export and Import centres (lane V4, `docs/design/visual-redesign.md`
-//! section 6): one window each for every format the program writes and every
-//! file it brings in. The commands are tiles with their icon and a sentence,
-//! grouped by what they are for; picking one shows what it does and the one
-//! button that does it. File > Export... and File > Import... open them, and
-//! so do the command field and the app menu search.
+//! The Export, Import and Start centres (lane V4, `docs/design/visual-redesign.md`
+//! section 6): one window each for every format the program writes, every
+//! file it brings in, and every template or example a project can start
+//! from. The commands are tiles with their icon and a sentence, grouped by
+//! what they are for; picking one shows what it does and the one button that
+//! does it. File > Export..., File > Import... and File > Templates and
+//! examples... open them, and so do the command field and the app menu search.
 //!
-//! Where the user finds them: File > Export... and File > Import..., or
-//! Ctrl+K and "export" or "import". Every command still runs from the
-//! command field by its own name.
+//! Where the user finds them: those three File rows, or Ctrl+K and "export",
+//! "import" or "templates". Every command still runs from the command field
+//! by its own name.
 
 use eframe::egui;
 use novo_theme::{icons, presentation, widgets};
@@ -95,6 +96,7 @@ impl NovoApp {
             match state.kind {
                 Centre::Export => "export_centre",
                 Centre::Import => "import_centre",
+                Centre::Start => "start_centre",
             },
             state.kind.title(),
             [novo_theme::dialog_width::CENTRE, 640.0],
@@ -176,7 +178,7 @@ impl NovoApp {
                         ui,
                         state
                             .selected
-                            .map_or(state.kind.title(), |id| state.kind.button(id)),
+                            .map_or(state.kind.idle_button(), |id| state.kind.button(id)),
                     )
                 })
                 .inner;
@@ -210,6 +212,7 @@ impl NovoApp {
                 egui::RichText::new(match state.kind {
                     Centre::Export => "No format matches. Try pdf, dxf, excel, bench or plc.",
                     Centre::Import => "Nothing matches. Try dxf, eplan, parts, excel or plc.",
+                    Centre::Start => "Nothing matches. Try crane, pump, motor control or plc.",
                 })
                 .color(pal.text_secondary),
             );
@@ -336,6 +339,7 @@ impl NovoApp {
                 egui::RichText::new(match state.kind {
                     Centre::Export => "Choose a format on the left to see what it writes.",
                     Centre::Import => "Choose an item on the left to see what it brings in.",
+                    Centre::Start => "Choose a template or example on the left to see what it is.",
                 })
                 .color(pal.text_secondary),
             );
@@ -375,6 +379,7 @@ impl NovoApp {
             egui::RichText::new(match state.kind {
                 Centre::Export => "Any export also runs from Ctrl+K by its name.",
                 Centre::Import => "Any import also runs from Ctrl+K by its name.",
+                Centre::Start => "Any template or example also runs from Ctrl+K by its name.",
             })
             .small()
             .color(pal.text_tertiary),

@@ -169,3 +169,68 @@ fn the_import_centre_draws_at_both_sizes_with_an_anchor_for_each_tile() {
         super::learn_labels::anchor_fallback("cmd.file.import_dxf_background").expect("fallback");
     assert_eq!(fallback, "cmd.file.import_centre");
 }
+
+#[test]
+fn the_start_centre_lists_templates_and_examples_and_file_has_one_row_for_them() {
+    let groups = visible(Centre::Start, "");
+    assert_eq!(groups.len(), 2);
+    let ids = |q: &str| -> Vec<&'static str> {
+        visible(Centre::Start, q)
+            .into_iter()
+            .flat_map(|(_, rows)| rows.into_iter().map(|r| r.id))
+            .collect()
+    };
+    assert!(ids("crane").contains(&"file.new_crane"));
+    assert!(ids("crane").contains(&"file.example_crane"));
+    assert!(ids("emc").contains(&"file.example_emc"));
+    assert!(!ids("pump").contains(&"file.new_crane"));
+    assert!(ids("zzzz").is_empty());
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_project(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(super::workbench::app_runs("file.start_centre"));
+    d.app.run_command(&ctx, "file.start_centre", None);
+    d.frame();
+    assert_eq!(
+        d.app.wb.centre.as_ref().map(|c| c.kind),
+        Some(Centre::Start)
+    );
+    let file = novo_workflow::menus::layout("File");
+    let named = |what: &str| {
+        file.iter()
+            .filter(|i| match i {
+                novo_workflow::menus::MenuItem::Command(c) => c.label.starts_with(what),
+                novo_workflow::menus::MenuItem::Submenu { name, .. } => name.starts_with(what),
+                _ => false,
+            })
+            .count()
+    };
+    assert_eq!(named("Templates and examples"), 1);
+    assert_eq!(named("New from template"), 0);
+    assert_eq!(named("Examples"), 0);
+    let fallback =
+        super::learn_labels::anchor_fallback("cmd.file.new_crane").expect("a tile has a fallback");
+    assert_eq!(fallback, "cmd.file.start_centre");
+}
+
+#[test]
+fn the_start_centre_draws_at_both_sizes_with_an_anchor_for_each_tile() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_project(dir.path());
+    let ctx = d.ctx.clone();
+    for size in SIZES {
+        d.app.run_command(&ctx, "file.start_centre", None);
+        for _ in 0..3 {
+            d.frame_sized(size, Vec::new());
+        }
+        for id in Centre::Start.ids() {
+            assert!(
+                d.app.learn_anchor(&format!("cmd.{id}")).is_some(),
+                "{id} has no anchor at {size:?}"
+            );
+        }
+        d.app.wb.centre = None;
+        d.frame_sized(size, Vec::new());
+    }
+}

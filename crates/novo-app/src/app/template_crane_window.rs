@@ -1,4 +1,4 @@
-//! The New crane project window (File > New from template > Overhead crane):
+//! The New crane project window (File > Templates and examples > Overhead crane):
 //! how many hoist units, and how the hoists and the travel motions are
 //! driven. The answers pick the circuits the template's pages carry.
 
