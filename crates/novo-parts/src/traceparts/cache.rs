@@ -9,6 +9,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,9 @@ struct Index {
     #[serde(default)]
     misses: BTreeMap<String, u64>,
 }
+
+/// Serialises index read-modify-write within this process.
+static INDEX_LOCK: Mutex<()> = Mutex::new(());
 
 pub struct DownloadCache {
     root: PathBuf,
@@ -112,6 +116,7 @@ impl DownloadCache {
     /// The cached file for this part and format, if it is still intact.
     /// Marks it as used.
     pub fn lookup(&self, part: &str, format: &str) -> Option<PathBuf> {
+        let _lock = INDEX_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let mut idx = self.load();
         let k = key(part, format);
         let entry = idx.files.get_mut(&k)?;
@@ -154,6 +159,7 @@ impl DownloadCache {
             if ext.is_empty() { "bin" } else { &ext }
         );
         let path = self.root.join(&name);
+        let _lock = INDEX_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         write_atomic(&path, bytes)?;
         let mut idx = self.load();
         let t = now();
@@ -200,6 +206,7 @@ impl DownloadCache {
 
     /// Remembers that TraceParts has no model for this part.
     pub fn note_miss(&self, part: &str) -> Result<(), TpError> {
+        let _lock = INDEX_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let mut idx = self.load();
         idx.misses.insert(normalize_code(part), now());
         self.save(&idx)
@@ -210,6 +217,25 @@ impl DownloadCache {
             .misses
             .get(&normalize_code(part))
             .is_some_and(|t| now().saturating_sub(*t) < MISS_TTL_SECS)
+    }
+
+    /// Deletes files the index does not know (left by a crash between
+    /// writing a file and saving the index) and stray temp files.
+    pub fn sweep(&self) {
+        let _lock = INDEX_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let idx = self.load();
+        let Ok(dir) = fs::read_dir(&self.root) else {
+            return;
+        };
+        for e in dir.flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name == "index.json" || idx.files.values().any(|f| f.file == name) {
+                continue;
+            }
+            if e.path().is_file() {
+                let _ = fs::remove_file(e.path());
+            }
+        }
     }
 
     pub fn total_bytes(&self) -> u64 {
@@ -328,6 +354,19 @@ mod tests {
         c.note_miss("Z9").unwrap();
         c.store("Z9", "step", "stp", STEP).unwrap();
         assert!(!c.recent_miss("Z9"));
+    }
+
+    #[test]
+    fn sweep_removes_unindexed_files_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let c = DownloadCache::at(dir.path());
+        let kept = c.store("A", "step", "stp", STEP).unwrap();
+        let stray = dir.path().join("orphan.stp");
+        fs::write(&stray, STEP).unwrap();
+        c.sweep();
+        assert!(kept.exists());
+        assert!(!stray.exists());
+        assert!(c.lookup("A", "step").is_some());
     }
 
     #[test]
