@@ -1,0 +1,21 @@
+@title Export tile titles stay whole at 1920x1080
+@area Layout
+# Parked item: three Export tile titles were cut off at 1920x1080. Scroll the
+# tiles list and look at every group.
+click_text "Open example"
+wait 20
+click_text File #1
+wait 6
+click_text "Export..."
+wait 10
+shot titles-top
+scroll 800 600 -400
+wait 4
+shot titles-mid
+scroll 800 600 -400
+wait 4
+shot titles-lower
+scroll 800 600 -600
+wait 4
+shot titles-bottom
+check_layout
