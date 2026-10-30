@@ -1,0 +1,29 @@
+@title Controller: several instances as tabs, pop-out panels and shared-target lines
+@area Live
+@sizes 1366x768 1920x1080
+# Shift+L, "Controller..." opens the card; the fixture has one radio. "Duplicate" makes a second
+# instance (tab "Generic radio 2 copy"), "Pop out" gives the selected one a panel of its own, and the
+# first tab stays in the card. Both can be operated at once.
+open qa/fixtures/radio-hoist.novo
+wait 20
+key shift+l
+wait 20
+click_text "Controller…"
+wait 20
+expect "+ Add"
+expect "Duplicate"
+shot one-tab
+check_layout
+click_text Duplicate
+wait 10
+expect "copy"
+shot two-tabs
+click_text "Pop out"
+wait 20
+expect "Keyboard here"
+shot popped
+check_layout
+click_text "Name, colour and group"
+wait 10
+shot settings
+check_layout

@@ -26,7 +26,9 @@ pub mod sequence;
 pub mod set;
 pub mod validate;
 
-pub use binding::{Binding, BindingFinding, BindingProblem, BindingTable, SignalKey, Target};
+pub use binding::{
+    Binding, BindingFinding, BindingProblem, BindingTable, SignalKey, Target, TargetOwnership,
+};
 pub use engine::{Applied, Block, ControlError, Controller, SignalChange, SignalState, State};
 pub use profile::{
     Combine, Condition, ControlDef, ControlKind, ControllerKind, ControllerMeta, Effects,

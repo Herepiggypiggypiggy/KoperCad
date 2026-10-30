@@ -1,0 +1,26 @@
+@title Drive hoist property section: floor under the hook, rope stiffness and rope damping rows on the motor (1366x768)
+@area Simulate
+@sizes 1366x768
+# Where to find it: select the hoist motor in the drawing, the property sheet shows the section
+# "Drive hoist" with the rope rows (floor under the hook, rope stiffness, rope damping) under the hook load.
+open qa/fixtures/hoist-drive-floor.novo
+wait 30
+key Escape
+wait 5
+key Home
+wait 30
+shot overview
+click 392 229
+wait 30
+shot motor-selected
+expect "Drive hoist"
+scroll 1130 500 -600
+wait 20
+shot drive-hoist-rows
+scroll 1130 500 -900
+wait 20
+scroll 1130 500 300
+wait 20
+expect "Floor under the hook"
+shot rope-rows
+check_layout
