@@ -1,0 +1,20 @@
+@title Ferrule table shows crimp and die; cut piece labels exist
+@area Reports
+# Reports > Bench output > Ferrules tab has Total mm, Crimp and Die columns; Labels tab lists "Cut piece labels".
+click_text "Open example"
+wait 20
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+click_text Ferrules
+wait 8
+expect "Die / setting"
+expect "Crimp"
+shot ferrules-crimp-die
+check_layout
+click_text Labels
+wait 8
+expect "Cut piece labels"
+shot cut-piece-labels
+check_layout
