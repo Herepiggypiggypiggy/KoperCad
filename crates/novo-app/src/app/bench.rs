@@ -1126,7 +1126,7 @@ fn ferrule_tab(
         novo_theme::widgets::banner(
             ui,
             novo_theme::widgets::Level::Warning,
-            "Each size must be listed once, above zero, with a contact length above zero",
+            "Each size must be listed once, above zero, with a contact length above zero and an overall length (if set) at least as long as the contact length",
             |_| {},
         );
     }
@@ -1185,9 +1185,10 @@ fn label_tab(
     act: &mut Option<Act>,
 ) {
     novo_theme::widgets::section_label(ui, "Print which labels");
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for (kind, title) in [
             ("wires", "Wire flags"),
+            ("cuts", "Cut pieces"),
             ("terminals", "Terminals"),
             ("devices", "Devices"),
             ("cables", "Cables"),
