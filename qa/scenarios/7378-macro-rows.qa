@@ -1,0 +1,40 @@
+@title Macro rows: one File row opens the Macros window, which carries import, export pack and edit
+@area Layout
+@sizes 1366x768 1920x1080
+# Lane V4l (docs/design/visual-redesign.md section 6). The File > Macros and Draw > Macros submenus (6 rows)
+# are gone: File has one Macros row; the Macros window has Import..., Export pack... and Edit parameters...;
+# Place macro is the Place tool of the rail; Save as macro is in the right-click menu of a selection.
+# Every one still runs from Ctrl+K.
+click_text "Open example"
+wait 20
+click_text File #1
+wait 6
+shot file-menu
+expect "Macros"
+expect_not "Export macro pack"
+expect_not "Import macros"
+key Escape
+wait 4
+click_text Draw #1
+wait 6
+shot draw-menu
+expect_not "Save selection as macro"
+expect_not "Edit macro parameters"
+key Escape
+wait 4
+key ctrl+k
+wait 4
+text export macro pack
+wait 8
+shot palette-path
+expect "Macros window"
+key Escape
+wait 4
+click_text File #1
+wait 6
+click_text "Macros"
+wait 20
+shot macros-window
+expect "Import..."
+expect "Export pack..."
+check_layout

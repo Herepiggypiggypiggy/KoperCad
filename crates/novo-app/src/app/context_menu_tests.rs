@@ -66,3 +66,14 @@ fn the_keys_the_menu_shows_come_from_the_keymap() {
         assert_eq!(keymap.shortcut_text(id).as_deref(), Some(key), "{id}");
     }
 }
+
+/// Draw > Macros no longer lists Save selection as macro: the right-click
+/// menu of a selected symbol carries it (`homes::PANEL_BUTTONS`).
+#[test]
+fn the_symbol_right_click_menu_carries_save_as_macro() {
+    assert!(menu_ids().iter().any(|s| s == "macro.save"));
+    assert_eq!(
+        novo_workflow::homes::panel_of("macro.save"),
+        Some("Symbol right-click menu")
+    );
+}

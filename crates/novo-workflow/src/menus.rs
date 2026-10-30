@@ -57,8 +57,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.open_read_only", under("File", "Open")),
     ("file.recover", under("File", "Open")),
     ("file.example", under("File", "Open")),
-    ("macro.browser", under("File", "Macros")),
-    ("macro.import", under("File", "Macros")),
+    ("macro.browser", at("File")),
     ("revision.issue", under("File", "Revisions")),
     ("revision.compare", under("File", "Revisions")),
     ("revision.lock_page", under("File", "Revisions")),
@@ -106,10 +105,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("plc.import_list", under("Draw", "PLC")),
     ("plc.to_plc", under("Draw", "PLC")),
     ("plc.overview", under("Draw", "PLC")),
-    ("macro.save", under("Draw", "Macros")),
-    ("macro.place", under("Draw", "Macros")),
-    ("macro.edit", under("Draw", "Macros")),
-    ("macro.export_pack", under("File", "Macros")),
     ("terminal.connect", under("Draw", "Terminals")),
     ("terminal.disconnect", under("Draw", "Terminals")),
     ("terminal.toggle_pe", under("Draw", "Terminals")),
@@ -321,6 +316,8 @@ pub const MOVED: &[&str] = &[
     "cabinet.routes",
     "cabinet.emc",
     "view.cabinet_table",
+    // The Place tool of the schematic rail opens the Place macro window.
+    "macro.place",
     // The Panels zone of the schematic rail (the drawers).
     "view.terminals_drawer",
     "view.cables_drawer",
@@ -566,12 +563,12 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
 /// Submenus drawn first, in this order, for the menus named here; the
 /// others follow in the order [`layout`] gives them.
 const SUB_FIRST: &[(&str, &[&str])] = &[
-    ("File", &["Library", "Macros", "Revisions"]),
+    ("File", &["Library", "Revisions"]),
     (
         "Edit",
         &["Paste special", "Parts", "Wire numbers", "Renumber"],
     ),
-    ("Draw", &["Terminals", "PLC", "Macros"]),
+    ("Draw", &["Terminals", "PLC"]),
 ];
 
 /// What the menu bar draws: [`layout`] with the plain rows in their
@@ -860,9 +857,9 @@ mod tests {
         let ceilings: &[(&str, usize)] = &[
             // The export formats are in the Export centre, the imports in the Import
             // centre, the templates and examples in the Start centre.
-            ("File", 26),
+            ("File", 24),
             ("Edit", 30),
-            ("Draw", 24),
+            ("Draw", 21),
             ("View", 65),
             ("Check", 11),
             ("Reports", 17),
@@ -886,7 +883,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 213, "the menus hold {total} rows");
+        assert!(total <= 208, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File

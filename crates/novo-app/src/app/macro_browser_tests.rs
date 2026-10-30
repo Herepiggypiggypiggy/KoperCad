@@ -85,3 +85,31 @@ fn the_place_button_opens_the_place_window_with_the_macro_name() {
     d.app.open_macro_place(Some("Motor starter DOL"));
     assert!(d.app.wb.macro_place.open);
 }
+
+/// The Draw and File menus no longer list the macro rows: the Macros window
+/// has a button for each (`homes::PANEL_BUTTONS`), the Place tool of the rail
+/// opens Place macro and the right-click menu has Save as macro. Each row is
+/// still found with Ctrl+K and falls back to the Macros row for a lesson.
+#[test]
+fn the_macros_window_carries_import_export_pack_and_edit_parameters() {
+    let src = include_str!("macro_browser.rs");
+    for (id, button) in [
+        ("macro.import", "\"Import...\""),
+        ("macro.export_pack", "\"Export pack...\""),
+        ("macro.edit", "\"Edit parameters...\""),
+    ] {
+        assert!(src.contains(button), "{button} is not drawn");
+        assert_eq!(
+            novo_workflow::homes::panel_of(id),
+            Some("Macros window"),
+            "{id}"
+        );
+        assert!(super::workbench::app_runs(id), "{id}");
+        assert!(novo_workflow::menus::place(novo_workflow::commands::get(id).unwrap()).is_none());
+    }
+    assert!(novo_workflow::menus::MOVED.contains(&"macro.place"));
+    assert_eq!(
+        super::learn_labels::anchor_fallback("macros.window").as_deref(),
+        Some("cmd.macro.browser")
+    );
+}

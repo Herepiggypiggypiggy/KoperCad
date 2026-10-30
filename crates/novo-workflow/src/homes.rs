@@ -173,6 +173,11 @@ pub const PANEL_BUTTONS: &[(&str, &[&str])] = &[
             "page.move_down",
         ],
     ),
+    ("Symbol right-click menu", &["macro.save"]),
+    (
+        "Macros window",
+        &["macro.import", "macro.export_pack", "macro.edit"],
+    ),
     (
         "Lesson card",
         &["learn.next", "learn.back", "learn.restart", "learn.close"],
