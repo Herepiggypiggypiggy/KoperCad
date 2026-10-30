@@ -40,6 +40,7 @@ panel `button` op. The engine starts with the bundled generic radio and one inst
 - It simulates wiring and logic of a generic radio, not a radio protocol, receiver firmware or any
   vendor product.
 - The panel acts on one instance (`radio`). Several panels, the signal-to-drawing binding and the
-  live-view card are the C2 and C3 UI work that follows; project data does not yet persist
-  (needs the generic project block in `novo-core`/`novo-storage`).
+  live-view card are the C2 and C3 UI work that follows. The live-view controllers (instances and
+  bindings) are stored in the project's add-on data block `controllers`/`project` and stay there
+  when this add-on is not installed.
 - Keyboard map, gamepad, joystick and tabs wait for the extra panel widgets (see addons.md).

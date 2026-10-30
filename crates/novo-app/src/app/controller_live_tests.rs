@@ -167,15 +167,8 @@ fn the_controller_is_read_from_the_project_and_saved_back_unchanged() {
     let text = live.ctl.snapshot().expect("serialises");
     let mut other = LiveView::default();
     other.ctl.set = novo_controller::ControllerSet::new();
-    let stored = match doc
-        .project()
-        .info()
-        .properties
-        .get(super::controller_live::PROPERTY)
-    {
-        Some(novo_core::Value::Text(t)) => t.clone(),
-        _ => panic!("the fixture stores its controllers"),
-    };
+    let stored = super::controller_live::stored(doc.project()).to_owned();
+    assert!(!stored.is_empty(), "the fixture stores its controllers");
     assert_eq!(text, stored);
 }
 

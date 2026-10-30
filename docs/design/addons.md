@@ -151,12 +151,21 @@ Request `{"api":1,"op":"<name>","data":{...}}`, reply `{"ok":true,"data":{...}}`
 - Tests: `crates/novo-addons/tests/` (hostile packages, install flow), `crates/novo-tests/tests/addons_fixtures.rs` (the fixtures and the CLI), `crates/novo-app/src/app/addons_tests.rs` (the window), QA scenarios `qa/scenarios/560-addons-manager.qa` and `561-addons-engine.qa`.
 - Fixtures: sources in `qa/fixtures/addons/src/<name>/`, packed files beside them. Rebuild with `KOPERCAD_REGENERATE=1 cargo test -p novo-tests --test addons_fixtures`.
 
+## Project data
+
+An add-on keeps its data in the project with `Tx::set_addon_block(addon_id, block_name, AddonBlock { format, text })` and reads it with `project.info().addon_data.get(addon_id, block_name)`. It is one undo step, it saves and opens with the project file (no schema change; it lives in the project info), and the program never looks inside the text: `format` is the add-on's own version number of it.
+
+- Names are 1 to 64 of `a-z 0-9 - _ .`; a block is at most 8 MB; empty text removes the block.
+- The block stays when the add-on is not installed, is off, or is newer than this program, and a save from such a session writes it back unchanged. Nothing deletes it but the person: **File > Add-ons**, section **Data in this project** (left column), lists every add-on id the open project holds data for, installed or not, with a *Remove...* button (one undo step).
+- The controller add-on stores its instances and bindings in block `controllers` / `project`. Projects written before the block kept the same text in the property `controllers.project`; that is read as a fallback and replaced by the block at the next write.
+- Tests: `crates/novo-core/tests/addon_data.rs`, `crates/novo-storage/tests/addon_data.rs`, `crates/novo-app/src/app/addons_tests.rs`.
+
 ## Follow-ups (not in this lane)
 
 | Follow-up | Where |
 | --- | --- |
 | Gate the controller import wizard (File > Import > Controller profile) behind the controller add-on, once that package exists | after C3 packages the add-on |
 | ~~Build the controller as `engine.wasm` and pack it in CI~~ done: `addons/controllers`, `scripts/build-controllers-addon.sh`, CI job `controllers add-on`. Signing the released file is still the release thread's | C3 / release |
-| Project data blocks tagged with the add-on id, kept untouched when the add-on is missing | needs a generic block in `novo-core`/`novo-storage` (WS-02/WS-04) |
+| ~~Project data blocks tagged with the add-on id, kept untouched when the add-on is missing~~ done: `ProjectInfo::addon_data`, see below | WS-02/WS-04 |
 | Rail slot and flyout, app-menu footer with count badge, add-on chip and "Turn on" row in Ctrl K, drawn icons | V3a, V2b, V5, V0 |
 | Release signing key and `scripts/pack-addon` in CI | release thread |

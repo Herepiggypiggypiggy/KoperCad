@@ -79,6 +79,102 @@ pub struct ProjectInfo {
     pub rules: ProjectRules,
     #[serde(default)]
     pub properties: Properties,
+    /// Data that add-ons keep in the project, by add-on id. The project does not look inside:
+    /// a block stays exactly as written when the add-on is not installed, is turned off or is
+    /// newer than this program, so opening and saving never loses it.
+    #[serde(default, skip_serializing_if = "AddonData::is_empty")]
+    pub addon_data: AddonData,
+}
+
+/// What one add-on stored in a project: named text blocks (the add-on picks the format).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AddonData(BTreeMap<String, BTreeMap<String, AddonBlock>>);
+
+/// One block of add-on data. `format` is the add-on's own version of the text, so a newer or
+/// older add-on can tell whether it understands what it finds.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct AddonBlock {
+    #[serde(default)]
+    pub format: u32,
+    #[serde(default)]
+    pub text: String,
+}
+
+impl AddonData {
+    /// Largest text one block may hold (bytes). Keeps one runaway add-on from bloating the file.
+    pub const MAX_BLOCK_BYTES: usize = 8 * 1024 * 1024;
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// A usable add-on id or block name: 1 to 64 of lowercase letters, digits, `-`, `_`, `.`.
+    pub fn valid_name(name: &str) -> bool {
+        (1..=64).contains(&name.len())
+            && name
+                .bytes()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || b"-_.".contains(&c))
+    }
+
+    pub fn get(&self, addon: &str, block: &str) -> Option<&AddonBlock> {
+        self.0.get(addon)?.get(block)
+    }
+
+    /// Add-on ids that hold data, in order.
+    pub fn addons(&self) -> impl Iterator<Item = &str> {
+        self.0.keys().map(String::as_str)
+    }
+
+    /// The blocks one add-on holds, in order of name.
+    pub fn blocks(&self, addon: &str) -> impl Iterator<Item = (&str, &AddonBlock)> {
+        self.0
+            .get(addon)
+            .into_iter()
+            .flat_map(|m| m.iter().map(|(k, v)| (k.as_str(), v)))
+    }
+
+    /// Stores a block. Empty text removes it (and the add-on's entry when it was the last).
+    /// Refuses names that are not usable and blocks over [`Self::MAX_BLOCK_BYTES`].
+    pub fn set(&mut self, addon: &str, block: &str, value: AddonBlock) -> Result<(), String> {
+        if !Self::valid_name(addon) || !Self::valid_name(block) {
+            return Err(format!(
+                "`{addon}`/`{block}` is not a usable add-on data name"
+            ));
+        }
+        if value.text.len() > Self::MAX_BLOCK_BYTES {
+            return Err(format!(
+                "add-on data `{addon}/{block}` is {} bytes; the limit is {}",
+                value.text.len(),
+                Self::MAX_BLOCK_BYTES
+            ));
+        }
+        if value.text.is_empty() {
+            self.remove(addon, block);
+        } else {
+            self.0
+                .entry(addon.to_owned())
+                .or_default()
+                .insert(block.to_owned(), value);
+        }
+        Ok(())
+    }
+
+    pub fn remove(&mut self, addon: &str, block: &str) -> bool {
+        let Some(blocks) = self.0.get_mut(addon) else {
+            return false;
+        };
+        let removed = blocks.remove(block).is_some();
+        if blocks.is_empty() {
+            self.0.remove(addon);
+        }
+        removed
+    }
+
+    /// Drops everything one add-on stored. Returns how many blocks went.
+    pub fn remove_addon(&mut self, addon: &str) -> usize {
+        self.0.remove(addon).map_or(0, |m| m.len())
+    }
 }
 
 /// Explicit, inspectable project rules. A file without an entry has the

@@ -15,3 +15,5 @@
 2026-10-29 04:40 UTC Wizard gate PR from main: file.import_controller greyed with a reason unless the controllers add-on is on, same check on Ctrl+K and scripts; QA 1580 installs the package first.
 
 - C3-3 (engine worker thread): `novo_addons::EngineWorker` (own thread per engine, ordered answers, wake on answer), the app sends with `addon_engine_send` and applies answers each frame. The add-on's menu command is now "Radio panel" (it clashed with the built-in Simulate > Controller panel in Ctrl+K). Tests: `crates/novo-addons/tests/host.rs` (two worker tests), `addons_tests.rs` (async button). QA 5620 and 5621 at both sizes.
+
+2026-10-30 Project data block: `ProjectInfo::addon_data` (novo-core, undoable via `Tx::set_addon_block`), saved in the project info (no schema change). Controllers moved onto block `controllers`/`project`, old `controllers.project` property read as fallback. File > Add-ons > Data in this project lists and removes it. Tests in novo-core, novo-storage, addons_tests.rs.

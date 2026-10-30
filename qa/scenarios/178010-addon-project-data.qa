@@ -1,0 +1,25 @@
+@title Add-ons window lists the add-on data a project holds, even with no add-on installed
+@area Add-ons
+# The fixture stores its controllers in the project's add-on data block. No add-on is installed
+# here, so the section "Data in this project" shows them as kept as they are.
+open qa/fixtures/radio-hoist.novo
+wait 20
+key ctrl+k
+wait 6
+text add-ons
+wait 8
+key Enter
+wait 10
+expect "Data in this project"
+expect "add-on not installed: kept as it is"
+shot data-kept
+check_layout
+click_text "Remove..."
+wait 4
+expect "Remove data"
+shot data-confirm
+click_text "Remove data"
+wait 6
+expect "Removed 1 block(s)"
+shot data-removed
+check_layout

@@ -24,7 +24,7 @@ scripts/qa.sh --only addons      # scenarios 560 and 561
 - Code that offers an add-on feature asks `NovoApp::addon_enabled(id)`.
 
 ## Follow-ups (see ROADMAP.md)
-gate the controller import wizard once the controller add-on exists; project data blocks that survive a missing add-on (needs WS-02/WS-04); rail slot, menu footer, Ctrl K chip, drawn icons (V3a, V2b, V5, V0); signing key and pack in CI.
+gate the controller import wizard once the controller add-on exists; rail slot, menu footer, Ctrl K chip, drawn icons (V3a, V2b, V5, V0); signing key and pack in CI.
 
 ## Traps
 - Cloud disk fills during a workspace build: `scripts/free-disk.sh`, use `CARGO_INCREMENTAL=0` and delete test binaries in the target dir.
