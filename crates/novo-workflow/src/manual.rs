@@ -369,7 +369,7 @@ const FEATURES: &[(&str, &str, &str, &str)] = &[
     (
         "Wire and potential numbering",
         "Schemes, stable fill, renumber, locks",
-        "Edit > Wire numbers, Ctrl+K \"numbering\"",
+        "Edit > Numbering..., Ctrl+K \"numbering\"",
         "motor-starter.html#wire-numbers",
     ),
     (
