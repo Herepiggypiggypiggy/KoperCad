@@ -24,7 +24,8 @@ expect "brake open"
 expect "wind"
 shot running-in-wind
 mouse_up 371 341
-wait 900
+wait 450
+wait 450
 expect "last stop"
 expect "Stopped from"
 shot stopped-with-distance
