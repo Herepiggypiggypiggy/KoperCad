@@ -85,7 +85,6 @@ not drop the target. Bind the chain to a target of its own. Not yet in the Check
 - Interlocks in the example (K1/K2, K3/K4) are the drawing's own; the engine refuses only what the profile says.
 - Not a safety function: the E-stop chain shows the logic of the wiring.
 - Generic profiles only. A person builds a vendor profile with File > Import > Controller profile from I/O table.
-
 - The dead-man bar, tare, coupling switch and fast-step release are modelled from the drawing and the profile you enter. They are not a certified
   enabling or safety function (no PL, SIL or compliance claim), and the import wizard only recognises them by the wording of the table.
 

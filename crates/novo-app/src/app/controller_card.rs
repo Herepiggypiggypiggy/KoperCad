@@ -445,7 +445,7 @@ fn instance_row(ui: &mut egui::Ui, ctl: &mut ControllerLive, _actions: &mut Vec<
             .collect();
         egui::ComboBox::from_id_salt("controller_instance")
             .selected_text(current)
-            .width(150.0)
+            .width(128.0)
             .show_ui(ui, |ui| {
                 for (id, label) in &ids {
                     if ui
