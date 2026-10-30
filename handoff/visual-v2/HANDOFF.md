@@ -52,6 +52,11 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 - Lessons: `cmd.terminal.*` anchors are the toolbar buttons (`strip_toolbar` registers a spot for each); with the drawer shut they fall back to the rail button `cmd.view.terminals_drawer`. The palette and the app menu search say `Terminals drawer` or `Cables drawer` as the path.
 - QA scenario 728 (Draw menu without the submenus, the toolbar in the drawer, the palette path).
 
+## V4e: panel homes (2026-10-29)
+- New `Home::Panel(name)` (`HomeKind::Panel`): a button or context menu of a panel. `homes::PANEL_BUTTONS` lists the 6 `page.*` commands (Pages list: the + New button and the right-click menu of a page) and the 4 `learn.*` commands (lesson card: Back, Next, Start over, Close). Their File > Pages and Help > Lesson rows are gone: File 47 to 41, Help 19 to 15 (the design target), total 253 to 243.
+- The palette and the app menu search name the panel as the place; lesson anchors `cmd.page.*` fall back to the Pages list (`outline.pages`); the tags-and-pages lesson says "Right-click the page in the Pages list".
+- QA scenario 729.
+
 ## V4 what is left
 - **Options and preview on the right of the centre** (design section 6): the right side now shows the sentence, the key and the reason a format is grey, not the options of the format or a preview. Formats with options (PDF options, print sets, DXF) still open their own window after Export.
 - **Library rows** (File > Library, Macros) are still menus.
@@ -59,6 +64,6 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 - The Reports rail's Export flyout (4 rows) still lists a few formats; it should open the centre once the rail has been used for a while.
 
 ## V4f: Start centre (2026-10-30)
-- `centres::Centre::Start` (command `file.start_centre`, File > Templates and examples...): the 3 `file.new_*` templates and the 6 example commands as tiles (Create / Open button). The File > New from template and Examples submenus and the EMC example row are gone: File 47 to 40, total 238 to 231 (before #1763's 10 rows). `file.example` keeps its row in File > Open (`centres::ALSO_IN_MENU`) and is also a tile.
+- `centres::Centre::Start` (command `file.start_centre`, File > Templates and examples...): the 3 `file.new_*` templates and the 6 example commands as tiles (Create / Open button). The File > New from template and Examples submenus and the EMC example row are gone: File 41 to 34, total 228 to 221 (after #1763). `file.example` keeps its row in File > Open (`centres::ALSO_IN_MENU`) and is also a tile.
 - Lessons: `cmd.file.new_*` and `cmd.file.example_*` fall back to `cmd.file.start_centre`, then File. Palette and app menu search say `File > Templates and examples`.
 - QA scenario 7370. Not done: preview of the template or example in the detail pane; options and preview pane for the other centres.

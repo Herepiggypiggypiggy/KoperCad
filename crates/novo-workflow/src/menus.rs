@@ -59,12 +59,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.example", under("File", "Open")),
     ("macro.browser", under("File", "Macros")),
     ("macro.import", under("File", "Macros")),
-    ("page.new", under("File", "Pages")),
-    ("page.rename", under("File", "Pages")),
-    ("page.duplicate", under("File", "Pages")),
-    ("page.delete", under("File", "Pages")),
-    ("page.move_up", under("File", "Pages")),
-    ("page.move_down", under("File", "Pages")),
     ("revision.issue", under("File", "Revisions")),
     ("revision.compare", under("File", "Revisions")),
     ("revision.lock_page", under("File", "Revisions")),
@@ -189,10 +183,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("help.learn", at("Help")),
     ("ai.assistant", at("Help")),
     ("help.next_lesson", at("Help")),
-    ("learn.next", under("Help", "Lesson")),
-    ("learn.back", under("Help", "Lesson")),
-    ("learn.restart", under("Help", "Lesson")),
-    ("learn.close", under("Help", "Lesson")),
     // Simulate
     ("sim.live", at("Simulate")),
     ("sim.controller", at("Simulate")),
@@ -338,6 +328,7 @@ pub fn moved_out(id: &str) -> bool {
     MOVED.contains(&id)
         || crate::centres::replaces_menu_row(id)
         || crate::homes::drawer_of(id).is_some()
+        || crate::homes::panel_of(id).is_some()
 }
 
 /// The command's place in the menu bar, or `None` for the commands in
@@ -569,10 +560,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
 /// Submenus drawn first, in this order, for the menus named here; the
 /// others follow in the order [`layout`] gives them.
 const SUB_FIRST: &[(&str, &[&str])] = &[
-    (
-        "File",
-        &["Project", "Library", "Macros", "Pages", "Revisions"],
-    ),
+    ("File", &["Project", "Library", "Macros", "Revisions"]),
     (
         "Edit",
         &["Paste special", "Parts", "Wire numbers", "Renumber"],
@@ -866,7 +854,7 @@ mod tests {
         let ceilings: &[(&str, usize)] = &[
             // The export formats are in the Export centre, the imports in the Import
             // centre, the templates and examples in the Start centre.
-            ("File", 40),
+            ("File", 34),
             ("Edit", 30),
             ("Draw", 24),
             ("View", 65),
@@ -875,7 +863,7 @@ mod tests {
             // 25: one Simulate row merged in parallel with the ratchet (#1734) and was
             // counted by no PR; it stays until the rail move lands.
             ("Simulate", 25),
-            ("Help", 19),
+            ("Help", 15),
         ];
         let mut total = 0;
         for (menu, ceiling) in ceilings {
@@ -892,7 +880,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 231, "the menus hold {total} rows");
+        assert!(total <= 221, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File
