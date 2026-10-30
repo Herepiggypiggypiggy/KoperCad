@@ -22,21 +22,21 @@ wait 20
 expect "Controller: radio-1/HOIST_UP_SLOW"
 shot before-main
 # Main on, then hold up step 2: the machine port lifts the hook with no drawn circuit.
-click 840 315
+click 855 369
 wait 10
-mouse_down 888 482
+mouse_down 888 536
 wait 120
 expect "brake open"
 shot hook-rising
-mouse_up 888 482
+mouse_up 888 536
 wait 120
 expect "0 rpm"
 # E-stop with the rocker held: the permit port stops the hoist.
-mouse_down 888 482
+mouse_down 888 536
 wait 60
-click 860 265
+click 860 320
 wait 60
 expect "brake closed"
 shot e-stop
-mouse_up 888 482
+mouse_up 888 536
 check_layout
