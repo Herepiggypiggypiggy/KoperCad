@@ -2,7 +2,7 @@
 
 Platform linux, window sizes 1366x768, 1920x1080. 19 run(s): 19 passed, 0 failed; 4 finding(s) (0 blocking, S1 to S3).
 
-Program: `/tmp/kc-target-panel/debug/kopercad`, built 1793368569 (unix time), source at git aea5acc88f.
+Program: `/tmp/kc-target-panel/debug/kopercad`, built 1793369558 (unix time), source at git 0b189af0dc.
 
 App: 1366.0x768.0 points at scale 1.0.
 
