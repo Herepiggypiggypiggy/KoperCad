@@ -694,7 +694,15 @@ mod tests {
         );
         let export = file
             .iter()
-            .position(|i| matches!(i, MenuItem::Submenu { name: "Revisions", .. }))
+            .position(|i| {
+                matches!(
+                    i,
+                    MenuItem::Submenu {
+                        name: "Revisions",
+                        ..
+                    }
+                )
+            })
             .expect("a Revisions submenu");
         let new = file
             .iter()
