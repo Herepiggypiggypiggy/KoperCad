@@ -1,0 +1,17 @@
+# KoperVonk add-on publisher keys that ship inside KoperCAD. PUBLIC keys only: nothing in this
+# file is secret, and the private key must never be committed anywhere in this repository.
+#
+# The file is embedded at build time (crates/novo-addons/build.rs) and read like
+# trusted-keys.toml. While it holds no [[key]] entry, KoperCAD trusts no publisher and every
+# add-on file needs the "I trust this file" tick.
+#
+# To add the key: run `kopercad-cli addons keygen ...` once (docs/design/addons-signing.md),
+# paste the [[key]] block it prints below this comment, commit, done. Nothing else changes.
+#
+# To withdraw a key, add a block like this and ship a new version (the older ones keep trusting
+# the key until they are updated, or until the person adds the same block to their own
+# %LOCALAPPDATA%\KoperCAD\addons\trusted-keys.toml):
+#
+# [[revoked]]
+# id = "koper-vonk-2026"
+# reason = "retired in favour of koper-vonk-2027"

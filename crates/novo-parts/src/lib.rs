@@ -19,7 +19,9 @@
 //!   not say.
 //! - [`ImportJob`], [`LocalLibrary`], [`import_bmecat`], [`step_box`]: the
 //!   one-click part import and the per-user library of downloaded maker
-//!   files (design: `docs/PARTS-LIBRARY-DESIGN.md`). No network code here.
+//!   files (design: `docs/PARTS-LIBRARY-DESIGN.md`). No network code there.
+//! - [`traceparts`]: the optional TraceParts API client, per-user key store
+//!   and download cache (the only network code in this crate).
 //!
 //! There is deliberately no panel layout here yet: the screen design comes
 //! from `docs/DESIGN.md`, and any UI built on top reads rows and returns
@@ -59,6 +61,7 @@ mod tablefile;
 mod tablemap;
 mod tablepreview;
 pub mod tp_handoff;
+pub mod traceparts;
 pub mod xlsx_guard;
 
 pub use assign::{

@@ -690,7 +690,13 @@ impl NovoApp {
                     return;
                 }
                 if let Some(why) = inspection.blocked() {
-                    manager.notice = Some((Tone::Warning, why));
+                    // A revoked key can never be installed: that is an error, not a "not now".
+                    let tone = if inspection.package.trust.is_refused() {
+                        Tone::Error
+                    } else {
+                        Tone::Warning
+                    };
+                    manager.notice = Some((tone, why));
                     return;
                 }
                 manager.notice = None;
@@ -868,23 +874,41 @@ fn status_look(status: &Status) -> (&'static str, Tone, &'static str) {
     }
 }
 
-fn trust_look(trust: &Trust, accepted: bool) -> (String, Tone, &'static str) {
+/// How a package's signature shows: the words (the state is always spelled out, so the glyph and
+/// the colour only repeat it), the colour family and the mark. Five states, five different words
+/// and marks: signed, unsigned, unknown key, revoked key, signature does not match.
+pub(super) fn trust_look(trust: &Trust, accepted: bool) -> (String, Tone, &'static str) {
+    let words = match trust {
+        Trust::Unsigned { note } if accepted => {
+            format!("Unsigned, from file (you accepted it): {note}")
+        }
+        Trust::UnknownKey { .. } if accepted => {
+            format!("{} (you accepted it)", trust.sentence())
+        }
+        other => other.sentence(),
+    };
     match trust {
-        Trust::Signed { owner, .. } => (
-            format!("Signed by {owner}"),
-            Tone::Success,
-            icons::addon::SIGNED,
+        Trust::Signed { .. } => (words, Tone::Success, icons::addon::SIGNED),
+        Trust::Unsigned { .. } => (words, Tone::Warning, icons::addon::UNSIGNED),
+        Trust::UnknownKey { .. } => (words, Tone::Warning, icons::addon::UNKNOWN_KEY),
+        Trust::Revoked { .. } => (words, Tone::Error, icons::addon::BLOCKED),
+        Trust::Tampered { .. } => (words, Tone::Error, icons::addon::FAILED),
+    }
+}
+
+/// The warning above the "I trust this file" tick, which differs for a file with no signature
+/// and one signed by a key this PC does not know. `None` for the states that never get a tick.
+pub(super) fn tick_warning(trust: &Trust) -> Option<String> {
+    match trust {
+        Trust::Unsigned { .. } => Some(
+            "Nobody you trust signed this file. Install it only if you know where it came from."
+                .to_owned(),
         ),
-        Trust::Unsigned { note } if accepted => (
-            format!("Unsigned, from file (you accepted it): {note}"),
-            Tone::Warning,
-            icons::addon::UNSIGNED,
-        ),
-        Trust::Unsigned { note } => (
-            format!("Unsigned, from file: {note}"),
-            Tone::Warning,
-            icons::addon::UNSIGNED,
-        ),
+        Trust::UnknownKey { key_id } => Some(format!(
+            "This file is signed with the key {key_id}, which this PC does not know, so it could be anyone. \
+             Install it only if you know where it came from."
+        )),
+        _ => None,
     }
 }
 
@@ -1366,12 +1390,9 @@ fn install_prompt_ui(ui: &mut egui::Ui, prompt: &mut Prompt, cancel: &mut bool, 
     let needs_tick = prompt.inspection.needs_trust_tick();
     if needs_tick {
         ui.add_space(space::M);
-        widgets::banner(
-            ui,
-            Tone::Warning,
-            "Nobody you trust signed this file. Install it only if you know where it came from.",
-            |_| {},
-        );
+        if let Some(text) = tick_warning(&package.trust) {
+            widgets::banner(ui, Tone::Warning, &text, |_| {});
+        }
         ui.checkbox(&mut prompt.tick, "I trust this file");
     }
     ui.add_space(space::L);
