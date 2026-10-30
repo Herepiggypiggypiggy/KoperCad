@@ -226,6 +226,7 @@ const KNOWN_VERBS: &[&str] = &[
     "move",
     "mouse_down",
     "mouse_up",
+    "pad",
     "drag",
     "scroll",
     "key",
@@ -1038,6 +1039,34 @@ impl Ctx<'_> {
             "mouse_down" | "mouse_up" => {
                 let args = json!({"x": num(1, "x")?, "y": num(2, "y")?});
                 self.srv.tool(&words[0], &args).map(|_| ())
+            }
+            // The fake gamepad of the control mode: `pad axis left_y 0.8`, `pad button south down`,
+            // `pad disconnect`, `pad connect`, `pad centre`.
+            "pad" => {
+                let req = match need(1, "axis, button, connect, disconnect or centre")? {
+                    "axis" => {
+                        json!({"cmd": "pad", "axis": need(2, "an axis name")?, "value": num(3, "value")?})
+                    }
+                    "button" => {
+                        let down = match need(3, "down or up")? {
+                            "down" => true,
+                            "up" => false,
+                            other => {
+                                return Err(format!("pad button: `{other}` is not down or up"));
+                            }
+                        };
+                        json!({"cmd": "pad", "button": need(2, "a button name")?, "down": down})
+                    }
+                    "connect" => json!({"cmd": "pad", "connect": true}),
+                    "disconnect" => json!({"cmd": "pad", "connect": false}),
+                    "centre" | "center" => json!({"cmd": "pad", "centre": true}),
+                    other => {
+                        return Err(format!(
+                            "pad: `{other}` is not axis, button, connect, disconnect or centre"
+                        ));
+                    }
+                };
+                self.srv.send(req).map(|_| ())
             }
             "drag" => {
                 let args = json!({"from": [num(1, "x1")?, num(2, "y1")?],

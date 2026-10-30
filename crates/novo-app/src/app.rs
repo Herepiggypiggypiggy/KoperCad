@@ -73,6 +73,9 @@ mod controller_import;
 mod controller_live;
 #[cfg(test)]
 mod controller_live_tests;
+mod controller_pad;
+#[cfg(test)]
+mod controller_pad_tests;
 mod controller_widgets;
 mod count_words;
 mod crane_setup;
@@ -170,6 +173,9 @@ mod heat_wires_tests;
 mod hoist_3d;
 mod hoist_run;
 mod icon_gallery;
+mod input_devices;
+#[cfg(windows)]
+mod input_gilrs;
 mod inspector;
 mod interop;
 mod kitting;
@@ -530,6 +536,7 @@ use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows_reusing};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
 use crate::{APP_NAME, PROJECT_EXTENSION, PROJECT_EXTENSIONS};
+pub(crate) use input_devices::control_fake as control_pad;
 use novo_theme::widgets::primary_button;
 pub(crate) use revisions::index_rule;
 use workbench::Workbench;

@@ -103,6 +103,51 @@ not drop the target. Bind the chain to a target of its own. Not yet in the Check
 - The dead-man bar, tare, coupling switch and fast-step release are modelled from the drawing and the profile you enter. They are not a certified
   enabling or safety function (no PL, SIL or compliance claim), and the import wizard only recognises them by the wording of the table.
 
+## Gamepad and joystick (lane C5)
+
+Where the user finds it: Controller card (Simulate > Controller panel), section **Gamepad** under Key map. It shows the
+device and whether it is connected, a live monitor of the sticks, triggers and buttons (with the step ticks of the mapped
+axes), the dead-man state, what the pad holds (or, with driving off, what it *would* hold: the test), a short event log,
+and the buttons **Edit map...** and **Calibrate...**. The switch "Drive this controller with the pad" is off until asked,
+so plugging a pad in never moves anything.
+
+Pieces:
+
+- `novo_controller::gamepad` (pure, wasm clean, tested by hand in `tests/gamepad.rs`): `InputState` (axes and buttons by
+  stable names such as `left_y`, `south`, `left_trigger`, plus numbered `axis3`/`button7` for odd devices), `GamepadMap`
+  (TOML, saved per controller instance in the project as `[gamepad.<instance>]` of the controllers block), `PadMapper`
+  (state in, holds and one-shot actions out), `Calibrator` (centre, then range, corners).
+- `novo-app` `input_devices.rs`: the generic host input service. `InputBackend` is the trait; `FakeBackend` is what the
+  tests and `kopercad --control` use (`pad` control command, QA step `pad axis left_y 0.8`). `input_gilrs.rs` reads real
+  pads on Windows through `gilrs` (Windows Gaming Input: part of Windows, offline, no driver, no admin rights).
+- `controller_pad.rs`: per-frame step, the section, the map editor and the calibration wizard.
+
+Rules of the map (each has a test):
+
+- A stick position picks the step of a rocker or axis. The deadzone is rest; the throw beyond it is cut into one band
+  per step of that side (two bands for a two-step rocker, three for a three-step). A step is left again only when the
+  value has fallen back by the hysteresis. The first direction is the positive one unless its name says left, down or
+  back. A selector takes the band of the stick, or Next/Prev buttons.
+- Calibration: per axis the raw centre and both ends, scaled per side; invert swaps the directions.
+- Dead-man: with a dead-man input in the map, axes and hold buttons marked "dead-man" (the default) act only while it is
+  held; letting go releases them in the same frame; after it is grasped again, a deflected stick (or a held button) must
+  first return to rest. The E-stop button acts on the press edge whatever the dead-man says.
+- Connecting: whatever is held when the pad connects must be let go first, and a button already down fires nothing.
+- Losing the device (unplugged, or the system stops reporting it): every control is released at once, then the map's
+  policy applies once: nothing more, drop the radio link (it comes back with the device; the main latch stays dropped), or
+  press the E-stop (never reset by reconnecting).
+- The pad acts only while the card is open, the window has the focus and the controller is the selected one. A window in
+  the background counts as hands off (not as unplugged). During calibration the controller sees a pad at rest.
+- The pad holds controls exactly like the mouse and keys do (`HoldBy::Pad`, which wins over key and mouse while it asks
+  for something); interlocks, the E-stop latch, `requires` and the link rules stay the engine's.
+
+Honest limits: it simulates the wiring and logic; it says nothing about a real transmitter, its radio, latency or contact
+bounce, and neither the dead-man gate nor the E-stop button is a certified safety function. Real pad reading is built
+only for Windows; elsewhere the section says so (`gilrs` needs the system library `libudev` on Linux, which the CI image
+lacks), and mouse, touch and keyboard still work. Devices without a standard layout (no SDL mapping) connect but show
+nothing. Real hardware was not available to the author: the Windows reader compiles for the Windows target but has not
+been run against a physical pad.
+
 ## Add-on seam
 
 The whole feature is two files (`controller_live.rs`, `controller_card.rs`), one `mod` line in `app.rs`, one field

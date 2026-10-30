@@ -80,3 +80,7 @@ workspace = true
 # Windows only: the main window as the owner of file dialogs (KC-11).
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.6"
+# USB gamepads and joysticks for the virtual controller (Windows Gaming Input: part of
+# Windows, no driver or administrator rights). Windows only: on Linux it needs the system library
+# libudev, which the CI image does not have; the card says so there (app/input_devices.rs).
+gilrs = "0.11"
