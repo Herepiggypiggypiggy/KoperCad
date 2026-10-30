@@ -72,3 +72,7 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 - `centres::Centre::Project` (command `file.project_centre`, File > Project settings...): Drawing standard, Rules, Report languages, Project options, Untie from options and Generate pages as tiles. The File > Project submenu (8 rows) and Report languages leave File: File 34 to 26, total 221 to 213.
 - `project.variant`, `project.option` and `project.tie` take a name in the command field and open Project options without one: they are palette-only (`menus::PALETTE_ONLY`, with the reason). Lessons that name them fall back to the opener.
 - QA scenario 7371.
+
+## V4k: Draw > PLC leaves the menu (2026-10-30)
+- Add PLC card and PLC overview are plain Draw rows. Import I/O list is a tile of the Import centre ("Lists and tags", next to Import PLC tags). Send signal to PLC is a row ("Send to PLC") of the right-click menu of one selected symbol (`homes::PANEL_BUTTONS` "Symbol right-click menu"; the app says what to select when it is not a contact, sensor or coil). Draw 24 to 22, total 213 to 211.
+- Test `the_symbol_right_click_menu_carries_send_to_plc` reads the editor's menu source. QA 7376 (1366x768) and 7377 (1920x1080).

@@ -2481,6 +2481,18 @@ impl SchematicView {
                         if menu.symbols > 0 && ui.button("Save as macro").clicked() {
                             chosen = Some(MenuChoice::Command("macro.save"));
                         }
+                        if menu.symbols == 1
+                            && menu.terminals == 0
+                            && ui
+                                .button("Send to PLC")
+                                .on_hover_text(
+                                    "Draws the next free PLC channel of the right type beside the \
+                                     contact, sensor or coil and connects it",
+                                )
+                                .clicked()
+                        {
+                            chosen = Some(MenuChoice::Command("plc.to_plc"));
+                        }
                         if fault_row
                             && ui
                                 .button("Add fault...")

@@ -1,0 +1,33 @@
+@title PLC rows: two Draw rows, the I/O list in the Import centre, Send to PLC on right-click
+@area Layout
+@sizes 1920x1080
+# Lane V4k (docs/design/visual-redesign.md section 6). Draw > PLC (4 rows) is gone: Add PLC card and
+# PLC overview are plain Draw rows, Import I/O list is a tile of the Import centre next to Import PLC
+# tags, and Send signal to PLC is a row of the right-click menu of a selected symbol.
+click_text "Open example"
+wait 20
+click_text Draw #1
+wait 6
+shot draw-menu
+expect "Add PLC card"
+expect "PLC overview"
+expect_not "Send signal to PLC"
+expect_not "Import I/O list"
+key Escape
+wait 4
+click_text File #1
+wait 6
+click_text "Import..."
+wait 10
+shot import-centre
+expect "Import I/O list"
+check_layout
+key Escape
+wait 4
+click 579 320 right
+wait 10
+shot right-click
+expect "Send to PLC"
+check_layout
+key Escape
+wait 4

@@ -102,10 +102,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("draw.text", at("Draw")),
     ("net.select", under("Edit", "Net")),
     ("net.trace", under("Edit", "Net")),
-    ("plc.add_card", under("Draw", "PLC")),
-    ("plc.import_list", under("Draw", "PLC")),
-    ("plc.to_plc", under("Draw", "PLC")),
-    ("plc.overview", under("Draw", "PLC")),
+    ("plc.add_card", at("Draw")),
+    ("plc.overview", at("Draw")),
     ("macro.save", under("Draw", "Macros")),
     ("macro.place", under("Draw", "Macros")),
     ("macro.edit", under("Draw", "Macros")),
@@ -571,7 +569,7 @@ const SUB_FIRST: &[(&str, &[&str])] = &[
         "Edit",
         &["Paste special", "Parts", "Wire numbers", "Renumber"],
     ),
-    ("Draw", &["Terminals", "PLC", "Macros"]),
+    ("Draw", &["Terminals", "Macros"]),
 ];
 
 /// What the menu bar draws: [`layout`] with the plain rows in their
@@ -862,7 +860,7 @@ mod tests {
             // centre, the templates and examples in the Start centre.
             ("File", 26),
             ("Edit", 30),
-            ("Draw", 24),
+            ("Draw", 22),
             ("View", 65),
             ("Check", 11),
             ("Reports", 17),
@@ -886,7 +884,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 213, "the menus hold {total} rows");
+        assert!(total <= 211, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File

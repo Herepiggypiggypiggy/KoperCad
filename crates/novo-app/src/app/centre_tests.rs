@@ -118,6 +118,7 @@ fn the_import_centre_lists_every_old_import_row_and_searches_them() {
     assert!(ids("eplan").contains(&"file.import_eplan"));
     assert!(ids("eplan").contains(&"parts.import_eplan"));
     assert!(ids("tags").contains(&"plc.import_tags"));
+    assert!(ids("i/o list").contains(&"plc.import_list"));
     assert!(!ids("tags").contains(&"file.import_dwg"));
     assert!(ids("zzzz").is_empty());
 }

@@ -66,3 +66,15 @@ fn the_keys_the_menu_shows_come_from_the_keymap() {
         assert_eq!(keymap.shortcut_text(id).as_deref(), Some(key), "{id}");
     }
 }
+
+/// Draw > PLC no longer lists Send signal to PLC: the right-click menu of a
+/// selected symbol carries it (`homes::PANEL_BUTTONS`), and Ctrl+K still runs it.
+#[test]
+fn the_symbol_right_click_menu_carries_send_to_plc() {
+    let shown = menu_ids();
+    assert!(shown.iter().any(|s| s == "plc.to_plc"));
+    assert_eq!(
+        novo_workflow::homes::panel_of("plc.to_plc"),
+        Some("Symbol right-click menu")
+    );
+}
