@@ -61,6 +61,16 @@ if [ -z "${KOPERCAD_BIN_DIR:-}" ]; then
     exit 4
   fi
 fi
+# Scenarios 560-5621 and 1580 install the Controllers add-on from target/addons. Without that file the
+# file picker answers nothing and the run dies at the "I trust this file" step, which looks like a
+# trust-flow regression. Build the package when it is missing or older than its sources.
+pkg=target/addons/controllers-0.1.0.kcaddon
+case ${1:-run} in list|report) ;; *)
+  if [ ! -f "$pkg" ] || [ -n "$(find addons/controllers crates/novo-controller/src -type f -newer "$pkg" -print -quit 2>/dev/null)" ]; then
+    echo "qa.sh: building $pkg for the add-on scenarios" >&2
+    scripts/build-controllers-addon.sh >&2 || echo "qa.sh: WARNING: could not build the Controllers add-on (rustup target add wasm32-unknown-unknown); scenarios 5620 and 1580 will fail at the trust prompt" >&2
+  fi ;;
+esac
 case ${1:-run} in
   list) shift; exec "$bin/kopercad-cli" qa list "$@" ;;
   report) shift; exec "$bin/kopercad-cli" qa report "$@" ;;
