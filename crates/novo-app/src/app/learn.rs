@@ -92,6 +92,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "drawer.devices.tab",
     "live.card",
     "live.controller",
+    "live.controller.gamepad",
     "live.pole",
     "live.coil",
     "live.output",
