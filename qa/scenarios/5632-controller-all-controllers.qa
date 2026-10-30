@@ -9,8 +9,9 @@ key shift+l
 wait 20
 click_text "Controller…"
 wait 20
-click_text Add
+click_text "+ Add"
 wait 10
+shot add-menu
 click_text "Wired pendant, 3 motions, 2-step"
 wait 20
 scroll 1100 500 -1500
