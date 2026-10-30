@@ -196,6 +196,23 @@ own honest note ("Picture, not measurement" and the swing notes). Not drawn: the
 drive state and the load cell reading (they are in the line), a rope that hangs at an angle from the start,
 and winches of a pair. Scenarios 1767 and 1767b.
 
+## How real closed-loop hoists are wired (alignment)
+
+Closed-loop hoists on overhead cranes follow one pattern, and the model and the fixtures
+(`closed-winch*.novo`) already match it:
+
+- The drive reads a pulse encoder (1024 pulses per revolution is the default, `cw_encoder_ppr`).
+- The brake is a holding brake. It is never a drive output: the drive's brake relay contact
+  (`cw_brake_relay`) feeds a brake contactor or rectifier (`cw_brake_feed`) that supplies the coil,
+  AC side for a thruster brake, DC side through a rectifier (`cw_brake_switching`). Release can be
+  monitored with `cw_brake_feedback`.
+- Step 1 and step 2 reach the drive as digital inputs (`cw_in_up` / `cw_in_down` and `cw_in_fast`
+  as the preset speed), so a radio drives them through plain relay contacts.
+
+Test: `closed_loop_hoist_styles_lift_through_the_brake_contactor_and_never_without_it` runs the AC
+and the DC monitored style, holds the hook when the buttons are released and keeps it still when the
+contactor does not pull in. This is a model of that wiring, not a drive manual.
+
 ## Not yet
 
 - Unconfirmed customer details: which drive maker's hoist and encoder arrangement applies. Everything
