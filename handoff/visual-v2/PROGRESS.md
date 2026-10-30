@@ -13,3 +13,4 @@
 - 2026-10-30 V4g (branch `claude/visual-v4-project`): Project settings centre. Rows 221 -> 213 (File 34 -> 26). Scenario 7371.
 - 2026-10-30 V4k (branch `claude/visual-v4-plc`): Draw > PLC submenu gone: two plain Draw rows, Import I/O list in the Import centre, Send to PLC on the symbol right-click menu. Draw 24 -> 22, total 213 -> 211. Scenarios 7376, 7377.
 - 2026-10-30 V4h (branch `claude/visual-v4-numbering`): Numbering centre. Rows 213 -> 205 (Edit 30 -> 22). Scenario 7372.
+- 2026-10-30 V4k follow-up (branch `claude/visual-v4-followups`, from R2/R3 on #1774): Send to PLC hover text says a PLC card is needed first; the Import centre lists "Lists and tags" second so Import I/O list is above the fold at 1366x768. No row count change.
