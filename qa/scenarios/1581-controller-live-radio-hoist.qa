@@ -4,8 +4,8 @@
 # Lane C2. Shift+L, then "Controller..." on the Live potentials card opens the Controller panel on
 # the right (Simulate > Controller panel does the same). The fixture has one generic radio bound to
 # the receiver -A1: E-stop chain and main contact in series ahead of the outputs, hoist outputs 1 to 4.
-# The rocker springs back when the pointer lets go, so the hold uses mouse_down / mouse_up at the
-# button's position for this window size (1366x768: "up 2" is at 1100 232).
+# The hoist is a stack of two step zones; the pointer holds one while it is down and the stack
+# springs back on release (positions for this window size: "slow" and "fast" of Hoist up).
 open qa/fixtures/radio-hoist.novo
 wait 20
 key shift+l
@@ -19,31 +19,31 @@ expect "9 signals drive nothing"
 shot panel-at-rest
 check_layout
 # Main latch on: the receiver's main contact closes, so the circuit is fed but nothing is selected.
-click_text off
+click 1052 315
 wait 10
 expect "Signals (2 of 15 high)"
 shot main-on
 # Hoist up, step 2: the rocker closes both up outputs while it is held.
-mouse_down 1100 232
+mouse_down 1081 482
 wait 10
 expect "Signals (4 of 15 high)"
 shot hoist-up-2
 check_layout
-mouse_up 1100 232
+mouse_up 1081 482
 wait 10
 expect "Signals (2 of 15 high)"
 # The motor page, with the rocker held again.
 key PageDown
 wait 10
-mouse_down 1100 232
+mouse_down 1081 482
 wait 10
 shot motor-page-up-2
-mouse_up 1100 232
+mouse_up 1081 482
 wait 10
 # E-stop: the chain contact opens and every output drops, whatever the rocker does.
-click_text E-stop
+click 1055 265
 wait 10
-expect "E-stop pressed"
+expect "Pressed"
 expect "Signals (0 of 15 high)"
 shot e-stop
 check_layout

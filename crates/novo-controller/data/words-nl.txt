@@ -25,6 +25,10 @@ role.stop: stop, uitschakelen
 role.common: com, gemeenschappelijk, gemeenschap, gemeen, c, 0v
 role.horn: claxon, hoorn, toeter, sirene
 role.light: licht, lamp, werklamp
+role.deadman: dodemansknop, dodemans*, dodeman, vrijgaveschakelaar, vrijgavebeugel
+role.tare: tarreren, tarreer, tareren, tareer, nulstelling
+role.coupling: koppelen, koppel, koppeling, koppelschakelaar
+role.release: vrijgave hoge snelheid, vrijgave snelheid, vrijgave snel, vrijgave grof
 role.selector: keuze, keuzeschakelaar, wissel, sleutelschakelaar
 kind.radio: radio, zender, ontvanger, afstandsbediening
 kind.pendant: drukknoppenkast, drukknopkast, bedieningskast, hangkast, bedieningsstation

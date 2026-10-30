@@ -1,0 +1,37 @@
+@title Controller panel: a pendant with two-step stacks and a joystick pad with detents
+@area Live
+@sizes 1366x768
+# Lane C3. Add a generic wired pendant and a generic joystick from the Add menu of the Controller
+# card; the host draws them from their profiles: two-step stacks per direction, the mushroom and
+# the horn on the pendant, a pad with a dot per detent on the joystick. Sticky keeps a click held.
+open qa/fixtures/radio-hoist.novo
+wait 20
+key shift+l
+wait 20
+click_text "Controller…"
+wait 20
+click_text Add
+wait 10
+click_text "Wired pendant, 3 motions, 2-step"
+wait 20
+expect "Motions"
+expect "slow"
+expect "fast"
+shot pendant
+check_layout
+click_text Add
+wait 10
+click_text "Joystick, 2 axes, 3 positions each"
+wait 20
+expect "Joysticks"
+shot joystick-at-rest
+check_layout
+click_text Sticky
+wait 10
+shot sticky-on
+check_layout
+click_text "Key map"
+wait 30
+expect "Hoist up"
+shot key-map
+check_layout

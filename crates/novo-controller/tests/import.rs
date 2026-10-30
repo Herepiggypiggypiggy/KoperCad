@@ -577,3 +577,139 @@ fn the_shared_pin_proposal_passes_the_engine_check() {
         "{issues:?}"
     );
 }
+
+#[test]
+fn deadman_bar_becomes_a_hold_control_in_both_languages() {
+    for (word, text) in [
+        (
+            "Dead man bar",
+            "Terminal;Function;Step\nC;Common;\n1;Hoist up;1\n2;Dead man bar;\n",
+        ),
+        (
+            "Dodemansknop",
+            "Terminal;Function;Step\nC;Common;\n1;Hijsen;1\n2;Dodemansknop;\n",
+        ),
+    ] {
+        let p = run(text);
+        let c = p
+            .profile
+            .controls
+            .iter()
+            .find(|c| c.kind == "deadman")
+            .unwrap_or_else(|| panic!("{word}: no dead-man control: {:?}", p.profile.controls));
+        assert_eq!(c.position_text(), "released / held");
+        let s = signal(&p, "DEADMAN");
+        assert_eq!(s.when, ["held"]);
+        assert_eq!(s.pin, "2");
+        // The proposal loads as a profile the engine accepts.
+        let profile = p.profile.to_profile().expect("profile builds");
+        assert!(
+            novo_controller::validate(&profile)
+                .iter()
+                .all(|i| i.severity != novo_controller::Severity::Error)
+        );
+    }
+}
+
+#[test]
+fn imported_pendant_gets_a_pendant_panel_with_every_control_once() {
+    use novo_controller::panel::{ButtonRole, Template, Widget, plan};
+    let p = run(
+        "Terminal;Function;Step\nC;Common;\n1;Hoist up;1\n2;Hoist up;2\n3;Hoist down;1\n4;Hoist down;2\n\
+         5;Bridge forward;1\n6;Bridge forward;2\n7;Bridge back;1\n8;Bridge back;2\n\
+         9;Emergency stop;\n10;Horn;\n11;Enabling switch;\n",
+    );
+    let mut proposed = p.profile.clone();
+    proposed.kind = "pendant".to_owned();
+    let profile = proposed.to_profile().expect("profile builds");
+    let plan = plan(&profile);
+    assert_eq!(plan.template, Template::Pendant);
+    let mut drawn: Vec<&str> = plan.controls();
+    let mut all: Vec<&str> = profile.controls.iter().map(|c| c.id.as_str()).collect();
+    drawn.sort();
+    all.sort();
+    assert_eq!(drawn, all);
+    assert!(plan.widgets().any(|w| matches!(
+        w,
+        Widget::Button {
+            role: ButtonRole::Horn,
+            ..
+        }
+    )));
+    assert!(plan.widgets().any(|w| matches!(
+        w,
+        Widget::Button {
+            role: ButtonRole::Deadman,
+            ..
+        }
+    )));
+}
+
+#[test]
+fn every_generic_library_profile_has_a_panel() {
+    use novo_controller::panel::{Template, Widget, plan};
+    for (id, _) in library::list() {
+        let profile = library::build(id)
+            .expect("library entry builds")
+            .profile
+            .to_profile()
+            .expect("profile builds");
+        let plan = plan(&profile);
+        assert_eq!(plan.controls().len(), profile.controls.len(), "{id}");
+        if id.contains("joystick") {
+            assert_eq!(plan.template, Template::Joystick, "{id}");
+            assert!(
+                plan.widgets().any(|w| matches!(w, Widget::Stick { .. })),
+                "{id}"
+            );
+        } else {
+            assert!(
+                plan.widgets().any(|w| matches!(w, Widget::Motion { .. })),
+                "{id}"
+            );
+        }
+    }
+}
+
+#[test]
+fn horn_tare_coupling_and_a_fast_step_release_come_through_in_both_languages() {
+    let p = run(
+        "Terminal;Function;Step\nC;Common;\n1;Hijsen;1\n2;Zakken;1\n3;H/Z snel;\n4;Links;1\n5;Rechts;1\n6;L/R snel;\n\
+         7;Toeter;\n8;Tarreren;\n9;Koppelen;\n10;Vrijgave hoge snelheid;\n11;Noodstop A;\n12;Noodstop B;\n",
+    );
+    let kinds: Vec<(&str, &str)> = p
+        .profile
+        .controls
+        .iter()
+        .map(|c| (c.id.as_str(), c.kind.as_str()))
+        .collect();
+    for want in [
+        ("horn", "button"),
+        ("tare", "button"),
+        ("coupling", "latch"),
+        ("fast_release", "latch"),
+        ("estop", "estop"),
+    ] {
+        assert!(kinds.contains(&want), "{want:?} missing in {kinds:?}");
+    }
+    // Two E-stop channels are two parallel contacts of the one mushroom.
+    assert_eq!(signal(&p, "ESTOP_OK_2").control, "estop");
+    // The second step only acts while the release relay is on.
+    let fast = p
+        .profile
+        .signals
+        .iter()
+        .filter(|s| s.step.is_some_and(|n| n >= 2))
+        .collect::<Vec<_>>();
+    assert!(!fast.is_empty());
+    assert!(fast.iter().all(|s| s.requires == ["fast_release=on"]));
+    // It builds, validates and survives a round trip through the TOML the wizard writes.
+    let text = p.profile.to_toml();
+    let profile = novo_controller::Profile::load(&text).expect("wizard output loads");
+    assert!(
+        profile
+            .signals
+            .iter()
+            .any(|s| s.requires == ["fast_release=on"])
+    );
+}

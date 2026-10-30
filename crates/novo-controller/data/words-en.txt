@@ -2,7 +2,7 @@
 # One line per category: `category: word, word, phrase with spaces, stem*`.
 # A trailing * matches any word that starts with the stem. Lines starting with # are comments.
 # Categories: pair.<motion> (one abbreviation for both directions: `l/r`), motion.<name>, dir.<up|down|forward|back|left|right>, combo.<motion>.<dir>,
-#             speed.<slow|fast>, role.<estop|main|stop|common|horn|light|selector>,
+#             speed.<slow|fast>, role.<estop|main|stop|common|horn|light|selector|deadman|tare|coupling|release>,
 #             kind.<radio|pendant|joystick|plc-panel>
 motion.hoist: hoist, hoisting, lift
 motion.aux: auxiliary, aux, auxiliary hoist, aux hoist
@@ -35,6 +35,10 @@ role.stop: stop, power off
 role.common: com, common, supply, c, 0v, 0vac, 0vdc, 0 v
 role.horn: horn, hooter, siren, warning
 role.light: light, lamp, work light
+role.deadman: dead man, deadman, dead-man, enabling, enabling switch, enable switch, enable bar
+role.tare: tare, tare button, zero load
+role.coupling: coupling, couple, coupled, tandem switch
+role.release: fast release, speed release, high speed release, fast step release
 role.selector: selector, select, selection, changeover, key switch
 kind.radio: radio, transmitter, receiver, remote
 kind.pendant: pendant, push button station, pushbutton station, control station
