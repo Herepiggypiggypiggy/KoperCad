@@ -1,14 +1,16 @@
-//! The Export, Import and Start centres (lane V4, `docs/design/visual-redesign.md`
-//! section 6): one window each for every format the program writes, every
-//! file it brings in, and every template or example a project can start
-//! from. The commands are tiles with their icon and a sentence, grouped by
-//! what they are for; picking one shows what it does and the one button that
-//! does it. File > Export..., File > Import... and File > Templates and
-//! examples... open them, and so do the command field and the app menu search.
+//! The Export, Import, Start and Project centres (lane V4,
+//! `docs/design/visual-redesign.md` section 6): one window each for every
+//! format the program writes, every file it brings in, every template or
+//! example a project can start from, and the settings of the project. The
+//! commands are tiles with their icon and a sentence, grouped by what they
+//! are for; picking one shows what it does and the one button that does it.
+//! File > Export..., File > Import..., File > Templates and examples... and
+//! File > Project settings... open them, and so do the command field and the
+//! app menu search.
 //!
-//! Where the user finds them: those three File rows, or Ctrl+K and "export",
-//! "import" or "templates". Every command still runs from the command field
-//! by its own name.
+//! Where the user finds them: those four File rows, or Ctrl+K and "export",
+//! "import", "templates" or "project settings". Every command still runs from
+//! the command field by its own name.
 
 use eframe::egui;
 use novo_theme::{icons, presentation, widgets};
@@ -97,6 +99,7 @@ impl NovoApp {
                 Centre::Export => "export_centre",
                 Centre::Import => "import_centre",
                 Centre::Start => "start_centre",
+                Centre::Project => "project_centre",
             },
             state.kind.title(),
             [novo_theme::dialog_width::CENTRE, 640.0],
@@ -213,6 +216,9 @@ impl NovoApp {
                     Centre::Export => "No format matches. Try pdf, dxf, excel, bench or plc.",
                     Centre::Import => "Nothing matches. Try dxf, eplan, parts, excel or plc.",
                     Centre::Start => "Nothing matches. Try crane, pump, motor control or plc.",
+                    Centre::Project => {
+                        "Nothing matches. Try standard, rules, options or languages."
+                    }
                 })
                 .color(pal.text_secondary),
             );
@@ -340,6 +346,7 @@ impl NovoApp {
                     Centre::Export => "Choose a format on the left to see what it writes.",
                     Centre::Import => "Choose an item on the left to see what it brings in.",
                     Centre::Start => "Choose a template or example on the left to see what it is.",
+                    Centre::Project => "Choose a setting on the left to see what it does.",
                 })
                 .color(pal.text_secondary),
             );
@@ -380,6 +387,7 @@ impl NovoApp {
                 Centre::Export => "Any export also runs from Ctrl+K by its name.",
                 Centre::Import => "Any import also runs from Ctrl+K by its name.",
                 Centre::Start => "Any template or example also runs from Ctrl+K by its name.",
+                Centre::Project => "Any setting also runs from Ctrl+K by its name.",
             })
             .small()
             .color(pal.text_tertiary),

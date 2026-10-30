@@ -234,3 +234,49 @@ fn the_start_centre_draws_at_both_sizes_with_an_anchor_for_each_tile() {
         d.frame_sized(size, Vec::new());
     }
 }
+
+#[test]
+fn the_project_centre_replaces_the_project_submenu_and_the_name_taking_commands_stay_in_the_palette()
+ {
+    let ids = |q: &str| -> Vec<&'static str> {
+        visible(Centre::Project, q)
+            .into_iter()
+            .flat_map(|(_, rows)| rows.into_iter().map(|r| r.id))
+            .collect()
+    };
+    assert!(ids("rules").contains(&"project.rules"));
+    assert!(ids("variants").contains(&"project.options"));
+    assert!(ids("zzzz").is_empty());
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_project(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(super::workbench::app_runs("file.project_centre"));
+    d.app.run_command(&ctx, "file.project_centre", None);
+    d.frame();
+    assert_eq!(
+        d.app.wb.centre.as_ref().map(|c| c.kind),
+        Some(Centre::Project)
+    );
+    let file = novo_workflow::menus::layout("File");
+    let has = |what: &str| {
+        file.iter().any(|i| match i {
+            novo_workflow::menus::MenuItem::Command(c) => c.label.starts_with(what),
+            novo_workflow::menus::MenuItem::Submenu { name, .. } => name.starts_with(what),
+            _ => false,
+        })
+    };
+    assert!(has("Project settings"));
+    assert!(!has("Project") || has("Project settings"));
+    assert!(!file.iter().any(|i| matches!(
+        i,
+        novo_workflow::menus::MenuItem::Submenu { name, .. } if *name == "Project"
+    )));
+    // Still runnable by name, with or without the centre.
+    d.app.wb.centre = None;
+    d.app.run_command(&ctx, "project.rules", None);
+    d.frame();
+    assert!(d.app.wb.project_rules);
+    let fallback = super::learn_labels::anchor_fallback("cmd.project.rules").expect("fallback");
+    assert_eq!(fallback, "cmd.file.project_centre");
+}

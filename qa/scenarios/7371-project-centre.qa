@@ -1,0 +1,29 @@
+@title Project settings centre: standard, rules, languages, options and generate as tiles
+@area Layout
+# Lane V4g (docs/design/visual-redesign.md section 6). File > Project settings... opens one
+# window with what the File > Project submenu and Report languages held; File no longer
+# has the Project submenu. Variant, option and tie take a name in the command field.
+click_text "Open example"
+wait 20
+click_text File #1
+wait 6
+shot file-menu-one-project-row
+expect "Project settings..."
+click_text "Project settings..."
+wait 10
+shot centre-open
+expect "Drawing and reports"
+expect "Options and variants"
+expect "Choose a setting"
+check_layout
+click_text "Rules"
+wait 6
+shot centre-picked-rules
+expect "The rules for wire numbers"
+check_layout
+click_text "Open"
+wait 10
+shot rules-window
+expect "Rules"
+key Escape
+wait 6

@@ -80,6 +80,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.import_centre", at("File")),
     // File > Templates and examples... opens the Start centre; the templates and examples are listed there.
     ("file.start_centre", at("File")),
+    // File > Project settings... opens the Project centre; the project commands are listed there.
+    ("file.project_centre", at("File")),
     ("export.print_preview", at("File")),
     // Reports
     ("report.wirecut", at("Reports")),
@@ -224,14 +226,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
 const REGROUPED: &[(&str, MenuPlace)] = &[
     // File: project settings and the library each get one submenu, so the
     // top level is only what you do to a file.
-    ("project.rules", under("File", "Project")),
-    ("project.standard", under("File", "Project")),
-    ("project.options", under("File", "Project")),
-    ("project.variant", under("File", "Project")),
-    ("project.option", under("File", "Project")),
-    ("project.tie", under("File", "Project")),
-    ("project.untie", under("File", "Project")),
-    ("project.generate", under("File", "Project")),
     ("parts.browser", under("File", "Library")),
     ("parts.import_step", under("File", "Library")),
     // Edit: the paste variants, the part commands and the numbering
@@ -262,6 +256,18 @@ const PALETTE_ONLY: &[(&str, &str)] = &[
     ("view.3d_missing_data", "a switch of the 3D toolbar"),
     ("view.3d_trackpad_pans", "a switch of the 3D toolbar"),
     ("tool.repeat", "the key that repeats the last tool"),
+    (
+        "project.variant",
+        "takes a name in the command field (variant crane); without one it opens Project options",
+    ),
+    (
+        "project.option",
+        "takes a name in the command field (option conveyor off); without one it opens Project options",
+    ),
+    (
+        "project.tie",
+        "takes a name in the command field (tie conveyor); without one it opens Project options",
+    ),
     (
         "view.icon_gallery",
         "a design reference for the icon set, opened from the command field",
@@ -560,7 +566,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
 /// Submenus drawn first, in this order, for the menus named here; the
 /// others follow in the order [`layout`] gives them.
 const SUB_FIRST: &[(&str, &[&str])] = &[
-    ("File", &["Project", "Library", "Macros", "Revisions"]),
+    ("File", &["Library", "Macros", "Revisions"]),
     (
         "Edit",
         &["Paste special", "Parts", "Wire numbers", "Renumber"],
@@ -854,7 +860,7 @@ mod tests {
         let ceilings: &[(&str, usize)] = &[
             // The export formats are in the Export centre, the imports in the Import
             // centre, the templates and examples in the Start centre.
-            ("File", 34),
+            ("File", 26),
             ("Edit", 30),
             ("Draw", 24),
             ("View", 65),
@@ -880,7 +886,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 221, "the menus hold {total} rows");
+        assert!(total <= 213, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File

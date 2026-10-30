@@ -182,6 +182,7 @@ fn path_of(info: &CommandInfo) -> String {
         return match centre {
             Some(novo_workflow::centres::Centre::Import) => "File > Import",
             Some(novo_workflow::centres::Centre::Start) => "File > Templates and examples",
+            Some(novo_workflow::centres::Centre::Project) => "File > Project settings",
             _ => "File > Export",
         }
         .to_owned();
