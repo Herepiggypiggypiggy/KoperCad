@@ -13,3 +13,12 @@ HEAD.txt: 781449f0c2c2575f0356334aeb504cd6473d9c04 (merge of main 965c88ee at a6
 - Parts scenarios 1581-assign-all, 1582-assign-all, 1584-parts-window: `click_text Place #2` fails; unrelated to controllers (caught by the `--only 158` filter).
 - Menu rows: this PR adds none (ceilings File 22, Edit 19, Draw 12, total 186 untouched).
 - Run windows keep their "Model, not measurement" footer; no safety claim added.
+
+## Addendum: the same scenarios on main
+Built origin/main b7a11a7f83f1867e0dfa4f821168148b3cdd78cb in a separate worktree (no change from this PR) and ran the four scenarios:
+- 1583-controller-hoist-run (1366x768): fail, F-001 (`brake open` not on screen)
+- 1583b-controller-hoist-run-1920 (1920x1080): fail, F-002
+- 1584-controller-pendant-joystick (1366x768): fail, F-001 (`click_text "Wired pendant, 3 motions, 2-step"`)
+- 1584b-controller-pendant-joystick-1920 (1920x1080): fail, F-002
+
+So these four already fail on main and are not caused by this PR. They are left untouched. Reports: /tmp/qa-main-a and /tmp/qa-main-b on the build box.
