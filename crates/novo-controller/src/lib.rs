@@ -12,6 +12,8 @@
 //! - [`binding`]: signal to target bindings keyed `controller/signal`, with checks.
 //! - [`panel`]: which widget draws which control (pendant, two-step pairs, joystick, rotary).
 //! - [`sequence`]: deterministic record and replay of timed presses.
+//! - [`gamepad`]: pad state, per-instance pad map, mapper (deadzone, calibration, detents, dead-man)
+//!   and the calibration wizard engine.
 //!
 //! The crate has no dependency on the data model or the simulator, uses only `std` (no files,
 //! clock, threads or global state) and a deterministic order everywhere, so it also compiles to
@@ -19,6 +21,7 @@
 
 pub mod binding;
 pub mod engine;
+pub mod gamepad;
 pub mod import;
 pub mod machine;
 mod machine_check;

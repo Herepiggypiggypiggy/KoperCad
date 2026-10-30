@@ -24,6 +24,9 @@ use super::{Level, NovoApp};
 enum CardAction {
     OpenWizard,
     Close,
+    Pad(super::controller_pad::PadAction),
+    /// Where the Gamepad section is drawn, for the lesson anchor.
+    PadAnchor(egui::Rect),
 }
 
 /// The keys of the keyboard map (see [`key_map`]).
@@ -234,6 +237,7 @@ impl NovoApp {
     /// The Controller card, drawn over the live view while it is open.
     pub(super) fn controller_card(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         if !self.wb.live.on || !(self.wb.live.ctl.open || !self.wb.live.ctl.popped.is_empty()) {
+            self.wb.live.ctl.pad_card_closed();
             return;
         }
         self.controller_keys(ctx);
@@ -243,6 +247,9 @@ impl NovoApp {
         let project = doc.project();
         let ctl = &mut self.wb.live.ctl;
         ctl.sync(project);
+        // The pad has the focus rules of a hand: a window in the background lets go.
+        let focused = ctx.input(|i| i.focused) || crate::control::requested_port().is_some();
+        ctl.pad_frame(focused);
         ctl.apply_holds();
         let mut actions = Vec::new();
         let card = if ctl.open {
@@ -270,10 +277,28 @@ impl NovoApp {
         if ctx.input(|i| i.pointer.any_down()) || self.wb.live.ctl.wants_frames() {
             ctx.request_repaint();
         }
+        {
+            let ctl = &mut self.wb.live.ctl;
+            super::controller_pad::editor(ctx, ctl);
+            super::controller_pad::wizard(ctx, ctl);
+            ctl.pad_commit(ctx.input(|i| i.pointer.any_down()));
+            if std::mem::take(&mut ctl.pad.seen) || ctl.pad.wants_frames() {
+                ctx.request_repaint_after(std::time::Duration::from_millis(33));
+            }
+        }
         for action in actions {
             match action {
                 CardAction::OpenWizard => self.open_controller_import(),
                 CardAction::Close => self.wb.live.ctl.open = false,
+                CardAction::Pad(super::controller_pad::PadAction::OpenEditor) => {
+                    self.wb.live.ctl.pad.editor = true;
+                }
+                CardAction::Pad(super::controller_pad::PadAction::OpenWizard) => {
+                    self.wb.live.ctl.pad_open_wizard();
+                }
+                CardAction::PadAnchor(rect) => {
+                    self.anchor("live.controller.gamepad", rect, "Gamepad section");
+                }
             }
         }
         self.controllers_save();
@@ -409,6 +434,14 @@ fn draw_card(
             super::controller_widgets::key_map_table(ui, &profile, &map);
         });
     if !popped {
+        let pad = egui::CollapsingHeader::new("Gamepad")
+            .id_salt(("controller_pad", &id))
+            .show(ui, |ui| {
+                let mut pad_actions = Vec::new();
+                super::controller_pad::section(ui, ctl, &id, &profile, &mut pad_actions);
+                actions.extend(pad_actions.into_iter().map(CardAction::Pad));
+            });
+        actions.push(CardAction::PadAnchor(pad.header_response.rect));
         effects_row(ui, ctl, &id);
     }
     ui.weak("Scroll for the signals, bindings and checks");
