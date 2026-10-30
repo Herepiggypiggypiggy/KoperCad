@@ -289,7 +289,7 @@ impl NovoApp {
         );
     }
 
-    /// File > New from template > Overhead crane: a structure tree, a few
+    /// File > Templates and examples > Overhead crane: a structure tree, a few
     /// empty pages and the cover pages, in a new unsaved project.
     pub(super) fn new_crane_project(&mut self, options: super::template_crane::CraneOptions) {
         let today = super::revisions::today();
@@ -301,7 +301,7 @@ impl NovoApp {
         );
     }
 
-    /// File > New from template > Pump station / Motor control centre.
+    /// File > Templates and examples > Pump station / Motor control centre.
     pub(super) fn new_plant_project(&mut self, options: super::template_plants::PlantOptions) {
         let today = super::revisions::today();
         self.open_built(

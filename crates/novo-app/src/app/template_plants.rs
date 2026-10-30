@@ -1,5 +1,5 @@
 //! The pump station and motor control centre project templates
-//! (File > New from template > Pump station / Motor control centre). Like
+//! (File > Templates and examples > Pump station / Motor control centre). Like
 //! the crane template they start a project with a plant-shaped structure
 //! tree, drawing pages filed under it with a circuit from the standard
 //! circuit library (docs/CIRCUIT-LIBRARY.md) on each, and the cover pages as

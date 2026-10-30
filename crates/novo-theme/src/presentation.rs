@@ -365,6 +365,11 @@ pub const TABLE: &[Presentation] = &[
     ),
     row("file.export_centre", p(icons::EXPORT), "Export"),
     row("file.import_centre", p(icons::DOWNLOAD_SIMPLE), "Import"),
+    row(
+        "file.start_centre",
+        p(icons::SQUARES_FOUR),
+        "Templates and examples",
+    ),
     row("file.import_crane", p(icons::CRANE), "Import crane project"),
     row(
         "file.import_eplan",
