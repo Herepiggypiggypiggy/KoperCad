@@ -316,8 +316,12 @@ impl ClWinchModule {
     }
 
     /// Force in the rope at the hook in newtons, as a load cell reads it: the weight plus the
-    /// inertia of the hook mass (the rope is taken as rigid).
+    /// inertia of the hook mass (the rope is taken as rigid). Zero while the hook rests on the
+    /// ground: the rope carries nothing then.
     pub fn load_n(&self) -> f64 {
+        if self.winch.resting() {
+            return 0.0;
+        }
         self.winch.hoist().mass_kg() * (G + self.accel_m_s2)
     }
 
