@@ -20,7 +20,7 @@ use std::sync::Arc;
 /// What the picture leaves out, shown next to it in the window.
 pub const CRANE_PICTURE_LEAVES_OUT: &[&str] = &[
     "Generic crane proportions: the girder, trolley and hook block are not your crane's sizes",
-    "The rope is a straight bar of fixed length: its swing is a simple pendulum model, not a measurement; stretch and slack rope are not modelled",
+    "The rope is a straight bar of fixed length: its swing is a simple pendulum model, not a measurement; stretch and slack rope are not drawn (Drive run and the line above the picture give slack rope and floor pick-up as numbers)",
     "Bridge and trolley follow a travel drive if you pick one (forward is +x for the bridge, +z for the trolley) and its end limits stand as upright flags, red forward and amber reverse; otherwise they stand where you set them. Your picks and the crane size are saved with the project",
     "No building, no clearance check, no structural model",
 ];
