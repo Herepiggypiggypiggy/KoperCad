@@ -1293,8 +1293,10 @@ fn closed_winch_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<
             help: "Hook load turns the motor into a winch behind an encoder drive. The STO \
                    channels and the encoder signal are devices of the drawing, so a defect \
                    injected on them (Simulate > Defects and walk-throughs) reaches the drive. \
-                   Blank rows use generic values, not a manufacturer's data. Run it: \
-                   Simulate > Drive run.",
+                   Blank rows use generic values, not a manufacturer's data. The rated load \
+                   and overload rows are a simulation of the behaviour, not a validated \
+                   overload protection and no substitute for a rated capacity limiter to the \
+                   applicable standard. Run it: Simulate > Drive run.",
         },
     );
 }

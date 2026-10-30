@@ -151,7 +151,9 @@ The reading beside the winch shows "load N % of rated" (and "lifting inhibited")
 Exact by definition: the arithmetic of the reading, the order of the tick, lifting only inhibited.
 Model: the rigid rope (no rope dynamics in the reading), the load cell itself (no noise, no
 calibration error, no response time) and the cut-out threshold behaviour of a real limiter, whose
-standard (for example the dynamic factor and test loads) is not looked up here. A rated load is not
+standard (for example the dynamic factor and test loads) is not looked up here. A hard acceleration raises the reading (weight plus inertia), so a lift can cut out a few per cent
+below the cut-out (the default 3 s ramp to step 2, 0.8 m/s, adds 2.7 %: about 107 % of the static load). It is a simulation of the behaviour, not a validated overload protection and no
+substitute for a rated capacity limiter to the applicable standard. A rated load is not
 monitored in a pair (the pair has its own rope rating). Scenarios 1765 to 1765d, fixtures
 `closed-winch-load.novo` and `closed-winch-overload.novo`.
 
