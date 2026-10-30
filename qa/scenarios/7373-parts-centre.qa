@@ -1,0 +1,31 @@
+@title Part tools centre: catalog, assign, describe and clean up as tiles
+@area Layout
+# Lane V4i (docs/design/visual-redesign.md section 6). Edit > Part tools... opens one window
+# with what File > Library and Edit > Parts held; neither submenu is in the menus any more.
+click_text "Open example"
+wait 20
+click_text Edit #1
+wait 6
+shot edit-menu-one-parts-row
+expect "Part tools..."
+click_text "Part tools..."
+wait 10
+shot centre-open
+expect "Catalog"
+expect "Parts on the devices"
+expect "Choose a tool"
+check_layout
+click_text "Remove unused parts"
+wait 6
+shot centre-picked-unused
+expect "Removes the parts no device uses any more."
+check_layout
+text catalog
+wait 8
+shot centre-search-catalog
+expect "Import 3D model (STEP)"
+expect_not "Remove unused parts"
+check_layout
+key Escape
+wait 6
+expect_not "Choose a tool"

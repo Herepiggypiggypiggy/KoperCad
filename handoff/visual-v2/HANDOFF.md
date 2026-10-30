@@ -84,3 +84,7 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 ## V4j: terminal rows leave Draw (2026-10-30)
 - The seven Draw > Terminals rows (Connect and Disconnect terminals, Toggle PE terminal, Reset PE override, strip number Up, Down, Lowest free) act on the terminals selected on the page. Their home is the right-click menu of a selected terminal, which already carried each one: `homes::PANEL_BUTTONS` entry "Terminal right-click menu". Draw 24 to 17, total 203 to 196 (after #1772 and #1774). Up and Down keep their keys; every row is still in Ctrl+K (its path reads "Terminal right-click menu").
 - Test `the_terminal_right_click_menu_carries_every_terminal_row_that_left_draw` reads the editor's menu source, so a row dropped from the menu fails it. QA scenarios 7374 (1366x768) and 7375 (1920x1080) walk the terminal-strips lesson to two selected terminals and open the menu.
+
+## V4i: Part tools centre (2026-10-30)
+- `centres::Centre::Parts` (command `edit.parts_centre`, Edit > Part tools...): Parts (the catalog), Import 3D model (STEP), Assign parts to devices, Describe devices from parts, Remove parts from selected devices, Remove unused parts. The File > Library and Edit > Parts submenus (6 rows) are gone: File 26 to 24, Edit 22 to 19, total 196 to 191 (after #1772, #1773 and #1774).
+- QA scenario 7373; scenario 723 now opens the Macros submenu where it opened Library. Next: the Draw leftovers (Terminals strip tools, PLC, Macros).
