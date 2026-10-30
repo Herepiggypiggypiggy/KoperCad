@@ -217,6 +217,58 @@ fn a_brake_contactor_that_does_not_pull_in_trips_the_feedback_and_the_hook_stays
     assert!(m.height_m().abs() < 0.002, "{}", m.height_m());
 }
 
+/// The closed-loop hoists of real cranes share one pattern: a 1024-pulse TTL encoder on the
+/// drive, a holding brake that the drive's relay output switches through a contactor (AC side
+/// for a thruster brake, DC side through a rectifier with the release monitored), step 1 and
+/// step 2 as digital inputs. The brake is never a drive output: with the contactor not pulling
+/// in, the hook stays.
+#[test]
+fn closed_loop_hoist_styles_lift_through_the_brake_contactor_and_never_without_it() {
+    for extra in [
+        vec![("cw_encoder_ppr", "1024"), ("cw_brake_switching", "ac")],
+        vec![
+            ("cw_encoder_ppr", "1024"),
+            ("cw_brake_switching", "dc"),
+            ("cw_brake_feedback", "KB"),
+        ],
+    ] {
+        let (mut l, mut c, cmd) = rig(&extra);
+        *cmd.borrow_mut() = Cmd {
+            up: true,
+            fast: true,
+            ..Cmd::default()
+        };
+        seconds(&mut l, &mut c, 8.0);
+        let m = l.module("=M1").unwrap();
+        assert!(m.height_m() > 1.0, "{extra:?}: {}", m.height_m());
+        assert!(
+            m.findings()
+                .iter()
+                .all(|f| !matches!(f.kind, ClFindingKind::Trip(_))),
+            "{extra:?}"
+        );
+        // Releasing the buttons: the relay opens, the contactor drops, the brake holds.
+        *cmd.borrow_mut() = Cmd::default();
+        seconds(&mut l, &mut c, 6.0);
+        let held = l.module("=M1").unwrap().height_m();
+        seconds(&mut l, &mut c, 3.0);
+        let after = l.module("=M1").unwrap().height_m();
+        assert!((after - held).abs() < 0.002, "{extra:?}: {held} {after}");
+
+        let (mut l, mut c, cmd) = rig(&extra);
+        *cmd.borrow_mut() = Cmd {
+            up: true,
+            contactor_follows_relay: false,
+            ..Cmd::default()
+        };
+        seconds(&mut l, &mut c, 4.0);
+        assert!(
+            l.module("=M1").unwrap().height_m().abs() < 0.002,
+            "{extra:?}"
+        );
+    }
+}
+
 #[test]
 fn a_welded_brake_contactor_lets_the_load_run_with_the_drive_off() {
     let (mut l, mut c, cmd) = rig(&[]);
