@@ -1,0 +1,32 @@
+@title Drive hoist slow-down switch: the hook slows before the final upper limit and the run reports the speed at the limit (1366x768)
+@area Simulate
+@sizes 1366x768
+# Opens the limits variant of the drive hoist fixture (slow-down switch at 0.8 m, final limit at
+# 1.1 m, both drawn as normally closed contacts), starts Simulate > Drive run, switches Live on and
+# lifts with radio step 2 until the final limit stops the hoist.
+open qa/fixtures/hoist-drive-limits.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+key Home
+wait 30
+mouse_down 123 343
+wait 150
+shot lifting
+wait 1800
+expect "slow-down switch"
+expect "final limit"
+expect "What the hoist run found"
+check_layout
+shot slowed-before-the-final-limit
+mouse_up 123 343
+wait 300
+shot stopped

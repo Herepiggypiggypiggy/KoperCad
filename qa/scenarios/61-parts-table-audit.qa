@@ -37,9 +37,13 @@ shot added
 answer_dialog qa/fixtures/parts/price-list-nl.csv
 click_text File
 wait 4
-click_text "Import parts"
+click_text "Import..."
 wait 4
-click_text "Import parts from a folder"
+text "folder"
+wait 4
+click_text "Import parts folder"
+wait 2
+click_text "Import" Button #1
 wait 20
 expect "is a file, not a folder"
 expect_not "os error"

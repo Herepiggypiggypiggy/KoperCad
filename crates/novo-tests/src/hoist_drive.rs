@@ -39,7 +39,7 @@ fn role(device: DeviceId, main: bool) -> SymbolRole {
 
 /// Builds the drive hoist project as one undo step.
 pub fn drive_hoist(doc: &mut Document) -> Result<DriveHoist> {
-    Ok(doc.transact("Draw drive hoist", build)?.0)
+    Ok(doc.transact("Draw drive hoist", |tx| build(tx, false))?.0)
 }
 
 /// The same project with the hook resting on the floor at the start (`dh_floor_m` 0) and a 1500 kg
@@ -47,7 +47,7 @@ pub fn drive_hoist(doc: &mut Document) -> Result<DriveHoist> {
 pub fn drive_hoist_on_floor(doc: &mut Document) -> Result<DriveHoist> {
     Ok(doc
         .transact("Draw drive hoist on the floor", |tx| {
-            let h = build(tx)?;
+            let h = build(tx, false)?;
             tx.set_property(h.motor, "dh_mass_kg", Some(1500.0.into()))?;
             tx.set_property(h.motor, "dh_floor_m", Some(0.0.into()))?;
             Ok(h)
@@ -55,7 +55,32 @@ pub fn drive_hoist_on_floor(doc: &mut Document) -> Result<DriveHoist> {
         .0)
 }
 
-fn build(tx: &mut Tx<'_>) -> Result<DriveHoist> {
+/// The same project with an upper final limit (LS-F, normally closed, in the up rung) and an
+/// upper slow-down switch (LS-S, normally closed, in the rungs of speed steps 2 and 3) that opens
+/// 0.3 m before it: past the slow-down switch only step 1 runs, and the final limit stops the hoist.
+pub fn drive_hoist_with_limits(doc: &mut Document) -> Result<DriveHoist> {
+    Ok(doc
+        .transact("Draw drive hoist with limits", |tx| {
+            let h = build(tx, true)?;
+            for (key, value) in [
+                ("dh_limit_up", "=A1+LIM-LS-F"),
+                ("dh_slow_up", "=A1+LIM-LS-S"),
+            ] {
+                tx.set_property(h.motor, key, Some(value.into()))?;
+            }
+            for (key, value) in [
+                ("dh_limit_up_m", 1.1),
+                ("dh_slow_up_m", 0.8),
+                ("dh_clearance_up_m", 0.1),
+            ] {
+                tx.set_property(h.motor, key, Some(value.into()))?;
+            }
+            Ok(h)
+        })?
+        .0)
+}
+
+fn build(tx: &mut Tx<'_>, limits: bool) -> Result<DriveHoist> {
     tx.set_info(|i| i.name = "Drive hoist".into())?;
     let page = tx.add_page("1")?;
     tx.update::<Page>(page, |p| p.title = "Drive hoist".into())?;
@@ -67,6 +92,12 @@ fn build(tx: &mut Tx<'_>) -> Result<DriveHoist> {
     let ka4 = tx.add_device(tag("=A1+CAB-KA4"), "Drive speed step 3")?;
     let kr2 = tx.add_device(tag("=A1+CAB-KR2"), "Drive brake relay")?;
     let kb = tx.add_device(tag("=A1+CAB-KB"), "Brake contactor")?;
+    let ls_f = limits
+        .then(|| tx.add_device(tag("=A1+LIM-LS-F"), "Upper final limit"))
+        .transpose()?;
+    let ls_s = limits
+        .then(|| tx.add_device(tag("=A1+LIM-LS-S"), "Upper slow-down switch"))
+        .transpose()?;
     let m1 = tx.add_device(tag("=A1+FLD-M1"), "Hoist motor")?;
     let s1 = tx.add_device(tag("=A1+RAD-S1"), "Up, step 1")?;
     let s2 = tx.add_device(tag("=A1+RAD-S2"), "Up, step 2")?;
@@ -101,6 +132,7 @@ fn build(tx: &mut Tx<'_>) -> Result<DriveHoist> {
     let btn = "iec/operators/pushbutton_no";
     let no = "iec/contacts/no";
     let coil = "iec/coils/relay";
+    let nc = "iec/contacts/nc";
 
     let motor_sym = tx.place_symbol(
         page,
@@ -124,17 +156,35 @@ fn build(tx: &mut Tx<'_>) -> Result<DriveHoist> {
         tx.connect(Endpoint::junction(j_top), Endpoint::pin(b, 0))?;
         tx.connect(Endpoint::pin(b, 1), Endpoint::junction(j_bot))?;
     }
-    tx.connect(Endpoint::junction(j_bot), Endpoint::pin(ka1_coil, 0))?;
+    match ls_f {
+        Some(ls) => {
+            let limit = sym(tx, nc, x, 84.0, ls, true)?;
+            tx.connect(Endpoint::junction(j_bot), Endpoint::pin(limit, 0))?;
+            tx.connect(Endpoint::pin(limit, 1), Endpoint::pin(ka1_coil, 0))?;
+        }
+        None => {
+            tx.connect(Endpoint::junction(j_bot), Endpoint::pin(ka1_coil, 0))?;
+        }
+    }
     tx.connect(Endpoint::pin(ka1_coil, 1), Endpoint::pin(fnn, 0))?;
 
     // Rungs 2 and 3: KA3 and KA4 = S2 (the same radio contact, drawn again).
-    for (x, device) in [(238.0, ka3), (286.0, ka4)] {
+    for (x, device, main_contact) in [(238.0, ka3, true), (286.0, ka4, false)] {
         let f = feed(tx, l, x, 20.0)?;
         let b = sym(tx, btn, x, 52.0, s2, false)?;
         let k = sym(tx, coil, x, 112.0, device, true)?;
         let fnn = feed(tx, n, x, 136.0)?;
         tx.connect(Endpoint::pin(f, 0), Endpoint::pin(b, 0))?;
-        tx.connect(Endpoint::pin(b, 1), Endpoint::pin(k, 0))?;
+        match ls_s {
+            Some(ls) => {
+                let limit = sym(tx, nc, x, 84.0, ls, main_contact)?;
+                tx.connect(Endpoint::pin(b, 1), Endpoint::pin(limit, 0))?;
+                tx.connect(Endpoint::pin(limit, 1), Endpoint::pin(k, 0))?;
+            }
+            None => {
+                tx.connect(Endpoint::pin(b, 1), Endpoint::pin(k, 0))?;
+            }
+        }
         tx.connect(Endpoint::pin(k, 1), Endpoint::pin(fnn, 0))?;
     }
 

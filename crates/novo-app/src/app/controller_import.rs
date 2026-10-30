@@ -1,4 +1,4 @@
-//! File > Import > Controller profile from I/O table (lane C4): a wizard that turns a standard
+//! File > Import... > Controller from I/O table (lane C4): a wizard that turns a standard
 //! I/O page into a controller profile and a binding table (`plans/controller-live-view.md`,
 //! section 3). Four ways in, all ending in the same editable table: paste from Excel, the
 //! pins of the selected device in the open drawing, a table or EPLAN page from a file, and the

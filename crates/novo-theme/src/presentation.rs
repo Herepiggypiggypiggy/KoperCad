@@ -302,7 +302,7 @@ pub const TABLE: &[Presentation] = &[
     ),
     row(
         "project.options",
-        p(icons::SLIDERS_HORIZONTAL),
+        p(icons::SLIDERS),
         "Project options and variants",
     ),
     row("project.variant", p(icons::GIT_BRANCH), "Switch variant"),
@@ -363,6 +363,19 @@ pub const TABLE: &[Presentation] = &[
         d(&drawn::PLC),
         "Controller from I/O table",
     ),
+    row("file.export_centre", p(icons::EXPORT), "Export"),
+    row("file.import_centre", p(icons::DOWNLOAD_SIMPLE), "Import"),
+    row(
+        "file.start_centre",
+        p(icons::SQUARES_FOUR),
+        "Templates and examples",
+    ),
+    row(
+        "file.project_centre",
+        p(icons::GEAR_SIX),
+        "Project settings",
+    ),
+    row("edit.numbering_centre", p(icons::LIST_NUMBERS), "Numbering"),
     row("file.import_crane", p(icons::CRANE), "Import crane project"),
     row(
         "file.import_eplan",

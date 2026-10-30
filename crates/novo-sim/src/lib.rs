@@ -33,6 +33,7 @@ pub mod study;
 pub mod timing;
 pub mod trace;
 pub mod walkthrough;
+pub mod winch_check;
 
 pub use coupling::{
     Clock, DEFAULT_DELAY, Faults, Settled, delay_seconds, is_coil, is_timer_contact, settle,

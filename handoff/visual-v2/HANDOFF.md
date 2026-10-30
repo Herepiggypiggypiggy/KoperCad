@@ -33,3 +33,54 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 - **Edit duplicates** (Undo/Redo also on the rail and in the top bar) stay in Edit: the menu is the place people look first and it shows the key.
 - V7 flips `MENU_NAMES_DEFAULT` and the lessons/QA scenarios that click menu words.
 - **Label policy in the classic menu bar**: the bar (menu words shown) still draws the full command labels (for example "Show or hide the wires in 3D", "EMC net classes on the schematic: each wire in the colour of its cable class (indicative)"). The short labels (28 characters) are used by the app menu, rails and palette. Moving the bar to short labels changes what lessons and QA scenarios click; that goes with V7 (menu words hidden by default).
+
+## V4a: the Export centre (2026-10-29)
+- `novo-workflow/src/centres.rs` lists the formats the centre shows, group by group (Drawings, Print, Reports, Workshop and bench, PLC, Exchange), with one sentence for each (`describe`). Every `export.*` command is in exactly one group (a test keeps it so). A new export command goes into a group there, or the test names it.
+- `novo-app/src/app/centre.rs` (was `export_centre.rs`) is the window for both centres (`modal_fill`, 1120 by 640, `dialog_width::CENTRE`): search on top, tiles by group on the left, the picked format on the right, Export button at the foot. A tile click picks, a double click runs, Enter runs the picked one; the search keeps the keyboard so typing keeps narrowing. Each tile carries the lesson anchor `cmd.<id>`; while the centre is shut the anchor falls back to `cmd.file.export_centre` and then to the File menu.
+- `file.export_centre` ("Export...") is the one File row. The 44 other export rows left File and Reports (File 88 to 58, Reports 30 to 17). `export.print_preview` keeps its File row as the print entry and is also a tile. All stay in the command field.
+- Lessons that walked File > Export submenus now say "open Export... and pick the format"; the manual lines too. Scenarios 09, 184 and 723 changed for it; 726 is new.
+- Budget ceilings now: File 60, Edit 30, Draw 39, View 65, Check 11, Reports 17, Simulate 25, Help 19 = 266 (Simulate 25 because `sim.hoist3d` landed after V2c and left main's own budget test red).
+
+## V4c: the Import centre (2026-10-29)
+- `centres::Centre` is `Export` or `Import`; `IMPORT_SECTIONS` groups the 14 commands of File > Import and File > Import parts (Drawings and backgrounds, Projects, Parts, Lists and tags). The window is the same (`centre.rs`, `CentreWindow { kind, .. }`, `wb.centre`); the footer button says Import, or Remove, Choose, Get script for the three that are not imports.
+- `file.import_centre` ("Import...") is the one File row; File 60 to 47, total 266 to 253. Palette and app-menu search show `File > Import` for the tiles; anchors fall back to `cmd.file.import_centre`.
+- Tile minimum width 250 and the window 1120 wide: titles like "Export plate drawing as DXF" were cut at 1366x768.
+- QA scenarios that clicked `File > Import parts > ...` (21-parts-*, 60, 61, 639, 1700 and the `import_table` step) go through the centre: type the query, click the tile, press the Import button.
+
+## V4d: drawer toolbars (2026-10-29)
+- `homes::DRAWER_TOOLBARS` lists, by the command that opens the drawer, the 11 `terminal.*` strip edits (Terminals drawer toolbar and row menu: `terminal_edit::EDIT_COMMANDS`, a test keeps the two equal) and the 4 `cable.*` rows (Cables drawer: name field, type picker, Delete cable, Restore declined). Their Draw rows (submenus Terminal strips and Cables) are gone: Draw 39 to 24, total 253 to 238. `Home::DrawerToolbar` is set for them; `menus::moved_out` knows them.
+- Lessons: `cmd.terminal.*` anchors are the toolbar buttons (`strip_toolbar` registers a spot for each); with the drawer shut they fall back to the rail button `cmd.view.terminals_drawer`. The palette and the app menu search say `Terminals drawer` or `Cables drawer` as the path.
+- QA scenario 728 (Draw menu without the submenus, the toolbar in the drawer, the palette path).
+
+## V4e: panel homes (2026-10-29)
+- New `Home::Panel(name)` (`HomeKind::Panel`): a button or context menu of a panel. `homes::PANEL_BUTTONS` lists the 6 `page.*` commands (Pages list: the + New button and the right-click menu of a page) and the 4 `learn.*` commands (lesson card: Back, Next, Start over, Close). Their File > Pages and Help > Lesson rows are gone: File 47 to 41, Help 19 to 15 (the design target), total 253 to 243.
+- The palette and the app menu search name the panel as the place; lesson anchors `cmd.page.*` fall back to the Pages list (`outline.pages`); the tags-and-pages lesson says "Right-click the page in the Pages list".
+- QA scenario 729.
+
+## V4 what is left
+- **Options and preview on the right of the centre** (design section 6): the right side now shows the sentence, the key and the reason a format is grey, not the options of the format or a preview. Formats with options (PDF options, print sets, DXF) still open their own window after Export.
+- **Library rows** (File > Library, Macros) are still menus.
+- **Project and Pages** moves, as in the V2c gaps above; the remaining Draw rows (Terminals submenu, PLC, Macros) and View (65 rows).
+- The Reports rail's Export flyout (4 rows) still lists a few formats; it should open the centre once the rail has been used for a while.
+
+## V4f: Start centre (2026-10-30)
+- `centres::Centre::Start` (command `file.start_centre`, File > Templates and examples...): the 3 `file.new_*` templates and the 6 example commands as tiles (Create / Open button). The File > New from template and Examples submenus and the EMC example row are gone: File 41 to 34, total 228 to 221 (after #1763). `file.example` keeps its row in File > Open (`centres::ALSO_IN_MENU`) and is also a tile.
+- Lessons: `cmd.file.new_*` and `cmd.file.example_*` fall back to `cmd.file.start_centre`, then File. Palette and app menu search say `File > Templates and examples`.
+- QA scenario 7370. Not done: preview of the template or example in the detail pane; options and preview pane for the other centres.
+
+## V4g: Project settings centre (2026-10-30)
+- `centres::Centre::Project` (command `file.project_centre`, File > Project settings...): Drawing standard, Rules, Report languages, Project options, Untie from options and Generate pages as tiles. The File > Project submenu (8 rows) and Report languages leave File: File 34 to 26, total 221 to 213.
+- `project.variant`, `project.option` and `project.tie` take a name in the command field and open Project options without one: they are palette-only (`menus::PALETTE_ONLY`, with the reason). Lessons that name them fall back to the opener.
+- QA scenario 7371.
+
+## V4h: Numbering centre (2026-10-30)
+- `centres::Centre::Numbering` (command `edit.numbering_centre`, Edit > Numbering...): Number wires, Renumber wires, Check wire numbers, Wire numbering, Set and Unlock wire number ("Wires") and Renumber devices, Number interruption points, Renumber I/O ("Devices and points"). The Edit > Wire numbers and Edit > Renumber submenus (9 rows) are gone: Edit 30 to 22, total 213 to 205. Tiles that need a selection say why they are grey.
+- Lessons that name those commands fall back to the opener, then Edit. QA scenario 7372. Next: Parts rows (Edit > Parts, File > Library), then the Draw leftovers.
+
+## V4k: Draw > PLC leaves the menu (2026-10-30)
+- Add PLC card and PLC overview are plain Draw rows. Import I/O list is a tile of the Import centre ("Lists and tags", next to Import PLC tags). Send signal to PLC is a row ("Send to PLC") of the right-click menu of one selected symbol (`homes::PANEL_BUTTONS` "Symbol right-click menu"; the app says what to select when it is not a contact, sensor or coil). Draw 24 to 22, total 205 to 203 (after #1772).
+- Test `the_symbol_right_click_menu_carries_send_to_plc` reads the editor's menu source. QA 7376 (1366x768) and 7377 (1920x1080).
+
+## V4j: terminal rows leave Draw (2026-10-30)
+- The seven Draw > Terminals rows (Connect and Disconnect terminals, Toggle PE terminal, Reset PE override, strip number Up, Down, Lowest free) act on the terminals selected on the page. Their home is the right-click menu of a selected terminal, which already carried each one: `homes::PANEL_BUTTONS` entry "Terminal right-click menu". Draw 24 to 17, total 203 to 196 (after #1772 and #1774). Up and Down keep their keys; every row is still in Ctrl+K (its path reads "Terminal right-click menu").
+- Test `the_terminal_right_click_menu_carries_every_terminal_row_that_left_draw` reads the editor's menu source, so a row dropped from the menu fails it. QA scenarios 7374 (1366x768) and 7375 (1920x1080) walk the terminal-strips lesson to two selected terminals and open the menu.

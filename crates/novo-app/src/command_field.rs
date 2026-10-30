@@ -617,6 +617,7 @@ fn path_chip(row: &Row) -> Option<String> {
         Home::Rail => "Rail".to_owned(),
         Home::Centre => "Centre".to_owned(),
         Home::DrawerToolbar => "Drawer".to_owned(),
+        Home::Panel(panel) => (*panel).to_owned(),
         Home::PaletteOnly(_) => "Keys".to_owned(),
     })
 }

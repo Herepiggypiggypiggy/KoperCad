@@ -653,6 +653,7 @@ impl NovoApp {
             .chain(novo_machine::travel_spec::KEYS)
             .chain(novo_machine::drive_hoist_spec::KEYS)
             .chain(novo_machine::cl_winch_spec::KEYS)
+            .chain(novo_machine::cl_winch_spec::PAIR_KEYS)
             .any(|k| k.key == key && k.text);
         let value = if text.is_empty() {
             None
@@ -990,6 +991,7 @@ fn inspector_body(
     travel_drive_section(ui, info, actions);
     drive_hoist_section(ui, info, actions);
     closed_winch_section(ui, info, actions);
+    closed_pair_section(ui, info, actions);
 
     // The rest of the device's properties are the advanced part: closed
     // until opened, and absent when there are none.
@@ -1291,8 +1293,33 @@ fn closed_winch_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<
             help: "Hook load turns the motor into a winch behind an encoder drive. The STO \
                    channels and the encoder signal are devices of the drawing, so a defect \
                    injected on them (Simulate > Defects and walk-throughs) reaches the drive. \
-                   Blank rows use generic values, not a manufacturer's data. Run it: \
-                   Simulate > Drive run.",
+                   Blank rows use generic values, not a manufacturer's data. The rated load \
+                   and overload rows are a simulation of the behaviour, not a validated \
+                   overload protection and no substitute for a rated capacity limiter to the \
+                   applicable standard. Run it: Simulate > Drive run.",
+        },
+    );
+}
+
+/// The "Two winches on one beam" section of a motor: the second winch, the beam, the ropes and
+/// the synchronisation of a pair of closed-loop winches, for Simulate > Drive run.
+fn closed_pair_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<InspectorAction>) {
+    spec_section(
+        ui,
+        info,
+        actions,
+        SpecSection {
+            id: "inspector_closed_pair",
+            title: "Two winches on one beam",
+            keys: novo_machine::cl_winch_spec::PAIR_KEYS,
+            marker: novo_machine::cl_winch_spec::PAIR_PARTNER_KEY,
+            summary: "pair",
+            comma_note: "A comma is a decimal comma: 1,5 means 1.5. A comma before three digits (5,000) is refused: type 5000.",
+            help: "Enter the second winch's motor tag here, on the first winch. Both motors need \
+                   their Closed-loop winch rows (the second one's command devices are not used: \
+                   the first winch commands the pair). STO, encoder and brake devices are read \
+                   per winch, so a defect on one reaches only that winch. Run it: Simulate > \
+                   Drive run.",
         },
     );
 }

@@ -1735,7 +1735,7 @@ fn list_ui(
         ui.add_space(12.0);
         if win.query.trim().is_empty() && win.maker.is_none() {
             ui.weak(
-                "The catalog is empty. Press Import catalog files above, or use File > Import parts > Import parts from a folder to load a whole folder of maker files.",
+                "The catalog is empty. Press Import catalog files above, or use File > Import... > Import parts folder to load a whole folder of maker files.",
             );
         } else {
             ui.weak("No part matches. Change the search or the maker.");

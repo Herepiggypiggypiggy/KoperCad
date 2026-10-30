@@ -11,10 +11,14 @@ check_layout
 key Escape
 click_text File #1
 wait 6
-click_text "Export reports"
+click_text "Export..."
+wait 8
+text handover
 wait 6
 shot handover-menu
-click_text "Export handover package (folder)"
+click_text "Export handover package"
+wait 4
+click_text "Export" Button #1
 wait 8
 shot handover-ask
 check_layout

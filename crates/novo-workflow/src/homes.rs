@@ -28,6 +28,9 @@ pub enum Home {
     Centre,
     /// The toolbar of a drawer (terminals, cables).
     DrawerToolbar,
+    /// A button or context menu of a panel (the Pages list, the lesson
+    /// card); the text names the panel.
+    Panel(&'static str),
     /// A key or pointer gesture, or a design reference: only the command
     /// field lists it. The text says why.
     PaletteOnly(&'static str),
@@ -41,6 +44,7 @@ impl Home {
             Home::Rail => HomeKind::Rail,
             Home::Centre => HomeKind::Centre,
             Home::DrawerToolbar => HomeKind::DrawerToolbar,
+            Home::Panel(_) => HomeKind::Panel,
             Home::PaletteOnly(_) => HomeKind::PaletteOnly,
         }
     }
@@ -53,15 +57,17 @@ pub enum HomeKind {
     Rail,
     Centre,
     DrawerToolbar,
+    Panel,
     PaletteOnly,
 }
 
 impl HomeKind {
-    pub const ALL: [HomeKind; 5] = [
+    pub const ALL: [HomeKind; 6] = [
         HomeKind::Menu,
         HomeKind::Rail,
         HomeKind::Centre,
         HomeKind::DrawerToolbar,
+        HomeKind::Panel,
         HomeKind::PaletteOnly,
     ];
 
@@ -71,6 +77,7 @@ impl HomeKind {
             HomeKind::Rail => "rail",
             HomeKind::Centre => "centre",
             HomeKind::DrawerToolbar => "drawer toolbar",
+            HomeKind::Panel => "panel",
             HomeKind::PaletteOnly => "palette only",
         }
     }
@@ -151,6 +158,92 @@ pub const RELOCATED: &[(&str, Home)] = &[
     ("export.punch_list", Home::Rail),
 ];
 
+/// The commands whose menu row moved to the buttons or context menu of a
+/// panel, by panel: the Pages list (its `+ New` button and the right-click
+/// menu of a page), the lesson card (Back, Next, Start over, Close) and the
+/// right-click menu of a selected terminal on the schematic (Connect, Disconnect,
+/// the PE rows and the strip number; Up and Down also have keys).
+pub const PANEL_BUTTONS: &[(&str, &[&str])] = &[
+    (
+        "Pages list",
+        &[
+            "page.new",
+            "page.rename",
+            "page.duplicate",
+            "page.delete",
+            "page.move_up",
+            "page.move_down",
+        ],
+    ),
+    ("Symbol right-click menu", &["plc.to_plc"]),
+    (
+        "Terminal right-click menu",
+        &[
+            "terminal.connect",
+            "terminal.disconnect",
+            "terminal.toggle_pe",
+            "terminal.reset_pe",
+            "terminal.strip_up",
+            "terminal.strip_down",
+            "terminal.strip_lowest",
+        ],
+    ),
+    (
+        "Lesson card",
+        &["learn.next", "learn.back", "learn.restart", "learn.close"],
+    ),
+];
+
+/// The panel whose buttons carry `id`.
+pub fn panel_of(id: &str) -> Option<&'static str> {
+    PANEL_BUTTONS
+        .iter()
+        .find(|(_, ids)| ids.contains(&id))
+        .map(|(panel, _)| *panel)
+}
+
+/// The commands whose menu row moved to the toolbar (or the row menu) of a
+/// drawer, by the command that opens the drawer. The Terminals drawer's
+/// toolbar and row menu carry every `terminal.*` strip edit; the Cables
+/// drawer has the cable's name field, type picker, Delete cable and
+/// Restore declined. While the drawer is shut a lesson points at the rail
+/// button that opens it.
+pub const DRAWER_TOOLBARS: &[(&str, &[&str])] = &[
+    (
+        "view.terminals_drawer",
+        &[
+            "terminal.add_spares",
+            "terminal.rename",
+            "terminal.renumber",
+            "terminal.join_duplicates",
+            "terminal.set_kind",
+            "terminal.set_level",
+            "terminal.set_jumper",
+            "terminal.order_up",
+            "terminal.order_down",
+            "terminal.style",
+            "terminal.restore_declined",
+        ],
+    ),
+    (
+        "view.cables_drawer",
+        &[
+            "cable.rename",
+            "cable.delete",
+            "cable.retype",
+            "cable.restore_proposals",
+        ],
+    ),
+];
+
+/// The command that opens the drawer whose toolbar carries `id`.
+pub fn drawer_of(id: &str) -> Option<&'static str> {
+    DRAWER_TOOLBARS
+        .iter()
+        .find(|(_, ids)| ids.contains(&id))
+        .map(|(drawer, _)| *drawer)
+}
+
 /// Every home of the command `id`, menu first. Empty only for a command that
 /// has none, which the test below does not allow.
 pub fn homes(id: &str) -> Vec<Home> {
@@ -159,6 +252,15 @@ pub fn homes(id: &str) -> Vec<Home> {
         out.extend(menus::place(info).map(Home::Menu));
     }
     out.extend(RELOCATED.iter().filter(|(i, _)| *i == id).map(|(_, h)| *h));
+    if crate::centres::in_centre(id) {
+        out.push(Home::Centre);
+    }
+    if drawer_of(id).is_some() {
+        out.push(Home::DrawerToolbar);
+    }
+    if let Some(panel) = panel_of(id) {
+        out.push(Home::Panel(panel));
+    }
     if let Some(reason) = menus::palette_only_reason(id) {
         out.push(Home::PaletteOnly(reason));
     }
@@ -197,6 +299,35 @@ mod tests {
             lost.is_empty(),
             "commands without a home (menu row, rail, centre, drawer toolbar or PALETTE_ONLY with a reason): {lost:?}"
         );
+    }
+
+    #[test]
+    fn the_panel_buttons_list_real_commands_once_and_no_menu_row_is_left() {
+        let mut seen = HashSet::new();
+        for (panel, ids) in PANEL_BUTTONS {
+            assert!(!panel.is_empty());
+            for id in *ids {
+                let info = crate::commands::get(id).unwrap_or_else(|| panic!("{id}"));
+                assert!(seen.insert(*id), "{id} is on two panels");
+                assert!(menus::place(info).is_none(), "{id} still has a menu row");
+                assert!(matches!(homes(id).as_slice(), [Home::Panel(_)]), "{id}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_drawer_toolbars_list_real_commands_once_and_no_menu_row_is_left() {
+        let mut seen = HashSet::new();
+        for (drawer, ids) in DRAWER_TOOLBARS {
+            assert!(crate::commands::get(drawer).is_some(), "{drawer}");
+            for id in *ids {
+                assert!(crate::commands::get(id).is_some(), "{id} is not a command");
+                assert!(seen.insert(*id), "{id} is in two drawers");
+                let info = crate::commands::get(id).unwrap();
+                assert!(menus::place(info).is_none(), "{id} still has a menu row");
+                assert!(homes(id).contains(&Home::DrawerToolbar), "{id}");
+            }
+        }
     }
 
     #[test]
@@ -254,6 +385,8 @@ mod tests {
             .iter()
             .find(|(k, _)| *k == HomeKind::Menu)
             .map(|(_, n)| *n);
-        assert!(menu.is_some_and(|n| n > 250), "{census:?}");
+        // The floor follows the menu budget (`menus::tests::menu_rows_stay_inside_the_budget`):
+        // the design target is about 152 rows, so a count under 140 means the census lost the menus.
+        assert!(menu.is_some_and(|n| n >= 140), "{census:?}");
     }
 }

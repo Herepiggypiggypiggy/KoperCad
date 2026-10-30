@@ -1,0 +1,31 @@
+@title Export centre: tiles by purpose, search, detail pane, Export button
+@area Layout
+# Lane V4 (docs/design/visual-redesign.md section 6). File > Export... opens one
+# window with every format as a tile; picking one shows what it writes. Search
+# narrows the tiles; the Export button stays grey until a format is picked.
+click_text "Open example"
+wait 20
+click_text File #1
+wait 6
+shot file-menu-one-export-row
+click_text "Export..."
+wait 10
+shot centre-open
+expect "Drawings"
+expect "Workshop and bench"
+expect "Choose a format on the left"
+check_layout
+click_text "Export PDF"
+wait 6
+shot centre-picked
+expect "Every page as one PDF"
+check_layout
+text dxf
+wait 8
+shot centre-search-dxf
+expect "Export this page as DXF"
+expect_not "Export work cards (PDF)"
+check_layout
+key Escape
+wait 6
+expect_not "Choose a format on the left"

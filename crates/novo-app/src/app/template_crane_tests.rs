@@ -1,4 +1,4 @@
-//! The crane project template (File > New from template): the structure
+//! The crane project template (File > Templates and examples): the structure
 //! tree, the drawing pages, the self-filling cover pages and the Project
 //! information fields that feed them.
 

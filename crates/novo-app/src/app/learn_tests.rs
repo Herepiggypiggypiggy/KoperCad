@@ -864,7 +864,26 @@ fn menu_rows_are_anchors_that_fall_back_to_their_menu() {
         assert!(anchor_fallback(&format!("cmd.{id}")).is_none());
     }
     for row in rows {
-        let parent = anchor_fallback(&row.id).expect("a row points at its menu");
+        // A row points at its menu; a format of the Export centre points at
+        // the row that opens the centre, which points at its menu.
+        let mut parent = anchor_fallback(&row.id).expect("a row points at its menu");
+        // A drawer's rail button has no menu to fall back to: the rail draws it.
+        let on_drawer =
+            novo_workflow::homes::drawer_of(row.id.trim_start_matches("cmd.")).is_some();
+        if parent.starts_with("cmd.") && on_drawer {
+            assert!(anchor_fallback(&parent).is_none(), "{} -> {parent}", row.id);
+            assert_eq!(any_anchor_label(&row.id), Some(row.label.clone()));
+            continue;
+        }
+        // A page command points at the Pages list, which has its own fallback.
+        if novo_workflow::homes::panel_of(row.id.trim_start_matches("cmd.")).is_some() {
+            assert_eq!(parent, "outline.pages", "{}", row.id);
+            assert_eq!(any_anchor_label(&row.id), Some(row.label.clone()));
+            continue;
+        }
+        if parent.starts_with("cmd.") {
+            parent = anchor_fallback(&parent).expect("the opener points at its menu");
+        }
         assert!(parent.starts_with("menu."), "{} -> {parent}", row.id);
         assert!(anchor_fallback(&parent).is_none());
         assert_eq!(any_anchor_label(&row.id), Some(row.label.clone()));

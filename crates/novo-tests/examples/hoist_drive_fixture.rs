@@ -2,6 +2,7 @@
 //!
 //!   cargo run -p novo-tests --example hoist_drive_fixture -- qa/fixtures/hoist-drive.novo
 //!   cargo run -p novo-tests --example hoist_drive_fixture -- qa/fixtures/hoist-drive-floor.novo floor
+//!   cargo run -p novo-tests --example hoist_drive_fixture -- qa/fixtures/hoist-drive-limits.novo limits
 
 use novo_core::Document;
 
@@ -12,6 +13,8 @@ fn main() {
     let mut doc = Document::default();
     if std::env::args().nth(2).as_deref() == Some("floor") {
         novo_tests::hoist_drive::drive_hoist_on_floor(&mut doc).expect("the project builds");
+    } else if std::env::args().nth(2).as_deref() == Some("limits") {
+        novo_tests::hoist_drive::drive_hoist_with_limits(&mut doc).expect("the project builds");
     } else {
         novo_tests::hoist_drive::drive_hoist(&mut doc).expect("the drive hoist project builds");
     }

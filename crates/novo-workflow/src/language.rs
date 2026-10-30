@@ -964,6 +964,31 @@ pub const DUTCH: &[Aliases] = &[
         &["eplan artikelen", "eplan onderdelen", "artikelexport"],
     ),
     nl(
+        "file.import_centre",
+        &["importeren", "importcentrum"],
+        &["inlezen", "binnenhalen"],
+    ),
+    nl(
+        "file.start_centre",
+        &["sjablonen", "voorbeelden"],
+        &["nieuw uit sjabloon", "beginnen met"],
+    ),
+    nl(
+        "edit.numbering_centre",
+        &["nummering"],
+        &["hernummeren", "draadnummers", "tags"],
+    ),
+    nl(
+        "file.project_centre",
+        &["projectinstellingen"],
+        &["instellingen", "tekennorm", "varianten"],
+    ),
+    nl(
+        "file.export_centre",
+        &["exporteren", "exportcentrum"],
+        &["formaten", "pdf", "dxf", "excel", "bank", "overdracht"],
+    ),
+    nl(
         "file.import_crane",
         &["importeer kraanconfigurator"],
         &["kraan", "configurator", "migreren", "overnemen"],

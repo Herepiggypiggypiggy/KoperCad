@@ -1,0 +1,30 @@
+@title Panel homes: the page commands are in the Pages list, the lesson buttons on the lesson card
+@area Layout
+@sizes 1366x768 1920x1080
+# Lane V4e (docs/design/visual-redesign.md section 5.2). File > Pages (6 rows) and Help > Lesson (4 rows)
+# are gone: the Pages list has the + New button and the right-click menu of a page, the lesson card has
+# its Back, Next, Start over and Close. Every command still runs from Ctrl+K, which names the panel.
+click_text "Open example"
+wait 20
+click_text File #1
+wait 6
+shot file-menu
+expect_not "New page"
+expect_not "Duplicate page"
+expect_not "Move page up"
+key Escape
+wait 4
+click_text Help #1
+wait 6
+shot help-menu
+expect_not "Lesson: next step"
+expect_not "Lesson: start over"
+key Escape
+wait 4
+key ctrl+k
+wait 6
+text "duplicate page"
+wait 8
+shot palette-panel-chip
+expect "Pages list"
+key Escape

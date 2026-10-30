@@ -152,7 +152,7 @@ how_nl = ["Scrol omlaag naar de sectie **Devices without parts**"]
 id = "export-sheet"
 title = "Export the devices to a spreadsheet"
 title_nl = "Exporteer de apparaten naar een spreadsheet"
-# verified: export.sheets "Export for bulk edit (.xlsx)" is in File > Export interchange
+# verified: export.sheets "Export for bulk edit (.xlsx)" is a tile of the Export centre (File > Export...)
 # (commands.rs, menus.rs); no key. It writes "<project> sheets.xlsx" next to
 # the project or in <Documents>\KoperCAD (sheets.rs export_spreadsheet).
 # GAP: no control picks a part for a device (inspector Part is read-only);
@@ -165,8 +165,8 @@ text_nl = """
 De inspecteur heeft nog geen onderdeelkiezer, dus geef de lamp zijn onderdeel via het spreadsheet: exporteer het project voor bulkbewerking.
 De melding onderaan noemt het .xlsx-bestand dat is geschreven.
 """
-how = ["Click **File**, then **Export**, then **Export for bulk edit (.xlsx)**", "Read the message at the bottom: it names the file"]
-how_nl = ["Klik op **File**, dan op **Export** en dan op **Export for bulk edit (.xlsx)**", "Lees de melding onderaan: die noemt het bestand"]
+how = ["Open {ui:cmd.file.export_centre}, pick {ui:cmd.export.sheets} and press Enter", "Read the message at the bottom: it names the file"]
+how_nl = ["Open {ui:cmd.file.export_centre}, kies {ui:cmd.export.sheets} en druk op Enter", "Lees de melding onderaan: die noemt het bestand"]
 expect = { command = "export.sheets" }
 solve = [ { command = "export.sheets" } ]
 
@@ -233,7 +233,7 @@ how_nl = ["Klik op **Reports** en dan op **Bill of materials**", "Zoek de regel 
 id = "export-bom"
 title = "Export it for the buyer"
 title_nl = "Exporteer hem voor de inkoper"
-# verified: export.bom "Export bill of materials" is in File > Export reports
+# verified: export.bom "Export bill of materials" is a tile of the Export centre (File > Export...)
 # (commands.rs, menus.rs), no key of its own; it writes
 # "<project> - Bill of materials.xlsx" next to the project file, or in
 # <Documents>\KoperCAD for a project not saved yet, never over an earlier
@@ -243,15 +243,15 @@ title_nl = "Exporteer hem voor de inkoper"
 # one sheet each) and, per report, the Excel and CSV buttons in the Reports
 # view.
 text = """
-Press {key:view.command_palette}, type **export bom** and press Enter, or choose **File > Export reports > Export bill of materials**.
+Press {key:view.command_palette}, type **export bom** and press Enter, or open {ui:cmd.file.export_centre} and pick {ui:cmd.export.bom}.
 KoperCAD saves **<project> - Bill of materials.xlsx** and the message at the bottom shows where. The other lists have **Excel** and **CSV** buttons in the Reports view.
 """
 text_nl = """
-Druk op {key:view.command_palette}, typ **export bom** en druk op Enter, of kies **File > Export reports > Export bill of materials**.
+Druk op {key:view.command_palette}, typ **export bom** en druk op Enter, of open {ui:cmd.file.export_centre} en kies {ui:cmd.export.bom}.
 KoperCAD bewaart **<project> - Bill of materials.xlsx** en de melding onderaan toont waar. De andere lijsten hebben **Excel**- en **CSV**-knoppen in het Reports-venster.
 """
-how = ["Press {key:view.command_palette}, type **export bom**, press Enter", "Or click **File**, **Export**, **Export bill of materials**"]
-how_nl = ["Druk op {key:view.command_palette}, typ **export bom**, druk op Enter", "Of klik op **File**, **Export**, **Export bill of materials**"]
+how = ["Press {key:view.command_palette}, type **export bom**, press Enter", "Or open {ui:cmd.file.export_centre}, pick {ui:cmd.export.bom} and press Enter"]
+how_nl = ["Druk op {key:view.command_palette}, typ **export bom**, druk op Enter", "Of open {ui:cmd.file.export_centre}, kies {ui:cmd.export.bom} en druk op Enter"]
 demo = [ { press = "view.command_palette" }, { type = "export bom" }, { key = "Enter" } ]
 expect = { command = "export.bom" }
 solve = [ { command = "export.bom" } ]

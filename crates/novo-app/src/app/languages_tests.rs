@@ -21,13 +21,12 @@ fn open() -> (tempfile::TempDir, Drive) {
 }
 
 #[test]
-fn the_command_is_in_the_file_menu_and_opens_the_window() {
+fn the_command_is_in_the_project_centre_and_opens_the_window() {
     assert!(novo_workflow::commands::is_known("project.languages"));
     assert!(super::workbench::app_runs("project.languages"));
-    assert!(
-        novo_workflow::menus::entries("File")
-            .iter()
-            .any(|(info, _)| info.id == "project.languages")
+    assert_eq!(
+        novo_workflow::centres::Centre::of("project.languages"),
+        Some(novo_workflow::centres::Centre::Project)
     );
     let (_dir, mut d) = open();
     d.app.wb.queued.push("project.languages");

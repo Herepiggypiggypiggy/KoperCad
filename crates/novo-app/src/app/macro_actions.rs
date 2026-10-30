@@ -180,7 +180,7 @@ impl Default for PlaceWindow {
 /// symbols: the symbols alone give no addresses, so the I/O list and PLC
 /// overview stay empty.
 const PLC_CARD_NOTE: &str =
-    "Symbols only: no addresses or I/O list until you add a PLC card (Draw > PLC > Add PLC card)";
+    "Symbols only: no addresses or I/O list until you add a PLC card (Draw > Add PLC card)";
 
 /// Whether the macro draws PLC input or output channels (not just a supply
 /// or CPU), which need a registered card to show in the I/O list.
@@ -796,7 +796,7 @@ impl NovoApp {
                 }
                 let text = if plc_note {
                     format!(
-                        "Placed {name} (symbols only: use Draw > PLC > Add PLC card for addresses) · {}",
+                        "Placed {name} (symbols only: use Draw > Add PLC card for addresses) · {}",
                         describe(&placed.report)
                     )
                 } else if fed > 0 && joined > 0 {

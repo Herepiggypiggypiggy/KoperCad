@@ -995,8 +995,9 @@ fn menu_row(
     rows.push(row);
 }
 
-/// Where the command lives, as the menu path (`File › Library`), or the
-/// key-only note for a command with no menu row. The command field shows it
+/// Where the command lives, as the menu path (`File › Library`; a command of
+/// the Import or Export centre says `File › Import` or `File › Export`), or
+/// the key-only note for a command with no menu row. The command field shows it
 /// beside the label and matches it, so typing `library` lists what is in
 /// that submenu.
 pub fn where_it_lives(info: &CommandInfo) -> String {
@@ -1005,7 +1006,17 @@ pub fn where_it_lives(info: &CommandInfo) -> String {
             Some(sub) => format!("{} › {sub}", place.menu),
             None => place.menu.to_owned(),
         },
-        None => "Keys".to_owned(),
+        None => match crate::centres::Centre::of(info.id) {
+            Some(centre) => format!("File › {}", centre.title()),
+            None => match crate::homes::drawer_of(info.id) {
+                Some("view.terminals_drawer") => "Terminals drawer".to_owned(),
+                Some(_) => "Cables drawer".to_owned(),
+                None => match crate::homes::panel_of(info.id) {
+                    Some(panel) => panel.to_owned(),
+                    None => "Keys".to_owned(),
+                },
+            },
+        },
     }
 }
 

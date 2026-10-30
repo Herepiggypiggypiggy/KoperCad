@@ -1,0 +1,38 @@
+@title Hoist in 3D follows a closed-loop winch of Drive run: the hook rises with the winch and the line under the controls says so
+@area Simulate
+@sizes 1366x768
+# Lane L2c. Simulate > Drive run starts the winch of the closed-loop fixture, Simulate > Hoist in 3D opens the
+# picture, which lists the winch next to the hoists and follows its hook (height, speed, drive state).
+open qa/fixtures/closed-winch.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 40
+key Home
+wait 30
+shot picture-before-lifting
+expect "Hoist in 3D"
+expect "hook +0.00 m from its start"
+# Radio step 2 (S2) lifts the hook; the line follows it.
+mouse_down 123 351
+wait 3000
+expect "rising"
+shot hook-rising-in-the-picture
+mouse_up 123 351
+wait 800
+expect "Picture, not measurement"
+check_layout
+shot stopped

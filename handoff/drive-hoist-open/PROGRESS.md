@@ -10,7 +10,10 @@
 ## Slack rope and pick-up (roadmap item 2)
 - `novo_drive::rope` (6 tests), `with_rope` in the loop (4 new loop tests), keys in the spec (1 test), reading in Simulate > Drive run (1 app test), fixture `qa/fixtures/hoist-drive-floor.novo` and QA 2430 / 2430b (property section 2431 / 2431b).
 - Next: item 3 (heat over a duty cycle; `novo_drive::hoist_thermal` exists for the contactor hoist).
+## Slow-down before the final limit (roadmap item 4)
+- Limit tracks in the loop (4 findings), `dh_slow_*` and `dh_clearance_*` keys (1 spec test), 3 loop tests, 1 app test with the drawn fixture `qa/fixtures/hoist-drive-limits.novo` (`drive_hoist_with_limits`), QA 1760 / 1760b.
+- Roadmap items 1 to 4 are built. Open: item 5 (closed-loop hoist) is a separate thread.
 ## Heat over a duty cycle (roadmap item 3)
 - `novo_drive::brake_heat` (4 tests), heat in the loop (`with_heat`, 3 loop tests), `dh_heat_*` and `dh_brake_*` keys (1 test), `novo_machine::duty_cycle` (5 tests), Drive run window section with a background job (1 app test), QA 1750 / 1750b.
 - Found on the way: the hoist loop at a 10 ms step cannot start a lowering from rest after a lift (current stuck at the locked-rotor value); the duty run refuses steps over 5 ms. Not investigated.
-- Next: item 4 (slow-down before the final upper limit).
+- Next: roadmap items 1 to 4 are done; open: the hoist loop at dt 10 ms.

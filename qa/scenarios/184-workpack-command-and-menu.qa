@@ -1,13 +1,13 @@
-@title Work cards: Reports > Export menu and command field
+@title Work cards: Export centre and command field
 @area Reports
-# Reports > Export > "Export work cards (PDF)", also the command field ("export work cards"). Same file as the Build order strip button.
+# File > Export... lists "Export work cards (PDF)" among the workshop formats, also the command field ("export work cards"). Same file as the Build order strip button.
 click_text "Open example"
 wait 20
-click_text Reports
+click_text File #1
 wait 8
-click_text "Export" Button #1
+click_text "Export..."
 wait 8
-shot export-submenu
+shot export-centre
 expect "Export work cards (PDF)"
 key Escape
 wait 6

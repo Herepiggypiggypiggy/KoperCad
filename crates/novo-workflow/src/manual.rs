@@ -369,13 +369,13 @@ const FEATURES: &[(&str, &str, &str, &str)] = &[
     (
         "Wire and potential numbering",
         "Schemes, stable fill, renumber, locks",
-        "Edit > Wire numbers, Ctrl+K \"numbering\"",
+        "Edit > Numbering..., Ctrl+K \"numbering\"",
         "motor-starter.html#wire-numbers",
     ),
     (
         "Parts catalogue",
         "Assign parts, import maker data and tables",
-        "Parts panel, File > Import parts",
+        "Parts panel, File > Import...",
         "motor-starter.html#parts",
     ),
     (

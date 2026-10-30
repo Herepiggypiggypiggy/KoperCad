@@ -16,7 +16,7 @@ Verified path per step
 - open-bom / see-missing: terminal block 3044076 Qty 3 used by -X1:1..3; section "Devices without parts" lists only -P1 (asserted).
 - export-sheet: File > Export > **Export for bulk edit (.xlsx)** (export.sheets) writes "<project> sheets.xlsx" (sheets.rs).
 - edit-part: Devices sheet columns Id, Tag, Description, Kind, Manufacturer, Order number (verified); the test edits the workbook as Excel would.
-- import-part: File > Import spreadsheet (file dialog, not driven; `import_sheet_from` stands in), preview, "Apply 1 change (Enter)" applies; the lamp gets
+- import-part: File > Import... > Import spreadsheet (file dialog, not driven; `import_sheet_from` stands in), preview, "Apply 1 change (Enter)" applies; the lamp gets
   part Siemens 3SU1106-6AA40-1AA0 (a part the catalog does not know is created from the sheet, sheets/create.rs).
 - bom-follows: one section, lamp row Qty 1 (asserted).
 - export-bom: {key:view.command_palette} "export bom" or File > Export reports > Export bill of materials; writes "<project> - Bill of materials.xlsx" next to the

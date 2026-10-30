@@ -1,0 +1,33 @@
+@title Two closed-loop winches on one beam: the first winch's radio lifts both through their drawn brake contactors
+@area Simulate
+@sizes 1366x768
+# Lane L2c. Opens the two-winch fixture, starts Simulate > Drive run, switches Live on.
+open qa/fixtures/closed-winch-pair.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+key Home
+wait 30
+shot before-pressing
+# Radio step 1 (S1) of the first winch commands both: each drive proves its torque, each drawn brake
+# contactor closes, both brakes open and the beam rises.
+mouse_down 123 330
+wait 500
+shot torque-proof-and-brakes-open
+wait 800
+expect "running"
+expect_not "brake closed · 0 rpm"
+shot beam-rising
+mouse_up 123 330
+wait 800
+expect "brake closed"
+check_layout
+shot stopped-brakes-closed

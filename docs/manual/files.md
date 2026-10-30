@@ -34,7 +34,7 @@ The full text is in `docs/FILE-COMPATIBILITY.md`.
 
 ## Import and export
 
-File > Import: DXF background, DXF drawing, AutomationML, parts tables and folders, PLC tags. File > Export: PDF (whole set, one page, variant), DXF, STEP of the cabinet, reports, handover package, PLC lists, print preview.
+File > Import… (the Import centre, which lists what it brings in by purpose): DXF and DWG backgrounds, EPLAN and crane projects, AutomationML, controller profiles, parts tables, folders and CAD parts exports, spreadsheets, PLC tags. File > Export… (the Export centre, which lists every format by purpose): PDF (whole set, one page, variant), DXF, STEP of the cabinet, reports, handover package, PLC lists, print preview.
 
 ## Command line and Python
 

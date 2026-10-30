@@ -57,39 +57,13 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.open_read_only", under("File", "Open")),
     ("file.recover", under("File", "Open")),
     ("file.example", under("File", "Open")),
-    ("file.new_crane", under("File", "New from template")),
-    ("file.new_pump", under("File", "New from template")),
-    ("file.new_mcc", under("File", "New from template")),
-    ("file.example_mcc", under("File", "Examples")),
-    ("file.example_crane", under("File", "Examples")),
-    ("file.example_plc", under("File", "Examples")),
-    ("file.example_pump", under("File", "Examples")),
     ("macro.browser", under("File", "Macros")),
     ("macro.import", under("File", "Macros")),
-    ("page.new", under("File", "Pages")),
-    ("page.rename", under("File", "Pages")),
-    ("page.duplicate", under("File", "Pages")),
-    ("page.delete", under("File", "Pages")),
-    ("page.move_up", under("File", "Pages")),
-    ("page.move_down", under("File", "Pages")),
     ("revision.issue", under("File", "Revisions")),
     ("revision.compare", under("File", "Revisions")),
     ("revision.lock_page", under("File", "Revisions")),
     ("revision.unlock_page", under("File", "Revisions")),
     ("revision.restore_page", under("File", "Revisions")),
-    ("file.import_dxf_background", under("File", "Import")),
-    ("file.remove_background", under("File", "Import")),
-    ("file.import_aml", under("File", "Import")),
-    ("file.import_controller", under("File", "Import")),
-    ("file.import_crane", under("File", "Import")),
-    ("file.import_eplan", under("File", "Import")),
-    ("parts.import_eplan", under("File", "Import parts")),
-    ("parts.import_table", under("File", "Import parts")),
-    ("file.import_dwg", under("File", "Import")),
-    ("file.choose_dwg_converter", under("File", "Import")),
-    ("file.eplan_export_script", under("File", "Import")),
-    ("parts.import_folder", under("File", "Import parts")),
-    ("plc.import_tags", under("File", "Import")),
     ("help.manual", at("Help")),
     ("help.context", at("Help")),
     ("help.walkthrough", at("Help")),
@@ -101,39 +75,16 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("help.keymap_file", at("Help")),
     ("help.open_log_folder", at("Help")),
     ("help.copy_problem_report", at("Help")),
-    // File > Export, split by what the file is for.
-    ("export.pdf", under("File", "Export drawings")),
-    ("export.print_preview", under("File", "Export print")),
-    ("export.pdf_options", under("File", "Export print")),
-    ("export.pdf_page", under("File", "Export drawings")),
-    ("export.variant_pdf", under("File", "Export drawings")),
-    ("export.dxf_page", under("File", "Export drawings")),
-    ("export.dxf_all", under("File", "Export drawings")),
-    ("export.step", under("File", "Export drawings")),
-    ("export.plate", under("File", "Export drawings")),
-    ("export.plate_dxf", under("File", "Export drawings")),
-    ("export.drill_plan", under("File", "Export drawings")),
-    ("export.wiring_dxf", under("File", "Export drawings")),
-    ("export.handover", under("File", "Export reports")),
-    ("export.bom", under("File", "Export reports")),
-    ("export.change_report", under("File", "Export reports")),
-    ("export.commissioning", under("File", "Export reports")),
-    ("export.punch_list", under("File", "Export reports")),
-    ("export.standards_report", under("File", "Export reports")),
-    ("export.standards_xlsx", under("File", "Export reports")),
-    ("export.wirecut", under("File", "Export production")),
-    ("export.wirecut_xlsx", under("File", "Export production")),
-    ("export.wirecut_page", under("File", "Export production")),
-    ("export.plc_csv", under("File", "Export PLC")),
-    ("export.plc_plcopen", under("File", "Export PLC")),
-    ("export.plc_tia", under("File", "Export PLC")),
-    ("export.plc_studio5000", under("File", "Export PLC")),
-    ("export.plc_address_plan", under("File", "Export PLC")),
-    ("export.aml", under("File", "Export interchange")),
-    ("export.eplan", under("File", "Export interchange")),
-    ("export.sheets", under("File", "Export interchange")),
-    ("export.sheets_csv", under("File", "Export interchange")),
-    ("export.spec", under("File", "Export interchange")),
+    // File > Export... opens the Export centre; the formats are listed there.
+    ("file.export_centre", at("File")),
+    ("file.import_centre", at("File")),
+    // File > Templates and examples... opens the Start centre; the templates and examples are listed there.
+    ("file.start_centre", at("File")),
+    // Edit > Numbering... opens the Numbering centre; the numbering commands are listed there.
+    ("edit.numbering_centre", at("Edit")),
+    // File > Project settings... opens the Project centre; the project commands are listed there.
+    ("file.project_centre", at("File")),
+    ("export.print_preview", at("File")),
     // Reports
     ("report.wirecut", at("Reports")),
     ("report.io", at("Reports")),
@@ -141,48 +92,21 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("report.plugs", under("Reports", "More reports")),
     ("report.singleline", under("Reports", "More reports")),
     ("report.add_page", at("Reports")),
-    ("export.report_pdf", under("Reports", "Export")),
     // Edit
     ("edit.rotate", at("Edit")),
     ("edit.mirror", at("Edit")),
     ("edit.shared_properties", at("Edit")),
-    ("edit.renumber", under("Edit", "Renumber")),
-    ("interruption.renumber", under("Edit", "Renumber")),
-    ("plc.renumber_io", under("Edit", "Renumber")),
     // Draw
     ("xref.link", at("Draw")),
     ("draw.text", at("Draw")),
     ("net.select", under("Edit", "Net")),
     ("net.trace", under("Edit", "Net")),
-    ("plc.add_card", under("Draw", "PLC")),
-    ("plc.import_list", under("Draw", "PLC")),
-    ("plc.to_plc", under("Draw", "PLC")),
-    ("plc.overview", under("Draw", "PLC")),
+    ("plc.add_card", at("Draw")),
+    ("plc.overview", at("Draw")),
     ("macro.save", under("Draw", "Macros")),
     ("macro.place", under("Draw", "Macros")),
     ("macro.edit", under("Draw", "Macros")),
     ("macro.export_pack", under("File", "Macros")),
-    ("terminal.connect", under("Draw", "Terminals")),
-    ("terminal.disconnect", under("Draw", "Terminals")),
-    ("terminal.toggle_pe", under("Draw", "Terminals")),
-    ("terminal.reset_pe", under("Draw", "Terminals")),
-    ("terminal.strip_up", under("Draw", "Terminals")),
-    ("terminal.strip_down", under("Draw", "Terminals")),
-    ("terminal.strip_lowest", under("Draw", "Terminals")),
-    ("terminal.add_spares", under("Draw", "Terminal strips")),
-    ("terminal.rename", under("Draw", "Terminal strips")),
-    ("terminal.renumber", under("Draw", "Terminal strips")),
-    ("terminal.join_duplicates", under("Draw", "Terminal strips")),
-    ("terminal.set_kind", under("Draw", "Terminal strips")),
-    ("terminal.set_level", under("Draw", "Terminal strips")),
-    ("terminal.set_jumper", under("Draw", "Terminal strips")),
-    ("terminal.order_up", under("Draw", "Terminal strips")),
-    ("terminal.order_down", under("Draw", "Terminal strips")),
-    ("terminal.style", under("Draw", "Terminal strips")),
-    (
-        "terminal.restore_declined",
-        under("Draw", "Terminal strips"),
-    ),
     // View
     ("layout.draw", under("View", "Layouts")),
     ("layout.cabinet", under("View", "Layouts")),
@@ -251,10 +175,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("help.learn", at("Help")),
     ("ai.assistant", at("Help")),
     ("help.next_lesson", at("Help")),
-    ("learn.next", under("Help", "Lesson")),
-    ("learn.back", under("Help", "Lesson")),
-    ("learn.restart", under("Help", "Lesson")),
-    ("learn.close", under("Help", "Lesson")),
     // Simulate
     ("sim.live", at("Simulate")),
     ("sim.controller", at("Simulate")),
@@ -278,30 +198,14 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("heat.add_grille", under("Simulate", "Heat")),
     ("heat.add_exhaust_fan", under("Simulate", "Heat")),
     // Reports
-    ("export.reports", under("Reports", "Export")),
-    ("export.assembly", under("Reports", "Export")),
-    ("export.workpack", under("Reports", "Export")),
-    ("export.wireit", under("Reports", "Export")),
-    ("export.workshop", under("Reports", "Export")),
-    ("export.scale_check", under("Reports", "Export")),
-    ("export.bench_packet", under("Reports", "Export")),
-    ("export.kitting", under("Reports", "Export")),
-    ("export.safety_sheets", under("Reports", "Export")),
     ("view.bench", at("Reports")),
     ("view.build", at("Reports")),
     ("report.designer", at("Reports")),
-    ("export.bench_cut", under("Reports", "Export")),
-    ("export.ferrules", under("Reports", "Export")),
-    ("export.labels", under("Reports", "Export")),
     ("report.toc", at("Reports")),
     ("report.bom", at("Reports")),
     ("report.devices", at("Reports")),
     ("report.wires", at("Reports")),
     ("report.terminals", at("Reports")),
-    ("cable.rename", under("Draw", "Cables")),
-    ("cable.delete", under("Draw", "Cables")),
-    ("cable.retype", under("Draw", "Cables")),
-    ("cable.restore_proposals", under("Draw", "Cables")),
     ("report.cables", at("Reports")),
     ("report.cutlist", at("Reports")),
     ("report.labels", at("Reports")),
@@ -312,17 +216,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
 const REGROUPED: &[(&str, MenuPlace)] = &[
     // File: project settings and the library each get one submenu, so the
     // top level is only what you do to a file.
-    ("project.rules", under("File", "Project")),
-    ("project.standard", under("File", "Project")),
-    ("project.options", under("File", "Project")),
-    ("project.variant", under("File", "Project")),
-    ("project.option", under("File", "Project")),
-    ("project.tie", under("File", "Project")),
-    ("project.untie", under("File", "Project")),
-    ("project.generate", under("File", "Project")),
     ("parts.browser", under("File", "Library")),
     ("parts.import_step", under("File", "Library")),
-    ("import.spreadsheet", under("File", "Import")),
     // Edit: the paste variants, the part commands and the numbering
     // commands are families.
     ("edit.paste_keep_tags", under("Edit", "Paste special")),
@@ -331,12 +226,6 @@ const REGROUPED: &[(&str, MenuPlace)] = &[
     ("parts.clear", under("Edit", "Parts")),
     ("parts.describe", under("Edit", "Parts")),
     ("parts.remove_unused", under("Edit", "Parts")),
-    ("wires.number", under("Edit", "Wire numbers")),
-    ("wires.numbering", under("Edit", "Wire numbers")),
-    ("wires.check_numbers", under("Edit", "Wire numbers")),
-    ("wires.set_number", under("Edit", "Wire numbers")),
-    ("wires.unlock_number", under("Edit", "Wire numbers")),
-    ("wires.renumber", under("Edit", "Renumber")),
     // Help: both fast-key walk-throughs sit together.
     ("file.practice", at("Help")),
 ];
@@ -351,6 +240,18 @@ const PALETTE_ONLY: &[(&str, &str)] = &[
     ("view.3d_missing_data", "a switch of the 3D toolbar"),
     ("view.3d_trackpad_pans", "a switch of the 3D toolbar"),
     ("tool.repeat", "the key that repeats the last tool"),
+    (
+        "project.variant",
+        "takes a name in the command field (variant crane); without one it opens Project options",
+    ),
+    (
+        "project.option",
+        "takes a name in the command field (option conveyor off); without one it opens Project options",
+    ),
+    (
+        "project.tie",
+        "takes a name in the command field (tie conveyor); without one it opens Project options",
+    ),
     (
         "view.icon_gallery",
         "a design reference for the icon set, opened from the command field",
@@ -410,9 +311,14 @@ pub const MOVED: &[&str] = &[
     "view.devices_drawer",
 ];
 
-/// Whether the menu row of `id` moved to a rail ([`MOVED`]).
+/// Whether the menu row of `id` moved to a rail ([`MOVED`]), to a centre
+/// ([`crate::centres`]) or to the toolbar of a drawer
+/// ([`crate::homes::DRAWER_TOOLBARS`]).
 pub fn moved_out(id: &str) -> bool {
     MOVED.contains(&id)
+        || crate::centres::replaces_menu_row(id)
+        || crate::homes::drawer_of(id).is_some()
+        || crate::homes::panel_of(id).is_some()
 }
 
 /// The command's place in the menu bar, or `None` for the commands in
@@ -644,31 +550,9 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
 /// Submenus drawn first, in this order, for the menus named here; the
 /// others follow in the order [`layout`] gives them.
 const SUB_FIRST: &[(&str, &[&str])] = &[
-    (
-        "File",
-        &[
-            "Project",
-            "Library",
-            "Macros",
-            "Pages",
-            "Import",
-            "Import parts",
-            "Revisions",
-            "Export drawings",
-            "Export reports",
-            "Export production",
-            "Export PLC",
-            "Export interchange",
-        ],
-    ),
-    (
-        "Edit",
-        &["Paste special", "Parts", "Wire numbers", "Renumber"],
-    ),
-    (
-        "Draw",
-        &["Terminals", "Terminal strips", "Cables", "PLC", "Macros"],
-    ),
+    ("File", &["Library", "Macros", "Revisions"]),
+    ("Edit", &["Paste special", "Parts"]),
+    ("Draw", &["Macros"]),
 ];
 
 /// What the menu bar draws: [`layout`] with the plain rows in their
@@ -825,12 +709,12 @@ mod tests {
                 matches!(
                     i,
                     MenuItem::Submenu {
-                        name: "Export drawings",
+                        name: "Library",
                         ..
                     }
                 )
             })
-            .expect("an Export drawings submenu");
+            .expect("a Library submenu");
         let new = file
             .iter()
             .position(|i| matches!(i, MenuItem::Command(c) if c.id == "file.new"))
@@ -854,7 +738,8 @@ mod tests {
     #[test]
     fn file_and_view_lead_with_the_expected_commands() {
         let file: Vec<_> = entries("File").iter().map(|(c, _)| c.id).collect();
-        assert!(file.contains(&"file.new") && file.contains(&"export.pdf"));
+        assert!(file.contains(&"file.new") && file.contains(&"file.export_centre"));
+        assert!(file.contains(&"file.import_centre"));
         let view: Vec<_> = entries("View").iter().map(|(c, _)| c.id).collect();
         assert!(view.contains(&"view.cabinet") && view.contains(&"nav.back"));
     }
@@ -954,19 +839,18 @@ mod tests {
     #[test]
     fn menu_rows_stay_inside_the_budget() {
         let ceilings: &[(&str, usize)] = &[
-            // 90: File > New from template gained Pump station and Motor control centre
-            // (#1737), next to the crane; a template is a start-of-work choice that has
-            // no rail or palette-only home a new user would find.
-            ("File", 90),
-            ("Edit", 30),
-            ("Draw", 39),
+            // The export formats are in the Export centre, the imports in the Import
+            // centre, the templates and examples in the Start centre.
+            ("File", 26),
+            ("Edit", 22),
+            ("Draw", 15),
             ("View", 65),
             ("Check", 11),
-            ("Reports", 30),
+            ("Reports", 17),
             // 25: one Simulate row merged in parallel with the ratchet (#1734) and was
             // counted by no PR; it stays until the rail move lands.
             ("Simulate", 25),
-            ("Help", 19),
+            ("Help", 15),
         ];
         let mut total = 0;
         for (menu, ceiling) in ceilings {
@@ -983,26 +867,30 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 309, "the menus hold {total} rows");
+        assert!(total <= 196, "the menus hold {total} rows");
     }
 
+    /// The formats are listed in the Export centre, not in the menus: File
+    /// has one Export... row and the print entry.
     #[test]
-    fn the_export_menu_is_split_and_every_export_has_a_submenu_of_its_own() {
-        for (info, p) in entries("File") {
-            if info.group == "Export" && info.id.starts_with("export.") {
-                let sub = p.submenu.unwrap();
+    fn the_export_formats_are_in_the_centre_and_file_has_one_export_row() {
+        let file: Vec<&str> = entries("File").iter().map(|(i, _)| i.id).collect();
+        assert!(file.contains(&"file.export_centre"));
+        assert!(file.contains(&"export.print_preview"));
+        for menu in MENUS {
+            for (info, p) in entries(menu) {
                 assert!(
-                    sub.starts_with("Export ") && sub != "Export other",
-                    "{} lands in {sub:?}: give it a place in PLACEMENTS",
-                    info.id
+                    !info.id.starts_with("export.")
+                        || crate::centres::ALSO_IN_MENU.contains(&info.id),
+                    "{} still has a row in {menu} > {:?}",
+                    info.id,
+                    p.submenu
                 );
             }
         }
         for item in layout("File") {
-            if let MenuItem::Submenu { name, items } = item
-                && name.starts_with("Export")
-            {
-                assert!(items.len() <= 10, "{name} has {} entries", items.len());
+            if let MenuItem::Submenu { name, .. } = item {
+                assert!(!name.starts_with("Export"), "{name} is still a submenu");
             }
         }
     }
@@ -1065,8 +953,9 @@ mod tests {
         }
         assert_eq!(home("report.plugs"), under("Reports", "More reports"));
         assert_eq!(home("report.singleline"), under("Reports", "More reports"));
-        assert_eq!(home("export.report_pdf"), under("Reports", "Export"));
-        assert_eq!(home("export.pdf_page"), under("File", "Export drawings"));
-        assert_eq!(home("export.plate_dxf"), under("File", "Export drawings"));
+        for id in ["export.report_pdf", "export.pdf_page", "export.plate_dxf"] {
+            assert!(crate::centres::in_export_centre(id), "{id}");
+            assert!(place(crate::commands::get(id).unwrap()).is_none(), "{id}");
+        }
     }
 }

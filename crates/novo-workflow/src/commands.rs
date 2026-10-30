@@ -771,6 +771,49 @@ pub const COMMANDS: &[CommandInfo] = &[
     // Draw
     verb(
         cmd(
+            "file.import_centre",
+            "Import...",
+            "Project",
+            &["import centre", "import center", "bring in"],
+            Needs::Project,
+        ),
+        &["import", "import centre"],
+    ),
+    verb(
+        cmd(
+            "file.start_centre",
+            "Templates and examples...",
+            "Project",
+            &[
+                "templates",
+                "examples",
+                "new from template",
+                "start from",
+                "sample",
+            ],
+            Needs::Nothing,
+        ),
+        &["templates", "examples", "start from"],
+    ),
+    verb(
+        cmd(
+            "file.project_centre",
+            "Project settings...",
+            "Project",
+            &[
+                "project settings",
+                "standard",
+                "rules",
+                "options",
+                "variants",
+                "languages",
+            ],
+            Needs::Project,
+        ),
+        &["project settings", "settings"],
+    ),
+    verb(
+        cmd(
             "import.spreadsheet",
             "Import spreadsheet",
             "Project",
@@ -1102,6 +1145,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Remove unused parts",
         "Edit",
         &["unused", "clean up", "purge", "article"],
+        Needs::Project,
+    ),
+    cmd(
+        "edit.numbering_centre",
+        "Numbering...",
+        "Edit",
+        &["numbering centre", "wire numbers", "tags", "potentials"],
         Needs::Project,
     ),
     with_arguments(
@@ -3165,6 +3215,26 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export eplan", "export pxf"],
+    ),
+    verb(
+        cmd(
+            "file.export_centre",
+            "Export...",
+            "Export",
+            &[
+                "export centre",
+                "export center",
+                "formats",
+                "save as pdf",
+                "dxf",
+                "excel",
+                "plc",
+                "bench",
+                "handover",
+            ],
+            Needs::Project,
+        ),
+        &["export", "export centre"],
     ),
     verb(
         cmd(

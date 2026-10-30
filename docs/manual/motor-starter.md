@@ -6,14 +6,14 @@ A direct-on-line starter is the classic first circuit: a breaker, a contactor, a
 
 ## Draw the main circuit
 
-1. File > New project, then add a page (File > Pages > New page).
+1. File > New project, then add a page (the + New button of the Pages list).
 2. **Q**, type `breaker`, Enter, click to place. Repeat for the contactor (`contactor`), overload relay (`overload`) and motor (`motor`).
 3. **W** from pin to pin. A proposal appears where two pins face each other; **Enter** accepts.
 4. The contactor coil goes on the control page. KoperCAD links coil and contacts: each contact shows the coil's page and column, and the coil lists its contacts. These are the cross references; click one to jump, **Alt+Left** comes back.
 
 ## Wire numbers
 
-Wire and potential numbers follow a scheme you choose (Edit > Wire numbers, or **Ctrl+K** and type `numbering`).
+Wire and potential numbers follow a scheme you choose (Edit > Numbering..., or **Ctrl+K** and type `numbering`).
 
 - Numbers are filled in stable order: adding a wire does not renumber the others.
 - A number you type is **locked** and kept.
@@ -24,7 +24,7 @@ Renumber always shows a preview and is one undo step.
 
 ## Parts
 
-Assign a part to a device from the Parts panel. The catalogue holds only what you import: maker data and tables via File > Import parts. Suggestions are limited to parts that fit the device. A device with no part still appears on the parts list, with a blank part number.
+Assign a part to a device from the Parts panel. The catalogue holds only what you import: maker data and tables via File > Import.... Suggestions are limited to parts that fit the device. A device with no part still appears on the parts list, with a blank part number.
 
 Weights and prices appear only when the part data has them.
 

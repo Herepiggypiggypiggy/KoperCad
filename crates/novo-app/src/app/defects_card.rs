@@ -18,7 +18,7 @@ use novo_sim::inject::{
     wire_numbers,
 };
 use novo_sim::walkthrough::{
-    Action, Recorder, Report, Verdict, Walkthrough, differences_of, run, run_with,
+    Action, Recorder, Report, Verdict, Walkthrough, differences_of, run, run_with_machinery,
 };
 use novo_sim::{Clock, PoleState, Settled, rest_state, settle_timed};
 
@@ -808,18 +808,45 @@ fn report_view(ui: &mut egui::Ui, report: &Report) {
     }
 }
 
-/// Plays a walk-through with the project's hoists (if it has any), so steps that put a defect
-/// on a hoist or ask where its hook is have something to act on.
+/// Plays a walk-through with everything the project can run besides its circuit: hoists,
+/// closed-loop winches and winch pairs. Steps that put a defect on a hoist or ask where a hook
+/// is or what a winch's drive did then have something to act on.
 pub(super) fn run_walkthrough(project: &novo_core::Project, w: &Walkthrough) -> Report {
+    use novo_machine::cl_pair_loop::ClPairLoop;
+    use novo_machine::cl_winch_loop::ClWinchLoop;
     use novo_machine::cosim::StepConfig;
     use novo_machine::hoist_loop::HoistLoop;
-    if super::hoist_run::hoists_of(project).0.is_empty() {
+    use novo_sim::machine::Machinery;
+    let (has_hoists, has_winches, has_pairs) = (
+        !super::hoist_run::hoists_of(project).0.is_empty(),
+        !super::drive_run::closed_winches_of(project).0.is_empty(),
+        !super::drive_run::closed_pairs_of(project).0.is_empty(),
+    );
+    if !(has_hoists || has_winches || has_pairs) {
         return run(project, w);
     }
-    let make = || {
+    let make_hoists = || {
         let mut lp = HoistLoop::new(StepConfig::default()).expect("the default step is valid");
         lp.hoists = super::hoist_run::hoists_of(project).0;
         lp
     };
-    run_with(project, w, Some(&make))
+    let make_winches = || {
+        let mut cw = ClWinchLoop::new(StepConfig::default()).expect("the default step is valid");
+        cw.modules = super::drive_run::closed_winches_of(project).0;
+        cw
+    };
+    let make_pairs = || {
+        let mut cp = ClPairLoop::new(StepConfig::default()).expect("the default step is valid");
+        cp.modules = super::drive_run::closed_pairs_of(project).0;
+        cp
+    };
+    run_with_machinery(
+        project,
+        w,
+        &Machinery {
+            hoists: has_hoists.then_some(&make_hoists),
+            winches: has_winches.then_some(&make_winches),
+            pairs: has_pairs.then_some(&make_pairs),
+        },
+    )
 }

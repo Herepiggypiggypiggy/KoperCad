@@ -1,0 +1,18 @@
+@title Walk-through with a closed-loop winch: the encoder channel B monitor opens and the run finds the lost channel
+@sizes 1366x768 1920x1080
+@area Simulate
+# Lane L2c. The project has one saved walk-through (press up step 1, open the coil of the encoder channel B
+# monitor, expect the finding "encoder_channel_lost"). Simulate > Defects and walk-throughs lists it.
+open qa/fixtures/closed-winch-channel.novo
+wait 20
+click_text Simulate
+wait 5
+click_text "Defects and walk-throughs"
+wait 30
+expect "Encoder channel B opens"
+shot card-with-the-saved-walk-through
+click_text "▶ Run"
+wait 300
+expect "1 passed, 0 failed"
+shot report
+check_layout

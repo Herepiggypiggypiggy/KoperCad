@@ -15,7 +15,8 @@ click 300 200
 key Home
 wait 20
 shot a-before
-drag 340 480 960 660
+click 560 640
+click 906 589 shift
 wait 10
 shot b-two-selected
 wait 20
@@ -30,7 +31,7 @@ shot c-after-set-location
 check_layout
 # The field devices now sit across a location boundary: seven terminals are proposed. By default they
 # go on strips by kind, not all on one.
-click 293 748
+click 341 748
 wait 10
 expect "Accept 7 proposed"
 shot d-terminals-proposed

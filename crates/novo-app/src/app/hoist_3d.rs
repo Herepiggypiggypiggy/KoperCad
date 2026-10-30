@@ -3,15 +3,17 @@
 //! the Hoist run window (hook height, the conditions it reports, the heights of the bound limit
 //! switches); the crane around them is a generic picture, see `CRANE_PICTURE_LEAVES_OUT`.
 
-use super::NovoApp;
+use super::crane_setup::CraneSetup;
 use super::hoist_run::conditions;
+use super::{Level, NovoApp};
 use eframe::egui;
+use novo_machine::cl_winch_loop::ClWinchModule;
 use novo_machine::hoist_loop::{HoistModule, LimitKind};
 use novo_machine::swing::{DEFAULT_DAMPING_RATIO, SWING_MODEL_LEAVES_OUT, Swing};
 use novo_view3d::camera::ViewPreset;
 use novo_view3d::crane::{
-    CRANE_PICTURE_LEAVES_OUT, CraneLayout, CraneState, LimitFlag, LimitMark, build, hook_bounds,
-    rope_length_mm,
+    CRANE_PICTURE_LEAVES_OUT, CraneLayout, CraneState, LimitFlag, LimitMark, TravelMark, build,
+    hook_bounds, rope_length_mm,
 };
 use novo_view3d::palette::View3dTheme;
 use novo_view3d::widget::{View3d, ViewOptions};
@@ -37,6 +39,8 @@ pub(crate) struct Hoist3d {
     /// the last frame, from which the acceleration is taken.
     swing: [Swing; 2],
     last_speed: [f64; 2],
+    /// The setup as the project last had it, read from or written to the project info.
+    synced: CraneSetup,
     /// The scene of the last frame and what it was built from, so an unchanged picture is not
     /// uploaded again.
     built: Option<(CraneLayout, CraneState, Arc<Scene>)>,
@@ -63,6 +67,7 @@ impl Default for Hoist3d {
             trolley_axis: None,
             swing: [new_swing(), new_swing()],
             last_speed: [0.0; 2],
+            synced: CraneSetup::default(),
             built: None,
             revision: 0,
             needs_fit: true,
@@ -89,6 +94,27 @@ pub(super) struct Travel {
 }
 
 impl Hoist3d {
+    /// What the project remembers of the picture, as the window has it now.
+    fn setup(&self) -> CraneSetup {
+        CraneSetup {
+            layout: self.layout,
+            bridge_m: self.bridge_m,
+            trolley_m: self.trolley_m,
+            bridge_axis: self.bridge_axis.clone(),
+            trolley_axis: self.trolley_axis.clone(),
+        }
+    }
+
+    /// Puts a setup read from the project into the window.
+    fn apply(&mut self, s: &CraneSetup) {
+        self.layout = s.layout;
+        self.bridge_m = s.bridge_m;
+        self.trolley_m = s.trolley_m;
+        self.bridge_axis = s.bridge_axis.clone();
+        self.trolley_axis = s.trolley_axis.clone();
+        self.needs_fit = true;
+    }
+
     /// One frame of travel: the axes that drive the bridge and the trolley give a position and a
     /// speed (`None` for an axis that is not driven or has no run), the swing steps with the
     /// acceleration of each axis over `dt_s`. `rope_m` is the length of the rope.
@@ -166,6 +192,8 @@ pub(super) fn state_of(module: Option<&HoistModule>, bridge_m: f32, trolley_m: f
         hook_m: m.height_m() as f32,
         swing_rad: [0.0; 2],
         warning: !conditions(m).is_empty(),
+        bridge_limits: Vec::new(),
+        trolley_limits: Vec::new(),
         limits: m
             .binding
             .limits
@@ -179,6 +207,97 @@ pub(super) fn state_of(module: Option<&HoistModule>, bridge_m: f32, trolley_m: f
             })
             .collect(),
     }
+}
+
+/// What the picture leaves out when it follows a closed-loop winch of Drive run.
+const WINCH_PICTURE_LEAVES_OUT: &[&str] = &[
+    "A closed-loop winch is drawn as a hook on a vertical rope at its height; the ground it may rest on, slack rope, the drive state and the load cell reading are in the line above the picture, not drawn",
+    "The swing is the same one-pendulum model as for a hoist, from the travel axes picked here; a rope that hangs at an angle from the start is not drawn",
+];
+
+/// The picture's numbers for one closed-loop winch of Drive run: its hook, the limit flags and
+/// whether the drive tripped or the rope reports a problem.
+pub(super) fn winch_state_of(m: &ClWinchModule, bridge_m: f32, trolley_m: f32) -> CraneState {
+    CraneState {
+        bridge_m,
+        trolley_m,
+        hook_m: m.height_m() as f32,
+        swing_rad: [0.0; 2],
+        warning: m
+            .snapshot()
+            .is_some_and(|s| s.drive.fault.is_some() || s.slack_m > 0.0 || m.lifting_inhibited()),
+        bridge_limits: Vec::new(),
+        trolley_limits: Vec::new(),
+        limits: m
+            .binding
+            .limits
+            .iter()
+            .map(|l| LimitMark {
+                height_m: (l.binding.actuate_at_mm / 1000.0) as f32,
+                kind: match l.kind {
+                    LimitKind::Upper => LimitFlag::Upper,
+                    LimitKind::Lower => LimitFlag::Lower,
+                },
+            })
+            .collect(),
+    }
+}
+
+/// The line under the controls for a closed-loop winch: where the hook is and what it does.
+pub(super) fn winch_line(m: &ClWinchModule) -> String {
+    let s = m.snapshot();
+    let v = s.map_or(0.0, |s| s.hook_speed_m_s);
+    let way = if v.abs() < 0.005 {
+        "standing"
+    } else if v > 0.0 {
+        "rising"
+    } else {
+        "lowering"
+    };
+    let mut line = format!(
+        "{}: hook {:+.2} m from its start, {:.2} m/s, {way}",
+        m.id,
+        m.height_m(),
+        v.abs()
+    );
+    if let Some(s) = s {
+        if s.resting {
+            line.push_str(" \u{b7} resting on the ground");
+        }
+        if s.slack_m > 0.005 {
+            line.push_str(&format!(" \u{b7} slack rope {:.0} mm", s.slack_m * 1000.0));
+        }
+        if let Some(f) = s.drive.fault {
+            line.push_str(&format!(" \u{b7} drive tripped ({})", f.code()));
+        }
+    }
+    if let Some(pct) = m.load_pct() {
+        line.push_str(&format!(" \u{b7} load {pct:.0} % of rated"));
+    }
+    line
+}
+
+/// The end limits of a travel axis as flag positions in the picture: the start of the axis plus the
+/// distance set on its motor. Nothing without an axis or a project.
+pub(super) fn travel_marks(
+    project: Option<&novo_core::Project>,
+    axis: Option<&str>,
+    start_m: f32,
+) -> Vec<TravelMark> {
+    let (Some(project), Some(axis)) = (project, axis) else {
+        return Vec::new();
+    };
+    super::drive_run::travel_limits_of(project, axis)
+        .into_iter()
+        .map(|(forward, m)| TravelMark {
+            position_m: start_m + m as f32,
+            kind: if forward {
+                LimitFlag::Upper
+            } else {
+                LimitFlag::Lower
+            },
+        })
+        .collect()
 }
 
 /// The line under the controls: where the hook is and what it does.
@@ -201,6 +320,38 @@ pub(super) fn hook_line(module: &HoistModule) -> String {
 }
 
 impl NovoApp {
+    /// Keeps the window and the project in step. A setup the project holds that the window does
+    /// not (a project just opened, an undo) is taken into the window; a setup the user changed in
+    /// the window is saved in the project, one undo step, once the mouse button is up so a drag
+    /// is not a hundred steps.
+    fn sync_crane_setup(&mut self, ctx: &egui::Context, axes: &[String]) {
+        let Some(doc) = self.backend.document() else {
+            return;
+        };
+        let stored = CraneSetup::from_properties(&doc.project().info().properties)
+            .without_missing_axes(axes);
+        let g = &mut self.wb.hoist.three_d;
+        if stored != g.synced {
+            g.apply(&stored);
+            g.synced = stored;
+            return;
+        }
+        let now = g.setup();
+        if now == g.synced || ctx.input(|i| i.pointer.any_down()) {
+            return;
+        }
+        g.synced = now.clone();
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        match doc.transact("Crane picture", |tx| {
+            tx.set_info(|i| now.write_properties(&mut i.properties))
+        }) {
+            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Err(e) => self.message(Level::Error, format!("Crane picture: {e}")),
+        }
+    }
+
     pub(super) fn toggle_hoist_3d(&mut self) {
         self.wb.hoist.three_d.open ^= true;
     }
@@ -215,13 +366,22 @@ impl NovoApp {
         let mut start = false;
         let mut open_drive = false;
         let running = self.wb.hoist.is_running();
-        let names: Vec<String> = self.wb.hoist.hoist_ids();
+        // The hoists of Hoist run, then the closed-loop winches of Drive run.
+        let hoists = self.wb.hoist.hoist_ids();
+        let hoist_count = hoists.len();
+        let names: Vec<String> = hoists
+            .into_iter()
+            .chain(self.wb.drive_run.winch_ids())
+            .collect();
         if self.wb.hoist.three_d.follow >= names.len().max(1) {
             self.wb.hoist.three_d.follow = 0;
         }
         let follow = self.wb.hoist.three_d.follow;
         // What the picture needs of the hoist, taken before the window borrows the state mutably.
-        let line = self.wb.hoist.module_at(follow).map(hook_line);
+        let line = match follow.checked_sub(hoist_count) {
+            None => self.wb.hoist.module_at(follow).map(hook_line),
+            Some(i) => self.wb.drive_run.winch_at(i).map(winch_line),
+        };
         // The travel axes of the project, and what the axes picked for the bridge and the trolley
         // did this frame.
         let axes: Vec<String> = self
@@ -229,12 +389,20 @@ impl NovoApp {
             .document()
             .map(|d| super::drive_run::travel_ids(d.project()))
             .unwrap_or_default();
+        self.sync_crane_setup(ctx, &axes);
         let dt = f64::from(ctx.input(|i| i.stable_dt).clamp(0.0, 0.1));
-        let hook_m = self
-            .wb
-            .hoist
-            .module_at(follow)
-            .map_or(0.0, |m| m.height_m() as f32);
+        let hook_m = match follow.checked_sub(hoist_count) {
+            None => self
+                .wb
+                .hoist
+                .module_at(follow)
+                .map_or(0.0, |m| m.height_m() as f32),
+            Some(i) => self
+                .wb
+                .drive_run
+                .winch_at(i)
+                .map_or(0.0, |m| m.height_m() as f32),
+        };
         let driven = {
             let g = &self.wb.hoist.three_d;
             let drive = &self.wb.drive_run;
@@ -245,11 +413,40 @@ impl NovoApp {
         };
         let rope_m = f64::from(rope_length_mm(&self.wb.hoist.three_d.layout, hook_m)) / 1000.0;
         let travel = self.wb.hoist.three_d.travel(dt, driven, rope_m);
-        let hoist_state = self
-            .wb
-            .hoist
-            .module_at(follow)
-            .map(|m| state_of(Some(m), travel.bridge_m, travel.trolley_m));
+        let hoist_state = match follow.checked_sub(hoist_count) {
+            None => self
+                .wb
+                .hoist
+                .module_at(follow)
+                .map(|m| state_of(Some(m), travel.bridge_m, travel.trolley_m)),
+            Some(i) => self
+                .wb
+                .drive_run
+                .winch_at(i)
+                .map(|m| winch_state_of(m, travel.bridge_m, travel.trolley_m)),
+        };
+        // The end limits of the picked axes, as flags: where the axis starts plus the distance
+        // set on the motor.
+        let (bridge_marks, trolley_marks) = {
+            let g = &self.wb.hoist.three_d;
+            let project = self.backend.document().map(|d| d.project());
+            (
+                travel_marks(project, g.bridge_axis.as_deref(), g.bridge_m),
+                travel_marks(project, g.trolley_axis.as_deref(), g.trolley_m),
+            )
+        };
+        let outside = [
+            (&bridge_marks, self.wb.hoist.three_d.layout.runway_m),
+            (&trolley_marks, self.wb.hoist.three_d.layout.span_m),
+        ]
+        .iter()
+        .map(|(marks, end)| {
+            marks
+                .iter()
+                .filter(|m| !(0.0..=*end).contains(&m.position_m))
+                .count()
+        })
+        .sum::<usize>();
         let g = &mut self.wb.hoist.three_d;
         let swinging = g.swinging();
         let drive_running = self.wb.drive_run.is_running();
@@ -392,6 +589,11 @@ impl NovoApp {
                         );
                     }
                 }
+                if outside > 0 {
+                    ui.weak(format!(
+                        "\u{2022} {outside} end limit(s) lie outside the picture and are not drawn"
+                    ));
+                }
                 match &line {
                     Some(text) => {
                         ui.label(text);
@@ -410,6 +612,8 @@ impl NovoApp {
                 }
                 let state = CraneState {
                     swing_rad: travel.swing_rad,
+                    bridge_limits: bridge_marks,
+                    trolley_limits: trolley_marks,
                     ..hoist_state
                         .clone()
                         .unwrap_or_else(|| state_of(None, travel.bridge_m, travel.trolley_m))
@@ -433,7 +637,7 @@ impl NovoApp {
                     let b = hook_bounds(&g.layout, &state);
                     g.view.frame_bounds(&b, now, reduced);
                 }
-                let height = (ui.available_height() - 170.0).max(160.0);
+                let height = (ui.available_height() - 190.0).max(160.0);
                 ui.allocate_ui(egui::vec2(ui.available_width(), height), |ui| {
                     g.view.show(
                         ui,
@@ -448,11 +652,17 @@ impl NovoApp {
                 ui.label(egui::RichText::new("Picture, not measurement").strong());
                 egui::ScrollArea::vertical()
                     .id_salt("hoist3d_notes")
-                    .max_height(130.0)
+                    .max_height(150.0)
                     .show(ui, |ui| {
+                        let winch_notes: &[&str] = if g.follow >= hoist_count {
+                            WINCH_PICTURE_LEAVES_OUT
+                        } else {
+                            &[]
+                        };
                         for line in CRANE_PICTURE_LEAVES_OUT
                             .iter()
                             .chain(SWING_MODEL_LEAVES_OUT)
+                            .chain(winch_notes)
                         {
                             ui.weak(format!("\u{2022} {line}"));
                         }

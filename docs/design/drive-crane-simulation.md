@@ -266,6 +266,19 @@ carriage, the small-angle period `2 pi sqrt(L / g)` and the lean `atan(a / g)` a
 acceleration; the damping ratio (2 %) is a number, the rope keeps its length, the swing does not
 push back on the drive, and the two directions do not couple.
 
+Saved setup: the axis picks, the crane size (runway, span, rail height, hook start, load) and the
+start positions are kept in the project info properties (`crane3d.*`, `app/crane_setup.rs`), one
+undo step ("Crane picture") once the mouse button is up. A project without them gets the defaults;
+a number that is missing or out of range falls back one by one, and an axis the project no longer
+has is dropped. Undo and opening another project reload the window from the project.
+
+Travel end limits: the forward and reverse end limit of a picked axis (the `trav_limit_fwd_m` and
+`trav_limit_rev_m` set on its motor, metres from the axis start) stand as upright flags, red for
+forward and amber for reverse: on the runway beam for the bridge, on the girder for the trolley, at
+the typed start plus the distance. They are read from the project, so they show before a run; a
+limit that falls outside the runway or the span is not drawn and the window says how many. The
+flag shows where the limit is set, not whether the switch is pressed.
+
 ### Lane L2c-open as built (open-loop drive hoist)
 
 A hoist behind a frequency drive without an encoder: `novo_drive::hoist_logic` (the brake sequence and
@@ -305,6 +318,18 @@ while the drum still takes up slack rope it reads a light load and may boost a h
 Exact by definition: the spring law, the weight, the floor as a one-sided inelastic constraint.
 Model: one stiffness and one damping ratio for the whole rope, hook mass lumped, no rope mass, hook
 swing or sheave friction, a one-tick lag between hook and shaft.
+Slow-down before the final limit (optional, `dh_slow_up`/`dh_slow_up_m`, `dh_slow_down`/`dh_slow_down_m`,
+`dh_clearance_up_m`/`dh_clearance_down_m`): a slow-down switch is a second limit contact in the drawing,
+placed before the final limit (the property sheet notes it when it is not). The loop only writes the
+contact by hook height; what it cuts is the drawing's business (for example the relays of the fast speed
+steps, so the drive falls back to step 1 and the final limit is reached at creep speed). The run reports
+the speed at the slow-down switch ("SlowDownPassed"), the speed at the final limit with the speed at the
+slow-down switch beside it ("FinalLimit"), how far the hook went past the final limit before it stood
+still ("LimitOvertravel") and, with a clearance entered, the speed at which it would hit the stop behind
+it ("HitStop"). Exact by definition: the limit contacts follow the hook height, the overtravel is the
+hook height past the actuation point. Model: the stopping behaviour (all of the drive, brake and sequence
+models above). The stop or buffer itself is not modelled (no impact, no rope shock): the run only says
+at what speed the hook would reach it.
 Heat over a duty cycle (`dh_heat_*`, `dh_brake_*` rows, always on): the module carries the two-node
 winding and frame model of `novo_drive::hoist_thermal` (losses from the fitted motor at the drive's
 output, a fan that cools in proportion to shaft speed, so a long slow run at low frequency heats more

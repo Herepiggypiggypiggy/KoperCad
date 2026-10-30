@@ -86,14 +86,117 @@ events.
 
 Fidelity: reading the devices and the tick order are exact by definition; everything inside the
 drive is the model listed above. A channel or the encoder device that is not bound counts as always
-present, and the run says so. The encoder loss here is a lost signal (counts stop); a lost single
-channel (direction lost) is available in the engine and the scenarios window, not as a drawn device yet.
+present, and the run says so. The encoder loss here is a lost signal (counts stop). A lost single
+channel (direction lost) is a second drawn device, the motor's "Encoder channel B device"
+(`cw_encoder_b`): when its coil opens the counts keep coming but the direction is gone, the run
+names it, and lowering trips the drive on the encoder code. Not bound means the channel is present.
+
+## Two winches on one beam in the drawn circuit
+
+A motor whose **Two winches on one beam** section names a second motor (`cw_pair_partner`, rows in
+`cl_winch_spec::PAIR_KEYS`) makes the two a pair in Simulate > Drive run (`novo_machine::cl_pair_loop`).
+Both motors keep their own Closed-loop winch rows. The beam (mass, rope distance, centre of gravity,
+guided or free), the rope stiffness and damping, the rope rating, the synchronisation (independent,
+position lock, torque follower), the position limit and the partner action are entered on the first
+motor. The hook load of each winch is replaced by its share of the beam; the beam itself is
+integrated by the pair (`sync_winch`).
+
+The first winch's up, down and step 2 devices command both winches; the second winch's are not read
+and the binding check says so when they are drawn. Everything else is read per winch: the two STO
+channels, the encoder signal, the main contactor, the brake feed and feedback, and the reset. The
+drive's brake relay of each winch is its own drawn contact. So an open coil on one STO channel of
+winch B trips only winch B (the pair then stops through the partner link, or the position error
+stops it first, as set), a lost encoder signal on B is named as winch B's, a brake contactor of B that
+does not pull in leaves B's brake closed and the pair stops itself on the position error.
+
+The run lists trips, STO and encoder events per winch, the pair stopping itself, a rope above its
+rating, a slack rope and a tilt beyond what the model covers. Start rollback, stop travel and brake
+slip are reported for a single winch only; for a pair read them off the snapshot rows.
+
+Fidelity: the tick order and the beam statics are exact by definition; ropes as spring-dampers that
+pull only when taut, the beam as a rigid body at small tilt with vertical ropes, and the drives are the
+model listed above. No rope swing, no drum grooving, no rope over-lap. The default rope rating is
+0.6 times the beam weight when none is entered, and the run says so.
+
+## Walk-throughs
+
+`novo_sim::walkthrough` runs the winch and pair loops on the healthy and the faulted plant, one circuit
+settle per tick (the loops split their tick into `write_contacts` and `step_after_settle` for this). The
+script writes circuit defects as for any plant and asks `winch` checks (`novo_sim::winch_check`): hook
+above or below a height, standing, moving, tripped, tripped with a code, clear, STO active, or the run found
+a trip, STO, a lost encoder signal, a brake slip, a start rollback, a pair stopping itself, a rope above
+its rating or a slack rope. The report's "what is different" lists a hook gap of 5 cm or more, a drive that
+trips only on the faulted plant and findings only the faulted run has. User: Simulate > Defects and
+walk-throughs, saved walk-throughs, `▶ Run`; the fixture `qa/fixtures/closed-winch-walk.novo` has one.
+Limits as for the hoist walk-throughs: a run with a machine in it stops at 120 s.
+
+## Rated load and the load cell (single winch)
+
+A winch with a rated load (`cw_swl_kg`, the safe working load) watches the force in its rope. The
+load cell reads the weight of the hook mass plus its inertia (`m (g + a)`, the acceleration taken
+from the hook speed of the last tick; the rope is rigid). Three things follow, all findings of
+the run:
+
+- over the rating (above 100 %): "The load cell reads N % of the rated load", once per crossing;
+- over the cut-out (`cw_overload_pct`, 110 % when blank): lifting is inhibited, lowering and holding
+  stay possible, and the cut-out lets go 2 % below its threshold so a load on the edge does not
+  chatter. The drawing can light a lamp from the optional output device (`cw_overload_out`, its
+  contact is written closed while lifting is inhibited);
+- the load cell signal (`cw_load_cell`, a drawn device, energised: present) lost: the load is unknown,
+  so lifting is inhibited (fail safe) and the run says so; back again releases it.
+
+With a ground level the reading is zero while the hook rests on the ground (the rope carries nothing), so an
+overweight hook is not refused on the ground: the pick-up puts the weight on the rope and the cut-out then
+stops the lift a few centimetres up.
+
+The reading beside the winch shows "load N % of rated" (and "lifting inhibited"). Walk-through checks
+`found` with `overload_cut_out` or `load_cell_lost` ask for them.
+
+Exact by definition: the arithmetic of the reading, the order of the tick, lifting only inhibited.
+Model: the rigid rope (no rope dynamics in the reading), the load cell itself (no noise, no
+calibration error, no response time) and the cut-out threshold behaviour of a real limiter, whose
+standard (for example the dynamic factor and test loads) is not looked up here. A hard acceleration raises the reading (weight plus inertia), so a lift can cut out a few per cent
+below the cut-out (the default 3 s ramp to step 2, 0.8 m/s, adds 2.7 %: about 107 % of the static load). It is a simulation of the behaviour, not a validated overload protection and no
+substitute for a rated capacity limiter to the applicable standard. A rated load is not
+monitored in a pair (the pair has its own rope rating). Scenarios 1765 to 1765d, fixtures
+`closed-winch-load.novo` and `closed-winch-overload.novo`.
+
+## The hook on the ground: slack rope and the snatch (single winch)
+
+With a ground level (`cw_ground_m`, metres above the hook start, negative below) the hook can rest
+on something. The drum position gives the rope paid out; the hook is at the ground whenever the rope
+reaches below it, and the difference is slack. While the hook rests the rope carries nothing: the
+weight torque is zero, the load cell (pre-torque) reads zero, and the drive turns the drum freely.
+Findings of the run:
+
+- the hook lands, with its speed;
+- the rope goes slack (more than 5 cm paid out beyond the hook), and when there is more than half a
+  metre of it, "the rope can leave the drum groove or the sheaves";
+- the slack is taken up and the rope snatches the hook off the ground: the speed at the moment the
+  rope comes taut and an estimated peak force `m g + v sqrt(k m)` with the rope stiffness `k`
+  (`cw_slack_k_n_m`, 2 MN/m when blank).
+
+Walk-throughs: `found` with `slack` (also the pair's name) or `snatch`.
+
+Exact by definition: the geometry (rope paid out, hook at the ground, slack) and the tick order.
+Model: the rigid rope while taut, the peak force of the snatch (an energy estimate from a rope
+stiffness you enter, not a dynamic simulation of the rope: the rope does not bounce, the hook does not
+swing), the shaft inertia kept as with the hook hanging (a slack drum accelerates a little slower than
+a real one), no friction or sticking of the hook on the ground. Not used in a pair (its rope model has
+its own slack). Scenarios 1766 and 1766b with the fixture `closed-winch-ground.novo` (a down button S3).
+
+## The winch in the 3D picture (single winch)
+
+Simulate > Hoist in 3D lists the closed-loop winches of Simulate > Drive run next to the hoists of Hoist
+run (the same drop-down); picking one makes the picture follow its hook height and the line under the controls
+says where it is, how fast, whether it rests on the ground or has slack rope, whether the drive tripped and the
+load as a share of the rated load. The swing is the existing one-pendulum model (`novo_machine::swing`) driven
+by the bridge and trolley axes picked in the window, so the hook swings when those axes accelerate, with its
+own honest note ("Picture, not measurement" and the swing notes). Not drawn: the ground, the slack rope, the
+drive state and the load cell reading (they are in the line), a rope that hangs at an angle from the start,
+and winches of a pair. Scenarios 1767 and 1767b.
 
 ## Not yet
 
-- Two winches on one beam from the schematic (two motors, one beam): the pair needs per-winch bindings
-  and a shared mechanics block. `PairCommand` already takes per-winch STO.
-- Walk-throughs (`novo_sim::walkthrough`) do not run the winch loop yet; defects are injected in the
-  live view.
 - Unconfirmed customer details: which drive maker's hoist and encoder arrangement applies. Everything
   here is generic public knowledge.

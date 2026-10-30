@@ -115,17 +115,17 @@ point = { area = { page = "Control circuit", x = 270, y = 251, w = 140, h = 36 }
 id = "export"
 title = "Export the set"
 title_nl = "Exporteer de set"
-# verified: export.pdf has no key (keymap.rs); it is in File > Export drawings > Export
+# verified: export.pdf has no key (keymap.rs); it is a tile of the Export centre (File > Export...)
 # PDF (commands.rs, menus.rs) and the palette verb "export pdf". The KoperCAD
 # brand button opens About, it is not an export menu.
 text = """
-Write the whole set as one vector PDF: press {key:view.command_palette}, type **export pdf** and press Enter, or choose **File > Export drawings > Export PDF**.
+Write the whole set as one vector PDF: press {key:view.command_palette}, type **export pdf** and press Enter, or open {ui:cmd.file.export_centre} and pick {ui:cmd.export.pdf}.
 """
 text_nl = """
-Schrijf de hele set als één vector-PDF: druk op {key:view.command_palette}, typ **export pdf** en druk op Enter, of kies **File > Export drawings > Export PDF**.
+Schrijf de hele set als één vector-PDF: druk op {key:view.command_palette}, typ **export pdf** en druk op Enter, of open {ui:cmd.file.export_centre} en kies {ui:cmd.export.pdf}.
 """
-how = ["Press {key:view.command_palette}, type **export pdf**, press Enter", "Or click **File**, **Export**, **Export PDF**"]
-how_nl = ["Druk op {key:view.command_palette}, typ **export pdf**, druk op Enter", "Of klik op **File**, **Export**, **Export PDF**"]
+how = ["Press {key:view.command_palette}, type **export pdf**, press Enter", "Or open {ui:cmd.file.export_centre}, pick {ui:cmd.export.pdf} and press Enter"]
+how_nl = ["Druk op {key:view.command_palette}, typ **export pdf**, druk op Enter", "Of open {ui:cmd.file.export_centre}, kies {ui:cmd.export.pdf} en druk op Enter"]
 demo = [ { press = "view.command_palette" }, { type = "export pdf" }, { key = "Enter" } ]
 expect = { command = "export.pdf" }
 solve = [ { command = "export.pdf" } ]

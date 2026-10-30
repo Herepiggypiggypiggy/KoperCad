@@ -1,4 +1,4 @@
-//! The crane project template (File > New from template > Overhead crane):
+//! The crane project template (File > Templates and examples > Overhead crane):
 //! a starting point instead of a blank project. It carries a crane-shaped
 //! structure tree (girder, hoist units, operator station, cabinets, limit
 //! switches, collision protection, load cell, motors), a few empty drawing

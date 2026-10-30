@@ -34,6 +34,12 @@ use crate::port::CircuitPort;
 /// Hook movement below this (m) is not reported as a rollback, a stop travel or a slip.
 const REPORT_BELOW_M: f64 = 0.005;
 
+/// Slack above this (m) is reported; it is re-armed once the rope is nearly taut again.
+const SLACK_REPORT_M: f64 = 0.05;
+
+/// Slack above this (m) is a rope that can jump out of its groove.
+const SLACK_LOOSE_M: f64 = 0.5;
+
 /// A hook that moved this far against the command at the start is reported at once.
 const RUNAWAY_M: f64 = 0.05;
 
@@ -55,6 +61,9 @@ pub struct ClWinchBinding {
     pub sto: [Option<String>; 2],
     /// Device tag whose energised state means the encoder signal is present. `None`: always.
     pub encoder: Option<String>,
+    /// Device tag whose energised state means encoder channel B is present. `None`: always. With
+    /// channel B lost the counts still arrive but only upward, whatever the direction.
+    pub encoder_b: Option<String>,
     /// Device tag of the main contactor coil that feeds the drive. `None`: mains is always on.
     pub mains: Option<String>,
     /// Device tag of the drive's brake relay contact. The module writes its state; the drawing
@@ -67,6 +76,12 @@ pub struct ClWinchBinding {
     pub brake_feedback: Option<String>,
     /// Device tag whose energised state resets a tripped drive (rising edge).
     pub reset: Option<String>,
+    /// Device tag whose energised state means the load cell signal is present. `None`: always.
+    /// Only used when the winch has a rated load.
+    pub load_cell: Option<String>,
+    /// Device tag the module writes: closed while lifting is inhibited by the overload
+    /// protection (cut-out or lost load cell). The drawing can light a lamp or interlock with it.
+    pub overload_out: Option<String>,
     /// Upper limit protects the top, lower limit the bottom, by hook height.
     pub limits: Vec<LimitSwitch>,
 }
@@ -103,6 +118,40 @@ pub enum ClFindingKind {
     /// The encoder signal device lost its supply or its wire.
     EncoderSignalLost,
     EncoderSignalBack,
+    /// One encoder channel is gone: the counts no longer say which way the shaft turns.
+    EncoderChannelLost,
+    EncoderChannelBack,
+    /// The hook rests on the ground and the drum paid out `slack_m` of rope beyond it.
+    SlackRope {
+        slack_m: f64,
+    },
+    /// So much slack that the rope can leave the drum groove or the sheaves.
+    RopeLoose {
+        slack_m: f64,
+    },
+    /// The hook came down on the ground at `m_s`.
+    HookLanded {
+        m_s: f64,
+    },
+    /// The rope came taut and the hook left the ground at `m_s`: `peak_n` is the estimated force
+    /// of the snatch.
+    RopePickedUp {
+        m_s: f64,
+        peak_n: f64,
+    },
+    /// The load cell reads more than the rated load (`pct` of it).
+    OverRated {
+        pct: f64,
+    },
+    /// The overload protection inhibited lifting at `pct` of the rated load.
+    OverloadCutOut {
+        pct: f64,
+    },
+    /// Lifting is allowed again.
+    OverloadCleared,
+    /// The load cell signal device lost its supply or its wire: lifting is inhibited.
+    LoadCellLost,
+    LoadCellBack,
 }
 
 impl ClFindingKind {
@@ -133,9 +182,53 @@ impl ClFindingKind {
                 "The encoder signal is gone: no speed or position feedback.".to_owned()
             }
             Self::EncoderSignalBack => "The encoder signal is back.".to_owned(),
+            Self::EncoderChannelLost => {
+                "An encoder channel is gone: the speed feedback no longer knows the direction."
+                    .to_owned()
+            }
+            Self::EncoderChannelBack => "The encoder channel is back.".to_owned(),
+            Self::SlackRope { slack_m } => format!(
+                "The rope is slack: the drum paid out {slack_m:.2} m beyond the hook, which rests on the ground."
+            ),
+            Self::RopeLoose { slack_m } => format!(
+                "{slack_m:.1} m of slack: the rope can leave the drum groove or the sheaves."
+            ),
+            Self::HookLanded { m_s } => format!(
+                "The hook landed on the ground at {m_s:.2} m/s: the rope carries nothing from here."
+            ),
+            Self::RopePickedUp { m_s, peak_n } => format!(
+                "The slack is taken up and the hook leaves the ground at {m_s:.2} m/s: the rope snatches, about {:.1} kN at its peak.",
+                peak_n / 1000.0
+            ),
+            Self::OverRated { pct } => {
+                format!("The load cell reads {pct:.0} % of the rated load.")
+            }
+            Self::OverloadCutOut { pct } => format!(
+                "Overload protection: lifting inhibited at {pct:.0} % of the rated load (lowering stays allowed)."
+            ),
+            Self::OverloadCleared => "Overload protection released: lifting is allowed.".to_owned(),
+            Self::LoadCellLost => {
+                "The load cell signal is gone: the load is unknown, so lifting is inhibited."
+                    .to_owned()
+            }
+            Self::LoadCellBack => "The load cell signal is back.".to_owned(),
         }
     }
 }
+
+/// Overload protection from a load cell: the rated load and the cut-out above it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LoadMonitor {
+    /// Rated load (safe working load) in kg.
+    pub swl_kg: f64,
+    /// Lifting is inhibited above this share of the rated load, in per cent (110 is common).
+    pub cutout_pct: f64,
+}
+
+/// The cut-out lets go this many per cent below its threshold, so a load on the edge does not chatter.
+const CUTOUT_HYSTERESIS_PCT: f64 = 2.0;
+
+use novo_drive::GRAVITY as G;
 
 /// A closed-loop winch: drive, brake, hoist load and bindings.
 #[derive(Debug)]
@@ -145,11 +238,22 @@ pub struct ClWinchModule {
     pub binding: ClWinchBinding,
     /// Hook speed of step 1 and step 2, m/s.
     pub speeds_m_s: [f64; 2],
+    /// Rope stiffness at the hook in N/m, for the estimate of a snatch.
+    pub rope_k_n_m: f64,
+    slack_reported: bool,
+    loose_reported: bool,
+    /// Overload protection; `None`: the load is not monitored.
+    pub monitor: Option<LoadMonitor>,
     last_reset: bool,
+    cutout: bool,
+    over_rated: bool,
+    last_cell_ok: bool,
+    accel_m_s2: f64,
     relay: bool,
     last_fault: Option<ClFault>,
     last_sto_requested: bool,
     last_encoder_ok: bool,
+    last_channel_ok: bool,
     snapshot: Option<WinchSnapshot>,
     findings: Vec<ClWinchFinding>,
     findings_dropped: usize,
@@ -180,11 +284,20 @@ impl ClWinchModule {
             winch,
             binding,
             speeds_m_s,
+            rope_k_n_m: 2.0e6,
+            slack_reported: false,
+            loose_reported: false,
+            monitor: None,
             last_reset: false,
+            cutout: false,
+            over_rated: false,
+            last_cell_ok: true,
+            accel_m_s2: 0.0,
             relay: false,
             last_fault: None,
             last_sto_requested: false,
             last_encoder_ok: true,
+            last_channel_ok: true,
             snapshot: None,
             findings: Vec::new(),
             findings_dropped: 0,
@@ -200,6 +313,27 @@ impl ClWinchModule {
     /// Hook height in metres, 0 at the start (positive is up).
     pub fn height_m(&self) -> f64 {
         self.snapshot.as_ref().map_or(0.0, |s| s.hook_height_m)
+    }
+
+    /// Force in the rope at the hook in newtons, as a load cell reads it: the weight plus the
+    /// inertia of the hook mass (the rope is taken as rigid). Zero while the hook rests on the
+    /// ground: the rope carries nothing then.
+    pub fn load_n(&self) -> f64 {
+        if self.winch.resting() {
+            return 0.0;
+        }
+        self.winch.hoist().mass_kg() * (G + self.accel_m_s2)
+    }
+
+    /// The load cell reading as a share of the rated load, in per cent (`None`: no rated load).
+    pub fn load_pct(&self) -> Option<f64> {
+        self.monitor
+            .map(|mon| self.load_n() / (mon.swl_kg * G) * 100.0)
+    }
+
+    /// True while the overload protection inhibits lifting.
+    pub fn lifting_inhibited(&self) -> bool {
+        self.monitor.is_some() && (self.cutout || !self.last_cell_ok)
     }
 
     pub fn snapshot(&self) -> Option<&WinchSnapshot> {
@@ -252,92 +386,16 @@ impl ClWinchLoop {
 
     /// Binding problems to show before the run.
     pub fn check_bindings(&self, circuit: &impl CircuitPort) -> Vec<BindingFinding> {
-        let mut out = Vec::new();
-        let finding = |module: &str, message: String| BindingFinding {
-            module: module.to_owned(),
-            message,
-        };
-        for m in &self.modules {
-            let b = &m.binding;
-            let named = [
-                ("up input", &b.up),
-                ("down input", &b.down),
-                ("speed step 2 input", &b.fast),
-                ("STO channel 1", &b.sto[0]),
-                ("STO channel 2", &b.sto[1]),
-                ("encoder signal", &b.encoder),
-                ("main contactor", &b.mains),
-                ("brake relay contact", &b.brake_relay),
-                ("brake feed", &b.brake_feed),
-                ("brake feedback", &b.brake_feedback),
-                ("reset input", &b.reset),
-            ];
-            for (what, tag) in named {
-                if let Some(tag) = tag
-                    && !circuit.knows_device(tag)
-                {
-                    out.push(finding(
-                        &m.id,
-                        format!("{what} {tag} is not in the circuit"),
-                    ));
-                }
-            }
-            for limit in &b.limits {
-                if !circuit.knows_device(&limit.binding.device_tag) {
-                    out.push(finding(
-                        &m.id,
-                        format!(
-                            "limit switch {} is not in the circuit",
-                            limit.binding.device_tag
-                        ),
-                    ));
-                }
-            }
-            if b.up.is_none() && b.down.is_none() {
-                out.push(finding(
-                    &m.id,
-                    "no up or down input is bound: the winch cannot be commanded".into(),
-                ));
-            }
-            if b.brake_relay.is_none() && b.brake_feed.is_some() {
-                out.push(finding(
-                    &m.id,
-                    "the brake is fed from the circuit but the drive's brake relay contact is \
-                     not bound, so the brake is never commanded open"
-                        .into(),
-                ));
-            }
-            if b.brake_feed.is_none() {
-                out.push(finding(
-                    &m.id,
-                    "no brake feed device is bound: the brake follows the drive's relay \
-                     directly (ideal wiring, the brake contactor and rectifier are not checked)"
-                        .into(),
-                ));
-            }
-            if b.sto[0].is_none() || b.sto[1].is_none() {
-                out.push(finding(
-                    &m.id,
-                    "an STO channel is not bound: it counts as always energised, so STO can \
-                     never be requested through it"
-                        .into(),
-                ));
-            }
-            if b.encoder.is_none() {
-                out.push(finding(
-                    &m.id,
-                    "no encoder signal device is bound: the encoder is always present in the \
-                     drawing (a loss can still be injected in the engine)"
-                        .into(),
-                ));
-            }
-        }
-        out
+        self.modules
+            .iter()
+            .flat_map(|m| binding_findings(&m.id, &m.binding, true, circuit))
+            .collect()
     }
 
-    /// One tick.
-    pub fn step(&mut self, circuit: &mut impl CircuitPort) {
-        let dt = self.config.dt_s;
+    /// First half of a tick: the limit switches and the drive's brake relay contact are written
+    /// from the previous tick. A host that settles one circuit for several loops calls this on
+    /// every loop, settles once, then calls [`step_after_settle`](Self::step_after_settle).
+    pub fn write_contacts(&self, circuit: &mut impl CircuitPort) {
         for m in &self.modules {
             let height = m.height_m();
             for limit in &m.binding.limits {
@@ -346,13 +404,27 @@ impl ClWinchLoop {
             if let Some(tag) = &m.binding.brake_relay {
                 circuit.set_contact(tag, m.relay);
             }
+            if let Some(tag) = &m.binding.overload_out {
+                circuit.set_contact(tag, m.lifting_inhibited());
+            }
         }
-        circuit.settle(dt);
+    }
+
+    /// Second half of a tick: read the settled circuit and step every winch.
+    pub fn step_after_settle(&mut self, circuit: &impl CircuitPort) {
+        let dt = self.config.dt_s;
         let time_s = self.time_s;
         for m in &mut self.modules {
             step_module(m, circuit, dt, time_s);
         }
         self.time_s += dt;
+    }
+
+    /// One tick.
+    pub fn step(&mut self, circuit: &mut impl CircuitPort) {
+        self.write_contacts(circuit);
+        circuit.settle(self.config.dt_s);
+        self.step_after_settle(circuit);
     }
 
     /// Runs `ticks` ticks.
@@ -363,11 +435,100 @@ impl ClWinchLoop {
     }
 }
 
-fn energised(circuit: &impl CircuitPort, tag: &Option<String>) -> bool {
+/// Binding problems of one winch. `commanded`: this winch's own up and down inputs are what
+/// commands it (the second winch of a pair is commanded through the first one's).
+pub(crate) fn binding_findings(
+    module: &str,
+    b: &ClWinchBinding,
+    commanded: bool,
+    circuit: &impl CircuitPort,
+) -> Vec<BindingFinding> {
+    let mut out = Vec::new();
+    let finding = |message: String| BindingFinding {
+        module: module.to_owned(),
+        message,
+    };
+    let named = [
+        ("up input", &b.up),
+        ("down input", &b.down),
+        ("speed step 2 input", &b.fast),
+        ("STO channel 1", &b.sto[0]),
+        ("STO channel 2", &b.sto[1]),
+        ("encoder signal", &b.encoder),
+        ("encoder channel B", &b.encoder_b),
+        ("main contactor", &b.mains),
+        ("brake relay contact", &b.brake_relay),
+        ("brake feed", &b.brake_feed),
+        ("brake feedback", &b.brake_feedback),
+        ("reset input", &b.reset),
+        ("load cell", &b.load_cell),
+        ("overload output", &b.overload_out),
+    ];
+    for (what, tag) in named {
+        if let Some(tag) = tag
+            && !circuit.knows_device(tag)
+        {
+            out.push(finding(format!("{what} {tag} is not in the circuit")));
+        }
+    }
+    for limit in &b.limits {
+        if !circuit.knows_device(&limit.binding.device_tag) {
+            out.push(finding(format!(
+                "limit switch {} is not in the circuit",
+                limit.binding.device_tag
+            )));
+        }
+    }
+    if commanded && b.up.is_none() && b.down.is_none() {
+        out.push(finding(
+            "no up or down input is bound: the winch cannot be commanded".into(),
+        ));
+    }
+    if b.brake_relay.is_none() && b.brake_feed.is_some() {
+        out.push(finding(
+            "the brake is fed from the circuit but the drive's brake relay contact is \
+             not bound, so the brake is never commanded open"
+                .into(),
+        ));
+    }
+    if b.brake_feed.is_none() {
+        out.push(finding(
+            "no brake feed device is bound: the brake follows the drive's relay \
+             directly (ideal wiring, the brake contactor and rectifier are not checked)"
+                .into(),
+        ));
+    }
+    if b.sto[0].is_none() || b.sto[1].is_none() {
+        out.push(finding(
+            "an STO channel is not bound: it counts as always energised, so STO can \
+             never be requested through it"
+                .into(),
+        ));
+    }
+    if b.encoder.is_none() {
+        out.push(finding(
+            "no encoder signal device is bound: the encoder is always present in the \
+             drawing (a loss can still be injected in the engine)"
+                .into(),
+        ));
+    }
+    out
+}
+
+/// What the drawing's encoder devices make of the encoder: no signal at all beats a lost channel.
+pub(crate) fn encoder_health(signal_ok: bool, channel_b_ok: bool) -> EncoderHealth {
+    match (signal_ok, channel_b_ok) {
+        (false, _) => EncoderHealth::SignalLost,
+        (true, false) => EncoderHealth::DirectionLost,
+        (true, true) => EncoderHealth::Healthy,
+    }
+}
+
+pub(crate) fn energised(circuit: &impl CircuitPort, tag: &Option<String>) -> bool {
     tag.as_deref().is_some_and(|t| circuit.is_energised(t))
 }
 
-fn energised_or_true(circuit: &impl CircuitPort, tag: &Option<String>) -> bool {
+pub(crate) fn energised_or_true(circuit: &impl CircuitPort, tag: &Option<String>) -> bool {
     tag.as_deref().is_none_or(|t| circuit.is_energised(t))
 }
 
@@ -387,11 +548,8 @@ fn step_module(m: &mut ClWinchModule, circuit: &impl CircuitPort, dt: f64, time_
 
     // A lost encoder signal is a device of the drawing: it keeps the counts from moving. Losing
     // it and getting it back are separate findings.
-    m.winch.drive.encoder.health = if encoder_ok {
-        EncoderHealth::Healthy
-    } else {
-        EncoderHealth::SignalLost
-    };
+    let channel_ok = energised_or_true(circuit, &m.binding.encoder_b);
+    m.winch.drive.encoder.health = encoder_health(encoder_ok, channel_ok);
     if encoder_ok != m.last_encoder_ok {
         let kind = if encoder_ok {
             ClFindingKind::EncoderSignalBack
@@ -401,8 +559,19 @@ fn step_module(m: &mut ClWinchModule, circuit: &impl CircuitPort, dt: f64, time_
         m.note(time_s, kind);
         m.last_encoder_ok = encoder_ok;
     }
+    if channel_ok != m.last_channel_ok {
+        let kind = if channel_ok {
+            ClFindingKind::EncoderChannelBack
+        } else {
+            ClFindingKind::EncoderChannelLost
+        };
+        m.note(time_s, kind);
+        m.last_channel_ok = channel_ok;
+    }
 
-    let run = up != down;
+    update_overload(m, circuit, time_s);
+    // Overload protection inhibits lifting only; lowering and holding stay possible.
+    let run = up != down && !(up && m.lifting_inhibited());
     let metres_per_rad = m.winch.hoist().metres_per_rad();
     let speed = if fast {
         m.speeds_m_s[1]
@@ -429,6 +598,9 @@ fn step_module(m: &mut ClWinchModule, circuit: &impl CircuitPort, dt: f64, time_
         ..ClInputs::default()
     };
     let snap = m.winch.step(&inp, dt);
+    if let Some(prev) = &m.snapshot {
+        m.accel_m_s2 = (snap.hook_speed_m_s - prev.hook_speed_m_s) / dt;
+    }
     let out = snap.drive;
     m.relay = out.brake_release_cmd;
     if out.fault != m.last_fault {
@@ -448,8 +620,83 @@ fn step_module(m: &mut ClWinchModule, circuit: &impl CircuitPort, dt: f64, time_
         m.note(time_s, kind);
         m.last_sto_requested = out.sto_requested;
     }
+    track_ground(m, &snap, time_s);
     track_findings(m, &snap, time_s, run, up);
     m.snapshot = Some(snap);
+}
+
+/// Slack rope, landing and the snatch when the rope comes taut again.
+fn track_ground(m: &mut ClWinchModule, snap: &WinchSnapshot, time_s: f64) {
+    if m.winch.ground_m.is_none() {
+        return;
+    }
+    if let Some(m_s) = snap.landed_m_s {
+        m.note(time_s, ClFindingKind::HookLanded { m_s });
+    }
+    if snap.slack_m > SLACK_REPORT_M && !m.slack_reported {
+        m.slack_reported = true;
+        m.note(
+            time_s,
+            ClFindingKind::SlackRope {
+                slack_m: snap.slack_m,
+            },
+        );
+    } else if snap.slack_m <= SLACK_REPORT_M / 5.0 {
+        m.slack_reported = false;
+    }
+    if snap.slack_m > SLACK_LOOSE_M && !m.loose_reported {
+        m.loose_reported = true;
+        m.note(
+            time_s,
+            ClFindingKind::RopeLoose {
+                slack_m: snap.slack_m,
+            },
+        );
+    } else if snap.slack_m <= SLACK_LOOSE_M / 2.0 {
+        m.loose_reported = false;
+    }
+    if let Some(m_s) = snap.pickup_m_s {
+        // A mass picked up at speed v on a rope of stiffness k, the rope slack until then: the
+        // energy of the moving drum side ends in the rope, F = m g + v sqrt(k m).
+        let mass = m.winch.hoist().mass_kg();
+        let peak_n = mass * novo_drive::GRAVITY + m_s.max(0.0) * (m.rope_k_n_m * mass).sqrt();
+        m.note(time_s, ClFindingKind::RopePickedUp { m_s, peak_n });
+    }
+}
+
+/// The load cell and the cut-out of one tick, from the load the previous tick left.
+fn update_overload(m: &mut ClWinchModule, circuit: &impl CircuitPort, time_s: f64) {
+    let Some(mon) = m.monitor else {
+        return;
+    };
+    let cell_ok = energised_or_true(circuit, &m.binding.load_cell);
+    if cell_ok != m.last_cell_ok {
+        let kind = if cell_ok {
+            ClFindingKind::LoadCellBack
+        } else {
+            ClFindingKind::LoadCellLost
+        };
+        m.note(time_s, kind);
+        m.last_cell_ok = cell_ok;
+    }
+    let pct = m.load_n() / (mon.swl_kg * G) * 100.0;
+    // Past the rated load is a finding of its own, once per crossing.
+    if cell_ok && pct > 100.0 && !m.over_rated {
+        m.over_rated = true;
+        m.note(time_s, ClFindingKind::OverRated { pct });
+    } else if pct <= 100.0 - CUTOUT_HYSTERESIS_PCT {
+        m.over_rated = false;
+    }
+    if !cell_ok {
+        return;
+    }
+    if pct > mon.cutout_pct && !m.cutout {
+        m.cutout = true;
+        m.note(time_s, ClFindingKind::OverloadCutOut { pct });
+    } else if m.cutout && pct <= mon.cutout_pct - CUTOUT_HYSTERESIS_PCT {
+        m.cutout = false;
+        m.note(time_s, ClFindingKind::OverloadCleared);
+    }
 }
 
 fn track_findings(m: &mut ClWinchModule, snap: &WinchSnapshot, time_s: f64, run: bool, up: bool) {
