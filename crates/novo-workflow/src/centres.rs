@@ -14,15 +14,17 @@ pub enum Centre {
     Start,
     Project,
     Numbering,
+    Parts,
 }
 
 /// Every centre, in the order their openers are listed.
-pub const CENTRES: [Centre; 5] = [
+pub const CENTRES: [Centre; 6] = [
     Centre::Export,
     Centre::Import,
     Centre::Start,
     Centre::Project,
     Centre::Numbering,
+    Centre::Parts,
 ];
 
 impl Centre {
@@ -34,6 +36,7 @@ impl Centre {
             Centre::Start => START_CENTRE,
             Centre::Project => PROJECT_CENTRE,
             Centre::Numbering => NUMBERING_CENTRE,
+            Centre::Parts => PARTS_CENTRE,
         }
     }
 
@@ -45,6 +48,7 @@ impl Centre {
             Centre::Start => "Templates and examples",
             Centre::Project => "Project settings",
             Centre::Numbering => "Numbering",
+            Centre::Parts => "Part tools",
         }
     }
 
@@ -56,6 +60,7 @@ impl Centre {
             Centre::Start => "Search: crane, pump, motor control, plc, emc",
             Centre::Project => "Search: standard, rules, options, variants, languages",
             Centre::Numbering => "Search: wires, devices, tags, potentials, I/O, interruption",
+            Centre::Parts => "Search: catalog, assign, describe, unused, step",
         }
     }
 
@@ -64,6 +69,7 @@ impl Centre {
         match self {
             Centre::Start | Centre::Project => "Open",
             Centre::Numbering => "Run",
+            Centre::Parts => "Run",
             _ => self.title(),
         }
     }
@@ -86,6 +92,11 @@ impl Centre {
                 "wires.numbering" | "wires.renumber" | "edit.renumber" | "wires.set_number",
             ) => "Open",
             (Centre::Numbering, _) => "Run",
+            (Centre::Parts, "parts.browser") => "Open",
+            (Centre::Parts, "parts.import_step") => "Import",
+            (Centre::Parts, "parts.auto_assign") => "Assign",
+            (Centre::Parts, "parts.describe") => "Describe",
+            (Centre::Parts, _) => "Remove",
         }
     }
 
@@ -96,6 +107,7 @@ impl Centre {
             Centre::Start => START_SECTIONS,
             Centre::Project => PROJECT_SECTIONS,
             Centre::Numbering => NUMBERING_SECTIONS,
+            Centre::Parts => PARTS_SECTIONS,
         }
     }
 
@@ -197,6 +209,28 @@ pub const NUMBERING_SECTIONS: &[Section] = &[
         name: "Devices and points",
         about: "Tags of devices, interruption points and PLC I/O.",
         ids: &["edit.renumber", "interruption.renumber", "plc.renumber_io"],
+    },
+];
+
+/// The command that opens the Part tools centre.
+pub const PARTS_CENTRE: &str = "edit.parts_centre";
+
+/// The Part tools centre: what File > Library and Edit > Parts held.
+pub const PARTS_SECTIONS: &[Section] = &[
+    Section {
+        name: "Catalog",
+        about: "The part catalog, and 3D models for parts.",
+        ids: &["parts.browser", "parts.import_step"],
+    },
+    Section {
+        name: "Parts on the devices",
+        about: "Give the devices of this project their parts, or take them away.",
+        ids: &[
+            "parts.auto_assign",
+            "parts.describe",
+            "parts.clear",
+            "parts.remove_unused",
+        ],
     },
 ];
 
@@ -409,6 +443,12 @@ pub fn describe(id: &str) -> &'static str {
         "project.languages" => "The languages the reports and lists are written in.",
         "project.options" => "Machine options and variants, and what each one draws.",
         "project.untie" => "Makes the selected items appear whatever the options are.",
+        "parts.browser" => "Search, compare and import parts of the makers' catalogs.",
+        "parts.import_step" => "A maker's STEP model, attached to a part for the 3D view.",
+        "parts.auto_assign" => "Gives every device without a part the best matching part.",
+        "parts.describe" => "Writes the description of each device from its part.",
+        "parts.clear" => "Takes the parts off the selected devices.",
+        "parts.remove_unused" => "Removes the parts no device uses any more.",
         "wires.number" => "Gives every wire without a number the next free one.",
         "wires.renumber" => "Numbers all wires again, from the scheme and the locks.",
         "wires.check_numbers" => "Lists wires that share a number or break the scheme.",
@@ -525,6 +565,20 @@ mod tests {
         assert_eq!(seen.len(), 9);
         assert_eq!(Centre::Numbering.button("wires.renumber"), "Open");
         assert_eq!(Centre::Numbering.button("wires.number"), "Run");
+    }
+
+    #[test]
+    fn the_parts_centre_lists_the_six_part_commands_once() {
+        let mut seen = HashSet::new();
+        for id in Centre::Parts.ids() {
+            assert!(get(id).is_some(), "{id} is not a command");
+            assert!(seen.insert(id), "{id} is in two sections");
+            assert_eq!(Centre::of(id), Some(Centre::Parts), "{id}");
+            assert!(replaces_menu_row(id), "{id}");
+        }
+        assert_eq!(seen.len(), 6);
+        assert_eq!(Centre::Parts.button("parts.auto_assign"), "Assign");
+        assert_eq!(Centre::Parts.button("parts.remove_unused"), "Remove");
     }
 
     #[test]

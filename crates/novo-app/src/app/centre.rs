@@ -103,6 +103,7 @@ impl NovoApp {
                 Centre::Start => "start_centre",
                 Centre::Project => "project_centre",
                 Centre::Numbering => "numbering_centre",
+                Centre::Parts => "parts_centre",
             },
             state.kind.title(),
             [novo_theme::dialog_width::CENTRE, 640.0],
@@ -223,6 +224,7 @@ impl NovoApp {
                         "Nothing matches. Try standard, rules, options or languages."
                     }
                     Centre::Numbering => "Nothing matches. Try wires, devices, tags or I/O.",
+                    Centre::Parts => "Nothing matches. Try catalog, assign, describe or unused.",
                 })
                 .color(pal.text_secondary),
             );
@@ -352,6 +354,7 @@ impl NovoApp {
                     Centre::Start => "Choose a template or example on the left to see what it is.",
                     Centre::Project => "Choose a setting on the left to see what it does.",
                     Centre::Numbering => "Choose an action on the left to see what it numbers.",
+                    Centre::Parts => "Choose a tool on the left to see what it does to the parts.",
                 })
                 .color(pal.text_secondary),
             );
@@ -394,6 +397,7 @@ impl NovoApp {
                 Centre::Start => "Any template or example also runs from Ctrl+K by its name.",
                 Centre::Project => "Any setting also runs from Ctrl+K by its name.",
                 Centre::Numbering => "Any numbering command also runs from Ctrl+K by its name.",
+                Centre::Parts => "Any part tool also runs from Ctrl+K by its name.",
             })
             .small()
             .color(pal.text_tertiary),
