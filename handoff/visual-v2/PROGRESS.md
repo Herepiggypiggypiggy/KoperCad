@@ -12,3 +12,4 @@
 - 2026-10-30 census floor: `homes::tests::the_census_counts_every_command_once_or_more` now asks for at least 140 menu homes (was 100 after V4d); the design target is about 152 rows.
 - 2026-10-30 V4g (branch `claude/visual-v4-project`): Project settings centre. Rows 221 -> 213 (File 34 -> 26). Scenario 7371.
 - 2026-10-30 V4h (branch `claude/visual-v4-numbering`): Numbering centre. Rows 213 -> 205 (Edit 30 -> 22). Scenario 7372.
+- 2026-10-30 V4i (branch `claude/visual-v4-parts`): Part tools centre. Rows 205 -> 200 (File 26 -> 24, Edit 22 -> 19). Scenario 7373.

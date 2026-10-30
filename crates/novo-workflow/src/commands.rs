@@ -1148,6 +1148,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "edit.parts_centre",
+        "Part tools...",
+        "Edit",
+        &["parts", "catalog", "assign parts", "articles"],
+        Needs::Project,
+    ),
+    cmd(
         "edit.numbering_centre",
         "Numbering...",
         "Edit",

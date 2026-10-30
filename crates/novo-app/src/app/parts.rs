@@ -1029,7 +1029,7 @@ impl NovoApp {
         }
     }
 
-    /// The command `parts.browser` (Library > Parts): opens the Parts
+    /// The command `parts.browser` (Edit > Part tools): opens the Parts
     /// window, or closes it when it is open.
     pub(super) fn toggle_parts_browser(&mut self) {
         if self.wb.parts.take().is_none() {

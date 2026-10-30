@@ -1,5 +1,5 @@
 //! `parts.describe`: writes device and part descriptions from part data by
-//! an editable recipe per kind of device (Edit > Parts > Describe devices
+//! an editable recipe per kind of device (Edit > Part tools > Describe devices
 //! from parts). Recipes are saved in the user's profile.
 
 use eframe::egui;

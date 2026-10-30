@@ -76,3 +76,7 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 ## V4h: Numbering centre (2026-10-30)
 - `centres::Centre::Numbering` (command `edit.numbering_centre`, Edit > Numbering...): Number wires, Renumber wires, Check wire numbers, Wire numbering, Set and Unlock wire number ("Wires") and Renumber devices, Number interruption points, Renumber I/O ("Devices and points"). The Edit > Wire numbers and Edit > Renumber submenus (9 rows) are gone: Edit 30 to 22, total 213 to 205. Tiles that need a selection say why they are grey.
 - Lessons that name those commands fall back to the opener, then Edit. QA scenario 7372. Next: Parts rows (Edit > Parts, File > Library), then the Draw leftovers.
+
+## V4i: Part tools centre (2026-10-30)
+- `centres::Centre::Parts` (command `edit.parts_centre`, Edit > Part tools...): Parts (the catalog), Import 3D model (STEP), Assign parts to devices, Describe devices from parts, Remove parts from selected devices, Remove unused parts. The File > Library and Edit > Parts submenus (6 rows) are gone: File 26 to 24, Edit 22 to 19, total 205 to 200.
+- QA scenario 7373; scenario 723 now opens the Macros submenu where it opened Library. Next: the Draw leftovers (Terminals strip tools, PLC, Macros).
