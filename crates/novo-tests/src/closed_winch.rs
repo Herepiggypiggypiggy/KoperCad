@@ -67,6 +67,21 @@ pub fn closed_winch_pair(doc: &mut Document) -> Result<ClosedWinch> {
         .0)
 }
 
+/// Builds the single winch with a down button (radio step 3 `=A1+RAD-S3`, relay `=A1+CAB-KA2`) and
+/// the hook resting on the ground `ground_m` metres from its start (negative: below), as one undo
+/// step. The drive's down input is KA2, so the hook can be lowered onto the ground and lifted again.
+pub fn closed_winch_ground(doc: &mut Document, ground_m: f64) -> Result<ClosedWinch> {
+    let winch = doc
+        .transact("Draw closed-loop winch with a ground level", |tx| {
+            build(tx, false, Extra::Ground)
+        })?
+        .0;
+    doc.transact("Set the ground level", |tx| {
+        tx.set_property(winch.motor, "cw_ground_m", Some(ground_m.into()))
+    })?;
+    Ok(winch)
+}
+
 /// Builds the winch project with a monitor for encoder channel B as one undo step.
 pub fn closed_winch_channel(doc: &mut Document) -> Result<ClosedWinch> {
     Ok(doc
@@ -92,6 +107,8 @@ enum Extra {
     None,
     Channel,
     Load(f64),
+    /// A down button (radio S3, relay KA2) for lowering the hook onto the ground.
+    Ground,
 }
 
 fn build(tx: &mut Tx<'_>, pair: bool, extra: Extra) -> Result<ClosedWinch> {
@@ -224,6 +241,21 @@ fn build(tx: &mut Tx<'_>, pair: bool, extra: Extra) -> Result<ClosedWinch> {
         tx.connect(Endpoint::pin(f, 0), Endpoint::pin(k, 0))?;
         tx.connect(Endpoint::pin(k, 1), Endpoint::pin(fnn, 0))?;
         tx.set_property(m1, "cw_encoder_b", Some("=A1+CAB-ENCH".into()))?;
+    }
+
+    // A down button: the radio's third step feeds KA2, the drive's down input.
+    if extra == Extra::Ground {
+        let ka2 = tx.add_device(tag("=A1+CAB-KA2"), "Drive down")?;
+        let s3 = tx.add_device(tag("=A1+RAD-S3"), "Down")?;
+        let x = col(0);
+        let f = feed(tx, l, x, 160.0)?;
+        let b = sym(tx, btn, x, 182.0, s3, true)?;
+        let k = sym(tx, coil, x, 206.0, ka2, true)?;
+        let fnn = feed(tx, n, x, 230.0)?;
+        tx.connect(Endpoint::pin(f, 0), Endpoint::pin(b, 0))?;
+        tx.connect(Endpoint::pin(b, 1), Endpoint::pin(k, 0))?;
+        tx.connect(Endpoint::pin(k, 1), Endpoint::pin(fnn, 0))?;
+        tx.set_property(m1, "cw_in_down", Some("=A1+CAB-KA2".into()))?;
     }
 
     // The load cell: a relay of its own, energised while its signal is present.

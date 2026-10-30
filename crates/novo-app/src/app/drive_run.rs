@@ -1036,6 +1036,16 @@ impl NovoApp {
                      substitute for a rated capacity limiter to the applicable standard. A hard \
                      acceleration raises the reading, so a lift can cut out a few per cent below the cut-out.",
                 );
+                ui.weak(
+                    "\u{2022} Ground and slack rope (single winch): the ground height and the rope \
+                     stiffness are numbers you enter. The rope is rigid while taut, so landing, \
+                     slack and the paid-out length are geometry; the snatch peak is only an energy \
+                     estimate, m g + v sqrt(k m), not an integrated rope. \"The rope can leave the \
+                     drum groove\" only checks that more than half a metre of slack is paid out: \
+                     no groove or sheave is modelled. Left out: rope bounce and mass, hook swing, \
+                     friction of the hook on the ground, several falls. A slack drum keeps the \
+                     inertia it has with the hook hanging.",
+                );
                 ui.weak("\u{2022} Not a safety or compliance statement.");
             });
         self.wb.drive_run.duty = duty;

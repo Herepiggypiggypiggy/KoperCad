@@ -591,3 +591,59 @@ fn findings_name_the_dangerous_settings() {
     let f = check_winch(&ok, &h, &brake(0.2, 0.0));
     assert!(f.iter().all(|x| x.severity != Severity::Problem), "{f:?}");
 }
+
+/// The winch with a 40 ohm braking resistor, as lowering a load needs one.
+fn winch_resistor() -> ClosedLoopWinch {
+    let mut c = cfg();
+    c.bus.resistor_ohm = Some(40.0);
+    winch_with(c, brake(0.2, 0.0))
+}
+
+// ---- 9. the hook on the ground: slack rope and the pick-up --------------------------------
+
+/// Ground 0.3 m below the start. Lowering at 225.6 rpm (0.15 m/s of hook): the hook lands, the
+/// drum keeps paying out rope. The rope paid out is the integral of the hook speed (rope speed =
+/// omega x metres per rad); the slack is that minus the 0.3 m the hook could follow. Turning
+/// back, the drum first takes the slack up and the hook leaves the ground at the same speed the
+/// drum has then: once.
+#[test]
+fn a_hook_on_the_ground_leaves_the_rope_slack_and_is_picked_up_once() {
+    let mut w = winch_resistor();
+    w.ground_m = Some(-0.3);
+    let down = run(&mut w, run_input(-225.6), 5.0);
+    let landed: Vec<&WinchSnapshot> = down.iter().filter(|s| s.landed_m_s.is_some()).collect();
+    assert_eq!(landed.len(), 1, "the hook lands once");
+    close(landed[0].landed_m_s.unwrap(), 0.15, 0.02);
+    let last = down.last().unwrap();
+    assert!(last.resting);
+    close(last.hook_height_m, -0.3, 1e-9);
+    let paid_out: f64 = down.iter().map(|s| s.hook_speed_m_s * DT).sum();
+    close(last.slack_m, -0.3 - paid_out, 2e-3);
+    assert!(last.slack_m > 0.2, "{}", last.slack_m);
+    // Nothing hangs on the rope, so the motor torque is the friction only, far below the weight.
+    assert!(
+        last.drive.torque_nm < 0.5 * t_static(),
+        "{}",
+        last.drive.torque_nm
+    );
+
+    let up = run(&mut w, run_input(225.6), 8.0);
+    let picked: Vec<&WinchSnapshot> = up.iter().filter(|s| s.pickup_m_s.is_some()).collect();
+    assert_eq!(picked.len(), 1, "the rope comes taut once");
+    close(picked[0].pickup_m_s.unwrap(), 0.15, 0.03);
+    let end = up.last().unwrap();
+    assert!(!end.resting);
+    close(end.slack_m, 0.0, 1e-9);
+    assert!(end.hook_height_m > -0.3 + 0.05, "{}", end.hook_height_m);
+}
+
+#[test]
+fn without_a_ground_there_is_never_slack() {
+    let mut w = winch_resistor();
+    let v = run(&mut w, run_input(-225.6), 4.0);
+    assert!(
+        v.iter()
+            .all(|s| !s.resting && s.slack_m == 0.0 && s.pickup_m_s.is_none())
+    );
+    assert!(v.last().unwrap().hook_height_m < -0.3);
+}

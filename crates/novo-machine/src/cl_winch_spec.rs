@@ -152,6 +152,18 @@ pub const KEYS: &[SpecKey] = &[
     tag("cw_brake_feedback", "Brake feedback device (blank: none)"),
     tag("cw_reset", "Fault reset input device"),
     num(
+        "cw_ground_m",
+        "Ground level (m above the hook start; blank: hangs free)",
+        "m",
+        "",
+    ),
+    num(
+        "cw_slack_k_n_m",
+        "Rope stiffness (for the snatch estimate)",
+        "N/m",
+        "2000000",
+    ),
+    num(
         "cw_swl_kg",
         "Rated load, SWL (blank: load not monitored)",
         "kg",
@@ -374,6 +386,11 @@ pub fn closed_pair_from_properties(
             })?;
         let who = if i == 0 { "A" } else { "B" };
         notes.extend(found.into_iter().map(|n| format!("Winch {who}: {n}")));
+        if module.winch.ground_m.is_some() {
+            notes.push(format!(
+                "Winch {who}: the ground level is not used in a pair (the rope slack of the pair is)."
+            ));
+        }
         if module.monitor.is_some() {
             notes.push(format!(
                 "Winch {who}: the rated load is not monitored in a pair (the rope rating is)."
@@ -615,6 +632,23 @@ pub fn closed_winch_from_properties(
     let rotor_inertia = number("cw_rotor_inertia")?;
     let winch = ClosedLoopWinch::new(cfg, hoist, brake, rotor_inertia)?;
     let mut module = ClWinchModule::new(id, winch, speeds, binding)?;
+    if text("cw_ground_m").is_some() {
+        let ground = number("cw_ground_m")?;
+        let k = number("cw_slack_k_n_m")?;
+        if !ground.is_finite() || !k.is_finite() || k <= 0.0 {
+            return Err(SpecError::Value(novo_drive::InputError::NotPositive {
+                field: "rope stiffness (or a ground level that is not a number)",
+                value: k,
+            }));
+        }
+        module.winch.ground_m = Some(ground);
+        module.rope_k_n_m = k;
+        notes.push(format!(
+            "The hook rests on the ground at {ground:.2} m: below it the drum pays out rope the hook \
+             does not follow (slack), and picking it up again snatches (peak estimated from a rope \
+             stiffness of {k:.0} N/m, a model, not a measurement)."
+        ));
+    }
     module.monitor = monitor;
     if let Some(mon) = monitor {
         notes.push(format!(
@@ -660,6 +694,34 @@ mod tests {
         assert_eq!(m.winch.drive.cfg.encoder_ppr, 1024);
         assert!(!m.winch.drive.cfg.brake_feedback);
         assert!((m.winch.drive.cfg.current_limit_a - 84.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_ground_level_makes_the_hook_rest_and_reads_the_stiffness() {
+        let (m, notes) = build(&props(&[
+            (CLOSED_WINCH_KEY, "2500"),
+            ("cw_ground_m", "-0.3"),
+            ("cw_slack_k_n_m", "1000000"),
+        ]))
+        .unwrap()
+        .unwrap();
+        assert_eq!(m.winch.ground_m, Some(-0.3));
+        assert_eq!(m.rope_k_n_m, 1.0e6);
+        assert!(notes.iter().any(|n| n.contains("rests on the ground")));
+        let (m, _) = build(&props(&[(CLOSED_WINCH_KEY, "2500")]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(m.winch.ground_m, None);
+        assert_eq!(m.rope_k_n_m, 2.0e6);
+        let err = build(&props(&[
+            (CLOSED_WINCH_KEY, "2500"),
+            ("cw_ground_m", "-0.3"),
+            ("cw_slack_k_n_m", "0"),
+        ]))
+        .err()
+        .map(|e| e.to_string())
+        .unwrap();
+        assert!(err.contains("rope stiffness"), "{err}");
     }
 
     #[test]

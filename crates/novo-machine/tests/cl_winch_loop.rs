@@ -332,6 +332,57 @@ fn a_lost_encoder_channel_is_found_and_lowering_trips_the_drive() {
     assert!(!has(m, |k| matches!(k, ClFindingKind::EncoderSignalLost)));
 }
 
+/// Ground 0.3 m below the start, 2500 kg, rope 2e6 N/m. Lowering lands the hook and the drum pays
+/// the rest out as slack (reported at 5 cm, and as "loose" past half a metre). Hoisting again takes
+/// the slack up and picks the hook up once, with the snatch estimated by m g + v sqrt(k m): the
+/// numbers are 24516 N plus v x 70711 N s/m.
+#[test]
+fn a_hook_lowered_onto_the_ground_goes_slack_and_snatches_when_lifted() {
+    let (mut l, mut c, cmd) = rig(&[("cw_ground_m", "-0.3")]);
+    cmd.borrow_mut().down = true;
+    seconds(&mut l, &mut c, 10.0);
+    let m = &l.modules[0];
+    assert!((m.height_m() + 0.3).abs() < 1e-9, "{}", m.height_m());
+    assert!(has(m, |k| matches!(k, ClFindingKind::HookLanded { .. })));
+    assert!(has(m, |k| matches!(k, ClFindingKind::SlackRope { .. })));
+    assert!(has(m, |k| matches!(k, ClFindingKind::RopeLoose { .. })));
+    assert!(m.snapshot().unwrap().slack_m > 0.5);
+    {
+        let mut k = cmd.borrow_mut();
+        k.down = false;
+        k.up = true;
+    }
+    seconds(&mut l, &mut c, 12.0);
+    let m = &l.modules[0];
+    let picked: Vec<_> = m
+        .findings()
+        .iter()
+        .filter_map(|f| match f.kind {
+            ClFindingKind::RopePickedUp { m_s, peak_n } => Some((m_s, peak_n)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(picked.len(), 1, "{picked:?}");
+    let (m_s, peak) = picked[0];
+    assert!(m_s > 0.05, "{m_s}");
+    let expect = 2500.0 * 9.80665 + m_s * (2.0e6_f64 * 2500.0).sqrt();
+    assert!((peak - expect).abs() < 1e-6, "{peak} vs {expect}");
+    assert!(m.height_m() > -0.3 + 0.05, "{}", m.height_m());
+}
+
+#[test]
+fn without_a_ground_level_the_rope_never_goes_slack() {
+    let (mut l, mut c, cmd) = rig(&[]);
+    cmd.borrow_mut().down = true;
+    seconds(&mut l, &mut c, 8.0);
+    let m = &l.modules[0];
+    assert!(m.height_m() < -0.5, "{}", m.height_m());
+    assert!(!has(m, |k| matches!(
+        k,
+        ClFindingKind::SlackRope { .. } | ClFindingKind::HookLanded { .. }
+    )));
+}
+
 /// 2500 kg on a rated load of 2000 kg is 125 % of it (weight 24516 N against 19613 N), above a
 /// 110 % cut-out: lifting is inhibited from the first tick, lowering is not.
 #[test]
