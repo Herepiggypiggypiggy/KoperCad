@@ -554,3 +554,100 @@ fn bad_input_is_an_error_not_a_panic() {
     let r = scan_step(b"not a step file", None, &AtomicBool::new(false), None);
     assert!(r.is_err());
 }
+
+fn mounting(step: &str, size: [f64; 3]) -> novo_interop::part3d::mounting::MountingScan {
+    novo_interop::part3d::mounting::scan_mounting(
+        step.as_bytes(),
+        Some(size),
+        &AtomicBool::new(false),
+        None,
+    )
+    .unwrap()
+}
+
+#[test]
+fn fixing_holes_in_the_back_face_are_read_from_the_bottom_left() {
+    // Back-face v runs down from the top edge: hole (10, 70) is 10 mm from
+    // the left and 10 mm from the bottom of a 60 x 80 part.
+    let big = Hole::Round {
+        u: 50.0,
+        v: 70.0,
+        r: 2.6,
+    };
+    // A large opening in the front keeps the back the larger flat face,
+    // which is how the mesh finds the mounting side.
+    let holes = vec![
+        (Face::Back, round(10.0, 70.0)),
+        (Face::Back, big),
+        (
+            Face::Front,
+            Hole::Round {
+                u: 30.0,
+                v: 40.0,
+                r: 6.0,
+            },
+        ),
+    ];
+    let step = box_step(60.0, 80.0, 25.0, &holes, &[]);
+    let m = mounting(&step, [60.0, 80.0, 25.0]);
+    assert_eq!(m.footprint_mm, [60.0, 80.0]);
+    assert_eq!(m.holes.len(), 2, "{:?}", m.holes);
+    assert!((m.holes[0].x_mm - 10.0).abs() < 0.05 && (m.holes[0].y_mm - 10.0).abs() < 0.05);
+    assert!(
+        (m.holes[0].diameter_mm - 3.2).abs() < 0.2,
+        "{:?}",
+        m.holes[0]
+    );
+    assert!((m.holes[1].x_mm - 50.0).abs() < 0.05);
+    assert!(
+        (m.holes[1].diameter_mm - 5.2).abs() < 0.3,
+        "{:?}",
+        m.holes[1]
+    );
+}
+
+#[test]
+fn holes_in_other_faces_and_wire_entries_are_not_fixing_holes() {
+    let holes = vec![
+        (Face::Front, round(30.0, 40.0)),
+        (Face::Top, round(30.0, 12.0)),
+        (
+            Face::Back,
+            Hole::Round {
+                u: 30.0,
+                v: 40.0,
+                r: 0.5,
+            },
+        ),
+    ];
+    let step = box_step(60.0, 80.0, 25.0, &holes, &[]);
+    assert!(mounting(&step, [60.0, 80.0, 25.0]).holes.is_empty());
+}
+
+#[test]
+fn holes_follow_the_part_onto_the_plate() {
+    let holes = vec![
+        (Face::Back, round(10.0, 70.0)),
+        (
+            Face::Front,
+            Hole::Round {
+                u: 30.0,
+                v: 40.0,
+                r: 6.0,
+            },
+        ),
+    ];
+    let step = box_step(60.0, 80.0, 25.0, &holes, &[]);
+    let m = mounting(&step, [60.0, 80.0, 25.0]);
+    let at = |turns| {
+        let h = m.on_plate([100.0, 200.0], turns)[0];
+        (h.x_mm.round(), h.y_mm.round())
+    };
+    assert_eq!(at(0), (110.0, 210.0));
+    // Turned a quarter: the 60 x 80 outline becomes 80 x 60.
+    assert_eq!(m.footprint_turned(1), [80.0, 60.0]);
+    assert_eq!(at(1), (100.0 + 80.0 - 10.0, 200.0 + 10.0));
+    assert_eq!(at(2), (100.0 + 50.0, 200.0 + 70.0));
+    assert_eq!(at(3), (100.0 + 10.0, 200.0 + 50.0));
+    assert_eq!(at(4), at(0));
+}

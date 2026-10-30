@@ -58,6 +58,7 @@ mod table;
 mod tablefile;
 mod tablemap;
 mod tablepreview;
+pub mod tp_handoff;
 pub mod xlsx_guard;
 
 pub use assign::{
