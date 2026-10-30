@@ -19,3 +19,10 @@ Decisions:
 
 Resume: `cargo test -p novo-reports --test bench`, `cargo test -p novo-app bench`.
 Reviewers: R5 for reports/UI (cse_01DHLANQPyc634wMAeUYHDHz), R2 for data (cse_01SEokxUZ1MKDwyQvLm4DPys).
+
+## Update 2026-10-30 (ferrule/wire-prep follow-up)
+- `FerruleSize` now has `crimp` (trapezoid/square/hexagon, default trapezoid), `die` (free text, the workshop's tool die or setting) and `total_mm` (overall length with collar; defaults are contact length plus a typical collar of 6/8/10 mm, planning values, not maker data). All `#[serde(default)]`, so standards saved earlier still load.
+- Ferrule table (PDF) columns: Contact, Total, Crimp, Die / setting; the "standard used" section prints the same. Cell indices moved (crimp count is cell 10, prepare 11).
+- New label kind `cuts` in `Labels::KINDS` (also `kopercad-cli` labels, Brother CSV, Reports > Bench output > Labels): one label per wire to cut with number, `~`-marked length, size and colour, and `sleeve A > sleeve B`.
+- Where found: Reports > Bench output (Ctrl+K "bench output"): Ferrules tab has the new columns, Labels tab has "Cut piece labels".
+- Not done: maker ferrule catalog data (default total lengths and the trapezoid default are not from a maker); crimp tool die names are blank until the workshop types them.

@@ -368,6 +368,8 @@ mod xref;
 #[cfg(test)]
 mod addons_tests;
 #[cfg(test)]
+mod addons_trust_tests;
+#[cfg(test)]
 mod assembly_pack_tests;
 #[cfg(test)]
 mod assembly_tests;

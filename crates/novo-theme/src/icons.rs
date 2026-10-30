@@ -120,6 +120,8 @@ pub mod addon {
     pub const OFF: &str = p::TOGGLE_LEFT;
     pub const SIGNED: &str = p::SEAL_CHECK;
     pub const UNSIGNED: &str = p::SHIELD_WARNING;
+    /// Signed, but with a key this PC does not know.
+    pub const UNKNOWN_KEY: &str = p::SEAL_QUESTION;
     pub const BLOCKED: &str = p::PROHIBIT;
     pub const FAILED: &str = p::WARNING_OCTAGON;
     pub const INSTALL: &str = p::DOWNLOAD_SIMPLE;

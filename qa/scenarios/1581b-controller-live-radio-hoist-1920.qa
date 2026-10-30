@@ -19,7 +19,7 @@ expect "9 signals drive nothing"
 shot panel-at-rest
 check_layout
 # Main latch on: the receiver's main contact closes, so the circuit is fed but nothing is selected.
-click 1611 369
+click 1607 369
 wait 10
 expect "Signals (2 of 15 high)"
 shot main-on
@@ -41,7 +41,7 @@ shot motor-page-up-2
 mouse_up 1640 536
 wait 10
 # E-stop: the chain contact opens and every output drops, whatever the rocker does.
-click 1612 320
+click 1608 319
 wait 10
 expect "Pressed"
 expect "Signals (0 of 15 high)"

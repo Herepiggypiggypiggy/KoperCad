@@ -1134,6 +1134,12 @@ fn reserved_dock(ctx: &egui::Context) -> f32 {
         .unwrap_or(0.0)
 }
 
+/// How much of the canvas's left edge the outline flyout covers: a panel on
+/// that side starts beside it, so the room it has is that much narrower.
+pub(super) fn flyout_width(ctx: &egui::Context) -> f32 {
+    reserved_left(ctx)
+}
+
 fn reserved_left(ctx: &egui::Context) -> f32 {
     ctx.data(|d| d.get_temp::<f32>(egui::Id::new("panel_flyout_left")))
         .unwrap_or(0.0)

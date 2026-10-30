@@ -2229,6 +2229,7 @@ version = "0.1.0"
 dependencies = [
  "calamine",
  "clap",
+ "getrandom 0.3.4",
  "image",
  "lopdf",
  "novo-addons",
@@ -2402,6 +2403,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "toml",
+ "ureq",
  "zip 9.1.3",
 ]
 

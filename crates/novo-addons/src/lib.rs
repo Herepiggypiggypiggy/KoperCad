@@ -15,6 +15,7 @@ pub mod error;
 pub mod extensions;
 pub mod host;
 pub mod icons;
+pub mod keyfile;
 pub mod layout;
 pub mod manifest;
 pub mod pack;

@@ -68,6 +68,20 @@ fn the_three_bench_pdfs_are_written() {
 }
 
 #[test]
+fn cut_piece_labels_print_one_per_wire_to_cut() {
+    let (dir, mut d) = app_with_wires();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.bench", None);
+    d.frame();
+    d.app.wb.bench.as_mut().unwrap().labels.kinds = vec!["cuts".into()];
+    let labels = dir.path().join("cuts.pdf");
+    assert_eq!(d.app.export_labels_to(&labels), Some(labels.clone()));
+    // The one wire is cut once: one piece label, where flags are two.
+    let msg = d.app.messages().last().unwrap().text.clone();
+    assert!(msg.contains("1 labels on 1 sheets"), "{msg}");
+}
+
+#[test]
 fn the_commands_export_a_pdf_each() {
     let (_dir, mut d) = app_with_wires();
     let ctx = d.ctx.clone();
@@ -137,6 +151,9 @@ fn exports_use_the_drafts_in_the_window_and_the_project_otherwise() {
             mm2: 0.0,
             colour: String::new(),
             length_mm: 0.0,
+            crimp: Default::default(),
+            die: String::new(),
+            total_mm: None,
         });
     let ferrules = dir.path().join("f.pdf");
     assert_eq!(d.app.export_ferrules_to(&ferrules), None);

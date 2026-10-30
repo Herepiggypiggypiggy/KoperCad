@@ -5,7 +5,7 @@
 # the right (Simulate > Controller panel does the same). The fixture has one generic radio bound to
 # the receiver -A1: E-stop chain and main contact in series ahead of the outputs, hoist outputs 1 to 4.
 # The hoist is a stack of two step zones; the pointer holds one while it is down and the stack
-# springs back on release (positions for this window size: "slow" and "fast" of Hoist up).
+# springs back on release (positions for this window size: "slow" and "fast" of Hoist up, below the instance row).
 open qa/fixtures/radio-hoist.novo
 wait 20
 key shift+l
@@ -19,7 +19,7 @@ expect "9 signals drive nothing"
 shot panel-at-rest
 check_layout
 # Main latch on: the receiver's main contact closes, so the circuit is fed but nothing is selected.
-click 1056 369
+click 1052 369
 wait 10
 expect "Signals (2 of 15 high)"
 shot main-on
@@ -41,7 +41,7 @@ shot motor-page-up-2
 mouse_up 1081 536
 wait 10
 # E-stop: the chain contact opens and every output drops, whatever the rocker does.
-click 1058 320
+click 1055 319
 wait 10
 expect "Pressed"
 expect "Signals (0 of 15 high)"

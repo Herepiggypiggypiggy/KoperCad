@@ -450,6 +450,8 @@ impl NovoApp {
         let g = &mut self.wb.hoist.three_d;
         let swinging = g.swinging();
         let drive_running = self.wb.drive_run.is_running();
+        let drive_run = &self.wb.drive_run;
+        let axis_status = |id: &str| drive_run.travel_status(id);
         // The window opens at the right edge: the Live card at the left keeps its buttons.
         super::panel::dialog(ctx, "Hoist in 3D", [760.0, 540.0])
             .default_pos([(ctx.content_rect().max.x - 770.0).max(310.0), 80.0])
@@ -574,6 +576,13 @@ impl NovoApp {
                             open_drive = true;
                         }
                     });
+                }
+                for status in [g.bridge_axis.as_deref(), g.trolley_axis.as_deref()]
+                    .into_iter()
+                    .flatten()
+                    .filter_map(axis_status)
+                {
+                    ui.weak(status);
                 }
                 for (at_end, what) in [
                     (travel.bridge_at_end, "bridge"),

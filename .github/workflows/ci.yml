@@ -169,6 +169,13 @@ jobs:
       - run: cargo test --locked --manifest-path addons/controllers/engine/Cargo.toml
       - run: cargo clippy --locked --manifest-path addons/controllers/engine/Cargo.toml --all-targets -- -D warnings
       - run: scripts/build-controllers-addon.sh
+      # The signing path on every change, with the committed test-only key (never a real one):
+      # sign a copy of the package; `sign` reads the result back and fails if it does not verify.
+      - name: Signing round trip (test-only key)
+        run: |
+          cp target/addons/controllers-*.kcaddon "$RUNNER_TEMP/signing-test.kcaddon"
+          target/debug/kopercad-cli addons sign "$RUNNER_TEMP/signing-test.kcaddon" --key crates/novo-tests/tests/keys/TEST-ONLY-addon-signing.key
+          unzip -p "$RUNNER_TEMP/signing-test.kcaddon" signature | head -2
       - run: cargo test -p novo-tests --test controllers_addon -- --nocapture
         env:
           KOPERCAD_REQUIRE_CONTROLLERS_PACK: "1"

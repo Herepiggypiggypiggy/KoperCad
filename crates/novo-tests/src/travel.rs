@@ -39,6 +39,26 @@ fn role(device: DeviceId, main: bool) -> SymbolRole {
     SymbolRole::Device { device, main }
 }
 
+/// The travel project with a travel brake, a steady wind and a gust on the motor, for the QA
+/// scenarios and the walk-through of the brake and the wind: a 15 N m spring brake behind the
+/// drive's brake output, a wind of 8 m/s on 30 m2 and a gust of 6 m/s after 20 s.
+pub fn travel_with_brake_and_wind(doc: &mut Document) -> Result<Travel> {
+    let t = travel(doc)?;
+    doc.transact("Add brake and wind", |tx| {
+        for (key, value) in [
+            ("trav_brake_torque_nm", 15.0),
+            ("trav_wind_ms", 8.0),
+            ("trav_wind_area_m2", 30.0),
+            ("trav_gust_ms", 6.0),
+            ("trav_gust_start_s", 20.0),
+        ] {
+            tx.set_property(t.motor, key, Some(value.into()))?;
+        }
+        Ok(())
+    })?;
+    Ok(t)
+}
+
 /// Builds the travel project as one undo step.
 pub fn travel(doc: &mut Document) -> Result<Travel> {
     Ok(doc.transact("Draw travel drive", build)?.0)
