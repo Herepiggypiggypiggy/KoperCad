@@ -34,6 +34,12 @@ use crate::port::CircuitPort;
 /// Hook movement below this (m) is not reported as a rollback, a stop travel or a slip.
 const REPORT_BELOW_M: f64 = 0.005;
 
+/// Slack above this (m) is reported; it is re-armed once the rope is nearly taut again.
+const SLACK_REPORT_M: f64 = 0.05;
+
+/// Slack above this (m) is a rope that can jump out of its groove.
+const SLACK_LOOSE_M: f64 = 0.5;
+
 /// A hook that moved this far against the command at the start is reported at once.
 const RUNAWAY_M: f64 = 0.05;
 
@@ -109,6 +115,24 @@ pub enum ClFindingKind {
     /// One encoder channel is gone: the counts no longer say which way the shaft turns.
     EncoderChannelLost,
     EncoderChannelBack,
+    /// The hook rests on the ground and the drum paid out `slack_m` of rope beyond it.
+    SlackRope {
+        slack_m: f64,
+    },
+    /// So much slack that the rope can leave the drum groove or the sheaves.
+    RopeLoose {
+        slack_m: f64,
+    },
+    /// The hook came down on the ground at `m_s`.
+    HookLanded {
+        m_s: f64,
+    },
+    /// The rope came taut and the hook left the ground at `m_s`: `peak_n` is the estimated force
+    /// of the snatch.
+    RopePickedUp {
+        m_s: f64,
+        peak_n: f64,
+    },
 }
 
 impl ClFindingKind {
@@ -144,6 +168,19 @@ impl ClFindingKind {
                     .to_owned()
             }
             Self::EncoderChannelBack => "The encoder channel is back.".to_owned(),
+            Self::SlackRope { slack_m } => format!(
+                "The rope is slack: the drum paid out {slack_m:.2} m beyond the hook, which rests on the ground."
+            ),
+            Self::RopeLoose { slack_m } => format!(
+                "{slack_m:.1} m of slack: the rope can leave the drum groove or the sheaves."
+            ),
+            Self::HookLanded { m_s } => format!(
+                "The hook landed on the ground at {m_s:.2} m/s: the rope carries nothing from here."
+            ),
+            Self::RopePickedUp { m_s, peak_n } => format!(
+                "The slack is taken up and the hook leaves the ground at {m_s:.2} m/s: the rope snatches, about {:.1} kN at its peak.",
+                peak_n / 1000.0
+            ),
         }
     }
 }
@@ -156,6 +193,10 @@ pub struct ClWinchModule {
     pub binding: ClWinchBinding,
     /// Hook speed of step 1 and step 2, m/s.
     pub speeds_m_s: [f64; 2],
+    /// Rope stiffness at the hook in N/m, for the estimate of a snatch.
+    pub rope_k_n_m: f64,
+    slack_reported: bool,
+    loose_reported: bool,
     last_reset: bool,
     relay: bool,
     last_fault: Option<ClFault>,
@@ -192,6 +233,9 @@ impl ClWinchModule {
             winch,
             binding,
             speeds_m_s,
+            rope_k_n_m: 2.0e6,
+            slack_reported: false,
+            loose_reported: false,
             last_reset: false,
             relay: false,
             last_fault: None,
@@ -489,8 +533,48 @@ fn step_module(m: &mut ClWinchModule, circuit: &impl CircuitPort, dt: f64, time_
         m.note(time_s, kind);
         m.last_sto_requested = out.sto_requested;
     }
+    track_ground(m, &snap, time_s);
     track_findings(m, &snap, time_s, run, up);
     m.snapshot = Some(snap);
+}
+
+/// Slack rope, landing and the snatch when the rope comes taut again.
+fn track_ground(m: &mut ClWinchModule, snap: &WinchSnapshot, time_s: f64) {
+    if m.winch.ground_m.is_none() {
+        return;
+    }
+    if let Some(m_s) = snap.landed_m_s {
+        m.note(time_s, ClFindingKind::HookLanded { m_s });
+    }
+    if snap.slack_m > SLACK_REPORT_M && !m.slack_reported {
+        m.slack_reported = true;
+        m.note(
+            time_s,
+            ClFindingKind::SlackRope {
+                slack_m: snap.slack_m,
+            },
+        );
+    } else if snap.slack_m <= SLACK_REPORT_M / 5.0 {
+        m.slack_reported = false;
+    }
+    if snap.slack_m > SLACK_LOOSE_M && !m.loose_reported {
+        m.loose_reported = true;
+        m.note(
+            time_s,
+            ClFindingKind::RopeLoose {
+                slack_m: snap.slack_m,
+            },
+        );
+    } else if snap.slack_m <= SLACK_LOOSE_M / 2.0 {
+        m.loose_reported = false;
+    }
+    if let Some(m_s) = snap.pickup_m_s {
+        // A mass picked up at speed v on a rope of stiffness k, the rope slack until then: the
+        // energy of the moving drum side ends in the rope, F = m g + v sqrt(k m).
+        let mass = m.winch.hoist().mass_kg();
+        let peak_n = mass * novo_drive::GRAVITY + m_s.max(0.0) * (m.rope_k_n_m * mass).sqrt();
+        m.note(time_s, ClFindingKind::RopePickedUp { m_s, peak_n });
+    }
 }
 
 fn track_findings(m: &mut ClWinchModule, snap: &WinchSnapshot, time_s: f64, run: bool, up: bool) {

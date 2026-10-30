@@ -39,8 +39,10 @@ pub enum FindingName {
     PairStopped,
     /// A rope carried more than its rating (pair).
     Overload,
-    /// A rope went slack (pair).
+    /// A rope went slack (pair), or the drum paid out rope beyond a hook on the ground (single winch).
     Slack,
+    /// The slack was taken up and the rope snatched the hook off the ground (single winch).
+    Snatch,
 }
 
 impl FindingName {
@@ -55,6 +57,7 @@ impl FindingName {
             Self::PairStopped => "the pair stopping itself",
             Self::Overload => "a rope above its rating",
             Self::Slack => "a slack rope",
+            Self::Snatch => "a snatch on pick-up",
         }
     }
 }
@@ -132,6 +135,8 @@ fn found(side: &MachineSide, id: &str, what: FindingName) -> bool {
                         ClFindingKind::EncoderChannelLost,
                         FindingName::EncoderChannelLost
                     )
+                    | (ClFindingKind::SlackRope { .. }, FindingName::Slack)
+                    | (ClFindingKind::RopePickedUp { .. }, FindingName::Snatch)
                     | (ClFindingKind::BrakeSlip { .. }, FindingName::BrakeSlip)
                     | (
                         ClFindingKind::StartRollback { .. },

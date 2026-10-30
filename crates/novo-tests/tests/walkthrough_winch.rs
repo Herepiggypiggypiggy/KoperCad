@@ -217,6 +217,42 @@ fn a_lost_encoder_channel_is_found_by_name() {
 }
 
 #[test]
+fn a_hook_lowered_onto_the_ground_is_slack_and_the_pick_up_snatches() {
+    let mut doc = Document::default();
+    novo_tests::closed_winch::closed_winch_ground(&mut doc, -0.3).unwrap();
+    let w = Walkthrough::new("ground")
+        .at(1.0, press("=A1+RAD-S3", true))
+        .at(8.0, press("=A1+RAD-S3", false))
+        .at(
+            8.5,
+            winch(
+                M1,
+                WinchIs::Found {
+                    finding: FindingName::Slack,
+                },
+            ),
+        )
+        .at(9.0, press(BUTTON, true))
+        .at(
+            16.0,
+            winch(
+                M1,
+                WinchIs::Found {
+                    finding: FindingName::Snatch,
+                },
+            ),
+        );
+    let report = single(&w, &doc);
+    let verdicts: Vec<Verdict> = report
+        .steps
+        .iter()
+        .filter(|s| s.label.starts_with("Expect"))
+        .map(|s| s.verdict)
+        .collect();
+    assert_eq!(verdicts, vec![Verdict::Pass, Verdict::Pass]);
+}
+
+#[test]
 fn a_winch_that_is_not_in_the_project_is_named() {
     let mut doc = Document::default();
     closed_winch(&mut doc).unwrap();

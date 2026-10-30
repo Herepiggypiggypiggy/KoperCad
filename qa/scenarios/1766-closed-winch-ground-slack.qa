@@ -1,0 +1,41 @@
+@title Closed-loop winch on the ground: lowering past the ground leaves the rope slack and the run says so
+@area Simulate
+@sizes 1366x768
+# Lane L2c. The fixture has the ground 0.3 m below the hook start and a down button (radio S3). Holding it
+# lands the hook and the drum keeps paying out rope: the run lists the landing and the slack rope. Then radio S2
+# lifts: the slack is taken up and the rope snatches the hook off the ground (the run says so).
+open qa/fixtures/closed-winch-ground.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+key Home
+wait 30
+shot before-pressing
+# Radio step 3 (S3) is the down button: the hook goes down 0.3 m, lands, and the drum goes on.
+mouse_down 123 421
+wait 1500
+shot lowering
+wait 800
+expect "The hook landed"
+expect "The rope is slack"
+shot landed-and-slack
+mouse_up 123 421
+wait 600
+shot released
+# Radio step 2 (S2) lifts: the drum takes the slack up first, then the rope snatches the hook off the ground.
+mouse_down 123 351
+wait 3000
+expect "the rope snatches"
+shot picked-up
+mouse_up 123 351
+wait 600
+check_layout
+shot stopped

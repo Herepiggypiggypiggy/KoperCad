@@ -51,27 +51,46 @@ fn role(device: DeviceId, main: bool) -> SymbolRole {
 /// Builds the closed-loop winch project as one undo step.
 pub fn closed_winch(doc: &mut Document) -> Result<ClosedWinch> {
     Ok(doc
-        .transact("Draw closed-loop winch", |tx| build(tx, false, false))?
+        .transact("Draw closed-loop winch", |tx| {
+            build(tx, false, false, false)
+        })?
         .0)
 }
 
 /// Builds the project with two winches on one beam as one undo step.
 pub fn closed_winch_pair(doc: &mut Document) -> Result<ClosedWinch> {
     Ok(doc
-        .transact("Draw two closed-loop winches", |tx| build(tx, true, false))?
+        .transact("Draw two closed-loop winches", |tx| {
+            build(tx, true, false, false)
+        })?
         .0)
+}
+
+/// Builds the single winch with a down button (radio step 3 `=A1+RAD-S3`, relay `=A1+CAB-KA2`) and
+/// the hook resting on the ground `ground_m` metres from its start (negative: below), as one undo
+/// step. The drive's down input is KA2, so the hook can be lowered onto the ground and lifted again.
+pub fn closed_winch_ground(doc: &mut Document, ground_m: f64) -> Result<ClosedWinch> {
+    let winch = doc
+        .transact("Draw closed-loop winch with a ground level", |tx| {
+            build(tx, false, false, true)
+        })?
+        .0;
+    doc.transact("Set the ground level", |tx| {
+        tx.set_property(winch.motor, "cw_ground_m", Some(ground_m.into()))
+    })?;
+    Ok(winch)
 }
 
 /// Builds the winch project with a monitor for encoder channel B as one undo step.
 pub fn closed_winch_channel(doc: &mut Document) -> Result<ClosedWinch> {
     Ok(doc
         .transact("Draw closed-loop winch with encoder channel", |tx| {
-            build(tx, false, true)
+            build(tx, false, true, false)
         })?
         .0)
 }
 
-fn build(tx: &mut Tx<'_>, pair: bool, channel: bool) -> Result<ClosedWinch> {
+fn build(tx: &mut Tx<'_>, pair: bool, channel: bool, down: bool) -> Result<ClosedWinch> {
     let title = if pair {
         "Two closed-loop winches"
     } else {
@@ -201,6 +220,21 @@ fn build(tx: &mut Tx<'_>, pair: bool, channel: bool) -> Result<ClosedWinch> {
         tx.connect(Endpoint::pin(f, 0), Endpoint::pin(k, 0))?;
         tx.connect(Endpoint::pin(k, 1), Endpoint::pin(fnn, 0))?;
         tx.set_property(m1, "cw_encoder_b", Some("=A1+CAB-ENCH".into()))?;
+    }
+
+    // A down button: the radio's third step feeds KA2, the drive's down input.
+    if down {
+        let ka2 = tx.add_device(tag("=A1+CAB-KA2"), "Drive down")?;
+        let s3 = tx.add_device(tag("=A1+RAD-S3"), "Down")?;
+        let x = col(0);
+        let f = feed(tx, l, x, 160.0)?;
+        let b = sym(tx, btn, x, 182.0, s3, true)?;
+        let k = sym(tx, coil, x, 206.0, ka2, true)?;
+        let fnn = feed(tx, n, x, 230.0)?;
+        tx.connect(Endpoint::pin(f, 0), Endpoint::pin(b, 0))?;
+        tx.connect(Endpoint::pin(b, 1), Endpoint::pin(k, 0))?;
+        tx.connect(Endpoint::pin(k, 1), Endpoint::pin(fnn, 0))?;
+        tx.set_property(m1, "cw_in_down", Some("=A1+CAB-KA2".into()))?;
     }
 
     // The second winch: STO channels and encoder monitor as relays, the drive's brake relay

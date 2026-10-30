@@ -130,6 +130,30 @@ trips only on the faulted plant and findings only the faulted run has. User: Sim
 walk-throughs, saved walk-throughs, `▶ Run`; the fixture `qa/fixtures/closed-winch-walk.novo` has one.
 Limits as for the hoist walk-throughs: a run with a machine in it stops at 120 s.
 
+## The hook on the ground: slack rope and the snatch (single winch)
+
+With a ground level (`cw_ground_m`, metres above the hook start, negative below) the hook can rest
+on something. The drum position gives the rope paid out; the hook is at the ground whenever the rope
+reaches below it, and the difference is slack. While the hook rests the rope carries nothing: the
+weight torque is zero, the load cell (pre-torque) reads zero, and the drive turns the drum freely.
+Findings of the run:
+
+- the hook lands, with its speed;
+- the rope goes slack (more than 5 cm paid out beyond the hook), and when there is more than half a
+  metre of it, "the rope can leave the drum groove or the sheaves";
+- the slack is taken up and the rope snatches the hook off the ground: the speed at the moment the
+  rope comes taut and an estimated peak force `m g + v sqrt(k m)` with the rope stiffness `k`
+  (`cw_slack_k_n_m`, 2 MN/m when blank).
+
+Walk-throughs: `found` with `slack` (also the pair's name) or `snatch`.
+
+Exact by definition: the geometry (rope paid out, hook at the ground, slack) and the tick order.
+Model: the rigid rope while taut, the peak force of the snatch (an energy estimate from a rope
+stiffness you enter, not a dynamic simulation of the rope: the rope does not bounce, the hook does not
+swing), the shaft inertia kept as with the hook hanging (a slack drum accelerates a little slower than
+a real one), no friction or sticking of the hook on the ground. Not used in a pair (its rope model has
+its own slack). Scenarios 1766 and 1766b with the fixture `closed-winch-ground.novo` (a down button S3).
+
 ## Not yet
 
 - Unconfirmed customer details: which drive maker's hoist and encoder arrangement applies. Everything
