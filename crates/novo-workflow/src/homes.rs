@@ -160,7 +160,9 @@ pub const RELOCATED: &[(&str, Home)] = &[
 
 /// The commands whose menu row moved to the buttons or context menu of a
 /// panel, by panel: the Pages list (its `+ New` button and the right-click
-/// menu of a page) and the lesson card (Back, Next, Start over, Close).
+/// menu of a page), the lesson card (Back, Next, Start over, Close) and the
+/// right-click menu of a selected terminal on the schematic (Connect, Disconnect,
+/// the PE rows and the strip number; Up and Down also have keys).
 pub const PANEL_BUTTONS: &[(&str, &[&str])] = &[
     (
         "Pages list",
@@ -171,6 +173,19 @@ pub const PANEL_BUTTONS: &[(&str, &[&str])] = &[
             "page.delete",
             "page.move_up",
             "page.move_down",
+        ],
+    ),
+    ("Symbol right-click menu", &["plc.to_plc"]),
+    (
+        "Terminal right-click menu",
+        &[
+            "terminal.connect",
+            "terminal.disconnect",
+            "terminal.toggle_pe",
+            "terminal.reset_pe",
+            "terminal.strip_up",
+            "terminal.strip_down",
+            "terminal.strip_lowest",
         ],
     ),
     (

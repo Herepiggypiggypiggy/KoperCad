@@ -269,8 +269,8 @@ pub const IMPORT_SECTIONS: &[Section] = &[
     },
     Section {
         name: "Lists and tags",
-        about: "Spreadsheets for bulk edit, and the tags of a PLC programmer.",
-        ids: &["import.spreadsheet", "plc.import_tags"],
+        about: "Spreadsheets for bulk edit, a machine's I/O list and the tags of a PLC programmer.",
+        ids: &["import.spreadsheet", "plc.import_list", "plc.import_tags"],
     },
 ];
 
@@ -427,6 +427,7 @@ pub fn describe(id: &str) -> &'static str {
         "parts.import_table" => "Parts from a CSV or Excel table, with your own columns.",
         "parts.import_eplan" => "Parts from a CAD parts export or maker XML files.",
         "import.spreadsheet" => "Changes made in Excel or CSV, checked before they apply.",
+        "plc.import_list" => "A machine's signal list as PLC cards and pages, reviewed first.",
         "plc.import_tags" => "The tags a PLC programmer wrote, matched to the I/O list.",
         "file.new_crane" => "An overhead crane project with its structure tree and covers.",
         "file.new_mcc" => "A motor control centre with feeders, control supply and cabinet.",
@@ -516,7 +517,7 @@ mod tests {
             assert!(seen.insert(id), "{id} is in two sections");
             assert!(!in_export_centre(id), "{id} is in both centres");
         }
-        assert_eq!(seen.len(), 14);
+        assert_eq!(seen.len(), 15);
     }
 
     #[test]

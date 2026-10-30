@@ -77,6 +77,14 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 - `centres::Centre::Numbering` (command `edit.numbering_centre`, Edit > Numbering...): Number wires, Renumber wires, Check wire numbers, Wire numbering, Set and Unlock wire number ("Wires") and Renumber devices, Number interruption points, Renumber I/O ("Devices and points"). The Edit > Wire numbers and Edit > Renumber submenus (9 rows) are gone: Edit 30 to 22, total 213 to 205. Tiles that need a selection say why they are grey.
 - Lessons that name those commands fall back to the opener, then Edit. QA scenario 7372. Next: Parts rows (Edit > Parts, File > Library), then the Draw leftovers.
 
+## V4k: Draw > PLC leaves the menu (2026-10-30)
+- Add PLC card and PLC overview are plain Draw rows. Import I/O list is a tile of the Import centre ("Lists and tags", next to Import PLC tags). Send signal to PLC is a row ("Send to PLC") of the right-click menu of one selected symbol (`homes::PANEL_BUTTONS` "Symbol right-click menu"; the app says what to select when it is not a contact, sensor or coil). Draw 24 to 22, total 205 to 203 (after #1772).
+- Test `the_symbol_right_click_menu_carries_send_to_plc` reads the editor's menu source. QA 7376 (1366x768) and 7377 (1920x1080).
+
+## V4j: terminal rows leave Draw (2026-10-30)
+- The seven Draw > Terminals rows (Connect and Disconnect terminals, Toggle PE terminal, Reset PE override, strip number Up, Down, Lowest free) act on the terminals selected on the page. Their home is the right-click menu of a selected terminal, which already carried each one: `homes::PANEL_BUTTONS` entry "Terminal right-click menu". Draw 24 to 17, total 203 to 196 (after #1772 and #1774). Up and Down keep their keys; every row is still in Ctrl+K (its path reads "Terminal right-click menu").
+- Test `the_terminal_right_click_menu_carries_every_terminal_row_that_left_draw` reads the editor's menu source, so a row dropped from the menu fails it. QA scenarios 7374 (1366x768) and 7375 (1920x1080) walk the terminal-strips lesson to two selected terminals and open the menu.
+
 ## V4i: Part tools centre (2026-10-30)
-- `centres::Centre::Parts` (command `edit.parts_centre`, Edit > Part tools...): Parts (the catalog), Import 3D model (STEP), Assign parts to devices, Describe devices from parts, Remove parts from selected devices, Remove unused parts. The File > Library and Edit > Parts submenus (6 rows) are gone: File 26 to 24, Edit 22 to 19, total 205 to 200.
+- `centres::Centre::Parts` (command `edit.parts_centre`, Edit > Part tools...): Parts (the catalog), Import 3D model (STEP), Assign parts to devices, Describe devices from parts, Remove parts from selected devices, Remove unused parts. The File > Library and Edit > Parts submenus (6 rows) are gone: File 26 to 24, Edit 22 to 19, total 196 to 191 (after #1772, #1773 and #1774).
 - QA scenario 7373; scenario 723 now opens the Macros submenu where it opened Library. Next: the Draw leftovers (Terminals strip tools, PLC, Macros).
