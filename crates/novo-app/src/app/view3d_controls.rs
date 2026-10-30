@@ -201,7 +201,12 @@ pub(super) fn toolbar(
     let mut command = None;
     // Leave the view cube (top right) uncovered.
     let width = TOOLBAR_WIDTH
-        .min(view.width() - super::view3d_heat::CUBE_SIZE - 3.0 * MARGIN)
+        .min(
+            view.width()
+                - super::panel::flyout_width(ctx)
+                - super::view3d_heat::CUBE_SIZE
+                - 3.0 * MARGIN,
+        )
         .max(300.0);
     // The simulation status is the first row, where the title bar was: the
     // toolbar has no title (it is still dragged by its body), so the status
