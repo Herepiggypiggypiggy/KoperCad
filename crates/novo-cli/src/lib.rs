@@ -23,6 +23,7 @@ use novo_revisions::{Comparison, FieldChange, Side, group_of};
 use novo_storage::ProjectFile;
 use serde_json::{Value, json};
 
+mod addon_keys;
 mod addons;
 mod eplan;
 mod macros;

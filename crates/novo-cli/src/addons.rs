@@ -91,6 +91,67 @@ pub(crate) enum Addons {
         #[arg(long, requires = "key_id")]
         seed_file: Option<PathBuf>,
     },
+    /// Make a new publisher signing key. The private key is written only to `--out`, outside
+    /// any git work tree and readable by you alone; the public key is printed in the form
+    /// `addons/keys/kopervonk.pub` takes. Never overwrites a key.
+    Keygen {
+        /// The key id add-ons will name, for example `koper-vonk-2026`.
+        #[arg(long, value_name = "ID")]
+        id: String,
+        /// Who the key belongs to, shown in the window as "Signed by <owner>".
+        #[arg(long, default_value = "KoperVonk")]
+        owner: String,
+        /// Where to write the private key, for example `%LOCALAPPDATA%\KoperCAD\keys\koper-vonk-2026.key` (not Documents: it is often synced to OneDrive).
+        #[arg(long, value_name = "FILE")]
+        out: PathBuf,
+        /// Signatures dated before this day (YYYY-MM-DD) are refused for this key.
+        #[arg(long, value_name = "DATE")]
+        valid_from: Option<String>,
+    },
+    /// Sign a `.kcaddon` with a key from `keygen`. The signature covers the manifest, which
+    /// names the hash of every file. The same package, key and date give the same file.
+    Sign {
+        file: PathBuf,
+        /// The private key file.
+        #[arg(long, value_name = "FILE", conflicts_with = "key_env")]
+        key: Option<PathBuf>,
+        /// Read the key from this environment variable instead (base64 of the key file, as in
+        /// the CI secret ADDON_SIGNING_KEY); nothing is written to disk.
+        #[arg(long, value_name = "VARIABLE")]
+        key_env: Option<String>,
+        /// For a key file that holds only a seed.
+        #[arg(long)]
+        key_id: Option<String>,
+        /// Write here instead of replacing `file`.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Date to put in the signature (YYYY-MM-DD). Default: today (UTC), or SOURCE_DATE_EPOCH.
+        #[arg(long)]
+        date: Option<String>,
+        /// Sign without a date (format 1).
+        #[arg(long)]
+        no_date: bool,
+        /// Replace an existing signature.
+        #[arg(long)]
+        replace: bool,
+    },
+    /// Check a `.kcaddon`'s signature. Without key options it uses the keys this program
+    /// trusts (built in, plus your trusted-keys.toml). Exit code 0 only when it is signed.
+    Verify {
+        #[command(flatten)]
+        root: RootArg,
+        file: PathBuf,
+        /// Trust only the keys in these files (`[[key]]` / `[[revoked]]` TOML, such as
+        /// addons/keys/kopervonk.pub).
+        #[arg(long, value_name = "FILE")]
+        keys: Vec<PathBuf>,
+        /// Trust only this public key (64 hex digits) ...
+        #[arg(long, value_name = "HEX", requires = "key_id")]
+        public_key: Option<String>,
+        /// ... under this key id.
+        #[arg(long, value_name = "ID")]
+        key_id: Option<String>,
+    },
 }
 
 fn store(root: &RootArg) -> Result<Store, Failure> {
@@ -176,10 +237,12 @@ pub(crate) fn run(cmd: Addons, out: &mut dyn Write) -> Result<i32, Failure> {
                 )?;
                 print(
                     out,
-                    &if i.package.trust.is_signed() {
-                        "signed by a trusted publisher".to_owned()
-                    } else {
-                        "unsigned, from file".to_owned()
+                    &match &i.package.trust {
+                        novo_addons::Trust::Signed { .. } => {
+                            "signed by a trusted publisher".to_owned()
+                        }
+                        novo_addons::Trust::Unsigned { .. } => "unsigned, from file".to_owned(),
+                        other => other.sentence(),
                     },
                 )?;
                 match i.blocked() {
@@ -228,6 +291,52 @@ pub(crate) fn run(cmd: Addons, out: &mut dyn Write) -> Result<i32, Failure> {
             print(out, &format!("{id} is back at {v}"))?;
             Ok(exit::OK)
         }
+        Addons::Keygen {
+            id,
+            owner,
+            out: key_path,
+            valid_from,
+        } => crate::addon_keys::keygen(&id, &owner, &key_path, valid_from.as_deref(), out),
+        Addons::Sign {
+            file,
+            key,
+            key_env,
+            key_id,
+            output,
+            date,
+            no_date,
+            replace,
+        } => crate::addon_keys::sign(
+            crate::addon_keys::SignArgs {
+                file,
+                key,
+                key_env,
+                key_id,
+                output,
+                date,
+                no_date,
+                replace,
+            },
+            out,
+        ),
+        Addons::Verify {
+            root,
+            file,
+            keys,
+            public_key,
+            key_id,
+        } => {
+            let trust = if keys.is_empty() && public_key.is_none() {
+                store(&root)?.trust().clone()
+            } else {
+                novo_addons::TrustStore::default()
+            };
+            let public = match (&key_id, &public_key) {
+                (Some(id), Some(hex)) => Some((id.as_str(), hex.as_str())),
+                _ => None,
+            };
+            crate::addon_keys::verify(&file, &trust, &keys, public, out)
+        }
         Addons::Pack {
             folder,
             output,
@@ -249,7 +358,11 @@ pub(crate) fn run(cmd: Addons, out: &mut dyn Write) -> Result<i32, Failure> {
                 None => None,
             };
             let signer = match (&key_id, seed) {
-                (Some(id), Some(seed)) => Some(Signer32 { key_id: id, seed }),
+                (Some(id), Some(seed)) => Some(Signer32 {
+                    key_id: id,
+                    seed,
+                    date: None,
+                }),
                 _ => None,
             };
             let bytes = pack_dir(&folder, signer.as_ref()).map_err(fail)?;

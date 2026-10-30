@@ -97,6 +97,9 @@ pub struct Inspection {
 impl Inspection {
     /// `None` when installing is allowed; otherwise the reason it is not.
     pub fn blocked(&self) -> Option<String> {
+        if let Some(why) = self.package.trust.refusal() {
+            return Some(format!("{} {why}", self.package.manifest.addon.name));
+        }
         if let Compat::No(why) = &self.compat {
             return Some(format!("{} {why}", self.package.manifest.addon.name));
         }
@@ -510,12 +513,20 @@ impl Store {
                 return fail(entry, e.to_string());
             }
         };
+        // Revoked or doctored: no tick can bring it back, and the window names which it is.
+        if let Some(why) = entry.trust.refusal() {
+            entry.manifest = Some(manifest);
+            return fail(entry, why);
+        }
         if !entry.trust.is_signed() && !rec.accepted_unsigned {
             entry.manifest = Some(manifest);
-            return fail(
-                entry,
-                "it is not signed by a trusted publisher and was not accepted".into(),
-            );
+            let why = match &entry.trust {
+                Trust::UnknownKey { key_id } => format!(
+                    "it is signed with the key {key_id}, which this PC does not know, so it is not signed by a trusted publisher and was not accepted"
+                ),
+                _ => "it is not signed by a trusted publisher and was not accepted".into(),
+            };
+            return fail(entry, why);
         }
         if manifest.files.contains_key(ICONS_FILE)
             && let Ok(bytes) = std::fs::read(dir.join(ICONS_FILE))
@@ -783,6 +794,9 @@ impl Store {
             }
             let sig = std::fs::read(dir.join("signature")).ok();
             let trust = judge(&manifest_bytes, sig.as_deref(), &self.trust)?;
+            if let Some(why) = trust.refusal() {
+                return Err(AddonError::Tampered(why));
+            }
             if !trust.is_signed() && !rec.previous_accepted {
                 return Err(AddonError::NotAccepted);
             }

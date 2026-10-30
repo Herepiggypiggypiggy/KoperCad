@@ -2229,6 +2229,7 @@ version = "0.1.0"
 dependencies = [
  "calamine",
  "clap",
+ "getrandom 0.3.4",
  "image",
  "novo-addons",
  "novo-ai",

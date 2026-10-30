@@ -7,16 +7,17 @@
 use std::io::{Cursor, Write};
 use std::path::Path;
 
-use ed25519_dalek::{Signer, SigningKey};
-
 use crate::error::{AddonError, Result};
 use crate::manifest::check_path;
-use crate::trust::{sha256_hex, signature_file, signed_message};
+use crate::package::Package;
+use crate::trust::{TrustStore, sha256_hex, sign_manifest};
 
-/// How to sign: a key id (as in the trusted-keys list) and the 32-byte Ed25519 seed.
+/// How to sign: a key id (as in the trusted-keys list), the 32-byte Ed25519 seed and, for a
+/// dated (format 2) signature, the date as `YYYY-MM-DD`.
 pub struct Signer32<'a> {
     pub key_id: &'a str,
     pub seed: [u8; 32],
+    pub date: Option<&'a str>,
 }
 
 /// Packs `folder`. Returns the bytes of the `.kcaddon`.
@@ -70,7 +71,40 @@ pub fn pack_parts(
         text.push_str(&format!("{name:?} = \"{}\"\n", sha256_hex(bytes)));
     }
     let manifest_bytes = text.into_bytes();
+    let signature = match signer {
+        Some(s) => Some(sign_manifest(&s.seed, s.key_id, s.date, &manifest_bytes)?),
+        None => None,
+    };
+    let sorted: Vec<(String, Vec<u8>)> = sorted.into_iter().cloned().collect();
+    write_zip(&manifest_bytes, signature.as_deref(), &sorted)
+}
 
+/// Adds (or, with `replace`, swaps) the signature of a finished package. The package must be
+/// intact (every file matches its hash); the result is the same zip layout the packer writes, so
+/// signing an unsigned package gives the same bytes as packing it signed.
+pub fn sign_package(bytes: &[u8], signer: &Signer32<'_>, replace: bool) -> Result<Vec<u8>> {
+    let package = Package::read(bytes, &TrustStore::default())?;
+    if package.signature.is_some() && !replace {
+        return Err(AddonError::BadSignature(
+            "the package is already signed; use --replace to sign it again".into(),
+        ));
+    }
+    let signature = sign_manifest(
+        &signer.seed,
+        signer.key_id,
+        signer.date,
+        &package.manifest_bytes,
+    )?;
+    let data: Vec<(String, Vec<u8>)> = package.files.into_iter().collect();
+    write_zip(&package.manifest_bytes, Some(&signature), &data)
+}
+
+/// The zip layout: `manifest.toml`, `signature` if any, then the data files in name order.
+fn write_zip(
+    manifest_bytes: &[u8],
+    signature: Option<&str>,
+    sorted: &[(String, Vec<u8>)],
+) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     {
         let mut zip = zip::ZipWriter::new(Cursor::new(&mut out));
@@ -85,14 +119,9 @@ pub fn pack_parts(
             zip.write_all(bytes)?;
             Ok(())
         };
-        put("manifest.toml", &manifest_bytes)?;
-        if let Some(s) = signer {
-            let sk = SigningKey::from_bytes(&s.seed);
-            let sig = sk.sign(&signed_message(&manifest_bytes));
-            put(
-                "signature",
-                signature_file(s.key_id, &sig.to_bytes()).as_bytes(),
-            )?;
+        put("manifest.toml", manifest_bytes)?;
+        if let Some(sig) = signature {
+            put("signature", sig.as_bytes())?;
         }
         for (name, bytes) in sorted {
             put(name, bytes)?;
