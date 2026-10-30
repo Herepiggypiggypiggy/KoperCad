@@ -325,20 +325,44 @@ mod toml_free {
         };
         for chunk in text.split("{ kind = \"").skip(1) {
             let kind = chunk.split('"').next().unwrap();
-            let id = chunk
+            // The lamp and the button have no braces inside, so their id is read up to the first
+            // closing brace; a separator, row or tab list has no id of its own.
+            let head = chunk.split('}').next().unwrap_or("");
+            let id = head
                 .split("id = \"")
                 .nth(1)
                 .and_then(|r| r.split('"').next())
-                .unwrap()
-                .to_owned();
-            match kind {
-                "lamp" => {
-                    if chunk.contains("lit = true") && chunk.find("lit = true") < chunk.find('}') {
+                .map(str::to_owned);
+            match (kind, id) {
+                ("lamp", Some(id)) => {
+                    if head.contains("lit = true") {
                         p.lit_at_start.push(id.clone());
                     }
                     p.lamps.push(id)
                 }
-                "button" => p.buttons.push(id),
+                ("button", Some(id)) => p.buttons.push(id),
+                // A rocker sends `<id>-<direction><step>`: the same button ids the engine reads,
+                // so every zone the panel draws must work.
+                ("rocker", Some(id)) => {
+                    let line = chunk.lines().next().unwrap_or("");
+                    let steps: u32 = line
+                        .split("steps = ")
+                        .nth(1)
+                        .and_then(|r| r.split(|c: char| !c.is_ascii_digit()).next())
+                        .and_then(|n| n.parse().ok())
+                        .unwrap_or(1);
+                    let dirs: Vec<&str> = line
+                        .split("name = \"")
+                        .skip(1)
+                        .filter_map(|r| r.split('"').next())
+                        .collect();
+                    for dir in dirs.iter().take(2) {
+                        for step in 1..=steps {
+                            p.buttons.push(format!("{id}-{dir}{step}"));
+                        }
+                    }
+                    p.buttons.push(format!("{id}-off"));
+                }
                 _ => {}
             }
         }

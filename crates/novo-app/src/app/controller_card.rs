@@ -446,6 +446,7 @@ fn draw_card(
     }
     ui.weak("Scroll for the signals, bindings and checks");
     ui.separator();
+    filter_bar(ui, ctl);
     signals_block(ui, ctl, &id, project);
     ui.separator();
     bindings_block(ui, ctl, &id, project);
@@ -851,47 +852,119 @@ fn effects_row(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str) {
     }
 }
 
+/// The filter of the monitor and the binding table: which controller, a search, only the
+/// signals that are high, only those that drive nothing. Kept in `ControllerLive::filter`.
+fn filter_bar(ui: &mut egui::Ui, ctl: &mut ControllerLive) {
+    use novo_controller::Scope;
+    ctl.filter.heal(&ctl.set);
+    let labels: Vec<(String, String)> = ctl
+        .set
+        .instances()
+        .iter()
+        .map(|i| (i.id.clone(), i.label.clone()))
+        .collect();
+    ui.horizontal_wrapped(|ui| {
+        let current = match &ctl.filter.scope {
+            Scope::Selected => "This controller".to_owned(),
+            Scope::All => "All controllers".to_owned(),
+            Scope::Instance(id) => labels
+                .iter()
+                .find(|(i, _)| i == id)
+                .map_or_else(|| id.clone(), |(_, l)| l.clone()),
+        };
+        egui::ComboBox::from_id_salt("controller_filter_scope")
+            .selected_text(current)
+            .width(124.0)
+            .show_ui(ui, |ui| {
+                let scope = &mut ctl.filter.scope;
+                ui.selectable_value(scope, Scope::Selected, "This controller");
+                ui.selectable_value(scope, Scope::All, "All controllers");
+                for (id, label) in &labels {
+                    ui.selectable_value(scope, Scope::Instance(id.clone()), label);
+                }
+            })
+            .response
+            .on_hover_text("Which controllers the signals and bindings below list");
+        ui.add(
+            egui::TextEdit::singleline(&mut ctl.filter.text)
+                .hint_text("Search signals")
+                .desired_width(110.0),
+        )
+        .on_hover_text("Words that must all occur in the controller, the signal or its target");
+        ui.checkbox(&mut ctl.filter.only_active, "Active")
+            .on_hover_text("Only signals that are high now");
+        ui.checkbox(&mut ctl.filter.only_unbound, "Unbound")
+            .on_hover_text("Only signals that drive nothing yet");
+        if !ctl.filter.is_clear() && ui.small_button("Clear").clicked() {
+            ctl.filter.text.clear();
+            ctl.filter.only_active = false;
+            ctl.filter.only_unbound = false;
+        }
+    });
+}
+
+/// A line saying nothing matches, with the way out.
+fn nothing_matches(ui: &mut egui::Ui, ctl: &mut ControllerLive) {
+    ui.horizontal_wrapped(|ui| {
+        ui.weak("No signal matches the filter.");
+        if ui.small_button("Clear filter").clicked() {
+            ctl.filter.text.clear();
+            ctl.filter.only_active = false;
+            ctl.filter.only_unbound = false;
+        }
+    });
+}
+
 fn signals_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project: &Project) {
     let palette = crate::theme::ui_palette();
-    let Some(inst) = ctl.set.instance(id) else {
-        return;
+    let _ = project;
+    let monitor = novo_controller::monitor(&ctl.set, &ctl.table, Some(id), &ctl.filter);
+    let high = monitor.rows.iter().filter(|r| r.is_active()).count();
+    let title = if ctl.filter.is_clear() {
+        format!("Signals ({high} of {} high)", monitor.in_scope)
+    } else {
+        format!(
+            "Signals ({} of {} shown, {high} high)",
+            monitor.rows.len(),
+            monitor.in_scope
+        )
     };
-    let signals = inst.controller.signals();
-    let high = signals.iter().filter(|s| s.is_high()).count();
-    egui::CollapsingHeader::new(format!("Signals ({high} of {} high)", signals.len()))
+    egui::CollapsingHeader::new(title)
         .id_salt(("controller_signals", id))
         .default_open(true)
         .show(ui, |ui| {
-            let mut rows = Vec::new();
-            for s in &signals {
-                let key = SignalKey::new(id, &s.name);
-                let targets: Vec<String> =
-                    ctl.table.targets_of(&key).map(|t| t.to_string()).collect();
-                rows.push((s.clone(), targets));
+            if monitor.rows.is_empty() {
+                if monitor.in_scope > 0 {
+                    nothing_matches(ui, ctl);
+                }
+                return;
             }
-            let _ = project;
+            let several = ctl.filter.lists_several();
             egui::ScrollArea::vertical()
                 .max_height(150.0)
                 .id_salt(("controller_signal_scroll", id))
                 .show(ui, |ui| {
-                    for (s, targets) in rows {
+                    for row in &monitor.rows {
                         ui.horizontal(|ui| {
                             let (rect, _) = ui
                                 .allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
-                            let color = if s.is_high() {
+                            let color = if row.is_active() {
                                 palette.success
                             } else {
                                 palette.border_control
                             };
                             ui.painter().circle_filled(rect.center(), 4.5, color);
-                            ui.label(&s.name);
-                            if s.kind == SignalKind::Analog {
-                                ui.weak(format!("{:.2}", s.level));
+                            if several {
+                                ui.weak(&row.instance_label);
                             }
-                            if targets.is_empty() {
+                            ui.label(&row.key.signal);
+                            if row.kind == SignalKind::Analog {
+                                ui.weak(format!("{:.2}", row.level));
+                            }
+                            if row.targets.is_empty() {
                                 ui.weak("not bound");
                             } else {
-                                ui.weak(format!("→ {}", targets.join(", ")));
+                                ui.weak(format!("→ {}", row.targets.join(", ")));
                             }
                         });
                     }
@@ -935,11 +1008,11 @@ fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project
                     }
                 });
             }
-            let signals: Vec<String> = ctl
-                .set
-                .instance(id)
-                .map(|i| i.controller.profile().signals.iter().map(|s| s.name.clone()).collect())
-                .unwrap_or_default();
+            let monitor = novo_controller::monitor(&ctl.set, &ctl.table, Some(id), &ctl.filter);
+            let several = ctl.filter.lists_several();
+            if monitor.rows.is_empty() && monitor.in_scope > 0 {
+                nothing_matches(ui, ctl);
+            }
             let pins = receiver_outputs(project);
             let hands = hand_devices(project);
             let modules = ctl.catalog(project).modules.clone();
@@ -948,8 +1021,9 @@ fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project
                 .max_height(180.0)
                 .id_salt(("controller_bind_scroll", id))
                 .show(ui, |ui| {
-                    for name in &signals {
-                        let key = SignalKey::new(id, name);
+                    for row in &monitor.rows {
+                        let key = row.key.clone();
+                        let name = &row.key.signal;
                         let current: Option<(Target, bool)> = ctl
                             .table
                             .bindings
@@ -957,6 +1031,9 @@ fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project
                             .find(|b| b.key == key)
                             .map(|b| (b.target.clone(), b.invert));
                         ui.horizontal(|ui| {
+                            if several {
+                                ui.weak(&row.instance_label);
+                            }
                             ui.label(name);
                             let text = current
                                 .as_ref()
@@ -971,7 +1048,7 @@ fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project
                                 Some(_) => palette.text_primary,
                                 None => palette.text_tertiary,
                             };
-                            egui::ComboBox::from_id_salt(("controller_target", id, name))
+                            egui::ComboBox::from_id_salt(("controller_target", &key.controller, name))
                                 .selected_text(egui::RichText::new(text).color(color))
                                 .width(120.0)
                                 .show_ui(ui, |ui| {
@@ -1182,4 +1259,122 @@ fn plc_row(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project: &Proj
         text.clear();
     }
     ui.data_mut(|d| d.insert_temp(state_id, (signal, text)));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use novo_controller::{Action, Scope};
+
+    const PROFILE: &str = r#"
+[controller]
+id = "pendant"
+name = "Pendant"
+kind = "pendant"
+
+[[control]]
+id = "start"
+kind = "latch"
+[[control]]
+id = "hoist"
+kind = "rocker2"
+positions = ["off", "up1", "up2", "down1", "down2"]
+
+[[signal]]
+name = "UP_SLOW"
+control = "hoist"
+group = "up"
+step = 1
+ungated = true
+[[signal]]
+name = "DOWN_SLOW"
+control = "hoist"
+group = "down"
+step = 1
+ungated = true
+"#;
+
+    /// Two instances of one profile; the second is selected.
+    fn two() -> ControllerLive {
+        let profile = Profile::load(PROFILE).expect("profile loads");
+        let mut ctl = ControllerLive::default();
+        ctl.add_instance(&profile).expect("first");
+        ctl.add_instance(&profile).expect("second");
+        ctl
+    }
+
+    /// One frame of the card; returns every text it painted.
+    fn card_text(ctl: &mut ControllerLive) -> String {
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(400.0, 1200.0),
+            )),
+            ..Default::default()
+        };
+        let project = Project::default();
+        let mut actions = Vec::new();
+        let mut out = ctx.run_ui(input, |ui| draw_card(ui, ctl, &project, &mut actions));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::epaint::Shape::Text(t) => Some(t.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn the_monitor_follows_the_filter_and_remembers_it() {
+        let mut ctl = two();
+        assert_eq!(ctl.selected.as_deref(), Some("pendant-2"));
+        let text = card_text(&mut ctl);
+        assert!(text.contains("Signals (0 of 2 high)"), "{text}");
+        assert!(text.contains("This controller"), "{text}");
+
+        ctl.filter.text = "up".into();
+        let text = card_text(&mut ctl);
+        assert!(text.contains("Signals (1 of 2 shown, 0 high)"), "{text}");
+
+        ctl.filter.text = "zzz".into();
+        let text = card_text(&mut ctl);
+        assert!(text.contains("No signal matches the filter."), "{text}");
+
+        // All controllers: four signals, and each line names its controller.
+        ctl.filter = novo_controller::SignalFilter {
+            scope: Scope::All,
+            ..Default::default()
+        };
+        let text = card_text(&mut ctl);
+        assert!(text.contains("Signals (0 of 4 high)"), "{text}");
+        assert!(text.contains("All controllers"), "{text}");
+
+        // Only the active ones: close the latch and hold the rocker of the first instance.
+        ctl.act(
+            "pendant",
+            Action::Press {
+                control: "start".into(),
+            },
+        );
+        ctl.act(
+            "pendant",
+            Action::SetPosition {
+                control: "hoist".into(),
+                position: "up1".into(),
+            },
+        );
+        ctl.filter.only_active = true;
+        let text = card_text(&mut ctl);
+        assert!(text.contains("Signals (1 of 4 shown, 1 high)"), "{text}");
+
+        // Removing the instance a filter names puts the scope back to the selected one.
+        ctl.filter.scope = Scope::Instance("pendant".into());
+        ctl.remove_instance("pendant");
+        card_text(&mut ctl);
+        assert_eq!(ctl.filter.scope, Scope::Selected);
+        assert!(ctl.filter.only_active, "the rest of the filter stays");
+    }
 }

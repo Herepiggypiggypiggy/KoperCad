@@ -11,7 +11,7 @@ text add-ons
 wait 8
 key Enter
 wait 10
-answer_dialog target/addons/controllers-0.1.0.kcaddon
+answer_dialog target/addons/controllers-0.2.0.kcaddon
 click_text "Install from file..."
 wait 10
 click_text "I trust this file"
@@ -51,7 +51,7 @@ text add-ons
 wait 8
 key Enter
 wait 10
-answer_dialog target/addons/controllers-0.1.0.kcaddon
+answer_dialog target/addons/controllers-0.2.0.kcaddon
 click_text "Install from file..."
 wait 10
 click_text "I trust this file"

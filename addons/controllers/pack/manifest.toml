@@ -6,11 +6,11 @@
 [addon]
 id = "controllers"
 name = "Controllers"
-version = "0.1.0"
+version = "0.2.0"
 publisher = "KoperVonk"
 description = "Virtual operator controllers: a generic radio with rockers, E-stop and main/start, simulated by a sandboxed engine."
 requires_app = ">=0.1.0"
-api_version = 1
+api_version = 2
 license = "MIT OR Apache-2.0"
 permissions = ["menu", "floating-panel"]
 

@@ -140,6 +140,10 @@ pub(crate) struct ControllerLive {
     holds: BTreeMap<(String, String), Hold>,
     /// The last thing a control refused, in words (an interlock, an E-stop that needs a reset).
     pub(super) refused: Option<String>,
+    /// What the signal monitor and the binding table list: instance, search words, only active,
+    /// only unbound. Kept for the session (it is not part of the project), so closing and
+    /// opening the card, or opening another project, leaves the person's view as it was.
+    pub(super) filter: novo_controller::SignalFilter,
     /// The gamepad: device, maps, mappers, monitor (lane C5, see `controller_pad`).
     pub(super) pad: super::controller_pad::PadHost,
 }

@@ -15,6 +15,11 @@ as on the crane. It simulates wiring and logic only: no radio protocol, no recei
   link, power and battery switches, the signal list with the receiver pin each one is bound to, the binding table
   and the checks. **Keyboard** turns the keyboard into the radio (keys are listed next to each control); it is off
   until asked so the canvas keys stay free.
+- **Signal filter.** Above the signals and the binding table: a controller picker ("This controller", "All controllers" or
+  one by name), a search box (all words must occur in the controller, the signal or its target), **Active** (only signals
+  that are high) and **Unbound** (only signals that drive nothing yet), and Clear. With "All controllers" each line names
+  its controller, so you can bind or check every instance from one list. The filter is kept while the program runs and
+  is not saved in the project. The rules live in `novo_controller::monitor` (tested without a window).
 - The fixture is `qa/fixtures/radio-hoist.novo` (a generic radio, a receiver, two reversing and two speed
   contactors, a two-speed motor). QA scenarios `1581` (1366x768) and `1581b` (1920x1080) drive it; `1582` opens it from the menu and the command field; `1583` runs it together with Simulate > Hoist run (the motor carries a 100 kg hook load, so the radio lifts the hook through the drawn circuit).
 

@@ -7,6 +7,7 @@ mod addons;
 mod addons_look;
 #[cfg(test)]
 mod addons_look_tests;
+mod addons_widgets;
 mod app_menu;
 #[cfg(test)]
 mod app_menu_tests;

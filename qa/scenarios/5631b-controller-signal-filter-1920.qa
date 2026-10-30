@@ -1,0 +1,28 @@
+@title Controller card: filter the signals by text, active and unbound (1920)
+@area Live
+@sizes 1920x1080
+# Lane C3. The 1920x1080 twin of 5631: the filter bar above the signal list, Unbound, Clear, Active.
+open qa/fixtures/radio-hoist.novo
+wait 20
+key shift+l
+wait 20
+click_text "Controller…"
+wait 20
+scroll 1700 500 -900
+wait 10
+shot filter-bar
+expect "This controller"
+expect "Signals (1 of 15 high)"
+click_text "Unbound" Checkbox
+wait 10
+shot only-unbound
+expect "Signals (9 of 15 shown, 0 high)"
+check_layout
+click_text "Clear"
+wait 10
+expect "Signals (1 of 15 high)"
+click_text "Active" Checkbox
+wait 10
+shot only-active
+expect "Signals (1 of 15 shown, 1 high)"
+check_layout

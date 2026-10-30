@@ -1,0 +1,31 @@
+@title Controller card: two controllers, the filter lists all of them
+@area Live
+@sizes 1366x768
+# Lane C3. Add a pendant next to the radio; the controller picker of the filter bar lists both and
+# "All controllers" shows the signals of both (15 + 13), each line naming its controller.
+open qa/fixtures/radio-hoist.novo
+wait 20
+key shift+l
+wait 20
+click_text "Controller…"
+wait 20
+click_text "+ Add"
+wait 10
+shot add-menu
+click_text "Wired pendant, 3 motions, 2-step"
+wait 20
+scroll 1100 500 -1500
+wait 10
+shot two-controllers
+expect "This controller"
+click_text "This controller"
+wait 10
+shot scope-menu
+expect "Radio, 3 motions, 2-step"
+expect "Wired pendant, 3 motions, 2-step"
+click_text "All controllers"
+wait 10
+shot all-controllers
+expect "All controllers"
+expect "of 28 high)"
+check_layout

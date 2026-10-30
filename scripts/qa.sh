@@ -64,7 +64,7 @@ fi
 # Scenarios 5620 and 1580 install the Controllers add-on from target/addons. Without that file the
 # file picker answers nothing and the run dies at the "I trust this file" step, which looks like a
 # trust-flow regression. Build the package when it is missing or older than its sources.
-pkg=target/addons/controllers-0.1.0.kcaddon
+pkg=target/addons/controllers-0.2.0.kcaddon
 case ${1:-run} in list|report) ;; *)
   if [ ! -f "$pkg" ] || [ -n "$(find addons/controllers crates/novo-controller/src -type f -newer "$pkg" -print -quit 2>/dev/null)" ]; then
     echo "qa.sh: building $pkg for the add-on scenarios" >&2

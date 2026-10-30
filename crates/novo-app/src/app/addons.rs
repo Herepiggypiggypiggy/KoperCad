@@ -54,6 +54,8 @@ pub(super) struct AddonsState {
     pub(super) stopped: BTreeMap<String, String>,
     /// What engines last said about lamps: add-on id and lamp id to its state.
     pub(super) lamps: BTreeMap<(String, String), (Option<Role>, Option<bool>)>,
+    /// What engines last said about bars (meters): add-on id and bar id to its value.
+    pub(super) bars: BTreeMap<(String, String), f64>,
 }
 
 /// What a request to an engine was for: where its answer goes when it arrives.
@@ -294,10 +296,13 @@ impl NovoApp {
 
     /// Applies what an engine answered: lamp states and a notice.
     pub(super) fn apply_engine_reply(&mut self, id: &str, reply: &Value) {
-        if let Some(lamps) = reply.get("lamps").and_then(Value::as_object) {
-            // Only lamps one of the add-on's own panels declares are kept, so an engine cannot
-            // grow the table with ids nothing shows.
+        let lamps = reply.get("lamps").and_then(Value::as_object);
+        let bars = reply.get("bars").and_then(Value::as_object);
+        if lamps.is_some() || bars.is_some() {
+            // Only lamps and bars one of the add-on's own panels declares are kept, so an engine
+            // cannot grow the table with ids nothing shows.
             let mut declared: Vec<String> = Vec::new();
+            let mut declared_bars: Vec<String> = Vec::new();
             for panel in self
                 .wb
                 .addons
@@ -315,9 +320,15 @@ impl NovoApp {
                     .and_then(|b| PanelLayout::parse(&b).map_err(|e| e.to_string()))
                 {
                     declared.extend(layout.ids().into_iter().map(str::to_owned));
+                    declared_bars.extend(layout.bar_ids().into_iter().map(str::to_owned));
                 }
             }
-            for (lamp, v) in lamps.iter().filter(|(l, _)| declared.contains(l)).take(200) {
+            for (lamp, v) in lamps
+                .into_iter()
+                .flatten()
+                .filter(|(l, _)| declared.contains(l))
+                .take(200)
+            {
                 let state = v
                     .get("state")
                     .and_then(|s| serde_json::from_value::<Role>(s.clone()).ok());
@@ -326,6 +337,20 @@ impl NovoApp {
                     .addons
                     .lamps
                     .insert((id.to_owned(), lamp.clone()), (state, lit));
+            }
+            for (bar, v) in bars
+                .into_iter()
+                .flatten()
+                .filter(|(b, _)| declared_bars.contains(b))
+                .take(200)
+            {
+                // A bar's value is a plain number; anything else (or not finite) is ignored.
+                if let Some(value) = v.as_f64().filter(|x| x.is_finite()) {
+                    self.wb
+                        .addons
+                        .bars
+                        .insert((id.to_owned(), bar.clone()), value);
+                }
             }
         }
         if let Some(text) = reply.get("notice").and_then(Value::as_str) {
@@ -613,6 +638,7 @@ impl NovoApp {
         // Any change in the manager is a fresh start for engines that stopped.
         self.wb.addons.stopped.clear();
         self.wb.addons.lamps.clear();
+        self.wb.addons.bars.clear();
         self.refresh_addons();
         if let Some(m) = &mut self.wb.addons.manager {
             m.prompt = None;
@@ -774,6 +800,15 @@ impl NovoApp {
                     .filter(|((id, _), _)| id == &panel.addon_id)
                     .map(|((_, lamp), v)| (lamp.clone(), *v))
                     .collect(),
+                bars: self
+                    .wb
+                    .addons
+                    .bars
+                    .iter()
+                    .filter(|((id, _), _)| id == &panel.addon_id)
+                    .map(|((_, bar), v)| (bar.clone(), *v))
+                    .collect(),
+                panel: panel.id.clone(),
             };
             let mut clicked: Vec<String> = Vec::new();
             super::panel::dialog(ctx, title, [320.0, 0.0])
@@ -815,9 +850,12 @@ impl NovoApp {
 
 /// What a panel needs to know about its add-on to draw: whether an engine can answer the
 /// buttons, and the lamp states the engine last set.
-struct PanelEnv {
-    has_engine: bool,
-    lamps: BTreeMap<String, (Option<Role>, Option<bool>)>,
+pub(super) struct PanelEnv {
+    pub(super) has_engine: bool,
+    pub(super) lamps: BTreeMap<String, (Option<Role>, Option<bool>)>,
+    pub(super) bars: BTreeMap<String, f64>,
+    /// The panel's registry id, to keep what a widget remembers (a tab, a selector) apart.
+    pub(super) panel: String,
 }
 
 // ----------------------------------------------------------------------
@@ -1411,7 +1449,7 @@ fn install_prompt_ui(ui: &mut egui::Ui, prompt: &mut Prompt, cancel: &mut bool, 
 }
 
 /// One widget of a declared panel, in the program's own look.
-fn widget_ui(ui: &mut egui::Ui, w: &Widget, env: &PanelEnv, clicked: &mut Vec<String>) {
+pub(super) fn widget_ui(ui: &mut egui::Ui, w: &Widget, env: &PanelEnv, clicked: &mut Vec<String>) {
     let p = crate::theme::ui_palette();
     match w {
         Widget::Heading { text } => {
@@ -1469,5 +1507,7 @@ fn widget_ui(ui: &mut egui::Ui, w: &Widget, env: &PanelEnv, clicked: &mut Vec<St
                 }
             });
         }
+        // Add-on API 2: drawn in `addons_widgets.rs` with the Controller card's own painters.
+        other => super::addons_widgets::new_widget_ui(ui, other, env, clicked),
     }
 }

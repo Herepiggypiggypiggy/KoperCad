@@ -48,9 +48,14 @@ use serde::{Deserialize, Serialize};
 use crate::error::{AddonError, Result};
 use crate::version::{Requirement, Version};
 
-/// The add-on API generation this program speaks. A package for another one is refused with a
-/// message that says so.
-pub const API_VERSION: u32 = 1;
+/// The newest add-on API generation this program speaks. A package for a newer one is refused
+/// with a message that says so; an older program therefore never shows half of a newer panel.
+///
+/// API 2 adds the panel widgets rocker, joystick, selector, keymap, table, tabs and bar
+/// (`layout.rs`). Everything of API 1 still works, so API 1 packages are accepted.
+pub const API_VERSION: u32 = 2;
+/// The oldest add-on API generation this program still accepts.
+pub const MIN_API_VERSION: u32 = 1;
 /// The host API generation of the engine (the host is lane C0b-2).
 pub const HOST_API_VERSION: u32 = 1;
 /// A menu row, rail row or palette result is at most this long (visual redesign, 5.2).
@@ -293,10 +298,11 @@ impl Manifest {
         let header: Header =
             toml::from_str(text).map_err(|e| AddonError::Manifest(e.to_string()))?;
         match header.addon.api_version {
-            Some(v) if v != API_VERSION => {
+            Some(v) if !(MIN_API_VERSION..=API_VERSION).contains(&v) => {
                 return Err(AddonError::Incompatible(format!(
-                    "this add-on is built for add-on API {v}; this KoperCAD speaks API {API_VERSION}. \
-                     Install a matching version of the add-on or update KoperCAD"
+                    "this add-on is built for add-on API {v}; this KoperCAD speaks API \
+                     {MIN_API_VERSION} to {API_VERSION}. Install a matching version of the \
+                     add-on or update KoperCAD"
                 )));
             }
             None => return Err(AddonError::Manifest("addon.api_version is missing".into())),
@@ -735,13 +741,13 @@ opens = "main"
     #[test]
     fn another_api_generation_is_named_before_anything_else() {
         let text = good()
-            .replace("api_version = 1", "api_version = 2")
+            .replace("api_version = 1", "api_version = 3")
             .replace(
                 "[files]",
                 "[files]\nnew_field = 3\n[brand_new_table]\nx = 1\n",
             );
         match Manifest::parse(text.as_bytes()) {
-            Err(AddonError::Incompatible(m)) => assert!(m.contains("API 2"), "{m}"),
+            Err(AddonError::Incompatible(m)) => assert!(m.contains("API 3"), "{m}"),
             other => panic!("{other:?}"),
         }
     }

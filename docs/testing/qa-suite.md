@@ -238,7 +238,7 @@ Not verified on Windows yet.
 
 ## Add-on scenarios need the Controllers package
 
-Scenarios 5620 and 1580 install `target/addons/controllers-0.1.0.kcaddon`. `scripts/qa.sh` builds it when it
+Scenarios 5620 and 1580 install `target/addons/controllers-0.2.0.kcaddon`. `scripts/qa.sh` builds it when it
 is missing or older than `addons/controllers` and `crates/novo-controller` (needs
 `rustup target add wasm32-unknown-unknown`). Without the file the install dialog never opens, and the run
 stops at the "I trust this file" step although the trust flow is fine.
