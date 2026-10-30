@@ -517,8 +517,8 @@ impl NovoApp {
                 &Engines {
                     stopped: &stopped,
                     load: &load,
+                    kept: &kept,
                 },
-                &kept,
                 &mut actions,
             );
         });
@@ -917,6 +917,8 @@ pub(super) fn kept_in(project: &novo_core::Project, set: &AddonSet) -> Vec<Kept>
 struct Engines<'a> {
     stopped: &'a BTreeMap<String, String>,
     load: &'a EngineLoad,
+    /// What the open project stores for add-ons.
+    kept: &'a [Kept],
 }
 
 /// Id of the controller add-on (`addons/controllers`): the controller import wizard needs it.
@@ -933,9 +935,9 @@ fn manager_ui(
     root: Option<&std::path::Path>,
     can_store: bool,
     engines: &Engines,
-    kept: &[Kept],
     actions: &mut Vec<Act>,
 ) {
+    let kept = engines.kept;
     let p = crate::theme::ui_palette();
     ui.horizontal(|ui| {
         ui.label(
