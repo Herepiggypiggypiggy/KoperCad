@@ -110,7 +110,13 @@ pub fn ids_from_view_url(url: &str) -> Option<(String, String)> {
     let mut id = None;
     let mut logic = None;
     for pair in query.split('&') {
+<<<<<<< HEAD
         let (k, v) = pair.split_once('=')?;
+=======
+        let Some((k, v)) = pair.split_once('=') else {
+            continue;
+        };
+>>>>>>> origin/main
         match k.to_ascii_lowercase().as_str() {
             "cadpartuniqueid" => id = Some(percent_decode(v)),
             "logicname" => logic = Some(percent_decode(v)),
@@ -141,6 +147,28 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+<<<<<<< HEAD
+=======
+/// https only; plain http is allowed for loopback (the mock gateway in
+/// tests), so a model cannot be swapped in transit.
+pub fn is_safe_url(url: &str) -> bool {
+    if url.starts_with("https://") {
+        return true;
+    }
+    let Some(rest) = url.strip_prefix("http://") else {
+        return false;
+    };
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = host.rsplit_once('@').map_or(host, |(_, h)| h);
+    let name = if host.starts_with('[') {
+        host.split(']').next().map_or(host, |h| &h[1..])
+    } else {
+        host.split(':').next().unwrap_or(host)
+    };
+    matches!(name, "localhost" | "127.0.0.1" | "::1")
+}
+
+>>>>>>> origin/main
 pub fn url_encode(s: &str) -> String {
     let mut out = String::new();
     for b in s.bytes() {
@@ -272,7 +300,11 @@ impl<T: Transport> Client<T> {
         let views: Views = parse_json(&self.call(Method::Get, &path, None, MAX_JSON)?)?;
         let empty = views.list.as_ref().is_none_or(Vec::is_empty);
         if empty {
+<<<<<<< HEAD
             return Err(TpError::NotFound);
+=======
+            return Err(TpError::NoModel);
+>>>>>>> origin/main
         }
         Ok(views)
     }
@@ -323,8 +355,15 @@ impl<T: Transport> Client<T> {
         // The documented answer is a JSON string; accept a bare URL too.
         let text = String::from_utf8_lossy(&resp.body);
         let url = serde_json::from_str::<String>(&text).unwrap_or_else(|_| text.trim().to_string());
+<<<<<<< HEAD
         if !(url.starts_with("https://") || url.starts_with("http://")) {
             return Err(TpError::BadResponse("the file address is not a URL".into()));
+=======
+        if !is_safe_url(&url) {
+            return Err(TpError::BadResponse(
+                "the file address is not an https URL".into(),
+            ));
+>>>>>>> origin/main
         }
         Ok(url)
     }
@@ -332,6 +371,14 @@ impl<T: Transport> Client<T> {
     /// Downloads a file URL from `cad_file_url`. Those URLs carry their own
     /// authorisation, so the bearer token is not sent.
     pub fn download(&mut self, url: &str) -> Result<Vec<u8>, TpError> {
+<<<<<<< HEAD
+=======
+        if !is_safe_url(url) {
+            return Err(TpError::BadResponse(
+                "the file address is not an https URL".into(),
+            ));
+        }
+>>>>>>> origin/main
         let req = Request {
             method: Method::Get,
             url: url.to_string(),
@@ -366,3 +413,29 @@ fn check_status(r: Response) -> Result<Response, TpError> {
 fn parse_json<V: for<'de> Deserialize<'de>>(r: &Response) -> Result<V, TpError> {
     serde_json::from_slice(&r.body).map_err(|e| TpError::BadResponse(e.to_string()))
 }
+<<<<<<< HEAD
+=======
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_https_or_loopback_http_is_safe() {
+        assert!(is_safe_url("https://files.traceparts.com/a.stp"));
+        assert!(is_safe_url("http://127.0.0.1:8080/a"));
+        assert!(is_safe_url("http://localhost/a"));
+        assert!(is_safe_url("http://[::1]:9/a"));
+        assert!(!is_safe_url("http://files.traceparts.com/a.stp"));
+        assert!(!is_safe_url("http://127.0.0.1@evil.example/a"));
+        assert!(!is_safe_url("ftp://x/a"));
+        assert!(!is_safe_url("file.stp"));
+    }
+
+    #[test]
+    fn ids_survive_a_pair_without_equals() {
+        let got = ids_from_view_url("https://v/?flag&cadPartUniqueId=A%2F1&logicName=c+1");
+        assert_eq!(got, Some(("A/1".into(), "c 1".into())));
+    }
+}
+>>>>>>> origin/main

@@ -1,0 +1,58 @@
+@title At 1920 the Travel drive rows of the motor sheet and the Hoist in 3D status line show the brake, the wind and the grip
+@area Simulate
+@sizes 1920x1080
+# Pictures of the property rows (wind, gust, grip, brake) of the travel motor and of the per-axis status line in Hoist in 3D.
+# 1791 is the 1920x1080 walk-through, 1791b the same at 1920x1080 (the motor and the Live card buttons sit elsewhere there).
+open qa/fixtures/travel-brake-wind.novo
+wait 20
+click 644 311
+wait 20
+shot motor-selected
+scroll 1720 400 -450
+wait 10
+shot rows-wind-and-gust
+scroll 1720 400 -300
+wait 10
+shot rows-grip-and-brake
+expect "Travel brake torque"
+expect "Wheel on rail friction"
+expect "Gust: extra wind"
+key Escape
+wait 10
+# The status bar names the selected motor, which click_text would find first: deselect on an empty spot.
+click 900 800
+wait 10
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 30
+click_text "none"
+wait 10
+click_text "=A1+FLD-M1"
+wait 10
+mouse_down 371 341
+wait 400
+expect "pushes with"
+expect "last stop"
+shot status-line-running
+mouse_up 371 341
+wait 20
+check_layout

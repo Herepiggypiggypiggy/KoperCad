@@ -8,7 +8,10 @@
 
 use eframe::egui;
 use novo_controller::profile::split_group_step;
-use novo_controller::{ControlDef, ControlKind, Profile, Severity, SignalKey, SignalKind, Target};
+use novo_controller::{
+    ControlDef, ControlKind, MachinePath, ModuleEntry, PortKind, Profile, Severity, SignalKey,
+    SignalKind, Target,
+};
 use novo_core::Project;
 
 use super::controller_live::{
@@ -21,6 +24,9 @@ use super::{Level, NovoApp};
 enum CardAction {
     OpenWizard,
     Close,
+    Pad(super::controller_pad::PadAction),
+    /// Where the Gamepad section is drawn, for the lesson anchor.
+    PadAnchor(egui::Rect),
 }
 
 /// The keys of the keyboard map (see [`key_map`]).
@@ -231,6 +237,7 @@ impl NovoApp {
     /// The Controller card, drawn over the live view while it is open.
     pub(super) fn controller_card(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         if !self.wb.live.on || !(self.wb.live.ctl.open || !self.wb.live.ctl.popped.is_empty()) {
+            self.wb.live.ctl.pad_card_closed();
             return;
         }
         self.controller_keys(ctx);
@@ -240,6 +247,9 @@ impl NovoApp {
         let project = doc.project();
         let ctl = &mut self.wb.live.ctl;
         ctl.sync(project);
+        // The pad has the focus rules of a hand: a window in the background lets go.
+        let focused = ctx.input(|i| i.focused) || crate::control::requested_port().is_some();
+        ctl.pad_frame(focused);
         ctl.apply_holds();
         let mut actions = Vec::new();
         let card = if ctl.open {
@@ -267,10 +277,28 @@ impl NovoApp {
         if ctx.input(|i| i.pointer.any_down()) || self.wb.live.ctl.wants_frames() {
             ctx.request_repaint();
         }
+        {
+            let ctl = &mut self.wb.live.ctl;
+            super::controller_pad::editor(ctx, ctl);
+            super::controller_pad::wizard(ctx, ctl);
+            ctl.pad_commit(ctx.input(|i| i.pointer.any_down()));
+            if std::mem::take(&mut ctl.pad.seen) || ctl.pad.wants_frames() {
+                ctx.request_repaint_after(std::time::Duration::from_millis(33));
+            }
+        }
         for action in actions {
             match action {
                 CardAction::OpenWizard => self.open_controller_import(),
                 CardAction::Close => self.wb.live.ctl.open = false,
+                CardAction::Pad(super::controller_pad::PadAction::OpenEditor) => {
+                    self.wb.live.ctl.pad.editor = true;
+                }
+                CardAction::Pad(super::controller_pad::PadAction::OpenWizard) => {
+                    self.wb.live.ctl.pad_open_wizard();
+                }
+                CardAction::PadAnchor(rect) => {
+                    self.anchor("live.controller.gamepad", rect, "Gamepad section");
+                }
             }
         }
         self.controllers_save();
@@ -406,6 +434,14 @@ fn draw_card(
             super::controller_widgets::key_map_table(ui, &profile, &map);
         });
     if !popped {
+        let pad = egui::CollapsingHeader::new("Gamepad")
+            .id_salt(("controller_pad", &id))
+            .show(ui, |ui| {
+                let mut pad_actions = Vec::new();
+                super::controller_pad::section(ui, ctl, &id, &profile, &mut pad_actions);
+                actions.extend(pad_actions.into_iter().map(CardAction::Pad));
+            });
+        actions.push(CardAction::PadAnchor(pad.header_response.rect));
         effects_row(ui, ctl, &id);
     }
     ui.weak("Scroll for the signals, bindings and checks");
@@ -413,6 +449,7 @@ fn draw_card(
     signals_block(ui, ctl, &id, project);
     ui.separator();
     bindings_block(ui, ctl, &id, project);
+    machine_block(ui, ctl, project);
     ownership_lines(ui, ctl, &id);
     let findings = ctl.findings(project);
     if !findings.is_empty() {
@@ -905,6 +942,7 @@ fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project
                 .unwrap_or_default();
             let pins = receiver_outputs(project);
             let hands = hand_devices(project);
+            let modules = ctl.catalog(project).modules.clone();
             let mut changes: Vec<(SignalKey, Option<(Target, bool)>)> = Vec::new();
             egui::ScrollArea::vertical()
                 .max_height(180.0)
@@ -963,6 +1001,7 @@ fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project
                                             chosen = Some((Target::Symbol(h.clone()), true));
                                         }
                                     }
+                                    machine_picker(ui, &modules, &mut chosen);
                                 });
                             if let Some(Resolved::Broken(why)) = &state {
                                 ui.colored_label(palette.error, "!").on_hover_text(why);
@@ -982,7 +1021,103 @@ fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project
                     ctl.bind(key, target, invert);
                 }
             }
-            plc_row(ui, ctl, id);
+            plc_row(ui, ctl, id, project);
+        });
+}
+
+/// The machine part of the target picker: one fold per module with its ports. A chain port also
+/// comes inverted, for a signal that is high while the E-stop is pressed.
+fn machine_picker(ui: &mut egui::Ui, modules: &[ModuleEntry], chosen: &mut Option<(Target, bool)>) {
+    if modules.is_empty() {
+        return;
+    }
+    ui.separator();
+    ui.weak("Machine ports (drive Simulate > Hoist run or Drive run)");
+    for m in modules {
+        ui.collapsing(&m.label, |ui| {
+            for p in &m.ports {
+                let Ok(path) = MachinePath::new(&m.path, &p.name) else {
+                    continue;
+                };
+                let target = Target::machine(&path);
+                let kind = match p.kind {
+                    PortKind::Command => "",
+                    PortKind::Chain => " (chain: low stops)",
+                    PortKind::Enable => " (hold to move)",
+                };
+                if ui
+                    .selectable_label(false, format!("{}{kind}", p.label))
+                    .on_hover_text(path.to_string())
+                    .clicked()
+                {
+                    *chosen = Some((target.clone(), false));
+                }
+                if p.kind != PortKind::Command
+                    && ui
+                        .selectable_label(false, format!("{} (inverted)", p.label))
+                        .on_hover_text("For a signal that is high while the stop is pressed")
+                        .clicked()
+                {
+                    *chosen = Some((target, true));
+                }
+            }
+        });
+    }
+}
+
+/// Which module each controller signal drives, and what the machine ports are good for.
+fn machine_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, project: &Project) {
+    let drivers = ctl.machine_drivers();
+    let palette = crate::theme::ui_palette();
+    egui::CollapsingHeader::new("Machine modules")
+        .id_salt("controller_machine_modules")
+        .default_open(!drivers.is_empty())
+        .show(ui, |ui| {
+            if drivers.is_empty() {
+                ui.add(
+                    egui::Label::new(
+                        "No signal is bound to a machine port. Pick one in the binding list \
+                         (hoist up, down, fast; travel forward, reverse, fast; permit for an \
+                         E-stop chain; dead-man).",
+                    )
+                    .wrap(),
+                );
+            }
+            let modules = ctl.catalog(project).modules.clone();
+            for (id, list) in &drivers {
+                let path = modules
+                    .iter()
+                    .find(|m| m.path.rsplit('/').next() == Some(id.as_str()))
+                    .map_or(id.clone(), |m| m.path.clone());
+                ui.label(egui::RichText::new(path).strong());
+                for (port, key, high) in list {
+                    ui.horizontal(|ui| {
+                        let (rect, _) =
+                            ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+                        let color = if *high {
+                            palette.success
+                        } else {
+                            palette.border_control
+                        };
+                        ui.painter().circle_filled(rect.center(), 4.5, color);
+                        ui.label(format!("{key} \u{2192} {}", port.name()));
+                    });
+                }
+            }
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(
+                        "The machine reads these ports while Simulate > Hoist run or Drive run \
+                         is running with Live on. A bound port replaces the drawn input for \
+                         that function, so a wiring fault on it is not simulated; bind a \
+                         receiver pin instead to test the wiring. This simulates wiring and \
+                         logic. It is not a safety function and gives no PL, SIL or \
+                         compliance claim.",
+                    )
+                    .weak(),
+                )
+                .wrap(),
+            );
         });
 }
 
@@ -991,12 +1126,12 @@ fn short(target: &Target) -> String {
         Target::Pin(p) => p.clone(),
         Target::Symbol(s) => format!("{s} (hand)"),
         Target::PlcAddress(a) => a.clone(),
-        Target::ModulePath(m) => m.clone(),
+        Target::ModulePath(m) => format!("{m} (machine)"),
     }
 }
 
 /// A line to bind a signal to a PLC input bit or a module path by typing it.
-fn plc_row(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str) {
+fn plc_row(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project: &Project) {
     let signals: Vec<String> = ctl
         .set
         .instance(id)
@@ -1024,7 +1159,7 @@ fn plc_row(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str) {
             });
         ui.add(
             egui::TextEdit::singleline(&mut text)
-                .hint_text("%I0.1 or crane/hoist")
+                .hint_text("%I0.1 or hoist/=A-M1@up")
                 .desired_width(90.0),
         );
         bind = ui.small_button("Bind").clicked();
@@ -1037,7 +1172,11 @@ fn plc_row(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str) {
         let target = if t.starts_with('%') || novo_sim::program::Address::parse(t).is_some() {
             Target::PlcAddress(t.to_owned())
         } else {
-            Target::ModulePath(t.to_owned())
+            // A machine path is stored in the spelling of the machine model when it resolves.
+            MachinePath::parse(t)
+                .ok()
+                .and_then(|p| ctl.catalog(project).canonical(&p))
+                .map_or_else(|| Target::ModulePath(t.to_owned()), |p| Target::machine(&p))
         };
         ctl.bind(SignalKey::new(id, name), target, false);
         text.clear();

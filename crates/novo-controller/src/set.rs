@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::binding::{Binding, BindingTable, SignalKey};
 use crate::engine::{Applied, ControlError, Controller, State};
+use crate::gamepad::GamepadMap;
 use crate::profile::Profile;
 use crate::sequence::{Action, Recorder, Sequence, TimedAction};
 use crate::validate::Issue;
@@ -118,6 +119,13 @@ pub struct ProjectControllers {
         skip_serializing_if = "BTreeMap::is_empty"
     )]
     pub profiles: BTreeMap<String, String>,
+    /// Gamepad maps by instance id (lane C5). Absent in projects without a pad map.
+    #[serde(
+        default,
+        rename = "gamepad",
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub gamepads: BTreeMap<String, GamepadMap>,
 }
 
 impl ProjectControllers {
@@ -134,6 +142,7 @@ impl ProjectControllers {
             instances: set.to_records(),
             bindings: table.bindings.clone(),
             profiles,
+            gamepads: BTreeMap::new(),
         })
     }
 

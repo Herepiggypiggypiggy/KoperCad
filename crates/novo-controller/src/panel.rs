@@ -230,7 +230,7 @@ fn negative_name(name: &str) -> bool {
 
 /// The axis of a control: negative detents, rest, positive detents. The first direction is the
 /// positive one unless its name says it goes left, down or back.
-fn stick_axis(def: &ControlDef) -> StickAxis {
+pub fn stick_axis(def: &ControlDef) -> StickAxis {
     let mut dirs = direction_groups(def);
     if dirs.len() == 2 && negative_name(&dirs[0].name) && !negative_name(&dirs[1].name) {
         dirs.swap(0, 1);

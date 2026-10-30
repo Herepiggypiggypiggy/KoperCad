@@ -191,9 +191,15 @@ fn unknown_part_is_not_found_and_remembered() {
     let cell = Arc::new(Mutex::new(String::new()));
     let (base, log) = serve(gateway(cell, true));
     let (mut svc, _d) = service(&base);
+<<<<<<< HEAD
     assert_eq!(svc.fetch_step("NOPE1").unwrap_err(), TpError::NotFound);
     let calls = log.lock().unwrap().len();
     assert_eq!(svc.fetch_step("NOPE1").unwrap_err(), TpError::NotFound);
+=======
+    assert_eq!(svc.fetch_step("NOPE1").unwrap_err(), TpError::NoModel);
+    let calls = log.lock().unwrap().len();
+    assert_eq!(svc.fetch_step("NOPE1").unwrap_err(), TpError::NoModel);
+>>>>>>> origin/main
     assert_eq!(
         log.lock().unwrap().len(),
         calls,
@@ -310,3 +316,52 @@ fn a_garbled_answer_is_a_bad_response_not_a_panic() {
         TpError::BadResponse(_)
     ));
 }
+<<<<<<< HEAD
+=======
+
+#[test]
+fn a_bare_404_is_not_remembered_as_no_model() {
+    let (base, log) = serve(|_, target, _, _| {
+        if target.contains("RequestToken") {
+            json(serde_json::json!({"token": "T"}))
+        } else {
+            (404, vec![], b"wrong endpoint".to_vec())
+        }
+    });
+    let (mut svc, _d) = service(&base);
+    assert_eq!(svc.fetch_step("A1").unwrap_err(), TpError::NotFound);
+    let calls = log.lock().unwrap().len();
+    assert_eq!(svc.fetch_step("A1").unwrap_err(), TpError::NotFound);
+    assert!(
+        log.lock().unwrap().len() > calls,
+        "a 404 must be asked again"
+    );
+}
+
+#[test]
+fn plain_http_download_addresses_are_refused() {
+    let (base, _) = serve(|_, target, _, _| {
+        if target.contains("RequestToken") {
+            json(serde_json::json!({"token": "T"}))
+        } else {
+            json(serde_json::json!("http://files.example.com/a.stp"))
+        }
+    });
+    let mut c = client(&base);
+    let t = CadTarget {
+        cad_part_unique_id: "a".into(),
+        logic_name: "b".into(),
+        language: "EN".into(),
+        view: "3D".into(),
+        format_id: "step214".into(),
+    };
+    assert!(matches!(
+        c.cad_file_url(&t).unwrap_err(),
+        TpError::BadResponse(_)
+    ));
+    assert!(matches!(
+        c.download("http://files.example.com/a.stp").unwrap_err(),
+        TpError::BadResponse(_)
+    ));
+}
+>>>>>>> origin/main

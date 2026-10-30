@@ -14,6 +14,7 @@ pub mod hoist;
 pub mod hoist_drive;
 pub mod motor_starter;
 pub mod radio_hoist;
+pub mod radio_machine;
 pub mod stress;
 pub mod text_conflicts;
 pub mod text_stress;
@@ -28,4 +29,5 @@ pub use motor_starter::{
     MotorStarter, motor_starter, motor_starter_in, motor_starter_with_changes,
 };
 pub use radio_hoist::{RadioHoist, radio_hoist, radio_hoist_with_controller};
+pub use radio_machine::{RadioMachine, radio_machine, radio_machine_with_controller};
 pub use stress::stress_page;

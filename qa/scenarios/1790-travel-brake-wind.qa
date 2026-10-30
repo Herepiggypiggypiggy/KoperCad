@@ -1,0 +1,32 @@
+@title Drive run shows the travel brake, the wind and the stop distance of an axis
+@area Simulate
+@sizes 1366x768
+# The brake-and-wind fixture is the travel project with a 15 N m spring brake behind the drive's brake output and an 8 m/s wind on 30 m2 with a gust after 20 s.
+# 1790 runs at 1366x768 and 1790b is the same walk-through at 1920x1080 (the Hold to press buttons of the Live card sit at other coordinates there).
+open qa/fixtures/travel-brake-wind.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+shot drive-started-brake-closed
+expect "brake closed"
+# Step 2 (S2): the brake opens above the drive's brake frequency and the wind shows in the reading.
+mouse_down 75 343
+wait 400
+expect "brake open"
+expect "wind"
+shot running-in-wind
+mouse_up 75 343
+wait 450
+wait 450
+expect "last stop"
+expect "Stopped from"
+shot stopped-with-distance
+check_layout

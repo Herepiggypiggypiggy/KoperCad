@@ -19,16 +19,18 @@
 //! - a hand device (`-S1`): its poles go to the opposite of their rest state while the signal is
 //!   high, as when the button is held (an inverted binding gives the E-stop chain this way);
 //! - a PLC input (`%I0.1`): the bit is held for the running PLC program;
-//! - a machine module path: kept in the table, waits for the machine loop (lane L5b).
+//! - a machine port (`hoist/=A+B-M1@up`): the level goes to the machine loop of a running hoist or
+//!   drive run as a command (lane L5b, [`super::controller_machine`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use novo_controller::{
-    BindingProblem, BindingTable, ControllerSet, Profile, ProfileLibrary, ProjectControllers,
-    Severity, SignalKey, Target,
+    BindingProblem, BindingTable, ControllerSet, MachineCatalog, MachinePath, Profile,
+    ProfileLibrary, ProjectControllers, Severity, SignalKey, Target,
     import::{Options, Table, WordList, library, propose},
 };
 use novo_core::{Project, SymbolId, Value};
+use novo_machine::commands::{Commands, Port, PortClass};
 use novo_sim::PoleState;
 use novo_sim::pins::{PoleRef, force_pole, operate_poles, pole_of_pin, poles_of_device};
 
@@ -63,10 +65,20 @@ pub(super) enum Resolved {
     Pole(PoleRef),
     Hand(Vec<PoleRef>),
     Plc(String),
-    /// A module path of the machine model; held until the machine loop reads it.
-    Machine(String),
+    /// A port of a module of the machine model; the machine loop reads it.
+    Machine(MachineRef),
     /// Why this target reaches nothing, in plain words.
     Broken(String),
+}
+
+/// A machine port a target reaches.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct MachineRef {
+    /// The module instance: the device tag of its motor.
+    pub(super) module: String,
+    pub(super) port: Port,
+    /// `hoist/=A+B-M1@up`, the spelling the catalog gives.
+    pub(super) path: String,
 }
 
 /// One line in the binding checks: what is wrong and for which signal.
@@ -100,6 +112,10 @@ pub(crate) struct ControllerLive {
     library: Option<(Vec<ProfileEntry>, Vec<String>)>,
     resolved: Option<ResolvedTargets>,
     table_generation: u64,
+    /// The machine model of the drawing, for the revision it was built for.
+    catalog: Option<(u64, MachineCatalog)>,
+    /// The levels of the machine ports the bound signals call for now.
+    commands: Commands,
     /// Poles and PLC bits this module held last frame, to let go of the ones no longer bound.
     applied: BTreeSet<PoleRef>,
     plc_applied: BTreeSet<String>,
@@ -124,6 +140,8 @@ pub(crate) struct ControllerLive {
     holds: BTreeMap<(String, String), Hold>,
     /// The last thing a control refused, in words (an interlock, an E-stop that needs a reset).
     pub(super) refused: Option<String>,
+    /// The gamepad: device, maps, mappers, monitor (lane C5, see `controller_pad`).
+    pub(super) pad: super::controller_pad::PadHost,
 }
 
 /// What holds a spring control away from rest: the pointer and a key, each at a position.
@@ -131,6 +149,7 @@ pub(crate) struct ControllerLive {
 struct Hold {
     mouse: Option<String>,
     key: Option<String>,
+    pad: Option<String>,
 }
 
 /// Who is holding.
@@ -138,6 +157,8 @@ struct Hold {
 pub(super) enum HoldBy {
     Mouse,
     Key,
+    /// A gamepad or joystick (lane C5), through the map of the instance.
+    Pad,
 }
 
 /// Colours offered for instances; new instances take them in turn.
@@ -262,13 +283,16 @@ impl ControllerLive {
         if text.is_empty() {
             self.set = ControllerSet::new();
             self.table = BindingTable::new();
+            self.pad.set_maps(Default::default());
             self.release();
             return;
         }
         let library = self.profile_library();
+        let mut maps = Default::default();
         let restored = ProjectControllers::from_text(text)
             .map_err(|e| format!("The controller data in this project could not be read: {e}"))
             .and_then(|data| {
+                maps = data.gamepads.clone();
                 data.restore(&library).map_err(|e| {
                     format!("The controllers of this project could not be restored: {e}")
                 })
@@ -278,10 +302,12 @@ impl ControllerLive {
                 self.set = set;
                 self.table = table;
                 self.notes = notes;
+                self.pad.set_maps(maps);
             }
             Err(e) => {
                 self.set = ControllerSet::new();
                 self.table = BindingTable::new();
+                self.pad.set_maps(Default::default());
                 self.damaged = Some(e);
             }
         }
@@ -306,6 +332,13 @@ impl ControllerLive {
     /// saved project does not reopen with an E-stop pressed or a rocker held.
     pub(super) fn snapshot(&self) -> Result<String, String> {
         let mut data = ProjectControllers::capture(&self.set, &self.table)?;
+        data.gamepads = self
+            .pad
+            .maps
+            .iter()
+            .filter(|(id, m)| !m.is_empty() && self.set.instance(id).is_some())
+            .map(|(id, m)| (id.clone(), m.clone()))
+            .collect();
         for record in &mut data.instances {
             if let Some(i) = self.set.instance(&record.id)
                 && let Ok(fresh) = novo_controller::Controller::new(i.controller.profile().clone())
@@ -389,6 +422,7 @@ impl ControllerLive {
         self.table.bindings.retain(|b| b.key.controller != id);
         self.popped.remove(id);
         self.holds.retain(|(who, _), _| who != id);
+        self.pad.forget(id);
         if self.selected.as_deref() == Some(id) {
             self.selected = self.set.instances().first().map(|i| i.id.clone());
         }
@@ -501,6 +535,7 @@ impl ControllerLive {
         let slot = match by {
             HoldBy::Mouse => &mut entry.mouse,
             HoldBy::Key => &mut entry.key,
+            HoldBy::Pad => &mut entry.pad,
         };
         *slot = position.map(str::to_owned);
     }
@@ -523,7 +558,7 @@ impl ControllerLive {
             let Some(hold) = self.holds.get(&key).cloned() else {
                 continue;
             };
-            let wanted = hold.key.clone().or(hold.mouse.clone());
+            let wanted = hold.pad.clone().or(hold.key.clone()).or(hold.mouse.clone());
             let Some((at, rest)) = self.set.instance(&key.0).and_then(|i| {
                 let at = i.controller.position(&key.1)?.to_owned();
                 let rest = i.controller.profile().control(&key.1)?.rest_position();
@@ -611,6 +646,7 @@ impl ControllerLive {
         self.sync(project);
         if self.set.instances().is_empty() && self.applied.is_empty() && self.plc_applied.is_empty()
         {
+            self.commands = Commands::new();
             return;
         }
         self.advance(dt);
@@ -621,6 +657,7 @@ impl ControllerLive {
         };
         let mut now_poles = BTreeSet::new();
         let mut now_plc = BTreeSet::new();
+        let mut commands = Commands::new();
         for (target, what) in &resolved.by_target {
             let on = levels.get(target).copied().unwrap_or(0.0) != 0.0;
             match what {
@@ -636,9 +673,20 @@ impl ControllerLive {
                     plc.override_input(address, Some(on));
                     now_plc.insert(address.clone());
                 }
-                Resolved::Machine(_) | Resolved::Broken(_) => {}
+                Resolved::Machine(r) => {
+                    // Two spellings of one port combine as the checks warn: a chain or enable
+                    // port needs every one high, a command any one.
+                    let level = match (commands.level(&r.module, r.port), r.port.class()) {
+                        (Some(before), PortClass::Command) => before || on,
+                        (Some(before), _) => before && on,
+                        (None, _) => on,
+                    };
+                    commands.set(&r.module, r.port, level);
+                }
+                Resolved::Broken(_) => {}
             }
         }
+        self.commands = commands;
         for gone in self.applied.difference(&now_poles) {
             poles.set(
                 gone.symbol,
@@ -663,10 +711,16 @@ impl ControllerLive {
             return;
         }
         let mut by_target = BTreeMap::new();
+        let wants_machine = self
+            .table
+            .bindings
+            .iter()
+            .any(|b| matches!(b.target, Target::ModulePath(_)));
+        let catalog = wants_machine.then(|| self.catalog(project).clone());
         for b in &self.table.bindings {
             by_target
                 .entry(b.target.clone())
-                .or_insert_with(|| resolve_target(project, &b.target));
+                .or_insert_with(|| resolve_target_in(project, &b.target, catalog.as_ref()));
         }
         self.resolved = Some(ResolvedTargets {
             revision: project.revision(),
@@ -679,10 +733,53 @@ impl ControllerLive {
     /// What a target leads to, for the binding table (resolved against the current drawing).
     pub(super) fn resolution(&mut self, project: &Project, target: &Target) -> Resolved {
         self.resolve_targets(project);
-        self.resolved
+        if let Some(found) = self
+            .resolved
             .as_ref()
             .and_then(|r| r.by_target.get(target).cloned())
-            .unwrap_or_else(|| resolve_target(project, target))
+        {
+            return found;
+        }
+        resolve_target(project, target)
+    }
+
+    /// The machine model of the drawing (hoists, drive hoists, winches, travel axes with their
+    /// mechanical data), kept for the revision of the project.
+    pub(super) fn catalog(&mut self, project: &Project) -> &MachineCatalog {
+        let stale = self
+            .catalog
+            .as_ref()
+            .is_none_or(|(rev, _)| *rev != project.revision());
+        if stale {
+            self.catalog = Some((
+                project.revision(),
+                super::controller_machine::catalog(project),
+            ));
+        }
+        self.catalog.as_ref().map(|(_, c)| c).expect("set above")
+    }
+
+    /// The machine ports the bound signals command now.
+    pub(super) fn machine_commands(&self) -> &Commands {
+        &self.commands
+    }
+
+    /// Which signals are bound to ports of which module, for the run windows and the table:
+    /// module instance to `(port, signal, high)`.
+    pub(super) fn machine_drivers(&self) -> BTreeMap<String, Vec<(Port, SignalKey, bool)>> {
+        let mut out: BTreeMap<String, Vec<(Port, SignalKey, bool)>> = BTreeMap::new();
+        let Some(resolved) = &self.resolved else {
+            return out;
+        };
+        for b in &self.table.bindings {
+            if let Some(Resolved::Machine(r)) = resolved.by_target.get(&b.target) {
+                let high = self.set.level(&b.key).is_some_and(|l| l != 0.0) != b.invert;
+                out.entry(r.module.clone())
+                    .or_default()
+                    .push((r.port, b.key.clone(), high));
+            }
+        }
+        out
     }
 
     // ---- checks ----
@@ -701,7 +798,13 @@ impl ControllerLive {
         // A control panel has many signals a drawing does not use; one line per instance, not one
         // per signal.
         let mut idle: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        for f in self.table.check(&self.set) {
+        let wants_machine = self
+            .table
+            .bindings
+            .iter()
+            .any(|b| matches!(b.target, Target::ModulePath(_)));
+        let catalog = wants_machine.then(|| self.catalog(project).clone());
+        for f in self.table.check_with(&self.set, catalog.as_ref()) {
             if f.problem == BindingProblem::Unbound {
                 idle.entry(f.key.controller.clone())
                     .or_default()
@@ -736,6 +839,8 @@ impl ControllerLive {
             let mut by_pole: BTreeMap<PoleRef, Vec<&Target>> = BTreeMap::new();
             for b in &self.table.bindings {
                 match resolved.by_target.get(&b.target) {
+                    // A machine target is explained by the machine checks above.
+                    Some(Resolved::Broken(_)) if matches!(b.target, Target::ModulePath(_)) => {}
                     Some(Resolved::Broken(why)) => out.push(Finding {
                         severity: Severity::Error,
                         key: Some(b.key.clone()),
@@ -881,6 +986,19 @@ fn coil_owns(project: &Project, pole: PoleRef) -> bool {
 
 /// What `target` is in `project`.
 pub(super) fn resolve_target(project: &Project, target: &Target) -> Resolved {
+    if matches!(target, Target::ModulePath(_)) {
+        let catalog = super::controller_machine::catalog(project);
+        return resolve_target_in(project, target, Some(&catalog));
+    }
+    resolve_target_in(project, target, None)
+}
+
+/// [`resolve_target`] with the machine model already worked out.
+fn resolve_target_in(
+    project: &Project,
+    target: &Target,
+    catalog: Option<&MachineCatalog>,
+) -> Resolved {
     match target {
         Target::Pin(designation) => match pole_of_pin(project, designation) {
             Ok(pole) => Resolved::Pole(pole),
@@ -896,8 +1014,41 @@ pub(super) fn resolve_target(project: &Project, target: &Target) -> Resolved {
             Some(a) if a.space == novo_sim::program::Space::Input => Resolved::Plc(address.clone()),
             _ => Resolved::Broken(format!("{address} is not a PLC input address")),
         },
-        Target::ModulePath(path) => Resolved::Machine(path.clone()),
+        Target::ModulePath(text) => resolve_machine(text, catalog),
     }
+}
+
+/// A machine target against the machine model: the module and port it reaches, or why it reaches
+/// none.
+fn resolve_machine(text: &str, catalog: Option<&MachineCatalog>) -> Resolved {
+    let path = match MachinePath::parse(text) {
+        Ok(p) => p,
+        Err(e) => return Resolved::Broken(e.to_string()),
+    };
+    let Some(catalog) = catalog else {
+        return Resolved::Broken("the machine model is not known".to_owned());
+    };
+    let Some(module) = catalog.module(&path) else {
+        return Resolved::Broken(format!(
+            "no module {} in the machine model of this drawing",
+            path.module()
+        ));
+    };
+    let Some(port_name) = path.port() else {
+        return Resolved::Broken(format!(
+            "{} names no port (add @up, @down, ...)",
+            module.path
+        ));
+    };
+    let Some(port) = module.port(port_name).and_then(|_| Port::parse(port_name)) else {
+        return Resolved::Broken(format!("{} has no port {port_name}", module.path));
+    };
+    let id = module.path.rsplit('/').next().unwrap_or(&module.path);
+    Resolved::Machine(MachineRef {
+        module: id.to_owned(),
+        port,
+        path: format!("{}@{port_name}", module.path),
+    })
 }
 
 /// A profile for the shipped generic radio, the same one the import wizard builds. Used by tests

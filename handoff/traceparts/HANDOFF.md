@@ -10,3 +10,5 @@ Downloaded models are personal: never bundle into .kcpl or the repo.
 
 
 L3 detail: the button uses `tp_handoff` (`search_url`, `TracePartsWatcher`) through `Import::start_traceparts`; files named by TraceParts ids are judged by content with cadmatch. The `traceparts` module (keyed client) is not behind the button yet.
+
+Follow-up (after #1796): `fetch_step` may return a `.zip` (TraceParts often zips output); the UI/importer must unzip it before STEP matching. "No model" (`TpError::NoModel`, remembered 7 days) is only set from an empty view list or `IsCADAvailable` false; a bare 404 is `NotFound` and never cached. File addresses must be https (loopback http allowed for tests). The cache sweeps unindexed files when a `Service` is created.
