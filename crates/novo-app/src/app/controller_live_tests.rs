@@ -400,3 +400,11 @@ fn colour_text_reads_back_and_bad_text_falls_back_to_the_presets() {
     assert_eq!(parse_hex("#zzzzzz"), None);
     assert_eq!(parse_hex("#ééé"), None);
 }
+
+#[test]
+fn a_long_instance_name_is_cut_for_its_tab_only() {
+    use super::controller_card::tab_text;
+    assert_eq!(tab_text("Crane 1"), "Crane 1");
+    let cut = tab_text("Radio, 3 motions, 2-step copy");
+    assert!(cut.ends_with('…') && cut.chars().count() <= 16, "{cut}");
+}

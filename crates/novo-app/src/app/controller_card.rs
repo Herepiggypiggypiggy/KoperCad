@@ -462,12 +462,14 @@ fn instance_row(ui: &mut egui::Ui, ctl: &mut ControllerLive, _actions: &mut Vec<
                 ui.spacing_mut().item_spacing.x = 2.0;
                 instance_dot(ui, colour, active);
                 let popped = ctl.popped.contains(id);
-                let text = if popped {
-                    format!("{label} ⧉")
-                } else {
-                    label.clone()
-                };
-                let mut response = ui.selectable_label(ctl.selected.as_deref() == Some(id), text);
+                // A long name is cut so the tab and the Pop out mark fit the card; the hover has it all.
+                let mut text = tab_text(label);
+                if popped {
+                    text.push_str(" ⧉");
+                }
+                let mut response = ui
+                    .selectable_label(ctl.selected.as_deref() == Some(id), text)
+                    .on_hover_text(label.as_str());
                 if popped {
                     response = response.on_hover_text("In a panel of its own");
                 }
@@ -544,7 +546,8 @@ fn instance_row(ui: &mut egui::Ui, ctl: &mut ControllerLive, _actions: &mut Vec<
         .show(ui, |ui| {
             let state_id = egui::Id::new(("controller_rename", &id));
             let mut name: String = ui.data(|d| d.get_temp(state_id)).unwrap_or(label);
-            let edit = ui.add(egui::TextEdit::singleline(&mut name).desired_width(150.0));
+            let edit =
+                ui.add(egui::TextEdit::singleline(&mut name).desired_width(ui.available_width()));
             if edit.lost_focus() {
                 ctl.rename_instance(&id, &name);
                 ui.data_mut(|d| d.remove_temp::<String>(state_id));
@@ -582,7 +585,7 @@ fn instance_row(ui: &mut egui::Ui, ctl: &mut ControllerLive, _actions: &mut Vec<
             let edit = ui.add(
                 egui::TextEdit::singleline(&mut text)
                     .hint_text("drives: crane 1, crab, hoist A")
-                    .desired_width(150.0),
+                    .desired_width(ui.available_width()),
             );
             if edit.lost_focus() {
                 ctl.set_target_group(&id, &text);
@@ -690,7 +693,11 @@ fn popped_panels(
         super::panel::dialog(ctx, title, [290.0, 0.0])
             .id(super::panel::keep_id(ctx, window_id))
             .open(&mut open)
-            .default_pos(canvas.left_top() + egui::vec2(60.0 + step, 70.0 + step))
+            .default_pos(super::panel::right_of_left_card(
+                ctx,
+                // Right of the Live potentials card, which sits at the top left of the canvas.
+                canvas.left_top() + egui::vec2(310.0 + step, 70.0 + step),
+            ))
             .show(ctx, |ui| {
                 let palette = crate::theme::ui_palette();
                 ui.set_max_width(280.0);
@@ -726,6 +733,18 @@ fn popped_panels(
         if !open {
             ctl.set_popped(id, false);
         }
+    }
+}
+
+/// The most of a name a tab shows.
+const TAB_CHARS: usize = 16;
+
+pub(super) fn tab_text(label: &str) -> String {
+    if label.chars().count() <= TAB_CHARS {
+        label.to_owned()
+    } else {
+        let cut: String = label.chars().take(TAB_CHARS - 1).collect();
+        format!("{}…", cut.trim_end())
     }
 }
 

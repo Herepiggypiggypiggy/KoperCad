@@ -16,7 +16,7 @@ shot one-tab
 check_layout
 click_text Duplicate
 wait 10
-expect "copy"
+expect "Radio, 3 motion…"
 shot two-tabs
 click_text "Pop out"
 wait 20
