@@ -12,4 +12,5 @@
 - 2026-10-30 census floor: `homes::tests::the_census_counts_every_command_once_or_more` now asks for at least 140 menu homes (was 100 after V4d); the design target is about 152 rows.
 - 2026-10-30 V4g (branch `claude/visual-v4-project`): Project settings centre. Rows 221 -> 213 (File 34 -> 26). Scenario 7371.
 - 2026-10-30 V4j (branch `claude/visual-v4-terminals`): the seven Draw > Terminals rows move to the terminal right-click menu (`Home::Panel`). Draw 24 -> 17, total 213 -> 206. Scenarios 7374, 7375.
+- 2026-10-30 V4k (branch `claude/visual-v4-plc`): Draw > PLC submenu gone: two plain Draw rows, Import I/O list in the Import centre, Send to PLC on the symbol right-click menu. Draw 24 -> 22, total 213 -> 211. Scenarios 7376, 7377.
 - 2026-10-30 V4h (branch `claude/visual-v4-numbering`): Numbering centre. Rows 213 -> 205 (Edit 30 -> 22). Scenario 7372.

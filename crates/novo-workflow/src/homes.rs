@@ -175,6 +175,7 @@ pub const PANEL_BUTTONS: &[(&str, &[&str])] = &[
             "page.move_down",
         ],
     ),
+    ("Symbol right-click menu", &["plc.to_plc"]),
     (
         "Terminal right-click menu",
         &[
