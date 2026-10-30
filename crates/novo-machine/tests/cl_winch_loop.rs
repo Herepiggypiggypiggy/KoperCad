@@ -458,6 +458,36 @@ fn a_lost_load_cell_inhibits_lifting_until_it_is_back() {
     assert!(m.height_m() > h + 0.5, "{}", m.height_m());
 }
 
+/// 2500 kg on 2000 kg rated, the hook resting on the ground at the start (ground 0): the rope
+/// carries nothing, so the load cell reads zero and lifting is not inhibited. The pick-up puts the
+/// weight on the rope and the cut-out then stops the lift, a few centimetres off the ground.
+#[test]
+fn an_overweight_hook_on_the_ground_reads_zero_until_the_rope_takes_it() {
+    let (mut l, mut c, cmd) = rig(&[("cw_swl_kg", "2000"), ("cw_ground_m", "0")]);
+    seconds(&mut l, &mut c, 0.5);
+    {
+        let m = &l.modules[0];
+        assert_eq!(m.load_n(), 0.0);
+        assert!(!m.lifting_inhibited());
+        assert_eq!(m.load_pct(), Some(0.0));
+    }
+    cmd.borrow_mut().up = true;
+    seconds(&mut l, &mut c, 6.0);
+    let m = &l.modules[0];
+    let at = |pick: fn(&ClFindingKind) -> bool| m.findings().iter().find(|f| pick(&f.kind));
+    let picked =
+        at(|k| matches!(k, ClFindingKind::RopePickedUp { .. })).expect("the rope takes it");
+    let cut = at(|k| matches!(k, ClFindingKind::OverloadCutOut { .. })).expect("then the cut-out");
+    assert!(
+        cut.time_s >= picked.time_s,
+        "{} vs {}",
+        cut.time_s,
+        picked.time_s
+    );
+    assert!(m.lifting_inhibited());
+    assert!(m.height_m() < 0.3, "{}", m.height_m());
+}
+
 #[test]
 fn without_a_rated_load_nothing_is_monitored() {
     let (mut l, mut c, cmd) = rig(&[("cw_load_cell", "LC")]);
