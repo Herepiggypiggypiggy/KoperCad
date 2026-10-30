@@ -474,6 +474,17 @@ impl DriveRun {
         self.active.is_some()
     }
 
+    /// The ids of the closed-loop winches of the run, in order.
+    pub(super) fn winch_ids(&self) -> Vec<String> {
+        self.active.as_ref().map_or_else(Vec::new, |a| {
+            a.cw.modules.iter().map(|m| m.id.clone()).collect()
+        })
+    }
+
+    pub(super) fn winch_at(&self, index: usize) -> Option<&ClWinchModule> {
+        self.active.as_ref().and_then(|a| a.cw.modules.get(index))
+    }
+
     /// Position in metres from the start (forward positive) and speed in m/s of a travel axis of
     /// the run, `None` without a run, for an unknown axis or before its first tick.
     pub(super) fn travel_of(&self, id: &str) -> Option<(f64, f64)> {
@@ -1853,6 +1864,29 @@ mod tests {
         assert!(m.height_m() > 0.3, "{}", m.height_m());
         assert!(winch_reading(m).contains("running"), "{}", winch_reading(m));
         assert!(m.findings().is_empty(), "{:?}", m.findings());
+    }
+
+    #[test]
+    fn the_3d_picture_follows_the_winch_of_the_run() {
+        use super::super::hoist_3d::{winch_line, winch_state_of};
+        let (doc, button) = closed_winch();
+        let project = doc.project();
+        let (mut run, mut live) = winch_run(&doc);
+        assert_eq!(run.winch_ids().len(), 1);
+        live.poles.set_all(project, button, true);
+        seconds(&mut run, &mut live, project, 8.0);
+        let m = run.winch_at(0).unwrap();
+        let state = winch_state_of(m, 3.0, 2.0);
+        assert!(
+            (f64::from(state.hook_m) - m.height_m()).abs() < 1e-4,
+            "{}",
+            state.hook_m
+        );
+        assert!(state.hook_m > 0.3);
+        assert!(!state.warning);
+        let line = winch_line(m);
+        assert!(line.contains("rising"), "{line}");
+        assert!(run.winch_at(1).is_none());
     }
 
     #[test]

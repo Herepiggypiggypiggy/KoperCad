@@ -7,6 +7,7 @@ use super::crane_setup::CraneSetup;
 use super::hoist_run::conditions;
 use super::{Level, NovoApp};
 use eframe::egui;
+use novo_machine::cl_winch_loop::ClWinchModule;
 use novo_machine::hoist_loop::{HoistModule, LimitKind};
 use novo_machine::swing::{DEFAULT_DAMPING_RATIO, SWING_MODEL_LEAVES_OUT, Swing};
 use novo_view3d::camera::ViewPreset;
@@ -208,6 +209,74 @@ pub(super) fn state_of(module: Option<&HoistModule>, bridge_m: f32, trolley_m: f
     }
 }
 
+/// What the picture leaves out when it follows a closed-loop winch of Drive run.
+const WINCH_PICTURE_LEAVES_OUT: &[&str] = &[
+    "A closed-loop winch is drawn as a hook on a vertical rope at its height; the ground it may rest on, slack rope, the drive state and the load cell reading are in the line above the picture, not drawn",
+    "The swing is the same one-pendulum model as for a hoist, from the travel axes picked here; a rope that hangs at an angle from the start is not drawn",
+];
+
+/// The picture's numbers for one closed-loop winch of Drive run: its hook, the limit flags and
+/// whether the drive tripped or the rope reports a problem.
+pub(super) fn winch_state_of(m: &ClWinchModule, bridge_m: f32, trolley_m: f32) -> CraneState {
+    CraneState {
+        bridge_m,
+        trolley_m,
+        hook_m: m.height_m() as f32,
+        swing_rad: [0.0; 2],
+        warning: m
+            .snapshot()
+            .is_some_and(|s| s.drive.fault.is_some() || s.slack_m > 0.0 || m.lifting_inhibited()),
+        bridge_limits: Vec::new(),
+        trolley_limits: Vec::new(),
+        limits: m
+            .binding
+            .limits
+            .iter()
+            .map(|l| LimitMark {
+                height_m: (l.binding.actuate_at_mm / 1000.0) as f32,
+                kind: match l.kind {
+                    LimitKind::Upper => LimitFlag::Upper,
+                    LimitKind::Lower => LimitFlag::Lower,
+                },
+            })
+            .collect(),
+    }
+}
+
+/// The line under the controls for a closed-loop winch: where the hook is and what it does.
+pub(super) fn winch_line(m: &ClWinchModule) -> String {
+    let s = m.snapshot();
+    let v = s.map_or(0.0, |s| s.hook_speed_m_s);
+    let way = if v.abs() < 0.005 {
+        "standing"
+    } else if v > 0.0 {
+        "rising"
+    } else {
+        "lowering"
+    };
+    let mut line = format!(
+        "{}: hook {:+.2} m from its start, {:.2} m/s, {way}",
+        m.id,
+        m.height_m(),
+        v.abs()
+    );
+    if let Some(s) = s {
+        if s.resting {
+            line.push_str(" \u{b7} resting on the ground");
+        }
+        if s.slack_m > 0.005 {
+            line.push_str(&format!(" \u{b7} slack rope {:.0} mm", s.slack_m * 1000.0));
+        }
+        if let Some(f) = s.drive.fault {
+            line.push_str(&format!(" \u{b7} drive tripped ({})", f.code()));
+        }
+    }
+    if let Some(pct) = m.load_pct() {
+        line.push_str(&format!(" \u{b7} load {pct:.0} % of rated"));
+    }
+    line
+}
+
 /// The end limits of a travel axis as flag positions in the picture: the start of the axis plus the
 /// distance set on its motor. Nothing without an axis or a project.
 pub(super) fn travel_marks(
@@ -297,13 +366,22 @@ impl NovoApp {
         let mut start = false;
         let mut open_drive = false;
         let running = self.wb.hoist.is_running();
-        let names: Vec<String> = self.wb.hoist.hoist_ids();
+        // The hoists of Hoist run, then the closed-loop winches of Drive run.
+        let hoists = self.wb.hoist.hoist_ids();
+        let hoist_count = hoists.len();
+        let names: Vec<String> = hoists
+            .into_iter()
+            .chain(self.wb.drive_run.winch_ids())
+            .collect();
         if self.wb.hoist.three_d.follow >= names.len().max(1) {
             self.wb.hoist.three_d.follow = 0;
         }
         let follow = self.wb.hoist.three_d.follow;
         // What the picture needs of the hoist, taken before the window borrows the state mutably.
-        let line = self.wb.hoist.module_at(follow).map(hook_line);
+        let line = match follow.checked_sub(hoist_count) {
+            None => self.wb.hoist.module_at(follow).map(hook_line),
+            Some(i) => self.wb.drive_run.winch_at(i).map(winch_line),
+        };
         // The travel axes of the project, and what the axes picked for the bridge and the trolley
         // did this frame.
         let axes: Vec<String> = self
@@ -313,11 +391,18 @@ impl NovoApp {
             .unwrap_or_default();
         self.sync_crane_setup(ctx, &axes);
         let dt = f64::from(ctx.input(|i| i.stable_dt).clamp(0.0, 0.1));
-        let hook_m = self
-            .wb
-            .hoist
-            .module_at(follow)
-            .map_or(0.0, |m| m.height_m() as f32);
+        let hook_m = match follow.checked_sub(hoist_count) {
+            None => self
+                .wb
+                .hoist
+                .module_at(follow)
+                .map_or(0.0, |m| m.height_m() as f32),
+            Some(i) => self
+                .wb
+                .drive_run
+                .winch_at(i)
+                .map_or(0.0, |m| m.height_m() as f32),
+        };
         let driven = {
             let g = &self.wb.hoist.three_d;
             let drive = &self.wb.drive_run;
@@ -328,11 +413,18 @@ impl NovoApp {
         };
         let rope_m = f64::from(rope_length_mm(&self.wb.hoist.three_d.layout, hook_m)) / 1000.0;
         let travel = self.wb.hoist.three_d.travel(dt, driven, rope_m);
-        let hoist_state = self
-            .wb
-            .hoist
-            .module_at(follow)
-            .map(|m| state_of(Some(m), travel.bridge_m, travel.trolley_m));
+        let hoist_state = match follow.checked_sub(hoist_count) {
+            None => self
+                .wb
+                .hoist
+                .module_at(follow)
+                .map(|m| state_of(Some(m), travel.bridge_m, travel.trolley_m)),
+            Some(i) => self
+                .wb
+                .drive_run
+                .winch_at(i)
+                .map(|m| winch_state_of(m, travel.bridge_m, travel.trolley_m)),
+        };
         // The end limits of the picked axes, as flags: where the axis starts plus the distance
         // set on the motor.
         let (bridge_marks, trolley_marks) = {
@@ -562,9 +654,15 @@ impl NovoApp {
                     .id_salt("hoist3d_notes")
                     .max_height(150.0)
                     .show(ui, |ui| {
+                        let winch_notes: &[&str] = if g.follow >= hoist_count {
+                            WINCH_PICTURE_LEAVES_OUT
+                        } else {
+                            &[]
+                        };
                         for line in CRANE_PICTURE_LEAVES_OUT
                             .iter()
                             .chain(SWING_MODEL_LEAVES_OUT)
+                            .chain(winch_notes)
                         {
                             ui.weak(format!("\u{2022} {line}"));
                         }

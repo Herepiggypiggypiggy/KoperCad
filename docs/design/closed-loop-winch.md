@@ -185,6 +185,17 @@ swing), the shaft inertia kept as with the hook hanging (a slack drum accelerate
 a real one), no friction or sticking of the hook on the ground. Not used in a pair (its rope model has
 its own slack). Scenarios 1766 and 1766b with the fixture `closed-winch-ground.novo` (a down button S3).
 
+## The winch in the 3D picture (single winch)
+
+Simulate > Hoist in 3D lists the closed-loop winches of Simulate > Drive run next to the hoists of Hoist
+run (the same drop-down); picking one makes the picture follow its hook height and the line under the controls
+says where it is, how fast, whether it rests on the ground or has slack rope, whether the drive tripped and the
+load as a share of the rated load. The swing is the existing one-pendulum model (`novo_machine::swing`) driven
+by the bridge and trolley axes picked in the window, so the hook swings when those axes accelerate, with its
+own honest note ("Picture, not measurement" and the swing notes). Not drawn: the ground, the slack rope, the
+drive state and the load cell reading (they are in the line), a rope that hangs at an angle from the start,
+and winches of a pair. Scenarios 1767 and 1767b.
+
 ## Not yet
 
 - Unconfirmed customer details: which drive maker's hoist and encoder arrangement applies. Everything
