@@ -19,29 +19,29 @@ expect "9 signals drive nothing"
 shot panel-at-rest
 check_layout
 # Main latch on: the receiver's main contact closes, so the circuit is fed but nothing is selected.
-click 1607 315
+click 1607 369
 wait 10
 expect "Signals (2 of 15 high)"
 shot main-on
 # Hoist up, step 2: the rocker closes both up outputs while it is held.
-mouse_down 1640 482
+mouse_down 1640 536
 wait 10
 expect "Signals (4 of 15 high)"
 shot hoist-up-2
 check_layout
-mouse_up 1640 482
+mouse_up 1640 536
 wait 10
 expect "Signals (2 of 15 high)"
 # The motor page, with the rocker held again.
 key PageDown
 wait 10
-mouse_down 1640 482
+mouse_down 1640 536
 wait 10
 shot motor-page-up-2
-mouse_up 1640 482
+mouse_up 1640 536
 wait 10
 # E-stop: the chain contact opens and every output drops, whatever the rocker does.
-click 1608 265
+click 1608 319
 wait 10
 expect "Pressed"
 expect "Signals (0 of 15 high)"
