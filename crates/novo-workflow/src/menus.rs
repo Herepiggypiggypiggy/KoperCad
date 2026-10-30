@@ -79,6 +79,10 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.import_centre", at("File")),
     // File > Templates and examples... opens the Start centre; the templates and examples are listed there.
     ("file.start_centre", at("File")),
+    // Edit > Numbering... opens the Numbering centre; the numbering commands are listed there.
+    ("edit.numbering_centre", at("Edit")),
+    // Edit > Part tools... opens the Parts centre; the part commands are listed there.
+    ("edit.parts_centre", at("Edit")),
     // File > Project settings... opens the Project centre; the project commands are listed there.
     ("file.project_centre", at("File")),
     ("export.print_preview", at("File")),
@@ -93,25 +97,13 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("edit.rotate", at("Edit")),
     ("edit.mirror", at("Edit")),
     ("edit.shared_properties", at("Edit")),
-    ("edit.renumber", under("Edit", "Renumber")),
-    ("interruption.renumber", under("Edit", "Renumber")),
-    ("plc.renumber_io", under("Edit", "Renumber")),
     // Draw
     ("xref.link", at("Draw")),
     ("draw.text", at("Draw")),
     ("net.select", under("Edit", "Net")),
     ("net.trace", under("Edit", "Net")),
-    ("plc.add_card", under("Draw", "PLC")),
-    ("plc.import_list", under("Draw", "PLC")),
-    ("plc.to_plc", under("Draw", "PLC")),
-    ("plc.overview", under("Draw", "PLC")),
-    ("terminal.connect", under("Draw", "Terminals")),
-    ("terminal.disconnect", under("Draw", "Terminals")),
-    ("terminal.toggle_pe", under("Draw", "Terminals")),
-    ("terminal.reset_pe", under("Draw", "Terminals")),
-    ("terminal.strip_up", under("Draw", "Terminals")),
-    ("terminal.strip_down", under("Draw", "Terminals")),
-    ("terminal.strip_lowest", under("Draw", "Terminals")),
+    ("plc.add_card", at("Draw")),
+    ("plc.overview", at("Draw")),
     // View
     ("layout.draw", under("View", "Layouts")),
     ("layout.cabinet", under("View", "Layouts")),
@@ -221,22 +213,10 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
 const REGROUPED: &[(&str, MenuPlace)] = &[
     // File: project settings and the library each get one submenu, so the
     // top level is only what you do to a file.
-    ("parts.browser", under("File", "Library")),
-    ("parts.import_step", under("File", "Library")),
     // Edit: the paste variants, the part commands and the numbering
     // commands are families.
     ("edit.paste_keep_tags", under("Edit", "Paste special")),
     ("edit.paste_in_place", under("Edit", "Paste special")),
-    ("parts.auto_assign", under("Edit", "Parts")),
-    ("parts.clear", under("Edit", "Parts")),
-    ("parts.describe", under("Edit", "Parts")),
-    ("parts.remove_unused", under("Edit", "Parts")),
-    ("wires.number", under("Edit", "Wire numbers")),
-    ("wires.numbering", under("Edit", "Wire numbers")),
-    ("wires.check_numbers", under("Edit", "Wire numbers")),
-    ("wires.set_number", under("Edit", "Wire numbers")),
-    ("wires.unlock_number", under("Edit", "Wire numbers")),
-    ("wires.renumber", under("Edit", "Renumber")),
     // Help: both fast-key walk-throughs sit together.
     ("file.practice", at("Help")),
 ];
@@ -562,14 +542,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
 
 /// Submenus drawn first, in this order, for the menus named here; the
 /// others follow in the order [`layout`] gives them.
-const SUB_FIRST: &[(&str, &[&str])] = &[
-    ("File", &["Library", "Revisions"]),
-    (
-        "Edit",
-        &["Paste special", "Parts", "Wire numbers", "Renumber"],
-    ),
-    ("Draw", &["Terminals", "PLC"]),
-];
+const SUB_FIRST: &[(&str, &[&str])] = &[("File", &["Revisions"]), ("Edit", &["Paste special"])];
 
 /// What the menu bar draws: [`layout`] with the plain rows in their
 /// [`BLOCKS`] (a separator between blocks) and the submenus in
@@ -721,16 +694,8 @@ mod tests {
         );
         let export = file
             .iter()
-            .position(|i| {
-                matches!(
-                    i,
-                    MenuItem::Submenu {
-                        name: "Library",
-                        ..
-                    }
-                )
-            })
-            .expect("a Library submenu");
+            .position(|i| matches!(i, MenuItem::Submenu { name: "Revisions", .. }))
+            .expect("a Revisions submenu");
         let new = file
             .iter()
             .position(|i| matches!(i, MenuItem::Command(c) if c.id == "file.new"))
@@ -857,9 +822,9 @@ mod tests {
         let ceilings: &[(&str, usize)] = &[
             // The export formats are in the Export centre, the imports in the Import
             // centre, the templates and examples in the Start centre.
-            ("File", 24),
-            ("Edit", 30),
-            ("Draw", 21),
+            ("File", 22),
+            ("Edit", 19),
+            ("Draw", 12),
             ("View", 65),
             ("Check", 11),
             ("Reports", 17),
@@ -883,7 +848,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 208, "the menus hold {total} rows");
+        assert!(total <= 186, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File

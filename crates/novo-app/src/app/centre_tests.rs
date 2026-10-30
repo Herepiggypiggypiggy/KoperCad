@@ -118,6 +118,7 @@ fn the_import_centre_lists_every_old_import_row_and_searches_them() {
     assert!(ids("eplan").contains(&"file.import_eplan"));
     assert!(ids("eplan").contains(&"parts.import_eplan"));
     assert!(ids("tags").contains(&"plc.import_tags"));
+    assert!(ids("i/o list").contains(&"plc.import_list"));
     assert!(!ids("tags").contains(&"file.import_dwg"));
     assert!(ids("zzzz").is_empty());
 }
@@ -279,4 +280,79 @@ fn the_project_centre_replaces_the_project_submenu_and_the_name_taking_commands_
     assert!(d.app.wb.project_rules);
     let fallback = super::learn_labels::anchor_fallback("cmd.project.rules").expect("fallback");
     assert_eq!(fallback, "cmd.file.project_centre");
+}
+
+#[test]
+fn the_numbering_centre_replaces_the_wire_number_and_renumber_submenus() {
+    let ids = |q: &str| -> Vec<&'static str> {
+        visible(Centre::Numbering, q)
+            .into_iter()
+            .flat_map(|(_, rows)| rows.into_iter().map(|r| r.id))
+            .collect()
+    };
+    assert!(ids("wire").contains(&"wires.renumber"));
+    assert!(ids("interruption").contains(&"interruption.renumber"));
+    assert!(ids("zzzz").is_empty());
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_project(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(super::workbench::app_runs("edit.numbering_centre"));
+    d.app.run_command(&ctx, "edit.numbering_centre", None);
+    d.frame();
+    assert_eq!(
+        d.app.wb.centre.as_ref().map(|c| c.kind),
+        Some(Centre::Numbering)
+    );
+    let edit = novo_workflow::menus::layout("Edit");
+    let submenu = |what: &str| {
+        edit.iter().any(
+            |i| matches!(i, novo_workflow::menus::MenuItem::Submenu { name, .. } if *name == what),
+        )
+    };
+    assert!(!submenu("Wire numbers") && !submenu("Renumber"));
+    let fallback =
+        super::learn_labels::anchor_fallback("cmd.wires.renumber").expect("a tile has a fallback");
+    assert_eq!(fallback, "cmd.edit.numbering_centre");
+    // The commands still run by name without the centre.
+    d.app.wb.centre = None;
+    d.app.run_command(&ctx, "wires.numbering", None);
+    d.frame();
+}
+
+#[test]
+fn the_part_tools_centre_replaces_the_library_and_parts_submenus() {
+    let ids = |q: &str| -> Vec<&'static str> {
+        visible(Centre::Parts, q)
+            .into_iter()
+            .flat_map(|(_, rows)| rows.into_iter().map(|r| r.id))
+            .collect()
+    };
+    assert!(ids("catalog").contains(&"parts.browser"));
+    assert!(ids("unused").contains(&"parts.remove_unused"));
+    assert!(ids("zzzz").is_empty());
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_project(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(super::workbench::app_runs("edit.parts_centre"));
+    d.app.run_command(&ctx, "edit.parts_centre", None);
+    d.frame();
+    assert_eq!(
+        d.app.wb.centre.as_ref().map(|c| c.kind),
+        Some(Centre::Parts)
+    );
+    let submenu = |menu: &str, what: &str| {
+        novo_workflow::menus::layout(menu).iter().any(
+            |i| matches!(i, novo_workflow::menus::MenuItem::Submenu { name, .. } if *name == what),
+        )
+    };
+    assert!(!submenu("File", "Library") && !submenu("Edit", "Parts"));
+    let fallback = super::learn_labels::anchor_fallback("cmd.parts.auto_assign")
+        .expect("a tile has a fallback");
+    assert_eq!(fallback, "cmd.edit.parts_centre");
+    // The Parts window still opens by name.
+    d.app.wb.centre = None;
+    d.app.run_command(&ctx, "parts.browser", None);
+    d.frame();
 }

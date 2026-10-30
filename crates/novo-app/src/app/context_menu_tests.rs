@@ -67,6 +67,37 @@ fn the_keys_the_menu_shows_come_from_the_keymap() {
     }
 }
 
+/// The Draw menu no longer lists the terminal rows: the right-click menu of a
+/// selected terminal carries every one (`homes::PANEL_BUTTONS`), and Ctrl+K
+/// still runs them.
+#[test]
+fn the_terminal_right_click_menu_carries_every_terminal_row_that_left_draw() {
+    let shown = menu_ids();
+    let panel = "Terminal right-click menu";
+    let listed = novo_workflow::homes::PANEL_BUTTONS
+        .iter()
+        .find(|(name, _)| *name == panel)
+        .map(|(_, ids)| *ids)
+        .expect(panel);
+    assert_eq!(listed.len(), 7);
+    for id in listed {
+        assert!(shown.iter().any(|s| s == id), "{id} is not in the menu");
+        assert_eq!(novo_workflow::homes::panel_of(id), Some(panel), "{id}");
+    }
+}
+
+/// Draw > PLC no longer lists Send signal to PLC: the right-click menu of a
+/// selected symbol carries it (`homes::PANEL_BUTTONS`), and Ctrl+K still runs it.
+#[test]
+fn the_symbol_right_click_menu_carries_send_to_plc() {
+    let shown = menu_ids();
+    assert!(shown.iter().any(|s| s == "plc.to_plc"));
+    assert_eq!(
+        novo_workflow::homes::panel_of("plc.to_plc"),
+        Some("Symbol right-click menu")
+    );
+}
+
 /// Draw > Macros no longer lists Save selection as macro: the right-click
 /// menu of a selected symbol carries it (`homes::PANEL_BUTTONS`).
 #[test]

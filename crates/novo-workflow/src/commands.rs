@@ -1147,6 +1147,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["unused", "clean up", "purge", "article"],
         Needs::Project,
     ),
+    cmd(
+        "edit.parts_centre",
+        "Part tools...",
+        "Edit",
+        &["parts", "catalog", "assign parts", "articles"],
+        Needs::Project,
+    ),
+    cmd(
+        "edit.numbering_centre",
+        "Numbering...",
+        "Edit",
+        &["numbering centre", "wire numbers", "tags", "potentials"],
+        Needs::Project,
+    ),
     with_arguments(
         verb(
             cmd(

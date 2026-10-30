@@ -2,7 +2,7 @@
 //! (project, this page, the selection) and a preview of every old and new
 //! tag; Renumber applies it as one undo step.
 //!
-//! Where the user finds it: Edit > Renumber > Renumber devices, or Ctrl+K
+//! Where the user finds it: Edit > Numbering... > Renumber devices, or Ctrl+K
 //! "renumber" (with `page`, `selection` or `project` to pick the scope).
 
 use eframe::egui;

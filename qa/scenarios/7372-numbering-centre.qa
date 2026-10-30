@@ -1,0 +1,31 @@
+@title Numbering centre: wire, device and I/O numbering as tiles
+@area Layout
+# Lane V4h (docs/design/visual-redesign.md section 6). Edit > Numbering... opens one window
+# with what Edit > Wire numbers and Edit > Renumber held; Edit no longer has those two submenus.
+click_text "Open example"
+wait 20
+click_text Edit #1
+wait 6
+shot edit-menu-one-numbering-row
+expect "Numbering..."
+click_text "Numbering..."
+wait 10
+shot centre-open
+expect "Wires"
+expect "Devices and points"
+expect "Choose an action"
+check_layout
+click_text "Renumber devices"
+wait 6
+shot centre-picked-devices
+expect "Gives the devices new tags in order"
+check_layout
+text interruption
+wait 8
+shot centre-search-interruption
+expect "Number interruption points"
+expect_not "Renumber devices"
+check_layout
+key Escape
+wait 6
+expect_not "Choose an action"

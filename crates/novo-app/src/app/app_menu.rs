@@ -183,6 +183,8 @@ fn path_of(info: &CommandInfo) -> String {
             Some(novo_workflow::centres::Centre::Import) => "File > Import",
             Some(novo_workflow::centres::Centre::Start) => "File > Templates and examples",
             Some(novo_workflow::centres::Centre::Project) => "File > Project settings",
+            Some(novo_workflow::centres::Centre::Numbering) => "Edit > Numbering",
+            Some(novo_workflow::centres::Centre::Parts) => "Edit > Part tools",
             _ => "File > Export",
         }
         .to_owned();

@@ -13,14 +13,18 @@ pub enum Centre {
     Import,
     Start,
     Project,
+    Numbering,
+    Parts,
 }
 
-/// Every centre, in the order the File menu lists their openers.
-pub const CENTRES: [Centre; 4] = [
+/// Every centre, in the order their openers are listed.
+pub const CENTRES: [Centre; 6] = [
     Centre::Export,
     Centre::Import,
     Centre::Start,
     Centre::Project,
+    Centre::Numbering,
+    Centre::Parts,
 ];
 
 impl Centre {
@@ -31,6 +35,8 @@ impl Centre {
             Centre::Import => IMPORT_CENTRE,
             Centre::Start => START_CENTRE,
             Centre::Project => PROJECT_CENTRE,
+            Centre::Numbering => NUMBERING_CENTRE,
+            Centre::Parts => PARTS_CENTRE,
         }
     }
 
@@ -41,6 +47,8 @@ impl Centre {
             Centre::Import => "Import",
             Centre::Start => "Templates and examples",
             Centre::Project => "Project settings",
+            Centre::Numbering => "Numbering",
+            Centre::Parts => "Part tools",
         }
     }
 
@@ -51,6 +59,8 @@ impl Centre {
             Centre::Import => "Search: dxf, eplan, parts, excel, plc",
             Centre::Start => "Search: crane, pump, motor control, plc, emc",
             Centre::Project => "Search: standard, rules, options, variants, languages",
+            Centre::Numbering => "Search: wires, devices, tags, potentials, I/O, interruption",
+            Centre::Parts => "Search: catalog, assign, describe, unused, step",
         }
     }
 
@@ -58,6 +68,8 @@ impl Centre {
     pub fn idle_button(self) -> &'static str {
         match self {
             Centre::Start | Centre::Project => "Open",
+            Centre::Numbering => "Run",
+            Centre::Parts => "Run",
             _ => self.title(),
         }
     }
@@ -75,6 +87,16 @@ impl Centre {
             (Centre::Project, "project.untie") => "Apply",
             (Centre::Project, "project.generate") => "Generate",
             (Centre::Project, _) => "Open",
+            (
+                Centre::Numbering,
+                "wires.numbering" | "wires.renumber" | "edit.renumber" | "wires.set_number",
+            ) => "Open",
+            (Centre::Numbering, _) => "Run",
+            (Centre::Parts, "parts.browser") => "Open",
+            (Centre::Parts, "parts.import_step") => "Import",
+            (Centre::Parts, "parts.auto_assign") => "Assign",
+            (Centre::Parts, "parts.describe") => "Describe",
+            (Centre::Parts, _) => "Remove",
         }
     }
 
@@ -84,6 +106,8 @@ impl Centre {
             Centre::Import => IMPORT_SECTIONS,
             Centre::Start => START_SECTIONS,
             Centre::Project => PROJECT_SECTIONS,
+            Centre::Numbering => NUMBERING_SECTIONS,
+            Centre::Parts => PARTS_SECTIONS,
         }
     }
 
@@ -164,6 +188,52 @@ pub const PROJECT_SECTIONS: &[Section] = &[
     },
 ];
 
+/// The command that opens the Numbering centre.
+pub const NUMBERING_CENTRE: &str = "edit.numbering_centre";
+
+/// The Numbering centre: what Edit > Wire numbers and Edit > Renumber held.
+pub const NUMBERING_SECTIONS: &[Section] = &[
+    Section {
+        name: "Wires",
+        about: "Numbers on wires and potentials: give them, renumber, check, fix one by hand.",
+        ids: &[
+            "wires.number",
+            "wires.renumber",
+            "wires.check_numbers",
+            "wires.numbering",
+            "wires.set_number",
+            "wires.unlock_number",
+        ],
+    },
+    Section {
+        name: "Devices and points",
+        about: "Tags of devices, interruption points and PLC I/O.",
+        ids: &["edit.renumber", "interruption.renumber", "plc.renumber_io"],
+    },
+];
+
+/// The command that opens the Part tools centre.
+pub const PARTS_CENTRE: &str = "edit.parts_centre";
+
+/// The Part tools centre: what File > Library and Edit > Parts held.
+pub const PARTS_SECTIONS: &[Section] = &[
+    Section {
+        name: "Catalog",
+        about: "The part catalog, and 3D models for parts.",
+        ids: &["parts.browser", "parts.import_step"],
+    },
+    Section {
+        name: "Parts on the devices",
+        about: "Give the devices of this project their parts, or take them away.",
+        ids: &[
+            "parts.auto_assign",
+            "parts.describe",
+            "parts.clear",
+            "parts.remove_unused",
+        ],
+    },
+];
+
 /// The Import centre, group by group: what File > Import and File > Import
 /// parts held, by what comes in.
 pub const IMPORT_SECTIONS: &[Section] = &[
@@ -176,6 +246,11 @@ pub const IMPORT_SECTIONS: &[Section] = &[
             "file.choose_dwg_converter",
             "file.remove_background",
         ],
+    },
+    Section {
+        name: "Lists and tags",
+        about: "Spreadsheets for bulk edit, a machine's I/O list and the tags of a PLC programmer.",
+        ids: &["import.spreadsheet", "plc.import_list", "plc.import_tags"],
     },
     Section {
         name: "Projects",
@@ -196,11 +271,6 @@ pub const IMPORT_SECTIONS: &[Section] = &[
             "parts.import_table",
             "parts.import_eplan",
         ],
-    },
-    Section {
-        name: "Lists and tags",
-        about: "Spreadsheets for bulk edit, and the tags of a PLC programmer.",
-        ids: &["import.spreadsheet", "plc.import_tags"],
     },
 ];
 
@@ -357,6 +427,7 @@ pub fn describe(id: &str) -> &'static str {
         "parts.import_table" => "Parts from a CSV or Excel table, with your own columns.",
         "parts.import_eplan" => "Parts from a CAD parts export or maker XML files.",
         "import.spreadsheet" => "Changes made in Excel or CSV, checked before they apply.",
+        "plc.import_list" => "A machine's signal list as PLC cards and pages, reviewed first.",
         "plc.import_tags" => "The tags a PLC programmer wrote, matched to the I/O list.",
         "file.new_crane" => "An overhead crane project with its structure tree and covers.",
         "file.new_mcc" => "A motor control centre with feeders, control supply and cabinet.",
@@ -372,6 +443,21 @@ pub fn describe(id: &str) -> &'static str {
         "project.languages" => "The languages the reports and lists are written in.",
         "project.options" => "Machine options and variants, and what each one draws.",
         "project.untie" => "Makes the selected items appear whatever the options are.",
+        "parts.browser" => "Search, compare and import parts of the makers' catalogs.",
+        "parts.import_step" => "A maker's STEP model, attached to a part for the 3D view.",
+        "parts.auto_assign" => "Gives every device without a part the best matching part.",
+        "parts.describe" => "Writes the description of each device from its part.",
+        "parts.clear" => "Takes the parts off the selected devices.",
+        "parts.remove_unused" => "Removes the parts no device uses any more.",
+        "wires.number" => "Gives every wire without a number the next free one.",
+        "wires.renumber" => "Numbers all wires again, from the scheme and the locks.",
+        "wires.check_numbers" => "Lists wires that share a number or break the scheme.",
+        "wires.numbering" => "The numbering scheme, ranges and locks of this project.",
+        "wires.set_number" => "Types a number on the selected wire's potential and locks it.",
+        "wires.unlock_number" => "Lets numbering runs change the selected wire's number again.",
+        "edit.renumber" => "Gives the devices new tags in order, page by page.",
+        "interruption.renumber" => "Numbers the interruption points of the wires automatically.",
+        "plc.renumber_io" => "Gives the PLC inputs and outputs new addresses in order.",
         "project.generate" => "Pages and devices made from an Excel or CSV spec sheet.",
         _ => "",
     }
@@ -431,7 +517,7 @@ mod tests {
             assert!(seen.insert(id), "{id} is in two sections");
             assert!(!in_export_centre(id), "{id} is in both centres");
         }
-        assert_eq!(seen.len(), 14);
+        assert_eq!(seen.len(), 15);
     }
 
     #[test]
@@ -465,6 +551,34 @@ mod tests {
         }
         assert_eq!(Centre::Project.button("project.generate"), "Generate");
         assert_eq!(Centre::Project.button("project.rules"), "Open");
+    }
+
+    #[test]
+    fn the_numbering_centre_lists_the_nine_numbering_commands_once() {
+        let mut seen = HashSet::new();
+        for id in Centre::Numbering.ids() {
+            assert!(get(id).is_some(), "{id} is not a command");
+            assert!(seen.insert(id), "{id} is in two sections");
+            assert_eq!(Centre::of(id), Some(Centre::Numbering), "{id}");
+            assert!(replaces_menu_row(id), "{id}");
+        }
+        assert_eq!(seen.len(), 9);
+        assert_eq!(Centre::Numbering.button("wires.renumber"), "Open");
+        assert_eq!(Centre::Numbering.button("wires.number"), "Run");
+    }
+
+    #[test]
+    fn the_parts_centre_lists_the_six_part_commands_once() {
+        let mut seen = HashSet::new();
+        for id in Centre::Parts.ids() {
+            assert!(get(id).is_some(), "{id} is not a command");
+            assert!(seen.insert(id), "{id} is in two sections");
+            assert_eq!(Centre::of(id), Some(Centre::Parts), "{id}");
+            assert!(replaces_menu_row(id), "{id}");
+        }
+        assert_eq!(seen.len(), 6);
+        assert_eq!(Centre::Parts.button("parts.auto_assign"), "Assign");
+        assert_eq!(Centre::Parts.button("parts.remove_unused"), "Remove");
     }
 
     #[test]
