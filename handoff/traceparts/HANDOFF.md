@@ -5,3 +5,5 @@ API for the UI (L3): `KeyStore::default_store()`, `DownloadCache::default_cache(
 
 Unverified (no key yet): endpoint shapes come from developers.traceparts.com reference pages (2026-10-30). The weakest link is how `cadPartUniqueId`/`logicName` are obtained: `ids_from_view_url` assumes the CADViews view URL carries them as query parameters. If the real answer differs, adjust `Service::fetch_step` only. The CADFileUrl body is sent as `{}` (configuration parameters unknown). Key is plain JSON (no DPAPI without unsafe); say so in the UI.
 Downloaded models are personal: never bundle into .kcpl or the repo.
+
+Follow-up (after #1796): `fetch_step` may return a `.zip` (TraceParts often zips output); the UI/importer must unzip it before STEP matching. "No model" (`TpError::NoModel`, remembered 7 days) is only set from an empty view list or `IsCADAvailable` false; a bare 404 is `NotFound` and never cached. File addresses must be https (loopback http allowed for tests). The cache sweeps unindexed files when a `Service` is created.
