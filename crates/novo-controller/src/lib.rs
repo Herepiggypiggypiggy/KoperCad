@@ -10,6 +10,7 @@
 //! - [`engine`]: one [`Controller`] (state machines, interlocks, link effects, signals).
 //! - [`set`]: several named instances per project ([`ControllerSet`]).
 //! - [`binding`]: signal to target bindings keyed `controller/signal`, with checks.
+//! - [`panel`]: which widget draws which control (pendant, two-step pairs, joystick, rotary).
 //! - [`sequence`]: deterministic record and replay of timed presses.
 //!
 //! The crate has no dependency on the data model or the simulator, uses only `std` (no files,
@@ -19,6 +20,7 @@
 pub mod binding;
 pub mod engine;
 pub mod import;
+pub mod panel;
 pub mod profile;
 pub mod sequence;
 pub mod set;

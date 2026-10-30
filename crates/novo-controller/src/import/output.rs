@@ -61,6 +61,7 @@ impl ProposedProfile {
                 needs_link: c.needs_link,
                 requires: c.requires.clone(),
                 drops_when: c.drops_when.clone(),
+                stick: None,
             });
         }
         let signals = self
@@ -78,7 +79,7 @@ impl ProposedProfile {
                     step: if grouped { s.step } else { None },
                     levels: Default::default(),
                     unit: None,
-                    requires: Vec::new(),
+                    requires: s.requires.clone(),
                     ungated: s.ungated,
                     needs_link: None,
                     combine: Combine::Or,
@@ -168,6 +169,9 @@ impl ProposedProfile {
                 let _ = writeln!(out, "step = {n}");
             } else {
                 let _ = writeln!(out, "when = {}", list(&s.when));
+            }
+            if !s.requires.is_empty() {
+                let _ = writeln!(out, "requires = {}", list(&s.requires));
             }
             if s.ungated {
                 out.push_str("ungated = true\n");

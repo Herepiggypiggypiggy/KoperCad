@@ -77,6 +77,14 @@ pub enum Role {
     Horn,
     Light,
     Selector,
+    /// Dead-man bar or enabling switch: motion only while it is held.
+    Deadman,
+    /// Weighing tare button.
+    Tare,
+    /// Coupling switch (two hoists or cranes run as one).
+    Coupling,
+    /// Relay that releases the fast step for every motion.
+    Release,
 }
 
 impl Role {
@@ -89,6 +97,10 @@ impl Role {
             "horn" => Role::Horn,
             "light" => Role::Light,
             "selector" => Role::Selector,
+            "deadman" => Role::Deadman,
+            "tare" => Role::Tare,
+            "coupling" => Role::Coupling,
+            "release" => Role::Release,
             _ => return None,
         })
     }
