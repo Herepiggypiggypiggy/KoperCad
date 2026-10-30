@@ -13,6 +13,9 @@
 //! relay fed from L and N), named by the motor's `cw_encoder_b`: opening its coil leaves the signal
 //! device ENC alone, so the encoder keeps its counts but loses the direction.
 //!
+//! `closed_winch_load` adds a monitor LCEL for the load cell signal and a rated load: the winch then
+//! watches its load and inhibits lifting above the cut-out.
+//!
 //! The values are made up for the fixture: a generic 30 kW hoist motor, not any manufacturer's data.
 
 use novo_core::{
@@ -51,14 +54,16 @@ fn role(device: DeviceId, main: bool) -> SymbolRole {
 /// Builds the closed-loop winch project as one undo step.
 pub fn closed_winch(doc: &mut Document) -> Result<ClosedWinch> {
     Ok(doc
-        .transact("Draw closed-loop winch", |tx| build(tx, false, false))?
+        .transact("Draw closed-loop winch", |tx| build(tx, false, Extra::None))?
         .0)
 }
 
 /// Builds the project with two winches on one beam as one undo step.
 pub fn closed_winch_pair(doc: &mut Document) -> Result<ClosedWinch> {
     Ok(doc
-        .transact("Draw two closed-loop winches", |tx| build(tx, true, false))?
+        .transact("Draw two closed-loop winches", |tx| {
+            build(tx, true, Extra::None)
+        })?
         .0)
 }
 
@@ -66,12 +71,30 @@ pub fn closed_winch_pair(doc: &mut Document) -> Result<ClosedWinch> {
 pub fn closed_winch_channel(doc: &mut Document) -> Result<ClosedWinch> {
     Ok(doc
         .transact("Draw closed-loop winch with encoder channel", |tx| {
-            build(tx, false, true)
+            build(tx, false, Extra::Channel)
         })?
         .0)
 }
 
-fn build(tx: &mut Tx<'_>, pair: bool, channel: bool) -> Result<ClosedWinch> {
+/// Builds the winch project with a rated load and a load cell signal device LCEL as one undo step.
+pub fn closed_winch_load(doc: &mut Document, swl_kg: f64) -> Result<ClosedWinch> {
+    Ok(doc
+        .transact("Draw closed-loop winch with load cell", |tx| {
+            build(tx, false, Extra::Load(swl_kg))
+        })?
+        .0)
+}
+
+/// What the single winch gets besides its rungs: a second encoder channel monitor, or a rated
+/// load and the load cell signal device.
+#[derive(Clone, Copy, PartialEq)]
+enum Extra {
+    None,
+    Channel,
+    Load(f64),
+}
+
+fn build(tx: &mut Tx<'_>, pair: bool, extra: Extra) -> Result<ClosedWinch> {
     let title = if pair {
         "Two closed-loop winches"
     } else {
@@ -192,7 +215,7 @@ fn build(tx: &mut Tx<'_>, pair: bool, channel: bool) -> Result<ClosedWinch> {
     tx.connect(Endpoint::pin(kb_coil, 1), Endpoint::pin(fnn, 0))?;
 
     // Encoder channel B: a relay of its own, one rung under the first one.
-    if channel {
+    if extra == Extra::Channel {
         let ench = tx.add_device(tag("=A1+CAB-ENCH"), "Encoder channel B monitor")?;
         let x = col(0);
         let f = feed(tx, l, x, 160.0)?;
@@ -201,6 +224,19 @@ fn build(tx: &mut Tx<'_>, pair: bool, channel: bool) -> Result<ClosedWinch> {
         tx.connect(Endpoint::pin(f, 0), Endpoint::pin(k, 0))?;
         tx.connect(Endpoint::pin(k, 1), Endpoint::pin(fnn, 0))?;
         tx.set_property(m1, "cw_encoder_b", Some("=A1+CAB-ENCH".into()))?;
+    }
+
+    // The load cell: a relay of its own, energised while its signal is present.
+    if let Extra::Load(swl_kg) = extra {
+        let lcel = tx.add_device(tag("=A1+CAB-LCEL"), "Load cell signal monitor")?;
+        let x = col(0);
+        let f = feed(tx, l, x, 160.0)?;
+        let k = sym(tx, coil, x, 206.0, lcel, true)?;
+        let fnn = feed(tx, n, x, 230.0)?;
+        tx.connect(Endpoint::pin(f, 0), Endpoint::pin(k, 0))?;
+        tx.connect(Endpoint::pin(k, 1), Endpoint::pin(fnn, 0))?;
+        tx.set_property(m1, "cw_load_cell", Some("=A1+CAB-LCEL".into()))?;
+        tx.set_property(m1, "cw_swl_kg", Some(swl_kg.into()))?;
     }
 
     // The second winch: STO channels and encoder monitor as relays, the drive's brake relay

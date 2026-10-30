@@ -217,6 +217,51 @@ fn a_lost_encoder_channel_is_found_by_name() {
 }
 
 #[test]
+fn an_overloaded_hook_and_a_lost_load_cell_are_found_by_name() {
+    let mut doc = Document::default();
+    novo_tests::closed_winch::closed_winch_load(&mut doc, 2000.0).unwrap();
+    let w = Walkthrough::new("overload")
+        .at(1.0, press(BUTTON, true))
+        .at(
+            4.0,
+            winch(
+                M1,
+                WinchIs::Found {
+                    finding: FindingName::OverloadCutOut,
+                },
+            ),
+        )
+        .at(4.0, winch(M1, WinchIs::Standing));
+    let report = single(&w, &doc);
+    let last = report.steps.last().unwrap();
+    assert_eq!(last.verdict, Verdict::Pass, "{}", last.detail);
+    assert!(
+        report
+            .steps
+            .iter()
+            .all(|s| !s.label.starts_with("Expect") || s.verdict == Verdict::Pass)
+    );
+
+    let mut doc = Document::default();
+    novo_tests::closed_winch::closed_winch_load(&mut doc, 3000.0).unwrap();
+    let w = Walkthrough::new("load cell lost")
+        .at(1.0, press(BUTTON, true))
+        .at(4.0, open_coil("=A1+CAB-LCEL"))
+        .at(
+            8.0,
+            winch(
+                M1,
+                WinchIs::Found {
+                    finding: FindingName::LoadCellLost,
+                },
+            ),
+        );
+    let report = single(&w, &doc);
+    let last = report.steps.last().unwrap();
+    assert_eq!(last.verdict, Verdict::Pass, "{}", last.detail);
+}
+
+#[test]
 fn a_winch_that_is_not_in_the_project_is_named() {
     let mut doc = Document::default();
     closed_winch(&mut doc).unwrap();
