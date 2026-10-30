@@ -2230,6 +2230,7 @@ dependencies = [
  "calamine",
  "clap",
  "image",
+ "lopdf",
  "novo-addons",
  "novo-ai",
  "novo-canvas",
