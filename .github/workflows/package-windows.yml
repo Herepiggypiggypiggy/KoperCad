@@ -395,7 +395,27 @@ jobs:
           workspaces: |
             .
             addons/controllers/engine
-      - run: scripts/build-controllers-addon.sh
+      # Signs the package when the repository secrets KOPERCAD_SIGN_SEED (the Ed25519 seed as hex)
+      # and KOPERCAD_SIGN_KEY_ID exist and this is a tag build; otherwise the package stays unsigned.
+      # The seed is written to a temporary file that is removed afterwards.
+      - name: Build the add-on package
+        env:
+          SIGN_SEED: ${{ secrets.KOPERCAD_SIGN_SEED }}
+          SIGN_KEY_ID: ${{ secrets.KOPERCAD_SIGN_KEY_ID }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          set -euo pipefail
+          if [ "$IS_TAG" = "true" ] && [ -n "$SIGN_SEED" ] && [ -n "$SIGN_KEY_ID" ]; then
+            seed_file="$RUNNER_TEMP/addon-seed.hex"
+            umask 077
+            printf '%s' "$SIGN_SEED" > "$seed_file"
+            trap 'rm -f "$seed_file"' EXIT
+            export KOPERCAD_SIGN_KEY_ID="$SIGN_KEY_ID" KOPERCAD_SIGN_SEED_FILE="$seed_file"
+            echo "Signing the add-on package with key $SIGN_KEY_ID"
+          else
+            echo "No signing secrets (or not a tag build): the add-on package stays unsigned"
+          fi
+          scripts/build-controllers-addon.sh
       - run: ls -l target/addons
       - uses: actions/upload-artifact@v4
         with:

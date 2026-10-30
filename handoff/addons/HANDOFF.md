@@ -32,3 +32,13 @@ gate the controller import wizard once the controller add-on exists; project dat
 - Engine calls: `NovoApp::addon_engine_send` queues a request and returns; `poll_engines` (every frame in `addons_windows`) applies answers; `addon_engine_call` is the blocking form for tests only. Answers come in send order; a stop answers everything behind it with the stop.
 - wasmi needs the `portable-dispatch` feature (set in the workspace dependency): without it a debug build overflows the thread stack in the interpreter loop.
 - Test engines are WebAssembly text built with the `wat` crate in tests only; the program accepts binary modules only.
+
+## Release signing (wired by the Release thread)
+
+- `package-windows.yml`, job `controllers-addon`, signs the Controllers package on tag builds when two repository
+  secrets exist: `KOPERCAD_SIGN_SEED` (Ed25519 seed, hex) and `KOPERCAD_SIGN_KEY_ID` (for example `koper-1`).
+  Without them the package stays unsigned and installs as "unsigned, from file" (tick needed).
+- The seed is written to a temporary file for the build step and removed afterwards. The private key never enters
+  the repository; generating it and setting the secrets is Tadjiro's step.
+- After the key exists, the add-ons owner adds the public key to `BUILTIN_KEYS` in `crates/novo-addons/src/trust.rs`.
+  Until then a signed package shows as signed by an unknown key.
