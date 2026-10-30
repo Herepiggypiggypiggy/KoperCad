@@ -2487,7 +2487,8 @@ impl SchematicView {
                                 .button("Send to PLC")
                                 .on_hover_text(
                                     "Draws the next free PLC channel of the right type beside the \
-                                     contact, sensor or coil and connects it",
+                                     contact, sensor or coil and connects it. Needs a PLC card \
+                                     first (Draw > Add PLC card)",
                                 )
                                 .clicked()
                         {

@@ -214,6 +214,11 @@ pub const IMPORT_SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        name: "Lists and tags",
+        about: "Spreadsheets for bulk edit, a machine's I/O list and the tags of a PLC programmer.",
+        ids: &["import.spreadsheet", "plc.import_list", "plc.import_tags"],
+    },
+    Section {
         name: "Projects",
         about: "Another tool's project or plant, brought in as pages and devices.",
         ids: &[
@@ -232,11 +237,6 @@ pub const IMPORT_SECTIONS: &[Section] = &[
             "parts.import_table",
             "parts.import_eplan",
         ],
-    },
-    Section {
-        name: "Lists and tags",
-        about: "Spreadsheets for bulk edit, a machine's I/O list and the tags of a PLC programmer.",
-        ids: &["import.spreadsheet", "plc.import_list", "plc.import_tags"],
     },
 ];
 
