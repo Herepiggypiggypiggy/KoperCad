@@ -37,6 +37,9 @@
 //!   does: answers the next file dialog with `path` and starts File > Open
 //!   (Ctrl+O). With `recover: true` it runs the command "Recover a damaged
 //!   project" from the palette (Ctrl+K) instead, so QA can open damaged fixtures.
+//! - `pad` `{axis,value}` / `{button,down}` / `{connect}` / `{centre:true}`: moves the fake
+//!   gamepad that the Controller card reads under `--control` instead of hardware (stick or
+//!   trigger value, button, plug in or pull out, everything back to rest).
 //! - `wait` `{frames?}`, `resize` `{w,h}`, `quit`.
 //!
 //! Every input command ends with a few settle frames before it replies, so a
@@ -579,6 +582,28 @@ impl Control {
             }
             "scene" => {
                 steps.push_back(Step::Scene(false));
+            }
+            "pad" => {
+                // The fake gamepad the app reads under --control (no hardware needed).
+                let hand = crate::app::control_pad();
+                if let (Some(axis), Some(v)) = (
+                    req.get("axis").and_then(Value::as_str),
+                    req.get("value").and_then(Value::as_f64),
+                ) {
+                    hand.set_axis(axis, v);
+                } else if let (Some(button), Some(down)) = (
+                    req.get("button").and_then(Value::as_str),
+                    req.get("down").and_then(Value::as_bool),
+                ) {
+                    hand.set_button(button, down);
+                } else if let Some(on) = req.get("connect").and_then(Value::as_bool) {
+                    hand.connect(on);
+                } else if req.get("centre").and_then(Value::as_bool) == Some(true) {
+                    hand.centre();
+                } else {
+                    return fail("pad needs axis+value, button+down, connect or centre".into());
+                }
+                steps.push_back(Step::Idle(SETTLE_FRAMES));
             }
             "dialog_answer" => {
                 // The next native file dialog takes this path (or these paths).

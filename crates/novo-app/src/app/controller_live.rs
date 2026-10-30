@@ -128,6 +128,8 @@ pub(crate) struct ControllerLive {
     /// only unbound. Kept for the session (it is not part of the project), so closing and
     /// opening the card, or opening another project, leaves the person's view as it was.
     pub(super) filter: novo_controller::SignalFilter,
+    /// The gamepad: device, maps, mappers, monitor (lane C5, see `controller_pad`).
+    pub(super) pad: super::controller_pad::PadHost,
 }
 
 /// What holds a spring control away from rest: the pointer and a key, each at a position.
@@ -135,6 +137,7 @@ pub(crate) struct ControllerLive {
 struct Hold {
     mouse: Option<String>,
     key: Option<String>,
+    pad: Option<String>,
 }
 
 /// Who is holding.
@@ -142,6 +145,8 @@ struct Hold {
 pub(super) enum HoldBy {
     Mouse,
     Key,
+    /// A gamepad or joystick (lane C5), through the map of the instance.
+    Pad,
 }
 
 /// Colours offered for instances; new instances take them in turn.
@@ -266,13 +271,16 @@ impl ControllerLive {
         if text.is_empty() {
             self.set = ControllerSet::new();
             self.table = BindingTable::new();
+            self.pad.set_maps(Default::default());
             self.release();
             return;
         }
         let library = self.profile_library();
+        let mut maps = Default::default();
         let restored = ProjectControllers::from_text(text)
             .map_err(|e| format!("The controller data in this project could not be read: {e}"))
             .and_then(|data| {
+                maps = data.gamepads.clone();
                 data.restore(&library).map_err(|e| {
                     format!("The controllers of this project could not be restored: {e}")
                 })
@@ -282,10 +290,12 @@ impl ControllerLive {
                 self.set = set;
                 self.table = table;
                 self.notes = notes;
+                self.pad.set_maps(maps);
             }
             Err(e) => {
                 self.set = ControllerSet::new();
                 self.table = BindingTable::new();
+                self.pad.set_maps(Default::default());
                 self.damaged = Some(e);
             }
         }
@@ -310,6 +320,13 @@ impl ControllerLive {
     /// saved project does not reopen with an E-stop pressed or a rocker held.
     pub(super) fn snapshot(&self) -> Result<String, String> {
         let mut data = ProjectControllers::capture(&self.set, &self.table)?;
+        data.gamepads = self
+            .pad
+            .maps
+            .iter()
+            .filter(|(id, m)| !m.is_empty() && self.set.instance(id).is_some())
+            .map(|(id, m)| (id.clone(), m.clone()))
+            .collect();
         for record in &mut data.instances {
             if let Some(i) = self.set.instance(&record.id)
                 && let Ok(fresh) = novo_controller::Controller::new(i.controller.profile().clone())
@@ -393,6 +410,7 @@ impl ControllerLive {
         self.table.bindings.retain(|b| b.key.controller != id);
         self.popped.remove(id);
         self.holds.retain(|(who, _), _| who != id);
+        self.pad.forget(id);
         if self.selected.as_deref() == Some(id) {
             self.selected = self.set.instances().first().map(|i| i.id.clone());
         }
@@ -505,6 +523,7 @@ impl ControllerLive {
         let slot = match by {
             HoldBy::Mouse => &mut entry.mouse,
             HoldBy::Key => &mut entry.key,
+            HoldBy::Pad => &mut entry.pad,
         };
         *slot = position.map(str::to_owned);
     }
@@ -527,7 +546,7 @@ impl ControllerLive {
             let Some(hold) = self.holds.get(&key).cloned() else {
                 continue;
             };
-            let wanted = hold.key.clone().or(hold.mouse.clone());
+            let wanted = hold.pad.clone().or(hold.key.clone()).or(hold.mouse.clone());
             let Some((at, rest)) = self.set.instance(&key.0).and_then(|i| {
                 let at = i.controller.position(&key.1)?.to_owned();
                 let rest = i.controller.profile().control(&key.1)?.rest_position();

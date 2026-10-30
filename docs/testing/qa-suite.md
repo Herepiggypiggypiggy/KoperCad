@@ -67,6 +67,7 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `double_click X Y` | two quick clicks at a window point |
 | `mouse_down X Y`, `mouse_up X Y` | press or release and leave it, so `move` and `shot` can capture the middle of a drag or hold a Live view pushbutton (the Operate rows' "Hold to press") for as long as the scenario needs |
 | `key ctrl+k Escape`, `text some words` | keyboard |
+| `pad axis NAME VALUE`, `pad button NAME down\|up`, `pad disconnect`, `pad connect`, `pad centre` | moves the fake gamepad that the Controller card's Gamepad section reads under `--control` (no hardware; `left_y` 0.8, `south`, `east`...). Axes run -1..1 (triggers 0..1); `connect` plugs it in with the sticks where they were (`centre` first for a pad at rest) |
 | `answer_dialog FILE` | the next native file dialog gets this path (queue it first) |
 | `import_table FILE` | File > Import parts > Import parts from a table, with the file dialog answered with FILE; leaves the mapping (or the refusal) on screen |
 | `wait N`, `resize W H` | run N frames (at most 600); resize the window |

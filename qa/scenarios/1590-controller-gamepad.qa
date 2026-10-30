@@ -1,0 +1,89 @@
+@title Controller gamepad: a (fake) pad drives the radio hoist, the dead-man gates it, unplugging stops it
+@area Live
+@sizes 1366x768
+# Lane C5. Under --control the Gamepad section reads a fake pad that the scenario moves with the
+# `pad` step (no hardware). Controller card > Gamepad: device, live monitor, "Edit map...",
+# "Calibrate...", and the switch that lets the pad drive the controller (off until asked).
+open qa/fixtures/radio-hoist.novo
+wait 20
+key shift+l
+wait 20
+click_text "Controller…"
+wait 20
+# The card scrolls: bring the Gamepad section into view.
+scroll 1180 500 -700
+wait 10
+click_text "Gamepad"
+wait 20
+scroll 1180 500 -100
+wait 10
+expect "Test gamepad (fake)"
+expect "Connected"
+expect "This controller has no pad map yet."
+shot section-no-map
+# A first map for this profile: sticks on the rockers, E-stop and start on buttons.
+click_text "Edit map…"
+wait 20
+expect "Gamepad map"
+click_text "Suggest a map"
+wait 20
+shot map-editor
+check_layout
+key Escape
+wait 10
+# Watching only: the pad moves nothing and the section says what it would do.
+pad axis left_y 0
+wait 5
+pad axis left_y 0.9
+wait 10
+expect "Test, would hold"
+expect "Signals (1 of 15 high)"
+shot test-would-hold
+pad centre
+wait 10
+# Now let it drive: main on with the start button, then hoist up step 2 with the stick.
+click_text "Drive this controller with the pad"
+wait 10
+pad button start down
+wait 5
+pad button start up
+wait 10
+expect "Signals (2 of 15 high)"
+pad axis left_y 0.9
+wait 10
+expect "Holding: hoist"
+expect "Signals (4 of 15 high)"
+shot pad-hoist-up-2
+# Half way: step 1 only.
+pad axis left_y 0.3
+wait 10
+expect "Signals (3 of 15 high)"
+# Unplug the pad with the hoist up: everything is let go at once and the radio link drops.
+pad axis left_y 0.9
+wait 10
+pad disconnect
+wait 10
+expect "Not connected"
+expect "Signals (0 of 15 high)"
+shot pad-unplugged
+# Plug it back in with the stick still over: nothing moves until it has been at rest.
+pad connect
+wait 10
+expect "Signals (1 of 15 high)"
+expect "waits until"
+shot pad-waits-for-rest
+pad centre
+wait 10
+pad button start down
+wait 5
+pad button start up
+wait 10
+pad axis left_y 0.9
+wait 10
+expect "Signals (4 of 15 high)"
+# The E-stop button drops everything.
+pad button east down
+wait 10
+expect "Signals (0 of 15 high)"
+shot pad-estop
+check_layout

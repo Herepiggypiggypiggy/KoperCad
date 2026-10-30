@@ -37,6 +37,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `drawer.devices.tab`: {ui:drawer.devices.tab} shows **Devices tab**
 - `live.card`: {ui:live.card} shows **Live potentials**
 - `live.controller`: {ui:live.controller} shows **Controller card**
+- `live.controller.gamepad`: {ui:live.controller.gamepad} shows **Gamepad section**
 - `live.pole`: {ui:live.pole} shows **Pole badge**
 - `live.coil`: {ui:live.coil} shows **Coil badge**
 - `live.output`: {ui:live.output} shows **Output badge**
