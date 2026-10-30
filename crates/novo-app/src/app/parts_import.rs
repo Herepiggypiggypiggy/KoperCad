@@ -81,6 +81,12 @@ pub(crate) struct Import {
     pub account: Option<String>,
     pub phase: Phase,
     watcher: Option<DownloadsWatcher>,
+    /// The TraceParts hand-off watches with this instead: TraceParts names
+    /// files by its own ids, so any new STEP or ZIP counts and its content
+    /// is judged against the part.
+    tp_watcher: Option<novo_parts::tp_handoff::TracePartsWatcher>,
+    /// Arrivals of the TraceParts watch whose names do not carry the part.
+    tp_unnamed: Vec<PathBuf>,
     /// Files the user said no to, so the watch does not ask again.
     declined: Vec<PathBuf>,
     /// New downloads already looked at (their names do not mention the
@@ -170,6 +176,8 @@ impl Import {
             declined: Vec::new(),
             judged: Vec::new(),
             left_alone: Vec::new(),
+            tp_watcher: None,
+            tp_unnamed: Vec::new(),
             watcher: downloads.map(|d| {
                 DownloadsWatcher::for_maker(
                     d,
@@ -178,6 +186,48 @@ impl Import {
                     &part.order_number,
                 )
             }),
+            last_poll: f64::NEG_INFINITY,
+            waiting_since: None,
+            now: 0.0,
+            read: None,
+        }
+    }
+
+    /// Starts the keyless TraceParts hand-off for `part`: the page to open is
+    /// TraceParts' search for the order number, and Downloads is watched for
+    /// the STEP file the user saves there. TraceParts names files by its own
+    /// ids, so the file itself is read and matched before it is taken.
+    pub(crate) fn start_traceparts(part: &CatalogPart, downloads: Option<&Path>) -> Import {
+        let page_url = novo_parts::tp_handoff::search_url(&part.order_number)
+            .unwrap_or_else(|| novo_parts::tp_handoff::HOME_URL.to_owned());
+        Import {
+            key: part.key(),
+            label: part.to_string(),
+            page_url: Some(page_url),
+            page_verified: false,
+            steps: vec![
+                format!("Find the {} entry in the TraceParts tab (the link is a search and may not land on the part itself).", part.order_number),
+                "Use its CAD download and choose STEP. TraceParts may ask you to sign in.".into(),
+                "Come back here: KoperCAD picks the file up from Downloads and checks it is the right part.".into(),
+            ],
+            order_warning: None,
+            account: Some(
+                "You may need to sign in to TraceParts yourself. KoperCAD never signs in or keeps a password; the download stays on this computer."
+                    .into(),
+            ),
+            phase: Phase::Waiting,
+            declined: Vec::new(),
+            judged: Vec::new(),
+            left_alone: Vec::new(),
+            watcher: None,
+            tp_watcher: downloads.map(|d| {
+                novo_parts::tp_handoff::TracePartsWatcher::new(
+                    d,
+                    SystemTime::now(),
+                    &part.order_number,
+                )
+            }),
+            tp_unnamed: Vec::new(),
             last_poll: f64::NEG_INFINITY,
             waiting_since: None,
             now: 0.0,
@@ -346,6 +396,20 @@ waiting. Try a smaller file, or the STEP file alone.",
         }
         self.last_poll = now;
         let declined = &self.declined;
+        if let Some(tp) = self.tp_watcher.as_mut() {
+            let mut named = Vec::new();
+            for a in tp.poll() {
+                if declined.contains(&a.path) {
+                    continue;
+                }
+                if a.names_the_part {
+                    named.push(a);
+                } else {
+                    self.tp_unnamed.push(a.path);
+                }
+            }
+            return named.into_iter().next();
+        }
         // A file that names the part wins over one that merely looks like a
         // download: the first is imported at once, the second is asked about.
         let mut fresh: Vec<Arrival> = self
@@ -362,6 +426,15 @@ waiting. Try a smaller file, or the STEP file alone.",
     /// Names of new downloads the watch passed over because they do not
     /// mention the part, at most three.
     pub(crate) fn passed_over(&self) -> Vec<String> {
+        if self.tp_watcher.is_some() {
+            return self
+                .tp_unnamed
+                .iter()
+                .filter(|p| !self.judged.contains(p))
+                .take(3)
+                .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+                .collect();
+        }
         self.watcher.as_ref().map_or_else(Vec::new, |w| {
             w.skipped()
                 .iter()
@@ -409,6 +482,14 @@ waiting. Try a smaller file, or the STEP file alone.",
 
     /// New downloads that were passed over by name and not judged yet.
     pub(crate) fn unjudged(&self) -> Vec<PathBuf> {
+        if self.tp_watcher.is_some() {
+            return self
+                .tp_unnamed
+                .iter()
+                .filter(|p| !self.judged.contains(p) && !self.declined.contains(p))
+                .cloned()
+                .collect();
+        }
         self.watcher.as_ref().map_or_else(Vec::new, |w| {
             w.skipped()
                 .iter()
@@ -424,7 +505,7 @@ waiting. Try a smaller file, or the STEP file alone.",
     }
 
     pub(crate) fn watching(&self) -> bool {
-        self.watcher.is_some()
+        self.watcher.is_some() || self.tp_watcher.is_some()
     }
 }
 
@@ -622,6 +703,41 @@ mod tests {
     }
 
     const STEP: &str = "ISO-10303-21;\nDATA;\n#1=CARTESIAN_POINT('',(0.,0.,0.));\n#2=CARTESIAN_POINT('',(5.2,0.,0.));\n#3=CARTESIAN_POINT('',(5.2,70.,0.));\n#4=CARTESIAN_POINT('',(0.,70.,32.));\nENDSEC;\nEND-ISO-10303-21;\n";
+
+    #[test]
+    fn traceparts_id_named_step_is_picked_up_and_judged_against_the_part() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut imp = Import::start_traceparts(&part(), Some(dir.path()));
+        assert_eq!(imp.poll(0.0), None);
+        let name = "MCADPP0003371_3D-simplified.stp";
+        fs::write(dir.path().join(name), STEP).unwrap();
+        for t in [1.5, 3.0, 4.5] {
+            assert_eq!(
+                imp.poll(t),
+                None,
+                "a name without the part is judged by content"
+            );
+        }
+        let path = dir.path().join(name);
+        assert_eq!(imp.unjudged(), vec![path.clone()]);
+        assert_eq!(imp.passed_over(), vec![name.to_owned()]);
+        imp.decline(path);
+        assert!(imp.unjudged().is_empty());
+    }
+
+    #[test]
+    fn traceparts_hand_off_opens_the_search_and_watches_downloads() {
+        let dir = tempfile::tempdir().unwrap();
+        let imp = Import::start_traceparts(&part(), Some(dir.path()));
+        assert_eq!(imp.phase, Phase::Waiting);
+        assert!(imp.watching());
+        let url = imp.page_url.unwrap();
+        assert!(url.starts_with("https://www.traceparts.com/"), "{url}");
+        assert!(url.contains("2002-1201"), "{url}");
+        assert!(!imp.page_verified);
+        let none = Import::start_traceparts(&part(), None);
+        assert!(!none.watching());
+    }
 
     #[test]
     fn a_click_starts_the_hand_off_with_the_makers_page() {

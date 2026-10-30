@@ -1,0 +1,23 @@
+@title Parts window: Get CAD from TraceParts shows its waiting state with steps
+@sizes 1366x768 1920x1080
+@area Parts
+# Where the user finds it: Parts window > select a part > Get CAD from TraceParts.
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text Parts
+wait 10
+key Return
+wait 20
+expect "Parts"
+text 3RT2016
+wait 12
+key Down
+wait 8
+expect "Get CAD from TraceParts"
+shot button-visible
+click_text "Get CAD from TraceParts"
+wait 15
+expect "TraceParts"
+shot waiting-with-steps

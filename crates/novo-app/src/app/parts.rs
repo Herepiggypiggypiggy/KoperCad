@@ -957,6 +957,7 @@ enum PartsAction {
     ImportLibrary,
     Select(PartKey),
     Import(PartKey),
+    TracePartsCad(PartKey),
     OpenPage(String),
     ChooseFile,
     ChooseModel,
@@ -1262,6 +1263,14 @@ impl NovoApp {
                     win.start_import(&key);
                     if let Some(url) = win.import.as_ref().and_then(|i| i.page_url.clone()) {
                         ctx.open_url(egui::OpenUrl::new_tab(url));
+                    }
+                }
+                PartsAction::TracePartsCad(key) => {
+                    if let Some(part) = win.catalog.get(&key) {
+                        win.import = Some(Import::start_traceparts(part, win.downloads.as_deref()));
+                        if let Some(url) = win.import.as_ref().and_then(|i| i.page_url.clone()) {
+                            ctx.open_url(egui::OpenUrl::new_tab(url));
+                        }
                     }
                 }
                 PartsAction::OpenPage(url) => ctx.open_url(egui::OpenUrl::new_tab(url)),
@@ -1997,6 +2006,15 @@ fn detail_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAc
                 }
                 if !win.in_library(&key) && ui.button("Import").clicked() {
                     actions.push(PartsAction::Import(key.clone()));
+                }
+                if ui
+                    .button("Get CAD from TraceParts")
+                    .on_hover_text(
+                        "Opens TraceParts for this part number in your browser. Press Download and choose STEP; KoperCAD picks the file up from Downloads, checks it is this part and stores it for the 3D view and drilling plans.",
+                    )
+                    .clicked()
+                {
+                    actions.push(PartsAction::TracePartsCad(key.clone()));
                 }
             });
             for section in detail_sections(part) {
