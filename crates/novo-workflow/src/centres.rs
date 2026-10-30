@@ -13,14 +13,16 @@ pub enum Centre {
     Import,
     Start,
     Project,
+    Numbering,
 }
 
-/// Every centre, in the order the File menu lists their openers.
-pub const CENTRES: [Centre; 4] = [
+/// Every centre, in the order their openers are listed.
+pub const CENTRES: [Centre; 5] = [
     Centre::Export,
     Centre::Import,
     Centre::Start,
     Centre::Project,
+    Centre::Numbering,
 ];
 
 impl Centre {
@@ -31,6 +33,7 @@ impl Centre {
             Centre::Import => IMPORT_CENTRE,
             Centre::Start => START_CENTRE,
             Centre::Project => PROJECT_CENTRE,
+            Centre::Numbering => NUMBERING_CENTRE,
         }
     }
 
@@ -41,6 +44,7 @@ impl Centre {
             Centre::Import => "Import",
             Centre::Start => "Templates and examples",
             Centre::Project => "Project settings",
+            Centre::Numbering => "Numbering",
         }
     }
 
@@ -51,6 +55,7 @@ impl Centre {
             Centre::Import => "Search: dxf, eplan, parts, excel, plc",
             Centre::Start => "Search: crane, pump, motor control, plc, emc",
             Centre::Project => "Search: standard, rules, options, variants, languages",
+            Centre::Numbering => "Search: wires, devices, tags, potentials, I/O, interruption",
         }
     }
 
@@ -58,6 +63,7 @@ impl Centre {
     pub fn idle_button(self) -> &'static str {
         match self {
             Centre::Start | Centre::Project => "Open",
+            Centre::Numbering => "Run",
             _ => self.title(),
         }
     }
@@ -75,6 +81,11 @@ impl Centre {
             (Centre::Project, "project.untie") => "Apply",
             (Centre::Project, "project.generate") => "Generate",
             (Centre::Project, _) => "Open",
+            (
+                Centre::Numbering,
+                "wires.numbering" | "wires.renumber" | "edit.renumber" | "wires.set_number",
+            ) => "Open",
+            (Centre::Numbering, _) => "Run",
         }
     }
 
@@ -84,6 +95,7 @@ impl Centre {
             Centre::Import => IMPORT_SECTIONS,
             Centre::Start => START_SECTIONS,
             Centre::Project => PROJECT_SECTIONS,
+            Centre::Numbering => NUMBERING_SECTIONS,
         }
     }
 
@@ -161,6 +173,30 @@ pub const PROJECT_SECTIONS: &[Section] = &[
         name: "Generate",
         about: "Pages and devices made from a spec sheet.",
         ids: &["project.generate"],
+    },
+];
+
+/// The command that opens the Numbering centre.
+pub const NUMBERING_CENTRE: &str = "edit.numbering_centre";
+
+/// The Numbering centre: what Edit > Wire numbers and Edit > Renumber held.
+pub const NUMBERING_SECTIONS: &[Section] = &[
+    Section {
+        name: "Wires",
+        about: "Numbers on wires and potentials: give them, renumber, check, fix one by hand.",
+        ids: &[
+            "wires.number",
+            "wires.renumber",
+            "wires.check_numbers",
+            "wires.numbering",
+            "wires.set_number",
+            "wires.unlock_number",
+        ],
+    },
+    Section {
+        name: "Devices and points",
+        about: "Tags of devices, interruption points and PLC I/O.",
+        ids: &["edit.renumber", "interruption.renumber", "plc.renumber_io"],
     },
 ];
 
@@ -373,6 +409,15 @@ pub fn describe(id: &str) -> &'static str {
         "project.languages" => "The languages the reports and lists are written in.",
         "project.options" => "Machine options and variants, and what each one draws.",
         "project.untie" => "Makes the selected items appear whatever the options are.",
+        "wires.number" => "Gives every wire without a number the next free one.",
+        "wires.renumber" => "Numbers all wires again, from the scheme and the locks.",
+        "wires.check_numbers" => "Lists wires that share a number or break the scheme.",
+        "wires.numbering" => "The numbering scheme, ranges and locks of this project.",
+        "wires.set_number" => "Types a number on the selected wire's potential and locks it.",
+        "wires.unlock_number" => "Lets numbering runs change the selected wire's number again.",
+        "edit.renumber" => "Gives the devices new tags in order, page by page.",
+        "interruption.renumber" => "Numbers the interruption points of the wires automatically.",
+        "plc.renumber_io" => "Gives the PLC inputs and outputs new addresses in order.",
         "project.generate" => "Pages and devices made from an Excel or CSV spec sheet.",
         _ => "",
     }
@@ -466,6 +511,20 @@ mod tests {
         }
         assert_eq!(Centre::Project.button("project.generate"), "Generate");
         assert_eq!(Centre::Project.button("project.rules"), "Open");
+    }
+
+    #[test]
+    fn the_numbering_centre_lists_the_nine_numbering_commands_once() {
+        let mut seen = HashSet::new();
+        for id in Centre::Numbering.ids() {
+            assert!(get(id).is_some(), "{id} is not a command");
+            assert!(seen.insert(id), "{id} is in two sections");
+            assert_eq!(Centre::of(id), Some(Centre::Numbering), "{id}");
+            assert!(replaces_menu_row(id), "{id}");
+        }
+        assert_eq!(seen.len(), 9);
+        assert_eq!(Centre::Numbering.button("wires.renumber"), "Open");
+        assert_eq!(Centre::Numbering.button("wires.number"), "Run");
     }
 
     #[test]

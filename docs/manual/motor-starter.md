@@ -13,7 +13,7 @@ A direct-on-line starter is the classic first circuit: a breaker, a contactor, a
 
 ## Wire numbers
 
-Wire and potential numbers follow a scheme you choose (Edit > Wire numbers, or **Ctrl+K** and type `numbering`).
+Wire and potential numbers follow a scheme you choose (Edit > Numbering..., or **Ctrl+K** and type `numbering`).
 
 - Numbers are filled in stable order: adding a wire does not renumber the others.
 - A number you type is **locked** and kept.

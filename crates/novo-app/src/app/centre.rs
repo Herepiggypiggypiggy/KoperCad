@@ -1,16 +1,18 @@
-//! The Export, Import, Start and Project centres (lane V4,
+//! The Export, Import, Start, Project and Numbering centres (lane V4,
 //! `docs/design/visual-redesign.md` section 6): one window each for every
 //! format the program writes, every file it brings in, every template or
-//! example a project can start from, and the settings of the project. The
-//! commands are tiles with their icon and a sentence, grouped by what they
-//! are for; picking one shows what it does and the one button that does it.
-//! File > Export..., File > Import..., File > Templates and examples... and
-//! File > Project settings... open them, and so do the command field and the
-//! app menu search.
+//! example a project can start from, the settings of the project, and the
+//! numbering of wires, devices and I/O. The commands are tiles with their
+//! icon and a sentence, grouped by what they are for; picking one shows what
+//! it does and the one button that does it. File > Export..., File >
+//! Import..., File > Templates and examples..., File > Project settings...
+//! and Edit > Numbering... open them, and so do the command field and the app
+//! menu search.
 //!
-//! Where the user finds them: those four File rows, or Ctrl+K and "export",
-//! "import", "templates" or "project settings". Every command still runs from
-//! the command field by its own name.
+//! Where the user finds them: those File rows and Edit > Numbering..., or
+//! Ctrl+K and "export", "import", "templates", "project settings" or
+//! "numbering". Every command still runs from the command field by its own
+//! name.
 
 use eframe::egui;
 use novo_theme::{icons, presentation, widgets};
@@ -100,6 +102,7 @@ impl NovoApp {
                 Centre::Import => "import_centre",
                 Centre::Start => "start_centre",
                 Centre::Project => "project_centre",
+                Centre::Numbering => "numbering_centre",
             },
             state.kind.title(),
             [novo_theme::dialog_width::CENTRE, 640.0],
@@ -219,6 +222,7 @@ impl NovoApp {
                     Centre::Project => {
                         "Nothing matches. Try standard, rules, options or languages."
                     }
+                    Centre::Numbering => "Nothing matches. Try wires, devices, tags or I/O.",
                 })
                 .color(pal.text_secondary),
             );
@@ -347,6 +351,7 @@ impl NovoApp {
                     Centre::Import => "Choose an item on the left to see what it brings in.",
                     Centre::Start => "Choose a template or example on the left to see what it is.",
                     Centre::Project => "Choose a setting on the left to see what it does.",
+                    Centre::Numbering => "Choose an action on the left to see what it numbers.",
                 })
                 .color(pal.text_secondary),
             );
@@ -388,6 +393,7 @@ impl NovoApp {
                 Centre::Import => "Any import also runs from Ctrl+K by its name.",
                 Centre::Start => "Any template or example also runs from Ctrl+K by its name.",
                 Centre::Project => "Any setting also runs from Ctrl+K by its name.",
+                Centre::Numbering => "Any numbering command also runs from Ctrl+K by its name.",
             })
             .small()
             .color(pal.text_tertiary),
