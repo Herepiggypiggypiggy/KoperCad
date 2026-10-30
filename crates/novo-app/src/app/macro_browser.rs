@@ -364,7 +364,7 @@ impl NovoApp {
             .document()
             .map(|d| self.wb.macros.updates_for(d.project()))
             .unwrap_or_default();
-        let window = super::panel::dialog(ctx, "Macros", [520.0, 0.0])
+        let window = super::panel::dialog(ctx, "Macros", [520.0, 520.0])
             .id(super::panel::keep_id(ctx, egui::Id::new("macro_browser")))
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
