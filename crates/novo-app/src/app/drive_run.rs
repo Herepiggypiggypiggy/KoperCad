@@ -622,7 +622,8 @@ pub(super) fn advance(
     true
 }
 
-/// A one-line reading of an axis, for the badge and the window.
+/// A one-line reading of an axis, for the badge (short: the badge sits on the drawing) and the
+/// window. [`travel_detail`] adds the wind and the last stop in the window.
 pub(super) fn reading(module: &TravelModule) -> String {
     if let Some(why) = module.fault() {
         return why.to_owned();
@@ -644,6 +645,15 @@ pub(super) fn reading(module: &TravelModule) -> String {
             novo_drive::brake::BrakeState::Released => " \u{b7} brake open",
         });
     }
+    text
+}
+
+/// What the badge leaves out, for the window row: the wind and the last stop.
+pub(super) fn travel_detail(module: &TravelModule) -> String {
+    let Some(s) = module.snapshot() else {
+        return String::new();
+    };
+    let mut text = String::new();
     if s.wind_force_n.abs() >= 1.0 {
         text.push_str(&format!(
             " \u{b7} wind {:.0} N ({:.0} m/s)",
@@ -867,7 +877,7 @@ impl NovoApp {
         let rows: Vec<(String, String)> = run.active.as_ref().map_or_else(Vec::new, |a| {
             a.lp.modules
                 .iter()
-                .map(|m| (m.id.clone(), reading(m)))
+                .map(|m| (m.id.clone(), format!("{}{}", reading(m), travel_detail(m))))
                 .chain(
                     a.hl.modules
                         .iter()
@@ -1362,7 +1372,8 @@ mod tests {
         let module = &run.active.as_ref().unwrap().lp.modules[0];
         let text = reading(module);
         assert!(text.contains("brake open"), "{text}");
-        assert!(text.contains("wind"), "{text}");
+        assert!(!text.contains("wind"), "the badge stays short: {text}");
+        assert!(travel_detail(module).contains("wind"));
         let id = module.id.clone();
         let line = run.travel_status(&id).expect("a status line");
         assert!(

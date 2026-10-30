@@ -2,6 +2,7 @@
 @area Simulate
 @sizes 1366x768
 # The brake-and-wind fixture is the travel project with a 15 N m spring brake behind the drive's brake output and an 8 m/s wind on 30 m2 with a gust after 20 s.
+# 1790 runs at 1366x768 and 1790b is the same walk-through at 1920x1080 (the Hold to press buttons of the Live card sit at other coordinates there).
 open qa/fixtures/travel-brake-wind.novo
 wait 20
 key ctrl+k
