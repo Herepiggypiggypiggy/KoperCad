@@ -23,6 +23,8 @@ pub mod binding;
 pub mod engine;
 pub mod gamepad;
 pub mod import;
+pub mod machine;
+mod machine_check;
 pub mod panel;
 pub mod profile;
 pub mod sequence;
@@ -33,6 +35,7 @@ pub use binding::{
     Binding, BindingFinding, BindingProblem, BindingTable, SignalKey, Target, TargetOwnership,
 };
 pub use engine::{Applied, Block, ControlError, Controller, SignalChange, SignalState, State};
+pub use machine::{MachineCatalog, MachinePath, ModuleEntry, PathError, PortEntry, PortKind};
 pub use profile::{
     Combine, Condition, ControlDef, ControlKind, ControllerKind, ControllerMeta, Effects,
     InterlockDef, InterlockMode, Profile, ProfileError, SignalDef, SignalKind, Supply, SupplyKind,

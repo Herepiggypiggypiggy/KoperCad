@@ -6,6 +6,9 @@ pub mod bindings;
 pub mod cl_pair_loop;
 pub mod cl_winch_loop;
 pub mod cl_winch_spec;
+pub mod commands;
+#[cfg(test)]
+mod commands_tests;
 pub mod cosim;
 pub mod crane;
 pub mod drive_hoist_loop;

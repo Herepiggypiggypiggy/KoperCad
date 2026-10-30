@@ -64,7 +64,7 @@ A binding connects a signal (`radio-1/HOIST_UP_FAST`) to a target, and each targ
 | Pin of a device (`-A1:2`) | The switched pole that pin belongs to closes (a receiver's dry output, or any contact no coil drives). The pin must lead to exactly one pole: a shared common (`COM`) is refused with the reason. |
 | Hand device (`-S1`) | Its poles go to the opposite of their rest state, as if the button were held. `invert` gives the opposite sense, as the E-stop chain needs (pressed while the signal is low). |
 | PLC input (`%IX0.3`) | The bit is held for the running PLC program; the drawn channel is overridden. Bit inputs only; a word input is kept and reported by the checks. |
-| Machine module path | Kept in the table; read by the machine loop (lane L5b). |
+| Machine port (`hoist/-M1@up`) | While Simulate > Hoist run or Drive run is running (Live on), the level is a command to that port of the module. See "Machine ports" below. |
 
 Receiver symbols (`iec/controllers/output_dry`, `outputs_6/9/12/16`) declare their shared common with
 `common = "COM"` in `[behavior]` (validator and `FORMAT.md` know it): each output is one pole `[COM, n]`. The device
@@ -76,6 +76,51 @@ The hoist run (lane L5a) steps the circuit through `LiveView::solved` too, so th
 extra code: its clock advances by each fixed tick, the radio closes the receiver contacts, the drawn contactors settle,
 and the loop reads the motor feed. The pole forcing (`novo_sim::pins`) is the same `PoleState` mechanism the loop's
 `set_contact` uses.
+
+## Machine ports (lane L5b)
+
+Where the user finds it: in the Controller card, the binding list of each signal has a **Machine ports** part with one fold per
+module and its ports; below the bindings a **Machine modules** block lists which signal drives which module and whether it is high
+now. The Hoist run and Drive run windows print "Controller: radio-1/HOIST_UP_FAST -> up" under each module a controller drives. Fixture
+`qa/fixtures/radio-machine.novo`, QA scenario `17300`.
+
+A machine target is written `module@port`. The module is a path of segments separated by `/`; its last segment is the module
+instance, the device tag of its motor (`hoist/-M1`, `travel/-M2`; the travel axis the crane picture uses for the bridge or the trolley
+is listed as `bridge/<tag>` or `trolley/<tag>`; leading segments such as `runway1/bridge2/crab1/` only say where it sits and are not
+checked). The module list comes from the drawing: every motor with a hook load (Mechanical load), a moving mass (Travel drive), a
+drive hoist, a closed-loop winch or a pair of winches. The text is stored in the controller data of the project like any other
+target, so it saves, copies and undoes with the project.
+
+| Module | Ports |
+| --- | --- |
+| Two-speed contactor hoist | `up`, `down`, `fast` (coarse winding), `brake_release` (only with a separate brake feed), `permit`, `deadman` |
+| Travel axis on a drive | `forward`, `reverse`, `fast` (step 2), `permit`, `deadman` |
+| Drive hoist | `up`, `down`, `fast` (first speed input), `reset`, `permit`, `deadman` |
+| Closed-loop winch | `up`, `down`, `fast`, `reset`, `permit`, `deadman` |
+| Pair of winches on one beam | `up`, `down`, `fast` of winch A, `permit`, `deadman` |
+
+What a port does (all in `novo_machine::commands`, tested with fixed steps):
+- A command port (`up`, `forward`, ...) is held while its signal is high. The module reads it where it would read the drawn input:
+  the motor feed of a contactor hoist (`up` and `down` together feed nothing, `fast` picks the coarse winding), the drive inputs of
+  a travel axis, drive hoist or winch. A port nothing is bound to leaves that input to the drawn circuit.
+- A bound port **replaces** the drawn input for its function while it is bound, so a wiring fault on that input is not simulated for
+  it. To test the wiring, bind a receiver pin instead.
+- `permit` is the E-stop or safety chain: high means the module may run, low removes every command, drops the motor and brake feed
+  and opens the main contactor and the safety torque off channels the module has. A drive coasts or ramps down as its settings say.
+- `deadman` is an enabling bar: the module moves only while it is high.
+- Both gates act only when a signal is bound to them. Bind the E-stop chain signal (ungated, `combine = "and"` when two controllers
+  share it) to `permit`; a signal that is high while the stop is pressed is bound with the inverted choice.
+
+Checks (`BindingTable::check_with`, shown in the card with the others): text that is not `module@port`, a module the drawing does
+not have, a module with no port or a port it lacks, a signal of the wrong kind for the port (an ungated chain signal on a motion
+port is an error; a motion signal on a chain port, or an analog value on a switching port, is a warning), two spellings of one
+port, controllers that are not all `shared` commanding one module, and the existing ownership and `and`/`or` mixing checks, which
+apply to a machine port like to any target.
+
+Honest limits: this simulates wiring and logic. A `permit` port shows what a chain does to the machine; it is not a certified
+E-stop and gives no PL, SIL or compliance claim. The machine reads the ports only while a run window is running with Live on.
+Travel brake, inertia and wind belong to the travel drive model (`novo-machine` travel loop) and are not changed here: a stopped
+axis follows its ramp and mechanics.
 
 ## Storage
 
@@ -150,7 +195,7 @@ been run against a physical pad.
 
 ## Add-on seam
 
-The whole feature is two files (`controller_live.rs`, `controller_card.rs`), one `mod` line in `app.rs`, one field
+The whole feature is three files (`controller_live.rs`, `controller_card.rs`, `controller_machine.rs` for the machine ports), one `mod` line in `app.rs`, one field
 (`ctl`) in `LiveView`, a handful of hook calls in `live.rs` and `plc_run.rs` (held input overrides), the command
 `sim.controller` and the lesson anchor `live.controller`. When the add-on manager hosts it, those are the places to
 move behind the add-on switch.

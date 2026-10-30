@@ -17,6 +17,7 @@ use novo_drive::brake_system::RectifierFault;
 use novo_drive::hoist_unit::HoistFaults;
 use novo_drive::motor::{Direction, WindingSel};
 use novo_drive::supply::Phase;
+use novo_machine::commands::CommandedCircuit;
 use novo_machine::cosim::StepConfig;
 use novo_machine::hoist_loop::{HoistLoop, HoistModule};
 use novo_machine::port::{CircuitPort, MotorFeed};
@@ -199,7 +200,20 @@ pub(super) fn advance(
     }
     let dt = active.lp.config.dt_s;
     active.acc += frame_dt.clamp(0.0, 0.1);
-    let mut circuit = LiveCircuit::new(live, project);
+    // Machine ports bound to controller signals command the hoists (lane L5b).
+    let commands = live.ctl.machine_commands().clone();
+    let wirings = super::controller_machine::wirings(
+        &commands,
+        super::controller_machine::Loops {
+            hoists: &mut active.lp.hoists,
+            drive_hoists: &mut [],
+            winches: &mut [],
+            pairs: &mut [],
+            axes: &mut [],
+        },
+    );
+    let mut live_circuit = LiveCircuit::new(live, project);
+    let mut circuit = CommandedCircuit::new(&mut live_circuit, &wirings, &commands);
     let mut ticks = 0;
     while active.acc >= dt && ticks < MAX_TICKS {
         active.lp.step(&mut circuit);
@@ -431,6 +445,7 @@ impl NovoApp {
         let mut stop = false;
         let mut live_toggle = false;
         let hoist = &self.wb.hoist;
+        let drivers = self.wb.live.ctl.machine_drivers();
         let rows: Vec<HoistRow> = hoist.active.as_ref().map_or_else(Vec::new, |a| {
             a.lp.hoists
                 .iter()
@@ -509,6 +524,12 @@ impl NovoApp {
                             ui.strong(tag);
                             ui.label(text);
                         });
+                        if let Some(list) = drivers.get(tag) {
+                            ui.weak(format!(
+                                "Controller: {}",
+                                super::controller_machine::driver_line(list)
+                            ));
+                        }
                         if let Some(heat) = heat {
                             ui.horizontal(|ui| {
                                 ui.weak(heat);
@@ -639,6 +660,22 @@ impl NovoApp {
         );
         self.wb.hoist.notice = notes;
         self.wb.hoist.active = Some(Active { lp, acc: 0.0 });
+    }
+}
+
+#[cfg(test)]
+impl HoistRun {
+    /// A run over `lp`, as if started (tests of the controller's machine ports).
+    pub(super) fn for_test(lp: HoistLoop) -> Self {
+        Self {
+            active: Some(Active { lp, acc: 0.0 }),
+            ..Default::default()
+        }
+    }
+
+    pub(super) fn height_m(&self, index: usize) -> f64 {
+        self.module_at(index)
+            .map_or(f64::NAN, HoistModule::height_m)
     }
 }
 

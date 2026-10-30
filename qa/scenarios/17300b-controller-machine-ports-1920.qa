@@ -1,0 +1,42 @@
+@title Controller machine ports: the radio drives the hoist through bound ports (1920)
+@area Live
+@sizes 1920x1080
+# Lane L5b. The fixture has a hoist -M1 and a bridge axis -M2 known to the machine model only (no
+# drawn circuit) and one generic radio bound to their ports. The Hoist run reads the ports.
+open qa/fixtures/radio-machine.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate hoist run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+drag 1554 82 1034 82
+wait 10
+click_text "Controller…"
+wait 20
+expect "Controller: radio-1/HOIST_UP_SLOW"
+shot before-main
+# Main on, then hold up step 2: the machine port lifts the hook with no drawn circuit.
+click 1409 369
+wait 10
+mouse_down 1442 536
+wait 120
+expect "brake open"
+shot hook-rising
+mouse_up 1442 536
+wait 120
+expect "0 rpm"
+# E-stop with the rocker held: the permit port stops the hoist.
+mouse_down 1442 536
+wait 60
+click 1414 320
+wait 60
+expect "brake closed"
+shot e-stop
+mouse_up 1442 536
+check_layout
