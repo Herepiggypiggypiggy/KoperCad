@@ -110,6 +110,8 @@ pub(crate) struct ControllerLive {
     pub(super) open: bool,
     /// The instance the card shows.
     pub(super) selected: Option<String>,
+    /// Instances shown in a floating panel of their own, so several can be operated at once.
+    pub(super) popped: BTreeSet<String>,
     /// The keyboard drives the selected instance (off until asked, so the canvas keys stay free).
     pub(super) keys: bool,
     /// A click keeps a button or the stick held until clicked again (several motions at once).
@@ -136,6 +138,26 @@ struct Hold {
 pub(super) enum HoldBy {
     Mouse,
     Key,
+}
+
+/// Colours offered for instances; new instances take them in turn.
+pub(super) const PRESET_COLOURS: [(&str, [u8; 3]); 6] = [
+    ("Blue", [0x4c, 0x9a, 0xff]),
+    ("Orange", [0xf5, 0x9e, 0x42]),
+    ("Green", [0x4c, 0xc2, 0x7a]),
+    ("Pink", [0xe0, 0x6c, 0xb4]),
+    ("Yellow", [0xe8, 0xd0, 0x4a]),
+    ("Violet", [0x9b, 0x7c, 0xf0]),
+];
+
+/// `#rrggbb` to its bytes.
+pub(super) fn parse_hex(text: &str) -> Option<[u8; 3]> {
+    let t = text.strip_prefix('#')?;
+    if t.len() != 6 || !t.is_ascii() {
+        return None;
+    }
+    let byte = |i: usize| u8::from_str_radix(&t[i..i + 2], 16).ok();
+    Some([byte(0)?, byte(2)?, byte(4)?])
 }
 
 /// The text the project holds for the controllers, empty for none.
@@ -365,10 +387,90 @@ impl ControllerLive {
             return;
         }
         self.table.bindings.retain(|b| b.key.controller != id);
+        self.popped.remove(id);
+        self.holds.retain(|(who, _), _| who != id);
         if self.selected.as_deref() == Some(id) {
             self.selected = self.set.instances().first().map(|i| i.id.clone());
         }
         self.changed();
+    }
+
+    /// A new instance of the same profile, selected, with bindings of its own (none copied).
+    pub(super) fn duplicate_instance(&mut self, from: &str) -> Result<String, String> {
+        let label = self
+            .set
+            .instance(from)
+            .map(|i| format!("{} copy", i.label))
+            .ok_or_else(|| format!("No controller {from}"))?;
+        let mut n = 2;
+        let id = loop {
+            let candidate = format!("{from}-{n}");
+            if self.set.instance(&candidate).is_none() {
+                break candidate;
+            }
+            n += 1;
+        };
+        self.set
+            .duplicate_instance(from, &id, &label)
+            .map_err(|e| e.to_string())?;
+        self.selected = Some(id.clone());
+        self.changed();
+        Ok(id)
+    }
+
+    /// Renames what the person sees; the id stays, so bindings and scripts keep working.
+    pub(super) fn rename_instance(&mut self, id: &str, label: &str) {
+        let label = label.trim();
+        if !label.is_empty() && self.set.rename(id, label).is_ok() {
+            self.changed();
+        }
+    }
+
+    pub(super) fn set_colour(&mut self, id: &str, colour: Option<&str>) {
+        if self.set.set_colour(id, colour).is_ok() {
+            self.changed();
+        }
+    }
+
+    pub(super) fn set_target_group(&mut self, id: &str, group: &str) {
+        let group = group.trim();
+        let group = (!group.is_empty()).then_some(group);
+        if self.set.set_target_group(id, group).is_ok() {
+            self.changed();
+        }
+    }
+
+    /// The colour of an instance: its own, or one of the presets by position in the list.
+    pub(super) fn colour_of(&self, id: &str) -> [u8; 3] {
+        let index = self.set.instances().iter().position(|i| i.id == id);
+        let own = self
+            .set
+            .instance(id)
+            .and_then(|i| i.colour.as_deref())
+            .and_then(parse_hex);
+        own.unwrap_or_else(|| {
+            let (_, rgb) = PRESET_COLOURS[index.unwrap_or(0) % PRESET_COLOURS.len()];
+            rgb
+        })
+    }
+
+    /// Shows the instance in a panel of its own (or back in the card). The keyboard stays with
+    /// the selected instance; pressing in a panel does not move it.
+    pub(super) fn set_popped(&mut self, id: &str, on: bool) {
+        if on && self.set.instance(id).is_some() {
+            self.popped.insert(id.to_owned());
+        } else {
+            self.popped.remove(id);
+        }
+    }
+
+    /// Targets this instance shares with another instance, for the owner lines in its panel.
+    pub(super) fn shared_targets(&self, id: &str) -> Vec<novo_controller::TargetOwnership> {
+        self.table
+            .ownership(&self.set)
+            .into_iter()
+            .filter(|o| o.controllers.len() > 1 && o.controllers.iter().any(|c| c == id))
+            .collect()
     }
 
     /// Discards data the project holds that could not be read.
