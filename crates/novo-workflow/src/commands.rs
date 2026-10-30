@@ -781,6 +781,22 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "file.start_centre",
+            "Templates and examples...",
+            "Project",
+            &[
+                "templates",
+                "examples",
+                "new from template",
+                "start from",
+                "sample",
+            ],
+            Needs::Nothing,
+        ),
+        &["templates", "examples", "start from"],
+    ),
+    verb(
+        cmd(
             "import.spreadsheet",
             "Import spreadsheet",
             "Project",

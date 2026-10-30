@@ -1,0 +1,33 @@
+@title Start centre: templates and examples as tiles, search, detail pane, Create button
+@area Layout
+# Lane V4f (docs/design/visual-redesign.md section 6). File > Templates and examples...
+# opens one window with the project templates and the example projects as tiles; File
+# no longer has the New from template and Examples submenus.
+click_text "Open example"
+wait 20
+click_text File #1
+wait 6
+shot file-menu-one-start-row
+expect "Templates and examples..."
+expect_not "New from template"
+click_text "Templates and examples..."
+wait 10
+shot centre-open
+expect "Templates"
+expect "Examples"
+expect "Choose a template or example"
+check_layout
+click_text "New pump station"
+wait 6
+shot centre-picked-template
+expect "A pump station with its motor starters and control."
+check_layout
+text emc
+wait 8
+shot centre-search-emc
+expect "Open EMC example"
+expect_not "New pump station"
+check_layout
+key Escape
+wait 6
+expect_not "Choose a template or example"

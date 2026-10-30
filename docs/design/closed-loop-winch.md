@@ -145,6 +145,10 @@ the run:
 - the load cell signal (`cw_load_cell`, a drawn device, energised: present) lost: the load is unknown,
   so lifting is inhibited (fail safe) and the run says so; back again releases it.
 
+With a ground level the reading is zero while the hook rests on the ground (the rope carries nothing), so an
+overweight hook is not refused on the ground: the pick-up puts the weight on the rope and the cut-out then
+stops the lift a few centimetres up.
+
 The reading beside the winch shows "load N % of rated" (and "lifting inhibited"). Walk-through checks
 `found` with `overload_cut_out` or `load_cell_lost` ask for them.
 

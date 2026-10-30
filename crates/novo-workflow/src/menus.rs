@@ -57,13 +57,6 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.open_read_only", under("File", "Open")),
     ("file.recover", under("File", "Open")),
     ("file.example", under("File", "Open")),
-    ("file.new_crane", under("File", "New from template")),
-    ("file.new_pump", under("File", "New from template")),
-    ("file.new_mcc", under("File", "New from template")),
-    ("file.example_mcc", under("File", "Examples")),
-    ("file.example_crane", under("File", "Examples")),
-    ("file.example_plc", under("File", "Examples")),
-    ("file.example_pump", under("File", "Examples")),
     ("macro.browser", under("File", "Macros")),
     ("macro.import", under("File", "Macros")),
     ("revision.issue", under("File", "Revisions")),
@@ -85,6 +78,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     // File > Export... opens the Export centre; the formats are listed there.
     ("file.export_centre", at("File")),
     ("file.import_centre", at("File")),
+    // File > Templates and examples... opens the Start centre; the templates and examples are listed there.
+    ("file.start_centre", at("File")),
     ("export.print_preview", at("File")),
     // Reports
     ("report.wirecut", at("Reports")),
@@ -857,11 +852,9 @@ mod tests {
     #[test]
     fn menu_rows_stay_inside_the_budget() {
         let ceilings: &[(&str, usize)] = &[
-            // 47: File > New from template has the crane, Pump station and Motor
-            // control centre rows (#1737); a template is a start-of-work choice that
-            // has no rail or palette-only home a new user would find. The export
-            // formats are in the Export centre, the imports in the Import centre.
-            ("File", 41),
+            // The export formats are in the Export centre, the imports in the Import
+            // centre, the templates and examples in the Start centre.
+            ("File", 34),
             ("Edit", 30),
             ("Draw", 24),
             ("View", 65),
@@ -887,7 +880,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 228, "the menus hold {total} rows");
+        assert!(total <= 221, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File

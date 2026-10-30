@@ -1,16 +1,21 @@
 //! The centres: Import and Export are workbenches, not menus of formats
-//! (`docs/design/visual-redesign.md` section 6). This file says which
-//! commands each centre lists and how it groups them; the window is in
+//! (`docs/design/visual-redesign.md` section 6), and the Start centre holds
+//! the templates and examples a new project can begin from. This file says
+//! which commands each centre lists and how it groups them; the window is in
 //! `novo-app`. A command listed here has no menu row: its home is the centre
-//! (`homes::Home::Centre`), and File > Export... and File > Import... open
-//! them.
+//! (`homes::Home::Centre`), and File > Export..., File > Import... and
+//! File > Templates and examples... open them.
 
 /// Which of the two centres.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Centre {
     Export,
     Import,
+    Start,
 }
+
+/// Every centre, in the order the File menu lists their openers.
+pub const CENTRES: [Centre; 3] = [Centre::Export, Centre::Import, Centre::Start];
 
 impl Centre {
     /// The command that opens the centre.
@@ -18,6 +23,7 @@ impl Centre {
         match self {
             Centre::Export => EXPORT_CENTRE,
             Centre::Import => IMPORT_CENTRE,
+            Centre::Start => START_CENTRE,
         }
     }
 
@@ -26,6 +32,7 @@ impl Centre {
         match self {
             Centre::Export => "Export",
             Centre::Import => "Import",
+            Centre::Start => "Templates and examples",
         }
     }
 
@@ -34,6 +41,15 @@ impl Centre {
         match self {
             Centre::Export => "Search formats: pdf, dxf, excel, bench, plc",
             Centre::Import => "Search: dxf, eplan, parts, excel, plc",
+            Centre::Start => "Search: crane, pump, motor control, plc, emc",
+        }
+    }
+
+    /// What the footer button says while nothing is picked.
+    pub fn idle_button(self) -> &'static str {
+        match self {
+            Centre::Start => "Open",
+            _ => self.title(),
         }
     }
 
@@ -45,6 +61,8 @@ impl Centre {
             (Centre::Import, "file.choose_dwg_converter") => "Choose",
             (Centre::Import, "file.eplan_export_script") => "Get script",
             (Centre::Import, _) => "Import",
+            (Centre::Start, id) if id.starts_with("file.new_") => "Create",
+            (Centre::Start, _) => "Open",
         }
     }
 
@@ -52,6 +70,7 @@ impl Centre {
         match self {
             Centre::Export => EXPORT_SECTIONS,
             Centre::Import => IMPORT_SECTIONS,
+            Centre::Start => START_SECTIONS,
         }
     }
 
@@ -62,7 +81,7 @@ impl Centre {
 
     /// The centre that lists `id`, if any.
     pub fn of(id: &str) -> Option<Centre> {
-        [Centre::Export, Centre::Import]
+        CENTRES
             .into_iter()
             .find(|c| c.sections().iter().any(|s| s.ids.contains(&id)))
     }
@@ -82,6 +101,30 @@ pub const EXPORT_CENTRE: &str = "file.export_centre";
 
 /// The command that opens the Import centre.
 pub const IMPORT_CENTRE: &str = "file.import_centre";
+
+/// The command that opens the Start centre.
+pub const START_CENTRE: &str = "file.start_centre";
+
+/// The Start centre: what File > New from template and File > Examples held.
+pub const START_SECTIONS: &[Section] = &[
+    Section {
+        name: "Templates",
+        about: "A new project with the pages, tags and structure of a kind of machine.",
+        ids: &["file.new_crane", "file.new_mcc", "file.new_pump"],
+    },
+    Section {
+        name: "Examples",
+        about: "Finished projects to open, look through and learn from.",
+        ids: &[
+            "file.example",
+            "file.example_crane",
+            "file.example_mcc",
+            "file.example_plc",
+            "file.example_pump",
+            "file.example_emc",
+        ],
+    },
+];
 
 /// The Import centre, group by group: what File > Import and File > Import
 /// parts held, by what comes in.
@@ -212,7 +255,7 @@ pub const EXPORT_SECTIONS: &[Section] = &[
 
 /// The commands that keep their File menu row although the centre lists
 /// them too.
-pub const ALSO_IN_MENU: &[&str] = &["export.print_preview"];
+pub const ALSO_IN_MENU: &[&str] = &["export.print_preview", "file.example"];
 
 /// One sentence about what the export writes, for the tile and the detail
 /// pane. It says what the command's own label says, in plain words.
@@ -277,6 +320,15 @@ pub fn describe(id: &str) -> &'static str {
         "parts.import_eplan" => "Parts from a CAD parts export or maker XML files.",
         "import.spreadsheet" => "Changes made in Excel or CSV, checked before they apply.",
         "plc.import_tags" => "The tags a PLC programmer wrote, matched to the I/O list.",
+        "file.new_crane" => "An overhead crane project with its structure tree and covers.",
+        "file.new_mcc" => "A motor control centre with feeders, control supply and cabinet.",
+        "file.new_pump" => "A pump station with its motor starters and control.",
+        "file.example" => "A small motor starter, to try the program on.",
+        "file.example_crane" => "An overhead crane cabinet: 2-speed hoist, drives, 48 V control.",
+        "file.example_mcc" => "A motor control centre: 4 feeders, 24 V control, full cabinet.",
+        "file.example_plc" => "A PLC cabinet: CPU, I/O cards and a 24 V supply.",
+        "file.example_pump" => "A pump system with its starter and control.",
+        "file.example_emc" => "A drive with a motor cable and signal wires, for the EMC checks.",
         _ => "",
     }
 }
@@ -304,7 +356,7 @@ pub fn export_ids() -> impl Iterator<Item = &'static str> {
 
 /// The command ids of both centres.
 pub fn centre_ids() -> impl Iterator<Item = &'static str> {
-    Centre::Export.ids().chain(Centre::Import.ids())
+    CENTRES.into_iter().flat_map(Centre::ids)
 }
 
 #[cfg(test)]
@@ -339,6 +391,22 @@ mod tests {
     }
 
     #[test]
+    fn the_start_centre_lists_the_templates_and_examples_once() {
+        let mut seen = HashSet::new();
+        for id in Centre::Start.ids() {
+            assert!(get(id).is_some(), "{id} is not a command");
+            assert!(seen.insert(id), "{id} is in two sections");
+            assert_eq!(Centre::of(id), Some(Centre::Start), "{id}");
+        }
+        assert_eq!(seen.len(), 9);
+        // Only the small example keeps its row (the Open submenu); the rest live here.
+        assert!(replaces_menu_row("file.new_crane") && replaces_menu_row("file.example_emc"));
+        assert!(!replaces_menu_row("file.example"));
+        assert_eq!(Centre::Start.button("file.new_pump"), "Create");
+        assert_eq!(Centre::Start.button("file.example_pump"), "Open");
+    }
+
+    #[test]
     fn every_listed_command_has_a_sentence() {
         for id in centre_ids() {
             let d = describe(id);
@@ -348,7 +416,7 @@ mod tests {
 
     #[test]
     fn sections_have_a_name_and_a_sentence_and_the_opener_is_a_command() {
-        for c in [Centre::Export, Centre::Import] {
+        for c in CENTRES {
             for s in c.sections() {
                 assert!(!s.name.is_empty() && !s.about.is_empty() && !s.ids.is_empty());
             }

@@ -181,6 +181,7 @@ fn path_of(info: &CommandInfo) -> String {
         let centre = novo_workflow::centres::Centre::of(info.id);
         return match centre {
             Some(novo_workflow::centres::Centre::Import) => "File > Import",
+            Some(novo_workflow::centres::Centre::Start) => "File > Templates and examples",
             _ => "File > Export",
         }
         .to_owned();
