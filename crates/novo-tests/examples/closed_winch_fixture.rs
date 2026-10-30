@@ -5,6 +5,11 @@
 //!   cargo run -p novo-tests --example closed_winch_fixture -- qa/fixtures/closed-winch-walk.novo walk
 //!   cargo run -p novo-tests --example closed_winch_fixture -- qa/fixtures/closed-winch-channel.novo channel
 //!   cargo run -p novo-tests --example closed_winch_fixture -- qa/fixtures/closed-winch-ground.novo ground
+//!   cargo run -p novo-tests --example closed_winch_fixture -- qa/fixtures/closed-winch-load.novo load
+//!   cargo run -p novo-tests --example closed_winch_fixture -- qa/fixtures/closed-winch-overload.novo overload
+//!
+//! `load` has a rated load of 3000 kg (83 % of it hangs on the hook) and a load cell signal device;
+//! `overload` a rated load of 2000 kg (125 %, above the 110 % cut-out).
 //!
 //! `ground` is the single winch with the ground 0.3 m below the hook start: lowering lands the hook
 //! and leaves the rope slack. `channel` is the single winch with a monitor for encoder channel B and one saved walk-through
@@ -60,6 +65,14 @@ fn main() {
             } else if other == Some("ground") {
                 novo_tests::closed_winch::closed_winch_ground(&mut doc, -0.3)
                     .expect("the winch project with a ground level builds");
+            } else if other == Some("load") || other == Some("overload") {
+                let swl = if other == Some("load") {
+                    3000.0
+                } else {
+                    2000.0
+                };
+                novo_tests::closed_winch::closed_winch_load(&mut doc, swl)
+                    .expect("the winch project with a load cell builds");
             } else {
                 novo_tests::closed_winch::closed_winch(&mut doc)
                     .expect("the closed-loop winch project builds");

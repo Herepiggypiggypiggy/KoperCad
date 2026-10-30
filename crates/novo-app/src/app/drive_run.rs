@@ -367,7 +367,18 @@ pub(super) fn closed_pairs_of(project: &Project) -> (Vec<ClPairModule>, Vec<(Lev
 
 /// A one-line reading of a closed-loop winch, for the badge and the window.
 pub(super) fn winch_reading(module: &ClWinchModule) -> String {
-    winch_text(module.snapshot())
+    let text = winch_text(module.snapshot());
+    match module.load_pct() {
+        Some(pct) if module.snapshot().is_some() => {
+            let note = if module.lifting_inhibited() {
+                ", lifting inhibited"
+            } else {
+                ""
+            };
+            format!("{text} \u{b7} load {pct:.0} % of rated{note}")
+        }
+        _ => text,
+    }
 }
 
 /// The readings of a pair: a line for the beam, then one per winch.
@@ -1015,6 +1026,25 @@ impl NovoApp {
                      measurements, and the first winch's up, down and step 2 devices command both \
                      winches. Start rollback, stop travel and brake slip are reported for a \
                      single winch only.",
+                );
+                ui.weak(
+                    "\u{2022} Rated load and overload: the load is the load cell reading, a number \
+                     the drawing or you supply (weight plus the inertia of the hook mass on a rigid \
+                     rope); the rated load (SWL) and the cut-out percent are numbers you enter. The \
+                     model only inhibits lifting in the simulation (lowering stays allowed). It is \
+                     a simulation of the behaviour, not a validated overload protection and no \
+                     substitute for a rated capacity limiter to the applicable standard. A hard \
+                     acceleration raises the reading, so a lift can cut out a few per cent below the cut-out.",
+                );
+                ui.weak(
+                    "\u{2022} Ground and slack rope (single winch): the ground height and the rope \
+                     stiffness are numbers you enter. The rope is rigid while taut, so landing, \
+                     slack and the paid-out length are geometry; the snatch peak is only an energy \
+                     estimate, m g + v sqrt(k m), not an integrated rope. \"The rope can leave the \
+                     drum groove\" only checks that more than half a metre of slack is paid out: \
+                     no groove or sheave is modelled. Left out: rope bounce and mass, hook swing, \
+                     friction of the hook on the ground, several falls. A slack drum keeps the \
+                     inertia it has with the hook hanging.",
                 );
                 ui.weak("\u{2022} Not a safety or compliance statement.");
             });

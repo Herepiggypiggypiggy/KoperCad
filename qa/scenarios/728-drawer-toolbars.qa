@@ -1,0 +1,28 @@
+@title Drawer toolbars: the strip edits and cable rows are in the drawers, not in Draw
+@area Terminals
+@sizes 1366x768 1920x1080
+# Lane V4d (docs/design/visual-redesign.md section 6). The 11 Terminal strips rows and the 4 Cables
+# rows of the Draw menu moved to the toolbars of their drawers; Ctrl+3 opens the Terminals drawer,
+# Ctrl+4 the Cables drawer. Every command still runs from Ctrl+K.
+open qa/fixtures/text-stress-cabinet.novo
+wait 20
+click_text Draw #1
+wait 6
+shot draw-menu
+expect_not "Terminal strips"
+expect_not "Rename terminals (find and replace)"
+key Escape
+wait 4
+key ctrl+3
+wait 20
+shot terminals-toolbar
+expect "Add spare terminals"
+expect "Rename terminals"
+check_layout
+key ctrl+k
+wait 6
+text "rename terminals"
+wait 8
+shot palette-path
+expect "Terminals drawer"
+key Escape

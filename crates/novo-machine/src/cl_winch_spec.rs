@@ -15,7 +15,7 @@ use novo_drive::mechanics::Hoist;
 
 use crate::bindings::SensorBinding;
 use crate::cl_pair_loop::ClPairModule;
-use crate::cl_winch_loop::{ClWinchBinding, ClWinchModule};
+use crate::cl_winch_loop::{ClWinchBinding, ClWinchModule, LoadMonitor};
 use crate::hoist_loop::{LimitKind, LimitSwitch};
 use crate::spec::{SpecError, SpecKey};
 use crate::sync_winch::{Beam, PartnerAction, Rope, Supervision, SyncMode, WinchPair};
@@ -162,6 +162,26 @@ pub const KEYS: &[SpecKey] = &[
         "Rope stiffness (for the snatch estimate)",
         "N/m",
         "2000000",
+    ),
+    num(
+        "cw_swl_kg",
+        "Rated load, SWL (blank: load not monitored)",
+        "kg",
+        "",
+    ),
+    num(
+        "cw_overload_pct",
+        "Overload cut-out (% of rated load)",
+        "%",
+        "110",
+    ),
+    tag(
+        "cw_load_cell",
+        "Load cell device (energised: signal present)",
+    ),
+    tag(
+        "cw_overload_out",
+        "Overload output device (closed: lifting inhibited)",
     ),
     tag("cw_limit_up", "Upper limit switch device"),
     num(
@@ -371,6 +391,11 @@ pub fn closed_pair_from_properties(
                 "Winch {who}: the ground level is not used in a pair (the rope slack of the pair is)."
             ));
         }
+        if module.monitor.is_some() {
+            notes.push(format!(
+                "Winch {who}: the rated load is not monitored in a pair (the rope rating is)."
+            ));
+        }
         parts.push(module);
     }
     notes.push(format!(
@@ -574,7 +599,22 @@ pub fn closed_winch_from_properties(
         brake_feed: text("cw_brake_feed"),
         brake_feedback: text("cw_brake_feedback"),
         reset: text("cw_reset"),
+        load_cell: text("cw_load_cell"),
+        overload_out: text("cw_overload_out"),
         limits,
+    };
+    let monitor = if text("cw_swl_kg").is_some() {
+        let swl_kg = number("cw_swl_kg")?;
+        let cutout_pct = number("cw_overload_pct")?;
+        if !swl_kg.is_finite() || swl_kg <= 0.0 || !cutout_pct.is_finite() || cutout_pct < 100.0 {
+            return Err(SpecError::Value(novo_drive::InputError::NotPositive {
+                field: "rated load, or an overload cut-out below 100 %",
+                value: swl_kg.min(cutout_pct - 100.0),
+            }));
+        }
+        Some(LoadMonitor { swl_kg, cutout_pct })
+    } else {
+        None
     };
 
     let findings = check_winch(&cfg, &hoist, &brake);
@@ -607,6 +647,15 @@ pub fn closed_winch_from_properties(
             "The hook rests on the ground at {ground:.2} m: below it the drum pays out rope the hook \
              does not follow (slack), and picking it up again snatches (peak estimated from a rope \
              stiffness of {k:.0} N/m, a model, not a measurement)."
+        ));
+    }
+    module.monitor = monitor;
+    if let Some(mon) = monitor {
+        notes.push(format!(
+            "Overload protection at {:.0} % of {:.0} kg: lifting is inhibited above it or with the \
+             load cell lost, lowering stays allowed. The load cell reads weight plus inertia of the \
+             hook mass (rigid rope), not a measurement.",
+            mon.cutout_pct, mon.swl_kg
         ));
     }
     Ok(Some((module, notes)))
@@ -673,6 +722,39 @@ mod tests {
         .map(|e| e.to_string())
         .unwrap();
         assert!(err.contains("rope stiffness"), "{err}");
+    }
+
+    #[test]
+    fn a_rated_load_turns_on_the_overload_protection() {
+        let (m, notes) = build(&props(&[
+            (CLOSED_WINCH_KEY, "2500"),
+            ("cw_swl_kg", "2000"),
+            ("cw_load_cell", "=LC"),
+        ]))
+        .unwrap()
+        .unwrap();
+        let mon = m.monitor.unwrap();
+        assert_eq!(mon.swl_kg, 2000.0);
+        assert_eq!(mon.cutout_pct, 110.0);
+        assert_eq!(m.binding.load_cell.as_deref(), Some("=LC"));
+        assert!(notes.iter().any(|n| n.contains("Overload protection")));
+        let (m, _) = build(&props(&[(CLOSED_WINCH_KEY, "2500")]))
+            .unwrap()
+            .unwrap();
+        assert!(m.monitor.is_none());
+    }
+
+    #[test]
+    fn a_cutout_below_the_rated_load_is_refused() {
+        let err = build(&props(&[
+            (CLOSED_WINCH_KEY, "2500"),
+            ("cw_swl_kg", "2000"),
+            ("cw_overload_pct", "90"),
+        ]))
+        .err()
+        .map(|e| e.to_string())
+        .unwrap();
+        assert!(err.contains("rated load"), "{err}");
     }
 
     #[test]

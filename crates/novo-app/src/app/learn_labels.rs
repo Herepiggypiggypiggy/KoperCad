@@ -219,6 +219,36 @@ pub(crate) fn menu_anchors() -> &'static [MenuAnchor] {
                 });
             }
         }
+        // A drawer toolbar draws a button for a command that left Draw; while
+        // the drawer is shut a lesson points at the rail button that opens it.
+        for (drawer, ids) in novo_workflow::homes::DRAWER_TOOLBARS {
+            for id in *ids {
+                if let Some(info) = novo_workflow::commands::get(id) {
+                    all.push(MenuAnchor {
+                        id: format!("cmd.{id}"),
+                        label: info.label.to_owned(),
+                        parent: Some(format!("cmd.{drawer}")),
+                    });
+                }
+            }
+        }
+        // The Pages list offers the page commands in its right-click menu; while
+        // the list is hidden a lesson points at the list, and from there at the
+        // button that opens it.
+        for (panel, ids) in novo_workflow::homes::PANEL_BUTTONS {
+            if *panel != "Pages list" {
+                continue;
+            }
+            for id in *ids {
+                if let Some(info) = novo_workflow::commands::get(id) {
+                    all.push(MenuAnchor {
+                        id: format!("cmd.{id}"),
+                        label: info.label.to_owned(),
+                        parent: Some("outline.pages".to_owned()),
+                    });
+                }
+            }
+        }
         // A centre draws a tile for each command; while it is shut a lesson
         // points at the File row that opens it.
         for centre in [

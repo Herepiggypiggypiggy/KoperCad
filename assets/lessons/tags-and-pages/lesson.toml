@@ -64,11 +64,11 @@ title_nl = "Dupliceer een pagina en kijk naar de tags"
 text = "Duplicating a page copies its devices, and the copies get **new tags** so no two devices share one. That is the whole point of a tag: a copy is never confused with the original."
 text_nl = "Een pagina dupliceren kopieert de apparaten en de kopieën krijgen **nieuwe tags**, zodat geen twee apparaten er een delen. Dat is het doel van een tag: een kopie wordt nooit met het origineel verward."
 how = [
-  "Open {ui:menu.File}, then Pages, and choose {ui:cmd.page.duplicate}.",
+  "Right-click the page in the {ui:outline.pages} and choose {ui:cmd.page.duplicate}.",
   "Open the copy and read the tags of its devices.",
 ]
 how_nl = [
-  "Open {ui:menu.File}, dan Pages, en kies {ui:cmd.page.duplicate}.",
+  "Klik met rechts op de pagina in de {ui:outline.pages} en kies {ui:cmd.page.duplicate}.",
   "Open de kopie en lees de tags van de apparaten.",
 ]
 point = { ui = "cmd.page.duplicate" }

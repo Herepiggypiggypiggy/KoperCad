@@ -24,6 +24,7 @@ struct Cmd {
     sto_b: bool,
     encoder: bool,
     encoder_b: bool,
+    load_cell: bool,
     /// The brake contactor pulls in when the drive's relay contact is closed.
     contactor_follows_relay: bool,
     /// A welded brake contactor: the coil is fed whatever the relay says.
@@ -40,6 +41,7 @@ impl Default for Cmd {
             sto_b: true,
             encoder: true,
             encoder_b: true,
+            load_cell: true,
             contactor_follows_relay: true,
             contactor_welded: false,
         }
@@ -89,6 +91,7 @@ fn rig(extra: &[(&str, &str)]) -> (ClWinchLoop, FakeCircuit, Shared) {
             ("STOB", cmd.sto_b),
             ("ENC", cmd.encoder),
             ("ENCB", cmd.encoder_b),
+            ("LC", cmd.load_cell),
             (
                 "KB",
                 cmd.contactor_welded || (cmd.contactor_follows_relay && relay_closed),
@@ -102,9 +105,12 @@ fn rig(extra: &[(&str, &str)]) -> (ClWinchLoop, FakeCircuit, Shared) {
         }
     });
     let mut circuit = circuit;
-    circuit
-        .known
-        .extend(["KU", "KD", "KF", "STOA", "STOB", "ENC", "ENCB", "KR", "KB"].map(str::to_owned));
+    circuit.known.extend(
+        [
+            "KU", "KD", "KF", "STOA", "STOB", "ENC", "ENCB", "LC", "OV", "KR", "KB",
+        ]
+        .map(str::to_owned),
+    );
     let mut l = ClWinchLoop::new(StepConfig::new(DT).unwrap()).unwrap();
     l.modules.push(winch(extra));
     (l, circuit, cmd)
@@ -375,6 +381,93 @@ fn without_a_ground_level_the_rope_never_goes_slack() {
         k,
         ClFindingKind::SlackRope { .. } | ClFindingKind::HookLanded { .. }
     )));
+}
+
+/// 2500 kg on a rated load of 2000 kg is 125 % of it (weight 24516 N against 19613 N), above a
+/// 110 % cut-out: lifting is inhibited from the first tick, lowering is not.
+#[test]
+fn a_load_above_the_cutout_inhibits_lifting_but_not_lowering() {
+    let (mut l, mut c, cmd) = rig(&[("cw_swl_kg", "2000"), ("cw_overload_out", "OV")]);
+    cmd.borrow_mut().up = true;
+    seconds(&mut l, &mut c, 4.0);
+    let m = &l.modules[0];
+    assert!(m.height_m().abs() < 0.001, "{}", m.height_m());
+    assert!(m.lifting_inhibited());
+    assert!(c.contacts.get("OV").copied().unwrap_or(false));
+    assert!(has(m, |k| matches!(k, ClFindingKind::OverRated { .. })));
+    let pct = m
+        .findings()
+        .iter()
+        .find_map(|f| match f.kind {
+            ClFindingKind::OverloadCutOut { pct } => Some(pct),
+            _ => None,
+        })
+        .expect("the cut-out is a finding");
+    assert!((pct - 125.0).abs() < 0.5, "{pct}");
+    {
+        let mut k = cmd.borrow_mut();
+        k.up = false;
+        k.down = true;
+    }
+    seconds(&mut l, &mut c, 6.0);
+    assert!(
+        l.modules[0].height_m() < -0.3,
+        "{}",
+        l.modules[0].height_m()
+    );
+}
+
+/// 2500 kg on 2400 kg rated is 104 %: over the rating (a finding) but under a 110 % cut-out, so
+/// the winch still lifts.
+#[test]
+fn a_load_between_the_rating_and_the_cutout_is_reported_but_lifts() {
+    let (mut l, mut c, cmd) = rig(&[("cw_swl_kg", "2400")]);
+    cmd.borrow_mut().up = true;
+    seconds(&mut l, &mut c, 6.0);
+    let m = &l.modules[0];
+    assert!(m.height_m() > 0.3, "{}", m.height_m());
+    assert!(has(m, |k| matches!(k, ClFindingKind::OverRated { .. })));
+    assert!(!has(m, |k| matches!(
+        k,
+        ClFindingKind::OverloadCutOut { .. }
+    )));
+}
+
+/// 2500 kg on 3000 kg rated: 83.3 % at constant speed. A lost load cell inhibits lifting (the
+/// load is unknown) and says so; the signal coming back releases it.
+#[test]
+fn a_lost_load_cell_inhibits_lifting_until_it_is_back() {
+    let (mut l, mut c, cmd) = rig(&[("cw_swl_kg", "3000"), ("cw_load_cell", "LC")]);
+    cmd.borrow_mut().up = true;
+    seconds(&mut l, &mut c, 6.0);
+    let pct = l.modules[0].load_pct().unwrap();
+    assert!((pct - 83.33).abs() < 1.0, "{pct}");
+    let h = l.modules[0].height_m();
+    assert!(h > 0.3, "{h}");
+    cmd.borrow_mut().load_cell = false;
+    seconds(&mut l, &mut c, 6.0);
+    let m = &l.modules[0];
+    assert!(has(m, |k| matches!(k, ClFindingKind::LoadCellLost)));
+    assert!(m.lifting_inhibited());
+    assert!(m.height_m() < h + 0.5, "it kept lifting: {}", m.height_m());
+    cmd.borrow_mut().load_cell = true;
+    seconds(&mut l, &mut c, 6.0);
+    let m = &l.modules[0];
+    assert!(has(m, |k| matches!(k, ClFindingKind::LoadCellBack)));
+    assert!(!m.lifting_inhibited());
+    assert!(m.height_m() > h + 0.5, "{}", m.height_m());
+}
+
+#[test]
+fn without_a_rated_load_nothing_is_monitored() {
+    let (mut l, mut c, cmd) = rig(&[("cw_load_cell", "LC")]);
+    cmd.borrow_mut().load_cell = false;
+    cmd.borrow_mut().up = true;
+    seconds(&mut l, &mut c, 4.0);
+    let m = &l.modules[0];
+    assert!(m.load_pct().is_none());
+    assert!(!m.lifting_inhibited());
+    assert!(m.height_m() > 0.1);
 }
 
 #[test]
