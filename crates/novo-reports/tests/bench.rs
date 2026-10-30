@@ -2,9 +2,9 @@
 
 use novo_core::{DeviceTag, Document, MountingPlate, Point, RailKind, Wire};
 use novo_reports::{
-    BenchCut, Cell, FerruleSize, FerruleStandard, FerruleTable, LabelSettings, LabelStock, Labels,
-    Report, TICK_BOX, bench_jobs, ferrule_counts, label_items, layout_labels, stock_presets,
-    wire_cut_jobs_with, with_spares,
+    BenchCut, Cell, CrimpProfile, FerruleSize, FerruleStandard, FerruleTable, LabelSettings,
+    LabelStock, Labels, Report, TICK_BOX, bench_jobs, ferrule_counts, is_estimate, label_items,
+    layout_labels, stock_presets, wire_cut_jobs_with, with_spares,
 };
 use novo_tests::motor_starter;
 
@@ -80,11 +80,11 @@ fn the_table_prepares_spares_and_prints_the_standard() {
     let out = FerruleTable.generate(doc.project());
     let table = out.section("ferrules").expect("table");
     let total = table.rows.last().expect("total row");
-    let crimp: i64 = match total.cells[7] {
+    let crimp: i64 = match total.cells[10] {
         Cell::Int(v) => v,
         ref c => panic!("{c:?}"),
     };
-    let prepare = match total.cells[8] {
+    let prepare = match total.cells[11] {
         Cell::Int(v) => v,
         ref c => panic!("{c:?}"),
     };
@@ -160,11 +160,17 @@ fn a_standard_that_does_not_read_falls_back_to_the_default() {
                 mm2: 1.5,
                 colour: "a".into(),
                 length_mm: 8.0,
+                crimp: Default::default(),
+                die: String::new(),
+                total_mm: None,
             },
             FerruleSize {
                 mm2: 1.5,
                 colour: "b".into(),
                 length_mm: 8.0,
+                crimp: Default::default(),
+                die: String::new(),
+                total_mm: None,
             },
         ],
         ..FerruleStandard::default()
@@ -541,4 +547,73 @@ fn group_title(out: &novo_reports::ReportOutput) -> String {
         .expect("group")
         .title
         .clone()
+}
+
+#[test]
+fn the_ferrule_table_states_total_length_crimp_and_die_per_size() {
+    let mut doc = cabinet();
+    let mut standard = FerruleStandard::default();
+    for size in &mut standard.sizes {
+        if size.mm2 == 1.5 {
+            size.crimp = CrimpProfile::Square;
+            size.die = "die 2".into();
+            size.total_mm = Some(16.0);
+        }
+    }
+    doc.transact("Standard", |tx| FerruleStandard::store(tx, &standard))
+        .expect("store");
+    let out = FerruleTable.generate(doc.project());
+    let table = out.section("ferrules").expect("table");
+    let at = |key: &str| table.column(key).expect(key);
+    let row = table
+        .rows
+        .iter()
+        .find(|r| text(&r.cells[1]) == "A1.5-10")
+        .expect("1.5 mm² row");
+    assert_eq!(text(&row.cells[at("total")]), "16");
+    assert_eq!(text(&row.cells[at("crimp")]), "square");
+    assert_eq!(text(&row.cells[at("die")]), "die 2");
+    // The standard section prints the same.
+    let printed = out.section("standard").expect("standard");
+    assert_eq!(text(&printed.rows[3].cells[4]), "square");
+    // Every default size has an overall length longer than its contact.
+    for s in &FerruleStandard::default().sizes {
+        assert!(s.total_mm.expect("total") > s.length_mm);
+    }
+}
+
+#[test]
+fn a_standard_stored_before_crimp_data_existed_still_reads() {
+    let old = r#"{"sizes":[{"mm2":1.5,"colour":"black","length_mm":10.0}],"spare_percent":10.0,"twin_to_mm2":6.0}"#;
+    let standard: FerruleStandard = serde_json::from_str(old).expect("old json");
+    assert!(standard.is_valid());
+    assert_eq!(standard.sizes[0].crimp, CrimpProfile::Trapezoidal);
+    assert_eq!(standard.sizes[0].total_mm, None);
+    // A total shorter than the contact length is not valid.
+    let mut bad = standard.clone();
+    bad.sizes[0].total_mm = Some(5.0);
+    assert!(!bad.is_valid());
+}
+
+#[test]
+fn cut_piece_labels_carry_number_length_size_and_both_sleeves() {
+    let doc = cabinet();
+    let jobs = bench_jobs(doc.project());
+    let report = Labels.generate(doc.project());
+    let cuts = label_items(&report, &["cuts".into()]);
+    assert_eq!(cuts.len(), jobs.len(), "one per wire to cut, not per end");
+    let first = &cuts[0];
+    assert_eq!(first.lines[0], jobs[0].number);
+    assert!(first.lines[1].contains("mm"), "{:?}", first.lines);
+    assert!(first.lines[2].contains(" > "), "{:?}", first.lines);
+    // An estimated length carries the ~ mark, a routed one does not.
+    for (item, job) in cuts.iter().zip(&jobs) {
+        assert_eq!(
+            item.lines[1].starts_with('~'),
+            is_estimate(&job.basis),
+            "{}",
+            job.number
+        );
+    }
+    assert!(novo_reports::Labels::KINDS.contains(&"cuts"));
 }

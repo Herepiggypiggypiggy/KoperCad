@@ -1063,13 +1063,16 @@ fn labels_cover_wires_terminals_and_devices() {
     let (doc, _) = starter();
     let labels = report(&doc, "labels");
     let kinds: Vec<&str> = labels.sections.iter().map(|s| s.key.as_str()).collect();
-    assert_eq!(kinds, ["wires", "terminals", "devices", "cables"]);
+    assert_eq!(kinds, ["wires", "cuts", "terminals", "devices", "cables"]);
 
     // Two labels per wire to cut (the wire list's connections and the
     // supply and PE leads): this end shows where the other goes.
     let wires = rows(&labels, "wires");
     let cuts = rows(&report(&doc, "wirecut"), "cuts");
     assert_eq!(wires.len(), 2 * cuts.len());
+    // One piece label per wire to cut, in the same order.
+    let pieces = rows(&labels, "cuts");
+    assert_eq!(pieces.len(), cuts.len());
     let list = rows(&report(&doc, "wires"), "wires");
     assert!(
         cuts.len() > list.len(),
