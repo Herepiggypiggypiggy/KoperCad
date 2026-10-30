@@ -1,0 +1,12 @@
+@title 3D toolbar stays clear of the view cube with the Navigator open
+@area Layout
+# At 1366x768 the toolbar, pushed right by the open Navigator, ran under the
+# view cube. Its width now leaves out the Navigator's share of the view.
+click_text "Open example"
+wait 20
+click_text 3D
+wait 20
+click_text Pages
+wait 8
+shot toolbar-and-cube
+check_layout
