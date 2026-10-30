@@ -797,6 +797,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "file.project_centre",
+            "Project settings...",
+            "Project",
+            &[
+                "project settings",
+                "standard",
+                "rules",
+                "options",
+                "variants",
+                "languages",
+            ],
+            Needs::Project,
+        ),
+        &["project settings", "settings"],
+    ),
+    verb(
+        cmd(
             "import.spreadsheet",
             "Import spreadsheet",
             "Project",

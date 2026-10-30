@@ -12,10 +12,16 @@ pub enum Centre {
     Export,
     Import,
     Start,
+    Project,
 }
 
 /// Every centre, in the order the File menu lists their openers.
-pub const CENTRES: [Centre; 3] = [Centre::Export, Centre::Import, Centre::Start];
+pub const CENTRES: [Centre; 4] = [
+    Centre::Export,
+    Centre::Import,
+    Centre::Start,
+    Centre::Project,
+];
 
 impl Centre {
     /// The command that opens the centre.
@@ -24,6 +30,7 @@ impl Centre {
             Centre::Export => EXPORT_CENTRE,
             Centre::Import => IMPORT_CENTRE,
             Centre::Start => START_CENTRE,
+            Centre::Project => PROJECT_CENTRE,
         }
     }
 
@@ -33,6 +40,7 @@ impl Centre {
             Centre::Export => "Export",
             Centre::Import => "Import",
             Centre::Start => "Templates and examples",
+            Centre::Project => "Project settings",
         }
     }
 
@@ -42,13 +50,14 @@ impl Centre {
             Centre::Export => "Search formats: pdf, dxf, excel, bench, plc",
             Centre::Import => "Search: dxf, eplan, parts, excel, plc",
             Centre::Start => "Search: crane, pump, motor control, plc, emc",
+            Centre::Project => "Search: standard, rules, options, variants, languages",
         }
     }
 
     /// What the footer button says while nothing is picked.
     pub fn idle_button(self) -> &'static str {
         match self {
-            Centre::Start => "Open",
+            Centre::Start | Centre::Project => "Open",
             _ => self.title(),
         }
     }
@@ -63,6 +72,9 @@ impl Centre {
             (Centre::Import, _) => "Import",
             (Centre::Start, id) if id.starts_with("file.new_") => "Create",
             (Centre::Start, _) => "Open",
+            (Centre::Project, "project.untie") => "Apply",
+            (Centre::Project, "project.generate") => "Generate",
+            (Centre::Project, _) => "Open",
         }
     }
 
@@ -71,6 +83,7 @@ impl Centre {
             Centre::Export => EXPORT_SECTIONS,
             Centre::Import => IMPORT_SECTIONS,
             Centre::Start => START_SECTIONS,
+            Centre::Project => PROJECT_SECTIONS,
         }
     }
 
@@ -123,6 +136,31 @@ pub const START_SECTIONS: &[Section] = &[
             "file.example_pump",
             "file.example_emc",
         ],
+    },
+];
+
+/// The command that opens the Project settings centre.
+pub const PROJECT_CENTRE: &str = "file.project_centre";
+
+/// The Project settings centre: what File > Project and the report
+/// languages row held. `project.variant`, `project.option` and `project.tie`
+/// take a name in the command field and open Project options without one,
+/// so they are palette-only.
+pub const PROJECT_SECTIONS: &[Section] = &[
+    Section {
+        name: "Drawing and reports",
+        about: "How the drawings are made and numbered, and what language the reports use.",
+        ids: &["project.standard", "project.rules", "project.languages"],
+    },
+    Section {
+        name: "Options and variants",
+        about: "Machine options and variants: what is drawn with which configuration.",
+        ids: &["project.options", "project.untie"],
+    },
+    Section {
+        name: "Generate",
+        about: "Pages and devices made from a spec sheet.",
+        ids: &["project.generate"],
     },
 ];
 
@@ -329,6 +367,12 @@ pub fn describe(id: &str) -> &'static str {
         "file.example_plc" => "A PLC cabinet: CPU, I/O cards and a 24 V supply.",
         "file.example_pump" => "A pump system with its starter and control.",
         "file.example_emc" => "A drive with a motor cable and signal wires, for the EMC checks.",
+        "project.standard" => "The drawing standard: sheet, title block, tag and wire style.",
+        "project.rules" => "The rules for wire numbers, tags and numbering of this project.",
+        "project.languages" => "The languages the reports and lists are written in.",
+        "project.options" => "Machine options and variants, and what each one draws.",
+        "project.untie" => "Makes the selected items appear whatever the options are.",
+        "project.generate" => "Pages and devices made from an Excel or CSV spec sheet.",
         _ => "",
     }
 }
@@ -404,6 +448,23 @@ mod tests {
         assert!(!replaces_menu_row("file.example"));
         assert_eq!(Centre::Start.button("file.new_pump"), "Create");
         assert_eq!(Centre::Start.button("file.example_pump"), "Open");
+    }
+
+    #[test]
+    fn the_project_centre_lists_the_project_commands_and_the_name_taking_ones_are_palette_only() {
+        let mut seen = HashSet::new();
+        for id in Centre::Project.ids() {
+            assert!(get(id).is_some(), "{id} is not a command");
+            assert!(seen.insert(id), "{id} is in two sections");
+            assert_eq!(Centre::of(id), Some(Centre::Project), "{id}");
+            assert!(replaces_menu_row(id), "{id}");
+        }
+        assert_eq!(seen.len(), 6);
+        for id in ["project.variant", "project.option", "project.tie"] {
+            assert!(!seen.contains(id), "{id} takes a name, it is not a tile");
+        }
+        assert_eq!(Centre::Project.button("project.generate"), "Generate");
+        assert_eq!(Centre::Project.button("project.rules"), "Open");
     }
 
     #[test]

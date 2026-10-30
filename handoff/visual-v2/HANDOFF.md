@@ -67,3 +67,8 @@ Windows fonts, 125 and 150 percent scaling, real GPU colour; a real screen reade
 - `centres::Centre::Start` (command `file.start_centre`, File > Templates and examples...): the 3 `file.new_*` templates and the 6 example commands as tiles (Create / Open button). The File > New from template and Examples submenus and the EMC example row are gone: File 41 to 34, total 228 to 221 (after #1763). `file.example` keeps its row in File > Open (`centres::ALSO_IN_MENU`) and is also a tile.
 - Lessons: `cmd.file.new_*` and `cmd.file.example_*` fall back to `cmd.file.start_centre`, then File. Palette and app menu search say `File > Templates and examples`.
 - QA scenario 7370. Not done: preview of the template or example in the detail pane; options and preview pane for the other centres.
+
+## V4g: Project settings centre (2026-10-30)
+- `centres::Centre::Project` (command `file.project_centre`, File > Project settings...): Drawing standard, Rules, Report languages, Project options, Untie from options and Generate pages as tiles. The File > Project submenu (8 rows) and Report languages leave File: File 34 to 26, total 221 to 213.
+- `project.variant`, `project.option` and `project.tie` take a name in the command field and open Project options without one: they are palette-only (`menus::PALETTE_ONLY`, with the reason). Lessons that name them fall back to the opener.
+- QA scenario 7371.

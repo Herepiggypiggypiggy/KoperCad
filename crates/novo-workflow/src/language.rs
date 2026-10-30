@@ -974,6 +974,11 @@ pub const DUTCH: &[Aliases] = &[
         &["nieuw uit sjabloon", "beginnen met"],
     ),
     nl(
+        "file.project_centre",
+        &["projectinstellingen"],
+        &["instellingen", "tekennorm", "varianten"],
+    ),
+    nl(
         "file.export_centre",
         &["exporteren", "exportcentrum"],
         &["formaten", "pdf", "dxf", "excel", "bank", "overdracht"],
