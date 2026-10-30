@@ -25,6 +25,9 @@ pub(super) const EDIT_COMMANDS: [&str; 11] = [
     "terminal.restore_declined",
 ];
 
+/// The edit commands the toolbar keeps behind its "Order and style" menu.
+const TOOLBAR_MORE: [&str; 3] = ["terminal.order_up", "terminal.order_down", "terminal.style"];
+
 /// Every terminal kind, in the order the pickers list them.
 pub(super) const KINDS: [TerminalKind; 5] = [
     TerminalKind::Feedthrough,
@@ -718,7 +721,8 @@ fn strip_toolbar_row(
             if matches!(
                 id,
                 "terminal.restore_declined" | "terminal.set_level" | "terminal.set_jumper"
-            ) {
+            ) || TOOLBAR_MORE.contains(&id)
+            {
                 continue;
             }
             let label = novo_workflow::commands::get(id).map_or(id, |c| c.label);
@@ -734,6 +738,17 @@ fn strip_toolbar_row(
                 out.push(ToolbarAction::Command(id));
             }
         }
+        // Order and style sit behind one button so the row fits a 1366-wide
+        // window without scrolling sideways.
+        ui.menu_button("Order and style", |ui| {
+            for id in TOOLBAR_MORE {
+                let label = novo_workflow::commands::get(id).map_or(id, |c| c.label);
+                if ui.button(label).clicked() {
+                    out.push(ToolbarAction::Command(id));
+                    ui.close();
+                }
+            }
+        });
         if !declined.is_empty() {
             ui.menu_button(format!("Declined ({})", declined.len()), |ui| {
                 if ui.button("Restore all").clicked() {
