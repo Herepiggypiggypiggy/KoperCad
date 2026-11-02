@@ -2,12 +2,12 @@
 @area Schematic
 @sizes 1366x768
 wait 20
-click_text File
+key ctrl+k
 wait 6
-move 260 466
+text new from template overhead crane
 wait 8
 shot menu-new-from-template
-click 600 466
+key Return
 wait 12
 shot options-window
 click_text "Create project"
@@ -21,13 +21,18 @@ wait 8
 key Return
 wait 12
 shot project-settings
+click_text "Drawing standard"
+wait 6
+click_text Open
+wait 12
+shot project-information
 tree Customer
-click 700 305
+click 1270 277
 text Acme Cranes
 key Tab
 wait 8
 shot customer-typed
-click_text Done Button
+click_text Done
 wait 10
 click_text Pages
 wait 10

@@ -4,7 +4,7 @@
 wait 20
 key ctrl+k
 wait 6
-text new from template pump station
+text new pump station
 wait 8
 key Return
 wait 12
