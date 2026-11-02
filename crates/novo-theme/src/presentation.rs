@@ -904,6 +904,21 @@ pub const TABLE: &[Presentation] = &[
     row("cabinet.arrange_ducts", d(&drawn::DUCT), "Auto ducts"),
     row("cabinet.arrange_group", p(icons::SQUARES_FOUR), "Autogroup"),
     row(
+        "cabinet.arrange_group_wiring",
+        p(icons::PLUGS_CONNECTED),
+        "Group by wiring",
+    ),
+    row(
+        "cabinet.arrange_group_heat",
+        p(icons::THERMOMETER_HOT),
+        "Group by heat",
+    ),
+    row(
+        "cabinet.arrange_group_both",
+        p(icons::MAGIC_WAND),
+        "Group by wiring and heat",
+    ),
+    row(
         "cabinet.arrange_tight",
         p(icons::ARROWS_IN_LINE_HORIZONTAL),
         "Close up gaps",

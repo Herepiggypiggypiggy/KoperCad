@@ -639,6 +639,9 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "cabinet.arrange_rails",
     "cabinet.arrange_ducts",
     "cabinet.arrange_group",
+    "cabinet.arrange_group_wiring",
+    "cabinet.arrange_group_heat",
+    "cabinet.arrange_group_both",
     "cabinet.arrange_tight",
     "cabinet.arrange_even",
     "cabinet.door",
@@ -1129,6 +1132,9 @@ impl NovoApp {
             | "cabinet.arrange_rails"
             | "cabinet.arrange_ducts"
             | "cabinet.arrange_group"
+            | "cabinet.arrange_group_wiring"
+            | "cabinet.arrange_group_heat"
+            | "cabinet.arrange_group_both"
             | "cabinet.arrange_tight"
             | "cabinet.arrange_even"
                 if self.is_open() =>

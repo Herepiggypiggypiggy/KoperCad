@@ -3148,7 +3148,7 @@ impl NovoApp {
             Ask::PlaceEveryPanel => self.place_every_panel(),
             Ask::AutoArrange(tool, ids) => {
                 if let Some(layout) = layout {
-                    self.arrange_preview(tool, &ids, &layout, cands);
+                    self.arrange_preview(tool, structure, &ids, &layout, cands);
                 }
             }
             Ask::PlaceAll => {

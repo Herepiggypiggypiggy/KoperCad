@@ -96,6 +96,7 @@ impl NovoApp {
                     caption: match id {
                         "cabinet.arrange_onto_rail" => Some("Rails and ducts"),
                         "cabinet.arrange_group" => Some("Order and distance"),
+                        "cabinet.arrange_group_wiring" => Some("Across rows"),
                         _ => None,
                     },
                 })

@@ -19,6 +19,7 @@ pub mod openings;
 pub mod plan;
 pub mod plate_drawing;
 pub mod railedit;
+pub mod regroup;
 pub mod rules;
 pub mod site;
 pub mod sizing;

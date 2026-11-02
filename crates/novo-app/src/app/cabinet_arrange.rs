@@ -7,8 +7,12 @@
 //! Where the user finds them: the Arrange entry of the Cabinet rail, Ctrl K
 //! ("autodistance", "autogroup", ...), and the right-click menu of the plate.
 
+use std::collections::{BTreeMap, HashSet};
+
+use novo_core::{Project, StructureId};
 use novo_layout::arrange::{self, Spacing};
 use novo_layout::plan::{Candidate, Plan};
+use novo_layout::regroup::{Goal, Inputs, Link, MAX_NET_DEVICES, regroup};
 use novo_layout::state::CabinetLayout;
 
 use super::NovoApp;
@@ -25,6 +29,9 @@ pub(super) const TOOLS: &[&str] = &[
     "cabinet.arrange_rails",
     "cabinet.arrange_ducts",
     "cabinet.arrange_group",
+    "cabinet.arrange_group_wiring",
+    "cabinet.arrange_group_heat",
+    "cabinet.arrange_group_both",
     "cabinet.arrange_tight",
     "cabinet.arrange_even",
 ];
@@ -46,6 +53,47 @@ pub(super) fn plan_for(
         "cabinet.arrange_even" => arrange::distribute(layout, ids, Spacing::Even),
         _ => return None,
     })
+}
+
+/// The goal of an Autogroup-across-rows command.
+fn regroup_goal(tool: &str) -> Option<Goal> {
+    match tool {
+        "cabinet.arrange_group_wiring" => Some(Goal::Wiring),
+        "cabinet.arrange_group_heat" => Some(Goal::Heat),
+        "cabinet.arrange_group_both" => Some(Goal::Both),
+        _ => None,
+    }
+}
+
+/// Which devices share wires, from the netlist: every net that touches two
+/// or more devices of the enclosure counts for each pair of them, `1 / (k - 1)`
+/// for a net of `k` devices. A net that touches more than
+/// [`MAX_NET_DEVICES`] devices (PE, 0 V, a supply bar) says nothing about
+/// which two belong together and is left out.
+pub(super) fn wiring_links(project: &Project, devices: &HashSet<u64>) -> Vec<Link> {
+    let netlist = project.netlist();
+    let mut weights: BTreeMap<(u64, u64), f64> = BTreeMap::new();
+    for net in netlist.nets() {
+        let on: Vec<u64> = netlist
+            .devices_on_net(project, net.id)
+            .into_iter()
+            .map(|d| d.raw())
+            .filter(|d| devices.contains(d))
+            .collect();
+        if on.len() < 2 || on.len() > MAX_NET_DEVICES {
+            continue;
+        }
+        let w = 1.0 / (on.len() - 1) as f64;
+        for (i, &a) in on.iter().enumerate() {
+            for &b in &on[i + 1..] {
+                *weights.entry((a.min(b), a.max(b))).or_insert(0.0) += w;
+            }
+        }
+    }
+    weights
+        .into_iter()
+        .map(|((a, b), weight)| Link { a, b, weight })
+        .collect()
 }
 
 /// True when the plan changes something.
@@ -83,17 +131,63 @@ pub(super) fn banner(plan: &Plan) -> Option<String> {
 }
 
 impl NovoApp {
+    /// The plan of Autogroup by wiring and/or heat: reads the part data
+    /// (losses, limits), the rule set and the netlist of the project.
+    fn regroup_plan(
+        &mut self,
+        goal: Goal,
+        structure: Option<StructureId>,
+        ids: &[u64],
+        layout: &CabinetLayout,
+    ) -> Option<Plan> {
+        let structure = structure?;
+        self.cabinet.rules.ensure_loaded();
+        let project = self.backend.document()?.project();
+        let specs = novo_layout::rules::model::specs(project, structure);
+        let on_plate: HashSet<u64> = layout.on_plate().iter().map(|p| p.id).collect();
+        let links = if goal == Goal::Heat {
+            Vec::new()
+        } else {
+            wiring_links(project, &on_plate)
+        };
+        let (mut plan, _) = regroup(
+            layout,
+            ids,
+            goal,
+            &Inputs {
+                specs: &specs,
+                links: &links,
+                rules: &self.cabinet.rules.rules,
+            },
+        );
+        plan.notes.push(
+            "A search, not a proof: it never scores worse than the layout now, and Undo takes it \
+             back."
+                .into(),
+        );
+        Some(plan)
+    }
+
     /// Runs an arrange tool and puts its plan up as the preview, or says why
     /// there is nothing to do.
     pub(super) fn arrange_preview(
         &mut self,
         tool: &str,
+        structure: Option<StructureId>,
         ids: &[u64],
         layout: &CabinetLayout,
         cands: &[Candidate],
     ) {
-        let Some(plan) = plan_for(tool, ids, layout, cands) else {
-            return;
+        let plan = if let Some(goal) = regroup_goal(tool) {
+            let Some(plan) = self.regroup_plan(goal, structure, ids, layout) else {
+                return;
+            };
+            plan
+        } else {
+            let Some(plan) = plan_for(tool, ids, layout, cands) else {
+                return;
+            };
+            plan
         };
         if changes(&plan) {
             self.cabinet.preview = Some(plan);

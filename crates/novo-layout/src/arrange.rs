@@ -43,16 +43,16 @@ pub enum Spacing {
     Even,
 }
 
-fn start_of(r: &Rect, vertical: bool) -> f64 {
+pub(crate) fn start_of(r: &Rect, vertical: bool) -> f64 {
     if vertical { r.y } else { r.x }
 }
 
-fn end_of(r: &Rect, vertical: bool) -> f64 {
+pub(crate) fn end_of(r: &Rect, vertical: bool) -> f64 {
     if vertical { r.bottom() } else { r.right() }
 }
 
 /// The gap `a` (before) and `b` (after) ask for along a run.
-fn need_between(a: &Placement, b: &Placement, vertical: bool) -> f64 {
+pub(crate) fn need_between(a: &Placement, b: &Placement, vertical: bool) -> f64 {
     if vertical {
         a.need(Side::Below).max(b.need(Side::Above))
     } else {
@@ -68,7 +68,7 @@ fn slid(p: &Placement, rail: &Rail, at: f64) -> (f64, f64) {
 }
 
 /// Top left of `p` standing on `rail` with its start `at` along the run.
-fn standing(p: &Placement, rail: &Rail, at: f64) -> (f64, f64) {
+pub(crate) fn standing(p: &Placement, rail: &Rail, at: f64) -> (f64, f64) {
     let f = p.footprint();
     if rail.vertical {
         (rail.x - f.w / 2.0, at)
@@ -77,7 +77,7 @@ fn standing(p: &Placement, rail: &Rail, at: f64) -> (f64, f64) {
     }
 }
 
-fn rect_at(p: &Placement, x: f64, y: f64) -> Rect {
+pub(crate) fn rect_at(p: &Placement, x: f64, y: f64) -> Rect {
     let f = p.footprint();
     Rect {
         x,
@@ -148,18 +148,18 @@ fn overlap_area(a: &Rect, b: &Rect) -> f64 {
     if w > 0.0 && h > 0.0 { w * h } else { 0.0 }
 }
 
-fn wanted(ids: &[u64], id: u64) -> bool {
+pub(crate) fn wanted(ids: &[u64], id: u64) -> bool {
     ids.is_empty() || ids.contains(&id)
 }
 
-fn titled(title: &str) -> Plan {
+pub(crate) fn titled(title: &str) -> Plan {
     Plan {
         title: Some(title.to_owned()),
         ..Plan::default()
     }
 }
 
-fn mv(p: &Placement, rail: &Rail, new_rail: bool, x: f64, y: f64) -> Move {
+pub(crate) fn mv(p: &Placement, rail: &Rail, new_rail: bool, x: f64, y: f64) -> Move {
     let offset = if rail.vertical {
         y - rail.y
     } else {

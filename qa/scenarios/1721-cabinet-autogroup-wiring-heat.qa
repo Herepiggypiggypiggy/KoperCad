@@ -1,0 +1,47 @@
+@title Cabinet: Autogroup by wiring and heat previews first, names its estimates, Cancel stores nothing, one Undo
+@area Cabinet
+@sizes 1366x768 1920x1080
+# Written without a run (no display on the authoring box): check the pictures on the first run.
+# On the made-up heat cabinet (qa/fixtures/heat-place-all.novo, planning values) Place all puts the devices on rails;
+# the Arrange card of the Cabinet left rail then has Group by wiring, Group by heat and Group by wiring and heat
+# (also Ctrl K: "group by heat", "autogroup wiring"). Each shows a preview banner with its estimates
+# ("not a temperature", "an estimate, not a routed length"); Esc stores nothing; Accept is one undo step.
+open qa/fixtures/heat-place-all.novo
+wait 20
+click_text Cabinet #1
+wait 20
+key ctrl+k
+wait 4
+text place all
+wait 6
+key Enter
+wait 30
+key Enter
+wait 20
+shot placed
+key ctrl+k
+wait 4
+text group by heat
+wait 6
+key Enter
+wait 20
+shot heat-preview
+check_layout
+key Escape
+wait 5
+shot heat-cancelled
+key ctrl+k
+wait 4
+text autogroup wiring and heat
+wait 6
+key Enter
+wait 20
+shot both-preview
+check_layout
+key Enter
+wait 20
+shot both-accepted
+check_layout
+key ctrl+z
+wait 10
+shot both-undone

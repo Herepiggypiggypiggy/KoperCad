@@ -1507,6 +1507,21 @@ pub const DUTCH: &[Aliases] = &[
         &["groep", "sorteer"],
     ),
     nl(
+        "cabinet.arrange_group_wiring",
+        &["groepeer op bedrading", "groepeer op draden"],
+        &["bedrading", "draden"],
+    ),
+    nl(
+        "cabinet.arrange_group_heat",
+        &["groepeer op warmte", "verdeel warmte"],
+        &["warmte", "verdeel"],
+    ),
+    nl(
+        "cabinet.arrange_group_both",
+        &["groepeer op bedrading en warmte", "herindelen"],
+        &["bedrading", "warmte"],
+    ),
+    nl(
         "cabinet.arrange_tight",
         &["gaten dichten", "sluit op"],
         &["afstand", "opschuiven"],
