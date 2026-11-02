@@ -44,3 +44,7 @@ Run: new-scenarios/ (this PR, before the fix), new-scenarios-main/ (main), fix2/
 | 1814, 1815, 18150 | red | red | step "click_text Quick" fails: the heat run is already going and the quality choice is disabled, the same on main; not caused by the bar |
 
 Remaining S4 layout-maybe findings: 18130 and 18130b show the floating Inspector over the plate (also on main at 1920); 1809b shows 3 stacked floating panels (main 1). Not blocking. Head with the fixes: bf579ef7c737455aabc5d45cad48b71acfb5a8c9.
+
+## After merging main with #1807 (dock every popup)
+
+Merge was mechanical (no conflicts). Rerun from this tree (after-1807/): 1120, 1121, 1135, 1102, 1151 pass. 1150 and 1153 (new in #1807) were red only from the shift: their click on the floating Ask Claude window header at y 54 is now 72; fixed, both pass. Head 40e11cd68f444d7611da0767736001cff3d540ac.
