@@ -1441,7 +1441,11 @@ impl NovoApp {
             let mut text = arranging.unwrap_or_else(|| {
                 format!(
                     "Preview{}: {n} {} would be placed. Nothing is stored until you accept.",
-                    if heat.is_some() { " (heat-aware)" } else { "" },
+                    if heat.is_some() {
+                        " (heat-aware: hot devices are kept apart using their power loss)"
+                    } else {
+                        ""
+                    },
                     if n == 1 { "device" } else { "devices" }
                 )
             });

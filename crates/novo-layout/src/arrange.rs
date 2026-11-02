@@ -6,7 +6,9 @@
 //!
 //! These are plain rules, not a search. A tool moves only what it was asked
 //! to move (the selection, or everything when nothing is selected), never
-//! moves a device onto another one, a duct or off the plate, and says in
+//! creates a new overlap with another device or a duct and never moves a
+//! device further off the plate (an overlap that was already there is not a
+//! reason to refuse, but a move may not make it bigger), and says in
 //! [`Plan::notes`] what it left alone and why. Positions are whole
 //! millimetres and gaps are rounded up, so a gap never ends up under the
 //! figure the part asks for. They know nothing about heat, wiring or
@@ -121,23 +123,29 @@ impl<'a> World<'a> {
         if old.is_some_and(|o| (o.x - rect.x).abs() < 0.01 && (o.y - rect.y).abs() < 0.01) {
             return true;
         }
+        // An overlap or a stretch off the plate that was already there is
+        // not a reason to refuse, but the move must not make it bigger.
         let usable = self.layout.plate.usable();
-        let was = |r: &Rect| old.is_some_and(|o| o.overlaps(r));
-        (usable.contains(rect) || old.is_some_and(|o| !usable.contains(&o)))
-            && !self
-                .now
-                .iter()
-                .any(|(id, other)| *id != me && other.overlaps(rect) && !was(other))
-            && !self
-                .layout
-                .ducts
-                .iter()
-                .any(|d| d.footprint().overlaps(rect) && !was(&d.footprint()))
+        let worse = |obstacle: &Rect| {
+            let now = overlap_area(rect, obstacle);
+            now > 0.0 && now > old.map_or(0.0, |o| overlap_area(&o, obstacle)) + 0.01
+        };
+        let outside_by = |r: &Rect| r.area() - overlap_area(r, &usable);
+        (outside_by(rect) <= old.map_or(0.0, |o| outside_by(&o)) + 0.01)
+            && !self.now.iter().any(|(id, other)| *id != me && worse(other))
+            && !self.layout.ducts.iter().any(|d| worse(&d.footprint()))
     }
 
     fn set(&mut self, id: u64, rect: Rect) {
         self.now.insert(id, rect);
     }
+}
+
+/// The area two rectangles share.
+fn overlap_area(a: &Rect, b: &Rect) -> f64 {
+    let w = a.right().min(b.right()) - a.x.max(b.x);
+    let h = a.bottom().min(b.bottom()) - a.y.max(b.y);
+    if w > 0.0 && h > 0.0 { w * h } else { 0.0 }
 }
 
 fn wanted(ids: &[u64], id: u64) -> bool {

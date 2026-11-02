@@ -336,3 +336,31 @@ fn add_ducts_says_when_the_rows_are_too_close_or_have_a_duct() {
     let again = arrange::add_ducts(&once);
     assert!(again.ducts.is_empty(), "running it twice adds nothing");
 }
+
+#[test]
+fn an_old_overlap_with_a_duct_may_stay_but_not_grow() {
+    use novo_layout::Duct;
+    // Device 1 overlaps the duct by 2 mm; closing up must not slide device 2 into it more.
+    let mut l = layout(
+        vec![rail(1, 100.0)],
+        vec![
+            dev(1, 30.0, 70.0, 40.0, 60.0, Some(1)),
+            dev(2, 200.0, 70.0, 40.0, 60.0, Some(1)),
+        ],
+    );
+    l.ducts.push(Duct {
+        id: 9,
+        x: 243.0,
+        y: 20.0,
+        length: 200.0,
+        width: 10.0,
+        vertical: true,
+    });
+    // The duct covers x 238..248: device 2 (200..240) overlaps it by 2 mm; closing up moves it away.
+    let plan = arrange::distribute(&l, &[], Spacing::Tight);
+    assert_eq!(plan.moves.len(), 1);
+    // A duct right where device 2 would land refuses the move.
+    l.ducts[0].x = 100.0;
+    let plan = arrange::distribute(&l, &[], Spacing::Tight);
+    assert!(plan.moves.is_empty(), "{:?}", plan.moves);
+}
