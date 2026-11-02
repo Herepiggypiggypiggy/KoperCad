@@ -354,6 +354,62 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState, can
     .scrolls()
     .show(ctx, |ui| {
         ui.set_max_width(356.0);
+        if let Some(n) = &state.notice {
+            super::dialog_ui::hint(ui, n);
+        }
+        let dirty = state.rules.to_text() != state.saved;
+        ui.horizontal(|ui| {
+            let save =
+                ui.add_enabled_ui(dirty, |ui| novo_theme::widgets::primary_button(ui, "Save"));
+            if !dirty {
+                save.response
+                    .on_disabled_hover_text("Nothing to save: the rules are already saved");
+            }
+            if save.inner.clicked() {
+                let text = state.rules.to_text();
+                state.notice = Some(match &state.path {
+                    Some(path) => match save_rules(&text, path) {
+                        Ok(()) => {
+                            state.saved = text;
+                            format!("Saved to {}", path.display())
+                        }
+                        Err(e) => format!("Could not save: {e}"),
+                    },
+                    None => "There is no folder to save to; used for this session".into(),
+                });
+            }
+            let can_undo = !state.history.is_empty();
+            if ui
+                .add_enabled(can_undo, egui::Button::new("Undo"))
+                .on_hover_text("Go back one change in this panel")
+                .on_disabled_hover_text("Nothing to undo yet in this panel")
+                .clicked()
+                && let Some(previous) = state.history.pop()
+            {
+                state.rules = previous;
+                state.text = state.rules.to_text();
+                state.last_edit = f64::NEG_INFINITY;
+            }
+            let standard = RuleSet::standard();
+            if super::dialog_ui::confirm_button(
+                ui,
+                "standard_rules",
+                "KoperCAD's default rules",
+                "Replace all rules with KoperCAD's default rules?",
+                state.rules != standard,
+            ) {
+                state.history.push(state.rules.clone());
+                state.rules = standard;
+                state.text = state.rules.to_text();
+                state.notice = None;
+            }
+        });
+        ui.weak(if dirty {
+            "Applies now. Not saved as your default yet."
+        } else {
+            "Saved as your default."
+        });
+        ui.separator();
         let changed = super::cabinet_rules_panel::show(ui, &mut state.rules);
         if changed {
             state.text = state.rules.to_text();
@@ -380,58 +436,6 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState, can
                     }
                 }
             });
-        if let Some(n) = &state.notice {
-            super::dialog_ui::hint(ui, n);
-        }
-        ui.add_space(8.0);
-        let dirty = state.rules.to_text() != state.saved;
-        ui.horizontal(|ui| {
-            let save = ui
-                .add_enabled_ui(dirty, |ui| novo_theme::widgets::primary_button(ui, "Save"))
-                .inner;
-            if save.clicked() {
-                let text = state.rules.to_text();
-                state.notice = Some(match &state.path {
-                    Some(path) => match save_rules(&text, path) {
-                        Ok(()) => {
-                            state.saved = text;
-                            format!("Saved to {}", path.display())
-                        }
-                        Err(e) => format!("Could not save: {e}"),
-                    },
-                    None => "There is no folder to save to; used for this session".into(),
-                });
-            }
-            let can_undo = !state.history.is_empty();
-            if ui
-                .add_enabled(can_undo, egui::Button::new("Undo"))
-                .on_hover_text("Go back one change in this panel")
-                .clicked()
-                && let Some(previous) = state.history.pop()
-            {
-                state.rules = previous;
-                state.text = state.rules.to_text();
-                state.last_edit = f64::NEG_INFINITY;
-            }
-            let standard = RuleSet::standard();
-            if super::dialog_ui::confirm_button(
-                ui,
-                "standard_rules",
-                "Standard rules",
-                "Replace all rules with the standard rules?",
-                state.rules != standard,
-            ) {
-                state.history.push(state.rules.clone());
-                state.rules = standard;
-                state.text = state.rules.to_text();
-                state.notice = None;
-            }
-        });
-        ui.weak(if dirty {
-            "Applies now. Not saved as your default yet."
-        } else {
-            "Saved as your default."
-        });
     });
     if state.rules != before && state.history.last() != Some(&before) {
         // A drag changes the rules every frame: one undo step per burst.

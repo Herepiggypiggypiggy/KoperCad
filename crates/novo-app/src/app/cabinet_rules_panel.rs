@@ -135,9 +135,28 @@ fn optional_mm(
     changed
 }
 
+/// A setting with its choices on one row: name and ?, then the choices.
+fn row_choice<T: Copy + PartialEq>(
+    ui: &mut egui::Ui,
+    label: &str,
+    help: &str,
+    value: &mut T,
+    options: &[(T, &str)],
+) {
+    ui.horizontal(|ui| {
+        ui.add_sized([86.0, 20.0], egui::Label::new(label));
+        let mut index = options.iter().position(|(v, _)| v == value).unwrap_or(0);
+        let labels: Vec<&str> = options.iter().map(|(_, l)| *l).collect();
+        if novo_theme::widgets::segmented(ui, &mut index, &labels) {
+            *value = options[index].0;
+        }
+        dialog_ui::help(ui, help);
+    });
+}
+
 fn zone_choice(ui: &mut egui::Ui, zone: &mut Zone) -> bool {
     let before = *zone;
-    dialog_ui::choice(
+    row_choice(
         ui,
         "Goes to",
         "Place all fills the plate from the top down. A kind in the top zone gets the first rows, \
@@ -157,31 +176,31 @@ fn card(ui: &mut egui::Ui, index: usize, count: usize, rule: &mut KindRule) -> E
     let mut changed = false;
     egui::Frame::group(ui.style()).show(ui, |ui| {
         ui.set_width(ui.available_width());
+        ui.add(egui::Label::new(egui::RichText::new(rule_title(rule)).strong()).wrap());
         ui.horizontal(|ui| {
-            ui.strong(rule_title(rule));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.small_button("Delete").on_hover_text("Remove this rule").clicked() {
-                    edit = Edit::Delete(index);
-                }
-                if index + 1 < count
-                    && ui
-                        .small_button("Down")
-                        .on_hover_text(
-                            "Later rules come later on a shared rail. Move a rule to change the order.",
-                        )
-                        .clicked()
-                {
-                    edit = Edit::Move(index, 1);
-                }
-                if index > 0
-                    && ui
-                        .small_button("Up")
-                        .on_hover_text("Move this rule earlier")
-                        .clicked()
-                {
-                    edit = Edit::Move(index, -1);
-                }
-            });
+            if ui
+                .small_button("Delete")
+                .on_hover_text("Remove this rule")
+                .clicked()
+            {
+                edit = Edit::Delete(index);
+            }
+            let down = ui
+                .add_enabled(index + 1 < count, egui::Button::new("Down").small())
+                .on_hover_text(
+                    "Later rules come later on a shared rail. Move a rule to change the order.",
+                )
+                .on_disabled_hover_text("This is the last rule");
+            if down.clicked() {
+                edit = Edit::Move(index, 1);
+            }
+            let up = ui
+                .add_enabled(index > 0, egui::Button::new("Up").small())
+                .on_hover_text("Move this rule earlier")
+                .on_disabled_hover_text("This is the first rule");
+            if up.clicked() {
+                edit = Edit::Move(index, -1);
+            }
         });
         dialog_ui::hint(ui, &rule_sentence(rule));
         ui.add_space(4.0);
@@ -220,7 +239,7 @@ fn card(ui: &mut egui::Ui, index: usize, count: usize, rule: &mut KindRule) -> E
 
         changed |= zone_choice(ui, &mut rule.zone);
         let before = rule.rail;
-        dialog_ui::choice(
+        row_choice(
             ui,
             "Rail",
             "Own: this kind never shares a rail with another kind, every kind gets its own rows. \
@@ -231,7 +250,7 @@ fn card(ui: &mut egui::Ui, index: usize, count: usize, rule: &mut KindRule) -> E
         );
         changed |= rule.rail != before;
         let before = rule.class;
-        dialog_ui::choice(
+        row_choice(
             ui,
             "Carries",
             "Power rows and signal rows are kept apart (see Wiring ducts below): a power duct \

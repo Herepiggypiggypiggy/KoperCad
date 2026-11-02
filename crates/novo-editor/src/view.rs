@@ -211,6 +211,8 @@ pub struct SchematicView {
     refusal: Option<RefusalMark>,
     /// The snap target of the wire tool and what it is, for its label.
     snap_label: Option<(Point, String)>,
+    /// Pins that can still take a wire, for the wire guide's words.
+    free_pin_count: usize,
     /// Reduce motion: the refusal mark then appears and goes without fading.
     pub reduce_motion: bool,
 }
@@ -378,6 +380,7 @@ impl SchematicView {
             where_shown: None,
             refusal: None,
             snap_label: None,
+            free_pin_count: 0,
             reduce_motion: false,
         }
     }
@@ -774,6 +777,7 @@ impl SchematicView {
             scene.scene_mut().remove(id);
         }
         let preview = self.editor.preview(document, page);
+        self.free_pin_count = preview.free_pins.len();
         self.snap_label = match (&preview.target, &preview.target_label) {
             (Some(at), Some(text)) if matches!(self.editor.tool(), crate::tool::Tool::Wire(_)) => {
                 Some((*at, text.clone()))
@@ -963,10 +967,16 @@ impl SchematicView {
         let Some(step) = self.editor.wire_step() else {
             return;
         };
+        let pins = match self.free_pin_count {
+            0 => "no free pins".to_owned(),
+            1 => "1 free pin (ringed)".to_owned(),
+            n => format!("{n} free pins (ringed)"),
+        };
         let steps = [
-            "1  Click a pin to start",
-            "2  Click empty space to turn",
-            "3  Click a pin to finish",
+            "1  Click a pin to start".to_owned(),
+            "2  Click empty space to turn".to_owned(),
+            "3  Click a pin to finish".to_owned(),
+            pins,
         ];
         let painter = ui.painter_at(self.rect);
         let visuals = ui.visuals();
@@ -982,7 +992,13 @@ impl SchematicView {
                 } else {
                     visuals.weak_text_color()
                 };
-                painter.layout_no_wrap((*t).to_owned(), font.clone(), color)
+                // The step you are at is marked with an arrow, not only lit.
+                let text = if i == step {
+                    format!("→ {t}")
+                } else {
+                    t.clone()
+                };
+                painter.layout_no_wrap(text, font.clone(), color)
             })
             .collect();
         let gap = 18.0;
