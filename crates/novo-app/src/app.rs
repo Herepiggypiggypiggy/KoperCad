@@ -30,6 +30,7 @@ mod build_mode_tests;
 mod cabinet;
 mod cabinet_bar;
 mod cabinet_door;
+mod cabinet_group;
 mod cabinet_inspector;
 mod cabinet_menu;
 mod cabinet_panel;
@@ -382,6 +383,8 @@ mod assembly_pack_tests;
 mod assembly_tests;
 #[cfg(test)]
 mod bench_tests;
+#[cfg(test)]
+mod cabinet_group_tests;
 #[cfg(test)]
 mod cabinet_rails_tests;
 #[cfg(test)]
@@ -1788,7 +1791,11 @@ impl NovoApp {
                 if cabinet
                     && matches!(
                         *id,
-                        "edit.rotate" | "edit.delete" | "terminal.strip_up" | "terminal.strip_down"
+                        "edit.rotate"
+                            | "edit.delete"
+                            | "edit.select_all"
+                            | "terminal.strip_up"
+                            | "terminal.strip_down"
                     )
                 {
                     self.cabinet.keys.push((*id).to_owned());
