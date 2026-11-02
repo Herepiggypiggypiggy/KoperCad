@@ -83,7 +83,7 @@ impl Op {
         OPS.iter().find(|o| o.0 == id).map(|o| o.3)
     }
 
-    fn needs(self) -> usize {
+    pub(super) fn needs(self) -> usize {
         match self {
             Op::SpreadAcross | Op::SpreadDown => 3,
             _ => 2,

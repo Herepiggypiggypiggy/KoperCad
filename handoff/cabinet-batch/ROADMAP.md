@@ -6,9 +6,11 @@ Done (this PR)
 - A drag that starts on a selected device carries the whole selection (one undo step, grid and DIN rail snap per device). A drag on an unselected device selects it first.
 - Ctrl+A selects every device on the plate.
 - Arrow keys nudge the selection by a grid step (Shift: 1 mm).
-- Align strip (left, centre, right, top, middle, bottom, spread across, spread down) shows over the plate with two or more devices selected. Shares the maths with the 3D view (`view3d_align::arrange_devices`).
+- Align row (docked under the plate, not floating) (left, centre, right, top, middle, bottom, spread across, spread down) shows over the plate with two or more devices selected. Shares the maths with the 3D view (`view3d_align::arrange_devices`).
 - Right-click inside a selection keeps it, so Rotate and Take off act on the group.
 - Box select and Shift-click were already the canvas's own and still apply.
+
+Also: the plate canvas has a fixed id (`push_id`) so the Align row appearing or vanishing cannot drop a drag in progress (found by QA).
 
 Next
 - Copy and paste of a device group (needs a model decision: a copy is a new schematic device).

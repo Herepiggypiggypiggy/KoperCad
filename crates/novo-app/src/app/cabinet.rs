@@ -1904,7 +1904,25 @@ impl NovoApp {
                 }
                 self.cabinet.view.glide_secs =
                     super::motion::glide_secs(self.settings.reduce_motion);
-                let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
+                // The Align row docks under the plate while two or more
+                // devices are selected.
+                if layout.is_some()
+                    && !has_plan
+                    && !on_surface
+                    && let n = self.cabinet_selected().len()
+                    && n >= 2
+                    && let Some(op) = super::cabinet_group::align_bar(ui, n)
+                {
+                    ask = Some(Ask::Arrange(op));
+                }
+                // A fixed id: the Align row above comes and goes with the
+                // selection and must not renumber the canvas (a drag in
+                // progress would be lost).
+                let out = ui
+                    .push_id("cabinet_plate_canvas", |ui| {
+                        self.cabinet.view.show(ui, self.cabinet.scene.scene())
+                    })
+                    .inner;
                 cabinet_bar::note_rect_in(ui, "cabinet.canvas", "Plate", out.response.rect, false);
                 // The same chip as in 3D: the run's state is in sight in both views.
                 {
@@ -2599,13 +2617,6 @@ impl NovoApp {
                     // Rotate and delete act on the selected devices, and
                     // Delete on the selected rail when no device is.
                     let selected = self.cabinet_selected();
-                    if selected.len() >= 2
-                        && self.cabinet.drag.is_none()
-                        && let Some(op) =
-                            super::view3d_align::strip(ui.ctx(), out.response.rect, selected.len())
-                    {
-                        ask = Some(Ask::Arrange(op));
-                    }
                     // Arrow keys nudge the selected devices by a grid step
                     // (1 mm with Shift).
                     if !selected.is_empty()

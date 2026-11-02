@@ -2,7 +2,7 @@
 
 Branch `claude/project-thread-r9e7qd` (kopercad). Code: `crates/novo-app/src/app/cabinet_group.rs` (landing maths, nudge), `cabinet.rs` (Drag.group, Ask::MoveGroup, Ask::Arrange, strip, Ctrl+A, arrows), `view3d_align.rs` (`arrange_devices`). Tests: `cabinet_group_tests.rs` and unit tests in `cabinet_group.rs`.
 
-Other thread: auto-placement tools (auto rail, ducts, autogroup, autodistance, reconfigure) live in their own files and the Cabinet toolbar; this PR deliberately adds no toolbar button (floating Align strip instead) so the two do not collide.
+Other thread: auto-placement tools (auto rail, ducts, autogroup, autodistance, reconfigure) live in their own files and the Cabinet toolbar; this PR deliberately adds no toolbar button (floating Align row (docked under the plate, not floating) instead) so the two do not collide.
 
 Remaining friction in the cabinet workflow (found while reading, not fixed):
 - Selecting a rail and a device at once is not possible; rails have their own selection.
