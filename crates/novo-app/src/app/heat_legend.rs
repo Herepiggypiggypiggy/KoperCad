@@ -35,7 +35,7 @@ pub(crate) fn notes(h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) -> 
     }
     if h.cloud {
         out.push(String::from(
-            "Cloud: air at ambient is clear; colour and opacity run from ambient to the hot end of the air (its own scale, above)",
+            "Cloud: air at ambient is clear; colour and opacity run from ambient to the hot end of the air (its own scale, above). Hotter air turns white-hot and more solid. Same density from every side; a model, not a measurement",
         ));
     }
     if h.carry {

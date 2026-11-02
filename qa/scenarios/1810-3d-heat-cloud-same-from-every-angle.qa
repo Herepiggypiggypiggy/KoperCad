@@ -1,0 +1,30 @@
+@title 3D Heat: the cloud keeps its density from every angle and 100 C+ air is white-hot
+@area 3D
+# Tadjiro: the cloud changed density when the view went from front to top or side, and very hot spots (100 C+) were hard to tell apart. The cloud now absorbs by millimetre of air on every axis and the same cell size, and air above the top of the cloud scale turns white and more solid. Pictures from several angles are the evidence (painted overlays).
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 200
+expect_not "Preliminary"
+click_text Cloud
+wait 20
+shot cloud-default-view
+expect "white-hot"
+drag 700 450 700 300
+wait 20
+shot cloud-from-above
+drag 700 300 500 300
+wait 20
+shot cloud-from-side
+drag 500 300 650 380
+wait 20
+shot cloud-oblique
+check_layout
