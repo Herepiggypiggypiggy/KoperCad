@@ -116,6 +116,7 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
         ],
         Target::Plate => vec![
             Some(("Place all", "cabinet.place-all")),
+            Some(("Auto-reconfigure", "cabinet.arrange_all")),
             Some(("Autoplace on rail", "cabinet.arrange_onto_rail")),
             Some(("Autogroup", "cabinet.arrange_group")),
             Some(("Close up gaps", "cabinet.arrange_tight")),

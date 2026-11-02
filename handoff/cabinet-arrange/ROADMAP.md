@@ -10,9 +10,13 @@ hand, holes drilled by hand). Batch select and drag belongs to another thread.
 - Preview and accept reuse the Place all path (banner, Enter/Esc, one undo step named after the tool).
 - Cabinet rail: Arrange entry with a card of the six commands. Also Ctrl K and the plate right-click menu.
 
+## Done (PR 2)
+- Auto-reconfigure (`arrange::reconfigure`, command `cabinet.arrange_all`): onto rail, auto rails,
+  autogroup (which also closes up), auto ducts, run on a simulated layout and merged into one plan:
+  one preview, one undo step. Notes list what each step did.
+
 ## Next, in order
-1. Auto-reconfigure: one button that runs rails, onto rail, group, close up and ducts together
-   on the selection, with one preview. Needs plan composition (new rails feeding later steps).
+1. (done) Auto-reconfigure.
 2. Autogroup across rails (put one kind on one row), using wiring connectivity from the
    schematic (shared nets), not only the letter code.
 3. Auto ducts: vertical ducts at the sides, duct class from the rows (power or signal),

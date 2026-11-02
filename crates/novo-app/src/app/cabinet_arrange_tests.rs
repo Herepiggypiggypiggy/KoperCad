@@ -134,3 +134,35 @@ fn a_tool_with_nothing_to_do_says_so_and_shows_no_preview() {
     run(&mut d, cab, "cabinet.arrange_ducts");
     assert!(d.app.cabinet.preview.is_none());
 }
+
+#[test]
+fn auto_reconfigure_is_one_preview_and_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let (cab, ids) = loose(&mut d);
+    let rails = |d: &Drive| {
+        project(d)
+            .all::<Rail>()
+            .filter(|r| r.kind == RailKind::DinRail)
+            .count()
+    };
+    run(&mut d, cab, "cabinet.arrange_all");
+    let plan = d.app.cabinet.preview.as_ref().expect("a preview");
+    assert_eq!(plan.title.as_deref(), Some("Auto-reconfigure"));
+    assert_eq!(rails(&d), 0, "nothing is stored by the preview");
+    let banner = super::cabinet_arrange::banner(plan).unwrap();
+    assert!(banner.contains("Auto-reconfigure") && banner.contains("rail"));
+    accept(&mut d, cab);
+    assert_eq!(rails(&d), 1);
+    let layout = novo_layout::model::load(project(&d), cab).unwrap();
+    assert!(layout.placements.iter().all(|p| p.rail.is_some()));
+    assert!(layout.report().too_close.is_empty());
+    // One undo step takes the rail and the moves back together.
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(rails(&d), 0);
+    assert_eq!(project(&d).all::<CabinetPlacement>().count(), ids.len());
+    let layout = novo_layout::model::load(project(&d), cab).unwrap();
+    assert!(layout.placements.iter().all(|p| p.rail.is_none()));
+}

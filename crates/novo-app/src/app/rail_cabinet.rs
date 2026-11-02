@@ -43,7 +43,7 @@ pub(super) fn local(id: &str) -> Option<(Glyph, &'static str, &'static str)> {
         "rail.arrange" => Some((
             Glyph::Phosphor(novo_theme::icons::MAGNET),
             "Arrange",
-            "Autoplace on rail, auto rails and ducts, autogroup and autodistance for the \
+            "Auto-reconfigure, autoplace on rail, auto rails and ducts, autogroup and autodistance for the \
              selected devices (all of them when none is selected), previewed before anything \
              is stored. Simple rules: a planning aid, not a clearance check or a heat calculation",
         )),
@@ -94,6 +94,7 @@ impl NovoApp {
                     current: false,
                     enabled: reason.is_none(),
                     caption: match id {
+                        "cabinet.arrange_all" => Some("All in one step"),
                         "cabinet.arrange_onto_rail" => Some("Rails and ducts"),
                         "cabinet.arrange_group" => Some("Order and distance"),
                         _ => None,
