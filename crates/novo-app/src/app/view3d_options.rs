@@ -64,8 +64,10 @@ pub(crate) enum ViewOption {
 /// What the registry knows about an option.
 pub(crate) struct Spec {
     pub option: ViewOption,
+    #[cfg_attr(not(test), allow(dead_code))] // the rail names rows itself; tests read it
     pub label: &'static str,
     pub hint: &'static str,
+    #[cfg_attr(not(test), allow(dead_code))] // read by the rail tests
     pub home: Home,
     /// The Ctrl K command that toggles it (also its menu row, where it has one).
     pub command: &'static str,
@@ -262,12 +264,6 @@ pub(crate) const ALL: &[Spec] = &[
 ];
 
 impl ViewOption {
-    pub(crate) fn spec(self) -> &'static Spec {
-        ALL.iter()
-            .find(|s| s.option == self)
-            .expect("every option has a spec")
-    }
-
     /// The option a command toggles.
     pub(crate) fn from_command(id: &str) -> Option<Self> {
         ALL.iter().find(|s| s.command == id).map(|s| s.option)
