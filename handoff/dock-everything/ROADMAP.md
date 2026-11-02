@@ -7,5 +7,5 @@ Done (PR on branch claude/project-thread-bb5jpo): `panel::Dialog` wrapper (53 co
 Next:
 - Per-window QA scenarios at 1366x768 and 1920x1080 (none yet for docked dialogs).
 - Wide windows (print preview, designer ...) are dockable but float by default; consider a bottom default.
-- Request 2 (help popups instead of explanation text) and request 8 (3D Layers card into the left rail) are other lanes.
+- Requests 2 (help popups) and 8 (3D Layers into the rail, #1808) landed on main in their own PRs.
 - Dock strip default width 320 is narrow for 420+ dialogs; consider remembering a per-dialog width.

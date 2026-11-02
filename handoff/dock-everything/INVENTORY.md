@@ -28,7 +28,7 @@ Save changes?, Restore unsaved work?, Delete/confirm in the outline, Restore rev
 ## D. Cards on the canvas (`Panel`)
 
 Dockable (already, V1c/V1d): Inspector (schematic and cabinet), Wire panel, Review notes, Live card, Controller, Changes, EMC nets, 3D: Heat, Vents and fans, Wire runs, Statistics, EMC panel, EMC legend.
-Made dockable in this change: Defects and walk-throughs, Heat legend (temperature and change B-A), 3D Layers card, Properties of the selection card.
+Made dockable in this change: Defects and walk-throughs, Heat legend (temperature and change B-A), Properties of the selection card.
 No title bar, so nothing to dock (small tool strips and chips): simulation chip, 3D toolbar, lesson card, walkthrough, 3D tool strips (move, nudge, align, measure, place, wire-it, build order, hints), tool dock, rail flyouts.
 
 ## E. Transient things that are not windows (never docked)
@@ -37,4 +37,4 @@ Toasts, hover tips, defect banner, refusal card, command field, right-click menu
 
 ## Not done here (other requests)
 
-Request 2 (move explanation text into a ? popup) and request 8 (remove the 3D Layers card, fold it into the left rail) are separate lanes. The Layers card is dockable meanwhile.
+Requests 2 (help popups) and 8 (3D Layers into the left rail, #1808) are separate lanes and landed on main separately.
