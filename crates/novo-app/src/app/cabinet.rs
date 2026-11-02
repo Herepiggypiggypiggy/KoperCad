@@ -2684,7 +2684,11 @@ impl NovoApp {
             ask = Some(Ask::SetPlateSize(s, plate));
         }
         super::sizing::show_editor(ui.ctx(), &mut self.sizing);
-        cabinet_rules::show_rules_window(ui.ctx(), &mut self.cabinet.rules);
+        let rules_canvas = self
+            .cabinet
+            .plate_rect
+            .unwrap_or_else(|| ui.ctx().content_rect());
+        cabinet_rules::show_rules_window(ui.ctx(), &mut self.cabinet.rules, rules_canvas);
         let lists = if self.cabinet.rules.cut_open {
             structure.and_then(|s| cabinet_rules::cut_lists(project, s))
         } else {

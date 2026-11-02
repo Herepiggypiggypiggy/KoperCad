@@ -67,21 +67,21 @@ solve = [ { select = "-K1" } ]
 
 [[step]]
 id = "rules-window"
-how = ["Click Rules in the header.", "Read one rule per line, then close the window."]
-how_nl = ["Klik op Rules in de kop.", "Lees één regel per rij en sluit het venster."]
+how = ["Click Rules in the header.", "Read one card per kind of device, then close the panel."]
+how_nl = ["Klik op Rules in de kop.", "Lees één kaart per soort apparaat en sluit het paneel."]
 title = "Read the place rules"
 title_nl = "Lees de plaatsingsregels"
 text = """
-Click **Rules**. The window **Place rules** lists one rule per line: which letter codes it covers, the zone on the plate (top, middle or bottom),
-whether the kind gets a rail of its own or shares one, and whether it is power or signal.
+Click **Rules**. The panel **Place rules** shows one card per kind of device: which letters it covers, the zone on the plate (top, middle or bottom),
+whether the kind gets a rail of its own or shares one, and whether it carries power or signals.
 Power and signal rows are kept apart, with a duct for each side. These are practice values, not a standard.
-You can edit them and press **Save**; this lesson only reads them. Close the window when you are done.
+Every card has a sentence that says what it does, and a **?** explains each setting. You can change them (they apply at once) and press **Save**; this lesson only reads them. Close the panel when you are done.
 """
 text_nl = """
-Klik op **Rules**. Het venster **Place rules** toont per regel: welke lettercodes erbij horen, de zone op de plaat (top, middle of bottom),
-of de soort een eigen rail krijgt of er een deelt en of het vermogen of signaal is.
+Klik op **Rules**. Het paneel **Place rules** toont een kaart per soort apparaat: welke letters erbij horen, de zone op de plaat (top, middle of bottom),
+of de soort een eigen rail krijgt of er een deelt en of het vermogen of signalen voert.
 Vermogens- en signaalrijen blijven gescheiden, met voor elke kant een kanaal. Dit zijn praktijkwaarden, geen norm.
-Je kunt ze aanpassen en op **Save** drukken; deze les leest ze alleen. Sluit het venster als je klaar bent.
+Elke kaart heeft een zin die zegt wat ze doet en een **?** legt elke instelling uit. Je kunt ze aanpassen (ze werken direct) en op **Save** drukken; deze les leest ze alleen. Sluit het paneel als je klaar bent.
 """
 point = { ui = "cabinet.rules" }
 expect = { clicked = "cabinet.rules" }

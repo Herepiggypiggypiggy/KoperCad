@@ -66,6 +66,13 @@ pub(super) struct RulesState {
     pub(super) explain: Option<Explanation>,
     pub(super) editor_open: bool,
     text: String,
+    /// The rule text last written to (or read from) the file: what "Save"
+    /// would not change.
+    saved: String,
+    /// Earlier rule sets, newest last, for Undo in the panel.
+    history: Vec<RuleSet>,
+    /// When the last edit was made, to fold a drag into one undo step.
+    last_edit: f64,
     /// One line for the editor: what the last save or check did.
     notice: Option<String>,
     pub(super) cut_open: bool,
@@ -80,6 +87,9 @@ impl RulesState {
             explain: None,
             editor_open: false,
             text: String::new(),
+            saved: String::new(),
+            history: Vec::new(),
+            last_edit: f64::NEG_INFINITY,
             notice: None,
             cut_open: false,
         }
@@ -97,6 +107,7 @@ impl RulesState {
             self.notice = problem;
         }
         self.text = self.rules.to_text();
+        self.saved = self.text.clone();
     }
 }
 
@@ -319,123 +330,133 @@ pub(super) fn annotate(
     }
 }
 
-/// The rule text with its `heat` line switched on or off (added when missing),
-/// everything else, comments included, untouched.
-fn set_heat_line(text: &str, on: bool) -> String {
-    let line = if on {
-        "heat on ambient=35 limit=60 margin=15 min_source=10"
-    } else {
-        "heat off"
-    };
-    let mut done = false;
-    let mut out: Vec<String> = text
-        .lines()
-        .map(|l| {
-            let word = l.split_whitespace().next().unwrap_or("");
-            if word.eq_ignore_ascii_case("heat") && !l.trim_start().starts_with('#') {
-                done = true;
-                line.to_owned()
-            } else {
-                l.to_owned()
-            }
-        })
-        .collect();
-    if !done {
-        let at = out
-            .iter()
-            .position(|l| l.trim_start().starts_with("rule "))
-            .unwrap_or(out.len());
-        out.insert(at, line.to_owned());
-    }
-    let mut joined = out.join("\n");
-    joined.push('\n');
-    joined
-}
-
-#[cfg(test)]
-pub(super) fn set_heat_line_for_test(text: &str, on: bool) -> String {
-    set_heat_line(text, on)
-}
-
-/// The floating "Place rules" window: the rule file as text, checked as it is
-/// typed, saved on request.
-pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState) {
+/// The Place rules panel: the rules as cards in plain words, dockable at the
+/// right. Changes apply to Place all at once and can be undone; "Save" keeps
+/// them as the person's defaults. The file as text is under "Edit as text".
+pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState, canvas: egui::Rect) {
     if !state.editor_open {
         return;
     }
     state.ensure_loaded();
-    let mut open = true;
-    super::panel::dialog(ctx, "Place rules", [520.0, 0.0])
-        .open(super::panel::esc(ctx, &mut open))
-        .show(ctx, |ui| {
-            super::dialog_ui::hint(
-                ui,
-                "Where Place all puts each kind of device. One rule per line: \
-                 letter codes, zone (top, middle, bottom), rail (own or shared), \
-                 class (power, signal), and gap, above, below in mm. \
-                 `heat on` / `heat off` switches heat-aware placement. \
-                 These are practice values, not a standard: change them to your own.",
-            );
-            ui.add_space(6.0);
-            ui.add(
-                egui::TextEdit::multiline(&mut state.text)
-                    .code_editor()
-                    .desired_rows(16)
-                    .desired_width(f32::INFINITY),
-            );
-            let parsed = RuleSet::parse(&state.text);
-            if let Ok(rules) = &parsed {
-                let mut on = rules.heat.is_some();
-                if ui
-                    .checkbox(&mut on, "Heat-aware placement")
-                    .on_hover_text(
-                        "Spreads hot devices, keeps devices that mind heat away from them \
-                         and below them. Needs power loss and a maximum ambient on the parts. \
-                         A planning score, not a temperature: check the result in the Heat view.",
-                    )
-                    .changed()
-                {
-                    state.text = set_heat_line(&state.text, on);
-                }
-            }
-            if let Err(e) = &parsed {
-                ui.colored_label(ui.visuals().error_fg_color, e.to_string());
-            }
-            if let Some(n) = &state.notice {
-                super::dialog_ui::hint(ui, n);
-            }
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                let ok = parsed.is_ok();
-                let save = ui
-                    .add_enabled_ui(ok, |ui| novo_theme::widgets::primary_button(ui, "Save"))
-                    .inner;
-                if save.clicked()
-                    && let Ok(rules) = parsed
-                {
-                    state.notice = Some(match &state.path {
-                        Some(path) => match save_rules(&state.text, path) {
-                            Ok(()) => format!("Saved to {}", path.display()),
-                            Err(e) => format!("Could not save: {e}"),
-                        },
-                        None => "There is no folder to save to; used for this session".into(),
-                    });
-                    state.rules = rules;
-                }
-                let standard = RuleSet::standard().to_text();
-                if super::dialog_ui::confirm_button(
-                    ui,
-                    "standard_rules",
-                    "Standard rules",
-                    "Replace the text above with the standard rules?",
-                    state.text != standard,
-                ) {
-                    state.text = standard;
-                    state.notice = None;
+    let now = ctx.input(|i| i.time);
+    let before = state.rules.clone();
+    let mut text_edit = false;
+    super::panel::Panel::new(
+        "place_rules",
+        "Place rules",
+        canvas,
+        super::panel::Side::Right,
+        380.0,
+    )
+    .closable()
+    .dockable()
+    .fixed_open()
+    .scrolls()
+    .show(ctx, |ui| {
+        ui.set_max_width(356.0);
+        let changed = super::cabinet_rules_panel::show(ui, &mut state.rules);
+        if changed {
+            state.text = state.rules.to_text();
+        }
+        egui::CollapsingHeader::new("Edit as text")
+            .default_open(false)
+            .show(ui, |ui| {
+                dialog_ui_hint(ui);
+                let r = ui.add(
+                    egui::TextEdit::multiline(&mut state.text)
+                        .code_editor()
+                        .desired_rows(10)
+                        .desired_width(f32::INFINITY),
+                );
+                match RuleSet::parse(&state.text) {
+                    Ok(rules) => {
+                        if r.changed() {
+                            state.rules = rules;
+                            text_edit = true;
+                        }
+                    }
+                    Err(e) => {
+                        ui.colored_label(ui.visuals().error_fg_color, e.to_string());
+                    }
                 }
             });
+        if let Some(n) = &state.notice {
+            super::dialog_ui::hint(ui, n);
+        }
+        ui.add_space(8.0);
+        let dirty = state.rules.to_text() != state.saved;
+        ui.horizontal(|ui| {
+            let save = ui
+                .add_enabled_ui(dirty, |ui| novo_theme::widgets::primary_button(ui, "Save"))
+                .inner;
+            if save.clicked() {
+                let text = state.rules.to_text();
+                state.notice = Some(match &state.path {
+                    Some(path) => match save_rules(&text, path) {
+                        Ok(()) => {
+                            state.saved = text;
+                            format!("Saved to {}", path.display())
+                        }
+                        Err(e) => format!("Could not save: {e}"),
+                    },
+                    None => "There is no folder to save to; used for this session".into(),
+                });
+            }
+            let can_undo = !state.history.is_empty();
+            if ui
+                .add_enabled(can_undo, egui::Button::new("Undo"))
+                .on_hover_text("Go back one change in this panel")
+                .clicked()
+                && let Some(previous) = state.history.pop()
+            {
+                state.rules = previous;
+                state.text = state.rules.to_text();
+                state.last_edit = f64::NEG_INFINITY;
+            }
+            let standard = RuleSet::standard();
+            if super::dialog_ui::confirm_button(
+                ui,
+                "standard_rules",
+                "Standard rules",
+                "Replace all rules with the standard rules?",
+                state.rules != standard,
+            ) {
+                state.history.push(state.rules.clone());
+                state.rules = standard;
+                state.text = state.rules.to_text();
+                state.notice = None;
+            }
         });
-    state.editor_open = open;
+        ui.weak(if dirty {
+            "Applies now. Not saved as your default yet."
+        } else {
+            "Saved as your default."
+        });
+    });
+    if state.rules != before && state.history.last() != Some(&before) {
+        // A drag changes the rules every frame: one undo step per burst.
+        if now - state.last_edit > 0.8 {
+            state.history.push(before);
+            if state.history.len() > 50 {
+                state.history.remove(0);
+            }
+        }
+        state.last_edit = now;
+    }
+    if text_edit {
+        state.notice = None;
+    }
+    if super::panel::take_closed(ctx, "place_rules") {
+        state.editor_open = false;
+    }
+}
+
+fn dialog_ui_hint(ui: &mut egui::Ui) {
+    super::dialog_ui::hint(
+        ui,
+        "The same rules as a file: one per line. Letter codes, then zone=, rail=, class=, \
+         gap=, above=, below= in mm. `heat on` / `heat off`. Edits here apply once the text reads.",
+    );
 }
 
 /// The bars to buy for the rails and ducts of the plate.
