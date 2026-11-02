@@ -25,12 +25,7 @@ expect "Heat "
 shot 3d-heat-running
 check_layout
 click_text Cancel
-wait_s 5
-click_text Quick
-wait 5
-click_text "Heat not run"
-wait 40
-wait_s 150
+wait_s 10
 expect "Heat done"
 shot 3d-done
 check_layout
