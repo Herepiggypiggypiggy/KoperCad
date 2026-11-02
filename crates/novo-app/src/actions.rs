@@ -14,6 +14,7 @@ pub enum Action {
     OpenEmcExample,
     OpenMccExample,
     OpenCraneExample,
+    OpenCraneSimExample,
     OpenPlcExample,
     OpenPumpExample,
     NewCraneProject,
@@ -54,6 +55,7 @@ impl Action {
         Action::OpenEmcExample,
         Action::OpenMccExample,
         Action::OpenCraneExample,
+        Action::OpenCraneSimExample,
         Action::OpenPlcExample,
         Action::OpenPumpExample,
         Action::NewCraneProject,
@@ -96,6 +98,7 @@ impl Action {
             Action::OpenEmcExample => "file.example_emc",
             Action::OpenMccExample => "file.example_mcc",
             Action::OpenCraneExample => "file.example_crane",
+            Action::OpenCraneSimExample => "file.example_crane_sim",
             Action::OpenPlcExample => "file.example_plc",
             Action::OpenPumpExample => "file.example_pump",
             Action::NewCraneProject => "file.new_crane",
@@ -141,6 +144,9 @@ impl Action {
             Action::OpenEmcExample => "Open EMC example",
             Action::OpenMccExample => "Open example: motor control centre",
             Action::OpenCraneExample => "Open example: overhead crane cabinet",
+            Action::OpenCraneSimExample => {
+                "Open example: crane simulation (radio, hoist, bridge, crab)"
+            }
             Action::OpenPlcExample => "Open example: PLC cabinet",
             Action::OpenPumpExample => "Open example: pump station",
             Action::NewCraneProject => "New from template: overhead crane",
@@ -184,6 +190,7 @@ impl Action {
             | Action::OpenEmcExample
             | Action::OpenMccExample
             | Action::OpenCraneExample
+            | Action::OpenCraneSimExample
             | Action::OpenPlcExample
             | Action::OpenPumpExample
             | Action::NewCraneProject
@@ -240,6 +247,7 @@ impl Action {
             | Action::OpenEmcExample
             | Action::OpenMccExample
             | Action::OpenCraneExample
+            | Action::OpenCraneSimExample
             | Action::OpenPlcExample
             | Action::OpenPumpExample
             | Action::NewCraneProject

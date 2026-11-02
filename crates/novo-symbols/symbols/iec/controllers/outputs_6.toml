@@ -10,12 +10,12 @@ aliases = ["rx6"]
 
 connections = [
   { id = "COM", at = [20, 0], dir = "up" },
-  { id = "1", at = [0, 24], dir = "down" },
-  { id = "2", at = [8, 24], dir = "down" },
-  { id = "3", at = [16, 24], dir = "down" },
-  { id = "4", at = [24, 24], dir = "down" },
-  { id = "5", at = [32, 24], dir = "down" },
-  { id = "6", at = [40, 24], dir = "down" },
+  { id = "1", at = [0, 24], dir = "down", optional = true },
+  { id = "2", at = [8, 24], dir = "down", optional = true },
+  { id = "3", at = [16, 24], dir = "down", optional = true },
+  { id = "4", at = [24, 24], dir = "down", optional = true },
+  { id = "5", at = [32, 24], dir = "down", optional = true },
+  { id = "6", at = [40, 24], dir = "down", optional = true },
 ]
 
 anchors = [
