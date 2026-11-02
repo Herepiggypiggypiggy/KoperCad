@@ -445,3 +445,47 @@ fn reconfigure_with_a_selection_leaves_the_rest_alone() {
     assert_eq!(plan.rails.len(), 1);
     assert!(plan.ducts.is_empty(), "one rail, no band to fill");
 }
+
+#[test]
+fn reconfigure_says_once_that_every_gap_has_a_duct() {
+    use novo_layout::Duct;
+    let mut l = layout(
+        vec![rail(1, 100.0), rail(2, 300.0), rail(3, 500.0)],
+        vec![
+            dev(1, 30.0, 70.0, 40.0, 60.0, Some(1)),
+            dev(2, 30.0, 270.0, 40.0, 60.0, Some(2)),
+            dev(3, 30.0, 470.0, 40.0, 60.0, Some(3)),
+        ],
+    );
+    l.ducts = vec![
+        Duct {
+            id: 10,
+            x: 20.0,
+            y: 200.0,
+            length: 500.0,
+            width: 30.0,
+            vertical: false,
+        },
+        Duct {
+            id: 11,
+            x: 20.0,
+            y: 400.0,
+            length: 500.0,
+            width: 30.0,
+            vertical: false,
+        },
+    ];
+    let plan = arrange::reconfigure(
+        &l,
+        &[],
+        &[],
+        &keys(&[(1, "K000001"), (2, "K000002"), (3, "K000003")]),
+    );
+    let ducts: Vec<_> = plan
+        .notes
+        .iter()
+        .filter(|n| n.starts_with("Auto ducts:"))
+        .collect();
+    assert_eq!(ducts.len(), 1, "{:?}", plan.notes);
+    assert!(ducts[0].contains("every gap between rows already has a duct"));
+}

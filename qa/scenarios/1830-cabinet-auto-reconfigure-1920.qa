@@ -21,6 +21,7 @@ wait 10
 expect "Preview (Auto-reconfigure)"
 expect "not a clearance check or a heat calculation"
 expect "can shift by a few mm"
+expect "already has a duct"
 shot reconfigure-preview
 key Escape
 wait 5

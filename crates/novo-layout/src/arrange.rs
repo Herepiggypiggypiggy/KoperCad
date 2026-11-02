@@ -817,7 +817,20 @@ pub fn reconfigure(
                     .into(),
             );
         }
-        for note in &plan.notes {
+        // One line for all the gaps that have a duct already.
+        let (have, other): (Vec<&String>, Vec<&String>) = plan
+            .notes
+            .iter()
+            .partition(|n| n.ends_with("there is a duct already."));
+        if !have.is_empty() {
+            let text = if other.is_empty() && plan.ducts.is_empty() {
+                "nothing to add, every gap between rows already has a duct.".to_owned()
+            } else {
+                format!("{} gap(s) between rows already have a duct.", have.len())
+            };
+            out.notes.push(format!("{name}: {text}"));
+        }
+        for note in other {
             out.notes.push(format!("{name}: {note}"));
         }
         sim.accept(&plan, unplaced);
