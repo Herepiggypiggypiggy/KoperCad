@@ -1,5 +1,6 @@
 @title A wire that breaks the project's house wire rules is listed in Issues
 @area Reports
+@sizes 1366x768
 # Accept one protective device's group under IEC 60204-1, then state house rules; those wires break them.
 click_text "Open example"
 wait 20
@@ -9,6 +10,9 @@ click_text "Bench output..."
 wait 20
 click_text Autopilot
 wait 20
+# Bench output and Autopilot dock on the right and share the height: close Bench output so the Autopilot list has room.
+click 1351 72
+wait 10
 click_text "14 changes"
 wait 5
 click_text "Accept ticked in this group"

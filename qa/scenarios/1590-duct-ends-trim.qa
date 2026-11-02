@@ -14,6 +14,9 @@ text rails and ducts
 wait 4
 key Enter
 wait 10
+# The window opens docked on the right (#1807); its table is wider than the strip, so float it first.
+click 1321 72
+wait 10
 click_text "Add duct"
 wait 10
 expect "Cut from one 2000 mm bar"
