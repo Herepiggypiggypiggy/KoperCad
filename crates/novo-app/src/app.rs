@@ -2372,7 +2372,8 @@ impl NovoApp {
             // and cuts its text to it, so a long page name or a row of
             // badges never pushes it under the Search button.
             let room =
-                (ui.available_width() - self.top_bar_right - ui.spacing().item_spacing.x).max(0.0);
+                (ui.available_width() - self.top_bar_right - ui.spacing().item_spacing.x - 10.0)
+                    .max(0.0);
             let breadcrumb =
                 egui::Rect::from_min_size(ui.cursor().min, egui::vec2(room, ui.available_height()));
             ui.scope_builder(
