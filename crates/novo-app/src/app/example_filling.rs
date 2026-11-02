@@ -1,6 +1,6 @@
 //! The bottle filling line example (large): four belts and a capper on
 //! direct-on-line starters, the filler pump on a frequency drive with a
-//! screened motor cable, an emergency stop relay, a PLC with a CPU, two
+//! screened motor cable, an emergency stop signal to the PLC, a PLC with a CPU, two
 //! 16-channel input cards, an 8-channel output card and an analog card,
 //! field wiring through terminal strips, a laid-out cabinet and a parts
 //! list, over twelve pages. Every PLC channel is drawn with the editor's own
@@ -21,11 +21,11 @@ pub(crate) const FILLING_EXAMPLE_NAME: &str = "Bottle filling line (example)";
 
 const DESCRIPTION: &str = "Bottle filling line, the large example: infeed and outfeed belts, a \
     capper and a labeller on direct-on-line starters, the filler pump on a frequency drive with a \
-    screened motor cable, an emergency stop relay, a PLC with CPU, 32 digital inputs, 8 digital \
+    screened motor cable, an emergency stop signal to the PLC (the drawing has no hardware stop circuit), a PLC with CPU, 32 digital inputs, 8 digital \
     outputs and 4 analog inputs, field wiring on terminal strips, a laid-out cabinet with heat, \
     drilling and parts list. Illustration only: sizes and ratings (and the 400 V / 10 kA supply) are planning values, \
-    not a verified design and not a safety design (the emergency stop relay is drawn as an \
-    example, not assessed).";
+    not a verified design and not a safety design (the emergency stop signal is an input to the PLC only and does not break the \
+    starters or the drive, and is not assessed).";
 
 const CAB: &str = "=FIL+CAB";
 const FLD: &str = "=FIL+FLD";
@@ -71,7 +71,7 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
     let supply = add_page(tx, "1", "Incoming supply and 24 V", CAB)?;
     let belts = add_page(tx, "2", "Belts, capper and labeller", CAB)?;
     let filler = add_page(tx, "3", "Filler pump drive", CAB)?;
-    let safety = add_page(tx, "4", "Emergency stop and drive command", CAB)?;
+    let safety = add_page(tx, "4", "Emergency stop signal and drive command", CAB)?;
     let plc = add_page(tx, "5", "PLC and cards", CAB)?;
     let di_a = add_page(tx, "6", "Digital inputs: operator panel", CAB)?;
     let di_b = add_page(tx, "7", "Digital inputs: machine", CAB)?;
@@ -284,7 +284,10 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
     kit.series(&mut c, "iec/coils/relay", &format!("{CAB}-K9"));
     kit.close(&c, p.p0);
     kit.describe(&format!("{OP}-S0"), "Emergency stop");
-    kit.describe(&format!("{CAB}-K9"), "Emergency stop relay");
+    kit.describe(
+        &format!("{CAB}-K9"),
+        "Emergency stop relay (signal to the PLC only)",
+    );
     let run = kit.tx.add_potential("U5:DI1", PotentialKind::Signal)?;
     let mut c = kit.rung(p.p24, 100.0);
     kit.series(&mut c, "iec/contacts/no", &format!("{CAB}-K10"));
