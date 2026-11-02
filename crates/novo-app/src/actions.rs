@@ -16,6 +16,9 @@ pub enum Action {
     OpenCraneExample,
     OpenPlcExample,
     OpenPumpExample,
+    OpenDoorExample,
+    OpenConveyorExample,
+    OpenFillingExample,
     NewCraneProject,
     NewPumpProject,
     NewMccProject,
@@ -56,6 +59,9 @@ impl Action {
         Action::OpenCraneExample,
         Action::OpenPlcExample,
         Action::OpenPumpExample,
+        Action::OpenDoorExample,
+        Action::OpenConveyorExample,
+        Action::OpenFillingExample,
         Action::NewCraneProject,
         Action::NewPumpProject,
         Action::NewMccProject,
@@ -98,6 +104,9 @@ impl Action {
             Action::OpenCraneExample => "file.example_crane",
             Action::OpenPlcExample => "file.example_plc",
             Action::OpenPumpExample => "file.example_pump",
+            Action::OpenDoorExample => "file.example_door",
+            Action::OpenConveyorExample => "file.example_conveyor",
+            Action::OpenFillingExample => "file.example_filling",
             Action::NewCraneProject => "file.new_crane",
             Action::NewPumpProject => "file.new_pump",
             Action::NewMccProject => "file.new_mcc",
@@ -143,6 +152,9 @@ impl Action {
             Action::OpenCraneExample => "Open example: overhead crane cabinet",
             Action::OpenPlcExample => "Open example: PLC cabinet",
             Action::OpenPumpExample => "Open example: pump station",
+            Action::OpenDoorExample => "Open example: roller door (small)",
+            Action::OpenConveyorExample => "Open example: conveyor line (medium)",
+            Action::OpenFillingExample => "Open example: bottle filling line (large)",
             Action::NewCraneProject => "New from template: overhead crane",
             Action::NewPumpProject => "New from template: pump station",
             Action::NewMccProject => "New from template: motor control centre",
@@ -186,6 +198,9 @@ impl Action {
             | Action::OpenCraneExample
             | Action::OpenPlcExample
             | Action::OpenPumpExample
+            | Action::OpenDoorExample
+            | Action::OpenConveyorExample
+            | Action::OpenFillingExample
             | Action::NewCraneProject
             | Action::NewPumpProject
             | Action::NewMccProject
@@ -242,6 +257,9 @@ impl Action {
             | Action::OpenCraneExample
             | Action::OpenPlcExample
             | Action::OpenPumpExample
+            | Action::OpenDoorExample
+            | Action::OpenConveyorExample
+            | Action::OpenFillingExample
             | Action::NewCraneProject
             | Action::NewPumpProject
             | Action::NewMccProject

@@ -1,0 +1,38 @@
+@title Example gallery: bottle filling line (large)
+@area Examples
+# File > Examples > Open example: bottle filling line. First page, two more pages, then the cabinet and 3D.
+fresh
+wait 10
+key ctrl+k
+wait 6
+text Open example: bottle filling line
+wait 8
+key Enter
+wait 40
+expect "Incoming supply and 24 V"
+shot filling-first-view
+check_blank filling-first-view
+check_layout
+key ctrl+k
+wait 6
+text Filler pump drive
+wait 8
+key Enter
+wait 15
+expect "Filler pump drive"
+shot filling-page-2
+key ctrl+k
+wait 6
+text PLC and cards
+wait 8
+key Enter
+wait 15
+expect "PLC and cards"
+shot filling-page-3
+click_text "Cabinet"
+wait 20
+shot filling-cabinet
+check_blank filling-cabinet
+click_text "3D"
+wait 30
+shot filling-3d

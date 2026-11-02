@@ -289,6 +289,30 @@ impl NovoApp {
         );
     }
 
+    /// The roller door example (small): reversing starter, limit switches, cabinet.
+    pub(super) fn open_door_example(&mut self) {
+        self.open_built_example(
+            super::example_door::DOOR_EXAMPLE_NAME,
+            super::example_door::build_door_example,
+        );
+    }
+
+    /// The conveyor line example (medium): three belts in sequence, sensors, cabinet.
+    pub(super) fn open_conveyor_example(&mut self) {
+        self.open_built_example(
+            super::example_conveyor::CONVEYOR_EXAMPLE_NAME,
+            super::example_conveyor::build_conveyor_example,
+        );
+    }
+
+    /// The bottle filling line example (large): PLC, drive, safety, cabinet.
+    pub(super) fn open_filling_example(&mut self) {
+        self.open_built_example(
+            super::example_filling::FILLING_EXAMPLE_NAME,
+            super::example_filling::build_filling_example,
+        );
+    }
+
     /// File > Templates and examples > Overhead crane: a structure tree, a few
     /// empty pages and the cover pages, in a new unsaved project.
     pub(super) fn new_crane_project(&mut self, options: super::template_crane::CraneOptions) {

@@ -259,6 +259,21 @@ pub const TABLE: &[Presentation] = &[
         "Open PLC cabinet example",
     ),
     row("file.example_pump", p(icons::DROP), "Open pump example"),
+    row(
+        "file.example_door",
+        d(&drawn::MOTOR),
+        "Open roller door example",
+    ),
+    row(
+        "file.example_conveyor",
+        d(&drawn::PLC),
+        "Open conveyor line example",
+    ),
+    row(
+        "file.example_filling",
+        d(&drawn::PLC),
+        "Open filling line example",
+    ),
     row("file.new_crane", d(&drawn::BRIDGE), "New crane project"),
     row("file.new_pump", p(icons::DROP), "New pump station"),
     row(

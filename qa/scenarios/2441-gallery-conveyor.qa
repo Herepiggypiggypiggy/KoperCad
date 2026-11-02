@@ -1,0 +1,38 @@
+@title Example gallery: conveyor line (medium)
+@area Examples
+# File > Examples > Open example: conveyor line. First page, two more pages, then the cabinet and 3D.
+fresh
+wait 10
+key ctrl+k
+wait 6
+text Open example: conveyor line
+wait 8
+key Enter
+wait 40
+expect "Incoming supply and 24 V"
+shot conveyor-first-view
+check_blank conveyor-first-view
+check_layout
+key ctrl+k
+wait 6
+text Belt motor feeders
+wait 8
+key Enter
+wait 15
+expect "Belt motor feeders"
+shot conveyor-page-2
+key ctrl+k
+wait 6
+text Control: stop, start and belt sequence
+wait 8
+key Enter
+wait 15
+expect "Control: stop, start and belt sequence"
+shot conveyor-page-3
+click_text "Cabinet"
+wait 20
+shot conveyor-cabinet
+check_blank conveyor-cabinet
+click_text "3D"
+wait 30
+shot conveyor-3d

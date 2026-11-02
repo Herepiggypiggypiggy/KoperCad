@@ -1,0 +1,38 @@
+@title Example gallery: roller door (small)
+@area Examples
+# File > Examples > Open example: roller door. First page, two more pages, then the cabinet and 3D.
+fresh
+wait 10
+key ctrl+k
+wait 6
+text Open example: roller door
+wait 8
+key Enter
+wait 40
+expect "Incoming supply and 24 V"
+shot door-first-view
+check_blank door-first-view
+check_layout
+key ctrl+k
+wait 6
+text Door motor, reversing starter
+wait 8
+key Enter
+wait 15
+expect "Door motor, reversing starter"
+shot door-page-2
+key ctrl+k
+wait 6
+text Control: up, down, stop
+wait 8
+key Enter
+wait 15
+expect "Control: up, down, stop"
+shot door-page-3
+click_text "Cabinet"
+wait 20
+shot door-cabinet
+check_blank door-cabinet
+click_text "3D"
+wait 30
+shot door-3d

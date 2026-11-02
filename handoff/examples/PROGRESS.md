@@ -4,3 +4,4 @@
 2026-10-29 PLC cabinet example built (PR 4)
 
 - Pump example (PR 3): maker order numbers replaced by generic articles with planning values (MPCB-4-6.3A, CONT-3P-9A-24VDC, MOTOR-2.2KW-4P-IE3, PSU-24V-10A) on Lead B's rule. Terminal blocks from `style_strip` (Phoenix Contact 3044076/3044089, shared kit) and the merged MCC example still use maker numbers: open follow-up. Presentation row `file.example_pump` added after #1669 (drop icon, "Open pump example"). Parts are generic planning values, no maker numbers except the shared terminal blocks (public Phoenix Contact catalogue numbers, see example_kit).
+2026-11-02 three more complete examples built (Tadjiro request 4): roller door (small, 4 pages), conveyor line (medium, 5 pages), bottle filling line (large, 10 pages with PLC, drive and safety relay); scenarios 2440 to 2442

@@ -183,7 +183,7 @@ const CABLE_4: Article = Article {
 };
 
 /// A PLC card's catalog-like part: planning values and its channel layout.
-fn card_part(
+pub(super) fn card_part(
     tx: &mut Tx<'_>,
     order: &str,
     description: &str,
@@ -238,7 +238,7 @@ pub(crate) fn build_plc_example(doc: &mut Document) -> ModelResult<novo_core::Ch
 }
 
 /// Where a pin is on its page.
-fn pin_at(kit: &Kit<'_, '_>, symbol: SymbolId, pin: u16) -> (f64, f64) {
+pub(super) fn pin_at(kit: &Kit<'_, '_>, symbol: SymbolId, pin: u16) -> (f64, f64) {
     let at = kit
         .tx
         .project()
@@ -251,7 +251,7 @@ fn pin_at(kit: &Kit<'_, '_>, symbol: SymbolId, pin: u16) -> (f64, f64) {
 /// `pin` of `symbol` and wired to it. `origin` is where the channel symbol
 /// goes, `rotation` how it is turned.
 #[allow(clippy::too_many_arguments)]
-fn to_channel(
+pub(super) fn to_channel(
     kit: &mut Kit<'_, '_>,
     card: DeviceId,
     signal: (SymbolId, u16),
@@ -285,7 +285,7 @@ fn to_channel(
 /// field, a terminal back and the DI channel under it. Returns the two wires
 /// that go out to the field (they run in a cable).
 #[allow(clippy::too_many_arguments)]
-fn input_column(
+pub(super) fn input_column(
     kit: &mut Kit<'_, '_>,
     card: DeviceId,
     strip: DeviceId,

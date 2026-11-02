@@ -158,6 +158,9 @@ pub const START_SECTIONS: &[Section] = &[
             "file.example_mcc",
             "file.example_plc",
             "file.example_pump",
+            "file.example_door",
+            "file.example_conveyor",
+            "file.example_filling",
             "file.example_emc",
         ],
     },
@@ -437,6 +440,11 @@ pub fn describe(id: &str) -> &'static str {
         "file.example_mcc" => "A motor control centre: 4 feeders, 24 V control, full cabinet.",
         "file.example_plc" => "A PLC cabinet: CPU, I/O cards and a 24 V supply.",
         "file.example_pump" => "A pump system with its starter and control.",
+        "file.example_door" => {
+            "Small: a roller door on a reversing starter, complete with cabinet."
+        }
+        "file.example_conveyor" => "Medium: three belts in sequence, sensors and a full cabinet.",
+        "file.example_filling" => "Large: a filling line with PLC, drive and safety, full cabinet.",
         "file.example_emc" => "A drive with a motor cable and signal wires, for the EMC checks.",
         "project.standard" => "The drawing standard: sheet, title block, tag and wire style.",
         "project.rules" => "The rules for wire numbers, tags and numbering of this project.",

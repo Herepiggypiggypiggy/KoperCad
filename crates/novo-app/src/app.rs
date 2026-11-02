@@ -113,7 +113,11 @@ mod eplan_import;
 mod eplan_parts;
 mod error_words;
 mod example;
+mod example_blocks;
+mod example_conveyor;
 mod example_crane;
+mod example_door;
+mod example_filling;
 #[cfg(test)]
 mod example_gallery;
 mod example_kit;
@@ -425,6 +429,8 @@ mod error_words_tests;
 #[cfg(test)]
 mod example_gallery_tests;
 #[cfg(test)]
+mod example_new_tests;
+#[cfg(test)]
 mod example_tests;
 #[cfg(test)]
 mod faults_tests;
@@ -651,6 +657,9 @@ enum Leaving {
     CraneExample,
     PlcExample,
     PumpExample,
+    DoorExample,
+    ConveyorExample,
+    FillingExample,
     CraneTemplate,
     PumpTemplate,
     MccTemplate,
@@ -1050,6 +1059,9 @@ impl NovoApp {
             Action::OpenCraneExample => self.leave_then(ctx, Leaving::CraneExample),
             Action::OpenPlcExample => self.leave_then(ctx, Leaving::PlcExample),
             Action::OpenPumpExample => self.leave_then(ctx, Leaving::PumpExample),
+            Action::OpenDoorExample => self.leave_then(ctx, Leaving::DoorExample),
+            Action::OpenConveyorExample => self.leave_then(ctx, Leaving::ConveyorExample),
+            Action::OpenFillingExample => self.leave_then(ctx, Leaving::FillingExample),
             Action::NewCraneProject => self.leave_then(ctx, Leaving::CraneTemplate),
             Action::NewPumpProject => self.leave_then(ctx, Leaving::PumpTemplate),
             Action::NewMccProject => self.leave_then(ctx, Leaving::MccTemplate),
@@ -1228,6 +1240,9 @@ impl NovoApp {
             Leaving::CraneExample => self.open_crane_example(),
             Leaving::PlcExample => self.open_plc_example(),
             Leaving::PumpExample => self.open_pump_example(),
+            Leaving::DoorExample => self.open_door_example(),
+            Leaving::ConveyorExample => self.open_conveyor_example(),
+            Leaving::FillingExample => self.open_filling_example(),
             Leaving::CraneTemplate => self.open_crane_options(),
             Leaving::PumpTemplate => self.open_plant_options(template_plants::Plant::PumpStation),
             Leaving::MccTemplate => self.open_plant_options(template_plants::Plant::ControlCentre),
