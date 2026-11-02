@@ -9,8 +9,8 @@ use super::workspace::{SegmentNames, Workspace};
 fn the_segments_spend_names_by_window_width() {
     assert_eq!(TopBarFit::at(1920.0).segment_names, SegmentNames::All);
     assert_eq!(TopBarFit::at(1500.0).segment_names, SegmentNames::All);
-    assert_eq!(TopBarFit::at(1366.0).segment_names, SegmentNames::Current);
-    assert_eq!(TopBarFit::at(1399.0).segment_names, SegmentNames::Current);
+    assert_eq!(TopBarFit::at(1366.0).segment_names, SegmentNames::All);
+    assert_eq!(TopBarFit::at(1299.0).segment_names, SegmentNames::Current);
     assert_eq!(TopBarFit::at(1100.0).segment_names, SegmentNames::Current);
     assert_eq!(
         TopBarFit::at(ICON_ONLY_BELOW).segment_names,

@@ -249,7 +249,7 @@ impl NovoApp {
                 show_name.then(|| ui.painter().layout_no_wrap(label.to_owned(), font, color));
             let width = galley
                 .as_ref()
-                .map_or(40.0, |g| (g.size().x + 16.0).max(48.0));
+                .map_or(40.0, |g| (g.size().x + 10.0).max(44.0));
             let (rect, response) = ui.allocate_exact_size(
                 egui::vec2(width, height),
                 if reason.is_none() {
@@ -271,6 +271,17 @@ impl NovoApp {
                 ui.painter().rect_filled(rect, rounding, pal.accent_wash);
             } else if reason.is_none() && response.hovered() {
                 ui.painter().rect_filled(rect, rounding, pal.hover);
+            }
+            if current {
+                // The active tile is also marked by a bar under it, not by colour alone.
+                ui.painter().rect_filled(
+                    egui::Rect::from_min_size(
+                        egui::pos2(rect.left() + 8.0, rect.bottom() - 3.0),
+                        egui::vec2(rect.width() - 16.0, 2.0),
+                    ),
+                    1.0,
+                    pal.accent,
+                );
             }
             if response.has_focus() {
                 ui.painter().rect_stroke(

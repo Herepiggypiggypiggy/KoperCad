@@ -48,7 +48,7 @@ pub(super) fn tile(
     let galley = caption.map(|c| ui.painter().layout_no_wrap(c.to_owned(), font, color));
     let width = galley
         .as_ref()
-        .map_or(40.0, |g| (g.size().x + 14.0).max(44.0));
+        .map_or(40.0, |g| (g.size().x + 10.0).max(40.0));
     let (rect, response) = ui.allocate_exact_size(
         egui::vec2(width, TILE_HEIGHT),
         if enabled {
@@ -122,7 +122,14 @@ impl NovoApp {
                 .shortcut()
                 .map(|s| ui.ctx().format_shortcut(&s))
                 .unwrap_or_default();
-            let response = response.on_hover_text(format!("{name} ({keys})"));
+            let response = if enabled {
+                response.on_hover_text(format!("{name} ({keys})"))
+            } else {
+                response.on_hover_text(format!(
+                    "{name} ({keys}): nothing to {} yet",
+                    name.to_lowercase()
+                ))
+            };
             if response.clicked() {
                 picked.push(action);
             }

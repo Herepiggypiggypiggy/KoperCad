@@ -40,7 +40,7 @@ impl TopBarFit {
     pub(super) fn at(width: f32) -> TopBarFit {
         let (search, search_width) = if width >= 1700.0 {
             ("Search or run", 240.0)
-        } else if width >= 1250.0 {
+        } else if width >= 1500.0 {
             ("Search", 0.0)
         } else {
             ("", 0.0)
@@ -49,7 +49,7 @@ impl TopBarFit {
             search,
             search_width,
             name_chars: if width >= 1700.0 { 32 } else { 14 },
-            segment_names: if width >= 1400.0 {
+            segment_names: if width >= 1300.0 {
                 super::workspace::SegmentNames::All
             } else if width >= ICON_ONLY_BELOW {
                 super::workspace::SegmentNames::Current
