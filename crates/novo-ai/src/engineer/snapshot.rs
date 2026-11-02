@@ -32,7 +32,7 @@ pub fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Snapshot 
         },
         "pages": novo_py::pages_json(p),
         "devices": tags,
-        "sections_for_read_project": ["pages", "devices", "symbols", "wires", "nets", "potentials", "terminals", "parts", "problems", "wire_numbers", "standards"],
+        "sections_for_read_project": ["pages", "devices", "symbols", "wires", "nets", "potentials", "terminals", "parts", "problems", "wire_numbers", "standards", "cabinet"],
     });
     if scope >= DataScope::Selection {
         let items: Vec<Value> = p
@@ -70,6 +70,8 @@ pub fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Snapshot 
             "pages": novo_py::pages_json(p),
             "devices": devices,
             "symbols": symbols_json(p),
+            // Enclosures with plate, rails, placed and unplaced devices and layout problems.
+            "cabinet": super::cabinet::section(p),
             "standards": json!({
                 "selected": novo_checks::standards::selected(p).iter().map(|s| s.short()).collect::<Vec<_>>(),
             }),
