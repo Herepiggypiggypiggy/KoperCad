@@ -20,6 +20,8 @@ scroll 1150 450 -150
 wait_s 1
 shot surface-rule-added
 expect "Back to KoperCAD's default"
+expect "marked with letter Z"
+expect "+ Add a surface rule"
 click_text "Back to KoperCAD's default"
 wait 10
 shot back-to-default
