@@ -343,6 +343,7 @@ mod tests {
             wall_flux_w_m2: vec![0.0; n],
             devices: Vec::new(),
             hot_spots: Vec::new(),
+            opening_flows: Vec::new(),
             progress: Progress {
                 fidelity: Fidelity::Coarse,
                 iteration: 1,
