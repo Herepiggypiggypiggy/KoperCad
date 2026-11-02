@@ -1,11 +1,11 @@
 @title Crane template options: two hoist units, frequency drives, circuits on the pages
 @area Schematic
 wait 20
-click_text File
+key ctrl+k
 wait 6
-move 260 466
+text new from template overhead crane
 wait 8
-click 600 466
+key Return
 wait 12
 click_text "2"
 click_text "Frequency drive" #1
