@@ -243,3 +243,23 @@ fn a_walkthrough_with_a_closed_loop_winch_runs_from_the_card() {
     let report = super::defects_card::run_walkthrough(doc.project(), &w);
     assert!(report.ok(), "{:?}", report.steps);
 }
+
+/// The injected-defect warning is a mode chip of the status bar, in the error
+/// colour, not a strip floating over the sheet.
+#[test]
+fn an_injected_defect_is_a_status_bar_chip() {
+    use super::gate1_tests::Drive;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(dir.path());
+    d.app.wb.live.on = true;
+    assert!(d.app.mode_chips().iter().all(|c| !c.alert));
+    d.app
+        .wb
+        .live
+        .defects
+        .inject(DefectKind::CoilOpen.build("-K1", ""));
+    let chips = d.app.mode_chips();
+    let chip = chips.iter().find(|c| c.alert).expect("a defect chip");
+    assert!(chip.label.contains("DEFECT INJECTED (1)"), "{}", chip.label);
+    assert_eq!(chip.command, "sim.defects");
+}
