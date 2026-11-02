@@ -309,8 +309,7 @@ fn hint(ui: &mut egui::Ui, text: &str) {
 }
 
 fn row_title(ui: &mut egui::Ui, label: &str, text: &str) {
-    ui.label(label);
-    hint(ui, text);
+    novo_theme::widgets::labeled_help(ui, label, text);
     ui.add_space(4.0);
 }
 

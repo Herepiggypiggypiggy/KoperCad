@@ -1267,7 +1267,7 @@ fn details_ui(
                     ui.label(format!("•  {}", perm.describe()));
                 }
                 if manifest.engine.is_some() {
-                    ui.weak("It carries a program (engine.wasm). It runs in a sandbox: it cannot use files, the network or the clock.");
+                    super::dialog_ui::explained(ui, "Runs in a sandbox", "It carries a program (engine.wasm). It runs in a sandbox: it cannot use files, the network or the clock.");
                 }
 
                 ui.add_space(space::M);
@@ -1420,7 +1420,11 @@ fn install_prompt_ui(ui: &mut egui::Ui, prompt: &mut Prompt, cancel: &mut bool, 
         ui.label(format!("•  {}", perm.describe()));
     }
     if package.manifest.engine.is_some() {
-        ui.weak("It carries a program (engine.wasm). It runs in a sandbox: it cannot use files, the network or the clock.");
+        super::dialog_ui::explained(
+            ui,
+            "Runs in a sandbox",
+            "It carries a program (engine.wasm). It runs in a sandbox: it cannot use files, the network or the clock.",
+        );
     }
     ui.add_space(space::S);
     fingerprint_row(ui, "Fingerprint", &package.fingerprint);

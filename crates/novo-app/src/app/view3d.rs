@@ -1157,6 +1157,7 @@ impl NovoApp {
                 if changed || mode.moving_mesh.as_ref().is_none_or(|(c, _)| *c != cut) {
                     let range = heat_3d::range_for(&sol.snapshot, sol.ambient, mode.heat.scale);
                     let hot_end = heat_cloud::air_hot_end(&sol.snapshot, range.lo);
+                    let peak = heat_cloud::air_peak(&sol.snapshot, hot_end);
                     let at = Place {
                         plate_x: sol.plate[0],
                         plate_y: sol.plate[1],
@@ -1170,7 +1171,7 @@ impl NovoApp {
                         mode.heat.cloud_opacity,
                         usize::from(mode.heat.cloud_layers),
                         mode.heat.cloud_contrast,
-                        Some(hot_end),
+                        Some((hot_end, peak)),
                     )
                     .map(|m| (cut, novo_view3d::Overlay::Mesh(m)));
                 }
@@ -1221,14 +1222,13 @@ impl NovoApp {
         // The status of the heat simulation, whether or not its panel is open.
         let no_cabinet = empty_hint.is_some();
         let heat_shown = self.cabinet.heat.on;
-        let (changed, asked) = view3d_controls::toolbar(
+        let changed = view3d_controls::toolbar(
             ui.ctx(),
             view_rect,
             &mut mode.controls,
             &mut values,
             limit,
             &self.settings.camera_views,
-            !mode.view.state.selection.is_empty(),
             &mut mode.view.state.section,
             &|| mode.built.as_ref().map(|(_, _, scene)| scene.bounds()),
             &mut |ui| {
@@ -1301,9 +1301,6 @@ impl NovoApp {
             None => {}
         }
         mode.view.top_inset = view3d_controls::toolbar_inset(ui.ctx(), view_rect);
-        if let Some(command) = asked {
-            self.wb.queued.push(command);
-        }
         match changed.views {
             Some(ViewsAction::Save) => {
                 // The menu disables Save when it is full.

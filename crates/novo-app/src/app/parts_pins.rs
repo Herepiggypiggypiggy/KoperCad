@@ -252,7 +252,7 @@ fn editor(ui: &mut egui::Ui, state: &mut PinsState, part: &CatalogPart) -> Optio
     egui::CollapsingHeader::new("Edit positions by hand")
         .id_salt("parts_pins_edit")
         .show(ui, |ui| {
-            ui.weak("x right, y up, z out from the mounting plate, in mm from the back-left-bottom corner.");
+            super::dialog_ui::explained(ui, "Pin coordinates", "x right, y up, z out from the mounting plate, in mm from the back-left-bottom corner.");
             egui::Grid::new("parts_pins_edit_grid")
                 .num_columns(4)
                 .show(ui, |ui| {

@@ -207,7 +207,7 @@ impl NovoApp {
         super::panel::dialog(ctx, "Electrical inputs", [560.0, 560.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
-                ui.label("The numbers the standards rules and the calculations read. A blank box is unknown: the rule says so and the calculation stays silent, nothing is guessed.");
+                super::dialog_ui::explained(ui, "Blank means unknown, never guessed", "The numbers the standards rules and the calculations read. A blank box is unknown: the rule says so and the calculation stays silent, nothing is guessed.");
                 ui.add_space(4.0);
                 let supplied = project
                     .info()
@@ -228,7 +228,7 @@ impl NovoApp {
                 grid(ui, "electrical_limits", &LIMITS, &project, &mut win, &mut commits);
                 widgets::section_label(ui, "Distribution");
                 grid(ui, "electrical_distribution", &DISTRIBUTION, &project, &mut win, &mut commits);
-                ui.weak("Used by the single-line diagram: the sum of the branch currents at the supply times this factor. Blank means no diversity. A device can state its own in its property diversity_factor.");
+                super::dialog_ui::explained(ui, "Diversity factor", "Used by the single-line diagram: the sum of the branch currents at the supply times this factor. Blank means no diversity. A device can state its own in its property diversity_factor.");
                 widgets::section_label(ui, "Machine");
                 grid(ui, "electrical_machine", &MACHINE, &project, &mut win, &mut commits);
                 ui.horizontal(|ui| {

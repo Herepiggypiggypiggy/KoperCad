@@ -104,5 +104,5 @@ pub(super) fn show(ui: &mut egui::Ui, view: &MountingView, values: &[(String, St
         false,
     );
     list(ui, "On the machine", view.field().collect(), true);
-    ui.add(egui::Label::new(egui::RichText::new(SIZES_NOTE).weak().small()).wrap());
+    super::dialog_ui::explained(ui, "About these sizes", SIZES_NOTE);
 }
