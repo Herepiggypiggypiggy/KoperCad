@@ -4,13 +4,13 @@
 click_text "Open example"
 wait 30
 shot before-select
-click 353 228
+click 358 185
 wait 40
 shot device-selected
 key Escape
 wait 40
 shot deselected
-click 353 228
+click 358 185
 wait 20
 click_text Edit
 wait 6

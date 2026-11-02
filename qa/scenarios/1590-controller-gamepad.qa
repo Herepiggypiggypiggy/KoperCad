@@ -24,12 +24,13 @@ shot section-no-map
 # A first map for this profile: sticks on the rockers, E-stop and start on buttons.
 click_text "Edit map…"
 wait 20
-expect "Gamepad map"
+expect "Which axis or button of the pad"
 click_text "Suggest a map"
 wait 20
 shot map-editor
 check_layout
-key Escape
+# The Gamepad map window docks on the right and Escape would leave Live: close it with its X.
+click 1351 72
 wait 10
 # Watching only: the pad moves nothing and the section says what it would do.
 pad axis left_y 0
