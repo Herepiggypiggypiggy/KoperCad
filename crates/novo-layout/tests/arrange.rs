@@ -408,6 +408,11 @@ fn reconfigure_chains_rails_grouping_and_ducts_into_one_plan() {
     // The steps are listed in the notes.
     assert!(plan.notes.iter().any(|n| n.starts_with("Auto rails:")));
     assert!(plan.notes.iter().any(|n| n.starts_with("Auto ducts:")));
+    assert!(
+        plan.notes
+            .iter()
+            .any(|n| n.contains("can shift by a few mm"))
+    );
 }
 
 #[test]

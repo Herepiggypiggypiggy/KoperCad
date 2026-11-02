@@ -810,6 +810,13 @@ pub fn reconfigure(
         if !bits.is_empty() {
             sizes.push(format!("{name}: {}.", bits.join(", ")));
         }
+        if step == 2 && !plan.moves.is_empty() {
+            sizes.push(
+                "Autogroup lays out each whole rail again, so even a tidy rail can shift by a \
+                 few mm; Cancel keeps it as it is."
+                    .into(),
+            );
+        }
         for note in &plan.notes {
             out.notes.push(format!("{name}: {note}"));
         }
