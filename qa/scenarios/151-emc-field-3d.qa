@@ -5,13 +5,13 @@
 open qa/fixtures/emc-field.novo
 wait 20
 click_text 3D #1
-wait 30
+wait 60
 key ctrl+k
 wait 6
 text emc view on the plate
 wait 8
 key Return
-wait 30
+wait 60
 click_text "Exposure map" #1
 wait 15
 expect "Magnetic field of the drawn currents"

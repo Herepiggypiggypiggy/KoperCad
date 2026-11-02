@@ -5,13 +5,13 @@
 open qa/fixtures/emc-cabinet-bonding.novo
 wait 20
 click_text 3D #1
-wait 30
+wait 60
 key ctrl+k
 wait 6
 text emc view on the plate
 wait 8
 key Return
-wait 30
+wait 60
 click 1068 279
 wait 10
 shot emc-overview-bonding-off
