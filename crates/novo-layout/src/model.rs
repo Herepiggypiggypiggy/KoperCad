@@ -583,6 +583,22 @@ pub fn apply_plan(tx: &mut Tx<'_>, id: StructureId, plan: &Plan) -> Result<()> {
             )?;
         }
     }
+    // Arrange tools: devices that are on the plate already move.
+    for m in &plan.moves {
+        let rail = if m.new_rail {
+            rails.get(&m.rail).map(|(rail, ..)| *rail)
+        } else {
+            Some(RailId::from(m.rail))
+        };
+        tx.execute(Command::PlaceDevice {
+            device: DeviceId::from(m.id),
+            structure: id,
+            x: m.x,
+            y: m.y,
+            rotated: m.rotated,
+            rail: rail.map(|r| (r, m.offset)),
+        })?;
+    }
     for p in &plan.placements {
         let device = DeviceId::from(p.id);
         if tx

@@ -264,6 +264,21 @@ pub const TABLE: &[Presentation] = &[
         "Open PLC cabinet example",
     ),
     row("file.example_pump", p(icons::DROP), "Open pump example"),
+    row(
+        "file.example_door",
+        d(&drawn::MOTOR),
+        "Open roller door example",
+    ),
+    row(
+        "file.example_conveyor",
+        d(&drawn::PLC),
+        "Open conveyor line example",
+    ),
+    row(
+        "file.example_filling",
+        d(&drawn::PLC),
+        "Open filling line example",
+    ),
     row("file.new_crane", d(&drawn::BRIDGE), "New crane project"),
     row("file.new_pump", p(icons::DROP), "New pump station"),
     row(
@@ -880,6 +895,24 @@ pub const TABLE: &[Presentation] = &[
         "Rail and duct cut list",
     ),
     row("cabinet.rails", d(&drawn::DIN_RAIL), "Rails and ducts"),
+    row(
+        "cabinet.arrange_onto_rail",
+        p(icons::MAGNET),
+        "Autoplace on rail",
+    ),
+    row("cabinet.arrange_rails", d(&drawn::DIN_RAIL), "Auto rails"),
+    row("cabinet.arrange_ducts", d(&drawn::DUCT), "Auto ducts"),
+    row("cabinet.arrange_group", p(icons::SQUARES_FOUR), "Autogroup"),
+    row(
+        "cabinet.arrange_tight",
+        p(icons::ARROWS_IN_LINE_HORIZONTAL),
+        "Close up gaps",
+    ),
+    row(
+        "cabinet.arrange_even",
+        p(icons::ARROWS_OUT_LINE_HORIZONTAL),
+        "Even gaps",
+    ),
     row(
         "cabinet.surface",
         p(icons::PAINT_BUCKET),

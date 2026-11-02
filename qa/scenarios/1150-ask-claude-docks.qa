@@ -12,11 +12,11 @@ wait 40
 expect "Claude is off"
 shot ask-claude-docked
 check_layout
-click 1063 54
+click 1063 72
 wait 30
 expect_not "Claude is off"
 shot ask-claude-folded
-click 1063 54
+click 1063 72
 wait 30
 expect "Claude is off"
 shot ask-claude-unfolded

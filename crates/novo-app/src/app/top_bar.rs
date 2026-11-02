@@ -27,6 +27,78 @@ pub(super) fn cut(text: &str, chars: usize) -> String {
     format!("{kept}…")
 }
 
+/// Height of a symbol tile in the top bar: a large icon over a short caption.
+pub(super) const TILE_HEIGHT: f32 = 46.0;
+
+/// A top bar button: the icon large, a short caption under it (`None` when
+/// the bar is too narrow for words; the name is then in the tooltip).
+pub(super) fn tile(
+    ui: &mut egui::Ui,
+    icon: &str,
+    caption: Option<&str>,
+    enabled: bool,
+) -> egui::Response {
+    let pal = crate::theme::ui_palette();
+    let font = egui::FontId::proportional(11.5);
+    let color = if enabled {
+        pal.text_secondary
+    } else {
+        pal.text_tertiary
+    };
+    let galley = caption.map(|c| ui.painter().layout_no_wrap(c.to_owned(), font, color));
+    let width = galley
+        .as_ref()
+        .map_or(40.0, |g| (g.size().x + 10.0).max(40.0));
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(width, TILE_HEIGHT),
+        if enabled {
+            egui::Sense::click()
+        } else {
+            egui::Sense::hover()
+        },
+    );
+    let rounding = egui::CornerRadius::same(8);
+    if enabled && response.hovered() {
+        ui.painter().rect_filled(rect, rounding, pal.hover);
+    }
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            rect,
+            rounding,
+            egui::Stroke::new(if pal.high_contrast { 2.5 } else { 2.0 }, pal.accent),
+            egui::StrokeKind::Inside,
+        );
+    }
+    let icon_y = rect.top()
+        + if galley.is_some() {
+            17.0
+        } else {
+            TILE_HEIGHT / 2.0
+        };
+    ui.painter().text(
+        egui::pos2(rect.center().x, icon_y),
+        egui::Align2::CENTER_CENTER,
+        icon,
+        egui::FontId::proportional(22.0),
+        if enabled && response.hovered() {
+            pal.text_strong
+        } else {
+            color
+        },
+    );
+    if let Some(galley) = galley {
+        ui.painter().galley(
+            egui::pos2(
+                rect.center().x - galley.size().x / 2.0,
+                rect.bottom() - galley.size().y - 5.0,
+            ),
+            galley,
+            color,
+        );
+    }
+    response
+}
+
 /// Widest the switcher's list is, and the most rows it shows before it scrolls.
 const SWITCHER_WIDTH: f32 = 360.0;
 const SWITCHER_ROWS: f32 = 10.0;
@@ -43,17 +115,21 @@ impl NovoApp {
             (Action::Redo, icons::ARROW_U_UP_RIGHT, "Redo"),
         ] {
             let enabled = self.is_enabled(action);
-            let response = ui.add_enabled(
-                enabled,
-                egui::Button::new(egui::RichText::new(icon).size(16.0)).frame(false),
-            );
+            let response = tile(ui, icon, Some(name), enabled);
             response
                 .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, name));
             let keys = action
                 .shortcut()
                 .map(|s| ui.ctx().format_shortcut(&s))
                 .unwrap_or_default();
-            let response = response.on_hover_text(format!("{name} ({keys})"));
+            let response = if enabled {
+                response.on_hover_text(format!("{name} ({keys})"))
+            } else {
+                response.on_hover_text(format!(
+                    "{name} ({keys}): nothing to {} yet",
+                    name.to_lowercase()
+                ))
+            };
             if response.clicked() {
                 picked.push(action);
             }

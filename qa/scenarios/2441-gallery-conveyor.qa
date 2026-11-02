@@ -1,0 +1,60 @@
+@title Example gallery: conveyor line (medium)
+@area Examples
+# File > Templates and examples... > Examples shows the row and its text; then the example opens (Ctrl+K), two pages, the cabinet, 3D and the live view.
+fresh
+wait 10
+click_text "Open example"
+wait 20
+click_text File #1
+wait 6
+click_text "Templates and examples..."
+wait 10
+text conveyor
+wait 8
+click_text "Open conveyor line example"
+wait 6
+shot conveyor-gallery-row
+expect "Illustration"
+expect "Medium: three belts"
+check_layout
+key Escape
+wait 6
+key ctrl+k
+wait 6
+text Open example: conveyor line
+wait 8
+key Enter
+wait 40
+expect "Incoming supply and 24 V"
+shot conveyor-first-view
+check_blank conveyor-first-view
+check_layout
+key ctrl+k
+wait 6
+text Belt motor feeders
+wait 8
+key Enter
+wait 15
+expect "Belt motor feeders"
+shot conveyor-page-2
+key ctrl+k
+wait 6
+text Control: stop, start and belt sequence
+wait 8
+key Enter
+wait 15
+expect "Control: stop, start and belt sequence"
+shot conveyor-page-3
+click_text "Cabinet"
+wait 20
+shot conveyor-cabinet
+check_blank conveyor-cabinet
+click_text "3D"
+wait 30
+shot conveyor-3d
+click_text "Schematic"
+wait 15
+key shift+l
+wait 20
+shot conveyor-live
+check_layout

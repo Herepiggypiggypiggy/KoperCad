@@ -24,7 +24,7 @@ use super::part_picker::{
 use super::{Level, NovoApp};
 
 /// Height of the menu bar the card keeps clear of, in points.
-const MENU_BAR_HEIGHT: f32 = 48.0;
+const MENU_BAR_HEIGHT: f32 = 66.0;
 
 /// The text shown in a field whose devices differ.
 pub(crate) const MIXED_HINT: &str = "multiple values";

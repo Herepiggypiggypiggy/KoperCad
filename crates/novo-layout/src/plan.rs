@@ -41,9 +41,30 @@ pub struct PlannedDuct {
     pub class: Class,
 }
 
+/// A device that is on the plate already and is moved by an arrange tool
+/// (see [`crate::arrange`]). `(x, y)` is its new top left; it stands on
+/// `rail`, `offset` mm from the rail's start. `new_rail` says `rail` is the
+/// id of one of [`Plan::rails`], not of a stored rail.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Move {
+    pub id: u64,
+    pub x: f64,
+    pub y: f64,
+    pub rotated: bool,
+    pub rail: u64,
+    pub new_rail: bool,
+    pub offset: f64,
+}
+
 /// The planner's proposal.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Plan {
+    /// Set by the arrange tools: the name of the edit (and its undo step).
+    pub title: Option<String>,
+    /// Devices already on the plate that move (arrange tools only).
+    pub moves: Vec<Move>,
+    /// What a tool left alone and why, in words for the person.
+    pub notes: Vec<String>,
     pub rails: Vec<Rail>,
     /// Ducts between the rows (rules-based plans only).
     pub ducts: Vec<PlannedDuct>,

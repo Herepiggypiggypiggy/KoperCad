@@ -159,6 +159,9 @@ pub const START_SECTIONS: &[Section] = &[
             "file.example_mcc",
             "file.example_plc",
             "file.example_pump",
+            "file.example_door",
+            "file.example_conveyor",
+            "file.example_filling",
             "file.example_emc",
         ],
     },
@@ -439,6 +442,13 @@ pub fn describe(id: &str) -> &'static str {
         "file.example_mcc" => "A motor control centre: 4 feeders, 24 V control, full cabinet.",
         "file.example_plc" => "A PLC cabinet: CPU, I/O cards and a 24 V supply.",
         "file.example_pump" => "A pump system with its starter and control.",
+        "file.example_door" => "Small: roller door, reversing. Illustration, not a safety design.",
+        "file.example_conveyor" => {
+            "Medium: three belts in sequence, full cabinet. Illustration only."
+        }
+        "file.example_filling" => {
+            "Large: filling line with PLC. Illustration, not a safety design."
+        }
         "file.example_emc" => "A drive with a motor cable and signal wires, for the EMC checks.",
         "project.standard" => "The drawing standard: sheet, title block, tag and wire style.",
         "project.rules" => "The rules for wire numbers, tags and numbering of this project.",
@@ -530,7 +540,7 @@ mod tests {
             assert!(seen.insert(id), "{id} is in two sections");
             assert_eq!(Centre::of(id), Some(Centre::Start), "{id}");
         }
-        assert_eq!(seen.len(), 10);
+        assert_eq!(seen.len(), 13);
         // Only the small example keeps its row (the Open submenu); the rest live here.
         assert!(replaces_menu_row("file.new_crane") && replaces_menu_row("file.example_emc"));
         assert!(!replaces_menu_row("file.example"));

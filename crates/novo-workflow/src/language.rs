@@ -93,6 +93,21 @@ pub const DUTCH: &[Aliases] = &[
         &["pomp voorbeeld", "pompen voorbeeld"],
     ),
     nl(
+        "file.example_door",
+        &[],
+        &["deur voorbeeld", "rolpoort voorbeeld"],
+    ),
+    nl(
+        "file.example_conveyor",
+        &[],
+        &["transportband voorbeeld", "band voorbeeld"],
+    ),
+    nl(
+        "file.example_filling",
+        &[],
+        &["vullijn voorbeeld", "bottelarij voorbeeld"],
+    ),
+    nl(
         "file.new_crane",
         &[],
         &["nieuw kraan", "kraan sjabloon", "kraanproject"],
@@ -1470,6 +1485,36 @@ pub const DUTCH: &[Aliases] = &[
         "cabinet.cutlist",
         &["zaaglijst", "knippenlijst"],
         &["zaaglijst", "lengtes", "knippen"],
+    ),
+    nl(
+        "cabinet.arrange_onto_rail",
+        &["plaats op rail", "zet op de rail"],
+        &["autoplaats", "rail"],
+    ),
+    nl(
+        "cabinet.arrange_rails",
+        &["maak rails", "rails aanmaken"],
+        &["rails", "rij"],
+    ),
+    nl(
+        "cabinet.arrange_ducts",
+        &["maak kanalen", "kanalen tussen rijen"],
+        &["kanaal", "kabelgoot"],
+    ),
+    nl(
+        "cabinet.arrange_group",
+        &["groepeer", "groepeer op soort"],
+        &["groep", "sorteer"],
+    ),
+    nl(
+        "cabinet.arrange_tight",
+        &["gaten dichten", "sluit op"],
+        &["afstand", "opschuiven"],
+    ),
+    nl(
+        "cabinet.arrange_even",
+        &["gelijke afstanden", "verdeel"],
+        &["afstand", "verdelen"],
     ),
     nl(
         "cabinet.rails",

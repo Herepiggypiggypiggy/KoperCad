@@ -28,6 +28,7 @@ mod build_mode;
 #[cfg(test)]
 mod build_mode_tests;
 mod cabinet;
+mod cabinet_arrange;
 mod cabinet_bar;
 mod cabinet_door;
 mod cabinet_group;
@@ -115,8 +116,12 @@ mod eplan_import;
 mod eplan_parts;
 mod error_words;
 mod example;
+mod example_blocks;
+mod example_conveyor;
 mod example_crane;
 mod example_crane_sim;
+mod example_door;
+mod example_filling;
 #[cfg(test)]
 mod example_gallery;
 mod example_kit;
@@ -389,6 +394,8 @@ mod assembly_tests;
 #[cfg(test)]
 mod bench_tests;
 #[cfg(test)]
+mod cabinet_arrange_tests;
+#[cfg(test)]
 mod cabinet_group_tests;
 #[cfg(test)]
 mod cabinet_rails_tests;
@@ -434,6 +441,8 @@ mod error_words_tests;
 mod example_crane_sim_tests;
 #[cfg(test)]
 mod example_gallery_tests;
+#[cfg(test)]
+mod example_new_tests;
 #[cfg(test)]
 mod example_tests;
 #[cfg(test)]
@@ -633,7 +642,7 @@ const TOAST_ERROR: Duration = Duration::from_secs(30);
 /// Most toasts shown at once; older ones wait in [`NovoApp::messages`].
 const MAX_TOASTS: usize = 3;
 /// Height of the top bar.
-const TOP_BAR: f32 = 40.0;
+const TOP_BAR: f32 = 58.0;
 /// Width of the outline, pinned or as a flyout.
 const OUTLINE_WIDTH: f32 = 248.0;
 /// The narrowest and widest the navigator column can be dragged to.
@@ -662,6 +671,9 @@ enum Leaving {
     CraneSimExample,
     PlcExample,
     PumpExample,
+    DoorExample,
+    ConveyorExample,
+    FillingExample,
     CraneTemplate,
     PumpTemplate,
     MccTemplate,
@@ -1062,6 +1074,9 @@ impl NovoApp {
             Action::OpenCraneSimExample => self.leave_then(ctx, Leaving::CraneSimExample),
             Action::OpenPlcExample => self.leave_then(ctx, Leaving::PlcExample),
             Action::OpenPumpExample => self.leave_then(ctx, Leaving::PumpExample),
+            Action::OpenDoorExample => self.leave_then(ctx, Leaving::DoorExample),
+            Action::OpenConveyorExample => self.leave_then(ctx, Leaving::ConveyorExample),
+            Action::OpenFillingExample => self.leave_then(ctx, Leaving::FillingExample),
             Action::NewCraneProject => self.leave_then(ctx, Leaving::CraneTemplate),
             Action::NewPumpProject => self.leave_then(ctx, Leaving::PumpTemplate),
             Action::NewMccProject => self.leave_then(ctx, Leaving::MccTemplate),
@@ -1241,6 +1256,9 @@ impl NovoApp {
             Leaving::CraneSimExample => self.open_crane_sim_example(),
             Leaving::PlcExample => self.open_plc_example(),
             Leaving::PumpExample => self.open_pump_example(),
+            Leaving::DoorExample => self.open_door_example(),
+            Leaving::ConveyorExample => self.open_conveyor_example(),
+            Leaving::FillingExample => self.open_filling_example(),
             Leaving::CraneTemplate => self.open_crane_options(),
             Leaving::PumpTemplate => self.open_plant_options(template_plants::Plant::PumpStation),
             Leaving::MccTemplate => self.open_plant_options(template_plants::Plant::ControlCentre),
@@ -1820,6 +1838,7 @@ impl NovoApp {
                 Action::from_id(id).is_some()
                     || *id == "view.cabinet_table"
                     || *id == "cabinet.place-all"
+                    || id.starts_with("cabinet.arrange_")
                     || *id == "cabinet.rails"
                     || *id == "cabinet.door"
                     || *id == "cabinet.surface"
@@ -2393,7 +2412,8 @@ impl NovoApp {
             // and cuts its text to it, so a long page name or a row of
             // badges never pushes it under the Search button.
             let room =
-                (ui.available_width() - self.top_bar_right - ui.spacing().item_spacing.x).max(0.0);
+                (ui.available_width() - self.top_bar_right - ui.spacing().item_spacing.x - 10.0)
+                    .max(0.0);
             let breadcrumb =
                 egui::Rect::from_min_size(ui.cursor().min, egui::vec2(room, ui.available_height()));
             ui.scope_builder(
@@ -2430,7 +2450,7 @@ impl NovoApp {
                     fit.search.to_owned()
                 };
                 let mut search =
-                    egui::Button::new(label).min_size(egui::vec2(fit.search_width, 0.0));
+                    egui::Button::new(label).min_size(egui::vec2(fit.search_width, 36.0));
                 if !fit.search.is_empty() && fit.search_width > 0.0 {
                     search = search.shortcut_text(shortcut.clone());
                 }
