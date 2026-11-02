@@ -43,6 +43,8 @@ pub struct Question {
 pub struct Resources {
     pub library: &'static Library,
     pub macros: Vec<MacroFile>,
+    /// The part picker's catalog (starter parts plus the person's own).
+    pub catalog: novo_parts::Catalog,
 }
 
 fn library() -> &'static Library {
@@ -73,16 +75,26 @@ impl Resources {
                 macros.push(m);
             }
         }
+        let catalog =
+            novo_parts::Catalog::load_default().unwrap_or_else(|_| novo_parts::Catalog::starter());
         Resources {
             library: library(),
             macros,
+            catalog,
         }
+    }
+
+    /// Uses `catalog` instead of the default one (the app's open catalog, tests).
+    pub fn with_catalog(mut self, catalog: novo_parts::Catalog) -> Self {
+        self.catalog = catalog;
+        self
     }
 
     pub fn env(&self) -> Env<'_> {
         Env {
             library: self.library,
             macros: &self.macros,
+            catalog: &self.catalog,
         }
     }
 }
@@ -415,6 +427,22 @@ impl EngineerHost {
         }
     }
 
+    fn search_catalog(&self, input: &Value) -> ToolReply {
+        if !self.scope.allows(DataScope::Outline) {
+            return self.denied(DataScope::Outline);
+        }
+        match super::cabinet::search_catalog(&self.resources.catalog, &self.draft, input) {
+            Ok(v) => ToolReply {
+                text: super::super::tools::clip_for_tools(&v.to_string()),
+                is_error: false,
+            },
+            Err(why) => ToolReply {
+                text: why,
+                is_error: true,
+            },
+        }
+    }
+
     fn set_plan(&mut self, input: &Value) -> ToolReply {
         let Some(items) = input["steps"].as_array() else {
             return ToolReply {
@@ -527,6 +555,16 @@ impl ToolHost for EngineerHost {
                 "query": {"type": "string"}, "limit": {"type": "integer"}}},
         }));
         specs.push(json!({
+            "name": "search_catalog",
+            "description": "The part picker: searches the part catalog by words or order number \
+                            and returns manufacturer, order number, size and the device letters \
+                            each part suits. Give device (a tag) to get parts that suit it \
+                            first. Use it before assign_catalog_part; never invent a part.",
+            "input_schema": {"type": "object", "properties": {
+                "query": {"type": "string"}, "device": {"type": "string"},
+                "limit": {"type": "integer"}}},
+        }));
+        specs.push(json!({
             "name": "set_plan",
             "description": "Shows the person your plan as a checklist and keeps it current. Call \
                             it first for any job of more than two edits, and again as steps \
@@ -586,6 +624,7 @@ impl EngineerHost {
             "standards_report" => self.standards(),
             "list_macros" => self.list_macros(),
             "list_symbols" => self.list_symbols(input),
+            "search_catalog" => self.search_catalog(input),
             "set_plan" => self.set_plan(input),
             "ask_user" => self.ask(input),
             other => self.reads.call(other, input),
